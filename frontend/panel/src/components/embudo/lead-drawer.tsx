@@ -38,7 +38,15 @@ import {
 import { cn } from "@/lib/utils";
 import { fromDateTimeLocalInput, toDateTimeLocalInput } from "@/lib/datetime";
 import { Badge } from "@/components/ui/badge";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { LeadOnboardingPanel } from "@/components/embudo/lead-onboarding";
+import { usePermissions } from "@/hooks/use-permissions";
 import {
   IconAlertTriangle,
   IconBrandWhatsapp,
@@ -215,6 +223,14 @@ type CatalogItemsState =
 
 type DrawerPrepOption = {
   value: string;
+  label: string;
+};
+
+type SalesRepOption = {
+  id: string;
+  nombre_completo: string | null;
+  correo: string | null;
+  telefono_e164: string | null;
   label: string;
 };
 
@@ -742,6 +758,29 @@ export function LeadDrawer({
   const [noteText, setNoteText] = useState("");
   const [notePending, setNotePending] = useState(false);
   const [noteError, setNoteError] = useState<string | null>(null);
+
+  const { context: permissionContext, loading: permissionsLoading } = usePermissions();
+  const normalizedPerms = useMemo(
+    () => (permissionContext.permisos ?? []).map((perm) => perm.toLowerCase()),
+    [permissionContext.permisos],
+  );
+  const canReassignAny =
+    permissionContext.es_admin ||
+    permissionContext.es_owner ||
+    normalizedPerms.includes("pipeline.reassign.any");
+  const canReassignTeam =
+    permissionContext.es_admin ||
+    permissionContext.es_owner ||
+    normalizedPerms.includes("pipeline.reassign.team");
+  const canReassign = canReassignAny || canReassignTeam;
+
+  const [vendorOptions, setVendorOptions] = useState<SalesRepOption[]>([]);
+  const [vendorLoading, setVendorLoading] = useState(false);
+  const [vendorError, setVendorError] = useState<string | null>(null);
+  const [selectedVendorId, setSelectedVendorId] = useState("");
+  const [reassignPending, setReassignPending] = useState(false);
+  const [reassignError, setReassignError] = useState<string | null>(null);
+  const [reassignSuccess, setReassignSuccess] = useState<string | null>(null);
   const [deletePending, setDeletePending] = useState(false);
   const [selectedContact, setSelectedContact] = useState<ContactSearchResult | null>(null);
   const [contactSearchQuery, setContactSearchQuery] = useState("");
@@ -775,6 +814,59 @@ export function LeadDrawer({
     setQuoteItems([createQuoteItemForm({ moneda: card?.moneda ?? "MXN" })]);
     setCatalogSearch("");
   }, [card?.oportunidadId, card?.moneda]);
+
+  useEffect(() => {
+    setSelectedVendorId(card?.asignadoId ?? "");
+    setReassignError(null);
+    setReassignSuccess(null);
+  }, [card?.asignadoId, card?.oportunidadId]);
+
+  useEffect(() => {
+    if (!open || isCreateMode || !card || !canReassign || permissionsLoading) {
+      return;
+    }
+    const controller = new AbortController();
+    const fetchVendors = async () => {
+      setVendorLoading(true);
+      setVendorError(null);
+      try {
+        const scope = canReassignAny ? "all" : "team";
+        const response = await fetch(`/api/embudo/vendedores?limit=200&scope=${scope}`, {
+          cache: "no-store",
+          signal: controller.signal,
+        });
+        if (!response.ok) {
+          const body = await response.json().catch(() => ({}));
+          setVendorError(body.error || `Error ${response.status}`);
+          setVendorOptions([]);
+          return;
+        }
+        const body = (await response.json()) as { vendedores?: Array<Record<string, unknown>> };
+        const vendors = Array.isArray(body?.vendedores) ? body.vendedores : [];
+        const options: SalesRepOption[] = vendors
+          .map((vendor) => {
+            if (!vendor || typeof vendor !== "object") return null;
+            const id = String((vendor as Record<string, unknown>).id || "").trim();
+            if (!id) return null;
+            const nombre = (vendor as Record<string, unknown>).nombre_completo as string | null;
+            const correo = (vendor as Record<string, unknown>).correo as string | null;
+            const telefono = (vendor as Record<string, unknown>).telefono_e164 as string | null;
+            const label = nombre?.trim() || correo?.trim() || telefono?.trim() || "Sin nombre";
+            return { id, nombre_completo: nombre ?? null, correo: correo ?? null, telefono_e164: telefono ?? null, label };
+          })
+          .filter((entry): entry is SalesRepOption => entry !== null);
+        setVendorOptions(options);
+      } catch (err) {
+        if ((err as Error).name === "AbortError") return;
+        setVendorError("No se pudo cargar la lista de vendedores.");
+        setVendorOptions([]);
+      } finally {
+        setVendorLoading(false);
+      }
+    };
+    fetchVendors();
+    return () => controller.abort();
+  }, [open, isCreateMode, card, canReassign, canReassignAny, permissionsLoading]);
 
   useEffect(() => {
     if (!computedQuoteTotals) return;
@@ -1300,6 +1392,39 @@ export function LeadDrawer({
     setContactSearchQuery("");
     setContactSearchError(null);
   };
+
+  const handleReassign = useCallback(async () => {
+    if (!card || !selectedVendorId || selectedVendorId === card.asignadoId) {
+      return;
+    }
+    setReassignPending(true);
+    setReassignError(null);
+    setReassignSuccess(null);
+    try {
+      const response = await fetch(`/api/embudo/leads/${card.oportunidadId}/reassign`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          asignado_usuario_id: selectedVendorId,
+          contacto_id: card.contactoId || null,
+          conversacion_id: card.conversacionId || null,
+          alinear_contacto: true,
+          alinear_conversacion: true,
+        }),
+      });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setReassignError(body?.error || `Error ${response.status}`);
+        return;
+      }
+      setReassignSuccess("Vendedor reasignado.");
+    } catch (err) {
+      if ((err as Error).name === "AbortError") return;
+      setReassignError("No se pudo reasignar el vendedor.");
+    } finally {
+      setReassignPending(false);
+    }
+  }, [card, selectedVendorId]);
 
   const handleAddEmptyItem = useCallback(() => {
     setQuoteItems((prev) => [...prev, createQuoteItemForm({ moneda: quoteMoneda || "MXN" })]);
@@ -1850,6 +1975,61 @@ export function LeadDrawer({
               onSubmit={handleSubmit(onSubmitForm)}
               className="flex flex-1 min-h-0 flex-col gap-4 overflow-y-auto px-4 pb-4"
             >
+              {!isCreateMode && card && canReassign ? (
+                <section className="space-y-3 rounded-2xl border border-border/60 bg-card/60 p-4 shadow-sm">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <h4 className="text-sm font-semibold text-foreground">Asignación</h4>
+                    <Badge variant="outline">
+                      Actual: {card.asignadoNombre?.trim() || "Sin asignar"}
+                    </Badge>
+                  </div>
+                  <div className="grid gap-2">
+                    <label className="text-xs font-medium text-muted-foreground" htmlFor="lead-vendedor">
+                      Reasignar vendedor
+                    </label>
+                    <Select
+                      value={selectedVendorId || undefined}
+                      onValueChange={setSelectedVendorId}
+                      disabled={vendorLoading || reassignPending}
+                    >
+                      <SelectTrigger id="lead-vendedor">
+                        <SelectValue placeholder={vendorLoading ? "Cargando..." : "Selecciona vendedor"} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {vendorOptions.map((option) => (
+                          <SelectItem key={option.id} value={option.id}>
+                            {option.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {vendorError ? (
+                      <p className="text-xs text-destructive">{vendorError}</p>
+                    ) : null}
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        onClick={handleReassign}
+                        disabled={
+                          reassignPending ||
+                          vendorLoading ||
+                          !selectedVendorId ||
+                          selectedVendorId === card.asignadoId
+                        }
+                      >
+                        {reassignPending ? "Reasignando..." : "Reasignar"}
+                      </Button>
+                      {reassignSuccess ? (
+                        <span className="text-xs text-emerald-600">{reassignSuccess}</span>
+                      ) : null}
+                      {reassignError ? (
+                        <span className="text-xs text-destructive">{reassignError}</span>
+                      ) : null}
+                    </div>
+                  </div>
+                </section>
+              ) : null}
               <section className="space-y-3 rounded-2xl border border-border/60 bg-card/60 p-4 shadow-sm">
                 <h4 className="text-sm font-semibold text-foreground">Contacto</h4>
                 {isCreateMode ? (

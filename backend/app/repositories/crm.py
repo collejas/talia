@@ -4285,6 +4285,72 @@ class CRMRepository:
                 results.append(entry)
         return results
 
+    async def list_sales_reps(
+        self,
+        *,
+        organizacion_id: UUID,
+        limit: int = 200,
+    ) -> list[dict[str, Any]]:
+        params = {
+            "organizacion_id": f"eq.{organizacion_id}",
+            "es_vendedor": "is.true",
+            "select": "usuario:usuarios!empleados_usuario_org_fkey(id,nombre_completo,correo,telefono_e164)",
+            "limit": str(limit),
+        }
+        resp = await self._request("GET", "/rest/v1/empleados", params=params)
+        empleados_data = resp.json() or []
+        if not isinstance(empleados_data, list):
+            raise CRMRepositoryError(
+                f"Respuesta inesperada al listar vendedores: {empleados_data!r}"
+            )
+        results: list[dict[str, Any]] = []
+        for item in empleados_data:
+            if not isinstance(item, dict):
+                continue
+            usuario = item.get("usuario")
+            if isinstance(usuario, dict):
+                user_id = usuario.get("id")
+                if not isinstance(user_id, str):
+                    continue
+                entry: dict[str, Any] = {
+                    "id": user_id,
+                    "nombre_completo": usuario.get("nombre_completo"),
+                    "correo": usuario.get("correo"),
+                    "telefono_e164": usuario.get("telefono_e164"),
+                }
+                results.append(entry)
+        return results
+
+    async def get_employee_vendor(
+        self,
+        *,
+        organizacion_id: UUID,
+        usuario_id: UUID,
+    ) -> dict[str, Any] | None:
+        params = {
+            "organizacion_id": f"eq.{organizacion_id}",
+            "usuario_id": f"eq.{usuario_id}",
+            "select": "usuario_id,es_vendedor",
+            "limit": "1",
+        }
+        resp = await self._request("GET", "/rest/v1/empleados", params=params)
+        data = resp.json() or []
+        if not isinstance(data, list) or not data:
+            return None
+        row = data[0]
+        return row if isinstance(row, dict) else None
+
+    async def is_in_current_user_scope(self, *, usuario_id: UUID) -> bool:
+        payload = {"p_uid": str(usuario_id)}
+        data = await self._rpc("is_in_current_user_scope", payload)
+        if isinstance(data, bool):
+            return data
+        if isinstance(data, dict):
+            value = data.get("is_in_current_user_scope")
+            if isinstance(value, bool):
+                return value
+        return False
+
     async def search_contacts(
         self,
         *,

@@ -4665,6 +4665,25 @@ class CRMUserSummary(BaseModel):
     telefono_e164: str | None = None
 
 
+class CRMReassignOpportunityPayload(BaseModel):
+    asignado_usuario_id: UUID = Field(..., description="Nuevo vendedor asignado")
+    contacto_id: UUID | None = None
+    conversacion_id: UUID | None = None
+    motivo: str | None = Field(default=None, max_length=500)
+    alinear_contacto: bool = True
+    alinear_conversacion: bool = True
+
+
+class CRMReassignOpportunityResponse(BaseModel):
+    ok: bool = True
+    oportunidad_id: UUID
+    asignado_usuario_id: UUID
+    contacto_id: UUID | None = None
+    conversacion_id: UUID | None = None
+    contacto_actualizado: bool = False
+    conversacion_actualizada: bool = False
+
+
 class CRMPipelineStageSummary(BaseModel):
     id: UUID
     nombre: str
@@ -6084,6 +6103,62 @@ async def list_users(
     return [CRMUserSummary.model_validate(row) for row in rows]
 
 
+@router.get("/usuarios/vendedores", response_model=list[CRMUserSummary])
+async def list_sales_reps(
+    *,
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    user_token: str = Depends(require_user_token),
+    usuario_id: UUID | None = Depends(optional_usuario_id),
+    limit: Annotated[int, Query(ge=1, le=500)] = 200,
+) -> list[CRMUserSummary]:
+    if usuario_id is None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="auth_required")
+    repo = CRMRepository(user_token=user_token)
+
+    can_any = await repo.current_user_has_perm(codigo="pipeline.reassign.any")
+    can_team = await repo.current_user_has_perm(codigo="pipeline.reassign.team")
+    if not can_any and not can_team:
+        return []
+
+    try:
+        if can_any:
+            rows = await repo.list_sales_reps(organizacion_id=organizacion_id, limit=limit)
+        else:
+            rows = await repo.list_supervised_sales_reps(
+                organizacion_id=organizacion_id,
+                supervisor_id=usuario_id,
+                limit=limit,
+            )
+            # Si el supervisor también es vendedor, lo incluimos.
+            self_entry = await repo.get_employee_vendor(
+                organizacion_id=organizacion_id,
+                usuario_id=usuario_id,
+            )
+            if isinstance(self_entry, dict) and self_entry.get("es_vendedor"):
+                all_users = await repo.list_users(organizacion_id=organizacion_id, limit=limit)
+                for user in all_users:
+                    if isinstance(user, dict) and str(user.get("id")) == str(usuario_id):
+                        rows.append(user)
+                        break
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    # Deduplicar por id
+    seen: set[str] = set()
+    results: list[CRMUserSummary] = []
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        user_id = row.get("id")
+        if not isinstance(user_id, str) or not user_id:
+            continue
+        if user_id in seen:
+            continue
+        seen.add(user_id)
+        results.append(CRMUserSummary.model_validate(row))
+    return results
+
+
 @router.get("/oportunidades", response_model=CRMOpportunitiesResponse)
 async def list_opportunities(
     *,
@@ -6132,6 +6207,110 @@ async def list_opportunities(
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     items = [CRMOpportunity.model_validate(row) for row in rows]
     return CRMOpportunitiesResponse(items=items, limit=limit, offset=offset)
+
+
+@router.post("/oportunidades/{oportunidad_id}/reasignar", response_model=CRMReassignOpportunityResponse)
+async def reassign_opportunity(
+    *,
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    oportunidad_id: UUID,
+    payload: CRMReassignOpportunityPayload,
+    user_token: str = Depends(require_user_token),
+    usuario_id: UUID | None = Depends(optional_usuario_id),
+) -> CRMReassignOpportunityResponse:
+    if usuario_id is None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="auth_required")
+
+    repo = CRMRepository(user_token=user_token)
+    can_any = await repo.current_user_has_perm(codigo="pipeline.reassign.any")
+    can_team = await repo.current_user_has_perm(codigo="pipeline.reassign.team")
+    if not can_any and not can_team:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden")
+
+    if not can_any:
+        allowed = await repo.is_in_current_user_scope(usuario_id=payload.asignado_usuario_id)
+        if not allowed:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="target_out_of_scope")
+
+    vendedor = await repo.get_employee_vendor(
+        organizacion_id=organizacion_id,
+        usuario_id=payload.asignado_usuario_id,
+    )
+    if not isinstance(vendedor, dict) or not vendedor.get("es_vendedor"):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="vendedor_invalid")
+
+    oportunidad = await repo.get_opportunity(
+        organizacion_id=organizacion_id,
+        opportunity_id=oportunidad_id,
+    )
+    if not oportunidad:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="oportunidad_not_found")
+
+    contacto_id_raw = payload.contacto_id or oportunidad.get("contacto_principal_id") or oportunidad.get(
+        "contacto_id"
+    )
+    contacto_id: UUID | None = None
+    if contacto_id_raw:
+        try:
+            contacto_id = UUID(str(contacto_id_raw))
+        except (TypeError, ValueError):
+            contacto_id = None
+
+    await repo.update_opportunity(
+        organizacion_id=organizacion_id,
+        oportunidad_id=oportunidad_id,
+        payload={"asignado_a_usuario_id": str(payload.asignado_usuario_id)},
+    )
+
+    contacto_actualizado = False
+    if payload.alinear_contacto and contacto_id:
+        can_contact_any = await repo.current_user_has_perm(codigo="contacts.reassign.any")
+        can_contact_team = await repo.current_user_has_perm(codigo="contacts.reassign.team")
+        if not can_contact_any and not can_contact_team:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="contacts_forbidden")
+        if not can_contact_any:
+            allowed = await repo.is_in_current_user_scope(usuario_id=payload.asignado_usuario_id)
+            if not allowed:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN, detail="contact_target_out_of_scope"
+                )
+        await repo.update_contact(
+            organizacion_id=organizacion_id,
+            contacto_id=contacto_id,
+            payload={"propietario_usuario_id": str(payload.asignado_usuario_id)},
+        )
+        contacto_actualizado = True
+
+    conversacion_actualizada = False
+    if payload.alinear_conversacion and payload.conversacion_id:
+        await repo.update_conversation(
+            conversation_id=str(payload.conversacion_id),
+            patch={"asignado_a_usuario_id": str(payload.asignado_usuario_id)},
+        )
+        conversacion_actualizada = True
+
+    metadata: dict[str, Any] = {"actor_id": str(usuario_id)}
+    if payload.motivo:
+        metadata["motivo"] = payload.motivo
+    await repo.insert_sales_assignment_audit(
+        organizacion_id=organizacion_id,
+        oportunidad_id=oportunidad_id,
+        vendedor_id=payload.asignado_usuario_id,
+        conversation_id=str(payload.conversacion_id) if payload.conversacion_id else None,
+        contact_id=str(contacto_id) if contacto_id else None,
+        trigger="manual_reassign",
+        metadata=metadata,
+        canal="panel",
+    )
+
+    return CRMReassignOpportunityResponse(
+        oportunidad_id=oportunidad_id,
+        asignado_usuario_id=payload.asignado_usuario_id,
+        contacto_id=contacto_id,
+        conversacion_id=payload.conversacion_id,
+        contacto_actualizado=contacto_actualizado,
+        conversacion_actualizada=conversacion_actualizada,
+    )
 
 
 @router.get("/usuarios/supervisados", response_model=list[CRMUserSummary])
