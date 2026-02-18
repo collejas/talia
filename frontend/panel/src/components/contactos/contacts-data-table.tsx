@@ -5,6 +5,22 @@ import type { ColumnDef, VisibilityState } from "@tanstack/react-table";
 import { z } from "zod";
 
 import { DataTable, schema } from "@/components/data-table";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { usePermissions } from "@/hooks/use-permissions";
 import type { ContactTableRow } from "@/lib/contactos/data";
 
 type TableRow = z.infer<typeof schema>;
@@ -19,6 +35,14 @@ type ContactField =
   | "ultimo_contacto_en"
   | "conversaciones"
   | "notes";
+
+type SalesRepOption = {
+  id: string;
+  nombre_completo: string | null;
+  correo: string | null;
+  telefono_e164: string | null;
+  label: string;
+};
 
 const DATE_FORMATTER = new Intl.DateTimeFormat("es-MX", {
   dateStyle: "medium",
@@ -158,12 +182,206 @@ const contactColumnVisibility: VisibilityState = CONTACT_COLUMNS.reduce<Visibili
 );
 
 export function ContactsDataTable({ data }: { data: ContactTableRow[] }) {
+  const { context: permissionContext, loading: permissionsLoading } = usePermissions();
+  const normalizedPerms = React.useMemo(
+    () => (permissionContext.permisos ?? []).map((perm) => perm.toLowerCase()),
+    [permissionContext.permisos],
+  );
+  const canReassignAny =
+    permissionContext.es_admin ||
+    permissionContext.es_owner ||
+    normalizedPerms.includes("contacts.reassign.any");
+  const canReassignTeam =
+    permissionContext.es_admin ||
+    permissionContext.es_owner ||
+    normalizedPerms.includes("contacts.reassign.team");
+  const canReassign = canReassignAny || canReassignTeam;
+
+  const [reassignOpen, setReassignOpen] = React.useState(false);
+  const [activeRow, setActiveRow] = React.useState<TableRow | null>(null);
+  const [selectedVendorId, setSelectedVendorId] = React.useState("");
+  const [vendorOptions, setVendorOptions] = React.useState<SalesRepOption[]>([]);
+  const [vendorLoading, setVendorLoading] = React.useState(false);
+  const [vendorError, setVendorError] = React.useState<string | null>(null);
+  const [reassignPending, setReassignPending] = React.useState(false);
+  const [reassignError, setReassignError] = React.useState<string | null>(null);
+  const [reassignSuccess, setReassignSuccess] = React.useState<string | null>(null);
+
+  React.useEffect(() => {
+    if (!reassignOpen || permissionsLoading || !canReassign) {
+      return;
+    }
+    const controller = new AbortController();
+    const fetchVendors = async () => {
+      setVendorLoading(true);
+      setVendorError(null);
+      try {
+        const scope = canReassignAny ? "all" : "team";
+        const response = await fetch(`/api/embudo/vendedores?limit=200&scope=${scope}`, {
+          cache: "no-store",
+          signal: controller.signal,
+        });
+        if (!response.ok) {
+          const body = await response.json().catch(() => ({}));
+          setVendorError(body.error || `Error ${response.status}`);
+          setVendorOptions([]);
+          return;
+        }
+        const body = (await response.json()) as { vendedores?: Array<Record<string, unknown>> };
+        const vendors = Array.isArray(body?.vendedores) ? body.vendedores : [];
+        const options: SalesRepOption[] = vendors
+          .map((vendor) => {
+            if (!vendor || typeof vendor !== "object") return null;
+            const id = String((vendor as Record<string, unknown>).id || "").trim();
+            if (!id) return null;
+            const nombre = (vendor as Record<string, unknown>).nombre_completo as string | null;
+            const correo = (vendor as Record<string, unknown>).correo as string | null;
+            const telefono = (vendor as Record<string, unknown>).telefono_e164 as string | null;
+            const label = nombre?.trim() || correo?.trim() || telefono?.trim() || "Sin nombre";
+            return { id, nombre_completo: nombre ?? null, correo: correo ?? null, telefono_e164: telefono ?? null, label };
+          })
+          .filter((entry): entry is SalesRepOption => entry !== null);
+        setVendorOptions(options);
+      } catch (err) {
+        if ((err as Error).name === "AbortError") return;
+        setVendorError("No se pudo cargar la lista de vendedores.");
+        setVendorOptions([]);
+      } finally {
+        setVendorLoading(false);
+      }
+    };
+    fetchVendors();
+    return () => controller.abort();
+  }, [reassignOpen, permissionsLoading, canReassign, canReassignAny]);
+
+  const extraColumns = React.useMemo(() => {
+    if (!canReassign) return contactExtraColumns;
+    return [
+      ...contactExtraColumns,
+      {
+        id: "acciones",
+        header: "Acciones",
+        cell: ({ row }: { row: { original: TableRow } }) => (
+          <div className="flex justify-end">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                setActiveRow(row.original);
+                const ownerId = extractString(row.original.raw as Record<string, unknown> | undefined, [
+                  "propietario_id",
+                ]);
+                setSelectedVendorId(ownerId ?? "");
+                setReassignError(null);
+                setReassignSuccess(null);
+                setReassignOpen(true);
+              }}
+            >
+              Reasignar
+            </Button>
+          </div>
+        ),
+        enableSorting: false,
+        meta: { label: "Acciones", reorderable: false },
+      } as ColumnDef<TableRow>,
+    ];
+  }, [canReassign]);
+
+  const activeRaw = (activeRow?.raw ?? {}) as Record<string, unknown>;
+  const activeContactoId = extractString(activeRaw, ["contacto_id"]);
+  const activePropietarioId = extractString(activeRaw, ["propietario_id"]);
+
+  const handleReassign = async () => {
+    if (!activeContactoId || !selectedVendorId) return;
+    setReassignPending(true);
+    setReassignError(null);
+    setReassignSuccess(null);
+    try {
+      const response = await fetch(`/api/contactos/${activeContactoId}/reassign`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          propietario_usuario_id: selectedVendorId,
+          alinear_oportunidad: true,
+          alinear_conversacion: true,
+        }),
+      });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setReassignError(body?.error || `Error ${response.status}`);
+        return;
+      }
+      setReassignSuccess("Vendedor reasignado.");
+    } catch {
+      setReassignError("No se pudo reasignar el vendedor.");
+    } finally {
+      setReassignPending(false);
+    }
+  };
+
   return (
-    <DataTable
-      data={data}
-      extraColumns={contactExtraColumns}
-      initialVisibility={contactColumnVisibility}
-      storageKey="contacts-table-column-order"
-    />
+    <>
+      <DataTable
+        data={data}
+        extraColumns={extraColumns}
+        initialVisibility={contactColumnVisibility}
+        storageKey="contacts-table-column-order"
+      />
+      <Dialog
+        open={reassignOpen}
+        onOpenChange={(open) => {
+          setReassignOpen(open);
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Cambiar vendedor</DialogTitle>
+            <DialogDescription>Selecciona el vendedor destino para este contacto.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="text-sm text-muted-foreground">
+              {activeRow?.header ?? "Contacto"}
+            </div>
+            <Select
+              value={selectedVendorId || undefined}
+              onValueChange={setSelectedVendorId}
+              disabled={vendorLoading || reassignPending}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder={vendorLoading ? "Cargando..." : "Selecciona vendedor"} />
+              </SelectTrigger>
+              <SelectContent>
+                {vendorOptions.map((option) => (
+                  <SelectItem key={option.id} value={option.id}>
+                    {option.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {vendorError ? <p className="text-xs text-destructive">{vendorError}</p> : null}
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                type="button"
+                onClick={handleReassign}
+                disabled={
+                  reassignPending ||
+                  vendorLoading ||
+                  !selectedVendorId ||
+                  (Boolean(activePropietarioId) && selectedVendorId === activePropietarioId)
+                }
+              >
+                {reassignPending ? "Reasignando..." : "Reasignar"}
+              </Button>
+              {reassignSuccess ? (
+                <span className="text-xs text-emerald-600">{reassignSuccess}</span>
+              ) : null}
+              {reassignError ? (
+                <span className="text-xs text-destructive">{reassignError}</span>
+              ) : null}
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }

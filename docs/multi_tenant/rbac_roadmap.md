@@ -56,7 +56,7 @@ Frontend:
   - selector de vendedores permitido (filtrado por scope)
 - [x] Oportunidades: UI de cambio de vendedor.
 - [x] Historial/auditoría de cambios (solo lectura)
-- [ ] Contactos: UI de cambio de vendedor (pendiente si se decide)
+- [x] Contactos: UI de cambio de vendedor.
 
 ## Fase 3: Inbox consistente con reasignaciones
 
