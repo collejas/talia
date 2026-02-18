@@ -10,8 +10,11 @@ type ReassignPayload = {
   alinear_conversacion?: boolean;
 };
 
-export async function POST(request: Request, context: { params: { oportunidadId: string } }) {
-  const { oportunidadId } = context.params;
+export async function POST(
+  request: Request,
+  { params }: { params: Promise<{ oportunidadId: string }> },
+) {
+  const { oportunidadId } = await params;
   if (!oportunidadId) {
     return NextResponse.json({ error: "oportunidad_id_required" }, { status: 400 });
   }
