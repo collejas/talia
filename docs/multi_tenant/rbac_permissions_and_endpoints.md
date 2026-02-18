@@ -69,6 +69,6 @@ Backend (implementado):
 
 Panel:
 - [x] Embudo: acción “Cambiar vendedor” (visible si tiene permiso de reasignación).
-- Oportunidades: acción “Cambiar vendedor”.
+- [x] Oportunidades: acción “Cambiar vendedor”.
 - Contactos: acción “Cambiar vendedor” (solo si se decide exponer).
 - Auditoría: vista completa si `audit.view_all`.

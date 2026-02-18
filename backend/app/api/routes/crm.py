@@ -6262,6 +6262,28 @@ async def reassign_opportunity(
         payload={"asignado_a_usuario_id": str(payload.asignado_usuario_id)},
     )
 
+    conversation_id: UUID | None = payload.conversacion_id
+    if conversation_id is None:
+        metadata = oportunidad.get("metadata") if isinstance(oportunidad, dict) else None
+        if isinstance(metadata, dict):
+            raw_conv = metadata.get("conversation_id") or metadata.get("conversacion_id")
+            if raw_conv:
+                try:
+                    conversation_id = UUID(str(raw_conv))
+                except (TypeError, ValueError):
+                    conversation_id = None
+    if conversation_id is None and contacto_id:
+        service_repo = CRMRepository()
+        resolved = await service_repo.get_latest_conversation_id_by_contact(
+            organizacion_id=organizacion_id,
+            contacto_id=contacto_id,
+        )
+        if resolved:
+            try:
+                conversation_id = UUID(str(resolved))
+            except (TypeError, ValueError):
+                conversation_id = None
+
     contacto_actualizado = False
     if payload.alinear_contacto and contacto_id:
         can_contact_any = await repo.current_user_has_perm(codigo="contacts.reassign.any")
@@ -6282,11 +6304,11 @@ async def reassign_opportunity(
         contacto_actualizado = True
 
     conversacion_actualizada = False
-    if payload.alinear_conversacion and payload.conversacion_id:
+    if payload.alinear_conversacion and conversation_id:
         # Conversaciones usan RLS estricta; actualizamos con service role
         service_repo = CRMRepository()
         await service_repo.update_conversation(
-            conversation_id=str(payload.conversacion_id),
+            conversation_id=str(conversation_id),
             patch={"asignado_a_usuario_id": str(payload.asignado_usuario_id)},
         )
         conversacion_actualizada = True
@@ -6294,22 +6316,33 @@ async def reassign_opportunity(
     metadata: dict[str, Any] = {"actor_id": str(usuario_id)}
     if payload.motivo:
         metadata["motivo"] = payload.motivo
-    await repo.insert_sales_assignment_audit(
-        organizacion_id=organizacion_id,
-        oportunidad_id=oportunidad_id,
-        vendedor_id=payload.asignado_usuario_id,
-        conversation_id=str(payload.conversacion_id) if payload.conversacion_id else None,
-        contact_id=str(contacto_id) if contacto_id else None,
-        trigger="manual_reassign",
-        metadata=metadata,
-        canal="panel",
-    )
+    if conversation_id:
+        await repo.insert_sales_assignment_audit(
+            organizacion_id=organizacion_id,
+            oportunidad_id=oportunidad_id,
+            vendedor_id=payload.asignado_usuario_id,
+            conversation_id=str(conversation_id),
+            contact_id=str(contacto_id) if contacto_id else None,
+            trigger="manual_reassign",
+            metadata=metadata,
+            canal="panel",
+        )
+    else:
+        logger.warning(
+            "crm.reassign.audit_skipped_no_conversation",
+            extra={
+                "organizacion_id": str(organizacion_id),
+                "oportunidad_id": str(oportunidad_id),
+                "contacto_id": str(contacto_id) if contacto_id else None,
+                "actor_id": str(usuario_id),
+            },
+        )
 
     return CRMReassignOpportunityResponse(
         oportunidad_id=oportunidad_id,
         asignado_usuario_id=payload.asignado_usuario_id,
         contacto_id=contacto_id,
-        conversacion_id=payload.conversacion_id,
+        conversacion_id=conversation_id,
         contacto_actualizado=contacto_actualizado,
         conversacion_actualizada=conversacion_actualizada,
     )

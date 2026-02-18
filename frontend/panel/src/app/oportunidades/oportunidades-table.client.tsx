@@ -11,12 +11,21 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { usePermissions } from "@/hooks/use-permissions";
+import {
   OportunidadesFiltersClient,
   type OportunidadesFilterOptions,
   type OportunidadesFiltersState,
 } from "./oportunidades-filters.client";
 import type { ColumnDef } from "@tanstack/react-table";
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 
 type Props = {
   rows: DataTableRow[];
@@ -48,7 +57,89 @@ export function OportunidadesTableClient({
   filterOptions,
   filterInitial,
 }: Props) {
-  const extraColumns: ColumnDef<DataTableRow>[] = buildExtraColumns();
+  const router = useRouter();
+  const { context: permissionContext, loading: permissionsLoading } = usePermissions();
+  const normalizedPerms = useMemo(
+    () => (permissionContext.permisos ?? []).map((perm) => perm.toLowerCase()),
+    [permissionContext.permisos],
+  );
+  const canReassignAny =
+    permissionContext.es_admin ||
+    permissionContext.es_owner ||
+    normalizedPerms.includes("pipeline.reassign.any");
+  const canReassignTeam =
+    permissionContext.es_admin ||
+    permissionContext.es_owner ||
+    normalizedPerms.includes("pipeline.reassign.team");
+  const canReassign = canReassignAny || canReassignTeam;
+
+  const [reassignOpen, setReassignOpen] = useState(false);
+  const [activeRow, setActiveRow] = useState<DataTableRow | null>(null);
+  const [selectedVendorId, setSelectedVendorId] = useState("");
+  const [vendorOptions, setVendorOptions] = useState<SalesRepOption[]>([]);
+  const [vendorLoading, setVendorLoading] = useState(false);
+  const [vendorError, setVendorError] = useState<string | null>(null);
+  const [reassignPending, setReassignPending] = useState(false);
+  const [reassignError, setReassignError] = useState<string | null>(null);
+  const [reassignSuccess, setReassignSuccess] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!reassignOpen || permissionsLoading || !canReassign) {
+      return;
+    }
+    const controller = new AbortController();
+    const fetchVendors = async () => {
+      setVendorLoading(true);
+      setVendorError(null);
+      try {
+        const scope = canReassignAny ? "all" : "team";
+        const response = await fetch(`/api/embudo/vendedores?limit=200&scope=${scope}`, {
+          cache: "no-store",
+          signal: controller.signal,
+        });
+        if (!response.ok) {
+          const body = await response.json().catch(() => ({}));
+          setVendorError(body.error || `Error ${response.status}`);
+          setVendorOptions([]);
+          return;
+        }
+        const body = (await response.json()) as { vendedores?: Array<Record<string, unknown>> };
+        const vendors = Array.isArray(body?.vendedores) ? body.vendedores : [];
+        const options: SalesRepOption[] = vendors
+          .map((vendor) => {
+            if (!vendor || typeof vendor !== "object") return null;
+            const id = String((vendor as Record<string, unknown>).id || "").trim();
+            if (!id) return null;
+            const nombre = (vendor as Record<string, unknown>).nombre_completo as string | null;
+            const correo = (vendor as Record<string, unknown>).correo as string | null;
+            const telefono = (vendor as Record<string, unknown>).telefono_e164 as string | null;
+            const label = nombre?.trim() || correo?.trim() || telefono?.trim() || "Sin nombre";
+            return { id, nombre_completo: nombre ?? null, correo: correo ?? null, telefono_e164: telefono ?? null, label };
+          })
+          .filter((entry): entry is SalesRepOption => entry !== null);
+        setVendorOptions(options);
+      } catch (err) {
+        if ((err as Error).name === "AbortError") return;
+        setVendorError("No se pudo cargar la lista de vendedores.");
+        setVendorOptions([]);
+      } finally {
+        setVendorLoading(false);
+      }
+    };
+    fetchVendors();
+    return () => controller.abort();
+  }, [reassignOpen, permissionsLoading, canReassign, canReassignAny]);
+
+  const extraColumns: ColumnDef<DataTableRow>[] = buildExtraColumns({
+    canReassign,
+    onReassignClick: (row) => {
+      setActiveRow(row);
+      setSelectedVendorId(extractAsignadoId(row) ?? "");
+      setReassignError(null);
+      setReassignSuccess(null);
+      setReassignOpen(true);
+    },
+  });
   const initialVisibility = buildInitialVisibility();
   const filteredRows = filters ? applyClientFilters(rows, filters) : rows;
   const [filtersOpen, setFiltersOpen] = useState(false);
@@ -74,19 +165,122 @@ export function OportunidadesTableClient({
     </Dialog>
   ) : null;
 
+  const activeRaw = (activeRow?.raw ?? {}) as Record<string, unknown>;
+  const activeOportunidadId = extractString(activeRaw, ["id"]) ?? activeRow?.id?.toString() ?? null;
+  const activeContactoId = extractString(activeRaw, ["contacto", "id"]) || extractString(activeRaw, ["contacto_principal_id"]);
+  const activeAsignadoId = extractAsignadoId(activeRow);
+
+  const handleReassign = async () => {
+    if (!activeOportunidadId || !selectedVendorId) return;
+    setReassignPending(true);
+    setReassignError(null);
+    setReassignSuccess(null);
+    try {
+      const response = await fetch(`/api/embudo/leads/${activeOportunidadId}/reassign`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          asignado_usuario_id: selectedVendorId,
+          contacto_id: activeContactoId || null,
+          conversacion_id: null,
+          alinear_contacto: true,
+          alinear_conversacion: false,
+        }),
+      });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setReassignError(body?.error || `Error ${response.status}`);
+        return;
+      }
+      setReassignSuccess("Vendedor reasignado.");
+      router.refresh();
+    } catch {
+      setReassignError("No se pudo reasignar el vendedor.");
+    } finally {
+      setReassignPending(false);
+    }
+  };
+
   return (
-    <ClientDataTable
-      rows={filteredRows}
-      columnLabels={columnLabels}
-      extraColumns={extraColumns}
-      initialVisibility={initialVisibility}
-      storageKey="oportunidades-table-columns"
-      toolbarActions={toolbarActions}
-    />
+    <>
+      <ClientDataTable
+        rows={filteredRows}
+        columnLabels={columnLabels}
+        extraColumns={extraColumns}
+        initialVisibility={initialVisibility}
+        storageKey="oportunidades-table-columns"
+        toolbarActions={toolbarActions}
+      />
+      <Dialog open={reassignOpen} onOpenChange={setReassignOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Cambiar vendedor</DialogTitle>
+            <DialogDescription>
+              Selecciona el vendedor destino para esta oportunidad.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="text-sm text-muted-foreground">
+              {activeRow?.header ?? "Oportunidad"}
+            </div>
+            <Select
+              value={selectedVendorId || undefined}
+              onValueChange={setSelectedVendorId}
+              disabled={vendorLoading || reassignPending}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder={vendorLoading ? "Cargando..." : "Selecciona vendedor"} />
+              </SelectTrigger>
+              <SelectContent>
+                {vendorOptions.map((option) => (
+                  <SelectItem key={option.id} value={option.id}>
+                    {option.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {vendorError ? <p className="text-xs text-destructive">{vendorError}</p> : null}
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                type="button"
+                onClick={handleReassign}
+                disabled={
+                  reassignPending ||
+                  vendorLoading ||
+                  !selectedVendorId ||
+                  (Boolean(activeAsignadoId) && selectedVendorId === activeAsignadoId)
+                }
+              >
+                {reassignPending ? "Reasignando..." : "Reasignar"}
+              </Button>
+              {reassignSuccess ? (
+                <span className="text-xs text-emerald-600">{reassignSuccess}</span>
+              ) : null}
+              {reassignError ? (
+                <span className="text-xs text-destructive">{reassignError}</span>
+              ) : null}
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
 
-function buildExtraColumns(): ColumnDef<DataTableRow>[] {
+type ExtraColumnOptions = {
+  canReassign: boolean;
+  onReassignClick: (row: DataTableRow) => void;
+};
+
+type SalesRepOption = {
+  id: string;
+  nombre_completo: string | null;
+  correo: string | null;
+  telefono_e164: string | null;
+  label: string;
+};
+
+function buildExtraColumns(options?: ExtraColumnOptions): ColumnDef<DataTableRow>[] {
   const extraColumns: ColumnDef<DataTableRow>[] = [
     {
       id: "cuenta",
@@ -248,6 +442,21 @@ function buildExtraColumns(): ColumnDef<DataTableRow>[] {
     },
   ];
 
+  if (options?.canReassign) {
+    extraColumns.push({
+      id: "acciones",
+      header: () => <div className="w-full text-right">Acciones</div>,
+      cell: ({ row }) => (
+        <div className="flex justify-end">
+          <Button variant="ghost" size="sm" onClick={() => options.onReassignClick(row.original)}>
+            Reasignar
+          </Button>
+        </div>
+      ),
+      meta: { label: "Acciones", reorderable: false },
+    });
+  }
+
   return extraColumns;
 }
 
@@ -348,6 +557,16 @@ function extractString(raw: Record<string, unknown> | undefined, path: string[])
   const value = extractUnknown(raw, path);
   if (typeof value === "string" && value.trim().length) return value.trim();
   return null;
+}
+
+function extractAsignadoId(row: DataTableRow | null): string | null {
+  if (!row) return null;
+  const raw = row.raw as Record<string, unknown> | undefined;
+  return (
+    extractString(raw, ["asignado", "id"]) ||
+    extractString(raw, ["asignado_a_usuario_id"]) ||
+    null
+  );
 }
 
 function parseNumber(value: unknown): number | null {

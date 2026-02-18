@@ -54,8 +54,9 @@ Backend:
 Frontend:
 - [x] UI en Embudo para cambiar vendedor:
   - selector de vendedores permitido (filtrado por scope)
+- [x] Oportunidades: UI de cambio de vendedor.
 - [ ] Historial/auditoría de cambios (solo lectura)
-- [ ] Oportunidades/Contactos: UI de cambio de vendedor (pendiente si se decide)
+- [ ] Contactos: UI de cambio de vendedor (pendiente si se decide)
 
 ## Fase 3: Inbox consistente con reasignaciones
 

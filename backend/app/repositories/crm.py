@@ -3816,6 +3816,29 @@ class CRMRepository:
             raise CRMRepositoryError("conversation_not_found")
         return row
 
+    async def get_latest_conversation_id_by_contact(
+        self,
+        *,
+        organizacion_id: UUID,
+        contacto_id: UUID,
+    ) -> str | None:
+        params = {
+            "organizacion_id": f"eq.{organizacion_id}",
+            "contacto_id": f"eq.{contacto_id}",
+            "order": "creado_en.desc",
+            "limit": "1",
+            "select": "id",
+        }
+        resp = await self._request("GET", "/rest/v1/conversaciones", params=params)
+        data = resp.json() or []
+        if not isinstance(data, list) or not data:
+            return None
+        row = data[0]
+        if not isinstance(row, dict):
+            return None
+        convo_id = row.get("id")
+        return str(convo_id) if convo_id else None
+
     async def _get_default_stage_id(self, *, organizacion_id: UUID) -> UUID:
         cache_key = str(organizacion_id)
         cached = self._stage_cache.get(cache_key)
