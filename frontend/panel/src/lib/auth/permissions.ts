@@ -8,12 +8,14 @@ export type PermissionContext = {
   roles?: string[]
   permisos?: string[]
   es_admin?: boolean
+  es_owner?: boolean
 }
 
 const EMPTY_CONTEXT: PermissionContext = {
   roles: [],
   permisos: [],
   es_admin: false,
+  es_owner: false,
 }
 
 export async function fetchPermissionContext(): Promise<PermissionContext> {
@@ -29,12 +31,13 @@ export async function fetchPermissionContext(): Promise<PermissionContext> {
     roles: Array.isArray(data.roles) ? data.roles : [],
     permisos: Array.isArray(data.permisos) ? data.permisos : [],
     es_admin: Boolean(data.es_admin),
+    es_owner: Boolean(data.es_owner),
   }
 }
 
 export async function hasPermission(code: string): Promise<boolean> {
   const context = await fetchPermissionContext()
-  if (context.es_admin) return true
+  if (context.es_admin || context.es_owner) return true
   const normalized = code.trim().toLowerCase()
   if (!normalized) return false
   const permisos = (context.permisos ?? []).map((perm) => perm.toLowerCase())

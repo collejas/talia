@@ -51,13 +51,6 @@ def get_crm_repo() -> CRMRepository:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
-def get_crm_repo_with_user(
-    user_token: str = Depends(require_user_token),
-) -> CRMRepository:
-    try:
-        return CRMRepository(user_token=user_token)
-    except CRMRepositoryError as exc:  # pragma: no cover
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
 def require_user_token(
@@ -73,6 +66,15 @@ def require_user_token(
         if token:
             return token
     raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="authorization_invalid")
+
+
+def get_crm_repo_with_user(
+    user_token: str = Depends(require_user_token),
+) -> CRMRepository:
+    try:
+        return CRMRepository(user_token=user_token)
+    except CRMRepositoryError as exc:  # pragma: no cover
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
 async def require_platform_admin(

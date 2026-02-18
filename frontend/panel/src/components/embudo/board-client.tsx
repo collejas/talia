@@ -184,7 +184,7 @@ export function EmbudoBoardClient({
     .map((role) => (role ?? "").toString().trim().toLowerCase())
     .filter(Boolean);
   const isAdminRole =
-    Boolean(permissionContext.es_admin) ||
+    Boolean(permissionContext.es_admin || permissionContext.es_owner) ||
     normalizedRoles.some((value) => value === "admin" || value.includes("admin"));
   const isSupervisorRole = normalizedRoles.some(
     (value) => value === "0002" || value === "supervisor" || value.includes("supervisor"),

@@ -289,9 +289,9 @@ function buildActividadDisplay(
 
 export function DenueBusquedaView() {
   const { context } = usePermissions();
-  const canRunBusquedas = context.es_admin || context.permisos.includes("busquedas.run");
-  const canDeleteBusquedas = context.es_admin || context.permisos.includes("busquedas.delete");
-  const canSaveProspectos = context.es_admin || context.permisos.includes("prospectos.create");
+  const canRunBusquedas = (context.es_admin || context.es_owner) || context.permisos.includes("busquedas.run");
+  const canDeleteBusquedas = (context.es_admin || context.es_owner) || context.permisos.includes("busquedas.delete");
+  const canSaveProspectos = (context.es_admin || context.es_owner) || context.permisos.includes("prospectos.create");
   const [formValues, setFormValues] = useState<FormValues>({
     query: "",
     radio_m: 1500,

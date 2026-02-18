@@ -15,7 +15,7 @@ export default async function Page() {
     .map((role) => (role ?? '').toString().trim().toLowerCase())
     .filter(Boolean)
   const isAdminRole =
-    Boolean(permContext.es_admin) ||
+    Boolean(permContext.es_admin || permContext.es_owner) ||
     normalizedRoles.some((value) => value === 'admin' || value.includes('admin'))
   const isSupervisorRole = normalizedRoles.some(
     (value) => value === '0002' || value === 'supervisor' || value.includes('supervisor'),

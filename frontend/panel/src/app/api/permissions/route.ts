@@ -47,8 +47,8 @@ export async function GET() {
   }
 
   const payload = (await response.json()) as
-    | { permisos?: string[]; es_admin?: boolean }
-    | Array<{ permisos?: string[]; es_admin?: boolean }>
+    | { permisos?: string[]; es_admin?: boolean; es_owner?: boolean }
+    | Array<{ permisos?: string[]; es_admin?: boolean; es_owner?: boolean }>
 
   const data = Array.isArray(payload) ? payload[0] ?? {} : payload ?? {}
   return NextResponse.json({

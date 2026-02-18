@@ -211,7 +211,7 @@ export function AppSidebar({
     }
 
     const perms = new Set((permissionContext.permisos ?? []).map((perm) => perm.toLowerCase()))
-    const isAdmin = permissionContext.es_admin
+    const isAdmin = permissionContext.es_admin || permissionContext.es_owner
 
     const hasPermission = (permission?: NavPermission) => {
       if (!permission) return true

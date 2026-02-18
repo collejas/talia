@@ -8,6 +8,7 @@ export type PermissionContext = {
   roles: string[]
   permisos: string[]
   es_admin: boolean
+  es_owner: boolean
 }
 
 type UsePermissionsState = {
@@ -20,6 +21,7 @@ const EMPTY_CONTEXT: PermissionContext = {
   roles: [],
   permisos: [],
   es_admin: false,
+  es_owner: false,
 }
 
 export function usePermissions() {
@@ -58,6 +60,7 @@ export function usePermissions() {
           roles: Array.isArray(data.roles) ? data.roles : [],
           permisos: Array.isArray(data.permisos) ? data.permisos : [],
           es_admin: Boolean(data.es_admin),
+          es_owner: Boolean(data.es_owner),
         },
         loading: false,
         error: null,
