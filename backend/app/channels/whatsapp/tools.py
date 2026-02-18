@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import re
 from collections.abc import Mapping
 from datetime import datetime, timezone, timedelta
 from typing import Any
@@ -118,7 +119,14 @@ def _optional_int_argument(arguments: dict[str, Any], key: str) -> int | None:
         return None
     value = arguments.get(key)
     if value is None:
-    return None
+        return None
+    if isinstance(value, bool):
+        return int(value)
+    try:
+        parsed = int(str(value).strip())
+    except (TypeError, ValueError):
+        return None
+    return max(0, parsed)
 
 
 def _repair_truncated_json(raw: str) -> str | None:
@@ -132,6 +140,7 @@ def _repair_truncated_json(raw: str) -> str | None:
     in_string = False
     escape = False
     brace_count = 0
+    bracket_count = 0
     for ch in text:
         if in_string:
             if escape:
@@ -146,23 +155,22 @@ def _repair_truncated_json(raw: str) -> str | None:
             in_string = True
         elif ch == "{":
             brace_count += 1
+        elif ch == "[":
+            bracket_count += 1
         elif ch == "}" and brace_count > 0:
             brace_count -= 1
+        elif ch == "]" and bracket_count > 0:
+            bracket_count -= 1
 
     repaired = text
     if in_string:
         repaired += "\""
+    if bracket_count > 0:
+        repaired += "]" * bracket_count
     if brace_count > 0:
         repaired += "}" * brace_count
 
     return repaired if repaired != text else None
-    if isinstance(value, bool):
-        return int(value)
-    try:
-        parsed = int(str(value).strip())
-    except (TypeError, ValueError):
-        return None
-    return max(0, parsed)
 
 
 def _ensure_dict(value: Any) -> dict[str, Any]:
@@ -263,12 +271,10 @@ def _has_base_fields_for_case_a(contact: Mapping[str, Any] | None) -> bool:
 def _has_base_fields_for_case_b(contact: Mapping[str, Any] | None) -> bool:
     if not contact:
         return False
-    return (
-        _has_text(contact.get("nombre_completo"))
-        and _has_text(contact.get("correo"))
-        and _has_text(contact.get("telefono_e164") or contact.get("telefono"))
-        and _has_text(contact.get("necesidad_proposito"))
+    has_contact = _has_text(contact.get("correo")) or _has_text(
+        contact.get("telefono_e164") or contact.get("telefono")
     )
+    return has_contact
 
 
 def _extract_required_case_a_fields_from_metadata(
@@ -645,17 +651,25 @@ async def execute_tool(
         raise ValueError("Nombre de función ausente")
 
     if isinstance(arguments, str):
+        raw_arguments = arguments
         try:
             arguments = json.loads(arguments)
         except json.JSONDecodeError as exc:  # type: ignore[name-defined]
-            repaired = _repair_truncated_json(arguments)
+            repaired = _repair_truncated_json(raw_arguments)
             if repaired is not None:
                 try:
                     arguments = json.loads(repaired)
                 except json.JSONDecodeError:
-                    raise ValueError(f"Arguments inválidos: {arguments!r}") from exc
+                    raise ValueError(f"Arguments inválidos: {raw_arguments!r}") from exc
+                logger.warning(
+                    "whatsapp.tool_arguments_repaired",
+                    extra={
+                        "tool": name,
+                        "raw_preview": raw_arguments[:400],
+                    },
+                )
             else:
-                raise ValueError(f"Arguments inválidos: {arguments!r}") from exc
+                raise ValueError(f"Arguments inválidos: {raw_arguments!r}") from exc
     elif not isinstance(arguments, dict):
         raise ValueError(f"Tipo de argumentos no soportado: {type(arguments)!r}")
 

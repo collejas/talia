@@ -171,6 +171,50 @@ def _extract_text_from_response(payload: dict[str, Any]) -> str | None:
     return None
 
 
+def _repair_truncated_json(raw: str) -> str | None:
+    text = (raw or "").strip()
+    if not text:
+        return None
+    start = text.find("{")
+    if start == -1:
+        return None
+    text = text[start:]
+    in_string = False
+    escape = False
+    brace_count = 0
+    bracket_count = 0
+    for ch in text:
+        if in_string:
+            if escape:
+                escape = False
+                continue
+            if ch == "\\":
+                escape = True
+            elif ch == "\"":
+                in_string = False
+            continue
+        if ch == "\"":
+            in_string = True
+        elif ch == "{":
+            brace_count += 1
+        elif ch == "[":
+            bracket_count += 1
+        elif ch == "}" and brace_count > 0:
+            brace_count -= 1
+        elif ch == "]" and bracket_count > 0:
+            bracket_count -= 1
+
+    repaired = text
+    if in_string:
+        repaired += "\""
+    if bracket_count > 0:
+        repaired += "]" * bracket_count
+    if brace_count > 0:
+        repaired += "}" * brace_count
+
+    return repaired if repaired != text else None
+
+
 async def _execute_lead_tool(
     name: str | None, arguments_payload: Any, context: ToolRuntimeContext
 ) -> dict[str, Any]:
@@ -178,10 +222,22 @@ async def _execute_lead_tool(
         raise ValueError("Nombre de función ausente")
 
     if isinstance(arguments_payload, str):
+        raw_arguments = arguments_payload
         try:
             arguments = json.loads(arguments_payload)
         except json.JSONDecodeError as exc:
-            raise ValueError(f"Arguments inválidos: {arguments_payload!r}") from exc
+            repaired = _repair_truncated_json(raw_arguments)
+            if repaired is not None:
+                try:
+                    arguments = json.loads(repaired)
+                except json.JSONDecodeError:
+                    raise ValueError(f"Arguments inválidos: {raw_arguments!r}") from exc
+                logger.warning(
+                    "messenger.tool_arguments_repaired",
+                    extra={"tool": name, "raw_preview": raw_arguments[:400]},
+                )
+            else:
+                raise ValueError(f"Arguments inválidos: {raw_arguments!r}") from exc
     elif isinstance(arguments_payload, dict):
         arguments = arguments_payload
     else:

@@ -137,8 +137,6 @@ async def refresh_contact_followup_state(
 
     if has_email and has_phone and has_company and has_need and not state.get("datos_completos_at"):
         state["datos_completos_at"] = _now_iso()
-        if not state.get("stop_reason"):
-            state["stop_reason"] = "datos_completos"
         changed = True
 
     if changed:
@@ -286,7 +284,7 @@ def _should_stop(state: dict[str, Any]) -> bool:
     stop_reason = _strip_text(state.get("stop_reason"))
     if stop_reason:
         return True
-    if state.get("entrega_realizada_at") or state.get("datos_completos_at"):
+    if state.get("entrega_realizada_at"):
         return True
     return False
 
@@ -583,15 +581,6 @@ async def _process_conversation(
         return
 
     missing_fields = _missing_required_fields(contact)
-    if not missing_fields:
-        log_event(
-            logger,
-            "webchat.followup.skipped_complete",
-            conversation_id=conversation_id,
-            contact_id=contact_id_str,
-        )
-        return
-
     reengage_meta = _ensure_dict(state.get("reengage"))
     attempts = int(reengage_meta.get("attempts") or 0)
     reengage_sent_at = _parse_ts(reengage_meta.get("sent_at"))

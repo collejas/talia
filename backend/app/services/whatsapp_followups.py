@@ -245,7 +245,7 @@ async def _process_conversation(
         },
     )
 
-    if should_reengage and not contact_complete:
+    if should_reengage:
         await _send_reengage_message(
             conversation_id=str(convo_id),
             contact_id=str(contact_id),
@@ -259,7 +259,7 @@ async def _process_conversation(
         )
         return
 
-    if should_escalate and not contact_complete:
+    if should_escalate:
         await _escalate_to_sales(
             conversation_id=str(convo_id),
             contact_id=str(contact_id),
