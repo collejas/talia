@@ -71,4 +71,5 @@ Panel:
 - [x] Embudo: acción “Cambiar vendedor” (visible si tiene permiso de reasignación).
 - [x] Oportunidades: acción “Cambiar vendedor”.
 - Contactos: acción “Cambiar vendedor” (solo si se decide exponer).
+- [x] Auditoría de reasignaciones en Oportunidades (lectura).
 - Auditoría: vista completa si `audit.view_all`.

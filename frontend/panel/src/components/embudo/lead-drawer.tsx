@@ -1927,9 +1927,6 @@ export function LeadDrawer({
           <DrawerTitle>{isCreateMode ? "Nuevo lead" : card?.nombre ?? "Lead sin nombre"}</DrawerTitle>
           <DrawerDescription className="flex flex-col gap-1 text-left">
             <span>{isCreateMode ? `Creando en etapa: ${stageName}` : `Etapa: ${stageName}`}</span>
-            {!isCreateMode ? (
-              <span className="text-xs text-muted-foreground">ID: {card?.oportunidadId ?? "—"}</span>
-            ) : null}
           </DrawerDescription>
         </DrawerHeader>
 

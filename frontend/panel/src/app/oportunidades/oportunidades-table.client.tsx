@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
@@ -82,6 +83,9 @@ export function OportunidadesTableClient({
   const [reassignPending, setReassignPending] = useState(false);
   const [reassignError, setReassignError] = useState<string | null>(null);
   const [reassignSuccess, setReassignSuccess] = useState<string | null>(null);
+  const [auditItems, setAuditItems] = useState<AuditAssignment[]>([]);
+  const [auditLoading, setAuditLoading] = useState(false);
+  const [auditError, setAuditError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!reassignOpen || permissionsLoading || !canReassign) {
@@ -201,6 +205,31 @@ export function OportunidadesTableClient({
     }
   };
 
+  const handleLoadAudit = async () => {
+    if (!activeOportunidadId) return;
+    setAuditLoading(true);
+    setAuditError(null);
+    try {
+      const response = await fetch(
+        `/api/embudo/asignaciones?oportunidad_id=${activeOportunidadId}&limit=50`,
+        { cache: "no-store" },
+      );
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setAuditError(body?.error || `Error ${response.status}`);
+        setAuditItems([]);
+        return;
+      }
+      const items = Array.isArray(body?.items) ? body.items : [];
+      setAuditItems(items);
+    } catch {
+      setAuditError("No se pudo cargar la auditoría.");
+      setAuditItems([]);
+    } finally {
+      setAuditLoading(false);
+    }
+  };
+
   return (
     <>
       <ClientDataTable
@@ -211,7 +240,17 @@ export function OportunidadesTableClient({
         storageKey="oportunidades-table-columns"
         toolbarActions={toolbarActions}
       />
-      <Dialog open={reassignOpen} onOpenChange={setReassignOpen}>
+      <Dialog
+        open={reassignOpen}
+        onOpenChange={(open) => {
+          setReassignOpen(open);
+          if (open) {
+            setAuditItems([]);
+            setAuditError(null);
+            handleLoadAudit();
+          }
+        }}
+      >
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Cambiar vendedor</DialogTitle>
@@ -260,6 +299,35 @@ export function OportunidadesTableClient({
                 <span className="text-xs text-destructive">{reassignError}</span>
               ) : null}
             </div>
+            <div className="border-t border-border pt-3">
+              <div className="flex items-center justify-between">
+                <p className="text-xs font-semibold text-muted-foreground">Auditoría</p>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleLoadAudit}
+                  disabled={auditLoading}
+                >
+                  {auditLoading ? "Cargando..." : "Actualizar"}
+                </Button>
+              </div>
+              {auditError ? (
+                <p className="text-xs text-destructive">{auditError}</p>
+              ) : null}
+              {!auditLoading && !auditError && auditItems.length === 0 ? (
+                <p className="text-xs text-muted-foreground">Sin movimientos registrados.</p>
+              ) : null}
+              <div className="mt-2 space-y-2">
+                {auditItems.map((item) => (
+                  <div key={item.id} className="rounded-md border border-border/60 bg-muted/40 p-2 text-xs">
+                    <div className="font-medium">{item.vendedor_nombre || item.vendedor_correo || "Vendedor"}</div>
+                    <div className="text-muted-foreground">
+                      {item.trigger_event} · {formatDate(item.creado_en)}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
         </DialogContent>
       </Dialog>
@@ -278,6 +346,14 @@ type SalesRepOption = {
   correo: string | null;
   telefono_e164: string | null;
   label: string;
+};
+
+type AuditAssignment = {
+  id: string;
+  creado_en: string;
+  trigger_event: string;
+  vendedor_nombre?: string | null;
+  vendedor_correo?: string | null;
 };
 
 function buildExtraColumns(options?: ExtraColumnOptions): ColumnDef<DataTableRow>[] {

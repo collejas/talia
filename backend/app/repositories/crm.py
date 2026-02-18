@@ -5927,6 +5927,10 @@ class CRMRepository:
         limit: int = 50,
         offset: int = 0,
         order: Literal["creado_en.desc", "creado_en.asc"] = "creado_en.desc",
+        oportunidad_id: UUID | None = None,
+        contacto_id: UUID | None = None,
+        conversacion_id: UUID | None = None,
+        vendedor_id: UUID | None = None,
     ) -> list[dict[str, Any]]:
         params = {
             "organizacion_id": f"eq.{organizacion_id}",
@@ -5934,6 +5938,14 @@ class CRMRepository:
             "offset": str(offset),
             "order": order,
         }
+        if oportunidad_id:
+            params["oportunidad_id"] = f"eq.{oportunidad_id}"
+        if contacto_id:
+            params["contacto_id"] = f"eq.{contacto_id}"
+        if conversacion_id:
+            params["conversacion_id"] = f"eq.{conversacion_id}"
+        if vendedor_id:
+            params["vendedor_usuario_id"] = f"eq.{vendedor_id}"
         resp = await self._request(
             "GET",
             "/rest/v1/v_asignaciones_vendedores",

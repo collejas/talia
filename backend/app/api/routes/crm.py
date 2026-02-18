@@ -907,6 +907,13 @@ class WhatsAppSalesAssignmentsResponse(BaseModel):
     offset: int
 
 
+class SalesAssignmentAuditResponse(BaseModel):
+    ok: bool = True
+    items: list[WhatsAppSalesAssignment]
+    limit: int
+    offset: int
+
+
 class ClienteOnboardingEstado(str, Enum):
     PENDIENTE = "pendiente"
     EN_PROGRESO = "en_progreso"
@@ -13012,22 +13019,39 @@ async def list_audit_logs(
 
 
 @router.get(
-    "/whatsapp/asignaciones",
+    "/asignaciones_vendedores",
     response_model=WhatsAppSalesAssignmentsResponse,
 )
-async def list_whatsapp_sales_assignments(
+async def list_sales_assignments(
     *,
     repo: CRMRepository = Depends(get_repository),
     organizacion_id: UUID = Depends(require_organizacion_id),
-    _: str = Depends(require_permission("conv.read")),
+    _: str = Depends(require_any_permission(["conv.read", "audit.view", "audit.view_all"])),
+    usuario_id: UUID | None = Depends(optional_usuario_id),
     limit: Annotated[int, Query(ge=1, le=200)] = 50,
     offset: Annotated[int, Query(ge=0)] = 0,
+    oportunidad_id: UUID | None = Query(default=None),
+    contacto_id: UUID | None = Query(default=None),
+    conversacion_id: UUID | None = Query(default=None),
+    vendedor_id: UUID | None = Query(default=None),
 ) -> WhatsAppSalesAssignmentsResponse:
+    if usuario_id is None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="auth_required")
+    can_view_all = await repo.current_user_has_perm(codigo="audit.view_all")
+    if not can_view_all and vendedor_id:
+        if not await repo.is_in_current_user_scope(usuario_id=vendedor_id):
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden")
+    if not can_view_all:
+        vendedor_id = usuario_id
     try:
         rows = await repo.list_whatsapp_sales_assignments(
             organizacion_id=organizacion_id,
             limit=limit,
             offset=offset,
+            oportunidad_id=oportunidad_id,
+            contacto_id=contacto_id,
+            conversacion_id=conversacion_id,
+            vendedor_id=vendedor_id,
         )
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
