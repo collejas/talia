@@ -6283,7 +6283,9 @@ async def reassign_opportunity(
 
     conversacion_actualizada = False
     if payload.alinear_conversacion and payload.conversacion_id:
-        await repo.update_conversation(
+        # Conversaciones usan RLS estricta; actualizamos con service role
+        service_repo = CRMRepository()
+        await service_repo.update_conversation(
             conversation_id=str(payload.conversacion_id),
             patch={"asignado_a_usuario_id": str(payload.asignado_usuario_id)},
         )

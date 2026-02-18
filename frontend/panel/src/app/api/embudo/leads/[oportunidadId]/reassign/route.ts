@@ -28,7 +28,7 @@ export async function POST(
 
   const response = await callCrmApi(`/crm/oportunidades/${oportunidadId}/reasignar`, {
     method: "POST",
-    body: JSON.stringify(payload),
+    body: payload,
     withUserToken: true,
   });
 

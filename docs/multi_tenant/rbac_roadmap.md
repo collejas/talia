@@ -38,23 +38,24 @@ Decisiones tomadas (2026-02-15)
 ## Fase 2: Reasignación de vendedor (feature)
 
 Backend:
-- Endpoint: “reasignar oportunidad” (y opcionalmente contacto/conversación).
-- Validación:
+- [x] Endpoint: “reasignar oportunidad” (alinea contacto y conversación).
+- [x] Validación:
   - permiso `pipeline.reassign.team` o `pipeline.reassign.any`
-  - regla jerárquica usando `equipo_usuario_ids` / `is_in_current_user_scope`
+  - regla jerárquica usando `is_in_current_user_scope`
   - misma `organizacion_id`
-- Auditoría:
-  - registrar evento (actor, from/to, motivo, timestamp, entidad) en `eventos_auditoria` y/o `asignaciones_vendedores`.
-- Efecto:
+- [x] Auditoría:
+  - registrar evento en `asignaciones_vendedores` (`manual_reassign`).
+- [x] Efecto:
   - actualizar `oportunidades.asignado_a_usuario_id`
   - actualizar `contactos.propietario_usuario_id`
   - actualizar `conversaciones.asignado_a_usuario_id`
-  - NO cambiar `oportunidades.propietario_usuario_id` (conservar creador)
+  - NO cambiar `oportunidades.propietario_usuario_id`
 
 Frontend:
-- UI en Embudo/Oportunidades para cambiar vendedor:
+- [x] UI en Embudo para cambiar vendedor:
   - selector de vendedores permitido (filtrado por scope)
-  - historial/auditoría de cambios (solo lectura)
+- [ ] Historial/auditoría de cambios (solo lectura)
+- [ ] Oportunidades/Contactos: UI de cambio de vendedor (pendiente si se decide)
 
 ## Fase 3: Inbox consistente con reasignaciones
 

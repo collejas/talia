@@ -61,14 +61,14 @@ Aplica a:
 
 ## 4) Endpoints/pantallas objetivo (plan)
 
-Backend (a implementar):
-- `PATCH /crm/oportunidades/{id}/reassign`:
+Backend (implementado):
+- `POST /crm/oportunidades/{id}/reasignar`:
   - requiere `pipeline.reassign.team` o `pipeline.reassign.any`
   - ejecuta alineación de oportunidad/contacto/conversación
+  - actualiza conversación con service role por RLS
 
-Panel (a implementar):
-- Embudo: acción “Cambiar vendedor” (visible si tiene permiso de reasignación).
+Panel:
+- [x] Embudo: acción “Cambiar vendedor” (visible si tiene permiso de reasignación).
 - Oportunidades: acción “Cambiar vendedor”.
 - Contactos: acción “Cambiar vendedor” (solo si se decide exponer).
 - Auditoría: vista completa si `audit.view_all`.
-
