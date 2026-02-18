@@ -116,3 +116,35 @@ Efecto esperado (alineación de asignaciones):
 
 No se cambia (para preservar el origen/creador):
 - `oportunidades.propietario_usuario_id`
+
+## 7) Checklist técnico: acceso `owner` (RLS + endpoints)
+
+Para que `owner` tenga acceso total a su tenant sin depender de `es_admin`, revisar y ajustar:
+
+Funciones SQL (agregar `es_owner` donde hoy se usa `es_admin`):
+- `public.puede_ver_contacto`
+- `public.puede_ver_conversacion`
+- `public.puede_ver_lead` (si aplica)
+- Cualquier función de “scope” que use `es_admin` como bypass total.
+
+Políticas RLS (agregar `es_owner` en las condiciones de “admin_all”):
+- `contactos_admin_all`
+- `clientes_admin_all`
+- `oportunidades_admin_all`
+- `usuarios_insert_admin` / `usuarios_update` / `usuarios_delete_admin`
+- `empleados_insert_admin` / `empleados_update_admin` / `empleados_delete_admin`
+
+Endpoints backend:
+- `/api/admin/*` (hoy “platform admin only”): permitir `owner` **solo** para su `organizacion_id`.
+- Endpoints de settings/roles/permisos que hoy asumen `es_admin` (validar que `owner` tenga acceso).
+
+Datos a exponer en permisos:
+- Si el panel necesita distinguir `owner`, agregar `es_owner` al payload de `/api/permissions` (o equivalente) para UI.
+
+## 8) Dependencias técnicas de `owner`
+
+Para que el rol `owner` funcione como “dueño” del tenant (sin acceso cross-tenant):
+- `public.es_owner(uid)` debe existir y evaluarse en RLS/funciones que hacen bypass por admin.
+- `public.mi_contexto_permisos()` debe exponer `es_owner` (o el rol debe incluirse en `roles[]`) para que el backend pueda decidir acceso.
+- Los endpoints `/api/admin/tenants/*` deben aceptar `owner` solo si el `organizacion_id` solicitado coincide con su tenant.
+- Acceso explícito a `organizaciones.config`, `organizacion_rutas_canal` y `secretos` del tenant, pero no a otros tenants.

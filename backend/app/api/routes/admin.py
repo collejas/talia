@@ -51,6 +51,15 @@ def get_crm_repo() -> CRMRepository:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
+def get_crm_repo_with_user(
+    user_token: str = Depends(require_user_token),
+) -> CRMRepository:
+    try:
+        return CRMRepository(user_token=user_token)
+    except CRMRepositoryError as exc:  # pragma: no cover
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
 def require_user_token(
     x_user_token: Annotated[str | None, Header(alias="X-User-Token")] = None,
     authorization: Annotated[str | None, Header(alias="Authorization")] = None,
@@ -87,6 +96,67 @@ async def require_platform_admin(
     if not allowed:
         raise HTTPException(status_code=403, detail="platform_admin_required")
     return user_id
+
+
+class AdminActor(BaseModel):
+    user_id: UUID
+    organizacion_id: UUID | None = None
+    is_platform_admin: bool = False
+    is_owner: bool = False
+
+
+def _is_owner_context(context: dict[str, Any]) -> bool:
+    if context.get("es_owner") is True:
+        return True
+    roles = context.get("roles")
+    if isinstance(roles, list):
+        return any(str(role).strip().lower() == "owner" for role in roles)
+    return False
+
+
+async def require_platform_admin_or_owner(
+    user_token: str = Depends(require_user_token),
+    repo: PlatformRepository = Depends(get_platform_repo),
+    crm_repo: CRMRepository = Depends(get_crm_repo_with_user),
+) -> AdminActor:
+    try:
+        user = await repo.auth_get_user(user_token=user_token)
+    except PlatformRepositoryError as exc:
+        raise HTTPException(status_code=401, detail=str(exc)) from exc
+    raw_id = user.get("id")
+    try:
+        user_id = UUID(str(raw_id))
+    except (TypeError, ValueError) as exc:
+        raise HTTPException(status_code=401, detail="auth_user_invalid") from exc
+
+    try:
+        allowed = await repo.is_platform_admin(user_id=user_id)
+    except PlatformRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    if allowed:
+        return AdminActor(user_id=user_id, is_platform_admin=True)
+
+    try:
+        context = await crm_repo.get_permission_context()
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    if not _is_owner_context(context):
+        raise HTTPException(status_code=403, detail="owner_required")
+
+    org_value = context.get("organizacion_id")
+    if not org_value:
+        raise HTTPException(status_code=403, detail="owner_without_org")
+    try:
+        organizacion_id = UUID(str(org_value))
+    except (TypeError, ValueError) as exc:
+        raise HTTPException(status_code=403, detail="owner_org_invalid") from exc
+
+    return AdminActor(
+        user_id=user_id,
+        organizacion_id=organizacion_id,
+        is_owner=True,
+    )
 
 
 @router.get("/me/platform-admin")
@@ -498,10 +568,12 @@ def _get_config_value(config: dict[str, Any], dotted_key: str) -> Any:
 
 @router.get("/tenants", response_model=TenantsResponse)
 async def list_tenants(
-    _: UUID = Depends(require_platform_admin),
+    actor: AdminActor = Depends(require_platform_admin_or_owner),
     repo: PlatformRepository = Depends(get_platform_repo),
 ) -> TenantsResponse:
     items = await repo.list_organizaciones()
+    if actor.is_owner:
+        items = [row for row in items if str(row.get("id")) == str(actor.organizacion_id)]
     return TenantsResponse(items=[TenantSummary.model_validate(row) for row in items])
 
 
@@ -685,9 +757,11 @@ async def create_tenant_with_admin(
 @router.get("/tenants/{organizacion_id}", response_model=TenantDetailResponse)
 async def get_tenant_info(
     organizacion_id: UUID,
-    _: UUID = Depends(require_platform_admin),
+    actor: AdminActor = Depends(require_platform_admin_or_owner),
     repo: PlatformRepository = Depends(get_platform_repo),
 ) -> TenantDetailResponse:
+    if actor.is_owner and actor.organizacion_id != organizacion_id:
+        raise HTTPException(status_code=403, detail="owner_scope_violation")
     row = await repo.get_organizacion_details(organizacion_id=organizacion_id)
     if not row:
         raise HTTPException(status_code=404, detail="tenant_not_found")
@@ -698,9 +772,11 @@ async def get_tenant_info(
 async def update_tenant_info(
     organizacion_id: UUID,
     payload: UpdateTenantRequest,
-    _: UUID = Depends(require_platform_admin),
+    actor: AdminActor = Depends(require_platform_admin_or_owner),
     repo: PlatformRepository = Depends(get_platform_repo),
 ) -> TenantDetailResponse:
+    if actor.is_owner and actor.organizacion_id != organizacion_id:
+        raise HTTPException(status_code=403, detail="owner_scope_violation")
     update_payload = payload.model_dump(exclude_none=True)
     if not update_payload:
         raise HTTPException(status_code=400, detail="nothing_to_update")
@@ -717,9 +793,11 @@ async def update_tenant_info(
 @router.get("/tenants/{organizacion_id}/routes", response_model=TenantRoutesResponse)
 async def list_tenant_routes(
     organizacion_id: UUID,
-    _: UUID = Depends(require_platform_admin),
+    actor: AdminActor = Depends(require_platform_admin_or_owner),
     repo: PlatformRepository = Depends(get_platform_repo),
 ) -> TenantRoutesResponse:
+    if actor.is_owner and actor.organizacion_id != organizacion_id:
+        raise HTTPException(status_code=403, detail="owner_scope_violation")
     routes = await repo.list_channel_routes(organizacion_id=organizacion_id)
     return TenantRoutesResponse(items=[ChannelRoute.model_validate(row) for row in routes])
 
@@ -728,9 +806,11 @@ async def list_tenant_routes(
 async def create_tenant_route(
     organizacion_id: UUID,
     payload: CreateRouteRequest,
-    _: UUID = Depends(require_platform_admin),
+    actor: AdminActor = Depends(require_platform_admin_or_owner),
     repo: PlatformRepository = Depends(get_platform_repo),
 ) -> CreateRouteResponse:
+    if actor.is_owner and actor.organizacion_id != organizacion_id:
+        raise HTTPException(status_code=403, detail="owner_scope_violation")
     canal = payload.canal.strip().lower()
     clave = payload.clave.strip().lower()
     if not canal or not clave:
@@ -755,9 +835,11 @@ async def create_tenant_route(
 async def delete_tenant_route(
     organizacion_id: UUID,
     route_id: UUID,
-    _: UUID = Depends(require_platform_admin),
+    actor: AdminActor = Depends(require_platform_admin_or_owner),
     repo: PlatformRepository = Depends(get_platform_repo),
 ) -> Response:
+    if actor.is_owner and actor.organizacion_id != organizacion_id:
+        raise HTTPException(status_code=403, detail="owner_scope_violation")
     try:
         await repo.delete_channel_route(organizacion_id=organizacion_id, route_id=route_id)
     except PlatformRepositoryError as exc:
@@ -768,9 +850,11 @@ async def delete_tenant_route(
 @router.get("/tenants/{organizacion_id}/config", response_model=TenantConfigResponse)
 async def get_tenant_config(
     organizacion_id: UUID,
-    _: UUID = Depends(require_platform_admin),
+    actor: AdminActor = Depends(require_platform_admin_or_owner),
     repo: PlatformRepository = Depends(get_platform_repo),
 ) -> TenantConfigResponse:
+    if actor.is_owner and actor.organizacion_id != organizacion_id:
+        raise HTTPException(status_code=403, detail="owner_scope_violation")
     config = await repo.get_organizacion_config(organizacion_id=organizacion_id)
     if config is None:
         raise HTTPException(status_code=404, detail="tenant_not_found")
@@ -781,11 +865,13 @@ async def get_tenant_config(
 async def set_tenant_config(
     organizacion_id: UUID,
     payload: SetTenantConfigRequest,
-    user_id: UUID = Depends(require_platform_admin),
+    actor: AdminActor = Depends(require_platform_admin_or_owner),
     repo: PlatformRepository = Depends(get_platform_repo),
 ) -> TenantConfigResponse:
+    if actor.is_owner and actor.organizacion_id != organizacion_id:
+        raise HTTPException(status_code=403, detail="owner_scope_violation")
     try:
-        _ = user_id  # reservado para auditoría futura
+        _ = actor.user_id  # reservado para auditoría futura
         row = await repo.set_organizacion_config(organizacion_id=organizacion_id, config=payload.config)
     except PlatformRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
@@ -799,9 +885,11 @@ async def set_tenant_config(
 @router.get("/tenants/{organizacion_id}/secrets", response_model=TenantSecretsResponse)
 async def list_tenant_secrets(
     organizacion_id: UUID,
-    _: UUID = Depends(require_platform_admin),
+    actor: AdminActor = Depends(require_platform_admin_or_owner),
     repo: PlatformRepository = Depends(get_platform_repo),
 ) -> TenantSecretsResponse:
+    if actor.is_owner and actor.organizacion_id != organizacion_id:
+        raise HTTPException(status_code=403, detail="owner_scope_violation")
     items = await repo.list_secret_metadata(organizacion_id=organizacion_id)
     return TenantSecretsResponse(items=[SecretMetadata.model_validate(row) for row in items])
 
@@ -811,9 +899,11 @@ async def set_tenant_secret(
     organizacion_id: UUID,
     clave: str,
     payload: SetTenantSecretRequest,
-    user_id: UUID = Depends(require_platform_admin),
+    actor: AdminActor = Depends(require_platform_admin_or_owner),
     repo: PlatformRepository = Depends(get_platform_repo),
 ) -> SetTenantSecretResponse:
+    if actor.is_owner and actor.organizacion_id != organizacion_id:
+        raise HTTPException(status_code=403, detail="owner_scope_violation")
     secret_key = _normalize_secret_key(clave)
 
     master_key = _get_master_key_for_tier(payload.tier)
@@ -842,6 +932,7 @@ async def set_tenant_secret(
             nonce=nonce_b64,
             etiqueta=etiqueta,
             version=version,
+            updated_by=actor.user_id,
         )
     except PlatformRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
@@ -865,9 +956,11 @@ async def set_tenant_secret(
 async def delete_tenant_secret(
     organizacion_id: UUID,
     clave: str,
-    _: UUID = Depends(require_platform_admin),
+    actor: AdminActor = Depends(require_platform_admin_or_owner),
     repo: PlatformRepository = Depends(get_platform_repo),
 ) -> Response:
+    if actor.is_owner and actor.organizacion_id != organizacion_id:
+        raise HTTPException(status_code=403, detail="owner_scope_violation")
     secret_key = _normalize_secret_key(clave)
     try:
         await repo.delete_secret(organizacion_id=organizacion_id, clave=secret_key)
@@ -880,9 +973,11 @@ async def delete_tenant_secret(
 async def validate_tenant(
     organizacion_id: UUID,
     scope: Literal["webchat", "calendar", "mail", "twilio", "messenger", "full"] = "full",
-    _: UUID = Depends(require_platform_admin),
+    actor: AdminActor = Depends(require_platform_admin_or_owner),
     repo: PlatformRepository = Depends(get_platform_repo),
 ) -> TenantValidationReport:
+    if actor.is_owner and actor.organizacion_id != organizacion_id:
+        raise HTTPException(status_code=403, detail="owner_scope_violation")
     config = await repo.get_organizacion_config(organizacion_id=organizacion_id)
     if config is None:
         raise HTTPException(status_code=404, detail="tenant_not_found")
