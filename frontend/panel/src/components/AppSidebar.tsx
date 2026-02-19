@@ -99,6 +99,7 @@ const NAVIGATION: {
         { title: "Campañas", url: "/crm/campanas", permission: "campaigns.view" },
         { title: "Notas", url: "/crm/notas", permission: "notes.view" },
         { title: "Asignaciones WhatsApp", url: "/crm/whatsapp/asignaciones", permission: "conv.assign" },
+        { title: "Auditoría reasignaciones", url: "/crm/asignaciones-vendedores", permission: ["audit.view", "audit.view_all"] },
       ],
     },
     {

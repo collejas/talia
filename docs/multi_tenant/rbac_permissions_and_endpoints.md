@@ -72,4 +72,5 @@ Panel:
 - [x] Oportunidades: acción “Cambiar vendedor”.
 - [x] Contactos: acción “Cambiar vendedor”.
 - [x] Auditoría de reasignaciones en Oportunidades (lectura).
+- [x] Vista global de auditoría de reasignaciones (CRM).
 - Auditoría: vista completa si `audit.view_all`.

@@ -57,6 +57,7 @@ Frontend:
 - [x] Oportunidades: UI de cambio de vendedor.
 - [x] Historial/auditoría de cambios (solo lectura)
 - [x] Contactos: UI de cambio de vendedor.
+- [x] Vista global de auditoría de reasignaciones (CRM).
 
 ## Fase 3: Inbox consistente con reasignaciones
 

@@ -106,6 +106,22 @@ function renderField(row: TableRow, key: ContactField): React.ReactNode {
   }
 }
 
+function extractUnknown(raw: Record<string, unknown> | undefined, path: string[]): unknown {
+  if (!raw) return undefined;
+  let current: unknown = raw;
+  for (const key of path) {
+    if (!current || typeof current !== "object") return undefined;
+    current = (current as Record<string, unknown>)[key];
+  }
+  return current;
+}
+
+function extractString(raw: Record<string, unknown> | undefined, path: string[]): string | null {
+  const value = extractUnknown(raw, path);
+  if (typeof value === "string" && value.trim().length) return value.trim();
+  return null;
+}
+
 const CONTACT_COLUMNS: Array<{
   id: string;
   label: string;
