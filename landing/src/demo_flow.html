@@ -70,7 +70,7 @@
 
 <!-- Progress Indicator Top -->
 <div class="fixed top-0 left-0 w-full h-1 bg-slate-100 z-50">
-  <div class="h-full bg-primary transition-all duration-500" id="progress-bar" style="width: 14.2857%;"></div>
+  <div class="h-full bg-primary transition-all duration-500" id="progress-bar" style="width: 20%;"></div>
 </div>
 
 <!-- Navigation Header -->
@@ -109,8 +109,8 @@
     </div>
   </section>
 
-  <!-- Slide 2: Contexto de la demostración -->
-  <section class="slide fade-in" id="slide-3">
+  <!-- Slide 2: Contexto de la demostración (ANTES era slide 3) -->
+  <section class="slide fade-in" id="slide-2">
     <div class="max-w-5xl w-full">
       <div class="max-w-3xl">
         <span class="text-primary font-bold tracking-widest text-xs uppercase mb-4 block">Contexto</span>
@@ -165,8 +165,8 @@
     </div>
   </section>
 
-  <!-- Slide 3: Arquitectura del flujo -->
-  <section class="slide fade-in" id="slide-4">
+  <!-- Slide 3: Arquitectura del flujo (ANTES era slide 4) -->
+  <section class="slide fade-in" id="slide-3">
     <div class="max-w-6xl w-full">
       <h2 class="text-4xl md:text-5xl font-bold tracking-tight mb-12 text-center">Arquitectura del flujo</h2>
 
@@ -199,8 +199,8 @@
     </div>
   </section>
 
-  <!-- Slide 4: Qué vamos a validar -->
-  <section class="slide fade-in" id="slide-2">
+  <!-- Slide 4: Qué vamos a validar (ANTES era slide 2) -->
+  <section class="slide fade-in" id="slide-4">
     <div class="max-w-6xl w-full">
       <div class="max-w-4xl">
         <span class="text-primary font-bold tracking-widest text-xs uppercase mb-4 block">Objetivo</span>
@@ -239,6 +239,13 @@
             <p class="text-slate-500 text-sm">Vendedor asignado + propuesta de cita.</p>
           </div>
         </div>
+        <div class="p-6 rounded-2xl bg-slate-50 border border-slate-100 flex items-start gap-4">
+          <span class="material-symbols-outlined text-primary">description</span>
+          <div>
+            <p class="font-bold">Documentación & cierre</p>
+            <p class="text-slate-500 text-sm">Si el prospecto decide comprar, el asistente solicita documentos y automatiza el seguimiento hasta el cierre.</p>
+          </div>
+        </div>
         <div class="p-6 rounded-2xl bg-slate-50 border border-slate-100 flex items-start gap-4 md:col-span-2">
           <span class="material-symbols-outlined text-primary">visibility</span>
           <div>
@@ -257,226 +264,8 @@
     </div>
   </section>
 
-  <!-- Slide 3: Contexto de la demostración -->
-  <section class="slide fade-in" id="slide-3">
-    <div class="max-w-5xl w-full">
-      <div class="max-w-3xl">
-        <span class="text-primary font-bold tracking-widest text-xs uppercase mb-4 block">Contexto</span>
-        <h2 class="text-4xl md:text-5xl font-bold tracking-tight mb-6">Contexto de la demostración</h2>
-        <p class="text-xl text-slate-600 mb-10">
-          Para que la evaluación sea justa y comparable, hoy operamos con un entorno de prueba.
-        </p>
-      </div>
-
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div class="p-8 rounded-3xl bg-white border border-slate-100 shadow-sm">
-          <div class="flex items-start gap-4">
-            <span class="material-symbols-outlined text-primary">science</span>
-            <div>
-              <p class="font-bold">Datos simulados</p>
-              <p class="text-slate-500 text-sm mt-1">Inventario y escenarios de ejemplo (solo para demostrar el motor).</p>
-            </div>
-          </div>
-        </div>
-        <div class="p-8 rounded-3xl bg-white border border-slate-100 shadow-sm">
-          <div class="flex items-start gap-4">
-            <span class="material-symbols-outlined text-primary">schema</span>
-            <div>
-              <p class="font-bold">Flujo genérico</p>
-              <p class="text-slate-500 text-sm mt-1">Plantilla base de ventas: captura, perfilamiento y cita.</p>
-            </div>
-          </div>
-        </div>
-        <div class="p-8 rounded-3xl bg-white border border-slate-100 shadow-sm">
-          <div class="flex items-start gap-4">
-            <span class="material-symbols-outlined text-primary">tune</span>
-            <div>
-              <p class="font-bold">Motor configurable</p>
-              <p class="text-slate-500 text-sm mt-1">Se ajusta a su catálogo (casas/terrenos), reglas y políticas.</p>
-            </div>
-          </div>
-        </div>
-        <div class="p-8 rounded-3xl bg-white border border-slate-100 shadow-sm">
-          <div class="flex items-start gap-4">
-            <span class="material-symbols-outlined text-primary">verified</span>
-            <div>
-              <p class="font-bold">Implementación real</p>
-              <p class="text-slate-500 text-sm mt-1">Opera con su inventario, zonas, criterios de calificación y asignación.</p>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div class="mt-10 text-center text-slate-500 text-sm">
-        <span class="font-semibold">Idea clave:</span> hoy validamos el <span class="font-semibold">motor</span>; la <span class="font-semibold">configuración</span> se hace a medida.
-      </div>
-    </div>
-  </section>
-
-  <!-- Slide 4: Arquitectura del flujo -->
-  <section class="slide fade-in" id="slide-4">
-    <div class="max-w-6xl w-full">
-      <h2 class="text-4xl md:text-5xl font-bold tracking-tight mb-12 text-center">Arquitectura del flujo</h2>
-
-      <div class="bg-slate-50 p-10 md:p-12 rounded-3xl border border-slate-100 flex flex-col md:flex-row items-center justify-center gap-6 md:gap-10">
-        <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 w-56 text-center">
-          <span class="text-xs text-slate-400 block mb-2">ENTRADA</span>
-          <p class="font-bold">Prospecto</p>
-        </div>
-        <span class="material-symbols-outlined text-slate-300">arrow_forward</span>
-        <div class="bg-primary text-white p-6 rounded-2xl shadow-lg w-56 text-center ring-4 ring-primary/10">
-          <span class="text-xs text-white/70 block mb-2">MOTOR</span>
-          <p class="font-bold">Asistente IA</p>
-        </div>
-        <span class="material-symbols-outlined text-slate-300">arrow_forward</span>
-        <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 w-56 text-center">
-          <span class="text-xs text-slate-400 block mb-2">CENTRAL</span>
-          <p class="font-bold">CRM</p>
-        </div>
-        <span class="material-symbols-outlined text-slate-300">arrow_forward</span>
-        <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 w-56 text-center">
-          <span class="text-xs text-slate-400 block mb-2">RESULTADO</span>
-          <p class="font-bold">Cita / Seguimiento</p>
-        </div>
-      </div>
-
-      <p class="text-center mt-8 text-slate-500 flex items-center justify-center gap-2">
-        <span class="material-symbols-outlined text-primary text-sm">verified</span>
-        Todo lo que ocurra en la conversación queda estructurado y medible.
-      </p>
-    </div>
-  </section>
-
-  <!-- Slide 5: Funnel antes del chat -->
+<!-- Slide 5: Inicio -->
   <section class="slide fade-in" id="slide-5">
-    <div class="max-w-6xl w-full grid md:grid-cols-2 gap-12 items-center">
-      <div>
-        <span class="text-primary font-bold tracking-widest text-xs uppercase mb-4 block">CRM primero</span>
-        <h2 class="text-4xl md:text-5xl font-bold tracking-tight mb-6">Funnel antes del chat</h2>
-        <p class="text-xl text-slate-600 mb-8">
-          La conversación solo dispara el proceso. El valor se evidencia en el CRM.
-        </p>
-        <div class="p-5 rounded-2xl border border-primary/20 bg-primary/5 text-slate-700 flex items-start gap-3">
-          <span class="material-symbols-outlined text-primary">priority_high</span>
-          <p class="text-sm leading-relaxed">
-            <span class="font-semibold">Hoy miraremos 3 cosas:</span> el lead creado, el estado del funnel y la siguiente acción automática.
-          </p>
-        </div>
-      </div>
-
-      <div class="bg-white rounded-3xl border border-slate-100 shadow-sm p-8">
-        <div class="flex items-center justify-between mb-6">
-          <p class="text-sm font-bold tracking-tight">Pipeline</p>
-          <span class="text-xs font-medium text-slate-400 uppercase tracking-widest">Vista demo</span>
-        </div>
-
-        <div class="grid grid-cols-1 gap-3">
-          <div class="flex items-center justify-between p-4 rounded-2xl bg-slate-50 border border-slate-100">
-            <div class="flex items-center gap-3">
-              <span class="material-symbols-outlined text-slate-400">fiber_new</span>
-              <p class="font-semibold">Nuevo lead</p>
-            </div>
-            <span class="text-xs font-semibold text-slate-400 uppercase">Entrada</span>
-          </div>
-          <div class="flex items-center justify-between p-4 rounded-2xl bg-slate-50 border border-slate-100">
-            <div class="flex items-center gap-3">
-              <span class="material-symbols-outlined text-slate-400">tune</span>
-              <p class="font-semibold">Perfilado</p>
-            </div>
-            <span class="text-xs font-semibold text-slate-400 uppercase">Calificación</span>
-          </div>
-          <div class="flex items-center justify-between p-4 rounded-2xl bg-primary/5 border border-primary/15">
-            <div class="flex items-center gap-3">
-              <span class="material-symbols-outlined text-primary">event</span>
-              <p class="font-semibold">Cita agendada</p>
-            </div>
-            <span class="text-xs font-semibold text-primary uppercase">Objetivo</span>
-          </div>
-          <div class="flex items-center justify-between p-4 rounded-2xl bg-slate-50 border border-slate-100">
-            <div class="flex items-center gap-3">
-              <span class="material-symbols-outlined text-slate-400">handshake</span>
-              <p class="font-semibold">Negociación</p>
-            </div>
-            <span class="text-xs font-semibold text-slate-400 uppercase">Proceso</span>
-          </div>
-          <div class="flex items-center justify-between p-4 rounded-2xl bg-slate-50 border border-slate-100">
-            <div class="flex items-center gap-3">
-              <span class="material-symbols-outlined text-slate-400">check_circle</span>
-              <p class="font-semibold">Cierre</p>
-            </div>
-            <span class="text-xs font-semibold text-slate-400 uppercase">Resultado</span>
-          </div>
-        </div>
-
-        <div class="mt-6 flex items-center justify-between text-xs text-slate-400">
-          <span>Campos: contacto · necesidad · score · dueño</span>
-          <span class="font-semibold">Trazabilidad</span>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <!-- Slide 6: Escenario predefinido -->
-  <section class="slide fade-in" id="slide-6">
-    <div class="max-w-6xl w-full">
-      <div class="max-w-4xl">
-        <span class="text-primary font-bold tracking-widest text-xs uppercase mb-4 block">Escenario</span>
-        <h2 class="text-4xl md:text-5xl font-bold tracking-tight mb-6">Escenario de validación</h2>
-        <p class="text-xl text-slate-600 mb-10">
-          Vamos a ejecutar <span class="font-semibold">un escenario definido</span> de principio a fin para validar el flujo.
-        </p>
-      </div>
-
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div class="p-8 rounded-3xl bg-white border border-slate-100 shadow-sm">
-          <div class="flex items-start gap-4">
-            <span class="material-symbols-outlined text-primary">location_on</span>
-            <div>
-              <p class="font-bold">Zona</p>
-              <p class="text-slate-500 text-sm mt-1">Definida en demo (editable en implementación).</p>
-            </div>
-          </div>
-        </div>
-        <div class="p-8 rounded-3xl bg-white border border-slate-100 shadow-sm">
-          <div class="flex items-start gap-4">
-            <span class="material-symbols-outlined text-primary">home</span>
-            <div>
-              <p class="font-bold">Tipo de interés</p>
-              <p class="text-slate-500 text-sm mt-1">Caso ejemplo: compra/visita (se ajusta a casas/terrenos).</p>
-            </div>
-          </div>
-        </div>
-        <div class="p-8 rounded-3xl bg-white border border-slate-100 shadow-sm">
-          <div class="flex items-start gap-4">
-            <span class="material-symbols-outlined text-primary">payments</span>
-            <div>
-              <p class="font-bold">Rango</p>
-              <p class="text-slate-500 text-sm mt-1">Se valida perfilamiento sin fricción (2–4 preguntas).</p>
-            </div>
-          </div>
-        </div>
-        <div class="p-8 rounded-3xl bg-white border border-slate-100 shadow-sm">
-          <div class="flex items-start gap-4">
-            <span class="material-symbols-outlined text-primary">event_available</span>
-            <div>
-              <p class="font-bold">Meta</p>
-              <p class="text-slate-500 text-sm mt-1">Agendar cita y registrar todo en el funnel.</p>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div class="mt-10 p-5 rounded-2xl border border-slate-200 bg-slate-50 text-slate-700 flex items-start gap-3">
-        <span class="material-symbols-outlined text-slate-400">chat</span>
-        <p class="text-sm leading-relaxed">
-          Si durante la sesión aparece otro caso (por ejemplo, <span class="font-semibold">terrenos</span>), se registra como <span class="font-semibold">Escenario 2</span> y se revisa al final.
-        </p>
-      </div>
-    </div>
-  </section>
-
-  <!-- Slide 7: Inicio -->
-  <section class="slide fade-in" id="slide-7">
     <div class="max-w-5xl text-center">
       <span class="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-primary/5 border border-primary/15 text-xs font-semibold tracking-wider uppercase text-primary mb-8">
         <span class="material-symbols-outlined text-base">play_circle</span>
@@ -522,12 +311,12 @@
 
 <!-- Slide counter -->
 <div class="fixed bottom-10 left-10 text-xs font-bold tracking-widest text-slate-300 uppercase z-50">
-  Slide <span id="current-slide-num">01</span> / 07
+  Slide <span id="current-slide-num">01</span> / 05
 </div>
 
 <script>
   let currentSlide = 1;
-  const totalSlides = 7;
+  const totalSlides = 5;
 
   function updateSlide() {
     document.querySelectorAll('.slide').forEach(s => s.classList.remove('active'));
