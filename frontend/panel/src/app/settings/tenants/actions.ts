@@ -54,6 +54,10 @@ export type TenantCreationResponse = {
   activo?: boolean | null
 }
 
+export type TenantCreationActionResult =
+  | { ok: true; data: TenantCreationResponse }
+  | { ok: false; error: string }
+
 const DEFAULT_SEED: SeedPayload = {
   departamento: "Administración",
   puesto: "Admin CRM",
@@ -67,14 +71,14 @@ const DEFAULT_SEED: SeedPayload = {
 
 export async function createTenantWithAdmin(
   payload: TenantWithAdminPayload,
-): Promise<TenantCreationResponse> {
+): Promise<TenantCreationActionResult> {
   const nombre = payload.tenant.nombre?.trim()
   if (!nombre) {
-    throw new Error("El nombre del tenant es obligatorio.")
+    return { ok: false, error: "El nombre del tenant es obligatorio." }
   }
   const correo = payload.admin.correo?.trim()
   if (!correo) {
-    throw new Error("El correo del admin es obligatorio.")
+    return { ok: false, error: "El correo del admin es obligatorio." }
   }
 
   const tenantBody: TenantPayload = {
@@ -110,9 +114,9 @@ export async function createTenantWithAdmin(
   })
 
   if (!response.ok) {
-    throw new Error(response.error)
+    return { ok: false, error: response.error || "No se pudo crear el tenant." }
   }
 
   revalidatePath("/settings/tenants")
-  return response.data
+  return { ok: true, data: response.data }
 }

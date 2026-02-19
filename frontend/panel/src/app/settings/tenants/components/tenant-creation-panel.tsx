@@ -98,7 +98,11 @@ export function TenantCreationPanel() {
     setLoading(true)
     try {
       const result = await createTenantWithAdmin(payload)
-      setSuccess(result)
+      if (!result.ok) {
+        setError(result.error || "No se pudo crear el tenant.")
+        return
+      }
+      setSuccess(result.data)
       setForm((prev) => ({
         ...prev,
         name: "",

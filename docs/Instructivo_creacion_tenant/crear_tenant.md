@@ -59,8 +59,10 @@ El método `create_tenant_with_admin` en `backend/app/api/routes/admin.py` sigue
    - Este paso evita que el owner tenga que capturar manualmente IDs internos de BD.
 2. **Alias webchat**: si se envía `webchat_alias`, el backend crea una fila en `organizacion_rutas_canal` con `canal="webchat"` y `clave=alias.lower()` y llama a `channel_routing.invalidate_cache` para que el router detecte el alias nuevo.
 3. **Semillas**:
-   - Insertar permisos (`permisos`) con `create_permissions`. Cada permiso queda con `codigo` y `descripcion`.
-   - Crear rol (`roles`) y asociarlo a los permisos (`roles_permisos`) via `create_role` + `create_role_permission`.
+   - Sembrar catálogo base de permisos tenant (incluye permisos de navegación del panel, settings, CRM, prospección y compatibilidad legacy de middleware).
+   - Crear/asegurar catálogo de roles base del tenant (`owner`, `admin_operativo`, `supervisor`, `agente`, `capturista`, `marketing`, `soporte`, `auditor`, `invitado`).
+   - Asociar permisos base a roles semilla. `owner` y roles administrativos quedan con cobertura alta para operar la app desde el día 1.
+   - Crear/asegurar rol de seed (`payload.seed.rol_nombre`) y asociar sus permisos explícitos.
    - Crear departamento y puesto (`departamentos`, `puestos`).
 4. **Usuario Supabase**: `create_supabase_user` (en `backend/app/services/supabase_admin.py`) lanza:
    - `POST /auth/v1/admin/users` + `PUT /auth/v1/admin/users/{id}` para fijar metadata/app_metadata con `organizacion_id`. Se genera una contraseña temporal, se marca `email_confirm`, y se formatea el teléfono a E.164 (fallback `+000...` si no es válido).
@@ -190,72 +192,75 @@ Objetivo del plan:
 ### Fase A: Bootstrap técnico automático (backend)
 
 Estado esperado al finalizar:
-- [ ] `POST /admin/tenants` y `POST /admin/tenants/con_usuario` crean `calendar_resources` por tenant si falta.
-- [ ] `organizaciones.config.webchat.calendar.resource_id` queda asignado automáticamente.
-- [ ] Se escriben defaults faltantes de `webchat.calendar.*` y `calendar.*` sin pisar valores existentes.
-- [ ] Si falla bootstrap, la API responde error controlado (`502`) y no queda onboarding “a medias”.
+- [x] `POST /admin/tenants` y `POST /admin/tenants/con_usuario` crean `calendar_resources` por tenant si falta.
+- [x] `organizaciones.config.webchat.calendar.resource_id` queda asignado automáticamente.
+- [x] Se escriben defaults faltantes de `webchat.calendar.*` y `calendar.*` sin pisar valores existentes.
+- [x] Si falla bootstrap, la API responde error controlado (`502`) y no queda onboarding “a medias”.
 
 Plan de ejecución (configuración):
 1. [x] Extender `_build_default_tenant_config` para inyectar defaults base de `features.webchat`, `webchat.*` operativo y `webchat.calendar.*`.
 2. [x] Mantener merge no destructivo (`_merge_missing_config`) para no sobrescribir configuración ya capturada en payload o UI.
 3. [x] Incluir defaults técnicos reutilizables de `mail.*`, `denue.base_url` y `brevo.base_url`.
 4. [ ] Agregar/ajustar tests automáticos de creación de tenant con validación de `config` bootstrap.
-5. [ ] Validar en entorno real que el owner de tenant nuevo puede entrar a `/settings/variables` sin datos manuales internos.
+5. [x] Validar en entorno real que el owner de tenant nuevo puede entrar a `/settings/variables` sin datos manuales internos.
 
 Validación:
-- [ ] Tenant nuevo aparece con `resource_id` válido en `organizaciones.config`.
-- [ ] Existe fila relacionada en `public.calendar_resources` con el mismo `organizacion_id`.
-- [ ] En `/settings/variables` (tenant), Calendario muestra `resource_id` en solo lectura.
+- [x] Tenant nuevo aparece con `resource_id` válido en `organizaciones.config`.
+- [x] Existe fila relacionada en `public.calendar_resources` con el mismo `organizacion_id`.
+- [x] En `/settings/variables` (tenant), Calendario muestra `resource_id` en solo lectura.
 
 ### Fase B: Bootstrap de seguridad (roles/permisos/usuario maestro)
 
 Estado esperado al finalizar:
-- [ ] Usuario maestro se asigna a `owner` (si existe), o al rol administrativo fallback.
-- [ ] Se garantizan permisos críticos: `ver_panel`, `settings.view`, `settings.manage`, `user.manage`, `role.manage`.
-- [ ] El rol administrativo queda con permisos altos del tenant para operar settings/usuarios/roles.
-- [ ] La asignación siempre se guarda en `usuarios_roles` con `organizacion_id` correcta.
+- [x] Usuario maestro se asigna a `owner` (si existe), o al rol administrativo fallback.
+- [x] Se garantizan permisos críticos: `ver_panel`, `settings.view`, `settings.manage`, `user.manage`, `role.manage`.
+- [x] El rol administrativo queda con permisos altos del tenant para operar settings/usuarios/roles.
+- [x] La asignación siempre se guarda en `usuarios_roles` con `organizacion_id` correcta.
+- [x] Se siembra catálogo base de permisos tenant (incluye permisos de navegación y compatibilidad legacy).
+- [x] Se siembra catálogo base de roles tenant (`owner`, `admin_operativo`, `supervisor`, `agente`, `capturista`, `marketing`, `soporte`, `auditor`, `invitado`).
 
 Validación:
-- [ ] `mi_contexto_permisos` del usuario maestro refleja permisos de settings y panel.
-- [ ] `/settings/variables` carga sin errores de permisos.
-- [ ] El usuario puede gestionar configuración y secretos de su tenant.
+- [x] `mi_contexto_permisos` del usuario maestro refleja permisos de settings y panel.
+- [x] `/settings/variables` carga sin errores de permisos.
+- [x] El usuario puede gestionar configuración y secretos de su tenant.
 
 ### Fase C: Aislamiento estricto por tenant (scope)
 
 Estado esperado al finalizar:
-- [ ] Los endpoints owner-enabled (`/admin/tenants/*`) validan `owner_scope_violation` fuera de su organización.
-- [ ] El owner no puede listar ni editar recursos de otro tenant.
-- [ ] El sidebar/UI no expone operaciones cross-tenant a usuarios no `platform_admin`.
+- [x] Los endpoints owner-enabled (`/admin/tenants/*`) validan `owner_scope_violation` fuera de su organización.
+- [x] El owner no puede listar ni editar recursos de otro tenant.
+- [x] El sidebar/UI no expone operaciones cross-tenant a usuarios no `platform_admin`.
 
 Validación:
-- [ ] Prueba negativa: owner tenant A intentando `/admin/tenants/{tenantB}` devuelve `403`.
-- [ ] Prueba positiva: owner tenant A operando `/tenant/me/*` y `/admin/tenants/{tenantA}/*` funciona.
+- [x] Prueba negativa: owner tenant A intentando `/admin/tenants/{tenantB}` devuelve `403`.
+- [x] Prueba positiva: owner tenant A operando `/tenant/me/*` y `/admin/tenants/{tenantA}/*` funciona.
 
 ### Fase D: Backfill de tenants existentes
 
 Estado esperado al finalizar:
-- [ ] Script SQL de backfill corrige tenants previos al cambio:
+- [x] Script SQL de backfill corrige tenants previos al cambio (ejecutado manualmente en tenant de prueba):
   - owner asignado al usuario maestro,
   - permisos altos de owner,
   - `calendar_resources` + `webchat.calendar.resource_id` cuando falten.
-- [ ] Resultado auditable por tenant (antes/después).
+- [x] Resultado auditable por tenant (antes/después).
+- [ ] Pendiente formalizar el backfill como migración SQL versionada en `supabase/migrations`.
 
 Validación:
-- [ ] Para cada tenant existente: owner + permisos críticos + resource_id enlazado.
-- [ ] Cero regresiones en tenant legacy y tenant de pruebas.
+- [x] Para cada tenant existente en entorno de pruebas: owner + permisos críticos + resource_id enlazado.
+- [x] Cero regresiones en tenant de pruebas.
 
 ### Fase E: Pruebas de aceptación (obligatorias)
 
 Casos mínimos:
-- [ ] Crear tenant por UI (`/settings/tenants`) con usuario admin.
-- [ ] Iniciar sesión como owner del nuevo tenant.
-- [ ] Entrar a `/settings/variables` y guardar cambios en Webchat/Calendario/Mail.
-- [ ] Validar scope: owner no accede a otro tenant.
-- [ ] Validar que platform admin sí mantiene acceso cross-tenant.
+- [x] Crear tenant por UI (`/settings/tenants`) con usuario admin.
+- [x] Iniciar sesión como owner del nuevo tenant.
+- [x] Entrar a `/settings/variables` y guardar cambios en Webchat/Calendario/Mail.
+- [x] Validar scope: owner no accede a otro tenant.
+- [x] Validar que platform admin sí mantiene acceso cross-tenant.
 
 ### Entregables
 
-- [ ] Código backend de bootstrap y scope.
-- [ ] Ajustes frontend de UX para campos internos (`resource_id` readonly en tenant).
+- [x] Código backend de bootstrap y scope.
+- [x] Ajustes frontend de UX para campos internos (`resource_id` readonly en tenant).
 - [ ] SQL de backfill versionado y reusable.
-- [ ] Documentación actualizada (`crear_tenant.md`, `rbac_and_scope.md`, `Matriz-permisos-v2.md`).
+- [x] Documentación actualizada (`crear_tenant.md`, `rbac_and_scope.md`, `Matriz-permisos-v2.md`).

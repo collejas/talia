@@ -17,11 +17,12 @@ from app.repositories.crm import CRMRepository, CRMRepositoryError
 from app.repositories.platform_admin import PlatformRepository, PlatformRepositoryError
 from app.services import channel_routing
 from app.services.role_permissions_sync import (
+    RolePermissionPlan,
     compute_matrix_hash,
     parse_role_permissions_matrix,
     sync_role_permissions,
 )
-from app.services.supabase_admin import SupabaseAdminError, create_supabase_user
+from app.services.supabase_admin import SupabaseAdminError, create_supabase_user, is_email_registered
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 logger = get_logger("app.api.admin")
@@ -675,6 +676,192 @@ CRITICAL_OWNER_PERMISSION_CODES = (
 )
 
 
+TENANT_BASE_PERMISSION_CODES = (
+    "ver_panel",
+    "ver_inbox",
+    "conv.read",
+    "conv.write",
+    "conv.assign",
+    "contacts.read",
+    "contacts.write",
+    "messages.read",
+    "messages.write",
+    "calls.read",
+    "calls.write",
+    "reports.view",
+    "role.manage",
+    "user.manage",
+    "settings.view",
+    "settings.manage",
+    "leads.view",
+    "pipeline.view",
+    "agenda.view",
+    "propuesta.view",
+    "clientes.view",
+    "propiedades.view",
+    "activities.view",
+    "tickets.view",
+    "campaigns.view",
+    "notes.view",
+    "files.view",
+    "audit.view",
+    "busquedas.view",
+    "busquedas.run",
+    "busquedas.delete",
+    "prospectos.create",
+    # Compatibilidad con rutas legacy en middleware.
+    "ver_busquedas_google",
+    "ver_busquedas_inegi",
+    "ejecutar_busquedas",
+)
+
+
+def _normalize_role_name(raw: str) -> str:
+    return raw.split("(", 1)[0].strip()
+
+
+def _default_tenant_role_plans() -> list[RolePermissionPlan]:
+    owner_perms = tuple(dict.fromkeys(TENANT_BASE_PERMISSION_CODES))
+    return [
+        RolePermissionPlan(role_name="owner", permissions=owner_perms),
+        RolePermissionPlan(role_name="admin_operativo", permissions=owner_perms),
+        RolePermissionPlan(
+            role_name="supervisor",
+            permissions=(
+                "ver_panel",
+                "ver_inbox",
+                "conv.read",
+                "conv.write",
+                "conv.assign",
+                "contacts.read",
+                "contacts.write",
+                "messages.read",
+                "messages.write",
+                "reports.view",
+                "leads.view",
+                "pipeline.view",
+                "agenda.view",
+                "propuesta.view",
+                "clientes.view",
+                "propiedades.view",
+                "campaigns.view",
+                "activities.view",
+                "notes.view",
+                "tickets.view",
+                "busquedas.view",
+                "busquedas.run",
+                "prospectos.create",
+                "ver_busquedas_google",
+                "ver_busquedas_inegi",
+                "ejecutar_busquedas",
+                "settings.view",
+            ),
+        ),
+        RolePermissionPlan(
+            role_name="agente",
+            permissions=(
+                "ver_panel",
+                "ver_inbox",
+                "conv.read",
+                "conv.write",
+                "contacts.read",
+                "contacts.write",
+                "messages.read",
+                "messages.write",
+                "leads.view",
+                "pipeline.view",
+                "agenda.view",
+                "propuesta.view",
+                "clientes.view",
+                "propiedades.view",
+            ),
+        ),
+        RolePermissionPlan(
+            role_name="capturista",
+            permissions=(
+                "ver_panel",
+                "contacts.read",
+                "contacts.write",
+                "clientes.view",
+                "agenda.view",
+                "pipeline.view",
+            ),
+        ),
+        RolePermissionPlan(
+            role_name="marketing",
+            permissions=(
+                "ver_panel",
+                "busquedas.view",
+                "busquedas.run",
+                "busquedas.delete",
+                "prospectos.create",
+                "campaigns.view",
+                "contacts.read",
+                "messages.read",
+                "reports.view",
+                "ver_busquedas_google",
+                "ver_busquedas_inegi",
+                "ejecutar_busquedas",
+            ),
+        ),
+        RolePermissionPlan(
+            role_name="soporte",
+            permissions=(
+                "ver_panel",
+                "ver_inbox",
+                "conv.read",
+                "conv.write",
+                "messages.read",
+                "messages.write",
+                "tickets.view",
+            ),
+        ),
+        RolePermissionPlan(
+            role_name="auditor",
+            permissions=(
+                "ver_panel",
+                "reports.view",
+                "audit.view",
+                "pipeline.view",
+                "contacts.read",
+                "clientes.view",
+                "conv.read",
+                "messages.read",
+                "files.view",
+            ),
+        ),
+        RolePermissionPlan(
+            role_name="invitado",
+            permissions=("ver_panel", "conv.read", "contacts.read", "messages.read", "clientes.view"),
+        ),
+    ]
+
+
+def _load_tenant_role_plans() -> list[RolePermissionPlan]:
+    blocked = {"super_admin", "platform_admin"}
+    candidates = ["docs/Roles de acceso/Matriz-permisos-v2.md", settings.role_permissions_matrix_path]
+    for candidate in candidates:
+        try:
+            matrix_path = _resolve_matrix_path(candidate)
+            if not matrix_path.exists():
+                continue
+            content = matrix_path.read_text(encoding="utf-8")
+            parsed = parse_role_permissions_matrix(content)
+        except Exception:
+            continue
+        cleaned: list[RolePermissionPlan] = []
+        seen_roles: set[str] = set()
+        for row in parsed:
+            role_name = _normalize_role_name(row.role_name).lower()
+            if not role_name or role_name in blocked or role_name in seen_roles:
+                continue
+            seen_roles.add(role_name)
+            cleaned.append(RolePermissionPlan(role_name=role_name, permissions=row.permissions))
+        if cleaned:
+            return cleaned
+    return _default_tenant_role_plans()
+
+
 async def _ensure_tenant_calendar_bootstrap(
     *,
     repo: PlatformRepository,
@@ -745,6 +932,58 @@ async def _resolve_owner_role_id(
         except (TypeError, ValueError):
             continue
     return None
+
+
+async def _ensure_role_exists(
+    *,
+    repo: PlatformRepository,
+    organizacion_id: UUID,
+    nombre: str,
+    descripcion: str | None = None,
+) -> UUID:
+    target = nombre.strip().lower()
+    roles = await repo.list_roles(organizacion_id=organizacion_id)
+    for row in roles:
+        if not isinstance(row, dict):
+            continue
+        role_name = str(row.get("nombre") or "").strip().lower()
+        if role_name != target:
+            continue
+        role_id = row.get("id")
+        if not role_id:
+            continue
+        return UUID(str(role_id))
+    created = await repo.create_role(
+        organizacion_id=organizacion_id,
+        nombre=target,
+        descripcion=descripcion,
+    )
+    return UUID(str(created["id"]))
+
+
+async def _grant_permissions_to_role(
+    *,
+    repo: PlatformRepository,
+    organizacion_id: UUID,
+    rol_id: UUID,
+    permiso_ids: set[UUID],
+) -> None:
+    if not permiso_ids:
+        return
+    current = await repo.list_role_permissions(organizacion_id=organizacion_id, rol_id=rol_id)
+    current_perm_ids = {
+        UUID(str(row["permiso_id"]))
+        for row in current
+        if isinstance(row, dict) and row.get("permiso_id")
+    }
+    for permiso_id in permiso_ids:
+        if permiso_id in current_perm_ids:
+            continue
+        await repo.create_role_permission(
+            organizacion_id=organizacion_id,
+            rol_id=rol_id,
+            permiso_id=permiso_id,
+        )
 
 
 async def _grant_all_permissions_to_role(
@@ -856,6 +1095,10 @@ async def create_tenant_with_admin(
     repo: PlatformRepository = Depends(get_platform_repo),
 ) -> CreateTenantWithAdminResponse:
     try:
+        admin_email = payload.admin.correo.strip().lower()
+        if await is_email_registered(email=admin_email):
+            raise HTTPException(status_code=409, detail="email_already_registered")
+
         tenant_payload: dict[str, Any] = {"nombre": payload.tenant.nombre}
         if payload.tenant.razon_social:
             tenant_payload["razon_social"] = payload.tenant.razon_social
@@ -907,34 +1150,8 @@ async def create_tenant_with_admin(
             except PlatformRepositoryError as exc:
                 raise HTTPException(status_code=409, detail=str(exc)) from exc
 
-        permisos_input = []
-        for permiso in payload.seed.permisos:
-            permisos_input.append(
-                {"codigo": permiso.codigo.strip(), "descripcion": permiso.descripcion}
-            )
-        permisos_rows = await repo.create_permissions(organizacion_id=tenant_id, permisos=permisos_input)
-        permiso_ids = [UUID(str(row["id"])) for row in permisos_rows]
-
-        role = await repo.create_role(
-            organizacion_id=tenant_id,
-            nombre=payload.seed.rol_nombre,
-            descripcion=payload.seed.rol_descripcion,
-        )
-        role_id = UUID(str(role["id"]))
-        for permiso_id in permiso_ids:
-            await repo.create_role_permission(
-                organizacion_id=tenant_id, rol_id=role_id, permiso_id=permiso_id
-            )
-
-        departamento = await repo.create_department(
-            organizacion_id=tenant_id, nombre=payload.seed.departamento
-        )
-        departamento_id = UUID(str(departamento["id"]))
-        puesto = await repo.create_position(organizacion_id=tenant_id, nombre=payload.seed.puesto)
-        puesto_id = UUID(str(puesto["id"]))
-
         usuario_id_str, telefono_value = await create_supabase_user(
-            email=payload.admin.correo,
+            email=admin_email,
             nombre=payload.admin.nombre_completo,
             telefono=payload.admin.telefono,
             organizacion_id=str(tenant_id),
@@ -944,7 +1161,7 @@ async def create_tenant_with_admin(
         await repo.upsert_usuario(
             usuario_id=usuario_id,
             payload={
-                "correo": payload.admin.correo,
+                "correo": admin_email,
                 "nombre_completo": payload.admin.nombre_completo,
                 "telefono_e164": telefono_value,
                 "estado": payload.admin.estado,
@@ -952,11 +1169,93 @@ async def create_tenant_with_admin(
             },
         )
 
+        tenant_role_plans = _load_tenant_role_plans()
+        role_descriptions = {
+            "owner": "Propietario del tenant",
+            "admin_operativo": "Administrador operativo",
+            "supervisor": "Supervisor comercial",
+            "agente": "Agente comercial",
+            "capturista": "Captura y apoyo operativo",
+            "marketing": "Prospección y campañas",
+            "soporte": "Atención e inbox",
+            "auditor": "Lectura y auditoría",
+            "invitado": "Lectura básica",
+        }
+        role_ids_by_name: dict[str, UUID] = {}
+        for plan in tenant_role_plans:
+            role_name = _normalize_role_name(plan.role_name).lower()
+            if not role_name:
+                continue
+            role_ids_by_name[role_name] = await _ensure_role_exists(
+                repo=repo,
+                organizacion_id=tenant_id,
+                nombre=role_name,
+                descripcion=role_descriptions.get(role_name),
+            )
+
+        admin_seed_role_name = _normalize_role_name(payload.seed.rol_nombre).lower() or "admin_operativo"
+        role_id = await _ensure_role_exists(
+            repo=repo,
+            organizacion_id=tenant_id,
+            nombre=admin_seed_role_name,
+            descripcion=payload.seed.rol_descripcion,
+        )
+
+        seed_permission_codes = {
+            permiso.codigo.strip() for permiso in payload.seed.permisos if permiso.codigo.strip()
+        }
+        desired_permission_codes = set(TENANT_BASE_PERMISSION_CODES)
+        desired_permission_codes.update(CRITICAL_OWNER_PERMISSION_CODES)
+        desired_permission_codes.update(seed_permission_codes)
+        for plan in tenant_role_plans:
+            desired_permission_codes.update(plan.permissions)
         await _ensure_permissions_exist(
             repo=repo,
             organizacion_id=tenant_id,
-            permission_codes=CRITICAL_OWNER_PERMISSION_CODES,
+            permission_codes=tuple(sorted(desired_permission_codes)),
         )
+
+        permissions = await repo.list_permissions(organizacion_id=tenant_id)
+        permission_by_code = {
+            str(row.get("codigo") or "").strip(): UUID(str(row["id"]))
+            for row in permissions
+            if isinstance(row, dict) and row.get("codigo") and row.get("id")
+        }
+        for plan in tenant_role_plans:
+            role_name = _normalize_role_name(plan.role_name).lower()
+            role_plan_id = role_ids_by_name.get(role_name)
+            if not role_plan_id:
+                continue
+            perm_ids_for_role = {
+                permission_by_code[code]
+                for code in plan.permissions
+                if code in permission_by_code
+            }
+            await _grant_permissions_to_role(
+                repo=repo,
+                organizacion_id=tenant_id,
+                rol_id=role_plan_id,
+                permiso_ids=perm_ids_for_role,
+            )
+        permiso_ids = [
+            permission_by_code[code]
+            for code in sorted(seed_permission_codes)
+            if code in permission_by_code
+        ]
+        await _grant_permissions_to_role(
+            repo=repo,
+            organizacion_id=tenant_id,
+            rol_id=role_id,
+            permiso_ids=set(permiso_ids),
+        )
+
+        departamento = await repo.create_department(
+            organizacion_id=tenant_id, nombre=payload.seed.departamento
+        )
+        departamento_id = UUID(str(departamento["id"]))
+        puesto = await repo.create_position(organizacion_id=tenant_id, nombre=payload.seed.puesto)
+        puesto_id = UUID(str(puesto["id"]))
+
         owner_role_id = await _resolve_owner_role_id(repo=repo, organizacion_id=tenant_id)
         admin_role_id = owner_role_id or role_id
         await _grant_all_permissions_to_role(
@@ -990,6 +1289,8 @@ async def create_tenant_with_admin(
     except PlatformRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     except SupabaseAdminError as exc:
+        if str(exc) == "user_email_already_registered":
+            raise HTTPException(status_code=409, detail="email_already_registered") from exc
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
 

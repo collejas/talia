@@ -148,7 +148,10 @@ async def test_create_tenant_with_admin_success(async_client: AsyncClient, clear
     }
 
     test_user_id = uuid4()
-    with patch("app.api.routes.admin.create_supabase_user", AsyncMock(return_value=(str(test_user_id), "+521234567890"))):
+    with (
+        patch("app.api.routes.admin.is_email_registered", AsyncMock(return_value=False)),
+        patch("app.api.routes.admin.create_supabase_user", AsyncMock(return_value=(str(test_user_id), "+521234567890"))),
+    ):
         response = await async_client.post("/admin/tenants/con_usuario", json=payload)
 
     assert response.status_code == 200
@@ -184,5 +187,32 @@ async def test_create_tenant_with_admin_alias_conflict(async_client: AsyncClient
         },
     }
 
-    response = await async_client.post("/admin/tenants/con_usuario", json=payload)
+    with patch("app.api.routes.admin.is_email_registered", AsyncMock(return_value=False)):
+        response = await async_client.post("/admin/tenants/con_usuario", json=payload)
     assert response.status_code == 409
+
+
+@pytest.mark.asyncio
+async def test_create_tenant_with_admin_duplicate_email(async_client: AsyncClient, clear_overrides: None):
+    repo = DummyRepo()
+    apply_dependency_overrides(repo)
+    payload = {
+        "tenant": {"nombre": "Cliente Z"},
+        "admin": {
+            "correo": "admin@duplicado.test",
+            "nombre_completo": "Admin Z",
+        },
+        "seed": {
+            "departamento": "Administración",
+            "puesto": "Admin CRM",
+            "rol_nombre": "Admin",
+            "permisos": [{"codigo": "usuarios.write", "descripcion": "Usuarios"}],
+        },
+    }
+
+    with patch("app.api.routes.admin.is_email_registered", AsyncMock(return_value=True)):
+        response = await async_client.post("/admin/tenants/con_usuario", json=payload)
+
+    assert response.status_code == 409
+    assert response.json()["detail"] == "email_already_registered"
+    assert repo.created_tenant is None
