@@ -1,0 +1,427 @@
+<!DOCTYPE html>
+
+<html lang="es"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Automatización Comercial | Presentación Ejecutiva</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#195de6",
+                        "background-light": "#f6f6f8",
+                        "background-dark": "#111621",
+                    },
+                    fontFamily: {
+                        "display": ["Inter", "sans-serif"]
+                    },
+                    borderRadius: {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                },
+            },
+        }
+    </script>
+<style>
+        body {
+            font-family: 'Inter', sans-serif;
+            overflow: hidden;
+            background-color: #ffffff;
+            color: #000000;
+        }
+        .slide {
+            height: 100vh;
+            width: 100%;
+            display: none;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            padding: 2rem;
+            position: relative;
+        }
+        .slide.active {
+            display: flex;
+        }
+        .fade-in {
+            animation: fadeIn 0.8s ease-out forwards;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .step-line {
+            height: 2px;
+            background: #e5e7eb;
+            flex-grow: 1;
+            margin: 0 1rem;
+        }
+    </style>
+</head>
+<body class="bg-white text-slate-900 font-display">
+<!-- Progress Indicator Top -->
+<div class="fixed top-0 left-0 w-full h-1 bg-slate-100 z-50">
+<div class="h-full bg-primary transition-all duration-500" id="progress-bar" style="width: 10%;"></div>
+</div>
+<!-- Navigation Header -->
+<header class="fixed top-0 left-0 w-full px-8 py-6 flex justify-between items-center z-40">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-primary text-2xl">deployed_code</span>
+<span class="font-bold tracking-tight text-sm uppercase">Estructura Comercial</span>
+</div>
+<div class="text-xs font-medium text-slate-400 uppercase tracking-widest">
+            Confidencial · Propuesta Ejecutiva
+        </div>
+</header>
+<!-- Slides Container -->
+<main class="relative h-screen w-full overflow-hidden">
+<!-- Slide 1: Apertura -->
+<section class="slide active fade-in" id="slide-1">
+<div class="max-w-4xl text-center">
+<h1 class="text-5xl md:text-7xl font-bold tracking-tighter mb-8 leading-[1.1]">
+                    Automatización Comercial para Escalar <span class="text-primary">sin Aumentar Estructura</span>
+</h1>
+<p class="text-xl md:text-2xl text-slate-500 font-light max-w-2xl mx-auto">
+                    Infraestructura inteligente para capturar, calificar y convertir prospectos.
+                </p>
+</div>
+</section>
+<!-- Slide 2: Problema -->
+<section class="slide fade-in" id="slide-2">
+<div class="max-w-5xl w-full grid md:grid-cols-2 gap-12 items-center">
+<div>
+<h2 class="text-4xl font-bold tracking-tight mb-6">El Problema: Fricción Operativa</h2>
+<p class="text-xl text-slate-600 mb-8">
+                        Las inmobiliarias pierden ventas no por falta de mercado, sino por procesos manuales que asfixian el crecimiento.
+                    </p>
+</div>
+<div class="space-y-4">
+<div class="p-6 rounded-xl border border-slate-100 bg-slate-50 flex items-start gap-4">
+<span class="material-symbols-outlined text-slate-400">timer_off</span>
+<div>
+<p class="font-semibold">Respuesta tardía</p>
+<p class="text-sm text-slate-500">Leads que se enfrían por falta de inmediatez.</p>
+</div>
+</div>
+<div class="p-6 rounded-xl border border-slate-100 bg-slate-50 flex items-start gap-4">
+<span class="material-symbols-outlined text-slate-400">person_search</span>
+<div>
+<p class="font-semibold">Leads mal calificados</p>
+<p class="text-sm text-slate-500">Vendedores perdiendo tiempo con curiosos.</p>
+</div>
+</div>
+<div class="p-6 rounded-xl border border-slate-100 bg-slate-50 flex items-start gap-4">
+<span class="material-symbols-outlined text-slate-400">visibility_off</span>
+<div>
+<p class="font-semibold">Falta de visibilidad</p>
+<p class="text-sm text-slate-500">Incapacidad de auditar la gestión en tiempo real.</p>
+</div>
+</div>
+</div>
+</div>
+</section>
+<!-- Slide 3: Impacto -->
+<section class="slide fade-in" id="slide-3">
+<div class="max-w-4xl text-center">
+<span class="text-primary font-bold tracking-widest text-xs uppercase mb-4 block">Impacto Financiero</span>
+<h2 class="text-5xl font-bold tracking-tight mb-8">
+                    "Cada lead mal gestionado es ingreso potencial no capturado."
+                </h2>
+<div class="h-1 w-24 bg-primary mx-auto mb-8"></div>
+<p class="text-2xl text-slate-400 italic font-light">
+                    El problema no es comercial. Es estructural.
+                </p>
+</div>
+</section>
+<!-- Slide 4: Solución -->
+<section class="slide fade-in" id="slide-4">
+<div class="max-w-6xl w-full">
+<h2 class="text-4xl font-bold tracking-tight mb-16 text-center">Infraestructura Comercial Automatizada</h2>
+<div class="flex flex-col md:flex-row items-center justify-between gap-4">
+<div class="text-center group">
+<div class="w-16 h-16 rounded-full bg-slate-50 flex items-center justify-center mb-4 transition-all duration-200 border border-slate-200 group-hover:scale-125 group-hover:bg-primary group-hover:text-white group-hover:border-primary">
+<span class="material-symbols-outlined">input</span>
+</div>
+<p class="font-bold text-slate-900 transition-colors duration-200 group-hover:text-primary">Captura</p>
+</div>
+<div class="hidden md:block step-line self-center"></div>
+<div class="text-center group">
+<div class="w-16 h-16 rounded-full bg-slate-50 flex items-center justify-center mb-4 transition-all duration-200 border border-slate-200 group-hover:scale-125 group-hover:bg-primary group-hover:text-white group-hover:border-primary">
+<span class="material-symbols-outlined">rule</span>
+</div>
+<p class="font-bold text-slate-900 transition-colors duration-200 group-hover:text-primary">Califica</p>
+</div>
+<div class="hidden md:block step-line self-center"></div>
+<div class="text-center group">
+<div class="w-16 h-16 rounded-full bg-slate-50 flex items-center justify-center mb-4 transition-all duration-200 border border-slate-200 group-hover:scale-125 group-hover:bg-primary group-hover:text-white group-hover:border-primary">
+<span class="material-symbols-outlined">account_tree</span>
+</div>
+<p class="font-bold text-slate-900 transition-colors duration-200 group-hover:text-primary">Organiza</p>
+</div>
+<div class="hidden md:block step-line self-center"></div>
+<div class="text-center group">
+<div class="w-16 h-16 rounded-full bg-slate-50 flex items-center justify-center mb-4 transition-all duration-200 border border-slate-200 group-hover:scale-125 group-hover:bg-primary group-hover:text-white group-hover:border-primary">
+<span class="material-symbols-outlined">person_add</span>
+</div>
+<p class="font-bold text-slate-900 transition-colors duration-200 group-hover:text-primary">Asigna</p>
+</div>
+<div class="hidden md:block step-line self-center"></div>
+<div class="text-center group">
+<div class="w-16 h-16 rounded-full bg-primary text-white flex items-center justify-center mb-4 transition-all duration-200 group-hover:scale-125 group-hover:bg-primary/90">
+<span class="material-symbols-outlined">calendar_today</span>
+</div>
+<p class="font-bold text-slate-900 transition-colors duration-200 group-hover:text-primary">Agenda</p>
+</div>
+<div class="hidden md:block step-line self-center"></div>
+<div class="text-center group">
+<div class="w-16 h-16 rounded-full bg-slate-50 flex items-center justify-center mb-4 transition-all duration-200 border border-slate-200 group-hover:scale-125 group-hover:bg-primary group-hover:text-white group-hover:border-primary">
+<span class="material-symbols-outlined">description</span>
+</div>
+<p class="font-bold text-slate-900 transition-colors duration-200 group-hover:text-primary">Documenta</p>
+</div>
+</div>
+<p class="mt-16 text-center text-slate-400 font-medium italic">Cero intervención manual en el proceso de filtrado.</p>
+</div>
+</section>
+<!-- Slide 5: Arquitectura -->
+<section class="slide fade-in" id="slide-5">
+<div class="max-w-5xl w-full">
+<h2 class="text-3xl font-bold mb-12 text-center">Arquitectura del Ecosistema</h2>
+<div class="bg-slate-50 p-12 rounded-3xl border border-slate-100 flex flex-col md:flex-row items-center justify-center gap-8 relative">
+<div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200 w-48 text-center">
+<span class="text-xs text-slate-400 block mb-2">ENTRADA</span>
+<p class="font-bold">Prospecto</p>
+</div>
+<span class="material-symbols-outlined text-slate-300">arrow_forward</span>
+<div class="bg-primary text-white p-6 rounded-xl shadow-lg w-48 text-center ring-4 ring-primary/10">
+<span class="text-xs text-white/70 block mb-2">MOTOR</span>
+<p class="font-bold">Asistente IA</p>
+</div>
+<span class="material-symbols-outlined text-slate-300">arrow_forward</span>
+<div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200 w-48 text-center">
+<span class="text-xs text-slate-400 block mb-2">CENTRAL</span>
+<p class="font-bold">CRM</p>
+</div>
+<span class="material-symbols-outlined text-slate-300">arrow_forward</span>
+<div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200 w-48 text-center">
+<span class="text-xs text-slate-400 block mb-2">CONVERSIÓN</span>
+<p class="font-bold">Cita</p>
+</div>
+</div>
+<p class="text-center mt-8 text-slate-500 flex items-center justify-center gap-2">
+<span class="material-symbols-outlined text-primary text-sm">verified</span>
+                    Todo estructurado y medible.
+                </p>
+</div>
+</section>
+<!-- Slide 6: Demo -->
+<section class="slide fade-in" id="slide-6">
+<div class="max-w-5xl w-full grid md:grid-cols-2 gap-12">
+<div class="bg-slate-900 rounded-2xl overflow-hidden aspect-video relative flex items-center justify-center">
+<div class="absolute inset-0 bg-gradient-to-br from-primary/20 to-transparent"></div>
+<div class="text-center z-10 p-8">
+<span class="material-symbols-outlined text-5xl text-white mb-4">analytics</span>
+<p class="text-white font-medium">Dashboard de Control en Vivo</p>
+<p class="text-slate-400 text-sm mt-2">Visualización de datos simulados</p>
+</div>
+<img alt="Dashboard analytics" class="absolute inset-0 w-full h-full object-cover opacity-20" data-alt="Futuristic business analytics dashboard display" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDY3i7z9AJ7xZijAuhpYb0NA8AP8lom37J9zNb-L8U9eS7S8Se7Heb2qaeNBRMXt0VLJRBJTnooBSH5nFXe2c_YAdsdDuS8u5r1XkysGpwsYSUboYmphI7YyLKZEunWSVVocmWn1VgxweoJ8QO5pngJA1dqQOea5LCMu6MaUeTcYp57G_78VYMwJOYIv1vPxQBgPe-ALckbaS4Aem1tQ3JHOlHuVYbmG5n_pYV36xuNOmpSHB2gUEESLl5jYLpwcso6oAV2ev7Q1hT3"/>
+</div>
+<div class="flex flex-col justify-center">
+<h2 class="text-3xl font-bold mb-6">El foco es el proceso</h2>
+<ul class="space-y-4">
+<li class="flex items-center gap-3">
+<span class="material-symbols-outlined text-primary">settings_suggest</span>
+<span>Motor configurable a su modelo de negocio.</span>
+</li>
+<li class="flex items-center gap-3">
+<span class="material-symbols-outlined text-primary">psychology</span>
+<span>IA entrenada con su inventario real.</span>
+</li>
+<li class="flex items-center gap-3">
+<span class="material-symbols-outlined text-primary">handshake</span>
+<span>Implementación 100% personalizada.</span>
+</li>
+</ul>
+</div>
+</div>
+</section>
+<!-- Slide 7: Dirección -->
+<section class="slide fade-in" id="slide-7">
+<div class="max-w-5xl w-full">
+<h2 class="text-4xl font-bold tracking-tight mb-12">Control Directivo Total</h2>
+<div class="grid grid-cols-2 md:grid-cols-4 gap-6">
+<div class="p-8 rounded-2xl bg-white border border-slate-100 shadow-sm hover:border-primary/30 transition-colors">
+<p class="text-4xl font-bold text-primary mb-2">+40%</p>
+<p class="text-sm font-semibold uppercase tracking-wider text-slate-400">Citas Calificadas</p>
+</div>
+<div class="p-8 rounded-2xl bg-white border border-slate-100 shadow-sm hover:border-primary/30 transition-colors">
+<p class="text-4xl font-bold text-primary mb-2">-60%</p>
+<p class="text-sm font-semibold uppercase tracking-wider text-slate-400">Carga Operativa</p>
+</div>
+<div class="p-8 rounded-2xl bg-white border border-slate-100 shadow-sm hover:border-primary/30 transition-colors">
+<p class="text-4xl font-bold text-primary mb-2">100%</p>
+<p class="text-sm font-semibold uppercase tracking-wider text-slate-400">Visibilidad Funnel</p>
+</div>
+<div class="p-8 rounded-2xl bg-white border border-slate-100 shadow-sm hover:border-primary/30 transition-colors">
+<p class="text-4xl font-bold text-primary mb-2">Optim.</p>
+<p class="text-sm font-semibold uppercase tracking-wider text-slate-400">Distribución Leads</p>
+</div>
+</div>
+</div>
+</section>
+<!-- Slide 8: Escalabilidad -->
+<section class="slide fade-in" id="slide-8">
+<div class="max-w-4xl">
+<h2 class="text-4xl font-bold tracking-tight mb-6">Escalabilidad de Infraestructura</h2>
+<p class="text-xl text-slate-500 mb-12">"El sistema no depende de personas. Depende de estructura."</p>
+<div class="grid gap-4">
+<div class="flex items-center gap-6 p-6 bg-slate-50 rounded-xl">
+<span class="material-symbols-outlined text-primary">schedule</span>
+<div>
+<p class="font-bold">Disponibilidad 24/7</p>
+<p class="text-slate-500">Captura y califica mientras su equipo descansa.</p>
+</div>
+</div>
+<div class="flex items-center gap-6 p-6 bg-slate-50 rounded-xl">
+<span class="material-symbols-outlined text-primary">expand</span>
+<div>
+<p class="font-bold">Escala por Proyecto o Ciudad</p>
+<p class="text-slate-500">Replique el modelo instantáneamente en nuevas plazas.</p>
+</div>
+</div>
+<div class="flex items-center gap-6 p-6 bg-slate-50 rounded-xl">
+<span class="material-symbols-outlined text-primary">reorder</span>
+<div>
+<p class="font-bold">Adaptable al Inventario</p>
+<p class="text-slate-500">Cambios masivos de precio o stock sin re-entrenamiento humano.</p>
+</div>
+</div>
+</div>
+</div>
+</section>
+<!-- Slide 9: Implementación -->
+<section class="slide fade-in" id="slide-9">
+<div class="max-w-5xl w-full">
+<h2 class="text-4xl font-bold tracking-tight mb-16 text-center">Hoja de Ruta de Activación</h2>
+<div class="relative">
+<div class="absolute top-1/2 left-0 w-full h-0.5 bg-slate-100 -translate-y-1/2"></div>
+<div class="relative z-10 flex justify-between">
+<div class="bg-white p-4 text-center">
+<div class="w-12 h-12 rounded-full bg-primary text-white flex items-center justify-center mx-auto mb-4 font-bold">1</div>
+<p class="font-bold text-sm">Configuración</p>
+<p class="text-xs text-slate-400 mt-1">Semanas 1-2</p>
+</div>
+<div class="bg-white p-4 text-center">
+<div class="w-12 h-12 rounded-full bg-slate-100 text-slate-400 flex items-center justify-center mx-auto mb-4 font-bold">2</div>
+<p class="font-bold text-sm">Entrenamiento</p>
+<p class="text-xs text-slate-400 mt-1">Semanas 2-3</p>
+</div>
+<div class="bg-white p-4 text-center">
+<div class="w-12 h-12 rounded-full bg-slate-100 text-slate-400 flex items-center justify-center mx-auto mb-4 font-bold">3</div>
+<p class="font-bold text-sm">Ajuste</p>
+<p class="text-xs text-slate-400 mt-1">Semana 4</p>
+</div>
+<div class="bg-white p-4 text-center">
+<div class="w-12 h-12 rounded-full bg-slate-900 text-white flex items-center justify-center mx-auto mb-4 font-bold">
+<span class="material-symbols-outlined text-sm">bolt</span>
+</div>
+<p class="font-bold text-sm">Activación</p>
+<p class="text-xs text-slate-400 mt-1">Día 30</p>
+</div>
+</div>
+</div>
+</div>
+</section>
+<!-- Slide 10: Cierre -->
+<section class="slide fade-in" id="slide-10">
+<div class="max-w-4xl text-center">
+<h2 class="text-4xl md:text-5xl font-bold tracking-tight mb-8">
+                    No es un chatbot. Es infraestructura para controlar y escalar su operación comercial.
+                </h2>
+<p class="text-xl text-slate-500 mb-12">
+                    Diseñado para adaptarse a su modelo de negocio.
+                </p>
+<div class="flex justify-center gap-4">
+<button class="bg-primary text-white px-8 py-4 rounded-xl font-bold text-lg hover:bg-blue-700 transition-colors shadow-lg shadow-primary/20">
+                        Agendar Consultoría
+                    </button>
+</div>
+</div>
+</section>
+</main>
+<!-- Navigation Controls -->
+<nav class="fixed bottom-10 right-10 flex gap-4 z-50">
+<button class="w-12 h-12 rounded-full border border-slate-200 bg-white/80 backdrop-blur flex items-center justify-center hover:bg-slate-50 transition-all text-slate-600 disabled:opacity-30" id="prev-btn" onclick="prevSlide()">
+<span class="material-symbols-outlined">arrow_back</span>
+</button>
+<button class="w-12 h-12 rounded-full border border-slate-200 bg-white/80 backdrop-blur flex items-center justify-center hover:bg-slate-50 transition-all text-slate-600" id="next-btn" onclick="nextSlide()">
+<span class="material-symbols-outlined">arrow_forward</span>
+</button>
+</nav>
+<!-- Slide counter -->
+<div class="fixed bottom-10 left-10 text-xs font-bold tracking-widest text-slate-300 uppercase z-50">
+        Slide <span id="current-slide-num">01</span> / 10
+    </div>
+<script>
+        let currentSlide = 1;
+        const totalSlides = 10;
+
+        function updateSlide() {
+            // Hide all
+            document.querySelectorAll('.slide').forEach(s => {
+                s.classList.remove('active');
+            });
+            
+            // Show current
+            document.getElementById(`slide-${currentSlide}`).classList.add('active');
+            
+            // Update Progress
+            const progress = (currentSlide / totalSlides) * 100;
+            document.getElementById('progress-bar').style.width = `${progress}%`;
+            
+            // Update counter
+            document.getElementById('current-slide-num').innerText = currentSlide.toString().padStart(2, '0');
+            
+            // Toggle buttons
+            document.getElementById('prev-btn').disabled = (currentSlide === 1);
+            if(currentSlide === totalSlides) {
+                document.getElementById('next-btn').innerHTML = '<span class="material-symbols-outlined">refresh</span>';
+            } else {
+                document.getElementById('next-btn').innerHTML = '<span class="material-symbols-outlined">arrow_forward</span>';
+            }
+        }
+
+        function nextSlide() {
+            if (currentSlide < totalSlides) {
+                currentSlide++;
+            } else {
+                currentSlide = 1;
+            }
+            updateSlide();
+        }
+
+        function prevSlide() {
+            if (currentSlide > 1) {
+                currentSlide--;
+                updateSlide();
+            }
+        }
+
+        // Keyboard navigation
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'ArrowRight' || e.key === ' ') nextSlide();
+            if (e.key === 'ArrowLeft') prevSlide();
+        });
+
+        // Initialize
+        updateSlide();
+    </script>
+</body></html>

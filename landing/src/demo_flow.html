@@ -1,0 +1,567 @@
+<!DOCTYPE html>
+
+<html lang="es"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Demo Controlada | Preparación Operativa</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#195de6",
+                        "background-light": "#f6f6f8",
+                        "background-dark": "#111621",
+                    },
+                    fontFamily: {
+                        "display": ["Inter", "sans-serif"]
+                    },
+                    borderRadius: {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                },
+            },
+        }
+    </script>
+<style>
+        body {
+            font-family: 'Inter', sans-serif;
+            overflow: hidden;
+            background-color: #ffffff;
+            color: #000000;
+        }
+        .slide {
+            height: 100vh;
+            width: 100%;
+            display: none;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            padding: 2rem;
+            position: relative;
+        }
+        .slide.active {
+            display: flex;
+        }
+        .fade-in {
+            animation: fadeIn 0.8s ease-out forwards;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .step-line {
+            height: 2px;
+            background: #e5e7eb;
+            flex-grow: 1;
+            margin: 0 1rem;
+        }
+    </style>
+</head>
+<body class="bg-white text-slate-900 font-display">
+
+<!-- Progress Indicator Top -->
+<div class="fixed top-0 left-0 w-full h-1 bg-slate-100 z-50">
+  <div class="h-full bg-primary transition-all duration-500" id="progress-bar" style="width: 14.2857%;"></div>
+</div>
+
+<!-- Navigation Header -->
+<header class="fixed top-0 left-0 w-full px-8 py-6 flex justify-between items-center z-40">
+  <div class="flex items-center gap-2">
+    <span class="material-symbols-outlined text-primary text-2xl">motion_photos_on</span>
+    <span class="font-bold tracking-tight text-sm uppercase">Demo Controlada</span>
+  </div>
+  <div class="text-xs font-medium text-slate-400 uppercase tracking-widest">
+    Preparación Operativa · Antes de la demostración
+  </div>
+</header>
+
+<!-- Slides Container -->
+<main class="relative h-screen w-full overflow-hidden">
+
+  <!-- Slide 1: Transición -->
+  <section class="slide active fade-in" id="slide-1">
+    <div class="max-w-5xl text-center">
+      <span class="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-slate-50 border border-slate-200 text-xs font-semibold tracking-wider uppercase text-slate-600 mb-8">
+        <span class="material-symbols-outlined text-primary text-base">switch_access_shortcut</span>
+        Evidencia operativa
+      </span>
+      <h1 class="text-5xl md:text-7xl font-bold tracking-tighter mb-8 leading-[1.08]">
+        Ahora veremos el sistema
+        <span class="text-primary">en acción</span>
+      </h1>
+      <p class="text-xl md:text-2xl text-slate-500 font-light max-w-3xl mx-auto">
+        Validaremos el flujo operativo completo en un escenario controlado.
+      </p>
+      <div class="mt-10 flex flex-wrap justify-center gap-3">
+        <span class="px-4 py-2 rounded-full bg-white border border-slate-200 text-sm text-slate-600">Foco: proceso</span>
+        <span class="px-4 py-2 rounded-full bg-white border border-slate-200 text-sm text-slate-600">Duración: 5–7 min</span>
+        <span class="px-4 py-2 rounded-full bg-white border border-slate-200 text-sm text-slate-600">Después: demo en vivo</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- Slide 2: Contexto de la demostración -->
+  <section class="slide fade-in" id="slide-3">
+    <div class="max-w-5xl w-full">
+      <div class="max-w-3xl">
+        <span class="text-primary font-bold tracking-widest text-xs uppercase mb-4 block">Contexto</span>
+        <h2 class="text-4xl md:text-5xl font-bold tracking-tight mb-6">Contexto de la demostración</h2>
+        <p class="text-xl text-slate-600 mb-10">
+          Para que la evaluación sea justa y comparable, hoy operamos con un entorno de prueba.
+        </p>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div class="p-8 rounded-3xl bg-white border border-slate-100 shadow-sm">
+          <div class="flex items-start gap-4">
+            <span class="material-symbols-outlined text-primary">science</span>
+            <div>
+              <p class="font-bold">Datos simulados</p>
+              <p class="text-slate-500 text-sm mt-1">Inventario y escenarios de ejemplo (solo para demostrar el motor).</p>
+            </div>
+          </div>
+        </div>
+        <div class="p-8 rounded-3xl bg-white border border-slate-100 shadow-sm">
+          <div class="flex items-start gap-4">
+            <span class="material-symbols-outlined text-primary">schema</span>
+            <div>
+              <p class="font-bold">Flujo genérico</p>
+              <p class="text-slate-500 text-sm mt-1">Plantilla base de ventas: captura, perfilamiento y cita.</p>
+            </div>
+          </div>
+        </div>
+        <div class="p-8 rounded-3xl bg-white border border-slate-100 shadow-sm">
+          <div class="flex items-start gap-4">
+            <span class="material-symbols-outlined text-primary">tune</span>
+            <div>
+              <p class="font-bold">Motor configurable</p>
+              <p class="text-slate-500 text-sm mt-1">Se ajusta a su catálogo (casas/terrenos), reglas y políticas.</p>
+            </div>
+          </div>
+        </div>
+        <div class="p-8 rounded-3xl bg-white border border-slate-100 shadow-sm">
+          <div class="flex items-start gap-4">
+            <span class="material-symbols-outlined text-primary">verified</span>
+            <div>
+              <p class="font-bold">Implementación real</p>
+              <p class="text-slate-500 text-sm mt-1">Opera con su inventario, zonas, criterios de calificación y asignación.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="mt-10 text-center text-slate-500 text-sm">
+        <span class="font-semibold">Idea clave:</span> hoy validamos el <span class="font-semibold">motor</span>; la <span class="font-semibold">configuración</span> se hace a medida.
+      </div>
+    </div>
+  </section>
+
+  <!-- Slide 3: Arquitectura del flujo -->
+  <section class="slide fade-in" id="slide-4">
+    <div class="max-w-6xl w-full">
+      <h2 class="text-4xl md:text-5xl font-bold tracking-tight mb-12 text-center">Arquitectura del flujo</h2>
+
+      <div class="bg-slate-50 p-10 md:p-12 rounded-3xl border border-slate-100 flex flex-col md:flex-row items-center justify-center gap-6 md:gap-10">
+        <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 w-56 text-center">
+          <span class="text-xs text-slate-400 block mb-2">ENTRADA</span>
+          <p class="font-bold">Prospecto</p>
+        </div>
+        <span class="material-symbols-outlined text-slate-300">arrow_forward</span>
+        <div class="bg-primary text-white p-6 rounded-2xl shadow-lg w-56 text-center ring-4 ring-primary/10">
+          <span class="text-xs text-white/70 block mb-2">MOTOR</span>
+          <p class="font-bold">Asistente IA</p>
+        </div>
+        <span class="material-symbols-outlined text-slate-300">arrow_forward</span>
+        <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 w-56 text-center">
+          <span class="text-xs text-slate-400 block mb-2">CENTRAL</span>
+          <p class="font-bold">CRM</p>
+        </div>
+        <span class="material-symbols-outlined text-slate-300">arrow_forward</span>
+        <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 w-56 text-center">
+          <span class="text-xs text-slate-400 block mb-2">RESULTADO</span>
+          <p class="font-bold">Cita / Seguimiento</p>
+        </div>
+      </div>
+
+      <p class="text-center mt-8 text-slate-500 flex items-center justify-center gap-2">
+        <span class="material-symbols-outlined text-primary text-sm">verified</span>
+        Todo lo que ocurra en la conversación queda estructurado y medible.
+      </p>
+    </div>
+  </section>
+
+  <!-- Slide 4: Qué vamos a validar -->
+  <section class="slide fade-in" id="slide-2">
+    <div class="max-w-6xl w-full">
+      <div class="max-w-4xl">
+        <span class="text-primary font-bold tracking-widest text-xs uppercase mb-4 block">Objetivo</span>
+        <h2 class="text-4xl md:text-5xl font-bold tracking-tight mb-6">Qué vamos a validar hoy</h2>
+        <p class="text-xl text-slate-600 mb-10 max-w-3xl">
+          No vamos a evaluar una respuesta aislada. Vamos a validar que el <span class="font-semibold">motor</span> ejecuta el flujo completo.
+        </p>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div class="p-6 rounded-2xl bg-slate-50 border border-slate-100 flex items-start gap-4">
+          <span class="material-symbols-outlined text-primary">contact_mail</span>
+          <div>
+            <p class="font-bold">Captura de datos</p>
+            <p class="text-slate-500 text-sm">Nombre, teléfono, correo y necesidad.</p>
+          </div>
+        </div>
+        <div class="p-6 rounded-2xl bg-slate-50 border border-slate-100 flex items-start gap-4">
+          <span class="material-symbols-outlined text-primary">database</span>
+          <div>
+            <p class="font-bold">Registro en CRM</p>
+            <p class="text-slate-500 text-sm">Datos estructurados, sin copiar/pegar.</p>
+          </div>
+        </div>
+        <div class="p-6 rounded-2xl bg-slate-50 border border-slate-100 flex items-start gap-4">
+          <span class="material-symbols-outlined text-primary">rule</span>
+          <div>
+            <p class="font-bold">Calificación</p>
+            <p class="text-slate-500 text-sm">Perfilamiento corto + score de intención.</p>
+          </div>
+        </div>
+        <div class="p-6 rounded-2xl bg-slate-50 border border-slate-100 flex items-start gap-4">
+          <span class="material-symbols-outlined text-primary">person_add</span>
+          <div>
+            <p class="font-bold">Asignación & agenda</p>
+            <p class="text-slate-500 text-sm">Vendedor asignado + propuesta de cita.</p>
+          </div>
+        </div>
+        <div class="p-6 rounded-2xl bg-slate-50 border border-slate-100 flex items-start gap-4 md:col-span-2">
+          <span class="material-symbols-outlined text-primary">visibility</span>
+          <div>
+            <p class="font-bold">Evidencia en funnel</p>
+            <p class="text-slate-500 text-sm">Se valida en el tablero: estado, trazabilidad y siguiente acción.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="mt-10 p-5 rounded-2xl border border-primary/20 bg-primary/5 text-slate-700 flex items-start gap-3">
+        <span class="material-symbols-outlined text-primary">info</span>
+        <p class="text-sm leading-relaxed">
+          <span class="font-semibold">Regla de evaluación:</span> el éxito se mide por el flujo (captura → CRM → calificación → cita), no por una frase puntual del asistente.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Slide 3: Contexto de la demostración -->
+  <section class="slide fade-in" id="slide-3">
+    <div class="max-w-5xl w-full">
+      <div class="max-w-3xl">
+        <span class="text-primary font-bold tracking-widest text-xs uppercase mb-4 block">Contexto</span>
+        <h2 class="text-4xl md:text-5xl font-bold tracking-tight mb-6">Contexto de la demostración</h2>
+        <p class="text-xl text-slate-600 mb-10">
+          Para que la evaluación sea justa y comparable, hoy operamos con un entorno de prueba.
+        </p>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div class="p-8 rounded-3xl bg-white border border-slate-100 shadow-sm">
+          <div class="flex items-start gap-4">
+            <span class="material-symbols-outlined text-primary">science</span>
+            <div>
+              <p class="font-bold">Datos simulados</p>
+              <p class="text-slate-500 text-sm mt-1">Inventario y escenarios de ejemplo (solo para demostrar el motor).</p>
+            </div>
+          </div>
+        </div>
+        <div class="p-8 rounded-3xl bg-white border border-slate-100 shadow-sm">
+          <div class="flex items-start gap-4">
+            <span class="material-symbols-outlined text-primary">schema</span>
+            <div>
+              <p class="font-bold">Flujo genérico</p>
+              <p class="text-slate-500 text-sm mt-1">Plantilla base de ventas: captura, perfilamiento y cita.</p>
+            </div>
+          </div>
+        </div>
+        <div class="p-8 rounded-3xl bg-white border border-slate-100 shadow-sm">
+          <div class="flex items-start gap-4">
+            <span class="material-symbols-outlined text-primary">tune</span>
+            <div>
+              <p class="font-bold">Motor configurable</p>
+              <p class="text-slate-500 text-sm mt-1">Se ajusta a su catálogo (casas/terrenos), reglas y políticas.</p>
+            </div>
+          </div>
+        </div>
+        <div class="p-8 rounded-3xl bg-white border border-slate-100 shadow-sm">
+          <div class="flex items-start gap-4">
+            <span class="material-symbols-outlined text-primary">verified</span>
+            <div>
+              <p class="font-bold">Implementación real</p>
+              <p class="text-slate-500 text-sm mt-1">Opera con su inventario, zonas, criterios de calificación y asignación.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="mt-10 text-center text-slate-500 text-sm">
+        <span class="font-semibold">Idea clave:</span> hoy validamos el <span class="font-semibold">motor</span>; la <span class="font-semibold">configuración</span> se hace a medida.
+      </div>
+    </div>
+  </section>
+
+  <!-- Slide 4: Arquitectura del flujo -->
+  <section class="slide fade-in" id="slide-4">
+    <div class="max-w-6xl w-full">
+      <h2 class="text-4xl md:text-5xl font-bold tracking-tight mb-12 text-center">Arquitectura del flujo</h2>
+
+      <div class="bg-slate-50 p-10 md:p-12 rounded-3xl border border-slate-100 flex flex-col md:flex-row items-center justify-center gap-6 md:gap-10">
+        <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 w-56 text-center">
+          <span class="text-xs text-slate-400 block mb-2">ENTRADA</span>
+          <p class="font-bold">Prospecto</p>
+        </div>
+        <span class="material-symbols-outlined text-slate-300">arrow_forward</span>
+        <div class="bg-primary text-white p-6 rounded-2xl shadow-lg w-56 text-center ring-4 ring-primary/10">
+          <span class="text-xs text-white/70 block mb-2">MOTOR</span>
+          <p class="font-bold">Asistente IA</p>
+        </div>
+        <span class="material-symbols-outlined text-slate-300">arrow_forward</span>
+        <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 w-56 text-center">
+          <span class="text-xs text-slate-400 block mb-2">CENTRAL</span>
+          <p class="font-bold">CRM</p>
+        </div>
+        <span class="material-symbols-outlined text-slate-300">arrow_forward</span>
+        <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 w-56 text-center">
+          <span class="text-xs text-slate-400 block mb-2">RESULTADO</span>
+          <p class="font-bold">Cita / Seguimiento</p>
+        </div>
+      </div>
+
+      <p class="text-center mt-8 text-slate-500 flex items-center justify-center gap-2">
+        <span class="material-symbols-outlined text-primary text-sm">verified</span>
+        Todo lo que ocurra en la conversación queda estructurado y medible.
+      </p>
+    </div>
+  </section>
+
+  <!-- Slide 5: Funnel antes del chat -->
+  <section class="slide fade-in" id="slide-5">
+    <div class="max-w-6xl w-full grid md:grid-cols-2 gap-12 items-center">
+      <div>
+        <span class="text-primary font-bold tracking-widest text-xs uppercase mb-4 block">CRM primero</span>
+        <h2 class="text-4xl md:text-5xl font-bold tracking-tight mb-6">Funnel antes del chat</h2>
+        <p class="text-xl text-slate-600 mb-8">
+          La conversación solo dispara el proceso. El valor se evidencia en el CRM.
+        </p>
+        <div class="p-5 rounded-2xl border border-primary/20 bg-primary/5 text-slate-700 flex items-start gap-3">
+          <span class="material-symbols-outlined text-primary">priority_high</span>
+          <p class="text-sm leading-relaxed">
+            <span class="font-semibold">Hoy miraremos 3 cosas:</span> el lead creado, el estado del funnel y la siguiente acción automática.
+          </p>
+        </div>
+      </div>
+
+      <div class="bg-white rounded-3xl border border-slate-100 shadow-sm p-8">
+        <div class="flex items-center justify-between mb-6">
+          <p class="text-sm font-bold tracking-tight">Pipeline</p>
+          <span class="text-xs font-medium text-slate-400 uppercase tracking-widest">Vista demo</span>
+        </div>
+
+        <div class="grid grid-cols-1 gap-3">
+          <div class="flex items-center justify-between p-4 rounded-2xl bg-slate-50 border border-slate-100">
+            <div class="flex items-center gap-3">
+              <span class="material-symbols-outlined text-slate-400">fiber_new</span>
+              <p class="font-semibold">Nuevo lead</p>
+            </div>
+            <span class="text-xs font-semibold text-slate-400 uppercase">Entrada</span>
+          </div>
+          <div class="flex items-center justify-between p-4 rounded-2xl bg-slate-50 border border-slate-100">
+            <div class="flex items-center gap-3">
+              <span class="material-symbols-outlined text-slate-400">tune</span>
+              <p class="font-semibold">Perfilado</p>
+            </div>
+            <span class="text-xs font-semibold text-slate-400 uppercase">Calificación</span>
+          </div>
+          <div class="flex items-center justify-between p-4 rounded-2xl bg-primary/5 border border-primary/15">
+            <div class="flex items-center gap-3">
+              <span class="material-symbols-outlined text-primary">event</span>
+              <p class="font-semibold">Cita agendada</p>
+            </div>
+            <span class="text-xs font-semibold text-primary uppercase">Objetivo</span>
+          </div>
+          <div class="flex items-center justify-between p-4 rounded-2xl bg-slate-50 border border-slate-100">
+            <div class="flex items-center gap-3">
+              <span class="material-symbols-outlined text-slate-400">handshake</span>
+              <p class="font-semibold">Negociación</p>
+            </div>
+            <span class="text-xs font-semibold text-slate-400 uppercase">Proceso</span>
+          </div>
+          <div class="flex items-center justify-between p-4 rounded-2xl bg-slate-50 border border-slate-100">
+            <div class="flex items-center gap-3">
+              <span class="material-symbols-outlined text-slate-400">check_circle</span>
+              <p class="font-semibold">Cierre</p>
+            </div>
+            <span class="text-xs font-semibold text-slate-400 uppercase">Resultado</span>
+          </div>
+        </div>
+
+        <div class="mt-6 flex items-center justify-between text-xs text-slate-400">
+          <span>Campos: contacto · necesidad · score · dueño</span>
+          <span class="font-semibold">Trazabilidad</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Slide 6: Escenario predefinido -->
+  <section class="slide fade-in" id="slide-6">
+    <div class="max-w-6xl w-full">
+      <div class="max-w-4xl">
+        <span class="text-primary font-bold tracking-widest text-xs uppercase mb-4 block">Escenario</span>
+        <h2 class="text-4xl md:text-5xl font-bold tracking-tight mb-6">Escenario de validación</h2>
+        <p class="text-xl text-slate-600 mb-10">
+          Vamos a ejecutar <span class="font-semibold">un escenario definido</span> de principio a fin para validar el flujo.
+        </p>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div class="p-8 rounded-3xl bg-white border border-slate-100 shadow-sm">
+          <div class="flex items-start gap-4">
+            <span class="material-symbols-outlined text-primary">location_on</span>
+            <div>
+              <p class="font-bold">Zona</p>
+              <p class="text-slate-500 text-sm mt-1">Definida en demo (editable en implementación).</p>
+            </div>
+          </div>
+        </div>
+        <div class="p-8 rounded-3xl bg-white border border-slate-100 shadow-sm">
+          <div class="flex items-start gap-4">
+            <span class="material-symbols-outlined text-primary">home</span>
+            <div>
+              <p class="font-bold">Tipo de interés</p>
+              <p class="text-slate-500 text-sm mt-1">Caso ejemplo: compra/visita (se ajusta a casas/terrenos).</p>
+            </div>
+          </div>
+        </div>
+        <div class="p-8 rounded-3xl bg-white border border-slate-100 shadow-sm">
+          <div class="flex items-start gap-4">
+            <span class="material-symbols-outlined text-primary">payments</span>
+            <div>
+              <p class="font-bold">Rango</p>
+              <p class="text-slate-500 text-sm mt-1">Se valida perfilamiento sin fricción (2–4 preguntas).</p>
+            </div>
+          </div>
+        </div>
+        <div class="p-8 rounded-3xl bg-white border border-slate-100 shadow-sm">
+          <div class="flex items-start gap-4">
+            <span class="material-symbols-outlined text-primary">event_available</span>
+            <div>
+              <p class="font-bold">Meta</p>
+              <p class="text-slate-500 text-sm mt-1">Agendar cita y registrar todo en el funnel.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="mt-10 p-5 rounded-2xl border border-slate-200 bg-slate-50 text-slate-700 flex items-start gap-3">
+        <span class="material-symbols-outlined text-slate-400">chat</span>
+        <p class="text-sm leading-relaxed">
+          Si durante la sesión aparece otro caso (por ejemplo, <span class="font-semibold">terrenos</span>), se registra como <span class="font-semibold">Escenario 2</span> y se revisa al final.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Slide 7: Inicio -->
+  <section class="slide fade-in" id="slide-7">
+    <div class="max-w-5xl text-center">
+      <span class="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-primary/5 border border-primary/15 text-xs font-semibold tracking-wider uppercase text-primary mb-8">
+        <span class="material-symbols-outlined text-base">play_circle</span>
+        Listos
+      </span>
+      <h2 class="text-5xl md:text-6xl font-bold tracking-tight mb-8">
+        Iniciamos la demostración
+      </h2>
+      <p class="text-xl text-slate-500 font-light max-w-3xl mx-auto mb-12">
+        Ejecutaremos el flujo completo y cerraremos validando la evidencia en el CRM.
+      </p>
+
+      <div class="flex flex-col sm:flex-row gap-4 justify-center">
+        <div class="px-6 py-4 rounded-2xl border border-slate-200 bg-white text-left max-w-sm">
+          <p class="text-xs font-semibold uppercase tracking-widest text-slate-400 mb-2">Lo que vas a ver</p>
+          <p class="font-semibold">Lead creado → Calificado → Asignado → Cita propuesta</p>
+        </div>
+        <div class="px-6 py-4 rounded-2xl border border-slate-200 bg-white text-left max-w-sm">
+          <p class="text-xs font-semibold uppercase tracking-widest text-slate-400 mb-2">Regla</p>
+          <p class="font-semibold">Sin improvisación: escenario definido + evidencia en funnel</p>
+        </div>
+      </div>
+
+      <div class="mt-12 flex justify-center">
+        <button class="bg-primary text-white px-8 py-4 rounded-xl font-bold text-lg hover:bg-blue-700 transition-colors shadow-lg shadow-primary/20" onclick="nextSlide()">
+          Continuar
+        </button>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<!-- Navigation Controls -->
+<nav class="fixed bottom-10 right-10 flex gap-4 z-50">
+  <button class="w-12 h-12 rounded-full border border-slate-200 bg-white/80 backdrop-blur flex items-center justify-center hover:bg-slate-50 transition-all text-slate-600 disabled:opacity-30" id="prev-btn" onclick="prevSlide()">
+    <span class="material-symbols-outlined">arrow_back</span>
+  </button>
+  <button class="w-12 h-12 rounded-full border border-slate-200 bg-white/80 backdrop-blur flex items-center justify-center hover:bg-slate-50 transition-all text-slate-600" id="next-btn" onclick="nextSlide()">
+    <span class="material-symbols-outlined">arrow_forward</span>
+  </button>
+</nav>
+
+<!-- Slide counter -->
+<div class="fixed bottom-10 left-10 text-xs font-bold tracking-widest text-slate-300 uppercase z-50">
+  Slide <span id="current-slide-num">01</span> / 07
+</div>
+
+<script>
+  let currentSlide = 1;
+  const totalSlides = 7;
+
+  function updateSlide() {
+    document.querySelectorAll('.slide').forEach(s => s.classList.remove('active'));
+    document.getElementById(`slide-${currentSlide}`).classList.add('active');
+
+    const progress = (currentSlide / totalSlides) * 100;
+    document.getElementById('progress-bar').style.width = `${progress}%`;
+
+    document.getElementById('current-slide-num').innerText = currentSlide.toString().padStart(2, '0');
+
+    document.getElementById('prev-btn').disabled = (currentSlide === 1);
+    if (currentSlide === totalSlides) {
+      document.getElementById('next-btn').innerHTML = '<span class="material-symbols-outlined">refresh</span>';
+    } else {
+      document.getElementById('next-btn').innerHTML = '<span class="material-symbols-outlined">arrow_forward</span>';
+    }
+  }
+
+  function nextSlide() {
+    if (currentSlide < totalSlides) currentSlide++;
+    else currentSlide = 1;
+    updateSlide();
+  }
+
+  function prevSlide() {
+    if (currentSlide > 1) currentSlide--;
+    updateSlide();
+  }
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowRight' || e.key === ' ') nextSlide();
+    if (e.key === 'ArrowLeft') prevSlide();
+  });
+
+  updateSlide();
+</script>
+</body></html>
