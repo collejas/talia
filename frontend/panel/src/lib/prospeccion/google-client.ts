@@ -83,6 +83,26 @@ export type GoogleResultadosResponse = {
   offset: number;
 };
 
+export type GoogleResultadosMapItem = Omit<GoogleResultadoItem, "resultado_id"> & {
+  resultado_id: string | null;
+  kind?: "point" | "cluster";
+  id?: string | null;
+  count?: number | null;
+};
+
+export type GoogleResultadosMapResponse = {
+  ok: boolean;
+  items: GoogleResultadosMapItem[];
+  limit: number;
+  truncated: boolean;
+};
+
+export type GoogleResultadosBoundsResponse = {
+  ok: boolean;
+  bounds: { west: number; south: number; east: number; north: number } | null;
+  total: number;
+};
+
 async function requestJson<T>(
   input: string,
   init?: RequestInit,
@@ -202,6 +222,77 @@ export async function listGoogleResultados(params: {
     url.searchParams.set("order", params.order);
   }
   return requestJson<GoogleResultadosResponse>(url.toString());
+}
+
+export async function listGoogleResultadosMap(params: {
+  busquedaId: string;
+  bbox: { west: number; south: number; east: number; north: number };
+  zoom: number;
+  phonePresent?: boolean;
+  websitePresent?: boolean;
+  minRating?: number;
+  actividades?: string[];
+  limit?: number;
+  q?: string;
+}): Promise<GoogleResultadosMapResponse> {
+  const url = buildClientUrl("/api/prospeccion/google/resultados/map");
+  url.searchParams.set("busqueda_id", params.busquedaId);
+  url.searchParams.set("bbox_w", String(params.bbox.west));
+  url.searchParams.set("bbox_s", String(params.bbox.south));
+  url.searchParams.set("bbox_e", String(params.bbox.east));
+  url.searchParams.set("bbox_n", String(params.bbox.north));
+  url.searchParams.set("zoom", String(params.zoom));
+  if (typeof params.limit === "number") {
+    url.searchParams.set("limit", String(params.limit));
+  }
+  if (params.phonePresent !== undefined) {
+    url.searchParams.set("phone_present", params.phonePresent ? "true" : "false");
+  }
+  if (params.websitePresent !== undefined) {
+    url.searchParams.set("website_present", params.websitePresent ? "true" : "false");
+  }
+  if (typeof params.minRating === "number") {
+    url.searchParams.set("min_rating", String(params.minRating));
+  }
+  if (params.q && params.q.trim().length) {
+    url.searchParams.set("q", params.q.trim());
+  }
+  if (params.actividades?.length) {
+    for (const actividad of params.actividades) {
+      url.searchParams.append("actividades", actividad);
+    }
+  }
+  return requestJson<GoogleResultadosMapResponse>(url.toString());
+}
+
+export async function getGoogleResultadosBounds(params: {
+  busquedaId: string;
+  phonePresent?: boolean;
+  websitePresent?: boolean;
+  minRating?: number;
+  actividades?: string[];
+  q?: string;
+}): Promise<GoogleResultadosBoundsResponse> {
+  const url = buildClientUrl("/api/prospeccion/google/resultados/bounds");
+  url.searchParams.set("busqueda_id", params.busquedaId);
+  if (params.phonePresent !== undefined) {
+    url.searchParams.set("phone_present", params.phonePresent ? "true" : "false");
+  }
+  if (params.websitePresent !== undefined) {
+    url.searchParams.set("website_present", params.websitePresent ? "true" : "false");
+  }
+  if (typeof params.minRating === "number") {
+    url.searchParams.set("min_rating", String(params.minRating));
+  }
+  if (params.q && params.q.trim().length) {
+    url.searchParams.set("q", params.q.trim());
+  }
+  if (params.actividades?.length) {
+    for (const actividad of params.actividades) {
+      url.searchParams.append("actividades", actividad);
+    }
+  }
+  return requestJson<GoogleResultadosBoundsResponse>(url.toString());
 }
 
 export async function deleteGoogleBusqueda(busquedaId: string) {

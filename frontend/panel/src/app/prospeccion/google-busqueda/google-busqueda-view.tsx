@@ -27,9 +27,11 @@ import {
   deleteGoogleResultados,
   listGoogleBusquedas,
   listGoogleResultados,
+  listGoogleResultadosMap,
   type CreateGoogleSearchPayload,
   type GoogleBusquedaItem,
   type GoogleResultadoItem,
+  type GoogleResultadosMapItem,
   type GoogleSearchStrategy,
 } from "@/lib/prospeccion/google-client";
 import { guardarProspectos } from "@/lib/prospeccion/prospectos-client";
@@ -65,6 +67,14 @@ import {
   DrawerTrigger,
 } from "@/components/ui/drawer";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { usePermissions } from "@/hooks/use-permissions";
 
 const DEFAULT_CENTER = { lat: 19.432608, lng: -99.133209 };
@@ -74,6 +84,8 @@ const RADIUS_MAX = 10_000;
 const DEFAULT_TYPES = "restaurant,store";
 const LIST_PAGE_SIZE = 250;
 const MAP_RESULTS_LIMIT = 5000;
+const BUSQUEDAS_PAGE_SIZE = 100;
+const BUSQUEDAS_MAX_ITEMS = 2000;
 
 type ContactFilterValue = "any" | "with" | "without";
 
@@ -130,6 +142,11 @@ export function GoogleBusquedaView() {
   const [actividadDrawerOpen, setActividadDrawerOpen] = useState(false);
   const [actividadSearch, setActividadSearch] = useState("");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [mapViewport, setMapViewport] = useState<{ bounds: { west: number; south: number; east: number; north: number }; zoom: number } | null>(
+    null,
+  );
+  const [mapItems, setMapItems] = useState<GoogleResultadosMapItem[]>([]);
+  const [mapTruncated, setMapTruncated] = useState(false);
   const [deletingBusquedaId, setDeletingBusquedaId] = useState<string | null>(null);
   const [isDeletingResultados, setIsDeletingResultados] = useState(false);
   const [isSavingProspectos, setIsSavingProspectos] = useState(false);
@@ -141,6 +158,10 @@ export function GoogleBusquedaView() {
   );
   const resultadosCount = resultados.length;
   const [denseMode, setDenseMode] = useState(false);
+  const selectedActividadesList = useMemo(
+    () => Array.from(selectedActividades).sort((a, b) => a.localeCompare(b, "es")),
+    [selectedActividades],
+  );
 
   const updateFormValue = useCallback(<K extends keyof FormValues>(key: K, value: FormValues[K]) => {
     setFormValues((prev) => ({ ...prev, [key]: value }));
@@ -149,11 +170,32 @@ export function GoogleBusquedaView() {
   const loadBusquedas = useCallback(async () => {
     setIsLoadingBusquedas(true);
     try {
-      const response = await listGoogleBusquedas({ limit: 8 });
-      const items = response.items ?? [];
-      setBusquedas(items);
-      busquedasRef.current = items;
-      return items;
+      const allItems: GoogleBusquedaItem[] = [];
+      let offset = 0;
+      let total = Number.POSITIVE_INFINITY;
+      while (offset < total && allItems.length < BUSQUEDAS_MAX_ITEMS) {
+        const response = await listGoogleBusquedas({ limit: BUSQUEDAS_PAGE_SIZE, offset });
+        const page = response.items ?? [];
+        if (!page.length) {
+          total = 0;
+          break;
+        }
+        allItems.push(...page);
+        total = typeof response.total === "number" ? response.total : allItems.length;
+        offset += BUSQUEDAS_PAGE_SIZE;
+        if (page.length < BUSQUEDAS_PAGE_SIZE) {
+          break;
+        }
+      }
+      if (allItems.length >= BUSQUEDAS_MAX_ITEMS) {
+        setFeedback({
+          type: "info",
+          message: `Se muestran las primeras ${numberFormatter.format(BUSQUEDAS_MAX_ITEMS)} búsquedas. Usa el filtro del backend para acotar si necesitas más.`,
+        });
+      }
+      setBusquedas(allItems);
+      busquedasRef.current = allItems;
+      return allItems;
     } catch (error) {
       setFeedback({
         type: "error",
@@ -189,6 +231,9 @@ export function GoogleBusquedaView() {
         const denseFlag = Boolean(selectedBusqueda.meta?.dense_mode);
         setDenseMode(denseFlag);
       }
+      setMapItems([]);
+      setMapTruncated(false);
+      setMapViewport(null);
       setResultsLoadedForId(busquedaId);
       } catch (error) {
         setFeedback({
@@ -440,6 +485,56 @@ export function GoogleBusquedaView() {
     });
   }, [minRatingFilter, phoneFilter, resultados, selectedActividades, websiteFilter]);
 
+  const mapFiltersKey = useMemo(() => {
+    const actividadesKey = selectedActividadesList.join("\u0001");
+    return [minRatingFilter, phoneFilter, websiteFilter, actividadesKey].join("|");
+  }, [minRatingFilter, phoneFilter, selectedActividadesList, websiteFilter]);
+
+  useEffect(() => {
+    if (!activeBusquedaId || !mapViewport) {
+      return;
+    }
+    let cancelled = false;
+    const phonePresent = phoneFilter === "any" ? undefined : phoneFilter === "with";
+    const websitePresent = websiteFilter === "any" ? undefined : websiteFilter === "with";
+    const minRating = minRatingFilter > 0 ? minRatingFilter : undefined;
+    const actividades = selectedActividadesList.length ? selectedActividadesList : undefined;
+    const handle = window.setTimeout(() => {
+      void listGoogleResultadosMap({
+        busquedaId: activeBusquedaId,
+        bbox: mapViewport.bounds,
+        zoom: mapViewport.zoom,
+        phonePresent,
+        websitePresent,
+        minRating,
+        actividades,
+        limit: MAP_RESULTS_LIMIT,
+      })
+        .then((response) => {
+          if (cancelled) return;
+          setMapItems(response.items ?? []);
+          setMapTruncated(Boolean(response.truncated));
+        })
+        .catch(() => {
+          if (cancelled) return;
+          setMapItems([]);
+          setMapTruncated(false);
+        });
+    }, 200);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(handle);
+    };
+  }, [
+    activeBusquedaId,
+    mapFiltersKey,
+    mapViewport,
+    minRatingFilter,
+    phoneFilter,
+    selectedActividadesList,
+    websiteFilter,
+  ]);
+
   const actividadOptions = useMemo(() => {
     const unique = new Set<string>();
     for (const item of resultados) {
@@ -488,6 +583,65 @@ export function GoogleBusquedaView() {
   const pageStart = totalFiltered === 0 ? 0 : pageOffset + 1;
   const pageEnd =
     totalFiltered === 0 ? 0 : Math.min(pageOffset + resultadosPagination.limit, totalFiltered);
+
+  type MapRenderItem = GoogleResultadoItem & { kind?: "point" | "cluster"; count?: number; id?: string };
+  const mapResults = useMemo<MapRenderItem[]>(() => {
+    if (!mapViewport) {
+      return filteredResults;
+    }
+    if (!mapItems.length) {
+      return [];
+    }
+    return mapItems.map((item) => {
+      if (item.kind === "cluster") {
+        const clusterId = item.id ?? `${item.lat ?? "0"},${item.lng ?? "0"}`;
+        return {
+          resultado_id: `cluster:${clusterId}`,
+          busqueda_id: activeBusquedaId ?? "",
+          display_name: null,
+          actividad: null,
+          phone: null,
+          email: null,
+          website: null,
+          address: null,
+          lat: item.lat ?? null,
+          lng: item.lng ?? null,
+          rating: null,
+          reviews: null,
+          distancia_m: null,
+          maps_url: null,
+          google_primary_type: null,
+          google_primary_type_display_name: null,
+          google_types: null,
+          kind: "cluster",
+          count: item.count ?? undefined,
+          id: item.id ?? undefined,
+        };
+      }
+      return {
+        resultado_id: item.resultado_id ?? item.id ?? "",
+        busqueda_id: item.busqueda_id ?? activeBusquedaId ?? "",
+        display_name: item.display_name ?? null,
+        actividad: item.actividad ?? null,
+        phone: item.phone ?? null,
+        email: item.email ?? null,
+        website: item.website ?? null,
+        address: item.address ?? null,
+        lat: item.lat ?? null,
+        lng: item.lng ?? null,
+        rating: item.rating ?? null,
+        reviews: item.reviews ?? null,
+        distancia_m: item.distancia_m ?? null,
+        maps_url: item.maps_url ?? null,
+        google_primary_type: item.google_primary_type ?? null,
+        google_primary_type_display_name: item.google_primary_type_display_name ?? null,
+        google_types: item.google_types ?? null,
+        kind: "point",
+        count: item.count ?? undefined,
+        id: item.id ?? undefined,
+      };
+    });
+  }, [activeBusquedaId, filteredResults, mapItems, mapViewport]);
 
   const selectedVisibleCount = useMemo(() => {
     if (!selectedIds.size) return 0;
@@ -1345,7 +1499,10 @@ export function GoogleBusquedaView() {
           <CardHeader className="flex flex-row items-center justify-between gap-4">
             <div>
               <CardTitle className="text-base">Mapa de resultados</CardTitle>
-              <CardDescription>Mueve el marcador para actualizar el centro.</CardDescription>
+              <CardDescription>
+                Mueve el marcador para actualizar el centro.
+                {mapTruncated ? <span className="mt-1 block">Demasiados puntos en esta vista: acerca el zoom.</span> : null}
+              </CardDescription>
             </div>
             <Button
               type="button"
@@ -1363,9 +1520,10 @@ export function GoogleBusquedaView() {
               <GoogleResultsMap
                 center={{ lat: formValues.lat, lng: formValues.lng }}
                 radius={formValues.radio_m}
-                results={filteredResults}
+                results={mapResults}
                 highlightIds={selectedIds}
                 onCenterChange={handleCenterChange}
+                onViewportChange={setMapViewport}
               />
             </div>
           </CardContent>
@@ -1381,58 +1539,77 @@ export function GoogleBusquedaView() {
           {isLoadingBusquedas ? (
             <p className="text-sm text-muted-foreground">Cargando historial…</p>
           ) : busquedas.length ? (
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-              {busquedas.map((item) => (
-                <div
-                  key={item.id}
-                  className={cn(
-                    "rounded-lg border px-3 py-2 text-sm",
-                    activeBusquedaId === item.id && "border-primary bg-primary/5",
-                  )}
-                >
-                  <div className="flex items-center justify-between gap-2">
-                    <div>
-                      <p className="font-medium">{item.query || "(Sin texto)"}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {new Date(item.creado_en).toLocaleString("es-MX", {
-                          dateStyle: "short",
-                          timeStyle: "short",
-                        })}
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Button
-                        size="sm"
-                        variant={activeBusquedaId === item.id ? "secondary" : "outline"}
-                        onClick={() => loadResultadosForBusqueda(item.id)}
-                      >
-                        Ver
-                      </Button>
-                      {canDeleteBusquedas ? (
-                        <Button
-                          type="button"
-                          size="icon"
-                          variant="ghost"
-                          aria-label="Eliminar búsqueda"
-                          onClick={() => handleDeleteBusqueda(item.id)}
-                          disabled={deletingBusquedaId === item.id}
-                          className="text-destructive hover:text-destructive"
-                        >
-                          {deletingBusquedaId === item.id ? (
-                            <RefreshCw className="h-4 w-4 animate-spin" />
-                          ) : (
-                            <Trash2 className="h-4 w-4" />
-                          )}
-                        </Button>
-                      ) : null}
-                    </div>
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    Radio {typeof item.radio_m === "number" ? numberFormatter.format(item.radio_m) : "-"} m · {item.total_encontrados ?? 0} registros
-                  </p>
-                </div>
-              ))}
-            </div>
+            <ScrollArea className="h-[360px] rounded-lg border border-border/60">
+              <div className="min-w-[860px]">
+                <Table>
+                  <TableHeader className="sticky top-0 z-10 bg-background">
+                    <TableRow>
+                      <TableHead>Búsqueda</TableHead>
+                      <TableHead className="w-36 text-right">Registros</TableHead>
+                      <TableHead className="w-28 text-right">Radio</TableHead>
+                      <TableHead className="w-44">Fecha</TableHead>
+                      <TableHead className="w-36 text-right">Acciones</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {busquedas.map((item) => {
+                      const createdLabel = new Date(item.creado_en).toLocaleString("es-MX", {
+                        dateStyle: "short",
+                        timeStyle: "short",
+                      });
+                      const isActive = activeBusquedaId === item.id;
+                      return (
+                        <TableRow key={item.id} className={isActive ? "bg-primary/5" : undefined}>
+                          <TableCell>
+                            <div className="space-y-1">
+                              <p className="font-medium">{item.query || "(Sin texto)"}</p>
+                              <p className="text-xs text-muted-foreground">{item.id}</p>
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-right">
+                            {typeof item.total_encontrados === "number"
+                              ? numberFormatter.format(item.total_encontrados)
+                              : "-"}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            {typeof item.radio_m === "number" ? numberFormatter.format(item.radio_m) : "-"}
+                          </TableCell>
+                          <TableCell>{createdLabel}</TableCell>
+                          <TableCell className="text-right">
+                            <div className="flex items-center justify-end gap-2">
+                              <Button
+                                size="sm"
+                                variant={isActive ? "secondary" : "outline"}
+                                onClick={() => loadResultadosForBusqueda(item.id)}
+                              >
+                                Ver
+                              </Button>
+                              {canDeleteBusquedas ? (
+                                <Button
+                                  type="button"
+                                  size="icon"
+                                  variant="ghost"
+                                  aria-label="Eliminar búsqueda"
+                                  onClick={() => handleDeleteBusqueda(item.id)}
+                                  disabled={deletingBusquedaId === item.id}
+                                  className="text-destructive hover:text-destructive"
+                                >
+                                  {deletingBusquedaId === item.id ? (
+                                    <RefreshCw className="h-4 w-4 animate-spin" />
+                                  ) : (
+                                    <Trash2 className="h-4 w-4" />
+                                  )}
+                                </Button>
+                              ) : null}
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </div>
+            </ScrollArea>
           ) : (
             <p className="text-sm text-muted-foreground">Aún no hay capturas registradas.</p>
           )}

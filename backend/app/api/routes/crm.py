@@ -10709,6 +10709,88 @@ async def listar_resultados_google(
         "total": total or len(rows),
     }
 
+@router.get("/prospeccion/google/resultados/map")
+async def listar_resultados_google_map(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    _: str = Depends(require_permission("busquedas.view")),
+    user_token: str = Depends(require_user_token),
+    busqueda_id: UUID = Query(...),
+    bbox_w: float = Query(...),
+    bbox_s: float = Query(...),
+    bbox_e: float = Query(...),
+    bbox_n: float = Query(...),
+    zoom: Annotated[int, Query(ge=0, le=22)] = 12,
+    q: str | None = Query(default=None),
+    phone_present: bool | None = Query(default=None),
+    website_present: bool | None = Query(default=None),
+    min_rating: Annotated[float | None, Query(ge=0, le=5)] = None,
+    actividades: list[str] | None = Query(default=None),
+    limit: Annotated[int, Query(ge=1, le=10000)] = 5000,
+) -> dict[str, Any]:
+    effective_limit = min(limit, 5000)
+    payload: dict[str, Any] = {
+        "p_busqueda_id": str(busqueda_id),
+        "p_bbox_w": bbox_w,
+        "p_bbox_s": bbox_s,
+        "p_bbox_e": bbox_e,
+        "p_bbox_n": bbox_n,
+        "p_zoom": zoom,
+        "p_q": q,
+        "p_phone_present": phone_present,
+        "p_website_present": website_present,
+        "p_min_rating": min_rating,
+        "p_actividades": actividades,
+        # Pedimos +1 para detectar truncado en modo points (sin contar exacto en cada pan/zoom).
+        "p_limit": effective_limit + 1,
+    }
+    try:
+        rows = await repo.google_resultados_map(usuario_token=user_token, payload=payload)
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    truncated = len(rows) > effective_limit
+    items = rows[:effective_limit]
+    return {"ok": True, "items": items, "limit": effective_limit, "truncated": truncated}
+
+
+@router.get("/prospeccion/google/resultados/bounds")
+async def obtener_bounds_google(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    _: str = Depends(require_permission("busquedas.view")),
+    user_token: str = Depends(require_user_token),
+    busqueda_id: UUID = Query(...),
+    q: str | None = Query(default=None),
+    phone_present: bool | None = Query(default=None),
+    website_present: bool | None = Query(default=None),
+    min_rating: Annotated[float | None, Query(ge=0, le=5)] = None,
+    actividades: list[str] | None = Query(default=None),
+) -> dict[str, Any]:
+    payload: dict[str, Any] = {
+        "p_busqueda_id": str(busqueda_id),
+        "p_q": q,
+        "p_phone_present": phone_present,
+        "p_website_present": website_present,
+        "p_min_rating": min_rating,
+        "p_actividades": actividades,
+    }
+    try:
+        row = await repo.google_resultados_bounds(usuario_token=user_token, payload=payload)
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    if not row:
+        return {"ok": True, "bounds": None, "total": 0}
+    return {
+        "ok": True,
+        "bounds": {
+            "west": row.get("west"),
+            "south": row.get("south"),
+            "east": row.get("east"),
+            "north": row.get("north"),
+        },
+        "total": int(row.get("total_count") or 0),
+    }
+
 
 @router.get("/prospeccion/denue/resultados")
 async def listar_resultados_denue(

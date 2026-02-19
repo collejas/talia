@@ -6703,6 +6703,47 @@ class CRMRepository:
         row = data[0] if data else None
         return row if isinstance(row, dict) else None
 
+    async def google_resultados_map(
+        self,
+        *,
+        usuario_token: str,
+        payload: dict[str, Any],
+    ) -> list[dict[str, Any]]:
+        resp = await self._request_with_user(
+            "POST",
+            "/rest/v1/rpc/google_resultados_map",
+            token=usuario_token,
+            json=payload,
+        )
+        try:
+            data = resp.json() or []
+        except ValueError as exc:  # pragma: no cover
+            raise CRMRepositoryError("google_resultados_map_invalid_response") from exc
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"google_resultados_map_invalid:{data!r}")
+        return [row for row in data if isinstance(row, dict)]
+
+    async def google_resultados_bounds(
+        self,
+        *,
+        usuario_token: str,
+        payload: dict[str, Any],
+    ) -> dict[str, Any] | None:
+        resp = await self._request_with_user(
+            "POST",
+            "/rest/v1/rpc/google_resultados_bounds",
+            token=usuario_token,
+            json=payload,
+        )
+        try:
+            data = resp.json() or []
+        except ValueError as exc:  # pragma: no cover
+            raise CRMRepositoryError("google_resultados_bounds_invalid_response") from exc
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"google_resultados_bounds_invalid:{data!r}")
+        row = data[0] if data else None
+        return row if isinstance(row, dict) else None
+
     async def denue_resultados_actividades(
         self,
         *,
