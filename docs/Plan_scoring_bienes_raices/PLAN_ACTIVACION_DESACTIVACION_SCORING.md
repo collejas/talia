@@ -108,32 +108,32 @@ Agregar eventos de log:
 - [ ] Retornar `403` en cualquier intento de tenant inferior.
 
 ### 12.3 Backend (servicios y rutas)
-- [ ] Crear helper central:
+- [Check] Crear helper central:
   - `is_profiling_enabled(organizacion_id, channel=None) -> bool`
-- [ ] Integrar helper en:
+- [Check] Integrar helper en:
   - flujo `close_lead`
   - guardas de `schedule_demo`
   - `apply_lead_scoring`
   - notificaciones que dependen de `required_for_case_a`
-- [ ] Si OFF:
+- [Check] Si OFF:
   - saltar perfilamiento/scoring catalogo
   - exigir solo datos base para el flujo comercial definido
-- [ ] Proteger endpoints de catalogo scoring:
+- [Check] Proteger endpoints de catalogo scoring:
   - `questions`
   - `reprompts`
   - `rules`
   - `profiles`
   - bloquear escritura cuando `profiling_enabled=false`
-- [ ] Crear endpoint admin (master only):
+- [Check] Crear endpoint admin (master only):
   - `PATCH /admin/tenants/{organizacion_id}/profiling-toggle`
 
 ### 12.4 Frontend (panel)
-- [ ] Mostrar switch de perfilamiento solo al tenant maestro.
-- [ ] Guardar cambios via endpoint admin.
-- [ ] Mostrar `settings/scoring` solo si flag ON para tenant objetivo.
-- [ ] Enrutamiento protegido:
+- [Check] Mostrar switch de perfilamiento solo al tenant maestro.
+- [Check] Guardar cambios via endpoint admin.
+- [Check] Mostrar `settings/scoring` solo si flag ON para tenant objetivo.
+- [Check] Enrutamiento protegido:
   - si flag OFF -> redirect/403 server-side
-- [ ] Ocultar acciones de edicion scoring si OFF.
+- [Check] Ocultar acciones de edicion scoring si OFF.
 
 ### 12.5 Observabilidad y auditoria
 - [ ] Log estructurado en cambios de flag:

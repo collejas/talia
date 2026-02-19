@@ -115,6 +115,35 @@ export async function updateTenantConfigAction(_: CrudActionState, formData: For
   }
 }
 
+export async function updateTenantProfilingToggleAction(
+  _: CrudActionState,
+  formData: FormData,
+): Promise<CrudActionState> {
+  try {
+    const tenantId = requireTenantId(formData)
+    const enabled = formData.has("profiling_enabled")
+    const reason = getText(formData, "profiling_reason")
+    const response = await callCrmApi<{ ok: boolean }>(
+      `/admin/tenants/${tenantId}/profiling-toggle`,
+      {
+        method: "PATCH",
+        organizacionId: null,
+        withUserToken: true,
+        body: {
+          enabled,
+          reason: reason || undefined,
+        },
+      },
+    )
+    if (!response.ok) throw new Error(response.error)
+    revalidatePath(`/settings/tenants/${tenantId}`)
+    revalidatePath("/settings/scoring")
+    return success(enabled ? "Perfilamiento IA activado." : "Perfilamiento IA desactivado.")
+  } catch (error) {
+    return failure(error, "No se pudo actualizar el estado de perfilamiento.")
+  }
+}
+
 export async function updateTenantInfoAction(_: CrudActionState, formData: FormData): Promise<CrudActionState> {
   try {
     const tenantId = requireTenantId(formData)

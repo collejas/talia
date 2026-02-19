@@ -265,6 +265,10 @@ async function resolveCurrentAccessToken(): Promise<string | null> {
 
 async function mapResponseError(response: Response): Promise<string> {
   if (response.status === 401 || response.status === 403) {
+    const isUnauthorized = response.status === 401
+    const defaultMessage = isUnauthorized
+      ? "Tu sesión caducó. Vuelve a iniciar sesión."
+      : "No tienes permisos para esta acción."
     try {
       const text = await response.text();
       if (text) {
@@ -285,16 +289,29 @@ async function mapResponseError(response: Response): Promise<string> {
           if (detail === "authorization_invalid" || detail.startsWith("auth_user_invalid")) {
             return "Tu sesión caducó. Vuelve a iniciar sesión.";
           }
+          if (
+            detail === "forbidden" ||
+            detail === "owner_required" ||
+            detail === "owner_scope_violation"
+          ) {
+            return "No tienes permisos para esta acción."
+          }
+          if (response.status === 403 && detail.length) {
+            return `No tienes permisos (${detail}).`
+          }
         } catch {
           if (text.includes("platform_admin_required")) {
             return "No tienes permisos de platform admin para ver Tenants. Agrega tu user_id a public.platform_admins.";
+          }
+          if (text.includes("forbidden")) {
+            return "No tienes permisos para esta acción."
           }
         }
       }
     } catch {
       // ignore
     }
-    return "Tu sesión caducó o no tienes permisos. Vuelve a iniciar sesión.";
+    return defaultMessage
   }
   try {
     const text = await response.text();

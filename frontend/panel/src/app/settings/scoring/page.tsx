@@ -1,6 +1,10 @@
 import type { Metadata } from "next";
 
-import { fetchScoringConfig, type ScoringConfigBundle } from "@/app/settings/scoring/actions";
+import {
+  fetchScoringConfig,
+  fetchScoringFeatureStatus,
+  type ScoringConfigBundle,
+} from "@/app/settings/scoring/actions";
 import { AppViewLayout } from "@/components/layouts/app-view-layout";
 import { ScoringConfigPanel } from "@/components/settings/scoring-config-panel";
 import { SettingsErrorCallout } from "@/components/settings/settings-helpers";
@@ -11,16 +15,34 @@ export const metadata: Metadata = {
 
 export default async function ScoringSettingsPage() {
   let loadError: string | null = null;
+  let profilingEnabled = true;
   let webchat: ScoringConfigBundle | null = null;
   let whatsapp: ScoringConfigBundle | null = null;
 
   try {
+    const feature = await fetchScoringFeatureStatus();
+    profilingEnabled = Boolean(feature.profiling_enabled);
     [whatsapp, webchat] = await Promise.all([
       fetchScoringConfig("whatsapp"),
       fetchScoringConfig("webchat"),
     ]);
   } catch (error) {
     loadError = error instanceof Error ? error.message : "No se pudo cargar configuración de scoring.";
+  }
+
+  if (!loadError && !profilingEnabled) {
+    return (
+      <AppViewLayout title="Settings">
+        <div className="flex flex-col gap-6 px-4 py-6 lg:px-6">
+          <SettingsErrorCallout
+            title="Perfilamiento desactivado"
+            messages={[
+              "La configuración de Calificación IA está deshabilitada para este tenant por el administrador maestro.",
+            ]}
+          />
+        </div>
+      </AppViewLayout>
+    );
   }
 
   return (

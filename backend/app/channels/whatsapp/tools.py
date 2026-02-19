@@ -299,6 +299,21 @@ async def _load_required_case_a_questions(
     organizacion_id: UUID,
     channel: str,
 ) -> tuple[list[str], dict[str, str]]:
+    profiling_enabled = await tenant_runtime.is_profiling_enabled(
+        organizacion_id=organizacion_id,
+        channel=channel if channel in {"whatsapp", "webchat"} else "whatsapp",
+    )
+    if not profiling_enabled:
+        logger.warning(
+            "profiling.mode.off",
+            extra={
+                "organizacion_id": str(organizacion_id),
+                "channel": channel,
+                "component": "whatsapp.prefilter",
+            },
+        )
+        return [], {}
+
     required_fields: list[str] = []
     question_by_field: dict[str, str] = {}
     try:
@@ -339,6 +354,12 @@ async def _has_minimum_profile_for_case_a(
     organizacion_id: UUID,
     channel: str,
 ) -> bool:
+    if not await tenant_runtime.is_profiling_enabled(
+        organizacion_id=organizacion_id,
+        channel=channel if channel in {"whatsapp", "webchat"} else "whatsapp",
+    ):
+        return True
+
     answers = _extract_scoring_answers(contact=contact, opportunity_metadata=opportunity_metadata)
     profiling_questions = _extract_profiling_questions(opportunity_metadata=opportunity_metadata)
     required_fields = _extract_required_case_a_fields_from_metadata(
@@ -534,6 +555,11 @@ async def _has_prefilter_for_schedule(
     org_uuid = webchat_service._resolve_org_uuid(org_value)
     if not org_uuid:
         return {"ready": False, "missing_fields": required_fields, "questions": question_by_field}
+    if not await tenant_runtime.is_profiling_enabled(
+        organizacion_id=UUID(org_uuid),
+        channel=channel if channel in {"whatsapp", "webchat"} else "whatsapp",
+    ):
+        return {"ready": True, "missing_fields": [], "questions": {}}
     required_fields, question_by_field = await _load_required_case_a_questions(
         repo=repo,
         organizacion_id=UUID(org_uuid),

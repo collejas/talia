@@ -110,6 +110,20 @@ async def _load_required_case_a_questions(
     organizacion_id: UUID,
     channel: str,
 ) -> list[str]:
+    if not await tenant_runtime.is_profiling_enabled(
+        organizacion_id=organizacion_id,
+        channel=channel if channel in {"whatsapp", "webchat"} else "webchat",
+    ):
+        logger.warning(
+            "profiling.mode.off",
+            extra={
+                "organizacion_id": str(organizacion_id),
+                "channel": channel,
+                "component": "webchat.notify_sales",
+            },
+        )
+        return []
+
     required_fields: list[str] = []
     try:
         question_rows = await repo.list_scoring_questions(
@@ -171,6 +185,12 @@ async def _has_minimum_profile_for_case_a(
     contact: dict[str, Any] | None,
     opportunity_metadata: dict[str, Any],
 ) -> bool:
+    if not await tenant_runtime.is_profiling_enabled(
+        organizacion_id=organizacion_id,
+        channel=channel if channel in {"whatsapp", "webchat"} else "webchat",
+    ):
+        return True
+
     answers = _extract_scoring_answers(contact=contact, opportunity_metadata=opportunity_metadata)
     profiling_questions = _extract_profiling_questions(
         opportunity_metadata=opportunity_metadata,

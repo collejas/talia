@@ -5942,6 +5942,14 @@ class CRMScoringConfigBundle(BaseModel):
     rules: list[CRMScoringRule] = Field(default_factory=list)
 
 
+class CRMScoringFeatureStatus(BaseModel):
+    organizacion_id: UUID
+    canal: Literal["whatsapp", "webchat"] | None = None
+    profiling_enabled: bool
+    profiling_enabled_global: bool
+    profiling_enabled_by_channel: dict[str, bool] = Field(default_factory=dict)
+
+
 class CRMScoringSeedRequest(BaseModel):
     canal: Literal["whatsapp", "webchat"]
     force: bool = False
@@ -13385,6 +13393,11 @@ async def get_pipeline_scoring_config(
     canal: Literal["whatsapp", "webchat"] = Query(...),
     include_inactive: bool = Query(default=False),
 ) -> CRMScoringConfigBundle:
+    if not await tenant_runtime.is_profiling_enabled(
+        organizacion_id=organizacion_id,
+        channel=canal,
+    ):
+        raise HTTPException(status_code=403, detail="profiling_disabled")
     try:
         profiles = await repo.list_scoring_profiles(
             organizacion_id=organizacion_id,
@@ -13418,6 +13431,33 @@ async def get_pipeline_scoring_config(
     )
 
 
+@router.get("/pipeline/scoring/feature-status", response_model=CRMScoringFeatureStatus)
+async def get_pipeline_scoring_feature_status(
+    *,
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("settings.view")),
+    canal: Literal["whatsapp", "webchat"] | None = Query(default=None),
+) -> CRMScoringFeatureStatus:
+    global_enabled = await tenant_runtime.is_profiling_enabled(
+        organizacion_id=organizacion_id,
+        channel=None,
+    )
+    by_channel: dict[str, bool] = {}
+    for channel_key in ("whatsapp", "webchat"):
+        by_channel[channel_key] = await tenant_runtime.is_profiling_enabled(
+            organizacion_id=organizacion_id,
+            channel=channel_key,
+        )
+    resolved_enabled = by_channel[canal] if canal in {"whatsapp", "webchat"} else global_enabled
+    return CRMScoringFeatureStatus(
+        organizacion_id=organizacion_id,
+        canal=canal,
+        profiling_enabled=resolved_enabled,
+        profiling_enabled_global=global_enabled,
+        profiling_enabled_by_channel=by_channel,
+    )
+
+
 @router.put("/pipeline/scoring/config/profile", response_model=CRMScoringProfile)
 async def upsert_pipeline_scoring_profile(
     *,
@@ -13426,6 +13466,11 @@ async def upsert_pipeline_scoring_profile(
     _: str = Depends(require_permission("settings.manage")),
     payload: CRMScoringProfileUpsert,
 ) -> CRMScoringProfile:
+    if not await tenant_runtime.is_profiling_enabled(
+        organizacion_id=organizacion_id,
+        channel=payload.canal,
+    ):
+        raise HTTPException(status_code=403, detail="profiling_disabled")
     body = payload.model_dump(mode="json")
     body["organizacion_id"] = str(organizacion_id)
     try:
@@ -13443,6 +13488,11 @@ async def delete_pipeline_scoring_profile(
     _: str = Depends(require_permission("settings.manage")),
     profile_id: UUID,
 ) -> Response:
+    if not await tenant_runtime.is_profiling_enabled(
+        organizacion_id=organizacion_id,
+        channel=None,
+    ):
+        raise HTTPException(status_code=403, detail="profiling_disabled")
     try:
         await repo.delete_scoring_profile(organizacion_id=organizacion_id, profile_id=profile_id)
     except CRMRepositoryError as exc:
@@ -13458,6 +13508,11 @@ async def upsert_pipeline_scoring_question(
     _: str = Depends(require_permission("settings.manage")),
     payload: CRMScoringQuestionUpsert,
 ) -> CRMScoringQuestion:
+    if not await tenant_runtime.is_profiling_enabled(
+        organizacion_id=organizacion_id,
+        channel=payload.canal,
+    ):
+        raise HTTPException(status_code=403, detail="profiling_disabled")
     body = payload.model_dump(mode="json", exclude_none=True)
     body["organizacion_id"] = str(organizacion_id)
     try:
@@ -13475,6 +13530,11 @@ async def delete_pipeline_scoring_question(
     _: str = Depends(require_permission("settings.manage")),
     question_id: UUID,
 ) -> Response:
+    if not await tenant_runtime.is_profiling_enabled(
+        organizacion_id=organizacion_id,
+        channel=None,
+    ):
+        raise HTTPException(status_code=403, detail="profiling_disabled")
     try:
         await repo.delete_scoring_question(organizacion_id=organizacion_id, question_id=question_id)
     except CRMRepositoryError as exc:
@@ -13490,6 +13550,11 @@ async def upsert_pipeline_scoring_question_reprompt(
     _: str = Depends(require_permission("settings.manage")),
     payload: CRMScoringQuestionRepromptUpsert,
 ) -> CRMScoringQuestionReprompt:
+    if not await tenant_runtime.is_profiling_enabled(
+        organizacion_id=organizacion_id,
+        channel=payload.canal,
+    ):
+        raise HTTPException(status_code=403, detail="profiling_disabled")
     body = payload.model_dump(mode="json", exclude_none=True)
     body["organizacion_id"] = str(organizacion_id)
     try:
@@ -13510,6 +13575,11 @@ async def delete_pipeline_scoring_question_reprompt(
     _: str = Depends(require_permission("settings.manage")),
     reprompt_id: UUID,
 ) -> Response:
+    if not await tenant_runtime.is_profiling_enabled(
+        organizacion_id=organizacion_id,
+        channel=None,
+    ):
+        raise HTTPException(status_code=403, detail="profiling_disabled")
     try:
         await repo.delete_scoring_question_reprompt(
             organizacion_id=organizacion_id,
@@ -13528,6 +13598,11 @@ async def upsert_pipeline_scoring_rule(
     _: str = Depends(require_permission("settings.manage")),
     payload: CRMScoringRuleUpsert,
 ) -> CRMScoringRule:
+    if not await tenant_runtime.is_profiling_enabled(
+        organizacion_id=organizacion_id,
+        channel=payload.canal,
+    ):
+        raise HTTPException(status_code=403, detail="profiling_disabled")
     body = payload.model_dump(mode="json", exclude_none=True)
     body["organizacion_id"] = str(organizacion_id)
     try:
@@ -13545,6 +13620,11 @@ async def delete_pipeline_scoring_rule(
     _: str = Depends(require_permission("settings.manage")),
     rule_id: UUID,
 ) -> Response:
+    if not await tenant_runtime.is_profiling_enabled(
+        organizacion_id=organizacion_id,
+        channel=None,
+    ):
+        raise HTTPException(status_code=403, detail="profiling_disabled")
     try:
         await repo.delete_scoring_rule(organizacion_id=organizacion_id, rule_id=rule_id)
     except CRMRepositoryError as exc:
@@ -13560,6 +13640,11 @@ async def seed_pipeline_scoring_config(
     _: str = Depends(require_permission("settings.manage")),
     payload: CRMScoringSeedRequest,
 ) -> CRMScoringSeedResponse:
+    if not await tenant_runtime.is_profiling_enabled(
+        organizacion_id=organizacion_id,
+        channel=payload.canal,
+    ):
+        raise HTTPException(status_code=403, detail="profiling_disabled")
     try:
         return await _seed_scoring_defaults(
             repo=repo,

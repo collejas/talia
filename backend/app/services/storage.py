@@ -829,6 +829,10 @@ async def _compute_lead_scoring_from_catalog(
     events: dict[str, Any],
     runtime_settings: tenant_runtime.LeadScoringRuntimeSettings,
 ) -> dict[str, Any] | None:
+    profiling_enabled = await tenant_runtime.is_profiling_enabled(
+        organizacion_id=organizacion_id,
+        channel=channel,
+    )
     profiles = await repo.list_scoring_profiles(
         organizacion_id=organizacion_id,
         canal=channel,
@@ -927,22 +931,32 @@ async def _compute_lead_scoring_from_catalog(
         grade = "listo"
 
     required_fields: list[str] = []
-    for question in questions:
-        field_key = str(question.get("field_key") or "").strip()
-        if not field_key:
-            continue
-        if bool(question.get("required_for_case_a")) and field_key not in required_fields:
-            required_fields.append(field_key)
-    if not required_fields:
+    if profiling_enabled:
+        for question in questions:
+            field_key = str(question.get("field_key") or "").strip()
+            if not field_key:
+                continue
+            if bool(question.get("required_for_case_a")) and field_key not in required_fields:
+                required_fields.append(field_key)
+        if not required_fields:
+            logger.warning(
+                "storage.lead_scoring.catalog_fallback_required_fields_default",
+                extra={
+                    "organizacion_id": str(organizacion_id),
+                    "channel": channel,
+                    "default_required_fields": list(_CRITICAL_SCORING_FIELDS),
+                },
+            )
+            required_fields = list(_CRITICAL_SCORING_FIELDS)
+    else:
         logger.warning(
-            "storage.lead_scoring.catalog_fallback_required_fields_default",
+            "profiling.mode.off",
             extra={
                 "organizacion_id": str(organizacion_id),
                 "channel": channel,
-                "default_required_fields": list(_CRITICAL_SCORING_FIELDS),
+                "component": "storage.lead_scoring",
             },
         )
-        required_fields = list(_CRITICAL_SCORING_FIELDS)
 
     missing_fields: list[str] = []
     refused_fields: list[str] = []
@@ -953,7 +967,7 @@ async def _compute_lead_scoring_from_catalog(
         if value == "refused":
             refused_fields.append(field)
     completed_critical = len([field for field in required_fields if field not in missing_fields])
-    completion_ratio = completed_critical / max(1, len(required_fields))
+    completion_ratio = 1.0 if not required_fields else completed_critical / len(required_fields)
     high_min, medium_min = _coerce_profile_confidence_thresholds(profile, runtime_settings)
     if completion_ratio >= high_min:
         confidence = "high"
@@ -2377,6 +2391,12 @@ async def apply_lead_scoring(
     now_iso = datetime.now(timezone.utc).isoformat()
     channel_value = str(merged_events.get("channel") or "").strip().lower()
     channel_key = channel_value if channel_value in {"whatsapp", "webchat"} else "unknown"
+    profiling_enabled = True
+    if channel_value in {"whatsapp", "webchat"}:
+        profiling_enabled = await tenant_runtime.is_profiling_enabled(
+            organizacion_id=org_uuid,
+            channel=channel_value,
+        )
 
     allowed_catalog_fields: set[str] | None = None
     if channel_value in {"whatsapp", "webchat"}:
@@ -2491,6 +2511,11 @@ async def apply_lead_scoring(
                     "channel": channel_value,
                 },
             )
+
+    if not profiling_enabled:
+        scoring["critical_fields"] = []
+        scoring["missing_fields"] = []
+        scoring["refused_fields"] = []
 
     scoring_payload = {
         **scoring,

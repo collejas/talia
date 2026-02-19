@@ -13,6 +13,7 @@ import {
   TenantMailSettings,
   TenantMessengerSettings,
   TenantOrganizationInfoForm,
+  TenantProfilingToggleForm,
   TenantSecretsManager,
   TenantWebchatSettings,
   TenantBusquedaSettings,
@@ -35,6 +36,7 @@ type TenantConfigResponse = { ok: boolean; organizacion_id: string; config: Reco
 type TenantSecretsResponse = { ok: boolean; items: Array<SecretItem & { id?: string }> }
 type TenantRoutesResponse = { ok: boolean; items: Array<RouteItem & { id: string }> }
 type TenantDetailResponse = { ok: boolean; tenant: TenantOrganizationInfo }
+type PlatformAdminStatusResponse = { is_platform_admin?: boolean }
 
 function asRecord(value: unknown): Record<string, unknown> | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null
@@ -80,6 +82,10 @@ export default async function TenantDetailSettingsPage({ params }: { params: Pro
     organizacionId: null,
     withUserToken: true,
   })
+  const platformAdminResp = await callCrmApi<PlatformAdminStatusResponse>("/admin/me/platform-admin", {
+    organizacionId: null,
+    withUserToken: true,
+  })
 
   const errors: string[] = []
   if (!configResp.ok) errors.push(configResp.error)
@@ -91,6 +97,7 @@ export default async function TenantDetailSettingsPage({ params }: { params: Pro
   const routes = routesResp.ok ? routesResp.data.items : []
   const config = configResp.ok ? asRecord(configResp.data.config ?? {}) ?? {} : {}
   const tenantInfo: TenantOrganizationInfo | null = infoResp.ok ? infoResp.data.tenant : null
+  const isPlatformAdmin = Boolean(platformAdminResp.ok && platformAdminResp.data?.is_platform_admin)
   const webchatConfig = getNestedRecord(config, "webchat") ?? {}
   const webchatCalendar = getNestedRecord(webchatConfig, "calendar") ?? {}
   const webchatRoute = routes.find((r) => r.canal === "webchat")?.clave ?? ""
@@ -166,6 +173,8 @@ export default async function TenantDetailSettingsPage({ params }: { params: Pro
   }
   const denueConfig = getNestedRecord(config, "denue") ?? {}
   const googlePlacesConfig = getNestedRecord(config, "google_places") ?? {}
+  const scoringConfig = getNestedRecord(config, "scoring_bienes_raices") ?? {}
+  const profilingEnabled = getNestedBoolean(scoringConfig, "profiling_enabled") ?? true
   const searchInitialValues = {
     denue_base_url: getNestedString(denueConfig, "base_url"),
     google_nearby_url: getNestedString(googlePlacesConfig, "nearby_url"),
@@ -212,6 +221,25 @@ export default async function TenantDetailSettingsPage({ params }: { params: Pro
           </CardHeader>
           <CardContent>
             <TenantOrganizationInfoForm tenantId={tenantId} info={tenantInfo} />
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="space-y-1">
+            <CardTitle>Calificación IA</CardTitle>
+            <CardDescription>
+              Control maestro del perfilamiento para este tenant. Si está apagado, la vista
+              `Settings / Calificación IA` queda bloqueada.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {isPlatformAdmin ? (
+              <TenantProfilingToggleForm tenantId={tenantId} profilingEnabled={profilingEnabled} />
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                Solo un administrador maestro puede cambiar este estado.
+              </p>
+            )}
           </CardContent>
         </Card>
 

@@ -58,6 +58,26 @@ export type ScoringConfigBundle = {
   rules: ScoringRule[];
 };
 
+export type ScoringFeatureStatus = {
+  organizacion_id: string;
+  canal?: ScoringChannel | null;
+  profiling_enabled: boolean;
+  profiling_enabled_global: boolean;
+  profiling_enabled_by_channel: Record<ScoringChannel, boolean>;
+};
+
+export async function fetchScoringFeatureStatus(
+  canal?: ScoringChannel,
+): Promise<ScoringFeatureStatus> {
+  const response = await callCrmApi<ScoringFeatureStatus>("/crm/pipeline/scoring/feature-status", {
+    searchParams: canal ? { canal } : undefined,
+  });
+  if (!response.ok || !response.data) {
+    throw new Error(response.ok ? "No se pudo cargar estado de perfilamiento." : response.error);
+  }
+  return response.data;
+}
+
 export async function fetchScoringConfig(canal: ScoringChannel): Promise<ScoringConfigBundle> {
   const response = await callCrmApi<ScoringConfigBundle>("/crm/pipeline/scoring/config", {
     searchParams: { canal, include_inactive: "true" },

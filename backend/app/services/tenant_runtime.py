@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
-from typing import Any
+from typing import Any, Literal
 from uuid import UUID
 
 import httpx
@@ -953,6 +953,37 @@ async def get_lead_scoring_runtime_settings(
         )
 
     return payload
+
+
+async def is_profiling_enabled(
+    *,
+    organizacion_id: UUID,
+    channel: Literal["whatsapp", "webchat"] | None = None,
+) -> bool:
+    """Resuelve si el perfilamiento está activo para un tenant/canal.
+
+    Fuente:
+    - `organizaciones.config.scoring_bienes_raices.profiling_enabled` (global)
+    - `organizaciones.config.scoring_bienes_raices.profiling_enabled_by_channel`
+    """
+
+    try:
+        config = await get_org_config(organizacion_id=organizacion_id)
+    except Exception as exc:
+        logger.warning(
+            "tenant_runtime.profiling_enabled_fallback_true",
+            extra={"organizacion_id": str(organizacion_id), "channel": channel, "error": str(exc)},
+        )
+        return True
+    scoring_cfg = _as_dict(config.get("scoring_bienes_raices")) or {}
+
+    # Default ON para no romper tenants existentes sin config explícita.
+    global_enabled = _coerce_bool(scoring_cfg.get("profiling_enabled"), True)
+    if channel not in {"whatsapp", "webchat"}:
+        return global_enabled
+
+    by_channel = _as_dict(scoring_cfg.get("profiling_enabled_by_channel")) or {}
+    return _coerce_bool(by_channel.get(channel), global_enabled)
 
 
 @dataclass(slots=True)

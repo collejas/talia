@@ -25,6 +25,7 @@ import {
   updateMessengerSettingsAction,
   updateOpenaiGeneralAction,
   updateOpenaiVoiceAction,
+  updateTenantProfilingToggleAction,
   updateTenantConfigAction,
   updateTenantInfoAction,
   updateWebchatSettingsAction,
@@ -33,6 +34,7 @@ import {
 
 export type TenantSettingsActions = {
   updateTenantConfigAction: CrudActionHandler
+  updateTenantProfilingToggleAction?: CrudActionHandler
   updateTenantInfoAction: CrudActionHandler
   setTenantSecretAction: CrudActionHandler
   deleteTenantSecretAction: CrudActionHandler
@@ -52,6 +54,7 @@ export type TenantSettingsActions = {
 
 const defaultTenantSettingsActions: TenantSettingsActions = {
   updateTenantConfigAction,
+  updateTenantProfilingToggleAction,
   updateTenantInfoAction,
   setTenantSecretAction,
   deleteTenantSecretAction,
@@ -166,6 +169,52 @@ export function TenantConfigEditor({
       <div className="flex items-center justify-between gap-3">
         <FormStatusMessage state={state} />
         <SubmitButton label="Guardar config" pendingLabel="Guardando..." />
+      </div>
+    </form>
+  )
+}
+
+export function TenantProfilingToggleForm({
+  tenantId,
+  profilingEnabled,
+}: {
+  tenantId: string
+  profilingEnabled: boolean
+}) {
+  const actions = useTenantSettingsActions()
+  const toggleAction = actions.updateTenantProfilingToggleAction ?? updateTenantProfilingToggleAction
+  const [state, formAction] = useActionState(toggleAction, INITIAL_CRUD_STATE)
+
+  return (
+    <form action={formAction} className="space-y-4">
+      <input type="hidden" name="tenant_id" value={tenantId} />
+      <div className="space-y-2">
+        <Label>Perfilamiento IA</Label>
+        <div className="flex items-center gap-3">
+          <input
+            id="profiling_enabled"
+            name="profiling_enabled"
+            type="checkbox"
+            className="size-4"
+            defaultChecked={profilingEnabled}
+          />
+          <span className="text-sm text-muted-foreground">
+            Activa/desactiva preguntas de perfilamiento y acceso a Settings {"/"} Calificación IA.
+          </span>
+        </div>
+      </div>
+      <div className="space-y-2">
+        <Label htmlFor="profiling_reason">Motivo (opcional)</Label>
+        <Input
+          id="profiling_reason"
+          name="profiling_reason"
+          placeholder="Ej. Campaña temporal sin perfilamiento."
+          maxLength={240}
+        />
+      </div>
+      <div className="flex items-center justify-between gap-3">
+        <FormStatusMessage state={state} />
+        <SubmitButton label="Guardar estado" pendingLabel="Guardando..." />
       </div>
     </form>
   )

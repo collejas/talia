@@ -11,6 +11,7 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Query, Response, 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.core.config import settings
+from app.core.logging import get_logger
 from app.core.secrets_crypto import SecretsCryptoError, encrypt_secret
 from app.repositories.crm import CRMRepository, CRMRepositoryError
 from app.repositories.platform_admin import PlatformRepository, PlatformRepositoryError
@@ -23,6 +24,7 @@ from app.services.role_permissions_sync import (
 from app.services.supabase_admin import SupabaseAdminError, create_supabase_user
 
 router = APIRouter(prefix="/admin", tags=["admin"])
+logger = get_logger("app.api.admin")
 
 
 class AdminDebugRowsResponse(BaseModel):
@@ -493,6 +495,23 @@ class SetTenantConfigRequest(BaseModel):
     config: dict[str, Any] = Field(default_factory=dict)
 
 
+class TenantProfilingToggleRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    enabled: bool
+    channel: Literal["whatsapp", "webchat"] | None = None
+    reason: str | None = Field(default=None, max_length=240)
+
+
+class TenantProfilingToggleResponse(BaseModel):
+    ok: bool = True
+    organizacion_id: UUID
+    channel: Literal["whatsapp", "webchat"] | None = None
+    profiling_enabled: bool
+    profiling_enabled_global: bool
+    profiling_enabled_by_channel: dict[str, bool] = Field(default_factory=dict)
+
+
 class SecretMetadata(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
@@ -881,6 +900,88 @@ async def set_tenant_config(
     return TenantConfigResponse(
         organizacion_id=organizacion_id,
         config=config if isinstance(config, dict) else {},
+    )
+
+
+@router.patch("/tenants/{organizacion_id}/profiling-toggle", response_model=TenantProfilingToggleResponse)
+async def set_tenant_profiling_toggle(
+    organizacion_id: UUID,
+    payload: TenantProfilingToggleRequest,
+    _: UUID = Depends(require_platform_admin),
+    repo: PlatformRepository = Depends(get_platform_repo),
+) -> TenantProfilingToggleResponse:
+    logger.warning(
+        "profiling.toggle.requested",
+        extra={
+            "organizacion_id": str(organizacion_id),
+            "channel": payload.channel,
+            "enabled": bool(payload.enabled),
+        },
+    )
+    try:
+        config = await repo.get_organizacion_config(organizacion_id=organizacion_id)
+    except PlatformRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    if config is None:
+        raise HTTPException(status_code=404, detail="tenant_not_found")
+
+    merged = dict(config)
+    scoring_cfg_raw = merged.get("scoring_bienes_raices")
+    scoring_cfg = dict(scoring_cfg_raw) if isinstance(scoring_cfg_raw, dict) else {}
+
+    if payload.channel in {"whatsapp", "webchat"}:
+        by_channel_raw = scoring_cfg.get("profiling_enabled_by_channel")
+        by_channel = dict(by_channel_raw) if isinstance(by_channel_raw, dict) else {}
+        by_channel[payload.channel] = bool(payload.enabled)
+        scoring_cfg["profiling_enabled_by_channel"] = by_channel
+    else:
+        scoring_cfg["profiling_enabled"] = bool(payload.enabled)
+
+    if payload.reason:
+        metadata_raw = scoring_cfg.get("profiling_toggle_metadata")
+        metadata = dict(metadata_raw) if isinstance(metadata_raw, dict) else {}
+        metadata["last_reason"] = payload.reason.strip()
+        scoring_cfg["profiling_toggle_metadata"] = metadata
+
+    merged["scoring_bienes_raices"] = scoring_cfg
+    try:
+        row = await repo.set_organizacion_config(organizacion_id=organizacion_id, config=merged)
+    except PlatformRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    saved_config = row.get("config") if isinstance(row, dict) else {}
+    saved = saved_config if isinstance(saved_config, dict) else {}
+    saved_scoring_raw = saved.get("scoring_bienes_raices")
+    saved_scoring = saved_scoring_raw if isinstance(saved_scoring_raw, dict) else {}
+
+    global_enabled = bool(saved_scoring.get("profiling_enabled", True))
+    by_channel_raw = saved_scoring.get("profiling_enabled_by_channel")
+    by_channel = by_channel_raw if isinstance(by_channel_raw, dict) else {}
+    normalized_by_channel = {
+        "whatsapp": bool(by_channel.get("whatsapp", global_enabled)),
+        "webchat": bool(by_channel.get("webchat", global_enabled)),
+    }
+    resolved = (
+        normalized_by_channel[payload.channel]
+        if payload.channel in {"whatsapp", "webchat"}
+        else global_enabled
+    )
+    logger.warning(
+        "profiling.toggle.changed",
+        extra={
+            "organizacion_id": str(organizacion_id),
+            "channel": payload.channel,
+            "enabled": resolved,
+            "enabled_global": global_enabled,
+            "enabled_whatsapp": normalized_by_channel["whatsapp"],
+            "enabled_webchat": normalized_by_channel["webchat"],
+        },
+    )
+    return TenantProfilingToggleResponse(
+        organizacion_id=organizacion_id,
+        channel=payload.channel,
+        profiling_enabled=resolved,
+        profiling_enabled_global=global_enabled,
+        profiling_enabled_by_channel=normalized_by_channel,
     )
 
 

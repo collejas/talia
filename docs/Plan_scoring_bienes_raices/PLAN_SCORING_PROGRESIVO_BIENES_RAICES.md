@@ -325,5 +325,7 @@ Estado actual:
 - [Check] Migracion creada: `20280416_120000_scoring_config_catalog.sql`.
 - [Check] Tablas creadas: `scoring_questions`, `scoring_question_reprompts`, `scoring_rules`, `scoring_profiles`.
 - [Check] API CRM para CRUD de configuracion de scoring por tenant/canal.
-- [Pending] Conectar motor de scoring runtime (`storage.apply_lead_scoring`) para leer este catalogo dinamico.
-- [Pending] Vista frontend para administrar preguntas/repreguntas/reglas/perfiles.
+- [Check] Motor de scoring runtime (`storage.apply_lead_scoring`) conectado al catalogo dinamico con fallback seguro.
+- [Check] Vista frontend `/settings/scoring` operativa para administrar preguntas/repreguntas/reglas/perfiles.
+- [Check] UX frontend simplificada para usuarios no tecnicos (sin edicion JSON, etiquetas de negocio en pasos operativos).
+- [Check] Trazabilidad de fallback en logs backend con eventos `warning` para escenarios recuperables.

@@ -35,6 +35,7 @@ import {
 import { useCurrentUser } from "@/hooks/use-current-user"
 import { usePermissions } from "@/hooks/use-permissions"
 import { usePlatformAdminStatus } from "@/hooks/use-platform-admin-status"
+import { useScoringFeatureStatus } from "@/hooks/use-scoring-feature-status"
 import { NavDocuments } from '@/components/nav-documents'
 import { NavMain } from '@/components/nav-main'
 import { NavSecondary } from '@/components/nav-secondary'
@@ -189,8 +190,11 @@ export function AppSidebar({
   const [hydrated, setHydrated] = useState(false)
 
   const { isPlatformAdmin } = usePlatformAdminStatus()
+  const { profilingEnabled } = useScoringFeatureStatus()
   const settingsChildren = useMemo(() => {
-    const base = SETTINGS_CHILDREN_TEMPLATE.map((child) => ({ ...child }))
+    const base = SETTINGS_CHILDREN_TEMPLATE.map((child) => ({ ...child })).filter((child) =>
+      child.url === "/settings/scoring" ? profilingEnabled : true,
+    )
     base.unshift({
       title: "Variables",
       url: "/settings/variables",
@@ -201,7 +205,7 @@ export function AppSidebar({
       base.push({ title: "Tenants", url: "/settings/tenants", icon: IconDatabase })
     }
     return base
-  }, [isPlatformAdmin])
+  }, [isPlatformAdmin, profilingEnabled])
   const navItems = useMemo(() => {
     const items = NAVIGATION.navMain.map((item) =>
       item.title === "Settings" ? { ...item, children: settingsChildren } : item,
