@@ -70,16 +70,17 @@
         .compare-card {
             border: 1px solid #e2e8f0;
             border-radius: 1rem;
-            padding: 1rem 1.25rem;
-            background: #ffffff;
-            transition: border-color 0.3s ease, background 0.3s ease;
+            padding: 0.9rem 1.1rem;
+            background: #f8fafc;
+            transition: border-color 0.3s ease, background 0.3s ease, color 0.3s ease;
+            cursor: pointer;
             color: inherit;
             display: flex;
             align-items: center;
-            font-size: 1.15rem;
-            line-height: 1.45;
+            font-size: 1rem;
+            line-height: 1.35;
         }
-        .compare-card > p {
+        .compare-card p {
             margin: 0;
         }
         .compare-card-before {
@@ -90,12 +91,11 @@
         }
         .compare-card-active {
             border-color: #1d4ed8;
-            box-shadow: 0 20px 45px rgba(14, 116, 144, 0.2);
-            background: #eff6ff;
+            background: #1d4ed8;
+            color: #ffffff;
         }
-        .compare-card-after.compare-card-active {
-            background: #dbeafe;
-            color: #1d4ed8;
+        .compare-card-active p {
+            color: inherit;
         }
     </style>
 </head>
@@ -276,44 +276,48 @@ Infraestructura Comercial <span class="text-primary block">Automatizada</span>
     <span class="text-primary">Después</span>
 </div>
 </div>
-<div class="grid gap-6 md:grid-cols-2">
+<div class="flex flex-col md:flex-row md:items-start md:justify-center gap-4">
+    <div class="flex-1 max-w-[32rem] space-y-3 text-left">
         <div class="compare-card compare-card-before" data-pair="1">
             <p>Leads sin respuesta en menos de 5 minutos</p>
-        </div>
-        <div class="compare-card compare-card-after" data-pair="1">
-            <p>Respuesta automática &lt; 10 segundos</p>
         </div>
         <div class="compare-card compare-card-before" data-pair="2">
             <p>Citas no confirmadas</p>
         </div>
-        <div class="compare-card compare-card-after" data-pair="2">
-            <p>Confirmación automática + recordatorios</p>
-        </div>
         <div class="compare-card compare-card-before" data-pair="3">
             <p>Seguimiento manual inconsistente</p>
-        </div>
-        <div class="compare-card compare-card-after" data-pair="3">
-            <p>Seguimiento estructurado</p>
         </div>
         <div class="compare-card compare-card-before" data-pair="4">
             <p>Vendedores saturados</p>
         </div>
-        <div class="compare-card compare-card-after" data-pair="4">
-            <p>Leads asignados según reglas</p>
-        </div>
         <div class="compare-card compare-card-before" data-pair="5">
             <p>Leads sin filtrar (curiosos mezclados con compradores reales)</p>
         </div>
-        <div class="compare-card compare-card-after" data-pair="5">
-            <p>Calificación inteligente antes de tocar vendedor</p>
-        </div>
         <div class="compare-card compare-card-before" data-pair="6">
             <p>Documentación solicitada de forma tardía o manual</p>
+        </div>
+    </div>
+    <div class="flex-1 max-w-[32rem] space-y-3 text-left">
+        <div class="compare-card compare-card-after" data-pair="1">
+            <p>Respuesta automática &lt; 10 segundos</p>
+        </div>
+        <div class="compare-card compare-card-after" data-pair="2">
+            <p>Confirmación automática + recordatorios</p>
+        </div>
+        <div class="compare-card compare-card-after" data-pair="3">
+            <p>Seguimiento estructurado</p>
+        </div>
+        <div class="compare-card compare-card-after" data-pair="4">
+            <p>Leads asignados según reglas</p>
+        </div>
+        <div class="compare-card compare-card-after" data-pair="5">
+            <p>Calificación inteligente antes de tocar vendedor</p>
         </div>
         <div class="compare-card compare-card-after" data-pair="6">
             <p>Solicitud automática de documentación al decidir compra</p>
         </div>
     </div>
+</div>
 </div>
 </section>
 <!-- Slide 7: Dirección -->
