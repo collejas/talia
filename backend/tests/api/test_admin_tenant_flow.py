@@ -17,9 +17,12 @@ class DummyRepo:
     def __init__(self, fail_route: bool = False) -> None:
         self.fail_route = fail_route
         self.created_tenant: dict[str, Any] | None = None
+        self.updated_config: dict[str, Any] | None = None
         self.role_id = uuid4()
         self.department_id = uuid4()
         self.position_id = uuid4()
+        self.owner_role_id = uuid4()
+        self.permission_rows: list[dict[str, Any]] = []
 
     async def create_organizacion(self, *, payload: dict[str, Any]) -> dict[str, Any]:
         self.created_tenant = payload
@@ -30,10 +33,33 @@ class DummyRepo:
             raise PlatformRepositoryError("route_conflict")
         return {"id": str(uuid4())}
 
+    async def get_organizacion_config(self, *, organizacion_id: UUID) -> dict[str, Any]:
+        return {}
+
+    async def create_calendar_resource(
+        self,
+        *,
+        organizacion_id: UUID,
+        name: str,
+        slug: str,
+        timezone: str,
+        metadata: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        return {"id": str(uuid4())}
+
+    async def set_organizacion_config(self, *, organizacion_id: UUID, config: dict[str, Any]) -> dict[str, Any]:
+        self.updated_config = config
+        return {"id": str(organizacion_id), "config": config}
+
     async def create_permissions(
         self, *, organizacion_id: UUID, permisos: Sequence[dict[str, str]]
     ) -> list[dict[str, Any]]:
-        return [{"id": str(uuid4()), **perm} for perm in permisos]
+        rows = [{"id": str(uuid4()), **perm} for perm in permisos]
+        self.permission_rows.extend(rows)
+        return rows
+
+    async def list_permissions(self, *, organizacion_id: UUID) -> list[dict[str, Any]]:
+        return list(self.permission_rows)
 
     async def create_role(
         self, *, organizacion_id: UUID, nombre: str, descripcion: str | None
@@ -44,6 +70,15 @@ class DummyRepo:
         self, *, organizacion_id: UUID, rol_id: UUID, permiso_id: UUID
     ) -> None:
         return None
+
+    async def list_roles(self, *, organizacion_id: UUID) -> list[dict[str, Any]]:
+        return [
+            {"id": str(self.owner_role_id), "nombre": "owner"},
+            {"id": str(self.role_id), "nombre": "Admin"},
+        ]
+
+    async def list_role_permissions(self, *, organizacion_id: UUID, rol_id: UUID) -> list[dict[str, Any]]:
+        return []
 
     async def create_department(self, *, organizacion_id: UUID, nombre: str) -> dict[str, Any]:
         return {"id": str(self.department_id), "nombre": nombre}
@@ -121,11 +156,14 @@ async def test_create_tenant_with_admin_success(async_client: AsyncClient, clear
     assert data["ok"] is True
     assert UUID(data["tenant_id"])
     assert UUID(data["usuario_id"]) == test_user_id
-    assert data["seed"]["rol_id"] == str(repo.role_id)
+    assert data["seed"]["rol_id"] == str(repo.owner_role_id)
     assert len(data["seed"]["permisos_ids"]) == 2
     assert data["seed"]["departamento_id"] == str(repo.department_id)
     assert data["seed"]["puesto_id"] == str(repo.position_id)
     assert data["recovery_email_sent"] is True
+    assert isinstance(repo.updated_config, dict)
+    assert repo.updated_config.get("features", {}).get("webchat", {}).get("enabled") is True
+    assert repo.updated_config.get("webchat", {}).get("calendar", {}).get("resource_id")
 
 
 @pytest.mark.asyncio

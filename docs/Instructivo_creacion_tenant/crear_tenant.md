@@ -46,12 +46,16 @@ El método `create_tenant_with_admin` en `backend/app/api/routes/admin.py` sigue
 1. **Crear organización** (`PlatformRepository.create_organizacion`) con los campos enviados. `config` se deja como se recibe (JSON) y `estado_onboarding` / `activo` se pueden escribir desde el formulario.
 2. **Bootstrap técnico del tenant (automático)**:
    - Crea un recurso en `public.calendar_resources` (agenda principal) si no existe `webchat.calendar.resource_id`.
-   - Completa `organizaciones.config` con defaults faltantes de calendario:
+   - Completa `organizaciones.config` con defaults faltantes de configuración base:
+     - `features.webchat.enabled=true`
+     - `webchat.persist_session`, `webchat.reengage_*`, `webchat.escalate_minutes`, `webchat.inactivity_hours` (si existe en settings), `webchat.assistant_id` y `webchat.prompt_version` (si existen en settings)
      - `webchat.calendar.resource_id`
      - `webchat.calendar.timezone`
      - `webchat.calendar.default_days`
      - `webchat.calendar.hold_minutes`
      - `calendar.provider/server_url/server_port/...` cuando existen defaults globales en `settings`.
+     - `mail.use_ssl/use_tls` y servidores/puertos de mail cuando existan en settings.
+     - `denue.base_url` y `brevo.base_url` desde defaults globales.
    - Este paso evita que el owner tenga que capturar manualmente IDs internos de BD.
 2. **Alias webchat**: si se envía `webchat_alias`, el backend crea una fila en `organizacion_rutas_canal` con `canal="webchat"` y `clave=alias.lower()` y llama a `channel_routing.invalidate_cache` para que el router detecte el alias nuevo.
 3. **Semillas**:
@@ -190,6 +194,13 @@ Estado esperado al finalizar:
 - [ ] `organizaciones.config.webchat.calendar.resource_id` queda asignado automáticamente.
 - [ ] Se escriben defaults faltantes de `webchat.calendar.*` y `calendar.*` sin pisar valores existentes.
 - [ ] Si falla bootstrap, la API responde error controlado (`502`) y no queda onboarding “a medias”.
+
+Plan de ejecución (configuración):
+1. [x] Extender `_build_default_tenant_config` para inyectar defaults base de `features.webchat`, `webchat.*` operativo y `webchat.calendar.*`.
+2. [x] Mantener merge no destructivo (`_merge_missing_config`) para no sobrescribir configuración ya capturada en payload o UI.
+3. [x] Incluir defaults técnicos reutilizables de `mail.*`, `denue.base_url` y `brevo.base_url`.
+4. [ ] Agregar/ajustar tests automáticos de creación de tenant con validación de `config` bootstrap.
+5. [ ] Validar en entorno real que el owner de tenant nuevo puede entrar a `/settings/variables` sin datos manuales internos.
 
 Validación:
 - [ ] Tenant nuevo aparece con `resource_id` válido en `organizaciones.config`.

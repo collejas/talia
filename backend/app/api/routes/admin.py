@@ -602,15 +602,30 @@ def _merge_missing_config(target: dict[str, Any], defaults: dict[str, Any]) -> d
 
 
 def _build_default_tenant_config(*, calendar_resource_id: str) -> dict[str, Any]:
+    webchat_cfg: dict[str, Any] = {
+        "calendar": {
+            "resource_id": calendar_resource_id,
+            "timezone": settings.webchat_calendar_timezone,
+            "default_days": settings.webchat_calendar_default_days,
+            "hold_minutes": settings.webchat_calendar_hold_minutes,
+        },
+        "persist_session": settings.webchat_persist_session,
+        "reengage_minutes": settings.webchat_reengage_minutes,
+        "reengage_max_attempts": settings.webchat_reengage_max_attempts,
+        "escalate_minutes": settings.webchat_escalate_minutes,
+    }
+    if settings.webchat_inactivity_hours is not None:
+        webchat_cfg["inactivity_hours"] = settings.webchat_inactivity_hours
+    assistant_id = settings.openai_webchat_assistant_id or settings.openai_assistant_id
+    if assistant_id:
+        webchat_cfg["assistant_id"] = assistant_id
+    prompt_version = settings.openai_prompt_webchat_version or settings.openai_prompt_version
+    if prompt_version:
+        webchat_cfg["prompt_version"] = prompt_version
+
     config: dict[str, Any] = {
-        "webchat": {
-            "calendar": {
-                "resource_id": calendar_resource_id,
-                "timezone": settings.webchat_calendar_timezone,
-                "default_days": settings.webchat_calendar_default_days,
-                "hold_minutes": settings.webchat_calendar_hold_minutes,
-            }
-        }
+        "features": {"webchat": {"enabled": True}},
+        "webchat": webchat_cfg,
     }
     calendar_cfg: dict[str, Any] = {}
     if settings.calendar_provider:
@@ -627,6 +642,27 @@ def _build_default_tenant_config(*, calendar_resource_id: str) -> dict[str, Any]
         calendar_cfg["full_contact_list_url"] = settings.calendar_full_contact_list_url
     if calendar_cfg:
         config["calendar"] = calendar_cfg
+
+    mail_cfg: dict[str, Any] = {
+        "use_ssl": settings.mail_use_ssl,
+        "use_tls": settings.mail_use_tls,
+    }
+    if settings.mail_incoming_server:
+        mail_cfg["incoming_server"] = settings.mail_incoming_server
+    if settings.mail_incoming_port_imap is not None:
+        mail_cfg["incoming_port_imap"] = settings.mail_incoming_port_imap
+    if settings.mail_outgoing_server:
+        mail_cfg["outgoing_server"] = settings.mail_outgoing_server
+    if settings.mail_outgoing_port_smtp is not None:
+        mail_cfg["outgoing_port_smtp"] = settings.mail_outgoing_port_smtp
+    if settings.mail_from_name:
+        mail_cfg["from_name"] = settings.mail_from_name
+    config["mail"] = mail_cfg
+
+    if settings.denue_base_url:
+        config["denue"] = {"base_url": settings.denue_base_url}
+    if settings.brevo_base_url:
+        config["brevo"] = {"base_url": settings.brevo_base_url}
     return config
 
 
