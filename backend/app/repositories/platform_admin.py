@@ -208,7 +208,7 @@ class PlatformRepository:
 
     async def get_organizacion_details(self, *, organizacion_id: UUID) -> dict[str, Any] | None:
         params = {
-            "select": "id,nombre,razon_social,rfc,pais,estado,ciudad,dominio_principal,telefono,sitio_web,estado_onboarding,activo,fecha_alta,fecha_pausa,fecha_cancelacion",
+            "select": "id,nombre,razon_social,rfc,pais,estado,ciudad,dominio_principal,telefono,sitio_web,config,estado_onboarding,activo,fecha_alta,fecha_pausa,fecha_cancelacion",
             "id": f"eq.{organizacion_id}",
             "limit": "1",
         }

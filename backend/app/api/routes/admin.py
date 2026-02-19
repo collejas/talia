@@ -1663,7 +1663,6 @@ def build_validation_report(
         "webchat.persist_session",
     ]
     calendar_config_keys = [
-        "webchat.calendar.resource_id",
         "webchat.calendar.timezone",
         "webchat.calendar.default_days",
         "webchat.calendar.hold_minutes",
