@@ -114,9 +114,9 @@
     <section class="slide fade-in" id="slide-2">
       <div class="max-w-5xl w-full" style="transform: translateY(-16.66%);">
         <div class="max-w-3xl">
-          <h2 class="text-5xl md:text-7xl font-bold tracking-tight mb-6">Contexto</h2>
+          <h2 class="text-5xl md:text-7xl font-bold tracking-tight mb-6 text-primary">Contexto</h2>
           <p class="text-xl text-slate-600 mb-6">
-            Porque aún no conocemos en detalle:
+            Porque aún <span class="text-primary underline decoration-primary decoration-2">no conocemos</span> en detalle:
           </p>
         </div>
         <div class="mt-6 grid gap-6 md:grid-cols-2 items-stretch">
@@ -144,11 +144,11 @@
         <div class="max-w-4xl">
           <h2 class="text-5xl md:text-7xl font-bold tracking-tight mb-6">Qué NO es esta demostración</h2>
           <p class="text-xl text-slate-600 mb-10 max-w-3xl">
-            Para evitar confusiones: hoy validamos el motor y el flujo. La personalización completa ocurre después.
+            Para evitar confusiones: hoy validamos el motor y el flujo. <span class="text-primary">La personalización completa ocurre después.</span>
           </p>
         </div>
 
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
           <div class="group p-7 rounded-3xl bg-white border border-slate-100 shadow-sm transition-all duration-200 hover:scale-105 hover:border-primary hover:bg-primary hover:text-white">
             <div class="flex items-start gap-4">
               <span class="material-symbols-outlined text-rose-500 transition-colors duration-200 group-hover:text-white">block</span>
@@ -179,13 +179,15 @@
             </div>
           </div>
 
-          <div class="group p-7 rounded-3xl bg-white border border-slate-100 shadow-sm transition-all duration-200 hover:scale-105 hover:border-primary hover:bg-primary hover:text-white">
-            <div class="flex items-start gap-4">
-              <span class="material-symbols-outlined text-emerald-600 transition-colors duration-200 group-hover:text-white">done_all</span>
-              <div>
-                <p class="font-bold transition-colors duration-200 group-hover:text-white">Sí valida lo esencial</p>
-                <p class="text-slate-500 text-sm mt-1 transition-colors duration-200 group-hover:text-white/80">Captura → CRM → calificación → asignación → agenda → funnel.</p>
+          <div class="group p-7 rounded-3xl bg-white border border-emerald-200 shadow-sm transition-all duration-200 hover:scale-105 hover:border-emerald-500 hover:bg-emerald-50 md:col-span-3">
+            <div class="flex flex-col gap-3 text-center">
+              <div class="flex items-center justify-center gap-2">
+                <span class="material-symbols-outlined text-emerald-600 transition-colors duration-200 group-hover:text-emerald-800">done_all</span>
+                <p class="font-bold transition-colors duration-200 group-hover:text-emerald-900 text-xl">Es una prueba con datos y flujo general para que veas:</p>
               </div>
+              <p class="text-slate-500 text-sm transition-colors duration-200 group-hover:text-slate-700">
+                Captura → CRM → calificación → asignación → agenda → funnel.
+              </p>
             </div>
           </div>
         </div>
@@ -253,12 +255,9 @@
       <div class="max-w-6xl w-full" style="transform: translateY(-16.66%);">
         <div class="max-w-4xl">
           <h2 class="text-5xl md:text-7xl font-bold tracking-tight mb-6">Qué vas a ver hoy</h2>
-          <p class="text-xl text-slate-600 mb-10 max-w-3xl">
-            El éxito se mide por el flujo completo: captura, CRM, calificación y siguiente acción.
-          </p>
         </div>
 
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
           <div class="group p-6 rounded-2xl bg-slate-50 border border-slate-100 flex items-start gap-4 transition-all duration-200 hover:scale-105 hover:border-primary hover:bg-primary hover:text-white">
             <div class="flex flex-col items-center gap-1">
               <span class="material-symbols-outlined text-primary transition-colors duration-200 group-hover:text-white text-lg">contact_mail</span>
@@ -303,7 +302,7 @@
             </div>
           </div>
 
-          <div class="group p-6 rounded-2xl bg-slate-50 border border-slate-100 flex flex-col gap-4 md:col-span-2 transition-all duration-200 hover:scale-105 hover:border-primary hover:bg-primary hover:text-white">
+          <div class="group p-6 rounded-2xl bg-slate-50 border border-slate-100 flex items-start gap-4 transition-all duration-200 hover:scale-105 hover:border-primary hover:bg-primary hover:text-white">
             <div class="flex flex-col items-center gap-1">
               <span class="material-symbols-outlined text-primary transition-colors duration-200 group-hover:text-white text-lg">visibility</span>
               <span class="text-[10px] font-semibold uppercase tracking-[0.5em] text-slate-400">5</span>
@@ -313,66 +312,14 @@
               <p class="text-slate-500 text-sm transition-colors duration-200 group-hover:text-white/80">Estado, trazabilidad y próxima acción en tablero.</p>
             </div>
           </div>
-        </div>
-
-      </div>
-    </section>
-
-    <!-- Slide 6: Inicio + Reglas de la prueba (blindaje anti-improvisación) -->
-    <section class="slide fade-in" id="slide-6">
-      <div class="max-w-5xl text-center">
-
-        <h2 class="text-5xl md:text-7xl font-bold tracking-tight mb-6">
-          Iniciamos la demostración
-        </h2>
-
-        <p class="text-xl text-slate-500 font-light max-w-3xl mx-auto mb-10">
-          Verás un caso completo: del lead capturado a la acción definida (cita / seguimiento / documentación), todo registrado en el CRM.
-        </p>
-
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-5 max-w-4xl mx-auto text-left">
-          <div class="px-6 py-5 rounded-3xl border border-slate-200 bg-white">
-            <p class="text-xs font-semibold uppercase tracking-widest text-slate-400 mb-2">Lo que verás</p>
-            <p class="font-semibold">Lead creado → Calificado → Asignado → Cita propuesta → Solicitud de documentos</p>
-            <p class="text-slate-500 text-sm mt-2">Todo con evidencia en el funnel.</p>
-          </div>
-
-          <div class="px-6 py-5 rounded-3xl border border-slate-200 bg-white">
-            <p class="text-xs font-semibold uppercase tracking-widest text-slate-400 mb-2">Escenario</p>
-            <p class="font-semibold">Avanzando</p>
-            <p class="text-slate-500 text-sm mt-2">Hacemos implementación a tu medida.</p>
-          </div>
-
-          <div class="px-6 py-5 rounded-3xl border border-amber-200 bg-amber-50 md:col-span-2">
-            <div class="flex items-start gap-3">
-              <span class="material-symbols-outlined text-amber-600">gavel</span>
-              <div>
-                <p class="font-bold">Reglas de la prueba (para que sea justa)</p>
-                <ul class="mt-2 text-sm text-slate-700 leading-relaxed list-disc pl-5 space-y-1">
-                  <li>Usaremos un escenario previamente definido (sin improvisación).</li>
-                  <li>Validaremos el flujo completo, no respuestas sueltas.</li>
-                  <li>Las personalizaciones (terrenos, reglas, guiones, inventario real) se hacen en implementación.</li>
-                  <li>Si el motor cumple el flujo, el siguiente paso es “configurar a tu operación”.</li>
-                </ul>
-              </div>
-            </div>
+          <div class="flex items-center justify-center">
+            <a href="https://talia.mx/auth/login" class="w-full inline-flex items-center justify-center gap-3 px-6 py-5 rounded-3xl border border-primary bg-primary/10 text-primary font-semibold uppercase tracking-[0.3em] text-xs hover:bg-primary/20 transition">
+              Empezamos?
+              <span class="material-symbols-outlined text-base leading-none">arrow_forward</span>
+            </a>
           </div>
         </div>
 
-        <div class="mt-10 flex flex-col sm:flex-row justify-center gap-3">
-          <button class="bg-primary text-white px-8 py-4 rounded-2xl font-bold text-lg hover:bg-blue-700 transition-colors shadow-lg shadow-primary/20"
-                  onclick="nextSlide()">
-            Continuar
-          </button>
-          <button class="px-8 py-4 rounded-2xl font-bold text-lg border border-slate-200 bg-white hover:bg-slate-50 transition-colors"
-                  onclick="currentSlide = 1; updateSlide();">
-            Reiniciar
-          </button>
-        </div>
-
-        <p class="mt-6 text-xs text-slate-400 uppercase tracking-[0.35em]">
-          Consejo: primero validamos el motor, después afinamos la personalización.
-        </p>
       </div>
     </section>
 
@@ -393,7 +340,7 @@
 
   <!-- Slide counter -->
   <div class="fixed bottom-10 left-10 text-xs font-bold tracking-widest text-slate-300 uppercase z-50">
-    Slide <span id="current-slide-num">01</span> / 06
+    Slide <span id="current-slide-num">01</span> / 05
   </div>
   <div class="fixed bottom-10 left-1/2 -translate-x-1/2 text-xs font-semibold uppercase tracking-[0.3em] text-slate-400 z-50">
     JORGE TORRE
@@ -401,7 +348,7 @@
 
   <script>
     let currentSlide = 1;
-    const totalSlides = 6;
+    const totalSlides = 5;
 
     function updateSlide() {
       document.querySelectorAll('.slide').forEach((slide) => slide.classList.remove('active'));
