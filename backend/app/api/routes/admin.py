@@ -1602,7 +1602,7 @@ async def delete_tenant_secret(
 @router.post("/tenants/{organizacion_id}/validate", response_model=TenantValidationReport)
 async def validate_tenant(
     organizacion_id: UUID,
-    scope: Literal["webchat", "calendar", "mail", "twilio", "messenger", "full"] = "full",
+    scope: Literal["webchat", "calendar", "mail", "twilio", "whatsapp", "messenger", "full"] = "full",
     actor: AdminActor = Depends(require_platform_admin_or_owner),
     repo: PlatformRepository = Depends(get_platform_repo),
 ) -> TenantValidationReport:
@@ -1629,14 +1629,14 @@ def build_validation_report(
     config: dict[str, Any],
     routes: list[dict[str, Any]],
     secrets: list[dict[str, Any]],
-    scope: Literal["webchat", "calendar", "mail", "twilio", "messenger", "full"],
+    scope: Literal["webchat", "calendar", "mail", "twilio", "whatsapp", "messenger", "full"],
 ) -> TenantValidationReport:
     report = TenantValidationReport(organizacion_id=organizacion_id)
 
     required_route_canals: list[str] = []
     if scope in {"webchat", "calendar", "full"}:
         required_route_canals.append("webchat")
-    if scope in {"twilio", "full"}:
+    if scope in {"twilio", "whatsapp", "full"}:
         required_route_canals.append("whatsapp")
     if scope in {"messenger", "full"}:
         required_route_canals.append("messenger")
@@ -1686,6 +1686,18 @@ def build_validation_report(
         "messenger.assistant_id",
         "messenger.inactivity_hours",
     ]
+    whatsapp_config_keys = [
+        "whatsapp.prompt_id",
+        "whatsapp.prompt_version",
+        "whatsapp.assistant_id",
+        "whatsapp.inactivity_minutes",
+        "whatsapp.reengage_minutes",
+        "whatsapp.reengage_max_attempts",
+        "whatsapp.escalate_minutes",
+        "whatsapp.templates.sales",
+        "whatsapp.templates.appointment",
+        "whatsapp.templates.cancel",
+    ]
 
     if scope == "full":
         required_config = (
@@ -1694,6 +1706,7 @@ def build_validation_report(
             + mail_config_keys
             + twilio_config_keys
             + voice_config_keys
+            + whatsapp_config_keys
             + messenger_config_keys
         )
     elif scope == "calendar":
@@ -1702,6 +1715,8 @@ def build_validation_report(
         required_config = mail_config_keys
     elif scope == "twilio":
         required_config = twilio_config_keys + voice_config_keys
+    elif scope == "whatsapp":
+        required_config = whatsapp_config_keys
     elif scope == "messenger":
         required_config = messenger_config_keys
     else:
@@ -1729,6 +1744,8 @@ def build_validation_report(
         required_secrets = ["mail.username", "mail.password"]
     elif scope == "twilio":
         required_secrets = ["twilio.account_sid", "twilio.auth_token", "voice.stream_jwt_secret"]
+    elif scope == "whatsapp":
+        required_secrets = []
     elif scope == "messenger":
         required_secrets = [
             "meta.messenger.page_access_token",

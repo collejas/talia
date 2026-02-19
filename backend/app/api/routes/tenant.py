@@ -156,7 +156,7 @@ class TenantSecretsPayload(BaseModel):
 
 class TenantValidationPayload(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    scope: Literal["webchat", "calendar", "mail", "twilio", "messenger", "full"] = "full"
+    scope: Literal["webchat", "calendar", "mail", "twilio", "whatsapp", "messenger", "full"] = "full"
 
 
 async def _build_tenant_response(
