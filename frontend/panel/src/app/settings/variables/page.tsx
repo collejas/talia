@@ -295,7 +295,11 @@ export default async function SettingsVariablesPage() {
                   />
                 </TabsContent>
                 <TabsContent value="calendar" className="pt-4">
-                  <TenantCalendarSettings tenantId={tenantId} initialValues={calendarInitialValues} />
+                  <TenantCalendarSettings
+                    tenantId={tenantId}
+                    initialValues={calendarInitialValues}
+                    allowResourceIdEdit={false}
+                  />
                 </TabsContent>
                 <TabsContent value="mail" className="pt-4">
                   <TenantMailSettings

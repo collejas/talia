@@ -644,9 +644,11 @@ export function TenantWebchatSettings({
 export function TenantCalendarSettings({
   tenantId,
   initialValues,
+  allowResourceIdEdit = true,
 }: {
   tenantId: string
   initialValues: CalendarInitialValues
+  allowResourceIdEdit?: boolean
 }) {
   const actions = useTenantSettingsActions()
   const [state, formAction] = useActionState(actions.updateCalendarSettingsAction, INITIAL_CRUD_STATE)
@@ -660,14 +662,24 @@ export function TenantCalendarSettings({
       <div className="grid gap-4 md:grid-cols-2">
         <div className="space-y-2">
           <Label htmlFor="calendar_resource_id">calendar.resource_id</Label>
-          <Input
-            id="calendar_resource_id"
-            name="calendar_resource_id"
-            placeholder="uuid del recurso (Supabase)"
-            defaultValue={initialValues.calendar_resource_id ?? ""}
-          />
+          {allowResourceIdEdit ? (
+            <Input
+              id="calendar_resource_id"
+              name="calendar_resource_id"
+              placeholder="uuid del recurso (Supabase)"
+              defaultValue={initialValues.calendar_resource_id ?? ""}
+            />
+          ) : (
+            <Input
+              id="calendar_resource_id"
+              name="calendar_resource_id"
+              readOnly
+              defaultValue={initialValues.calendar_resource_id ?? ""}
+            />
+          )}
           <p className="text-xs text-muted-foreground">
             Se refiere a <code>calendar_resources.id</code> que expone slots.
+            {!allowResourceIdEdit ? " Este valor lo provisiona automáticamente la plataforma." : ""}
           </p>
         </div>
         <div className="space-y-2">

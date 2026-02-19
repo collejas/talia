@@ -140,6 +140,34 @@ class PlatformRepository:
             raise PlatformRepositoryError("route_create_failed")
         return data[0]
 
+    async def create_calendar_resource(
+        self,
+        *,
+        organizacion_id: UUID,
+        name: str,
+        slug: str | None = None,
+        timezone: str | None = None,
+        metadata: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        payload: dict[str, Any] = {
+            "organizacion_id": str(organizacion_id),
+            "name": name,
+            "metadata": metadata or {},
+        }
+        if slug:
+            payload["slug"] = slug
+        if timezone:
+            payload["timezone"] = timezone
+        data = await self._rest(
+            "POST",
+            "/rest/v1/calendar_resources",
+            json=payload,
+            prefer="return=representation",
+        )
+        if not isinstance(data, list) or not data or not isinstance(data[0], dict):
+            raise PlatformRepositoryError("calendar_resource_create_failed")
+        return data[0]
+
     async def delete_channel_route(self, *, organizacion_id: UUID, route_id: UUID) -> None:
         await self._rest(
             "DELETE",

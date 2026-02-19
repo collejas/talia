@@ -587,6 +587,80 @@ def _get_config_value(config: dict[str, Any], dotted_key: str) -> Any:
     return current
 
 
+def _merge_missing_config(target: dict[str, Any], defaults: dict[str, Any]) -> dict[str, Any]:
+    for key, default_value in defaults.items():
+        current_value = target.get(key)
+        if isinstance(default_value, dict):
+            if not isinstance(current_value, dict):
+                target[key] = dict(default_value)
+                continue
+            _merge_missing_config(current_value, default_value)
+            continue
+        if current_value is None:
+            target[key] = default_value
+    return target
+
+
+def _build_default_tenant_config(*, calendar_resource_id: str) -> dict[str, Any]:
+    config: dict[str, Any] = {
+        "webchat": {
+            "calendar": {
+                "resource_id": calendar_resource_id,
+                "timezone": settings.webchat_calendar_timezone,
+                "default_days": settings.webchat_calendar_default_days,
+                "hold_minutes": settings.webchat_calendar_hold_minutes,
+            }
+        }
+    }
+    calendar_cfg: dict[str, Any] = {}
+    if settings.calendar_provider:
+        calendar_cfg["provider"] = settings.calendar_provider
+    if settings.calendar_server_url:
+        calendar_cfg["server_url"] = settings.calendar_server_url
+    if settings.calendar_server_url_alternate:
+        calendar_cfg["server_url_alternate"] = settings.calendar_server_url_alternate
+    if settings.calendar_server_port is not None:
+        calendar_cfg["server_port"] = settings.calendar_server_port
+    if settings.calendar_full_calendar_url:
+        calendar_cfg["full_calendar_url"] = settings.calendar_full_calendar_url
+    if settings.calendar_full_contact_list_url:
+        calendar_cfg["full_contact_list_url"] = settings.calendar_full_contact_list_url
+    if calendar_cfg:
+        config["calendar"] = calendar_cfg
+    return config
+
+
+async def _ensure_tenant_calendar_bootstrap(
+    *,
+    repo: PlatformRepository,
+    tenant_id: UUID,
+    tenant_name: str,
+    current_config: dict[str, Any],
+) -> dict[str, Any]:
+    existing_resource = _get_config_value(current_config, "webchat.calendar.resource_id")
+    resource_id = (
+        str(existing_resource).strip()
+        if isinstance(existing_resource, str) and existing_resource.strip()
+        else ""
+    )
+
+    if not resource_id:
+        resource_row = await repo.create_calendar_resource(
+            organizacion_id=tenant_id,
+            name=f"{tenant_name} - Agenda principal",
+            slug="default",
+            timezone=settings.webchat_calendar_timezone,
+            metadata={"source": "admin.tenant_bootstrap"},
+        )
+        resource_id = str(resource_row.get("id") or "").strip()
+        if not resource_id:
+            raise PlatformRepositoryError("calendar_resource_create_failed")
+
+    defaults = _build_default_tenant_config(calendar_resource_id=resource_id)
+    merged = _merge_missing_config(dict(current_config), defaults)
+    return merged
+
+
 @router.get("/tenants", response_model=TenantsResponse)
 async def list_tenants(
     actor: AdminActor = Depends(require_platform_admin_or_owner),
@@ -631,13 +705,25 @@ async def create_tenant(
         tenant_payload["config"] = payload.config
 
     tenant = await repo.create_organizacion(payload=tenant_payload)
+    tenant_id = UUID(str(tenant["id"]))
+    try:
+        current_config = await repo.get_organizacion_config(organizacion_id=tenant_id)
+        merged_config = await _ensure_tenant_calendar_bootstrap(
+            repo=repo,
+            tenant_id=tenant_id,
+            tenant_name=payload.nombre,
+            current_config=current_config or {},
+        )
+        await repo.set_organizacion_config(organizacion_id=tenant_id, config=merged_config)
+    except PlatformRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
 
     alias = payload.webchat_alias.strip().lower() if payload.webchat_alias else None
     if alias:
         try:
             await repo.create_channel_route(
                 payload={
-                    "organizacion_id": str(tenant["id"]),
+                    "organizacion_id": str(tenant_id),
                     "canal": "webchat",
                     "clave": alias,
                     "metadata": {"source": "admin.create_tenant"},
@@ -684,6 +770,14 @@ async def create_tenant_with_admin(
 
         tenant = await repo.create_organizacion(payload=tenant_payload)
         tenant_id = UUID(str(tenant["id"]))
+        current_config = await repo.get_organizacion_config(organizacion_id=tenant_id)
+        merged_config = await _ensure_tenant_calendar_bootstrap(
+            repo=repo,
+            tenant_id=tenant_id,
+            tenant_name=payload.tenant.nombre,
+            current_config=current_config or {},
+        )
+        await repo.set_organizacion_config(organizacion_id=tenant_id, config=merged_config)
 
         alias = payload.tenant.webchat_alias.strip().lower() if payload.tenant.webchat_alias else None
         if alias:
