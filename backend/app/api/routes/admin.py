@@ -691,6 +691,8 @@ TENANT_BASE_PERMISSION_CODES = (
     "reports.view",
     "role.manage",
     "user.manage",
+    "roles.write",
+    "usuarios.write",
     "settings.view",
     "settings.manage",
     "leads.view",
@@ -1247,6 +1249,12 @@ async def create_tenant_with_admin(
             organizacion_id=tenant_id,
             rol_id=role_id,
             permiso_ids=set(permiso_ids),
+        )
+        # El rol administrativo de seed (normalmente "admin") también debe quedar operativo completo.
+        await _grant_all_permissions_to_role(
+            repo=repo,
+            organizacion_id=tenant_id,
+            rol_id=role_id,
         )
 
         departamento = await repo.create_department(
