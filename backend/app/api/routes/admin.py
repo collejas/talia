@@ -630,6 +630,15 @@ def _build_default_tenant_config(*, calendar_resource_id: str) -> dict[str, Any]
     return config
 
 
+CRITICAL_OWNER_PERMISSION_CODES = (
+    "ver_panel",
+    "settings.view",
+    "settings.manage",
+    "user.manage",
+    "role.manage",
+)
+
+
 async def _ensure_tenant_calendar_bootstrap(
     *,
     repo: PlatformRepository,
@@ -659,6 +668,73 @@ async def _ensure_tenant_calendar_bootstrap(
     defaults = _build_default_tenant_config(calendar_resource_id=resource_id)
     merged = _merge_missing_config(dict(current_config), defaults)
     return merged
+
+
+async def _ensure_permissions_exist(
+    *,
+    repo: PlatformRepository,
+    organizacion_id: UUID,
+    permission_codes: tuple[str, ...],
+) -> None:
+    existing = await repo.list_permissions(organizacion_id=organizacion_id)
+    existing_codes = {
+        str(row.get("codigo") or "").strip()
+        for row in existing
+        if isinstance(row, dict) and row.get("codigo")
+    }
+    missing = [code for code in permission_codes if code not in existing_codes]
+    if not missing:
+        return
+    payload = [{"codigo": code, "descripcion": code} for code in missing]
+    await repo.create_permissions(organizacion_id=organizacion_id, permisos=payload)
+
+
+async def _resolve_owner_role_id(
+    *,
+    repo: PlatformRepository,
+    organizacion_id: UUID,
+) -> UUID | None:
+    roles = await repo.list_roles(organizacion_id=organizacion_id)
+    for row in roles:
+        if not isinstance(row, dict):
+            continue
+        nombre = str(row.get("nombre") or "").strip().lower()
+        if nombre != "owner":
+            continue
+        role_id = row.get("id")
+        if not role_id:
+            continue
+        try:
+            return UUID(str(role_id))
+        except (TypeError, ValueError):
+            continue
+    return None
+
+
+async def _grant_all_permissions_to_role(
+    *,
+    repo: PlatformRepository,
+    organizacion_id: UUID,
+    rol_id: UUID,
+) -> None:
+    permissions = await repo.list_permissions(organizacion_id=organizacion_id)
+    current = await repo.list_role_permissions(organizacion_id=organizacion_id, rol_id=rol_id)
+    current_perm_ids = {
+        UUID(str(row["permiso_id"]))
+        for row in current
+        if isinstance(row, dict) and row.get("permiso_id")
+    }
+    for row in permissions:
+        if not isinstance(row, dict) or not row.get("id"):
+            continue
+        permiso_id = UUID(str(row["id"]))
+        if permiso_id in current_perm_ids:
+            continue
+        await repo.create_role_permission(
+            organizacion_id=organizacion_id,
+            rol_id=rol_id,
+            permiso_id=permiso_id,
+        )
 
 
 @router.get("/tenants", response_model=TenantsResponse)
@@ -840,8 +916,20 @@ async def create_tenant_with_admin(
             },
         )
 
+        await _ensure_permissions_exist(
+            repo=repo,
+            organizacion_id=tenant_id,
+            permission_codes=CRITICAL_OWNER_PERMISSION_CODES,
+        )
+        owner_role_id = await _resolve_owner_role_id(repo=repo, organizacion_id=tenant_id)
+        admin_role_id = owner_role_id or role_id
+        await _grant_all_permissions_to_role(
+            repo=repo,
+            organizacion_id=tenant_id,
+            rol_id=admin_role_id,
+        )
         await repo.assign_user_role(
-            usuario_id=usuario_id, rol_id=role_id, organizacion_id=tenant_id
+            usuario_id=usuario_id, rol_id=admin_role_id, organizacion_id=tenant_id
         )
 
         await repo.create_employee(
@@ -855,7 +943,7 @@ async def create_tenant_with_admin(
             tenant_id=tenant_id,
             usuario_id=usuario_id,
             seed=TenantSeedSummary(
-                rol_id=role_id,
+                rol_id=admin_role_id,
                 permisos_ids=permiso_ids,
                 departamento_id=departamento_id,
                 puesto_id=puesto_id,

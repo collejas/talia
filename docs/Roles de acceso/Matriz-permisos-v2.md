@@ -82,7 +82,8 @@ Regla general: además del permiso, se respeta el “scope” (equipo) salvo `ow
 
 ## Vistas (recordatorio)
 
-- `/settings/tenants` NO se gobierna por permisos tenant. Requiere `super_admin` (`platform_admins`).
+- `/settings/variables` es la vista principal para owner/admin del tenant (sobre su propia `organizacion_id`).
+- `/settings/tenants` se oculta en UI para no-platform-admin; si un owner llega por URL, backend debe limitar a su organización y bloquear acceso fuera de scope.
 
 ## Migración sugerida (resumen)
 

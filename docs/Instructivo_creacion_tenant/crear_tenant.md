@@ -26,7 +26,7 @@ Este instructivo recoge el flujo completo para registrar un nuevo tenant (el cli
 - **Tenant**: `nombre` (obligatorio, mínimo 2 caracteres), `webchat_alias` (alias lowercase para `organizacion_rutas_canal`), `pais`, `estado`, `ciudad`, `dominio_principal`, `razon_social`, `rfc`, `telefono`, `sitio_web`, `activo` (checkbox), `estado_onboarding` (`pendiente|en_progreso|completado|pausado|cancelado`). Todos se envían como parte de `CreateTenantRequest`.
 - **Admin**: `correo` (email validado), `nombre_completo`, `telefono` (E.164), `estado` (`activo`/`bloqueado`).
 
-La acción `createTenantWithAdmin` en `frontend/panel/src/app/settings/tenants/actions.ts` arma el payload y siempre añade el `seed` por defecto:
+La acción `createTenantWithAdmin` en `frontend/panel/src/app/settings/tenants/actions.ts` arma el payload y añade un `seed` por defecto para compatibilidad operacional:
 
 ```ts
 DEFAULT_SEED = {
@@ -37,14 +37,22 @@ DEFAULT_SEED = {
   permisos: [{ codigo: "usuarios.write" }, { codigo: "roles.write" }],
 }
 ```
-
-Puedes modificar este objeto si los tenants necesitan otra semilla (por ejemplo, permisos adicionales o departamentos distintos).
+Este `seed` ya no define el alcance final del usuario maestro: el backend eleva al usuario al rol `owner` del tenant (si existe) y garantiza permisos críticos de configuración.
 
 ### 2.2. Qué hace el backend al recibir el payload (`create_tenant_with_admin`)
 
 El método `create_tenant_with_admin` en `backend/app/api/routes/admin.py` sigue estos pasos (todas las llamadas se canalizan por `PlatformRepository`):
 
 1. **Crear organización** (`PlatformRepository.create_organizacion`) con los campos enviados. `config` se deja como se recibe (JSON) y `estado_onboarding` / `activo` se pueden escribir desde el formulario.
+2. **Bootstrap técnico del tenant (automático)**:
+   - Crea un recurso en `public.calendar_resources` (agenda principal) si no existe `webchat.calendar.resource_id`.
+   - Completa `organizaciones.config` con defaults faltantes de calendario:
+     - `webchat.calendar.resource_id`
+     - `webchat.calendar.timezone`
+     - `webchat.calendar.default_days`
+     - `webchat.calendar.hold_minutes`
+     - `calendar.provider/server_url/server_port/...` cuando existen defaults globales en `settings`.
+   - Este paso evita que el owner tenga que capturar manualmente IDs internos de BD.
 2. **Alias webchat**: si se envía `webchat_alias`, el backend crea una fila en `organizacion_rutas_canal` con `canal="webchat"` y `clave=alias.lower()` y llama a `channel_routing.invalidate_cache` para que el router detecte el alias nuevo.
 3. **Semillas**:
    - Insertar permisos (`permisos`) con `create_permissions`. Cada permiso queda con `codigo` y `descripcion`.
@@ -55,7 +63,16 @@ El método `create_tenant_with_admin` en `backend/app/api/routes/admin.py` sigue
    - Envía `POST /auth/v1/recover` con `supabase_reset_redirect_url` para que el admin reciba un correo de recuperación.
 5. **Persistir en el CRM**:
    - `upsert_usuario` crea/actualiza la fila en `public.usuarios` (nota: la tabla sólo admite `estado`=`activo`/`inactivo` y `telefono_e164` validado).
-   - `assign_user_role` graba la relación en `public.usuarios_roles`.
+   - El backend resuelve el rol administrativo del tenant:
+     - Usa `owner` (por nombre) si existe en el catálogo del tenant.
+     - Si no existe, usa el rol creado por `seed`.
+   - Antes de asignar el rol, garantiza permisos críticos mínimos:
+     - `ver_panel`
+     - `settings.view`
+     - `settings.manage`
+     - `user.manage`
+     - `role.manage`
+   - Luego otorga al rol administrativo todos los permisos existentes del tenant y ejecuta `assign_user_role`.
    - `create_employee` deja un `empleado` con departamento/puesto y el mismo `usuario_id`.
 
 ### 2.3. Validaciones y errores
@@ -63,7 +80,8 @@ El método `create_tenant_with_admin` en `backend/app/api/routes/admin.py` sigue
 - `webchat_alias` usa `create_channel_route`, que lanza `409` si existe otra ruta igual (el alias se normaliza con `lower()`).
 - El correo pasa por `email_validator`; el teléfono se normaliza.
 - Si cualquier llamada a PlatformRepository falla el endpoint devuelve `502 repo_error`.
-- Si la semilla ya existía puede causar `409`/`supabase_error`; el panel muestra el `error` devuelto.
+- Si hay conflicto de alias webchat, se devuelve `409`.
+- Si falla bootstrap técnico (calendar resource/config), se devuelve `502`.
 
 ### 2.4. ¿Qué se devuelve?
 
@@ -141,7 +159,8 @@ Ejemplos habituales de `clave`: alias textuales para webchat (`cliente-x`), un n
 ## 5. Qué ve el admin del tenant
 
 - `GET /tenant/me/settings` carga su `organizacion_id`, datos básicos y rutas (`PlatformRepository.get_organizacion_details`, `list_channel_routes`).
-- La vista `/settings/variables` muestra las mismas secciones que la vista global (tabs en `TenantVariablesSectionsPanel`), pero el botón “Tenants” del sidebar sólo aparece si estás en `platform_admins`. Los tenants usan “Variables” y el botón “Account” inferior (`NavUser`) redirige al mismo formulario para editar su organización sin exponer `/settings/tenants`.
+- La vista `/settings/variables` muestra las mismas secciones que la vista global (tabs en `TenantVariablesSectionsPanel`), pero el botón “Tenants” del sidebar sólo aparece si estás en `platform_admins`.
+- En la pestaña Calendario de owner tenant, `calendar.resource_id` se muestra en solo lectura: lo provisiona la plataforma durante el alta.
 - Los tenant admins usan `/tenant/me/routes`, `/tenant/me/secrets`, `/tenant/me/validate` para tocar sus propios datos, y nunca entran a `/admin/tenants/*`.
 
 ## 6. Referencias rápidas

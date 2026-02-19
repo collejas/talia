@@ -74,3 +74,14 @@ Panel:
 - [x] Auditoría de reasignaciones en Oportunidades (lectura).
 - [x] Vista global de auditoría de reasignaciones (CRM).
 - Auditoría: vista completa si `audit.view_all`.
+
+## 5) Scope tenant en configuración (estado actual)
+
+- Owners configuran su organización vía endpoints `tenant/me/*`:
+  - `GET/PUT /tenant/me/settings`
+  - `PUT /tenant/me/config`
+  - `GET/POST/DELETE /tenant/me/routes`
+  - `GET/POST/DELETE /tenant/me/secrets`
+  - `POST /tenant/me/validate`
+- Endpoints administrativos `/admin/tenants/*` aceptan owner solo dentro de su `organizacion_id`; si no coincide, responde `403 owner_scope_violation`.
+- En onboarding (`POST /admin/tenants/con_usuario`) el usuario maestro queda con rol de mayor privilegio tenant (`owner` si existe) y permisos completos del tenant.

@@ -134,8 +134,10 @@ Políticas RLS (agregar `es_owner` en las condiciones de “admin_all”):
 - `usuarios_insert_admin` / `usuarios_update` / `usuarios_delete_admin`
 - `empleados_insert_admin` / `empleados_update_admin` / `empleados_delete_admin`
 
-Endpoints backend:
-- `/api/admin/*` (hoy “platform admin only”): permitir `owner` **solo** para su `organizacion_id`.
+Endpoints backend (estado actual):
+- `/api/admin/*` orientados a tenants aceptan `owner` con guardas de alcance.
+- Cualquier operación con `organizacion_id` valida `owner_scope_violation` si intenta salir de su tenant.
+- En listados cross-tenant, el `owner` queda filtrado a su propia organización.
 - Endpoints de settings/roles/permisos que hoy asumen `es_admin` (validar que `owner` tenga acceso).
 
 Datos a exponer en permisos:
@@ -148,3 +150,13 @@ Para que el rol `owner` funcione como “dueño” del tenant (sin acceso cross-
 - `public.mi_contexto_permisos()` debe exponer `es_owner` (o el rol debe incluirse en `roles[]`) para que el backend pueda decidir acceso.
 - Los endpoints `/api/admin/tenants/*` deben aceptar `owner` solo si el `organizacion_id` solicitado coincide con su tenant.
 - Acceso explícito a `organizaciones.config`, `organizacion_rutas_canal` y `secretos` del tenant, pero no a otros tenants.
+
+## 9) Onboarding técnico mínimo del tenant (obligatorio)
+
+Para que el owner opere sin depender de datos internos de BD, el alta de tenant debe crear:
+- `calendar_resources` base para el tenant.
+- `organizaciones.config.webchat.calendar.resource_id` apuntando a ese recurso.
+- Defaults de `webchat.calendar.*` y `calendar.*` (si no existen).
+- Usuario maestro con rol `owner` (o equivalente) y permisos de settings/usuarios/roles.
+
+Con esto el owner puede administrar su tenant desde `/settings/variables` sin intervención de platform admin para IDs internos.
