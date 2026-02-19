@@ -69,15 +69,15 @@
         }
         .compare-line {
             min-height: 3rem;
-            transition: transform 0.2s ease, font-weight 0.2s ease, font-size 0.2s ease;
-            font-size: 1.125rem;
+            transition: transform 0.3s ease, font-weight 0.25s ease, font-size 0.25s ease;
+            font-size: 1.75rem;
             font-weight: 400;
             line-height: 1.5;
         }
         .compare-line-active {
-            transform: scale(1.05);
-            font-weight: 600;
-            font-size: 1.875rem;
+            transform: scale(1.25);
+            font-weight: 700;
+            font-size: 2.5rem;
         }
     </style>
 </head>
@@ -261,19 +261,19 @@ Antes <span class="text-primary block">vs Después</span>
 <div class="flex-1 space-y-6">
 <p class="text-sm uppercase tracking-[0.4em] text-slate-400">ANTES</p>
             <div class="space-y-3">
-                <p class="compare-line compare-line-left text-slate-900 text-lg" data-pair="1">Leads sin seguimiento</p>
-                <p class="compare-line compare-line-left text-slate-600 text-lg" data-pair="2">Respuestas tardías</p>
-                <p class="compare-line compare-line-left text-slate-600 text-lg" data-pair="3">Citas sin confirmar</p>
+                <p class="compare-line compare-line-left text-slate-900 text-lg" data-pair="1">Leads sin respuesta en menos de 5 minutos</p>
+                <p class="compare-line compare-line-left text-slate-600 text-lg" data-pair="2">Citas no confirmadas</p>
+                <p class="compare-line compare-line-left text-slate-600 text-lg" data-pair="3">Seguimiento manual inconsistente</p>
                 <p class="compare-line compare-line-left text-slate-600 text-lg" data-pair="4">Vendedores saturados</p>
             </div>
 </div>
 <div class="flex-1 space-y-6">
 <p class="text-sm uppercase tracking-[0.4em] text-slate-400">DESPUÉS</p>
             <div class="space-y-3">
-                <p class="compare-line compare-line-right text-primary text-lg" data-pair="1">Respuesta automática inmediata</p>
-                <p class="compare-line compare-line-right text-slate-600 text-lg" data-pair="2">Lead filtrado antes de tocar vendedor</p>
-                <p class="compare-line compare-line-right text-slate-600 text-lg" data-pair="3">Cita confirmada con recordatorios</p>
-                <p class="compare-line compare-line-right text-slate-600 text-lg" data-pair="4">Dirección ve todo en tiempo real</p>
+                <p class="compare-line compare-line-right text-primary text-lg" data-pair="1">Respuesta automática < 10 segundos</p>
+                <p class="compare-line compare-line-right text-slate-600 text-lg" data-pair="2">Confirmación automática + recordatorios</p>
+                <p class="compare-line compare-line-right text-slate-600 text-lg" data-pair="3">Seguimiento estructurado</p>
+                <p class="compare-line compare-line-right text-slate-600 text-lg" data-pair="4">Leads asignados según reglas</p>
             </div>
 </div>
 </div>
