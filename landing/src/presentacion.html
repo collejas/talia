@@ -105,16 +105,24 @@
 <div class="h-full bg-primary transition-all duration-500" id="progress-bar" style="width: 10%;"></div>
 </div>
 <!-- Navigation Header -->
-<header class="fixed top-0 left-0 w-full px-8 py-4 flex justify-between items-center z-40 bg-white/90 backdrop-blur">
-    <div class="flex items-center gap-3">
+<header class="fixed top-0 left-0 w-full px-8 py-4 flex justify-between items-center z-40 bg-white/90 backdrop-blur relative">
+    <div class="flex items-center gap-3 flex-shrink-0">
         <img src="Logo8.svg" alt="Tal-IA logo" class="w-11 h-11 object-contain"/>
         <div class="flex items-center gap-1">
             <span class="text-xs uppercase tracking-[0.4em] text-slate-400">Sistema</span>
             <span class="font-bold text-xl text-slate-900 tracking-tight">Tal-IA</span>
         </div>
     </div>
-    <div class="text-xs font-semibold uppercase tracking-[0.4em] text-slate-500">
-        Presentación Ejecutiva
+    <div class="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 flex items-center gap-2">
+        <a href="presentacion.html" class="px-4 py-2 rounded-full border border-primary bg-primary/10 text-xs font-semibold uppercase tracking-[0.3em] text-primary transition hover:bg-primary/20">
+            Presentacion
+        </a>
+        <a href="nota.html" class="px-4 py-2 rounded-full border border-slate-200 text-xs font-semibold uppercase tracking-[0.3em] text-slate-600 transition hover:border-primary hover:text-slate-900">
+            Nota
+        </a>
+    </div>
+    <div class="flex-shrink-0 text-xs font-semibold uppercase tracking-[0.4em] text-slate-500 text-right">
+        Presentacion Ejecutiva
     </div>
 </header>
 <!-- Slides Container -->

@@ -231,6 +231,25 @@ server {
         add_header Cache-Control "public, max-age=86400";
     }
 
+    # Landing demos direct access
+    location = /presentacion.html {
+        root /var/www/talia/landing/src;
+        add_header Cache-Control "no-cache, must-revalidate";
+    }
+
+    location = /nota.html {
+        root /var/www/talia/landing/src;
+        add_header Cache-Control "no-cache, must-revalidate";
+    }
+
+    location = /presentacion {
+        return 302 /presentacion.html;
+    }
+
+    location = /nota {
+        return 302 /nota.html;
+    }
+
     # Fallback SPA
     location / {
         try_files $uri $uri/ /index.html;
