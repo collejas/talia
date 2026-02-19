@@ -264,3 +264,27 @@ Casos mínimos:
 - [x] Ajustes frontend de UX para campos internos (`resource_id` readonly en tenant).
 - [x] SQL de backfill versionado y reusable.
 - [x] Documentación actualizada (`crear_tenant.md`, `rbac_and_scope.md`, `Matriz-permisos-v2.md`).
+
+## 8. Smoke Test Post-Creación
+
+Checklist rápido para validar cada alta nueva de tenant:
+
+- [ ] Crear tenant desde `/settings/tenants` con correo nuevo.
+- [ ] Verificar respuesta de éxito con `tenant_id` y `usuario_id`.
+- [ ] Validar baseline en BD del tenant recién creado:
+  - [ ] `roles = 10`
+  - [ ] `permisos = 37`
+  - [ ] `roles_permisos = 191`
+  - [ ] `usuarios = 1`
+- [ ] Iniciar sesión con owner del tenant.
+- [ ] Confirmar que carga sidebar completo (Dashboard, Inbox, Agenda, Oportunidades, Contactos, Clientes, Settings).
+- [ ] Entrar a `/settings/variables`:
+  - [ ] carga sin error,
+  - [ ] `webchat.calendar.resource_id` existe y es readonly para tenant.
+- [ ] En `/settings/rh` validar que se ven roles, permisos, departamentos y puestos.
+- [ ] Crear un usuario adicional y asignarle rol (`agente` o `supervisor`) para validar delegación.
+- [ ] Probar bloqueo de correo duplicado:
+  - [ ] crear tenant con email existente devuelve `409 email_already_registered`,
+  - [ ] no se crea tenant parcial.
+- [ ] Probar scope:
+  - [ ] owner de tenant no accede a recursos de otro tenant (`403` esperado).
