@@ -67,6 +67,24 @@
             align-self: center;
             transform: translateY(-0.25rem);
         }
+        .compare-line {
+            min-height: 3rem;
+            transition: transform 0.2s ease, color 0.2s ease, font-weight 0.2s ease, font-size 0.2s ease;
+            font-size: 1.125rem;
+            font-weight: 400;
+            line-height: 1.5;
+        }
+        .compare-line:hover {
+            transform: scale(1.05);
+            font-weight: 600;
+            font-size: 1.875rem;
+        }
+        .compare-line.compare-line-right:hover {
+            color: #195de6;
+        }
+        .compare-line.compare-line-left:hover {
+            color: inherit;
+        }
     </style>
 </head>
 <body class="bg-white text-slate-900 font-display">
@@ -237,29 +255,31 @@ Infraestructura Comercial <span class="text-primary block">Automatizada</span>
 </section>
 <!-- Slide 5: Antes vs Después -->
 <section class="slide fade-in" id="slide-5">
-<div class="max-w-5xl w-full bg-white rounded-3xl shadow-xl border border-slate-200 p-10">
+<div class="max-w-5xl w-full">
 <div class="text-center mb-10">
 <p class="text-xs uppercase tracking-[0.5em] text-slate-400 mb-2">Comparativa</p>
-<h2 class="text-4xl font-bold">Antes vs Después</h2>
-<p class="text-slate-500 mt-2">Cómo mejora la operación cuando automatizas todo el flujo.</p>
+<h2 class="text-5xl md:text-7xl font-bold tracking-tight leading-[1.1]">
+Antes <span class="text-primary block">vs Después</span>
+</h2>
+<p class="text-slate-500 mt-4 text-base md:text-lg">Cómo mejora la operación cuando automatizas todo el flujo.</p>
 </div>
-<div class="grid md:grid-cols-2 gap-8">
-<div class="space-y-6">
+<div class="flex flex-col md:flex-row md:gap-8 text-left items-start">
+<div class="flex-1 space-y-6">
 <p class="text-sm uppercase tracking-[0.4em] text-slate-400">ANTES</p>
-<div class="space-y-2">
-<p class="text-2xl font-semibold text-slate-900">Leads sin respuesta en menos de 5 minutos o nunca</p>
-<p class="text-slate-600">Citas no confirmadas</p>
-<p class="text-slate-600">Seguimiento manual inconsistente</p>
-<p class="text-slate-600">Vendedores saturados</p>
+<div class="space-y-3">
+<p class="compare-line compare-line-left text-slate-900 text-lg">Leads sin seguimiento</p>
+<p class="compare-line compare-line-left text-slate-600 text-lg">Respuestas tardías</p>
+<p class="compare-line compare-line-left text-slate-600 text-lg">Citas sin confirmar</p>
+<p class="compare-line compare-line-left text-slate-600 text-lg">Vendedores saturados</p>
 </div>
 </div>
-<div class="space-y-6">
+<div class="flex-1 space-y-6">
 <p class="text-sm uppercase tracking-[0.4em] text-slate-400">DESPUÉS</p>
-<div class="space-y-2">
-<p class="text-2xl font-semibold text-primary">Respuesta automática inmediata</p>
-<p class="text-slate-600">Confirmación automática + recordatorios</p>
-<p class="text-slate-600">Seguimiento estructurado</p>
-<p class="text-slate-600">Leads asignados según reglas</p>
+<div class="space-y-3">
+<p class="compare-line compare-line-right text-primary text-lg">Respuesta automática inmediata</p>
+<p class="compare-line compare-line-right text-slate-600 text-lg">Lead filtrado antes de tocar vendedor</p>
+<p class="compare-line compare-line-right text-slate-600 text-lg">Cita confirmada con recordatorios</p>
+<p class="compare-line compare-line-right text-slate-600 text-lg">Dirección ve todo en tiempo real</p>
 </div>
 </div>
 </div>
@@ -435,5 +455,6 @@ const totalSlides = 9;
 
         // Initialize
         updateSlide();
+
     </script>
 </body></html>
