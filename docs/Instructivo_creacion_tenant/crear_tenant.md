@@ -243,7 +243,7 @@ Estado esperado al finalizar:
   - permisos altos de owner,
   - `calendar_resources` + `webchat.calendar.resource_id` cuando falten.
 - [x] Resultado auditable por tenant (antes/después).
-- [ ] Pendiente formalizar el backfill como migración SQL versionada en `supabase/migrations`.
+- [x] Backfill formalizado como migración SQL versionada en `supabase/migrations` (`20280420_120000_tenant_bootstrap_backfill.sql`).
 
 Validación:
 - [x] Para cada tenant existente en entorno de pruebas: owner + permisos críticos + resource_id enlazado.
@@ -262,5 +262,5 @@ Casos mínimos:
 
 - [x] Código backend de bootstrap y scope.
 - [x] Ajustes frontend de UX para campos internos (`resource_id` readonly en tenant).
-- [ ] SQL de backfill versionado y reusable.
+- [x] SQL de backfill versionado y reusable.
 - [x] Documentación actualizada (`crear_tenant.md`, `rbac_and_scope.md`, `Matriz-permisos-v2.md`).
