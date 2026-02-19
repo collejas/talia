@@ -61,9 +61,9 @@
         .step-line {
             height: 2px;
             background: #e5e7eb;
-            flex: 0 0 2.5rem;
-            width: 2.5rem;
-            margin: 0 0.5rem;
+            flex: 0 0 2rem;
+            width: 2rem;
+            margin: 0 0.25rem;
             align-self: center;
             transform: translateY(-0.25rem);
         }
@@ -101,9 +101,11 @@
 <section class="slide fade-in" id="slide-2">
 <div class="max-w-5xl w-full grid md:grid-cols-2 gap-12 items-center">
 <div>
-<h2 class="text-4xl font-bold tracking-tight mb-6">El Problema: Fricción Operativa</h2>
+<h2 class="text-5xl md:text-7xl font-bold tracking-tight leading-[1.1] mb-6">
+El Problema: <span class="text-primary">Ventas</span> que se <span class="text-primary">Escapan</span>
+</h2>
 <p class="text-xl text-slate-600 mb-8">
-                        Se pierden ventas no por falta de mercado, sino por procesos manuales que asfixian el crecimiento.
+                        Las oportunidades existen. El problema es capturarlas a tiempo.
                     </p>
 </div>
 <div class="space-y-4">
@@ -147,63 +149,83 @@
 <!-- Slide 4: Solución -->
 <section class="slide fade-in" id="slide-4">
 <div class="max-w-6xl w-full">
-<h2 class="text-4xl font-bold tracking-tight mb-16 text-center">Infraestructura Comercial Automatizada</h2>
-<div class="flex flex-col md:flex-row items-center justify-center gap-6">
+<h2 class="text-5xl md:text-7xl font-bold tracking-tight leading-[1.1] mb-4 text-center">
+Infraestructura Comercial <span class="text-primary block">Automatizada</span>
+</h2>
+<p class="text-center text-slate-500 mb-12">Cero intervención manual en el proceso de filtrado.</p>
+        <div class="flex flex-col md:flex-row items-center justify-center gap-3">
 <div class="text-center group">
-<div class="relative flex flex-col items-center">
-<div class="w-16 h-16 rounded-full bg-slate-50 flex items-center justify-center mb-4 transition-all duration-200 border border-slate-200 group-hover:scale-125 group-hover:bg-primary group-hover:text-white group-hover:border-primary">
+<div class="flex flex-col items-center gap-1">
+<div class="w-16 h-16 rounded-full bg-slate-50 flex items-center justify-center transition-all duration-200 border border-slate-200 group-hover:scale-125 group-hover:bg-primary group-hover:text-white group-hover:border-primary">
 <span class="material-symbols-outlined">input</span>
 </div>
-<p class="font-bold text-slate-900 transition-colors duration-200 group-hover:text-primary mt-2 md:mt-0 md:absolute md:left-1/2 md:top-[calc(100%+0.75rem)] md:-translate-x-1/2">Captura</p>
+<div class="space-y-1">
+<p class="font-bold text-slate-900 transition-colors duration-200 group-hover:text-primary">Captura</p>
+<p class="text-sm text-slate-400 transition-colors duration-200 group-hover:text-primary/90">Omnicanal 24/7</p>
+</div>
 </div>
 </div>
 <div class="hidden md:block step-line self-center"></div>
 <div class="text-center group">
-<div class="relative flex flex-col items-center">
-<div class="w-16 h-16 rounded-full bg-slate-50 flex items-center justify-center mb-4 transition-all duration-200 border border-slate-200 group-hover:scale-125 group-hover:bg-primary group-hover:text-white group-hover:border-primary">
+<div class="flex flex-col items-center gap-1">
+<div class="w-16 h-16 rounded-full bg-slate-50 flex items-center justify-center transition-all duration-200 border border-slate-200 group-hover:scale-125 group-hover:bg-primary group-hover:text-white group-hover:border-primary">
 <span class="material-symbols-outlined">rule</span>
 </div>
-<p class="font-bold text-slate-900 transition-colors duration-200 group-hover:text-primary mt-2 md:mt-0 md:absolute md:left-1/2 md:top-[calc(100%+0.75rem)] md:-translate-x-1/2">Califica</p>
+<div class="space-y-1">
+<p class="font-bold text-slate-900 transition-colors duration-200 group-hover:text-primary">Califica</p>
+<p class="text-sm text-slate-400 transition-colors duration-200 group-hover:text-primary/90">IA filtra perfiles</p>
+</div>
 </div>
 </div>
 <div class="hidden md:block step-line self-center"></div>
 <div class="text-center group">
-<div class="relative flex flex-col items-center">
-<div class="w-16 h-16 rounded-full bg-slate-50 flex items-center justify-center mb-4 transition-all duration-200 border border-slate-200 group-hover:scale-125 group-hover:bg-primary group-hover:text-white group-hover:border-primary">
+<div class="flex flex-col items-center gap-1">
+<div class="w-16 h-16 rounded-full bg-slate-50 flex items-center justify-center transition-all duration-200 border border-slate-200 group-hover:scale-125 group-hover:bg-primary group-hover:text-white group-hover:border-primary">
 <span class="material-symbols-outlined">account_tree</span>
 </div>
-<p class="font-bold text-slate-900 transition-colors duration-200 group-hover:text-primary mt-2 md:mt-0 md:absolute md:left-1/2 md:top-[calc(100%+0.75rem)] md:-translate-x-1/2">Organiza</p>
+<div class="space-y-1">
+<p class="font-bold text-slate-900 transition-colors duration-200 group-hover:text-primary">Organiza</p>
+<p class="text-sm text-slate-400 transition-colors duration-200 group-hover:text-primary/90">Estructura CRM</p>
+</div>
 </div>
 </div>
 <div class="hidden md:block step-line self-center"></div>
 <div class="text-center group">
-<div class="relative flex flex-col items-center">
-<div class="w-16 h-16 rounded-full bg-slate-50 flex items-center justify-center mb-4 transition-all duration-200 border border-slate-200 group-hover:scale-125 group-hover:bg-primary group-hover:text-white group-hover:border-primary">
+<div class="flex flex-col items-center gap-1">
+<div class="w-16 h-16 rounded-full bg-slate-50 flex items-center justify-center transition-all duration-200 border border-slate-200 group-hover:scale-125 group-hover:bg-primary group-hover:text-white group-hover:border-primary">
 <span class="material-symbols-outlined">person_add</span>
 </div>
-<p class="font-bold text-slate-900 transition-colors duration-200 group-hover:text-primary mt-2 md:mt-0 md:absolute md:left-1/2 md:top-[calc(100%+0.75rem)] md:-translate-x-1/2">Asigna</p>
+<div class="space-y-1">
+<p class="font-bold text-slate-900 transition-colors duration-200 group-hover:text-primary">Asigna</p>
+<p class="text-sm text-slate-400 transition-colors duration-200 group-hover:text-primary/90">Vendedor ideal</p>
+</div>
 </div>
 </div>
 <div class="hidden md:block step-line self-center"></div>
 <div class="text-center group">
-<div class="relative flex flex-col items-center">
-<div class="w-16 h-16 rounded-full bg-primary text-white flex items-center justify-center mb-4 transition-all duration-200 group-hover:scale-125 group-hover:bg-primary/90">
+<div class="flex flex-col items-center gap-1">
+<div class="w-16 h-16 rounded-full bg-primary text-white flex items-center justify-center transition-all duration-200 group-hover:scale-125 group-hover:bg-primary/90">
 <span class="material-symbols-outlined">calendar_today</span>
 </div>
-<p class="font-bold text-slate-900 transition-colors duration-200 group-hover:text-primary mt-2 md:mt-0 md:absolute md:left-1/2 md:top-[calc(100%+0.75rem)] md:-translate-x-1/2">Agenda</p>
+<div class="space-y-1">
+<p class="font-bold text-slate-900 transition-colors duration-200 group-hover:text-primary">Agenda</p>
+<p class="text-sm text-slate-400 transition-colors duration-200 group-hover:text-primary/90">Cita Confirmada</p>
+</div>
 </div>
 </div>
 <div class="hidden md:block step-line self-center"></div>
 <div class="text-center group">
-<div class="relative flex flex-col items-center">
-<div class="w-16 h-16 rounded-full bg-slate-50 flex items-center justify-center mb-4 transition-all duration-200 border border-slate-200 group-hover:scale-125 group-hover:bg-primary group-hover:text-white group-hover:border-primary">
-<span class="material-symbols-outlined">description</span>
+<div class="flex flex-col items-center gap-1">
+<div class="w-16 h-16 rounded-full bg-slate-50 flex items-center justify-center transition-all duration-200 border border-slate-200 group-hover:scale-125 group-hover:bg-primary group-hover:text-white group-hover:border-primary">
+<span class="material-symbols-outlined">auto_mode</span>
 </div>
-<p class="font-bold text-slate-900 transition-colors duration-200 group-hover:text-primary mt-2 md:mt-0 md:absolute md:left-1/2 md:top-[calc(100%+0.75rem)] md:-translate-x-1/2">Documenta</p>
+<div class="space-y-1">
+<p class="font-bold text-slate-900 transition-colors duration-200 group-hover:text-primary">Re-Automatiza</p>
+<p class="text-sm text-slate-400 transition-colors duration-200 group-hover:text-primary/90">Solicitud de Docs al cerrar venta</p>
 </div>
 </div>
 </div>
-<p class="mt-16 text-center text-slate-400 font-medium italic">Cero intervención manual en el proceso de filtrado.</p>
+</div>
 </div>
 </section>
 <!-- Slide 5: Arquitectura -->
