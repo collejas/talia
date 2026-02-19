@@ -67,17 +67,35 @@
             align-self: center;
             transform: translateY(-0.25rem);
         }
-        .compare-line {
-            min-height: 3rem;
-            transition: transform 0.3s ease, font-weight 0.25s ease, font-size 0.25s ease;
-            font-size: 1.75rem;
-            font-weight: 400;
-            line-height: 1.5;
+        .compare-card {
+            border: 1px solid #e2e8f0;
+            border-radius: 1rem;
+            padding: 1rem 1.25rem;
+            background: #ffffff;
+            transition: border-color 0.3s ease, background 0.3s ease;
+            color: inherit;
+            display: flex;
+            align-items: center;
+            font-size: 1.15rem;
+            line-height: 1.45;
         }
-        .compare-line-active {
-            transform: scale(1.25);
-            font-weight: 700;
-            font-size: 2.5rem;
+        .compare-card > p {
+            margin: 0;
+        }
+        .compare-card-before {
+            color: #0f172a;
+        }
+        .compare-card-after {
+            color: #1d4ed8;
+        }
+        .compare-card-active {
+            border-color: #1d4ed8;
+            box-shadow: 0 20px 45px rgba(14, 116, 144, 0.2);
+            background: #eff6ff;
+        }
+        .compare-card-after.compare-card-active {
+            background: #dbeafe;
+            color: #1d4ed8;
         }
     </style>
 </head>
@@ -249,38 +267,53 @@ Infraestructura Comercial <span class="text-primary block">Automatizada</span>
 </section>
 <!-- Slide 5: Antes vs Después -->
 <section class="slide fade-in" id="slide-5">
-<div class="max-w-6xl w-full">
+<div class="max-w-screen-xl w-full">
 <div class="text-center mb-10">
 <p class="text-xs uppercase tracking-[0.5em] text-slate-400 mb-2">Comparativa</p>
-<h2 class="text-5xl md:text-7xl font-bold tracking-tight leading-[1.1]">
-Antes <span class="text-primary block">vs Después</span>
-</h2>
-<p class="text-slate-500 mt-4 text-base md:text-lg">Cómo mejora la operación cuando automatizas todo el flujo.</p>
-</div>
-<div class="flex flex-col md:flex-row md:gap-12 text-left items-start">
-<div class="flex-1 space-y-6">
-<p class="text-sm uppercase tracking-[0.4em] text-slate-400">ANTES</p>
-            <div class="space-y-3">
-                <p class="compare-line compare-line-left text-slate-900 text-lg" data-pair="1">Leads sin seguimiento</p>
-                <p class="compare-line compare-line-left text-slate-600 text-lg" data-pair="2">Leads sin filtrar (curiosos mezclados con compradores reales)</p>
-                <p class="compare-line compare-line-left text-slate-600 text-lg" data-pair="3">Respuestas tardías</p>
-                <p class="compare-line compare-line-left text-slate-600 text-lg" data-pair="4">Documentación solicitada de forma tardía o manual</p>
-                <p class="compare-line compare-line-left text-slate-600 text-lg" data-pair="5">Citas sin confirmar</p>
-                <p class="compare-line compare-line-left text-slate-600 text-lg" data-pair="6">Vendedores saturados</p>
-            </div>
-</div>
-<div class="flex-1 space-y-6">
-<p class="text-sm uppercase tracking-[0.4em] text-slate-400">DESPUÉS</p>
-            <div class="space-y-3">
-                <p class="compare-line compare-line-right text-primary text-lg" data-pair="1">Respuesta automática inmediata</p>
-                <p class="compare-line compare-line-right text-slate-600 text-lg" data-pair="2">Calificación inteligente antes de tocar vendedor</p>
-                <p class="compare-line compare-line-right text-slate-600 text-lg" data-pair="3">Lead filtrado antes de tocar vendedor</p>
-                <p class="compare-line compare-line-right text-slate-600 text-lg" data-pair="4">Solicitud automática de documentación al decidir compra</p>
-                <p class="compare-line compare-line-right text-slate-600 text-lg" data-pair="5">Confirmación automática + recordatorios</p>
-                <p class="compare-line compare-line-right text-slate-600 text-lg" data-pair="6">Dirección ve todo en tiempo real</p>
-            </div>
+<div class="flex items-center justify-center gap-4 text-4xl font-bold">
+    <span class="text-slate-900">Antes</span>
+    <span class="text-primary">vs</span>
+    <span class="text-primary">Después</span>
 </div>
 </div>
+<div class="grid gap-6 md:grid-cols-2">
+        <div class="compare-card compare-card-before" data-pair="1">
+            <p>Leads sin respuesta en menos de 5 minutos</p>
+        </div>
+        <div class="compare-card compare-card-after" data-pair="1">
+            <p>Respuesta automática &lt; 10 segundos</p>
+        </div>
+        <div class="compare-card compare-card-before" data-pair="2">
+            <p>Citas no confirmadas</p>
+        </div>
+        <div class="compare-card compare-card-after" data-pair="2">
+            <p>Confirmación automática + recordatorios</p>
+        </div>
+        <div class="compare-card compare-card-before" data-pair="3">
+            <p>Seguimiento manual inconsistente</p>
+        </div>
+        <div class="compare-card compare-card-after" data-pair="3">
+            <p>Seguimiento estructurado</p>
+        </div>
+        <div class="compare-card compare-card-before" data-pair="4">
+            <p>Vendedores saturados</p>
+        </div>
+        <div class="compare-card compare-card-after" data-pair="4">
+            <p>Leads asignados según reglas</p>
+        </div>
+        <div class="compare-card compare-card-before" data-pair="5">
+            <p>Leads sin filtrar (curiosos mezclados con compradores reales)</p>
+        </div>
+        <div class="compare-card compare-card-after" data-pair="5">
+            <p>Calificación inteligente antes de tocar vendedor</p>
+        </div>
+        <div class="compare-card compare-card-before" data-pair="6">
+            <p>Documentación solicitada de forma tardía o manual</p>
+        </div>
+        <div class="compare-card compare-card-after" data-pair="6">
+            <p>Solicitud automática de documentación al decidir compra</p>
+        </div>
+    </div>
 </div>
 </section>
 <!-- Slide 7: Dirección -->
@@ -457,15 +490,15 @@ const totalSlides = 9;
     </script>
     <script>
         document.addEventListener('DOMContentLoaded', () => {
-            document.querySelectorAll('.compare-line[data-pair]').forEach((line) => {
-                const pairKey = line.dataset.pair;
-                const pairLines = document.querySelectorAll(`.compare-line[data-pair="${pairKey}"]`);
+            document.querySelectorAll('.compare-card[data-pair]').forEach((card) => {
+                const pairKey = card.dataset.pair;
+                const pairCards = document.querySelectorAll(`.compare-card[data-pair="${pairKey}"]`);
 
-                line.addEventListener('mouseenter', () => {
-                    pairLines.forEach(el => el.classList.add('compare-line-active'));
+                card.addEventListener('mouseenter', () => {
+                    pairCards.forEach(el => el.classList.add('compare-card-active'));
                 });
-                line.addEventListener('mouseleave', () => {
-                    pairLines.forEach(el => el.classList.remove('compare-line-active'));
+                card.addEventListener('mouseleave', () => {
+                    pairCards.forEach(el => el.classList.remove('compare-card-active'));
                 });
             });
         });
