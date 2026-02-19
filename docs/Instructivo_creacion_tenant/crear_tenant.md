@@ -176,3 +176,75 @@ Ejemplos habituales de `clave`: alias textuales para webchat (`cliente-x`), un n
 - `frontend/panel/src/lib/api/crm.ts` (headers `X-User-Token`, `X-Organizacion-Id` y revalidaciones).
 - `backups/postgres_20260204_142816/postgres_20260204_142816_schema.sql` (estructura de `organizaciones`, `organizacion_rutas_canal`, `secretos`, `permisos`, `roles`, `roles_permisos`, `departamentos`, `puestos`, `usuarios`, `usuarios_roles`, `empleados`, `platform_admins`).
 - `docs/creacion_tenants/plan_creacion_tenants.md` (contexto general y checklist detallado).
+
+## 7. Plan de implementación (automatización completa)
+
+Objetivo del plan:
+- Que al crear un tenant nuevo, el sistema deje lista su estructura mínima (recursos + seguridad + configuración base) sin pasos manuales.
+- Que el usuario maestro del tenant tenga permisos altos dentro de su organización y cero acceso cross-tenant.
+
+### Fase A: Bootstrap técnico automático (backend)
+
+Estado esperado al finalizar:
+- [ ] `POST /admin/tenants` y `POST /admin/tenants/con_usuario` crean `calendar_resources` por tenant si falta.
+- [ ] `organizaciones.config.webchat.calendar.resource_id` queda asignado automáticamente.
+- [ ] Se escriben defaults faltantes de `webchat.calendar.*` y `calendar.*` sin pisar valores existentes.
+- [ ] Si falla bootstrap, la API responde error controlado (`502`) y no queda onboarding “a medias”.
+
+Validación:
+- [ ] Tenant nuevo aparece con `resource_id` válido en `organizaciones.config`.
+- [ ] Existe fila relacionada en `public.calendar_resources` con el mismo `organizacion_id`.
+- [ ] En `/settings/variables` (tenant), Calendario muestra `resource_id` en solo lectura.
+
+### Fase B: Bootstrap de seguridad (roles/permisos/usuario maestro)
+
+Estado esperado al finalizar:
+- [ ] Usuario maestro se asigna a `owner` (si existe), o al rol administrativo fallback.
+- [ ] Se garantizan permisos críticos: `ver_panel`, `settings.view`, `settings.manage`, `user.manage`, `role.manage`.
+- [ ] El rol administrativo queda con permisos altos del tenant para operar settings/usuarios/roles.
+- [ ] La asignación siempre se guarda en `usuarios_roles` con `organizacion_id` correcta.
+
+Validación:
+- [ ] `mi_contexto_permisos` del usuario maestro refleja permisos de settings y panel.
+- [ ] `/settings/variables` carga sin errores de permisos.
+- [ ] El usuario puede gestionar configuración y secretos de su tenant.
+
+### Fase C: Aislamiento estricto por tenant (scope)
+
+Estado esperado al finalizar:
+- [ ] Los endpoints owner-enabled (`/admin/tenants/*`) validan `owner_scope_violation` fuera de su organización.
+- [ ] El owner no puede listar ni editar recursos de otro tenant.
+- [ ] El sidebar/UI no expone operaciones cross-tenant a usuarios no `platform_admin`.
+
+Validación:
+- [ ] Prueba negativa: owner tenant A intentando `/admin/tenants/{tenantB}` devuelve `403`.
+- [ ] Prueba positiva: owner tenant A operando `/tenant/me/*` y `/admin/tenants/{tenantA}/*` funciona.
+
+### Fase D: Backfill de tenants existentes
+
+Estado esperado al finalizar:
+- [ ] Script SQL de backfill corrige tenants previos al cambio:
+  - owner asignado al usuario maestro,
+  - permisos altos de owner,
+  - `calendar_resources` + `webchat.calendar.resource_id` cuando falten.
+- [ ] Resultado auditable por tenant (antes/después).
+
+Validación:
+- [ ] Para cada tenant existente: owner + permisos críticos + resource_id enlazado.
+- [ ] Cero regresiones en tenant legacy y tenant de pruebas.
+
+### Fase E: Pruebas de aceptación (obligatorias)
+
+Casos mínimos:
+- [ ] Crear tenant por UI (`/settings/tenants`) con usuario admin.
+- [ ] Iniciar sesión como owner del nuevo tenant.
+- [ ] Entrar a `/settings/variables` y guardar cambios en Webchat/Calendario/Mail.
+- [ ] Validar scope: owner no accede a otro tenant.
+- [ ] Validar que platform admin sí mantiene acceso cross-tenant.
+
+### Entregables
+
+- [ ] Código backend de bootstrap y scope.
+- [ ] Ajustes frontend de UX para campos internos (`resource_id` readonly en tenant).
+- [ ] SQL de backfill versionado y reusable.
+- [ ] Documentación actualizada (`crear_tenant.md`, `rbac_and_scope.md`, `Matriz-permisos-v2.md`).
