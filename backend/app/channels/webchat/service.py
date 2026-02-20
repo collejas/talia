@@ -62,6 +62,9 @@ from app.services.catalog_locations import (
     extract_development_id,
     format_location_payload,
 )
+from app.services.scoring_contract import (
+    normalize_required_fields_for_answers as shared_normalize_required_fields_for_answers,
+)
 from app.services.storage import StorageError
 from app.logging.catalog_debug import write_catalog_debug_entry
 
@@ -1896,11 +1899,7 @@ def _normalize_required_fields_for_context(
     *,
     answers: Mapping[str, Any],
 ) -> list[str]:
-    fields = [str(item).strip() for item in required_fields if str(item).strip()]
-    financing = str(answers.get("financing_type") or "").strip().lower()
-    if financing and "contado" in financing:
-        fields = [field for field in fields if field != "credit_preapproved"]
-    return fields
+    return shared_normalize_required_fields_for_answers(required_fields, answers)
 
 
 def _extract_contact_email(contact: dict[str, Any] | None) -> str | None:
