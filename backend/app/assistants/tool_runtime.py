@@ -21,6 +21,7 @@ except Exception:  # pragma: no cover
 
 _RETRYABLE_TOOL_LOOP_ERRORS = (InternalServerError, APIConnectionError, APITimeoutError, RateLimitError)
 _RETRY_DELAYS_SECONDS: tuple[float, ...] = (0.6, 1.5)
+_MAX_TOOL_ERROR_MESSAGE_CHARS = 500
 
 
 @dataclass(slots=True)
@@ -52,9 +53,23 @@ RequestTemplateFn = Callable[[], dict[str, Any]]
 def _is_retryable_openai_error(exc: Exception) -> bool:
     if _RETRYABLE_TOOL_LOOP_ERRORS and isinstance(exc, _RETRYABLE_TOOL_LOOP_ERRORS):
         return True
+    status_code = getattr(exc, "status_code", None)
+    if isinstance(status_code, int) and status_code in {408, 409, 429, 500, 502, 503, 504}:
+        return True
     # Compatibilidad con wrappers o errores serializados sin clase fuerte.
     text = str(exc).lower()
     return "server_error" in text or "rate limit" in text or "timeout" in text
+
+
+def _build_tool_error_payload(exc: Exception) -> dict[str, Any]:
+    message = str(exc).strip() or "tool execution failed"
+    if len(message) > _MAX_TOOL_ERROR_MESSAGE_CHARS:
+        message = message[: _MAX_TOOL_ERROR_MESSAGE_CHARS - 1].rstrip() + "…"
+    return {
+        "status": "error",
+        "error_type": exc.__class__.__name__,
+        "message": message,
+    }
 
 
 async def _create_response_with_retry(
@@ -160,7 +175,7 @@ async def run_tool_loop(
                         "error": str(exc),
                     },
                 )
-                result = {"status": "error", "message": str(exc)}
+                result = _build_tool_error_payload(exc)
             extras = None
             if isinstance(result, dict):
                 extras = result.pop("_side_effects", None)

@@ -15,7 +15,7 @@ class _DummyResponse:
 
 
 class _DummyResponsesClient:
-    def __init__(self, scripted_payloads: list[dict]):
+    def __init__(self, scripted_payloads: list[dict | Exception]):
         self._payloads = list(scripted_payloads)
         self.calls: list[dict] = []
 
@@ -23,11 +23,14 @@ class _DummyResponsesClient:
         self.calls.append(kwargs)
         if not self._payloads:
             raise AssertionError("No hay más payloads scripted para el Dummy client.")
-        return _DummyResponse(self._payloads.pop(0))
+        next_item = self._payloads.pop(0)
+        if isinstance(next_item, Exception):
+            raise next_item
+        return _DummyResponse(next_item)
 
 
 class _DummyClient:
-    def __init__(self, scripted_payloads: list[dict]):
+    def __init__(self, scripted_payloads: list[dict | Exception]):
         self.responses = _DummyResponsesClient(scripted_payloads)
 
 
@@ -102,3 +105,89 @@ async def test_run_tool_loop_preserves_controls_between_iterations():
     assert second_call["max_output_tokens"] == 123
     assert second_call["temperature"] == 0.2
     assert second_call["metadata"] == {"channel": "webchat"}
+
+
+@pytest.mark.asyncio
+async def test_run_tool_loop_retries_retryable_response_errors():
+    client = _DummyClient(
+        scripted_payloads=[
+            RuntimeError("server_error temporary outage"),
+            {
+                "id": "resp_ok",
+                "conversation": {"id": "conv_ok"},
+                "output": [
+                    {
+                        "type": "message",
+                        "content": [{"type": "output_text", "text": "ok"}],
+                    }
+                ],
+            },
+        ]
+    )
+    assistant = AssistantConfig(assistant_id="asst_test", project_id="proj_test")
+    context = ToolRuntimeContext(conversation_id="crm_conv", contact_id="crm_contact")
+
+    await run_tool_loop(
+        client=client,
+        assistant=assistant,
+        assistant_spec=None,
+        context=context,
+        initial_request={"input": [], "store": True, "model": "gpt-4o"},
+        request_template=lambda: {"model": "gpt-4o"},
+        execute_tool=lambda *_: None,
+        openai_conversation_id=None,
+        previous_response_id=None,
+    )
+
+    assert len(client.responses.calls) == 2
+
+
+@pytest.mark.asyncio
+async def test_run_tool_loop_returns_structured_tool_error_payload():
+    client = _DummyClient(
+        scripted_payloads=[
+            {
+                "id": "resp_1",
+                "conversation": {"id": "conv_1"},
+                "output": [
+                    {
+                        "type": "function_call",
+                        "name": "close_lead",
+                        "call_id": "call_1",
+                        "arguments": json.dumps({"x": 1}),
+                    }
+                ],
+            },
+            {
+                "id": "resp_2",
+                "conversation": {"id": "conv_1"},
+                "output": [{"type": "message", "content": [{"type": "output_text", "text": "ok"}]}],
+            },
+        ]
+    )
+
+    assistant = AssistantConfig(assistant_id="asst_test", project_id="proj_test")
+    context = ToolRuntimeContext(conversation_id="crm_conv", contact_id="crm_contact")
+
+    async def execute_tool(_name, _args, _ctx):
+        raise ValueError("payload invalido")
+
+    await run_tool_loop(
+        client=client,
+        assistant=assistant,
+        assistant_spec=None,
+        context=context,
+        initial_request={"input": [], "store": True, "model": "gpt-4o"},
+        request_template=lambda: {"model": "gpt-4o"},
+        execute_tool=execute_tool,
+        openai_conversation_id=None,
+        previous_response_id=None,
+    )
+
+    second_call = client.responses.calls[1]
+    output_items = second_call["input"]
+    assert len(output_items) == 1
+    payload = json.loads(output_items[0]["output"])
+    assert payload["status"] == "error"
+    assert payload["error_type"] == "ValueError"
+    assert payload["message"] == "payload invalido"
