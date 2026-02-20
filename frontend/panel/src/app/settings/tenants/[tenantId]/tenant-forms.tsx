@@ -661,7 +661,7 @@ export function TenantCalendarSettings({
 
       <div className="grid gap-4 md:grid-cols-2">
         <div className="space-y-2">
-          <Label htmlFor="calendar_resource_id">calendar.resource_id</Label>
+          <Label htmlFor="calendar_resource_id">webchat.calendar.resource_id</Label>
           {allowResourceIdEdit ? (
             <Input
               id="calendar_resource_id"

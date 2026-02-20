@@ -18,6 +18,7 @@ from app.api.routes.admin import (
     TenantValidationReport,
     SecretMetadata,
     TenantSecretsResponse,
+    _ensure_tenant_calendar_bootstrap,
     _get_master_key_for_tier,
     _normalize_secret_key,
     build_validation_report,
@@ -193,6 +194,19 @@ async def get_tenant_settings(
     row = await platform_repo.get_organizacion_details(organizacion_id=context.organizacion_id)
     if not row:
         raise HTTPException(status_code=404, detail="tenant_not_found")
+    current_config = row.get("config") if isinstance(row.get("config"), dict) else {}
+    ensured_config = await _ensure_tenant_calendar_bootstrap(
+        repo=platform_repo,
+        tenant_id=context.organizacion_id,
+        tenant_name=str(row.get("nombre") or context.organizacion_id),
+        current_config=current_config,
+    )
+    if ensured_config != current_config:
+        saved = await platform_repo.set_organizacion_config(
+            organizacion_id=context.organizacion_id,
+            config=ensured_config,
+        )
+        row["config"] = saved.get("config") if isinstance(saved.get("config"), dict) else ensured_config
     routes = await platform_repo.list_channel_routes(organizacion_id=context.organizacion_id)
     return await _build_tenant_response(context.organizacion_id, row, routes)
 
@@ -368,10 +382,18 @@ async def set_my_tenant_config(
     repo: PlatformRepository = Depends(get_platform_repo),
 ) -> TenantConfigResponse:
     await require_permission(user_token, "settings.manage")
+    tenant_row = await repo.get_organizacion_details(organizacion_id=context.organizacion_id)
+    tenant_name = str((tenant_row or {}).get("nombre") or context.organizacion_id)
+    ensured_config = await _ensure_tenant_calendar_bootstrap(
+        repo=repo,
+        tenant_id=context.organizacion_id,
+        tenant_name=tenant_name,
+        current_config=payload.config,
+    )
     try:
         row = await repo.set_organizacion_config(
             organizacion_id=context.organizacion_id,
-            config=payload.config,
+            config=ensured_config,
         )
     except PlatformRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
