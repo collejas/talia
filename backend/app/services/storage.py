@@ -211,6 +211,16 @@ def _is_generic_opportunity_title(
     return False
 
 
+def _is_unconfirmed_whatsapp_name(
+    *,
+    contact_name: str | None,
+    profile_name: str | None,
+) -> bool:
+    name_value = _clean_text(contact_name).lower()
+    profile_value = _clean_text(profile_name).lower()
+    return bool(name_value and profile_value and name_value == profile_value)
+
+
 _SCORE_VALUE_MAP: dict[str, dict[str, int]] = {
     "financing_type": {
         "contado": 100,
@@ -1130,6 +1140,38 @@ async def register_whatsapp_message(
             logger.warning(
                 "storage.whatsapp_channel_patch_failed",
                 extra={"conversation_id": conversation_id, "error": str(exc)},
+            )
+
+    if direction == "entrante" and profile_name and result.get("contact_id"):
+        contact_id_value = str(result.get("contact_id"))
+        try:
+            contact_row = await repo.get_contact_by_id(contact_id=contact_id_value)
+            if contact_row:
+                raw_contact_data = contact_row.get("contacto_datos")
+                contact_data = _ensure_dict(raw_contact_data)
+                current_profile_name = _clean_text(contact_data.get("profile_name"))
+                incoming_profile_name = _clean_text(profile_name)
+                patch: dict[str, Any] = {}
+                if incoming_profile_name and current_profile_name != incoming_profile_name:
+                    contact_data["profile_name"] = incoming_profile_name
+                    patch["contacto_datos"] = contact_data
+
+                # No usar nombre de perfil de WhatsApp como nombre real.
+                if _is_unconfirmed_whatsapp_name(
+                    contact_name=contact_row.get("nombre_completo"),
+                    profile_name=incoming_profile_name,
+                ):
+                    patch["nombre_completo"] = None
+                    if "contacto_datos" not in patch:
+                        contact_data["profile_name"] = incoming_profile_name
+                        patch["contacto_datos"] = contact_data
+
+                if patch:
+                    await repo.update_contact_by_id(contact_id=contact_id_value, patch=patch)
+        except CRMRepositoryError as exc:
+            logger.warning(
+                "storage.whatsapp_profile_name_normalization_failed",
+                extra={"contact_id": contact_id_value, "error": str(exc)},
             )
     return result
 

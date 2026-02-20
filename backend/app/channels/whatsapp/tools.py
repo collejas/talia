@@ -2441,7 +2441,7 @@ def _compose_sales_notification_message(
     email: str | None,
     extra: dict[str, Any] | None,
 ) -> str:
-    name = str(contact.get("nombre_completo") or "").strip() or "Prospecto sin nombre"
+    name = str(contact.get("nombre_completo") or "").strip() or "No dio nombre"
     company = str(contact.get("company_name") or "").strip()
     phone = str(contact.get("telefono_e164") or "").strip()
     correo = str(contact.get("correo") or "").strip()
@@ -2492,7 +2492,7 @@ def _build_sales_template_variables(
     email: str | None,
 ) -> dict[str, str]:
     """Mapea los valores dinámicos a las variables esperadas por la plantilla."""
-    name = str(contact.get("nombre_completo") or "").strip() or "Prospecto Tal-IA"
+    name = str(contact.get("nombre_completo") or "").strip() or "No dio nombre"
     company = str(contact.get("company_name") or "").strip()
     summary_text = resumen or notes or "Pendiente de detalle"
     next_action = str((extra or {}).get("siguiente_accion") or "").strip()
@@ -2584,7 +2584,7 @@ def _build_booking_template_variables(
 ) -> dict[str, str]:
     slot_iso = (extra or {}).get("slot_start")
     date_text, time_text = _format_booking_datetime(_parse_iso_datetime(slot_iso))
-    client_name = str(contact.get("nombre_completo") or "").strip() or "Prospecto Tal-IA"
+    client_name = str(contact.get("nombre_completo") or "").strip() or "No dio nombre"
     model = _extract_model_description(contact)
     location = _extract_contact_location(contact)
     phone = str(contact.get("telefono_e164") or contact.get("telefono") or "N/D").strip() or "N/D"

@@ -36,7 +36,14 @@ def _build_contact_context_lines(contact: dict[str, Any] | None) -> list[str]:
     if not isinstance(contact, dict):
         return []
     lines: list[str] = []
-    lines.append(f"- Nombre: {_safe_text(contact.get('nombre_completo'))}")
+    contacto_datos = contact.get("contacto_datos") or {}
+    if isinstance(contacto_datos, str):
+        contacto_datos = _ensure_dict(contacto_datos)
+    profile_name = str(contacto_datos.get("profile_name") or "").strip()
+    contact_name = str(contact.get("nombre_completo") or "").strip()
+    if contact_name and profile_name and contact_name.lower() == profile_name.lower():
+        contact_name = ""
+    lines.append(f"- Nombre: {_safe_text(contact_name)}")
     lines.append(f"- Correo: {_safe_text(contact.get('correo'))}")
     lines.append(f"- Teléfono: {_safe_text(contact.get('telefono_e164'))}")
     lines.append(f"- Empresa: {_safe_text(contact.get('company_name'))}")
@@ -52,7 +59,6 @@ def _build_contact_context_lines(contact: dict[str, Any] | None) -> list[str]:
     captura = contact.get("captura_estado")
     if captura:
         lines.append(f"- Estado de captura: {_safe_text(captura)}")
-    contacto_datos = contact.get("contacto_datos") or {}
     ubicacion = contacto_datos.get("ubicacion") or {}
     location_parts: list[str] = []
     if ubicacion.get("nom_ent"):
@@ -64,7 +70,6 @@ def _build_contact_context_lines(contact: dict[str, Any] | None) -> list[str]:
         location_parts.append(f"LADA {lada}")
     if location_parts:
         lines.append(f"- Ubicación: {_safe_text(', '.join(location_parts))}")
-    profile_name = contacto_datos.get("profile_name")
     if profile_name:
         lines.append(f"- Nombre de perfil: {_safe_text(profile_name)}")
     return lines
