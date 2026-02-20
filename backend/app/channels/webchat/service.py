@@ -26,7 +26,11 @@ from app.assistants.runtime import AssistantSpec, resolve_assistant_spec
 from app.assistants.runtime import (
     build_prompt_payload as build_assistant_prompt_payload,
 )
-from app.assistants.tool_runtime import ToolRuntimeContext, run_tool_loop
+from app.assistants.tool_runtime import (
+    ToolRuntimeContext,
+    classify_runtime_error,
+    run_tool_loop,
+)
 from app.channels.booking_context import build_booking_context_message
 from app.assistants.tools import lead as lead_tools
 from app.core.config import settings
@@ -2846,9 +2850,16 @@ async def handle_message(
             booking_context=booking_context_text,
         )
     except Exception as exc:  # pragma: no cover - se registra y responde fallback
+        error_meta = classify_runtime_error(exc)
         logger.exception(
             "webchat.assistant_turn_failed",
-            extra={"conversation_id": str(conversation_id), "error": str(exc)},
+            extra={
+                "conversation_id": str(conversation_id),
+                "error": str(exc),
+                "error_type": error_meta.get("error_type"),
+                "status_code": error_meta.get("status_code"),
+                "retryable": bool(error_meta.get("retryable")),
+            },
         )
         return schemas.MessageResponse(
             reply=DEFAULT_FALLBACK,

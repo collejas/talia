@@ -13,7 +13,11 @@ from fastapi import HTTPException
 
 from app.assistants.manager import AssistantConfig
 from app.assistants.runtime import build_prompt_payload, resolve_assistant_spec
-from app.assistants.tool_runtime import ToolRuntimeContext, run_tool_loop
+from app.assistants.tool_runtime import (
+    ToolRuntimeContext,
+    classify_runtime_error,
+    run_tool_loop,
+)
 from app.channels.whatsapp import tools as whatsapp_tools
 from app.channels.whatsapp.routing import resolve_whatsapp_organizacion
 from app.core.config import settings
@@ -367,9 +371,16 @@ async def handle_incoming_message(
             openai_conversation_id=assistant_reply.openai_conversation_id,
         )
     except Exception as exc:  # pragma: no cover - errores inesperados de OpenAI
+        error_meta = classify_runtime_error(exc)
         logger.exception(
             "whatsapp.generate_reply_failed",
-            extra={"conversation_id": conversation_id, "error": str(exc)},
+            extra={
+                "conversation_id": conversation_id,
+                "error": str(exc),
+                "error_type": error_meta.get("error_type"),
+                "status_code": error_meta.get("status_code"),
+                "retryable": bool(error_meta.get("retryable")),
+            },
         )
         assistant_reply = AssistantReply(
             text=DEFAULT_FALLBACK,

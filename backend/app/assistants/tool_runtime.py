@@ -61,6 +61,15 @@ def _is_retryable_openai_error(exc: Exception) -> bool:
     return "server_error" in text or "rate limit" in text or "timeout" in text
 
 
+def classify_runtime_error(exc: Exception) -> dict[str, Any]:
+    status_code = getattr(exc, "status_code", None)
+    return {
+        "error_type": exc.__class__.__name__,
+        "status_code": status_code if isinstance(status_code, int) else None,
+        "retryable": _is_retryable_openai_error(exc),
+    }
+
+
 def _build_tool_error_payload(exc: Exception) -> dict[str, Any]:
     message = str(exc).strip() or "tool execution failed"
     if len(message) > _MAX_TOOL_ERROR_MESSAGE_CHARS:

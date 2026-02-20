@@ -3,7 +3,7 @@ import json
 import pytest
 
 from app.assistants.manager import AssistantConfig
-from app.assistants.tool_runtime import ToolRuntimeContext, run_tool_loop
+from app.assistants.tool_runtime import ToolRuntimeContext, classify_runtime_error, run_tool_loop
 
 
 class _DummyResponse:
@@ -191,3 +191,15 @@ async def test_run_tool_loop_returns_structured_tool_error_payload():
     assert payload["status"] == "error"
     assert payload["error_type"] == "ValueError"
     assert payload["message"] == "payload invalido"
+
+
+def test_classify_runtime_error_marks_retryable_by_status_code():
+    class _HttpError(Exception):
+        def __init__(self, status_code: int, message: str):
+            super().__init__(message)
+            self.status_code = status_code
+
+    result = classify_runtime_error(_HttpError(503, "temporarily unavailable"))
+    assert result["error_type"] == "_HttpError"
+    assert result["status_code"] == 503
+    assert result["retryable"] is True
