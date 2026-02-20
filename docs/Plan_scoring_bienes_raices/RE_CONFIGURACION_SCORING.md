@@ -332,6 +332,11 @@ Helpers candidatos a consolidar/eliminar duplicados:
   - `backend/app/assistants/tool_runtime.py`
   - clasificacion uniforme de error: `error_type`, `status_code`, `retryable`
   - retry para fallas transitorias de Responses API (incluye codigos HTTP 408/409/429/500/502/503/504)
+- Builder comercial unificado (mensaje + variables template):
+  - `backend/app/services/sales_notifications.py`
+  - `backend/app/channels/webchat/notifications.py`
+  - `backend/app/channels/whatsapp/tools.py`
+  - asegura bloque consistente de perfilamiento/score en notificaciones al vendedor.
 
 ### 14.2 Pruebas ejecutadas
 - `tests/channels/test_whatsapp_tools.py`

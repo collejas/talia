@@ -26,6 +26,15 @@ from app.services.scoring_contract import (
 from app.services.scoring_contract import (
     normalize_required_fields_for_answers as shared_normalize_required_fields_for_answers,
 )
+from app.services.sales_notifications import (
+    build_booking_template_variables as shared_build_booking_template_variables,
+)
+from app.services.sales_notifications import (
+    build_sales_template_variables as shared_build_sales_template_variables,
+)
+from app.services.sales_notifications import (
+    compose_sales_notification_message as shared_compose_sales_notification_message,
+)
 from app.services.catalog_fraccionamientos import (
     list_catalog_fraccionamientos,
     list_catalog_modelos,
@@ -2238,7 +2247,7 @@ async def _notify_sales_rep(
         )
         return
 
-    message_body = _compose_sales_notification_message(
+    message_body = shared_compose_sales_notification_message(
         contact=contact_record,
         trigger=trigger,
         resumen=resumen,
@@ -2258,17 +2267,19 @@ async def _notify_sales_rep(
     template_vars: dict[str, str] | None = None
     if trigger == "booking_confirmed" and appointment_template:
         template_sid = appointment_template
-        template_vars = _build_booking_template_variables(
+        template_vars = shared_build_booking_template_variables(
             contact=contact_record,
             seller_name=seller_name,
             extra=extra,
+            include_reason=False,
         )
     elif trigger == "booking_canceled" and cancel_template:
         template_sid = cancel_template
-        template_vars = _build_booking_template_variables(
+        template_vars = shared_build_booking_template_variables(
             contact=contact_record,
             seller_name=seller_name,
             extra=extra,
+            include_reason=True,
         )
     else:
         if trigger == "booking_canceled":
@@ -2283,7 +2294,7 @@ async def _notify_sales_rep(
             )
         template_sid = whatsapp_settings.sales_template_sid or settings.whatsapp_sales_template_sid
         if template_sid:
-            template_vars = _build_sales_template_variables(
+            template_vars = shared_build_sales_template_variables(
             contact=contact_record,
             resumen=resumen,
             notes=notes,
@@ -2443,182 +2454,5 @@ async def _notify_sales_rep(
     )
 
 
-def _compose_sales_notification_message(
-    *,
-    contact: dict[str, Any],
-    trigger: str,
-    resumen: str | None,
-    notes: str | None,
-    email: str | None,
-    extra: dict[str, Any] | None,
-) -> str:
-    name = str(contact.get("nombre_completo") or "").strip() or "No dio nombre"
-    company = str(contact.get("company_name") or "").strip()
-    phone = str(contact.get("telefono_e164") or "").strip()
-    correo = str(contact.get("correo") or "").strip()
-    lines = [
-        "🚀 Tal-IA tiene un lead listo para seguimiento.",
-        f"Nombre: {name}",
-    ]
-    if company:
-        lines.append(f"Empresa: {company}")
-    if phone:
-        lines.append(f"WhatsApp: {phone}")
-    if correo:
-        lines.append(f"Correo: {correo}")
-
-    if trigger == "information_email":
-        lines.append("Acción: solicitó información y ya se le envió por correo.")
-        if email and email.lower() != correo.lower():
-            lines.append(f"Correo confirmado para envío: {email}")
-    elif trigger == "close_lead":
-        lines.append("Acción: completó la calificación del asistente.")
-    elif trigger == "booking_confirmed":
-        lines.append("Acción: agendó una cita.")
-        profile_summary = str((extra or {}).get("profile_summary") or "").strip()
-        if profile_summary:
-            lines.append(f"Perfilamiento: {profile_summary}")
-    elif trigger == "booking_canceled":
-        lines.append("Acción: canceló la cita.")
-        reason = (extra or {}).get("reason")
-        if reason:
-            lines.append(f"Motivo: {reason}")
-
-    if resumen:
-        lines.append(f"Necesidad: {resumen}")
-    if notes and notes != resumen:
-        lines.append(f"Notas: {notes}")
-    siguiente = (extra or {}).get("siguiente_accion")
-    if siguiente:
-        lines.append(f"Siguiente paso sugerido: {siguiente}")
-
-    lines.append("Puedes seguir la conversación desde el panel o responder por WhatsApp.")
-    return "\n".join(lines)
-
-
-def _build_sales_template_variables(
-    *,
-    contact: dict[str, Any],
-    resumen: str | None,
-    notes: str | None,
-    extra: dict[str, Any] | None,
-    seller_name: str,
-    email: str | None,
-) -> dict[str, str]:
-    """Mapea los valores dinámicos a las variables esperadas por la plantilla."""
-    name = str(contact.get("nombre_completo") or "").strip() or "No dio nombre"
-    company = str(contact.get("company_name") or "").strip()
-    summary_text = resumen or notes or "Pendiente de detalle"
-    next_action = str((extra or {}).get("siguiente_accion") or "").strip()
-    phone = str(
-        contact.get("telefono_e164") or contact.get("telefono") or ""
-    ).strip()
-    email_value = str(email or contact.get("correo") or "").strip()
-
-    return {
-        "1": seller_name,
-        "2": name,
-        "3": summary_text,
-        "4": next_action or "Contacta y confirma próximos pasos.",
-        "5": phone or "N/D",
-        "6": email_value or "N/D",
-        "7": company or "Sin empresa",
-    }
-
-
-def _parse_iso_datetime(value: str | None) -> datetime | None:
-    if not value:
-        return None
-    text = str(value).strip().replace("Z", "+00:00")
-    try:
-        parsed = datetime.fromisoformat(text)
-    except ValueError:
-        return None
-    if parsed.tzinfo is None:
-        parsed = parsed.replace(tzinfo=timezone.utc)
-    return parsed
-
-
-def _format_booking_datetime(value: datetime | None) -> tuple[str, str]:
-    if not value:
-        return "Pendiente", "Pendiente"
-    tz_name = settings.webchat_calendar_timezone or "UTC"
-    try:
-        target_tz = ZoneInfo(tz_name)
-    except Exception:
-        target_tz = timezone.utc
-    localized = value.astimezone(target_tz)
-    return localized.strftime("%d/%m/%Y"), localized.strftime("%H:%M")
-
-
-def _extract_contact_location(contact: dict[str, Any]) -> str:
-    raw_data = contact.get("contacto_datos") or {}
-    if isinstance(raw_data, str):
-        try:
-            raw_data = json.loads(raw_data)
-        except json.JSONDecodeError:
-            raw_data = {}
-    ubicacion = raw_data.get("ubicacion") or {}
-    if isinstance(ubicacion, str):
-        try:
-            ubicacion = json.loads(ubicacion)
-        except json.JSONDecodeError:
-            ubicacion = {}
-    parts: list[str] = []
-    for field in ("nom_mun", "nom_ent"):
-        candidate = ubicacion.get(field)
-        if isinstance(candidate, str):
-            candidate = candidate.strip()
-        if candidate:
-            parts.append(candidate)
-    if not parts:
-        fallback = raw_data.get("formatted_address") or raw_data.get("direccion")
-        if fallback:
-            parts.append(str(fallback).strip())
-    if not parts:
-        return "Pendiente de confirmación"
-    return ", ".join(parts)
-
-
-def _extract_model_description(contact: dict[str, Any]) -> str:
-    for key in ("notes", "necesidad_proposito"):
-        candidate = contact.get(key)
-        if isinstance(candidate, str):
-            cleaned = candidate.strip()
-            if cleaned:
-                return cleaned.split("\n", 1)[0]
-    return "Modelo pendiente"
-
-
 def _build_profile_summary_text(opportunity_metadata: Mapping[str, Any]) -> str | None:
     return shared_build_profile_summary_text(opportunity_metadata)
-
-
-def _build_booking_template_variables(
-    *,
-    contact: dict[str, Any],
-    seller_name: str,
-    extra: dict[str, Any] | None,
-) -> dict[str, str]:
-    slot_iso = (extra or {}).get("slot_start")
-    date_text, time_text = _format_booking_datetime(_parse_iso_datetime(slot_iso))
-    client_name = str(contact.get("nombre_completo") or "").strip() or "No dio nombre"
-    model = _extract_model_description(contact)
-    profile_summary = str((extra or {}).get("profile_summary") or "").strip()
-    if profile_summary:
-        model = f"{model}. {profile_summary}"
-        if len(model) > 500:
-            model = model[:499].rstrip() + "…"
-    location = _extract_contact_location(contact)
-    phone = str(contact.get("telefono_e164") or contact.get("telefono") or "N/D").strip() or "N/D"
-    reason = str((extra or {}).get("reason") or "").strip() or "Sin motivo especificado"
-    return {
-        "1": seller_name,
-        "2": client_name,
-        "3": date_text,
-        "4": time_text,
-        "5": model,
-        "6": location,
-        "7": phone,
-        "8": reason,
-    }
