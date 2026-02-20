@@ -1392,7 +1392,9 @@ async def _guard_booking_confirmation_claim(
             if missing_fields:
                 question_map = _safe_dict(prefilter_status.get("questions"))
                 field = missing_fields[0]
-                question_text = str(question_map.get(field) or "").strip()
+                question_text = str(
+                    question_map.get(field) or _DEFAULT_SCHEDULE_QUESTION_BY_FIELD.get(field) or ""
+                ).strip()
                 if question_text:
                     return f"Para confirmar tu cita, solo falta este dato: {question_text}"
     except Exception as exc:
@@ -1401,8 +1403,8 @@ async def _guard_booking_confirmation_claim(
             extra={"conversation_id": conversation_id, "error": str(exc)},
         )
     return (
-        "Para confirmar tu cita, solo me falta un dato breve. "
-        "Te hago una pregunta rápida y, en cuanto me respondas, la dejo lista."
+        "Para confirmar tu cita, aún falta un dato breve. "
+        "Te hago una pregunta rápida para continuar."
     )
 
 
@@ -1669,20 +1671,9 @@ def _sanitize_scoring_answers_from_user_messages(
         if field == "evasive" or field not in user_signals:
             continue
         if value is None:
-            if not user_signals.get(field, False):
-                sanitized.pop(field, None)
-            continue
-        normalized = str(value).strip().lower() if isinstance(value, str) else value
-        if isinstance(normalized, str) and normalized in {"", "unknown"}:
-            if not user_signals.get(field, False):
-                sanitized.pop(field, None)
-            continue
-        if isinstance(normalized, str) and normalized == "refused":
-            if user_signals.get("evasive"):
-                continue
             sanitized.pop(field, None)
             continue
-        if not user_signals.get(field, False):
+        if isinstance(value, str) and not value.strip():
             sanitized.pop(field, None)
     return sanitized
 
@@ -1700,8 +1691,6 @@ def _sanitize_profiling_statuses_from_user_messages(
         if not key:
             continue
         status = str(raw_value or "").strip().lower()
-        if status == "answered" and not user_signals.get(key, False):
-            status = "unknown"
         if status:
             sanitized[key] = status
     return sanitized

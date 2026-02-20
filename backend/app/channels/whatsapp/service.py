@@ -184,7 +184,12 @@ async def _guard_booking_confirmation_claim(
             if missing_fields:
                 questions = prefilter_status.get("questions") or {}
                 if isinstance(questions, Mapping):
-                    question_text = str(questions.get(missing_fields[0]) or "").strip()
+                    missing_field = missing_fields[0]
+                    question_text = str(
+                        questions.get(missing_field)
+                        or whatsapp_tools._DEFAULT_SCHEDULE_QUESTION_BY_FIELD.get(missing_field)
+                        or ""
+                    ).strip()
                     if question_text:
                         return f"Para confirmar tu cita, solo falta este dato: {question_text}"
     except Exception as exc:
@@ -193,8 +198,8 @@ async def _guard_booking_confirmation_claim(
             extra={"conversation_id": conversation_id, "error": str(exc)},
         )
     return (
-        "Para confirmar tu cita, solo me falta un dato breve. "
-        "Te hago una pregunta rápida y, en cuanto me respondas, la dejo lista."
+        "Para confirmar tu cita, aún falta un dato breve. "
+        "Te hago una pregunta rápida para continuar."
     )
 
 

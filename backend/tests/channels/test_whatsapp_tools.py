@@ -237,7 +237,7 @@ async def test_has_minimum_profile_for_case_a_uses_profiling_status_fallback(
     )
 
 
-def test_sanitize_profiling_statuses_demotes_answered_without_user_signal() -> None:
+def test_sanitize_profiling_statuses_preserves_assistant_statuses() -> None:
     statuses = {
         "financing_type": "answered",
         "budget_range": "answered",
@@ -254,7 +254,7 @@ def test_sanitize_profiling_statuses_demotes_answered_without_user_signal() -> N
     )
     assert sanitized["financing_type"] == "answered"
     assert sanitized["budget_range"] == "answered"
-    assert sanitized["decision_authority"] == "unknown"
+    assert sanitized["decision_authority"] == "answered"
 
 
 def test_extract_user_prefilter_signals_detects_spousal_authority_phrase() -> None:
@@ -280,7 +280,7 @@ def test_build_schedule_prefilter_error_message_includes_missing_field_and_quest
     assert "vuelve a ejecutar schedule_demo" in message
 
 
-def test_sanitize_scoring_answers_removes_unknown_without_signal() -> None:
+def test_sanitize_scoring_answers_keeps_explicit_unknown_values() -> None:
     sanitized = tools._sanitize_scoring_answers_from_user_messages(
         scoring_answers={
             "financing_type": None,
@@ -294,8 +294,8 @@ def test_sanitize_scoring_answers_removes_unknown_without_signal() -> None:
         },
     )
     assert "financing_type" not in sanitized
-    assert "budget_range" not in sanitized
-    assert "decision_authority" not in sanitized
+    assert sanitized["budget_range"] == "unknown"
+    assert sanitized["decision_authority"] == "unknown"
 
 
 @pytest.mark.asyncio

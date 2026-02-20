@@ -590,20 +590,9 @@ def _sanitize_scoring_answers_from_user_messages(
         if field == "evasive" or field not in user_signals:
             continue
         if value is None:
-            if not user_signals.get(field, False):
-                sanitized.pop(field, None)
-            continue
-        normalized = str(value).strip().lower() if isinstance(value, str) else value
-        if isinstance(normalized, str) and normalized in {"", "unknown"}:
-            if not user_signals.get(field, False):
-                sanitized.pop(field, None)
-            continue
-        if isinstance(normalized, str) and normalized == "refused":
-            if user_signals.get("evasive"):
-                continue
             sanitized.pop(field, None)
             continue
-        if not user_signals.get(field, False):
+        if isinstance(value, str) and not value.strip():
             sanitized.pop(field, None)
     return sanitized
 
@@ -621,10 +610,6 @@ def _sanitize_profiling_statuses_from_user_messages(
         if not key:
             continue
         status = str(raw_value or "").strip().lower()
-        if status == "answered" and not user_signals.get(key, False):
-            # Evita falsos positivos cuando el modelo marca "answered"
-            # sin evidencia en mensajes del usuario.
-            status = "unknown"
         if status:
             sanitized[key] = status
     return sanitized
