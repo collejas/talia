@@ -16,6 +16,9 @@ from fastapi import UploadFile
 from app.core.config import settings
 from app.core.logging import get_logger, log_event
 from app.repositories.crm import CRMRepository, CRMRepositoryError
+from app.services.scoring_contract import (
+    normalize_required_fields_for_answers as shared_normalize_required_fields_for_answers,
+)
 from app.services.phone_utils import normalize_phone
 from app.services import tenant_runtime
 
@@ -457,14 +460,7 @@ def _normalize_required_fields_for_answers(
     required_fields: Sequence[str],
     answers: Mapping[str, Any] | None,
 ) -> list[str]:
-    normalized: list[str] = []
-    for item in required_fields:
-        field = str(item or "").strip()
-        if field and field not in normalized:
-            normalized.append(field)
-    if _is_financing_cash(answers):
-        normalized = [field for field in normalized if field != "credit_preapproved"]
-    return normalized
+    return shared_normalize_required_fields_for_answers(required_fields, answers)
 
 
 def _field_score(field: str, value: Any) -> int:

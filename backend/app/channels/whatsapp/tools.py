@@ -20,6 +20,12 @@ from app.services import send_email, storage, tenant_runtime
 from app.services.calendar import CalendarError
 from app.services.catalog_embeddings import CatalogEmbeddingService
 from app.logging.catalog_debug import write_catalog_debug_entry
+from app.services.scoring_contract import (
+    build_profile_summary_text as shared_build_profile_summary_text,
+)
+from app.services.scoring_contract import (
+    normalize_required_fields_for_answers as shared_normalize_required_fields_for_answers,
+)
 from app.services.catalog_fraccionamientos import (
     list_catalog_fraccionamientos,
     list_catalog_modelos,
@@ -789,9 +795,7 @@ async def _has_prefilter_for_schedule(
         required_fields = required_from_metadata
     scoring = _ensure_dict(metadata.get("lead_scoring"))
     answers = _ensure_dict(scoring.get("answers"))
-    financing = str(answers.get("financing_type") or "").strip().lower()
-    if financing and "contado" in financing:
-        required_fields = [field for field in required_fields if field != "credit_preapproved"]
+    required_fields = shared_normalize_required_fields_for_answers(required_fields, answers)
     profiling_questions = _extract_profiling_questions(opportunity_metadata=metadata)
 
     def _is_completed(field: str, value: Any) -> bool:
@@ -2587,57 +2591,7 @@ def _extract_model_description(contact: dict[str, Any]) -> str:
 
 
 def _build_profile_summary_text(opportunity_metadata: Mapping[str, Any]) -> str | None:
-    scoring = _ensure_dict(opportunity_metadata.get("lead_scoring"))
-    answers = _ensure_dict(scoring.get("answers"))
-    if not answers:
-        return None
-
-    finance_map = {"credito": "crédito", "contado": "contado", "mixto": "mixto"}
-    credit_map = {
-        "in_process": "crédito en trámite",
-        "preapproved": "crédito preaprobado",
-        "none": "sin crédito",
-    }
-    decision_map = {"self": "individual", "shared": "compartida", "advisor": "con asesor"}
-    visited_map = {"yes": "sí", "no": "no"}
-
-    fields: list[str] = []
-    budget = str(answers.get("budget_range") or "").strip()
-    if budget:
-        fields.append(f"Presupuesto {budget}")
-
-    financing = str(answers.get("financing_type") or "").strip().lower()
-    if financing:
-        fields.append(f"Financiamiento {finance_map.get(financing, financing)}")
-
-    credit = str(answers.get("credit_preapproved") or "").strip().lower()
-    if credit:
-        fields.append(f"Estatus crédito {credit_map.get(credit, credit)}")
-
-    timeline = str(answers.get("purchase_timeline") or "").strip()
-    if timeline:
-        fields.append(f"Plazo {timeline}")
-
-    decision = str(answers.get("decision_authority") or "").strip().lower()
-    if decision:
-        fields.append(f"Decisión {decision_map.get(decision, decision)}")
-
-    visited = str(answers.get("visited_properties") or "").strip().lower()
-    if visited:
-        fields.append(f"Visitas previas {visited_map.get(visited, visited)}")
-
-    score_value = scoring.get("score_total")
-    grade = str(scoring.get("grade") or "").strip()
-    if score_value is not None:
-        try:
-            score_text = f"{float(score_value):.0f}"
-            fields.append(f"Lead score {score_text}{f' ({grade})' if grade else ''}")
-        except (TypeError, ValueError):
-            pass
-
-    if not fields:
-        return None
-    return " | ".join(fields)
+    return shared_build_profile_summary_text(opportunity_metadata)
 
 
 def _build_booking_template_variables(
