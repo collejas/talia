@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 from dataclasses import dataclass
 from typing import Any, Awaitable, Callable
@@ -11,6 +12,15 @@ from app.assistants.runtime import AssistantSpec
 from app.core.logging import get_logger
 
 logger = get_logger("app.assistants.tool_runtime")
+
+try:  # pragma: no cover - fallback defensivo para SDKs antiguos
+    from openai import APITimeoutError, APIConnectionError, InternalServerError, RateLimitError
+except Exception:  # pragma: no cover
+    APITimeoutError = APIConnectionError = InternalServerError = RateLimitError = tuple()  # type: ignore[assignment]
+
+
+_RETRYABLE_TOOL_LOOP_ERRORS = (InternalServerError, APIConnectionError, APITimeoutError, RateLimitError)
+_RETRY_DELAYS_SECONDS: tuple[float, ...] = (0.6, 1.5)
 
 
 @dataclass(slots=True)
@@ -37,6 +47,47 @@ class ToolRuntimeResult:
 
 ExecuteToolFn = Callable[[str | None, Any, ToolRuntimeContext], Awaitable[dict[str, Any]]]
 RequestTemplateFn = Callable[[], dict[str, Any]]
+
+
+def _is_retryable_openai_error(exc: Exception) -> bool:
+    if _RETRYABLE_TOOL_LOOP_ERRORS and isinstance(exc, _RETRYABLE_TOOL_LOOP_ERRORS):
+        return True
+    # Compatibilidad con wrappers o errores serializados sin clase fuerte.
+    text = str(exc).lower()
+    return "server_error" in text or "rate limit" in text or "timeout" in text
+
+
+async def _create_response_with_retry(
+    *,
+    client: Any,
+    request_kwargs: dict[str, Any],
+    context: ToolRuntimeContext,
+    log: Any,
+) -> Any:
+    max_attempts = len(_RETRY_DELAYS_SECONDS) + 1
+    last_exc: Exception | None = None
+    for attempt in range(1, max_attempts + 1):
+        try:
+            return await client.responses.create(**request_kwargs)
+        except Exception as exc:  # pragma: no cover - red/servicio externo
+            last_exc = exc
+            if attempt >= max_attempts or not _is_retryable_openai_error(exc):
+                raise
+            delay = _RETRY_DELAYS_SECONDS[attempt - 1]
+            log.warning(
+                "assistant.responses_retry",
+                extra={
+                    "conversation_id": context.conversation_id,
+                    "attempt": attempt,
+                    "max_attempts": max_attempts,
+                    "delay_seconds": delay,
+                    "error": str(exc),
+                },
+            )
+            await asyncio.sleep(delay)
+    if last_exc:
+        raise last_exc
+    raise RuntimeError("responses.create_retry_exhausted")
 
 
 async def run_tool_loop(
@@ -69,7 +120,12 @@ async def run_tool_loop(
     tool_call_ids: list[str] = []
 
     while True:
-        response = await client.responses.create(**request_kwargs)
+        response = await _create_response_with_retry(
+            client=client,
+            request_kwargs=request_kwargs,
+            context=context,
+            log=log,
+        )
         response_dict = response.model_dump()
         latest_response_id = response_dict.get("id") or latest_response_id
         conversation_obj = response_dict.get("conversation") or {}

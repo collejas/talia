@@ -60,6 +60,10 @@ _BOOKING_CONFIRMATION_HINTS: tuple[str, ...] = (
     "quedo todo listo",
     "tu cita esta lista",
     "tu cita está lista",
+    "quedo pendiente para tu visita",
+    "quedó pendiente para tu visita",
+    "visita mañana a las",
+    "visita para mañana a las",
 )
 
 _DETAILED_REPLY_HINTS: tuple[str, ...] = (
@@ -78,6 +82,7 @@ _DETAILED_REPLY_HINTS: tuple[str, ...] = (
     "cotización",
     "cotizacion",
 )
+_DEFAULT_WHATSAPP_MAX_CHARS = 280
 
 
 @dataclass(slots=True)
@@ -111,6 +116,13 @@ def _wants_detailed_reply(text: str | None) -> bool:
     if not normalized:
         return False
     return any(hint in normalized for hint in _DETAILED_REPLY_HINTS)
+
+
+def _compact_whatsapp_reply(text: str | None, max_chars: int = _DEFAULT_WHATSAPP_MAX_CHARS) -> str:
+    compact = " ".join(str(text or "").split())
+    if len(compact) <= max_chars:
+        return compact
+    return compact[: max_chars - 1].rstrip() + "…"
 
 
 async def _guard_booking_confirmation_claim(
@@ -384,6 +396,7 @@ async def handle_incoming_message(
         conversation_id=conversation_id,
         reply_text=final_reply_text,
     )
+    final_reply_text = _compact_whatsapp_reply(final_reply_text, _DEFAULT_WHATSAPP_MAX_CHARS)
 
     send_result = await _send_whatsapp_reply(
         to_number=message.from_number,
@@ -806,7 +819,9 @@ async def _generate_assistant_reply(
             },
         )
     wants_detail = _wants_detailed_reply(message.body)
-    max_output_tokens = 700 if wants_detail else 120
+    # Este presupuesto aplica al loop de tools; debe ser holgado para evitar
+    # truncar JSON de function calls.
+    max_output_tokens = 1200 if wants_detail else 900
     request_kwargs: dict[str, Any] = {
         "input": initial_input,
         "store": True,
@@ -829,7 +844,7 @@ async def _generate_assistant_reply(
             extra={"conversation_id": conversation_id, "error": str(exc)},
         )
 
-    def _build_request_template() -> dict[str, Any]:
+    def _build_request_template(*, include_tools: bool = True) -> dict[str, Any]:
         if assistant.is_prompt:
             variables = {"conversacion_id": conversation_id}
             return {
@@ -841,11 +856,11 @@ async def _generate_assistant_reply(
         payload: dict[str, Any] = {"model": assistant_spec.model}
         if assistant_spec.instructions:
             payload["instructions"] = assistant_spec.instructions
-        if assistant_spec.tools:
+        if include_tools and assistant_spec.tools:
             payload["tools"] = assistant_spec.tools
         return payload
 
-    request_kwargs.update(_build_request_template())
+    request_kwargs.update(_build_request_template(include_tools=True))
 
     if openai_conversation_id:
         request_kwargs["conversation"] = openai_conversation_id
@@ -865,7 +880,7 @@ async def _generate_assistant_reply(
         assistant_spec=assistant_spec,
         context=context_obj,
         initial_request=request_kwargs,
-        request_template=_build_request_template,
+        request_template=lambda: _build_request_template(include_tools=True),
         execute_tool=whatsapp_tools.execute_tool,
         openai_conversation_id=openai_conversation_id,
         previous_response_id=previous_response_id,
@@ -873,10 +888,56 @@ async def _generate_assistant_reply(
     )
 
     reply_text = _extract_text_from_response(result.response)
+    final_text = reply_text
+    followup_kwargs: dict[str, Any] = {
+        "input": [
+            {
+                "role": "developer",
+                "content": [
+                    {
+                        "type": "input_text",
+                        "text": (
+                            "Redacta SOLO el mensaje final para WhatsApp al último usuario. "
+                            "Máximo 280 caracteres, 1-3 frases, directo, sin listas largas."
+                        ),
+                    }
+                ],
+            }
+        ],
+        "store": True,
+        "max_output_tokens": 140,
+        "temperature": 0.3,
+        "metadata": metadata_payload,
+        "tool_choice": "none",
+    }
+    followup_kwargs.update(_build_request_template(include_tools=False))
+    if result.conversation_id:
+        followup_kwargs["conversation"] = result.conversation_id
+    elif result.response_id:
+        followup_kwargs["previous_response_id"] = result.response_id
+    try:
+        final_response = await client.responses.create(**followup_kwargs)
+        final_response_dict = final_response.model_dump()
+        followup_text = _extract_text_from_response(final_response_dict)
+        if followup_text:
+            final_text = followup_text
+        final_response_id = final_response_dict.get("id") or result.response_id
+        final_conversation_id = (
+            (final_response_dict.get("conversation") or {}).get("id")
+            or result.conversation_id
+        )
+    except Exception as exc:  # pragma: no cover - tolerante a falla de red/SDK
+        logger.warning(
+            "whatsapp.concise_reply_generation_failed",
+            extra={"conversation_id": conversation_id, "error": str(exc)},
+        )
+        final_response_id = result.response_id
+        final_conversation_id = result.conversation_id
+
     return AssistantReply(
-        text=reply_text.strip() if reply_text else None,
-        openai_conversation_id=result.conversation_id,
-        response_id=result.response_id,
+        text=final_text.strip() if final_text else None,
+        openai_conversation_id=final_conversation_id,
+        response_id=final_response_id,
     )
 
 

@@ -129,14 +129,7 @@ def _optional_int_argument(arguments: dict[str, Any], key: str) -> int | None:
     return max(0, parsed)
 
 
-def _repair_truncated_json(raw: str) -> str | None:
-    text = (raw or "").strip()
-    if not text:
-        return None
-    start = text.find("{")
-    if start == -1:
-        return None
-    text = text[start:]
+def _close_json_structures(text: str) -> str:
     in_string = False
     escape = False
     brace_count = 0
@@ -169,8 +162,101 @@ def _repair_truncated_json(raw: str) -> str | None:
         repaired += "]" * bracket_count
     if brace_count > 0:
         repaired += "}" * brace_count
+    return repaired
 
-    return repaired if repaired != text else None
+
+def _repair_truncated_json(raw: str) -> str | None:
+    text = (raw or "").strip()
+    if not text:
+        return None
+    start = text.find("{")
+    if start == -1:
+        return None
+    text = text[start:]
+
+    # Intenta recortar un sufijo corrupto y cerrar estructuras abiertas.
+    max_trim = min(300, len(text))
+    for trim in range(0, max_trim + 1):
+        candidate = text[: len(text) - trim] if trim else text
+        candidate = candidate.rstrip()
+        while candidate and candidate[-1] in {",", ":"}:
+            candidate = candidate[:-1].rstrip()
+        if not candidate:
+            continue
+        repaired = _close_json_structures(candidate)
+        try:
+            json.loads(repaired)
+        except json.JSONDecodeError:
+            continue
+        return repaired if repaired != text else None
+    return None
+
+
+def _extract_json_scalar(raw: str, key: str) -> Any | None:
+    pattern = rf'"{re.escape(key)}"\s*:\s*(true|false|null|-?\d+(?:\.\d+)?|"(?:\\.|[^"\\])*")'
+    match = re.search(pattern, raw, flags=re.IGNORECASE)
+    if not match:
+        return None
+    token = match.group(1)
+    if token.startswith('"'):
+        try:
+            return json.loads(token)
+        except json.JSONDecodeError:
+            return token.strip('"')
+    lowered = token.lower()
+    if lowered == "true":
+        return True
+    if lowered == "false":
+        return False
+    if lowered == "null":
+        return None
+    try:
+        return int(token) if "." not in token else float(token)
+    except ValueError:
+        return None
+
+
+def _salvage_tool_arguments(tool_name: str, raw: str) -> dict[str, Any] | None:
+    keys_by_tool: dict[str, tuple[str, ...]] = {
+        "close_lead": (
+            "conversacion_id",
+            "notes",
+            "necesidad_proposito",
+            "siguiente_accion",
+            "budget_range",
+            "financing_type",
+            "purchase_timeline",
+            "decision_authority",
+            "credit_preapproved",
+            "visited_properties",
+        ),
+        "schedule_demo": ("conversacion_id", "slot_id", "start_at", "notes"),
+        "send_information_email": (
+            "conversacion_id",
+            "email",
+            "full_name",
+            "company_name",
+            "summary",
+        ),
+    }
+    keys = keys_by_tool.get(tool_name, ())
+    if not keys:
+        return None
+    recovered: dict[str, Any] = {}
+    for key in keys:
+        value = _extract_json_scalar(raw, key)
+        if value is not None:
+            recovered[key] = value
+
+    required_by_tool: dict[str, tuple[str, ...]] = {
+        "close_lead": ("notes", "necesidad_proposito"),
+        "schedule_demo": ("slot_id", "start_at"),
+        "send_information_email": ("email",),
+    }
+    required = required_by_tool.get(tool_name, ())
+    if required and any(not _has_text(recovered.get(field)) for field in required):
+        return None
+    return recovered or None
 
 
 def _ensure_dict(value: Any) -> dict[str, Any]:
@@ -259,13 +345,11 @@ def _is_profile_field_answered(
 def _has_base_fields_for_case_a(contact: Mapping[str, Any] | None) -> bool:
     if not contact:
         return False
-    return (
-        _has_text(contact.get("nombre_completo"))
-        and _has_text(contact.get("correo"))
-        and _has_text(contact.get("telefono_e164") or contact.get("telefono"))
-        and _has_text(contact.get("company_name"))
-        and _has_text(contact.get("necesidad_proposito"))
+    has_contact = _has_text(contact.get("correo")) or _has_text(
+        contact.get("telefono_e164") or contact.get("telefono")
     )
+    has_context = _has_text(contact.get("necesidad_proposito")) or _has_text(contact.get("notes"))
+    return has_contact and has_context
 
 
 def _has_base_fields_for_case_b(contact: Mapping[str, Any] | None) -> bool:
@@ -456,12 +540,27 @@ def _extract_user_prefilter_signals(messages: list[dict[str, Any]]) -> dict[str,
             joined,
         )
     )
+    has_credit_status = bool(
+        re.search(
+            r"\b(en tramite|en trámite|tramitando|proceso|preaprobado|aprobado|sin credito|sin crédito|no tengo credito|no tengo crédito)\b",
+            joined,
+        )
+    )
+    has_visited = bool(
+        re.search(
+            r"\b(ya vi|ya visite|ya visité|ya fui|ya conoci|ya conoc[ií]|ya vimos|hemos visto|visitamos|visitado)\b",
+            joined,
+        )
+        or re.search(r"\b(no he visitado|aun no|aún no|todavia no|todavía no)\b", joined)
+    )
     has_evasive = any(token in joined for token in _EVASIVE_TOKENS)
     return {
         "financing_type": has_financing,
         "budget_range": has_budget,
         "purchase_timeline": has_timeline,
         "decision_authority": has_authority,
+        "credit_preapproved": has_credit_status,
+        "visited_properties": has_visited,
         "evasive": has_evasive,
     }
 
@@ -514,6 +613,112 @@ def _sanitize_profiling_statuses_from_user_messages(
         if status:
             sanitized[key] = status
     return sanitized
+
+
+def _infer_prefilter_answers_from_messages(
+    messages: list[dict[str, Any]],
+    *,
+    missing_fields: list[str],
+) -> dict[str, Any]:
+    inbound_texts: list[str] = []
+    for row in messages:
+        direction = str(row.get("direccion") or "").strip().lower()
+        if direction != "entrante":
+            continue
+        text = str(row.get("texto") or "").strip().lower()
+        if text:
+            inbound_texts.append(text)
+    if not inbound_texts:
+        return {}
+    joined = " ".join(inbound_texts[-6:])
+    inferred: dict[str, Any] = {}
+    missing = {str(field).strip() for field in missing_fields if str(field).strip()}
+
+    if "financing_type" in missing:
+        if any(token in joined for token in ("contado", "efectivo")):
+            inferred["financing_type"] = "contado"
+        elif any(
+            token in joined
+            for token in ("cofinavit", "infonavit", "fovissste", "hipoteca", "credito", "crédito")
+        ):
+            inferred["financing_type"] = "credito"
+        elif any(token in joined for token in ("mixto", "ambos", "combinado")):
+            inferred["financing_type"] = "mixto"
+
+    if "budget_range" in missing:
+        if re.search(r"\b\d+(\.\d+)?\s*(k|mil|miles|millon|millones)\b", joined):
+            inferred["budget_range"] = "captured"
+
+    if "purchase_timeline" in missing:
+        if re.search(r"\b(inmediat|ya|pronto|cuanto antes|lo mas pronto|lo más pronto)\b", joined):
+            inferred["purchase_timeline"] = "immediate"
+        elif re.search(r"\b(1|2|3)\s*mes", joined):
+            inferred["purchase_timeline"] = "short_term"
+        elif re.search(r"\b(4|5|6)\s*mes", joined):
+            inferred["purchase_timeline"] = "medium_term"
+        elif re.search(r"\b(7|8|9|10|11|12)\s*mes|a[nñ]o", joined):
+            inferred["purchase_timeline"] = "long_term"
+
+    if "decision_authority" in missing:
+        if re.search(r"\b(yo decido|solo yo|yo solo|por mi cuenta)\b", joined):
+            inferred["decision_authority"] = "self"
+        elif re.search(r"\b(mi esposa y yo|mi esposo y yo|con mi pareja|con mi familia|entre los dos)\b", joined):
+            inferred["decision_authority"] = "shared"
+
+    if "credit_preapproved" in missing:
+        if re.search(r"\b(en tramite|en trámite|tramitando|proceso)\b", joined):
+            inferred["credit_preapproved"] = "in_process"
+        elif re.search(r"\b(preaprobado|aprobado)\b", joined):
+            inferred["credit_preapproved"] = "preapproved"
+        elif re.search(r"\b(no tengo|sin credito|sin crédito)\b", joined):
+            inferred["credit_preapproved"] = "none"
+
+    if "visited_properties" in missing:
+        if re.search(
+            r"\b(ya vi|ya visite|ya visité|ya fui|ya conoci|ya conoc[ií]|ya vimos|hemos visto|visitamos|visitado)\b",
+            joined,
+        ):
+            inferred["visited_properties"] = "yes"
+        elif re.search(r"\b(no he visitado|aun no|aún no|todavia no|todavía no)\b", joined):
+            inferred["visited_properties"] = "no"
+        else:
+            last_user_text = inbound_texts[-1].strip()
+            yes_like = bool(
+                re.search(
+                    r"\b(si|sí|correcto|afirmativo)\b",
+                    last_user_text,
+                )
+            )
+            no_like = bool(
+                re.search(
+                    r"\b(no|aun no|aún no|todavia no|todavía no|no he)\b",
+                    last_user_text,
+                )
+            )
+            # Si el último mensaje es una respuesta corta y recientemente
+            # se preguntó por visitas previas, infiere yes/no.
+            assistant_text = " ".join(
+                str(row.get("texto") or "").strip().lower()
+                for row in messages[-8:]
+                if str(row.get("direccion") or "").strip().lower() == "saliente"
+            )
+            if "visitado" in assistant_text or "propiedades similares" in assistant_text:
+                if no_like:
+                    inferred["visited_properties"] = "no"
+                elif yes_like or "ya" in last_user_text:
+                    inferred["visited_properties"] = "yes"
+
+    # `captured` permite desbloquear cuando el usuario sí dio rango,
+    # pero el modelo no envió el valor textual.
+    if inferred.get("budget_range") == "captured":
+        for text in reversed(inbound_texts):
+            if re.search(r"\b\d+(\.\d+)?\s*(k|mil|miles|millon|millones)\b", text):
+                inferred["budget_range"] = text[:120]
+                break
+        if inferred.get("budget_range") == "captured":
+            inferred.pop("budget_range", None)
+
+    return inferred
 
 
 def _sanitize_profiling_reprompt_counts(
@@ -695,7 +900,18 @@ async def execute_tool(
                     },
                 )
             else:
-                raise ValueError(f"Arguments inválidos: {raw_arguments!r}") from exc
+                salvaged = _salvage_tool_arguments(name.strip(), raw_arguments)
+                if salvaged is None:
+                    raise ValueError(f"Arguments inválidos: {raw_arguments!r}") from exc
+                arguments = salvaged
+                logger.warning(
+                    "whatsapp.tool_arguments_salvaged",
+                    extra={
+                        "tool": name,
+                        "keys": sorted(salvaged.keys()),
+                        "raw_preview": raw_arguments[:400],
+                    },
+                )
     elif not isinstance(arguments, dict):
         raise ValueError(f"Tipo de argumentos no soportado: {type(arguments)!r}")
 
@@ -1483,6 +1699,44 @@ async def _handle_schedule_demo(
             for item in (prefilter_status.get("missing_fields") or [])
             if str(item).strip()
         ]
+        try:
+            recent_messages = await storage.fetch_recent_messages(
+                conversation_id=context.conversation_id,
+                limit=40,
+            )
+        except StorageError:
+            recent_messages = []
+        inferred_answers = _infer_prefilter_answers_from_messages(
+            recent_messages,
+            missing_fields=missing_fields,
+        )
+        if inferred_answers:
+            try:
+                await storage.apply_lead_scoring(
+                    conversation_id=context.conversation_id,
+                    contact_id=context.contact_id,
+                    opportunity_id=str(tarjeta_id),
+                    answers=inferred_answers,
+                    events={
+                        "channel": context.channel or "whatsapp",
+                        "appointment_requested": True,
+                        "accepted_answering_questions": True,
+                    },
+                    source="schedule_demo_prefilter_infer",
+                )
+                prefilter_status = await _has_prefilter_for_schedule(
+                    contact=contact,
+                    opportunity_id=tarjeta_id,
+                    conversation_id=context.conversation_id,
+                )
+            except StorageError:
+                pass
+    if not bool(prefilter_status.get("ready")):
+        missing_fields = [
+            str(item)
+            for item in (prefilter_status.get("missing_fields") or [])
+            if str(item).strip()
+        ]
         logger.info(
             "whatsapp.schedule_demo.prefilter_missing",
             extra={
@@ -1491,12 +1745,15 @@ async def _handle_schedule_demo(
                 "missing_fields": missing_fields,
             },
         )
-        raise ValueError(
-            _build_schedule_prefilter_error_message(
-                missing_fields=missing_fields,
-                question_by_field=_ensure_dict(prefilter_status.get("questions")),
-            )
+        guidance = _build_schedule_prefilter_error_message(
+            missing_fields=missing_fields,
+            question_by_field=_ensure_dict(prefilter_status.get("questions")),
         )
+        return {
+            "status": "prefilter_missing",
+            "missing_fields": missing_fields,
+            "guidance": guidance,
+        }
 
     metadata_payload: dict[str, Any] = {
         "slot_id": slot_identifier,
@@ -1539,7 +1796,6 @@ async def _handle_schedule_demo(
         raise ValueError(str(exc)) from exc
 
     booking_response = webchat_service._build_booking_response(booking)
-    contact = await _resolve_contact(context.contact_id)
     contact = await _resolve_contact(context.contact_id)
     booking_response.hold_id = hold.get("hold_id")
     contact_record = contact

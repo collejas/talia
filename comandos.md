@@ -90,6 +90,8 @@ sudo systemctl restart talia-panel.service
 
 sudo rsync -a landing/src/ /var/www/talia-landing/
 
+codex resume 019c770e-a670-7c72-9b54-8c804c9c7c60
+
 Whatsapp: codex resume 019c6d2c-fbf1-7ca2-99b7-78d39aec1c82
 codex resume 019c63bb-9e0b-7420-92d8-9a6a81f0f386
 
