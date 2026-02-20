@@ -337,6 +337,12 @@ Helpers candidatos a consolidar/eliminar duplicados:
   - `backend/app/channels/webchat/notifications.py`
   - `backend/app/channels/whatsapp/tools.py`
   - asegura bloque consistente de perfilamiento/score en notificaciones al vendedor.
+- OpenAI COMEBI alineado a contrato canonico:
+  - `docs/openai/demos/bienes_raices/comebi/Prompt/prompt_webchat_comebi.md`
+  - `docs/openai/demos/bienes_raices/comebi/Prompt/prompr_whatsapp_comebi.md`
+  - `docs/openai/demos/bienes_raices/comebi/funciones/funciones_webchat_comebi.md`
+  - `docs/openai/demos/bienes_raices/comebi/funciones/funciones_whatsapp_comebi.md`
+  - incluye enums canonicos, dependencia `contado -> omitir credit_preapproved` y reglas de payload por turno.
 
 ### 14.2 Pruebas ejecutadas
 - `tests/channels/test_whatsapp_tools.py`
@@ -352,7 +358,6 @@ Resultado: pruebas en verde durante la fase actual y compilacion de modulos modi
 
 ### 14.3 Pendiente inmediato
 - Unificar builder final de notificacion comercial para que el bloque de perfilamiento/score salga consistente en todos los triggers y canales.
-- Actualizar archivos OpenAI COMEBI (`Prompt` + `funciones`) para reflejar el contrato canonico implementado.
 - Ejecutar corrida E2E manual por canal (webchat/whatsapp) validando:
   - perfilamiento completo,
   - agenda real confirmada,

@@ -136,14 +136,14 @@
           "string",
           "null"
         ],
-        "description": "Cómo planea comprar: contado, crédito, mixto o unknown/refused."
+        "description": "Cómo planea comprar. Valores canónicos: contado, credito, mixto, unknown, refused."
       },
       "credit_preapproved": {
         "type": [
           "string",
           "null"
         ],
-        "description": "Estatus del crédito: preapproved, in_process, none, unknown o refused."
+        "description": "Estatus del crédito (solo si aplica). Valores canónicos: yes, in_process, no, unknown, refused. Si financing_type=contado, omite este campo y marca skipped_max_retries en profiling_statuses si corresponde."
       },
       "budget_range": {
         "type": [
@@ -164,7 +164,7 @@
           "string",
           "null"
         ],
-        "description": "Horizonte de compra: immediate, short_term, medium_term, long_term, unknown o refused."
+        "description": "Horizonte de compra. Valores canónicos: <3m, 3-6m, 6-12m, >12m, unknown, refused."
       },
       "hard_deadline": {
         "type": [
@@ -178,14 +178,14 @@
           "string",
           "null"
         ],
-        "description": "Nivel de definición de lo que busca: clear, partial, exploring, unknown o refused."
+        "description": "Nivel de definición de lo que busca. Valores canónicos: high, medium, low, unknown, refused."
       },
       "comparison_mode": {
         "type": [
           "string",
           "null"
         ],
-        "description": "Si está comparando opciones activamente: active, light, none, unknown o refused."
+        "description": "Modo de comparación actual. Valores canónicos: shortlist, comparing, exploring, unknown, refused."
       },
       "visited_properties": {
         "type": [
@@ -199,14 +199,14 @@
           "string",
           "null"
         ],
-        "description": "Autoridad de decisión: self, shared, advisor, unknown o refused."
+        "description": "Autoridad de decisión. Valores canónicos: full, shared, advisor, unknown, refused."
       },
       "buyer_type": {
         "type": [
           "string",
           "null"
         ],
-        "description": "Tipo de comprador: end_user, investor, company, unknown o refused."
+        "description": "Tipo de comprador. Valores canónicos: individual, couple, family, company, investor, unknown, refused."
       },
       "appointment_requested": {
         "type": [
@@ -273,6 +273,14 @@
     "additionalProperties": false
   }
 }
+
+> REGLAS CANONICAS DE PERFILAMIENTO (OBLIGATORIAS):
+> - Envia solo valores canonicos en campos de scoring cuando exista enum definido.
+> - Si el usuario responde texto libre, normaliza a canonico antes del tool call.
+> - No infieras respuestas no expresadas literalmente por el prospecto.
+> - Si `financing_type = contado`, no envies `credit_preapproved` en `close_lead`.
+> - En `profiling_statuses`, usa solo: `answered`, `unknown`, `refused`, `skipped_max_retries`.
+> - En `profiling_reprompt_counts`, envia solo llaves modificadas en el turno actual.
 
 ---
 
