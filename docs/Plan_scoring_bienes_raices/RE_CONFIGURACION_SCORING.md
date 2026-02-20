@@ -314,3 +314,42 @@ Helpers candidatos a consolidar/eliminar duplicados:
 - Antes de borrar:
   - marcar como deprecated en 1 release corta (si aplica),
   - registrar en changelog tecnico interno.
+
+## 14. Avance ejecutado (2026-02-20)
+### 14.1 Completado
+- Contrato compartido creado:
+  - `backend/app/services/scoring_contract.py`
+  - `normalize_required_fields_for_answers(...)`
+  - `build_profile_summary_text(...)`
+- Webchat migrado a contrato compartido:
+  - `backend/app/channels/webchat/notifications.py`
+  - `backend/app/channels/webchat/service.py`
+- WhatsApp migrado a contrato compartido:
+  - `backend/app/channels/whatsapp/tools.py`
+- Storage alineado al contrato compartido:
+  - `backend/app/services/storage.py`
+- Runtime resiliente estandarizado:
+  - `backend/app/assistants/tool_runtime.py`
+  - clasificacion uniforme de error: `error_type`, `status_code`, `retryable`
+  - retry para fallas transitorias de Responses API (incluye codigos HTTP 408/409/429/500/502/503/504)
+
+### 14.2 Pruebas ejecutadas
+- `tests/channels/test_whatsapp_tools.py`
+- `tests/channels/test_webchat_service_assignment.py`
+- `tests/channels/test_webchat_calendar.py`
+- `tests/channels/test_whatsapp_service.py`
+- `tests/services/test_storage_channels.py`
+- `tests/services/test_webchat_followups.py`
+- `tests/services/test_whatsapp_followups.py`
+- `tests/assistants/test_tool_runtime_controls.py`
+
+Resultado: pruebas en verde durante la fase actual y compilacion de modulos modificados sin errores.
+
+### 14.3 Pendiente inmediato
+- Unificar builder final de notificacion comercial para que el bloque de perfilamiento/score salga consistente en todos los triggers y canales.
+- Actualizar archivos OpenAI COMEBI (`Prompt` + `funciones`) para reflejar el contrato canonico implementado.
+- Ejecutar corrida E2E manual por canal (webchat/whatsapp) validando:
+  - perfilamiento completo,
+  - agenda real confirmada,
+  - notificacion al vendedor con perfilamiento completo,
+  - sin confirmacion textual de cita cuando no exista booking real.
