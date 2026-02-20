@@ -6,7 +6,7 @@ import asyncio
 import json
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Any
+from typing import Any, Mapping
 from uuid import UUID
 
 from fastapi import HTTPException
@@ -133,6 +133,8 @@ async def _guard_booking_confirmation_claim(
     *,
     conversation_id: str,
     reply_text: str,
+    contact: Mapping[str, Any] | None = None,
+    opportunity_id: str | None = None,
 ) -> str:
     if not _looks_like_booking_confirmation(reply_text):
         return reply_text
@@ -153,8 +155,45 @@ async def _guard_booking_confirmation_claim(
         conversation_id=conversation_id,
         booking_status=status or None,
     )
+    try:
+        resolved_contact = dict(contact or {})
+        resolved_opportunity_id = str(opportunity_id or "").strip() or None
+        if (not resolved_contact) or not resolved_opportunity_id:
+            conversation_meta = await storage.fetch_conversation(conversation_id)
+            if not resolved_contact:
+                contact_id = str(conversation_meta.get("contact_id") or "").strip()
+                if contact_id:
+                    resolved_contact = await storage.fetch_contact(contact_id)
+            if not resolved_opportunity_id and resolved_contact:
+                resolved_opportunity_id = await storage.ensure_conversation_opportunity(
+                    conversation_id=conversation_id,
+                    contact_id=str(resolved_contact.get("id") or ""),
+                    channel="whatsapp",
+                )
+        if resolved_contact and resolved_opportunity_id:
+            prefilter_status = await whatsapp_tools._has_prefilter_for_schedule(
+                contact=resolved_contact,
+                opportunity_id=resolved_opportunity_id,
+                conversation_id=conversation_id,
+            )
+            missing_fields = [
+                str(item).strip()
+                for item in (prefilter_status.get("missing_fields") or [])
+                if str(item).strip()
+            ]
+            if missing_fields:
+                questions = prefilter_status.get("questions") or {}
+                if isinstance(questions, Mapping):
+                    question_text = str(questions.get(missing_fields[0]) or "").strip()
+                    if question_text:
+                        return f"Para confirmar tu cita, solo falta este dato: {question_text}"
+    except Exception as exc:
+        logger.warning(
+            "whatsapp.booking_guard_prefilter_lookup_failed",
+            extra={"conversation_id": conversation_id, "error": str(exc)},
+        )
     return (
-        "Para dejar tu cita confirmada, solo me falta un dato breve. "
+        "Para confirmar tu cita, solo me falta un dato breve. "
         "Te hago una pregunta rápida y, en cuanto me respondas, la dejo lista."
     )
 
@@ -254,6 +293,7 @@ async def handle_incoming_message(
         return
 
     restart_context: dict[str, Any] | None = None
+    opportunity_ref: str | None = None
     try:
         ensure_payload = await storage.ensure_conversation_opportunity(
             conversation_id=conversation_id,
@@ -269,7 +309,9 @@ async def handle_incoming_message(
     else:
         if isinstance(ensure_payload, dict):
             restart_context = ensure_payload
+            opportunity_ref = str(ensure_payload.get("oportunidad_id") or "").strip() or None
         else:
+            opportunity_ref = str(ensure_payload or "").strip() or None
             restart_context = {
                 "oportunidad_id": ensure_payload,
                 "restart_created": False,
@@ -281,7 +323,7 @@ async def handle_incoming_message(
     restart_created = bool(restart_context and restart_context.get("restart_created"))
     if restart_created:
         restart_sequence = int(restart_context.get("restart_sequence") or 1)
-        opportunity_ref = restart_context.get("oportunidad_id")
+        opportunity_ref = str(restart_context.get("oportunidad_id") or opportunity_ref or "").strip() or None
         context = ToolRuntimeContext(
             conversation_id=conversation_id,
             contact_id=contact_id,
@@ -406,6 +448,8 @@ async def handle_incoming_message(
     final_reply_text = await _guard_booking_confirmation_claim(
         conversation_id=conversation_id,
         reply_text=final_reply_text,
+        contact=contact_record,
+        opportunity_id=opportunity_ref,
     )
     final_reply_text = _compact_whatsapp_reply(final_reply_text, _DEFAULT_WHATSAPP_MAX_CHARS)
 

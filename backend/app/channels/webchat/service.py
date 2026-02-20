@@ -1342,6 +1342,8 @@ async def _guard_booking_confirmation_claim(
     *,
     conversation_id: str,
     reply_text: str,
+    contact: Mapping[str, Any] | None = None,
+    opportunity_id: str | None = None,
 ) -> str:
     if not _looks_like_booking_confirmation(reply_text):
         return reply_text
@@ -1362,8 +1364,44 @@ async def _guard_booking_confirmation_claim(
         conversation_id=conversation_id,
         booking_status=status or None,
     )
+    try:
+        resolved_contact = dict(contact or {})
+        resolved_opportunity_id = str(opportunity_id or "").strip() or None
+        if (not resolved_contact) or not resolved_opportunity_id:
+            conversation_meta = await storage.fetch_webchat_conversation(conversation_id)
+            if not resolved_contact:
+                contact_id = str(conversation_meta.get("contact_id") or "").strip()
+                if contact_id:
+                    resolved_contact = await _resolve_contact(contact_id) or {}
+            if not resolved_opportunity_id and resolved_contact:
+                resolved_opportunity_id = await storage.ensure_conversation_opportunity(
+                    conversation_id=conversation_id,
+                    contact_id=str(resolved_contact.get("id") or ""),
+                    channel="webchat",
+                )
+        if resolved_contact and resolved_opportunity_id:
+            prefilter_status = await _has_prefilter_for_schedule(
+                contact=resolved_contact,
+                opportunity_id=resolved_opportunity_id,
+            )
+            missing_fields = [
+                str(item).strip()
+                for item in (prefilter_status.get("missing_fields") or [])
+                if str(item).strip()
+            ]
+            if missing_fields:
+                question_map = _safe_dict(prefilter_status.get("questions"))
+                field = missing_fields[0]
+                question_text = str(question_map.get(field) or "").strip()
+                if question_text:
+                    return f"Para confirmar tu cita, solo falta este dato: {question_text}"
+    except Exception as exc:
+        logger.warning(
+            "webchat.booking_guard_prefilter_lookup_failed",
+            extra={"conversation_id": conversation_id, "error": str(exc)},
+        )
     return (
-        "Para dejar tu cita confirmada, solo me falta un dato breve. "
+        "Para confirmar tu cita, solo me falta un dato breve. "
         "Te hago una pregunta rápida y, en cuanto me respondas, la dejo lista."
     )
 
@@ -2883,6 +2921,7 @@ async def handle_message(
         assistant_reply = await _guard_booking_confirmation_claim(
             conversation_id=str(conversation_id),
             reply_text=assistant_reply,
+            contact=contact,
         )
 
     if assistant_reply:
