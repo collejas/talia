@@ -1,5 +1,13 @@
 # Plan Scoring Progresivo para Bienes Raices
 
+> [!IMPORTANT]
+> **PLAN REEMPLAZADO PARA NUEVA IMPLEMENTACION MULTI-CANAL.**
+> Este documento queda como **referencia historica**.
+> La ejecucion vigente de refactorizacion y estandarizacion para **TODOS los canales de comunicacion** se define en:
+> `docs/Plan_scoring_bienes_raices/RE_CONFIGURACION_SCORING.md`
+> 
+> A partir de ahora, cualquier cambio nuevo debe alinearse primero con ese documento.
+
 ## 1. Objetivo
 - Implementar calificacion de prospectos con IA sin friccion inicial.
 - Mejorar priorizacion comercial y conversion a cierre.
