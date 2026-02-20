@@ -104,7 +104,7 @@
 
 {
   "name": "close_lead",
-  "description": "Cerrar y consolidar el lead. Se usa cuando ya tenemos los datos mínimos (nombre, correo, teléfono y empresa) y, si aplica, para registrar respuestas de precalificación cuando el prospecto quiere agendar cita. Reglas: no inferir respuestas; enviar solo respuestas explícitas del prospecto; para campos no respondidos, omitir la clave o marcar estado en profiling_statuses.",
+  "description": "Cerrar y consolidar el lead. Se usa cuando ya tenemos datos base de contacto y contexto del prospecto y, si aplica, para registrar respuestas de precalificación cuando el prospecto quiere agendar cita. Reglas: no inferir respuestas; enviar solo respuestas explícitas del prospecto; para campos no respondidos, omitir la clave o marcar estado en profiling_statuses.",
   "strict": false,
   "parameters": {
     "type": "object",
@@ -115,18 +115,21 @@
       },
       "notes": {
         "type": "string",
-        "description": "Resumen corto en lenguaje humano. Incluye qué hace la empresa, problema que tiene y qué espera de Tal-IA. Ej: 'Administra condominios y plazas comerciales; quiere automatizar atención a residentes y coordinación de incidencias vía WhatsApp sin saturar al personal.'"
+        "description": "Resumen corto en lenguaje humano. Incluye qué busca y siguiente contexto comercial. Máx 320 caracteres.",
+        "maxLength": 320
       },
       "necesidad_proposito": {
         "type": "string",
-        "description": "Intención principal del lead en una sola frase clara tipo titular. Ej: 'Automatizar gestión de incidencias y comunicación con residentes usando WhatsApp y panel centralizado.'"
+        "description": "Intención principal del lead en una sola frase clara tipo titular. Máx 220 caracteres.",
+        "maxLength": 220
       },
       "siguiente_accion": {
         "type": [
           "string",
           "null"
         ],
-        "description": "Siguiente paso acordado con el prospecto. Ej: 'Quiere agendar cita presencial para conocer opciones este fin de semana'."
+        "description": "Siguiente paso acordado con el prospecto. Ej: 'Quiere agendar cita presencial para conocer opciones este fin de semana'.",
+        "maxLength": 180
       },
       "financing_type": {
         "type": [

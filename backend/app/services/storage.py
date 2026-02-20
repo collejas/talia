@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import re
 import unicodedata
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping, Sequence
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Literal
@@ -444,6 +444,29 @@ def _normalize_answer_value(field: str, value: Any) -> Any:
     return normalized
 
 
+def _is_financing_cash(answers: Mapping[str, Any] | None) -> bool:
+    if not isinstance(answers, Mapping):
+        return False
+    normalized = _normalize_answer_value("financing_type", answers.get("financing_type"))
+    if not isinstance(normalized, str):
+        return False
+    return normalized.strip().lower() == "contado"
+
+
+def _normalize_required_fields_for_answers(
+    required_fields: Sequence[str],
+    answers: Mapping[str, Any] | None,
+) -> list[str]:
+    normalized: list[str] = []
+    for item in required_fields:
+        field = str(item or "").strip()
+        if field and field not in normalized:
+            normalized.append(field)
+    if _is_financing_cash(answers):
+        normalized = [field for field in normalized if field != "credit_preapproved"]
+    return normalized
+
+
 def _field_score(field: str, value: Any) -> int:
     score_map = _SCORE_VALUE_MAP.get(field)
     if score_map is None:
@@ -552,9 +575,10 @@ def _compute_lead_scoring(
     runtime_settings = scoring_settings or tenant_runtime.LeadScoringRuntimeSettings.from_defaults()
     finanzas_values = [
         _field_score("financing_type", answers.get("financing_type")),
-        _field_score("credit_preapproved", answers.get("credit_preapproved")),
         _field_score("down_payment_ready", answers.get("down_payment_ready")),
     ]
+    if not _is_financing_cash(answers):
+        finanzas_values.append(_field_score("credit_preapproved", answers.get("credit_preapproved")))
     budget_value = answers.get("budget_range")
     if isinstance(budget_value, str) and budget_value.strip() and budget_value not in {"unknown", "refused"}:
         finanzas_values.append(100)
@@ -624,7 +648,7 @@ def _compute_lead_scoring(
     else:
         grade = "listo"
 
-    critical_fields = list(_CRITICAL_SCORING_FIELDS)
+    critical_fields = _normalize_required_fields_for_answers(_CRITICAL_SCORING_FIELDS, answers)
     missing_fields: list[str] = []
     refused_fields: list[str] = []
     for field in critical_fields:
@@ -897,6 +921,8 @@ async def _compute_lead_scoring_from_catalog(
         question_id = str(question.get("id") or "").strip()
         if not field_key or not question_id:
             continue
+        if field_key == "credit_preapproved" and _is_financing_cash(answers):
+            continue
         metadata = _ensure_dict(question.get("metadata"))
         factor_name = str(metadata.get("factor") or _FIELD_FACTOR_MAP.get(field_key) or "").strip()
         if factor_name not in factor_scores:
@@ -967,6 +993,7 @@ async def _compute_lead_scoring_from_catalog(
                 "component": "storage.lead_scoring",
             },
         )
+    required_fields = _normalize_required_fields_for_answers(required_fields, answers)
 
     missing_fields: list[str] = []
     refused_fields: list[str] = []
@@ -2690,6 +2717,7 @@ async def maybe_promote_prequalified_from_scoring(
                 critical_fields.append(field)
     if not critical_fields:
         critical_fields = list(_CRITICAL_SCORING_FIELDS)
+    critical_fields = _normalize_required_fields_for_answers(critical_fields, answers)
 
     has_required_answers = all(
         (answers.get(field) not in (None, "", "unknown", "refused"))

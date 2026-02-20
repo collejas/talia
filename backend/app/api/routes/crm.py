@@ -4316,13 +4316,18 @@ def require_permission(permission_code: str):
             return user_token
         repo = CRMRepository(user_token=user_token)
         user_id = _jwt_verify_and_sub(user_token)
-        allowed = await repo.current_user_has_perm(codigo=permission_code)
+        permission_context = await repo.get_permission_context()
+        es_admin = _coerce_bool(permission_context.get("es_admin")) is True
+        es_owner = _coerce_bool(permission_context.get("es_owner")) is True
+        allowed = es_admin or es_owner or await repo.current_user_has_perm(codigo=permission_code)
         logger.info(
             "permission.check",
             extra={
                 "user_id": user_id,
                 "permission": permission_code,
                 "allowed": allowed,
+                "ctx_es_admin": es_admin,
+                "ctx_es_owner": es_owner,
             },
         )
         if not allowed:
@@ -4338,17 +4343,23 @@ def require_any_permission(permission_codes: list[str]):
             return user_token
         repo = CRMRepository(user_token=user_token)
         user_id = _jwt_verify_and_sub(user_token)
-        allowed = False
-        for code in permission_codes:
-            if await repo.current_user_has_perm(codigo=code):
-                allowed = True
-                break
+        permission_context = await repo.get_permission_context()
+        es_admin = _coerce_bool(permission_context.get("es_admin")) is True
+        es_owner = _coerce_bool(permission_context.get("es_owner")) is True
+        allowed = es_admin or es_owner
+        if not allowed:
+            for code in permission_codes:
+                if await repo.current_user_has_perm(codigo=code):
+                    allowed = True
+                    break
         logger.info(
             "permission.check.any",
             extra={
                 "user_id": user_id,
                 "permissions": permission_codes,
                 "allowed": allowed,
+                "ctx_es_admin": es_admin,
+                "ctx_es_owner": es_owner,
             },
         )
         if not allowed:

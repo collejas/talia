@@ -224,6 +224,10 @@ MASTER_ORGANIZACION_UUID = UUID(MASTER_ORGANIZACION_ID)
 _REMINDER_SETTINGS_CACHE: dict[str, Any] | None = None
 _REMINDER_SETTINGS_LOADED_AT: datetime | None = None
 
+def _has_text(value: Any) -> bool:
+    return bool(str(value or "").strip())
+
+
 def _parse_organizacion_uuid(value: Any | None) -> UUID | None:
     if isinstance(value, UUID):
         return value
@@ -1311,7 +1315,20 @@ def _looks_like_booking_confirmation(text: str) -> bool:
     normalized = str(text or "").strip().lower()
     if not normalized:
         return False
-    return any(hint in normalized for hint in _BOOKING_CONFIRMATION_HINTS)
+    if any(hint in normalized for hint in _BOOKING_CONFIRMATION_HINTS):
+        return True
+    # Cobertura adicional para confirmaciones implícitas que suelen escapar
+    # al listado literal de hints.
+    implicit_patterns = (
+        r"\btu visita\b.*\bsera\b",
+        r"\btu visita\b.*\bserá\b",
+        r"\btu cita\b.*\bsera\b",
+        r"\btu cita\b.*\bserá\b",
+        r"\bya tengo todo listo\b.*\btu visita\b",
+        r"\bya tengo todo listo\b.*\btu cita\b",
+        r"\bnos vemos el\b",
+    )
+    return any(re.search(pattern, normalized) is not None for pattern in implicit_patterns)
 
 
 async def _guard_booking_confirmation_claim(
@@ -1497,6 +1514,45 @@ def _has_meaningful_scoring_answers(contact: Mapping[str, Any] | None) -> bool:
     return False
 
 
+def _build_insights_from_scoring_answers(
+    *,
+    contact: Mapping[str, Any] | None,
+    booking_start_at: datetime | None = None,
+) -> tuple[str, str, str]:
+    contact_data = _ensure_dict((contact or {}).get("contacto_datos"))
+    scoring = _ensure_dict(contact_data.get("lead_scoring"))
+    answers = _ensure_dict(scoring.get("answers"))
+
+    budget = str(answers.get("budget_range") or "").strip()
+    financing = str(answers.get("financing_type") or "").strip()
+    timeline = str(answers.get("purchase_timeline") or "").strip()
+    authority = str(answers.get("decision_authority") or "").strip()
+    visited = str(answers.get("visited_properties") or "").strip()
+
+    detail_parts: list[str] = []
+    if budget:
+        detail_parts.append(f"presupuesto {budget}")
+    if financing:
+        detail_parts.append(f"financiamiento {financing}")
+    if timeline:
+        detail_parts.append(f"plazo {timeline}")
+    if authority:
+        detail_parts.append(f"decisión {authority}")
+    if visited:
+        detail_parts.append(f"visitó propiedades {visited}")
+
+    details = ", ".join(detail_parts) if detail_parts else "perfilamiento completo"
+    notes = f"Agendó cita de demo en webchat ({details})."
+    necesidad = "Busca comprar una propiedad y solicitó acompañamiento comercial con cita de demo."
+    if booking_start_at:
+        siguiente_accion = (
+            f"Dar seguimiento a cita confirmada para {booking_start_at.isoformat()} y continuar asesoría comercial."
+        )
+    else:
+        siguiente_accion = "Dar seguimiento inmediato a cita confirmada y continuar asesoría comercial."
+    return notes, necesidad, siguiente_accion
+
+
 def _extract_user_prefilter_signals(messages: list[dict[str, Any]]) -> dict[str, bool]:
     inbound_texts: list[str] = []
     for row in messages:
@@ -1507,9 +1563,9 @@ def _extract_user_prefilter_signals(messages: list[dict[str, Any]]) -> dict[str,
         if text:
             inbound_texts.append(text)
 
-    # Solo evaluamos el ultimo mensaje del prospecto para evitar "arrastrar"
-    # inferencias desde turnos anteriores.
-    joined = inbound_texts[-1] if inbound_texts else ""
+    # Evaluamos una ventana corta para capturar respuestas fragmentadas
+    # sin arrastrar demasiado contexto viejo.
+    joined = " ".join(inbound_texts[-3:]) if inbound_texts else ""
     has_budget = bool(
         re.search(r"\$\s*\d", joined)
         or re.search(r"\b\d+(\.\d+)?\s*(k|mil|miles|millon|millones)\b", joined)
@@ -1533,12 +1589,27 @@ def _extract_user_prefilter_signals(messages: list[dict[str, Any]]) -> dict[str,
             joined,
         )
     )
+    has_credit_status = bool(
+        re.search(
+            r"\b(en tramite|en trámite|tramitando|proceso|validacion|validación|preaprobado|aprobado|sin credito|sin crédito|no tengo credito|no tengo crédito|no la tengo)\b",
+            joined,
+        )
+    )
+    has_visited = bool(
+        re.search(
+            r"\b(ya vi|ya visite|ya visité|ya fui|ya conoci|ya conoc[ií]|ya vimos|hemos visto|visitamos|visitado)\b",
+            joined,
+        )
+        or re.search(r"\b(no he visitado|aun no|aún no|todavia no|todavía no|primera visita)\b", joined)
+    )
     has_evasive = any(token in joined for token in _EVASIVE_TOKENS)
     return {
         "financing_type": has_financing,
         "budget_range": has_budget,
         "purchase_timeline": has_timeline,
         "decision_authority": has_authority,
+        "credit_preapproved": has_credit_status,
+        "visited_properties": has_visited,
         "evasive": has_evasive,
     }
 
@@ -1620,6 +1691,105 @@ def _has_minimum_prefilter_data(contact: Mapping[str, Any] | None) -> bool:
     return _has_meaningful_scoring_answers(contact)
 
 
+def _infer_prefilter_answers_from_messages(
+    messages: list[dict[str, Any]],
+    *,
+    missing_fields: list[str],
+) -> dict[str, Any]:
+    inbound_texts: list[str] = []
+    for row in messages:
+        direction = str(row.get("direccion") or "").strip().lower()
+        if direction != "entrante":
+            continue
+        text = str(row.get("texto") or "").strip().lower()
+        if text:
+            inbound_texts.append(text)
+    if not inbound_texts:
+        return {}
+
+    joined = " ".join(inbound_texts[-6:])
+    missing = {str(field).strip() for field in missing_fields if str(field).strip()}
+    inferred: dict[str, Any] = {}
+
+    if "financing_type" in missing:
+        if any(token in joined for token in ("contado", "efectivo")):
+            inferred["financing_type"] = "contado"
+        elif any(
+            token in joined
+            for token in ("cofinavit", "infonavit", "fovissste", "hipoteca", "credito", "crédito")
+        ):
+            inferred["financing_type"] = "credito"
+        elif any(token in joined for token in ("mixto", "ambos", "combinado")):
+            inferred["financing_type"] = "mixto"
+
+    if "budget_range" in missing:
+        if re.search(r"\b\d+(\.\d+)?\s*(k|mil|miles|millon|millones)\b", joined):
+            inferred["budget_range"] = "captured"
+
+    if "purchase_timeline" in missing:
+        if re.search(r"\b(inmediat|ya|pronto|cuanto antes|lo mas pronto|lo más pronto)\b", joined):
+            inferred["purchase_timeline"] = "immediate"
+        elif re.search(r"\b(1|2|3)\s*mes", joined):
+            inferred["purchase_timeline"] = "short_term"
+        elif re.search(r"\b(4|5|6)\s*mes", joined):
+            inferred["purchase_timeline"] = "medium_term"
+        elif re.search(r"\b(7|8|9|10|11|12)\s*mes|a[nñ]o", joined):
+            inferred["purchase_timeline"] = "long_term"
+
+    if "decision_authority" in missing:
+        if re.search(r"\b(yo decido|solo yo|yo solo|por mi cuenta)\b", joined):
+            inferred["decision_authority"] = "self"
+        elif re.search(
+            r"\b(mi esposa y yo|mi esposo y yo|con mi pareja|con mi familia|entre los dos)\b",
+            joined,
+        ):
+            inferred["decision_authority"] = "shared"
+
+    if "credit_preapproved" in missing:
+        if re.search(r"\b(en tramite|en trámite|tramitando|proceso|validacion|validación)\b", joined):
+            inferred["credit_preapproved"] = "in_process"
+        elif re.search(r"\b(preaprobado|aprobado)\b", joined):
+            inferred["credit_preapproved"] = "preapproved"
+        elif re.search(r"\b(no la tengo|no tengo|sin credito|sin crédito)\b", joined):
+            inferred["credit_preapproved"] = "none"
+
+    if "visited_properties" in missing:
+        if re.search(
+            r"\b(ya vi|ya visite|ya visité|ya fui|ya conoci|ya conoc[ií]|ya vimos|hemos visto|visitamos|visitado)\b",
+            joined,
+        ):
+            inferred["visited_properties"] = "yes"
+        elif re.search(
+            r"\b(no he visitado|aun no|aún no|todavia no|todavía no|primera visita)\b",
+            joined,
+        ):
+            inferred["visited_properties"] = "no"
+        else:
+            last_user_text = inbound_texts[-1].strip()
+            yes_like = bool(re.search(r"\b(si|sí|correcto|afirmativo)\b", last_user_text))
+            no_like = bool(re.search(r"\b(no)\b", last_user_text))
+            assistant_text = " ".join(
+                str(row.get("texto") or "").strip().lower()
+                for row in messages[-8:]
+                if str(row.get("direccion") or "").strip().lower() == "saliente"
+            )
+            if "visitado" in assistant_text or "propiedades similares" in assistant_text:
+                if no_like:
+                    inferred["visited_properties"] = "no"
+                elif yes_like or "ya" in last_user_text:
+                    inferred["visited_properties"] = "yes"
+
+    if inferred.get("budget_range") == "captured":
+        for text in reversed(inbound_texts):
+            if re.search(r"\b\d+(\.\d+)?\s*(k|mil|miles|millon|millones)\b", text):
+                inferred["budget_range"] = text[:120]
+                break
+        if inferred.get("budget_range") == "captured":
+            inferred.pop("budget_range", None)
+
+    return inferred
+
+
 async def _has_prefilter_for_schedule(
     *,
     contact: Mapping[str, Any] | None,
@@ -1631,9 +1801,7 @@ async def _has_prefilter_for_schedule(
     channel = str((contact or {}).get("canal") or "webchat").strip().lower() or "webchat"
     if not contact or not opportunity_id:
         return {"ready": False, "missing_fields": required_fields, "questions": question_by_field}
-    notes = str(contact.get("notes") or "").strip()
-    need = str(contact.get("necesidad_proposito") or "").strip()
-    if not (notes and need):
+    if not _has_minimum_prefilter_data(contact):
         return {"ready": False, "missing_fields": required_fields, "questions": question_by_field}
     org_value = _extract_contact_org(contact)
     org_uuid = _resolve_org_uuid(org_value)
@@ -1671,6 +1839,10 @@ async def _has_prefilter_for_schedule(
     scoring_dict = scoring if isinstance(scoring, dict) else {}
     answers = scoring_dict.get("answers")
     answers_dict = answers if isinstance(answers, dict) else {}
+    required_fields = _normalize_required_fields_for_context(
+        required_fields,
+        answers=answers_dict,
+    )
     profiling_questions = _extract_profiling_questions(opportunity_metadata=metadata_dict)
 
     completed_fields = {
@@ -1717,6 +1889,18 @@ def _build_schedule_prefilter_error_message(
         f"Haz una sola pregunta exacta al prospecto: {question_text} "
         "Cuando responda, vuelve a ejecutar schedule_demo con el mismo horario solicitado."
     )
+
+
+def _normalize_required_fields_for_context(
+    required_fields: list[str],
+    *,
+    answers: Mapping[str, Any],
+) -> list[str]:
+    fields = [str(item).strip() for item in required_fields if str(item).strip()]
+    financing = str(answers.get("financing_type") or "").strip().lower()
+    if financing and "contado" in financing:
+        fields = [field for field in fields if field != "credit_preapproved"]
+    return fields
 
 
 def _extract_contact_email(contact: dict[str, Any] | None) -> str | None:
@@ -3675,6 +3859,43 @@ async def _execute_function_call(
                 for item in (prefilter_status.get("missing_fields") or [])
                 if str(item).strip()
             ]
+            try:
+                recent_messages = await storage.fetch_recent_messages(
+                    conversation_id=context.conversation_id,
+                    limit=40,
+                )
+            except StorageError:
+                recent_messages = []
+            inferred_answers = _infer_prefilter_answers_from_messages(
+                recent_messages,
+                missing_fields=missing_fields,
+            )
+            if inferred_answers:
+                try:
+                    await storage.apply_lead_scoring(
+                        conversation_id=context.conversation_id,
+                        contact_id=context.contact_id,
+                        opportunity_id=str(tarjeta_id),
+                        answers=inferred_answers,
+                        events={
+                            "channel": "webchat",
+                            "appointment_requested": True,
+                            "accepted_answering_questions": True,
+                        },
+                        source="schedule_demo_prefilter_infer",
+                    )
+                    prefilter_status = await _has_prefilter_for_schedule(
+                        contact=contact,
+                        opportunity_id=tarjeta_id,
+                    )
+                except StorageError:
+                    pass
+        if not bool(prefilter_status.get("ready")):
+            missing_fields = [
+                str(item)
+                for item in (prefilter_status.get("missing_fields") or [])
+                if str(item).strip()
+            ]
             logger.info(
                 "webchat.schedule_demo.prefilter_missing",
                 extra={
@@ -3683,12 +3904,15 @@ async def _execute_function_call(
                     "missing_fields": missing_fields,
                 },
             )
-            raise ValueError(
-                _build_schedule_prefilter_error_message(
-                    missing_fields=missing_fields,
-                    question_by_field=_safe_dict(prefilter_status.get("questions")),
-                )
+            guidance = _build_schedule_prefilter_error_message(
+                missing_fields=missing_fields,
+                question_by_field=_safe_dict(prefilter_status.get("questions")),
             )
+            return {
+                "status": "prefilter_missing",
+                "missing_fields": missing_fields,
+                "guidance": guidance,
+            }
 
         organizacion_hint = _extract_contact_org(contact) if contact else None
         if not organizacion_hint:
@@ -3804,6 +4028,51 @@ async def _execute_function_call(
                 "webchat.schedule_demo.prequalified_failed",
                 extra={"conversation_id": context.conversation_id, "error": str(exc)},
             )
+        if contact and (not _has_text(contact.get("notes")) or not _has_text(contact.get("necesidad_proposito"))):
+            notes_auto, necesidad_auto, siguiente_accion_auto = _build_insights_from_scoring_answers(
+                contact=contact,
+                booking_start_at=booking_response.start_at,
+            )
+            contact_patch: dict[str, Any] = {}
+            if not _has_text(contact.get("notes")):
+                contact_patch["notes"] = notes_auto
+            if not _has_text(contact.get("necesidad_proposito")):
+                contact_patch["necesidad_proposito"] = necesidad_auto
+            if contact_patch:
+                try:
+                    await storage.update_contact(context.contact_id, contact_patch)
+                    contact = await _resolve_contact(context.contact_id)
+                except StorageError as exc:
+                    logger.warning(
+                        "webchat.schedule_demo.auto_contact_context_failed",
+                        extra={"conversation_id": context.conversation_id, "error": str(exc)},
+                    )
+            try:
+                await storage.upsert_conversation_insights(
+                    conversation_id=context.conversation_id,
+                    resumen=notes_auto,
+                    intencion=necesidad_auto,
+                    siguiente_accion=siguiente_accion_auto,
+                )
+            except StorageError as exc:
+                logger.warning(
+                    "webchat.schedule_demo.auto_insights_failed",
+                    extra={"conversation_id": context.conversation_id, "error": str(exc)},
+                )
+            try:
+                await storage.maybe_auto_name_opportunity(
+                    conversation_id=context.conversation_id,
+                    contact_id=context.contact_id,
+                    opportunity_id=str(tarjeta_id),
+                    intent=necesidad_auto,
+                    summary=notes_auto,
+                    channel="webchat",
+                )
+            except StorageError as exc:
+                logger.warning(
+                    "webchat.schedule_demo.auto_name_failed",
+                    extra={"conversation_id": context.conversation_id, "error": str(exc)},
+                )
         try:
             await webchat_notifications.notify_sales_rep(
                 context=context,

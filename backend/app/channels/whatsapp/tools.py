@@ -789,6 +789,9 @@ async def _has_prefilter_for_schedule(
         required_fields = required_from_metadata
     scoring = _ensure_dict(metadata.get("lead_scoring"))
     answers = _ensure_dict(scoring.get("answers"))
+    financing = str(answers.get("financing_type") or "").strip().lower()
+    if financing and "contado" in financing:
+        required_fields = [field for field in required_fields if field != "credit_preapproved"]
     profiling_questions = _extract_profiling_questions(opportunity_metadata=metadata)
 
     def _is_completed(field: str, value: Any) -> bool:
@@ -2145,6 +2148,10 @@ async def _notify_sales_rep(
     whatsapp_settings = await tenant_runtime.get_whatsapp_runtime_settings(organizacion_id=org_uuid)
 
     metadata = _ensure_dict(opportunity.get("metadata"))
+    profile_summary = _build_profile_summary_text(metadata)
+    if profile_summary:
+        extra = dict(extra or {})
+        extra.setdefault("profile_summary", profile_summary)
     notifications = _ensure_dict(metadata.get("sales_notifications"))
     if trigger in {"information_email", "close_lead"}:
         logger.info(
@@ -2464,6 +2471,9 @@ def _compose_sales_notification_message(
         lines.append("Acción: completó la calificación del asistente.")
     elif trigger == "booking_confirmed":
         lines.append("Acción: agendó una cita.")
+        profile_summary = str((extra or {}).get("profile_summary") or "").strip()
+        if profile_summary:
+            lines.append(f"Perfilamiento: {profile_summary}")
     elif trigger == "booking_canceled":
         lines.append("Acción: canceló la cita.")
         reason = (extra or {}).get("reason")
@@ -2576,6 +2586,60 @@ def _extract_model_description(contact: dict[str, Any]) -> str:
     return "Modelo pendiente"
 
 
+def _build_profile_summary_text(opportunity_metadata: Mapping[str, Any]) -> str | None:
+    scoring = _ensure_dict(opportunity_metadata.get("lead_scoring"))
+    answers = _ensure_dict(scoring.get("answers"))
+    if not answers:
+        return None
+
+    finance_map = {"credito": "crédito", "contado": "contado", "mixto": "mixto"}
+    credit_map = {
+        "in_process": "crédito en trámite",
+        "preapproved": "crédito preaprobado",
+        "none": "sin crédito",
+    }
+    decision_map = {"self": "individual", "shared": "compartida", "advisor": "con asesor"}
+    visited_map = {"yes": "sí", "no": "no"}
+
+    fields: list[str] = []
+    budget = str(answers.get("budget_range") or "").strip()
+    if budget:
+        fields.append(f"Presupuesto {budget}")
+
+    financing = str(answers.get("financing_type") or "").strip().lower()
+    if financing:
+        fields.append(f"Financiamiento {finance_map.get(financing, financing)}")
+
+    credit = str(answers.get("credit_preapproved") or "").strip().lower()
+    if credit:
+        fields.append(f"Estatus crédito {credit_map.get(credit, credit)}")
+
+    timeline = str(answers.get("purchase_timeline") or "").strip()
+    if timeline:
+        fields.append(f"Plazo {timeline}")
+
+    decision = str(answers.get("decision_authority") or "").strip().lower()
+    if decision:
+        fields.append(f"Decisión {decision_map.get(decision, decision)}")
+
+    visited = str(answers.get("visited_properties") or "").strip().lower()
+    if visited:
+        fields.append(f"Visitas previas {visited_map.get(visited, visited)}")
+
+    score_value = scoring.get("score_total")
+    grade = str(scoring.get("grade") or "").strip()
+    if score_value is not None:
+        try:
+            score_text = f"{float(score_value):.0f}"
+            fields.append(f"Lead score {score_text}{f' ({grade})' if grade else ''}")
+        except (TypeError, ValueError):
+            pass
+
+    if not fields:
+        return None
+    return " | ".join(fields)
+
+
 def _build_booking_template_variables(
     *,
     contact: dict[str, Any],
@@ -2586,6 +2650,11 @@ def _build_booking_template_variables(
     date_text, time_text = _format_booking_datetime(_parse_iso_datetime(slot_iso))
     client_name = str(contact.get("nombre_completo") or "").strip() or "No dio nombre"
     model = _extract_model_description(contact)
+    profile_summary = str((extra or {}).get("profile_summary") or "").strip()
+    if profile_summary:
+        model = f"{model}. {profile_summary}"
+        if len(model) > 500:
+            model = model[:499].rstrip() + "…"
     location = _extract_contact_location(contact)
     phone = str(contact.get("telefono_e164") or contact.get("telefono") or "N/D").strip() or "N/D"
     reason = str((extra or {}).get("reason") or "").strip() or "Sin motivo especificado"

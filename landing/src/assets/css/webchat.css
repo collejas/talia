@@ -172,3 +172,99 @@
     color: white;
     border-bottom-right-radius: 4px;
 }
+
+/* Calendar slot picker (webchat) */
+.message__calendar {
+    margin-top: 0.75rem;
+    padding: 0.75rem;
+    border: 1px solid rgba(15, 23, 42, 0.12);
+    border-radius: 0.85rem;
+    background: rgba(148, 163, 184, 0.12);
+    display: flex;
+    flex-direction: column;
+    gap: 0.65rem;
+}
+.message__calendar-header { display: flex; flex-direction: column; gap: 0.35rem; }
+.message__calendar-title { font-size: 0.9rem; font-weight: 700; }
+.message__calendar-subtitle,
+.message__calendar-window,
+.message__calendar-nav-label,
+.message__calendar-hint,
+.message__calendar-empty {
+    font-size: 0.75rem;
+    color: #556275;
+}
+.message__calendar-week {
+    display: grid;
+    gap: 0.75rem;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.message__calendar-column {
+    background: rgba(59, 130, 246, 0.08);
+    border: 1px solid rgba(59, 130, 246, 0.18);
+    border-radius: 0.85rem;
+    padding: 0.65rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    min-width: 0;
+}
+.message__calendar-column-day { font-size: 0.85rem; font-weight: 700; text-transform: capitalize; }
+.message__calendar-column-count { font-size: 0.72rem; color: #556275; }
+.message__calendar-column-slots { display: flex; flex-direction: column; gap: 0.45rem; }
+.message__calendar-slot {
+    width: 100%;
+    border-radius: 0.65rem;
+    border: 1px solid rgba(15, 23, 42, 0.12);
+    background: #ffffff;
+    color: #0f172a;
+    font-size: 0.82rem;
+    padding: 0.45rem 0.6rem;
+    cursor: pointer;
+}
+.message__calendar-slot:hover {
+    border-color: rgba(59, 130, 246, 0.4);
+    box-shadow: 0 8px 14px rgba(15, 23, 42, 0.15);
+}
+.message__calendar-slot.is-selected {
+    border-color: rgba(59, 130, 246, 0.6);
+    background: rgba(59, 130, 246, 0.18);
+}
+.message__calendar-confirm {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.6rem;
+    border: 1px dashed rgba(59, 130, 246, 0.45);
+    border-radius: 0.7rem;
+    background: rgba(59, 130, 246, 0.08);
+}
+.message__calendar-confirm-text { display: flex; flex-direction: column; gap: 0.1rem; }
+.message__calendar-confirm-day { font-size: 0.8rem; font-weight: 700; text-transform: capitalize; }
+.message__calendar-confirm-time { font-size: 0.72rem; color: #556275; }
+.message__calendar-confirm-actions { display: flex; align-items: center; gap: 0.45rem; }
+.message__calendar-confirm-button {
+    border: none;
+    border-radius: 0.55rem;
+    padding: 0.35rem 0.6rem;
+    background: #7f13ec;
+    color: #fff;
+    font-size: 0.75rem;
+    font-weight: 700;
+    cursor: pointer;
+}
+.message__calendar-confirm-link {
+    border: none;
+    background: transparent;
+    color: #475569;
+    font-size: 0.72rem;
+    text-decoration: underline;
+    cursor: pointer;
+}
+
+@media (max-width: 520px) {
+    .message__calendar-week {
+        grid-template-columns: 1fr;
+    }
+}

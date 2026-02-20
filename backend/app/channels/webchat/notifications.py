@@ -45,6 +45,27 @@ def _is_answered_scoring_value(value: Any) -> bool:
     return True
 
 
+def _normalize_financing_value(value: Any) -> str:
+    if not isinstance(value, str):
+        return ""
+    return value.strip().lower().replace("é", "e").replace("í", "i")
+
+
+def _normalize_required_fields_for_answers(
+    required_fields: list[str],
+    answers: Mapping[str, Any],
+) -> list[str]:
+    normalized: list[str] = []
+    for item in required_fields:
+        field = str(item or "").strip()
+        if field and field not in normalized:
+            normalized.append(field)
+    financing = _normalize_financing_value(answers.get("financing_type"))
+    if financing == "contado":
+        normalized = [field for field in normalized if field != "credit_preapproved"]
+    return normalized
+
+
 def _extract_scoring_answers(
     *,
     contact: dict[str, Any] | None,
@@ -157,23 +178,16 @@ async def _load_required_case_a_questions(
 def _has_base_fields_for_case_a(contact: dict[str, Any] | None) -> bool:
     if not contact:
         return False
-    return (
-        _has_text(contact.get("nombre_completo"))
-        and _has_text(contact.get("correo"))
-        and _has_text(contact.get("telefono_e164") or contact.get("telefono"))
-        and _has_text(contact.get("company_name"))
-        and _has_text(contact.get("necesidad_proposito"))
+    return _has_text(contact.get("correo")) or _has_text(
+        contact.get("telefono_e164") or contact.get("telefono")
     )
 
 
 def _has_base_fields_for_case_b(contact: dict[str, Any] | None) -> bool:
     if not contact:
         return False
-    return (
-        _has_text(contact.get("nombre_completo"))
-        and _has_text(contact.get("correo"))
-        and _has_text(contact.get("telefono_e164") or contact.get("telefono"))
-        and _has_text(contact.get("necesidad_proposito"))
+    return _has_text(contact.get("correo")) or _has_text(
+        contact.get("telefono_e164") or contact.get("telefono")
     )
 
 
@@ -205,6 +219,7 @@ async def _has_minimum_profile_for_case_a(
             organizacion_id=organizacion_id,
             channel=channel,
         )
+    required_fields = _normalize_required_fields_for_answers(required_fields, answers)
     return all(
         _is_profile_field_answered(
             field=field,
@@ -310,6 +325,60 @@ def _extract_model_description(contact: dict[str, Any]) -> str:
     return "Modelo pendiente"
 
 
+def _build_profile_summary_text(opportunity_metadata: Mapping[str, Any]) -> str | None:
+    scoring = _ensure_dict(opportunity_metadata.get("lead_scoring"))
+    answers = _ensure_dict(scoring.get("answers"))
+    if not answers:
+        return None
+
+    finance_map = {"credito": "crédito", "contado": "contado", "mixto": "mixto"}
+    credit_map = {
+        "in_process": "crédito en trámite",
+        "preapproved": "crédito preaprobado",
+        "none": "sin crédito",
+    }
+    decision_map = {"full": "individual", "shared": "compartida", "advisor": "con asesor"}
+    visited_map = {"yes": "sí", "no": "no"}
+
+    fields: list[str] = []
+    budget = str(answers.get("budget_range") or "").strip()
+    if budget:
+        fields.append(f"Presupuesto {budget}")
+
+    financing = str(answers.get("financing_type") or "").strip().lower()
+    if financing:
+        fields.append(f"Financiamiento {finance_map.get(financing, financing)}")
+
+    credit = str(answers.get("credit_preapproved") or "").strip().lower()
+    if credit:
+        fields.append(f"Estatus crédito {credit_map.get(credit, credit)}")
+
+    timeline = str(answers.get("purchase_timeline") or "").strip()
+    if timeline:
+        fields.append(f"Plazo {timeline}")
+
+    decision = str(answers.get("decision_authority") or "").strip().lower()
+    if decision:
+        fields.append(f"Decisión {decision_map.get(decision, decision)}")
+
+    visited = str(answers.get("visited_properties") or "").strip().lower()
+    if visited:
+        fields.append(f"Visitas previas {visited_map.get(visited, visited)}")
+
+    score_value = scoring.get("score_total")
+    grade = str(scoring.get("grade") or "").strip()
+    if score_value is not None:
+        try:
+            score_text = f"{float(score_value):.0f}"
+            fields.append(f"Lead score {score_text}{f' ({grade})' if grade else ''}")
+        except (TypeError, ValueError):
+            pass
+
+    if not fields:
+        return None
+    return " | ".join(fields)
+
+
 def _compose_sales_notification_message(
     *,
     contact: dict[str, Any],
@@ -317,6 +386,7 @@ def _compose_sales_notification_message(
     resumen: str | None,
     notes: str | None,
     email: str | None,
+    extra: dict[str, Any] | None = None,
 ) -> str:
     name = str(contact.get("nombre_completo") or "").strip() or "Prospecto sin nombre"
     company = str(contact.get("company_name") or "").strip()
@@ -341,6 +411,9 @@ def _compose_sales_notification_message(
         lines.append(f"Necesidad: {resumen}")
     if notes and notes != resumen:
         lines.append(f"Notas: {notes}")
+    profile_summary = str((extra or {}).get("profile_summary") or "").strip()
+    if profile_summary:
+        lines.append(f"Perfilamiento: {profile_summary}")
 
     lines.append("Puedes seguir la conversación desde el panel.")
     return "\n".join(lines)
@@ -382,6 +455,11 @@ def _build_booking_template_variables(
     date_text, time_text = _format_booking_datetime(_parse_iso_datetime(slot_iso))
     client_name = str(contact.get("nombre_completo") or "").strip() or "Prospecto Tal-IA"
     model = _extract_model_description(contact)
+    profile_summary = str((extra or {}).get("profile_summary") or "").strip()
+    if profile_summary:
+        model = f"{model}. {profile_summary}"
+        if len(model) > 500:
+            model = model[:499].rstrip() + "…"
     location = _extract_contact_location(contact)
     phone = str(contact.get("telefono_e164") or contact.get("telefono") or "N/D").strip() or "N/D"
 
@@ -489,6 +567,10 @@ async def notify_sales_rep(
     whatsapp_settings = await tenant_runtime.get_whatsapp_runtime_settings(organizacion_id=org_uuid)
 
     metadata = _ensure_dict(opportunity.get("metadata"))
+    extra_payload = dict(extra or {})
+    profile_summary = _build_profile_summary_text(metadata)
+    if profile_summary:
+        extra_payload.setdefault("profile_summary", profile_summary)
     notifications = _ensure_dict(metadata.get("sales_notifications"))
     if trigger in {"information_email", "close_lead"}:
         logger.info(
@@ -573,6 +655,7 @@ async def notify_sales_rep(
         resumen=resumen,
         notes=notes,
         email=email,
+        extra=extra_payload,
     )
 
     appointment_template_sid = (
@@ -592,7 +675,7 @@ async def notify_sales_rep(
         template_vars = _build_booking_template_variables(
             contact=contact_record,
             seller_name=seller_name,
-            extra=extra,
+            extra=extra_payload,
         )
     else:
         template_sid = fallback_template_sid
@@ -603,7 +686,7 @@ async def notify_sales_rep(
                 notes=notes,
                 seller_name=seller_name,
                 email=email,
-                extra=extra,
+                extra=extra_payload,
             )
 
     logger.info(
@@ -689,7 +772,7 @@ async def notify_sales_rep(
         if seller_id:
             seller_uuid = UUID(str(seller_id))
             assignment_metadata: dict[str, Any] = {
-                "reason": extra or {},
+                "reason": extra_payload,
                 "notification": {"trigger": trigger, "uses_template": bool(template_sid)},
             }
             await repo.insert_sales_assignment_audit(

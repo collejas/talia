@@ -13,8 +13,8 @@ const defaultConfig = {
   tenantAlias: null,
   getScrollContainer: () => {
     return (
-      document.getElementById('chat-log') ||
       document.querySelector('.webchat-widget__messages') ||
+      document.getElementById('chat-log') ||
       document.querySelector('.webchat-widget__panel') ||
       document.querySelector('.layout') ||
       document.scrollingElement ||
@@ -126,6 +126,24 @@ function handleCalendarSlotSelection(slot, fallbackTimezone) {
 const calendarState = {
   selectedSlotId: null,
 };
+
+function ensureCalendarInlineStyles() {
+  if (typeof document === 'undefined') return;
+  if (document.getElementById('talia-calendar-inline-styles')) return;
+  const style = document.createElement('style');
+  style.id = 'talia-calendar-inline-styles';
+  style.textContent = `
+    .message__calendar{margin-top:.75rem;padding:.75rem;border:1px solid rgba(15,23,42,.12);border-radius:.85rem;background:rgba(148,163,184,.12);display:flex;flex-direction:column;gap:.65rem}
+    .message__calendar-week{display:grid;gap:.75rem;grid-template-columns:repeat(2,minmax(0,1fr))}
+    .message__calendar-column{background:rgba(59,130,246,.08);border:1px solid rgba(59,130,246,.18);border-radius:.85rem;padding:.65rem;display:flex;flex-direction:column;gap:.5rem;min-width:0}
+    .message__calendar-slot{width:100%;border-radius:.65rem;border:1px solid rgba(15,23,42,.12);background:#fff;color:#0f172a;font-size:.82rem;padding:.45rem .6rem;cursor:pointer}
+    .message__calendar-slot.is-selected{border-color:rgba(59,130,246,.6);background:rgba(59,130,246,.18)}
+    .message__calendar-confirm{display:flex;justify-content:space-between;align-items:center;gap:.75rem;padding:.6rem;border:1px dashed rgba(59,130,246,.45);border-radius:.7rem;background:rgba(59,130,246,.08)}
+    .message__calendar-confirm-button{border:none;border-radius:.55rem;padding:.35rem .6rem;background:#7f13ec;color:#fff;font-size:.75rem;font-weight:700;cursor:pointer}
+    @media (max-width:520px){.message__calendar-week{grid-template-columns:1fr}}
+  `;
+  document.head.appendChild(style);
+}
 
 function calendarDebug(...args) {
   try {
@@ -261,9 +279,6 @@ function renderAvailabilityCalendar(availability) {
     hour12: false,
   });
 
-  const confirmWrapper = document.createElement('div');
-  confirmWrapper.className = 'message__calendar-selection';
-
   groups.forEach((group) => {
     const column = document.createElement('div');
     column.className = 'message__calendar-column';
@@ -299,7 +314,7 @@ function renderAvailabilityCalendar(availability) {
 
         button.addEventListener('click', () => {
           calendarState.selectedSlotId = button.dataset.slotId;
-          confirmSelection(slot, timezone, confirmWrapper);
+          handleCalendarSlotSelection(slot, timezone);
           const allButtons = wrapper.querySelectorAll('.message__calendar-slot');
           allButtons.forEach((btn) => btn.classList.remove('is-selected'));
           button.classList.add('is-selected');
@@ -314,76 +329,13 @@ function renderAvailabilityCalendar(availability) {
   });
 
   wrapper.appendChild(grid);
-  wrapper.appendChild(confirmWrapper);
 
   const hint = document.createElement('p');
   hint.className = 'message__calendar-hint';
-  hint.textContent = 'Toca un horario para colocarlo en el mensaje y confirmarlo con Tal-IA.';
+  hint.textContent = 'Toca un horario para colocarlo en el mensaje.';
   wrapper.appendChild(hint);
 
   return wrapper;
-}
-
-function confirmSelection(slot, timezone, container) {
-  container.innerHTML = '';
-  if (!slot) return;
-  calendarDebug('confirmSelection', { slotId: slot.slot_id || slot.start_at, start_at: slot.start_at });
-
-  const confirmation = document.createElement('div');
-  confirmation.className = 'message__calendar-confirm';
-
-  const startDate = new Date(slot.start_at);
-  const locale = 'es-MX';
-  const dayFormatter = new Intl.DateTimeFormat(locale, {
-    weekday: 'long',
-    day: 'numeric',
-    month: 'long',
-  });
-  const timeFormatter = new Intl.DateTimeFormat(locale, {
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false,
-    timeZone: slot.timezone || timezone,
-  });
-
-  confirmation.innerHTML = `
-    <div class="message__calendar-confirm-text">
-      <span class="message__calendar-confirm-day">${capitalize(dayFormatter.format(startDate))}</span>
-      <span class="message__calendar-confirm-time">${timeFormatter.format(startDate)} (${normaliseTimezoneLabel(
-        slot.timezone || timezone,
-      )})</span>
-    </div>
-    <div class="message__calendar-confirm-actions">
-      <button type="button" class="message__calendar-confirm-button" data-action="confirm">
-        Confirmar demo
-      </button>
-      <button type="button" class="message__calendar-confirm-link" data-action="clear">
-        Ver otro horario
-      </button>
-    </div>
-  `;
-
-  const confirmButton = confirmation.querySelector('[data-action="confirm"]');
-  const clearButton = confirmation.querySelector('[data-action="clear"]');
-
-  confirmButton?.addEventListener('click', () => {
-    handleCalendarSlotSelection(
-      {
-        start_at: slot.start_at,
-        timezone: slot.timezone || timezone,
-      },
-      timezone,
-    );
-  });
-
-  clearButton?.addEventListener('click', () => {
-    calendarState.selectedSlotId = null;
-    container.innerHTML = '';
-    const buttons = container.parentElement?.querySelectorAll('.message__calendar-slot');
-    buttons?.forEach((btn) => btn.classList.remove('is-selected'));
-  });
-
-  container.appendChild(confirmation);
 }
 
 function appendCalendarToChat(calendarElement) {
@@ -404,6 +356,7 @@ let freshLoad = true;
 
 export function initialiseChat(options = {}) {
   config = { ...defaultConfig, ...options };
+  ensureCalendarInlineStyles();
 
   elements.chatLog = options.chatLog ?? document.getElementById('chat-log');
   elements.chatForm = options.chatForm ?? document.getElementById('chat-form');
