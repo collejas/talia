@@ -108,6 +108,7 @@ def compose_sales_notification_message(
         "booking_confirmed": "Acción: agendó una cita.",
         "booking_canceled": "Acción: canceló la cita.",
         "webchat_escalate": "Acción: superó intentos de reenganche.",
+        "webchat_session_closed": "Acción: cerró sesión en webchat con lead pendiente.",
         "followup_escalate": "Acción: superó intentos de reenganche.",
     }
     action_text = action_map.get(trigger)

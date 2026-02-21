@@ -3886,6 +3886,46 @@ class CRMRepository:
             return None
         return row
 
+    async def list_webchat_session_closures_since(
+        self,
+        *,
+        closed_since: datetime,
+        limit: int = 500,
+    ) -> list[dict[str, Any]]:
+        params = {
+            "select": "session_id,closed_at,contacto_id,organizacion_id",
+            "closed_at": f"gte.{closed_since.astimezone(timezone.utc).isoformat()}",
+            "order": "closed_at.asc",
+            "limit": str(max(1, limit)),
+        }
+        resp = await self._request("GET", "/rest/v1/webchat_session_closures", params=params)
+        data = resp.json() or []
+        return data if isinstance(data, list) else []
+
+    async def find_open_opportunity_by_conversation(
+        self,
+        *,
+        organizacion_id: UUID,
+        conversation_id: str,
+    ) -> dict[str, Any] | None:
+        conversation_key = (conversation_id or "").strip()
+        if not conversation_key:
+            return None
+        params = {
+            "organizacion_id": f"eq.{organizacion_id}",
+            "metadata->>conversation_id": f"eq.{conversation_key}",
+            "estado": "eq.abierta",
+            "order": "creado_en.desc",
+            "limit": "1",
+            "select": self._PIPELINE_SELECT,
+        }
+        resp = await self._request("GET", "/rest/v1/oportunidades", params=params)
+        data = resp.json() or []
+        if isinstance(data, list) and data:
+            row = data[0]
+            return row if isinstance(row, dict) else None
+        return None
+
     async def ensure_prospeccion_stage(self, *, organizacion_id: UUID) -> dict[str, Any]:
         """Garantiza que exista la etapa 'Prospección · Primer contacto'."""
 

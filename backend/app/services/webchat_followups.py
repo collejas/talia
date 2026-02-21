@@ -17,6 +17,7 @@ from app.services import storage
 from app.services.storage import StorageError
 
 logger = get_logger("app.services.webchat_followups")
+_CLOSURE_RESCUE_LOOKBACK_HOURS = 24
 
 FIELD_LABELS = {
     "email": "tu correo electrónico",
@@ -730,6 +731,162 @@ async def _send_reengage_message(
     return True
 
 
+async def notify_session_closed_lead(
+    *,
+    session_id: str,
+    reason: str = "session_closed",
+) -> bool:
+    """Evalúa una sesión cerrada y notifica al vendedor si hay lead accionable."""
+    session_key = _strip_text(session_id)
+    if not session_key:
+        return False
+
+    try:
+        contact_id = await storage.get_webchat_contact_id(session_key)
+    except StorageError as exc:
+        logger.warning(
+            "webchat.session_closed.contact_lookup_failed",
+            extra={"session_id": session_key, "error": str(exc)},
+        )
+        return False
+    if not contact_id:
+        return False
+
+    try:
+        conversation = await storage.resolve_webchat_conversation_from_session(session_key)
+    except StorageError as exc:
+        logger.warning(
+            "webchat.session_closed.conversation_lookup_failed",
+            extra={"session_id": session_key, "contact_id": contact_id, "error": str(exc)},
+        )
+        return False
+    if not conversation:
+        return False
+
+    conversation_id = _strip_text(conversation.get("id"))
+    if not conversation_id:
+        return False
+
+    try:
+        contact = await storage.fetch_contact(contact_id)
+    except StorageError as exc:
+        logger.warning(
+            "webchat.session_closed.contact_fetch_failed",
+            extra={
+                "session_id": session_key,
+                "conversation_id": conversation_id,
+                "contact_id": contact_id,
+                "error": str(exc),
+            },
+        )
+        return False
+
+    has_base_contact = _has_value(contact.get("correo")) or _has_value(
+        contact.get("telefono_e164") or contact.get("telefono")
+    )
+    if not has_base_contact:
+        return False
+
+    org_id = contact.get("organizacion_id")
+    if not org_id:
+        return False
+    try:
+        org_uuid = UUID(str(org_id))
+    except (TypeError, ValueError):
+        return False
+
+    repo = CRMRepository()
+    try:
+        opportunity = await repo.find_open_opportunity_by_conversation(
+            organizacion_id=org_uuid,
+            conversation_id=conversation_id,
+        )
+    except CRMRepositoryError as exc:
+        logger.warning(
+            "webchat.session_closed.opportunity_lookup_failed",
+            extra={
+                "session_id": session_key,
+                "conversation_id": conversation_id,
+                "contact_id": contact_id,
+                "error": str(exc),
+            },
+        )
+        return False
+
+    if not opportunity:
+        return False
+
+    context = ToolRuntimeContext(
+        conversation_id=conversation_id,
+        contact_id=str(contact_id),
+        channel="webchat",
+    )
+    resumen = str(contact.get("necesidad_proposito") or "").strip() or None
+    notes = str(contact.get("notes") or "").strip() or None
+    email = str(contact.get("correo") or "").strip() or None
+    opportunity_id = str(opportunity.get("id") or "").strip() or None
+    if not opportunity_id:
+        return False
+
+    # Import diferido para evitar ciclos de importación durante bootstrap.
+    from app.channels.webchat import notifications as webchat_notifications
+
+    try:
+        await webchat_notifications.notify_sales_rep(
+            context=context,
+            trigger="webchat_session_closed",
+            contact=contact,
+            opportunity_id=opportunity_id,
+            resumen=resumen,
+            notes=notes,
+            email=email,
+            extra={"reason": reason, "session_id": session_key},
+        )
+    except Exception as exc:  # pragma: no cover - best effort
+        logger.warning(
+            "webchat.session_closed.notify_failed",
+            extra={
+                "session_id": session_key,
+                "conversation_id": conversation_id,
+                "contact_id": contact_id,
+                "error": str(exc),
+            },
+        )
+        return False
+
+    logger.info(
+        "webchat.session_closed.notified",
+        extra={
+            "session_id": session_key,
+            "conversation_id": conversation_id,
+            "contact_id": str(contact_id),
+            "opportunity_id": opportunity_id,
+            "reason": reason,
+        },
+    )
+    return True
+
+
+async def run_session_closure_rescue(*, now: datetime | None = None, limit: int = 500) -> None:
+    """Revisión periódica de cierres webchat para rescatar notificaciones no enviadas."""
+    reference = (now or datetime.now(timezone.utc)).astimezone(timezone.utc)
+    since = reference - timedelta(hours=_CLOSURE_RESCUE_LOOKBACK_HOURS)
+    repo = CRMRepository()
+    try:
+        closures = await repo.list_webchat_session_closures_since(closed_since=since, limit=limit)
+    except CRMRepositoryError as exc:
+        logger.warning("webchat.session_closed.rescue_list_failed", extra={"error": str(exc)})
+        return
+
+    for row in closures:
+        if not isinstance(row, dict):
+            continue
+        session_id = _strip_text(row.get("session_id"))
+        if not session_id:
+            continue
+        await notify_session_closed_lead(session_id=session_id, reason="closure_rescue")
+
+
 class WebchatFollowupRunner:
     """Ejecuta run_followups en intervalos definidos."""
 
@@ -775,3 +932,50 @@ class WebchatFollowupRunner:
 
 
 followup_runner = WebchatFollowupRunner()
+
+
+class WebchatClosureRescueRunner:
+    """Ejecuta run_session_closure_rescue en intervalos definidos."""
+
+    def __init__(self, *, interval_minutes: int = 120) -> None:
+        self._interval = max(5, interval_minutes)
+        self._task: asyncio.Task[None] | None = None
+        self._stop_event = asyncio.Event()
+        self._enabled = True
+
+    async def start(self) -> None:
+        if self._task and not self._task.done():
+            return
+        if not settings.supabase_url or not settings.supabase_service_role:
+            self._enabled = False
+            logger.warning("webchat.session_closed.rescue_disabled", extra={"reason": "supabase_config_missing"})
+            return
+        self._enabled = True
+        self._stop_event.clear()
+        self._task = asyncio.create_task(self._run_loop(), name="webchat-closure-rescue")
+        logger.info("webchat.session_closed.rescue_started", extra={"interval_minutes": self._interval})
+
+    async def shutdown(self) -> None:
+        if not self._task:
+            return
+        self._stop_event.set()
+        try:
+            await self._task
+        finally:
+            self._task = None
+        logger.info("webchat.session_closed.rescue_stopped")
+
+    async def _run_loop(self) -> None:
+        interval_seconds = self._interval * 60
+        while not self._stop_event.is_set():
+            try:
+                await run_session_closure_rescue()
+            except Exception as exc:  # pragma: no cover
+                logger.exception("webchat.session_closed.rescue_loop_error", extra={"error": str(exc)})
+            try:
+                await asyncio.wait_for(self._stop_event.wait(), timeout=interval_seconds)
+            except asyncio.TimeoutError:
+                continue
+
+
+closure_rescue_runner = WebchatClosureRescueRunner(interval_minutes=120)

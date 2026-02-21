@@ -3229,6 +3229,17 @@ async def close_session(
         raise HTTPException(status_code=502, detail="No fue posible registrar el cierre") from exc
 
     try:
+        await webchat_followups.notify_session_closed_lead(
+            session_id=session_id,
+            reason="session_closed",
+        )
+    except Exception:  # pragma: no cover - best effort
+        logger.exception(
+            "webchat.session_close_notify_failed",
+            extra={"session_id": session_id},
+        )
+
+    try:
         await _register_webchat_visit(
             session_id,
             request=request,

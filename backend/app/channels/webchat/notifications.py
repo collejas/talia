@@ -405,6 +405,13 @@ async def notify_sales_rep(
             )
             return
         primary_reason = "case_b_reengage_exhausted"
+    elif trigger == "webchat_session_closed":
+        if not _has_base_fields_for_case_b(contact_record):
+            logger.info(
+                "webchat.notify_sales.skip_case_c_base_missing",
+                extra={"conversation_id": context.conversation_id, "trigger": trigger},
+            )
+            return
 
     primary_by_channel = _get_primary_notification_by_channel(metadata)
     if primary_reason and primary_by_channel.get(channel_key):

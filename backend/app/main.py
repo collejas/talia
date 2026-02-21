@@ -22,7 +22,11 @@ from app.core.logging import configure_logging, get_logger, resolve_log_level
 from app.core.middleware import RequestLoggingMiddleware
 from app.services.prospeccion_contact_sender import contact_sender
 from app.services.role_permissions_sync import maybe_sync_role_permissions_on_start
-from app.services.whatsapp_followups import followup_runner
+from app.services.webchat_followups import (
+    closure_rescue_runner as webchat_closure_rescue_runner,
+)
+from app.services.webchat_followups import followup_runner as webchat_followup_runner
+from app.services.whatsapp_followups import followup_runner as whatsapp_followup_runner
 
 
 @asynccontextmanager
@@ -31,11 +35,15 @@ async def app_lifespan(_: FastAPI):
 
     await maybe_sync_role_permissions_on_start()
     await contact_sender.start()
-    await followup_runner.start()
+    await whatsapp_followup_runner.start()
+    await webchat_followup_runner.start()
+    await webchat_closure_rescue_runner.start()
     try:
         yield
     finally:
-        await followup_runner.shutdown()
+        await webchat_closure_rescue_runner.shutdown()
+        await webchat_followup_runner.shutdown()
+        await whatsapp_followup_runner.shutdown()
         await contact_sender.shutdown()
 
 
@@ -50,6 +58,7 @@ def create_app() -> FastAPI:
         "app.channels.messenger": str(log_dir / "messenger.log"),
         "app.channels.voice": str(log_dir / "voice.log"),
         "app.channels.webchat": str(log_dir / "webchat.log"),
+        "app.services.webchat_followups": str(log_dir / "webchat.log"),
         "app.analytics.visitas": str(log_dir / "visitas.log"),
         "app.services.whatsapp_followups": str(log_dir / "whatsapp.log"),
         "app.api.crm.import": str(log_dir / "propiedades-import.log"),
