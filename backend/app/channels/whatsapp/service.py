@@ -546,7 +546,167 @@ async def handle_status_callback(callback: schemas.WhatsAppStatusCallback) -> No
             event=event,
         )
 
+    if event == "fallido":
+        await _retry_failed_sales_notification(
+            message_sid=callback.message_sid,
+            error_code=callback.error_code,
+        )
+
     await _sync_envio_status_from_whatsapp(callback)
+
+
+async def _retry_failed_sales_notification(
+    *,
+    message_sid: str,
+    error_code: str | None = None,
+) -> None:
+    sid = str(message_sid or "").strip()
+    if not sid:
+        return
+    try:
+        repo = CRMRepository()
+    except CRMRepositoryError as exc:
+        log_event(logger, "whatsapp.retry_notification.repo_error", message_sid=sid, error=str(exc))
+        return
+    try:
+        assignment = await repo.get_sales_assignment_by_notification_sid(notification_sid=sid)
+    except CRMRepositoryError as exc:
+        log_event(
+            logger,
+            "whatsapp.retry_notification.lookup_failed",
+            message_sid=sid,
+            error=str(exc),
+        )
+        return
+    if not assignment:
+        return
+
+    trigger_event = str(assignment.get("trigger_event") or "").strip().lower()
+    if not trigger_event.startswith("notify_"):
+        return
+    trigger = trigger_event.removeprefix("notify_")
+
+    assignment_metadata = assignment.get("metadata")
+    assignment_metadata = assignment_metadata if isinstance(assignment_metadata, dict) else {}
+    notification_meta = assignment_metadata.get("notification")
+    notification_meta = notification_meta if isinstance(notification_meta, dict) else {}
+    try:
+        retry_count = max(0, int(notification_meta.get("retry_count") or 0))
+    except (TypeError, ValueError):
+        retry_count = 0
+    if retry_count >= 1:
+        log_event(
+            logger,
+            "whatsapp.retry_notification.skipped_max_retries",
+            message_sid=sid,
+            trigger=trigger,
+        )
+        return
+
+    assignment_id = assignment.get("id")
+    try:
+        assignment_uuid = UUID(str(assignment_id))
+    except (TypeError, ValueError):
+        return
+
+    notification_meta["retry_count"] = retry_count + 1
+    notification_meta["retry_of_sid"] = sid
+    notification_meta["retry_requested_at"] = datetime.now(timezone.utc).isoformat()
+    if error_code:
+        notification_meta["last_error_code"] = str(error_code)
+    assignment_metadata = {**assignment_metadata, "notification": notification_meta}
+    try:
+        await repo.update_sales_assignment_notification(
+            assignment_id=assignment_uuid,
+            metadata=assignment_metadata,
+        )
+    except CRMRepositoryError as exc:
+        log_event(
+            logger,
+            "whatsapp.retry_notification.metadata_update_failed",
+            message_sid=sid,
+            trigger=trigger,
+            error=str(exc),
+        )
+        return
+
+    conversation_id = str(assignment.get("conversacion_id") or "").strip()
+    contact_id = str(assignment.get("contacto_id") or "").strip()
+    opportunity_id = str(assignment.get("oportunidad_id") or "").strip() or None
+    if not conversation_id or not contact_id:
+        return
+
+    try:
+        contact = await storage.fetch_contact(contact_id)
+    except StorageError as exc:
+        log_event(
+            logger,
+            "whatsapp.retry_notification.contact_fetch_failed",
+            message_sid=sid,
+            trigger=trigger,
+            error=str(exc),
+        )
+        return
+
+    resumen = str(contact.get("necesidad_proposito") or "").strip() or None
+    notes = str(contact.get("notes") or "").strip() or None
+    email = str(contact.get("correo") or "").strip() or None
+    extra_reason = assignment_metadata.get("reason")
+    extra: dict[str, Any] = dict(extra_reason) if isinstance(extra_reason, dict) else {}
+    extra["retry_of_sid"] = sid
+    extra["delivery_error_code"] = error_code
+
+    channel_value = str(assignment.get("canal") or "").strip().lower() or "whatsapp"
+    context = ToolRuntimeContext(
+        conversation_id=conversation_id,
+        contact_id=contact_id,
+        channel=channel_value,
+    )
+    try:
+        if channel_value == "webchat":
+            from app.channels.webchat import notifications as webchat_notifications
+
+            await webchat_notifications.notify_sales_rep(
+                context=context,
+                trigger=trigger,
+                contact=contact,
+                opportunity_id=opportunity_id,
+                resumen=resumen,
+                notes=notes,
+                email=email,
+                extra=extra,
+                force_retry=True,
+            )
+        else:
+            await whatsapp_tools._notify_sales_rep(
+                context=context,
+                trigger=trigger,
+                contact=contact,
+                opportunity_id=opportunity_id,
+                resumen=resumen,
+                notes=notes,
+                email=email,
+                extra=extra,
+                force_retry=True,
+            )
+    except Exception as exc:  # pragma: no cover - best effort
+        log_event(
+            logger,
+            "whatsapp.retry_notification.send_failed",
+            message_sid=sid,
+            trigger=trigger,
+            channel=channel_value,
+            error=str(exc),
+        )
+        return
+
+    log_event(
+        logger,
+        "whatsapp.retry_notification.sent",
+        message_sid=sid,
+        trigger=trigger,
+        channel=channel_value,
+    )
 
 
 async def _sync_envio_status_from_whatsapp(callback: schemas.WhatsAppStatusCallback) -> None:

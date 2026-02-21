@@ -2066,6 +2066,7 @@ async def _notify_sales_rep(
     notes: str | None,
     email: str | None,
     extra: dict[str, Any] | None,
+    force_retry: bool = False,
 ) -> None:
     contact_record = contact or await _resolve_contact(context.contact_id)
     if not contact_record:
@@ -2196,7 +2197,7 @@ async def _notify_sales_rep(
         primary_reason = "case_b_reengage_exhausted"
 
     primary_by_channel = _get_primary_notification_by_channel(metadata)
-    if primary_reason and primary_by_channel.get(channel_key):
+    if primary_reason and primary_by_channel.get(channel_key) and not force_retry:
         logger.info(
             "whatsapp.notify_sales.primary_already_sent",
             extra={
@@ -2207,7 +2208,7 @@ async def _notify_sales_rep(
         )
         return
 
-    if notifications.get(trigger):
+    if notifications.get(trigger) and not force_retry:
         logger.info(
             "whatsapp.notify_sales.already_sent",
             extra={"conversation_id": context.conversation_id, "trigger": trigger},
@@ -2369,10 +2370,19 @@ async def _notify_sales_rep(
                 },
             )
 
+    previous_notification = _ensure_dict(notifications.get(trigger))
+    retry_count = 0
+    if force_retry:
+        try:
+            retry_count = max(0, int(previous_notification.get("retry_count") or 0)) + 1
+        except (TypeError, ValueError):
+            retry_count = 1
     notifications[trigger] = {
         "sent_at": datetime.now(timezone.utc).isoformat(),
         "conversation_id": context.conversation_id,
         "contact_id": context.contact_id,
+        "notification_sid": message_sid,
+        "retry_count": retry_count,
     }
     metadata["sales_notifications"] = notifications
     if primary_reason:

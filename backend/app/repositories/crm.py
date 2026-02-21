@@ -2610,6 +2610,53 @@ class CRMRepository:
             prefer="return=minimal",
         )
 
+    async def get_sales_assignment_by_notification_sid(
+        self,
+        *,
+        notification_sid: str,
+    ) -> dict[str, Any] | None:
+        sid = str(notification_sid or "").strip()
+        if not sid:
+            return None
+        params = {
+            "notificacion_message_sid": f"eq.{sid}",
+            "order": "creado_en.desc",
+            "limit": "1",
+            "select": (
+                "id,organizacion_id,oportunidad_id,contacto_id,conversacion_id,trigger_event,"
+                "metadata,canal,notificacion_message_sid"
+            ),
+        }
+        resp = await self._request("GET", "/rest/v1/asignaciones_vendedores", params=params)
+        data = resp.json() or []
+        if isinstance(data, list) and data:
+            row = data[0]
+            return row if isinstance(row, dict) else None
+        return None
+
+    async def update_sales_assignment_notification(
+        self,
+        *,
+        assignment_id: UUID,
+        metadata: dict[str, Any] | None = None,
+        notification_sid: str | None = None,
+    ) -> None:
+        payload: dict[str, Any] = {}
+        if isinstance(metadata, dict):
+            payload["metadata"] = metadata
+        if notification_sid:
+            payload["notificacion_message_sid"] = notification_sid
+        if not payload:
+            return
+        params = {"id": f"eq.{assignment_id}", "limit": "1"}
+        await self._request(
+            "PATCH",
+            "/rest/v1/asignaciones_vendedores",
+            params=params,
+            json=payload,
+            prefer="return=minimal",
+        )
+
     async def get_contact_opportunity(
         self,
         *,
