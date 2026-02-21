@@ -354,7 +354,7 @@ def _is_profile_field_answered(
     profiling_questions = profiling_questions or {}
     field_payload = _ensure_dict(profiling_questions.get(field))
     status_value = str(field_payload.get("estado_respuesta") or "").strip().lower()
-    return status_value == "answered"
+    return status_value in {"answered", "unknown", "refused", "skipped_max_retries"}
 
 
 def _has_base_fields_for_case_a(contact: Mapping[str, Any] | None) -> bool:
