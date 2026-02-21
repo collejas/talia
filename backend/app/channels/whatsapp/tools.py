@@ -2402,7 +2402,7 @@ async def _notify_sales_rep(
         )
 
         seller_id_value = assigned.get("id")
-        if seller_id_value:
+        if seller_id_value and not force_retry:
             seller_uuid = UUID(str(seller_id_value))
             assignment_metadata: dict[str, Any] = {
                 "reason": extra or {},

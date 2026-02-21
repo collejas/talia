@@ -577,7 +577,7 @@ async def notify_sales_rep(
             payload={"metadata": metadata},
         )
 
-        if seller_id:
+        if seller_id and not force_retry:
             seller_uuid = UUID(str(seller_id))
             assignment_metadata: dict[str, Any] = {
                 "reason": extra_payload,
