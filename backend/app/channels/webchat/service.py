@@ -100,13 +100,6 @@ _SCHEDULE_CRITICAL_FIELDS: tuple[str, ...] = (
 
 _DEFAULT_REQUIRED_CASE_A_FIELDS: tuple[str, ...] = _SCHEDULE_CRITICAL_FIELDS
 
-_DEFAULT_SCHEDULE_QUESTION_BY_FIELD: dict[str, str] = {
-    "financing_type": "¿Comprarías de contado, crédito o mixto?",
-    "budget_range": "¿Cuál es tu rango de presupuesto aproximado?",
-    "purchase_timeline": "¿En qué plazo planeas comprar?",
-    "decision_authority": "¿Quién toma la decisión final de compra?",
-}
-
 _EVASIVE_TOKENS: tuple[str, ...] = (
     "no se",
     "no sé",
@@ -1392,9 +1385,7 @@ async def _guard_booking_confirmation_claim(
             if missing_fields:
                 question_map = _safe_dict(prefilter_status.get("questions"))
                 field = missing_fields[0]
-                question_text = str(
-                    question_map.get(field) or _DEFAULT_SCHEDULE_QUESTION_BY_FIELD.get(field) or ""
-                ).strip()
+                question_text = str(question_map.get(field) or "").strip()
                 if question_text:
                     return f"Para confirmar tu cita, solo falta este dato: {question_text}"
     except Exception as exc:
@@ -1831,7 +1822,7 @@ async def _has_prefilter_for_schedule(
 ) -> dict[str, Any]:
     repo = CRMRepository()
     required_fields: list[str] = list(_DEFAULT_REQUIRED_CASE_A_FIELDS)
-    question_by_field: dict[str, str] = dict(_DEFAULT_SCHEDULE_QUESTION_BY_FIELD)
+    question_by_field: dict[str, str] = {}
     channel = str((contact or {}).get("canal") or "webchat").strip().lower() or "webchat"
     if not contact or not opportunity_id:
         return {"ready": False, "missing_fields": required_fields, "questions": question_by_field}
@@ -1912,11 +1903,11 @@ def _build_schedule_prefilter_error_message(
         )
     field = missing[0]
     question_by_field = question_by_field or {}
-    question_text = str(
-        question_by_field.get(field)
-        or _DEFAULT_SCHEDULE_QUESTION_BY_FIELD.get(field)
-        or "¿Me ayudas con un dato clave para continuar?"
-    ).strip()
+    question_text = str(question_by_field.get(field) or "").strip()
+    if not question_text:
+        question_text = (
+            f"Pregunta por el campo faltante '{field}' con una sola pregunta corta."
+        )
     return (
         "Antes de agendar la cita falta completar la información de agenda. "
         f"Campo faltante: {field}. "

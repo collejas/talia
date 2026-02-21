@@ -187,7 +187,6 @@ async def _guard_booking_confirmation_claim(
                     missing_field = missing_fields[0]
                     question_text = str(
                         questions.get(missing_field)
-                        or whatsapp_tools._DEFAULT_SCHEDULE_QUESTION_BY_FIELD.get(missing_field)
                         or ""
                     ).strip()
                     if question_text:
