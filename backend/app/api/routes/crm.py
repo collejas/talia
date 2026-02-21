@@ -8579,7 +8579,15 @@ async def reply_inbox_conversation(
                     session_id=session_id or "",
                     author="agent",
                     content=content,
-                    inactivity_hours=settings.webchat_inactivity_hours,
+                    inactivity_minutes=(
+                        settings.webchat_inactivity_minutes
+                        if settings.webchat_inactivity_minutes is not None
+                        else (
+                            settings.webchat_inactivity_hours * 60
+                            if settings.webchat_inactivity_hours is not None
+                            else None
+                        )
+                    ),
                     metadata=extra_metadata,
                     attachments=attachments_payload,
                     organizacion_id=contact_org_id,

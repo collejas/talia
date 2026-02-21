@@ -42,7 +42,7 @@ class WebchatRuntimeSettings:
     openai_api_key: str | None
     assistant_id: str | None
     prompt_version: str | None
-    inactivity_hours: int | None
+    inactivity_minutes: int | None
 
 
 @dataclass(slots=True)
@@ -236,12 +236,19 @@ async def get_webchat_runtime_settings(*, organizacion_id: UUID) -> WebchatRunti
     assistant_id = webchat.get("assistant_id") if isinstance(webchat.get("assistant_id"), str) else None
     prompt_version = webchat.get("prompt_version") if isinstance(webchat.get("prompt_version"), str) else None
 
+    inactivity_minutes_raw = webchat.get("inactivity_minutes")
     inactivity_hours_raw = webchat.get("inactivity_hours")
-    inactivity_hours = None
-    if isinstance(inactivity_hours_raw, int):
-        inactivity_hours = inactivity_hours_raw
+    inactivity_minutes = None
+    if isinstance(inactivity_minutes_raw, int):
+        inactivity_minutes = inactivity_minutes_raw
+    elif isinstance(inactivity_minutes_raw, float):
+        inactivity_minutes = int(inactivity_minutes_raw)
+    elif isinstance(inactivity_hours_raw, int):
+        inactivity_minutes = inactivity_hours_raw * 60
     elif isinstance(inactivity_hours_raw, float):
-        inactivity_hours = int(inactivity_hours_raw)
+        inactivity_minutes = int(inactivity_hours_raw * 60)
+    if isinstance(inactivity_minutes, int) and inactivity_minutes < 1:
+        inactivity_minutes = 1
 
     openai_api_key = await get_openai_api_key(organizacion_id=organizacion_id)
 
@@ -249,7 +256,7 @@ async def get_webchat_runtime_settings(*, organizacion_id: UUID) -> WebchatRunti
         openai_api_key=openai_api_key,
         assistant_id=assistant_id,
         prompt_version=prompt_version,
-        inactivity_hours=inactivity_hours,
+        inactivity_minutes=inactivity_minutes,
     )
 
 

@@ -2665,7 +2665,15 @@ async def handle_message(
     metadata_dict = payload.metadata if isinstance(payload.metadata, dict) else None
     attachments_payload = payload.attachments or []
     organizacion_hint = await resolve_webchat_organizacion(metadata_dict)
-    runtime_inactivity_hours = settings.webchat_inactivity_hours
+    runtime_inactivity_minutes = (
+        settings.webchat_inactivity_minutes
+        if settings.webchat_inactivity_minutes is not None
+        else (
+            settings.webchat_inactivity_hours * 60
+            if settings.webchat_inactivity_hours is not None
+            else None
+        )
+    )
     runtime_openai_api_key: str | None = None
     runtime_assistant_id: str | None = None
     runtime_prompt_version: str | None = None
@@ -2686,15 +2694,15 @@ async def handle_message(
                 runtime_openai_api_key = rt.openai_api_key
                 runtime_assistant_id = rt.assistant_id
                 runtime_prompt_version = rt.prompt_version
-                if rt.inactivity_hours is not None:
-                    runtime_inactivity_hours = rt.inactivity_hours
+                if rt.inactivity_minutes is not None:
+                    runtime_inactivity_minutes = rt.inactivity_minutes
 
     try:
         registration = await storage.register_webchat_message(
             session_id=payload.session_id,
             author="user",
             content=payload.content,
-            inactivity_hours=runtime_inactivity_hours,
+            inactivity_minutes=runtime_inactivity_minutes,
             metadata={
                 "client_message_id": payload.client_message_id,
                 "locale": payload.locale,
@@ -2920,7 +2928,15 @@ async def handle_message(
                 author="assistant",
                 content=assistant_reply,
                 response_id=metadata.assistant_response_id,
-                inactivity_hours=settings.webchat_inactivity_hours,
+                inactivity_minutes=(
+                    settings.webchat_inactivity_minutes
+                    if settings.webchat_inactivity_minutes is not None
+                    else (
+                        settings.webchat_inactivity_hours * 60
+                        if settings.webchat_inactivity_hours is not None
+                        else None
+                    )
+                ),
                 metadata=message_metadata,
                 organizacion_id=resolved_organizacion_id,
             )

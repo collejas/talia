@@ -249,7 +249,7 @@ export async function updateWebchatSettingsAction(_: CrudActionState, formData: 
     const webchatEnabled = formData.has("webchat_enabled")
     const assistantId = getText(formData, "webchat_assistant_id")
     const promptVersion = getText(formData, "webchat_prompt_version")
-    const inactivityHoursRaw = getText(formData, "webchat_inactivity_hours")
+    const inactivityMinutesRaw = getText(formData, "webchat_inactivity_minutes")
     const persistSession = formData.has("webchat_persist_session")
     const reengageMinutesRaw = getText(formData, "webchat_reengage_minutes")
     const reengageMaxAttemptsRaw = getText(formData, "webchat_reengage_max_attempts")
@@ -273,8 +273,11 @@ export async function updateWebchatSettingsAction(_: CrudActionState, formData: 
     const webchatPatch: Record<string, unknown> = {}
     if (assistantId) webchatPatch.assistant_id = assistantId
     if (promptVersion) webchatPatch.prompt_version = promptVersion
-    const inactivityHours = parseNumber(inactivityHoursRaw)
-    if (inactivityHours !== undefined) webchatPatch.inactivity_hours = inactivityHours
+    const inactivityMinutes = parseNumber(inactivityMinutesRaw)
+    if (inactivityMinutes !== undefined) {
+      webchatPatch.inactivity_minutes = inactivityMinutes
+      webchatPatch.inactivity_hours = null
+    }
     webchatPatch.persist_session = persistSession
     const reengageMinutes = parseNumber(reengageMinutesRaw)
     if (reengageMinutes !== undefined) webchatPatch.reengage_minutes = reengageMinutes

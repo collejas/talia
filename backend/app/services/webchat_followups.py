@@ -707,7 +707,15 @@ async def _send_reengage_message(
             session_id=session_id,
             author="assistant",
             content=message,
-            inactivity_hours=settings.webchat_inactivity_hours,
+            inactivity_minutes=(
+                settings.webchat_inactivity_minutes
+                if settings.webchat_inactivity_minutes is not None
+                else (
+                    settings.webchat_inactivity_hours * 60
+                    if settings.webchat_inactivity_hours is not None
+                    else None
+                )
+            ),
             metadata={
                 "source": "webchat_followup",
                 "followup_reason": "reengage",

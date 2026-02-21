@@ -2694,6 +2694,7 @@ class CRMRepository:
         content: str,
         response_id: str | None = None,
         metadata: dict[str, Any] | None = None,
+        inactivity_minutes: int | None = None,
         inactivity_hours: int | None = None,
         attachments: list[dict[str, Any]] | None = None,
         organizacion_id: str | None = None,
@@ -2705,10 +2706,16 @@ class CRMRepository:
         }
         if response_id:
             payload["p_response_id"] = response_id
-        if metadata:
-            payload["p_metadata"] = metadata
-        if inactivity_hours is not None:
-            payload["p_inactivity_hours"] = inactivity_hours
+        effective_inactivity_hours = inactivity_hours
+        if effective_inactivity_hours is None and inactivity_minutes is not None:
+            effective_inactivity_hours = max(1, int((max(1, inactivity_minutes) + 59) // 60))
+        metadata_payload = dict(metadata or {})
+        if inactivity_minutes is not None:
+            metadata_payload["__inactivity_minutes"] = max(1, int(inactivity_minutes))
+        if metadata_payload:
+            payload["p_metadata"] = metadata_payload
+        if effective_inactivity_hours is not None:
+            payload["p_inactivity_hours"] = effective_inactivity_hours
         if attachments:
             payload["p_attachments"] = attachments
         # IMPORTANTE:

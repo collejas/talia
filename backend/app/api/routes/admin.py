@@ -615,8 +615,10 @@ def _build_default_tenant_config(*, calendar_resource_id: str) -> dict[str, Any]
         "reengage_max_attempts": settings.webchat_reengage_max_attempts,
         "escalate_minutes": settings.webchat_escalate_minutes,
     }
-    if settings.webchat_inactivity_hours is not None:
-        webchat_cfg["inactivity_hours"] = settings.webchat_inactivity_hours
+    if settings.webchat_inactivity_minutes is not None:
+        webchat_cfg["inactivity_minutes"] = settings.webchat_inactivity_minutes
+    elif settings.webchat_inactivity_hours is not None:
+        webchat_cfg["inactivity_minutes"] = settings.webchat_inactivity_hours * 60
     assistant_id = settings.openai_webchat_assistant_id or settings.openai_assistant_id
     if assistant_id:
         webchat_cfg["assistant_id"] = assistant_id
@@ -1659,7 +1661,7 @@ def build_validation_report(
     webchat_config_keys = [
         "webchat.assistant_id",
         "webchat.prompt_version",
-        "webchat.inactivity_hours",
+        "webchat.inactivity_minutes",
         "webchat.persist_session",
     ]
     calendar_config_keys = [
@@ -1768,6 +1770,12 @@ def build_validation_report(
         value = _get_config_value(config, dotted)
         if value is None or value == "":
             report.missing_config.append(dotted)
+
+    # Compatibilidad: aceptar `webchat.inactivity_hours` mientras migra a minutos.
+    if "webchat.inactivity_minutes" in report.missing_config:
+        legacy_hours = _get_config_value(config, "webchat.inactivity_hours")
+        if isinstance(legacy_hours, (int, float)):
+            report.missing_config.remove("webchat.inactivity_minutes")
 
     if not settings.secrets_master_key:
         report.notes.append("TALIA_SECRETS_MASTER_KEY no está configurada (tier A fallará).")

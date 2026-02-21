@@ -37,7 +37,7 @@ const SECTIONS: SectionConfig[] = [
       { label: "Webchat habilitado", path: "features.webchat.enabled", control: "checkbox" },
       { label: "Assistant ID", path: "webchat.assistant_id" },
       { label: "Prompt version", path: "webchat.prompt_version" },
-      { label: "Inactivity hours", path: "webchat.inactivity_hours", type: "number" },
+      { label: "Inactivity minutes", path: "webchat.inactivity_minutes", type: "number" },
       { label: "Persist session", path: "webchat.persist_session", control: "checkbox" },
       { label: "Reengage minutes", path: "webchat.reengage_minutes", type: "number" },
       { label: "Reengage max attempts", path: "webchat.reengage_max_attempts", type: "number" },

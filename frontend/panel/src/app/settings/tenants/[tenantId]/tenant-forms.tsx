@@ -349,7 +349,7 @@ type WebchatInitialValues = {
   enabled?: boolean
   assistant_id?: string
   prompt_version?: string
-  inactivity_hours?: number
+  inactivity_minutes?: number
   persist_session?: boolean
   reengage_minutes?: number
   reengage_max_attempts?: number
@@ -512,13 +512,13 @@ export function TenantWebchatSettings({
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="webchat_inactivity_hours">inactivity_hours</Label>
+            <Label htmlFor="webchat_inactivity_minutes">inactivity_minutes</Label>
             <Input
-              id="webchat_inactivity_hours"
-              name="webchat_inactivity_hours"
+              id="webchat_inactivity_minutes"
+              name="webchat_inactivity_minutes"
               type="number"
               min={0}
-              defaultValue={initialValues.inactivity_hours ?? ""}
+              defaultValue={initialValues.inactivity_minutes ?? ""}
             />
           </div>
 

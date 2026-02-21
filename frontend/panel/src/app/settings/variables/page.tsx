@@ -285,7 +285,12 @@ export default async function SettingsVariablesPage() {
                       enabled: webchatEnabled,
                       assistant_id: getNestedString(webchatConfig, "assistant_id") ?? "",
                       prompt_version: getNestedString(webchatConfig, "prompt_version") ?? "",
-                      inactivity_hours: getNestedNumber(webchatConfig, "inactivity_hours"),
+                      inactivity_minutes:
+                        getNestedNumber(webchatConfig, "inactivity_minutes") ??
+                        (() => {
+                          const hours = getNestedNumber(webchatConfig, "inactivity_hours")
+                          return typeof hours === "number" ? hours * 60 : undefined
+                        })(),
                       persist_session: getNestedBoolean(webchatConfig, "persist_session"),
                       reengage_minutes: getNestedNumber(webchatConfig, "reengage_minutes"),
                       reengage_max_attempts: getNestedNumber(webchatConfig, "reengage_max_attempts"),

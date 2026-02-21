@@ -132,9 +132,13 @@ class ClientConfig(BaseModel):
         default=True,
         description="Indica si el widget debe reutilizar session_id entre recargas.",
     )
+    inactivity_timeout_minutes: int | None = Field(
+        default=None,
+        description="Minutos de inactividad en backend antes de iniciar nueva conversación.",
+    )
     inactivity_timeout_hours: int | None = Field(
         default=None,
-        description="Horas de inactividad en backend antes de iniciar nueva conversación.",
+        description="Compatibilidad legacy en horas (derivado de inactivity_timeout_minutes).",
     )
     tenant_alias: str | None = Field(
         default=None,

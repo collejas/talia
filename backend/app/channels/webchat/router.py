@@ -137,7 +137,15 @@ async def get_webchat_config(
             organizacion_id = str(tenant_runtime.MASTER_ORGANIZACION_ID)
 
     persist_session = settings.webchat_persist_session
-    inactivity_timeout_hours = settings.webchat_inactivity_hours
+    inactivity_timeout_minutes = (
+        settings.webchat_inactivity_minutes
+        if settings.webchat_inactivity_minutes is not None
+        else (
+            settings.webchat_inactivity_hours * 60
+            if settings.webchat_inactivity_hours is not None
+            else None
+        )
+    )
     if organizacion_id:
         try:
             config = await tenant_runtime.get_org_config(organizacion_id=UUID(organizacion_id))
@@ -147,15 +155,23 @@ async def get_webchat_config(
             webchat = config.get("webchat")
             if isinstance(webchat, dict):
                 persist = webchat.get("persist_session")
-                inactivity = webchat.get("inactivity_hours")
+                inactivity = webchat.get("inactivity_minutes")
+                inactivity_hours = webchat.get("inactivity_hours")
                 if isinstance(persist, bool):
                     persist_session = persist
                 if isinstance(inactivity, int):
-                    inactivity_timeout_hours = inactivity
+                    inactivity_timeout_minutes = inactivity
+                elif isinstance(inactivity_hours, int):
+                    inactivity_timeout_minutes = inactivity_hours * 60
 
     return schemas.ClientConfig(
         persist_session=persist_session,
-        inactivity_timeout_hours=inactivity_timeout_hours,
+        inactivity_timeout_minutes=inactivity_timeout_minutes,
+        inactivity_timeout_hours=(
+            int(inactivity_timeout_minutes / 60)
+            if inactivity_timeout_minutes is not None
+            else None
+        ),
         tenant_alias=alias_value or service.get_webchat_tenant_alias(),
     )
 

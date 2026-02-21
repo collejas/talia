@@ -305,9 +305,21 @@ class Settings(BaseSettings):
         ge=0,
         description="Cantidad máxima de lotes consecutivos que descargamos (0 = sin límite práctico).",
     )
+    webchat_inactivity_minutes: int | None = Field(
+        default=None,
+        validation_alias=AliasChoices(
+            "WEBCHAT_INACTIVITY_MINUTES",
+            "TALIA_WEBCHAT_INACTIVITY_MINUTES",
+        ),
+        description="Número de minutos para reiniciar conversación webchat; usa default SQL cuando no se define.",
+    )
     webchat_inactivity_hours: int | None = Field(
         default=None,
-        description="Número de horas para reiniciar conversación webchat; usa default SQL cuando no se define.",
+        validation_alias=AliasChoices(
+            "WEBCHAT_INACTIVITY_HOURS",
+            "TALIA_WEBCHAT_INACTIVITY_HOURS",
+        ),
+        description="Compatibilidad legacy en horas para reiniciar conversación webchat.",
     )
     webchat_persist_session: bool = Field(
         default=True,
