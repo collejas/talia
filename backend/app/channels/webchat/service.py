@@ -2832,12 +2832,14 @@ async def handle_message(
         session_id=payload.session_id,
     )
 
-    catalog_context = await build_catalog_context(
-        organizacion_hint,
-        payload.content or "",
-        user_id=context.contact_id,
-        channel="webchat",
-    )
+    catalog_context: CatalogContext | None = None
+    if settings.catalog_context_autoload:
+        catalog_context = await build_catalog_context(
+            organizacion_hint,
+            payload.content or "",
+            user_id=context.contact_id,
+            channel="webchat",
+        )
     booking_context_text = None
     try:
         booking_context_text = await build_booking_context_message(

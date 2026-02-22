@@ -40,6 +40,17 @@ class Settings(BaseSettings):
         default="text-embedding-ada-002",
         description="Modelo de embeddings que se usa para la vector store.",
     )
+    catalog_context_autoload: bool = Field(
+        default=False,
+        description=(
+            "Cuando es true, inyecta contexto de catálogo (vector store) en cada turno entrante. "
+            "Se recomienda false para delegar la decisión de consulta al prompt vía tools."
+        ),
+        validation_alias=AliasChoices(
+            "CATALOG_CONTEXT_AUTOLOAD",
+            "TALIA_CATALOG_CONTEXT_AUTOLOAD",
+        ),
+    )
     openai_assistant_id: str | None = None
     # Específico para el webchat (landing). Si no se define, se usa openai_assistant_id.
     openai_webchat_assistant_id: str | None = Field(

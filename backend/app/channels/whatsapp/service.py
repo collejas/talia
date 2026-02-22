@@ -373,12 +373,14 @@ async def handle_incoming_message(
     if not openai_conversation_id:
         openai_conversation_id = conversation_meta.get("openai_conversation_id")
 
-    catalog_context = await build_catalog_context(
-        organizacion_hint,
-        message.body or "",
-        user_id=message.wa_id or message.from_number,
-        channel="whatsapp",
-    )
+    catalog_context = None
+    if settings.catalog_context_autoload:
+        catalog_context = await build_catalog_context(
+            organizacion_hint,
+            message.body or "",
+            user_id=message.wa_id or message.from_number,
+            channel="whatsapp",
+        )
     booking_context_text = None
     try:
         booking_context_text = await build_booking_context_message(
