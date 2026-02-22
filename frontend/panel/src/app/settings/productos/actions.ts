@@ -1,5 +1,7 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
+
 import { callCrmApi, type CrmResult } from "@/lib/api/crm";
 
 type CrmRow = Record<string, unknown>;
@@ -460,6 +462,20 @@ export type CatalogVectorStoreMetrics = {
   buckets: CatalogVectorStoreMetricsBucket[]
 }
 
+export type CatalogVectorAlertThresholds = {
+  minQueryEvents30d: number
+  fallbackRatioThreshold: number
+  minFallbackEvents30d: number
+  weeklyGrowthRatioThreshold: number
+  minWeeklyQueries: number
+}
+
+export type CatalogVectorAlertThresholdsConfig = {
+  globalThresholds: CatalogVectorAlertThresholds
+  organizationThresholds: CatalogVectorAlertThresholds | null
+  effectiveThresholds: CatalogVectorAlertThresholds
+}
+
 function emptyCatalogMetrics(days: number): CatalogVectorStoreMetrics {
   const toDate = new Date()
   const fromDate = new Date()
@@ -544,4 +560,94 @@ export async function fetchCatalogVectorStoreMetrics(
     totalEvents: Number(payload.total_events ?? payload.totalEvents ?? 0),
     buckets,
   }
+}
+
+function normalizeThresholds(raw: unknown): CatalogVectorAlertThresholds {
+  const payload = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>
+  return {
+    minQueryEvents30d: Number(payload.min_query_events_30d ?? payload.minQueryEvents30d ?? 250),
+    fallbackRatioThreshold: Number(payload.fallback_ratio_threshold ?? payload.fallbackRatioThreshold ?? 0.35),
+    minFallbackEvents30d: Number(payload.min_fallback_events_30d ?? payload.minFallbackEvents30d ?? 20),
+    weeklyGrowthRatioThreshold: Number(
+      payload.weekly_growth_ratio_threshold ?? payload.weeklyGrowthRatioThreshold ?? 0.4,
+    ),
+    minWeeklyQueries: Number(payload.min_weekly_queries ?? payload.minWeeklyQueries ?? 20),
+  }
+}
+
+function defaultThresholdsConfig(): CatalogVectorAlertThresholdsConfig {
+  const defaults = normalizeThresholds({})
+  return {
+    globalThresholds: defaults,
+    organizationThresholds: null,
+    effectiveThresholds: defaults,
+  }
+}
+
+export async function fetchCatalogVectorStoreAlertThresholds(): Promise<CatalogVectorAlertThresholdsConfig> {
+  const response = await callCrmApi<Record<string, unknown>>("/crm/catalog/vector-store/alert-thresholds")
+  if (!response.ok || !response.data || typeof response.data !== "object") {
+    if (!response.ok) {
+      console.warn("[crm] /crm/catalog/vector-store/alert-thresholds failed", response.error, response.status)
+    }
+    return defaultThresholdsConfig()
+  }
+  const payload = response.data
+  const orgRaw = payload.organization_thresholds ?? payload.organizationThresholds
+  return {
+    globalThresholds: normalizeThresholds(payload.global_thresholds ?? payload.globalThresholds),
+    organizationThresholds: orgRaw ? normalizeThresholds(orgRaw) : null,
+    effectiveThresholds: normalizeThresholds(payload.effective_thresholds ?? payload.effectiveThresholds),
+  }
+}
+
+function parseThresholdNumber(formData: FormData, key: string): number {
+  const raw = formData.get(key)
+  const value = typeof raw === "string" ? Number(raw.trim()) : Number(raw)
+  if (!Number.isFinite(value)) {
+    throw new Error(`Valor inválido para ${key}`)
+  }
+  return value
+}
+
+function buildThresholdPayloadFromForm(formData: FormData): Record<string, number> {
+  return {
+    min_query_events_30d: Math.max(1, Math.round(parseThresholdNumber(formData, "min_query_events_30d"))),
+    fallback_ratio_threshold: Math.max(0, Math.min(1, parseThresholdNumber(formData, "fallback_ratio_threshold"))),
+    min_fallback_events_30d: Math.max(1, Math.round(parseThresholdNumber(formData, "min_fallback_events_30d"))),
+    weekly_growth_ratio_threshold: Math.max(0, parseThresholdNumber(formData, "weekly_growth_ratio_threshold")),
+    min_weekly_queries: Math.max(1, Math.round(parseThresholdNumber(formData, "min_weekly_queries"))),
+  }
+}
+
+export async function saveCatalogVectorStoreOrgThresholdsAction(formData: FormData): Promise<void> {
+  const response = await callCrmApi("/crm/catalog/vector-store/alert-thresholds", {
+    method: "PUT",
+    body: buildThresholdPayloadFromForm(formData),
+  })
+  if (!response.ok) {
+    throw new Error(response.error || "No se pudieron guardar los umbrales por organización.")
+  }
+  revalidatePath("/settings/productos/observabilidad")
+}
+
+export async function saveCatalogVectorStoreGlobalThresholdsAction(formData: FormData): Promise<void> {
+  const response = await callCrmApi("/crm/catalog/vector-store/alert-thresholds/global", {
+    method: "PUT",
+    body: buildThresholdPayloadFromForm(formData),
+  })
+  if (!response.ok) {
+    throw new Error(response.error || "No se pudieron guardar los umbrales globales.")
+  }
+  revalidatePath("/settings/productos/observabilidad")
+}
+
+export async function clearCatalogVectorStoreOrgThresholdsAction(): Promise<void> {
+  const response = await callCrmApi("/crm/catalog/vector-store/alert-thresholds", {
+    method: "DELETE",
+  })
+  if (!response.ok) {
+    throw new Error(response.error || "No se pudo limpiar el override de umbrales por organización.")
+  }
+  revalidatePath("/settings/productos/observabilidad")
 }

@@ -8924,6 +8924,44 @@ class CRMRepository:
             )
         return row
 
+    async def get_organizacion_config(self, *, organizacion_id: UUID) -> dict[str, Any] | None:
+        params = {
+            "select": "id,config",
+            "id": f"eq.{organizacion_id}",
+            "limit": "1",
+        }
+        resp = await self._request("GET", "/rest/v1/organizaciones", params=params)
+        data = resp.json()
+        if not isinstance(data, list) or not data:
+            return None
+        row = data[0]
+        if not isinstance(row, dict):
+            return None
+        config = row.get("config")
+        return config if isinstance(config, dict) else ({} if config is None else None)
+
+    async def set_organizacion_config(
+        self,
+        *,
+        organizacion_id: UUID,
+        config: dict[str, Any],
+    ) -> dict[str, Any]:
+        payload: dict[str, Any] = {"config": config}
+        resp = await self._request(
+            "PATCH",
+            "/rest/v1/organizaciones",
+            params={"id": f"eq.{organizacion_id}"},
+            json=payload,
+            prefer="return=representation",
+        )
+        data = resp.json()
+        if not isinstance(data, list) or not data:
+            raise CRMRepositoryError("organizacion_update_failed")
+        row = data[0]
+        if not isinstance(row, dict):
+            raise CRMRepositoryError(f"Respuesta inválida al actualizar configuración de organización: {row!r}")
+        return row
+
     @staticmethod
     def _extract_total_count(content_range: str | None) -> int | None:
         if not content_range or "/" not in content_range:

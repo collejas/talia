@@ -1,14 +1,21 @@
 import Link from "next/link"
 
 import {
+  clearCatalogVectorStoreOrgThresholdsAction,
   fetchCatalogVectorStoreMetrics,
   fetchCatalogVectorStoreStatus,
+  fetchCatalogVectorStoreAlertThresholds,
+  saveCatalogVectorStoreGlobalThresholdsAction,
+  saveCatalogVectorStoreOrgThresholdsAction,
+  type CatalogVectorAlertThresholds,
   type CatalogVectorStoreMetricsBucket,
 } from "@/app/settings/productos/actions"
 import { AppViewLayout } from "@/components/layouts/app-view-layout"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
 import {
   Table,
   TableBody,
@@ -120,6 +127,7 @@ type AlertItem = {
 function buildAlerts(
   buckets: CatalogVectorStoreMetricsBucket[],
   byDayRows: Array<{ day: string; query: number; reindex: number; total: number }>,
+  thresholds: CatalogVectorAlertThresholds,
 ): AlertItem[] {
   const alerts: AlertItem[] = []
   const totalQueries = sumByType(buckets, "query")
@@ -134,7 +142,7 @@ function buildAlerts(
   const growthRatio =
     previous7Queries > 0 ? (last7Queries - previous7Queries) / previous7Queries : (last7Queries > 0 ? 1 : 0)
 
-  if (totalQueries >= 250) {
+  if (totalQueries >= thresholds.minQueryEvents30d) {
     alerts.push({
       title: "Volumen alto de consultas vectoriales",
       detail: `Se registran ${totalQueries} queries vectoriales en 30 días.`,
@@ -142,7 +150,10 @@ function buildAlerts(
     })
   }
 
-  if (fallbackRatio >= 0.35 && fallbackQueries >= 20) {
+  if (
+    fallbackRatio >= thresholds.fallbackRatioThreshold
+    && fallbackQueries >= thresholds.minFallbackEvents30d
+  ) {
     alerts.push({
       title: "Dependencia alta de fallback semántico",
       detail: `${Math.round(fallbackRatio * 100)}% de las queries vectoriales fueron fallback (${fallbackQueries}/${totalQueries}).`,
@@ -150,7 +161,7 @@ function buildAlerts(
     })
   }
 
-  if (growthRatio >= 0.4 && last7Queries >= 20) {
+  if (growthRatio >= thresholds.weeklyGrowthRatioThreshold && last7Queries >= thresholds.minWeeklyQueries) {
     alerts.push({
       title: "Crecimiento semanal de costo potencial",
       detail: `Últimos 7 días: ${last7Queries} queries vs ${previous7Queries} en la semana previa.`,
@@ -182,16 +193,17 @@ function severityVariant(severity: AlertItem["severity"]): "destructive" | "seco
 }
 
 export default async function ProductosObservabilidadPage() {
-  const [status, metrics] = await Promise.all([
+  const [status, metrics, thresholdsConfig] = await Promise.all([
     fetchCatalogVectorStoreStatus(),
     fetchCatalogVectorStoreMetrics({ days: 30, limit: 5000 }),
+    fetchCatalogVectorStoreAlertThresholds(),
   ])
 
   const queryEvents = sumByType(metrics.buckets, "query")
   const reindexEvents = sumByType(metrics.buckets, "reindex")
   const topReasons = aggregateByReason(metrics.buckets).slice(0, 8)
   const byDay = aggregateByDay(metrics.buckets).slice(0, 30)
-  const alerts = buildAlerts(metrics.buckets, byDay)
+  const alerts = buildAlerts(metrics.buckets, byDay, thresholdsConfig.effectiveThresholds)
   const last7Queries = sumQueriesInRange(byDay, 6, 0)
   const previous7Queries = sumQueriesInRange(byDay, 13, 7)
   const weeklyDelta = last7Queries - previous7Queries
@@ -319,6 +331,148 @@ export default async function ProductosObservabilidadPage() {
             ))}
           </CardContent>
         </Card>
+
+        <div className="grid gap-4 xl:grid-cols-2">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Umbrales globales (todas las organizaciones)</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <form action={saveCatalogVectorStoreGlobalThresholdsAction} className="space-y-4">
+                <div className="grid gap-3 md:grid-cols-2">
+                  <div className="space-y-1">
+                    <Label htmlFor="global_min_query_events_30d">Min. queries 30d</Label>
+                    <Input
+                      id="global_min_query_events_30d"
+                      name="min_query_events_30d"
+                      type="number"
+                      min={1}
+                      defaultValue={thresholdsConfig.globalThresholds.minQueryEvents30d}
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label htmlFor="global_fallback_ratio_threshold">Ratio fallback (0-1)</Label>
+                    <Input
+                      id="global_fallback_ratio_threshold"
+                      name="fallback_ratio_threshold"
+                      type="number"
+                      min={0}
+                      max={1}
+                      step="0.01"
+                      defaultValue={thresholdsConfig.globalThresholds.fallbackRatioThreshold}
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label htmlFor="global_min_fallback_events_30d">Min. fallback 30d</Label>
+                    <Input
+                      id="global_min_fallback_events_30d"
+                      name="min_fallback_events_30d"
+                      type="number"
+                      min={1}
+                      defaultValue={thresholdsConfig.globalThresholds.minFallbackEvents30d}
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label htmlFor="global_weekly_growth_ratio_threshold">Crecimiento semanal (ratio)</Label>
+                    <Input
+                      id="global_weekly_growth_ratio_threshold"
+                      name="weekly_growth_ratio_threshold"
+                      type="number"
+                      min={0}
+                      step="0.01"
+                      defaultValue={thresholdsConfig.globalThresholds.weeklyGrowthRatioThreshold}
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label htmlFor="global_min_weekly_queries">Min. queries semanales</Label>
+                    <Input
+                      id="global_min_weekly_queries"
+                      name="min_weekly_queries"
+                      type="number"
+                      min={1}
+                      defaultValue={thresholdsConfig.globalThresholds.minWeeklyQueries}
+                    />
+                  </div>
+                </div>
+                <Button type="submit" size="sm">Guardar umbrales globales</Button>
+              </form>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Override por organización (esta organización)</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <form action={saveCatalogVectorStoreOrgThresholdsAction} className="space-y-4">
+                <div className="grid gap-3 md:grid-cols-2">
+                  <div className="space-y-1">
+                    <Label htmlFor="org_min_query_events_30d">Min. queries 30d</Label>
+                    <Input
+                      id="org_min_query_events_30d"
+                      name="min_query_events_30d"
+                      type="number"
+                      min={1}
+                      defaultValue={thresholdsConfig.effectiveThresholds.minQueryEvents30d}
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label htmlFor="org_fallback_ratio_threshold">Ratio fallback (0-1)</Label>
+                    <Input
+                      id="org_fallback_ratio_threshold"
+                      name="fallback_ratio_threshold"
+                      type="number"
+                      min={0}
+                      max={1}
+                      step="0.01"
+                      defaultValue={thresholdsConfig.effectiveThresholds.fallbackRatioThreshold}
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label htmlFor="org_min_fallback_events_30d">Min. fallback 30d</Label>
+                    <Input
+                      id="org_min_fallback_events_30d"
+                      name="min_fallback_events_30d"
+                      type="number"
+                      min={1}
+                      defaultValue={thresholdsConfig.effectiveThresholds.minFallbackEvents30d}
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label htmlFor="org_weekly_growth_ratio_threshold">Crecimiento semanal (ratio)</Label>
+                    <Input
+                      id="org_weekly_growth_ratio_threshold"
+                      name="weekly_growth_ratio_threshold"
+                      type="number"
+                      min={0}
+                      step="0.01"
+                      defaultValue={thresholdsConfig.effectiveThresholds.weeklyGrowthRatioThreshold}
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label htmlFor="org_min_weekly_queries">Min. queries semanales</Label>
+                    <Input
+                      id="org_min_weekly_queries"
+                      name="min_weekly_queries"
+                      type="number"
+                      min={1}
+                      defaultValue={thresholdsConfig.effectiveThresholds.minWeeklyQueries}
+                    />
+                  </div>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <Button type="submit" size="sm">Guardar override</Button>
+                  <Button type="submit" size="sm" variant="outline" formAction={clearCatalogVectorStoreOrgThresholdsAction}>
+                    Limpiar override
+                  </Button>
+                </div>
+              </form>
+              <p className="text-xs text-muted-foreground">
+                Estado override: {thresholdsConfig.organizationThresholds ? "activo" : "usa global"}
+              </p>
+            </CardContent>
+          </Card>
+        </div>
 
         <Card>
           <CardHeader>

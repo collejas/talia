@@ -144,10 +144,13 @@ La estrategia será híbrida: SQL-first para consultas estructuradas y vector st
 - [x] Alertas y tendencia semanal en panel:
   - Se agregaron alertas automáticas por umbral (volumen, ratio de fallback y crecimiento semanal).
   - Se añadió comparativo semanal de queries vectoriales (últimos 7 días vs semana previa).
+- [x] Umbrales duales (global + por organización):
+  - Se implementó lectura efectiva en cascada (`global` + `override` tenant) desde `organizaciones.config`.
+  - Se habilitó edición de umbrales globales y override por organización desde la vista de observabilidad.
 - [x] Batch para operaciones masivas:
   - Endpoints bulk-delete para líneas/familias/modelos.
   - Frontend actualizado para usar llamadas batch en vez de N requests individuales.
 - [x] Modelo de embeddings actualizado:
   - Default de `embeddings_model` migrado a `text-embedding-3-small` (compatible con `vector(1536)`).
 - [ ] Pendiente principal:
-  - Afinar umbrales por tenant/canal y parametrizarlos desde configuración para evitar falsos positivos.
+  - Añadir control de permisos para edición global (solo platform admin) y versionado/historial de cambios de umbral.

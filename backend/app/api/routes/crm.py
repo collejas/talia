@@ -50,6 +50,7 @@ from app.core.config import settings
 from app.core.logging import get_logger
 from app.data.geo.locations import get_municipality_name, get_state_name
 from app.repositories.crm import CRMRepository, CRMRepositoryError
+from app.repositories.platform_admin import PlatformRepository, PlatformRepositoryError
 from app.services import (
     DenueClient,
     DenueError,
@@ -220,6 +221,14 @@ async def _sync_lead_metrics_after_sale(repo: CRMRepository, lead_id: UUID) -> N
 DEFAULT_TEMPLATE_SLUG = "default"
 DEFAULT_QUOTE_TEMPLATE_SLUG = "default"
 DEFAULT_REMINDER_SLUG = "default"
+CATALOG_VECTOR_ALERT_CONFIG_PATH = ("catalog", "vector_store", "alert_thresholds")
+CATALOG_VECTOR_ALERT_DEFAULTS: dict[str, Any] = {
+    "min_query_events_30d": 250,
+    "fallback_ratio_threshold": 0.35,
+    "min_fallback_events_30d": 20,
+    "weekly_growth_ratio_threshold": 0.40,
+    "min_weekly_queries": 20,
+}
 
 
 def _is_pytest_runtime() -> bool:
@@ -230,6 +239,52 @@ QUOTE_WITH_ITEMS_SELECT = "*,items:lead_cotizacion_items(*,catalog_item:catalog_
 QUOTE_DEFAULT_TAX_RATE = Decimal("0.16")
 CURRENCY_QUANTUM = Decimal("0.01")
 MAX_PROSPECCION_BATCH = 500
+
+
+def _get_nested_dict_value(config: Mapping[str, Any] | None, path: Sequence[str]) -> Any:
+    current: Any = config
+    for key in path:
+        if not isinstance(current, Mapping):
+            return None
+        current = current.get(key)
+    return current
+
+
+def _set_nested_dict_value(config: dict[str, Any], path: Sequence[str], value: Any) -> dict[str, Any]:
+    result = dict(config)
+    current: dict[str, Any] = result
+    for key in path[:-1]:
+        nested = current.get(key)
+        if not isinstance(nested, dict):
+            nested = {}
+        else:
+            nested = dict(nested)
+        current[key] = nested
+        current = nested
+    current[path[-1]] = value
+    return result
+
+
+def _delete_nested_dict_value(config: dict[str, Any], path: Sequence[str]) -> dict[str, Any]:
+    if not path:
+        return dict(config)
+    result = dict(config)
+    stack: list[tuple[dict[str, Any], str]] = []
+    current: Any = result
+    for key in path:
+        if not isinstance(current, dict) or key not in current:
+            return result
+        stack.append((current, key))
+        current = current[key]
+    parent, key = stack[-1]
+    parent.pop(key, None)
+    for container, container_key in reversed(stack[:-1]):
+        value = container.get(container_key)
+        if isinstance(value, dict) and not value:
+            container.pop(container_key, None)
+        else:
+            break
+    return result
 
 
 class CatalogItemDetailsRequest(BaseModel):
@@ -4469,6 +4524,41 @@ def require_any_permission(permission_codes: list[str]):
     return _dependency
 
 
+async def require_platform_admin(
+    user_token: str = Depends(require_user_token),
+) -> UUID:
+    if settings.environment.strip().lower() == "test" or _is_pytest_runtime():
+        user_id = _jwt_verify_and_sub(user_token)
+        if user_id:
+            try:
+                return UUID(str(user_id))
+            except (TypeError, ValueError):
+                pass
+        return UUID(int=0)
+    try:
+        repo = PlatformRepository()
+    except PlatformRepositoryError as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+    try:
+        user = await repo.auth_get_user(user_token=user_token)
+    except PlatformRepositoryError as exc:
+        raise HTTPException(status_code=401, detail=str(exc)) from exc
+    raw_id = user.get("id")
+    try:
+        user_id = UUID(str(raw_id))
+    except (TypeError, ValueError) as exc:
+        raise HTTPException(status_code=401, detail="auth_user_invalid") from exc
+
+    try:
+        allowed = await repo.is_platform_admin(user_id=user_id)
+    except PlatformRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    if not allowed:
+        raise HTTPException(status_code=403, detail="platform_admin_required")
+    return user_id
+
+
 @router.post("/catalog/item-details")
 async def fetch_catalog_item_details(
     payload: CatalogItemDetailsRequest,
@@ -7295,6 +7385,28 @@ class CatalogVectorStoreMetricsResponse(BaseModel):
     buckets: list[CatalogVectorStoreMetricsBucket] = Field(default_factory=list)
 
 
+class CatalogVectorStoreAlertThresholds(BaseModel):
+    min_query_events_30d: Annotated[int, Field(ge=1, le=200000)] = 250
+    fallback_ratio_threshold: Annotated[float, Field(ge=0.0, le=1.0)] = 0.35
+    min_fallback_events_30d: Annotated[int, Field(ge=1, le=200000)] = 20
+    weekly_growth_ratio_threshold: Annotated[float, Field(ge=0.0, le=10.0)] = 0.40
+    min_weekly_queries: Annotated[int, Field(ge=1, le=200000)] = 20
+
+
+class CatalogVectorStoreAlertThresholdsPayload(BaseModel):
+    min_query_events_30d: Annotated[int, Field(ge=1, le=200000)]
+    fallback_ratio_threshold: Annotated[float, Field(ge=0.0, le=1.0)]
+    min_fallback_events_30d: Annotated[int, Field(ge=1, le=200000)]
+    weekly_growth_ratio_threshold: Annotated[float, Field(ge=0.0, le=10.0)]
+    min_weekly_queries: Annotated[int, Field(ge=1, le=200000)]
+
+
+class CatalogVectorStoreAlertThresholdsResponse(BaseModel):
+    global_thresholds: CatalogVectorStoreAlertThresholds
+    organization_thresholds: CatalogVectorStoreAlertThresholds | None = None
+    effective_thresholds: CatalogVectorStoreAlertThresholds
+
+
 @router.get("/catalog/vector-store/status", response_model=CatalogVectorStoreStatus)
 async def catalog_vector_store_status(
     *,
@@ -7392,6 +7504,142 @@ async def catalog_vector_store_metrics(
         total_events=len(rows),
         buckets=buckets,
     )
+
+
+def _parse_alert_thresholds(raw: Any) -> CatalogVectorStoreAlertThresholds | None:
+    if not isinstance(raw, Mapping):
+        return None
+    payload = {
+        "min_query_events_30d": raw.get("min_query_events_30d"),
+        "fallback_ratio_threshold": raw.get("fallback_ratio_threshold"),
+        "min_fallback_events_30d": raw.get("min_fallback_events_30d"),
+        "weekly_growth_ratio_threshold": raw.get("weekly_growth_ratio_threshold"),
+        "min_weekly_queries": raw.get("min_weekly_queries"),
+    }
+    try:
+        return CatalogVectorStoreAlertThresholds.model_validate(payload)
+    except ValidationError:
+        return None
+
+
+async def _resolve_catalog_vector_alert_thresholds(
+    *,
+    repo: CRMRepository,
+    organizacion_id: UUID,
+) -> CatalogVectorStoreAlertThresholdsResponse:
+    global_config = await repo.get_organizacion_config(organizacion_id=tenant_runtime.MASTER_ORGANIZACION_ID)
+    global_raw = _get_nested_dict_value(global_config or {}, CATALOG_VECTOR_ALERT_CONFIG_PATH)
+    global_thresholds = _parse_alert_thresholds(global_raw) or CatalogVectorStoreAlertThresholds.model_validate(
+        CATALOG_VECTOR_ALERT_DEFAULTS
+    )
+
+    org_config = await repo.get_organizacion_config(organizacion_id=organizacion_id)
+    org_raw = _get_nested_dict_value(org_config or {}, CATALOG_VECTOR_ALERT_CONFIG_PATH)
+    org_thresholds = _parse_alert_thresholds(org_raw)
+    effective = org_thresholds or global_thresholds
+    return CatalogVectorStoreAlertThresholdsResponse(
+        global_thresholds=global_thresholds,
+        organization_thresholds=org_thresholds,
+        effective_thresholds=effective,
+    )
+
+
+@router.get(
+    "/catalog/vector-store/alert-thresholds",
+    response_model=CatalogVectorStoreAlertThresholdsResponse,
+)
+async def catalog_vector_store_alert_thresholds(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("settings.view")),
+) -> CatalogVectorStoreAlertThresholdsResponse:
+    try:
+        return await _resolve_catalog_vector_alert_thresholds(
+            repo=repo,
+            organizacion_id=organizacion_id,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+
+@router.put(
+    "/catalog/vector-store/alert-thresholds",
+    response_model=CatalogVectorStoreAlertThresholdsResponse,
+)
+async def update_catalog_vector_store_alert_thresholds(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("settings.manage")),
+    payload: CatalogVectorStoreAlertThresholdsPayload,
+) -> CatalogVectorStoreAlertThresholdsResponse:
+    try:
+        current = await repo.get_organizacion_config(organizacion_id=organizacion_id) or {}
+        updated = _set_nested_dict_value(
+            current,
+            CATALOG_VECTOR_ALERT_CONFIG_PATH,
+            payload.model_dump(mode="json"),
+        )
+        await repo.set_organizacion_config(organizacion_id=organizacion_id, config=updated)
+        return await _resolve_catalog_vector_alert_thresholds(
+            repo=repo,
+            organizacion_id=organizacion_id,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+
+@router.delete(
+    "/catalog/vector-store/alert-thresholds",
+    response_model=CatalogVectorStoreAlertThresholdsResponse,
+)
+async def clear_catalog_vector_store_alert_thresholds(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("settings.manage")),
+) -> CatalogVectorStoreAlertThresholdsResponse:
+    try:
+        current = await repo.get_organizacion_config(organizacion_id=organizacion_id) or {}
+        updated = _delete_nested_dict_value(current, CATALOG_VECTOR_ALERT_CONFIG_PATH)
+        await repo.set_organizacion_config(organizacion_id=organizacion_id, config=updated)
+        return await _resolve_catalog_vector_alert_thresholds(
+            repo=repo,
+            organizacion_id=organizacion_id,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+
+@router.put(
+    "/catalog/vector-store/alert-thresholds/global",
+    response_model=CatalogVectorStoreAlertThresholdsResponse,
+)
+async def update_catalog_vector_store_alert_thresholds_global(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("settings.manage")),
+    payload: CatalogVectorStoreAlertThresholdsPayload,
+) -> CatalogVectorStoreAlertThresholdsResponse:
+    try:
+        current = await repo.get_organizacion_config(organizacion_id=tenant_runtime.MASTER_ORGANIZACION_ID) or {}
+        updated = _set_nested_dict_value(
+            current,
+            CATALOG_VECTOR_ALERT_CONFIG_PATH,
+            payload.model_dump(mode="json"),
+        )
+        await repo.set_organizacion_config(
+            organizacion_id=tenant_runtime.MASTER_ORGANIZACION_ID,
+            config=updated,
+        )
+        return await _resolve_catalog_vector_alert_thresholds(
+            repo=repo,
+            organizacion_id=organizacion_id,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
 
 
 @router.get(
