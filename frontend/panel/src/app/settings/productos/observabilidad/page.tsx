@@ -2,6 +2,7 @@ import Link from "next/link"
 
 import {
   clearCatalogVectorStoreOrgThresholdsAction,
+  fetchIsPlatformAdmin,
   fetchCatalogVectorStoreAlertThresholdsHistory,
   fetchCatalogVectorStoreMetrics,
   fetchCatalogVectorStoreStatus,
@@ -291,6 +292,7 @@ export default async function ProductosObservabilidadPage({
     fetchCatalogVectorStoreAlertThresholds(),
     fetchCatalogVectorStoreAlertThresholdsHistory({ scope: "all", limit: 200 }),
   ])
+  const isPlatformAdmin = await fetchIsPlatformAdmin()
 
   const queryEvents = sumByType(metrics.buckets, "query")
   const reindexEvents = sumByType(metrics.buckets, "reindex")
@@ -391,13 +393,18 @@ export default async function ProductosObservabilidadPage({
             <CardContent>
               <form action={saveCatalogVectorStoreGlobalThresholdsAction} className="space-y-4">
                 <div className="grid gap-3 md:grid-cols-2">
-                  <div className="space-y-1"><Label htmlFor="global_min_query_events_30d">Min. queries 30d</Label><Input id="global_min_query_events_30d" name="min_query_events_30d" type="number" min={1} defaultValue={thresholdsConfig.globalThresholds.minQueryEvents30d} /></div>
-                  <div className="space-y-1"><Label htmlFor="global_fallback_ratio_threshold">Ratio fallback (0-1)</Label><Input id="global_fallback_ratio_threshold" name="fallback_ratio_threshold" type="number" min={0} max={1} step="0.01" defaultValue={thresholdsConfig.globalThresholds.fallbackRatioThreshold} /></div>
-                  <div className="space-y-1"><Label htmlFor="global_min_fallback_events_30d">Min. fallback 30d</Label><Input id="global_min_fallback_events_30d" name="min_fallback_events_30d" type="number" min={1} defaultValue={thresholdsConfig.globalThresholds.minFallbackEvents30d} /></div>
-                  <div className="space-y-1"><Label htmlFor="global_weekly_growth_ratio_threshold">Crecimiento semanal (ratio)</Label><Input id="global_weekly_growth_ratio_threshold" name="weekly_growth_ratio_threshold" type="number" min={0} step="0.01" defaultValue={thresholdsConfig.globalThresholds.weeklyGrowthRatioThreshold} /></div>
-                  <div className="space-y-1"><Label htmlFor="global_min_weekly_queries">Min. queries semanales</Label><Input id="global_min_weekly_queries" name="min_weekly_queries" type="number" min={1} defaultValue={thresholdsConfig.globalThresholds.minWeeklyQueries} /></div>
+                  <div className="space-y-1"><Label htmlFor="global_min_query_events_30d">Min. queries 30d</Label><Input id="global_min_query_events_30d" name="min_query_events_30d" type="number" min={1} defaultValue={thresholdsConfig.globalThresholds.minQueryEvents30d} disabled={!isPlatformAdmin} /></div>
+                  <div className="space-y-1"><Label htmlFor="global_fallback_ratio_threshold">Ratio fallback (0-1)</Label><Input id="global_fallback_ratio_threshold" name="fallback_ratio_threshold" type="number" min={0} max={1} step="0.01" defaultValue={thresholdsConfig.globalThresholds.fallbackRatioThreshold} disabled={!isPlatformAdmin} /></div>
+                  <div className="space-y-1"><Label htmlFor="global_min_fallback_events_30d">Min. fallback 30d</Label><Input id="global_min_fallback_events_30d" name="min_fallback_events_30d" type="number" min={1} defaultValue={thresholdsConfig.globalThresholds.minFallbackEvents30d} disabled={!isPlatformAdmin} /></div>
+                  <div className="space-y-1"><Label htmlFor="global_weekly_growth_ratio_threshold">Crecimiento semanal (ratio)</Label><Input id="global_weekly_growth_ratio_threshold" name="weekly_growth_ratio_threshold" type="number" min={0} step="0.01" defaultValue={thresholdsConfig.globalThresholds.weeklyGrowthRatioThreshold} disabled={!isPlatformAdmin} /></div>
+                  <div className="space-y-1"><Label htmlFor="global_min_weekly_queries">Min. queries semanales</Label><Input id="global_min_weekly_queries" name="min_weekly_queries" type="number" min={1} defaultValue={thresholdsConfig.globalThresholds.minWeeklyQueries} disabled={!isPlatformAdmin} /></div>
                 </div>
-                <Button type="submit" size="sm">Guardar umbrales globales</Button>
+                <Button type="submit" size="sm" disabled={!isPlatformAdmin}>Guardar umbrales globales</Button>
+                {!isPlatformAdmin ? (
+                  <p className="text-xs text-muted-foreground">
+                    Solo un usuario con rol `platform admin` puede modificar umbrales globales.
+                  </p>
+                ) : null}
               </form>
             </CardContent>
           </Card>

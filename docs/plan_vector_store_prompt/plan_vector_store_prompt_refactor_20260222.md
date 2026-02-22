@@ -158,10 +158,12 @@ La estrategia será híbrida: SQL-first para consultas estructuradas y vector st
   - Se agregó endpoint dedicado en panel para descargar CSV con los filtros activos del historial.
 - [x] Comparativa semanal/mensual:
   - Se añadió comparativo de queries, fallback ratio y reindex entre periodos consecutivos (7d vs 7d previos, 30d vs 30d previos).
+- [x] Hardening de permisos en UI:
+  - La edición global de umbrales se deshabilita visualmente para usuarios no `platform admin`.
 - [x] Batch para operaciones masivas:
   - Endpoints bulk-delete para líneas/familias/modelos.
   - Frontend actualizado para usar llamadas batch en vez de N requests individuales.
 - [x] Modelo de embeddings actualizado:
   - Default de `embeddings_model` migrado a `text-embedding-3-small` (compatible con `vector(1536)`).
 - [ ] Pendiente principal:
-  - Ocultar/inhabilitar edición global en UI para usuarios no `platform admin` (el backend ya lo bloquea).
+  - Enriquecer comparativa con correlación explícita entre cambios de umbral y variación de costo real por periodo.

@@ -664,6 +664,18 @@ export async function clearCatalogVectorStoreOrgThresholdsAction(): Promise<void
   revalidatePath("/settings/productos/observabilidad")
 }
 
+export async function fetchIsPlatformAdmin(): Promise<boolean> {
+  const response = await callCrmApi<Record<string, unknown>>("/admin/me/platform-admin", {
+    organizacionId: null,
+  })
+  if (!response.ok || !response.data || typeof response.data !== "object") {
+    return false
+  }
+  const payload = response.data
+  const value = payload.is_platform_admin ?? payload.isPlatformAdmin
+  return value === true
+}
+
 export async function fetchCatalogVectorStoreAlertThresholdsHistory(options?: {
   scope?: "all" | "organization" | "global"
   limit?: number
