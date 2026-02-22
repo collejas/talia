@@ -40,6 +40,34 @@ class Settings(BaseSettings):
         default="text-embedding-ada-002",
         description="Modelo de embeddings que se usa para la vector store.",
     )
+    catalog_query_embedding_cache_enabled: bool = Field(
+        default=True,
+        description="Activa cache en memoria para embeddings de consultas de catálogo.",
+        validation_alias=AliasChoices(
+            "CATALOG_QUERY_EMBEDDING_CACHE_ENABLED",
+            "TALIA_CATALOG_QUERY_EMBEDDING_CACHE_ENABLED",
+        ),
+    )
+    catalog_query_embedding_cache_ttl_seconds: int = Field(
+        default=86400,
+        ge=60,
+        le=7 * 86400,
+        description="TTL del cache de embeddings de consulta de catálogo (segundos).",
+        validation_alias=AliasChoices(
+            "CATALOG_QUERY_EMBEDDING_CACHE_TTL_SECONDS",
+            "TALIA_CATALOG_QUERY_EMBEDDING_CACHE_TTL_SECONDS",
+        ),
+    )
+    catalog_query_embedding_cache_max_entries: int = Field(
+        default=2000,
+        ge=100,
+        le=20000,
+        description="Tamaño máximo de entradas en cache de embeddings de consulta.",
+        validation_alias=AliasChoices(
+            "CATALOG_QUERY_EMBEDDING_CACHE_MAX_ENTRIES",
+            "TALIA_CATALOG_QUERY_EMBEDDING_CACHE_MAX_ENTRIES",
+        ),
+    )
     catalog_context_autoload: bool = Field(
         default=False,
         description=(

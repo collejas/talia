@@ -5,9 +5,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 import json
 from collections import defaultdict
+import re
 from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Any, Literal, Mapping, Sequence
+from time import monotonic
 from uuid import UUID
 
 from app.core.config import settings
@@ -17,6 +19,20 @@ from app.services import tenant_runtime
 from app.services.openai import get_openai_client
 
 logger = get_logger("app.services.catalog_embeddings")
+
+_TRIVIAL_QUERY_TOKENS = {
+    "ok",
+    "oka",
+    "vale",
+    "listo",
+    "si",
+    "sí",
+    "no",
+    "hola",
+    "gracias",
+}
+_EMAIL_RE = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")
+_PHONE_RE = re.compile(r"\+?\d[\d\-\s]{7,}\d")
 
 
 def _safe_text(value: Any) -> str | None:
@@ -108,6 +124,10 @@ class CatalogEmbeddingService:
     def __init__(self, repo: CRMRepository) -> None:
         self._repo = repo
         self._model = settings.embeddings_model or "text-embedding-ada-002"
+        self._query_cache_enabled = bool(settings.catalog_query_embedding_cache_enabled)
+        self._query_cache_ttl = int(settings.catalog_query_embedding_cache_ttl_seconds)
+        self._query_cache_max_entries = int(settings.catalog_query_embedding_cache_max_entries)
+        self._query_embedding_cache: dict[tuple[str, str, str], tuple[float, list[float]]] = {}
 
     async def reindex_catalog(
         self,
@@ -468,7 +488,7 @@ class CatalogEmbeddingService:
         prompt = query.strip()
         if not prompt:
             return []
-        embedding = await self._create_embedding(prompt, organizacion_id)
+        embedding = await self._get_or_create_query_embedding(prompt, organizacion_id)
         rows = await self._repo.search_catalog_document_embeddings(
             organizacion_id=organizacion_id,
             embedding=embedding,
@@ -492,9 +512,70 @@ class CatalogEmbeddingService:
             "query",
             usuario_id=user_id,
             canal=channel,
-            metadata={"query": prompt, "matches": len(matches)},
+            metadata={
+                "query": prompt,
+                "matches": len(matches),
+                "embedding_cache_eligible": self._is_query_cache_eligible(prompt),
+            },
         )
         return matches
+
+    def _cache_key(self, organizacion_id: UUID, prompt: str) -> tuple[str, str, str]:
+        normalized = " ".join(prompt.lower().split())
+        return (str(organizacion_id), self._model, normalized)
+
+    @staticmethod
+    def _is_query_cache_eligible(prompt: str) -> bool:
+        normalized = " ".join(prompt.strip().lower().split())
+        if len(normalized) < 3:
+            return False
+        if normalized in _TRIVIAL_QUERY_TOKENS:
+            return False
+        if _EMAIL_RE.search(normalized):
+            return False
+        if _PHONE_RE.search(normalized):
+            return False
+        return True
+
+    def _purge_expired_cache_entries(self) -> None:
+        if not self._query_embedding_cache:
+            return
+        now = monotonic()
+        stale_keys = [
+            key
+            for key, (expires_at, _) in self._query_embedding_cache.items()
+            if expires_at <= now
+        ]
+        for key in stale_keys:
+            self._query_embedding_cache.pop(key, None)
+
+    async def _get_or_create_query_embedding(
+        self,
+        prompt: str,
+        organizacion_id: UUID,
+    ) -> Sequence[float]:
+        if not self._query_cache_enabled or not self._is_query_cache_eligible(prompt):
+            return await self._create_embedding(prompt, organizacion_id)
+
+        self._purge_expired_cache_entries()
+        key = self._cache_key(organizacion_id, prompt)
+        now = monotonic()
+        entry = self._query_embedding_cache.get(key)
+        if entry:
+            expires_at, embedding = entry
+            if expires_at > now:
+                return list(embedding)
+            self._query_embedding_cache.pop(key, None)
+
+        embedding = list(await self._create_embedding(prompt, organizacion_id))
+        self._query_embedding_cache[key] = (now + self._query_cache_ttl, embedding)
+        if len(self._query_embedding_cache) > self._query_cache_max_entries:
+            oldest_key = min(
+                self._query_embedding_cache.items(),
+                key=lambda item: item[1][0],
+            )[0]
+            self._query_embedding_cache.pop(oldest_key, None)
+        return embedding
 
     async def audit_event(
         self,
