@@ -7621,6 +7621,7 @@ async def update_catalog_vector_store_alert_thresholds_global(
     repo: CRMRepository = Depends(get_repository),
     organizacion_id: UUID = Depends(require_organizacion_id),
     _: str = Depends(require_permission("settings.manage")),
+    __: UUID = Depends(require_platform_admin),
     payload: CatalogVectorStoreAlertThresholdsPayload,
 ) -> CatalogVectorStoreAlertThresholdsResponse:
     try:

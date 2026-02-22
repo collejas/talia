@@ -147,10 +147,12 @@ La estrategia será híbrida: SQL-first para consultas estructuradas y vector st
 - [x] Umbrales duales (global + por organización):
   - Se implementó lectura efectiva en cascada (`global` + `override` tenant) desde `organizaciones.config`.
   - Se habilitó edición de umbrales globales y override por organización desde la vista de observabilidad.
+- [x] Control de permisos en umbrales globales:
+  - La edición global de umbrales requiere `platform admin` además de `settings.manage`.
 - [x] Batch para operaciones masivas:
   - Endpoints bulk-delete para líneas/familias/modelos.
   - Frontend actualizado para usar llamadas batch en vez de N requests individuales.
 - [x] Modelo de embeddings actualizado:
   - Default de `embeddings_model` migrado a `text-embedding-3-small` (compatible con `vector(1536)`).
 - [ ] Pendiente principal:
-  - Añadir control de permisos para edición global (solo platform admin) y versionado/historial de cambios de umbral.
+  - Implementar versionado/historial de cambios de umbral (quién, cuándo, valor previo/nuevo).
