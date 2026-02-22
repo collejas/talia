@@ -18,6 +18,7 @@ import {
   FamiliaProducto,
   LineaDeNegocio,
   createFamiliaProducto,
+  deleteFamiliasProductoBulk,
   deleteFamiliaProducto,
   updateFamiliaProducto,
 } from "@/app/settings/productos/actions"
@@ -235,28 +236,20 @@ export function FamiliasView({ lineas, familias }: FamiliasViewProps) {
     startTransition(() => {
       void (async () => {
         try {
-          const operations = selectedFamilias.map(async (id) => {
-            await deleteFamiliaProducto(id)
-            return id
-          })
-          const results = await Promise.allSettled(operations)
-          const deletedIds = results
-            .filter((res): res is PromiseFulfilledResult<string> => res.status === "fulfilled")
-            .map((res) => res.value)
+          const result = await deleteFamiliasProductoBulk(selectedFamilias)
+          const deletedIds = result.deleted_ids
           if (deletedIds.length) {
             const deletedSet = new Set(deletedIds)
             setFamiliasState((prev) => prev.filter((item) => !deletedSet.has(item.id)))
             setSelectedFamilias((prev) => prev.filter((id) => !deletedSet.has(id)))
           }
-          const failed = results.find((res) => res.status === "rejected") as
-            | PromiseRejectedResult
-            | undefined
-          if (failed) {
+          if (result.failed > 0) {
+            const firstError = result.errors[0]
             const message = formatDeleteErrorMessage(
-              failed.reason instanceof Error ? failed.reason.message : String(failed.reason),
+              firstError?.detail || "No se pudieron eliminar algunos registros.",
             )
             setListFeedback({ type: "error", message })
-          } else {
+          } else if (deletedIds.length) {
             setListFeedback({
               type: "success",
               message: `Se eliminaron ${deletedIds.length} familia(s).`,

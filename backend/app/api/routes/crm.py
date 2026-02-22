@@ -5201,6 +5201,23 @@ class CRMCatalogDeleteResponse(BaseModel):
     hard_deleted: bool = False
 
 
+class CRMBulkDeleteRequest(BaseModel):
+    ids: list[UUID] = Field(..., min_length=1, max_length=500)
+
+
+class CRMBulkDeleteError(BaseModel):
+    id: UUID
+    detail: str
+
+
+class CRMBulkDeleteResponse(BaseModel):
+    requested: int
+    deleted: int
+    failed: int
+    deleted_ids: list[UUID] = Field(default_factory=list)
+    errors: list[CRMBulkDeleteError] = Field(default_factory=list)
+
+
 # existing classes...
 class CRMProductoMetadataField(BaseModel):
     id: str
@@ -7511,6 +7528,54 @@ async def delete_product_linea(
     return CRMLineaDeNegocio.model_validate(row)
 
 
+@router.post("/productos/lineas/bulk-delete", response_model=CRMBulkDeleteResponse)
+async def bulk_delete_product_lineas(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("settings.manage")),
+    payload: CRMBulkDeleteRequest,
+    background_tasks: BackgroundTasks,
+    usuario_id: UUID | None = Depends(optional_usuario_id),
+) -> CRMBulkDeleteResponse:
+    deleted_ids: list[UUID] = []
+    errors: list[CRMBulkDeleteError] = []
+    for linea_id in payload.ids:
+        try:
+            row = await repo.delete_linea_de_negocio(
+                organizacion_id=organizacion_id,
+                linea_id=linea_id,
+            )
+        except CRMRepositoryError as exc:
+            detail, _ = _map_delete_exception(
+                exc,
+                not_found_key="linea_not_found",
+                dependency_key="linea_has_children",
+                dependency_message=(
+                    "Esta línea todavía tiene familias/modelos/productos asociados. "
+                    "Elimina primero esos registros antes de borrar la línea."
+                ),
+            )
+            errors.append(CRMBulkDeleteError(id=linea_id, detail=detail))
+            continue
+        deleted_ids.append(linea_id)
+        _trigger_catalog_reindex_entity(
+            background_tasks,
+            row.get("organizacion_id") or organizacion_id,
+            entity_type="linea",
+            entity_id_value=row.get("id") or linea_id,
+            usuario_id=usuario_id,
+            canal="panel",
+        )
+    return CRMBulkDeleteResponse(
+        requested=len(payload.ids),
+        deleted=len(deleted_ids),
+        failed=len(errors),
+        deleted_ids=deleted_ids,
+        errors=errors,
+    )
+
+
 @router.get("/productos/familias", response_model=list[CRMFamiliaProducto])
 async def list_product_familias(
     *,
@@ -7640,6 +7705,54 @@ async def delete_product_familia(
     return CRMFamiliaProducto.model_validate(row)
 
 
+@router.post("/productos/familias/bulk-delete", response_model=CRMBulkDeleteResponse)
+async def bulk_delete_product_familias(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("settings.manage")),
+    payload: CRMBulkDeleteRequest,
+    background_tasks: BackgroundTasks,
+    usuario_id: UUID | None = Depends(optional_usuario_id),
+) -> CRMBulkDeleteResponse:
+    deleted_ids: list[UUID] = []
+    errors: list[CRMBulkDeleteError] = []
+    for familia_id in payload.ids:
+        try:
+            row = await repo.delete_familia_producto(
+                organizacion_id=organizacion_id,
+                familia_id=familia_id,
+            )
+        except CRMRepositoryError as exc:
+            detail, _ = _map_delete_exception(
+                exc,
+                not_found_key="familia_not_found",
+                dependency_key="familia_has_children",
+                dependency_message=(
+                    "La familia tiene modelos o productos asociados. Elimina primero los productos "
+                    "y luego los modelos antes de borrar la familia."
+                ),
+            )
+            errors.append(CRMBulkDeleteError(id=familia_id, detail=detail))
+            continue
+        deleted_ids.append(familia_id)
+        _trigger_catalog_reindex_entity(
+            background_tasks,
+            row.get("organizacion_id") or organizacion_id,
+            entity_type="familia",
+            entity_id_value=row.get("id") or familia_id,
+            usuario_id=usuario_id,
+            canal="panel",
+        )
+    return CRMBulkDeleteResponse(
+        requested=len(payload.ids),
+        deleted=len(deleted_ids),
+        failed=len(errors),
+        deleted_ids=deleted_ids,
+        errors=errors,
+    )
+
+
 @router.get("/productos/modelos", response_model=list[CRMModeloProducto])
 async def list_product_modelos(
     *,
@@ -7765,6 +7878,54 @@ async def delete_product_modelo(
         canal="panel",
     )
     return CRMModeloProducto.model_validate(row)
+
+
+@router.post("/productos/modelos/bulk-delete", response_model=CRMBulkDeleteResponse)
+async def bulk_delete_product_modelos(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("settings.manage")),
+    payload: CRMBulkDeleteRequest,
+    background_tasks: BackgroundTasks,
+    usuario_id: UUID | None = Depends(optional_usuario_id),
+) -> CRMBulkDeleteResponse:
+    deleted_ids: list[UUID] = []
+    errors: list[CRMBulkDeleteError] = []
+    for modelo_id in payload.ids:
+        try:
+            row = await repo.delete_modelo_producto(
+                organizacion_id=organizacion_id,
+                modelo_id=modelo_id,
+            )
+        except CRMRepositoryError as exc:
+            detail, _ = _map_delete_exception(
+                exc,
+                not_found_key="modelo_not_found",
+                dependency_key="modelo_has_children",
+                dependency_message=(
+                    "El modelo tiene productos asociados. Elimina primero los productos antes "
+                    "de borrar el modelo."
+                ),
+            )
+            errors.append(CRMBulkDeleteError(id=modelo_id, detail=detail))
+            continue
+        deleted_ids.append(modelo_id)
+        _trigger_catalog_reindex_entity(
+            background_tasks,
+            row.get("organizacion_id") or organizacion_id,
+            entity_type="modelo",
+            entity_id_value=row.get("id") or modelo_id,
+            usuario_id=usuario_id,
+            canal="panel",
+        )
+    return CRMBulkDeleteResponse(
+        requested=len(payload.ids),
+        deleted=len(deleted_ids),
+        failed=len(errors),
+        deleted_ids=deleted_ids,
+        errors=errors,
+    )
 
 
 @router.get(

@@ -16,6 +16,7 @@ import {
   FamiliaProducto,
   createLineaDeNegocio,
   deleteLineaDeNegocio,
+  deleteLineasDeNegocioBulk,
   updateLineaDeNegocio,
 } from "@/app/settings/productos/actions"
 import {
@@ -222,28 +223,20 @@ export function LineasView({ lineas, familias }: LineasViewProps) {
     startTransition(() => {
       void (async () => {
         try {
-          const operations = selectedLineas.map(async (id) => {
-            await deleteLineaDeNegocio(id)
-            return id
-          })
-          const results = await Promise.allSettled(operations)
-          const deletedIds = results
-            .filter((res): res is PromiseFulfilledResult<string> => res.status === "fulfilled")
-            .map((res) => res.value)
+          const result = await deleteLineasDeNegocioBulk(selectedLineas)
+          const deletedIds = result.deleted_ids
           if (deletedIds.length) {
             const deletedSet = new Set(deletedIds)
             setLineasState((prev) => prev.filter((item) => !deletedSet.has(item.id)))
             setSelectedLineas((prev) => prev.filter((id) => !deletedSet.has(id)))
           }
-          const failed = results.find((res) => res.status === "rejected") as
-            | PromiseRejectedResult
-            | undefined
-          if (failed) {
+          if (result.failed > 0) {
+            const firstError = result.errors[0]
             const message = formatDeleteErrorMessage(
-              failed.reason instanceof Error ? failed.reason.message : String(failed.reason),
+              firstError?.detail || "No se pudieron eliminar algunos registros.",
             )
             setListFeedback({ type: "error", message })
-          } else {
+          } else if (deletedIds.length) {
             setListFeedback({
               type: "success",
               message: `Se eliminaron ${deletedIds.length} línea(s).`,

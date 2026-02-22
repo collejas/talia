@@ -371,6 +371,14 @@ export async function deleteFamiliaProducto(id: string): Promise<void> {
 
 export type DeleteModeloResult = { ok: true } | { ok: false; error: string }
 
+export type BulkDeleteResult = {
+  requested: number
+  deleted: number
+  failed: number
+  deleted_ids: string[]
+  errors: { id: string; detail: string }[]
+}
+
 export async function deleteModeloProducto(id: string): Promise<DeleteModeloResult> {
   if (!id) {
     throw new Error("Falta el identificador del modelo.")
@@ -385,4 +393,45 @@ export async function deleteModeloProducto(id: string): Promise<DeleteModeloResu
     }
   }
   return { ok: true }
+}
+
+async function callBulkDelete(path: string, ids: string[]): Promise<BulkDeleteResult> {
+  if (!ids.length) {
+    return { requested: 0, deleted: 0, failed: 0, deleted_ids: [], errors: [] }
+  }
+  const response = await callCrmApi<BulkDeleteResult>(path, {
+    method: "POST",
+    body: { ids },
+  })
+  if (!response.ok) {
+    throw new Error(response.error || "No se pudo ejecutar el borrado masivo.")
+  }
+  const payload = response.data
+  if (!payload || typeof payload !== "object") {
+    throw new Error("No se pudo ejecutar el borrado masivo.")
+  }
+  return {
+    requested: Number(payload.requested ?? ids.length),
+    deleted: Number(payload.deleted ?? 0),
+    failed: Number(payload.failed ?? 0),
+    deleted_ids: Array.isArray(payload.deleted_ids) ? payload.deleted_ids.map(String) : [],
+    errors: Array.isArray(payload.errors)
+      ? payload.errors.map((entry) => ({
+          id: String(entry.id),
+          detail: String(entry.detail ?? "Error desconocido"),
+        }))
+      : [],
+  }
+}
+
+export async function deleteLineasDeNegocioBulk(ids: string[]): Promise<BulkDeleteResult> {
+  return callBulkDelete("/crm/productos/lineas/bulk-delete", ids)
+}
+
+export async function deleteFamiliasProductoBulk(ids: string[]): Promise<BulkDeleteResult> {
+  return callBulkDelete("/crm/productos/familias/bulk-delete", ids)
+}
+
+export async function deleteModelosProductoBulk(ids: string[]): Promise<BulkDeleteResult> {
+  return callBulkDelete("/crm/productos/modelos/bulk-delete", ids)
 }

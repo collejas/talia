@@ -19,6 +19,7 @@ import {
   LineaDeNegocio,
   ModeloProducto,
   createModeloProducto,
+  deleteModelosProductoBulk,
   deleteModeloProducto,
   updateModeloProducto,
 } from "@/app/settings/productos/actions"
@@ -52,8 +53,6 @@ const MODELO_FORM_DEFAULTS: ModeloFormValues = {
 
 type Feedback = { type: "success" | "error"; message: string }
 type PendingAction = "save" | "delete" | "bulk-delete"
-type DeleteModeloFailedResult = { id: string; result: { ok: false; error: string } }
-type DeleteModeloSuccessResult = { id: string; result: { ok: true } }
 
 const formatter = new Intl.DateTimeFormat("es-MX", {
   dateStyle: "medium",
@@ -273,42 +272,24 @@ export function ModelosView({ modelos, familias, lineas }: ModelosViewProps) {
     startTransition(() => {
       void (async () => {
         try {
-          const operations = selectedModelos.map(async (id) => {
-            const result = await deleteModeloProducto(id)
-            return { id, result }
-          })
-          const results = await Promise.allSettled(operations)
-          const deletedIds = results
-            .filter(
-              (res): res is PromiseFulfilledResult<DeleteModeloSuccessResult> =>
-                res.status === "fulfilled" && res.value.result.ok,
-            )
-            .map((res) => res.value.id)
+          const result = await deleteModelosProductoBulk(selectedModelos)
+          const deletedIds = result.deleted_ids
           if (deletedIds.length) {
             const deletedSet = new Set(deletedIds)
             setModelosState((prev) => prev.filter((item) => !deletedSet.has(item.id)))
             setSelectedModelos((prev) => prev.filter((id) => !deletedSet.has(id)))
           }
-          const rejected = results.find((res): res is PromiseRejectedResult => res.status === "rejected")
-          if (rejected) {
+          if (result.failed > 0) {
+            const firstError = result.errors[0]
             const message = formatDeleteErrorMessage(
-              rejected.reason instanceof Error ? rejected.reason.message : String(rejected.reason),
+              firstError?.detail || "No se pudieron eliminar algunos registros.",
             )
             setListFeedback({ type: "error", message })
-          } else {
-            const failed = results.find(
-              (res): res is PromiseFulfilledResult<DeleteModeloFailedResult> =>
-                res.status === "fulfilled" && res.value.result.ok === false,
-            )
-            if (failed) {
-              const message = formatDeleteErrorMessage(failed.value.result.error)
-              setListFeedback({ type: "error", message })
-            } else if (deletedIds.length) {
-              setListFeedback({
-                type: "success",
-                message: `Se eliminaron ${deletedIds.length} modelo(s).`,
-              })
-            }
+          } else if (deletedIds.length) {
+            setListFeedback({
+              type: "success",
+              message: `Se eliminaron ${deletedIds.length} modelo(s).`,
+            })
           }
         } catch (error) {
           console.error("[modelos] bulk delete failed", error)
