@@ -284,6 +284,71 @@ async def _run_catalog_reindex(
         )
 
 
+async def _run_catalog_reindex_entity(
+    organizacion_id: UUID,
+    *,
+    entity_type: Literal["linea", "familia", "modelo", "producto"],
+    entity_id: UUID,
+    usuario_id: str | None = None,
+    canal: str | None = None,
+) -> None:
+    logger.info(
+        "vector_store.reindex_entity.triggered",
+        extra={
+            "organizacion_id": str(organizacion_id),
+            "entity_type": entity_type,
+            "entity_id": str(entity_id),
+        },
+    )
+    repo = CRMRepository()
+    service = CatalogEmbeddingService(repo)
+    status = "success"
+    error_detail: str | None = None
+    result: str | None = None
+    try:
+        result = await service.reindex_entity(
+            organizacion_id,
+            entity_type=entity_type,
+            entity_id=entity_id,
+        )
+        logger.info(
+            "vector_store.reindex_entity.completed",
+            extra={
+                "organizacion_id": str(organizacion_id),
+                "entity_type": entity_type,
+                "entity_id": str(entity_id),
+                "result": result,
+            },
+        )
+    except Exception as exc:  # pragma: no cover - logging de errores externos
+        status = "failed"
+        error_detail = str(exc)
+        logger.exception(
+            "vector_store.reindex_entity.failed",
+            extra={
+                "organizacion_id": str(organizacion_id),
+                "entity_type": entity_type,
+                "entity_id": str(entity_id),
+                "error": str(exc),
+            },
+        )
+    finally:
+        await service.audit_event(
+            organizacion_id,
+            "reindex",
+            usuario_id=usuario_id,
+            canal=canal,
+            metadata={
+                "status": status,
+                "error": error_detail,
+                "mode": "incremental",
+                "entity_type": entity_type,
+                "entity_id": str(entity_id),
+                "result": result,
+            },
+        )
+
+
 def _stage_code_is_ready(code: str | None) -> bool:
     if not code:
         return False
@@ -740,6 +805,40 @@ def _trigger_catalog_reindex(
     background_tasks.add_task(
         _run_catalog_reindex,
         organizacion_id,
+        usuario_id=str(usuario_id) if usuario_id else None,
+        canal=canal,
+    )
+
+
+def _trigger_catalog_reindex_entity(
+    background_tasks: BackgroundTasks,
+    organizacion_value: Any | None,
+    *,
+    entity_type: Literal["linea", "familia", "modelo", "producto"],
+    entity_id_value: Any | None,
+    usuario_id: UUID | None = None,
+    canal: str | None = None,
+) -> None:
+    if not organizacion_value or not entity_id_value:
+        return
+    try:
+        organizacion_id = UUID(str(organizacion_value))
+        entity_id = UUID(str(entity_id_value))
+    except (TypeError, ValueError):
+        logger.warning(
+            "vector_store.reindex_entity.invalid_payload",
+            extra={
+                "organizacion_id": organizacion_value,
+                "entity_type": entity_type,
+                "entity_id": entity_id_value,
+            },
+        )
+        return
+    background_tasks.add_task(
+        _run_catalog_reindex_entity,
+        organizacion_id,
+        entity_type=entity_type,
+        entity_id=entity_id,
         usuario_id=str(usuario_id) if usuario_id else None,
         canal=canal,
     )
@@ -7051,9 +7150,11 @@ async def create_catalog_item(
         row = await repo.create_catalog_item(payload=body)
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
-    _trigger_catalog_reindex(
+    _trigger_catalog_reindex_entity(
         background_tasks,
         row.get("organizacion_id"),
+        entity_type="producto",
+        entity_id_value=row.get("id"),
         usuario_id=usuario_id,
         canal="panel",
     )
@@ -7081,9 +7182,11 @@ async def update_catalog_item(
         detail = "catalog_item_not_found" if "catalog_item_not_found" in str(exc) else str(exc)
         status_code = 404 if detail == "catalog_item_not_found" else 502
         raise HTTPException(status_code=status_code, detail=detail) from exc
-    _trigger_catalog_reindex(
+    _trigger_catalog_reindex_entity(
         background_tasks,
         row.get("organizacion_id"),
+        entity_type="producto",
+        entity_id_value=row.get("id"),
         usuario_id=usuario_id,
         canal="panel",
     )
@@ -7096,12 +7199,21 @@ async def delete_catalog_item(
     repo: CRMRepository = Depends(get_repository),
     _: str = Depends(require_permission("settings.manage")),
     item_id: UUID,
+    background_tasks: BackgroundTasks,
     hard: bool = Query(default=False),
     usuario_id: UUID | None = Depends(optional_usuario_id),
 ) -> CRMCatalogDeleteResponse:
     try:
         if hard:
             row = await repo.delete_catalog_item(item_id=item_id)
+            _trigger_catalog_reindex_entity(
+                background_tasks,
+                row.get("organizacion_id"),
+                entity_type="producto",
+                entity_id_value=row.get("id") or item_id,
+                usuario_id=usuario_id,
+                canal="panel",
+            )
             return CRMCatalogDeleteResponse(
                 item=CRMCatalogItem.model_validate(row),
                 hard_deleted=True,
@@ -7110,6 +7222,14 @@ async def delete_catalog_item(
         if usuario_id:
             body["updated_by"] = str(usuario_id)
         row = await repo.soft_delete_catalog_item(item_id=item_id, payload=body)
+        _trigger_catalog_reindex_entity(
+            background_tasks,
+            row.get("organizacion_id"),
+            entity_type="producto",
+            entity_id_value=row.get("id") or item_id,
+            usuario_id=usuario_id,
+            canal="panel",
+        )
         return CRMCatalogDeleteResponse(
             item=CRMCatalogItem.model_validate(row),
             hard_deleted=False,
@@ -7308,9 +7428,11 @@ async def create_product_linea(
         )
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
-    _trigger_catalog_reindex(
+    _trigger_catalog_reindex_entity(
         background_tasks,
         row.get("organizacion_id"),
+        entity_type="linea",
+        entity_id_value=row.get("id"),
         usuario_id=usuario_id,
         canal="panel",
     )
@@ -7348,9 +7470,11 @@ async def update_product_linea(
             ),
         )
         raise HTTPException(status_code=status_code, detail=detail) from exc
-    _trigger_catalog_reindex(
+    _trigger_catalog_reindex_entity(
         background_tasks,
         row.get("organizacion_id"),
+        entity_type="linea",
+        entity_id_value=row.get("id"),
         usuario_id=usuario_id,
         canal="panel",
     )
@@ -7376,9 +7500,11 @@ async def delete_product_linea(
         detail = "linea_not_found" if "linea_not_found" in str(exc) else str(exc)
         status_code = 404 if detail == "linea_not_found" else 502
         raise HTTPException(status_code=status_code, detail=detail) from exc
-    _trigger_catalog_reindex(
+    _trigger_catalog_reindex_entity(
         background_tasks,
         row.get("organizacion_id"),
+        entity_type="linea",
+        entity_id_value=row.get("id") or linea_id,
         usuario_id=usuario_id,
         canal="panel",
     )
@@ -7431,9 +7557,11 @@ async def create_product_familia(
         )
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
-    _trigger_catalog_reindex(
+    _trigger_catalog_reindex_entity(
         background_tasks,
         row.get("organizacion_id"),
+        entity_type="familia",
+        entity_id_value=row.get("id"),
         usuario_id=usuario_id,
         canal="panel",
     )
@@ -7471,9 +7599,11 @@ async def update_product_familia(
             ),
         )
         raise HTTPException(status_code=status_code, detail=detail) from exc
-    _trigger_catalog_reindex(
+    _trigger_catalog_reindex_entity(
         background_tasks,
         row.get("organizacion_id"),
+        entity_type="familia",
+        entity_id_value=row.get("id"),
         usuario_id=usuario_id,
         canal="panel",
     )
@@ -7499,9 +7629,11 @@ async def delete_product_familia(
         detail = "familia_not_found" if "familia_not_found" in str(exc) else str(exc)
         status_code = 404 if detail == "familia_not_found" else 502
         raise HTTPException(status_code=status_code, detail=detail) from exc
-    _trigger_catalog_reindex(
+    _trigger_catalog_reindex_entity(
         background_tasks,
         row.get("organizacion_id"),
+        entity_type="familia",
+        entity_id_value=row.get("id") or familia_id,
         usuario_id=usuario_id,
         canal="panel",
     )
@@ -7552,9 +7684,11 @@ async def create_product_modelo(
         )
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
-    _trigger_catalog_reindex(
+    _trigger_catalog_reindex_entity(
         background_tasks,
         row.get("organizacion_id"),
+        entity_type="modelo",
+        entity_id_value=row.get("id"),
         usuario_id=usuario_id,
         canal="panel",
     )
@@ -7592,9 +7726,11 @@ async def update_product_modelo(
             ),
         )
         raise HTTPException(status_code=status_code, detail=detail) from exc
-    _trigger_catalog_reindex(
+    _trigger_catalog_reindex_entity(
         background_tasks,
         row.get("organizacion_id"),
+        entity_type="modelo",
+        entity_id_value=row.get("id"),
         usuario_id=usuario_id,
         canal="panel",
     )
@@ -7620,9 +7756,11 @@ async def delete_product_modelo(
         detail = "modelo_not_found" if "modelo_not_found" in str(exc) else str(exc)
         status_code = 404 if detail == "modelo_not_found" else 502
         raise HTTPException(status_code=status_code, detail=detail) from exc
-    _trigger_catalog_reindex(
+    _trigger_catalog_reindex_entity(
         background_tasks,
         row.get("organizacion_id"),
+        entity_type="modelo",
+        entity_id_value=row.get("id") or modelo_id,
         usuario_id=usuario_id,
         canal="panel",
     )

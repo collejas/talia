@@ -185,6 +185,109 @@ class CatalogEmbeddingService:
             extra={"organizacion_id": str(organizacion_id), "processed": total},
         )
 
+    async def reindex_entity(
+        self,
+        organizacion_id: UUID,
+        *,
+        entity_type: Literal["linea", "familia", "modelo", "producto"],
+        entity_id: UUID,
+    ) -> Literal["indexed", "deleted", "not_found", "inactive"]:
+        resource_map = self._group_resources(
+            await self._repo.list_recursos_media(
+                organizacion_id=organizacion_id,
+                objeto_type=entity_type,
+                objeto_ids=[entity_id],
+                limit=200,
+            )
+        )
+
+        if entity_type == "linea":
+            row = await self._repo.get_linea_de_negocio(
+                organizacion_id=organizacion_id,
+                linea_id=entity_id,
+            )
+            if not row:
+                await self._repo.delete_catalog_document_embedding_entity(
+                    organizacion_id=organizacion_id,
+                    entity_type=entity_type,
+                    entity_id=entity_id,
+                )
+                return "not_found"
+            if row.get("activo") is False:
+                await self._repo.delete_catalog_document_embedding_entity(
+                    organizacion_id=organizacion_id,
+                    entity_type=entity_type,
+                    entity_id=entity_id,
+                )
+                return "inactive"
+            await self._index_linea(row, organizacion_id, resource_map)
+            return "indexed"
+
+        if entity_type == "familia":
+            row = await self._repo.get_familia_producto(
+                organizacion_id=organizacion_id,
+                familia_id=entity_id,
+            )
+            if not row:
+                await self._repo.delete_catalog_document_embedding_entity(
+                    organizacion_id=organizacion_id,
+                    entity_type=entity_type,
+                    entity_id=entity_id,
+                )
+                return "not_found"
+            if row.get("activo") is False:
+                await self._repo.delete_catalog_document_embedding_entity(
+                    organizacion_id=organizacion_id,
+                    entity_type=entity_type,
+                    entity_id=entity_id,
+                )
+                return "inactive"
+            await self._index_familia(row, organizacion_id, resource_map)
+            return "indexed"
+
+        if entity_type == "modelo":
+            row = await self._repo.get_modelo_producto(
+                organizacion_id=organizacion_id,
+                modelo_id=entity_id,
+            )
+            if not row:
+                await self._repo.delete_catalog_document_embedding_entity(
+                    organizacion_id=organizacion_id,
+                    entity_type=entity_type,
+                    entity_id=entity_id,
+                )
+                return "not_found"
+            if row.get("activo") is False:
+                await self._repo.delete_catalog_document_embedding_entity(
+                    organizacion_id=organizacion_id,
+                    entity_type=entity_type,
+                    entity_id=entity_id,
+                )
+                return "inactive"
+            await self._index_modelo(row, organizacion_id, resource_map)
+            return "indexed"
+
+        row = await self._repo.get_catalog_item(
+            organizacion_id=organizacion_id,
+            item_id=entity_id,
+        )
+        if not row:
+            await self._repo.delete_catalog_document_embedding_entity(
+                organizacion_id=organizacion_id,
+                entity_type=entity_type,
+                entity_id=entity_id,
+            )
+            return "not_found"
+        if row.get("activo") is False:
+            await self._repo.delete_catalog_document_embedding_entity(
+                organizacion_id=organizacion_id,
+                entity_type=entity_type,
+                entity_id=entity_id,
+            )
+            return "inactive"
+        await self._index_producto(row, organizacion_id, resource_map)
+        return "indexed"
+
     async def _cleanup_deleted_entities(
         self,
         organizacion_id: UUID,

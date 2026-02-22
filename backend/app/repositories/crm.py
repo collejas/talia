@@ -4880,6 +4880,72 @@ class CRMRepository:
             raise CRMRepositoryError(f"Respuesta inválida al buscar catálogo: {row!r}")
         return row
 
+    async def get_linea_de_negocio(
+        self,
+        *,
+        organizacion_id: UUID,
+        linea_id: UUID,
+    ) -> dict[str, Any] | None:
+        params: dict[str, Any] = {
+            "organizacion_id": f"eq.{organizacion_id}",
+            "id": f"eq.{linea_id}",
+            "limit": "1",
+        }
+        resp = await self._request("GET", "/rest/v1/lineas_de_negocio", params=params)
+        data = resp.json()
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"Respuesta inesperada al buscar línea: {data!r}")
+        if not data:
+            return None
+        row = data[0]
+        if not isinstance(row, dict):
+            raise CRMRepositoryError(f"Respuesta inválida al buscar línea: {row!r}")
+        return row
+
+    async def get_familia_producto(
+        self,
+        *,
+        organizacion_id: UUID,
+        familia_id: UUID,
+    ) -> dict[str, Any] | None:
+        params: dict[str, Any] = {
+            "organizacion_id": f"eq.{organizacion_id}",
+            "id": f"eq.{familia_id}",
+            "limit": "1",
+        }
+        resp = await self._request("GET", "/rest/v1/familias_productos", params=params)
+        data = resp.json()
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"Respuesta inesperada al buscar familia: {data!r}")
+        if not data:
+            return None
+        row = data[0]
+        if not isinstance(row, dict):
+            raise CRMRepositoryError(f"Respuesta inválida al buscar familia: {row!r}")
+        return row
+
+    async def get_modelo_producto(
+        self,
+        *,
+        organizacion_id: UUID,
+        modelo_id: UUID,
+    ) -> dict[str, Any] | None:
+        params: dict[str, Any] = {
+            "organizacion_id": f"eq.{organizacion_id}",
+            "id": f"eq.{modelo_id}",
+            "limit": "1",
+        }
+        resp = await self._request("GET", "/rest/v1/modelos_productos", params=params)
+        data = resp.json()
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"Respuesta inesperada al buscar modelo: {data!r}")
+        if not data:
+            return None
+        row = data[0]
+        if not isinstance(row, dict):
+            raise CRMRepositoryError(f"Respuesta inválida al buscar modelo: {row!r}")
+        return row
+
     async def get_product(
         self,
         *,
@@ -5141,6 +5207,24 @@ class CRMRepository:
             "POST",
             "/rest/v1/rpc/catalog_document_embeddings_delete_missing",
             json=payload,
+        )
+
+    async def delete_catalog_document_embedding_entity(
+        self,
+        *,
+        organizacion_id: UUID,
+        entity_type: str,
+        entity_id: UUID,
+    ) -> None:
+        params = {
+            "organizacion_id": f"eq.{organizacion_id}",
+            "entity_type": f"eq.{entity_type}",
+            "entity_id": f"eq.{entity_id}",
+        }
+        await self._request(
+            "DELETE",
+            "/rest/v1/catalog_document_embeddings",
+            params=params,
         )
 
     async def search_catalog_document_embeddings(
