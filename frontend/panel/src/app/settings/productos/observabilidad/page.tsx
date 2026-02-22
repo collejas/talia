@@ -26,6 +26,14 @@ import {
   TableRow,
 } from "@/components/ui/table"
 
+type PageSearchParams = {
+  history_scope?: string
+  history_actor?: string
+  history_date_from?: string
+  history_date_to?: string
+  history_limit?: string
+}
+
 function formatDate(value: string | null): string {
   if (!value) {
     return "Sin datos"
@@ -227,12 +235,27 @@ function formatThresholdDiff(
   return changes.length ? changes.join(" | ") : "Sin cambios detectados"
 }
 
-export default async function ProductosObservabilidadPage() {
+export default async function ProductosObservabilidadPage({
+  searchParams,
+}: {
+  searchParams?: Promise<PageSearchParams>
+}) {
+  const params = searchParams ? await searchParams : {}
+  const historyScope =
+    params.history_scope === "organization" || params.history_scope === "global"
+      ? params.history_scope
+      : "all"
+  const historyActor = (params.history_actor ?? "").trim().toLowerCase()
+  const historyDateFrom = (params.history_date_from ?? "").trim()
+  const historyDateTo = (params.history_date_to ?? "").trim()
+  const rawLimit = Number(params.history_limit ?? 40)
+  const historyLimit = Number.isFinite(rawLimit) ? Math.min(Math.max(rawLimit, 1), 200) : 40
+
   const [status, metrics, thresholdsConfig, thresholdsHistory] = await Promise.all([
     fetchCatalogVectorStoreStatus(),
     fetchCatalogVectorStoreMetrics({ days: 30, limit: 5000 }),
     fetchCatalogVectorStoreAlertThresholds(),
-    fetchCatalogVectorStoreAlertThresholdsHistory({ scope: "all", limit: 40 }),
+    fetchCatalogVectorStoreAlertThresholdsHistory({ scope: "all", limit: 200 }),
   ])
 
   const queryEvents = sumByType(metrics.buckets, "query")
@@ -243,6 +266,30 @@ export default async function ProductosObservabilidadPage() {
   const last7Queries = sumQueriesInRange(byDay, 6, 0)
   const previous7Queries = sumQueriesInRange(byDay, 13, 7)
   const weeklyDelta = last7Queries - previous7Queries
+  const filteredHistory = thresholdsHistory
+    .filter((entry) => {
+      if (historyScope !== "all" && entry.scope !== historyScope) {
+        return false
+      }
+      if (historyActor) {
+        const actorCandidate = `${entry.changedByName ?? ""} ${entry.changedBy ?? ""}`.toLowerCase()
+        if (!actorCandidate.includes(historyActor)) {
+          return false
+        }
+      }
+      const date = entry.createdAt.slice(0, 10)
+      if (historyDateFrom && date < historyDateFrom) {
+        return false
+      }
+      if (historyDateTo && date > historyDateTo) {
+        return false
+      }
+      return true
+    })
+    .slice(0, historyLimit)
+  const actorOptions = Array.from(
+    new Set(thresholdsHistory.map((entry) => entry.changedByName ?? entry.changedBy).filter(Boolean)),
+  ) as string[]
 
   return (
     <AppViewLayout title="Settings · Observabilidad vectorial">
@@ -550,7 +597,55 @@ export default async function ProductosObservabilidadPage() {
           <CardHeader>
             <CardTitle className="text-base">Historial de umbrales</CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="space-y-4">
+            <form className="grid gap-3 rounded-md border p-3 md:grid-cols-5">
+              <div className="space-y-1">
+                <Label htmlFor="history_scope">Scope</Label>
+                <select
+                  id="history_scope"
+                  name="history_scope"
+                  defaultValue={historyScope}
+                  className="h-9 w-full rounded-md border bg-background px-3 text-sm"
+                >
+                  <option value="all">Todos</option>
+                  <option value="organization">Organización</option>
+                  <option value="global">Global</option>
+                </select>
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="history_actor">Actor</Label>
+                <Input
+                  id="history_actor"
+                  name="history_actor"
+                  list="history-actor-options"
+                  defaultValue={params.history_actor ?? ""}
+                  placeholder="Nombre o UUID"
+                />
+                <datalist id="history-actor-options">
+                  {actorOptions.map((actor) => (
+                    <option key={actor} value={actor} />
+                  ))}
+                </datalist>
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="history_date_from">Desde</Label>
+                <Input id="history_date_from" name="history_date_from" type="date" defaultValue={historyDateFrom} />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="history_date_to">Hasta</Label>
+                <Input id="history_date_to" name="history_date_to" type="date" defaultValue={historyDateTo} />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="history_limit">Límite</Label>
+                <Input id="history_limit" name="history_limit" type="number" min={1} max={200} defaultValue={historyLimit} />
+              </div>
+              <div className="md:col-span-5 flex gap-2">
+                <Button type="submit" size="sm">Aplicar filtros</Button>
+                <Button asChild type="button" size="sm" variant="outline">
+                  <Link href="/settings/productos/observabilidad">Limpiar</Link>
+                </Button>
+              </div>
+            </form>
             <Table>
               <TableHeader>
                 <TableRow>
@@ -562,8 +657,8 @@ export default async function ProductosObservabilidadPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {thresholdsHistory.length ? (
-                  thresholdsHistory.map((entry) => (
+                {filteredHistory.length ? (
+                  filteredHistory.map((entry) => (
                     <TableRow key={entry.id}>
                       <TableCell>{formatDate(entry.createdAt)}</TableCell>
                       <TableCell>
@@ -583,7 +678,7 @@ export default async function ProductosObservabilidadPage() {
                 ) : (
                   <TableRow>
                     <TableCell colSpan={5} className="text-center text-muted-foreground">
-                      Sin historial de cambios de umbrales.
+                      Sin resultados para los filtros seleccionados.
                     </TableCell>
                   </TableRow>
                 )}

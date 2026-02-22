@@ -152,10 +152,12 @@ La estrategia será híbrida: SQL-first para consultas estructuradas y vector st
 - [x] Versionado/historial de umbrales:
   - Cada cambio de umbrales (global u organización) se registra en `audit_logs`.
   - Se expuso historial en `GET /crm/catalog/vector-store/alert-thresholds/history` y se visualiza en el panel.
+- [x] Filtros en historial de umbrales:
+  - La vista permite filtrar por scope, actor, fecha desde/hasta y límite de registros.
 - [x] Batch para operaciones masivas:
   - Endpoints bulk-delete para líneas/familias/modelos.
   - Frontend actualizado para usar llamadas batch en vez de N requests individuales.
 - [x] Modelo de embeddings actualizado:
   - Default de `embeddings_model` migrado a `text-embedding-3-small` (compatible con `vector(1536)`).
 - [ ] Pendiente principal:
-  - Afinar UI del historial para mostrar diff completo de todos los campos y actor por nombre.
+  - Añadir exportación CSV del historial filtrado y vista comparativa semanal/mensual de cambios.
