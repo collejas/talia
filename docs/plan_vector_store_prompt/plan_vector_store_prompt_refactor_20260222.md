@@ -141,10 +141,13 @@ La estrategia será híbrida: SQL-first para consultas estructuradas y vector st
 - [x] Dashboard base en panel:
   - Nueva vista `settings/productos/observabilidad` con KPIs de 30 días, top reasons y desglose diario.
   - Integrada en el hub de `settings/productos`.
+- [x] Alertas y tendencia semanal en panel:
+  - Se agregaron alertas automáticas por umbral (volumen, ratio de fallback y crecimiento semanal).
+  - Se añadió comparativo semanal de queries vectoriales (últimos 7 días vs semana previa).
 - [x] Batch para operaciones masivas:
   - Endpoints bulk-delete para líneas/familias/modelos.
   - Frontend actualizado para usar llamadas batch en vez de N requests individuales.
 - [x] Modelo de embeddings actualizado:
   - Default de `embeddings_model` migrado a `text-embedding-3-small` (compatible con `vector(1536)`).
 - [ ] Pendiente principal:
-  - Agregar alertas/umbrales automáticos en panel (ej. picos de fallback vector por reason/canal) y tendencia comparativa semanal.
+  - Afinar umbrales por tenant/canal y parametrizarlos desde configuración para evitar falsos positivos.

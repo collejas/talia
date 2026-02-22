@@ -92,6 +92,95 @@ function aggregateByDay(buckets: CatalogVectorStoreMetricsBucket[]) {
     .sort((a, b) => (a.day < b.day ? 1 : -1))
 }
 
+function buildDateKey(daysAgo: number): string {
+  const date = new Date()
+  date.setHours(0, 0, 0, 0)
+  date.setDate(date.getDate() - daysAgo)
+  return date.toISOString().slice(0, 10)
+}
+
+function sumQueriesInRange(
+  byDayRows: Array<{ day: string; query: number; reindex: number; total: number }>,
+  fromDaysAgo: number,
+  toDaysAgo: number,
+): number {
+  const from = buildDateKey(fromDaysAgo)
+  const to = buildDateKey(toDaysAgo)
+  return byDayRows
+    .filter((row) => row.day >= from && row.day <= to)
+    .reduce((acc, row) => acc + row.query, 0)
+}
+
+type AlertItem = {
+  title: string
+  detail: string
+  severity: "high" | "medium" | "low"
+}
+
+function buildAlerts(
+  buckets: CatalogVectorStoreMetricsBucket[],
+  byDayRows: Array<{ day: string; query: number; reindex: number; total: number }>,
+): AlertItem[] {
+  const alerts: AlertItem[] = []
+  const totalQueries = sumByType(buckets, "query")
+  const fallbackQueries = buckets
+    .filter((bucket) => String(bucket.tipo).toLowerCase() === "query")
+    .filter((bucket) => (bucket.reason ?? "").toLowerCase().includes("fallback"))
+    .reduce((acc, bucket) => acc + bucket.total, 0)
+  const fallbackRatio = totalQueries > 0 ? fallbackQueries / totalQueries : 0
+
+  const last7Queries = sumQueriesInRange(byDayRows, 6, 0)
+  const previous7Queries = sumQueriesInRange(byDayRows, 13, 7)
+  const growthRatio =
+    previous7Queries > 0 ? (last7Queries - previous7Queries) / previous7Queries : (last7Queries > 0 ? 1 : 0)
+
+  if (totalQueries >= 250) {
+    alerts.push({
+      title: "Volumen alto de consultas vectoriales",
+      detail: `Se registran ${totalQueries} queries vectoriales en 30 días.`,
+      severity: "medium",
+    })
+  }
+
+  if (fallbackRatio >= 0.35 && fallbackQueries >= 20) {
+    alerts.push({
+      title: "Dependencia alta de fallback semántico",
+      detail: `${Math.round(fallbackRatio * 100)}% de las queries vectoriales fueron fallback (${fallbackQueries}/${totalQueries}).`,
+      severity: "high",
+    })
+  }
+
+  if (growthRatio >= 0.4 && last7Queries >= 20) {
+    alerts.push({
+      title: "Crecimiento semanal de costo potencial",
+      detail: `Últimos 7 días: ${last7Queries} queries vs ${previous7Queries} en la semana previa.`,
+      severity: "medium",
+    })
+  }
+
+  if (!alerts.length) {
+    alerts.push({
+      title: "Sin alertas críticas",
+      detail: "No se detectan picos significativos con los umbrales actuales.",
+      severity: "low",
+    })
+  }
+
+  return alerts
+}
+
+function severityLabel(severity: AlertItem["severity"]): string {
+  if (severity === "high") return "Alta"
+  if (severity === "medium") return "Media"
+  return "Baja"
+}
+
+function severityVariant(severity: AlertItem["severity"]): "destructive" | "secondary" | "outline" {
+  if (severity === "high") return "destructive"
+  if (severity === "medium") return "secondary"
+  return "outline"
+}
+
 export default async function ProductosObservabilidadPage() {
   const [status, metrics] = await Promise.all([
     fetchCatalogVectorStoreStatus(),
@@ -102,6 +191,10 @@ export default async function ProductosObservabilidadPage() {
   const reindexEvents = sumByType(metrics.buckets, "reindex")
   const topReasons = aggregateByReason(metrics.buckets).slice(0, 8)
   const byDay = aggregateByDay(metrics.buckets).slice(0, 30)
+  const alerts = buildAlerts(metrics.buckets, byDay)
+  const last7Queries = sumQueriesInRange(byDay, 6, 0)
+  const previous7Queries = sumQueriesInRange(byDay, 13, 7)
+  const weeklyDelta = last7Queries - previous7Queries
 
   return (
     <AppViewLayout title="Settings · Observabilidad vectorial">
@@ -197,9 +290,35 @@ export default async function ProductosObservabilidadPage() {
                 <p className="text-muted-foreground">{formatDate(status.lastQueryAt)}</p>
                 <p className="text-muted-foreground">Canal: {channelLabel(status.lastQueryChannel)}</p>
               </div>
+              <div>
+                <p className="font-medium">Tendencia semanal (queries)</p>
+                <p className="text-muted-foreground">
+                  Últimos 7 días: {last7Queries} | Semana previa: {previous7Queries}
+                </p>
+                <p className="text-muted-foreground">
+                  Delta: {weeklyDelta > 0 ? `+${weeklyDelta}` : weeklyDelta}
+                </p>
+              </div>
             </CardContent>
           </Card>
         </div>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Alertas automáticas</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {alerts.map((alert) => (
+              <div key={`${alert.title}-${alert.detail}`} className="flex items-start justify-between gap-3 rounded-md border p-3">
+                <div>
+                  <p className="text-sm font-medium">{alert.title}</p>
+                  <p className="text-sm text-muted-foreground">{alert.detail}</p>
+                </div>
+                <Badge variant={severityVariant(alert.severity)}>{severityLabel(alert.severity)}</Badge>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
 
         <Card>
           <CardHeader>
