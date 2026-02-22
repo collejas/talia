@@ -76,7 +76,7 @@ La estrategia será híbrida: SQL-first para consultas estructuradas y vector st
   - usar endpoint batch y una sola indexación incremental agrupada.
 
 ## Fase 6: Modelo de embeddings y configuración (Media prioridad)
-- Estado: **Pendiente** [ ]
+- Estado: **Completada (configuración base)** [x]
 - Revisar el modelo configurado en `embeddings_model`.
 - Migrar a un modelo vigente y más costo-eficiente cuando aplique.
 - Documentar decisión por tenant/canal.
@@ -141,6 +141,7 @@ La estrategia será híbrida: SQL-first para consultas estructuradas y vector st
 - [x] Batch para operaciones masivas:
   - Endpoints bulk-delete para líneas/familias/modelos.
   - Frontend actualizado para usar llamadas batch en vez de N requests individuales.
+- [x] Modelo de embeddings actualizado:
+  - Default de `embeddings_model` migrado a `text-embedding-3-small` (compatible con `vector(1536)`).
 - [ ] Pendiente principal:
-  - Optimizar/actualizar modelo de embeddings (fase 6).
   - Completar observabilidad avanzada en panel/dashboard (visualización y alertas) usando las nuevas métricas por `reason` (fase 7).

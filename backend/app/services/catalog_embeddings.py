@@ -123,7 +123,7 @@ class CatalogEmbeddingService:
 
     def __init__(self, repo: CRMRepository) -> None:
         self._repo = repo
-        self._model = settings.embeddings_model or "text-embedding-ada-002"
+        self._model = settings.embeddings_model or "text-embedding-3-small"
         self._query_cache_enabled = bool(settings.catalog_query_embedding_cache_enabled)
         self._query_cache_ttl = int(settings.catalog_query_embedding_cache_ttl_seconds)
         self._query_cache_max_entries = int(settings.catalog_query_embedding_cache_max_entries)

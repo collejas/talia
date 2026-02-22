@@ -37,7 +37,7 @@ class Settings(BaseSettings):
     )
     openai_api_key: str | None = None
     embeddings_model: str = Field(
-        default="text-embedding-ada-002",
+        default="text-embedding-3-small",
         description="Modelo de embeddings que se usa para la vector store.",
     )
     catalog_query_embedding_cache_enabled: bool = Field(
