@@ -118,6 +118,50 @@ function sumQueriesInRange(
   return byDayRows.filter((row) => row.day >= from && row.day <= to).reduce((acc, row) => acc + row.query, 0)
 }
 
+function sumReindexInRange(
+  byDayRows: Array<{ day: string; query: number; reindex: number; total: number }>,
+  fromDaysAgo: number,
+  toDaysAgo: number,
+): number {
+  const from = buildDateKey(fromDaysAgo)
+  const to = buildDateKey(toDaysAgo)
+  return byDayRows.filter((row) => row.day >= from && row.day <= to).reduce((acc, row) => acc + row.reindex, 0)
+}
+
+function vectorQueryStatsInRange(
+  buckets: CatalogVectorStoreMetricsBucket[],
+  fromDaysAgo: number,
+  toDaysAgo: number,
+): { totalQueries: number; fallbackQueries: number; fallbackRatio: number } {
+  const from = buildDateKey(fromDaysAgo)
+  const to = buildDateKey(toDaysAgo)
+  const queryBuckets = buckets.filter((bucket) => {
+    const day = bucket.day
+    if (day < from || day > to) return false
+    return String(bucket.tipo).toLowerCase() === "query"
+  })
+  const totalQueries = queryBuckets.reduce((acc, item) => acc + item.total, 0)
+  const fallbackQueries = queryBuckets
+    .filter((item) => (item.reason ?? "").toLowerCase().includes("fallback"))
+    .reduce((acc, item) => acc + item.total, 0)
+  return {
+    totalQueries,
+    fallbackQueries,
+    fallbackRatio: totalQueries > 0 ? fallbackQueries / totalQueries : 0,
+  }
+}
+
+function formatSignedDelta(value: number): string {
+  if (value > 0) return `+${value}`
+  return String(value)
+}
+
+function formatSignedPercent(value: number): string {
+  const pct = Math.round(value * 100)
+  if (pct > 0) return `+${pct}%`
+  return `${pct}%`
+}
+
 type AlertItem = {
   title: string
   detail: string
@@ -256,6 +300,18 @@ export default async function ProductosObservabilidadPage({
   const last7Queries = sumQueriesInRange(byDay, 6, 0)
   const previous7Queries = sumQueriesInRange(byDay, 13, 7)
   const weeklyDelta = last7Queries - previous7Queries
+  const last7Reindex = sumReindexInRange(byDay, 6, 0)
+  const previous7Reindex = sumReindexInRange(byDay, 13, 7)
+  const last30Queries = sumQueriesInRange(byDay, 29, 0)
+  const previous30Queries = sumQueriesInRange(byDay, 59, 30)
+  const last30Reindex = sumReindexInRange(byDay, 29, 0)
+  const previous30Reindex = sumReindexInRange(byDay, 59, 30)
+  const last7Stats = vectorQueryStatsInRange(metrics.buckets, 6, 0)
+  const previous7Stats = vectorQueryStatsInRange(metrics.buckets, 13, 7)
+  const last30Stats = vectorQueryStatsInRange(metrics.buckets, 29, 0)
+  const previous30Stats = vectorQueryStatsInRange(metrics.buckets, 59, 30)
+  const weeklyRatioDelta = last7Stats.fallbackRatio - previous7Stats.fallbackRatio
+  const monthlyRatioDelta = last30Stats.fallbackRatio - previous30Stats.fallbackRatio
 
   const filteredHistory = thresholdsHistory
     .filter((entry) => {
@@ -373,6 +429,45 @@ export default async function ProductosObservabilidadPage({
             <Table>
               <TableHeader><TableRow><TableHead>Fecha</TableHead><TableHead className="text-right">Query</TableHead><TableHead className="text-right">Reindex</TableHead><TableHead className="text-right">Total</TableHead></TableRow></TableHeader>
               <TableBody>{byDay.length ? byDay.map((row) => (<TableRow key={row.day}><TableCell>{row.day}</TableCell><TableCell className="text-right">{row.query}</TableCell><TableCell className="text-right">{row.reindex}</TableCell><TableCell className="text-right font-medium">{row.total}</TableCell></TableRow>)) : <TableRow><TableCell colSpan={4} className="text-center text-muted-foreground">Sin actividad en la ventana seleccionada.</TableCell></TableRow>}</TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader><CardTitle className="text-base">Comparativa Semanal y Mensual</CardTitle></CardHeader>
+          <CardContent>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Periodo</TableHead>
+                  <TableHead className="text-right">Queries</TableHead>
+                  <TableHead className="text-right">Delta queries</TableHead>
+                  <TableHead className="text-right">Fallback ratio</TableHead>
+                  <TableHead className="text-right">Delta ratio</TableHead>
+                  <TableHead className="text-right">Reindex</TableHead>
+                  <TableHead className="text-right">Delta reindex</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                <TableRow>
+                  <TableCell>Últimos 7d vs 7d previos</TableCell>
+                  <TableCell className="text-right">{last7Queries}</TableCell>
+                  <TableCell className="text-right">{formatSignedDelta(last7Queries - previous7Queries)}</TableCell>
+                  <TableCell className="text-right">{Math.round(last7Stats.fallbackRatio * 100)}%</TableCell>
+                  <TableCell className="text-right">{formatSignedPercent(weeklyRatioDelta)}</TableCell>
+                  <TableCell className="text-right">{last7Reindex}</TableCell>
+                  <TableCell className="text-right">{formatSignedDelta(last7Reindex - previous7Reindex)}</TableCell>
+                </TableRow>
+                <TableRow>
+                  <TableCell>Últimos 30d vs 30d previos</TableCell>
+                  <TableCell className="text-right">{last30Queries}</TableCell>
+                  <TableCell className="text-right">{formatSignedDelta(last30Queries - previous30Queries)}</TableCell>
+                  <TableCell className="text-right">{Math.round(last30Stats.fallbackRatio * 100)}%</TableCell>
+                  <TableCell className="text-right">{formatSignedPercent(monthlyRatioDelta)}</TableCell>
+                  <TableCell className="text-right">{last30Reindex}</TableCell>
+                  <TableCell className="text-right">{formatSignedDelta(last30Reindex - previous30Reindex)}</TableCell>
+                </TableRow>
+              </TableBody>
             </Table>
           </CardContent>
         </Card>
