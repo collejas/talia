@@ -484,6 +484,7 @@ class CatalogEmbeddingService:
         limit: int = 5,
         user_id: str | None = None,
         channel: str | None = None,
+        reason: str | None = None,
     ) -> list[CatalogDocumentMatch]:
         prompt = query.strip()
         if not prompt:
@@ -516,6 +517,7 @@ class CatalogEmbeddingService:
                 "query": prompt,
                 "matches": len(matches),
                 "embedding_cache_eligible": self._is_query_cache_eligible(prompt),
+                "reason": reason,
             },
         )
         return matches

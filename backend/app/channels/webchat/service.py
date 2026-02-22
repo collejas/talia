@@ -4519,6 +4519,7 @@ async def _execute_function_call(
                 org_uuid,
                 query=query,
                 limit=limit,
+                reason="fetch_catalog_item_details_fallback",
             )
         except CRMRepositoryError as exc:
             raise ValueError(str(exc)) from exc

@@ -254,6 +254,7 @@ async def build_catalog_context(
             limit=limit,
             user_id=user_id,
             channel=channel,
+            reason="catalog_context_autoload",
         )
     except CRMRepositoryError as exc:
         logger.debug(

@@ -4565,6 +4565,7 @@ async def fetch_catalog_item_details(
             organizacion_uuid,
             query=payload.query,
             limit=payload.limit,
+            reason="fetch_catalog_item_details_fallback",
         )
     except CRMRepositoryError as exc:
         logger.exception(

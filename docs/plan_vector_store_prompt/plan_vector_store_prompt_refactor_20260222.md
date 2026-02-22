@@ -134,6 +134,9 @@ La estrategia será híbrida: SQL-first para consultas estructuradas y vector st
 - [x] Cache de embeddings de query:
   - Cache en memoria con TTL y tamaño máximo configurables.
   - Exclusión de queries triviales y con PII (correo/teléfono).
+- [x] Observabilidad parcial en auditoría vector:
+  - `query_documents` ya persiste `reason` y `embedding_cache_eligible` en `catalog_embeddings_audit.metadata`.
+  - Integrado en fallback vector de `fetch_catalog_item_details` (API CRM, webchat y WhatsApp).
 - [x] Batch para operaciones masivas:
   - Endpoints bulk-delete para líneas/familias/modelos.
   - Frontend actualizado para usar llamadas batch en vez de N requests individuales.
