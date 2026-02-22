@@ -39,6 +39,7 @@ from app.services.catalog_fraccionamientos import (
     list_catalog_fraccionamientos,
     list_catalog_modelos,
 )
+from app.services.catalog_item_lookup import lookup_catalog_items_sql_first
 from app.services.email import EmailSendError
 from app.services.storage import StorageError
 
@@ -1083,16 +1084,6 @@ async def execute_tool(
         limit = max(1, min(5, limit))
 
         repo = CRMRepository()
-        service = CatalogEmbeddingService(repo)
-        try:
-            matches = await service.query_documents(
-                org_uuid,
-                query=query,
-                limit=limit,
-            )
-        except CRMRepositoryError as exc:
-            raise ValueError(str(exc)) from exc
-
         conversation_id_value = (
             str(context.conversation_id) if context and context.conversation_id else None
         )
@@ -1104,6 +1095,81 @@ async def execute_tool(
             "detail_level": detail_level,
             "limit": limit,
         }
+        try:
+            sql_items = await lookup_catalog_items_sql_first(
+                repo,
+                organizacion_id=org_uuid,
+                query=query,
+                limit=limit,
+            )
+        except CRMRepositoryError as exc:
+            logger.warning(
+                "catalog.item_details_sql_lookup_failed",
+                extra={"organizacion_id": str(org_uuid), "error": str(exc)},
+            )
+            sql_items = []
+        if sql_items:
+            matches_log: list[dict[str, Any]] = []
+            items: list[dict[str, Any]] = []
+            for item_data in sql_items[:limit]:
+                metadata_value = item_data.get("metadata") or item_data.get("metadatos")
+                normalized_metadata = webchat_service._normalize_metadata_value(metadata_value)
+                metadata: dict[str, Any] | Mapping[str, Any]
+                metadata = normalized_metadata or (
+                    metadata_value if isinstance(metadata_value, Mapping) else {}
+                )
+                if isinstance(metadata, Mapping):
+                    metadata = {str(key): val for key, val in metadata.items()}
+                metadata_keys = list(metadata.keys()) if isinstance(metadata, Mapping) else []
+                matches_log.append(
+                    {
+                        "slug": item_data.get("slug"),
+                        "similarity": None,
+                        "metadata_keys": metadata_keys,
+                        "metadata": metadata,
+                        "fallback_used": True,
+                        "strategy": "sql_direct",
+                    }
+                )
+                items.append(
+                    {
+                        "nombre": item_data.get("nombre"),
+                        "slug": item_data.get("slug"),
+                        "tipo": item_data.get("tipo"),
+                        "unidad": item_data.get("unidad"),
+                        "precio_base": item_data.get("precio_base"),
+                        "moneda": item_data.get("moneda"),
+                        "activo": item_data.get("activo"),
+                        "metadata": metadata,
+                        "similarity": None,
+                    }
+                )
+            write_catalog_debug_entry(
+                {
+                    **log_base,
+                    "match_count": len(items),
+                    "items_returned": len(items),
+                    "matches": matches_log,
+                    "strategy": "sql_first",
+                    "vector_used": False,
+                }
+            )
+            return {
+                "status": "ok",
+                "items": items,
+                "detail_level": detail_level,
+                "source": "catalog_sql_direct",
+            }
+
+        service = CatalogEmbeddingService(repo)
+        try:
+            matches = await service.query_documents(
+                org_uuid,
+                query=query,
+                limit=limit,
+            )
+        except CRMRepositoryError as exc:
+            raise ValueError(str(exc)) from exc
         matches_log: list[dict[str, Any]] = []
         items: list[dict[str, Any]] = []
         for match in matches:

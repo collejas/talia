@@ -76,6 +76,7 @@ from app.services.catalog_fraccionamientos import (
     list_catalog_fraccionamientos as list_fraccionamientos,
     list_catalog_modelos,
 )
+from app.services.catalog_item_lookup import lookup_catalog_items_sql_first
 from app.services.demografia_service import DemografiaServiceError
 from app.services.metrics import metrics as contact_metrics
 from app.services.prospeccion_contact_sender import contact_sender
@@ -4384,6 +4385,81 @@ async def fetch_catalog_item_details(
         )
 
     repo = CRMRepository(user_token=user_token)
+    log_base = {
+        "source": "api.fetch_catalog_item_details",
+        "conversation_id": payload.conversacion_id,
+        "organizacion_id": str(organizacion_uuid),
+        "query": payload.query,
+        "detail_level": payload.detail_level,
+        "limit": payload.limit,
+    }
+
+    try:
+        sql_items = await lookup_catalog_items_sql_first(
+            repo,
+            organizacion_id=organizacion_uuid,
+            query=payload.query,
+            limit=payload.limit,
+        )
+    except CRMRepositoryError as exc:
+        logger.warning(
+            "catalog.item_details_sql_lookup_failed",
+            extra={"organizacion_id": payload.organizacion_id, "error": str(exc)},
+        )
+        sql_items = []
+
+    if sql_items:
+        matches_log: list[dict[str, Any]] = []
+        items: list[dict[str, Any]] = []
+        for item_data in sql_items[: payload.limit]:
+            metadata_value = item_data.get("metadata") or item_data.get("metadatos")
+            normalized_metadata = _normalize_metadata_value(metadata_value)
+            metadata: Mapping[str, Any] | dict[str, Any]
+            metadata = normalized_metadata or (
+                metadata_value if isinstance(metadata_value, Mapping) else {}
+            )
+            if isinstance(metadata, Mapping):
+                metadata = {str(key): val for key, val in metadata.items()}
+            metadata_keys = list(metadata.keys()) if isinstance(metadata, Mapping) else []
+            matches_log.append(
+                {
+                    "slug": item_data.get("slug"),
+                    "similarity": None,
+                    "metadata_keys": metadata_keys,
+                    "metadata": metadata,
+                    "fallback_used": True,
+                    "strategy": "sql_direct",
+                }
+            )
+            items.append(
+                {
+                    "nombre": item_data.get("nombre"),
+                    "slug": item_data.get("slug"),
+                    "tipo": item_data.get("tipo"),
+                    "unidad": item_data.get("unidad"),
+                    "precio_base": item_data.get("precio_base"),
+                    "moneda": item_data.get("moneda"),
+                    "activo": item_data.get("activo"),
+                    "metadata": metadata,
+                    "similarity": None,
+                }
+            )
+        write_catalog_debug_entry(
+            {
+                **log_base,
+                "match_count": len(items),
+                "items_returned": len(items),
+                "matches": matches_log,
+                "strategy": "sql_first",
+                "vector_used": False,
+            }
+        )
+        return {
+            "items": items,
+            "detail_level": payload.detail_level,
+            "source": "catalog_sql_direct",
+        }
+
     service = CatalogEmbeddingService(repo)
     try:
         matches = await service.query_documents(
@@ -4400,15 +4476,6 @@ async def fetch_catalog_item_details(
             status.HTTP_502_BAD_GATEWAY,
             detail="No se pudo consultar la vector store del catálogo.",
         ) from exc
-
-    log_base = {
-        "source": "api.fetch_catalog_item_details",
-        "conversation_id": payload.conversacion_id,
-        "organizacion_id": str(organizacion_uuid),
-        "query": payload.query,
-        "detail_level": payload.detail_level,
-        "limit": payload.limit,
-    }
 
     if not matches:
         write_catalog_debug_entry(
