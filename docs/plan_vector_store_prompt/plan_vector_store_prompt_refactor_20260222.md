@@ -137,9 +137,10 @@ La estrategia será híbrida: SQL-first para consultas estructuradas y vector st
 - [x] Observabilidad parcial en auditoría vector:
   - `query_documents` ya persiste `reason` y `embedding_cache_eligible` en `catalog_embeddings_audit.metadata`.
   - Integrado en fallback vector de `fetch_catalog_item_details` (API CRM, webchat y WhatsApp).
+  - Endpoint agregado: `GET /crm/catalog/vector-store/metrics` con buckets por día/tipo/canal/reason.
 - [x] Batch para operaciones masivas:
   - Endpoints bulk-delete para líneas/familias/modelos.
   - Frontend actualizado para usar llamadas batch en vez de N requests individuales.
 - [ ] Pendiente principal:
   - Optimizar/actualizar modelo de embeddings (fase 6).
-  - Completar observabilidad avanzada con métricas de `reason` por activación vectorial (fase 7).
+  - Completar observabilidad avanzada en panel/dashboard (visualización y alertas) usando las nuevas métricas por `reason` (fase 7).

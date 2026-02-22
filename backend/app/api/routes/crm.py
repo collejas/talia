@@ -7280,6 +7280,21 @@ class CatalogVectorStoreAuditEntry(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
 
+class CatalogVectorStoreMetricsBucket(BaseModel):
+    day: str
+    tipo: Literal["reindex", "query"] | str
+    canal: str | None = None
+    reason: str | None = None
+    total: int
+
+
+class CatalogVectorStoreMetricsResponse(BaseModel):
+    from_date: str
+    to_date: str
+    total_events: int
+    buckets: list[CatalogVectorStoreMetricsBucket] = Field(default_factory=list)
+
+
 @router.get("/catalog/vector-store/status", response_model=CatalogVectorStoreStatus)
 async def catalog_vector_store_status(
     *,
@@ -7325,6 +7340,58 @@ async def catalog_vector_store_audit(
         limit=limit,
     )
     return [CatalogVectorStoreAuditEntry.model_validate(row) for row in rows]
+
+
+@router.get(
+    "/catalog/vector-store/metrics",
+    response_model=CatalogVectorStoreMetricsResponse,
+)
+async def catalog_vector_store_metrics(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("settings.view")),
+    days: Annotated[int, Query(ge=1, le=90)] = 30,
+    tipo: Literal["reindex", "query"] | None = Query(default=None),
+    canal: str | None = Query(default=None, max_length=80),
+    limit: Annotated[int, Query(ge=100, le=5000)] = 2000,
+) -> CatalogVectorStoreMetricsResponse:
+    from_dt = datetime.now(timezone.utc) - timedelta(days=days)
+    rows = await repo.list_catalog_embeddings_audit(
+        organizacion_id=organizacion_id,
+        tipo=tipo,
+        canal=canal,
+        created_after=from_dt,
+        limit=limit,
+    )
+    aggregated: dict[tuple[str, str, str | None, str | None], int] = {}
+    for row in rows:
+        created_raw = str(row.get("creado_en") or "")
+        day = created_raw[:10] if len(created_raw) >= 10 else "unknown"
+        row_tipo = str(row.get("tipo") or "unknown")
+        row_canal = row.get("canal") if isinstance(row.get("canal"), str) else None
+        metadata = row.get("metadata") if isinstance(row.get("metadata"), Mapping) else {}
+        reason = metadata.get("reason") if isinstance(metadata.get("reason"), str) else None
+        key = (day, row_tipo, row_canal, reason)
+        aggregated[key] = aggregated.get(key, 0) + 1
+
+    buckets = [
+        CatalogVectorStoreMetricsBucket(
+            day=day,
+            tipo=row_tipo,
+            canal=row_canal,
+            reason=reason,
+            total=total,
+        )
+        for (day, row_tipo, row_canal, reason), total in aggregated.items()
+    ]
+    buckets.sort(key=lambda item: (item.day, item.total), reverse=True)
+    return CatalogVectorStoreMetricsResponse(
+        from_date=from_dt.date().isoformat(),
+        to_date=datetime.now(timezone.utc).date().isoformat(),
+        total_events=len(rows),
+        buckets=buckets,
+    )
 
 
 @router.get(

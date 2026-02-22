@@ -5266,15 +5266,21 @@ class CRMRepository:
         *,
         organizacion_id: UUID,
         tipo: str | None = None,
+        canal: str | None = None,
+        created_after: datetime | None = None,
         limit: int = 10,
     ) -> list[dict[str, Any]]:
         params: dict[str, str] = {
             "organizacion_id": f"eq.{organizacion_id}",
             "order": "creado_en.desc",
-            "limit": str(max(1, min(limit, 500))),
+            "limit": str(max(1, min(limit, 5000))),
         }
         if tipo:
             params["tipo"] = f"eq.{tipo}"
+        if canal:
+            params["canal"] = f"eq.{canal}"
+        if created_after:
+            params["creado_en"] = f"gte.{created_after.isoformat()}"
         resp = await self._request("GET", "/rest/v1/catalog_embeddings_audit", params=params)
         data = resp.json()
         if not isinstance(data, list):
