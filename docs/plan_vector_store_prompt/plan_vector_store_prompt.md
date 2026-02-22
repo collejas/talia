@@ -1,5 +1,7 @@
 # Vector Store Prompt Plan
 
+> Nota de refactorización (2026-02-22): este plan fue refactorizado después del análisis de costos/uso en producción. La versión actualizada y recomendada quedó documentada en `docs/plan_vector_store_prompt/plan_vector_store_prompt_refactor_20260222.md`.
+
 ## Objetivo
 Permitir que el prompt que ejecuta Tal-IA consulte directamente la vector store en Supabase, de modo que él mismo recupere todos los matches y ordene la respuesta según el contexto deseado. La idea es replicar la experiencia de `docs/openai/demos/bienes_raices/las aguilas` pero manteniendo los datos dentro del stack propio (Supabase + backend).
 
@@ -27,3 +29,5 @@ Permitir que el prompt que ejecuta Tal-IA consulte directamente la vector store 
 5. **Documentar cambios** [x]
    - [x] Actualizar `docs/openai/talia/webchat/webchat_prompt.md` con referencias al uso de la tool.
    - [x] Guardar este plan y cualquier hallazgo adicional.
+
+> Cierre de refactorización (2026-02-22): este documento se conserva como plan histórico. Para implementación activa usar `docs/plan_vector_store_prompt/plan_vector_store_prompt_refactor_20260222.md`.
