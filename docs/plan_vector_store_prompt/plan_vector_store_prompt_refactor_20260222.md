@@ -154,10 +154,12 @@ La estrategia será híbrida: SQL-first para consultas estructuradas y vector st
   - Se expuso historial en `GET /crm/catalog/vector-store/alert-thresholds/history` y se visualiza en el panel.
 - [x] Filtros en historial de umbrales:
   - La vista permite filtrar por scope, actor, fecha desde/hasta y límite de registros.
+- [x] Exportación CSV de historial filtrado:
+  - Se agregó endpoint dedicado en panel para descargar CSV con los filtros activos del historial.
 - [x] Batch para operaciones masivas:
   - Endpoints bulk-delete para líneas/familias/modelos.
   - Frontend actualizado para usar llamadas batch en vez de N requests individuales.
 - [x] Modelo de embeddings actualizado:
   - Default de `embeddings_model` migrado a `text-embedding-3-small` (compatible con `vector(1536)`).
 - [ ] Pendiente principal:
-  - Añadir exportación CSV del historial filtrado y vista comparativa semanal/mensual de cambios.
+  - Construir vista comparativa semanal/mensual de cambios de umbral y su impacto en uso vectorial.

@@ -35,13 +35,9 @@ type PageSearchParams = {
 }
 
 function formatDate(value: string | null): string {
-  if (!value) {
-    return "Sin datos"
-  }
+  if (!value) return "Sin datos"
   const parsed = new Date(value)
-  if (Number.isNaN(parsed.getTime())) {
-    return value
-  }
+  if (Number.isNaN(parsed.getTime())) return value
   return parsed.toLocaleString("es-MX", {
     year: "numeric",
     month: "2-digit",
@@ -96,11 +92,8 @@ function aggregateByDay(buckets: CatalogVectorStoreMetricsBucket[]) {
     const day = bucket.day
     const current = grouped.get(day) ?? { query: 0, reindex: 0 }
     const type = String(bucket.tipo).toLowerCase()
-    if (type === "query") {
-      current.query += bucket.total
-    } else if (type === "reindex") {
-      current.reindex += bucket.total
-    }
+    if (type === "query") current.query += bucket.total
+    else if (type === "reindex") current.reindex += bucket.total
     grouped.set(day, current)
   }
   return Array.from(grouped.entries())
@@ -122,9 +115,7 @@ function sumQueriesInRange(
 ): number {
   const from = buildDateKey(fromDaysAgo)
   const to = buildDateKey(toDaysAgo)
-  return byDayRows
-    .filter((row) => row.day >= from && row.day <= to)
-    .reduce((acc, row) => acc + row.query, 0)
+  return byDayRows.filter((row) => row.day >= from && row.day <= to).reduce((acc, row) => acc + row.query, 0)
 }
 
 type AlertItem = {
@@ -159,10 +150,7 @@ function buildAlerts(
     })
   }
 
-  if (
-    fallbackRatio >= thresholds.fallbackRatioThreshold
-    && fallbackQueries >= thresholds.minFallbackEvents30d
-  ) {
+  if (fallbackRatio >= thresholds.fallbackRatioThreshold && fallbackQueries >= thresholds.minFallbackEvents30d) {
     alerts.push({
       title: "Dependencia alta de fallback semántico",
       detail: `${Math.round(fallbackRatio * 100)}% de las queries vectoriales fueron fallback (${fallbackQueries}/${totalQueries}).`,
@@ -205,34 +193,36 @@ function formatThresholdDiff(
   before: CatalogVectorAlertThresholds | null,
   after: CatalogVectorAlertThresholds | null,
 ): string {
-  if (!before && !after) {
-    return "Sin datos"
-  }
+  if (!before && !after) return "Sin datos"
   if (!before && after) {
     return `Nuevo: q30d=${after.minQueryEvents30d}, fallbackRatio=${after.fallbackRatioThreshold}, fallbackMin=${after.minFallbackEvents30d}, growth=${after.weeklyGrowthRatioThreshold}, weeklyMin=${after.minWeeklyQueries}`
   }
-  if (before && !after) {
-    return "Override limpiado"
-  }
+  if (before && !after) return "Override limpiado"
   const prev = before as CatalogVectorAlertThresholds
   const next = after as CatalogVectorAlertThresholds
   const changes: string[] = []
-  if (prev.minQueryEvents30d !== next.minQueryEvents30d) {
-    changes.push(`q30d ${prev.minQueryEvents30d}->${next.minQueryEvents30d}`)
-  }
-  if (prev.fallbackRatioThreshold !== next.fallbackRatioThreshold) {
-    changes.push(`fallbackRatio ${prev.fallbackRatioThreshold}->${next.fallbackRatioThreshold}`)
-  }
-  if (prev.minFallbackEvents30d !== next.minFallbackEvents30d) {
-    changes.push(`fallbackMin ${prev.minFallbackEvents30d}->${next.minFallbackEvents30d}`)
-  }
-  if (prev.weeklyGrowthRatioThreshold !== next.weeklyGrowthRatioThreshold) {
-    changes.push(`growth ${prev.weeklyGrowthRatioThreshold}->${next.weeklyGrowthRatioThreshold}`)
-  }
-  if (prev.minWeeklyQueries !== next.minWeeklyQueries) {
-    changes.push(`weeklyMin ${prev.minWeeklyQueries}->${next.minWeeklyQueries}`)
-  }
+  if (prev.minQueryEvents30d !== next.minQueryEvents30d) changes.push(`q30d ${prev.minQueryEvents30d}->${next.minQueryEvents30d}`)
+  if (prev.fallbackRatioThreshold !== next.fallbackRatioThreshold) changes.push(`fallbackRatio ${prev.fallbackRatioThreshold}->${next.fallbackRatioThreshold}`)
+  if (prev.minFallbackEvents30d !== next.minFallbackEvents30d) changes.push(`fallbackMin ${prev.minFallbackEvents30d}->${next.minFallbackEvents30d}`)
+  if (prev.weeklyGrowthRatioThreshold !== next.weeklyGrowthRatioThreshold) changes.push(`growth ${prev.weeklyGrowthRatioThreshold}->${next.weeklyGrowthRatioThreshold}`)
+  if (prev.minWeeklyQueries !== next.minWeeklyQueries) changes.push(`weeklyMin ${prev.minWeeklyQueries}->${next.minWeeklyQueries}`)
   return changes.length ? changes.join(" | ") : "Sin cambios detectados"
+}
+
+function buildHistoryExportHref(filters: {
+  scope: string
+  actor: string
+  dateFrom: string
+  dateTo: string
+  limit: number
+}): string {
+  const params = new URLSearchParams()
+  params.set("history_scope", filters.scope)
+  if (filters.actor) params.set("history_actor", filters.actor)
+  if (filters.dateFrom) params.set("history_date_from", filters.dateFrom)
+  if (filters.dateTo) params.set("history_date_to", filters.dateTo)
+  params.set("history_limit", String(filters.limit))
+  return `/api/settings/productos/vector-thresholds-history.csv?${params.toString()}`
 }
 
 export default async function ProductosObservabilidadPage({
@@ -266,30 +256,32 @@ export default async function ProductosObservabilidadPage({
   const last7Queries = sumQueriesInRange(byDay, 6, 0)
   const previous7Queries = sumQueriesInRange(byDay, 13, 7)
   const weeklyDelta = last7Queries - previous7Queries
+
   const filteredHistory = thresholdsHistory
     .filter((entry) => {
-      if (historyScope !== "all" && entry.scope !== historyScope) {
-        return false
-      }
+      if (historyScope !== "all" && entry.scope !== historyScope) return false
       if (historyActor) {
         const actorCandidate = `${entry.changedByName ?? ""} ${entry.changedBy ?? ""}`.toLowerCase()
-        if (!actorCandidate.includes(historyActor)) {
-          return false
-        }
+        if (!actorCandidate.includes(historyActor)) return false
       }
       const date = entry.createdAt.slice(0, 10)
-      if (historyDateFrom && date < historyDateFrom) {
-        return false
-      }
-      if (historyDateTo && date > historyDateTo) {
-        return false
-      }
+      if (historyDateFrom && date < historyDateFrom) return false
+      if (historyDateTo && date > historyDateTo) return false
       return true
     })
     .slice(0, historyLimit)
+
   const actorOptions = Array.from(
     new Set(thresholdsHistory.map((entry) => entry.changedByName ?? entry.changedBy).filter(Boolean)),
   ) as string[]
+
+  const historyExportHref = buildHistoryExportHref({
+    scope: historyScope,
+    actor: params.history_actor ?? "",
+    dateFrom: historyDateFrom,
+    dateTo: historyDateTo,
+    limit: historyLimit,
+  })
 
   return (
     <AppViewLayout title="Settings · Observabilidad vectorial">
@@ -311,171 +303,43 @@ export default async function ProductosObservabilidadPage({
         </header>
 
         <div className="grid gap-4 md:grid-cols-4">
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm">Eventos 30 días</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-2xl font-semibold">{metrics.totalEvents}</p>
-              <p className="text-xs text-muted-foreground">Ventana {metrics.fromDate} a {metrics.toDate}</p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm">Queries vectoriales</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-2xl font-semibold">{queryEvents}</p>
-              <p className="text-xs text-muted-foreground">Consultas con embeddings</p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm">Reindex</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-2xl font-semibold">{reindexEvents}</p>
-              <p className="text-xs text-muted-foreground">Operaciones de indexación</p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm">Último query</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm font-medium">{formatDate(status.lastQueryAt)}</p>
-              <p className="text-xs text-muted-foreground">Canal: {channelLabel(status.lastQueryChannel)}</p>
-            </CardContent>
-          </Card>
+          <Card><CardHeader className="pb-2"><CardTitle className="text-sm">Eventos 30 días</CardTitle></CardHeader><CardContent><p className="text-2xl font-semibold">{metrics.totalEvents}</p><p className="text-xs text-muted-foreground">Ventana {metrics.fromDate} a {metrics.toDate}</p></CardContent></Card>
+          <Card><CardHeader className="pb-2"><CardTitle className="text-sm">Queries vectoriales</CardTitle></CardHeader><CardContent><p className="text-2xl font-semibold">{queryEvents}</p><p className="text-xs text-muted-foreground">Consultas con embeddings</p></CardContent></Card>
+          <Card><CardHeader className="pb-2"><CardTitle className="text-sm">Reindex</CardTitle></CardHeader><CardContent><p className="text-2xl font-semibold">{reindexEvents}</p><p className="text-xs text-muted-foreground">Operaciones de indexación</p></CardContent></Card>
+          <Card><CardHeader className="pb-2"><CardTitle className="text-sm">Último query</CardTitle></CardHeader><CardContent><p className="text-sm font-medium">{formatDate(status.lastQueryAt)}</p><p className="text-xs text-muted-foreground">Canal: {channelLabel(status.lastQueryChannel)}</p></CardContent></Card>
         </div>
 
         <div className="grid gap-4 lg:grid-cols-2">
           <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Top reasons (30 días)</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-3">
-                {topReasons.length ? (
-                  topReasons.map((item) => (
-                    <div className="flex items-center justify-between" key={item.reason}>
-                      <span className="text-sm text-muted-foreground">{item.reason}</span>
-                      <Badge variant="outline">{item.total}</Badge>
-                    </div>
-                  ))
-                ) : (
-                  <p className="text-sm text-muted-foreground">Sin eventos registrados.</p>
-                )}
-              </div>
-            </CardContent>
+            <CardHeader><CardTitle className="text-base">Top reasons (30 días)</CardTitle></CardHeader>
+            <CardContent><div className="space-y-3">{topReasons.length ? topReasons.map((item) => (<div className="flex items-center justify-between" key={item.reason}><span className="text-sm text-muted-foreground">{item.reason}</span><Badge variant="outline">{item.total}</Badge></div>)) : <p className="text-sm text-muted-foreground">Sin eventos registrados.</p>}</div></CardContent>
           </Card>
-
           <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Estado de actividad</CardTitle>
-            </CardHeader>
+            <CardHeader><CardTitle className="text-base">Estado de actividad</CardTitle></CardHeader>
             <CardContent className="space-y-3 text-sm">
-              <div>
-                <p className="font-medium">Último reindex</p>
-                <p className="text-muted-foreground">{formatDate(status.lastReindexAt)}</p>
-                <p className="text-muted-foreground">Canal: {channelLabel(status.lastReindexChannel)}</p>
-              </div>
-              <div>
-                <p className="font-medium">Última consulta vectorial</p>
-                <p className="text-muted-foreground">{formatDate(status.lastQueryAt)}</p>
-                <p className="text-muted-foreground">Canal: {channelLabel(status.lastQueryChannel)}</p>
-              </div>
-              <div>
-                <p className="font-medium">Tendencia semanal (queries)</p>
-                <p className="text-muted-foreground">
-                  Últimos 7 días: {last7Queries} | Semana previa: {previous7Queries}
-                </p>
-                <p className="text-muted-foreground">
-                  Delta: {weeklyDelta > 0 ? `+${weeklyDelta}` : weeklyDelta}
-                </p>
-              </div>
+              <div><p className="font-medium">Último reindex</p><p className="text-muted-foreground">{formatDate(status.lastReindexAt)}</p><p className="text-muted-foreground">Canal: {channelLabel(status.lastReindexChannel)}</p></div>
+              <div><p className="font-medium">Última consulta vectorial</p><p className="text-muted-foreground">{formatDate(status.lastQueryAt)}</p><p className="text-muted-foreground">Canal: {channelLabel(status.lastQueryChannel)}</p></div>
+              <div><p className="font-medium">Tendencia semanal (queries)</p><p className="text-muted-foreground">Últimos 7 días: {last7Queries} | Semana previa: {previous7Queries}</p><p className="text-muted-foreground">Delta: {weeklyDelta > 0 ? `+${weeklyDelta}` : weeklyDelta}</p></div>
             </CardContent>
           </Card>
         </div>
 
         <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Alertas automáticas</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {alerts.map((alert) => (
-              <div key={`${alert.title}-${alert.detail}`} className="flex items-start justify-between gap-3 rounded-md border p-3">
-                <div>
-                  <p className="text-sm font-medium">{alert.title}</p>
-                  <p className="text-sm text-muted-foreground">{alert.detail}</p>
-                </div>
-                <Badge variant={severityVariant(alert.severity)}>{severityLabel(alert.severity)}</Badge>
-              </div>
-            ))}
-          </CardContent>
+          <CardHeader><CardTitle className="text-base">Alertas automáticas</CardTitle></CardHeader>
+          <CardContent className="space-y-3">{alerts.map((alert) => (<div key={`${alert.title}-${alert.detail}`} className="flex items-start justify-between gap-3 rounded-md border p-3"><div><p className="text-sm font-medium">{alert.title}</p><p className="text-sm text-muted-foreground">{alert.detail}</p></div><Badge variant={severityVariant(alert.severity)}>{severityLabel(alert.severity)}</Badge></div>))}</CardContent>
         </Card>
 
         <div className="grid gap-4 xl:grid-cols-2">
           <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Umbrales globales (todas las organizaciones)</CardTitle>
-            </CardHeader>
+            <CardHeader><CardTitle className="text-base">Umbrales globales (todas las organizaciones)</CardTitle></CardHeader>
             <CardContent>
               <form action={saveCatalogVectorStoreGlobalThresholdsAction} className="space-y-4">
                 <div className="grid gap-3 md:grid-cols-2">
-                  <div className="space-y-1">
-                    <Label htmlFor="global_min_query_events_30d">Min. queries 30d</Label>
-                    <Input
-                      id="global_min_query_events_30d"
-                      name="min_query_events_30d"
-                      type="number"
-                      min={1}
-                      defaultValue={thresholdsConfig.globalThresholds.minQueryEvents30d}
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <Label htmlFor="global_fallback_ratio_threshold">Ratio fallback (0-1)</Label>
-                    <Input
-                      id="global_fallback_ratio_threshold"
-                      name="fallback_ratio_threshold"
-                      type="number"
-                      min={0}
-                      max={1}
-                      step="0.01"
-                      defaultValue={thresholdsConfig.globalThresholds.fallbackRatioThreshold}
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <Label htmlFor="global_min_fallback_events_30d">Min. fallback 30d</Label>
-                    <Input
-                      id="global_min_fallback_events_30d"
-                      name="min_fallback_events_30d"
-                      type="number"
-                      min={1}
-                      defaultValue={thresholdsConfig.globalThresholds.minFallbackEvents30d}
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <Label htmlFor="global_weekly_growth_ratio_threshold">Crecimiento semanal (ratio)</Label>
-                    <Input
-                      id="global_weekly_growth_ratio_threshold"
-                      name="weekly_growth_ratio_threshold"
-                      type="number"
-                      min={0}
-                      step="0.01"
-                      defaultValue={thresholdsConfig.globalThresholds.weeklyGrowthRatioThreshold}
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <Label htmlFor="global_min_weekly_queries">Min. queries semanales</Label>
-                    <Input
-                      id="global_min_weekly_queries"
-                      name="min_weekly_queries"
-                      type="number"
-                      min={1}
-                      defaultValue={thresholdsConfig.globalThresholds.minWeeklyQueries}
-                    />
-                  </div>
+                  <div className="space-y-1"><Label htmlFor="global_min_query_events_30d">Min. queries 30d</Label><Input id="global_min_query_events_30d" name="min_query_events_30d" type="number" min={1} defaultValue={thresholdsConfig.globalThresholds.minQueryEvents30d} /></div>
+                  <div className="space-y-1"><Label htmlFor="global_fallback_ratio_threshold">Ratio fallback (0-1)</Label><Input id="global_fallback_ratio_threshold" name="fallback_ratio_threshold" type="number" min={0} max={1} step="0.01" defaultValue={thresholdsConfig.globalThresholds.fallbackRatioThreshold} /></div>
+                  <div className="space-y-1"><Label htmlFor="global_min_fallback_events_30d">Min. fallback 30d</Label><Input id="global_min_fallback_events_30d" name="min_fallback_events_30d" type="number" min={1} defaultValue={thresholdsConfig.globalThresholds.minFallbackEvents30d} /></div>
+                  <div className="space-y-1"><Label htmlFor="global_weekly_growth_ratio_threshold">Crecimiento semanal (ratio)</Label><Input id="global_weekly_growth_ratio_threshold" name="weekly_growth_ratio_threshold" type="number" min={0} step="0.01" defaultValue={thresholdsConfig.globalThresholds.weeklyGrowthRatioThreshold} /></div>
+                  <div className="space-y-1"><Label htmlFor="global_min_weekly_queries">Min. queries semanales</Label><Input id="global_min_weekly_queries" name="min_weekly_queries" type="number" min={1} defaultValue={thresholdsConfig.globalThresholds.minWeeklyQueries} /></div>
                 </div>
                 <Button type="submit" size="sm">Guardar umbrales globales</Button>
               </form>
@@ -483,130 +347,43 @@ export default async function ProductosObservabilidadPage({
           </Card>
 
           <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Override por organización (esta organización)</CardTitle>
-            </CardHeader>
+            <CardHeader><CardTitle className="text-base">Override por organización (esta organización)</CardTitle></CardHeader>
             <CardContent className="space-y-4">
               <form action={saveCatalogVectorStoreOrgThresholdsAction} className="space-y-4">
                 <div className="grid gap-3 md:grid-cols-2">
-                  <div className="space-y-1">
-                    <Label htmlFor="org_min_query_events_30d">Min. queries 30d</Label>
-                    <Input
-                      id="org_min_query_events_30d"
-                      name="min_query_events_30d"
-                      type="number"
-                      min={1}
-                      defaultValue={thresholdsConfig.effectiveThresholds.minQueryEvents30d}
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <Label htmlFor="org_fallback_ratio_threshold">Ratio fallback (0-1)</Label>
-                    <Input
-                      id="org_fallback_ratio_threshold"
-                      name="fallback_ratio_threshold"
-                      type="number"
-                      min={0}
-                      max={1}
-                      step="0.01"
-                      defaultValue={thresholdsConfig.effectiveThresholds.fallbackRatioThreshold}
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <Label htmlFor="org_min_fallback_events_30d">Min. fallback 30d</Label>
-                    <Input
-                      id="org_min_fallback_events_30d"
-                      name="min_fallback_events_30d"
-                      type="number"
-                      min={1}
-                      defaultValue={thresholdsConfig.effectiveThresholds.minFallbackEvents30d}
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <Label htmlFor="org_weekly_growth_ratio_threshold">Crecimiento semanal (ratio)</Label>
-                    <Input
-                      id="org_weekly_growth_ratio_threshold"
-                      name="weekly_growth_ratio_threshold"
-                      type="number"
-                      min={0}
-                      step="0.01"
-                      defaultValue={thresholdsConfig.effectiveThresholds.weeklyGrowthRatioThreshold}
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <Label htmlFor="org_min_weekly_queries">Min. queries semanales</Label>
-                    <Input
-                      id="org_min_weekly_queries"
-                      name="min_weekly_queries"
-                      type="number"
-                      min={1}
-                      defaultValue={thresholdsConfig.effectiveThresholds.minWeeklyQueries}
-                    />
-                  </div>
+                  <div className="space-y-1"><Label htmlFor="org_min_query_events_30d">Min. queries 30d</Label><Input id="org_min_query_events_30d" name="min_query_events_30d" type="number" min={1} defaultValue={thresholdsConfig.effectiveThresholds.minQueryEvents30d} /></div>
+                  <div className="space-y-1"><Label htmlFor="org_fallback_ratio_threshold">Ratio fallback (0-1)</Label><Input id="org_fallback_ratio_threshold" name="fallback_ratio_threshold" type="number" min={0} max={1} step="0.01" defaultValue={thresholdsConfig.effectiveThresholds.fallbackRatioThreshold} /></div>
+                  <div className="space-y-1"><Label htmlFor="org_min_fallback_events_30d">Min. fallback 30d</Label><Input id="org_min_fallback_events_30d" name="min_fallback_events_30d" type="number" min={1} defaultValue={thresholdsConfig.effectiveThresholds.minFallbackEvents30d} /></div>
+                  <div className="space-y-1"><Label htmlFor="org_weekly_growth_ratio_threshold">Crecimiento semanal (ratio)</Label><Input id="org_weekly_growth_ratio_threshold" name="weekly_growth_ratio_threshold" type="number" min={0} step="0.01" defaultValue={thresholdsConfig.effectiveThresholds.weeklyGrowthRatioThreshold} /></div>
+                  <div className="space-y-1"><Label htmlFor="org_min_weekly_queries">Min. queries semanales</Label><Input id="org_min_weekly_queries" name="min_weekly_queries" type="number" min={1} defaultValue={thresholdsConfig.effectiveThresholds.minWeeklyQueries} /></div>
                 </div>
                 <div className="flex flex-wrap gap-2">
                   <Button type="submit" size="sm">Guardar override</Button>
-                  <Button type="submit" size="sm" variant="outline" formAction={clearCatalogVectorStoreOrgThresholdsAction}>
-                    Limpiar override
-                  </Button>
+                  <Button type="submit" size="sm" variant="outline" formAction={clearCatalogVectorStoreOrgThresholdsAction}>Limpiar override</Button>
                 </div>
               </form>
-              <p className="text-xs text-muted-foreground">
-                Estado override: {thresholdsConfig.organizationThresholds ? "activo" : "usa global"}
-              </p>
+              <p className="text-xs text-muted-foreground">Estado override: {thresholdsConfig.organizationThresholds ? "activo" : "usa global"}</p>
             </CardContent>
           </Card>
         </div>
 
         <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Desglose diario</CardTitle>
-          </CardHeader>
+          <CardHeader><CardTitle className="text-base">Desglose diario</CardTitle></CardHeader>
           <CardContent>
             <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Fecha</TableHead>
-                  <TableHead className="text-right">Query</TableHead>
-                  <TableHead className="text-right">Reindex</TableHead>
-                  <TableHead className="text-right">Total</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {byDay.length ? (
-                  byDay.map((row) => (
-                    <TableRow key={row.day}>
-                      <TableCell>{row.day}</TableCell>
-                      <TableCell className="text-right">{row.query}</TableCell>
-                      <TableCell className="text-right">{row.reindex}</TableCell>
-                      <TableCell className="text-right font-medium">{row.total}</TableCell>
-                    </TableRow>
-                  ))
-                ) : (
-                  <TableRow>
-                    <TableCell colSpan={4} className="text-center text-muted-foreground">
-                      Sin actividad en la ventana seleccionada.
-                    </TableCell>
-                  </TableRow>
-                )}
-              </TableBody>
+              <TableHeader><TableRow><TableHead>Fecha</TableHead><TableHead className="text-right">Query</TableHead><TableHead className="text-right">Reindex</TableHead><TableHead className="text-right">Total</TableHead></TableRow></TableHeader>
+              <TableBody>{byDay.length ? byDay.map((row) => (<TableRow key={row.day}><TableCell>{row.day}</TableCell><TableCell className="text-right">{row.query}</TableCell><TableCell className="text-right">{row.reindex}</TableCell><TableCell className="text-right font-medium">{row.total}</TableCell></TableRow>)) : <TableRow><TableCell colSpan={4} className="text-center text-muted-foreground">Sin actividad en la ventana seleccionada.</TableCell></TableRow>}</TableBody>
             </Table>
           </CardContent>
         </Card>
 
         <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Historial de umbrales</CardTitle>
-          </CardHeader>
+          <CardHeader><CardTitle className="text-base">Historial de umbrales</CardTitle></CardHeader>
           <CardContent className="space-y-4">
             <form className="grid gap-3 rounded-md border p-3 md:grid-cols-5">
               <div className="space-y-1">
                 <Label htmlFor="history_scope">Scope</Label>
-                <select
-                  id="history_scope"
-                  name="history_scope"
-                  defaultValue={historyScope}
-                  className="h-9 w-full rounded-md border bg-background px-3 text-sm"
-                >
+                <select id="history_scope" name="history_scope" defaultValue={historyScope} className="h-9 w-full rounded-md border bg-background px-3 text-sm">
                   <option value="all">Todos</option>
                   <option value="organization">Organización</option>
                   <option value="global">Global</option>
@@ -614,73 +391,31 @@ export default async function ProductosObservabilidadPage({
               </div>
               <div className="space-y-1">
                 <Label htmlFor="history_actor">Actor</Label>
-                <Input
-                  id="history_actor"
-                  name="history_actor"
-                  list="history-actor-options"
-                  defaultValue={params.history_actor ?? ""}
-                  placeholder="Nombre o UUID"
-                />
-                <datalist id="history-actor-options">
-                  {actorOptions.map((actor) => (
-                    <option key={actor} value={actor} />
-                  ))}
-                </datalist>
+                <Input id="history_actor" name="history_actor" list="history-actor-options" defaultValue={params.history_actor ?? ""} placeholder="Nombre o UUID" />
+                <datalist id="history-actor-options">{actorOptions.map((actor) => (<option key={actor} value={actor} />))}</datalist>
               </div>
-              <div className="space-y-1">
-                <Label htmlFor="history_date_from">Desde</Label>
-                <Input id="history_date_from" name="history_date_from" type="date" defaultValue={historyDateFrom} />
-              </div>
-              <div className="space-y-1">
-                <Label htmlFor="history_date_to">Hasta</Label>
-                <Input id="history_date_to" name="history_date_to" type="date" defaultValue={historyDateTo} />
-              </div>
-              <div className="space-y-1">
-                <Label htmlFor="history_limit">Límite</Label>
-                <Input id="history_limit" name="history_limit" type="number" min={1} max={200} defaultValue={historyLimit} />
-              </div>
+              <div className="space-y-1"><Label htmlFor="history_date_from">Desde</Label><Input id="history_date_from" name="history_date_from" type="date" defaultValue={historyDateFrom} /></div>
+              <div className="space-y-1"><Label htmlFor="history_date_to">Hasta</Label><Input id="history_date_to" name="history_date_to" type="date" defaultValue={historyDateTo} /></div>
+              <div className="space-y-1"><Label htmlFor="history_limit">Límite</Label><Input id="history_limit" name="history_limit" type="number" min={1} max={200} defaultValue={historyLimit} /></div>
               <div className="md:col-span-5 flex gap-2">
                 <Button type="submit" size="sm">Aplicar filtros</Button>
-                <Button asChild type="button" size="sm" variant="outline">
-                  <Link href="/settings/productos/observabilidad">Limpiar</Link>
-                </Button>
+                <Button asChild type="button" size="sm" variant="outline"><Link href="/settings/productos/observabilidad">Limpiar</Link></Button>
+                <Button asChild type="button" size="sm" variant="outline"><a href={historyExportHref}>Exportar CSV</a></Button>
               </div>
             </form>
             <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Fecha</TableHead>
-                  <TableHead>Scope</TableHead>
-                  <TableHead>Actor</TableHead>
-                  <TableHead>Acción</TableHead>
-                  <TableHead>Cambio</TableHead>
-                </TableRow>
-              </TableHeader>
+              <TableHeader><TableRow><TableHead>Fecha</TableHead><TableHead>Scope</TableHead><TableHead>Actor</TableHead><TableHead>Acción</TableHead><TableHead>Cambio</TableHead></TableRow></TableHeader>
               <TableBody>
-                {filteredHistory.length ? (
-                  filteredHistory.map((entry) => (
-                    <TableRow key={entry.id}>
-                      <TableCell>{formatDate(entry.createdAt)}</TableCell>
-                      <TableCell>
-                        <Badge variant="outline">
-                          {entry.scope === "global" ? "Global" : "Organización"}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-xs text-muted-foreground">
-                        {entry.changedByName ?? entry.changedBy ?? "Sistema"}
-                      </TableCell>
-                      <TableCell>{entry.action}</TableCell>
-                      <TableCell className="text-xs text-muted-foreground">
-                        {formatThresholdDiff(entry.before, entry.after)}
-                      </TableCell>
-                    </TableRow>
-                  ))
-                ) : (
-                  <TableRow>
-                    <TableCell colSpan={5} className="text-center text-muted-foreground">
-                      Sin resultados para los filtros seleccionados.
-                    </TableCell>
+                {filteredHistory.length ? filteredHistory.map((entry) => (
+                  <TableRow key={entry.id}>
+                    <TableCell>{formatDate(entry.createdAt)}</TableCell>
+                    <TableCell><Badge variant="outline">{entry.scope === "global" ? "Global" : "Organización"}</Badge></TableCell>
+                    <TableCell className="text-xs text-muted-foreground">{entry.changedByName ?? entry.changedBy ?? "Sistema"}</TableCell>
+                    <TableCell>{entry.action}</TableCell>
+                    <TableCell className="text-xs text-muted-foreground">{formatThresholdDiff(entry.before, entry.after)}</TableCell>
                   </TableRow>
+                )) : (
+                  <TableRow><TableCell colSpan={5} className="text-center text-muted-foreground">Sin resultados para los filtros seleccionados.</TableCell></TableRow>
                 )}
               </TableBody>
             </Table>
