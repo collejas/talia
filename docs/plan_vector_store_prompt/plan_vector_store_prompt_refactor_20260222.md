@@ -149,10 +149,13 @@ La estrategia será híbrida: SQL-first para consultas estructuradas y vector st
   - Se habilitó edición de umbrales globales y override por organización desde la vista de observabilidad.
 - [x] Control de permisos en umbrales globales:
   - La edición global de umbrales requiere `platform admin` además de `settings.manage`.
+- [x] Versionado/historial de umbrales:
+  - Cada cambio de umbrales (global u organización) se registra en `audit_logs`.
+  - Se expuso historial en `GET /crm/catalog/vector-store/alert-thresholds/history` y se visualiza en el panel.
 - [x] Batch para operaciones masivas:
   - Endpoints bulk-delete para líneas/familias/modelos.
   - Frontend actualizado para usar llamadas batch en vez de N requests individuales.
 - [x] Modelo de embeddings actualizado:
   - Default de `embeddings_model` migrado a `text-embedding-3-small` (compatible con `vector(1536)`).
 - [ ] Pendiente principal:
-  - Implementar versionado/historial de cambios de umbral (quién, cuándo, valor previo/nuevo).
+  - Afinar UI del historial para mostrar diff completo de todos los campos y actor por nombre.

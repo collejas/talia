@@ -476,6 +476,18 @@ export type CatalogVectorAlertThresholdsConfig = {
   effectiveThresholds: CatalogVectorAlertThresholds
 }
 
+export type CatalogVectorAlertThresholdsHistoryEntry = {
+  id: string
+  scope: "global" | "organization" | string
+  action: string
+  changedBy: string | null
+  changedByName: string | null
+  createdAt: string
+  targetOrganizacionId: string | null
+  before: CatalogVectorAlertThresholds | null
+  after: CatalogVectorAlertThresholds | null
+}
+
 function emptyCatalogMetrics(days: number): CatalogVectorStoreMetrics {
   const toDate = new Date()
   const fromDate = new Date()
@@ -650,4 +662,46 @@ export async function clearCatalogVectorStoreOrgThresholdsAction(): Promise<void
     throw new Error(response.error || "No se pudo limpiar el override de umbrales por organización.")
   }
   revalidatePath("/settings/productos/observabilidad")
+}
+
+export async function fetchCatalogVectorStoreAlertThresholdsHistory(options?: {
+  scope?: "all" | "organization" | "global"
+  limit?: number
+}): Promise<CatalogVectorAlertThresholdsHistoryEntry[]> {
+  const limit = Math.min(Math.max(options?.limit ?? 30, 1), 200)
+  const response = await callCrmApi<Record<string, unknown>[]>(
+    "/crm/catalog/vector-store/alert-thresholds/history",
+    {
+      searchParams: {
+        scope: options?.scope ?? "all",
+        limit,
+      },
+    },
+  )
+  if (!response.ok || !Array.isArray(response.data)) {
+    if (!response.ok) {
+      console.warn(
+        "[crm] /crm/catalog/vector-store/alert-thresholds/history failed",
+        response.error,
+        response.status,
+      )
+    }
+    return []
+  }
+  return response.data
+    .filter((entry) => entry && typeof entry === "object")
+    .map((entry) => {
+      const row = entry as Record<string, unknown>
+      return {
+        id: String(row.id ?? ""),
+        scope: String(row.scope ?? "organization"),
+        action: String(row.action ?? "update"),
+        changedBy: normalizeString(row.changed_by ?? row.changedBy),
+        changedByName: normalizeString(row.changed_by_name ?? row.changedByName),
+        createdAt: String(row.created_at ?? row.createdAt ?? ""),
+        targetOrganizacionId: normalizeString(row.target_organizacion_id ?? row.targetOrganizacionId),
+        before: row.before ? normalizeThresholds(row.before) : null,
+        after: row.after ? normalizeThresholds(row.after) : null,
+      }
+    })
 }

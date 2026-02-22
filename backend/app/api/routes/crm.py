@@ -222,6 +222,7 @@ DEFAULT_TEMPLATE_SLUG = "default"
 DEFAULT_QUOTE_TEMPLATE_SLUG = "default"
 DEFAULT_REMINDER_SLUG = "default"
 CATALOG_VECTOR_ALERT_CONFIG_PATH = ("catalog", "vector_store", "alert_thresholds")
+CATALOG_VECTOR_ALERT_AUDIT_TABLA = "organizaciones.config.catalog.vector_store.alert_thresholds"
 CATALOG_VECTOR_ALERT_DEFAULTS: dict[str, Any] = {
     "min_query_events_30d": 250,
     "fallback_ratio_threshold": 0.35,
@@ -7407,6 +7408,18 @@ class CatalogVectorStoreAlertThresholdsResponse(BaseModel):
     effective_thresholds: CatalogVectorStoreAlertThresholds
 
 
+class CatalogVectorStoreAlertThresholdsHistoryEntry(BaseModel):
+    id: UUID
+    scope: Literal["global", "organization"] | str
+    action: str
+    changed_by: UUID | None = None
+    changed_by_name: str | None = None
+    created_at: str
+    target_organizacion_id: UUID | None = None
+    before: dict[str, Any] | None = None
+    after: dict[str, Any] | None = None
+
+
 @router.get("/catalog/vector-store/status", response_model=CatalogVectorStoreStatus)
 async def catalog_vector_store_status(
     *,
@@ -7544,6 +7557,74 @@ async def _resolve_catalog_vector_alert_thresholds(
     )
 
 
+async def _audit_catalog_vector_alert_thresholds_change(
+    *,
+    repo: CRMRepository,
+    actor_organizacion_id: UUID,
+    target_organizacion_id: UUID,
+    scope: Literal["global", "organization"],
+    action: str,
+    before: Mapping[str, Any] | None,
+    after: Mapping[str, Any] | None,
+    usuario_id: UUID | None = None,
+    request: Request | None = None,
+) -> None:
+    changes = {
+        "scope": scope,
+        "target_organizacion_id": str(target_organizacion_id),
+        "before": dict(before or {}),
+        "after": dict(after or {}),
+    }
+    ip_value = _request_ip(request)
+    user_agent = request.headers.get("user-agent") if request and request.headers else None
+    try:
+        await repo.create_audit_log(
+            organizacion_id=actor_organizacion_id,
+            accion=action,
+            tabla=CATALOG_VECTOR_ALERT_AUDIT_TABLA,
+            cambios=changes,
+            usuario_id=usuario_id,
+            registro_id=target_organizacion_id,
+            ip=ip_value,
+            user_agent=user_agent,
+        )
+    except CRMRepositoryError as exc:
+        logger.warning(
+            "catalog.vector_store.alert_thresholds.audit_failed",
+            extra={
+                "organizacion_id": str(actor_organizacion_id),
+                "target_organizacion_id": str(target_organizacion_id),
+                "scope": scope,
+                "action": action,
+                "error": str(exc),
+            },
+        )
+
+
+def _parse_alert_thresholds_history_entry(row: Mapping[str, Any]) -> CatalogVectorStoreAlertThresholdsHistoryEntry | None:
+    changes = row.get("cambios") if isinstance(row.get("cambios"), Mapping) else {}
+    scope_value = str(changes.get("scope") or "organization")
+    target_id = _safe_uuid(changes.get("target_organizacion_id"))
+    before_raw = changes.get("before") if isinstance(changes.get("before"), Mapping) else None
+    after_raw = changes.get("after") if isinstance(changes.get("after"), Mapping) else None
+    before_norm = _parse_alert_thresholds(before_raw)
+    after_norm = _parse_alert_thresholds(after_raw)
+    created_at = str(row.get("creado_en") or "")
+    row_id = _safe_uuid(row.get("id"))
+    if not row_id or not created_at:
+        return None
+    return CatalogVectorStoreAlertThresholdsHistoryEntry(
+        id=row_id,
+        scope=scope_value,
+        action=str(row.get("accion") or "update"),
+        changed_by=_safe_uuid(row.get("usuario_id")),
+        created_at=created_at,
+        target_organizacion_id=target_id,
+        before=before_norm.model_dump(mode="json") if before_norm else None,
+        after=after_norm.model_dump(mode="json") if after_norm else None,
+    )
+
+
 @router.get(
     "/catalog/vector-store/alert-thresholds",
     response_model=CatalogVectorStoreAlertThresholdsResponse,
@@ -7563,6 +7644,66 @@ async def catalog_vector_store_alert_thresholds(
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
 
+@router.get(
+    "/catalog/vector-store/alert-thresholds/history",
+    response_model=list[CatalogVectorStoreAlertThresholdsHistoryEntry],
+)
+async def catalog_vector_store_alert_thresholds_history(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("settings.view")),
+    scope: Literal["all", "organization", "global"] = Query(default="all"),
+    limit: Annotated[int, Query(ge=1, le=200)] = 50,
+) -> list[CatalogVectorStoreAlertThresholdsHistoryEntry]:
+    try:
+        rows = await repo.list_audit_logs_by_tabla(
+            organizacion_id=organizacion_id,
+            tabla=CATALOG_VECTOR_ALERT_AUDIT_TABLA,
+            limit=limit,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    entries: list[CatalogVectorStoreAlertThresholdsHistoryEntry] = []
+    for row in rows:
+        entry = _parse_alert_thresholds_history_entry(row)
+        if entry is None:
+            continue
+        if scope != "all" and entry.scope != scope:
+            continue
+        entries.append(entry)
+    changed_by_ids = [entry.changed_by for entry in entries if entry.changed_by is not None]
+    if changed_by_ids:
+        try:
+            user_rows = await repo.list_users_by_ids(
+                organizacion_id=organizacion_id,
+                user_ids=changed_by_ids,
+            )
+        except CRMRepositoryError:
+            user_rows = []
+        user_name_by_id: dict[str, str] = {}
+        for user_row in user_rows:
+            user_id = _safe_uuid(user_row.get("id"))
+            if user_id is None:
+                continue
+            full_name = str(user_row.get("nombre_completo") or "").strip()
+            email = str(user_row.get("correo") or "").strip()
+            label = full_name or email
+            if label:
+                user_name_by_id[str(user_id)] = label
+        entries = [
+            entry.model_copy(
+                update={
+                    "changed_by_name": (
+                        user_name_by_id.get(str(entry.changed_by)) if entry.changed_by is not None else None
+                    )
+                }
+            )
+            for entry in entries
+        ]
+    return entries
+
+
 @router.put(
     "/catalog/vector-store/alert-thresholds",
     response_model=CatalogVectorStoreAlertThresholdsResponse,
@@ -7572,16 +7713,31 @@ async def update_catalog_vector_store_alert_thresholds(
     repo: CRMRepository = Depends(get_repository),
     organizacion_id: UUID = Depends(require_organizacion_id),
     _: str = Depends(require_permission("settings.manage")),
+    usuario_id: UUID | None = Depends(optional_usuario_id),
+    request: Request,
     payload: CatalogVectorStoreAlertThresholdsPayload,
 ) -> CatalogVectorStoreAlertThresholdsResponse:
     try:
         current = await repo.get_organizacion_config(organizacion_id=organizacion_id) or {}
+        before_raw = _get_nested_dict_value(current, CATALOG_VECTOR_ALERT_CONFIG_PATH)
+        before_thresholds = _parse_alert_thresholds(before_raw)
         updated = _set_nested_dict_value(
             current,
             CATALOG_VECTOR_ALERT_CONFIG_PATH,
             payload.model_dump(mode="json"),
         )
         await repo.set_organizacion_config(organizacion_id=organizacion_id, config=updated)
+        await _audit_catalog_vector_alert_thresholds_change(
+            repo=repo,
+            actor_organizacion_id=organizacion_id,
+            target_organizacion_id=organizacion_id,
+            scope="organization",
+            action="update",
+            before=before_thresholds.model_dump(mode="json") if before_thresholds else None,
+            after=payload.model_dump(mode="json"),
+            usuario_id=usuario_id,
+            request=request,
+        )
         return await _resolve_catalog_vector_alert_thresholds(
             repo=repo,
             organizacion_id=organizacion_id,
@@ -7599,11 +7755,26 @@ async def clear_catalog_vector_store_alert_thresholds(
     repo: CRMRepository = Depends(get_repository),
     organizacion_id: UUID = Depends(require_organizacion_id),
     _: str = Depends(require_permission("settings.manage")),
+    usuario_id: UUID | None = Depends(optional_usuario_id),
+    request: Request,
 ) -> CatalogVectorStoreAlertThresholdsResponse:
     try:
         current = await repo.get_organizacion_config(organizacion_id=organizacion_id) or {}
+        before_raw = _get_nested_dict_value(current, CATALOG_VECTOR_ALERT_CONFIG_PATH)
+        before_thresholds = _parse_alert_thresholds(before_raw)
         updated = _delete_nested_dict_value(current, CATALOG_VECTOR_ALERT_CONFIG_PATH)
         await repo.set_organizacion_config(organizacion_id=organizacion_id, config=updated)
+        await _audit_catalog_vector_alert_thresholds_change(
+            repo=repo,
+            actor_organizacion_id=organizacion_id,
+            target_organizacion_id=organizacion_id,
+            scope="organization",
+            action="clear",
+            before=before_thresholds.model_dump(mode="json") if before_thresholds else None,
+            after=None,
+            usuario_id=usuario_id,
+            request=request,
+        )
         return await _resolve_catalog_vector_alert_thresholds(
             repo=repo,
             organizacion_id=organizacion_id,
@@ -7622,10 +7793,14 @@ async def update_catalog_vector_store_alert_thresholds_global(
     organizacion_id: UUID = Depends(require_organizacion_id),
     _: str = Depends(require_permission("settings.manage")),
     __: UUID = Depends(require_platform_admin),
+    usuario_id: UUID | None = Depends(optional_usuario_id),
+    request: Request,
     payload: CatalogVectorStoreAlertThresholdsPayload,
 ) -> CatalogVectorStoreAlertThresholdsResponse:
     try:
         current = await repo.get_organizacion_config(organizacion_id=tenant_runtime.MASTER_ORGANIZACION_ID) or {}
+        before_raw = _get_nested_dict_value(current, CATALOG_VECTOR_ALERT_CONFIG_PATH)
+        before_thresholds = _parse_alert_thresholds(before_raw)
         updated = _set_nested_dict_value(
             current,
             CATALOG_VECTOR_ALERT_CONFIG_PATH,
@@ -7634,6 +7809,17 @@ async def update_catalog_vector_store_alert_thresholds_global(
         await repo.set_organizacion_config(
             organizacion_id=tenant_runtime.MASTER_ORGANIZACION_ID,
             config=updated,
+        )
+        await _audit_catalog_vector_alert_thresholds_change(
+            repo=repo,
+            actor_organizacion_id=organizacion_id,
+            target_organizacion_id=tenant_runtime.MASTER_ORGANIZACION_ID,
+            scope="global",
+            action="update",
+            before=before_thresholds.model_dump(mode="json") if before_thresholds else None,
+            after=payload.model_dump(mode="json"),
+            usuario_id=usuario_id,
+            request=request,
         )
         return await _resolve_catalog_vector_alert_thresholds(
             repo=repo,

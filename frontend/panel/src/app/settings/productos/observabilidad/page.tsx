@@ -2,6 +2,7 @@ import Link from "next/link"
 
 import {
   clearCatalogVectorStoreOrgThresholdsAction,
+  fetchCatalogVectorStoreAlertThresholdsHistory,
   fetchCatalogVectorStoreMetrics,
   fetchCatalogVectorStoreStatus,
   fetchCatalogVectorStoreAlertThresholds,
@@ -192,11 +193,46 @@ function severityVariant(severity: AlertItem["severity"]): "destructive" | "seco
   return "outline"
 }
 
+function formatThresholdDiff(
+  before: CatalogVectorAlertThresholds | null,
+  after: CatalogVectorAlertThresholds | null,
+): string {
+  if (!before && !after) {
+    return "Sin datos"
+  }
+  if (!before && after) {
+    return `Nuevo: q30d=${after.minQueryEvents30d}, fallbackRatio=${after.fallbackRatioThreshold}, fallbackMin=${after.minFallbackEvents30d}, growth=${after.weeklyGrowthRatioThreshold}, weeklyMin=${after.minWeeklyQueries}`
+  }
+  if (before && !after) {
+    return "Override limpiado"
+  }
+  const prev = before as CatalogVectorAlertThresholds
+  const next = after as CatalogVectorAlertThresholds
+  const changes: string[] = []
+  if (prev.minQueryEvents30d !== next.minQueryEvents30d) {
+    changes.push(`q30d ${prev.minQueryEvents30d}->${next.minQueryEvents30d}`)
+  }
+  if (prev.fallbackRatioThreshold !== next.fallbackRatioThreshold) {
+    changes.push(`fallbackRatio ${prev.fallbackRatioThreshold}->${next.fallbackRatioThreshold}`)
+  }
+  if (prev.minFallbackEvents30d !== next.minFallbackEvents30d) {
+    changes.push(`fallbackMin ${prev.minFallbackEvents30d}->${next.minFallbackEvents30d}`)
+  }
+  if (prev.weeklyGrowthRatioThreshold !== next.weeklyGrowthRatioThreshold) {
+    changes.push(`growth ${prev.weeklyGrowthRatioThreshold}->${next.weeklyGrowthRatioThreshold}`)
+  }
+  if (prev.minWeeklyQueries !== next.minWeeklyQueries) {
+    changes.push(`weeklyMin ${prev.minWeeklyQueries}->${next.minWeeklyQueries}`)
+  }
+  return changes.length ? changes.join(" | ") : "Sin cambios detectados"
+}
+
 export default async function ProductosObservabilidadPage() {
-  const [status, metrics, thresholdsConfig] = await Promise.all([
+  const [status, metrics, thresholdsConfig, thresholdsHistory] = await Promise.all([
     fetchCatalogVectorStoreStatus(),
     fetchCatalogVectorStoreMetrics({ days: 30, limit: 5000 }),
     fetchCatalogVectorStoreAlertThresholds(),
+    fetchCatalogVectorStoreAlertThresholdsHistory({ scope: "all", limit: 40 }),
   ])
 
   const queryEvents = sumByType(metrics.buckets, "query")
@@ -502,6 +538,52 @@ export default async function ProductosObservabilidadPage() {
                   <TableRow>
                     <TableCell colSpan={4} className="text-center text-muted-foreground">
                       Sin actividad en la ventana seleccionada.
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Historial de umbrales</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Fecha</TableHead>
+                  <TableHead>Scope</TableHead>
+                  <TableHead>Actor</TableHead>
+                  <TableHead>Acción</TableHead>
+                  <TableHead>Cambio</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {thresholdsHistory.length ? (
+                  thresholdsHistory.map((entry) => (
+                    <TableRow key={entry.id}>
+                      <TableCell>{formatDate(entry.createdAt)}</TableCell>
+                      <TableCell>
+                        <Badge variant="outline">
+                          {entry.scope === "global" ? "Global" : "Organización"}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-xs text-muted-foreground">
+                        {entry.changedByName ?? entry.changedBy ?? "Sistema"}
+                      </TableCell>
+                      <TableCell>{entry.action}</TableCell>
+                      <TableCell className="text-xs text-muted-foreground">
+                        {formatThresholdDiff(entry.before, entry.after)}
+                      </TableCell>
+                    </TableRow>
+                  ))
+                ) : (
+                  <TableRow>
+                    <TableCell colSpan={5} className="text-center text-muted-foreground">
+                      Sin historial de cambios de umbrales.
                     </TableCell>
                   </TableRow>
                 )}

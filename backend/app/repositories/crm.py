@@ -894,6 +894,28 @@ class CRMRepository:
             raise CRMRepositoryError(f"Respuesta inesperada al listar usuarios: {data!r}")
         return data
 
+    async def list_users_by_ids(
+        self,
+        *,
+        organizacion_id: UUID,
+        user_ids: Sequence[UUID],
+    ) -> list[dict[str, Any]]:
+        unique_ids = sorted({str(user_id) for user_id in user_ids if user_id})
+        if not unique_ids:
+            return []
+        in_values = ",".join(unique_ids)
+        params = {
+            "organizacion_id": f"eq.{organizacion_id}",
+            "id": f"in.({in_values})",
+            "select": "id,nombre_completo,correo",
+            "limit": str(min(len(unique_ids), 500)),
+        }
+        resp = await self._request("GET", "/rest/v1/usuarios", params=params)
+        data = resp.json()
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"Respuesta inesperada al listar usuarios por id: {data!r}")
+        return data
+
     async def list_sale_ready_opportunities(
         self,
         *,
@@ -4184,6 +4206,66 @@ class CRMRepository:
         if not isinstance(data, list):
             raise CRMRepositoryError(f"Respuesta inesperada al listar audit logs: {data!r}")
         return data
+
+    async def list_audit_logs_by_tabla(
+        self,
+        *,
+        organizacion_id: UUID,
+        tabla: str,
+        limit: int = 100,
+    ) -> list[dict[str, Any]]:
+        safe_limit = max(1, min(limit, 500))
+        params = {
+            "organizacion_id": f"eq.{organizacion_id}",
+            "tabla": f"eq.{tabla}",
+            "order": "creado_en.desc",
+            "limit": str(safe_limit),
+        }
+        resp = await self._request("GET", "/rest/v1/audit_logs", params=params)
+        data = resp.json()
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"Respuesta inesperada al listar audit logs por tabla: {data!r}")
+        return data
+
+    async def create_audit_log(
+        self,
+        *,
+        organizacion_id: UUID,
+        accion: str,
+        tabla: str,
+        cambios: dict[str, Any],
+        usuario_id: UUID | None = None,
+        registro_id: UUID | None = None,
+        ip: str | None = None,
+        user_agent: str | None = None,
+    ) -> dict[str, Any]:
+        body: dict[str, Any] = {
+            "organizacion_id": str(organizacion_id),
+            "accion": accion,
+            "tabla": tabla,
+            "cambios": cambios or {},
+        }
+        if usuario_id:
+            body["usuario_id"] = str(usuario_id)
+        if registro_id:
+            body["registro_id"] = str(registro_id)
+        if ip:
+            body["ip"] = ip
+        if user_agent:
+            body["user_agent"] = user_agent
+        resp = await self._request(
+            "POST",
+            "/rest/v1/audit_logs",
+            json=body,
+            prefer="return=representation",
+        )
+        data = resp.json()
+        if not isinstance(data, list) or not data:
+            raise CRMRepositoryError("Supabase no devolvió el audit_log creado")
+        row = data[0]
+        if not isinstance(row, dict):
+            raise CRMRepositoryError(f"Respuesta inválida al crear audit_log: {row!r}")
+        return row
 
     async def append_stage_history(
         self,
