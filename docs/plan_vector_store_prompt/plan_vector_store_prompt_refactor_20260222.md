@@ -118,6 +118,22 @@ La estrategia será híbrida: SQL-first para consultas estructuradas y vector st
 - Riesgo: desalineación prompt/backend.
   - Mitigación: versionar prompt junto con reglas de activación en backend.
 
+## Pendientes Próxima Iteración (sin costo real)
+- Afinar permisos finos en UI/UX:
+  - Mensajería más explícita cuando el usuario no puede editar umbrales globales.
+  - Evitar submits accidentales en formularios deshabilitados.
+- Robustecer historial:
+  - Agregar paginación real del historial (más allá del límite estático).
+  - Incorporar filtro por tipo de acción (`update` / `clear`).
+- Pulir exportación:
+  - Incluir metadatos de filtros aplicados en cabecera del CSV.
+  - Soportar exportaciones de más de 200 registros con paginación backend.
+- Hardening técnico:
+  - Añadir pruebas automáticas para endpoints de umbrales, historial y exportación CSV.
+  - Agregar validaciones de regresión para la vista de observabilidad.
+- Cierre operativo:
+  - Crear una guía breve de operación para uso de umbrales globales vs por organización y lectura de correlación 7d pre/post.
+
 ## Estado del documento
 - Estado: en ejecución (avance significativo).
 - Autoría: refactor derivado de análisis técnico de costo/uso (2026-02-22).
