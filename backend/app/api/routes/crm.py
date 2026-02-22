@@ -7228,7 +7228,7 @@ async def list_catalog_items(
     include_inactive: bool = Query(default=False),
     tipo: Literal["producto", "servicio", "paquete"] | None = Query(default=None),
     search: str | None = Query(default=None, max_length=200),
-    limit: Annotated[int, Query(ge=1, le=500)] = 200,
+    limit: Annotated[int, Query(ge=1, le=5000)] = 2000,
 ) -> list[CRMCatalogItem]:
     try:
         rows = await repo.list_catalog_items(
@@ -7878,7 +7878,7 @@ async def catalog_modelos(
     organizacion_id: UUID = Depends(require_organizacion_id),
     _: str = Depends(require_permission("settings.view")),
     include_inactive: bool = Query(default=False),
-    limit: Annotated[int, Query(ge=1, le=500)] = 500,
+    limit: Annotated[int, Query(ge=1, le=5000)] = 2000,
 ) -> dict[str, Any]:
     try:
         result = await list_catalog_modelos(
@@ -7910,7 +7910,7 @@ async def list_product_lineas(
     _: str = Depends(require_permission("settings.view")),
     include_inactive: bool = Query(default=False),
     search: str | None = Query(default=None, max_length=200),
-    limit: Annotated[int, Query(ge=1, le=500)] = 200,
+    limit: Annotated[int, Query(ge=1, le=5000)] = 2000,
 ) -> list[CRMLineaDeNegocio]:
     try:
         rows = await repo.list_lineas_de_negocio(
@@ -8088,7 +8088,7 @@ async def list_product_familias(
     include_inactive: bool = Query(default=False),
     linea_id: UUID | None = Query(default=None),
     search: str | None = Query(default=None, max_length=200),
-    limit: Annotated[int, Query(ge=1, le=500)] = 500,
+    limit: Annotated[int, Query(ge=1, le=5000)] = 2000,
 ) -> list[CRMFamiliaProducto]:
     try:
         rows = await repo.list_familias_productos(
@@ -8264,7 +8264,7 @@ async def list_product_modelos(
     _: str = Depends(require_permission("settings.view")),
     include_inactive: bool = Query(default=False),
     search: str | None = Query(default=None, max_length=200),
-    limit: Annotated[int, Query(ge=1, le=500)] = 500,
+    limit: Annotated[int, Query(ge=1, le=5000)] = 2000,
 ) -> list[CRMModeloProducto]:
     try:
         rows = await repo.list_modelos_productos(

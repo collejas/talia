@@ -4367,8 +4367,8 @@ async def _execute_function_call(
         try:
             limit = int(limit_raw)
         except (TypeError, ValueError):
-            limit = 500
-        limit = max(1, min(500, limit))
+            limit = 2000
+        limit = max(500, min(5000, limit))
         repo = CRMRepository()
         try:
             result = await list_catalog_modelos(

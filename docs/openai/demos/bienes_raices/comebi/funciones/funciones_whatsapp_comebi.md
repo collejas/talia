@@ -509,7 +509,7 @@
 
 {
   "name": "fetch_catalog_item_details",
-  "description": "Busca en la vector store interna y retorna el registro completo con metadata de un prototipo o fraccionamiento.",
+  "description": "Retorna el registro completo con metadata de un prototipo o fraccionamiento, priorizando lookup SQL exacto y aplicando fallback semántico solo si no hay match claro.",
   "strict": false,
   "parameters": {
     "type": "object",

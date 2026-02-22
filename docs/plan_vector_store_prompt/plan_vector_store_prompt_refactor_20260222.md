@@ -133,6 +133,9 @@ La estrategia será híbrida: SQL-first para consultas estructuradas y vector st
   - Agregar validaciones de regresión para la vista de observabilidad.
 - Cierre operativo:
   - Crear una guía breve de operación para uso de umbrales globales vs por organización y lectura de correlación 7d pre/post.
+- Observabilidad SQL (nuevo pendiente):
+  - Registrar también eventos de consultas SQL de catálogo (no solo vector/embeddings) en auditoría persistente.
+  - Extender `settings/productos/observabilidad` para mostrar volumen SQL, split SQL vs vector y ratio de fallback.
 
 ## Estado del documento
 - Estado: en ejecución (avance significativo).
@@ -185,3 +188,5 @@ La estrategia será híbrida: SQL-first para consultas estructuradas y vector st
   - Default de `embeddings_model` migrado a `text-embedding-3-small` (compatible con `vector(1536)`).
 - [ ] Pendiente principal:
   - Integrar costo monetario real (billing/tokens) para reemplazar el proxy por volumen de queries.
+- [ ] Pendiente adicional:
+  - Integrar observabilidad de consultas SQL de catálogo en la vista de observabilidad (actualmente centrada en vector/embeddings).

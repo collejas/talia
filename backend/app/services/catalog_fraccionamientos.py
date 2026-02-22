@@ -127,14 +127,16 @@ async def list_catalog_fraccionamientos(
     include_inactive: bool = False,
     prototipos_limit: int = 6,
 ) -> list[dict[str, Any]]:
+    effective_limit = 5000
     familias = await repo.list_familias_productos(
         organizacion_id=organizacion_id,
         include_inactive=include_inactive,
+        limit=effective_limit,
     )
     catalog_items = await repo.list_catalog_items(
         organizacion_id=organizacion_id,
         include_inactive=include_inactive,
-        limit=500,
+        limit=effective_limit,
     )
     location_resolver = LocationResolver(repo, str(organizacion_id))
     development_ids: list[str] = []
@@ -146,7 +148,7 @@ async def list_catalog_fraccionamientos(
     lineas = await repo.list_lineas_de_negocio(
         organizacion_id=organizacion_id,
         include_inactive=include_inactive,
-        limit=500,
+        limit=effective_limit,
     )
 
     linea_names: dict[str, str] = {
@@ -211,24 +213,26 @@ async def list_catalog_modelos(
     include_inactive: bool = False,
     limit: int = 500,
 ) -> dict[str, Any]:
+    effective_limit = max(2000, min(limit, 5000))
     familias = await repo.list_familias_productos(
         organizacion_id=organizacion_id,
         include_inactive=include_inactive,
+        limit=effective_limit,
     )
     lineas = await repo.list_lineas_de_negocio(
         organizacion_id=organizacion_id,
         include_inactive=include_inactive,
-        limit=limit,
+        limit=effective_limit,
     )
     catalog_items = await repo.list_catalog_items(
         organizacion_id=organizacion_id,
         include_inactive=include_inactive,
-        limit=limit,
+        limit=effective_limit,
     )
     modelos = await repo.list_modelos_productos(
         organizacion_id=organizacion_id,
         include_inactive=include_inactive,
-        limit=limit,
+        limit=effective_limit,
     )
     location_resolver = LocationResolver(repo, str(organizacion_id))
     development_ids: list[str] = []

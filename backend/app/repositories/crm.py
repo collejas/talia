@@ -4883,12 +4883,15 @@ class CRMRepository:
         organizacion_id: UUID | None = None,
         include_inactive: bool = False,
         tipo: str | None = None,
+        linea_id: UUID | None = None,
+        familia_id: UUID | None = None,
+        modelo_id: UUID | None = None,
         search: str | None = None,
         limit: int = 200,
     ) -> list[dict[str, Any]]:
         params: dict[str, Any] = {
             "order": "nombre.asc",
-            "limit": str(max(1, min(limit, 500))),
+            "limit": str(max(1, min(limit, 5000))),
         }
         params[
             "select"
@@ -4904,6 +4907,12 @@ class CRMRepository:
             params["activo"] = "eq.true"
         if tipo:
             params["tipo"] = f"eq.{tipo}"
+        if linea_id:
+            params["linea_id"] = f"eq.{linea_id}"
+        if familia_id:
+            params["familia_id"] = f"eq.{familia_id}"
+        if modelo_id:
+            params["modelo_id"] = f"eq.{modelo_id}"
         if search:
             pattern = search.strip()
             if pattern:
@@ -5061,7 +5070,7 @@ class CRMRepository:
         params: dict[str, Any] = {
             "organizacion_id": f"eq.{organizacion_id}",
             "order": "nombre.asc",
-            "limit": str(max(1, min(limit, 500))),
+            "limit": str(max(1, min(limit, 5000))),
         }
         if not include_inactive:
             params["activo"] = "eq.true"
@@ -5087,7 +5096,7 @@ class CRMRepository:
         params: dict[str, Any] = {
             "organizacion_id": f"eq.{organizacion_id}",
             "order": "nombre.asc",
-            "limit": str(max(1, min(limit, 500))),
+            "limit": str(max(1, min(limit, 5000))),
         }
         if not include_inactive:
             params["activo"] = "eq.true"
@@ -5114,7 +5123,7 @@ class CRMRepository:
         params: dict[str, Any] = {
             "organizacion_id": f"eq.{organizacion_id}",
             "order": "nombre.asc",
-            "limit": str(max(1, min(limit, 500))),
+            "limit": str(max(1, min(limit, 5000))),
         }
         if not include_inactive:
             params["activo"] = "eq.true"
