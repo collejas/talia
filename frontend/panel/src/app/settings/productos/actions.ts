@@ -435,3 +435,113 @@ export async function deleteFamiliasProductoBulk(ids: string[]): Promise<BulkDel
 export async function deleteModelosProductoBulk(ids: string[]): Promise<BulkDeleteResult> {
   return callBulkDelete("/crm/productos/modelos/bulk-delete", ids)
 }
+
+export type CatalogVectorStoreStatus = {
+  lastReindexAt: string | null
+  lastReindexBy: string | null
+  lastReindexChannel: string | null
+  lastQueryAt: string | null
+  lastQueryBy: string | null
+  lastQueryChannel: string | null
+}
+
+export type CatalogVectorStoreMetricsBucket = {
+  day: string
+  tipo: string
+  canal: string | null
+  reason: string | null
+  total: number
+}
+
+export type CatalogVectorStoreMetrics = {
+  fromDate: string
+  toDate: string
+  totalEvents: number
+  buckets: CatalogVectorStoreMetricsBucket[]
+}
+
+function emptyCatalogMetrics(days: number): CatalogVectorStoreMetrics {
+  const toDate = new Date()
+  const fromDate = new Date()
+  fromDate.setDate(toDate.getDate() - Math.max(days, 1))
+  return {
+    fromDate: fromDate.toISOString().slice(0, 10),
+    toDate: toDate.toISOString().slice(0, 10),
+    totalEvents: 0,
+    buckets: [],
+  }
+}
+
+export async function fetchCatalogVectorStoreStatus(): Promise<CatalogVectorStoreStatus> {
+  const response = await callCrmApi<Record<string, unknown>>("/crm/catalog/vector-store/status")
+  if (!response.ok || !response.data || typeof response.data !== "object") {
+    if (!response.ok) {
+      console.warn("[crm] /crm/catalog/vector-store/status failed", response.error, response.status)
+    }
+    return {
+      lastReindexAt: null,
+      lastReindexBy: null,
+      lastReindexChannel: null,
+      lastQueryAt: null,
+      lastQueryBy: null,
+      lastQueryChannel: null,
+    }
+  }
+  const payload = response.data
+  return {
+    lastReindexAt: normalizeString(payload.last_reindex_at ?? payload.lastReindexAt),
+    lastReindexBy: normalizeString(payload.last_reindex_by ?? payload.lastReindexBy),
+    lastReindexChannel: normalizeString(payload.last_reindex_channel ?? payload.lastReindexChannel),
+    lastQueryAt: normalizeString(payload.last_query_at ?? payload.lastQueryAt),
+    lastQueryBy: normalizeString(payload.last_query_by ?? payload.lastQueryBy),
+    lastQueryChannel: normalizeString(payload.last_query_channel ?? payload.lastQueryChannel),
+  }
+}
+
+type FetchCatalogVectorStoreMetricsOptions = {
+  days?: number
+  tipo?: "query" | "reindex"
+  canal?: string | null
+  limit?: number
+}
+
+export async function fetchCatalogVectorStoreMetrics(
+  options?: FetchCatalogVectorStoreMetricsOptions,
+): Promise<CatalogVectorStoreMetrics> {
+  const days = Math.min(Math.max(options?.days ?? 30, 1), 90)
+  const limit = Math.min(Math.max(options?.limit ?? 2000, 100), 5000)
+  const response = await callCrmApi<Record<string, unknown>>("/crm/catalog/vector-store/metrics", {
+    searchParams: {
+      days,
+      tipo: options?.tipo,
+      canal: options?.canal ?? undefined,
+      limit,
+    },
+  })
+  if (!response.ok || !response.data || typeof response.data !== "object") {
+    if (!response.ok) {
+      console.warn("[crm] /crm/catalog/vector-store/metrics failed", response.error, response.status)
+    }
+    return emptyCatalogMetrics(days)
+  }
+  const payload = response.data
+  const rawBuckets = Array.isArray(payload.buckets) ? payload.buckets : []
+  const buckets: CatalogVectorStoreMetricsBucket[] = rawBuckets
+    .filter((entry) => entry && typeof entry === "object")
+    .map((entry) => {
+      const item = entry as Record<string, unknown>
+      return {
+        day: normalizeString(item.day) ?? "unknown",
+        tipo: normalizeString(item.tipo) ?? "unknown",
+        canal: normalizeString(item.canal),
+        reason: normalizeString(item.reason),
+        total: Number(item.total ?? 0),
+      }
+    })
+  return {
+    fromDate: normalizeString(payload.from_date ?? payload.fromDate) ?? emptyCatalogMetrics(days).fromDate,
+    toDate: normalizeString(payload.to_date ?? payload.toDate) ?? emptyCatalogMetrics(days).toDate,
+    totalEvents: Number(payload.total_events ?? payload.totalEvents ?? 0),
+    buckets,
+  }
+}

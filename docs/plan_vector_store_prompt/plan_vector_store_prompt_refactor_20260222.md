@@ -82,7 +82,7 @@ La estrategia será híbrida: SQL-first para consultas estructuradas y vector st
 - Documentar decisión por tenant/canal.
 
 ## Fase 7: Observabilidad y control de costo (Alta prioridad)
-- Estado: **Parcial** [~]
+- Estado: **Parcial (backend + dashboard base en panel)** [~]
 - Extender auditoría con:
   - `reason` de activación vector (`catalog_intent`, `fallback_semantic`, `skipped_non_catalog`).
   - contadores por canal, tipo de turno y resultado.
@@ -138,10 +138,13 @@ La estrategia será híbrida: SQL-first para consultas estructuradas y vector st
   - `query_documents` ya persiste `reason` y `embedding_cache_eligible` en `catalog_embeddings_audit.metadata`.
   - Integrado en fallback vector de `fetch_catalog_item_details` (API CRM, webchat y WhatsApp).
   - Endpoint agregado: `GET /crm/catalog/vector-store/metrics` con buckets por día/tipo/canal/reason.
+- [x] Dashboard base en panel:
+  - Nueva vista `settings/productos/observabilidad` con KPIs de 30 días, top reasons y desglose diario.
+  - Integrada en el hub de `settings/productos`.
 - [x] Batch para operaciones masivas:
   - Endpoints bulk-delete para líneas/familias/modelos.
   - Frontend actualizado para usar llamadas batch en vez de N requests individuales.
 - [x] Modelo de embeddings actualizado:
   - Default de `embeddings_model` migrado a `text-embedding-3-small` (compatible con `vector(1536)`).
 - [ ] Pendiente principal:
-  - Completar observabilidad avanzada en panel/dashboard (visualización y alertas) usando las nuevas métricas por `reason` (fase 7).
+  - Agregar alertas/umbrales automáticos en panel (ej. picos de fallback vector por reason/canal) y tendencia comparativa semanal.
