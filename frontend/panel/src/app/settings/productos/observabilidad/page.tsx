@@ -109,6 +109,13 @@ function buildDateKey(daysAgo: number): string {
   return date.toISOString().slice(0, 10)
 }
 
+function addDays(day: string, delta: number): string {
+  const date = new Date(`${day}T00:00:00.000Z`)
+  if (Number.isNaN(date.getTime())) return day
+  date.setUTCDate(date.getUTCDate() + delta)
+  return date.toISOString().slice(0, 10)
+}
+
 function sumQueriesInRange(
   byDayRows: Array<{ day: string; query: number; reindex: number; total: number }>,
   fromDaysAgo: number,
@@ -152,6 +159,37 @@ function vectorQueryStatsInRange(
   }
 }
 
+function vectorQueryStatsBetweenDates(
+  buckets: CatalogVectorStoreMetricsBucket[],
+  fromDay: string,
+  toDay: string,
+): { totalQueries: number; fallbackQueries: number; fallbackRatio: number } {
+  const queryBuckets = buckets.filter((bucket) => {
+    const day = bucket.day
+    if (day < fromDay || day > toDay) return false
+    return String(bucket.tipo).toLowerCase() === "query"
+  })
+  const totalQueries = queryBuckets.reduce((acc, item) => acc + item.total, 0)
+  const fallbackQueries = queryBuckets
+    .filter((item) => (item.reason ?? "").toLowerCase().includes("fallback"))
+    .reduce((acc, item) => acc + item.total, 0)
+  return {
+    totalQueries,
+    fallbackQueries,
+    fallbackRatio: totalQueries > 0 ? fallbackQueries / totalQueries : 0,
+  }
+}
+
+function sumReindexBetweenDates(
+  byDayRows: Array<{ day: string; query: number; reindex: number; total: number }>,
+  fromDay: string,
+  toDay: string,
+): number {
+  return byDayRows
+    .filter((row) => row.day >= fromDay && row.day <= toDay)
+    .reduce((acc, row) => acc + row.reindex, 0)
+}
+
 function formatSignedDelta(value: number): string {
   if (value > 0) return `+${value}`
   return String(value)
@@ -161,6 +199,14 @@ function formatSignedPercent(value: number): string {
   const pct = Math.round(value * 100)
   if (pct > 0) return `+${pct}%`
   return `${pct}%`
+}
+
+function formatDeltaPercent(current: number, previous: number): string {
+  if (previous <= 0) {
+    if (current > 0) return "+100%"
+    return "0%"
+  }
+  return formatSignedPercent((current - previous) / previous)
 }
 
 type AlertItem = {
@@ -340,6 +386,32 @@ export default async function ProductosObservabilidadPage({
     dateTo: historyDateTo,
     limit: historyLimit,
   })
+  const impactRows = filteredHistory
+    .slice(0, 8)
+    .map((entry) => {
+      const changeDay = entry.createdAt.slice(0, 10)
+      const preFrom = addDays(changeDay, -7)
+      const preTo = addDays(changeDay, -1)
+      const postFrom = changeDay
+      const postTo = addDays(changeDay, 6)
+      const preStats = vectorQueryStatsBetweenDates(metrics.buckets, preFrom, preTo)
+      const postStats = vectorQueryStatsBetweenDates(metrics.buckets, postFrom, postTo)
+      const preReindex = sumReindexBetweenDates(byDay, preFrom, preTo)
+      const postReindex = sumReindexBetweenDates(byDay, postFrom, postTo)
+      return {
+        id: entry.id,
+        changedAt: entry.createdAt,
+        actor: entry.changedByName ?? entry.changedBy ?? "Sistema",
+        scope: entry.scope,
+        action: entry.action,
+        preQueries: preStats.totalQueries,
+        postQueries: postStats.totalQueries,
+        preFallbackRatio: preStats.fallbackRatio,
+        postFallbackRatio: postStats.fallbackRatio,
+        preReindex,
+        postReindex,
+      }
+    })
 
   return (
     <AppViewLayout title="Settings · Observabilidad vectorial">
@@ -474,6 +546,52 @@ export default async function ProductosObservabilidadPage({
                   <TableCell className="text-right">{last30Reindex}</TableCell>
                   <TableCell className="text-right">{formatSignedDelta(last30Reindex - previous30Reindex)}</TableCell>
                 </TableRow>
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader><CardTitle className="text-base">Impacto por Cambio de Umbral (7d antes vs 7d después)</CardTitle></CardHeader>
+          <CardContent>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Fecha cambio</TableHead>
+                  <TableHead>Scope</TableHead>
+                  <TableHead>Actor</TableHead>
+                  <TableHead className="text-right">Queries pre/post</TableHead>
+                  <TableHead className="text-right">Delta queries</TableHead>
+                  <TableHead className="text-right">Fallback ratio pre/post</TableHead>
+                  <TableHead className="text-right">Delta ratio</TableHead>
+                  <TableHead className="text-right">Reindex pre/post</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {impactRows.length ? (
+                  impactRows.map((row) => (
+                    <TableRow key={row.id}>
+                      <TableCell>{formatDate(row.changedAt)}</TableCell>
+                      <TableCell>
+                        <Badge variant="outline">{row.scope === "global" ? "Global" : "Organización"}</Badge>
+                      </TableCell>
+                      <TableCell className="text-xs text-muted-foreground">{row.actor}</TableCell>
+                      <TableCell className="text-right">{row.preQueries} / {row.postQueries}</TableCell>
+                      <TableCell className="text-right">{formatDeltaPercent(row.postQueries, row.preQueries)}</TableCell>
+                      <TableCell className="text-right">
+                        {Math.round(row.preFallbackRatio * 100)}% / {Math.round(row.postFallbackRatio * 100)}%
+                      </TableCell>
+                      <TableCell className="text-right">{formatSignedPercent(row.postFallbackRatio - row.preFallbackRatio)}</TableCell>
+                      <TableCell className="text-right">{row.preReindex} / {row.postReindex}</TableCell>
+                    </TableRow>
+                  ))
+                ) : (
+                  <TableRow>
+                    <TableCell colSpan={8} className="text-center text-muted-foreground">
+                      No hay cambios de umbral suficientes para estimar impacto.
+                    </TableCell>
+                  </TableRow>
+                )}
               </TableBody>
             </Table>
           </CardContent>
