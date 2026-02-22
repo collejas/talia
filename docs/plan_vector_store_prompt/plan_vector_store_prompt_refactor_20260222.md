@@ -27,6 +27,7 @@ La estrategia será híbrida: SQL-first para consultas estructuradas y vector st
 - Contrato operativo: **orquestación por prompt, control operativo por backend**.
 
 ## Fase 1: Gating de intención antes de vector search (Alta prioridad)
+- Estado: **Completada** [x]
 - Agregar guardas de intención para no llamar `build_catalog_context` en turnos de:
   - Captura de datos (nombre, correo, teléfono, empresa).
   - Perfilamiento/scoring (sí/no, presupuesto, financiamiento, plazos).
@@ -36,6 +37,7 @@ La estrategia será híbrida: SQL-first para consultas estructuradas y vector st
   - Fraccionamiento, prototipo/modelo, ficha, comparación, recámaras, m2, precio, tipo de propiedad.
 
 ## Fase 2: SQL-first + Vector fallback (Alta prioridad)
+- Estado: **Completada** [x]
 - Ruta primaria:
   - `list_catalog_fraccionamientos` para inventario general de desarrollos.
   - `list_catalog_modelos` para jerarquía línea/familia/modelo y tipo de propiedad.
@@ -47,6 +49,7 @@ La estrategia será híbrida: SQL-first para consultas estructuradas y vector st
   - Menos embeddings por turno.
 
 ## Fase 3: Reindex incremental (Alta prioridad)
+- Estado: **Completada** [x]
 - Sustituir `_trigger_catalog_reindex` completo por indexación por entidad afectada:
   - `catalog_item` individual.
   - familia/modelo/línea específica y sus dependencias mínimas.
@@ -55,6 +58,7 @@ La estrategia será híbrida: SQL-first para consultas estructuradas y vector st
   - deduplicación por ventana corta (ej. 30-120s) por organización y entidad.
 
 ## Fase 4: Cache de embeddings de consulta (Media prioridad)
+- Estado: **Completada (cache en memoria de proceso)** [x]
 - Cachear embedding de query por:
   - `organizacion_id + model + query_normalized`.
 - Normalización:
@@ -66,16 +70,19 @@ La estrategia será híbrida: SQL-first para consultas estructuradas y vector st
   - opción B: tabla SQL de cache (si no hay Redis).
 
 ## Fase 5: Optimización de frontend para cambios masivos (Media prioridad)
+- Estado: **Completada para líneas/familias/modelos** [x]
 - En operaciones bulk de líneas/familias/modelos:
   - evitar N requests con N reindexaciones.
   - usar endpoint batch y una sola indexación incremental agrupada.
 
 ## Fase 6: Modelo de embeddings y configuración (Media prioridad)
+- Estado: **Pendiente** [ ]
 - Revisar el modelo configurado en `embeddings_model`.
 - Migrar a un modelo vigente y más costo-eficiente cuando aplique.
 - Documentar decisión por tenant/canal.
 
 ## Fase 7: Observabilidad y control de costo (Alta prioridad)
+- Estado: **Parcial** [~]
 - Extender auditoría con:
   - `reason` de activación vector (`catalog_intent`, `fallback_semantic`, `skipped_non_catalog`).
   - contadores por canal, tipo de turno y resultado.
@@ -112,5 +119,24 @@ La estrategia será híbrida: SQL-first para consultas estructuradas y vector st
   - Mitigación: versionar prompt junto con reglas de activación en backend.
 
 ## Estado del documento
-- Estado: propuesto para ejecución.
+- Estado: en ejecución (avance significativo).
 - Autoría: refactor derivado de análisis técnico de costo/uso (2026-02-22).
+
+## Avance Implementado (2026-02-22)
+- [x] Prompt-first operativo:
+  - Se desactivó la inyección automática de contexto vectorial por turno (configurable vía `CATALOG_CONTEXT_AUTOLOAD`).
+- [x] SQL-first + fallback vector:
+  - `fetch_catalog_item_details` ahora intenta lookup SQL directo antes de embeddings.
+  - Aplicado en API CRM, webchat y WhatsApp.
+- [x] Reindex incremental:
+  - Nuevo flujo por entidad (`linea`, `familia`, `modelo`, `producto`) con auditoría `mode=incremental`.
+  - CRUD de catálogo migrado a trigger incremental por entidad.
+- [x] Cache de embeddings de query:
+  - Cache en memoria con TTL y tamaño máximo configurables.
+  - Exclusión de queries triviales y con PII (correo/teléfono).
+- [x] Batch para operaciones masivas:
+  - Endpoints bulk-delete para líneas/familias/modelos.
+  - Frontend actualizado para usar llamadas batch en vez de N requests individuales.
+- [ ] Pendiente principal:
+  - Optimizar/actualizar modelo de embeddings (fase 6).
+  - Completar observabilidad avanzada con métricas de `reason` por activación vectorial (fase 7).
