@@ -11575,6 +11575,9 @@ async def listar_resultados_google(
     tipo: str | None = Query(default=None),
     max_distancia_m: Annotated[int | None, Query(ge=1, le=50000)] = None,
     min_rating: Annotated[float | None, Query(ge=0, le=5)] = None,
+    phone_present: bool | None = Query(default=None),
+    website_present: bool | None = Query(default=None),
+    actividades: list[str] | None = Query(default=None),
     limit: Annotated[int, Query(ge=1, le=5000)] = 250,
     offset: Annotated[int, Query(ge=0)] = 0,
     order: Literal["recientes", "rating", "distancia"] = Query(default="recientes"),
@@ -11596,6 +11599,26 @@ async def listar_resultados_google(
         params["distancia_m"] = f"lte.{max_distancia_m}"
     if min_rating is not None:
         params["rating"] = f"gte.{min_rating}"
+    if phone_present is True:
+        params["phone"] = "not.is.null"
+    elif phone_present is False:
+        params["phone"] = "is.null"
+    if website_present is True:
+        params["website"] = "not.is.null"
+    elif website_present is False:
+        params["website"] = "is.null"
+    if actividades:
+        unique_activities: list[str] = []
+        seen_activities: set[str] = set()
+        for activity in actividades:
+            candidate = str(activity or "").strip()
+            if not candidate or candidate in seen_activities:
+                continue
+            seen_activities.add(candidate)
+            unique_activities.append(candidate)
+        if unique_activities:
+            quoted = ",".join(f'"{value.replace(chr(34), chr(34) * 2)}"' for value in unique_activities)
+            params["actividad"] = f"in.({quoted})"
     if q:
         sanitized = q.replace("*", "").replace("%", "")
         params["or"] = (
@@ -11603,7 +11626,7 @@ async def listar_resultados_google(
             f"actividad.ilike.*{sanitized}*,"
             f"address.ilike.*{sanitized}*)"
         )
-    effective_limit = min(limit, 500)
+    effective_limit = min(limit, 5000)
     params["limit"] = str(effective_limit)
     params["offset"] = str(offset)
     try:

@@ -207,6 +207,11 @@ export async function listGoogleResultados(params: {
   limit?: number;
   offset?: number;
   order?: "recientes" | "rating" | "distancia";
+  phonePresent?: boolean;
+  websitePresent?: boolean;
+  minRating?: number;
+  q?: string;
+  actividades?: string[];
 } = {}): Promise<GoogleResultadosResponse> {
   const url = buildClientUrl("/api/prospeccion/google/resultados");
   if (params.busquedaId) {
@@ -220,6 +225,25 @@ export async function listGoogleResultados(params: {
   }
   if (params.order) {
     url.searchParams.set("order", params.order);
+  }
+  if (params.phonePresent !== undefined) {
+    url.searchParams.set("phone_present", params.phonePresent ? "true" : "false");
+  }
+  if (params.websitePresent !== undefined) {
+    url.searchParams.set("website_present", params.websitePresent ? "true" : "false");
+  }
+  if (typeof params.minRating === "number") {
+    url.searchParams.set("min_rating", String(params.minRating));
+  }
+  if (params.q && params.q.trim().length) {
+    url.searchParams.set("q", params.q.trim());
+  }
+  if (params.actividades?.length) {
+    for (const actividad of params.actividades) {
+      if (actividad && actividad.trim().length) {
+        url.searchParams.append("actividades", actividad.trim());
+      }
+    }
   }
   return requestJson<GoogleResultadosResponse>(url.toString());
 }
