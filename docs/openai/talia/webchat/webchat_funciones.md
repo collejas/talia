@@ -134,141 +134,6 @@
 ---
 
 {
-  "name": "list_demo_slots",
-  "description": "Consulta la disponibilidad del calendario para preparar opciones que el prospecto verá en el webchat.",
-  "strict": true,
-  "parameters": {
-    "type": "object",
-    "properties": {
-      "conversacion_id": {
-        "type": "string",
-        "description": "Conversación activa asociada al lead."
-      },
-      "timezone": {
-        "type": "string",
-        "description": "Zona horaria preferida del prospecto (ej. 'America/Mexico_City')."
-      },
-      "start_date": {
-        "type": "string",
-        "description": "Fecha inicial en formato YYYY-MM-DD. Si se omite, se usa la fecha actual."
-      },
-      "window_days": {
-        "type": "integer",
-        "description": "Cantidad de días a mostrar (máximo 60).",
-        "minimum": 1,
-        "maximum": 60
-      }
-    },
-    "required": [
-      "conversacion_id"
-    ],
-    "additionalProperties": false
-  }
-}
-
----
-
-{
-  "name": "schedule_demo",
-  "description": "Confirma una demo en el slot seleccionado; al ejecutarse se envía la invitación por correo y se programa el recordatorio automático.",
-  "strict": true,
-  "parameters": {
-    "type": "object",
-    "properties": {
-      "conversacion_id": {
-        "type": "string",
-        "description": "Conversación activa donde se registrará la cita."
-      },
-      "slot_id": {
-        "type": "string",
-        "description": "Identificador del slot devuelto por list_demo_slots."
-      },
-      "start_at": {
-        "type": "string",
-        "description": "Fecha y hora del slot en formato ISO 8601 (ej. '2025-03-18T16:00:00-06:00')."
-      },
-      "notes": {
-        "type": "string",
-        "description": "Notas opcionales que el prospecto haya mencionado."
-      }
-    },
-    "required": [
-      "conversacion_id",
-      "slot_id",
-      "start_at"
-    ],
-    "additionalProperties": false
-  }
-}
-
----
-
-{
-  "name": "reschedule_demo",
-  "description": "Mueve una demo confirmada a un nuevo horario; el backend rehace la invitación y actualiza recordatorios automáticamente.",
-  "strict": true,
-  "parameters": {
-    "type": "object",
-    "properties": {
-      "conversacion_id": {
-        "type": "string",
-        "description": "Conversación activa relacionada a la cita."
-      },
-      "booking_id": {
-        "type": "string",
-        "description": "Identificador de la cita confirmada."
-      },
-      "start_at": {
-        "type": "string",
-        "description": "Nuevo horario en formato ISO 8601."
-      },
-      "notes": {
-        "type": "string",
-        "description": "Notas adicionales para el seguimiento."
-      }
-    },
-    "required": [
-      "conversacion_id",
-      "booking_id",
-      "start_at"
-    ],
-    "additionalProperties": false
-  }
-}
-
----
-
-{
-  "name": "cancel_demo",
-  "description": "Cancela una demo previamente confirmada.",
-  "strict": true,
-  "parameters": {
-    "type": "object",
-    "properties": {
-      "conversacion_id": {
-        "type": "string",
-        "description": "Conversación activa relacionada a la cita."
-      },
-      "booking_id": {
-        "type": "string",
-        "description": "Identificador de la cita confirmada."
-      },
-      "reason": {
-        "type": "string",
-        "description": "Motivo opcional compartido por el prospecto."
-      }
-    },
-    "required": [
-      "conversacion_id",
-      "booking_id"
-    ],
-    "additionalProperties": false
-  }
-}
-
----
-
-{
   "name": "send_information_email",
   "description": "Enviar al prospecto la información solicitada sobre Tal-IA cuando prefiere recibirla por correo en lugar de agendar demo.",
   "strict": true,
@@ -284,26 +149,36 @@
         "description": "Correo de destino confirmado con el prospecto."
       },
       "full_name": {
-        "type": "string",
+        "type": [
+          "string"
+        ],
         "description": "Nombre de la persona a quien va dirigido el correo. Opcional si ya se registró."
       },
       "company_name": {
-        "type": "string",
+        "type": [
+          "string"
+        ],
         "description": "Nombre de la empresa o marca del prospecto para personalizar el asunto."
       },
       "summary": {
-        "type": "string",
+        "type": [
+          "string"
+        ],
         "description": "Resumen breve (1-2 frases) sobre la necesidad u objetivo principal del lead."
       },
       "highlights": {
-        "type": "array",
+        "type": [
+          "array"
+        ],
         "description": "Lista de beneficios concretos que quieres remarcar en el correo.",
         "items": {
           "type": "string"
         }
       },
       "resources": {
-        "type": "array",
+        "type": [
+          "array"
+        ],
         "description": "Enlaces adicionales que quieras compartir (ej. video, ficha técnica).",
         "items": {
           "type": "object",
@@ -341,97 +216,142 @@
 ---
 
 {
-  "name": "list_catalog_fraccionamientos",
-  "description": "Devuelve el listado de fraccionamientos activos con zona/segmento y algunos prototipos representativos.",
-  "strict": false,
+  "name": "list_demo_slots",
+  "description": "Consulta la disponibilidad del calendario para ofrecer al cliente opciones de demo dentro de WhatsApp.",
+  "strict": true,
   "parameters": {
     "type": "object",
     "properties": {
-      "organizacion_id": {
-        "type": "string",
-        "description": "ID de la organización cuyo catálogo queremos listar."
-      },
-      "include_inactive": {
-        "type": "boolean",
-        "description": "Incluir fraccionamientos inactivos en la lista.",
-        "default": false
-      },
-      "prototipos_limit": {
-        "type": "integer",
-        "description": "Cuántos prototipos representar por fraccionamiento (1-20).",
-        "minimum": 1,
-        "maximum": 20
-      }
-    },
-    "required": ["organizacion_id"],
-    "additionalProperties": false
-  }
-}
-
----
-
-{
-  "name": "list_catalog_modelos",
-  "description": "Entrega la jerarquía completa de líneas, familias y modelos, junto con los tipos de propiedad disponibles.",
-  "strict": false,
-  "parameters": {
-    "type": "object",
-    "properties": {
-      "organizacion_id": {
-        "type": "string",
-        "description": "ID de la organización cuyo catálogo se está consultando."
-      },
-      "include_inactive": {
-        "type": "boolean",
-        "description": "Incluir modelos inactivos.",
-        "default": false
-      },
-      "limit": {
-        "type": "integer",
-        "description": "Máximo de registros de catálogo a revisar (1-500).",
-        "minimum": 1,
-        "maximum": 500
-      }
-    },
-    "required": ["organizacion_id"],
-    "additionalProperties": false
-  }
-}
-
----
-
-{
-  "name": "fetch_catalog_item_details",
-  "description": "Busca en la vector store interna y retorna el registro completo con metadata de un prototipo o fraccionamiento.",
-  "strict": false,
-  "parameters": {
-    "type": "object",
-    "properties": {
-      "organizacion_id": {
-        "type": "string",
-        "description": "ID de la organización que se usa en el contexto del chat."
-      },
       "conversacion_id": {
         "type": "string",
-        "description": "ID de la conversación activa relacionada con la consulta."
+        "description": "La conversación activa donde se debe mostrar la agenda."
       },
-      "query": {
+      "timezone": {
         "type": "string",
-        "description": "Nombre del prototipo o fraccionamiento que desean conocer."
+        "description": "Zona horaria del prospecto (ej. 'America/Mexico_City') para ajustar las franjas."
       },
-      "detail_level": {
+      "start_date": {
         "type": "string",
-        "description": "Nivel de detalle solicitado; usa el valor 'metadata' para obtener cada campo del metadata.",
-        "enum": ["metadata", "overview"]
+        "description": "Fecha inicial (YYYY-MM-DD). Si se omite, se usa el día actual."
       },
-      "limit": {
+      "window_days": {
         "type": "integer",
-        "description": "Cantidad máxima de coincidencias a devolver (1-5).",
+        "description": "Número de días a mostrar (máximo 60).",
         "minimum": 1,
-        "maximum": 5
+        "maximum": 60
       }
     },
-    "required": ["organizacion_id", "query", "detail_level"],
+    "required": [
+      "conversacion_id",
+      "timezone",
+      "start_date",
+      "window_days"
+    ],
     "additionalProperties": false
   }
 }
+
+---
+
+{
+  "name": "schedule_demo",
+  "description": "Confirma la demo elegida para que se reserve el slot y se envíe el correo/invitación automáticamente.",
+  "strict": true,
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "conversacion_id": {
+        "type": "string",
+        "description": "Conversación activa donde se registra la cita."
+      },
+      "slot_id": {
+        "type": "string",
+        "description": "Identificador que regresó `list_demo_slots`."
+      },
+      "start_at": {
+        "type": "string",
+        "description": "Fecha y hora en formato ISO 8601 del slot elegido."
+      },
+      "notes": {
+        "type": "string",
+        "description": "Notas del prospecto que quieras guardar junto a la demo."
+      }
+    },
+    "required": [
+      "conversacion_id",
+      "slot_id",
+      "start_at",
+      "notes"
+    ],
+    "additionalProperties": false
+  }
+}
+
+---
+
+{
+  "name": "reschedule_demo",
+  "description": "Reprograma una demo ya confirmada cuando el cliente solicita un cambio.",
+  "strict": true,
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "conversacion_id": {
+        "type": "string",
+        "description": "La conversación vinculada con la demo."
+      },
+      "booking_id": {
+        "type": "string",
+        "description": "Identificador de la cita que se moverá."
+      },
+      "start_at": {
+        "type": "string",
+        "description": "Nuevo horario propuesto en ISO 8601."
+      },
+      "notes": {
+        "type": "string",
+        "description": "Motivo o comentarios para el cambio."
+      }
+    },
+    "required": [
+      "conversacion_id",
+      "booking_id",
+      "start_at",
+      "notes"
+    ],
+    "additionalProperties": false
+  }
+}
+
+---
+
+{
+  "name": "cancel_demo",
+  "description": "Cancela una demo previamente confirmada cuando el prospecto lo solicita.",
+  "strict": true,
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "conversacion_id": {
+        "type": "string",
+        "description": "Conversación activa relacionada a la cita."
+      },
+      "booking_id": {
+        "type": "string",
+        "description": "Identificador de la demo que se cancela."
+      },
+      "reason": {
+        "type": "string",
+        "description": "Motivo opcional compartido por el prospecto."
+      }
+    },
+    "required": [
+      "conversacion_id",
+      "booking_id",
+      "reason"
+    ],
+    "additionalProperties": false
+  }
+}
+
+---

@@ -24,7 +24,8 @@ Cuando el usuario responda a tu hook:
 
 🔴 Si está dudoso -> reduce fricción
 
-Cuando un contacto regrese después de un tiempo o cambie de tema, evita pedir de nuevo datos básicos que ya tenemos. Si es un nuevo proyecto/ciclo, utiliza la función `restart_conversation_cycle` (solo una vez por tema real) para que el equipo humano reciba la notificación del reinicio.
+Cuando un contacto regrese después de un tiempo o cambie de tema, evita pedir de nuevo datos básicos que ya tenemos.
+En webchat no uses `restart_conversation_cycle`: primero captura y confirma teléfono para asegurar identidad del prospecto.
 ---
 ### 📇 Captura de datos (funciones)
 Usa las funciones del sistema con `conversacion_id` cada vez que el usuario da el dato:
