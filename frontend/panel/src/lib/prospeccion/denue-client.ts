@@ -278,6 +278,7 @@ export async function listDenueResultados(params: {
   phonePresent?: boolean;
   emailPresent?: boolean;
   websitePresent?: boolean;
+  contactMatch?: "all" | "any";
   actividades?: string[];
   geoEstado?: string;
   geoMunicipio?: string;
@@ -310,6 +311,9 @@ export async function listDenueResultados(params: {
   if (typeof params.websitePresent === "boolean") {
     url.searchParams.set("website_present", String(params.websitePresent));
   }
+  if (params.contactMatch) {
+    url.searchParams.set("contact_match", params.contactMatch);
+  }
   if (params.actividades?.length) {
     for (const actividad of params.actividades) {
       if (actividad && actividad.trim().length) {
@@ -335,6 +339,7 @@ export async function listDenueResultadosMap(params: {
   phonePresent?: boolean;
   emailPresent?: boolean;
   websitePresent?: boolean;
+  contactMatch?: "all" | "any";
   actividades?: string[];
   geoEstado?: string;
   geoMunicipio?: string;
@@ -362,6 +367,9 @@ export async function listDenueResultadosMap(params: {
   if (typeof params.websitePresent === "boolean") {
     url.searchParams.set("website_present", String(params.websitePresent));
   }
+  if (params.contactMatch) {
+    url.searchParams.set("contact_match", params.contactMatch);
+  }
   if (params.actividades?.length) {
     for (const actividad of params.actividades) {
       if (actividad && actividad.trim().length) {
@@ -388,6 +396,7 @@ export async function getDenueResultadosBounds(params: {
   phonePresent?: boolean;
   emailPresent?: boolean;
   websitePresent?: boolean;
+  contactMatch?: "all" | "any";
   actividades?: string[];
   geoEstado?: string;
   geoMunicipio?: string;
@@ -408,6 +417,9 @@ export async function getDenueResultadosBounds(params: {
   }
   if (typeof params.websitePresent === "boolean") {
     url.searchParams.set("website_present", String(params.websitePresent));
+  }
+  if (params.contactMatch) {
+    url.searchParams.set("contact_match", params.contactMatch);
   }
   if (params.actividades?.length) {
     for (const actividad of params.actividades) {

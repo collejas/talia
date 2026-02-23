@@ -106,6 +106,7 @@ const ACTIONS = [
 ] as const;
 
 type ContactFilterValue = "any" | "with" | "without";
+type ContactMatchMode = "all" | "any";
 type EstratoFilterValue = "any" | "micro" | "pequena" | "mediana" | "grande";
 type BusquedasSortKey = "busqueda" | "registros" | "radio" | "geo" | "fecha";
 
@@ -316,6 +317,7 @@ export function DenueBusquedaView() {
   const [phoneFilter, setPhoneFilter] = useState<ContactFilterValue>("any");
   const [emailFilter, setEmailFilter] = useState<ContactFilterValue>("any");
   const [websiteFilter, setWebsiteFilter] = useState<ContactFilterValue>("any");
+  const [contactMatchMode, setContactMatchMode] = useState<ContactMatchMode>("all");
   const [estratoFilter, setEstratoFilter] = useState<EstratoFilterValue>("any");
   const [selectedActividades, setSelectedActividades] = useState<Set<string>>(new Set());
   const [actividadSearch, setActividadSearch] = useState("");
@@ -406,6 +408,7 @@ export function DenueBusquedaView() {
       phonePresent,
       emailPresent,
       websitePresent,
+      contactMatch: contactMatchMode,
       estratoGroup,
       actividades,
       geoEstado: selectedEstadoCode,
@@ -413,6 +416,7 @@ export function DenueBusquedaView() {
     };
   }, [
     debouncedFilterText,
+    contactMatchMode,
     emailFilter,
     estratoFilter,
     phoneFilter,
@@ -548,6 +552,7 @@ export function DenueBusquedaView() {
         phonePresent?: boolean;
         emailPresent?: boolean;
         websitePresent?: boolean;
+        contactMatch?: "all" | "any";
         estratoGroup?: string;
         actividades?: string[];
         geoEstado?: string;
@@ -565,6 +570,7 @@ export function DenueBusquedaView() {
           phonePresent: filters.phonePresent,
           emailPresent: filters.emailPresent,
           websitePresent: filters.websitePresent,
+          contactMatch: filters.contactMatch,
           estratoGroup: filters.estratoGroup,
           actividades: filters.actividades,
           geoEstado: filters.geoEstado,
@@ -595,6 +601,7 @@ export function DenueBusquedaView() {
       setPhoneFilter("any");
       setEmailFilter("any");
       setWebsiteFilter("any");
+      setContactMatchMode("all");
       setEstratoFilter("any");
       setGeoEstadoFilter("any");
       setGeoMunicipioFilter("any");
@@ -807,6 +814,7 @@ export function DenueBusquedaView() {
       phoneFilter,
       emailFilter,
       websiteFilter,
+      contactMatchMode,
       estratoFilter,
       selectedEstadoCode ?? "",
       selectedMunicipioCode ?? "",
@@ -816,6 +824,7 @@ export function DenueBusquedaView() {
     debouncedFilterText,
     emailFilter,
     estratoFilter,
+    contactMatchMode,
     phoneFilter,
     selectedActividadesList,
     selectedEstadoCode,
@@ -860,6 +869,7 @@ export function DenueBusquedaView() {
         phonePresent: currentResultFilters.phonePresent,
         emailPresent: currentResultFilters.emailPresent,
         websitePresent: currentResultFilters.websitePresent,
+        contactMatch: currentResultFilters.contactMatch,
         estratoGroup: currentResultFilters.estratoGroup,
         actividades: currentResultFilters.actividades,
         geoEstado: currentResultFilters.geoEstado,
@@ -901,6 +911,7 @@ export function DenueBusquedaView() {
         phonePresent: currentResultFilters.phonePresent,
         emailPresent: currentResultFilters.emailPresent,
         websitePresent: currentResultFilters.websitePresent,
+        contactMatch: currentResultFilters.contactMatch,
         estratoGroup: currentResultFilters.estratoGroup,
         actividades: currentResultFilters.actividades,
         geoEstado: currentResultFilters.geoEstado,
@@ -995,6 +1006,7 @@ export function DenueBusquedaView() {
     setPhoneFilter("any");
     setEmailFilter("any");
     setWebsiteFilter("any");
+    setContactMatchMode("all");
     setGeoEstadoFilter("any");
     setGeoMunicipioFilter("any");
     setFilterText("");
@@ -1877,6 +1889,20 @@ export function DenueBusquedaView() {
                   <option value="any">Todos</option>
                   <option value="with">Con sitio web</option>
                   <option value="without">Sin sitio web</option>
+                </select>
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs font-normal" htmlFor="contact-match-filter">
+                  Coincidencia
+                </Label>
+                <select
+                  id="contact-match-filter"
+                  value={contactMatchMode}
+                  onChange={(event) => setContactMatchMode(event.target.value as ContactMatchMode)}
+                  className="h-9 w-full rounded-md border border-border bg-background px-2 text-sm"
+                >
+                  <option value="all">Todos (AND)</option>
+                  <option value="any">Cualquiera (OR)</option>
                 </select>
               </div>
             </div>

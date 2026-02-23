@@ -22,7 +22,6 @@ import {
   IconMail,
   IconTargetArrow,
   IconPhone,
-  IconBrandWhatsapp,
   IconUsersGroup,
   IconWorldSearch,
 } from "@tabler/icons-react"
@@ -487,8 +486,6 @@ function ProspectosView() {
   const [contactDrawerOpen, setContactDrawerOpen] = useState(false)
   const [contactDrawerData, setContactDrawerData] = useState<ContactDrawerData | null>(null)
   const [contactIndicators, setContactIndicators] = useState<Record<string, ProspectoContactIndicators>>({})
-  const [contactIndicatorsLoading, setContactIndicatorsLoading] = useState(false)
-  const [contactIndicatorsError, setContactIndicatorsError] = useState<string | null>(null)
   const [historyDialogOpen, setHistoryDialogOpen] = useState(false)
   const [historyProspect, setHistoryProspect] = useState<ProspectoItem | null>(null)
   const [historyEntries, setHistoryEntries] = useState<ContactoEnvio[]>([])
@@ -1111,12 +1108,9 @@ useEffect(() => {
   useEffect(() => {
     if (!currentIds.length) {
       setContactIndicators({})
-      setContactIndicatorsError(null)
       return
     }
     let cancelled = false
-    setContactIndicatorsLoading(true)
-    setContactIndicatorsError(null)
     ;(async () => {
       try {
         const response = await listProspectoContactIndicators(currentIds)
@@ -1129,15 +1123,9 @@ useEffect(() => {
           }
         }
         setContactIndicators(indicators)
-      } catch (err) {
+      } catch {
         if (!cancelled) {
           setContactIndicators({})
-          const message = err instanceof Error ? err.message : "No se pudieron cargar los indicadores."
-          setContactIndicatorsError(message)
-        }
-      } finally {
-        if (!cancelled) {
-          setContactIndicatorsLoading(false)
         }
       }
     })()
@@ -2536,9 +2524,15 @@ useEffect(() => {
                     />
                   </TableHead>
                   <TableHead>Prospecto</TableHead>
-                  <TableHead>Contacto</TableHead>
-                  <TableHead>Verificación</TableHead>
+                  <TableHead>Correo</TableHead>
+                  <TableHead>Sitio web</TableHead>
+                  <TableHead>Teléfono</TableHead>
+                  <TableHead>Tipo de línea</TableHead>
+                  <TableHead>Teléfono verificado</TableHead>
                   <TableHead>Fuente y contexto</TableHead>
+                  <TableHead>Tamaño/Rating</TableHead>
+                  <TableHead>Campaña</TableHead>
+                  <TableHead>Con envío</TableHead>
                   <TableHead className="text-right">Creado</TableHead>
                   <TableHead className="w-14 text-right">Acciones</TableHead>
                 </TableRow>
@@ -2546,7 +2540,7 @@ useEffect(() => {
               <TableBody>
                 {loading ? (
                   <TableRow>
-                    <TableCell colSpan={7} className="py-10 text-center text-sm text-muted-foreground">
+                    <TableCell colSpan={12} className="py-10 text-center text-sm text-muted-foreground">
                       <IconLoader className="mr-2 inline size-4 animate-spin" />
                       Cargando prospectos...
                     </TableCell>
@@ -2554,7 +2548,7 @@ useEffect(() => {
                 ) : null}
                 {!loading && !items.length ? (
                   <TableRow>
-                    <TableCell colSpan={7} className="py-10 text-center text-sm text-muted-foreground">
+                    <TableCell colSpan={12} className="py-10 text-center text-sm text-muted-foreground">
                       No hay prospectos con los filtros actuales.
                     </TableCell>
                   </TableRow>
@@ -2563,6 +2557,9 @@ useEffect(() => {
                   ? items.map((prospecto) => {
                       const notas = extractProspectoNotes(prospecto.metadata)
                       const consulta = extractProspectoQuery(prospecto.metadata)
+                      const campaignName = extractProspectoCampaignName(prospecto.metadata)
+                      const indicator = prospecto.id ? contactIndicators[prospecto.id] : undefined
+                      const hasEnvios = (indicator?.total_envios ?? 0) > 0
                       return (
                         <TableRow key={prospecto.id}>
                           <TableCell>
@@ -2594,24 +2591,19 @@ useEffect(() => {
                           ) : null}
                           </TableCell>
                           <TableCell>
-                          <div className="text-sm">{prospecto.phone_e164 || prospecto.phone || "—"}</div>
-                          {prospecto.email ? (
-                            <div className="text-xs text-muted-foreground">{prospecto.email}</div>
-                          ) : null}
-                          <ProspectChannelBadges prospecto={prospecto} />
-                          <ProspectContactIndicatorsView
-                            indicator={prospecto.id ? contactIndicators[prospecto.id] : undefined}
-                            loading={contactIndicatorsLoading}
-                            error={contactIndicatorsError}
-                          />
+                          <span className="text-sm">{prospecto.email || "—"}</span>
+                          </TableCell>
+                          <TableCell>
+                          <span className="text-sm">{prospecto.website || "—"}</span>
+                          </TableCell>
+                          <TableCell>
+                          <span className="text-sm">{prospecto.phone_e164 || prospecto.phone || "—"}</span>
+                          </TableCell>
+                          <TableCell>
+                          <span className="text-sm">{prospecto.carrier_type ? carrierLabel(prospecto.carrier_type) : "—"}</span>
                           </TableCell>
                           <TableCell>
                           <LookupStatusBadge status={prospecto.lookup_status} />
-                          {prospecto.carrier_type ? (
-                            <p className="mt-1 text-xs text-muted-foreground">
-                              Línea: {carrierLabel(prospecto.carrier_type)}
-                            </p>
-                          ) : null}
                           </TableCell>
                           <TableCell>
                           <div className="flex flex-wrap items-center gap-2">
@@ -2630,14 +2622,26 @@ useEffect(() => {
                               </span>
                             ) : null}
                           </div>
-                          {prospecto.website ? (
-                            <p className="mt-1 text-xs text-muted-foreground">{prospecto.website}</p>
-                          ) : null}
                           {consulta ? (
                             <p className="mt-1 max-w-full break-words text-xs text-muted-foreground">
                               Consulta: <span className="text-foreground">{consulta}</span>
                             </p>
                           ) : null}
+                          </TableCell>
+                          <TableCell>
+                          {typeof prospecto.rating === "number" ? (
+                            <Badge variant="secondary">⭐ {prospecto.rating.toFixed(1)}</Badge>
+                          ) : prospecto.segmento ? (
+                            <Badge variant="outline">{prospecto.segmento}</Badge>
+                          ) : (
+                            <span className="text-sm text-muted-foreground">—</span>
+                          )}
+                          </TableCell>
+                          <TableCell>
+                          <span className="text-sm">{campaignName || (hasEnvios ? "Sí" : "No")}</span>
+                          </TableCell>
+                          <TableCell>
+                          <span className="text-sm">{hasEnvios ? "Sí" : "No"}</span>
                           </TableCell>
                           <TableCell className="text-right text-xs text-muted-foreground">
                           {formatDate(prospecto.creado_en)}
@@ -3367,110 +3371,6 @@ function LookupStatusBadge({ status }: { status?: string | null }) {
   return <Badge variant={variant}>{label}</Badge>
 }
 
-type ProspectChannelBadgesProps = {
-  prospecto: ProspectoItem
-}
-
-function ProspectChannelBadges({ prospecto }: ProspectChannelBadgesProps) {
-  const rawPhone = (prospecto.phone_e164 || prospecto.phone || "").trim()
-  const hasPhone = rawPhone.length > 0
-  const carrier = (prospecto.carrier_type || "").toLowerCase()
-  const whatsappAllowed = prospecto.whatsapp_permitido === true
-  const whatsappDenied = prospecto.whatsapp_permitido === false
-
-  let label = "Pendiente"
-  let variantClass = "border border-border text-muted-foreground"
-  let icon = <IconPhone className="size-3" />
-
-  if (!hasPhone) {
-    label = "Sin teléfono"
-    variantClass = "border-destructive/40 bg-destructive/10 text-destructive"
-  } else if (whatsappAllowed || carrier === "mobile") {
-    label = "Teléfono móvil"
-    variantClass = "bg-emerald-100 text-emerald-800"
-    icon = <IconBrandWhatsapp className="size-3" />
-  } else if (whatsappDenied || carrier === "landline") {
-    label = "Teléfono fijo"
-    variantClass = "bg-blue-100 text-blue-800"
-  }
-
-  return (
-    <div className="mt-2 flex flex-wrap gap-2 text-xs">
-      <span
-        className={cn("flex items-center gap-1 rounded-full px-2 py-1 text-[11px] font-medium", variantClass)}
-        title={whatsappAllowed || carrier === "mobile" ? "Probablemente tiene WhatsApp" : undefined}
-      >
-        {icon}
-        {label}
-      </span>
-    </div>
-  )
-}
-
-type ProspectContactIndicatorsViewProps = {
-  indicator?: ProspectoContactIndicators
-  loading: boolean
-  error: string | null
-}
-
-function ProspectContactIndicatorsView({ indicator, loading, error }: ProspectContactIndicatorsViewProps) {
-  if (loading && !indicator) {
-    return <p className="mt-2 text-[11px] text-muted-foreground">Calculando indicadores…</p>
-  }
-  if (error && !indicator) {
-    return (
-      <Badge variant="outline" className="mt-2 text-[11px] font-normal text-destructive">
-        Indicadores no disponibles
-      </Badge>
-    )
-  }
-  if (!indicator) {
-    return (
-      <p className="mt-2 text-[11px] text-muted-foreground">
-        Sin envíos registrados para este prospecto.
-      </p>
-    )
-  }
-  const canales = indicator.canales ?? {}
-  const entries = Object.entries(canales)
-  if (!entries.length && !(indicator.respondio || indicator.total_respuestas)) {
-    return null
-  }
-  return (
-    <div className="mt-2 flex flex-col gap-1">
-      {entries.map(([canal, stats]) => {
-        if (!stats) return null
-        const total = stats.total ?? 0
-        const resumen: string[] = []
-        if ((stats.exitosos ?? 0) > 0) resumen.push(`${stats.exitosos} ok`)
-        if ((stats.pendientes ?? 0) > 0) resumen.push(`${stats.pendientes} pend`)
-        if ((stats.fallidos ?? 0) > 0) resumen.push(`${stats.fallidos} err`)
-        if ((stats.omitidos ?? 0) > 0) resumen.push(`${stats.omitidos} omit`)
-        const label = `${canalLabel(canal)} · ${total} env${total === 1 ? "ío" : "íos"}${
-          resumen.length ? ` (${resumen.join(" · ")})` : ""
-        }`
-        return (
-          <Badge key={canal} variant="secondary" className="w-fit text-[11px] font-normal">
-            {label}
-          </Badge>
-        )
-      })}
-      <div className="flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
-        <Badge variant={indicator.respondio ? "default" : "outline"} className="text-[11px] font-medium">
-          {indicator.respondio
-            ? `Respondió${indicator.total_respuestas ? ` (${indicator.total_respuestas})` : ""}`
-            : "Sin respuesta"}
-        </Badge>
-        {indicator.ultima_respuesta_en ? (
-          <span>Última resp.: {formatDate(indicator.ultima_respuesta_en)}</span>
-        ) : indicator.ultimo_contacto_en ? (
-          <span>Último contacto: {formatDate(indicator.ultimo_contacto_en)}</span>
-        ) : null}
-      </div>
-    </div>
-  )
-}
-
 function formatDate(value?: string | null) {
   if (!value) return "—"
   const date = new Date(value)
@@ -3668,6 +3568,22 @@ function extractProspectoQuery(metadata: unknown): string | null {
     return null
   }
   for (const key of ["query", "busqueda_query"] as const) {
+    const value = metadata[key]
+    if (typeof value === "string") {
+      const trimmed = value.trim()
+      if (trimmed.length) {
+        return trimmed
+      }
+    }
+  }
+  return null
+}
+
+function extractProspectoCampaignName(metadata: unknown): string | null {
+  if (!isRecord(metadata)) {
+    return null
+  }
+  for (const key of ["campana_nombre", "campaign_name", "campana", "campaign"] as const) {
     const value = metadata[key]
     if (typeof value === "string") {
       const trimmed = value.trim()
