@@ -173,6 +173,14 @@ const initialProspectoForm: ProspectoFormState = {
   notas: "",
 }
 
+function arraysEqual(a: string[], b: string[]) {
+  if (a.length !== b.length) return false
+  for (let i = 0; i < a.length; i += 1) {
+    if (a[i] !== b[i]) return false
+  }
+  return true
+}
+
 type ProspeccionStage = "discover" | "enrich" | "prepare" | "launch" | "evaluate"
 type ProspeccionCanal = "correo" | "whatsapp" | "llamada" | "otro"
 
@@ -724,19 +732,34 @@ const [selectedTemplates, setSelectedTemplates] = useState<Record<string, string
       setQueryOptions(queries)
       setActivityOptions(activities)
       const queryValues = new Set(queries.map((item) => item.value))
-      setFilters((prev) => ({
-        ...prev,
-        queryFilters: prev.queryFilters.filter((value) => queryValues.has(value)),
-        actividadFilters: prev.actividadFilters.filter((value) => activities.includes(value)),
-      }))
+      setFilters((prev) => {
+        const nextQueryFilters = prev.queryFilters.filter((value) => queryValues.has(value))
+        const nextActividadFilters = prev.actividadFilters.filter((value) => activities.includes(value))
+        if (
+          arraysEqual(nextQueryFilters, prev.queryFilters) &&
+          arraysEqual(nextActividadFilters, prev.actividadFilters)
+        ) {
+          return prev
+        }
+        return {
+          ...prev,
+          queryFilters: nextQueryFilters,
+          actividadFilters: nextActividadFilters,
+        }
+      })
     } catch {
       setQueryOptions([])
       setActivityOptions([])
-      setFilters((prev) => ({
-        ...prev,
-        queryFilters: [],
-        actividadFilters: [],
-      }))
+      setFilters((prev) => {
+        if (!prev.queryFilters.length && !prev.actividadFilters.length) {
+          return prev
+        }
+        return {
+          ...prev,
+          queryFilters: [],
+          actividadFilters: [],
+        }
+      })
     } finally {
       setQueryOptionsLoading(false)
     }
@@ -758,17 +781,28 @@ const [selectedTemplates, setSelectedTemplates] = useState<Record<string, string
           dateTo,
         })
       const activities = response.activities ?? []
-      setActivityOptions(activities)
-        setFilters((prev) => ({
-          ...prev,
-          actividadFilters: prev.actividadFilters.filter((value) => activities.includes(value)),
-        }))
+        setActivityOptions(activities)
+        setFilters((prev) => {
+          const nextActividadFilters = prev.actividadFilters.filter((value) => activities.includes(value))
+          if (arraysEqual(nextActividadFilters, prev.actividadFilters)) {
+            return prev
+          }
+          return {
+            ...prev,
+            actividadFilters: nextActividadFilters,
+          }
+        })
       } catch {
         setActivityOptions([])
-        setFilters((prev) => ({
-          ...prev,
-          actividadFilters: [],
-        }))
+        setFilters((prev) => {
+          if (!prev.actividadFilters.length) {
+            return prev
+          }
+          return {
+            ...prev,
+            actividadFilters: [],
+          }
+        })
       } finally {
         setActivityOptionsLoading(false)
       }
