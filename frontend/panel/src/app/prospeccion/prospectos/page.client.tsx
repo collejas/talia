@@ -94,6 +94,18 @@ import {
 type FuenteFilter = "" | "google_places" | "denue" | "usuario"
 type LookupFilter = "" | "pendiente" | "verificado" | "sin_numero" | "error"
 type OrderOption = "creado" | "nombre"
+type ProspectosSortKey =
+  | "prospecto"
+  | "correo"
+  | "sitio_web"
+  | "telefono"
+  | "tipo_linea"
+  | "telefono_verificado"
+  | "fuente"
+  | "tamano_rating"
+  | "campana"
+  | "con_envio"
+  | "creado"
 
 type Filters = {
   search: string
@@ -366,13 +378,6 @@ const FUENTE_LABELS: Record<string, string> = {
   usuario: "Usuario",
 }
 
-const FUENTE_BUSQUEDA_LABELS: Record<string, string> = {
-  buscador: "Búsqueda web",
-  manual: "Captura manual",
-  denue: "Importado DENUE",
-  google_places: "Importado Google",
-}
-
 const BATCH_STATE_VARIANTS: Record<string, "default" | "secondary" | "outline" | "destructive"> = {
   pendiente: "secondary",
   procesando: "secondary",
@@ -456,6 +461,10 @@ export default function ProspectosClientPage() {
 
 function ProspectosView() {
   const [filters, setFilters] = useState<Filters>(initialFilters)
+  const [tableSort, setTableSort] = useState<{ key: ProspectosSortKey; direction: "asc" | "desc" }>({
+    key: "creado",
+    direction: "desc",
+  })
   const [searchInput, setSearchInput] = useState(initialFilters.search)
   const [items, setItems] = useState<ProspectoItem[]>([])
   const [total, setTotal] = useState(0)
@@ -566,6 +575,90 @@ const [selectedTemplates, setSelectedTemplates] = useState<Record<string, string
     () => new Map(queryOptions.map((option) => [option.value, option.label])),
     [queryOptions]
   )
+  const toggleTableSort = useCallback((key: ProspectosSortKey) => {
+    setTableSort((current) => {
+      if (current.key === key) {
+        return { key, direction: current.direction === "asc" ? "desc" : "asc" }
+      }
+      return { key, direction: "asc" }
+    })
+  }, [])
+  const sortedItems = useMemo(() => {
+    const rows = [...items]
+    rows.sort((a, b) => {
+      const aName = (a.display_name || "").trim()
+      const bName = (b.display_name || "").trim()
+      const aEmail = (a.email || "").trim().toLowerCase()
+      const bEmail = (b.email || "").trim().toLowerCase()
+      const aWebsite = (a.website || "").trim().toLowerCase()
+      const bWebsite = (b.website || "").trim().toLowerCase()
+      const aPhone = (a.phone_e164 || a.phone || "").trim()
+      const bPhone = (b.phone_e164 || b.phone || "").trim()
+      const aCarrier = carrierLabel(a.carrier_type).toLowerCase()
+      const bCarrier = carrierLabel(b.carrier_type).toLowerCase()
+      const aLookup = (a.lookup_status || "").toLowerCase()
+      const bLookup = (b.lookup_status || "").toLowerCase()
+      const aFuente = FUENTE_LABELS[a.fuente] ?? a.fuente
+      const bFuente = FUENTE_LABELS[b.fuente] ?? b.fuente
+      const aRating = typeof a.rating === "number" ? a.rating : null
+      const bRating = typeof b.rating === "number" ? b.rating : null
+      const aSize = (a.estrato || a.segmento || "").trim().toLowerCase()
+      const bSize = (b.estrato || b.segmento || "").trim().toLowerCase()
+      const aCampaign = (extractProspectoCampaignName(a.metadata) || "").trim().toLowerCase()
+      const bCampaign = (extractProspectoCampaignName(b.metadata) || "").trim().toLowerCase()
+      const aHasEnvios = ((a.id ? contactIndicators[a.id]?.total_envios : 0) ?? 0) > 0 ? 1 : 0
+      const bHasEnvios = ((b.id ? contactIndicators[b.id]?.total_envios : 0) ?? 0) > 0 ? 1 : 0
+      const aCreated = a.creado_en ? new Date(a.creado_en).getTime() : 0
+      const bCreated = b.creado_en ? new Date(b.creado_en).getTime() : 0
+
+      let base = 0
+      switch (tableSort.key) {
+        case "prospecto":
+          base = aName.localeCompare(bName, "es", { sensitivity: "base" })
+          break
+        case "correo":
+          base = aEmail.localeCompare(bEmail, "es", { sensitivity: "base" })
+          break
+        case "sitio_web":
+          base = aWebsite.localeCompare(bWebsite, "es", { sensitivity: "base" })
+          break
+        case "telefono":
+          base = aPhone.localeCompare(bPhone, "es", { sensitivity: "base" })
+          break
+        case "tipo_linea":
+          base = aCarrier.localeCompare(bCarrier, "es", { sensitivity: "base" })
+          break
+        case "telefono_verificado":
+          base = aLookup.localeCompare(bLookup, "es", { sensitivity: "base" })
+          break
+        case "fuente":
+          base = aFuente.localeCompare(bFuente, "es", { sensitivity: "base" })
+          break
+        case "tamano_rating":
+          if (aRating !== null || bRating !== null) {
+            base = (aRating ?? -1) - (bRating ?? -1)
+          } else {
+            base = aSize.localeCompare(bSize, "es", { sensitivity: "base" })
+          }
+          break
+        case "campana":
+          base = aCampaign.localeCompare(bCampaign, "es", { sensitivity: "base" })
+          break
+        case "con_envio":
+          base = aHasEnvios - bHasEnvios
+          break
+        case "creado":
+        default:
+          base = aCreated - bCreated
+          break
+      }
+      if (base === 0) {
+        return aName.localeCompare(bName, "es", { sensitivity: "base" })
+      }
+      return tableSort.direction === "asc" ? base : -base
+    })
+    return rows
+  }, [contactIndicators, items, tableSort.direction, tableSort.key])
 
   const selectionChips = useMemo(() => {
     const chips: string[] = []
@@ -2515,7 +2608,7 @@ useEffect(() => {
           ) : null}
 
           <div className="overflow-x-auto">
-            <Table>
+            <Table className="text-[11px]">
               <TableHeader>
                 <TableRow>
                   <TableHead className="w-10">
@@ -2526,18 +2619,62 @@ useEffect(() => {
                       disabled={!items.length}
                     />
                   </TableHead>
-                  <TableHead>Prospecto</TableHead>
-                  <TableHead>Correo</TableHead>
-                  <TableHead>Sitio web</TableHead>
-                  <TableHead>Teléfono</TableHead>
-                  <TableHead>Tipo de línea</TableHead>
-                  <TableHead>Teléfono verificado</TableHead>
-                  <TableHead>Fuente y contexto</TableHead>
-                  <TableHead>Tamaño/Rating</TableHead>
-                  <TableHead>Campaña</TableHead>
-                  <TableHead>Con envío</TableHead>
-                  <TableHead className="text-right">Creado</TableHead>
-                  <TableHead className="w-14 text-right">Acciones</TableHead>
+                  <TableHead className="w-[260px] text-[10px] font-bold uppercase tracking-wide">
+                    <button type="button" onClick={() => toggleTableSort("prospecto")}>
+                      Prospecto {tableSort.key === "prospecto" ? (tableSort.direction === "asc" ? "↑" : "↓") : ""}
+                    </button>
+                  </TableHead>
+                  <TableHead className="w-[180px] text-[10px] font-bold uppercase tracking-wide">
+                    <button type="button" onClick={() => toggleTableSort("correo")}>
+                      Correo {tableSort.key === "correo" ? (tableSort.direction === "asc" ? "↑" : "↓") : ""}
+                    </button>
+                  </TableHead>
+                  <TableHead className="w-[180px] text-[10px] font-bold uppercase tracking-wide">
+                    <button type="button" onClick={() => toggleTableSort("sitio_web")}>
+                      Sitio web {tableSort.key === "sitio_web" ? (tableSort.direction === "asc" ? "↑" : "↓") : ""}
+                    </button>
+                  </TableHead>
+                  <TableHead className="w-[140px] text-[10px] font-bold uppercase tracking-wide">
+                    <button type="button" onClick={() => toggleTableSort("telefono")}>
+                      Teléfono {tableSort.key === "telefono" ? (tableSort.direction === "asc" ? "↑" : "↓") : ""}
+                    </button>
+                  </TableHead>
+                  <TableHead className="w-[120px] text-[10px] font-bold uppercase tracking-wide">
+                    <button type="button" onClick={() => toggleTableSort("tipo_linea")}>
+                      Tipo de línea {tableSort.key === "tipo_linea" ? (tableSort.direction === "asc" ? "↑" : "↓") : ""}
+                    </button>
+                  </TableHead>
+                  <TableHead className="w-[130px] text-[10px] font-bold uppercase tracking-wide">
+                    <button type="button" onClick={() => toggleTableSort("telefono_verificado")}>
+                      Teléfono verificado {tableSort.key === "telefono_verificado" ? (tableSort.direction === "asc" ? "↑" : "↓") : ""}
+                    </button>
+                  </TableHead>
+                  <TableHead className="w-[160px] text-[10px] font-bold uppercase tracking-wide">
+                    <button type="button" onClick={() => toggleTableSort("fuente")}>
+                      Fuente {tableSort.key === "fuente" ? (tableSort.direction === "asc" ? "↑" : "↓") : ""}
+                    </button>
+                  </TableHead>
+                  <TableHead className="w-[130px] text-[10px] font-bold uppercase tracking-wide">
+                    <button type="button" onClick={() => toggleTableSort("tamano_rating")}>
+                      Tamaño/Rating {tableSort.key === "tamano_rating" ? (tableSort.direction === "asc" ? "↑" : "↓") : ""}
+                    </button>
+                  </TableHead>
+                  <TableHead className="w-[140px] text-[10px] font-bold uppercase tracking-wide">
+                    <button type="button" onClick={() => toggleTableSort("campana")}>
+                      Campaña {tableSort.key === "campana" ? (tableSort.direction === "asc" ? "↑" : "↓") : ""}
+                    </button>
+                  </TableHead>
+                  <TableHead className="w-[110px] text-[10px] font-bold uppercase tracking-wide">
+                    <button type="button" onClick={() => toggleTableSort("con_envio")}>
+                      Con envío {tableSort.key === "con_envio" ? (tableSort.direction === "asc" ? "↑" : "↓") : ""}
+                    </button>
+                  </TableHead>
+                  <TableHead className="w-[120px] text-right text-[10px] font-bold uppercase tracking-wide">
+                    <button type="button" onClick={() => toggleTableSort("creado")}>
+                      Creado {tableSort.key === "creado" ? (tableSort.direction === "asc" ? "↑" : "↓") : ""}
+                    </button>
+                  </TableHead>
+                  <TableHead className="w-14 text-right text-[10px] font-bold uppercase tracking-wide">Acciones</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -2557,9 +2694,8 @@ useEffect(() => {
                   </TableRow>
                 ) : null}
                 {!loading
-                  ? items.map((prospecto) => {
+                  ? sortedItems.map((prospecto) => {
                       const notas = extractProspectoNotes(prospecto.metadata)
-                      const consulta = resolveProspectoQueryLabel(prospecto.metadata, queryLabelMap)
                       const campaignName = extractProspectoCampaignName(prospecto.metadata)
                       const indicator = prospecto.id ? contactIndicators[prospecto.id] : undefined
                       const hasEnvios = (indicator?.total_envios ?? 0) > 0
@@ -2577,73 +2713,97 @@ useEffect(() => {
                           />
                           </TableCell>
                           <TableCell>
-                          <div className="font-medium">{prospecto.display_name || "Sin nombre"}</div>
+                          <div
+                            className="max-w-[220px] truncate text-[11px] font-medium"
+                            title={prospecto.display_name || "Sin nombre"}
+                          >
+                            {prospecto.display_name || "Sin nombre"}
+                          </div>
                           <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                            {prospecto.actividad ? <span>{prospecto.actividad}</span> : null}
+                            {prospecto.actividad ? (
+                              <span className="block max-w-[200px] truncate" title={prospecto.actividad}>
+                                {prospecto.actividad}
+                              </span>
+                            ) : null}
                             {prospecto.segmento ? (
-                              <Badge variant="outline" className="text-[11px]">
+                              <Badge variant="outline" className="text-[10px]">
                                 {prospecto.segmento}
                               </Badge>
                             ) : null}
                           </div>
                           {prospecto.address ? (
-                            <p className="mt-1 text-xs text-muted-foreground">{prospecto.address}</p>
+                            <p className="mt-1 max-w-[220px] truncate text-xs text-muted-foreground" title={prospecto.address}>
+                              {prospecto.address}
+                            </p>
                           ) : null}
                           {notas ? (
-                            <p className="mt-1 text-xs text-muted-foreground">Notas: {notas}</p>
-                          ) : null}
-                          </TableCell>
-                          <TableCell>
-                          <span className="text-sm">{prospecto.email || "—"}</span>
-                          </TableCell>
-                          <TableCell>
-                          <span className="text-sm">{prospecto.website || "—"}</span>
-                          </TableCell>
-                          <TableCell>
-                          <span className="text-sm">{prospecto.phone_e164 || prospecto.phone || "—"}</span>
-                          </TableCell>
-                          <TableCell>
-                          <span className="text-sm">{prospecto.carrier_type ? carrierLabel(prospecto.carrier_type) : "—"}</span>
-                          </TableCell>
-                          <TableCell>
-                          <LookupStatusBadge status={prospecto.lookup_status} />
-                          </TableCell>
-                          <TableCell>
-                          <div className="flex flex-wrap items-center gap-2">
-                            <Badge variant="outline">{FUENTE_LABELS[prospecto.fuente] ?? prospecto.fuente}</Badge>
-                            {prospecto.fuente_busqueda ? (
-                              <Badge variant="secondary">
-                                {FUENTE_BUSQUEDA_LABELS[prospecto.fuente_busqueda] ?? prospecto.fuente_busqueda}
-                              </Badge>
-                            ) : null}
-                            {typeof prospecto.distancia_m === "number" ? (
-                              <span className="text-xs text-muted-foreground">
-                                {formatDistance(prospecto.distancia_m)}
-                              </span>
-                            ) : null}
-                          </div>
-                          {consulta ? (
-                            <p className="mt-1 max-w-full break-words text-xs text-muted-foreground">
-                              Consulta: <span className="text-foreground">{consulta}</span>
+                            <p className="mt-1 max-w-[220px] truncate text-xs text-muted-foreground" title={`Notas: ${notas}`}>
+                              Notas: {notas}
                             </p>
                           ) : null}
                           </TableCell>
                           <TableCell>
+                          {(() => {
+                            const email = (prospecto.email || "").trim()
+                            const normalizedEmail = email ? email.toLowerCase() : ""
+                            return (
+                              <span className="block max-w-[160px] truncate text-[11px]" title={normalizedEmail || "—"}>
+                                {normalizedEmail || "—"}
+                              </span>
+                            )
+                          })()}
+                          </TableCell>
+                          <TableCell>
+                          {(() => {
+                            const websiteLabel = (prospecto.website || "").trim()
+                            const websiteHref = buildWebsiteHref(websiteLabel)
+                            if (!websiteLabel || !websiteHref) {
+                              return <span className="text-[11px] text-muted-foreground">—</span>
+                            }
+                            return (
+                              <a
+                                href={websiteHref}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center gap-1 text-[11px] font-medium text-primary hover:underline"
+                                title={websiteLabel}
+                              >
+                                <IconWorldSearch className="size-3.5" />
+                                Sitio web
+                              </a>
+                            )
+                          })()}
+                          </TableCell>
+                          <TableCell>
+                          <span className="text-[11px]">{prospecto.phone_e164 || prospecto.phone || "—"}</span>
+                          </TableCell>
+                          <TableCell>
+                          <span className="text-[11px]">{prospecto.carrier_type ? carrierLabel(prospecto.carrier_type) : "—"}</span>
+                          </TableCell>
+                          <TableCell>
+                          <LookupStatusBadge status={prospecto.lookup_status} className="text-[10px]" />
+                          </TableCell>
+                          <TableCell>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <Badge variant="outline" className="text-[10px]">{FUENTE_LABELS[prospecto.fuente] ?? prospecto.fuente}</Badge>
+                          </div>
+                          </TableCell>
+                          <TableCell>
                           {typeof prospecto.rating === "number" ? (
-                            <Badge variant="secondary">⭐ {prospecto.rating.toFixed(1)}</Badge>
+                            <Badge variant="secondary" className="text-[10px]">⭐ {prospecto.rating.toFixed(1)}</Badge>
                           ) : prospecto.estrato ? (
-                            <Badge variant="outline">{prospecto.estrato}</Badge>
+                            <Badge variant="outline" className="text-[10px]">{prospecto.estrato}</Badge>
                           ) : prospecto.segmento ? (
-                            <Badge variant="outline">{prospecto.segmento}</Badge>
+                            <Badge variant="outline" className="text-[10px]">{prospecto.segmento}</Badge>
                           ) : (
-                            <span className="text-sm text-muted-foreground">—</span>
+                            <span className="text-[11px] text-muted-foreground">—</span>
                           )}
                           </TableCell>
                           <TableCell>
-                          <span className="text-sm">{campaignName || (hasEnvios ? "Sí" : "No")}</span>
+                          <span className="text-[11px]">{campaignName || (hasEnvios ? "Sí" : "No")}</span>
                           </TableCell>
                           <TableCell>
-                          <span className="text-sm">{hasEnvios ? "Sí" : "No"}</span>
+                          <span className="text-[11px]">{hasEnvios ? "Sí" : "No"}</span>
                           </TableCell>
                           <TableCell className="text-right text-xs text-muted-foreground">
                           {formatDate(prospecto.creado_en)}
@@ -3363,14 +3523,14 @@ useEffect(() => {
   )
 }
 
-function LookupStatusBadge({ status }: { status?: string | null }) {
+function LookupStatusBadge({ status, className }: { status?: string | null; className?: string }) {
   if (!status) {
-    return <Badge variant="secondary">Pendiente</Badge>
+    return <Badge variant="secondary" className={className}>Pendiente</Badge>
   }
   const normalized = status.toLowerCase()
   const label = LOOKUP_STATUS_LABELS[normalized] ?? status
   const variant = LOOKUP_STATUS_VARIANTS[normalized] ?? "secondary"
-  return <Badge variant={variant}>{label}</Badge>
+  return <Badge variant={variant} className={className}>{label}</Badge>
 }
 
 function formatDate(value?: string | null) {
@@ -3524,16 +3684,6 @@ function EnrichmentChecklist({
   )
 }
 
-function formatDistance(meters?: number | null) {
-  if (typeof meters !== "number" || Number.isNaN(meters)) {
-    return null
-  }
-  if (meters >= 1000) {
-    return `${(meters / 1000).toFixed(1)} km`
-  }
-  return `${Math.round(meters)} m`
-}
-
 function carrierLabel(value: string | null | undefined) {
   if (!value) return ""
   const normalized = value.toLowerCase()
@@ -3546,6 +3696,22 @@ function carrierLabel(value: string | null | undefined) {
       return "VoIP"
     default:
       return normalized
+  }
+}
+
+function buildWebsiteHref(value: string | null | undefined): string | null {
+  const raw = (value || "").trim()
+  if (!raw) return null
+  try {
+    const absolute = new URL(raw)
+    return absolute.toString()
+  } catch {
+    try {
+      const prefixed = new URL(`https://${raw}`)
+      return prefixed.toString()
+    } catch {
+      return null
+    }
   }
 }
 
@@ -3563,35 +3729,6 @@ function extractProspectoNotes(metadata: unknown): string | null {
   }
   const trimmed = value.trim()
   return trimmed.length ? trimmed : null
-}
-
-function resolveProspectoQueryLabel(
-  metadata: unknown,
-  queryLabelMap: Map<string, string>
-): string | null {
-  if (!isRecord(metadata)) {
-    return null
-  }
-  const busquedaIdRaw = metadata["busqueda_id"]
-  if (typeof busquedaIdRaw === "string") {
-    const busquedaId = busquedaIdRaw.trim()
-    if (busquedaId.length) {
-      const label = queryLabelMap.get(busquedaId)
-      if (label) {
-        return label
-      }
-    }
-  }
-  for (const key of ["query", "busqueda_query"] as const) {
-    const value = metadata[key]
-    if (typeof value === "string") {
-      const trimmed = value.trim()
-      if (trimmed.length) {
-        return queryLabelMap.get(trimmed) ?? trimmed
-      }
-    }
-  }
-  return null
 }
 
 function extractProspectoCampaignName(metadata: unknown): string | null {
