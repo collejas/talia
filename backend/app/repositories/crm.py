@@ -7585,6 +7585,40 @@ class CRMRepository:
         if not data:
             raise CRMRepositoryError("prospecto_not_found")
 
+    async def delete_prospectos(
+        self,
+        *,
+        usuario_token: str,
+        prospecto_ids: list[UUID],
+    ) -> list[UUID]:
+        """Elimina prospectos en bloque y devuelve los IDs eliminados."""
+
+        if not prospecto_ids:
+            return []
+        ids = ",".join(str(value) for value in prospecto_ids)
+        resp = await self._request_with_user(
+            "DELETE",
+            "/rest/v1/prospeccion_prospectos",
+            token=usuario_token,
+            params={"id": f"in.({ids})"},
+            prefer="return=representation",
+        )
+        data = resp.json() or []
+        if not isinstance(data, list):
+            raise CRMRepositoryError("prospectos_delete_failed")
+        deleted_ids: list[UUID] = []
+        for item in data:
+            if isinstance(item, dict):
+                item_id = item.get("id")
+                if isinstance(item_id, str):
+                    try:
+                        deleted_ids.append(UUID(item_id))
+                    except ValueError:
+                        continue
+        if not deleted_ids:
+            raise CRMRepositoryError("prospectos_not_found")
+        return deleted_ids
+
     async def insert_prospecto_logs(
         self,
         *,

@@ -798,3 +798,13 @@ export async function eliminarProspecto(prospectoId: string) {
     method: "DELETE",
   })
 }
+
+/**
+ * Delete multiple prospects.
+ */
+export async function eliminarProspectos(prospectoIds: string[]) {
+  return requestJson<{ ok: boolean; prospecto_ids: string[] }>("/api/prospeccion/prospectos/bulk-delete", {
+    method: "POST",
+    body: JSON.stringify({ ids: prospectoIds }),
+  })
+}

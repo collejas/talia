@@ -65,6 +65,7 @@ import {
   crearProspectoManual,
   contactarProspectos,
   eliminarProspecto,
+  eliminarProspectos,
   convertirProspectoAContacto,
   type ConvertirProspectoPayload,
   listProspectos,
@@ -471,6 +472,9 @@ function ProspectosView() {
   const [deleteTarget, setDeleteTarget] = useState<ProspectoItem | null>(null)
   const [deleteError, setDeleteError] = useState<string | null>(null)
   const [deleteLoading, setDeleteLoading] = useState(false)
+  const [bulkDeleteDialogOpen, setBulkDeleteDialogOpen] = useState(false)
+  const [bulkDeleteError, setBulkDeleteError] = useState<string | null>(null)
+  const [bulkDeleteLoading, setBulkDeleteLoading] = useState(false)
   const [contactDrawerOpen, setContactDrawerOpen] = useState(false)
   const [contactDrawerData, setContactDrawerData] = useState<ContactDrawerData | null>(null)
   const [contactIndicators, setContactIndicators] = useState<Record<string, ProspectoContactIndicators>>({})
@@ -1710,6 +1714,29 @@ useEffect(() => {
     }
   }, [deleteTarget, fetchProspectos, fetchStageSummary, items.length, limit, offset])
 
+  const handleBulkDeleteConfirm = useCallback(async () => {
+    if (!selectedIds.length) return
+    setBulkDeleteLoading(true)
+    setBulkDeleteError(null)
+    try {
+      await eliminarProspectos(selectedIds)
+      setBanner({
+        type: "success",
+        message: `Se eliminaron ${selectedIds.length} prospecto${selectedIds.length === 1 ? "" : "s"}.`,
+      })
+      const shouldGoBack = offset >= limit && selectedIds.length >= items.length
+      const nextOffset = shouldGoBack ? Math.max(0, offset - limit) : offset
+      await fetchProspectos(nextOffset)
+      setBulkDeleteDialogOpen(false)
+      void fetchStageSummary()
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "No se pudieron eliminar los prospectos."
+      setBulkDeleteError(message)
+    } finally {
+      setBulkDeleteLoading(false)
+    }
+  }, [fetchProspectos, fetchStageSummary, items.length, limit, offset, selectedIds])
+
   return (
     <div className="space-y-4">
       {banner ? (
@@ -2306,43 +2333,43 @@ useEffect(() => {
         </DrawerContent>
       </Drawer>
       <section id="prospectos" className="overflow-hidden rounded-lg border bg-card shadow-sm">
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b px-4 py-3 sm:px-6">
-          <div>
-            <p className="text-sm font-medium">Prospectos guardados</p>
-            <p className="text-xs text-muted-foreground">
-              {showingFrom}-{Math.max(showingFrom, showingTo)} de {total} registros · Página {currentPage} de{" "}
-              {Math.max(pageCount, 1)}
-            </p>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <Button size="sm" onClick={handleOpenCreateDialog}>
-              <IconPlus className="mr-1.5 size-4" />
-              Agregar prospecto
-            </Button>
-            <Button variant="ghost" size="sm" onClick={() => void fetchProspectos(offset)} disabled={loading}>
-              <IconRefresh className={cn("mr-1.5 size-4", loading && "animate-spin")} />
-              Actualizar
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => void handleVerify()}
-              disabled={!selectedCount || action === "lookup"}
-            >
-              <IconPhoneCheck className={cn("mr-1.5 size-4", action === "lookup" && "animate-spin")} />
-              Verificar teléfonos
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => void handleScraperSelected()}
-              disabled={!selectedCount || checklistAction === "scraper"}
-            >
-              <IconWorldSearch
-                className={cn("mr-1.5 size-4", checklistAction === "scraper" && "animate-spin")}
-              />
-              Scraper seleccionados
-            </Button>
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b px-4 py-3 sm:px-6">
+            <div>
+              <p className="text-sm font-medium">Prospectos guardados</p>
+              <p className="text-xs text-muted-foreground">
+                {showingFrom}-{Math.max(showingFrom, showingTo)} de {total} registros · Página {currentPage} de{" "}
+                {Math.max(pageCount, 1)}
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button size="sm" onClick={handleOpenCreateDialog}>
+                <IconPlus className="mr-1.5 size-4" />
+                Agregar prospecto
+              </Button>
+              <Button variant="ghost" size="sm" onClick={() => void fetchProspectos(offset)} disabled={loading}>
+                <IconRefresh className={cn("mr-1.5 size-4", loading && "animate-spin")} />
+                Actualizar
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => void handleVerify()}
+                disabled={!selectedCount || action === "lookup"}
+              >
+                <IconPhoneCheck className={cn("mr-1.5 size-4", action === "lookup" && "animate-spin")} />
+                Verificar teléfonos
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => void handleScraperSelected()}
+                disabled={!selectedCount || checklistAction === "scraper"}
+              >
+                <IconWorldSearch
+                  className={cn("mr-1.5 size-4", checklistAction === "scraper" && "animate-spin")}
+                />
+                Scraper seleccionados
+              </Button>
             <Button size="sm" onClick={handlePlannerOpen}>
               <IconSparkles className="mr-1.5 size-4" />
               Preparar envíos
@@ -2352,224 +2379,233 @@ useEffect(() => {
                 </span>
               ) : null}
             </Button>
-          </div>
-        </div>
-
-        {error ? (
-          <div className="flex flex-wrap items-center gap-2 border-b border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive sm:px-6">
-            <IconAlertTriangle className="size-4" />
-            <span className="flex-1">{error}</span>
-            <Button variant="outline" size="sm" onClick={() => void fetchProspectos(offset)} disabled={loading}>
-              Reintentar
+            <Button
+              variant="destructive"
+              size="sm"
+              onClick={() => setBulkDeleteDialogOpen(true)}
+              disabled={!selectedCount}
+            >
+              <IconTrash className="mr-1.5 size-4" />
+              Eliminar seleccionados
             </Button>
           </div>
-        ) : null}
-
-        <div className="overflow-x-auto">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="w-10">
-                  <Checkbox
-                    aria-label="Seleccionar todos los prospectos"
-                    checked={allSelected ? true : selected.size ? "indeterminate" : false}
-                    onCheckedChange={(value) => handleToggleAll(value === true)}
-                    disabled={!items.length}
-                  />
-                </TableHead>
-                <TableHead>Prospecto</TableHead>
-                <TableHead>Contacto</TableHead>
-                <TableHead>Verificación</TableHead>
-                <TableHead>Fuente y contexto</TableHead>
-                <TableHead className="text-right">Creado</TableHead>
-                <TableHead className="w-14 text-right">Acciones</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {loading ? (
-                <TableRow>
-                  <TableCell colSpan={7} className="py-10 text-center text-sm text-muted-foreground">
-                    <IconLoader className="mr-2 inline size-4 animate-spin" />
-                    Cargando prospectos...
-                  </TableCell>
-                </TableRow>
-              ) : null}
-              {!loading && !items.length ? (
-                <TableRow>
-                  <TableCell colSpan={7} className="py-10 text-center text-sm text-muted-foreground">
-                    No hay prospectos con los filtros actuales.
-                  </TableCell>
-                </TableRow>
-              ) : null}
-              {!loading
-                ? items.map((prospecto) => {
-                    const notas = extractProspectoNotes(prospecto.metadata)
-                    const consulta = extractProspectoQuery(prospecto.metadata)
-                    return (
-                      <TableRow key={prospecto.id}>
-                        <TableCell>
-                        <Checkbox
-                          aria-label={`Seleccionar ${prospecto.display_name ?? "prospecto"}`}
-                          checked={prospecto.id ? selected.has(prospecto.id) : false}
-                          onCheckedChange={(value) => {
-                            if (!prospecto.id) return
-                            handleToggleRow(prospecto.id, value === true)
-                          }}
-                          disabled={!prospecto.id}
-                        />
-                        </TableCell>
-                        <TableCell>
-                        <div className="font-medium">{prospecto.display_name || "Sin nombre"}</div>
-                        <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                          {prospecto.actividad ? <span>{prospecto.actividad}</span> : null}
-                          {prospecto.segmento ? (
-                            <Badge variant="outline" className="text-[11px]">
-                              {prospecto.segmento}
-                            </Badge>
-                          ) : null}
-                        </div>
-                        {prospecto.address ? (
-                          <p className="mt-1 text-xs text-muted-foreground">{prospecto.address}</p>
-                        ) : null}
-                        {notas ? (
-                          <p className="mt-1 text-xs text-muted-foreground">Notas: {notas}</p>
-                        ) : null}
-                        </TableCell>
-                        <TableCell>
-                        <div className="text-sm">{prospecto.phone_e164 || prospecto.phone || "—"}</div>
-                        {prospecto.email ? (
-                          <div className="text-xs text-muted-foreground">{prospecto.email}</div>
-                        ) : null}
-                        <ProspectChannelBadges prospecto={prospecto} />
-                        <ProspectContactIndicatorsView
-                          indicator={prospecto.id ? contactIndicators[prospecto.id] : undefined}
-                          loading={contactIndicatorsLoading}
-                          error={contactIndicatorsError}
-                        />
-                        </TableCell>
-                        <TableCell>
-                        <LookupStatusBadge status={prospecto.lookup_status} />
-                        {prospecto.carrier_type ? (
-                          <p className="mt-1 text-xs text-muted-foreground">
-                            Línea: {carrierLabel(prospecto.carrier_type)}
-                          </p>
-                        ) : null}
-                        </TableCell>
-                        <TableCell>
-                        <div className="flex flex-wrap items-center gap-2">
-                          <Badge variant="outline">{FUENTE_LABELS[prospecto.fuente] ?? prospecto.fuente}</Badge>
-                          {prospecto.fuente_busqueda ? (
-                            <Badge variant="secondary">
-                              {FUENTE_BUSQUEDA_LABELS[prospecto.fuente_busqueda] ?? prospecto.fuente_busqueda}
-                            </Badge>
-                          ) : null}
-                          {typeof prospecto.rating === "number" ? (
-                            <Badge variant="secondary">⭐ {prospecto.rating.toFixed(1)}</Badge>
-                          ) : null}
-                          {typeof prospecto.distancia_m === "number" ? (
-                            <span className="text-xs text-muted-foreground">
-                              {formatDistance(prospecto.distancia_m)}
-                            </span>
-                          ) : null}
-                        </div>
-                        {prospecto.website ? (
-                          <p className="mt-1 text-xs text-muted-foreground">{prospecto.website}</p>
-                        ) : null}
-                        {consulta ? (
-                          <p className="mt-1 max-w-full break-words text-xs text-muted-foreground">
-                            Consulta: <span className="text-foreground">{consulta}</span>
-                          </p>
-                        ) : null}
-                        </TableCell>
-                        <TableCell className="text-right text-xs text-muted-foreground">
-                        {formatDate(prospecto.creado_en)}
-                        </TableCell>
-                        <TableCell className="text-right">
-                        {prospecto.id ? (
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button variant="ghost" size="icon" className="size-8" aria-label="Acciones del prospecto">
-                                <IconDotsVertical className="size-4" />
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end" className="w-40">
-                              <DropdownMenuItem onClick={() => handleOpenEditDialog(prospecto)}>
-                                <IconPencil className="size-4" />
-                                Editar
-                              </DropdownMenuItem>
-                              <DropdownMenuItem onClick={() => void handleOpenHistoryDialog(prospecto)}>
-                                <IconHistory className="size-4" />
-                                Historial de contacto
-                              </DropdownMenuItem>
-                              <DropdownMenuItem onClick={() => handleOpenConvertDialog(prospecto)}>
-                                <IconTargetArrow className="size-4" />
-                                Convertir a CRM
-                              </DropdownMenuItem>
-                              <DropdownMenuItem
-                                variant="destructive"
-                                onClick={() => handleOpenDeleteDialog(prospecto)}
-                              >
-                                <IconTrash className="size-4" />
-                                Eliminar
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        ) : (
-                          <span className="text-xs text-muted-foreground">—</span>
-                        )}
-                        </TableCell>
-                      </TableRow>
-                    )
-                  })
-                : null}
-            </TableBody>
-          </Table>
         </div>
 
-        <div className="flex flex-wrap items-center justify-between gap-3 border-t px-4 py-3 text-sm text-muted-foreground sm:px-6">
-          <div>
-            {selectedCount ? (
-              <span className="font-medium text-foreground">{selectedCount} seleccionados.</span>
-            ) : (
-              <span>Sin prospectos seleccionados.</span>
-            )}
-          </div>
-          <div className="flex flex-wrap items-center gap-3">
-            <div className="flex items-center gap-2">
-              <span className="text-xs">Filas:</span>
-              <Select value={String(limit)} onValueChange={handleLimitChange}>
-                <SelectTrigger className="h-8 w-24">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {PAGE_SIZE_OPTIONS.map((value) => (
-                    <SelectItem key={value} value={String(value)}>
-                      {value}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="flex items-center gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => void fetchProspectos(Math.max(0, offset - limit))}
-                disabled={loading || offset === 0}
-              >
-                Anterior
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => void fetchProspectos(offset + limit)}
-                disabled={loading || offset + limit >= total}
-              >
-                Siguiente
+          {error ? (
+            <div className="flex flex-wrap items-center gap-2 border-b border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive sm:px-6">
+              <IconAlertTriangle className="size-4" />
+              <span className="flex-1">{error}</span>
+              <Button variant="outline" size="sm" onClick={() => void fetchProspectos(offset)} disabled={loading}>
+                Reintentar
               </Button>
             </div>
+          ) : null}
+
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-10">
+                    <Checkbox
+                      aria-label="Seleccionar todos los prospectos"
+                      checked={allSelected ? true : selected.size ? "indeterminate" : false}
+                      onCheckedChange={(value) => handleToggleAll(value === true)}
+                      disabled={!items.length}
+                    />
+                  </TableHead>
+                  <TableHead>Prospecto</TableHead>
+                  <TableHead>Contacto</TableHead>
+                  <TableHead>Verificación</TableHead>
+                  <TableHead>Fuente y contexto</TableHead>
+                  <TableHead className="text-right">Creado</TableHead>
+                  <TableHead className="w-14 text-right">Acciones</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {loading ? (
+                  <TableRow>
+                    <TableCell colSpan={7} className="py-10 text-center text-sm text-muted-foreground">
+                      <IconLoader className="mr-2 inline size-4 animate-spin" />
+                      Cargando prospectos...
+                    </TableCell>
+                  </TableRow>
+                ) : null}
+                {!loading && !items.length ? (
+                  <TableRow>
+                    <TableCell colSpan={7} className="py-10 text-center text-sm text-muted-foreground">
+                      No hay prospectos con los filtros actuales.
+                    </TableCell>
+                  </TableRow>
+                ) : null}
+                {!loading
+                  ? items.map((prospecto) => {
+                      const notas = extractProspectoNotes(prospecto.metadata)
+                      const consulta = extractProspectoQuery(prospecto.metadata)
+                      return (
+                        <TableRow key={prospecto.id}>
+                          <TableCell>
+                          <Checkbox
+                            aria-label={`Seleccionar ${prospecto.display_name ?? "prospecto"}`}
+                            checked={prospecto.id ? selected.has(prospecto.id) : false}
+                            onCheckedChange={(value) => {
+                              if (!prospecto.id) return
+                              handleToggleRow(prospecto.id, value === true)
+                            }}
+                            disabled={!prospecto.id}
+                          />
+                          </TableCell>
+                          <TableCell>
+                          <div className="font-medium">{prospecto.display_name || "Sin nombre"}</div>
+                          <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                            {prospecto.actividad ? <span>{prospecto.actividad}</span> : null}
+                            {prospecto.segmento ? (
+                              <Badge variant="outline" className="text-[11px]">
+                                {prospecto.segmento}
+                              </Badge>
+                            ) : null}
+                          </div>
+                          {prospecto.address ? (
+                            <p className="mt-1 text-xs text-muted-foreground">{prospecto.address}</p>
+                          ) : null}
+                          {notas ? (
+                            <p className="mt-1 text-xs text-muted-foreground">Notas: {notas}</p>
+                          ) : null}
+                          </TableCell>
+                          <TableCell>
+                          <div className="text-sm">{prospecto.phone_e164 || prospecto.phone || "—"}</div>
+                          {prospecto.email ? (
+                            <div className="text-xs text-muted-foreground">{prospecto.email}</div>
+                          ) : null}
+                          <ProspectChannelBadges prospecto={prospecto} />
+                          <ProspectContactIndicatorsView
+                            indicator={prospecto.id ? contactIndicators[prospecto.id] : undefined}
+                            loading={contactIndicatorsLoading}
+                            error={contactIndicatorsError}
+                          />
+                          </TableCell>
+                          <TableCell>
+                          <LookupStatusBadge status={prospecto.lookup_status} />
+                          {prospecto.carrier_type ? (
+                            <p className="mt-1 text-xs text-muted-foreground">
+                              Línea: {carrierLabel(prospecto.carrier_type)}
+                            </p>
+                          ) : null}
+                          </TableCell>
+                          <TableCell>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <Badge variant="outline">{FUENTE_LABELS[prospecto.fuente] ?? prospecto.fuente}</Badge>
+                            {prospecto.fuente_busqueda ? (
+                              <Badge variant="secondary">
+                                {FUENTE_BUSQUEDA_LABELS[prospecto.fuente_busqueda] ?? prospecto.fuente_busqueda}
+                              </Badge>
+                            ) : null}
+                            {typeof prospecto.rating === "number" ? (
+                              <Badge variant="secondary">⭐ {prospecto.rating.toFixed(1)}</Badge>
+                            ) : null}
+                            {typeof prospecto.distancia_m === "number" ? (
+                              <span className="text-xs text-muted-foreground">
+                                {formatDistance(prospecto.distancia_m)}
+                              </span>
+                            ) : null}
+                          </div>
+                          {prospecto.website ? (
+                            <p className="mt-1 text-xs text-muted-foreground">{prospecto.website}</p>
+                          ) : null}
+                          {consulta ? (
+                            <p className="mt-1 max-w-full break-words text-xs text-muted-foreground">
+                              Consulta: <span className="text-foreground">{consulta}</span>
+                            </p>
+                          ) : null}
+                          </TableCell>
+                          <TableCell className="text-right text-xs text-muted-foreground">
+                          {formatDate(prospecto.creado_en)}
+                          </TableCell>
+                          <TableCell className="text-right">
+                          {prospecto.id ? (
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" size="icon" className="size-8" aria-label="Acciones del prospecto">
+                                  <IconDotsVertical className="size-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end" className="w-40">
+                                <DropdownMenuItem onClick={() => handleOpenEditDialog(prospecto)}>
+                                  <IconPencil className="size-4" />
+                                  Editar
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => void handleOpenHistoryDialog(prospecto)}>
+                                  <IconHistory className="size-4" />
+                                  Historial de contacto
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => handleOpenConvertDialog(prospecto)}>
+                                  <IconTargetArrow className="size-4" />
+                                  Convertir a CRM
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  variant="destructive"
+                                  onClick={() => handleOpenDeleteDialog(prospecto)}
+                                >
+                                  <IconTrash className="size-4" />
+                                  Eliminar
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          ) : (
+                            <span className="text-xs text-muted-foreground">—</span>
+                          )}
+                          </TableCell>
+                        </TableRow>
+                      )
+                    })
+                  : null}
+              </TableBody>
+            </Table>
           </div>
-        </div>
+
+          <div className="flex flex-wrap items-center justify-between gap-3 border-t px-4 py-3 text-sm text-muted-foreground sm:px-6">
+            <div>
+              {selectedCount ? (
+                <span className="font-medium text-foreground">{selectedCount} seleccionados.</span>
+              ) : (
+                <span>Sin prospectos seleccionados.</span>
+              )}
+            </div>
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="flex items-center gap-2">
+                <span className="text-xs">Filas:</span>
+                <Select value={String(limit)} onValueChange={handleLimitChange}>
+                  <SelectTrigger className="h-8 w-24">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {PAGE_SIZE_OPTIONS.map((value) => (
+                      <SelectItem key={value} value={String(value)}>
+                        {value}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => void fetchProspectos(Math.max(0, offset - limit))}
+                  disabled={loading || offset === 0}
+                >
+                  Anterior
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => void fetchProspectos(offset + limit)}
+                  disabled={loading || offset + limit >= total}
+                >
+                  Siguiente
+                </Button>
+              </div>
+            </div>
+          </div>
       </section>
 
       <Dialog open={contactDialogOpen} onOpenChange={setContactDialogOpen}>
@@ -2974,6 +3010,47 @@ useEffect(() => {
             </Button>
             <Button variant="destructive" onClick={() => void handleDeleteConfirm()} disabled={deleteLoading}>
               {deleteLoading ? (
+                <>
+                  <IconLoader className="mr-2 size-4 animate-spin" />
+                  Eliminando...
+                </>
+              ) : (
+                <>
+                  <IconTrash className="mr-2 size-4" />
+                  Eliminar
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={bulkDeleteDialogOpen} onOpenChange={setBulkDeleteDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Eliminar prospectos seleccionados</DialogTitle>
+            <DialogDescription>
+              Esta acción no se puede deshacer. Se eliminarán los prospectos seleccionados y todo su historial.
+            </DialogDescription>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            ¿Deseas eliminar{" "}
+            <span className="font-semibold text-foreground">
+              {selectedCount} prospecto{selectedCount === 1 ? "" : "s"}
+            </span>
+            ?
+          </p>
+          {bulkDeleteError ? <p className="text-sm text-destructive">{bulkDeleteError}</p> : null}
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setBulkDeleteDialogOpen(false)}>
+              Cancelar
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => void handleBulkDeleteConfirm()}
+              disabled={bulkDeleteLoading}
+            >
+              {bulkDeleteLoading ? (
                 <>
                   <IconLoader className="mr-2 size-4 animate-spin" />
                   Eliminando...

@@ -1307,6 +1307,31 @@ class DeleteResultadosPayload(BaseModel):
         return deduped
 
 
+class ProspectoDeletePayload(BaseModel):
+    """IDs de prospectos a eliminar."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    ids: list[UUID] = Field(
+        ...,
+        min_length=1,
+        max_length=500,
+        description="IDs de prospectos (uuid) a eliminar.",
+    )
+
+    @field_validator("ids")
+    @classmethod
+    def _dedupe_ids(cls, value: list[UUID]) -> list[UUID]:
+        seen: set[UUID] = set()
+        deduped: list[UUID] = []
+        for item in value:
+            if item in seen:
+                continue
+            seen.add(item)
+            deduped.append(item)
+        return deduped
+
+
 class ProspectoSeleccionPayload(BaseModel):
     """IDs de resultados a convertir en prospectos."""
 
@@ -12822,6 +12847,27 @@ async def eliminar_prospecto(
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
     return {"ok": True, "prospecto_id": str(prospecto_id)}
+
+
+@router.post("/prospeccion/prospectos/bulk-delete")
+async def eliminar_prospectos(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    _: str = Depends(require_permission("ejecutar_busquedas")),
+    user_token: str = Depends(require_user_token),
+    payload: ProspectoDeletePayload,
+) -> dict[str, Any]:
+    """Elimina prospectos en bloque y registra auditoría vía trigger."""
+
+    try:
+        deleted_ids = await repo.delete_prospectos(
+            usuario_token=user_token,
+            prospecto_ids=payload.ids,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    return {"ok": True, "prospecto_ids": [str(value) for value in deleted_ids]}
 
 
 @router.post("/prospeccion/prospectos/verificar-telefonos")
