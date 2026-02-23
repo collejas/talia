@@ -4342,10 +4342,29 @@ async def _execute_function_call(
         return {"status": "ok", "fraccionamientos": rows}
 
     if name == "list_catalog_modelos":
-        org_value = arguments.get("organizacion_id")
-        if not org_value:
+        org_value_raw = arguments.get("organizacion_id")
+        org_value = str(org_value_raw).strip() if org_value_raw else None
+        contact = None
+        contact_org = None
+        if context.contact_id:
             contact = await _resolve_contact(context.contact_id)
-            org_value = _extract_contact_org(contact)
+            contact_org = _extract_contact_org(contact)
+        # No confiar ciegamente en el argumento del LLM para evitar cruces de tenant.
+        # Si tenemos org del contacto, esa es la fuente canónica.
+        if contact_org:
+            if org_value and org_value != contact_org and org_value != context.conversation_id:
+                logger.warning(
+                    "catalog.org_argument_mismatch",
+                    extra={
+                        "tool": "list_catalog_modelos",
+                        "conversation_id": context.conversation_id,
+                        "arg_organizacion_id": org_value,
+                        "contact_organizacion_id": contact_org,
+                    },
+                )
+            org_value = contact_org
+        elif not org_value or org_value == context.conversation_id:
+            org_value = contact_org
         if not org_value:
             raise ValueError("organizacion_id requerido para list_catalog_modelos")
         resolved = _resolve_org_uuid(org_value)
@@ -4400,10 +4419,29 @@ async def _execute_function_call(
         return {"status": "ok", **result}
 
     if name == "fetch_catalog_item_details":
-        org_value = arguments.get("organizacion_id")
-        if not org_value:
+        org_value_raw = arguments.get("organizacion_id")
+        org_value = str(org_value_raw).strip() if org_value_raw else None
+        contact = None
+        contact_org = None
+        if context.contact_id:
             contact = await _resolve_contact(context.contact_id)
-            org_value = _extract_contact_org(contact)
+            contact_org = _extract_contact_org(contact)
+        # No confiar ciegamente en el argumento del LLM para evitar cruces de tenant.
+        # Si tenemos org del contacto, esa es la fuente canónica.
+        if contact_org:
+            if org_value and org_value != contact_org and org_value != context.conversation_id:
+                logger.warning(
+                    "catalog.org_argument_mismatch",
+                    extra={
+                        "tool": "fetch_catalog_item_details",
+                        "conversation_id": context.conversation_id,
+                        "arg_organizacion_id": org_value,
+                        "contact_organizacion_id": contact_org,
+                    },
+                )
+            org_value = contact_org
+        elif not org_value or org_value == context.conversation_id:
+            org_value = contact_org
         if not org_value:
             raise ValueError("organizacion_id requerido para fetch_catalog_item_details")
         resolved = _resolve_org_uuid(org_value)
