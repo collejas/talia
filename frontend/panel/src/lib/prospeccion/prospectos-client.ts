@@ -8,6 +8,7 @@ export type ProspectoItem = {
   id: string
   display_name: string | null
   actividad: string | null
+  estrato?: string | null
   phone: string | null
   phone_e164?: string | null
   email: string | null

@@ -562,9 +562,12 @@ const [selectedTemplates, setSelectedTemplates] = useState<Record<string, string
     }
     return ordered
   }
+  const queryLabelMap = useMemo(
+    () => new Map(queryOptions.map((option) => [option.value, option.label])),
+    [queryOptions]
+  )
 
   const selectionChips = useMemo(() => {
-    const queryLabelMap = new Map(queryOptions.map((option) => [option.value, option.label]))
     const chips: string[] = []
     if (filters.fuente) {
       chips.push(`Fuente: ${FUENTE_LABELS[filters.fuente] ?? filters.fuente}`)
@@ -596,7 +599,7 @@ const [selectedTemplates, setSelectedTemplates] = useState<Record<string, string
       chips.push(`Fecha: ${dateChip}`)
     }
     return chips
-  }, [filters, queryOptions])
+  }, [filters, queryLabelMap])
   const fetchProspectos = useCallback(
     async (nextOffset = 0) => {
       setLoading(true)
@@ -2556,7 +2559,7 @@ useEffect(() => {
                 {!loading
                   ? items.map((prospecto) => {
                       const notas = extractProspectoNotes(prospecto.metadata)
-                      const consulta = extractProspectoQuery(prospecto.metadata)
+                      const consulta = resolveProspectoQueryLabel(prospecto.metadata, queryLabelMap)
                       const campaignName = extractProspectoCampaignName(prospecto.metadata)
                       const indicator = prospecto.id ? contactIndicators[prospecto.id] : undefined
                       const hasEnvios = (indicator?.total_envios ?? 0) > 0
@@ -2613,9 +2616,6 @@ useEffect(() => {
                                 {FUENTE_BUSQUEDA_LABELS[prospecto.fuente_busqueda] ?? prospecto.fuente_busqueda}
                               </Badge>
                             ) : null}
-                            {typeof prospecto.rating === "number" ? (
-                              <Badge variant="secondary">⭐ {prospecto.rating.toFixed(1)}</Badge>
-                            ) : null}
                             {typeof prospecto.distancia_m === "number" ? (
                               <span className="text-xs text-muted-foreground">
                                 {formatDistance(prospecto.distancia_m)}
@@ -2631,6 +2631,8 @@ useEffect(() => {
                           <TableCell>
                           {typeof prospecto.rating === "number" ? (
                             <Badge variant="secondary">⭐ {prospecto.rating.toFixed(1)}</Badge>
+                          ) : prospecto.estrato ? (
+                            <Badge variant="outline">{prospecto.estrato}</Badge>
                           ) : prospecto.segmento ? (
                             <Badge variant="outline">{prospecto.segmento}</Badge>
                           ) : (
@@ -3563,16 +3565,29 @@ function extractProspectoNotes(metadata: unknown): string | null {
   return trimmed.length ? trimmed : null
 }
 
-function extractProspectoQuery(metadata: unknown): string | null {
+function resolveProspectoQueryLabel(
+  metadata: unknown,
+  queryLabelMap: Map<string, string>
+): string | null {
   if (!isRecord(metadata)) {
     return null
+  }
+  const busquedaIdRaw = metadata["busqueda_id"]
+  if (typeof busquedaIdRaw === "string") {
+    const busquedaId = busquedaIdRaw.trim()
+    if (busquedaId.length) {
+      const label = queryLabelMap.get(busquedaId)
+      if (label) {
+        return label
+      }
+    }
   }
   for (const key of ["query", "busqueda_query"] as const) {
     const value = metadata[key]
     if (typeof value === "string") {
       const trimmed = value.trim()
       if (trimmed.length) {
-        return trimmed
+        return queryLabelMap.get(trimmed) ?? trimmed
       }
     }
   }
