@@ -652,6 +652,58 @@ const [selectedTemplates, setSelectedTemplates] = useState<Record<string, string
     [filters, limit]
   )
 
+  const appendProspectos = useCallback(
+    async (startOffset: number, needed: number) => {
+      if (needed <= 0) return
+      try {
+        const phonePresent = resolvePresenceFlag(
+          filters.contactFilters.includes("phone_has"),
+          filters.contactFilters.includes("phone_missing")
+        )
+        const emailPresent = resolvePresenceFlag(
+          filters.contactFilters.includes("email_has"),
+          filters.contactFilters.includes("email_missing")
+        )
+        const websitePresent = resolvePresenceFlag(
+          filters.contactFilters.includes("website_has"),
+          filters.contactFilters.includes("website_missing")
+        )
+        const { from: dateFrom, to: dateTo } = getDateRangeFromFilters(
+          filters.dateOption,
+          filters.customDateFrom,
+          filters.customDateTo
+        )
+        const response = await listProspectos({
+          limit: needed,
+          offset: startOffset,
+          search: filters.search || undefined,
+          fuente: filters.fuente || undefined,
+          lookupStatus: filters.lookupStatus || undefined,
+          segmento: filters.segmento || undefined,
+          carrierType: filters.carrierType || undefined,
+          order: filters.order,
+          phonePresent,
+          emailPresent,
+          websitePresent,
+          metadataQueries: filters.queryFilters.length ? filters.queryFilters : undefined,
+          actividades: filters.actividadFilters.length ? filters.actividadFilters : undefined,
+          dateFrom,
+          dateTo,
+        })
+        const rows = response.items ?? []
+        if (rows.length) {
+          setItems((prev) => [...prev, ...rows])
+        }
+        if (typeof response.total === "number") {
+          setTotal(response.total)
+        }
+      } catch {
+        // Silencioso: solo relleno de huecos.
+      }
+    },
+    [filters]
+  )
+
   useEffect(() => {
     void fetchProspectos(0)
   }, [fetchProspectos])
@@ -1696,14 +1748,26 @@ useEffect(() => {
     setDeleteLoading(true)
     setDeleteError(null)
     try {
-      await eliminarProspecto(deleteTarget.id)
+      const response = await eliminarProspecto(deleteTarget.id)
+      const deletedId = response.prospecto_id ?? deleteTarget.id
+      const removedCount = items.some((item) => item.id === deletedId) ? 1 : 0
+      const nextItems = items.filter((item) => item.id !== deletedId)
+      setItems(nextItems)
+      setSelected((prev) => {
+        if (!prev.has(deletedId)) return prev
+        const next = new Set(prev)
+        next.delete(deletedId)
+        return next
+      })
+      const nextTotal = Math.max(0, total - removedCount)
+      if (removedCount) setTotal(nextTotal)
+      if (nextItems.length < limit && offset + nextItems.length < nextTotal) {
+        void appendProspectos(offset + nextItems.length, limit - nextItems.length)
+      }
       setBanner({
         type: "success",
         message: `${deleteTarget.display_name ?? "El prospecto"} fue eliminado.`,
       })
-      const shouldGoBack = offset >= limit && items.length <= 1
-      const nextOffset = shouldGoBack ? Math.max(0, offset - limit) : offset
-      await fetchProspectos(nextOffset)
       setDeleteDialogOpen(false)
       void fetchStageSummary()
     } catch (err) {
@@ -1712,21 +1776,34 @@ useEffect(() => {
     } finally {
       setDeleteLoading(false)
     }
-  }, [deleteTarget, fetchProspectos, fetchStageSummary, items.length, limit, offset])
+  }, [appendProspectos, deleteTarget, fetchStageSummary, items, limit, offset, total])
 
   const handleBulkDeleteConfirm = useCallback(async () => {
     if (!selectedIds.length) return
     setBulkDeleteLoading(true)
     setBulkDeleteError(null)
     try {
-      await eliminarProspectos(selectedIds)
+      const response = await eliminarProspectos(selectedIds)
+      const deletedIds = response.prospecto_ids ?? selectedIds
+      const deletedSet = new Set(deletedIds)
+      const removedCount = items.reduce((acc, item) => (item.id && deletedSet.has(item.id) ? acc + 1 : acc), 0)
+      const nextItems = items.filter((item) => !item.id || !deletedSet.has(item.id))
+      setItems(nextItems)
+      setSelected((prev) => {
+        if (!prev.size) return prev
+        const next = new Set(prev)
+        deletedSet.forEach((id) => next.delete(id))
+        return next
+      })
+      const nextTotal = Math.max(0, total - removedCount)
+      if (removedCount) setTotal(nextTotal)
+      if (nextItems.length < limit && offset + nextItems.length < nextTotal) {
+        void appendProspectos(offset + nextItems.length, limit - nextItems.length)
+      }
       setBanner({
         type: "success",
         message: `Se eliminaron ${selectedIds.length} prospecto${selectedIds.length === 1 ? "" : "s"}.`,
       })
-      const shouldGoBack = offset >= limit && selectedIds.length >= items.length
-      const nextOffset = shouldGoBack ? Math.max(0, offset - limit) : offset
-      await fetchProspectos(nextOffset)
       setBulkDeleteDialogOpen(false)
       void fetchStageSummary()
     } catch (err) {
@@ -1735,7 +1812,7 @@ useEffect(() => {
     } finally {
       setBulkDeleteLoading(false)
     }
-  }, [fetchProspectos, fetchStageSummary, items.length, limit, offset, selectedIds])
+  }, [appendProspectos, fetchStageSummary, items, limit, offset, selectedIds, total])
 
   return (
     <div className="space-y-4">
