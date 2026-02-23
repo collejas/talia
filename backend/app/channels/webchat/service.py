@@ -3312,6 +3312,25 @@ async def _run_assistant_turn(
             ],
         }
     )
+    profiling_enabled_for_channel = True
+    if organizacion_id:
+        resolved_org = _resolve_org_uuid(organizacion_id)
+        if resolved_org:
+            try:
+                profiling_enabled_for_channel = await tenant_runtime.is_profiling_enabled(
+                    organizacion_id=UUID(resolved_org),
+                    channel="webchat",
+                )
+            except Exception as exc:  # pragma: no cover
+                logger.warning(
+                    "webchat.profiling_toggle_lookup_failed",
+                    extra={
+                        "conversation_id": context.conversation_id,
+                        "organizacion_id": organizacion_id,
+                        "error": str(exc),
+                    },
+                )
+
     base_input.append(
         {
             "role": "developer",
@@ -3324,6 +3343,14 @@ async def _run_assistant_turn(
                         "profiling_statuses debe usar solo: answered, unknown, refused, skipped_max_retries. "
                         "Si un campo no se obtiene tras la repregunta máxima, marca skipped_max_retries y continua. "
                         "No fuerces repreguntas adicionales."
+                        if profiling_enabled_for_channel
+                        else "Perfilamiento IA desactivado para este tenant/canal. "
+                        "No hagas preguntas de perfilamiento o scoring. "
+                        "No envíes campos de scoring en close_lead "
+                        "(financing_type, credit_preapproved, budget_range, purchase_timeline, "
+                        "decision_authority, visited_properties, profiling_statuses, profiling_reprompt_counts). "
+                        "Flujo permitido: captura de datos básicos, close_lead simple, "
+                        "y gestión de agenda/email si el prospecto lo pide."
                     ),
                 }
             ],
@@ -3677,6 +3704,15 @@ async def _execute_function_call(
                 contact_record = await _resolve_contact(resolved_contact_id)
                 context.contact_id = resolved_contact_id
         if opportunity_id:
+            channel_value = "webchat"
+            profiling_enabled_for_channel = True
+            contact_org = _extract_contact_org(contact_record)
+            contact_org_uuid = _resolve_org_uuid(contact_org) if contact_org else None
+            if contact_org_uuid:
+                profiling_enabled_for_channel = await tenant_runtime.is_profiling_enabled(
+                    organizacion_id=UUID(contact_org_uuid),
+                    channel=channel_value,
+                )
             scoring_answers = {
                 key: arguments.get(key)
                 for key in (
@@ -3801,33 +3837,43 @@ async def _execute_function_call(
                 profiling_counts=profiling_reprompt_counts,
                 profiling_statuses=profiling_statuses,
             )
-            try:
-                await storage.apply_lead_scoring(
-                    conversation_id=context.conversation_id,
-                    contact_id=context.contact_id,
-                    opportunity_id=str(opportunity_id),
-                    answers=scoring_answers,
-                    events=scoring_events,
-                    profiling_statuses=profiling_statuses,
-                    profiling_reprompt_counts=profiling_reprompt_counts,
-                    source="close_lead",
-                )
-            except StorageError as exc:
-                logger.warning(
-                    "webchat.close_lead.scoring_failed",
-                    extra={"conversation_id": context.conversation_id, "error": str(exc)},
-                )
-            try:
-                await storage.maybe_promote_prequalified_from_scoring(
-                    conversation_id=context.conversation_id,
-                    contact_id=context.contact_id,
-                    opportunity_id=str(opportunity_id),
-                    channel="webchat",
-                )
-            except StorageError as exc:
-                logger.warning(
-                    "webchat.close_lead.prequalified_failed",
-                    extra={"conversation_id": context.conversation_id, "error": str(exc)},
+            if profiling_enabled_for_channel:
+                try:
+                    await storage.apply_lead_scoring(
+                        conversation_id=context.conversation_id,
+                        contact_id=context.contact_id,
+                        opportunity_id=str(opportunity_id),
+                        answers=scoring_answers,
+                        events=scoring_events,
+                        profiling_statuses=profiling_statuses,
+                        profiling_reprompt_counts=profiling_reprompt_counts,
+                        source="close_lead",
+                    )
+                except StorageError as exc:
+                    logger.warning(
+                        "webchat.close_lead.scoring_failed",
+                        extra={"conversation_id": context.conversation_id, "error": str(exc)},
+                    )
+                try:
+                    await storage.maybe_promote_prequalified_from_scoring(
+                        conversation_id=context.conversation_id,
+                        contact_id=context.contact_id,
+                        opportunity_id=str(opportunity_id),
+                        channel="webchat",
+                    )
+                except StorageError as exc:
+                    logger.warning(
+                        "webchat.close_lead.prequalified_failed",
+                        extra={"conversation_id": context.conversation_id, "error": str(exc)},
+                    )
+            else:
+                logger.info(
+                    "webchat.close_lead.skip_scoring_profiling_disabled",
+                    extra={
+                        "conversation_id": context.conversation_id,
+                        "opportunity_id": str(opportunity_id),
+                        "channel": channel_value,
+                    },
                 )
         try:
             await storage.maybe_auto_name_opportunity(
@@ -4035,6 +4081,14 @@ async def _execute_function_call(
         booking_response = _build_booking_response(booking)
         booking_response.hold_id = hold.get("hold_id")
         contact = await _resolve_contact(context.contact_id)
+        profiling_enabled_for_channel = True
+        contact_org = _extract_contact_org(contact) if contact else None
+        contact_org_uuid = _resolve_org_uuid(contact_org) if contact_org else None
+        if contact_org_uuid:
+            profiling_enabled_for_channel = await tenant_runtime.is_profiling_enabled(
+                organizacion_id=UUID(contact_org_uuid),
+                channel="webchat",
+            )
         await _sync_booking_with_opportunity(
             booking=booking_response,
             tarjeta_id=tarjeta_id,
@@ -4048,44 +4102,54 @@ async def _execute_function_call(
             tarjeta_id=tarjeta_id,
             contact=contact,
         )
-        if _has_meaningful_scoring_answers(contact):
+        if profiling_enabled_for_channel:
+            if _has_meaningful_scoring_answers(contact):
+                try:
+                    await storage.apply_lead_scoring(
+                        conversation_id=context.conversation_id,
+                        contact_id=context.contact_id,
+                        opportunity_id=str(tarjeta_id),
+                        events={
+                            "channel": "webchat",
+                            "appointment_requested": True,
+                            "appointment_scheduled": True,
+                            "appointment_confirmed": True,
+                        },
+                        source="booking_confirmed",
+                    )
+                except StorageError as exc:
+                    logger.warning(
+                        "webchat.schedule_demo.scoring_failed",
+                        extra={"conversation_id": context.conversation_id, "error": str(exc)},
+                    )
+            else:
+                logger.info(
+                    "webchat.schedule_demo.skip_scoring_without_answers",
+                    extra={
+                        "conversation_id": context.conversation_id,
+                        "opportunity_id": str(tarjeta_id),
+                    },
+                )
             try:
-                await storage.apply_lead_scoring(
+                await storage.maybe_promote_prequalified_from_scoring(
                     conversation_id=context.conversation_id,
                     contact_id=context.contact_id,
                     opportunity_id=str(tarjeta_id),
-                    events={
-                        "channel": "webchat",
-                        "appointment_requested": True,
-                        "appointment_scheduled": True,
-                        "appointment_confirmed": True,
-                    },
-                    source="booking_confirmed",
+                    channel="webchat",
                 )
             except StorageError as exc:
                 logger.warning(
-                    "webchat.schedule_demo.scoring_failed",
+                    "webchat.schedule_demo.prequalified_failed",
                     extra={"conversation_id": context.conversation_id, "error": str(exc)},
                 )
         else:
             logger.info(
-                "webchat.schedule_demo.skip_scoring_without_answers",
+                "webchat.schedule_demo.skip_scoring_profiling_disabled",
                 extra={
                     "conversation_id": context.conversation_id,
                     "opportunity_id": str(tarjeta_id),
+                    "channel": "webchat",
                 },
-            )
-        try:
-            await storage.maybe_promote_prequalified_from_scoring(
-                conversation_id=context.conversation_id,
-                contact_id=context.contact_id,
-                opportunity_id=str(tarjeta_id),
-                channel="webchat",
-            )
-        except StorageError as exc:
-            logger.warning(
-                "webchat.schedule_demo.prequalified_failed",
-                extra={"conversation_id": context.conversation_id, "error": str(exc)},
             )
         if contact and (not _has_text(contact.get("notes")) or not _has_text(contact.get("necesidad_proposito"))):
             notes_auto, necesidad_auto, siguiente_accion_auto = _build_insights_from_scoring_answers(

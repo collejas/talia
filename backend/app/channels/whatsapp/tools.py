@@ -1460,6 +1460,16 @@ async def _handle_close_lead(
         {"notes": notes, "necesidad_proposito": necesidad},
     )
     if tarjeta_id:
+        channel_value = str(context.channel or "whatsapp").strip().lower() or "whatsapp"
+        profiling_enabled_for_channel = True
+        contact_org = webchat_service._extract_contact_org(contact)
+        contact_org_uuid = webchat_service._resolve_org_uuid(contact_org)
+        if contact_org_uuid and channel_value in {"whatsapp", "webchat"}:
+            profiling_enabled_for_channel = await tenant_runtime.is_profiling_enabled(
+                organizacion_id=UUID(contact_org_uuid),
+                channel=channel_value,
+            )
+
         scoring_answers = {
             key: arguments.get(key)
             for key in (
@@ -1545,33 +1555,43 @@ async def _handle_close_lead(
             profiling_counts=profiling_reprompt_counts,
             profiling_statuses=profiling_statuses,
         )
-        try:
-            await storage.apply_lead_scoring(
-                conversation_id=context.conversation_id,
-                contact_id=context.contact_id,
-                opportunity_id=str(tarjeta_id),
-                answers=scoring_answers,
-                events=scoring_events,
-                profiling_statuses=profiling_statuses,
-                profiling_reprompt_counts=profiling_reprompt_counts,
-                source="close_lead",
-            )
-        except StorageError as exc:
-            logger.warning(
-                "whatsapp.close_lead.scoring_failed",
-                extra={"conversation_id": context.conversation_id, "error": str(exc)},
-            )
-        try:
-            await storage.maybe_promote_prequalified_from_scoring(
-                conversation_id=context.conversation_id,
-                contact_id=context.contact_id,
-                opportunity_id=str(tarjeta_id),
-                channel=context.channel or "whatsapp",
-            )
-        except StorageError as exc:
-            logger.warning(
-                "whatsapp.close_lead.prequalified_failed",
-                extra={"conversation_id": context.conversation_id, "error": str(exc)},
+        if profiling_enabled_for_channel:
+            try:
+                await storage.apply_lead_scoring(
+                    conversation_id=context.conversation_id,
+                    contact_id=context.contact_id,
+                    opportunity_id=str(tarjeta_id),
+                    answers=scoring_answers,
+                    events=scoring_events,
+                    profiling_statuses=profiling_statuses,
+                    profiling_reprompt_counts=profiling_reprompt_counts,
+                    source="close_lead",
+                )
+            except StorageError as exc:
+                logger.warning(
+                    "whatsapp.close_lead.scoring_failed",
+                    extra={"conversation_id": context.conversation_id, "error": str(exc)},
+                )
+            try:
+                await storage.maybe_promote_prequalified_from_scoring(
+                    conversation_id=context.conversation_id,
+                    contact_id=context.contact_id,
+                    opportunity_id=str(tarjeta_id),
+                    channel=context.channel or "whatsapp",
+                )
+            except StorageError as exc:
+                logger.warning(
+                    "whatsapp.close_lead.prequalified_failed",
+                    extra={"conversation_id": context.conversation_id, "error": str(exc)},
+                )
+        else:
+            logger.info(
+                "whatsapp.close_lead.skip_scoring_profiling_disabled",
+                extra={
+                    "conversation_id": context.conversation_id,
+                    "opportunity_id": str(tarjeta_id),
+                    "channel": channel_value,
+                },
             )
     try:
         # Mantener hilo único en inbox: en WhatsApp el cierre operativo del lead
@@ -1860,6 +1880,16 @@ async def _handle_schedule_demo(
     contact = await _resolve_contact(context.contact_id)
     booking_response.hold_id = hold.get("hold_id")
     contact_record = contact
+    channel_value = str(context.channel or "whatsapp").strip().lower() or "whatsapp"
+    profiling_enabled_for_channel = True
+    contact_org = webchat_service._extract_contact_org(contact_record)
+    contact_org_uuid = webchat_service._resolve_org_uuid(contact_org)
+    if contact_org_uuid and channel_value in {"whatsapp", "webchat"}:
+        profiling_enabled_for_channel = await tenant_runtime.is_profiling_enabled(
+            organizacion_id=UUID(contact_org_uuid),
+            channel=channel_value,
+        )
+
     await webchat_service._sync_booking_with_opportunity(
         booking=booking_response,
         tarjeta_id=tarjeta_id,
@@ -1873,41 +1903,51 @@ async def _handle_schedule_demo(
         tarjeta_id=tarjeta_id,
         contact=contact_record,
     )
-    if _has_meaningful_scoring_answers(contact_record):
+    if profiling_enabled_for_channel:
+        if _has_meaningful_scoring_answers(contact_record):
+            try:
+                await storage.apply_lead_scoring(
+                    conversation_id=context.conversation_id,
+                    contact_id=context.contact_id,
+                    opportunity_id=str(tarjeta_id),
+                    events={
+                        "channel": "whatsapp",
+                        "appointment_requested": True,
+                        "appointment_scheduled": True,
+                        "appointment_confirmed": True,
+                    },
+                    source="booking_confirmed",
+                )
+            except StorageError as exc:
+                logger.warning(
+                    "whatsapp.schedule_demo.scoring_failed",
+                    extra={"conversation_id": context.conversation_id, "error": str(exc)},
+                )
+        else:
+            logger.info(
+                "whatsapp.schedule_demo.skip_scoring_without_answers",
+                extra={"conversation_id": context.conversation_id, "opportunity_id": str(tarjeta_id)},
+            )
         try:
-            await storage.apply_lead_scoring(
+            await storage.maybe_promote_prequalified_from_scoring(
                 conversation_id=context.conversation_id,
                 contact_id=context.contact_id,
                 opportunity_id=str(tarjeta_id),
-                events={
-                    "channel": "whatsapp",
-                    "appointment_requested": True,
-                    "appointment_scheduled": True,
-                    "appointment_confirmed": True,
-                },
-                source="booking_confirmed",
+                channel=context.channel or "whatsapp",
             )
         except StorageError as exc:
             logger.warning(
-                "whatsapp.schedule_demo.scoring_failed",
+                "whatsapp.schedule_demo.prequalified_failed",
                 extra={"conversation_id": context.conversation_id, "error": str(exc)},
             )
     else:
         logger.info(
-            "whatsapp.schedule_demo.skip_scoring_without_answers",
-            extra={"conversation_id": context.conversation_id, "opportunity_id": str(tarjeta_id)},
-        )
-    try:
-        await storage.maybe_promote_prequalified_from_scoring(
-            conversation_id=context.conversation_id,
-            contact_id=context.contact_id,
-            opportunity_id=str(tarjeta_id),
-            channel=context.channel or "whatsapp",
-        )
-    except StorageError as exc:
-        logger.warning(
-            "whatsapp.schedule_demo.prequalified_failed",
-            extra={"conversation_id": context.conversation_id, "error": str(exc)},
+            "whatsapp.schedule_demo.skip_scoring_profiling_disabled",
+            extra={
+                "conversation_id": context.conversation_id,
+                "opportunity_id": str(tarjeta_id),
+                "channel": channel_value,
+            },
         )
     try:
         await _notify_sales_rep(

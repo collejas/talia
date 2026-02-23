@@ -976,6 +976,22 @@ async def _generate_assistant_reply(
         summary_created_en=summary_created_en,
         catalog_context=catalog_context,
     )
+    profiling_enabled_for_channel = True
+    if organizacion_id:
+        try:
+            profiling_enabled_for_channel = await tenant_runtime.is_profiling_enabled(
+                organizacion_id=organizacion_id,
+                channel="whatsapp",
+            )
+        except Exception as exc:  # pragma: no cover
+            logger.warning(
+                "whatsapp.profiling_toggle_lookup_failed",
+                extra={
+                    "conversation_id": conversation_id,
+                    "organizacion_id": str(organizacion_id),
+                    "error": str(exc),
+                },
+            )
     initial_input.insert(
         0,
         {
@@ -1005,6 +1021,14 @@ async def _generate_assistant_reply(
                         "profiling_statuses debe usar solo: answered, unknown, refused, skipped_max_retries. "
                         "Si un campo no se obtuvo tras la repregunta máxima, marca skipped_max_retries y continua. "
                         "No forces al usuario con repreguntas adicionales."
+                        if profiling_enabled_for_channel
+                        else "Perfilamiento IA desactivado para este tenant/canal. "
+                        "No hagas preguntas de perfilamiento o scoring. "
+                        "No envíes campos de scoring en close_lead "
+                        "(financing_type, credit_preapproved, budget_range, purchase_timeline, "
+                        "decision_authority, visited_properties, profiling_statuses, profiling_reprompt_counts). "
+                        "Flujo permitido: captura de datos básicos, close_lead simple, "
+                        "y gestión de agenda/email si el prospecto lo pide."
                     ),
                 }
             ],
