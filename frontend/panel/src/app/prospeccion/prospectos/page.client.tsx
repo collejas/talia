@@ -85,6 +85,7 @@ import {
   type ProspeccionOmitido,
   type ProspectoContactIndicators,
   type ContactoLog,
+  type ProspectoQueryOption,
   verificarProspectos,
   listContactoBatches,
   type ContactoBatch,
@@ -501,7 +502,7 @@ const [selectedTemplates, setSelectedTemplates] = useState<Record<string, string
   const [recentBatches, setRecentBatches] = useState<ContactoBatch[]>([])
   const [recentBatchLoading, setRecentBatchLoading] = useState(false)
   const [recentBatchError, setRecentBatchError] = useState<string | null>(null)
-  const [queryOptions, setQueryOptions] = useState<string[]>([])
+  const [queryOptions, setQueryOptions] = useState<ProspectoQueryOption[]>([])
   const [activityOptions, setActivityOptions] = useState<string[]>([])
   const [queryOptionsLoading, setQueryOptionsLoading] = useState(false)
   const [activityOptionsLoading, setActivityOptionsLoading] = useState(false)
@@ -558,6 +559,7 @@ const [selectedTemplates, setSelectedTemplates] = useState<Record<string, string
   }
 
   const selectionChips = useMemo(() => {
+    const queryLabelMap = new Map(queryOptions.map((option) => [option.value, option.label]))
     const chips: string[] = []
     if (filters.fuente) {
       chips.push(`Fuente: ${FUENTE_LABELS[filters.fuente] ?? filters.fuente}`)
@@ -578,7 +580,8 @@ const [selectedTemplates, setSelectedTemplates] = useState<Record<string, string
       })
     }
     if (filters.queryFilters.length) {
-      chips.push(`Consulta: ${filters.queryFilters.join(", ")}`)
+      const labels = filters.queryFilters.map((value) => queryLabelMap.get(value) ?? value)
+      chips.push(`Consulta: ${labels.join(", ")}`)
     }
     if (filters.actividadFilters.length) {
       chips.push(`Actividad: ${filters.actividadFilters.join(", ")}`)
@@ -588,7 +591,7 @@ const [selectedTemplates, setSelectedTemplates] = useState<Record<string, string
       chips.push(`Fecha: ${dateChip}`)
     }
     return chips
-  }, [filters])
+  }, [filters, queryOptions])
   const fetchProspectos = useCallback(
     async (nextOffset = 0) => {
       setLoading(true)
@@ -720,9 +723,10 @@ const [selectedTemplates, setSelectedTemplates] = useState<Record<string, string
       const activities = response.activities ?? []
       setQueryOptions(queries)
       setActivityOptions(activities)
+      const queryValues = new Set(queries.map((item) => item.value))
       setFilters((prev) => ({
         ...prev,
-        queryFilters: prev.queryFilters.filter((value) => queries.includes(value)),
+        queryFilters: prev.queryFilters.filter((value) => queryValues.has(value)),
         actividadFilters: prev.actividadFilters.filter((value) => activities.includes(value)),
       }))
     } catch {
@@ -753,8 +757,8 @@ const [selectedTemplates, setSelectedTemplates] = useState<Record<string, string
           dateFrom,
           dateTo,
         })
-        const activities = response.activities ?? []
-        setActivityOptions(activities)
+      const activities = response.activities ?? []
+      setActivityOptions(activities)
         setFilters((prev) => ({
           ...prev,
           actividadFilters: prev.actividadFilters.filter((value) => activities.includes(value)),
@@ -1208,7 +1212,10 @@ useEffect(() => {
       }
       return {
         ...prev,
-        queryFilters: orderSelectedByOptions(next, queryOptions),
+        queryFilters: orderSelectedByOptions(
+          next,
+          queryOptions.map((option) => option.value)
+        ),
       }
     })
   }
@@ -2144,7 +2151,11 @@ useEffect(() => {
                     className="min-w-[220px] justify-between text-sm normal-case"
                   >
                     <span className="max-w-[160px] truncate text-left text-sm">
-                      {filters.queryFilters.length ? filters.queryFilters.join(", ") : QUERY_FILTER_PLACEHOLDER}
+                      {filters.queryFilters.length
+                        ? filters.queryFilters
+                            .map((value) => queryOptions.find((option) => option.value === value)?.label ?? value)
+                            .join(", ")
+                        : QUERY_FILTER_PLACEHOLDER}
                     </span>
                     <IconChevronDown className="size-4 opacity-70" />
                   </Button>
@@ -2155,11 +2166,11 @@ useEffect(() => {
                 ) : queryOptions.length ? (
                   queryOptions.map((option) => (
                     <DropdownMenuCheckboxItem
-                      key={option}
-                      checked={filters.queryFilters.includes(option)}
-                      onCheckedChange={(checked) => handleQueryFilterToggle(option, Boolean(checked))}
+                      key={option.value}
+                      checked={filters.queryFilters.includes(option.value)}
+                      onCheckedChange={(checked) => handleQueryFilterToggle(option.value, Boolean(checked))}
                     >
-                      {option}
+                      {option.label}
                     </DropdownMenuCheckboxItem>
                   ))
                 ) : (

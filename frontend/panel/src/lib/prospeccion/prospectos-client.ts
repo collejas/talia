@@ -421,12 +421,14 @@ export async function listProspectos(params: {
   return requestJson<ProspectosResponse>(url.toString())
 }
 
+export type ProspectoQueryOption = { value: string; label: string }
+
 export async function listProspectosQueryMetadata(params?: {
   queries?: string[]
   fuente?: "google_places" | "denue" | "usuario"
   dateFrom?: string
   dateTo?: string
-}): Promise<{ queries: string[]; activities: string[] }> {
+}): Promise<{ queries: ProspectoQueryOption[]; activities: string[] }> {
   const url = buildClientUrl("/api/prospeccion/prospectos/queries")
   if (params?.queries?.length) {
     for (const query of params.queries) {
@@ -445,7 +447,19 @@ export async function listProspectosQueryMetadata(params?: {
   if (params?.dateTo) {
     url.searchParams.set("date_to", params.dateTo)
   }
-  return requestJson<{ queries: string[]; activities: string[] }>(url.toString())
+  const response = await requestJson<{
+    queries: Array<string | { value: string; label?: string }>
+    activities: string[]
+  }>(url.toString())
+  const normalizedQueries = (response.queries ?? [])
+    .map((item) =>
+      typeof item === "string" ? { value: item, label: item } : { value: item.value, label: item.label ?? item.value }
+    )
+    .filter((item) => item.value)
+  return {
+    queries: normalizedQueries,
+    activities: response.activities ?? [],
+  }
 }
 
 /**

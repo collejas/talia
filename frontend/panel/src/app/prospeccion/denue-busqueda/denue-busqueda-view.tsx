@@ -672,6 +672,27 @@ export function DenueBusquedaView() {
     return null;
   }, [activeBusqueda]);
 
+  const resolveBusquedaLabel = useCallback(
+    (item: DenueBusquedaItem | null) => {
+      if (!item) return null;
+      const meta = extractBusquedaMeta(item);
+      const modo = meta.modo || "radio";
+      if (modo === "radio") {
+        return item.query?.trim() || null;
+      }
+      const textoBusqueda = meta.filters?.texto_busqueda?.trim();
+      if (textoBusqueda) {
+        return textoBusqueda;
+      }
+      const actividad = buildActividadDisplay(meta.filters, scianLookups);
+      if (actividad.label) {
+        return `Avanzada · ${actividad.label}`;
+      }
+      return item.query?.trim() || null;
+    },
+    [scianLookups],
+  );
+
   const effectiveTotal = resultadosTotal || 0;
   const totalPages = Math.max(
     1,
@@ -1336,12 +1357,13 @@ export function DenueBusquedaView() {
     }
     setIsSavingProspectos(true);
     try {
+      const busquedaLabel = resolveBusquedaLabel(activeBusqueda);
       const response = await guardarProspectos({
         fuente: "denue",
         resultado_ids: Array.from(selectedIds),
         metadata: {
           busqueda_id: activeBusqueda?.id,
-          busqueda_query: activeBusqueda?.query,
+          busqueda_query: busquedaLabel ?? activeBusqueda?.query,
         },
       });
       setFeedback({
@@ -1359,7 +1381,7 @@ export function DenueBusquedaView() {
     } finally {
       setIsSavingProspectos(false);
     }
-  }, [activeBusqueda?.id, activeBusqueda?.query, selectedIds]);
+  }, [activeBusqueda, resolveBusquedaLabel, selectedIds]);
 
   return (
     <div className="space-y-6">

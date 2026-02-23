@@ -7104,6 +7104,29 @@ class CRMRepository:
             raise CRMRepositoryError(f"Respuesta inesperada al listar contactables: {data!r}")
         return data
 
+    async def list_scian_clase_titles(self, *, codes: list[str]) -> dict[str, str]:
+        """Devuelve un mapa codigo -> titulo para clases SCIAN."""
+
+        if not codes:
+            return {}
+        params: dict[str, Any] = {
+            "select": "codigo,titulo",
+            "codigo": _postgrest_in_clause(codes),
+        }
+        resp = await self._request("GET", "/rest/v1/scian_clase", params=params)
+        data = resp.json() or []
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"Respuesta inesperada al listar clases SCIAN: {data!r}")
+        mapping: dict[str, str] = {}
+        for row in data:
+            if not isinstance(row, dict):
+                continue
+            code = row.get("codigo")
+            title = row.get("titulo")
+            if isinstance(code, str) and isinstance(title, str):
+                mapping[code] = title
+        return mapping
+
     async def list_scian_catalogs(self) -> dict[str, list[dict[str, Any]]]:
         """Consulta los catálogos SCIAN (sector → clase) desde Supabase."""
 
@@ -7316,11 +7339,12 @@ class CRMRepository:
                 unique_queries.append(candidate)
             metadata_conditions: list[str] = []
             for value in unique_queries:
-                literal = _postgrest_ilike_literal(value)
+                literal = _postgrest_eq_literal(value)
                 # PostgREST JSON path syntax does not use SQL quotes around keys.
-                metadata_conditions.append(f"metadata->>query.ilike.{literal}")
-                metadata_conditions.append(f"metadata->>busqueda_query.ilike.{literal}")
-                metadata_conditions.append(f"metadata->busqueda_meta->>query.ilike.{literal}")
+                metadata_conditions.append(f"metadata->>busqueda_id.eq.{literal}")
+                metadata_conditions.append(f"metadata->>query.eq.{literal}")
+                metadata_conditions.append(f"metadata->>busqueda_query.eq.{literal}")
+                metadata_conditions.append(f"metadata->busqueda_meta->>query.eq.{literal}")
             if metadata_conditions:
                 and_filters.append(f"or({','.join(metadata_conditions)})")
 
@@ -7360,7 +7384,7 @@ class CRMRepository:
         fuente: str | None = None,
         date_from: date | None = None,
         date_to: date | None = None,
-    ) -> dict[str, list[str]]:
+    ) -> dict[str, list[dict[str, str]] | list[str]]:
         params: dict[str, str] = {
             "select": "actividad,metadata",
             "order": "metadata->>query.asc,actividad.asc",
@@ -7401,30 +7425,94 @@ class CRMRepository:
                     normalized.add(candidate.casefold())
             selected_queries = normalized if normalized else None
 
+        activity_codes: set[str] = set()
+        for row in data:
+            metadata = row.get("metadata")
+            if not isinstance(metadata, dict):
+                continue
+            busqueda_meta = metadata.get("busqueda_meta")
+            if not isinstance(busqueda_meta, dict):
+                continue
+            advanced = busqueda_meta.get("advanced_filters")
+            if not isinstance(advanced, dict):
+                continue
+            codes = advanced.get("actividad_codigos")
+            if not isinstance(codes, list):
+                continue
+            for raw in codes:
+                candidate = str(raw or "").strip()
+                if candidate:
+                    activity_codes.add(candidate)
+
+        scian_titles: dict[str, str] = {}
+        if activity_codes:
+            scian_titles = await self.list_scian_clase_titles(codes=sorted(activity_codes))
+
+        query_labels: dict[str, str] = {}
         query_values: set[str] = set()
         activity_values: set[str] = set()
         for row in data:
             metadata = row.get("metadata")
             row_queries: list[str] = []
+            value: str | None = None
+            label: str | None = None
             if isinstance(metadata, dict):
-                for key in ("query", "busqueda_query"):
-                    value = metadata.get(key)
-                    if isinstance(value, str):
-                        candidate = value.strip()
-                        if candidate:
-                            query_values.add(candidate)
-                            row_queries.append(candidate)
+                busqueda_id = metadata.get("busqueda_id")
+                busqueda_id_value = None
+                if isinstance(busqueda_id, str) and busqueda_id.strip():
+                    busqueda_id_value = busqueda_id.strip()
                 busqueda_meta = metadata.get("busqueda_meta")
+                advanced = busqueda_meta.get("advanced_filters") if isinstance(busqueda_meta, dict) else None
+                texto_busqueda = None
+                actividad_codigos: list[str] = []
+                meta_query: str | None = None
                 if isinstance(busqueda_meta, dict):
-                    value = busqueda_meta.get("query")
-                    if isinstance(value, str):
-                        candidate = value.strip()
+                    raw_meta_query = busqueda_meta.get("query")
+                    if isinstance(raw_meta_query, str) and raw_meta_query.strip():
+                        meta_query = raw_meta_query.strip()
+                if isinstance(advanced, dict):
+                    raw_texto = advanced.get("texto_busqueda")
+                    if isinstance(raw_texto, str):
+                        candidate = raw_texto.strip()
                         if candidate:
-                            query_values.add(candidate)
-                            row_queries.append(candidate)
+                            texto_busqueda = candidate
+                    raw_codes = advanced.get("actividad_codigos")
+                    if isinstance(raw_codes, list):
+                        actividad_codigos = [
+                            str(code).strip() for code in raw_codes if str(code or "").strip()
+                        ]
+
+                busqueda_query = metadata.get("busqueda_query")
+                raw_query = metadata.get("query") if isinstance(metadata.get("query"), str) else None
+                if busqueda_id_value:
+                    value = busqueda_id_value
+                elif isinstance(busqueda_query, str) and busqueda_query.strip():
+                    value = busqueda_query.strip()
+                elif isinstance(raw_query, str) and raw_query.strip():
+                    value = raw_query.strip()
+                elif meta_query:
+                    value = meta_query
+                if texto_busqueda:
+                    label = texto_busqueda
+                elif actividad_codigos:
+                    names = [scian_titles.get(code, code) for code in actividad_codigos]
+                    base = names[0] if names else ""
+                    if base:
+                        label = base if len(names) == 1 else f"{base} +{len(names) - 1}"
+                if not label:
+                    if isinstance(busqueda_query, str) and busqueda_query.strip():
+                        label = busqueda_query.strip()
+                    elif isinstance(raw_query, str) and raw_query.strip():
+                        label = raw_query.strip()
+                    else:
+                        label = value
+
+            if value:
+                query_values.add(value)
+                query_labels.setdefault(value, label or value)
+                row_queries.append(value)
+
             if selected_queries is not None:
-                # When the UI requests activities for specific queries, filter in Python
-                # instead of relying on PostgREST OR filters (which can be brittle with JSON ops).
                 matched = False
                 for candidate in row_queries:
                     if candidate.casefold() in selected_queries:
@@ -7432,16 +7520,22 @@ class CRMRepository:
                         break
                 if not matched:
                     continue
+
             actividad = row.get("actividad")
             if isinstance(actividad, str):
                 candidate = actividad.strip()
                 if candidate:
                     activity_values.add(candidate)
+
         if selected_queries is not None:
-            # Keep original casing as received from the UI where possible.
             query_values = {str(value).strip() for value in (query_filters or []) if str(value or "").strip()}
+        queries = [
+            {"value": value, "label": query_labels.get(value, value)}
+            for value in query_values
+        ]
+        queries.sort(key=lambda item: item["label"].casefold())
         return {
-            "queries": sorted(query_values),
+            "queries": queries,
             "activities": sorted(activity_values),
         }
 
