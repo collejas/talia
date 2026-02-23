@@ -151,6 +151,8 @@ export function GoogleBusquedaView() {
   const [mapItems, setMapItems] = useState<GoogleResultadosMapItem[]>([]);
   const [mapTruncated, setMapTruncated] = useState(false);
   const [deletingBusquedaId, setDeletingBusquedaId] = useState<string | null>(null);
+  const [selectedBusquedas, setSelectedBusquedas] = useState<Set<string>>(new Set());
+  const [isDeletingSelectedBusquedas, setIsDeletingSelectedBusquedas] = useState(false);
   const [isDeletingResultados, setIsDeletingResultados] = useState(false);
   const [isSavingProspectos, setIsSavingProspectos] = useState(false);
   const [queuedBusquedaId, setQueuedBusquedaId] = useState<string | null>(null);
@@ -379,6 +381,24 @@ export function GoogleBusquedaView() {
       }
     };
   }, [activeBusquedaId, activeBusqueda?.meta?.status, loadBusquedas]);
+
+  useEffect(() => {
+    if (!busquedas.length) {
+      setSelectedBusquedas(new Set());
+      return;
+    }
+    const validIds = new Set(busquedas.map((item) => item.id));
+    setSelectedBusquedas((current) => {
+      if (!current.size) return current;
+      const next = new Set<string>();
+      current.forEach((id) => {
+        if (validIds.has(id)) {
+          next.add(id);
+        }
+      });
+      return next;
+    });
+  }, [busquedas]);
 
   useEffect(() => {
     if (!activeBusquedaId) {
@@ -764,6 +784,14 @@ export function GoogleBusquedaView() {
       setDeletingBusquedaId(busquedaId);
       try {
         await deleteGoogleBusqueda(busquedaId);
+        setSelectedBusquedas((current) => {
+          if (!current.has(busquedaId)) {
+            return current;
+          }
+          const next = new Set(current);
+          next.delete(busquedaId);
+          return next;
+        });
         setFeedback({
           type: "success",
           message: "La búsqueda se eliminó correctamente.",
@@ -793,6 +821,83 @@ export function GoogleBusquedaView() {
     },
     [activeBusquedaId, loadBusquedas, loadResultadosForBusqueda],
   );
+
+  const handleToggleBusquedaSelection = useCallback((busquedaId: string, checked: boolean) => {
+    setSelectedBusquedas((current) => {
+      const next = new Set(current);
+      if (checked) {
+        next.add(busquedaId);
+      } else {
+        next.delete(busquedaId);
+      }
+      return next;
+    });
+  }, []);
+
+  const handleSelectAllBusquedas = useCallback((checked: boolean) => {
+    if (!checked) {
+      setSelectedBusquedas(new Set());
+      return;
+    }
+    setSelectedBusquedas(new Set(busquedas.map((item) => item.id)));
+  }, [busquedas]);
+
+  const handleDeleteSelectedBusquedas = useCallback(async () => {
+    const ids = Array.from(selectedBusquedas);
+    if (!ids.length) {
+      setFeedback({
+        type: "info",
+        message: "Selecciona al menos una búsqueda para eliminar.",
+      });
+      return;
+    }
+    if (typeof window !== "undefined") {
+      const confirmed = window.confirm(
+        `¿Eliminar ${ids.length} búsqueda(s) seleccionada(s)? Se borrarán todos sus resultados.`,
+      );
+      if (!confirmed) {
+        return;
+      }
+    }
+    setIsDeletingSelectedBusquedas(true);
+    try {
+      const outcomes = await Promise.allSettled(ids.map((id) => deleteGoogleBusqueda(id)));
+      const deletedCount = outcomes.filter((result) => result.status === "fulfilled").length;
+      const failedCount = outcomes.length - deletedCount;
+      const remaining = await loadBusquedas();
+      setSelectedBusquedas(new Set());
+      if (!remaining.length) {
+        setActiveBusquedaId(null);
+        setResultados([]);
+        setResultadosPagination({ limit: LIST_PAGE_SIZE, offset: 0 });
+        setResultadosTotal(0);
+        setSelectedIds(new Set());
+      } else {
+        const activeStillExists = activeBusquedaId ? remaining.some((item) => item.id === activeBusquedaId) : false;
+        if (!activeStillExists || ids.includes(activeBusquedaId ?? "")) {
+          await loadResultadosForBusqueda(remaining[0]!.id);
+        }
+      }
+      if (failedCount > 0) {
+        setFeedback({
+          type: "error",
+          message: `Se eliminaron ${deletedCount} búsquedas, pero ${failedCount} fallaron.`,
+        });
+      } else {
+        setFeedback({
+          type: "success",
+          message: `Se eliminaron ${deletedCount} búsquedas.`,
+        });
+      }
+    } catch (error) {
+      setFeedback({
+        type: "error",
+        message: error instanceof Error ? error.message : "No fue posible eliminar las búsquedas seleccionadas.",
+      });
+    } finally {
+      setIsDeletingSelectedBusquedas(false);
+    }
+  }, [activeBusquedaId, loadBusquedas, loadResultadosForBusqueda, selectedBusquedas]);
 
   const handleDeleteSelectedResultados = useCallback(async () => {
     if (!selectedIds.size) {
@@ -831,6 +936,9 @@ export function GoogleBusquedaView() {
       setIsDeletingResultados(false);
     }
   }, [activeBusquedaId, loadBusquedas, loadResultadosForBusqueda, selectedIds]);
+
+  const selectedBusquedasCount = selectedBusquedas.size;
+  const allBusquedasSelected = busquedas.length > 0 && selectedBusquedasCount === busquedas.length;
 
   const goToPage = useCallback(
     (pageIndex: number) => {
@@ -1630,6 +1738,28 @@ export function GoogleBusquedaView() {
         <CardHeader>
           <CardTitle className="text-base">Búsquedas recientes</CardTitle>
           <CardDescription>Vuelve a cargar resultados anteriores o reutiliza sus parámetros.</CardDescription>
+          <div className="flex items-center justify-between gap-3 pt-2">
+            <span className="text-xs text-muted-foreground">
+              Seleccionadas: {numberFormatter.format(selectedBusquedasCount)}
+            </span>
+            {canDeleteBusquedas ? (
+              <Button
+                type="button"
+                size="sm"
+                variant="destructive"
+                onClick={handleDeleteSelectedBusquedas}
+                disabled={!selectedBusquedasCount || isDeletingSelectedBusquedas}
+                className="flex items-center gap-2"
+              >
+                {isDeletingSelectedBusquedas ? (
+                  <RefreshCw className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Trash2 className="h-4 w-4" />
+                )}
+                Eliminar seleccionadas
+              </Button>
+            ) : null}
+          </div>
         </CardHeader>
         <CardContent className="space-y-3">
           {isLoadingBusquedas ? (
@@ -1640,6 +1770,13 @@ export function GoogleBusquedaView() {
                 <Table>
                   <TableHeader className="sticky top-0 z-10 bg-background">
                     <TableRow>
+                      <TableHead className="w-12 text-center">
+                        <Checkbox
+                          aria-label="Seleccionar todas las búsquedas"
+                          checked={allBusquedasSelected}
+                          onCheckedChange={(value) => handleSelectAllBusquedas(Boolean(value))}
+                        />
+                      </TableHead>
                       <TableHead>Búsqueda</TableHead>
                       <TableHead className="w-36 text-right">Registros</TableHead>
                       <TableHead className="w-28 text-right">Radio</TableHead>
@@ -1654,12 +1791,19 @@ export function GoogleBusquedaView() {
                         timeStyle: "short",
                       });
                       const isActive = activeBusquedaId === item.id;
+                      const isChecked = selectedBusquedas.has(item.id);
                       return (
                         <TableRow key={item.id} className={isActive ? "bg-primary/5" : undefined}>
+                          <TableCell className="text-center">
+                            <Checkbox
+                              aria-label={`Seleccionar búsqueda ${item.query || item.id}`}
+                              checked={isChecked}
+                              onCheckedChange={(value) => handleToggleBusquedaSelection(item.id, Boolean(value))}
+                            />
+                          </TableCell>
                           <TableCell>
                             <div className="space-y-1">
                               <p className="font-medium">{item.query || "(Sin texto)"}</p>
-                              <p className="text-xs text-muted-foreground">{item.id}</p>
                             </div>
                           </TableCell>
                           <TableCell className="text-right">

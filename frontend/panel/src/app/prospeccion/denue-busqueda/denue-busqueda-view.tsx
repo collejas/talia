@@ -323,6 +323,8 @@ export function DenueBusquedaView() {
   const [isLoadingActividadOptions, setIsLoadingActividadOptions] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [deletingBusquedaId, setDeletingBusquedaId] = useState<string | null>(null);
+  const [selectedBusquedas, setSelectedBusquedas] = useState<Set<string>>(new Set());
+  const [isDeletingSelectedBusquedas, setIsDeletingSelectedBusquedas] = useState(false);
   const [isDeletingResultados, setIsDeletingResultados] = useState(false);
   const [isSavingProspectos, setIsSavingProspectos] = useState(false);
   const [advancedModalOpen, setAdvancedModalOpen] = useState(false);
@@ -663,6 +665,24 @@ export function DenueBusquedaView() {
       return next;
     });
   }, [resultados]);
+
+  useEffect(() => {
+    if (!busquedas.length) {
+      setSelectedBusquedas(new Set());
+      return;
+    }
+    const validIds = new Set(busquedas.map((item) => item.id));
+    setSelectedBusquedas((current) => {
+      if (!current.size) return current;
+      const next = new Set<string>();
+      current.forEach((id) => {
+        if (validIds.has(id)) {
+          next.add(id);
+        }
+      });
+      return next;
+    });
+  }, [busquedas]);
 
   const busquedaDescriptor = useMemo(() => {
     if (!activeBusqueda) return null;
@@ -1027,6 +1047,14 @@ export function DenueBusquedaView() {
       setDeletingBusquedaId(busquedaId);
       try {
         await deleteDenueBusqueda(busquedaId);
+        setSelectedBusquedas((current) => {
+          if (!current.has(busquedaId)) {
+            return current;
+          }
+          const next = new Set(current);
+          next.delete(busquedaId);
+          return next;
+        });
         setFeedback({
           type: "success",
           message: "La búsqueda se eliminó correctamente.",
@@ -1063,6 +1091,83 @@ export function DenueBusquedaView() {
       setFeedback,
     ],
   );
+
+  const handleToggleBusquedaSelection = useCallback((busquedaId: string, checked: boolean) => {
+    setSelectedBusquedas((current) => {
+      const next = new Set(current);
+      if (checked) {
+        next.add(busquedaId);
+      } else {
+        next.delete(busquedaId);
+      }
+      return next;
+    });
+  }, []);
+
+  const handleSelectAllBusquedas = useCallback((checked: boolean) => {
+    if (!checked) {
+      setSelectedBusquedas(new Set());
+      return;
+    }
+    setSelectedBusquedas(new Set(busquedas.map((item) => item.id)));
+  }, [busquedas]);
+
+  const handleDeleteSelectedBusquedas = useCallback(async () => {
+    const ids = Array.from(selectedBusquedas);
+    if (!ids.length) {
+      setFeedback({
+        type: "info",
+        message: "Selecciona al menos una búsqueda para eliminar.",
+      });
+      return;
+    }
+    if (typeof window !== "undefined") {
+      const confirmed = window.confirm(
+        `¿Eliminar ${ids.length} búsqueda(s) seleccionada(s)? Se borrarán todos sus resultados.`,
+      );
+      if (!confirmed) {
+        return;
+      }
+    }
+    setIsDeletingSelectedBusquedas(true);
+    try {
+      const outcomes = await Promise.allSettled(ids.map((id) => deleteDenueBusqueda(id)));
+      const deletedCount = outcomes.filter((result) => result.status === "fulfilled").length;
+      const failedCount = outcomes.length - deletedCount;
+      const remaining = await loadBusquedas();
+      setSelectedBusquedas(new Set());
+      if (!remaining.length) {
+        setActiveBusquedaId(null);
+        setResultados([]);
+        setResultadosPagination({ limit: LIST_PAGE_SIZE, offset: 0 });
+        setResultadosTotal(0);
+        setSelectedIds(new Set());
+      } else {
+        const activeStillExists = activeBusquedaId ? remaining.some((item) => item.id === activeBusquedaId) : false;
+        if (!activeStillExists || ids.includes(activeBusquedaId ?? "")) {
+          await loadResultadosForBusqueda(remaining[0]!.id);
+        }
+      }
+      if (failedCount > 0) {
+        setFeedback({
+          type: "error",
+          message: `Se eliminaron ${deletedCount} búsquedas, pero ${failedCount} fallaron.`,
+        });
+      } else {
+        setFeedback({
+          type: "success",
+          message: `Se eliminaron ${deletedCount} búsquedas.`,
+        });
+      }
+    } catch (error) {
+      setFeedback({
+        type: "error",
+        message: error instanceof Error ? error.message : "No fue posible eliminar las búsquedas seleccionadas.",
+      });
+    } finally {
+      setIsDeletingSelectedBusquedas(false);
+    }
+  }, [activeBusquedaId, loadBusquedas, loadResultadosForBusqueda, selectedBusquedas]);
 
   const handleDeleteSelectedResultados = useCallback(async () => {
     if (!selectedIds.size) {
@@ -1105,6 +1210,9 @@ export function DenueBusquedaView() {
       setIsDeletingResultados(false);
     }
   }, [activeBusquedaId, loadBusquedas, refreshResultados, selectedIds, setFeedback]);
+
+  const selectedBusquedasCount = selectedBusquedas.size;
+  const allBusquedasSelected = busquedas.length > 0 && selectedBusquedasCount === busquedas.length;
 
   const goToPage = useCallback(
     (pageIndex: number) => {
@@ -2065,6 +2173,28 @@ export function DenueBusquedaView() {
         <CardHeader>
           <CardTitle className="text-base">Búsquedas recientes</CardTitle>
           <CardDescription>Vuelve a cargar resultados anteriores o reutiliza sus parámetros.</CardDescription>
+          <div className="flex items-center justify-between gap-3 pt-2">
+            <span className="text-xs text-muted-foreground">
+              Seleccionadas: {numberFormatter.format(selectedBusquedasCount)}
+            </span>
+            {canDeleteBusquedas ? (
+              <Button
+                type="button"
+                size="sm"
+                variant="destructive"
+                onClick={handleDeleteSelectedBusquedas}
+                disabled={!selectedBusquedasCount || isDeletingSelectedBusquedas}
+                className="flex items-center gap-2"
+              >
+                {isDeletingSelectedBusquedas ? (
+                  <RefreshCw className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Trash2 className="h-4 w-4" />
+                )}
+                Eliminar seleccionadas
+              </Button>
+            ) : null}
+          </div>
         </CardHeader>
         <CardContent className="space-y-3">
           {isLoadingBusquedas ? (
@@ -2075,6 +2205,13 @@ export function DenueBusquedaView() {
                 <Table>
                   <TableHeader className="sticky top-0 z-10 bg-background">
                     <TableRow>
+                      <TableHead className="w-12 text-center">
+                        <Checkbox
+                          aria-label="Seleccionar todas las búsquedas"
+                          checked={allBusquedasSelected}
+                          onCheckedChange={(value) => handleSelectAllBusquedas(Boolean(value))}
+                        />
+                      </TableHead>
                       <TableHead>Búsqueda / App</TableHead>
                       <TableHead className="w-36 text-right">Registros</TableHead>
                       <TableHead className="w-28 text-right">Radio</TableHead>
@@ -2097,7 +2234,6 @@ export function DenueBusquedaView() {
                         modo === "radio" && typeof item.radio_m === "number"
                           ? `${numberFormatter.format(item.radio_m)} m`
                           : "—";
-                      const sourceLabel = meta.source ? String(meta.source) : item.fuente;
                       const textoBusqueda = meta.filters?.texto_busqueda?.trim();
                       const busquedaTitulo =
                         modo === "radio"
@@ -2117,6 +2253,7 @@ export function DenueBusquedaView() {
                         }
                       }
                       const busquedaTooltip = tooltipParts.filter(Boolean).join("\n\n") || undefined;
+                      const isChecked = selectedBusquedas.has(item.id);
                       return (
                         <TableRow
                           key={item.id}
@@ -2124,6 +2261,13 @@ export function DenueBusquedaView() {
                             activeBusquedaId === item.id && "bg-primary/5",
                           )}
                         >
+                          <TableCell className="text-center">
+                            <Checkbox
+                              aria-label={`Seleccionar búsqueda ${busquedaTitulo}`}
+                              checked={isChecked}
+                              onCheckedChange={(value) => handleToggleBusquedaSelection(item.id, Boolean(value))}
+                            />
+                          </TableCell>
                           <TableCell className="max-w-[380px] whitespace-normal">
                             <div className="space-y-0.5">
                               <div className="font-medium">
@@ -2143,9 +2287,6 @@ export function DenueBusquedaView() {
                                 ) : (
                                   busquedaTitulo
                                 )}
-                              </div>
-                              <div className="text-[11px] text-muted-foreground">
-                                {sourceLabel} · {modo}
                               </div>
                             </div>
                           </TableCell>
@@ -2186,18 +2327,18 @@ export function DenueBusquedaView() {
                               {canDeleteBusquedas ? (
                                 <Button
                                   type="button"
-                                  size="sm"
-                                  variant="destructive"
+                                  size="icon"
+                                  variant="ghost"
                                   aria-label="Eliminar búsqueda"
                                   onClick={() => handleDeleteBusqueda(item.id)}
                                   disabled={deletingBusquedaId === item.id}
+                                  className="text-destructive hover:text-destructive"
                                 >
                                   {deletingBusquedaId === item.id ? (
-                                    <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                                    <RefreshCw className="h-4 w-4 animate-spin" />
                                   ) : (
-                                    <Trash2 className="mr-2 h-4 w-4" />
+                                    <Trash2 className="h-4 w-4" />
                                   )}
-                                  Eliminar
                                 </Button>
                               ) : null}
                             </div>
