@@ -1,7 +1,7 @@
 "use client"
 
 import dynamic from "next/dynamic"
-import { ChangeEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowUpRight,
   Globe,
@@ -87,7 +87,7 @@ const DEFAULT_CENTER = { lat: 19.432608, lng: -99.133209 };
 const numberFormatter = new Intl.NumberFormat("es-MX");
 const RADIUS_MIN = 100;
 const RADIUS_MAX = 5_000;
-const LIST_PAGE_SIZE = 500;
+const LIST_PAGE_SIZE = 5000;
 const BUSQUEDAS_PAGE_SIZE = 100;
 const BUSQUEDAS_MAX_ITEMS = 2000;
 const JOB_POLL_INTERVAL_MS = 2000;
@@ -1007,14 +1007,9 @@ export function DenueBusquedaView() {
     ],
   );
 
-  const handleLimitChange = useCallback(
-    (event: ChangeEvent<HTMLInputElement>) => {
-      const value = Number(event.target.value) || 50;
-      const limit = Math.min(500, Math.max(50, value));
-      setResultadosPagination((prev) => ({ ...prev, limit, offset: 0 }));
-    },
-    [],
-  );
+  const handleLimitChange = useCallback(() => {
+    setResultadosPagination((prev) => ({ ...prev, limit: LIST_PAGE_SIZE, offset: 0 }));
+  }, []);
 
   const handleDeleteBusqueda = useCallback(
     async (busquedaId: string) => {
@@ -1603,7 +1598,7 @@ export function DenueBusquedaView() {
                   onChange={(event) => setEstratoFilter(event.target.value as EstratoFilterValue)}
                   className="h-9 w-full rounded-md border border-border bg-background px-2 text-sm"
                 >
-                  <option value="any">Todos</option>
+                  <option value="any">Todos los tamaños</option>
                   <option value="micro">Micro (0-10)</option>
                   <option value="pequena">Pequeña (11-50)</option>
                   <option value="mediana">Mediana (51-250)</option>
@@ -1815,9 +1810,9 @@ export function DenueBusquedaView() {
                 <Label className="text-xs font-normal">Resultados por página</Label>
                 <Input
                   type="number"
-                  min={50}
-                  max={500}
-                  step={50}
+                  min={5000}
+                  max={5000}
+                  step={5000}
                   value={resultadosPagination.limit}
                   onChange={handleLimitChange}
                   className="h-8 text-sm"

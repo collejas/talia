@@ -11721,14 +11721,14 @@ async def listar_resultados_denue(
     actividades: list[str] | None = Query(default=None),
     geo_estado: str | None = Query(default=None),
     geo_municipio: str | None = Query(default=None),
-    limit: Annotated[int, Query(ge=1, le=5000)] = 250,
+    limit: Annotated[int, Query(ge=1, le=5000)] = 5000,
     offset: Annotated[int, Query(ge=0)] = 0,
     order: Literal["recientes", "distancia"] = Query(default="recientes"),
 ) -> dict[str, Any]:
     try:
         if not busqueda_id:
             raise HTTPException(status_code=400, detail="busqueda_id_required")
-        effective_limit = min(limit, 500)
+        effective_limit = min(limit, 5000)
         payload: dict[str, Any] = {
             "p_busqueda_id": str(busqueda_id),
             "p_q": q,
