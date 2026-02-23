@@ -389,6 +389,40 @@ const BATCH_STATE_VARIANTS: Record<string, "default" | "secondary" | "outline" |
 }
 
 const PAGE_SIZE_OPTIONS = [10, 25, 50] as const
+const PROSPECTOS_TABLE_PREFS_KEY = "prospeccion_prospectos_table_prefs_v1"
+const DEFAULT_TABLE_COLUMN_ORDER: ProspectTableColumnId[] = [
+  "prospecto",
+  "correo",
+  "sitio_web",
+  "telefono",
+  "tipo_linea",
+  "telefono_verificado",
+  "fuente",
+  "tamano_rating",
+  "campana",
+  "con_envio",
+  "creado",
+]
+
+const TABLE_COLUMN_META: Record<
+  ProspectTableColumnId,
+  {
+    label: string
+    widthClass: string
+  }
+> = {
+  prospecto: { label: "Prospecto", widthClass: "w-[260px]" },
+  correo: { label: "Correo", widthClass: "w-[180px]" },
+  sitio_web: { label: "Sitio web", widthClass: "w-[180px]" },
+  telefono: { label: "Teléfono", widthClass: "w-[140px]" },
+  tipo_linea: { label: "Tipo de línea", widthClass: "w-[120px]" },
+  telefono_verificado: { label: "Teléfono verificado", widthClass: "w-[130px]" },
+  fuente: { label: "Fuente", widthClass: "w-[160px]" },
+  tamano_rating: { label: "Tamaño/Rating", widthClass: "w-[130px]" },
+  campana: { label: "Campaña", widthClass: "w-[140px]" },
+  con_envio: { label: "Con envío", widthClass: "w-[110px]" },
+  creado: { label: "Creado", widthClass: "w-[120px]" },
+}
 const DATE_TIME_FORMATTER = new Intl.DateTimeFormat("es-MX", {
   dateStyle: "medium",
   timeStyle: "short",
@@ -464,6 +498,20 @@ function ProspectosView() {
   const [tableSort, setTableSort] = useState<{ key: ProspectosSortKey; direction: "asc" | "desc" }>({
     key: "creado",
     direction: "desc",
+  })
+  const [columnOrder, setColumnOrder] = useState<ProspectTableColumnId[]>(DEFAULT_TABLE_COLUMN_ORDER)
+  const [columnVisibility, setColumnVisibility] = useState<Record<ProspectTableColumnId, boolean>>({
+    prospecto: true,
+    correo: true,
+    sitio_web: true,
+    telefono: true,
+    tipo_linea: true,
+    telefono_verificado: true,
+    fuente: true,
+    tamano_rating: true,
+    campana: true,
+    con_envio: true,
+    creado: true,
   })
   const [searchInput, setSearchInput] = useState(initialFilters.search)
   const [items, setItems] = useState<ProspectoItem[]>([])
@@ -659,6 +707,58 @@ const [selectedTemplates, setSelectedTemplates] = useState<Record<string, string
     })
     return rows
   }, [contactIndicators, items, tableSort.direction, tableSort.key])
+  const visibleColumns = useMemo(
+    () => columnOrder.filter((columnId) => columnVisibility[columnId] !== false),
+    [columnOrder, columnVisibility]
+  )
+  const visibleColumnsCount = visibleColumns.length
+
+  useEffect(() => {
+    if (typeof window === "undefined") return
+    const raw = window.localStorage.getItem(PROSPECTOS_TABLE_PREFS_KEY)
+    if (!raw) return
+    try {
+      const parsed = JSON.parse(raw) as {
+        order?: ProspectTableColumnId[]
+        visibility?: Partial<Record<ProspectTableColumnId, boolean>>
+      }
+      const parsedOrder = Array.isArray(parsed.order) ? parsed.order.filter((id): id is ProspectTableColumnId => id in TABLE_COLUMN_META) : []
+      if (parsedOrder.length) {
+        const missing = DEFAULT_TABLE_COLUMN_ORDER.filter((id) => !parsedOrder.includes(id))
+        setColumnOrder([...parsedOrder, ...missing])
+      }
+      if (parsed.visibility && typeof parsed.visibility === "object") {
+        setColumnVisibility((prev) => ({ ...prev, ...parsed.visibility }))
+      }
+    } catch {
+      // ignore persisted parse issues
+    }
+  }, [])
+
+  useEffect(() => {
+    if (typeof window === "undefined") return
+    window.localStorage.setItem(
+      PROSPECTOS_TABLE_PREFS_KEY,
+      JSON.stringify({ order: columnOrder, visibility: columnVisibility })
+    )
+  }, [columnOrder, columnVisibility])
+
+  const moveTableColumn = useCallback((draggedId: ProspectTableColumnId, targetId: ProspectTableColumnId) => {
+    if (draggedId === targetId) return
+    setColumnOrder((prev) => {
+      const from = prev.indexOf(draggedId)
+      const to = prev.indexOf(targetId)
+      if (from < 0 || to < 0) return prev
+      const next = [...prev]
+      next.splice(from, 1)
+      next.splice(to, 0, draggedId)
+      return next
+    })
+  }, [])
+
+  const toggleColumnVisibility = useCallback((columnId: ProspectTableColumnId, visible: boolean) => {
+    setColumnVisibility((prev) => ({ ...prev, [columnId]: visible }))
+  }, [])
 
   const selectionChips = useMemo(() => {
     const chips: string[] = []
@@ -2556,6 +2656,24 @@ useEffect(() => {
                 <IconRefresh className={cn("mr-1.5 size-4", loading && "animate-spin")} />
                 Actualizar
               </Button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="sm">
+                    Columnas
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-56">
+                  {DEFAULT_TABLE_COLUMN_ORDER.map((columnId) => (
+                    <DropdownMenuCheckboxItem
+                      key={columnId}
+                      checked={columnVisibility[columnId] !== false}
+                      onCheckedChange={(checked) => toggleColumnVisibility(columnId, checked === true)}
+                    >
+                      {TABLE_COLUMN_META[columnId].label}
+                    </DropdownMenuCheckboxItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
               <Button
                 variant="outline"
                 size="sm"
@@ -2619,68 +2737,42 @@ useEffect(() => {
                       disabled={!items.length}
                     />
                   </TableHead>
-                  <TableHead className="w-[260px] text-[10px] font-bold uppercase tracking-wide">
-                    <button type="button" onClick={() => toggleTableSort("prospecto")}>
-                      Prospecto {tableSort.key === "prospecto" ? (tableSort.direction === "asc" ? "↑" : "↓") : ""}
-                    </button>
-                  </TableHead>
-                  <TableHead className="w-[180px] text-[10px] font-bold uppercase tracking-wide">
-                    <button type="button" onClick={() => toggleTableSort("correo")}>
-                      Correo {tableSort.key === "correo" ? (tableSort.direction === "asc" ? "↑" : "↓") : ""}
-                    </button>
-                  </TableHead>
-                  <TableHead className="w-[180px] text-[10px] font-bold uppercase tracking-wide">
-                    <button type="button" onClick={() => toggleTableSort("sitio_web")}>
-                      Sitio web {tableSort.key === "sitio_web" ? (tableSort.direction === "asc" ? "↑" : "↓") : ""}
-                    </button>
-                  </TableHead>
-                  <TableHead className="w-[140px] text-[10px] font-bold uppercase tracking-wide">
-                    <button type="button" onClick={() => toggleTableSort("telefono")}>
-                      Teléfono {tableSort.key === "telefono" ? (tableSort.direction === "asc" ? "↑" : "↓") : ""}
-                    </button>
-                  </TableHead>
-                  <TableHead className="w-[120px] text-[10px] font-bold uppercase tracking-wide">
-                    <button type="button" onClick={() => toggleTableSort("tipo_linea")}>
-                      Tipo de línea {tableSort.key === "tipo_linea" ? (tableSort.direction === "asc" ? "↑" : "↓") : ""}
-                    </button>
-                  </TableHead>
-                  <TableHead className="w-[130px] text-[10px] font-bold uppercase tracking-wide">
-                    <button type="button" onClick={() => toggleTableSort("telefono_verificado")}>
-                      Teléfono verificado {tableSort.key === "telefono_verificado" ? (tableSort.direction === "asc" ? "↑" : "↓") : ""}
-                    </button>
-                  </TableHead>
-                  <TableHead className="w-[160px] text-[10px] font-bold uppercase tracking-wide">
-                    <button type="button" onClick={() => toggleTableSort("fuente")}>
-                      Fuente {tableSort.key === "fuente" ? (tableSort.direction === "asc" ? "↑" : "↓") : ""}
-                    </button>
-                  </TableHead>
-                  <TableHead className="w-[130px] text-[10px] font-bold uppercase tracking-wide">
-                    <button type="button" onClick={() => toggleTableSort("tamano_rating")}>
-                      Tamaño/Rating {tableSort.key === "tamano_rating" ? (tableSort.direction === "asc" ? "↑" : "↓") : ""}
-                    </button>
-                  </TableHead>
-                  <TableHead className="w-[140px] text-[10px] font-bold uppercase tracking-wide">
-                    <button type="button" onClick={() => toggleTableSort("campana")}>
-                      Campaña {tableSort.key === "campana" ? (tableSort.direction === "asc" ? "↑" : "↓") : ""}
-                    </button>
-                  </TableHead>
-                  <TableHead className="w-[110px] text-[10px] font-bold uppercase tracking-wide">
-                    <button type="button" onClick={() => toggleTableSort("con_envio")}>
-                      Con envío {tableSort.key === "con_envio" ? (tableSort.direction === "asc" ? "↑" : "↓") : ""}
-                    </button>
-                  </TableHead>
-                  <TableHead className="w-[120px] text-right text-[10px] font-bold uppercase tracking-wide">
-                    <button type="button" onClick={() => toggleTableSort("creado")}>
-                      Creado {tableSort.key === "creado" ? (tableSort.direction === "asc" ? "↑" : "↓") : ""}
-                    </button>
-                  </TableHead>
+                  {visibleColumns.map((columnId) => {
+                    const meta = TABLE_COLUMN_META[columnId]
+                    const isSorted = tableSort.key === columnId
+                    return (
+                      <TableHead
+                        key={columnId}
+                        className={cn(meta.widthClass, "text-[10px] font-bold uppercase tracking-wide")}
+                        draggable
+                        onDragStart={(event) => {
+                          event.dataTransfer.setData("text/plain", columnId)
+                          event.dataTransfer.effectAllowed = "move"
+                        }}
+                        onDragOver={(event) => {
+                          event.preventDefault()
+                          event.dataTransfer.dropEffect = "move"
+                        }}
+                        onDrop={(event) => {
+                          event.preventDefault()
+                          const dragged = event.dataTransfer.getData("text/plain") as ProspectTableColumnId
+                          if (!dragged) return
+                          moveTableColumn(dragged, columnId)
+                        }}
+                      >
+                        <button type="button" onClick={() => toggleTableSort(columnId)}>
+                          {meta.label} {isSorted ? (tableSort.direction === "asc" ? "↑" : "↓") : ""}
+                        </button>
+                      </TableHead>
+                    )
+                  })}
                   <TableHead className="w-14 text-right text-[10px] font-bold uppercase tracking-wide">Acciones</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {loading ? (
                   <TableRow>
-                    <TableCell colSpan={12} className="py-10 text-center text-sm text-muted-foreground">
+                    <TableCell colSpan={visibleColumnsCount + 2} className="py-10 text-center text-sm text-muted-foreground">
                       <IconLoader className="mr-2 inline size-4 animate-spin" />
                       Cargando prospectos...
                     </TableCell>
@@ -2688,7 +2780,7 @@ useEffect(() => {
                 ) : null}
                 {!loading && !items.length ? (
                   <TableRow>
-                    <TableCell colSpan={12} className="py-10 text-center text-sm text-muted-foreground">
+                    <TableCell colSpan={visibleColumnsCount + 2} className="py-10 text-center text-sm text-muted-foreground">
                       No hay prospectos con los filtros actuales.
                     </TableCell>
                   </TableRow>
@@ -2712,102 +2804,133 @@ useEffect(() => {
                             disabled={!prospecto.id}
                           />
                           </TableCell>
-                          <TableCell>
-                          <div
-                            className="max-w-[220px] truncate text-[11px] font-medium"
-                            title={prospecto.display_name || "Sin nombre"}
-                          >
-                            {prospecto.display_name || "Sin nombre"}
-                          </div>
-                          <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                            {prospecto.actividad ? (
-                              <span className="block max-w-[200px] truncate" title={prospecto.actividad}>
-                                {prospecto.actividad}
-                              </span>
-                            ) : null}
-                            {prospecto.segmento ? (
-                              <Badge variant="outline" className="text-[10px]">
-                                {prospecto.segmento}
-                              </Badge>
-                            ) : null}
-                          </div>
-                          {prospecto.address ? (
-                            <p className="mt-1 max-w-[220px] truncate text-xs text-muted-foreground" title={prospecto.address}>
-                              {prospecto.address}
-                            </p>
-                          ) : null}
-                          {notas ? (
-                            <p className="mt-1 max-w-[220px] truncate text-xs text-muted-foreground" title={`Notas: ${notas}`}>
-                              Notas: {notas}
-                            </p>
-                          ) : null}
-                          </TableCell>
-                          <TableCell>
-                          {(() => {
-                            const email = (prospecto.email || "").trim()
-                            const normalizedEmail = email ? email.toLowerCase() : ""
-                            return (
-                              <span className="block max-w-[160px] truncate text-[11px]" title={normalizedEmail || "—"}>
-                                {normalizedEmail || "—"}
-                              </span>
-                            )
-                          })()}
-                          </TableCell>
-                          <TableCell>
-                          {(() => {
-                            const websiteLabel = (prospecto.website || "").trim()
-                            const websiteHref = buildWebsiteHref(websiteLabel)
-                            if (!websiteLabel || !websiteHref) {
-                              return <span className="text-[11px] text-muted-foreground">—</span>
+                          {visibleColumns.map((columnId) => {
+                            switch (columnId) {
+                              case "prospecto":
+                                return (
+                                  <TableCell key={columnId}>
+                                    <div className="max-w-[220px] truncate text-[11px] font-medium" title={prospecto.display_name || "Sin nombre"}>
+                                      {prospecto.display_name || "Sin nombre"}
+                                    </div>
+                                    <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                                      {prospecto.actividad ? (
+                                        <span className="block max-w-[200px] truncate" title={prospecto.actividad}>
+                                          {prospecto.actividad}
+                                        </span>
+                                      ) : null}
+                                      {prospecto.segmento ? (
+                                        <Badge variant="outline" className="text-[10px]">
+                                          {prospecto.segmento}
+                                        </Badge>
+                                      ) : null}
+                                    </div>
+                                    {prospecto.address ? (
+                                      <p className="mt-1 max-w-[220px] truncate text-xs text-muted-foreground" title={prospecto.address}>
+                                        {prospecto.address}
+                                      </p>
+                                    ) : null}
+                                    {notas ? (
+                                      <p className="mt-1 max-w-[220px] truncate text-xs text-muted-foreground" title={`Notas: ${notas}`}>
+                                        Notas: {notas}
+                                      </p>
+                                    ) : null}
+                                  </TableCell>
+                                )
+                              case "correo": {
+                                const email = (prospecto.email || "").trim()
+                                const normalizedEmail = email ? email.toLowerCase() : ""
+                                return (
+                                  <TableCell key={columnId}>
+                                    <span className="block max-w-[160px] truncate text-[11px]" title={normalizedEmail || "—"}>
+                                      {normalizedEmail || "—"}
+                                    </span>
+                                  </TableCell>
+                                )
+                              }
+                              case "sitio_web": {
+                                const websiteLabel = (prospecto.website || "").trim()
+                                const websiteHref = buildWebsiteHref(websiteLabel)
+                                return (
+                                  <TableCell key={columnId}>
+                                    {!websiteLabel || !websiteHref ? (
+                                      <span className="text-[11px] text-muted-foreground">—</span>
+                                    ) : (
+                                      <a
+                                        href={websiteHref}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="inline-flex items-center gap-1 text-[11px] font-medium text-primary hover:underline"
+                                        title={websiteLabel}
+                                      >
+                                        <IconWorldSearch className="size-3.5" />
+                                        Sitio web
+                                      </a>
+                                    )}
+                                  </TableCell>
+                                )
+                              }
+                              case "telefono":
+                                return (
+                                  <TableCell key={columnId}>
+                                    <span className="text-[11px]">{prospecto.phone_e164 || prospecto.phone || "—"}</span>
+                                  </TableCell>
+                                )
+                              case "tipo_linea":
+                                return (
+                                  <TableCell key={columnId}>
+                                    <span className="text-[11px]">{prospecto.carrier_type ? carrierLabel(prospecto.carrier_type) : "—"}</span>
+                                  </TableCell>
+                                )
+                              case "telefono_verificado":
+                                return (
+                                  <TableCell key={columnId}>
+                                    <LookupStatusBadge status={prospecto.lookup_status} className="text-[10px]" />
+                                  </TableCell>
+                                )
+                              case "fuente":
+                                return (
+                                  <TableCell key={columnId}>
+                                    <Badge variant="outline" className="text-[10px]">
+                                      {FUENTE_LABELS[prospecto.fuente] ?? prospecto.fuente}
+                                    </Badge>
+                                  </TableCell>
+                                )
+                              case "tamano_rating":
+                                return (
+                                  <TableCell key={columnId}>
+                                    {typeof prospecto.rating === "number" ? (
+                                      <Badge variant="secondary" className="text-[10px]">⭐ {prospecto.rating.toFixed(1)}</Badge>
+                                    ) : prospecto.estrato ? (
+                                      <Badge variant="outline" className="text-[10px]">{prospecto.estrato}</Badge>
+                                    ) : prospecto.segmento ? (
+                                      <Badge variant="outline" className="text-[10px]">{prospecto.segmento}</Badge>
+                                    ) : (
+                                      <span className="text-[11px] text-muted-foreground">—</span>
+                                    )}
+                                  </TableCell>
+                                )
+                              case "campana":
+                                return (
+                                  <TableCell key={columnId}>
+                                    <span className="text-[11px]">{campaignName || (hasEnvios ? "Sí" : "No")}</span>
+                                  </TableCell>
+                                )
+                              case "con_envio":
+                                return (
+                                  <TableCell key={columnId}>
+                                    <span className="text-[11px]">{hasEnvios ? "Sí" : "No"}</span>
+                                  </TableCell>
+                                )
+                              case "creado":
+                                return (
+                                  <TableCell key={columnId} className="text-right text-xs text-muted-foreground">
+                                    {formatDate(prospecto.creado_en)}
+                                  </TableCell>
+                                )
+                              default:
+                                return null
                             }
-                            return (
-                              <a
-                                href={websiteHref}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="inline-flex items-center gap-1 text-[11px] font-medium text-primary hover:underline"
-                                title={websiteLabel}
-                              >
-                                <IconWorldSearch className="size-3.5" />
-                                Sitio web
-                              </a>
-                            )
-                          })()}
-                          </TableCell>
-                          <TableCell>
-                          <span className="text-[11px]">{prospecto.phone_e164 || prospecto.phone || "—"}</span>
-                          </TableCell>
-                          <TableCell>
-                          <span className="text-[11px]">{prospecto.carrier_type ? carrierLabel(prospecto.carrier_type) : "—"}</span>
-                          </TableCell>
-                          <TableCell>
-                          <LookupStatusBadge status={prospecto.lookup_status} className="text-[10px]" />
-                          </TableCell>
-                          <TableCell>
-                          <div className="flex flex-wrap items-center gap-2">
-                            <Badge variant="outline" className="text-[10px]">{FUENTE_LABELS[prospecto.fuente] ?? prospecto.fuente}</Badge>
-                          </div>
-                          </TableCell>
-                          <TableCell>
-                          {typeof prospecto.rating === "number" ? (
-                            <Badge variant="secondary" className="text-[10px]">⭐ {prospecto.rating.toFixed(1)}</Badge>
-                          ) : prospecto.estrato ? (
-                            <Badge variant="outline" className="text-[10px]">{prospecto.estrato}</Badge>
-                          ) : prospecto.segmento ? (
-                            <Badge variant="outline" className="text-[10px]">{prospecto.segmento}</Badge>
-                          ) : (
-                            <span className="text-[11px] text-muted-foreground">—</span>
-                          )}
-                          </TableCell>
-                          <TableCell>
-                          <span className="text-[11px]">{campaignName || (hasEnvios ? "Sí" : "No")}</span>
-                          </TableCell>
-                          <TableCell>
-                          <span className="text-[11px]">{hasEnvios ? "Sí" : "No"}</span>
-                          </TableCell>
-                          <TableCell className="text-right text-xs text-muted-foreground">
-                          {formatDate(prospecto.creado_en)}
-                          </TableCell>
+                          })}
                           <TableCell className="text-right">
                           {prospecto.id ? (
                             <DropdownMenu>
