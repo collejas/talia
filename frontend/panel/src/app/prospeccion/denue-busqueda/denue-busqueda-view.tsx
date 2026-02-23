@@ -107,6 +107,7 @@ const ACTIONS = [
 
 type ContactFilterValue = "any" | "with" | "without";
 type EstratoFilterValue = "any" | "micro" | "pequena" | "mediana" | "grande";
+type BusquedasSortKey = "busqueda" | "registros" | "radio" | "geo" | "fecha";
 
 type FormValues = {
   query: string;
@@ -325,6 +326,10 @@ export function DenueBusquedaView() {
   const [deletingBusquedaId, setDeletingBusquedaId] = useState<string | null>(null);
   const [selectedBusquedas, setSelectedBusquedas] = useState<Set<string>>(new Set());
   const [isDeletingSelectedBusquedas, setIsDeletingSelectedBusquedas] = useState(false);
+  const [busquedasSort, setBusquedasSort] = useState<{ key: BusquedasSortKey; direction: "asc" | "desc" }>({
+    key: "fecha",
+    direction: "desc",
+  });
   const [isDeletingResultados, setIsDeletingResultados] = useState(false);
   const [isSavingProspectos, setIsSavingProspectos] = useState(false);
   const [advancedModalOpen, setAdvancedModalOpen] = useState(false);
@@ -1213,6 +1218,81 @@ export function DenueBusquedaView() {
 
   const selectedBusquedasCount = selectedBusquedas.size;
   const allBusquedasSelected = busquedas.length > 0 && selectedBusquedasCount === busquedas.length;
+
+  const toggleBusquedasSort = useCallback((key: BusquedasSortKey) => {
+    setBusquedasSort((current) => {
+      if (current.key === key) {
+        return {
+          key,
+          direction: current.direction === "asc" ? "desc" : "asc",
+        };
+      }
+      return { key, direction: "asc" };
+    });
+  }, []);
+
+  const sortedBusquedas = useMemo(() => {
+    const rows = [...busquedas];
+    rows.sort((a, b) => {
+      const metaA = extractBusquedaMeta(a);
+      const metaB = extractBusquedaMeta(b);
+      const modoA = metaA.modo || "radio";
+      const modoB = metaB.modo || "radio";
+      const actividadA = buildActividadDisplay(metaA.filters, scianLookups).label;
+      const actividadB = buildActividadDisplay(metaB.filters, scianLookups).label;
+      const textoBusquedaA = metaA.filters?.texto_busqueda?.trim();
+      const textoBusquedaB = metaB.filters?.texto_busqueda?.trim();
+      const busquedaTituloA =
+        modoA === "radio"
+          ? (a.query || "(Sin texto)")
+          : textoBusquedaA
+            ? textoBusquedaA
+            : actividadA
+              ? `Avanzada · ${actividadA}`
+              : (a.query || "Búsqueda avanzada");
+      const busquedaTituloB =
+        modoB === "radio"
+          ? (b.query || "(Sin texto)")
+          : textoBusquedaB
+            ? textoBusquedaB
+            : actividadB
+              ? `Avanzada · ${actividadB}`
+              : (b.query || "Búsqueda avanzada");
+      const geoA = buildGeoDisplay(metaA.filters, geoLookups).label;
+      const geoB = buildGeoDisplay(metaB.filters, geoLookups).label;
+      const dateA = new Date(a.creado_en).getTime();
+      const dateB = new Date(b.creado_en).getTime();
+      const radioA = modoA === "radio" && typeof a.radio_m === "number" ? a.radio_m : -1;
+      const radioB = modoB === "radio" && typeof b.radio_m === "number" ? b.radio_m : -1;
+      const registrosA = typeof a.total_encontrados === "number" ? a.total_encontrados : -1;
+      const registrosB = typeof b.total_encontrados === "number" ? b.total_encontrados : -1;
+
+      let base = 0;
+      switch (busquedasSort.key) {
+        case "busqueda":
+          base = busquedaTituloA.localeCompare(busquedaTituloB, "es", { sensitivity: "base" });
+          break;
+        case "registros":
+          base = registrosA - registrosB;
+          break;
+        case "radio":
+          base = radioA - radioB;
+          break;
+        case "geo":
+          base = geoA.localeCompare(geoB, "es", { sensitivity: "base" });
+          break;
+        case "fecha":
+        default:
+          base = dateA - dateB;
+          break;
+      }
+      if (base === 0) {
+        return a.creado_en.localeCompare(b.creado_en);
+      }
+      return busquedasSort.direction === "asc" ? base : -base;
+    });
+    return rows;
+  }, [busquedas, busquedasSort.direction, busquedasSort.key, geoLookups, scianLookups]);
 
   const goToPage = useCallback(
     (pageIndex: number) => {
@@ -2212,16 +2292,36 @@ export function DenueBusquedaView() {
                           onCheckedChange={(value) => handleSelectAllBusquedas(Boolean(value))}
                         />
                       </TableHead>
-                      <TableHead>Búsqueda / App</TableHead>
-                      <TableHead className="w-36 text-right">Registros</TableHead>
-                      <TableHead className="w-28 text-right">Radio</TableHead>
-                      <TableHead className="w-44">Estado / Municipio</TableHead>
-                      <TableHead className="w-44">Fecha</TableHead>
+                      <TableHead>
+                        <Button type="button" size="sm" variant="ghost" onClick={() => toggleBusquedasSort("busqueda")}>
+                          Búsqueda / App {busquedasSort.key === "busqueda" ? (busquedasSort.direction === "asc" ? "↑" : "↓") : ""}
+                        </Button>
+                      </TableHead>
+                      <TableHead className="w-36 text-right">
+                        <Button type="button" size="sm" variant="ghost" onClick={() => toggleBusquedasSort("registros")}>
+                          Registros {busquedasSort.key === "registros" ? (busquedasSort.direction === "asc" ? "↑" : "↓") : ""}
+                        </Button>
+                      </TableHead>
+                      <TableHead className="w-28 text-right">
+                        <Button type="button" size="sm" variant="ghost" onClick={() => toggleBusquedasSort("radio")}>
+                          Radio {busquedasSort.key === "radio" ? (busquedasSort.direction === "asc" ? "↑" : "↓") : ""}
+                        </Button>
+                      </TableHead>
+                      <TableHead className="w-44">
+                        <Button type="button" size="sm" variant="ghost" onClick={() => toggleBusquedasSort("geo")}>
+                          Estado / Municipio {busquedasSort.key === "geo" ? (busquedasSort.direction === "asc" ? "↑" : "↓") : ""}
+                        </Button>
+                      </TableHead>
+                      <TableHead className="w-44">
+                        <Button type="button" size="sm" variant="ghost" onClick={() => toggleBusquedasSort("fecha")}>
+                          Fecha {busquedasSort.key === "fecha" ? (busquedasSort.direction === "asc" ? "↑" : "↓") : ""}
+                        </Button>
+                      </TableHead>
                       <TableHead className="w-44 text-right">Acciones</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {busquedas.map((item) => {
+                    {sortedBusquedas.map((item) => {
                       const meta = extractBusquedaMeta(item);
                       const geo = buildGeoDisplay(meta.filters, geoLookups);
                       const actividad = buildActividadDisplay(meta.filters, scianLookups);
