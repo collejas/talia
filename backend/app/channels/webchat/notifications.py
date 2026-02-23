@@ -407,6 +407,12 @@ async def notify_sales_rep(
             return
         primary_reason = "case_b_reengage_exhausted"
     elif trigger == "webchat_session_closed":
+        if notifications.get("booking_confirmed"):
+            logger.info(
+                "webchat.notify_sales.skip_session_closed_after_booking",
+                extra={"conversation_id": context.conversation_id, "trigger": trigger},
+            )
+            return
         if not _has_base_fields_for_case_b(contact_record):
             logger.info(
                 "webchat.notify_sales.skip_case_c_base_missing",
