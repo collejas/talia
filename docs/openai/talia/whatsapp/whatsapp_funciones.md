@@ -119,7 +119,7 @@
       },
       "necesidad_proposito": {
         "type": "string",
-        "description": "Intención principal del lead en una sola frase clara tipo titular. Ej: 'Automatizar seguimiento de leads y atención en WhatsApp'."
+        "description": "Intención principal del lead en una sola frase clara tipo titular. Ej: 'Automatizar gestión de incidencias y comunicación con residentes usando WhatsApp y panel centralizado.'"
       }
     },
     "required": [
