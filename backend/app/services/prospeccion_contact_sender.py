@@ -277,6 +277,7 @@ async def _send_whatsapp_message(
     *,
     content_sid: str | None = None,
     content_variables: dict[str, str] | None = None,
+    organizacion_id: UUID | None = None,
 ) -> TwilioSendResult:
     if not body and not content_sid:
         return TwilioSendResult(sid=None, status="skipped", error="empty_body")
@@ -285,6 +286,7 @@ async def _send_whatsapp_message(
         body=body or "",
         content_sid=content_sid,
         content_variables=content_variables,
+        organizacion_id=organizacion_id,
     )
 
 
@@ -324,7 +326,12 @@ async def _run_envio_correo(envio: dict[str, Any], payload: dict[str, Any]) -> C
     )
 
 
-async def _run_envio_whatsapp(detalle: dict[str, Any], payload: dict[str, Any]) -> ContactEnvioResult:
+async def _run_envio_whatsapp(
+    detalle: dict[str, Any],
+    payload: dict[str, Any],
+    *,
+    organizacion_id: UUID | None = None,
+) -> ContactEnvioResult:
     telefono = _clean_text(detalle.get("phone"))
     if not telefono or not _prospecto_whatsapp_allowed(detalle):
         return ContactEnvioResult(
@@ -358,6 +365,7 @@ async def _run_envio_whatsapp(detalle: dict[str, Any], payload: dict[str, Any]) 
             body=None,
             content_sid=template_sid,
             content_variables=rendered_vars,
+            organizacion_id=organizacion_id,
         )
         fallback_used = False
         fallback_error: str | None = None
@@ -365,6 +373,7 @@ async def _run_envio_whatsapp(detalle: dict[str, Any], payload: dict[str, Any]) 
             fallback_result = await _send_whatsapp_message(
                 to_number=telefono,
                 body=preview_text,
+                organizacion_id=organizacion_id,
             )
             if not fallback_result.error:
                 wa_result = fallback_result
@@ -379,7 +388,11 @@ async def _run_envio_whatsapp(detalle: dict[str, Any], payload: dict[str, Any]) 
                 detalle={"reason": "whatsapp_payload_incompleto"},
                 error="whatsapp_payload_incompleto",
         )
-        wa_result = await _send_whatsapp_message(to_number=telefono, body=rendered_body)
+        wa_result = await _send_whatsapp_message(
+            to_number=telefono,
+            body=rendered_body,
+            organizacion_id=organizacion_id,
+        )
         preview_text = rendered_body
         fallback_used = False
         fallback_error = None
@@ -549,7 +562,17 @@ class ProspeccionContactSender:
         if canal == "correo":
             result = await _run_envio_correo(detalle, payload)
         elif canal == "whatsapp":
-            result = await _run_envio_whatsapp(detalle, payload)
+            org_value = envio.get("organizacion_id")
+            org_uuid: UUID | None = None
+            try:
+                org_uuid = UUID(str(org_value)) if org_value else None
+            except (TypeError, ValueError):
+                org_uuid = None
+            result = await _run_envio_whatsapp(
+                detalle,
+                payload,
+                organizacion_id=org_uuid,
+            )
         elif canal == "llamada":
             result = await _run_envio_llamada(detalle, payload)
         else:

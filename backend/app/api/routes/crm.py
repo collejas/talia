@@ -4240,6 +4240,41 @@ async def _fetch_contact_templates(
     return template_map
 
 
+async def _apply_default_whatsapp_runtime_template(
+    *,
+    canales_config: dict[str, dict[str, Any]],
+    organizacion_id: UUID,
+) -> None:
+    """Aplica plantilla WhatsApp por tenant cuando no se indicó una explícita."""
+
+    whatsapp_payload = canales_config.get("whatsapp")
+    if not isinstance(whatsapp_payload, dict):
+        return
+    metadata = whatsapp_payload.get("metadata") if isinstance(whatsapp_payload.get("metadata"), dict) else {}
+    template_sid = _clean_text(metadata.get("twilio_content_sid") or whatsapp_payload.get("twilio_content_sid"))
+    if template_sid:
+        return
+    runtime_settings = await tenant_runtime.get_whatsapp_runtime_settings(organizacion_id=organizacion_id)
+    default_sid = _clean_text(runtime_settings.sales_template_sid)
+    if not default_sid:
+        return
+    merged_metadata = dict(metadata)
+    merged_metadata["twilio_content_sid"] = default_sid
+    whatsapp_payload["metadata"] = merged_metadata
+
+
+def _assert_whatsapp_template_configured(canales_config: dict[str, dict[str, Any]]) -> None:
+    """En campañas de prospección en frío, WhatsApp debe salir por plantilla aprobada."""
+
+    whatsapp_payload = canales_config.get("whatsapp")
+    if not isinstance(whatsapp_payload, dict):
+        return
+    metadata = whatsapp_payload.get("metadata") if isinstance(whatsapp_payload.get("metadata"), dict) else {}
+    template_sid = _clean_text(metadata.get("twilio_content_sid") or whatsapp_payload.get("twilio_content_sid"))
+    if not template_sid:
+        raise HTTPException(status_code=400, detail="whatsapp_template_required")
+
+
 def _build_contact_template_payload(
     data: dict[str, Any],
     *,
@@ -13271,6 +13306,7 @@ async def contactar_prospectos(
     _: str = Depends(require_permission("ejecutar_busquedas")),
     user_token: str = Depends(require_user_token),
     usuario_id: UUID | None = Depends(optional_usuario_id),
+    organizacion_id: UUID = Depends(require_organizacion_id),
     payload: ProspectoContactarPayload,
 ) -> dict[str, Any]:
     """Envía correos, WhatsApps o llamadas registrando lotes y envíos individuales."""
@@ -13289,6 +13325,11 @@ async def contactar_prospectos(
         payload,
         template_map=template_map,
     )
+    await _apply_default_whatsapp_runtime_template(
+        canales_config=canales_config,
+        organizacion_id=organizacion_id,
+    )
+    _assert_whatsapp_template_configured(canales_config)
     if not canales_config:
         raise HTTPException(status_code=400, detail="contact_channels_required")
 

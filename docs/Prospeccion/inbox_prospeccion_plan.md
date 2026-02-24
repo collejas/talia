@@ -72,6 +72,10 @@ Resultado esperado:
 - [x] Backfill técnico:
   - Migración `20260224_140000_inbox_prospeccion_backfill.sql` para rellenar `mensajes.datos` históricos desde `prospeccion_contacto_envio`.
   - Aplicada vía MCP Supabase (sin filas históricas en el entorno actual de prueba).
+- [x] Envío WhatsApp de prospección en frío (backend):
+  - El worker de envíos usa credenciales Twilio por `organizacion_id` del envío.
+  - Si una campaña incluye canal WhatsApp sin plantilla explícita, se intenta usar `whatsapp.templates.sales` del tenant.
+  - Si no existe SID de plantilla, el backend rechaza con `whatsapp_template_required`.
 
 ## Propuesta técnica
 

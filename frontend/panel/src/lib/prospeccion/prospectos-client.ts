@@ -343,6 +343,11 @@ async function requestJson<T>(input: string, init?: RequestInit, retryAuth = tru
     if (detail === "twilio_not_configured" || detail.includes("Twilio credentials are not configured")) {
       throw new Error("Twilio no está configurado (faltan credenciales). Configura `TWILIO_ACCOUNT_SID` y `TWILIO_AUTH_TOKEN` en el backend.")
     }
+    if (detail === "whatsapp_template_required") {
+      throw new Error(
+        "WhatsApp de prospección en frío requiere plantilla aprobada. Configura `whatsapp.templates.sales` o selecciona una plantilla con `twilio_content_sid`."
+      )
+    }
     throw new Error(detail)
   }
 
