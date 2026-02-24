@@ -88,6 +88,7 @@ _DETAILED_REPLY_HINTS: tuple[str, ...] = (
 )
 _DEFAULT_WHATSAPP_MAX_CHARS = 280
 _MAX_PROSPECCION_REPLY_PREVIEW_CHARS = 500
+_PROSPECCION_REPLY_ENVIO_SOURCE_STATES = {"pendiente", "procesando", "enviado", "entregado", "leido", "completado"}
 
 
 @dataclass(slots=True)
@@ -173,6 +174,37 @@ async def _sync_inbound_to_prospeccion_log(
     if body_text and len(body_text) > _MAX_PROSPECCION_REPLY_PREVIEW_CHARS:
         body_text = f"{body_text[:_MAX_PROSPECCION_REPLY_PREVIEW_CHARS]}..."
 
+    if envio_id_value:
+        try:
+            envio_uuid = UUID(str(envio_id_value))
+        except (TypeError, ValueError):
+            envio_uuid = None
+        if envio_uuid:
+            envio_estado = _trim_text(envio.get("estado")) if isinstance(envio, dict) else None
+            envio_estado_norm = (envio_estado or "").lower()
+            if envio_estado_norm in _PROSPECCION_REPLY_ENVIO_SOURCE_STATES:
+                current_detalle = envio.get("detalle") if isinstance(envio.get("detalle"), dict) else {}
+                update_payload = {
+                    "estado": "respondido",
+                    "detalle": {
+                        **current_detalle,
+                        "reply_inbound_at": datetime.now(timezone.utc).isoformat(),
+                        "reply_message_sid": _trim_text(message.message_sid),
+                        "reply_preview": body_text,
+                    },
+                    "error": None,
+                    "procesado_en": datetime.now(timezone.utc).isoformat(),
+                }
+                try:
+                    await repo.worker_complete_envio(envio_id=envio_uuid, payload=update_payload)
+                except CRMRepositoryError as exc:
+                    log_event(
+                        logger,
+                        "whatsapp.prospeccion_reply_envio_update_failed",
+                        envio_id=str(envio_uuid),
+                        error=str(exc),
+                    )
+
     log_entry: dict[str, Any] = {
         "prospecto_id": str(prospecto_uuid),
         "canal": "whatsapp",
@@ -216,6 +248,16 @@ async def _sync_inbound_to_prospeccion_log(
                     "canal": "whatsapp",
                 },
             )
+            if envio_id_value:
+                await progress_hub.publish(
+                    str(batch_id_value),
+                    {
+                        "type": "envio",
+                        "batch_id": str(batch_id_value),
+                        "envio_id": str(envio_id_value),
+                        "estado": "respondido",
+                    },
+                )
         except Exception as exc:  # pragma: no cover - SSE best effort
             log_event(
                 logger,
