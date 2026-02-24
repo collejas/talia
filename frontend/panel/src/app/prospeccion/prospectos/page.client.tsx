@@ -106,6 +106,7 @@ type ProspectosSortKey =
   | "campana"
   | "con_envio"
   | "creado"
+type ProspectTableColumnId = ProspectosSortKey
 
 type Filters = {
   search: string
@@ -728,7 +729,16 @@ const [selectedTemplates, setSelectedTemplates] = useState<Record<string, string
         setColumnOrder([...parsedOrder, ...missing])
       }
       if (parsed.visibility && typeof parsed.visibility === "object") {
-        setColumnVisibility((prev) => ({ ...prev, ...parsed.visibility }))
+        setColumnVisibility((prev) => {
+          const next: Record<ProspectTableColumnId, boolean> = { ...prev }
+          for (const columnId of DEFAULT_TABLE_COLUMN_ORDER) {
+            const value = parsed.visibility?.[columnId]
+            if (typeof value === "boolean") {
+              next[columnId] = value
+            }
+          }
+          return next
+        })
       }
     } catch {
       // ignore persisted parse issues

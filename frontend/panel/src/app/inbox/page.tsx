@@ -13,7 +13,7 @@ export const dynamic = "force-dynamic"
 type InboxSearchParams = Record<string, string | string[] | undefined>
 
 type InboxPageProps = {
-  searchParams?: Promise<InboxSearchParams> | InboxSearchParams
+  searchParams?: Promise<InboxSearchParams>
 }
 
 export default async function Page({ searchParams }: InboxPageProps) {
