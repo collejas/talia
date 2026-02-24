@@ -107,6 +107,16 @@ def _render_twilio_variables(definition: Any, context: dict[str, Any]) -> dict[s
     return rendered or None
 
 
+def _find_blank_twilio_variables(variables: dict[str, str] | None) -> list[str]:
+    if not variables:
+        return []
+    missing: list[str] = []
+    for key, value in variables.items():
+        if not str(value or "").strip():
+            missing.append(str(key))
+    return missing
+
+
 def _build_contact_log_entry(
     *,
     prospecto_id: Any,
@@ -331,6 +341,17 @@ async def _run_envio_whatsapp(detalle: dict[str, Any], payload: dict[str, Any]) 
     preview_text: str | None = None
     if template_sid:
         rendered_vars = _render_twilio_variables(variables_def, context)
+        missing_vars = _find_blank_twilio_variables(rendered_vars)
+        if missing_vars:
+            return ContactEnvioResult(
+                estado="error",
+                detalle={
+                    "reason": "whatsapp_template_variables_incompletas",
+                    "template_sid": template_sid,
+                    "missing_variables": missing_vars,
+                },
+                error="whatsapp_template_variables_incompletas",
+            )
         preview_text = _render_template_text(_clean_text(payload.get("body")) or "", context).strip()
         wa_result = await _send_whatsapp_message(
             to_number=telefono,
@@ -338,6 +359,18 @@ async def _run_envio_whatsapp(detalle: dict[str, Any], payload: dict[str, Any]) 
             content_sid=template_sid,
             content_variables=rendered_vars,
         )
+        fallback_used = False
+        fallback_error: str | None = None
+        if wa_result.error and preview_text:
+            fallback_result = await _send_whatsapp_message(
+                to_number=telefono,
+                body=preview_text,
+            )
+            if not fallback_result.error:
+                wa_result = fallback_result
+                fallback_used = True
+            else:
+                fallback_error = fallback_result.error
     else:
         rendered_body = _render_template_text(_clean_text(payload.get("body")) or "", context).strip()
         if not rendered_body:
@@ -345,9 +378,11 @@ async def _run_envio_whatsapp(detalle: dict[str, Any], payload: dict[str, Any]) 
                 estado="error",
                 detalle={"reason": "whatsapp_payload_incompleto"},
                 error="whatsapp_payload_incompleto",
-            )
+        )
         wa_result = await _send_whatsapp_message(to_number=telefono, body=rendered_body)
         preview_text = rendered_body
+        fallback_used = False
+        fallback_error = None
     estado = "enviado" if not wa_result.error else "error"
     return ContactEnvioResult(
         estado=estado,
@@ -357,6 +392,8 @@ async def _run_envio_whatsapp(detalle: dict[str, Any], payload: dict[str, Any]) 
             "template_sid": template_sid,
             "twilio_variables": rendered_vars if template_sid else None,
             "body_preview": preview_text,
+            "fallback_plaintext_used": fallback_used,
+            "fallback_error": fallback_error,
         },
         error=wa_result.error,
         mensaje_id=wa_result.sid,

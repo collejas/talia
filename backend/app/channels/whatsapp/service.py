@@ -202,6 +202,28 @@ async def _sync_inbound_to_prospeccion_log(
             envio_id=str(envio_id_value) if envio_id_value else None,
             error=str(exc),
         )
+        return
+
+    if batch_id_value:
+        try:
+            await progress_hub.publish(
+                str(batch_id_value),
+                {
+                    "type": "reply",
+                    "batch_id": str(batch_id_value),
+                    "envio_id": str(envio_id_value) if envio_id_value else None,
+                    "prospecto_id": str(prospecto_uuid),
+                    "canal": "whatsapp",
+                },
+            )
+        except Exception as exc:  # pragma: no cover - SSE best effort
+            log_event(
+                logger,
+                "whatsapp.prospeccion_reply_publish_failed",
+                batch_id=str(batch_id_value),
+                prospecto_id=str(prospecto_uuid),
+                error=str(exc),
+            )
 
 
 def _looks_like_booking_confirmation(text: str) -> bool:
