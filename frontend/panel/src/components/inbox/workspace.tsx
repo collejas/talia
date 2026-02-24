@@ -32,9 +32,9 @@ export function InboxWorkspace({
 }: InboxWorkspaceProps) {
   const [sourceFilterValue, setSourceFilterValue] = React.useState(initialFilters?.source ?? "");
   const [channelFilterValue, setChannelFilterValue] = React.useState(initialFilters?.channel ?? "");
+  const [batchFilterValue, setBatchFilterValue] = React.useState(initialFilters?.batchId ?? "");
+  const [campanaFilterValue, setCampanaFilterValue] = React.useState(initialFilters?.campanaId ?? "");
   const [estadoFilterValue] = React.useState(initialFilters?.estado ?? "");
-  const [batchFilterValue] = React.useState(initialFilters?.batchId ?? "");
-  const [campanaFilterValue] = React.useState(initialFilters?.campanaId ?? "");
   const [dateFilterValue, setDateFilterValue] = React.useState("");
   const [reengageFilter, setReengageFilter] = React.useState("");
 
@@ -64,6 +64,31 @@ export function InboxWorkspace({
     () => [...derivedReengageOptions, ...normalizedTagOptions],
     [derivedReengageOptions, normalizedTagOptions],
   );
+  const batchOptions = React.useMemo(() => {
+    const seen = new Set<string>();
+    const values: Array<{ value: string; label: string }> = [];
+    for (const thread of threads) {
+      const value = thread.batchId?.trim();
+      if (!value || seen.has(value)) continue;
+      seen.add(value);
+      values.push({ value, label: `Batch ${value.slice(0, 8)}` });
+    }
+    values.sort((a, b) => a.label.localeCompare(b.label, "es", { sensitivity: "base" }));
+    return values;
+  }, [threads]);
+
+  const campanaOptions = React.useMemo(() => {
+    const seen = new Set<string>();
+    const values: Array<{ value: string; label: string }> = [];
+    for (const thread of threads) {
+      const value = thread.campanaId?.trim();
+      if (!value || seen.has(value)) continue;
+      seen.add(value);
+      values.push({ value, label: `Campaña ${value.slice(0, 8)}` });
+    }
+    values.sort((a, b) => a.label.localeCompare(b.label, "es", { sensitivity: "base" }));
+    return values;
+  }, [threads]);
 
   React.useEffect(() => {
     if (
@@ -91,6 +116,12 @@ export function InboxWorkspace({
         onSourceFilterValueChange={setSourceFilterValue}
         channelFilterValue={channelFilterValue}
         onChannelFilterValueChange={setChannelFilterValue}
+        batchFilterValue={batchFilterValue}
+        onBatchFilterValueChange={setBatchFilterValue}
+        batchOptions={batchOptions}
+        campanaFilterValue={campanaFilterValue}
+        onCampanaFilterValueChange={setCampanaFilterValue}
+        campanaOptions={campanaOptions}
         dateFilterValue={dateFilterValue}
         onDateFilterValueChange={setDateFilterValue}
         reengageFilter={reengageFilter}

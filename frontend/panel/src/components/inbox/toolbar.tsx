@@ -44,6 +44,12 @@ type InboxToolbarProps = {
   onChannelFilterValueChange?: (value: string) => void;
   sourceFilterValue: string;
   onSourceFilterValueChange?: (value: string) => void;
+  batchFilterValue: string;
+  onBatchFilterValueChange?: (value: string) => void;
+  batchOptions: Array<{ value: string; label: string }>;
+  campanaFilterValue: string;
+  onCampanaFilterValueChange?: (value: string) => void;
+  campanaOptions: Array<{ value: string; label: string }>;
   dateFilterValue: string;
   onDateFilterValueChange?: (value: string) => void;
   reengageFilter: string;
@@ -57,6 +63,12 @@ export function InboxToolbar({
   onChannelFilterValueChange,
   sourceFilterValue,
   onSourceFilterValueChange,
+  batchFilterValue,
+  onBatchFilterValueChange,
+  batchOptions,
+  campanaFilterValue,
+  onCampanaFilterValueChange,
+  campanaOptions,
   dateFilterValue,
   onDateFilterValueChange,
   reengageFilter,
@@ -130,6 +142,34 @@ export function InboxToolbar({
             >
               <option value="">Fecha</option>
               {DATE_FILTER_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="flex items-center">
+            <select
+              className="h-8 w-[7rem] rounded-md border border-muted-foreground/40 bg-background px-3 text-[10px] uppercase tracking-wider text-muted-foreground leading-none focus-visible:border-ring focus-visible:ring-ring/50"
+              value={batchFilterValue}
+              onChange={(event) => onBatchFilterValueChange?.(event.target.value)}
+            >
+              <option value="">Batch</option>
+              {batchOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="flex items-center">
+            <select
+              className="h-8 w-[7rem] rounded-md border border-muted-foreground/40 bg-background px-3 text-[10px] uppercase tracking-wider text-muted-foreground leading-none focus-visible:border-ring focus-visible:ring-ring/50"
+              value={campanaFilterValue}
+              onChange={(event) => onCampanaFilterValueChange?.(event.target.value)}
+            >
+              <option value="">Campaña</option>
+              {campanaOptions.map((option) => (
                 <option key={option.value} value={option.value}>
                   {option.label}
                 </option>
