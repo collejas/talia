@@ -49,10 +49,20 @@ def _clean_text(value: Any) -> str | None:
 
 
 def _prospecto_whatsapp_allowed(info: dict[str, Any]) -> bool:
-    if info.get("whatsapp_permitido"):
+    # Prospección en frío puede forzar intento aunque lookup no tenga carrier móvil.
+    if info.get("whatsapp_force"):
         return True
+    # Explicit override from lookup/business rule.
+    if info.get("whatsapp_permitido") is True:
+        return True
+    if info.get("whatsapp_permitido") is False:
+        return False
     carrier_type = _clean_text(info.get("carrier_type")) or ""
-    return carrier_type.lower() == "mobile"
+    normalized = carrier_type.lower()
+    if not normalized:
+        # For cold outreach we allow unknown carrier and let provider validation decide.
+        return True
+    return normalized == "mobile"
 
 
 def _prospecto_llamada_permitida(info: dict[str, Any]) -> bool:

@@ -4404,6 +4404,7 @@ def _build_contact_envios_entries(
             "actividad": prospecto.get("actividad"),
             "email": prospecto.get("email"),
             "phone": prospecto.get("phone_e164") or prospecto.get("phone"),
+            "whatsapp_force": True,
             "whatsapp_permitido": prospecto.get("whatsapp_permitido"),
             "llamada_permitida": prospecto.get("llamada_permitida"),
             "carrier_type": prospecto.get("carrier_type"),
@@ -12369,6 +12370,7 @@ async def listar_contacto_templates(
     repo: CRMRepository = Depends(get_repository),
     _: str = Depends(require_permission("ejecutar_busquedas")),
     user_token: str = Depends(require_user_token),
+    organizacion_id: UUID = Depends(require_organizacion_id),
     params: ContactTemplateQuery = Depends(),
 ) -> dict[str, Any]:
     """Lista plantillas disponibles para envíos."""
@@ -12380,6 +12382,42 @@ async def listar_contacto_templates(
         )
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
+    if not params.canal or params.canal == "whatsapp":
+        runtime_settings = await tenant_runtime.get_whatsapp_runtime_settings(organizacion_id=organizacion_id)
+        runtime_sids = runtime_settings.prospeccion_template_sids
+        if runtime_sids:
+            existing_whatsapp_sids: set[str] = set()
+            for item in items:
+                if not isinstance(item, dict):
+                    continue
+                if _clean_text(item.get("canal")) != "whatsapp":
+                    continue
+                metadata = item.get("metadata") if isinstance(item.get("metadata"), dict) else {}
+                sid = _clean_text(metadata.get("twilio_content_sid"))
+                if sid:
+                    existing_whatsapp_sids.add(sid)
+            for idx, sid in enumerate(runtime_sids, start=1):
+                if sid in existing_whatsapp_sids:
+                    continue
+                items.append(
+                    {
+                        "id": f"runtime:whatsapp:prospeccion:{idx}",
+                        "canal": "whatsapp",
+                        "slug": f"runtime-whats-prosp-{idx}",
+                        "nombre": f"Whats-Prosp {idx}",
+                        "descripcion": "SID configurado desde settings/tenants",
+                        "asunto": None,
+                        "cuerpo_texto": None,
+                        "cuerpo_html": None,
+                        "activo": True,
+                        "metadata": {
+                            "twilio_content_sid": sid,
+                            "runtime_template": True,
+                            "template_source": "whatsapp.templates.prospeccion",
+                        },
+                    }
+                )
+
     return {"ok": True, "items": items}
 
 

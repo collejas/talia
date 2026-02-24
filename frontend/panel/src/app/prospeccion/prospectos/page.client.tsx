@@ -1633,9 +1633,22 @@ useEffect(() => {
         return
       }
       const autoWhatsappVariables = buildAutoWhatsappVariables(message, whatsappEmpresa)
+      const templateMetadata =
+        whatsappTemplate.metadata && typeof whatsappTemplate.metadata === "object"
+          ? whatsappTemplate.metadata
+          : null
+      const twilioSidFromTemplate =
+        templateMetadata && typeof templateMetadata["twilio_content_sid"] === "string"
+          ? templateMetadata["twilio_content_sid"].trim()
+          : ""
       const entry: ProspeccionCanalConfigInput = {
         canal: "whatsapp",
-        template_id: whatsappTemplate.id,
+      }
+      const isTemplateIdUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+        whatsappTemplate.id
+      )
+      if (isTemplateIdUuid) {
+        entry.template_id = whatsappTemplate.id
       }
       if (message) {
         entry.body = message
@@ -1644,8 +1657,11 @@ useEffect(() => {
         ...(autoWhatsappVariables ?? {}),
         ...(parsedWhatsappVariables.value ?? {}),
       }
-      if (Object.keys(mergedWhatsappVariables).length) {
-        entry.metadata = { twilio_variables: mergedWhatsappVariables }
+      if (twilioSidFromTemplate || Object.keys(mergedWhatsappVariables).length) {
+        entry.metadata = {
+          ...(twilioSidFromTemplate ? { twilio_content_sid: twilioSidFromTemplate } : {}),
+          ...(Object.keys(mergedWhatsappVariables).length ? { twilio_variables: mergedWhatsappVariables } : {}),
+        }
       }
       canalesPayload.push(entry)
     } else if (whatsappMensaje) {

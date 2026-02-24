@@ -746,6 +746,7 @@ class WhatsappRuntimeSettings:
     sales_template_sid: str | None
     appointment_template_sid: str | None
     cancel_template_sid: str | None
+    prospeccion_template_sids: list[str]
     project_id: str | None
     voice_model: str | None
     voice_max_tokens: int | None
@@ -765,6 +766,7 @@ class WhatsappRuntimeSettings:
             sales_template_sid=settings.whatsapp_sales_template_sid,
             appointment_template_sid=settings.whatsapp_sales_appointment_template_sid,
             cancel_template_sid=settings.whatsapp_sales_cancel_appointment_template_sid,
+            prospeccion_template_sids=[],
             project_id=settings.openai_project_id,
             voice_model=settings.openai_model,
             voice_max_tokens=settings.openai_max_tokens,
@@ -830,6 +832,26 @@ async def get_whatsapp_runtime_settings(
     cancel_template = _coerce_str_or_none(templates.get("cancel"))
     if cancel_template is not None:
         settings_payload.cancel_template_sid = cancel_template
+    prospeccion_templates_raw = templates.get("prospeccion")
+    prospeccion_templates: list[str] = []
+    if isinstance(prospeccion_templates_raw, list):
+        for item in prospeccion_templates_raw:
+            sid = _coerce_str_or_none(item)
+            if sid:
+                prospeccion_templates.append(sid)
+    else:
+        single_sid = _coerce_str_or_none(prospeccion_templates_raw)
+        if single_sid:
+            prospeccion_templates.append(single_sid)
+    if prospeccion_templates:
+        deduped: list[str] = []
+        seen: set[str] = set()
+        for sid in prospeccion_templates:
+            if sid in seen:
+                continue
+            seen.add(sid)
+            deduped.append(sid)
+        settings_payload.prospeccion_template_sids = deduped
 
     project_value = _coerce_str_or_none(general_cfg.get("project_id"))
     if project_value is not None:
