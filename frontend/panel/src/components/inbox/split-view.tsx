@@ -496,6 +496,8 @@ function resolveHumanAuthorName(
 }
 type InboxSplitViewProps = {
   threads: InboxThread[];
+  batchOptions?: Array<{ value: string; label: string }>;
+  campanaOptions?: Array<{ value: string; label: string }>;
   sourceFilter?: string | null;
   channelFilter?: string | null;
   estadoFilter?: string | null;
@@ -507,6 +509,8 @@ type InboxSplitViewProps = {
 
 export function InboxSplitView({
   threads,
+  batchOptions,
+  campanaOptions,
   sourceFilter,
   channelFilter,
   estadoFilter,
@@ -535,6 +539,14 @@ export function InboxSplitView({
   const lastMessagesFingerprintRef = React.useRef<string>("");
   const previousSelectedIdRef = React.useRef<string | null>(null);
   const { user: currentUser } = useCurrentUser();
+  const batchLabelMap = React.useMemo(
+    () => new Map((batchOptions ?? []).map((item) => [item.value, item.label])),
+    [batchOptions],
+  );
+  const campanaLabelMap = React.useMemo(
+    () => new Map((campanaOptions ?? []).map((item) => [item.value, item.label])),
+    [campanaOptions],
+  );
 
   const manualAgentMetadata = React.useMemo(() => {
     if (!currentUser) {
@@ -1237,6 +1249,16 @@ export function InboxSplitView({
                         <Badge variant="outline" className={`uppercase ${channelBadgeClass}`}>
                           {thread.canal}
                         </Badge>
+                        {thread.batchId ? (
+                          <Badge variant="outline" className="max-w-[160px] truncate">
+                            {batchLabelMap.get(thread.batchId) ?? `Batch ${thread.batchId.slice(0, 8)}`}
+                          </Badge>
+                        ) : null}
+                        {thread.campanaId ? (
+                          <Badge variant="outline" className="max-w-[160px] truncate">
+                            {campanaLabelMap.get(thread.campanaId) ?? `Campaña ${thread.campanaId.slice(0, 8)}`}
+                          </Badge>
+                        ) : null}
                         {thread.asignadoNombre ? <span>Asignado a {thread.asignadoNombre}</span> : null}
                       </div>
                       <p className="line-clamp-2 text-xs text-muted-foreground">
@@ -1280,6 +1302,18 @@ export function InboxSplitView({
                 {selectedThread.source?.toLowerCase() === "prospeccion" ? (
                   <Badge variant="secondary" className="uppercase">
                     Prospección
+                  </Badge>
+                ) : null}
+                {selectedThread.batchId ? (
+                  <Badge variant="outline" className="max-w-[220px] truncate">
+                    {batchLabelMap.get(selectedThread.batchId) ??
+                      `Batch ${selectedThread.batchId.slice(0, 8)}`}
+                  </Badge>
+                ) : null}
+                {selectedThread.campanaId ? (
+                  <Badge variant="outline" className="max-w-[220px] truncate">
+                    {campanaLabelMap.get(selectedThread.campanaId) ??
+                      `Campaña ${selectedThread.campanaId.slice(0, 8)}`}
                   </Badge>
                 ) : null}
                 {selectedThread.contactoTelefono ? (

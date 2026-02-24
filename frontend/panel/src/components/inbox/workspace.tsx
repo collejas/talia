@@ -217,6 +217,8 @@ export function InboxWorkspace({
       />
       <InboxSplitView
         threads={threads}
+        batchOptions={batchOptions}
+        campanaOptions={campanaOptions}
         sourceFilter={activeSourceFilter}
         channelFilter={activeChannelFilter}
         estadoFilter={activeEstadoFilter}
