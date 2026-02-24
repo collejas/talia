@@ -701,7 +701,7 @@ export function InboxSplitView({
         return (thread.canal ?? "").toLowerCase() === normalizedChannelFilter;
       })
       .filter((thread) => {
-        if (!normalizedEstadoFilter) return true;
+        if (!normalizedEstadoFilter || normalizedEstadoFilter === "all") return true;
         return (thread.estado ?? "").toLowerCase() === normalizedEstadoFilter;
       })
       .filter((thread) => {

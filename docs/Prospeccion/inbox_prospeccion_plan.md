@@ -66,8 +66,12 @@ Resultado esperado:
   - Filtro `Origen` (`Todos`, `Prospección`, `Operativo`).
   - Badge visual `Prospección` en lista y encabezado del hilo.
   - Selectores `Batch` y `Campaña`.
+  - Filtro `Estados` conectado a filtro real de hilos.
   - Deep link por URL (`source`, `channel`, `batchId`, `campanaId`, etc.).
   - Botón `Copiar enlace` del contexto filtrado.
+- [x] Backfill técnico:
+  - Migración `20260224_140000_inbox_prospeccion_backfill.sql` para rellenar `mensajes.datos` históricos desde `prospeccion_contacto_envio`.
+  - Aplicada vía MCP Supabase (sin filas históricas en el entorno actual de prueba).
 
 ## Propuesta técnica
 
@@ -138,4 +142,4 @@ Permitir abrir `/inbox` con query params:
 
 1. Validar en producción el comportamiento con alto volumen (performance y cardinalidad de filtros).
 2. Mejorar etiquetas de `Batch/Campaña` con nombre comercial real en lugar de UUID corto.
-3. (Opcional) backfill histórico de `mensajes.datos.source` para conversaciones antiguas.
+3. (Opcional) validar en producción si existen filas históricas a corregir con la migración de backfill.

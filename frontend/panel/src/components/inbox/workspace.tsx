@@ -40,7 +40,7 @@ export function InboxWorkspace({
   const [channelFilterValue, setChannelFilterValue] = React.useState(initialFilters?.channel ?? "");
   const [batchFilterValue, setBatchFilterValue] = React.useState(initialFilters?.batchId ?? "");
   const [campanaFilterValue, setCampanaFilterValue] = React.useState(initialFilters?.campanaId ?? "");
-  const [estadoFilterValue] = React.useState(initialFilters?.estado ?? "");
+  const [estadoFilterValue, setEstadoFilterValue] = React.useState(initialFilters?.estado ?? "");
   const [dateFilterValue, setDateFilterValue] = React.useState("");
   const [reengageFilter, setReengageFilter] = React.useState("");
   const [copyLinkLabel, setCopyLinkLabel] = React.useState("Copiar enlace");
@@ -146,9 +146,7 @@ export function InboxWorkspace({
     upsert("date", dateFilterValue, { skipAll: true });
     upsert("reengage", reengageFilter, { skipAll: true });
 
-    if (initialFilters?.estado?.trim()) {
-      params.set("estado", initialFilters.estado.trim());
-    }
+    upsert("estado", estadoFilterValue, { skipAll: true });
 
     const nextQuery = params.toString();
     const nextUrl = `${pathname}${nextQuery ? `?${nextQuery}` : ""}`;
@@ -160,11 +158,11 @@ export function InboxWorkspace({
     pathname,
     sourceFilterValue,
     channelFilterValue,
+    estadoFilterValue,
     batchFilterValue,
     campanaFilterValue,
     dateFilterValue,
     reengageFilter,
-    initialFilters?.estado,
   ]);
 
   React.useEffect(() => {
@@ -188,7 +186,8 @@ export function InboxWorkspace({
     sourceFilterValue && sourceFilterValue !== "all" ? sourceFilterValue : null;
   const activeChannelFilter =
     channelFilterValue && channelFilterValue !== "all" ? channelFilterValue : null;
-  const activeEstadoFilter = estadoFilterValue?.trim() || null;
+  const activeEstadoFilter =
+    estadoFilterValue?.trim() && estadoFilterValue !== "all" ? estadoFilterValue.trim() : null;
   const activeBatchFilter = batchFilterValue?.trim() || null;
   const activeCampanaFilter = campanaFilterValue?.trim() || null;
   const activeDateFilter: DateFilterOption = (dateFilterValue || "all") as DateFilterOption;
@@ -197,6 +196,8 @@ export function InboxWorkspace({
     <div className="space-y-4">
       <InboxToolbar
         summary={summary}
+        stateFilterValue={estadoFilterValue}
+        onStateFilterValueChange={setEstadoFilterValue}
         sourceFilterValue={sourceFilterValue}
         onSourceFilterValueChange={setSourceFilterValue}
         channelFilterValue={channelFilterValue}

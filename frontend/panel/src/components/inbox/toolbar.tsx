@@ -40,6 +40,8 @@ const STATE_FILTER_OPTIONS = [
 
 type InboxToolbarProps = {
   summary: InboxSummary;
+  stateFilterValue: string;
+  onStateFilterValueChange?: (value: string) => void;
   channelFilterValue: string;
   onChannelFilterValueChange?: (value: string) => void;
   sourceFilterValue: string;
@@ -61,6 +63,8 @@ type InboxToolbarProps = {
 
 export function InboxToolbar({
   summary,
+  stateFilterValue,
+  onStateFilterValueChange,
   channelFilterValue,
   onChannelFilterValueChange,
   sourceFilterValue,
@@ -83,7 +87,6 @@ export function InboxToolbar({
   const unread = summary.unread ?? 0;
   const awaiting = summary.awaiting ?? 0;
   const closed = summary.folders.find((folder) => folder.id === "closed")?.count ?? 0;
-  const [stateFilter, setStateFilter] = React.useState("");
 
   const renderStateLabel = (value: string): string => {
     switch (value) {
@@ -197,8 +200,8 @@ export function InboxToolbar({
           <div className="flex items-center">
             <select
               className="h-8 w-[5rem] rounded-md border border-muted-foreground/40 bg-background px-3 text-[10px] uppercase tracking-wider text-muted-foreground leading-none focus-visible:border-ring focus-visible:ring-ring/50"
-              value={stateFilter}
-              onChange={(event) => setStateFilter(event.target.value)}
+              value={stateFilterValue}
+              onChange={(event) => onStateFilterValueChange?.(event.target.value)}
             >
               <option value="">Estados</option>
               {STATE_FILTER_OPTIONS.map((option) => (
