@@ -108,5 +108,7 @@ export type InboxPayload = {
   threads: InboxThread[];
   totalThreads: number;
   reengageTags: string[];
+  batchOptions: Array<{ value: string; label: string }>;
+  campanaOptions: Array<{ value: string; label: string }>;
   errors: string[];
 };

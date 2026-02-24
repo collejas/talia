@@ -61,6 +61,8 @@ export default async function Page({ searchParams }: InboxPageProps) {
                   summary={inboxData.summary}
                   threads={inboxData.threads}
                   reengageTagOptions={inboxData.reengageTags}
+                  batchOptions={inboxData.batchOptions}
+                  campanaOptions={inboxData.campanaOptions}
                   initialFilters={initialFilters}
                 />
               </div>

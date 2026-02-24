@@ -15,6 +15,8 @@ type InboxWorkspaceProps = {
   summary: InboxSummary;
   threads: InboxThread[];
   reengageTagOptions: string[];
+  batchOptions?: Array<{ value: string; label: string }>;
+  campanaOptions?: Array<{ value: string; label: string }>;
   initialFilters?: {
     estado?: string | null;
     source?: string | null;
@@ -28,6 +30,8 @@ export function InboxWorkspace({
   summary,
   threads,
   reengageTagOptions,
+  batchOptions: initialBatchOptions,
+  campanaOptions: initialCampanaOptions,
   initialFilters,
 }: InboxWorkspaceProps) {
   const [sourceFilterValue, setSourceFilterValue] = React.useState(initialFilters?.source ?? "");
@@ -65,8 +69,15 @@ export function InboxWorkspace({
     [derivedReengageOptions, normalizedTagOptions],
   );
   const batchOptions = React.useMemo(() => {
+    const base = Array.isArray(initialBatchOptions) ? initialBatchOptions : [];
     const seen = new Set<string>();
     const values: Array<{ value: string; label: string }> = [];
+    for (const item of base) {
+      const value = item.value?.trim();
+      if (!value || seen.has(value)) continue;
+      seen.add(value);
+      values.push({ value, label: item.label?.trim() || `Batch ${value.slice(0, 8)}` });
+    }
     for (const thread of threads) {
       const value = thread.batchId?.trim();
       if (!value || seen.has(value)) continue;
@@ -75,11 +86,18 @@ export function InboxWorkspace({
     }
     values.sort((a, b) => a.label.localeCompare(b.label, "es", { sensitivity: "base" }));
     return values;
-  }, [threads]);
+  }, [threads, initialBatchOptions]);
 
   const campanaOptions = React.useMemo(() => {
+    const base = Array.isArray(initialCampanaOptions) ? initialCampanaOptions : [];
     const seen = new Set<string>();
     const values: Array<{ value: string; label: string }> = [];
+    for (const item of base) {
+      const value = item.value?.trim();
+      if (!value || seen.has(value)) continue;
+      seen.add(value);
+      values.push({ value, label: item.label?.trim() || `Campaña ${value.slice(0, 8)}` });
+    }
     for (const thread of threads) {
       const value = thread.campanaId?.trim();
       if (!value || seen.has(value)) continue;
@@ -88,7 +106,7 @@ export function InboxWorkspace({
     }
     values.sort((a, b) => a.label.localeCompare(b.label, "es", { sensitivity: "base" }));
     return values;
-  }, [threads]);
+  }, [threads, initialCampanaOptions]);
 
   React.useEffect(() => {
     if (

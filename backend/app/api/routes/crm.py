@@ -5675,6 +5675,16 @@ class CRMInboxMessage(BaseModel):
     attachments: list[dict[str, Any]] | None = None
 
 
+class CRMInboxContextOption(BaseModel):
+    value: str
+    label: str
+
+
+class CRMInboxContextFilters(BaseModel):
+    batches: list[CRMInboxContextOption] = Field(default_factory=list)
+    campanas: list[CRMInboxContextOption] = Field(default_factory=list)
+
+
 class CRMPipelineHistoryItem(BaseModel):
     id: UUID
     oportunidad_id: UUID
@@ -9243,6 +9253,48 @@ async def get_inbox_threads(
         message_limit=message_limit,
     )
     return [CRMInboxThread.model_validate(row) for row in rows]
+
+
+@router.get("/inbox/filter-options", response_model=CRMInboxContextFilters)
+async def get_inbox_filter_options(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    _: str = Depends(require_permission("ver_inbox")),
+    user_token: str = Depends(require_user_token),
+    source: str | None = Query(default=None, max_length=80),
+    channel: str | None = Query(default=None, max_length=30),
+    limit: Annotated[int, Query(ge=25, le=500)] = 200,
+) -> CRMInboxContextFilters:
+    """Devuelve catálogos de batch/campaña para los filtros del inbox."""
+
+    rows = await repo.inbox_threads(
+        usuario_token=user_token,
+        source=source,
+        channel=channel,
+        limit=limit,
+        offset=0,
+        message_limit=1,
+    )
+
+    batch_ids: set[str] = set()
+    campana_ids: set[str] = set()
+    for row in rows:
+        batch_value = _clean_text(row.get("batch_id"))
+        if batch_value:
+            batch_ids.add(batch_value)
+        campana_value = _clean_text(row.get("campana_id"))
+        if campana_value:
+            campana_ids.add(campana_value)
+
+    batches = [
+        CRMInboxContextOption(value=value, label=f"Batch {value[:8]}")
+        for value in sorted(batch_ids)
+    ]
+    campanas = [
+        CRMInboxContextOption(value=value, label=f"Campaña {value[:8]}")
+        for value in sorted(campana_ids)
+    ]
+    return CRMInboxContextFilters(batches=batches, campanas=campanas)
 
 
 @router.get("/inbox/messages/{conversacion_id}", response_model=list[CRMInboxMessage])

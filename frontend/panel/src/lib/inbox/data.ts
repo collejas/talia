@@ -41,6 +41,11 @@ type CrmTagRow = {
   nombre?: string | null;
 };
 
+type InboxFilterOptionsResponse = {
+  batches?: Array<{ value?: string; label?: string | null }>;
+  campanas?: Array<{ value?: string; label?: string | null }>;
+};
+
 const REENGAGE_TAG_KEYWORDS = [
   "reeng",
   "reenganch",
@@ -112,19 +117,27 @@ export async function loadInboxData(filters?: InboxThreadsFilters): Promise<Inbo
   if (normalizedBatchId) normalizedFilters.batch_id = normalizedBatchId;
   if (normalizedCampanaId) normalizedFilters.campana_id = normalizedCampanaId;
 
-  const [resumen, threads, tags] = await Promise.all([
+  const [resumen, threads, tags, filterOptions] = await Promise.all([
     callCrmApi<InboxResumenResponse>("/crm/inbox/summary", { withUserToken: true }),
     callCrmApi<InboxThreadRow[]>("/crm/inbox/threads", {
       withUserToken: true,
       searchParams: normalizedFilters,
     }),
     callCrmApi<CrmTagRow[]>("/crm/tags", { withUserToken: true }),
+    callCrmApi<InboxFilterOptionsResponse>("/crm/inbox/filter-options", {
+      withUserToken: true,
+      searchParams: {
+        ...(normalizedSource ? { source: normalizedSource } : {}),
+        ...(normalizedChannel ? { channel: normalizedChannel } : {}),
+      },
+    }),
   ]);
 
   const errors: string[] = [];
   if (!resumen.ok) errors.push(resumen.error);
   if (!threads.ok) errors.push(threads.error);
   if (!tags.ok) errors.push(tags.error);
+  if (!filterOptions.ok) errors.push(filterOptions.error);
 
   const summary = mapSummary(resumen.ok ? resumen.data : undefined);
   const mappedThreads = mapThreads(threads.ok ? threads.data : undefined);
@@ -141,13 +154,35 @@ export async function loadInboxData(filters?: InboxThreadsFilters): Promise<Inbo
     new Set([...reengageTagsFromApi, ...reengageTagsFromThreads]),
   ).sort((a, b) => a.localeCompare(b, "es", { sensitivity: "base" }));
 
+  const batchOptions = mapContextOptions(filterOptions.ok ? filterOptions.data?.batches : undefined);
+  const campanaOptions = mapContextOptions(
+    filterOptions.ok ? filterOptions.data?.campanas : undefined,
+  );
+
   return {
     summary,
     threads: mappedThreads,
     totalThreads,
     reengageTags,
+    batchOptions,
+    campanaOptions,
     errors: Array.from(new Set(errors)),
   };
+}
+
+function mapContextOptions(
+  items: Array<{ value?: string; label?: string | null }> | undefined,
+): Array<{ value: string; label: string }> {
+  if (!Array.isArray(items)) return [];
+  const seen = new Set<string>();
+  const mapped: Array<{ value: string; label: string }> = [];
+  for (const item of items) {
+    const value = item?.value?.trim();
+    if (!value || seen.has(value)) continue;
+    seen.add(value);
+    mapped.push({ value, label: item?.label?.trim() || value });
+  }
+  return mapped;
 }
 
 function mapSummary(payload?: InboxResumenResponse): InboxSummary {
