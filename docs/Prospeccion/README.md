@@ -4,6 +4,7 @@
 
 Esta carpeta quedó organizada así:
 
+- `CHANGELOG.md`: registro cronológico de cambios en prospección.
 - `prospeccion.md`: visión general funcional y flujo end-to-end.
 - `frontend_vistas.md`: vistas de UI y responsabilidades.
 - `backend_endpoints.md`: endpoints y capas backend.
