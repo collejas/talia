@@ -87,6 +87,7 @@ _DETAILED_REPLY_HINTS: tuple[str, ...] = (
     "cotizacion",
 )
 _DEFAULT_WHATSAPP_MAX_CHARS = 280
+_MAX_PROSPECCION_REPLY_PREVIEW_CHARS = 500
 
 
 @dataclass(slots=True)
@@ -106,6 +107,101 @@ class TwilioSendResult:
     status: str | None
     error: str | None = None
     from_number: str | None = None
+
+
+def _trim_text(value: Any) -> str | None:
+    if isinstance(value, str):
+        trimmed = value.strip()
+        return trimmed or None
+    if value is None:
+        return None
+    trimmed = str(value).strip()
+    return trimmed or None
+
+
+async def _sync_inbound_to_prospeccion_log(
+    *,
+    repo: CRMRepository,
+    contact_id: str,
+    message: schemas.WhatsAppIncomingMessage,
+) -> None:
+    """Registra respuesta entrante en bitácora de prospección cuando aplica."""
+
+    try:
+        contact_uuid = UUID(contact_id)
+    except (TypeError, ValueError):
+        return
+
+    try:
+        prospecto = await repo.worker_find_prospecto_by_contacto(contacto_id=contact_uuid)
+    except CRMRepositoryError as exc:
+        log_event(
+            logger,
+            "whatsapp.prospeccion_reply_lookup_failed",
+            contact_id=contact_id,
+            error=str(exc),
+        )
+        return
+    if not prospecto:
+        return
+
+    prospecto_id = prospecto.get("id")
+    if not prospecto_id:
+        return
+    try:
+        prospecto_uuid = UUID(str(prospecto_id))
+    except (TypeError, ValueError):
+        return
+
+    envio: dict[str, Any] | None = None
+    try:
+        envio = await repo.worker_get_latest_envio_for_prospecto(
+            prospecto_id=prospecto_uuid,
+            canal="whatsapp",
+        )
+    except CRMRepositoryError as exc:
+        log_event(
+            logger,
+            "whatsapp.prospeccion_reply_envio_lookup_failed",
+            prospecto_id=str(prospecto_id),
+            error=str(exc),
+        )
+
+    envio_id_value = envio.get("id") if envio else None
+    batch_id_value = envio.get("batch_id") if envio else None
+    body_text = _trim_text(message.body)
+    if body_text and len(body_text) > _MAX_PROSPECCION_REPLY_PREVIEW_CHARS:
+        body_text = f"{body_text[:_MAX_PROSPECCION_REPLY_PREVIEW_CHARS]}..."
+
+    log_entry: dict[str, Any] = {
+        "prospecto_id": str(prospecto_uuid),
+        "canal": "whatsapp",
+        "accion": "reply_inbound",
+        "estado": "respondido",
+        "detalle": {
+            "action": "reply_inbound",
+            "direction": "incoming",
+            "respondio": True,
+            "message_sid": _trim_text(message.message_sid),
+            "wa_id": _trim_text(message.wa_id),
+            "from_number": _trim_text(message.from_number),
+            "body": body_text,
+        },
+    }
+    if envio_id_value:
+        log_entry["envio_id"] = str(envio_id_value)
+    if batch_id_value:
+        log_entry["batch_id"] = str(batch_id_value)
+    try:
+        await repo.worker_insert_contact_logs([log_entry])
+    except CRMRepositoryError as exc:
+        log_event(
+            logger,
+            "whatsapp.prospeccion_reply_log_failed",
+            prospecto_id=str(prospecto_uuid),
+            envio_id=str(envio_id_value) if envio_id_value else None,
+            error=str(exc),
+        )
 
 
 def _looks_like_booking_confirmation(text: str) -> bool:
@@ -295,6 +391,18 @@ async def handle_incoming_message(
             extra={"conversation_id": conversation_id},
         )
         return
+
+    try:
+        repo = CRMRepository()
+    except CRMRepositoryError as exc:
+        log_event(logger, "whatsapp.prospeccion_reply_repo_error", error=str(exc))
+        repo = None
+    if repo:
+        await _sync_inbound_to_prospeccion_log(
+            repo=repo,
+            contact_id=contact_id,
+            message=message,
+        )
 
     restart_context: dict[str, Any] | None = None
     opportunity_ref: str | None = None

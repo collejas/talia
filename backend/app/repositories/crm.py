@@ -8468,6 +8468,58 @@ class CRMRepository:
             raise CRMRepositoryError(f"worker_get_envio_invalid:{row!r}")
         return row
 
+    async def worker_find_prospecto_by_contacto(
+        self,
+        *,
+        contacto_id: UUID,
+    ) -> dict[str, Any] | None:
+        """Resuelve un prospecto asociado al contacto CRM guardado en metadata."""
+
+        resp = await self._request(
+            "GET",
+            "/rest/v1/prospeccion_prospectos",
+            params={
+                "metadata->>crm_contacto_id": f"eq.{contacto_id}",
+                "order": "actualizado_en.desc.nullslast,creado_en.desc",
+                "limit": "1",
+            },
+        )
+        data = resp.json() or []
+        if not isinstance(data, list) or not data:
+            return None
+        row = data[0]
+        if not isinstance(row, dict):
+            raise CRMRepositoryError(f"worker_find_prospecto_by_contacto_invalid:{row!r}")
+        return row
+
+    async def worker_get_latest_envio_for_prospecto(
+        self,
+        *,
+        prospecto_id: UUID,
+        canal: str | None = None,
+    ) -> dict[str, Any] | None:
+        """Obtiene el envío más reciente del prospecto, opcionalmente filtrado por canal."""
+
+        params: dict[str, str] = {
+            "prospecto_id": f"eq.{prospecto_id}",
+            "order": "procesado_en.desc.nullslast,creado_en.desc",
+            "limit": "1",
+        }
+        if canal:
+            params["canal"] = f"eq.{canal.strip().lower()}"
+        resp = await self._request(
+            "GET",
+            "/rest/v1/prospeccion_contacto_envio",
+            params=params,
+        )
+        data = resp.json() or []
+        if not isinstance(data, list) or not data:
+            return None
+        row = data[0]
+        if not isinstance(row, dict):
+            raise CRMRepositoryError(f"worker_get_latest_envio_for_prospecto_invalid:{row!r}")
+        return row
+
     async def worker_insert_contact_logs(self, entries: Sequence[dict[str, Any]]) -> None:
         """Inserta registros en la bitácora usando service role."""
 
