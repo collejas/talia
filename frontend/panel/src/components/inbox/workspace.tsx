@@ -43,6 +43,7 @@ export function InboxWorkspace({
   const [estadoFilterValue] = React.useState(initialFilters?.estado ?? "");
   const [dateFilterValue, setDateFilterValue] = React.useState("");
   const [reengageFilter, setReengageFilter] = React.useState("");
+  const [copyLinkLabel, setCopyLinkLabel] = React.useState("Copiar enlace");
 
   const derivedReengageOptions = React.useMemo(
     () => buildDerivedReengageOptions(threads),
@@ -166,6 +167,23 @@ export function InboxWorkspace({
     initialFilters?.estado,
   ]);
 
+  React.useEffect(() => {
+    if (copyLinkLabel === "Copiar enlace") return;
+    const timeout = window.setTimeout(() => setCopyLinkLabel("Copiar enlace"), 1800);
+    return () => window.clearTimeout(timeout);
+  }, [copyLinkLabel]);
+
+  const handleCopyLink = React.useCallback(async () => {
+    if (typeof window === "undefined") return;
+    const href = window.location.href;
+    try {
+      await navigator.clipboard.writeText(href);
+      setCopyLinkLabel("Enlace copiado");
+    } catch {
+      setCopyLinkLabel("No se pudo copiar");
+    }
+  }, []);
+
   const activeSourceFilter =
     sourceFilterValue && sourceFilterValue !== "all" ? sourceFilterValue : null;
   const activeChannelFilter =
@@ -189,6 +207,8 @@ export function InboxWorkspace({
         campanaFilterValue={campanaFilterValue}
         onCampanaFilterValueChange={setCampanaFilterValue}
         campanaOptions={campanaOptions}
+        onCopyLink={handleCopyLink}
+        copyLinkLabel={copyLinkLabel}
         dateFilterValue={dateFilterValue}
         onDateFilterValueChange={setDateFilterValue}
         reengageFilter={reengageFilter}
