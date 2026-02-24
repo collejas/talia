@@ -65,6 +65,7 @@ Repositorio principal: `backend/app/repositories/crm.py`
 - `PATCH /crm/prospeccion/contacto/listas/{lista_id}`
 - `DELETE /crm/prospeccion/contacto/listas/{lista_id}`
 - `GET /crm/prospeccion/contacto/metrics`
+- `GET /crm/prospeccion/whatsapp/readiness`
 - `POST /crm/prospeccion/contacto/brevo/webhook`
 - `GET /crm/prospeccion/campanas`
 - `GET /crm/prospeccion/campanas/{campana_id}/duplicar`

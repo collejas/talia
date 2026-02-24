@@ -5720,6 +5720,14 @@ class CRMInboxContextFilters(BaseModel):
     campanas: list[CRMInboxContextOption] = Field(default_factory=list)
 
 
+class ProspeccionWhatsappReadiness(BaseModel):
+    ok: bool
+    organizacion_id: UUID
+    checks: dict[str, bool]
+    missing: list[str] = Field(default_factory=list)
+    details: dict[str, Any] = Field(default_factory=dict)
+
+
 class CRMPipelineHistoryItem(BaseModel):
     id: UUID
     oportunidad_id: UUID
@@ -12373,6 +12381,73 @@ async def listar_contacto_templates(
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     return {"ok": True, "items": items}
+
+
+@router.get(
+    "/prospeccion/whatsapp/readiness",
+    response_model=ProspeccionWhatsappReadiness,
+)
+async def prospeccion_whatsapp_readiness(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    _: str = Depends(require_permission("ejecutar_busquedas")),
+    user_token: str = Depends(require_user_token),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+) -> ProspeccionWhatsappReadiness:
+    """Diagnóstico rápido para habilitar campañas WhatsApp de prospección en frío."""
+
+    twilio_runtime = await tenant_runtime.get_twilio_runtime_settings(organizacion_id=organizacion_id)
+    whatsapp_runtime = await tenant_runtime.get_whatsapp_runtime_settings(organizacion_id=organizacion_id)
+
+    has_twilio_account_sid = bool(_clean_text(twilio_runtime.account_sid))
+    has_twilio_auth_token = bool(_clean_text(twilio_runtime.auth_token))
+    has_twilio_phone_number = bool(_clean_text(twilio_runtime.phone_number))
+    has_runtime_sales_template = bool(_clean_text(whatsapp_runtime.sales_template_sid))
+
+    try:
+        whatsapp_templates = await repo.list_contact_templates(
+            usuario_token=user_token,
+            canal="whatsapp",
+        )
+    except CRMRepositoryError:
+        whatsapp_templates = []
+
+    templates_with_twilio_sid = 0
+    for template in whatsapp_templates:
+        metadata = template.get("metadata") if isinstance(template.get("metadata"), dict) else {}
+        sid = _clean_text(metadata.get("twilio_content_sid"))
+        if sid:
+            templates_with_twilio_sid += 1
+
+    has_template_source = has_runtime_sales_template or templates_with_twilio_sid > 0
+    checks = {
+        "twilio_account_sid": has_twilio_account_sid,
+        "twilio_auth_token": has_twilio_auth_token,
+        "twilio_phone_number": has_twilio_phone_number,
+        "whatsapp_template_source": has_template_source,
+    }
+    missing: list[str] = []
+    if not has_twilio_account_sid:
+        missing.append("twilio.account_sid")
+    if not has_twilio_auth_token:
+        missing.append("twilio.auth_token")
+    if not has_twilio_phone_number:
+        missing.append("twilio.phone_number")
+    if not has_template_source:
+        missing.append("whatsapp.templates.sales or template.metadata.twilio_content_sid")
+
+    details = {
+        "runtime_sales_template_sid": whatsapp_runtime.sales_template_sid,
+        "whatsapp_templates_total": len(whatsapp_templates),
+        "whatsapp_templates_with_twilio_sid": templates_with_twilio_sid,
+    }
+    return ProspeccionWhatsappReadiness(
+        ok=all(checks.values()),
+        organizacion_id=organizacion_id,
+        checks=checks,
+        missing=missing,
+        details=details,
+    )
 
 
 @router.post("/prospeccion/contacto/templates")
