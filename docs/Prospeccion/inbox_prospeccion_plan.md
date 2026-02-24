@@ -143,3 +143,21 @@ Permitir abrir `/inbox` con query params:
 1. Validar en producción el comportamiento con alto volumen (performance y cardinalidad de filtros).
 2. Mejorar etiquetas de `Batch/Campaña` con nombre comercial real en lugar de UUID corto.
 3. (Opcional) validar en producción si existen filas históricas a corregir con la migración de backfill.
+
+## Checklist de performance (operación)
+
+- Endpoint `GET /crm/inbox/threads`:
+  - Objetivo p50: < 250 ms.
+  - Objetivo p95: < 700 ms.
+  - Alertar si > 1200 ms de forma sostenida.
+- Endpoint `GET /crm/inbox/filter-options`:
+  - Objetivo p50: < 300 ms.
+  - Objetivo p95: < 800 ms.
+- Validaciones recomendadas:
+  - Sin filtros.
+  - Con `source=prospeccion`.
+  - Con `source+channel`.
+  - Con `source+batch_id`.
+  - Con `source+campana_id`.
+
+Nota: el backend ya registra `duration_ms` y marca warning cuando la consulta tarda 700 ms o más.

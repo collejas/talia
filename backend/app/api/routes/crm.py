@@ -9240,6 +9240,7 @@ async def get_inbox_threads(
     offset: Annotated[int, Query(ge=0)] = 0,
     message_limit: Annotated[int, Query(ge=1, le=50)] = 20,
 ) -> list[CRMInboxThread]:
+    start = time.perf_counter()
     rows = await repo.inbox_threads(
         usuario_token=user_token,
         estado=estado,
@@ -9252,6 +9253,22 @@ async def get_inbox_threads(
         offset=offset,
         message_limit=message_limit,
     )
+    duration_ms = (time.perf_counter() - start) * 1000
+    log_payload = {
+        "duration_ms": round(duration_ms, 2),
+        "rows": len(rows),
+        "estado": estado,
+        "source": source,
+        "channel": channel,
+        "has_batch": bool(batch_id),
+        "has_campana": bool(campana_id),
+        "limit": limit,
+        "offset": offset,
+    }
+    if duration_ms >= 700:
+        logger.warning("crm.inbox.threads.slow_query", extra=log_payload)
+    else:
+        logger.info("crm.inbox.threads.query", extra=log_payload)
     return [CRMInboxThread.model_validate(row) for row in rows]
 
 
@@ -9268,6 +9285,7 @@ async def get_inbox_filter_options(
 ) -> CRMInboxContextFilters:
     """Devuelve catálogos de batch/campaña para los filtros del inbox."""
 
+    start = time.perf_counter()
     rows = await repo.inbox_threads(
         usuario_token=user_token,
         source=source,
@@ -9333,6 +9351,21 @@ async def get_inbox_filter_options(
     for value in sorted(campana_ids):
         label = campana_label_map.get(value) or f"Campaña {value[:8]}"
         campanas.append(CRMInboxContextOption(value=value, label=label))
+
+    duration_ms = (time.perf_counter() - start) * 1000
+    log_payload = {
+        "duration_ms": round(duration_ms, 2),
+        "threads_scanned": len(rows),
+        "batch_options": len(batches),
+        "campana_options": len(campanas),
+        "source": source,
+        "channel": channel,
+        "limit": limit,
+    }
+    if duration_ms >= 700:
+        logger.warning("crm.inbox.filter_options.slow_query", extra=log_payload)
+    else:
+        logger.info("crm.inbox.filter_options.query", extra=log_payload)
 
     return CRMInboxContextFilters(batches=batches, campanas=campanas)
 
