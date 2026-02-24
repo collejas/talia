@@ -9261,6 +9261,7 @@ async def get_inbox_filter_options(
     repo: CRMRepository = Depends(get_repository),
     _: str = Depends(require_permission("ver_inbox")),
     user_token: str = Depends(require_user_token),
+    organizacion_id: UUID = Depends(require_organizacion_id),
     source: str | None = Query(default=None, max_length=80),
     channel: str | None = Query(default=None, max_length=30),
     limit: Annotated[int, Query(ge=25, le=500)] = 200,
@@ -9286,14 +9287,53 @@ async def get_inbox_filter_options(
         if campana_value:
             campana_ids.add(campana_value)
 
-    batches = [
-        CRMInboxContextOption(value=value, label=f"Batch {value[:8]}")
-        for value in sorted(batch_ids)
-    ]
-    campanas = [
-        CRMInboxContextOption(value=value, label=f"Campaña {value[:8]}")
-        for value in sorted(campana_ids)
-    ]
+    batch_label_map: dict[str, str] = {}
+    if batch_ids:
+        try:
+            batch_rows, _ = await repo.list_contact_batches(
+                usuario_token=user_token,
+                limit=max(limit, 300),
+                offset=0,
+            )
+        except CRMRepositoryError:
+            batch_rows = []
+        for batch in batch_rows:
+            batch_id_value = _clean_text(batch.get("id"))
+            if not batch_id_value or batch_id_value not in batch_ids:
+                continue
+            title = _clean_text(batch.get("titulo"))
+            if not title:
+                metadata = batch.get("metadata") if isinstance(batch.get("metadata"), dict) else {}
+                title = _clean_text(metadata.get("campana_nombre")) or _clean_text(
+                    metadata.get("lista_nombre")
+                )
+            if title:
+                batch_label_map[batch_id_value] = title
+
+    campana_label_map: dict[str, str] = {}
+    if campana_ids:
+        try:
+            campaign_rows = await repo.list_campaigns(organizacion_id=organizacion_id)
+        except CRMRepositoryError:
+            campaign_rows = []
+        for campaign in campaign_rows:
+            campaign_id_value = _clean_text(campaign.get("id"))
+            if not campaign_id_value or campaign_id_value not in campana_ids:
+                continue
+            name = _clean_text(campaign.get("nombre"))
+            if name:
+                campana_label_map[campaign_id_value] = name
+
+    batches = []
+    for value in sorted(batch_ids):
+        label = batch_label_map.get(value) or f"Batch {value[:8]}"
+        batches.append(CRMInboxContextOption(value=value, label=label))
+
+    campanas = []
+    for value in sorted(campana_ids):
+        label = campana_label_map.get(value) or f"Campaña {value[:8]}"
+        campanas.append(CRMInboxContextOption(value=value, label=label))
+
     return CRMInboxContextFilters(batches=batches, campanas=campanas)
 
 
