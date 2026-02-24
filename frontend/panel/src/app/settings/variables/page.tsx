@@ -188,6 +188,7 @@ export default async function SettingsVariablesPage() {
   }
   const whatsappConfig = getNestedRecord(config, "whatsapp") ?? {}
   const whatsappTemplates = getNestedRecord(whatsappConfig, "templates") ?? {}
+  const whatsappProspeccionConfig = getNestedRecord(whatsappConfig, "prospeccion") ?? {}
   const whatsappInitialValues = {
     whatsapp_prompt_id: getNestedString(whatsappConfig, "prompt_id"),
     whatsapp_prompt_version: getNestedString(whatsappConfig, "prompt_version"),
@@ -200,6 +201,7 @@ export default async function SettingsVariablesPage() {
     whatsapp_template_appointment: getNestedString(whatsappTemplates, "appointment"),
     whatsapp_template_cancel: getNestedString(whatsappTemplates, "cancel"),
     whatsapp_template_prospeccion_sids: (getNestedStringArray(whatsappTemplates, "prospeccion") ?? []).join("\n"),
+    whatsapp_prospeccion_prompt_id: getNestedString(whatsappProspeccionConfig, "prompt_id"),
   }
   const messengerConfig = getNestedRecord(config, "messenger") ?? {}
   const messengerInitialValues = {

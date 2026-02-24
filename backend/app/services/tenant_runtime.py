@@ -746,6 +746,7 @@ class WhatsappRuntimeSettings:
     sales_template_sid: str | None
     appointment_template_sid: str | None
     cancel_template_sid: str | None
+    prospeccion_prompt_id: str | None
     prospeccion_template_sids: list[str]
     project_id: str | None
     voice_model: str | None
@@ -766,6 +767,7 @@ class WhatsappRuntimeSettings:
             sales_template_sid=settings.whatsapp_sales_template_sid,
             appointment_template_sid=settings.whatsapp_sales_appointment_template_sid,
             cancel_template_sid=settings.whatsapp_sales_cancel_appointment_template_sid,
+            prospeccion_prompt_id=None,
             prospeccion_template_sids=[],
             project_id=settings.openai_project_id,
             voice_model=settings.openai_model,
@@ -823,6 +825,7 @@ async def get_whatsapp_runtime_settings(
     )
 
     templates = _as_dict(whatsapp_cfg.get("templates")) or {}
+    prospeccion_cfg = _as_dict(whatsapp_cfg.get("prospeccion")) or {}
     sales_template = _coerce_str_or_none(templates.get("sales"))
     if sales_template is not None:
         settings_payload.sales_template_sid = sales_template
@@ -832,6 +835,9 @@ async def get_whatsapp_runtime_settings(
     cancel_template = _coerce_str_or_none(templates.get("cancel"))
     if cancel_template is not None:
         settings_payload.cancel_template_sid = cancel_template
+    prospeccion_prompt_id = _coerce_str_or_none(prospeccion_cfg.get("prompt_id"))
+    if prospeccion_prompt_id is not None:
+        settings_payload.prospeccion_prompt_id = prospeccion_prompt_id
     prospeccion_templates_raw = templates.get("prospeccion")
     prospeccion_templates: list[str] = []
     if isinstance(prospeccion_templates_raw, list):

@@ -125,13 +125,13 @@ async def _sync_inbound_to_prospeccion_log(
     repo: CRMRepository,
     contact_id: str,
     message: schemas.WhatsAppIncomingMessage,
-) -> None:
+) -> bool:
     """Registra respuesta entrante en bitácora de prospección cuando aplica."""
 
     try:
         contact_uuid = UUID(contact_id)
     except (TypeError, ValueError):
-        return
+        return False
 
     try:
         prospecto = await repo.worker_find_prospecto_by_contacto(contacto_id=contact_uuid)
@@ -142,17 +142,17 @@ async def _sync_inbound_to_prospeccion_log(
             contact_id=contact_id,
             error=str(exc),
         )
-        return
+        return False
     if not prospecto:
-        return
+        return False
 
     prospecto_id = prospecto.get("id")
     if not prospecto_id:
-        return
+        return False
     try:
         prospecto_uuid = UUID(str(prospecto_id))
     except (TypeError, ValueError):
-        return
+        return False
 
     envio: dict[str, Any] | None = None
     try:
@@ -234,7 +234,7 @@ async def _sync_inbound_to_prospeccion_log(
             envio_id=str(envio_id_value) if envio_id_value else None,
             error=str(exc),
         )
-        return
+        return True
 
     if batch_id_value:
         try:
@@ -266,6 +266,7 @@ async def _sync_inbound_to_prospeccion_log(
                 prospecto_id=str(prospecto_uuid),
                 error=str(exc),
             )
+    return True
 
 
 def _looks_like_booking_confirmation(text: str) -> bool:
@@ -461,8 +462,9 @@ async def handle_incoming_message(
     except CRMRepositoryError as exc:
         log_event(logger, "whatsapp.prospeccion_reply_repo_error", error=str(exc))
         repo = None
+    is_prospeccion_context = False
     if repo:
-        await _sync_inbound_to_prospeccion_log(
+        is_prospeccion_context = await _sync_inbound_to_prospeccion_log(
             repo=repo,
             contact_id=contact_id,
             message=message,
@@ -582,6 +584,7 @@ async def handle_incoming_message(
             booking_context=booking_context_text,
             whatsapp_settings=whatsapp_settings,
             organizacion_id=org_uuid,
+            prospeccion_mode=is_prospeccion_context,
         )
         log_event(
             logger,
@@ -1079,8 +1082,9 @@ async def _generate_assistant_reply(
     booking_context: str | None,
     whatsapp_settings: tenant_runtime.WhatsappRuntimeSettings,
     organizacion_id: UUID | None,
+    prospeccion_mode: bool = False,
 ) -> AssistantReply:
-    assistant = _build_assistant_from_runtime(whatsapp_settings)
+    assistant = _build_assistant_from_runtime(whatsapp_settings, prospeccion_mode=prospeccion_mode)
     client = openai_service.get_assistant_client(api_key=whatsapp_settings.voice_api_key)
     assistant_spec = None
     if not assistant.is_prompt:
@@ -1093,6 +1097,7 @@ async def _generate_assistant_reply(
         "contact_id": contact_id,
         "channel": "whatsapp",
         "message_sid": message.message_sid,
+        "prospeccion_mode": str(bool(prospeccion_mode)).lower(),
     }
     context_payload: dict[str, Any] | None = None
     try:
@@ -1714,7 +1719,16 @@ def _map_status_to_envio_estado(status: str | None) -> str | None:
 
 def _build_assistant_from_runtime(
     settings_values: tenant_runtime.WhatsappRuntimeSettings,
+    *,
+    prospeccion_mode: bool = False,
 ) -> AssistantConfig:
+    if prospeccion_mode and settings_values.prospeccion_prompt_id:
+        return AssistantConfig(
+            assistant_id=None,
+            prompt_id=settings_values.prospeccion_prompt_id,
+            prompt_version=settings_values.prompt_version,
+            project_id=settings.openai_project_id,
+        )
     if settings_values.prompt_id:
         return AssistantConfig(
             assistant_id=None,

@@ -24,7 +24,7 @@ Este archivo sirve para capturar próximos requerimientos sin mezclar historial 
   - Crear assistant separado de WhatsApp operativo (`talia_prospeccion_whatsapp`).
   - Prompt y tools específicos de prospección en frío (captar interés -> calificar -> agendar demo).
   - Vector store dedicado (`talia_prospeccion_vs`) con propuesta por industria, objeciones, cierre demo y compliance.
-  - Routing por metadata: `source=prospeccion` + `channel=whatsapp` para usar assistant de prospección.
+  - Routing por metadata: `source=prospeccion` + `channel=whatsapp` para usar assistant de prospección. (Completado)
   - Mantener assistant operativo actual para conversaciones no comerciales de prospección.
 
 4. Operación
@@ -46,8 +46,12 @@ Por cada cambio nuevo:
 - Inbox con filtros de origen/canal/lote/campaña + deep links.
 - `prospeccion/denue-busqueda`: guardar como prospectos ahora pide `Segmento` en modal y lo persiste en `prospeccion_prospectos.segmento`.
 - `settings/tenants` y `settings/variables`: nueva pestaña `Whats-Prosp` para guardar múltiples SIDs en `whatsapp.templates.prospeccion`.
+- `settings/tenants` y `settings/variables`: soporte para `whatsapp.prospeccion.prompt_id` en pestaña `Whats-Prosp`.
 - Modal `prospeccion/prospectos`:
   - consume plantillas Whats-Prosp desde config tenant.
   - muestra nombre/SID y preview real de plantilla Twilio Content.
   - permite variables de plantilla para envío en frío.
 - Ajuste de envío en frío: ya no se omite por `whatsapp_no_permitido` cuando el lote de prospección fuerza intento de WhatsApp.
+- Routing runtime en canal WhatsApp:
+  - Cuando un entrante se identifica como prospección, usa `whatsapp.prospeccion.prompt_id`.
+  - Si no es prospección, conserva assistant/prompt operativo general.

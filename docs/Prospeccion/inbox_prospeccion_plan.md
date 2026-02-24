@@ -91,6 +91,11 @@ Resultado esperado:
   - El modal muestra preview y utiliza `twilio_content_sid` al enviar.
 - [x] Política de envío en frío:
   - Ajuste para evitar omisión por `whatsapp_no_permitido` cuando el envío proviene de lote de prospección en frío.
+- [x] Assistant IA especializado en prospección (routing inicial):
+  - `settings/variables` y `settings/tenants` permiten guardar `whatsapp.prospeccion.prompt_id` en pestaña `Whats-Prosp`.
+  - Runtime WhatsApp carga `whatsapp.prospeccion.prompt_id`.
+  - En mensajes entrantes WhatsApp con contexto `source=prospeccion`, el backend usa el prompt de prospección.
+  - Si no hay contexto de prospección, se mantiene el assistant/prompt operativo actual.
 
 ## Propuesta técnica
 
@@ -164,10 +169,10 @@ Permitir abrir `/inbox` con query params:
 3. Ejecutar pruebas E2E con plantillas WhatsApp reales de prospección y respuestas entrantes para cierre de fase 3.
 4. (Opcional) validar en producción si existen filas históricas a corregir con la migración de backfill.
 5. Integración de assistant IA especializado en prospección:
-   - Assistant dedicado para `source=prospeccion`.
+   - Confirmar pruebas E2E de respuestas reales usando `whatsapp.prospeccion.prompt_id`.
    - Prompt + tools de prospección (documentados en `docs/openai/talia/prospeccion`).
    - Vector store dedicado de prospección (`talia_prospeccion_vs`).
-   - Routing por metadata en canal WhatsApp para no mezclar con assistant operativo general.
+   - Ajustar métricas/observabilidad para distinguir conversaciones de prospección vs. operativo.
 
 ## Checklist de performance (operación)
 

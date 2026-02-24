@@ -402,6 +402,7 @@ type WhatsAppInitialValues = {
   whatsapp_template_appointment?: string
   whatsapp_template_cancel?: string
   whatsapp_template_prospeccion_sids?: string
+  whatsapp_prospeccion_prompt_id?: string
 }
 
 type MessengerInitialValues = {
@@ -1707,7 +1708,7 @@ export function TenantWhatsAppProspeccionSettings({
   initialValues,
 }: {
   tenantId: string
-  initialValues: Pick<WhatsAppInitialValues, "whatsapp_template_prospeccion_sids">
+  initialValues: Pick<WhatsAppInitialValues, "whatsapp_template_prospeccion_sids" | "whatsapp_prospeccion_prompt_id">
 }) {
   const actions = useTenantSettingsActions()
   const [state, formAction] = useActionState(actions.updateWhatsAppSettingsAction, INITIAL_CRUD_STATE)
@@ -1716,6 +1717,18 @@ export function TenantWhatsAppProspeccionSettings({
     <div className="space-y-6">
       <form action={formAction} className="space-y-4">
         <input type="hidden" name="tenant_id" value={tenantId} />
+        <div className="space-y-2">
+          <Label htmlFor="whatsapp_prospeccion_prompt_id">Prompt ID (prospección)</Label>
+          <Input
+            id="whatsapp_prospeccion_prompt_id"
+            name="whatsapp_prospeccion_prompt_id"
+            placeholder="pmpt_..."
+            defaultValue={initialValues.whatsapp_prospeccion_prompt_id ?? ""}
+          />
+          <p className="text-xs text-muted-foreground">
+            Se guarda en <code>organizaciones.config.whatsapp.prospeccion.prompt_id</code>.
+          </p>
+        </div>
         <div className="space-y-2">
           <Label htmlFor="whatsapp_template_prospeccion_sids">Plantillas Whats-Prosp (SIDs)</Label>
           <Textarea
