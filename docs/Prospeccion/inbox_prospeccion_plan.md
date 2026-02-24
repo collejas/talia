@@ -1,7 +1,7 @@
 # Prospección · Plan de Inbox Reutilizando `/inbox`
 
 Fecha: 2026-02-24
-Estado: en ejecución (fase 1 y 2 completadas)
+Estado: en ejecución (fase 1 y 2 completadas; fase 3 iniciada)
 
 ## Objetivo
 
@@ -76,6 +76,12 @@ Resultado esperado:
   - El worker de envíos usa credenciales Twilio por `organizacion_id` del envío.
   - Si una campaña incluye canal WhatsApp sin plantilla explícita, se intenta usar `whatsapp.templates.sales` del tenant.
   - Si no existe SID de plantilla, el backend rechaza con `whatsapp_template_required`.
+- [x] Diagnóstico operativo WhatsApp:
+  - Nuevo endpoint `GET /crm/prospeccion/whatsapp/readiness`.
+  - Verifica llaves de Twilio + plantilla de tenant en runtime.
+- [x] Fix de integración frontend (modal de prospectos):
+  - `POST /api/prospeccion/prospectos/contactar` ahora usa proxy estándar y propaga `X-Organizacion-Id`.
+  - Resuelto error `422 missing header X-Organizacion-Id` al guardar acciones.
 
 ## Propuesta técnica
 
@@ -146,7 +152,8 @@ Permitir abrir `/inbox` con query params:
 
 1. Validar en producción el comportamiento con alto volumen (performance y cardinalidad de filtros).
 2. Mejorar etiquetas de `Batch/Campaña` con nombre comercial real en lugar de UUID corto.
-3. (Opcional) validar en producción si existen filas históricas a corregir con la migración de backfill.
+3. Ejecutar pruebas E2E con plantillas WhatsApp reales de prospección y respuestas entrantes para cierre de fase 3.
+4. (Opcional) validar en producción si existen filas históricas a corregir con la migración de backfill.
 
 ## Checklist de performance (operación)
 

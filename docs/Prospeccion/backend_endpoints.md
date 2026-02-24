@@ -80,8 +80,13 @@ Repositorio principal: `backend/app/repositories/crm.py`
 ## 6) Inbox reutilizado para prospección (en curso)
 
 - Endpoint base: `GET /crm/inbox/threads`
-- Filtros nuevos planeados/soportados para prospección:
+- Filtros ya soportados para prospección:
   - `source` (ej. `prospeccion`)
   - `channel` (ej. `whatsapp`)
   - `batch_id`
   - `campana_id`
+
+## 7) Notas operativas recientes
+
+- `POST /crm/prospeccion/prospectos/contactar` requiere header `X-Organizacion-Id`.
+- `GET /crm/prospeccion/whatsapp/readiness` permite validar configuración Twilio/plantilla antes de lanzar lotes.

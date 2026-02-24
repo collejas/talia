@@ -28,6 +28,7 @@
 - Prospectos: tabla central para selección comercial.
 - Contacto: worker multicanal con reintentos y estado.
 - Campañas: agrupación/duplicación de lotes.
+- Inbox comercial: operación de respuestas de prospección desde `/inbox` con filtros de origen/canal/lote/campaña.
 
 ## 3) Observaciones técnicas clave
 
@@ -35,6 +36,8 @@
 - Para DENUE, el tamaño de empresa viene de `estrato`; para Google, `rating`.
 - El backend ya soporta filtros complejos en DENUE (incluye `contact_match = all|any`).
 - El frontend ya usa paginación alta para resultados (5000) en vistas geográficas.
+- En `prospeccion/prospectos`, la tabla ya permite orden por columna, reordenar columnas y ocultar/mostrar columnas.
+- En `google-busqueda` y `denue-busqueda`, ya existe eliminación individual y masiva de búsquedas recientes.
 
 ## 4) Referencia de datos actual (MCP, instancia vigente)
 
@@ -49,3 +52,9 @@ Para cambios nuevos:
 2. Revisar contrato en `backend_endpoints.md`.
 3. Validar impacto de datos en `base_datos.md`.
 
+## 6) Avance WhatsApp en frío (2026-02-24)
+
+- Endpoint de verificación operativa disponible: `GET /crm/prospeccion/whatsapp/readiness`.
+- Envío WhatsApp de prospección exige plantilla y usa fallback por tenant (`whatsapp.templates.sales`).
+- Proxy frontend de `POST /api/prospeccion/prospectos/contactar` ya propaga `X-Organizacion-Id`.
+- Resultado: desde modal de `prospeccion/prospectos`, `Guardar acciones` para canal WhatsApp ya no falla por header faltante.
