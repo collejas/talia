@@ -18,6 +18,9 @@ export type InboxThreadRow = {
   contacto_correo: string | null;
   contacto_telefono: string | null;
   canal: string | null;
+  source?: string | null;
+  batch_id?: string | null;
+  campana_id?: string | null;
   estado: string | null;
   prioridad: number | null;
   iniciada_en: string | null;
@@ -78,6 +81,9 @@ export type InboxThread = {
   contactoCorreo: string | null;
   contactoTelefono: string | null;
   canal: string;
+  source: string | null;
+  batchId: string | null;
+  campanaId: string | null;
   estado: string;
   prioridad: number;
   iniciadoEn: string | null;

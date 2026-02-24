@@ -15,12 +15,22 @@ export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const limit = parseNumber(searchParams.get("limit"), 25, { min: 1, max: 100 });
   const messageLimit = parseNumber(searchParams.get("message_limit"), 20, { min: 1, max: 100 });
+  const estado = searchParams.get("estado")?.trim() || "";
+  const source = searchParams.get("source")?.trim() || "";
+  const channel = searchParams.get("channel")?.trim() || "";
+  const batchId = searchParams.get("batch_id")?.trim() || "";
+  const campanaId = searchParams.get("campana_id")?.trim() || "";
 
   const response = await callCrmApi<InboxThreadRow[]>("/crm/inbox/threads", {
     withUserToken: true,
     searchParams: {
       limit: String(limit),
       message_limit: String(messageLimit),
+      ...(estado ? { estado } : {}),
+      ...(source ? { source } : {}),
+      ...(channel ? { channel } : {}),
+      ...(batchId ? { batch_id: batchId } : {}),
+      ...(campanaId ? { campana_id: campanaId } : {}),
     },
   });
 

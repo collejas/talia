@@ -5640,6 +5640,9 @@ class CRMInboxThread(BaseModel):
     contacto_correo: str | None = None
     contacto_telefono: str | None = None
     canal: str | None = None
+    source: str | None = None
+    batch_id: UUID | None = None
+    campana_id: UUID | None = None
     estado: str | None = None
     prioridad: int | None = None
     iniciada_en: datetime | None = None
@@ -9218,6 +9221,10 @@ async def get_inbox_threads(
     _: str = Depends(require_permission("ver_inbox")),
     user_token: str = Depends(require_user_token),
     estado: str | None = Query(default=None, max_length=50),
+    source: str | None = Query(default=None, max_length=80),
+    channel: str | None = Query(default=None, max_length=30),
+    batch_id: UUID | None = Query(default=None),
+    campana_id: UUID | None = Query(default=None),
     asignado_id: UUID | None = Query(default=None),
     limit: Annotated[int, Query(ge=1, le=200)] = 25,
     offset: Annotated[int, Query(ge=0)] = 0,
@@ -9226,6 +9233,10 @@ async def get_inbox_threads(
     rows = await repo.inbox_threads(
         usuario_token=user_token,
         estado=estado,
+        source=source,
+        channel=channel,
+        batch_id=batch_id,
+        campana_id=campana_id,
         asignado_id=asignado_id,
         limit=limit,
         offset=offset,

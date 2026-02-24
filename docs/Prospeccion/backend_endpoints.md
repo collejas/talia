@@ -76,3 +76,11 @@ Repositorio principal: `backend/app/repositories/crm.py`
 - `prospeccion_contact_sender.py`: worker de envíos por canal.
 - `prospeccion_auto_promoter.py`: promoción automática a CRM según señales.
 
+## 6) Inbox reutilizado para prospección (en curso)
+
+- Endpoint base: `GET /crm/inbox/threads`
+- Filtros nuevos planeados/soportados para prospección:
+  - `source` (ej. `prospeccion`)
+  - `channel` (ej. `whatsapp`)
+  - `batch_id`
+  - `campana_id`

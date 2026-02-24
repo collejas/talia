@@ -5767,6 +5767,10 @@ class CRMRepository:
         limit: int = 50,
         offset: int = 0,
         message_limit: int = 20,
+        source: str | None = None,
+        channel: str | None = None,
+        batch_id: UUID | None = None,
+        campana_id: UUID | None = None,
     ) -> list[dict[str, Any]]:
         body = {
             "p_estado": estado,
@@ -5774,6 +5778,10 @@ class CRMRepository:
             "p_limit": max(1, min(limit, 200)),
             "p_offset": max(0, offset),
             "p_message_limit": max(1, min(message_limit, 50)),
+            "p_source": source.strip().lower() if isinstance(source, str) and source.strip() else None,
+            "p_channel": channel.strip().lower() if isinstance(channel, str) and channel.strip() else None,
+            "p_batch_id": str(batch_id) if batch_id else None,
+            "p_campana_id": str(campana_id) if campana_id else None,
         }
         resp = await self._request_with_user(
             "POST",
