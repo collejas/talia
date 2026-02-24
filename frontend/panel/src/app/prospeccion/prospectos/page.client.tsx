@@ -266,6 +266,11 @@ function buildAutoWhatsappVariables(message: string, empresa: string): Record<st
   return Object.keys(out).length ? out : null
 }
 
+function getTemplateTwilioSid(template: ContactoTemplate): string {
+  const metadata = template.metadata && typeof template.metadata === "object" ? template.metadata : null
+  return metadata && typeof metadata["twilio_content_sid"] === "string" ? metadata["twilio_content_sid"].trim() : ""
+}
+
 type ProspeccionStage = "discover" | "enrich" | "prepare" | "launch" | "evaluate"
 type ProspeccionCanal = "correo" | "whatsapp" | "llamada" | "otro"
 
@@ -1361,10 +1366,6 @@ useEffect(() => {
     const template = templates.find((item) => item.slug === slug && item.canal === canal)
     if (!template) return
     const metadata = template.metadata && typeof template.metadata === "object" ? template.metadata : null
-    const twilioSid =
-      metadata && typeof metadata["twilio_content_sid"] === "string"
-        ? metadata["twilio_content_sid"].trim()
-        : ""
     if (canal === "correo") {
       setContactForm((prev) => ({
         ...prev,
@@ -1377,7 +1378,7 @@ useEffect(() => {
       )
       setContactForm((prev) => ({
         ...prev,
-        whatsappMensaje: twilioSid ? "" : template.cuerpo_texto ?? prev.whatsappMensaje,
+        whatsappMensaje: template.cuerpo_texto ?? prev.whatsappMensaje,
         whatsappVariables: templateVariables,
       }))
     } else if (canal === "llamada") {
@@ -1420,6 +1421,11 @@ useEffect(() => {
   const showingFrom = items.length ? offset + 1 : 0
   const showingTo = items.length ? offset + items.length : 0
   const pageCount = limit ? Math.ceil(total / limit) : 1
+  const selectedWhatsappTemplate = useMemo(() => {
+    const slug = selectedTemplates.whatsapp
+    if (!slug) return null
+    return templates.find((template) => template.canal === "whatsapp" && template.slug === slug) ?? null
+  }, [selectedTemplates.whatsapp, templates])
   const currentPage = limit ? Math.floor(offset / limit) + 1 : 1
   const flowSteps = useMemo(() => {
     const pendingPhones = checklist?.telefonos_pendientes ?? 0
@@ -3217,12 +3223,18 @@ useEffect(() => {
                       .map((template) => (
                         <SelectItem key={template.slug} value={template.slug}>
                           {template.nombre}
+                          {getTemplateTwilioSid(template) ? ` · ${getTemplateTwilioSid(template).slice(0, 10)}...` : ""}
                         </SelectItem>
                       ))}
                   </SelectContent>
                 </Select>
                 {!templatesLoading && !templates.some((tpl) => tpl.canal === "whatsapp") ? (
                   <p className="text-xs text-muted-foreground">Aún no has creado plantillas de WhatsApp.</p>
+                ) : null}
+                {selectedWhatsappTemplate?.cuerpo_texto ? (
+                  <p className="whitespace-pre-wrap rounded-md border border-border/60 bg-muted/30 p-2 text-xs text-muted-foreground">
+                    {selectedWhatsappTemplate.cuerpo_texto}
+                  </p>
                 ) : null}
               </div>
               <div className="space-y-1">

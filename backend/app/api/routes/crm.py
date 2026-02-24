@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import base64
 import csv
 import io
 import json
@@ -18,6 +19,8 @@ from pathlib import Path
 from typing import Annotated, Any, Awaitable, Callable, Literal, Mapping, Sequence
 from uuid import UUID, uuid4
 from urllib.parse import urlparse
+from urllib.error import HTTPError, URLError
+from urllib.request import Request as UrlRequest, urlopen
 import time
 
 from fastapi import (
@@ -3034,6 +3037,61 @@ def _clean_text(value: Any) -> str | None:
         return None
     trimmed = str(value).strip()
     return trimmed or None
+
+
+def _extract_twilio_content_body(payload: dict[str, Any]) -> str | None:
+    types = payload.get("types") if isinstance(payload.get("types"), dict) else {}
+    if not isinstance(types, dict):
+        return None
+    for channel_key in ("twilio/text", "twilio/quick-reply", "twilio/call-to-action"):
+        channel_payload = types.get(channel_key)
+        if not isinstance(channel_payload, dict):
+            continue
+        body = _clean_text(channel_payload.get("body"))
+        if body:
+            return body
+    return None
+
+
+def _extract_twilio_variable_keys(payload: dict[str, Any]) -> list[str]:
+    variables = payload.get("variables")
+    if not isinstance(variables, dict):
+        return []
+    keys = [str(key).strip() for key in variables.keys() if str(key).strip()]
+    return sorted(set(keys), key=lambda key: (0, int(key)) if key.isdigit() else (1, key))
+
+
+async def _fetch_twilio_content_template(
+    *,
+    account_sid: str,
+    auth_token: str,
+    content_sid: str,
+) -> dict[str, Any] | None:
+    url = f"https://content.twilio.com/v1/Content/{content_sid}"
+    basic = base64.b64encode(f"{account_sid}:{auth_token}".encode("utf-8")).decode("ascii")
+
+    def _request() -> dict[str, Any] | None:
+        req = UrlRequest(
+            url,
+            headers={
+                "Authorization": f"Basic {basic}",
+                "Accept": "application/json",
+            },
+            method="GET",
+        )
+        with urlopen(req, timeout=8) as response:  # noqa: S310 - trusted outbound
+            raw = response.read()
+        payload = json.loads(raw.decode("utf-8"))
+        return payload if isinstance(payload, dict) else None
+
+    try:
+        return await asyncio.to_thread(_request)
+    except (HTTPError, URLError, TimeoutError, json.JSONDecodeError) as exc:
+        logger.warning(
+            "prospeccion.twilio_template_fetch_failed",
+            extra={"sid": content_sid, "error": str(exc)},
+        )
+        return None
 
 
 def _normalize_phone_input(value: str) -> str | None:
@@ -12384,6 +12442,7 @@ async def listar_contacto_templates(
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     if not params.canal or params.canal == "whatsapp":
         runtime_settings = await tenant_runtime.get_whatsapp_runtime_settings(organizacion_id=organizacion_id)
+        twilio_runtime = await tenant_runtime.get_twilio_runtime_settings(organizacion_id=organizacion_id)
         runtime_sids = runtime_settings.prospeccion_template_sids
         if runtime_sids:
             existing_whatsapp_sids: set[str] = set()
@@ -12399,21 +12458,34 @@ async def listar_contacto_templates(
             for idx, sid in enumerate(runtime_sids, start=1):
                 if sid in existing_whatsapp_sids:
                     continue
+                twilio_payload: dict[str, Any] | None = None
+                if twilio_runtime.account_sid and twilio_runtime.auth_token:
+                    twilio_payload = await _fetch_twilio_content_template(
+                        account_sid=twilio_runtime.account_sid,
+                        auth_token=twilio_runtime.auth_token,
+                        content_sid=sid,
+                    )
+                template_name = _clean_text((twilio_payload or {}).get("friendly_name")) or f"Whats-Prosp {idx}"
+                template_body = _extract_twilio_content_body(twilio_payload or {})
+                template_language = _clean_text((twilio_payload or {}).get("language"))
+                template_variables = _extract_twilio_variable_keys(twilio_payload or {})
                 items.append(
                     {
                         "id": f"runtime:whatsapp:prospeccion:{idx}",
                         "canal": "whatsapp",
                         "slug": f"runtime-whats-prosp-{idx}",
-                        "nombre": f"Whats-Prosp {idx}",
+                        "nombre": template_name,
                         "descripcion": "SID configurado desde settings/tenants",
                         "asunto": None,
-                        "cuerpo_texto": None,
+                        "cuerpo_texto": template_body,
                         "cuerpo_html": None,
                         "activo": True,
                         "metadata": {
                             "twilio_content_sid": sid,
                             "runtime_template": True,
                             "template_source": "whatsapp.templates.prospeccion",
+                            **({"twilio_language": template_language} if template_language else {}),
+                            **({"twilio_content_variables_keys": template_variables} if template_variables else {}),
                         },
                     }
                 )
