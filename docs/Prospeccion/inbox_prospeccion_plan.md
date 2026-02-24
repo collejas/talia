@@ -163,6 +163,11 @@ Permitir abrir `/inbox` con query params:
 2. Mejorar etiquetas de `Batch/Campaña` con nombre comercial real en lugar de UUID corto.
 3. Ejecutar pruebas E2E con plantillas WhatsApp reales de prospección y respuestas entrantes para cierre de fase 3.
 4. (Opcional) validar en producción si existen filas históricas a corregir con la migración de backfill.
+5. Integración de assistant IA especializado en prospección:
+   - Assistant dedicado para `source=prospeccion`.
+   - Prompt + tools de prospección (documentados en `docs/openai/talia/prospeccion`).
+   - Vector store dedicado de prospección (`talia_prospeccion_vs`).
+   - Routing por metadata en canal WhatsApp para no mezclar con assistant operativo general.
 
 ## Checklist de performance (operación)
 

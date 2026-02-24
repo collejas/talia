@@ -20,6 +20,12 @@ Este archivo sirve para capturar próximos requerimientos sin mezclar historial 
   - Alta y mapeo de plantillas comerciales en Twilio para prospección.
   - Prueba E2E de envío real desde lote de prospectos.
   - Confirmar trazabilidad completa en `/inbox` para respuestas reales.
+- Asistente IA especializado en prospección:
+  - Crear assistant separado de WhatsApp operativo (`talia_prospeccion_whatsapp`).
+  - Prompt y tools específicos de prospección en frío (captar interés -> calificar -> agendar demo).
+  - Vector store dedicado (`talia_prospeccion_vs`) con propuesta por industria, objeciones, cierre demo y compliance.
+  - Routing por metadata: `source=prospeccion` + `channel=whatsapp` para usar assistant de prospección.
+  - Mantener assistant operativo actual para conversaciones no comerciales de prospección.
 
 4. Operación
 - Alertas automáticas de fallos por canal.
