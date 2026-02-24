@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { usePathname } from "next/navigation";
 
 import type { InboxSummary, InboxThread } from "@/lib/inbox/data";
 import { InboxSplitView } from "@/components/inbox/split-view";
@@ -34,6 +35,7 @@ export function InboxWorkspace({
   campanaOptions: initialCampanaOptions,
   initialFilters,
 }: InboxWorkspaceProps) {
+  const pathname = usePathname();
   const [sourceFilterValue, setSourceFilterValue] = React.useState(initialFilters?.source ?? "");
   const [channelFilterValue, setChannelFilterValue] = React.useState(initialFilters?.channel ?? "");
   const [batchFilterValue, setBatchFilterValue] = React.useState(initialFilters?.batchId ?? "");
@@ -116,6 +118,53 @@ export function InboxWorkspace({
       setReengageFilter("");
     }
   }, [reengageFilter, combinedReengageOptions]);
+
+  React.useEffect(() => {
+    if (typeof window === "undefined") return;
+    const currentUrl = new URL(window.location.href);
+    const params = new URLSearchParams(currentUrl.search);
+
+    const upsert = (
+      key: string,
+      value: string | null | undefined,
+      options?: { skipAll?: boolean },
+    ) => {
+      const skipAll = Boolean(options?.skipAll);
+      const normalized = value?.trim() ?? "";
+      if (!normalized || (skipAll && normalized === "all")) {
+        params.delete(key);
+      } else {
+        params.set(key, normalized);
+      }
+    };
+
+    upsert("source", sourceFilterValue, { skipAll: true });
+    upsert("channel", channelFilterValue, { skipAll: true });
+    upsert("batchId", batchFilterValue);
+    upsert("campanaId", campanaFilterValue);
+    upsert("date", dateFilterValue, { skipAll: true });
+    upsert("reengage", reengageFilter, { skipAll: true });
+
+    if (initialFilters?.estado?.trim()) {
+      params.set("estado", initialFilters.estado.trim());
+    }
+
+    const nextQuery = params.toString();
+    const nextUrl = `${pathname}${nextQuery ? `?${nextQuery}` : ""}`;
+    const currentPathWithQuery = `${window.location.pathname}${window.location.search}`;
+    if (nextUrl !== currentPathWithQuery) {
+      window.history.replaceState(window.history.state, "", nextUrl);
+    }
+  }, [
+    pathname,
+    sourceFilterValue,
+    channelFilterValue,
+    batchFilterValue,
+    campanaFilterValue,
+    dateFilterValue,
+    reengageFilter,
+    initialFilters?.estado,
+  ]);
 
   const activeSourceFilter =
     sourceFilterValue && sourceFilterValue !== "all" ? sourceFilterValue : null;
