@@ -66,6 +66,25 @@ function parseNumber(raw: string): number | undefined {
   return Number.isFinite(num) ? num : undefined
 }
 
+function parseSidList(raw: string): string[] {
+  if (!raw.trim()) return []
+  const tokens = raw
+    .split(/\r?\n|,|;/)
+    .map((item) => item.trim())
+    .filter(Boolean)
+  const unique: string[] = []
+  const seen = new Set<string>()
+  for (const token of tokens) {
+    if (!/^HX[0-9a-zA-Z]+$/.test(token)) {
+      throw new Error(`SID inválido: ${token}. Debe iniciar con HX.`)
+    }
+    if (seen.has(token)) continue
+    seen.add(token)
+    unique.push(token)
+  }
+  return unique
+}
+
 async function upsertTenantSecret(
   tenantId: string,
   clave: string,
@@ -696,6 +715,7 @@ export async function updateWhatsAppSettingsAction(_: CrudActionState, formData:
     const templateSales = getText(formData, "whatsapp_template_sales")
     const templateAppointment = getText(formData, "whatsapp_template_appointment")
     const templateCancel = getText(formData, "whatsapp_template_cancel")
+    const templateProspeccionRaw = getText(formData, "whatsapp_template_prospeccion_sids")
 
     const whatsappPatch: Record<string, unknown> = {}
     if (promptId) whatsappPatch.prompt_id = promptId
@@ -714,6 +734,8 @@ export async function updateWhatsAppSettingsAction(_: CrudActionState, formData:
     if (templateSales) templatesPatch.sales = templateSales
     if (templateAppointment) templatesPatch.appointment = templateAppointment
     if (templateCancel) templatesPatch.cancel = templateCancel
+    const templateProspeccion = parseSidList(templateProspeccionRaw)
+    if (templateProspeccion.length) templatesPatch.prospeccion = templateProspeccion
     if (Object.keys(templatesPatch).length) {
       whatsappPatch.templates = templatesPatch
     }

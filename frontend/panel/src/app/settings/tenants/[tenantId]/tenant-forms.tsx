@@ -401,6 +401,7 @@ type WhatsAppInitialValues = {
   whatsapp_template_sales?: string
   whatsapp_template_appointment?: string
   whatsapp_template_cancel?: string
+  whatsapp_template_prospeccion_sids?: string
 }
 
 type MessengerInitialValues = {
@@ -1696,6 +1697,43 @@ export function TenantWhatsAppSettings({
         ) : (
           <FormStatusMessage state={validateState} />
         )}
+      </form>
+    </div>
+  )
+}
+
+export function TenantWhatsAppProspeccionSettings({
+  tenantId,
+  initialValues,
+}: {
+  tenantId: string
+  initialValues: Pick<WhatsAppInitialValues, "whatsapp_template_prospeccion_sids">
+}) {
+  const actions = useTenantSettingsActions()
+  const [state, formAction] = useActionState(actions.updateWhatsAppSettingsAction, INITIAL_CRUD_STATE)
+
+  return (
+    <div className="space-y-6">
+      <form action={formAction} className="space-y-4">
+        <input type="hidden" name="tenant_id" value={tenantId} />
+        <div className="space-y-2">
+          <Label htmlFor="whatsapp_template_prospeccion_sids">Plantillas Whats-Prosp (SIDs)</Label>
+          <Textarea
+            id="whatsapp_template_prospeccion_sids"
+            name="whatsapp_template_prospeccion_sids"
+            placeholder={"HX...\nHX..."}
+            defaultValue={initialValues.whatsapp_template_prospeccion_sids ?? ""}
+            className="min-h-[180px] font-mono text-xs"
+            spellCheck={false}
+          />
+          <p className="text-xs text-muted-foreground">
+            Un SID por línea. Se guarda en <code>organizaciones.config.whatsapp.templates.prospeccion</code> como arreglo.
+          </p>
+        </div>
+        <div className="flex items-center justify-between gap-3">
+          <FormStatusMessage state={state} />
+          <SubmitButton label="Guardar Whats-Prosp" pendingLabel="Guardando..." />
+        </div>
       </form>
     </div>
   )

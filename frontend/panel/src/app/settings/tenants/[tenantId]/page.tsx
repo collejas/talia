@@ -20,6 +20,7 @@ import {
   TenantOpenaiSettings,
   TenantTwilioSettings,
   TenantWhatsAppSettings,
+  TenantWhatsAppProspeccionSettings,
   type RouteItem,
   type SecretItem,
   type TenantOrganizationInfo,
@@ -61,6 +62,15 @@ function getNestedNumber(root: Record<string, unknown>, key: string): number | u
 function getNestedBoolean(root: Record<string, unknown>, key: string): boolean | undefined {
   const value = root[key]
   return typeof value === "boolean" ? value : undefined
+}
+
+function getNestedStringArray(root: Record<string, unknown>, key: string): string[] | undefined {
+  const value = root[key]
+  if (!Array.isArray(value)) return undefined
+  const items = value
+    .map((item) => (typeof item === "string" ? item.trim() : ""))
+    .filter(Boolean)
+  return items.length ? items : undefined
 }
 
 export default async function TenantDetailSettingsPage({ params }: { params: Promise<{ tenantId: string }> }) {
@@ -152,6 +162,7 @@ export default async function TenantDetailSettingsPage({ params }: { params: Pro
     whatsapp_template_sales: getNestedString(whatsappTemplates, "sales"),
     whatsapp_template_appointment: getNestedString(whatsappTemplates, "appointment"),
     whatsapp_template_cancel: getNestedString(whatsappTemplates, "cancel"),
+    whatsapp_template_prospeccion_sids: (getNestedStringArray(whatsappTemplates, "prospeccion") ?? []).join("\n"),
   }
   const messengerConfig = getNestedRecord(config, "messenger") ?? {}
   const messengerInitialValues = {
@@ -253,12 +264,13 @@ export default async function TenantDetailSettingsPage({ params }: { params: Pro
           </CardHeader>
         <CardContent>
           <Tabs defaultValue="webchat">
-          <TabsList className="grid grid-cols-9">
+          <TabsList className="grid grid-cols-10">
             <TabsTrigger value="webchat">Webchat</TabsTrigger>
             <TabsTrigger value="calendar">Calendario</TabsTrigger>
             <TabsTrigger value="mail">Correo</TabsTrigger>
             <TabsTrigger value="twilio">Twilio</TabsTrigger>
             <TabsTrigger value="whatsapp">WhatsApp</TabsTrigger>
+            <TabsTrigger value="whatsapp-prosp">Whats-Prosp</TabsTrigger>
             <TabsTrigger value="messenger">Messenger</TabsTrigger>
             <TabsTrigger value="busqueda">Búsqueda</TabsTrigger>
             <TabsTrigger value="openai">OpenAI</TabsTrigger>
@@ -304,6 +316,9 @@ export default async function TenantDetailSettingsPage({ params }: { params: Pro
                 initialValues={whatsappInitialValues}
                 routes={routes}
               />
+            </TabsContent>
+            <TabsContent value="whatsapp-prosp" className="pt-4">
+              <TenantWhatsAppProspeccionSettings tenantId={tenantId} initialValues={whatsappInitialValues} />
             </TabsContent>
             <TabsContent value="messenger" className="pt-4">
               <TenantMessengerSettings
