@@ -22,6 +22,7 @@ export function InboxWorkspace({
   threads,
   reengageTagOptions,
 }: InboxWorkspaceProps) {
+  const [sourceFilterValue, setSourceFilterValue] = React.useState("");
   const [channelFilterValue, setChannelFilterValue] = React.useState("");
   const [dateFilterValue, setDateFilterValue] = React.useState("");
   const [reengageFilter, setReengageFilter] = React.useState("");
@@ -62,13 +63,18 @@ export function InboxWorkspace({
     }
   }, [reengageFilter, combinedReengageOptions]);
 
-  const activeChannelFilter = channelFilterValue || null;
+  const activeSourceFilter =
+    sourceFilterValue && sourceFilterValue !== "all" ? sourceFilterValue : null;
+  const activeChannelFilter =
+    channelFilterValue && channelFilterValue !== "all" ? channelFilterValue : null;
   const activeDateFilter: DateFilterOption = (dateFilterValue || "all") as DateFilterOption;
 
   return (
     <div className="space-y-4">
       <InboxToolbar
         summary={summary}
+        sourceFilterValue={sourceFilterValue}
+        onSourceFilterValueChange={setSourceFilterValue}
         channelFilterValue={channelFilterValue}
         onChannelFilterValueChange={setChannelFilterValue}
         dateFilterValue={dateFilterValue}
@@ -79,6 +85,7 @@ export function InboxWorkspace({
       />
       <InboxSplitView
         threads={threads}
+        sourceFilter={activeSourceFilter}
         channelFilter={activeChannelFilter}
         dateFilter={activeDateFilter}
         reengageFilter={reengageFilter}

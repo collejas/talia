@@ -496,6 +496,7 @@ function resolveHumanAuthorName(
 }
 type InboxSplitViewProps = {
   threads: InboxThread[];
+  sourceFilter?: string | null;
   channelFilter?: string | null;
   dateFilter: DateFilterOption;
   reengageFilter: string;
@@ -503,6 +504,7 @@ type InboxSplitViewProps = {
 
 export function InboxSplitView({
   threads,
+  sourceFilter,
   channelFilter,
   dateFilter,
   reengageFilter,
@@ -663,10 +665,18 @@ export function InboxSplitView({
 
   const filteredThreads = React.useMemo(() => {
     const term = searchTerm.toLowerCase();
+    const normalizedSourceFilter = sourceFilter ? sourceFilter.toLowerCase() : null;
     const normalizedFilter = channelFilter ? channelFilter.toLowerCase() : null;
     return threadItems
       .filter((thread) => {
-        if (!normalizedFilter) return true;
+        if (!normalizedSourceFilter || normalizedSourceFilter === "all") return true;
+        if (normalizedSourceFilter === "operativo") {
+          return (thread.source ?? "").toLowerCase() !== "prospeccion";
+        }
+        return (thread.source ?? "").toLowerCase() === normalizedSourceFilter;
+      })
+      .filter((thread) => {
+        if (!normalizedFilter || normalizedFilter === "all") return true;
         return (thread.canal ?? "").toLowerCase() === normalizedFilter;
       })
       .filter((thread) => matchesDateFilter(thread, dateFilter))
@@ -675,6 +685,7 @@ export function InboxSplitView({
         if (!term) return true;
         const haystack = [
           thread.contactoNombre,
+          thread.source ?? "",
           thread.canal,
           thread.preview,
           thread.tags.join(" "),
@@ -683,7 +694,7 @@ export function InboxSplitView({
           .toLowerCase();
         return haystack.includes(term);
       });
-  }, [threadItems, searchTerm, channelFilter, dateFilter, reengageFilter]);
+  }, [threadItems, searchTerm, sourceFilter, channelFilter, dateFilter, reengageFilter]);
 
   const selectedThread = React.useMemo(() => {
     if (!selectedId) {
@@ -761,7 +772,17 @@ export function InboxSplitView({
       if (threadsRefreshingRef.current) return;
       threadsRefreshingRef.current = true;
       try {
-        const response = await fetch(`/api/inbox/threads?limit=25&message_limit=20`, {
+        const params = new URLSearchParams({
+          limit: "25",
+          message_limit: "20",
+        });
+        if (sourceFilter && sourceFilter !== "all") {
+          params.set("source", sourceFilter);
+        }
+        if (channelFilter && channelFilter !== "all") {
+          params.set("channel", channelFilter);
+        }
+        const response = await fetch(`/api/inbox/threads?${params.toString()}`, {
           cache: "no-store",
         });
         if (!response.ok) {
@@ -792,7 +813,7 @@ export function InboxSplitView({
       clearInterval(interval);
       threadsRefreshingRef.current = false;
     };
-  }, []);
+  }, [sourceFilter, channelFilter]);
 
   const refreshMessages = React.useCallback(
     async (conversationId: string, options: { force?: boolean } = {}) => {
@@ -1168,6 +1189,11 @@ export function InboxSplitView({
                         <span className="text-xs text-muted-foreground">{formattedTime}</span>
                       </div>
                       <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                        {thread.source?.toLowerCase() === "prospeccion" ? (
+                          <Badge variant="secondary" className="uppercase">
+                            Prospección
+                          </Badge>
+                        ) : null}
                         <Badge variant="outline" className={`uppercase ${channelBadgeClass}`}>
                           {thread.canal}
                         </Badge>
@@ -1211,6 +1237,11 @@ export function InboxSplitView({
                 >
                   {selectedThread.canal}
                 </span>
+                {selectedThread.source?.toLowerCase() === "prospeccion" ? (
+                  <Badge variant="secondary" className="uppercase">
+                    Prospección
+                  </Badge>
+                ) : null}
                 {selectedThread.contactoTelefono ? (
                   <span className="text-xs text-muted-foreground">{selectedThread.contactoTelefono}</span>
                 ) : null}

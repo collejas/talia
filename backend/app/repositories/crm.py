@@ -5778,11 +5778,17 @@ class CRMRepository:
             "p_limit": max(1, min(limit, 200)),
             "p_offset": max(0, offset),
             "p_message_limit": max(1, min(message_limit, 50)),
-            "p_source": source.strip().lower() if isinstance(source, str) and source.strip() else None,
-            "p_channel": channel.strip().lower() if isinstance(channel, str) and channel.strip() else None,
-            "p_batch_id": str(batch_id) if batch_id else None,
-            "p_campana_id": str(campana_id) if campana_id else None,
         }
+        source_value = source.strip().lower() if isinstance(source, str) and source.strip() else None
+        channel_value = channel.strip().lower() if isinstance(channel, str) and channel.strip() else None
+        if source_value:
+            body["p_source"] = source_value
+        if channel_value:
+            body["p_channel"] = channel_value
+        if batch_id:
+            body["p_batch_id"] = str(batch_id)
+        if campana_id:
+            body["p_campana_id"] = str(campana_id)
         resp = await self._request_with_user(
             "POST",
             "/rest/v1/rpc/panel_inbox_threads",

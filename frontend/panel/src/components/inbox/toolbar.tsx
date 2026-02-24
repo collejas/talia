@@ -25,6 +25,12 @@ const CHANNEL_FILTER_OPTIONS = [
   { id: "webchat", label: "Webchat" },
 ];
 
+const SOURCE_FILTER_OPTIONS = [
+  { id: "all", label: "Todos" },
+  { id: "prospeccion", label: "Prospección" },
+  { id: "operativo", label: "Operativo" },
+];
+
 const STATE_FILTER_OPTIONS = [
   { value: "all", label: "Todos" },
   { value: "unread", label: "Sin leer" },
@@ -36,6 +42,8 @@ type InboxToolbarProps = {
   summary: InboxSummary;
   channelFilterValue: string;
   onChannelFilterValueChange?: (value: string) => void;
+  sourceFilterValue: string;
+  onSourceFilterValueChange?: (value: string) => void;
   dateFilterValue: string;
   onDateFilterValueChange?: (value: string) => void;
   reengageFilter: string;
@@ -47,6 +55,8 @@ export function InboxToolbar({
   summary,
   channelFilterValue,
   onChannelFilterValueChange,
+  sourceFilterValue,
+  onSourceFilterValueChange,
   dateFilterValue,
   onDateFilterValueChange,
   reengageFilter,
@@ -84,6 +94,20 @@ export function InboxToolbar({
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          <div className="flex items-center">
+            <select
+              className="h-8 w-[4.8rem] rounded-md border border-muted-foreground/40 bg-background px-3 text-[10px] uppercase tracking-wider text-muted-foreground leading-none focus-visible:border-ring focus-visible:ring-ring/50"
+              value={sourceFilterValue}
+              onChange={(event) => onSourceFilterValueChange?.(event.target.value)}
+            >
+              <option value="">Origen</option>
+              {SOURCE_FILTER_OPTIONS.map((option) => (
+                <option key={option.label} value={option.id ?? ""}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </div>
           <div className="flex items-center">
             <select
               className="h-8 w-[4.8rem] rounded-md border border-muted-foreground/40 bg-background px-3 text-[10px] uppercase tracking-wider text-muted-foreground leading-none focus-visible:border-ring focus-visible:ring-ring/50"
