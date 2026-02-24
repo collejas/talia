@@ -25,7 +25,7 @@ curl -u "$TWILIO_ACCOUNT_SID:$TWILIO_AUTH_TOKEN" \
 
 # solicitar la revisión a WhatsApp
 curl -u "$TWILIO_ACCOUNT_SID:$TWILIO_AUTH_TOKEN" \
-  -X POST https://content.twilio.com/v1/Content/HX631a650d5232ea74f5bb4d02f3b0a89a/ApprovalRequests/whatsapp \
+  -X POST https://content.twilio.com/v1/Content/HHXd394ce0f5e307ad7c4a22738024b8b03/ApprovalRequests/whatsapp \
   -H "Content-Type: application/json" \
   -d '{
     "name": "cita_vendedor",
@@ -34,7 +34,7 @@ curl -u "$TWILIO_ACCOUNT_SID:$TWILIO_AUTH_TOKEN" \
 
 # Ver aprobacion
 curl -u "$TWILIO_ACCOUNT_SID:$TWILIO_AUTH_TOKEN" \
-  -X GET https://content.twilio.com/v1/Content/HX13d4db774bbe3ee0e4db57ec06ce3398/ApprovalRequests
+  -X GET https://content.twilio.com/v1/Content/HXd394ce0f5e307ad7c4a22738024b8b03/ApprovalRequests
 
 # Ver como quedo la plantilla:
 curl -u "$TWILIO_ACCOUNT_SID:$TWILIO_AUTH_TOKEN" \

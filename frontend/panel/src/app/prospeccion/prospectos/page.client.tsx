@@ -160,6 +160,8 @@ const initialContactForm = {
   correoAsunto: "",
   correoCuerpo: "",
   whatsappMensaje: "",
+  whatsappVariables: "",
+  whatsappEmpresa: process.env.NEXT_PUBLIC_WHATSAPP_EMPRESA?.trim() || process.env.NEXT_PUBLIC_APP_NAME?.trim() || "Tal-IA",
   llamadaNotas: "",
 }
 
@@ -191,6 +193,77 @@ function arraysEqual(a: string[], b: string[]) {
     if (a[i] !== b[i]) return false
   }
   return true
+}
+
+function serializeWhatsappVariables(value: unknown): string {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return ""
+  const entries = Object.entries(value as Record<string, unknown>)
+    .map(([key, raw]) => [String(key).trim(), raw == null ? "" : String(raw).trim()] as const)
+    .filter(([key]) => key.length > 0)
+  if (!entries.length) return ""
+  return entries.map(([key, entry]) => `${key}=${entry}`).join("\n")
+}
+
+function parseWhatsappVariables(raw: string): { value: Record<string, string> | null; error: string | null } {
+  const input = raw.trim()
+  if (!input) return { value: null, error: null }
+
+  if (input.startsWith("{")) {
+    try {
+      const parsed = JSON.parse(input)
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+        return { value: null, error: "Las variables de WhatsApp deben ser un objeto JSON (clave/valor)." }
+      }
+      const mapped = Object.entries(parsed as Record<string, unknown>)
+        .map(([key, val]) => [String(key).trim(), val == null ? "" : String(val)] as const)
+        .filter(([key]) => key.length > 0)
+      return { value: Object.fromEntries(mapped), error: null }
+    } catch {
+      return { value: null, error: "JSON inválido en variables de WhatsApp." }
+    }
+  }
+
+  const variables: Record<string, string> = {}
+  const lines = input.split(/\r?\n/)
+  for (const line of lines) {
+    const trimmed = line.trim()
+    if (!trimmed) continue
+    const separatorIndex = trimmed.search(/[:=]/)
+    if (separatorIndex <= 0) {
+      return { value: null, error: "Formato inválido. Usa `clave=valor` o JSON." }
+    }
+    const key = trimmed.slice(0, separatorIndex).trim()
+    const value = trimmed.slice(separatorIndex + 1).trim()
+    if (!key) {
+      return { value: null, error: "Cada variable de WhatsApp requiere una clave." }
+    }
+    variables[key] = value
+  }
+  return { value: Object.keys(variables).length ? variables : null, error: null }
+}
+
+function extractNumericWhatsappPlaceholders(text: string): string[] {
+  if (!text.trim()) return []
+  const keys = new Set<string>()
+  const regex = /{{\s*(\d+)\s*}}/g
+  let match: RegExpExecArray | null = regex.exec(text)
+  while (match) {
+    keys.add(match[1])
+    match = regex.exec(text)
+  }
+  return Array.from(keys)
+}
+
+function buildAutoWhatsappVariables(message: string, empresa: string): Record<string, string> | null {
+  const keys = extractNumericWhatsappPlaceholders(message)
+  if (!keys.length) return null
+  const out: Record<string, string> = {}
+  for (const key of keys) {
+    if (key === "1") out[key] = "{{display_name}}"
+    else if (key === "3") out[key] = empresa.trim() || "Tal-IA"
+    else if (key === "4") out[key] = "{{segmento}}"
+  }
+  return Object.keys(out).length ? out : null
 }
 
 type ProspeccionStage = "discover" | "enrich" | "prepare" | "launch" | "evaluate"
@@ -1299,9 +1372,13 @@ useEffect(() => {
         correoCuerpo: template.cuerpo_texto ?? prev.correoCuerpo,
       }))
     } else if (canal === "whatsapp") {
+      const templateVariables = serializeWhatsappVariables(
+        metadata?.["twilio_variables"] ?? metadata?.["twilio_content_variables"]
+      )
       setContactForm((prev) => ({
         ...prev,
         whatsappMensaje: twilioSid ? "" : template.cuerpo_texto ?? prev.whatsappMensaje,
+        whatsappVariables: templateVariables,
       }))
     } else if (canal === "llamada") {
       setContactForm((prev) => ({
@@ -1507,6 +1584,8 @@ useEffect(() => {
     const correoAsunto = contactForm.correoAsunto.trim()
     const correoCuerpo = contactForm.correoCuerpo.trim()
     const whatsappMensaje = contactForm.whatsappMensaje.trim()
+    const whatsappVariablesRaw = contactForm.whatsappVariables.trim()
+    const whatsappEmpresa = contactForm.whatsappEmpresa.trim()
     const llamadaNotas = contactForm.llamadaNotas.trim()
 
     const canalesPayload: ProspeccionCanalConfigInput[] = []
@@ -1548,12 +1627,25 @@ useEffect(() => {
     }
     if (whatsappTemplate) {
       const message = whatsappMensaje || whatsappTemplate.cuerpo_texto?.trim() || ""
+      const parsedWhatsappVariables = parseWhatsappVariables(whatsappVariablesRaw)
+      if (parsedWhatsappVariables.error) {
+        setContactError(parsedWhatsappVariables.error)
+        return
+      }
+      const autoWhatsappVariables = buildAutoWhatsappVariables(message, whatsappEmpresa)
       const entry: ProspeccionCanalConfigInput = {
         canal: "whatsapp",
         template_id: whatsappTemplate.id,
       }
       if (message) {
         entry.body = message
+      }
+      const mergedWhatsappVariables = {
+        ...(autoWhatsappVariables ?? {}),
+        ...(parsedWhatsappVariables.value ?? {}),
+      }
+      if (Object.keys(mergedWhatsappVariables).length) {
+        entry.metadata = { twilio_variables: mergedWhatsappVariables }
       }
       canalesPayload.push(entry)
     } else if (whatsappMensaje) {
@@ -3125,6 +3217,29 @@ useEffect(() => {
                   rows={4}
                   placeholder="Hola, soy del equipo Tal-IA..."
                 />
+              </div>
+              <div className="space-y-1">
+                <Label>Variables</Label>
+                <Textarea
+                  value={contactForm.whatsappVariables}
+                  onChange={(event) => setContactForm((prev) => ({ ...prev, whatsappVariables: event.target.value }))}
+                  rows={4}
+                  placeholder={"1={{display_name}}\n2=Jorge\n3=GeoActiv"}
+                />
+                <p className="text-xs text-muted-foreground">
+                  {"Libre: usa `clave=valor` por línea o JSON. También puedes usar placeholders como {{display_name}}."}
+                </p>
+              </div>
+              <div className="space-y-1">
+                <Label>{"Empresa (auto para {{3}})"}</Label>
+                <Input
+                  value={contactForm.whatsappEmpresa}
+                  onChange={(event) => setContactForm((prev) => ({ ...prev, whatsappEmpresa: event.target.value }))}
+                  placeholder="Tal-IA"
+                />
+                <p className="text-xs text-muted-foreground">
+                  {"Auto en plantilla: {{1}} = nombre, {{3}} = empresa, {{4}} = segmento."}
+                </p>
               </div>
             </TabsContent>
             <TabsContent value="llamada" className="space-y-3">

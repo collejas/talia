@@ -69,6 +69,14 @@ import {
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
   DenueAdvancedFilters,
   DenueAdvancedSearchModal,
 } from "./advanced-denue-search-modal";
@@ -334,6 +342,9 @@ export function DenueBusquedaView() {
   });
   const [isDeletingResultados, setIsDeletingResultados] = useState(false);
   const [isSavingProspectos, setIsSavingProspectos] = useState(false);
+  const [saveProspectosModalOpen, setSaveProspectosModalOpen] = useState(false);
+  const [saveProspectosSegmento, setSaveProspectosSegmento] = useState("");
+  const [saveProspectosSegmentoError, setSaveProspectosSegmentoError] = useState<string | null>(null);
   const [advancedModalOpen, setAdvancedModalOpen] = useState(false);
   const [advancedFilters, setAdvancedFilters] = useState<DenueAdvancedFilters | null>(null);
   const [geoLookups, setGeoLookups] = useState<GeoLookups | null>(null);
@@ -1542,7 +1553,7 @@ export function DenueBusquedaView() {
     [selectedIds.size],
   );
 
-  const handleGuardarSeleccion = useCallback(async () => {
+  const handleOpenGuardarSeleccion = useCallback(() => {
     if (!selectedIds.size) {
       setFeedback({
         type: "info",
@@ -1550,17 +1561,31 @@ export function DenueBusquedaView() {
       });
       return;
     }
+    setSaveProspectosSegmentoError(null);
+    setSaveProspectosModalOpen(true);
+  }, [selectedIds.size]);
+
+  const handleGuardarSeleccion = useCallback(async () => {
+    const segmento = saveProspectosSegmento.trim();
+    if (!segmento) {
+      setSaveProspectosSegmentoError("El segmento es obligatorio.");
+      return;
+    }
     setIsSavingProspectos(true);
+    setSaveProspectosSegmentoError(null);
     try {
       const busquedaLabel = resolveBusquedaLabel(activeBusqueda);
       const response = await guardarProspectos({
         fuente: "denue",
         resultado_ids: Array.from(selectedIds),
+        segmento,
         metadata: {
           busqueda_id: activeBusqueda?.id,
           busqueda_query: busquedaLabel ?? activeBusqueda?.query,
         },
       });
+      setSaveProspectosModalOpen(false);
+      setSaveProspectosSegmento("");
       setFeedback({
         type: "success",
         message: `Se guardaron ${response.total} prospectos desde DENUE. Continúa con la verificación en la vista Prospección.`,
@@ -1576,7 +1601,7 @@ export function DenueBusquedaView() {
     } finally {
       setIsSavingProspectos(false);
     }
-  }, [activeBusqueda, resolveBusquedaLabel, selectedIds]);
+  }, [activeBusqueda, resolveBusquedaLabel, saveProspectosSegmento, selectedIds]);
 
   return (
     <div className="space-y-6">
@@ -2071,7 +2096,7 @@ export function DenueBusquedaView() {
                   <Button
                     type="button"
                     size="sm"
-                    onClick={handleGuardarSeleccion}
+                    onClick={handleOpenGuardarSeleccion}
                     disabled={!selectedIds.size || isSavingProspectos}
                     className="flex items-center gap-2"
                   >
@@ -2481,6 +2506,55 @@ export function DenueBusquedaView() {
           )}
         </CardContent>
       </Card>
+      <Dialog
+        open={saveProspectosModalOpen}
+        onOpenChange={(open) => {
+          setSaveProspectosModalOpen(open);
+          if (!open) {
+            setSaveProspectosSegmentoError(null);
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Guardar como prospectos</DialogTitle>
+            <DialogDescription>
+              Define el segmento que se asignará a todos los resultados seleccionados.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            <Label htmlFor="denue-save-segmento">Segmento</Label>
+            <Input
+              id="denue-save-segmento"
+              value={saveProspectosSegmento}
+              onChange={(event) => {
+                setSaveProspectosSegmento(event.target.value);
+                if (saveProspectosSegmentoError) {
+                  setSaveProspectosSegmentoError(null);
+                }
+              }}
+              placeholder="Ej. Restaurantes"
+              maxLength={120}
+            />
+            {saveProspectosSegmentoError ? (
+              <p className="text-xs text-destructive">{saveProspectosSegmentoError}</p>
+            ) : null}
+          </div>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setSaveProspectosModalOpen(false)}
+              disabled={isSavingProspectos}
+            >
+              Cancelar
+            </Button>
+            <Button type="button" onClick={handleGuardarSeleccion} disabled={isSavingProspectos}>
+              {isSavingProspectos ? "Guardando..." : "Guardar prospectos"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       <DenueAdvancedSearchModal
         open={advancedModalOpen}
         onOpenChange={setAdvancedModalOpen}
