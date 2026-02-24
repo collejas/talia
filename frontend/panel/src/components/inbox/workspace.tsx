@@ -15,15 +15,26 @@ type InboxWorkspaceProps = {
   summary: InboxSummary;
   threads: InboxThread[];
   reengageTagOptions: string[];
+  initialFilters?: {
+    estado?: string | null;
+    source?: string | null;
+    channel?: string | null;
+    batchId?: string | null;
+    campanaId?: string | null;
+  };
 };
 
 export function InboxWorkspace({
   summary,
   threads,
   reengageTagOptions,
+  initialFilters,
 }: InboxWorkspaceProps) {
-  const [sourceFilterValue, setSourceFilterValue] = React.useState("");
-  const [channelFilterValue, setChannelFilterValue] = React.useState("");
+  const [sourceFilterValue, setSourceFilterValue] = React.useState(initialFilters?.source ?? "");
+  const [channelFilterValue, setChannelFilterValue] = React.useState(initialFilters?.channel ?? "");
+  const [estadoFilterValue] = React.useState(initialFilters?.estado ?? "");
+  const [batchFilterValue] = React.useState(initialFilters?.batchId ?? "");
+  const [campanaFilterValue] = React.useState(initialFilters?.campanaId ?? "");
   const [dateFilterValue, setDateFilterValue] = React.useState("");
   const [reengageFilter, setReengageFilter] = React.useState("");
 
@@ -67,6 +78,9 @@ export function InboxWorkspace({
     sourceFilterValue && sourceFilterValue !== "all" ? sourceFilterValue : null;
   const activeChannelFilter =
     channelFilterValue && channelFilterValue !== "all" ? channelFilterValue : null;
+  const activeEstadoFilter = estadoFilterValue?.trim() || null;
+  const activeBatchFilter = batchFilterValue?.trim() || null;
+  const activeCampanaFilter = campanaFilterValue?.trim() || null;
   const activeDateFilter: DateFilterOption = (dateFilterValue || "all") as DateFilterOption;
 
   return (
@@ -87,6 +101,9 @@ export function InboxWorkspace({
         threads={threads}
         sourceFilter={activeSourceFilter}
         channelFilter={activeChannelFilter}
+        estadoFilter={activeEstadoFilter}
+        batchFilter={activeBatchFilter}
+        campanaFilter={activeCampanaFilter}
         dateFilter={activeDateFilter}
         reengageFilter={reengageFilter}
       />

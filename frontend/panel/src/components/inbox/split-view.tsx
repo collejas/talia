@@ -498,6 +498,9 @@ type InboxSplitViewProps = {
   threads: InboxThread[];
   sourceFilter?: string | null;
   channelFilter?: string | null;
+  estadoFilter?: string | null;
+  batchFilter?: string | null;
+  campanaFilter?: string | null;
   dateFilter: DateFilterOption;
   reengageFilter: string;
 };
@@ -506,6 +509,9 @@ export function InboxSplitView({
   threads,
   sourceFilter,
   channelFilter,
+  estadoFilter,
+  batchFilter,
+  campanaFilter,
   dateFilter,
   reengageFilter,
 }: InboxSplitViewProps) {
@@ -666,7 +672,10 @@ export function InboxSplitView({
   const filteredThreads = React.useMemo(() => {
     const term = searchTerm.toLowerCase();
     const normalizedSourceFilter = sourceFilter ? sourceFilter.toLowerCase() : null;
-    const normalizedFilter = channelFilter ? channelFilter.toLowerCase() : null;
+    const normalizedChannelFilter = channelFilter ? channelFilter.toLowerCase() : null;
+    const normalizedEstadoFilter = estadoFilter ? estadoFilter.toLowerCase() : null;
+    const normalizedBatchFilter = batchFilter ? batchFilter.toLowerCase() : null;
+    const normalizedCampanaFilter = campanaFilter ? campanaFilter.toLowerCase() : null;
     return threadItems
       .filter((thread) => {
         if (!normalizedSourceFilter || normalizedSourceFilter === "all") return true;
@@ -676,8 +685,20 @@ export function InboxSplitView({
         return (thread.source ?? "").toLowerCase() === normalizedSourceFilter;
       })
       .filter((thread) => {
-        if (!normalizedFilter || normalizedFilter === "all") return true;
-        return (thread.canal ?? "").toLowerCase() === normalizedFilter;
+        if (!normalizedChannelFilter || normalizedChannelFilter === "all") return true;
+        return (thread.canal ?? "").toLowerCase() === normalizedChannelFilter;
+      })
+      .filter((thread) => {
+        if (!normalizedEstadoFilter) return true;
+        return (thread.estado ?? "").toLowerCase() === normalizedEstadoFilter;
+      })
+      .filter((thread) => {
+        if (!normalizedBatchFilter) return true;
+        return (thread.batchId ?? "").toLowerCase() === normalizedBatchFilter;
+      })
+      .filter((thread) => {
+        if (!normalizedCampanaFilter) return true;
+        return (thread.campanaId ?? "").toLowerCase() === normalizedCampanaFilter;
       })
       .filter((thread) => matchesDateFilter(thread, dateFilter))
       .filter((thread) => matchesReengageFilter(thread, reengageFilter))
@@ -694,7 +715,17 @@ export function InboxSplitView({
           .toLowerCase();
         return haystack.includes(term);
       });
-  }, [threadItems, searchTerm, sourceFilter, channelFilter, dateFilter, reengageFilter]);
+  }, [
+    threadItems,
+    searchTerm,
+    sourceFilter,
+    channelFilter,
+    estadoFilter,
+    batchFilter,
+    campanaFilter,
+    dateFilter,
+    reengageFilter,
+  ]);
 
   const selectedThread = React.useMemo(() => {
     if (!selectedId) {
@@ -782,6 +813,15 @@ export function InboxSplitView({
         if (channelFilter && channelFilter !== "all") {
           params.set("channel", channelFilter);
         }
+        if (estadoFilter) {
+          params.set("estado", estadoFilter);
+        }
+        if (batchFilter) {
+          params.set("batch_id", batchFilter);
+        }
+        if (campanaFilter) {
+          params.set("campana_id", campanaFilter);
+        }
         const response = await fetch(`/api/inbox/threads?${params.toString()}`, {
           cache: "no-store",
         });
@@ -813,7 +853,7 @@ export function InboxSplitView({
       clearInterval(interval);
       threadsRefreshingRef.current = false;
     };
-  }, [sourceFilter, channelFilter]);
+  }, [sourceFilter, channelFilter, estadoFilter, batchFilter, campanaFilter]);
 
   const refreshMessages = React.useCallback(
     async (conversationId: string, options: { force?: boolean } = {}) => {

@@ -22,6 +22,13 @@ type InboxResumenResponse = {
 
 export type { InboxFolder, InboxSummary, InboxThread, InboxPayload, InboxMessage } from "@/lib/inbox/types";
 export type { InboxMessageRow } from "@/lib/inbox/types";
+export type InboxThreadsFilters = {
+  estado?: string | null;
+  source?: string | null;
+  channel?: string | null;
+  batchId?: string | null;
+  campanaId?: string | null;
+};
 
 const FOLDER_LABELS: Record<string, string> = {
   inbox: "Bandeja de entrada",
@@ -89,12 +96,27 @@ function gatherReengageTagsFromThreads(threads: InboxThread[]): string[] {
   return Array.from(seen);
 }
 
-export async function loadInboxData(): Promise<InboxPayload> {
+export async function loadInboxData(filters?: InboxThreadsFilters): Promise<InboxPayload> {
+  const normalizedFilters: Record<string, string> = {
+    limit: "25",
+    message_limit: "20",
+  };
+  const normalizedEstado = filters?.estado?.trim();
+  const normalizedSource = filters?.source?.trim();
+  const normalizedChannel = filters?.channel?.trim();
+  const normalizedBatchId = filters?.batchId?.trim();
+  const normalizedCampanaId = filters?.campanaId?.trim();
+  if (normalizedEstado) normalizedFilters.estado = normalizedEstado;
+  if (normalizedSource) normalizedFilters.source = normalizedSource;
+  if (normalizedChannel) normalizedFilters.channel = normalizedChannel;
+  if (normalizedBatchId) normalizedFilters.batch_id = normalizedBatchId;
+  if (normalizedCampanaId) normalizedFilters.campana_id = normalizedCampanaId;
+
   const [resumen, threads, tags] = await Promise.all([
     callCrmApi<InboxResumenResponse>("/crm/inbox/summary", { withUserToken: true }),
     callCrmApi<InboxThreadRow[]>("/crm/inbox/threads", {
       withUserToken: true,
-      searchParams: { limit: "25", message_limit: "20" },
+      searchParams: normalizedFilters,
     }),
     callCrmApi<CrmTagRow[]>("/crm/tags", { withUserToken: true }),
   ]);

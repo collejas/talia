@@ -10,8 +10,23 @@ import { loadInboxData } from "@/lib/inbox/data"
 
 export const dynamic = "force-dynamic"
 
-export default async function Page() {
-  const inboxData = await loadInboxData()
+type InboxSearchParams = Record<string, string | string[] | undefined>
+
+type InboxPageProps = {
+  searchParams?: Promise<InboxSearchParams> | InboxSearchParams
+}
+
+export default async function Page({ searchParams }: InboxPageProps) {
+  const resolvedSearchParams = searchParams ? await searchParams : undefined
+  const initialFilters = {
+    estado: pickQueryParam(resolvedSearchParams, "estado"),
+    source: pickQueryParam(resolvedSearchParams, "source"),
+    channel: pickQueryParam(resolvedSearchParams, "channel"),
+    batchId: pickQueryParam(resolvedSearchParams, "batchId") ?? pickQueryParam(resolvedSearchParams, "batch_id"),
+    campanaId:
+      pickQueryParam(resolvedSearchParams, "campanaId") ?? pickQueryParam(resolvedSearchParams, "campana_id"),
+  }
+  const inboxData = await loadInboxData(initialFilters)
 
   return (
     <SidebarProvider
@@ -46,6 +61,7 @@ export default async function Page() {
                   summary={inboxData.summary}
                   threads={inboxData.threads}
                   reengageTagOptions={inboxData.reengageTags}
+                  initialFilters={initialFilters}
                 />
               </div>
             </div>
@@ -55,6 +71,21 @@ export default async function Page() {
       <ThemeToggle />
     </SidebarProvider>
   )
+}
+
+function pickQueryParam(
+  searchParams: InboxSearchParams | undefined,
+  key: string,
+): string | null {
+  const value = searchParams?.[key]
+  if (Array.isArray(value)) {
+    const candidate = value[0]
+    return typeof candidate === "string" && candidate.trim().length ? candidate.trim() : null
+  }
+  if (typeof value === "string" && value.trim().length) {
+    return value.trim()
+  }
+  return null
 }
 
 function sanitizeMessage(message: string) {
