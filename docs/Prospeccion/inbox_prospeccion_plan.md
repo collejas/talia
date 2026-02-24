@@ -82,6 +82,15 @@ Resultado esperado:
 - [x] Fix de integración frontend (modal de prospectos):
   - `POST /api/prospeccion/prospectos/contactar` ahora usa proxy estándar y propaga `X-Organizacion-Id`.
   - Resuelto error `422 missing header X-Organizacion-Id` al guardar acciones.
+- [x] Configuración de plantillas WhatsApp de prospección por tenant:
+  - Nueva pestaña `Whats-Prosp` en `settings/tenants` y `settings/variables`.
+  - Guarda múltiples SIDs en `organizaciones.config.whatsapp.templates.prospeccion`.
+- [x] Consumo runtime de plantillas Whats-Prosp en modal de prospección:
+  - `GET /crm/prospeccion/contacto/templates` incorpora SIDs runtime del tenant.
+  - Enriquecimiento con Twilio Content API para mostrar nombre y cuerpo real de plantilla.
+  - El modal muestra preview y utiliza `twilio_content_sid` al enviar.
+- [x] Política de envío en frío:
+  - Ajuste para evitar omisión por `whatsapp_no_permitido` cuando el envío proviene de lote de prospección en frío.
 
 ## Propuesta técnica
 

@@ -25,6 +25,9 @@ Formato recomendado por entrada:
   - Match de filtros de contacto con modo `TODOS`/`CUALQUIERA`.
 - Se corrigió proxy frontend `POST /api/prospeccion/prospectos/contactar` para propagar cabeceras de organización.
 - Se resolvió error operativo: `422 missing header X-Organizacion-Id` desde modal de `prospeccion/prospectos`.
+- `prospeccion/denue-busqueda`: guardar como prospectos ahora solicita `Segmento` en modal.
+- `settings/tenants` y `settings/variables`: pestaña nueva `Whats-Prosp` para registrar múltiples SIDs.
+- `prospeccion/prospectos`: preview de plantilla WhatsApp al seleccionar SID runtime.
 
 ### Backend
 - Se agregó `GET /crm/prospeccion/whatsapp/readiness` para validar configuración runtime (Twilio + plantilla por tenant).
@@ -32,6 +35,9 @@ Formato recomendado por entrada:
 - Se habilitó fallback de plantilla WhatsApp por tenant (`whatsapp.templates.sales`) cuando aplica.
 - Se extendieron filtros de `/crm/inbox/threads` por `source`, `channel`, `batch_id`, `campana_id`.
 - Se agregó endpoint `GET /crm/inbox/filter-options`.
+- `GET /crm/prospeccion/contacto/templates` incorpora plantillas runtime desde `whatsapp.templates.prospeccion`.
+- Enriquecimiento runtime con Twilio Content API (nombre/cuerpo/variables de plantilla).
+- Ajuste de envío en frío para evitar omisión por `whatsapp_no_permitido` en lotes de prospección.
 
 ### Base de datos
 - Se aplicó migración de backfill para metadata de prospección en mensajes históricos (sin filas a corregir en entorno de prueba).

@@ -38,3 +38,10 @@ Por cada cambio nuevo:
 - Fix de proxy frontend para contacto de prospectos: ahora envía `X-Organizacion-Id`.
 - Endpoint de readiness para WhatsApp de prospección en backend.
 - Inbox con filtros de origen/canal/lote/campaña + deep links.
+- `prospeccion/denue-busqueda`: guardar como prospectos ahora pide `Segmento` en modal y lo persiste en `prospeccion_prospectos.segmento`.
+- `settings/tenants` y `settings/variables`: nueva pestaña `Whats-Prosp` para guardar múltiples SIDs en `whatsapp.templates.prospeccion`.
+- Modal `prospeccion/prospectos`:
+  - consume plantillas Whats-Prosp desde config tenant.
+  - muestra nombre/SID y preview real de plantilla Twilio Content.
+  - permite variables de plantilla para envío en frío.
+- Ajuste de envío en frío: ya no se omite por `whatsapp_no_permitido` cuando el lote de prospección fuerza intento de WhatsApp.
