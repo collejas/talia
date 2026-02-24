@@ -1,6 +1,7 @@
 # Prospección · Plan de Inbox Reutilizando `/inbox`
 
 Fecha: 2026-02-24
+Estado: en ejecución (fase 1 y 2 completadas)
 
 ## Objetivo
 
@@ -50,6 +51,23 @@ Resultado esperado:
 - Gap actual:
   - La RPC no calcula ni expone un campo de `source`.
   - Tampoco permite filtrar por `source/batch/campana`.
+
+## Avance completado
+
+- [x] Estandarización inicial de metadata de prospección en mensajes WhatsApp de campañas (`source`, `channel`, `batch_id`, `envio_id`).
+- [x] Extensión SQL de inbox:
+  - `panel_inbox_threads(...)` ahora soporta `source/channel/batch/campana`.
+  - `panel_inbox_threads_debug(...)` actualizado con la nueva firma.
+  - Índices en `mensajes.datos` para `source`, `batch_id`, `campana_id`.
+- [x] Backend API:
+  - `GET /crm/inbox/threads` acepta `source`, `channel`, `batch_id`, `campana_id`.
+  - Nuevo `GET /crm/inbox/filter-options` para catálogo de `batch` y `campaña`.
+- [x] Frontend `/inbox`:
+  - Filtro `Origen` (`Todos`, `Prospección`, `Operativo`).
+  - Badge visual `Prospección` en lista y encabezado del hilo.
+  - Selectores `Batch` y `Campaña`.
+  - Deep link por URL (`source`, `channel`, `batchId`, `campanaId`, etc.).
+  - Botón `Copiar enlace` del contexto filtrado.
 
 ## Propuesta técnica
 
@@ -116,10 +134,8 @@ Permitir abrir `/inbox` con query params:
 - Riesgo: degradación de performance al filtrar JSONB en alto volumen.
   - Mitigación: índices por expresión sobre `mensajes.datos->>'source'`, `batch_id`, `campana_id`.
 
-## Orden de implementación sugerido
+## Pendiente
 
-1. Extensión SQL RPC + índices.
-2. Ajuste backend `crm.py` + `crm.py repository`.
-3. Ajuste API Next `/api/inbox/threads` para pasar filtros.
-4. Ajuste UI toolbar + badges + persistencia simple de filtros.
-5. QA funcional con casos: prospección sí/no, canal, batch.
+1. Validar en producción el comportamiento con alto volumen (performance y cardinalidad de filtros).
+2. Mejorar etiquetas de `Batch/Campaña` con nombre comercial real en lugar de UUID corto.
+3. (Opcional) backfill histórico de `mensajes.datos.source` para conversaciones antiguas.
