@@ -8975,8 +8975,9 @@ async def list_settings_logos(
 @router.post("/settings/logos", response_model=CRMLogoAsset)
 async def upload_settings_logo(
     *,
-    repo: CRMRepository = Depends(get_repository),
+    repo: CRMRepository = Depends(get_repository),  # noqa: ARG001
     _: str = Depends(require_permission("settings.manage")),
+    organizacion_id: UUID = Depends(require_organizacion_id),
     usuario_id: UUID | None = Depends(optional_usuario_id),
     file: UploadFile = File(...),
     nombre: Annotated[str, Form()],
@@ -9007,8 +9008,12 @@ async def upload_settings_logo(
         "uploaded_by": str(usuario_id) if usuario_id else None,
     }
 
+    admin_repo = CRMRepository()
     try:
-        row = await repo.create_logo(payload=payload)
+        row = await admin_repo.create_logo(
+            organizacion_id=organizacion_id,
+            payload=payload,
+        )
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 

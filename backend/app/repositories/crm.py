@@ -1400,11 +1400,20 @@ class CRMRepository:
             raise CRMRepositoryError(f"Respuesta inesperada al listar logos: {data!r}")
         return data
 
-    async def create_logo(self, payload: dict[str, Any]) -> dict[str, Any]:
+    async def create_logo(
+        self,
+        *,
+        organizacion_id: UUID,
+        payload: dict[str, Any],
+    ) -> dict[str, Any]:
+        body = {
+            "organizacion_id": str(organizacion_id),
+            **payload,
+        }
         resp = await self._request(
             "POST",
             "/rest/v1/logos",
-            json=payload,
+            json=body,
             prefer="return=representation",
         )
         data = resp.json()
