@@ -49,3 +49,23 @@ Formato recomendado por entrada:
 - `GET /crm/prospeccion/whatsapp/readiness` ahora reporta si existe `whatsapp.prospeccion.prompt_id` en runtime.
 - Ajustes de resolución de nombre de consulta para resultados DENUE.
 - Normalización de correos a minúsculas en render de tabla de prospectos.
+
+## 2026-02-25
+
+### Backend
+- Flujo de prospección WhatsApp:
+  - Se reforzó la deduplicación de oportunidad por conversación/prospecto para evitar duplicados.
+  - Se prioriza reutilizar contacto de la oportunidad de prospección durante el procesamiento de respuestas entrantes.
+- Agenda:
+  - Se añadió regla operativa para que, ante confirmación de horario, el asistente use tools de agenda (`list_demo_slots`/`schedule_demo`) en lugar de responder sin tool call.
+  - Se activó `tool_choice=auto` en la llamada principal del assistant para facilitar ejecución de tools.
+- Confirmación de demo:
+  - Se sincroniza mejor el contexto sobre el contacto de la oportunidad (merge de nombre/correo/empresa cuando difieren contactos de conversación vs oportunidad).
+  - Se completa contexto mínimo para prospección (`notes`, `necesidad_proposito`) tras booking confirmado.
+  - Se incorporó guardado de insights (`upsert_conversation_insights`) y ajuste de título/descripcion cuando el título es genérico.
+- Notificación comercial:
+  - `booking_confirmed` en oportunidades de prospección ya no bloquea por perfilamiento completo; usa validación base de contacto/contexto.
+
+### Operación/Notas
+- Validación funcional: una sola oportunidad por conversación en escenarios de respuesta de campaña de prospección.
+- Queda habilitado el camino para marcar etapa demo + notificación de asesor en la confirmación real de agenda.

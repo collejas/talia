@@ -16,7 +16,7 @@ Este archivo sirve para capturar próximos requerimientos sin mezclar historial 
 - Reglas de suppressions/opt-out por canal.
 - Dashboard de conversión por fuente (`google_places`, `denue`, `usuario`).
 - Integrar `/inbox` con filtros de prospección (`source`, `batch`, `campana`) según `inbox_prospeccion_plan.md`. (Completado en fase inicial y validado funcional)
-- Completar operación de WhatsApp en frío:
+- Completar operación de WhatsApp en frío: (Completado en fase base)
   - Alta y mapeo de plantillas comerciales en Twilio para prospección.
   - Prueba E2E de envío real desde lote de prospectos.
   - Confirmar trazabilidad completa en `/inbox` para respuestas reales.
@@ -55,3 +55,15 @@ Por cada cambio nuevo:
 - Routing runtime en canal WhatsApp:
   - Cuando un entrante se identifica como prospección, usa `whatsapp.prospeccion.prompt_id`.
   - Si no es prospección, conserva assistant/prompt operativo general.
+
+## Completado recientemente (2026-02-25)
+
+- Flujo WhatsApp prospección estabilizado:
+  - Se evitó creación duplicada de oportunidades para la misma conversación/prospecto.
+  - Se reutiliza la oportunidad/contacto de prospección cuando aplica.
+- Agenda en prospección:
+  - Captura de datos básicos (nombre/correo/empresa) antes de confirmar la demo.
+  - Ajuste de runtime para forzar uso de tools de agenda (`list_demo_slots` / `schedule_demo`) cuando el prospecto confirma horario.
+- Post-agenda:
+  - Mejoras para persistir contexto mínimo en contacto (`necesidad_proposito`, `notes`) y habilitar insights/título automático de oportunidad.
+  - Notificación al asesor ajustada para caso de prospección sin exigir perfilamiento completo.

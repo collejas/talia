@@ -58,3 +58,13 @@ Para cambios nuevos:
 - Envío WhatsApp de prospección exige plantilla y usa fallback por tenant (`whatsapp.templates.sales`).
 - Proxy frontend de `POST /api/prospeccion/prospectos/contactar` ya propaga `X-Organizacion-Id`.
 - Resultado: desde modal de `prospeccion/prospectos`, `Guardar acciones` para canal WhatsApp ya no falla por header faltante.
+
+## 7) Avance WhatsApp en frío (2026-02-25)
+
+- Se estabilizó la relación conversación ↔ oportunidad para evitar oportunidades duplicadas en respuestas de prospección.
+- Se fortaleció el flujo de agenda para que el assistant use tools (`list_demo_slots`/`schedule_demo`) al confirmar horario.
+- Se completó el post-agenda de prospección:
+  - persistencia de contexto mínimo en contacto,
+  - guardado de insights de conversación,
+  - ajuste automático de título/descripción cuando la oportunidad queda con nombre genérico.
+- La notificación al asesor en `booking_confirmed` ahora contempla el caso prospección sin requerir perfilamiento completo.
