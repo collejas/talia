@@ -1557,6 +1557,26 @@ class ProspeccionCampanaQuery(BaseModel):
     limit: int = Field(default=15, ge=1, le=100)
 
 
+class ProspeccionCampanaUpdatePayload(BaseModel):
+    """Edita una campaña de prospección y su lote más reciente."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    campana_nombre: str | None = Field(default=None, min_length=3, max_length=255)
+    batch_titulo: str | None = Field(default=None, max_length=160)
+    lista_id: UUID | None = None
+    filtros: ProspectoFiltroPayload | None = None
+    canales: list[ProspeccionCanalConfig] | None = None
+
+
+class ProspeccionCampanaDeletePayload(BaseModel):
+    """Controla cómo eliminar/archivar una campaña."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    hard_delete: bool = False
+
+
 class ProspectoConvertirPayload(BaseModel):
     """Payload para convertir un prospecto a contacto de CRM."""
 
@@ -4537,6 +4557,34 @@ def _build_contact_resumen(envios: Sequence[dict[str, Any]]) -> list[dict[str, A
             resumen["stage"] = detalle.get("stage")
         resumen[canal] = estado
     return list(resumen_por_prospecto.values())
+
+
+async def _list_batch_envios_all(
+    *,
+    repo: CRMRepository,
+    user_token: str,
+    batch_id: UUID,
+) -> list[dict[str, Any]]:
+    """Obtiene todos los envíos de un lote paginando en bloques."""
+
+    items: list[dict[str, Any]] = []
+    offset = 0
+    page = 500
+    while True:
+        rows, total = await repo.list_contact_envios(
+            usuario_token=user_token,
+            batch_id=batch_id,
+            limit=page,
+            offset=offset,
+            order="creado_en.asc",
+        )
+        if not rows:
+            break
+        items.extend(rows)
+        offset += len(rows)
+        if len(rows) < page or offset >= total:
+            break
+    return items
 
 
 def _sse_payload(data: dict[str, Any]) -> str:
@@ -12792,6 +12840,9 @@ async def prospeccion_campanas_dashboard(
             raise HTTPException(status_code=502, detail=str(exc)) from exc
         for campana in campanas:
             campana_id = str(campana.get("id"))
+            metadata = _ensure_dict(campana.get("metadata"), default={})
+            if str(metadata.get("deleted")).lower() in {"true", "1", "yes"}:
+                continue
             if campana_id in campana_ids:
                 campana_map[campana_id] = campana
 
@@ -12904,6 +12955,303 @@ async def prospeccion_campana_duplicar_defaults(
         },
         "defaults": defaults,
     }
+
+
+@router.patch("/prospeccion/campanas/{campana_id}")
+async def prospeccion_campana_update(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    _: str = Depends(require_permission("ejecutar_busquedas")),
+    user_token: str = Depends(require_user_token),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    campana_id: UUID,
+    payload: ProspeccionCampanaUpdatePayload,
+) -> dict[str, Any]:
+    """Edita una campaña y reconfigura el lote más reciente no finalizado."""
+
+    campana = await repo.get_campaign(organizacion_id=organizacion_id, campana_id=campana_id)
+    if not campana:
+        raise HTTPException(status_code=404, detail="campana_not_found")
+
+    campaign_patch: dict[str, Any] = {}
+    if payload.campana_nombre is not None:
+        campaign_patch["nombre"] = payload.campana_nombre.strip()
+    if campaign_patch:
+        await repo.update_campaign(
+            organizacion_id=organizacion_id,
+            campana_id=campana_id,
+            payload=campaign_patch,
+        )
+
+    batches, _ = await repo.list_contact_batches(
+        usuario_token=user_token,
+        limit=100,
+        offset=0,
+        campana_id=campana_id,
+        order="creado_en.desc",
+    )
+    if not batches:
+        raise HTTPException(status_code=404, detail="campana_without_batches")
+    target_batch = None
+    for row in batches:
+        estado = _clean_text(row.get("estado")) or ""
+        if estado.lower() in {"pendiente", "procesando"}:
+            target_batch = row
+            break
+    if target_batch is None:
+        target_batch = batches[0]
+
+    batch_id_raw = target_batch.get("id")
+    if not batch_id_raw:
+        raise HTTPException(status_code=400, detail="batch_not_found")
+    batch_id = UUID(str(batch_id_raw))
+
+    template_map: dict[str, dict[str, Any]] = {}
+    if payload.canales:
+        template_ids = {config.template_id for config in payload.canales if config.template_id}
+        if template_ids:
+            template_map = await _fetch_contact_templates(
+                repo=repo,
+                user_token=user_token,
+                template_ids=template_ids,
+            )
+    canales_config, programacion = _resolve_contact_channels(
+        ProspectoContactarPayload(
+            prospecto_ids=[UUID("00000000-0000-0000-0000-000000000001")],
+            campana_id=campana_id,
+            lista_id=payload.lista_id,
+            filtros=payload.filtros,
+            canales=payload.canales,
+        ),
+        template_map=template_map,
+    )
+    if not canales_config:
+        existing_meta = _ensure_dict(target_batch.get("metadata"), default={})
+        existing_canales = _ensure_dict(existing_meta.get("canales_config"), default={})
+        canales_config = {k: v for k, v in existing_canales.items() if isinstance(v, dict)}
+        programacion = _ensure_dict(target_batch.get("programacion"), default={})
+    await _apply_default_whatsapp_runtime_template(
+        canales_config=canales_config,
+        organizacion_id=organizacion_id,
+    )
+    _assert_whatsapp_template_configured(canales_config)
+    if not canales_config:
+        raise HTTPException(status_code=400, detail="contact_channels_required")
+
+    selector_filtros: dict[str, Any] = {}
+    prospectos: list[dict[str, Any]] = []
+    if payload.lista_id:
+        lista_row = await repo.get_contact_list(usuario_token=user_token, lista_id=payload.lista_id)
+        if not lista_row:
+            raise HTTPException(status_code=404, detail="contact_list_not_found")
+        filtros_data = _ensure_dict(lista_row.get("filtros"), default={})
+        filtros_fuente = ProspectoFiltroPayload.model_validate(filtros_data)
+        repo_kwargs = _prospecto_filters_to_kwargs(filtros_fuente)
+        prospectos, total = await repo.list_prospectos(
+            usuario_token=user_token,
+            limit=MAX_PROSPECCION_BATCH,
+            offset=0,
+            order="creado_en.desc",
+            **repo_kwargs,
+        )
+        if total > MAX_PROSPECCION_BATCH:
+            raise HTTPException(status_code=400, detail="prospecto_batch_limit_exceeded")
+        selector_filtros = filtros_data
+    elif payload.filtros:
+        repo_kwargs = _prospecto_filters_to_kwargs(payload.filtros)
+        prospectos, total = await repo.list_prospectos(
+            usuario_token=user_token,
+            limit=MAX_PROSPECCION_BATCH,
+            offset=0,
+            order="creado_en.desc",
+            **repo_kwargs,
+        )
+        if total > MAX_PROSPECCION_BATCH:
+            raise HTTPException(status_code=400, detail="prospecto_batch_limit_exceeded")
+        selector_filtros = payload.filtros.model_dump(exclude_none=True)
+    else:
+        current_envios = await _list_batch_envios_all(repo=repo, user_token=user_token, batch_id=batch_id)
+        detail_by_prospect: dict[str, dict[str, Any]] = {}
+        for envio in current_envios:
+            pid = _clean_text(envio.get("prospecto_id"))
+            if not pid:
+                continue
+            detalle = envio.get("detalle") if isinstance(envio.get("detalle"), dict) else {}
+            detail_by_prospect.setdefault(pid, detalle)
+        for pid, detalle in detail_by_prospect.items():
+            prospectos.append(
+                {
+                    "id": pid,
+                    "display_name": detalle.get("display_name"),
+                    "actividad": detalle.get("actividad"),
+                    "email": detalle.get("email"),
+                    "phone": detalle.get("phone"),
+                    "phone_e164": detalle.get("phone"),
+                    "whatsapp_permitido": detalle.get("whatsapp_permitido"),
+                    "llamada_permitida": detalle.get("llamada_permitida"),
+                    "carrier_type": detalle.get("carrier_type"),
+                    "segmento": detalle.get("segmento"),
+                    "metadata": {"stage": detalle.get("stage")},
+                }
+            )
+        selector_filtros = _ensure_dict(target_batch.get("filtros"), default={})
+
+    prospectos, bloqueados = _split_recontact_blocked_prospectos(prospectos)
+    if not prospectos:
+        raise HTTPException(status_code=400, detail="prospectos_not_found")
+
+    existing_envios = await _list_batch_envios_all(repo=repo, user_token=user_token, batch_id=batch_id)
+    for envio in existing_envios:
+        envio_id_raw = envio.get("id")
+        if not envio_id_raw:
+            continue
+        estado = _clean_text(envio.get("estado")) or "pendiente"
+        if estado != "pendiente":
+            continue
+        try:
+            envio_id = UUID(str(envio_id_raw))
+        except (TypeError, ValueError):
+            continue
+        await repo.update_contact_envio(
+            usuario_token=user_token,
+            envio_id=envio_id,
+            payload={
+                "estado": "cancelado",
+                "detalle": _merge_detalle(
+                    envio.get("detalle") if isinstance(envio.get("detalle"), dict) else {},
+                    {"reason": "campana_editada"},
+                ),
+                "procesado_en": datetime.now(UTC).isoformat(),
+                "error": None,
+            },
+        )
+
+    new_entries = _build_contact_envios_entries(
+        batch_id=batch_id,
+        prospectos=prospectos,
+        canales=canales_config,
+        programacion=programacion or None,
+    )
+    created_envios = await repo.insert_contact_envios(usuario_token=user_token, entries=new_entries)
+
+    metadata_existing = _ensure_dict(target_batch.get("metadata"), default={})
+    metadata_existing["canales_config"] = canales_config
+    if bloqueados:
+        metadata_existing["recontacto_bloqueados"] = {"total": len(bloqueados)}
+
+    batch_patch: dict[str, Any] = {
+        "canales": list(canales_config.keys()),
+        "filtros": selector_filtros,
+        "total_prospectos": len(prospectos),
+        "estado": "pendiente",
+        "metadata": metadata_existing,
+    }
+    if payload.batch_titulo is not None:
+        batch_patch["titulo"] = payload.batch_titulo.strip() or None
+    if payload.lista_id is not None:
+        batch_patch["lista_id"] = str(payload.lista_id)
+    if programacion:
+        batch_patch["programacion"] = programacion
+    else:
+        batch_patch["programacion"] = {}
+
+    updated_batch = await repo.update_contact_batch(
+        usuario_token=user_token,
+        batch_id=batch_id,
+        payload=batch_patch,
+    )
+    resumen = _build_contact_resumen(created_envios)
+    return {
+        "ok": True,
+        "campana_id": str(campana_id),
+        "batch_id": str(batch_id),
+        "batch": updated_batch,
+        "contactos": resumen,
+        "omitidos": (
+            [{"motivo": "convertido_contacto", "prospecto_ids": bloqueados, "total": len(bloqueados)}]
+            if bloqueados
+            else []
+        ),
+    }
+
+
+@router.delete("/prospeccion/campanas/{campana_id}")
+async def prospeccion_campana_delete(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    _: str = Depends(require_permission("ejecutar_busquedas")),
+    user_token: str = Depends(require_user_token),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    campana_id: UUID,
+    payload: ProspeccionCampanaDeletePayload = Body(default=ProspeccionCampanaDeletePayload()),
+) -> dict[str, Any]:
+    """Archiva campaña y cancela pendientes de sus lotes (eliminación lógica)."""
+
+    campana = await repo.get_campaign(organizacion_id=organizacion_id, campana_id=campana_id)
+    if not campana:
+        raise HTTPException(status_code=404, detail="campana_not_found")
+
+    batches, _ = await repo.list_contact_batches(
+        usuario_token=user_token,
+        limit=500,
+        offset=0,
+        campana_id=campana_id,
+        order="creado_en.desc",
+    )
+    cancelled = 0
+    for batch in batches:
+        batch_id_raw = batch.get("id")
+        if not batch_id_raw:
+            continue
+        try:
+            batch_id = UUID(str(batch_id_raw))
+        except (TypeError, ValueError):
+            continue
+        envios = await _list_batch_envios_all(repo=repo, user_token=user_token, batch_id=batch_id)
+        for envio in envios:
+            if _clean_text(envio.get("estado")) != "pendiente":
+                continue
+            envio_id_raw = envio.get("id")
+            if not envio_id_raw:
+                continue
+            try:
+                envio_id = UUID(str(envio_id_raw))
+            except (TypeError, ValueError):
+                continue
+            await repo.update_contact_envio(
+                usuario_token=user_token,
+                envio_id=envio_id,
+                payload={
+                    "estado": "cancelado",
+                    "detalle": _merge_detalle(
+                        envio.get("detalle") if isinstance(envio.get("detalle"), dict) else {},
+                        {"reason": "campana_eliminada"},
+                    ),
+                    "procesado_en": datetime.now(UTC).isoformat(),
+                    "error": None,
+                },
+            )
+            cancelled += 1
+        batch_meta = _ensure_dict(batch.get("metadata"), default={})
+        batch_meta["deleted"] = True
+        batch_meta["deleted_at"] = datetime.now(UTC).isoformat()
+        await repo.update_contact_batch(
+            usuario_token=user_token,
+            batch_id=batch_id,
+            payload={"estado": "cancelado", "metadata": batch_meta},
+        )
+
+    campana_meta = _ensure_dict(campana.get("metadata"), default={})
+    campana_meta["deleted"] = True
+    campana_meta["deleted_at"] = datetime.now(UTC).isoformat()
+    if payload.hard_delete:
+        campana_meta["hard_delete_requested"] = True
+    await repo.update_campaign(
+        organizacion_id=organizacion_id,
+        campana_id=campana_id,
+        payload={"metadata": campana_meta},
+    )
+    return {"ok": True, "campana_id": str(campana_id), "envios_cancelados": cancelled}
 
 
 @router.get("/prospeccion/prospectos/{prospecto_id}/contactos")
@@ -14417,7 +14765,13 @@ async def list_campaigns(
         rows = await repo.list_campaigns(organizacion_id=organizacion_id)
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
-    return [CRMCampaign.model_validate(row) for row in rows]
+    visible_rows: list[dict[str, Any]] = []
+    for row in rows:
+        metadata = _ensure_dict(row.get("metadata"), default={})
+        if str(metadata.get("deleted")).lower() in {"true", "1", "yes"}:
+            continue
+        visible_rows.append(row)
+    return [CRMCampaign.model_validate(row) for row in visible_rows]
 
 
 @router.post("/campanas", response_model=CRMCampaign, status_code=status.HTTP_201_CREATED)

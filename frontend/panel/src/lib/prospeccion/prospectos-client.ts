@@ -633,6 +633,35 @@ export async function getProspeccionCampanaPreset(campanaId: string) {
   )
 }
 
+export async function updateProspeccionCampana(
+  campanaId: string,
+  payload: {
+    campana_nombre?: string
+    batch_titulo?: string
+    lista_id?: string | null
+    filtros?: ProspectoFiltroInput
+    canales?: ProspeccionCanalConfigInput[]
+  }
+) {
+  return requestJson<{
+    ok: boolean
+    campana_id: string
+    batch_id: string
+    contactos: ProspectoContactoResumen[]
+    omitidos?: ProspeccionOmitido[]
+  }>(`/api/prospeccion/campanas/${campanaId}`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  })
+}
+
+export async function deleteProspeccionCampana(campanaId: string) {
+  return requestJson<{ ok: boolean; campana_id: string; envios_cancelados: number }>(
+    `/api/prospeccion/campanas/${campanaId}`,
+    { method: "DELETE", body: JSON.stringify({}) }
+  )
+}
+
 export async function listCrmCampaigns() {
   return requestJson<CrmCampaign[]>("/api/prospeccion/crm/campanas")
 }

@@ -14,6 +14,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Separator } from "@/components/ui/separator"
 import { cn } from "@/lib/utils"
 import {
+  deleteProspeccionCampana,
   getContactoMetrics,
   getProspeccionCampanaPreset,
   getProspeccionCampanas,
@@ -67,8 +68,10 @@ export function CampanasMetricsClient() {
   const [campanasLoading, setCampanasLoading] = useState(false)
   const [campanasError, setCampanasError] = useState<string | null>(null)
   const [duplicateLoading, setDuplicateLoading] = useState<string | null>(null)
+  const [deleteLoading, setDeleteLoading] = useState<string | null>(null)
   const [wizardOpen, setWizardOpen] = useState(false)
   const [wizardPreset, setWizardPreset] = useState<ProspeccionWizardPreset | null>(null)
+  const [editCampanaId, setEditCampanaId] = useState<string | null>(null)
   const [drawerData, setDrawerData] = useState<ProspeccionContactDrawerData | null>(null)
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [banner, setBanner] = useState<{ type: "success" | "error"; message: string } | null>(null)
@@ -113,6 +116,7 @@ export function CampanasMetricsClient() {
 
   const handleNewCampaign = useCallback(() => {
     setWizardPreset({ source: "lista" })
+    setEditCampanaId(null)
     setWizardOpen(true)
   }, [])
 
@@ -148,6 +152,7 @@ export function CampanasMetricsClient() {
           campanaId: response.defaults?.campana_id ?? response.campana?.id ?? null,
           campanaNombre: response.campana?.nombre ?? undefined,
         })
+        setEditCampanaId(campanaId)
         setWizardOpen(true)
       } catch (err) {
         const message =
@@ -160,6 +165,27 @@ export function CampanasMetricsClient() {
       }
     },
     []
+  )
+
+  const handleDeleteCampana = useCallback(
+    async (campanaId: string) => {
+      setBanner(null)
+      setDeleteLoading(campanaId)
+      try {
+        const response = await deleteProspeccionCampana(campanaId)
+        setBanner({
+          type: "success",
+          message: `Campaña eliminada. ${response.envios_cancelados ?? 0} envíos pendientes cancelados.`,
+        })
+        await fetchCampanas()
+      } catch (err) {
+        const message = err instanceof Error ? err.message : "No se pudo eliminar la campaña."
+        setBanner({ type: "error", message })
+      } finally {
+        setDeleteLoading(null)
+      }
+    },
+    [fetchCampanas]
   )
 
   const handleWizardCompleted = useCallback(
@@ -320,6 +346,7 @@ export function CampanasMetricsClient() {
                     </Badge>
                   ))}
                 </div>
+                <div className="flex items-center gap-2">
                 <Button
                   variant="outline"
                   size="sm"
@@ -331,8 +358,23 @@ export function CampanasMetricsClient() {
                   ) : (
                     <IconCopy className="mr-2 size-4" />
                   )}
-                  Duplicar
+                  Editar
                 </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="text-destructive"
+                  disabled={!group.campana_id || deleteLoading === group.campana_id}
+                  onClick={() => group.campana_id && void handleDeleteCampana(group.campana_id)}
+                >
+                  {deleteLoading === group.campana_id ? (
+                    <IconLoader className="mr-2 size-4 animate-spin" />
+                  ) : (
+                    <IconX className="mr-2 size-4" />
+                  )}
+                  Eliminar
+                </Button>
+                </div>
               </div>
               <div className="mt-4 space-y-3">
                 {group.batches.map((batch) => (
@@ -373,9 +415,13 @@ export function CampanasMetricsClient() {
 
       <ProspeccionCampaignWizard
         open={wizardOpen}
-        onClose={() => setWizardOpen(false)}
+        onClose={() => {
+          setWizardOpen(false)
+          setEditCampanaId(null)
+        }}
         selectedIds={[]}
         preset={wizardPreset}
+        editCampanaId={editCampanaId}
         onCompleted={handleWizardCompleted}
       />
 

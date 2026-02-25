@@ -1728,6 +1728,31 @@ class CRMRepository:
             raise CRMRepositoryError(f"campaign_get_invalid:{row!r}")
         return row
 
+    async def update_campaign(
+        self,
+        *,
+        organizacion_id: UUID,
+        campana_id: UUID,
+        payload: dict[str, Any],
+    ) -> dict[str, Any]:
+        resp = await self._request(
+            "PATCH",
+            "/rest/v1/campanas",
+            params={
+                "id": f"eq.{campana_id}",
+                "organizacion_id": f"eq.{organizacion_id}",
+            },
+            json=payload,
+            prefer="return=representation",
+        )
+        data = resp.json() or []
+        if not isinstance(data, list) or not data:
+            raise CRMRepositoryError("campaign_update_not_found")
+        row = data[0]
+        if not isinstance(row, dict):
+            raise CRMRepositoryError(f"campaign_update_invalid:{row!r}")
+        return row
+
     async def list_leads(
         self,
         *,

@@ -17,6 +17,7 @@ import {
   listContactoTemplates,
   listCrmCampaigns,
   listProspeccionListas,
+  updateProspeccionCampana,
   type CrmCampaign,
   type ContactarProspectosPayload,
   type ContactoTemplate,
@@ -132,6 +133,7 @@ type ProspeccionCampaignWizardProps = {
   selectedIds: string[]
   defaultFilters?: ProspectoFiltroInput
   preset?: ProspeccionWizardPreset | null
+  editCampanaId?: string | null
   onCompleted?: (result: {
     batchId?: string | null
     total?: number
@@ -146,6 +148,7 @@ export function ProspeccionCampaignWizard({
   selectedIds,
   defaultFilters,
   preset,
+  editCampanaId,
   onCompleted,
 }: ProspeccionCampaignWizardProps) {
   const defaultSource: WizardSource = selectedIds.length > 0 ? "selected" : "filters"
@@ -161,6 +164,7 @@ export function ProspeccionCampaignWizard({
   const [campanas, setCampanas] = useState<CrmCampaign[]>([])
   const [campanasLoading, setCampanasLoading] = useState(false)
   const [campanaId, setCampanaId] = useState<string | null>(null)
+  const [campanaNombre, setCampanaNombre] = useState("")
   const [newCampaignOpen, setNewCampaignOpen] = useState(false)
   const [newCampaignName, setNewCampaignName] = useState("")
   const [newCampaignSaving, setNewCampaignSaving] = useState(false)
@@ -184,6 +188,7 @@ export function ProspeccionCampaignWizard({
     setSelectedListaId(null)
     setFilters(defaultFilters ?? {})
     setCampanaId(null)
+    setCampanaNombre("")
     setTitulo("")
     setChannelState(buildChannelState())
     setLogos([])
@@ -232,6 +237,9 @@ export function ProspeccionCampaignWizard({
             if (prev) return prev
             return campanasResponse[0]?.id ?? null
           })
+          if (campanasResponse[0]?.nombre) {
+            setCampanaNombre((prev) => (prev.trim() ? prev : campanasResponse[0].nombre ?? ""))
+          }
         }
       })
       .catch((err) => {
@@ -244,6 +252,14 @@ export function ProspeccionCampaignWizard({
         setCampanasLoading(false)
       })
   }, [open, preset, presetApplied, resetState])
+
+  useEffect(() => {
+    if (!campanaId) return
+    const selected = campanas.find((item) => item.id === campanaId)
+    if (selected?.nombre) {
+      setCampanaNombre(selected.nombre)
+    }
+  }, [campanaId, campanas])
 
   useEffect(() => {
     if (!open || !preset || presetApplied) return
@@ -262,6 +278,9 @@ export function ProspeccionCampaignWizard({
     }
     if ("campanaId" in preset) {
       setCampanaId(preset.campanaId ?? null)
+    }
+    if ("campanaNombre" in preset) {
+      setCampanaNombre(preset.campanaNombre ?? "")
     }
     if ("titulo" in preset) {
       setTitulo(preset.titulo ?? "")
@@ -570,7 +589,15 @@ export function ProspeccionCampaignWizard({
 
     setSubmitting(true)
     try {
-      const response = await contactarProspectos(payload)
+      const response = editCampanaId
+        ? await updateProspeccionCampana(editCampanaId, {
+            campana_nombre: campanaNombre.trim() || undefined,
+            batch_titulo: payload.batch_titulo,
+            lista_id: payload.lista_id ?? null,
+            filtros: payload.filtros,
+            canales: payload.canales,
+          })
+        : await contactarProspectos(payload)
       onCompleted?.({
         batchId: response.batch_id,
         total: response.contactos?.length,
@@ -579,7 +606,7 @@ export function ProspeccionCampaignWizard({
       })
       onClose()
     } catch (err) {
-      const message = err instanceof Error ? err.message : "No se pudo crear la campaña."
+      const message = err instanceof Error ? err.message : editCampanaId ? "No se pudo editar la campaña." : "No se pudo crear la campaña."
       setError(message)
     } finally {
       setSubmitting(false)
@@ -954,6 +981,16 @@ export function ProspeccionCampaignWizard({
   const renderStepSchedule = () => (
     <div className="space-y-4">
       <div className="grid gap-4 md:grid-cols-2">
+        {editCampanaId ? (
+          <div className="space-y-1">
+            <Label>Nombre de campaña CRM</Label>
+            <Input
+              value={campanaNombre}
+              onChange={(event) => setCampanaNombre(event.target.value)}
+              placeholder="Ej. Prospección inmobiliarias Q1"
+            />
+          </div>
+        ) : null}
         <div className="space-y-1">
           <Label>Nombre interno del lote</Label>
           <Input value={titulo} onChange={(event) => setTitulo(event.target.value)} placeholder="Ej. Follow up semana 42" />
@@ -1056,10 +1093,12 @@ export function ProspeccionCampaignWizard({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-lg">
             <IconTargetArrow className="size-5 text-primary" />
-            Lanzar nueva campaña
+            {editCampanaId ? "Editar campaña" : "Lanzar nueva campaña"}
           </DialogTitle>
           <DialogDescription>
-            Sigue el flujo Descubre → Enriquecer → Preparar → Lanzar para crear un lote multicanal listo para ejecutar.
+            {editCampanaId
+              ? "Ajusta audiencia, contenido y programación del lote principal de esta campaña."
+              : "Sigue el flujo Descubre → Enriquecer → Preparar → Lanzar para crear un lote multicanal listo para ejecutar."}
           </DialogDescription>
           {preset?.campanaNombre ? (
             <div className="rounded-md border border-dashed border-primary/40 bg-primary/5 px-3 py-2 text-xs font-medium text-primary">
@@ -1115,10 +1154,10 @@ export function ProspeccionCampaignWizard({
                 </Button>
               ) : (
                 <Button onClick={() => void handleSubmit()} disabled={submitting}>
-                  {submitting ? "Creando..." : "Lanzar campaña"}
-                </Button>
-              )}
-            </div>
+                {submitting ? (editCampanaId ? "Guardando..." : "Creando...") : (editCampanaId ? "Guardar cambios" : "Lanzar campaña")}
+              </Button>
+            )}
+          </div>
           </div>
         </div>
       </DialogContent>
