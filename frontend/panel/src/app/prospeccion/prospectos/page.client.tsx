@@ -1695,7 +1695,11 @@ useEffect(() => {
       const subject = correoAsunto || templateSubject
       const bodyHtml = correoHtml || templateBodyHtml || ""
       const requiresLogo =
-        hasEmailLogoPlaceholder(subject) || hasEmailLogoPlaceholder(bodyHtml) || hasEmailLogoPlaceholder(templateBodyText)
+        hasEmailLogoPlaceholder(subject) ||
+        hasEmailLogoPlaceholder(bodyHtml) ||
+        hasEmailLogoPlaceholder(templateBodyText) ||
+        hasEmailLogoPlaceholder(correoCuerpo) ||
+        hasEmailLogoPlaceholder(correoHtml)
       const logoUrl =
         requiresLogo ? normalizeLogoUrl(selectedLogoUrl.trim() || quoteLogoUrl.trim() || (await resolvePreferredLogo())) : ""
       const body = correoCuerpo || templateBodyText || (bodyHtml ? htmlToPlainText(bodyHtml) : "")

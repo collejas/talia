@@ -136,6 +136,24 @@ def _inject_text_fallback_into_html(*, body_text: str, body_html: str) -> str:
     return f"<p>{escaped}</p>\n{body_html}"
 
 
+def _build_basic_html_from_text(*, body_text: str, logo_url: str | None = None) -> str | None:
+    """Construye una versión HTML mínima desde texto plano para mejorar render en clientes de correo."""
+
+    normalized_text = (body_text or "").strip()
+    if not normalized_text:
+        return None
+    escaped = html_lib.escape(normalized_text).replace("\n", "<br/>")
+    if logo_url:
+        safe_logo_url = html_lib.escape(logo_url, quote=True)
+        escaped_logo = html_lib.escape(logo_url)
+        logo_tag = f'<img src="{safe_logo_url}" alt="Logo" style="max-width:180px;height:auto;" />'
+        if escaped_logo in escaped:
+            escaped = escaped.replace(escaped_logo, logo_tag)
+        else:
+            escaped = f"{logo_tag}<br/>{escaped}"
+    return f"<p>{escaped}</p>"
+
+
 def _render_twilio_variables(definition: Any, context: dict[str, Any]) -> dict[str, str] | None:
     if not isinstance(definition, dict):
         return None
@@ -359,11 +377,17 @@ async def _run_envio_correo(
     subject = _render_template_text(subject_template, context).strip()
     body = _render_template_text(str(body_template), context).strip()
     body_html = None
+    logo_url = _clean_text(context.get("logo_url"))
     if isinstance(body_html_template, str) and body_html_template.strip():
         normalized_html_template = _normalize_email_html_template(body_html_template)
         body_html = _render_template_text(normalized_html_template, context).strip() or None
     if body_html:
         body_html = _inject_text_fallback_into_html(body_text=body, body_html=body_html)
+    elif logo_url and (
+        "{{logo_url}}" in str(body_template or "")
+        or "{{DATA:IMAGE:" in str(body_template or "")
+    ):
+        body_html = _build_basic_html_from_text(body_text=body, logo_url=logo_url)
     if not subject or not body:
         return ContactEnvioResult(
             estado="error",
