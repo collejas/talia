@@ -28,6 +28,11 @@ Formato recomendado por entrada:
 - `prospeccion/denue-busqueda`: guardar como prospectos ahora solicita `Segmento` en modal.
 - `settings/tenants` y `settings/variables`: pestaña nueva `Whats-Prosp` para registrar múltiples SIDs.
 - `prospeccion/prospectos`: preview de plantilla WhatsApp al seleccionar SID runtime.
+- `prospeccion/prospectos` y `settings/prospeccion/plantillas`:
+  - Soporte de variable `{{logo_url}}` en correo.
+  - Botón `Insertar logo` ahora inserta placeholder reutilizable en vez de URL fija.
+  - Placeholder legado `{{DATA:IMAGE:...}}` normalizado a `{{logo_url}}`.
+  - Estilo por defecto del logo en correo ajustado a `5/6` del cuerpo (`width:83.333%`).
 
 ### Backend
 - Se agregó `GET /crm/prospeccion/whatsapp/readiness` para validar configuración runtime (Twilio + plantilla por tenant).
@@ -38,6 +43,13 @@ Formato recomendado por entrada:
 - `GET /crm/prospeccion/contacto/templates` incorpora plantillas runtime desde `whatsapp.templates.prospeccion`.
 - Enriquecimiento runtime con Twilio Content API (nombre/cuerpo/variables de plantilla).
 - Ajuste de envío en frío para evitar omisión por `whatsapp_no_permitido` en lotes de prospección.
+- Correo de prospección:
+  - Render de `body_html` con placeholders dinámicos (`{{logo_url}}` incluido en metadata de envío).
+  - Fallback `texto -> HTML` cuando aplica para mejorar visualización del cuerpo.
+  - Todas las imágenes del HTML se envuelven con link de tracking a `https://talia.mx/` con UTM + `kw`.
+- Settings/logos:
+  - Fix en `POST /api/settings/logos` para insertar con `organizacion_id` correcto.
+  - Ajuste de persistencia para evitar bloqueo RLS al cargar logos desde `settings/formato-cotizacion`.
 
 ### Base de datos
 - Se aplicó migración de backfill para metadata de prospección en mensajes históricos (sin filas a corregir en entorno de prueba).
@@ -75,3 +87,6 @@ Formato recomendado por entrada:
     - fase inicial administradas en app (con/sin plantilla y variables),
     - fase evolutiva con integración de plantillas por API Brevo.
   - Se define implementación de mediciones/eventos Brevo en app (enviado, entregado, apertura, clic, rebote, bloqueo, spam, unsubscribe, error).
+  - Nota de compatibilidad de cliente de correo:
+    - SVG no es confiable en varios clientes; para logo se recomienda PNG/JPG.
+    - Con imágenes remotas no se adjunta archivo; con inline CID algunos proveedores las muestran como adjunto.

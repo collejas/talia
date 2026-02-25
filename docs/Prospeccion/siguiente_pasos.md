@@ -75,4 +75,9 @@ Por cada cambio nuevo:
   - Notificación al asesor ajustada para caso de prospección sin exigir perfilamiento completo.
 - Correo prospección:
   - Validado envío transaccional por Brevo desde worker de prospección.
+  - Soporte funcional de `{{logo_url}}` en plantillas/modales de correo.
+  - Normalización de placeholder legado `{{DATA:IMAGE:...}}` a `{{logo_url}}`.
+  - Inserción de logo con tamaño por defecto `5/6` del cuerpo (`width:83.333%`).
+  - Enlace de tracking en imágenes de correo hacia `https://talia.mx/` con UTM + `kw` para atribución.
+  - Fix de carga de logos en `settings/formato-cotizacion` (RLS/tenant en `logos`).
   - Definido roadmap de plantillas (app-first -> API Brevo) y de métricas/eventos para visualización en la app.

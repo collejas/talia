@@ -8,6 +8,7 @@ from datetime import datetime, timedelta, timezone
 import html as html_lib
 import re
 from typing import Any, Sequence
+from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 from uuid import UUID
 
 from app.channels.voice.service import VoiceCallResult, start_outbound_call
@@ -28,6 +29,7 @@ DEFAULT_BACKOFF_SECONDS: tuple[int, ...] = (30, 120, 300, 600)
 PLACEHOLDER_PATTERN = re.compile(r"{{\s*([\w\.-]+)\s*}}")
 LEGACY_IMAGE_PLACEHOLDER_PATTERN = re.compile(r"{{\s*DATA:IMAGE:[^}]+}}", re.IGNORECASE)
 EMAIL_LOGO_IMG_STYLE = "width:83.333%;height:auto;display:block;margin:0 auto;"
+IMG_TAG_PATTERN = re.compile(r"<img\b[^>]*>", re.IGNORECASE)
 
 
 @dataclass(slots=True)
@@ -153,6 +155,59 @@ def _build_basic_html_from_text(*, body_text: str, logo_url: str | None = None) 
         else:
             escaped = f"{logo_tag}<br/>{escaped}"
     return f"<p>{escaped}</p>"
+
+
+def _sanitize_tracking_keyword(value: Any) -> str:
+    text = _clean_text(value) or ""
+    normalized = re.sub(r"[^a-zA-Z0-9_-]+", "-", text).strip("-").lower()
+    return (normalized or "general")[:80]
+
+
+def _build_email_tracking_url(*, context: dict[str, Any], payload: dict[str, Any]) -> str:
+    metadata = payload.get("metadata") if isinstance(payload.get("metadata"), dict) else {}
+    keyword = _sanitize_tracking_keyword(
+        metadata.get("tracking_keyword")
+        or metadata.get("template_slug")
+        or context.get("segmento")
+        or context.get("fuente")
+        or "general"
+    )
+    base_url = _clean_text(metadata.get("tracking_base_url")) or "https://talia.mx/"
+    parsed = urlparse(base_url)
+    existing = dict(parse_qsl(parsed.query, keep_blank_values=True))
+    existing.update(
+        {
+            "utm_source": existing.get("utm_source") or "prospeccion",
+            "utm_medium": existing.get("utm_medium") or "email",
+            "utm_campaign": existing.get("utm_campaign") or "cold_outreach",
+            "utm_content": existing.get("utm_content") or "image",
+            "kw": keyword,
+        }
+    )
+    query = urlencode(existing, doseq=True)
+    return urlunparse((parsed.scheme or "https", parsed.netloc or "talia.mx", parsed.path or "/", "", query, ""))
+
+
+def _wrap_images_with_tracking_link(body_html: str, tracking_url: str) -> str:
+    if not body_html:
+        return body_html
+    chunks: list[str] = []
+    cursor = 0
+    for match in IMG_TAG_PATTERN.finditer(body_html):
+        start, end = match.span()
+        image_tag = match.group(0)
+        chunks.append(body_html[cursor:start])
+        last_anchor_open = body_html.rfind("<a", 0, start)
+        last_anchor_close = body_html.rfind("</a>", 0, start)
+        inside_anchor = last_anchor_open != -1 and last_anchor_open > last_anchor_close
+        if inside_anchor:
+            chunks.append(image_tag)
+        else:
+            safe_url = html_lib.escape(tracking_url, quote=True)
+            chunks.append(f'<a href="{safe_url}" target="_blank" rel="noopener noreferrer">{image_tag}</a>')
+        cursor = end
+    chunks.append(body_html[cursor:])
+    return "".join(chunks)
 
 
 def _render_twilio_variables(definition: Any, context: dict[str, Any]) -> dict[str, str] | None:
@@ -389,6 +444,9 @@ async def _run_envio_correo(
         or "{{DATA:IMAGE:" in str(body_template or "")
     ):
         body_html = _build_basic_html_from_text(body_text=body, logo_url=logo_url)
+    if body_html:
+        tracking_url = _build_email_tracking_url(context=context, payload=payload)
+        body_html = _wrap_images_with_tracking_link(body_html, tracking_url)
     if not subject or not body:
         return ContactEnvioResult(
             estado="error",

@@ -68,3 +68,11 @@ Para cambios nuevos:
   - guardado de insights de conversación,
   - ajuste automático de título/descripción cuando la oportunidad queda con nombre genérico.
 - La notificación al asesor en `booking_confirmed` ahora contempla el caso prospección sin requerir perfilamiento completo.
+
+## 8) Avance Correo de prospección (2026-02-25)
+
+- Envío operativo por Brevo validado con `subject/body/body_html`.
+- Plantillas/modales de correo con variable `{{logo_url}}` (incluye normalización desde `{{DATA:IMAGE:...}}`).
+- Logo de correo con estilo por defecto de `5/6` del cuerpo (`width:83.333%`, alto proporcional).
+- Imágenes en HTML de correo envueltas con link a `https://talia.mx/` con UTM + `kw` para atribución.
+- Carga de logos desde `settings/formato-cotizacion` corregida (insert con `organizacion_id` y compatibilidad RLS).
