@@ -135,6 +135,7 @@ type ContactDrawerData = {
   results: ProspeccionContactResult[]
   omitidos?: ProspeccionOmitido[]
 }
+type LogoAsset = { id: string; nombre: string; file_url: string }
 type ChecklistSummary = {
   telefonos_pendientes: number
   sin_email: number
@@ -166,7 +167,33 @@ const initialContactForm = {
   llamadaNotas: "",
 }
 
-const MAIL_VARIABLE_TOKENS = ["{{nombre}}", "{{empresa}}", "{{email}}", "{{telefono}}", "{{segmento}}"]
+const MAIL_VARIABLE_TOKENS = ["{{nombre}}", "{{empresa}}", "{{email}}", "{{telefono}}", "{{segmento}}", "{{logo_url}}"]
+const LEGACY_LOGO_PLACEHOLDER_REGEX = /{{\s*DATA:IMAGE:[^}]+}}/gi
+const LOGO_PLACEHOLDER_REGEX = /{{\s*logo_url\s*}}/i
+
+function htmlToPlainText(input: string): string {
+  const cleaned = input.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim()
+  return cleaned || "Contenido HTML"
+}
+
+function normalizeLogoUrl(input: string): string {
+  const value = input.trim()
+  if (!value) return value
+  if (value.startsWith("/") && typeof window !== "undefined") {
+    return `${window.location.origin}${value}`
+  }
+  return value
+}
+
+function normalizeEmailLogoPlaceholders(input: string): string {
+  if (!input) return input
+  return input.replace(LEGACY_LOGO_PLACEHOLDER_REGEX, "{{logo_url}}")
+}
+
+function hasEmailLogoPlaceholder(input: string): boolean {
+  if (!input) return false
+  return LOGO_PLACEHOLDER_REGEX.test(input) || /{{\s*DATA:IMAGE:[^}]+}}/i.test(input)
+}
 
 type ProspectoFormState = {
   displayName: string
@@ -628,6 +655,10 @@ function ProspectosView() {
   const correoAsuntoRef = useRef<HTMLInputElement | null>(null)
   const correoCuerpoRef = useRef<HTMLTextAreaElement | null>(null)
   const correoHtmlRef = useRef<HTMLTextAreaElement | null>(null)
+  const [quoteLogoUrl, setQuoteLogoUrl] = useState<string>("")
+  const [logos, setLogos] = useState<LogoAsset[]>([])
+  const [logosLoading, setLogosLoading] = useState(false)
+  const [selectedLogoUrl, setSelectedLogoUrl] = useState<string>("")
   const [historyDialogOpen, setHistoryDialogOpen] = useState(false)
   const [historyProspect, setHistoryProspect] = useState<ProspectoItem | null>(null)
   const [historyEntries, setHistoryEntries] = useState<ContactoEnvio[]>([])
@@ -1580,6 +1611,47 @@ useEffect(() => {
     }
   }, [fetchProspectos, fetchStageSummary, offset, selectedIds])
 
+  const resolvePreferredLogo = useCallback(async (): Promise<string> => {
+    if (quoteLogoUrl.trim()) return quoteLogoUrl.trim()
+    try {
+      const response = await fetch("/api/crm/settings/quote-template", { cache: "no-store" })
+      const payload = await response.json().catch(() => ({}))
+      if (response.ok) {
+        const fromConfig =
+          payload && typeof payload === "object" && payload.config && typeof payload.config === "object"
+            ? String((payload.config as Record<string, unknown>).logoUrl ?? "").trim()
+            : ""
+        if (fromConfig) {
+          setQuoteLogoUrl(fromConfig)
+          return fromConfig
+        }
+      }
+    } catch {
+      // fallback below
+    }
+    try {
+      const response = await fetch("/api/settings/logos", { cache: "no-store" })
+      const payload = await response.json().catch(() => ({}))
+      if (response.ok && Array.isArray(payload?.logos) && payload.logos.length) {
+        const first = payload.logos.find(
+          (item: unknown) =>
+            item &&
+            typeof item === "object" &&
+            typeof (item as Record<string, unknown>).file_url === "string" &&
+            String((item as Record<string, unknown>).file_url).trim().length,
+        ) as Record<string, unknown> | undefined
+        const fileUrl = first ? String(first.file_url).trim() : ""
+        if (fileUrl) return fileUrl
+      }
+    } catch {
+      // fallback below
+    }
+    if (typeof window !== "undefined") {
+      return `${window.location.origin}/assets/logos/Logo8.png`
+    }
+    return "https://talia.mx/assets/logos/Logo8.png"
+  }, [quoteLogoUrl])
+
   const handleContactSubmit = useCallback(async () => {
     if (!selectedIds.length) {
       setContactError("Selecciona al menos un prospecto.")
@@ -1594,9 +1666,9 @@ useEffect(() => {
       canales?: ProspeccionCanalConfigInput[]
     } = { prospecto_ids: selectedIds }
 
-    const correoAsunto = contactForm.correoAsunto.trim()
-    const correoCuerpo = contactForm.correoCuerpo.trim()
-    const correoHtml = contactForm.correoHtml.trim()
+    const correoAsunto = normalizeEmailLogoPlaceholders(contactForm.correoAsunto.trim())
+    const correoCuerpo = normalizeEmailLogoPlaceholders(contactForm.correoCuerpo.trim())
+    const correoHtml = normalizeEmailLogoPlaceholders(contactForm.correoHtml.trim())
     const whatsappMensaje = contactForm.whatsappMensaje.trim()
     const whatsappVariablesRaw = contactForm.whatsappVariables.trim()
     const whatsappEmpresa = contactForm.whatsappEmpresa.trim()
@@ -1617,9 +1689,16 @@ useEffect(() => {
       return
     }
     if (correoTemplate) {
-      const subject = correoAsunto || correoTemplate.asunto?.trim() || ""
-      const body = correoCuerpo || correoTemplate.cuerpo_texto?.trim() || ""
-      const bodyHtml = correoHtml || correoTemplate.cuerpo_html?.trim() || ""
+      const templateSubject = normalizeEmailLogoPlaceholders(correoTemplate.asunto?.trim() || "")
+      const templateBodyHtml = normalizeEmailLogoPlaceholders(correoTemplate.cuerpo_html?.trim() || "")
+      const templateBodyText = normalizeEmailLogoPlaceholders(correoTemplate.cuerpo_texto?.trim() || "")
+      const subject = correoAsunto || templateSubject
+      const bodyHtml = correoHtml || templateBodyHtml || ""
+      const requiresLogo =
+        hasEmailLogoPlaceholder(subject) || hasEmailLogoPlaceholder(bodyHtml) || hasEmailLogoPlaceholder(templateBodyText)
+      const logoUrl =
+        requiresLogo ? normalizeLogoUrl(selectedLogoUrl.trim() || quoteLogoUrl.trim() || (await resolvePreferredLogo())) : ""
+      const body = correoCuerpo || templateBodyText || (bodyHtml ? htmlToPlainText(bodyHtml) : "")
       if (!subject || !body) {
         setContactError("La plantilla de correo seleccionada necesita asunto y cuerpo.")
         return
@@ -1633,15 +1712,25 @@ useEffect(() => {
       if (bodyHtml) {
         correoEntry.body_html = bodyHtml
       }
+      if (logoUrl) {
+        correoEntry.metadata = { ...(correoEntry.metadata ?? {}), logo_url: logoUrl }
+      }
       canalesPayload.push(correoEntry)
-    } else if (correoAsunto && correoCuerpo) {
+    } else if (correoAsunto && (correoCuerpo || correoHtml)) {
+      const requiresLogo = hasEmailLogoPlaceholder(correoAsunto) || hasEmailLogoPlaceholder(correoCuerpo) || hasEmailLogoPlaceholder(correoHtml)
+      const logoUrl =
+        requiresLogo ? normalizeLogoUrl(selectedLogoUrl.trim() || quoteLogoUrl.trim() || (await resolvePreferredLogo())) : ""
+      const plainBody = correoCuerpo || (correoHtml ? htmlToPlainText(correoHtml) : "")
       const correoEntry: ProspeccionCanalConfigInput = {
         canal: "correo",
         subject: correoAsunto,
-        body: correoCuerpo,
+        body: plainBody,
       }
       if (correoHtml) {
         correoEntry.body_html = correoHtml
+      }
+      if (logoUrl) {
+        correoEntry.metadata = { ...(correoEntry.metadata ?? {}), logo_url: logoUrl }
       }
       canalesPayload.push(correoEntry)
     }
@@ -1771,6 +1860,9 @@ useEffect(() => {
     openContactDrawer,
     selectedIds,
     selectedTemplates,
+    quoteLogoUrl,
+    resolvePreferredLogo,
+    selectedLogoUrl,
     templates,
   ])
 
@@ -1809,6 +1901,67 @@ useEffect(() => {
     },
     [],
   )
+
+  const insertCorreoLogo = useCallback(
+    (logoUrl: string) => {
+      const url = normalizeLogoUrl(logoUrl)
+      if (!url) return
+      setSelectedLogoUrl(url)
+      appendCorreoToken("correoCuerpo", "{{logo_url}}")
+      const htmlFocused = typeof document !== "undefined" && document.activeElement === correoHtmlRef.current
+      const hasHtmlContent = Boolean(contactForm.correoHtml.trim())
+      if (htmlFocused || hasHtmlContent) {
+        const token = '<img src="{{logo_url}}" alt="Logo" style="max-width:180px;height:auto;" />'
+        appendCorreoToken("correoHtml", token)
+      }
+    },
+    [appendCorreoToken, contactForm.correoHtml, setSelectedLogoUrl],
+  )
+
+  const handleInsertQuoteLogo = useCallback(async () => {
+    try {
+      const logo = await resolvePreferredLogo()
+      insertCorreoLogo(logo)
+    } catch (error) {
+      setContactError(error instanceof Error ? error.message : "No se pudo insertar el logo.")
+    }
+  }, [insertCorreoLogo, resolvePreferredLogo])
+
+  const loadLogos = useCallback(async () => {
+    if (logosLoading) return
+    setLogosLoading(true)
+    try {
+      const response = await fetch("/api/settings/logos", { cache: "no-store" })
+      const payload = await response.json().catch(() => ({}))
+      if (!response.ok) {
+        throw new Error(
+          typeof payload?.detail === "string" ? payload.detail : "No se pudieron cargar los logos.",
+        )
+      }
+      const items = Array.isArray(payload?.logos) ? payload.logos : []
+      const normalized = items
+        .map((item: unknown) => {
+          if (!item || typeof item !== "object") return null
+          const row = item as Record<string, unknown>
+          const fileUrl = typeof row.file_url === "string" ? row.file_url.trim() : ""
+          if (!fileUrl) return null
+          return {
+            id: String(row.id ?? fileUrl),
+            nombre: typeof row.nombre === "string" && row.nombre.trim() ? row.nombre.trim() : "Logo",
+            file_url: fileUrl,
+          } as LogoAsset
+        })
+        .filter((item: LogoAsset | null): item is LogoAsset => item != null)
+      setLogos(normalized)
+      if (normalized.length) {
+        setSelectedLogoUrl(normalized[0].file_url)
+      }
+    } catch (error) {
+      setContactError(error instanceof Error ? error.message : "No se pudieron cargar los logos.")
+    } finally {
+      setLogosLoading(false)
+    }
+  }, [logosLoading])
 
   const handlePlannerOpen = useCallback(() => {
     setPlannerMode(selectedCount ? "quick" : "campaign")
@@ -3311,8 +3464,44 @@ useEffect(() => {
                     </Button>
                   ))}
                 </div>
+                <div className="space-y-2 rounded-md border border-dashed p-2">
+                  <Label className="text-xs">Logo para correo</Label>
+                  <div className="flex flex-wrap gap-2">
+                    <Button type="button" variant="outline" size="sm" onClick={() => void handleInsertQuoteLogo()}>
+                      Insertar logo
+                    </Button>
+                    <Button type="button" variant="outline" size="sm" onClick={() => void loadLogos()} disabled={logosLoading}>
+                      {logosLoading ? "Cargando..." : "Cargar galería"}
+                    </Button>
+                  </div>
+                  {logos.length ? (
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Select value={selectedLogoUrl} onValueChange={setSelectedLogoUrl}>
+                        <SelectTrigger className="w-[280px]">
+                          <SelectValue placeholder="Selecciona un logo" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {logos.map((logo) => (
+                            <SelectItem key={logo.id} value={logo.file_url}>
+                              {logo.nombre}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        disabled={!selectedLogoUrl}
+                        onClick={() => insertCorreoLogo(selectedLogoUrl)}
+                      >
+                        Insertar seleccionado
+                      </Button>
+                    </div>
+                  ) : null}
+                </div>
                 <p className="text-xs text-muted-foreground">
-                  Usa URL pública para imágenes. Variables soportadas: {"{{nombre}}, {{empresa}}, {{email}}, {{telefono}}, {{segmento}}"}.
+                  Usa URL pública para imágenes. Variables soportadas: {"{{nombre}}, {{empresa}}, {{email}}, {{telefono}}, {{segmento}}, {{logo_url}}"}.
                 </p>
               </div>
             </TabsContent>

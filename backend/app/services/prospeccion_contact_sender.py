@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
+import html as html_lib
 import re
 from typing import Any, Sequence
 from uuid import UUID
@@ -25,6 +26,7 @@ logger = get_logger("prospeccion.contact_sender")
 
 DEFAULT_BACKOFF_SECONDS: tuple[int, ...] = (30, 120, 300, 600)
 PLACEHOLDER_PATTERN = re.compile(r"{{\s*([\w\.-]+)\s*}}")
+LEGACY_IMAGE_PLACEHOLDER_PATTERN = re.compile(r"{{\s*DATA:IMAGE:[^}]+}}", re.IGNORECASE)
 
 
 @dataclass(slots=True)
@@ -105,6 +107,33 @@ def _render_template_text(template: str, context: dict[str, Any]) -> str:
         return "" if value is None else str(value)
 
     return PLACEHOLDER_PATTERN.sub(_replace, template)
+
+
+def _normalize_email_html_template(template: str) -> str:
+    """Normaliza placeholders heredados de editores web a tokens soportados en correo."""
+
+    if not template:
+        return ""
+    return LEGACY_IMAGE_PLACEHOLDER_PATTERN.sub("{{logo_url}}", template)
+
+
+def _extract_visible_text_from_html(value: str) -> str:
+    without_tags = re.sub(r"<[^>]+>", " ", value or "")
+    normalized = re.sub(r"\s+", " ", without_tags).strip()
+    return normalized
+
+
+def _inject_text_fallback_into_html(*, body_text: str, body_html: str) -> str:
+    """Si el HTML queda sin texto visible (solo imagen/logo), antepone el texto plano."""
+
+    if not body_html:
+        return body_html
+    if _extract_visible_text_from_html(body_html):
+        return body_html
+    escaped = html_lib.escape(body_text or "").replace("\n", "<br/>")
+    if not escaped.strip():
+        return body_html
+    return f"<p>{escaped}</p>\n{body_html}"
 
 
 def _render_twilio_variables(definition: Any, context: dict[str, Any]) -> dict[str, str] | None:
@@ -326,12 +355,15 @@ async def _run_envio_correo(
             detalle={"reason": "correo_payload_incompleto"},
             error="correo_payload_incompleto",
         )
-    context = _build_placeholder_context(envio, payload)
+    context = _build_placeholder_context(envio, payload, payload.get("metadata"))
     subject = _render_template_text(subject_template, context).strip()
     body = _render_template_text(str(body_template), context).strip()
     body_html = None
     if isinstance(body_html_template, str) and body_html_template.strip():
-        body_html = _render_template_text(body_html_template, context).strip() or None
+        normalized_html_template = _normalize_email_html_template(body_html_template)
+        body_html = _render_template_text(normalized_html_template, context).strip() or None
+    if body_html:
+        body_html = _inject_text_fallback_into_html(body_text=body, body_html=body_html)
     if not subject or not body:
         return ContactEnvioResult(
             estado="error",

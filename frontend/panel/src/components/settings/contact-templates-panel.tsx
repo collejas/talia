@@ -42,6 +42,7 @@ import { cn } from "@/lib/utils"
 type StatusBanner = { type: "success" | "error"; message: string } | null
 
 type TwilioVariableEntry = { key: string; value: string }
+type LogoAsset = { id: string; nombre: string; file_url: string }
 
 type TemplateFormValues = {
   nombre: string
@@ -56,7 +57,8 @@ type TemplateFormValues = {
   twilioVariables: TwilioVariableEntry[]
 }
 
-const MAIL_VARIABLE_TOKENS = ["{{nombre}}", "{{empresa}}", "{{email}}", "{{telefono}}", "{{segmento}}"]
+const MAIL_VARIABLE_TOKENS = ["{{nombre}}", "{{empresa}}", "{{email}}", "{{telefono}}", "{{segmento}}", "{{logo_url}}"]
+const LEGACY_LOGO_PLACEHOLDER_REGEX = /{{\s*DATA:IMAGE:[^}]+}}/gi
 
 const EMPTY_FORM: TemplateFormValues = {
   nombre: "",
@@ -79,6 +81,25 @@ function toSlug(value: string): string {
     .replace(/[^a-z0-9]+/g, "_")
     .replace(/^_+|_+$/g, "")
     .slice(0, 160)
+}
+
+function htmlToPlainText(input: string): string {
+  const cleaned = input.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim()
+  return cleaned || "Contenido HTML"
+}
+
+function normalizeLogoUrl(input: string): string {
+  const value = input.trim()
+  if (!value) return value
+  if (value.startsWith("/") && typeof window !== "undefined") {
+    return `${window.location.origin}${value}`
+  }
+  return value
+}
+
+function normalizeEmailLogoPlaceholders(input: string): string {
+  if (!input) return input
+  return input.replace(LEGACY_LOGO_PLACEHOLDER_REGEX, "{{logo_url}}")
 }
 
 function sortTemplates(list: ContactTemplate[]): ContactTemplate[] {
@@ -148,13 +169,13 @@ function buildInputFromValues(
     nombre: values.nombre.trim(),
     slug: values.slug.trim(),
     descripcion: values.descripcion.trim() || null,
-    cuerpo_texto: values.bodyText.trim() || null,
-    cuerpo_html: values.canal === "correo" ? values.bodyHtml.trim() || null : null,
+    cuerpo_texto: normalizeEmailLogoPlaceholders(values.bodyText.trim()) || null,
+    cuerpo_html: values.canal === "correo" ? normalizeEmailLogoPlaceholders(values.bodyHtml.trim()) || null : null,
     activo: values.activo,
     metadata,
   }
   if (values.canal === "correo") {
-    baseInput.asunto = values.asunto.trim()
+    baseInput.asunto = normalizeEmailLogoPlaceholders(values.asunto.trim())
   } else {
     baseInput.asunto = null
   }
@@ -201,6 +222,10 @@ export function ContactTemplatesPanel({
   const [feedback, setFeedback] = useState<StatusBanner>(null)
   const [pendingAction, setPendingAction] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
+  const [quoteLogoUrl, setQuoteLogoUrl] = useState<string>("")
+  const [logos, setLogos] = useState<LogoAsset[]>([])
+  const [logosLoading, setLogosLoading] = useState(false)
+  const [selectedLogoUrl, setSelectedLogoUrl] = useState<string>("")
   const mailFieldRefs = useRef<{
     asunto: HTMLInputElement | null
     bodyText: HTMLTextAreaElement | null
@@ -330,7 +355,7 @@ export function ContactTemplatesPanel({
     if (!values.slug.trim()) return "Define un slug único para la plantilla."
     if (values.canal === "correo") {
       if (!values.asunto.trim()) return "El asunto es obligatorio para las plantillas de correo."
-      if (!values.bodyText.trim()) return "Agrega un cuerpo de correo."
+      if (!values.bodyText.trim() && !values.bodyHtml.trim()) return "Agrega un cuerpo de correo (texto o HTML)."
     }
     if (values.canal === "whatsapp") {
       const hasBody = Boolean(values.bodyText.trim())
@@ -348,6 +373,9 @@ export function ContactTemplatesPanel({
   const onSubmit = form.handleSubmit((values) => {
     if (!values.slug.trim() && values.nombre.trim()) {
       values.slug = toSlug(values.nombre)
+    }
+    if (values.canal === "correo" && !values.bodyText.trim() && values.bodyHtml.trim()) {
+      values.bodyText = htmlToPlainText(values.bodyHtml)
     }
     const validationError = validateForm(values)
     if (validationError) {
@@ -408,6 +436,113 @@ export function ContactTemplatesPanel({
     },
     [form],
   )
+
+  const insertLogoInTemplate = useCallback(
+    (logoUrl: string) => {
+      const url = normalizeLogoUrl(logoUrl)
+      if (!url) return
+      setSelectedLogoUrl(url)
+      appendTemplateToken("bodyText", "{{logo_url}}")
+      const currentHtml = String(form.getValues("bodyHtml") ?? "").trim()
+      const htmlFocused = typeof document !== "undefined" && document.activeElement === mailFieldRefs.current.bodyHtml
+      if (htmlFocused || currentHtml) {
+        appendTemplateToken("bodyHtml", '<img src="{{logo_url}}" alt="Logo" style="max-width:180px;height:auto;" />')
+      }
+    },
+    [appendTemplateToken, form, setSelectedLogoUrl],
+  )
+
+  const resolvePreferredLogo = useCallback(async (): Promise<string> => {
+    if (quoteLogoUrl.trim()) return quoteLogoUrl.trim()
+    try {
+      const response = await fetch("/api/crm/settings/quote-template", { cache: "no-store" })
+      const payload = await response.json().catch(() => ({}))
+      if (response.ok) {
+        const fromConfig =
+          payload && typeof payload === "object" && payload.config && typeof payload.config === "object"
+            ? String((payload.config as Record<string, unknown>).logoUrl ?? "").trim()
+            : ""
+        if (fromConfig) {
+          setQuoteLogoUrl(fromConfig)
+          return fromConfig
+        }
+      }
+    } catch {
+      // fallback below
+    }
+    try {
+      const response = await fetch("/api/settings/logos", { cache: "no-store" })
+      const payload = await response.json().catch(() => ({}))
+      if (response.ok && Array.isArray(payload?.logos) && payload.logos.length) {
+        const first = payload.logos.find(
+          (item: unknown) =>
+            item &&
+            typeof item === "object" &&
+            typeof (item as Record<string, unknown>).file_url === "string" &&
+            String((item as Record<string, unknown>).file_url).trim().length,
+        ) as Record<string, unknown> | undefined
+        const fileUrl = first ? String(first.file_url).trim() : ""
+        if (fileUrl) return fileUrl
+      }
+    } catch {
+      // fallback below
+    }
+    if (typeof window !== "undefined") {
+      return `${window.location.origin}/assets/logos/Logo8.png`
+    }
+    return "https://talia.mx/assets/logos/Logo8.png"
+  }, [quoteLogoUrl])
+
+  const handleInsertQuoteLogo = useCallback(async () => {
+    try {
+      const logo = await resolvePreferredLogo()
+      insertLogoInTemplate(logo)
+    } catch (error) {
+      setFeedback({
+        type: "error",
+        message: error instanceof Error ? error.message : "No se pudo insertar el logo.",
+      })
+    }
+  }, [insertLogoInTemplate, resolvePreferredLogo])
+
+  const loadLogos = useCallback(async () => {
+    if (logosLoading) return
+    setLogosLoading(true)
+    try {
+      const response = await fetch("/api/settings/logos", { cache: "no-store" })
+      const payload = await response.json().catch(() => ({}))
+      if (!response.ok) {
+        throw new Error(
+          typeof payload?.detail === "string" ? payload.detail : "No se pudieron cargar los logos.",
+        )
+      }
+      const items = Array.isArray(payload?.logos) ? payload.logos : []
+      const normalized = items
+        .map((item: unknown) => {
+          if (!item || typeof item !== "object") return null
+          const row = item as Record<string, unknown>
+          const fileUrl = typeof row.file_url === "string" ? row.file_url.trim() : ""
+          if (!fileUrl) return null
+          return {
+            id: String(row.id ?? fileUrl),
+            nombre: typeof row.nombre === "string" && row.nombre.trim() ? row.nombre.trim() : "Logo",
+            file_url: fileUrl,
+          } as LogoAsset
+        })
+        .filter((item: LogoAsset | null): item is LogoAsset => item != null)
+      setLogos(normalized)
+      if (normalized.length) {
+        setSelectedLogoUrl(normalized[0].file_url)
+      }
+    } catch (error) {
+      setFeedback({
+        type: "error",
+        message: error instanceof Error ? error.message : "No se pudieron cargar los logos.",
+      })
+    } finally {
+      setLogosLoading(false)
+    }
+  }, [logosLoading])
 
   return (
     <div className="flex flex-col gap-6">
@@ -710,12 +845,49 @@ export function ContactTemplatesPanel({
                       </Button>
                     ))}
                   </div>
+                  <div className="space-y-2 rounded-md border border-dashed p-2">
+                    <Label className="text-xs">Logo para correo</Label>
+                    <div className="flex flex-wrap gap-2">
+                      <Button type="button" variant="outline" size="sm" onClick={() => void handleInsertQuoteLogo()}>
+                        Insertar logo
+                      </Button>
+                      <Button type="button" variant="outline" size="sm" onClick={() => void loadLogos()} disabled={logosLoading}>
+                        {logosLoading ? "Cargando..." : "Cargar galería"}
+                      </Button>
+                    </div>
+                    {logos.length ? (
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Select value={selectedLogoUrl} onValueChange={setSelectedLogoUrl}>
+                          <SelectTrigger className="w-[280px]">
+                            <SelectValue placeholder="Selecciona un logo" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {logos.map((logo) => (
+                              <SelectItem key={logo.id} value={logo.file_url}>
+                                {logo.nombre}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          disabled={!selectedLogoUrl}
+                          onClick={() => insertLogoInTemplate(selectedLogoUrl)}
+                        >
+                          Insertar seleccionado
+                        </Button>
+                      </div>
+                    ) : null}
+                  </div>
                   <p className="text-xs text-muted-foreground">
-                    Para imágenes usa URL pública: <code>{`<img src=\"https://...\" alt=\"...\" />`}</code>.
+                    Para usar el logo seleccionado, inserta <code>{"{{logo_url}}"}</code> o el botón de logo.
                   </p>
                   <p className="text-xs text-muted-foreground">
                     Variables disponibles: <code>{"{{nombre}}"}</code>, <code>{"{{empresa}}"}</code>,{" "}
-                    <code>{"{{email}}"}</code>, <code>{"{{telefono}}"}</code>, <code>{"{{segmento}}"}</code>.
+                    <code>{"{{email}}"}</code>, <code>{"{{telefono}}"}</code>, <code>{"{{segmento}}"}</code>,{" "}
+                    <code>{"{{logo_url}}"}</code>.
                   </p>
                 </div>
               </div>

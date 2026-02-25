@@ -3040,6 +3040,17 @@ def _clean_text(value: Any) -> str | None:
     return trimmed or None
 
 
+def _html_to_text(value: Any) -> str | None:
+    if not isinstance(value, str):
+        return None
+    raw = value.strip()
+    if not raw:
+        return None
+    text = re.sub(r"<[^>]+>", " ", raw)
+    text = re.sub(r"\s+", " ", text).strip()
+    return text or "Contenido HTML"
+
+
 def _extract_twilio_content_body(payload: dict[str, Any]) -> str | None:
     types = payload.get("types") if isinstance(payload.get("types"), dict) else {}
     if not isinstance(types, dict):
@@ -4240,13 +4251,15 @@ def _resolve_contact_channels(
                 if not subject and template_row:
                     subject = _clean_text(template_row.get("asunto"))
                 body = canal_config.body or (template_row.get("cuerpo_texto") if template_row else None)
+                body_html = canal_config.body_html
+                if body_html is None and template_row:
+                    body_html = template_row.get("cuerpo_html")
+                if not body and body_html:
+                    body = _html_to_text(body_html)
                 if not subject or not body:
                     raise HTTPException(status_code=400, detail="correo_payload_incompleto")
                 entry["subject"] = subject
                 entry["body"] = body
-                body_html = canal_config.body_html
-                if body_html is None and template_row:
-                    body_html = template_row.get("cuerpo_html")
                 if body_html:
                     entry["body_html"] = body_html
             elif canal == "whatsapp":
