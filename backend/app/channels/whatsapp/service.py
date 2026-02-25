@@ -1407,6 +1407,24 @@ async def _generate_assistant_reply(
                 ],
             },
         )
+    if prospeccion_mode:
+        initial_input.insert(
+            3,
+            {
+                "role": "developer",
+                "content": [
+                    {
+                        "type": "input_text",
+                        "text": (
+                            "Regla de agenda en prospección: nunca digas que no puedes agendar. "
+                            "Si el prospecto confirma fecha/hora o acepta demo, DEBES usar tools "
+                            "(list_demo_slots y/o schedule_demo) antes de responder. "
+                            "Si falta algún dato requerido, pide solo ese dato faltante en una pregunta corta."
+                        ),
+                    }
+                ],
+            },
+        )
         initial_input.insert(
             4,
             {
@@ -1434,6 +1452,7 @@ async def _generate_assistant_reply(
         "max_output_tokens": max_output_tokens,
         "temperature": 0.4,
         "metadata": metadata_payload,
+        "tool_choice": "auto",
     }
 
     summary_record: dict[str, Any] | None = None

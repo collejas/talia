@@ -2025,8 +2025,22 @@ async def _handle_schedule_demo(
     contact = await _resolve_contact(context.contact_id)
     booking_response.hold_id = hold.get("hold_id")
     contact_record = contact
+    opportunity_contact_id = context.contact_id
     channel_value = str(context.channel or "whatsapp").strip().lower() or "whatsapp"
     contact_org = webchat_service._extract_contact_org(contact_record)
+    if contact_org:
+        try:
+            opportunity_contact = await storage.fetch_opportunity_contact(
+                oportunidad_id=str(tarjeta_id),
+                organizacion_id=str(contact_org),
+            )
+        except StorageError:
+            opportunity_contact = None
+        if isinstance(opportunity_contact, dict):
+            resolved_contact_id = str(opportunity_contact.get("id") or "").strip()
+            if resolved_contact_id:
+                opportunity_contact_id = resolved_contact_id
+                contact_record = opportunity_contact
 
     await webchat_service._sync_booking_with_opportunity(
         booking=booking_response,
@@ -2087,6 +2101,130 @@ async def _handle_schedule_demo(
                 "channel": channel_value,
             },
         )
+    # En prospección, al confirmar demo dejamos contexto mínimo para insights/título.
+    opportunity_metadata: dict[str, Any] = {}
+    opportunity_row: dict[str, Any] | None = None
+    if contact_org_uuid:
+        try:
+            repo = CRMRepository()
+            opportunity_row = await repo.get_pipeline_opportunity(
+                organizacion_id=UUID(contact_org_uuid),
+                oportunidad_id=UUID(str(tarjeta_id)),
+            )
+        except (CRMRepositoryError, ValueError) as exc:
+            logger.warning(
+                "whatsapp.schedule_demo.fetch_opportunity_failed",
+                extra={"conversation_id": context.conversation_id, "error": str(exc)},
+            )
+            opportunity_row = None
+        if isinstance(opportunity_row, dict):
+            opportunity_metadata = _ensure_dict(opportunity_row.get("metadata"))
+    if _is_prospeccion_opportunity({"metadata": opportunity_metadata}):
+        # Si el contacto de la conversación y el de la oportunidad difieren,
+        # propagamos datos capturados (nombre/correo/empresa) al contacto de oportunidad.
+        if opportunity_contact_id != context.contact_id and isinstance(contact, dict):
+            merge_payload: dict[str, Any] = {}
+            if not str((contact_record or {}).get("nombre_completo") or "").strip():
+                candidate = str(contact.get("nombre_completo") or "").strip()
+                if candidate:
+                    merge_payload["nombre_completo"] = candidate
+            if not str((contact_record or {}).get("correo") or "").strip():
+                candidate = str(contact.get("correo") or "").strip()
+                if candidate:
+                    merge_payload["correo"] = candidate
+            if not str((contact_record or {}).get("company_name") or "").strip():
+                candidate = str(contact.get("company_name") or "").strip()
+                if candidate:
+                    merge_payload["company_name"] = candidate
+            if merge_payload:
+                try:
+                    await storage.update_contact(opportunity_contact_id, merge_payload)
+                    contact_record = await _resolve_contact(opportunity_contact_id)
+                except StorageError as exc:
+                    logger.warning(
+                        "whatsapp.schedule_demo.contact_merge_failed",
+                        extra={"conversation_id": context.conversation_id, "error": str(exc)},
+                    )
+
+        existing_need = str((contact_record or {}).get("necesidad_proposito") or "").strip()
+        existing_notes = str((contact_record or {}).get("notes") or "").strip()
+        booking_note = (
+            f"Demo confirmada para {booking_response.start_at.isoformat()} "
+            f"(booking {booking_response.booking_id})."
+        )
+        inferred_need = existing_need or "Agendar demo de prospección por WhatsApp"
+        inferred_notes = existing_notes or notes or booking_note
+        patch_payload: dict[str, Any] = {}
+        if not existing_need:
+            patch_payload["necesidad_proposito"] = inferred_need
+        if not existing_notes:
+            patch_payload["notes"] = inferred_notes
+        if patch_payload:
+            try:
+                await storage.update_contact(opportunity_contact_id, patch_payload)
+                contact_record = await _resolve_contact(opportunity_contact_id)
+            except StorageError as exc:
+                logger.warning(
+                    "whatsapp.schedule_demo.contact_context_patch_failed",
+                    extra={"conversation_id": context.conversation_id, "error": str(exc)},
+                )
+        try:
+            await storage.upsert_conversation_insights(
+                conversation_id=context.conversation_id,
+                resumen=inferred_notes,
+                intencion=inferred_need,
+                siguiente_accion="demo_agendada",
+            )
+        except StorageError as exc:
+            logger.warning(
+                "whatsapp.schedule_demo.insights_failed",
+                extra={"conversation_id": context.conversation_id, "error": str(exc)},
+            )
+        try:
+            await storage.maybe_auto_name_opportunity(
+                conversation_id=context.conversation_id,
+                contact_id=opportunity_contact_id,
+                opportunity_id=str(tarjeta_id),
+                intent=inferred_need,
+                summary=inferred_notes,
+                channel=context.channel or "whatsapp",
+            )
+        except StorageError as exc:
+            logger.warning(
+                "whatsapp.schedule_demo.auto_name_failed",
+                extra={"conversation_id": context.conversation_id, "error": str(exc)},
+            )
+        if opportunity_row and contact_org_uuid:
+            current_title = str(opportunity_row.get("titulo") or "").strip()
+            current_description = str(opportunity_row.get("descripcion") or "").strip()
+            full_name = str((contact_record or {}).get("nombre_completo") or "").strip()
+            company_name = str((contact_record or {}).get("company_name") or "").strip()
+            looks_generic = (
+                not current_title
+                or current_title.lower().startswith("conversación ")
+                or (full_name and current_title.casefold() == full_name.casefold())
+            )
+            if looks_generic or not current_description:
+                label = company_name or full_name or "Prospecto"
+                desired_title = f"Demo de prospección - {label}"
+                patch_opp: dict[str, Any] = {}
+                if looks_generic:
+                    patch_opp["titulo"] = desired_title[:120]
+                if not current_description:
+                    patch_opp["descripcion"] = inferred_notes[:1000]
+                if patch_opp:
+                    try:
+                        repo = CRMRepository()
+                        await repo.update_opportunity(
+                            organizacion_id=UUID(contact_org_uuid),
+                            oportunidad_id=UUID(str(tarjeta_id)),
+                            payload=patch_opp,
+                        )
+                    except (CRMRepositoryError, ValueError) as exc:
+                        logger.warning(
+                            "whatsapp.schedule_demo.prospeccion_title_patch_failed",
+                            extra={"conversation_id": context.conversation_id, "error": str(exc)},
+                        )
     try:
         await _notify_sales_rep(
             context=context,
@@ -2385,6 +2523,7 @@ async def _notify_sales_rep(
     whatsapp_settings = await tenant_runtime.get_whatsapp_runtime_settings(organizacion_id=org_uuid)
 
     metadata = _ensure_dict(opportunity.get("metadata"))
+    is_prospeccion = _is_prospeccion_opportunity({"metadata": metadata})
     profile_summary = _build_profile_summary_text(metadata)
     if profile_summary:
         extra = dict(extra or {})
@@ -2406,19 +2545,22 @@ async def _notify_sales_rep(
                 extra={"conversation_id": context.conversation_id, "trigger": trigger},
             )
             return
-        if not await _has_minimum_profile_for_case_a(
-            contact=contact_record,
-            opportunity_metadata=metadata,
-            repo=repo,
-            organizacion_id=org_uuid,
-            channel=channel_key,
-        ):
-            logger.info(
-                "whatsapp.notify_sales.skip_case_a_profile_missing",
-                extra={"conversation_id": context.conversation_id, "trigger": trigger},
-            )
-            return
-        primary_reason = "case_a_booking_profile"
+        if is_prospeccion:
+            primary_reason = "case_a_booking_prospeccion"
+        else:
+            if not await _has_minimum_profile_for_case_a(
+                contact=contact_record,
+                opportunity_metadata=metadata,
+                repo=repo,
+                organizacion_id=org_uuid,
+                channel=channel_key,
+            ):
+                logger.info(
+                    "whatsapp.notify_sales.skip_case_a_profile_missing",
+                    extra={"conversation_id": context.conversation_id, "trigger": trigger},
+                )
+                return
+            primary_reason = "case_a_booking_profile"
     elif trigger in {"followup_escalate", "webchat_escalate"}:
         if not _has_base_fields_for_case_b(contact_record):
             logger.info(
