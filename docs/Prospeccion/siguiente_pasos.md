@@ -4,6 +4,21 @@ Este archivo sirve para capturar próximos requerimientos sin mezclar historial 
 
 ## Backlog sugerido (priorizado)
 
+0. Refactor de flujo (acordado)
+- Simplificar a modelo único:
+  - Gestión de campañas/plantillas en `prospeccion/campanas`.
+  - Ejecución de envíos sólo en `prospeccion/prospectos`.
+- Eliminar ruta operativa duplicada:
+  - retirar `settings/prospeccion/plantillas`.
+- Ligadura fuerte campaña-plantilla:
+  - plantillas con `campana_id` obligatorio.
+  - en `prospeccion/prospectos`, al elegir campaña, mostrar sólo plantillas de esa campaña.
+- Programación operativa de envío:
+  - soportar fecha/hora opcional.
+  - soportar separación entre envíos por canal/lote.
+- Métricas:
+  - tablero por campaña (principal) + desglose por plantilla.
+
 1. UX de tabla de prospectos
 - Guardar preferencias de columnas por usuario en backend (no sólo `localStorage`).
 - Vistas guardadas (preset de columnas + filtros + orden).

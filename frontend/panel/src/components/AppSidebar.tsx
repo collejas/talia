@@ -145,12 +145,6 @@ const NAVIGATION: {
         },
         { title: "Recursos Humanos", url: "/settings/rh", icon: IconUsersGroup, permission: "user.manage" },
         
-        {
-          title: "Plantillas de contacto",
-          url: "/settings/prospeccion/plantillas",
-          icon: IconMessageCircle,
-          permission: "settings.manage",
-        },
       ],
     },
     { title: "Proyectos", url: "#", icon: IconFolder },
