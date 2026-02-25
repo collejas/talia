@@ -90,6 +90,8 @@ def _build_placeholder_context(*sources: Any) -> dict[str, Any]:
                 context[str(key)] = value
     if "nombre" not in context and context.get("display_name"):
         context["nombre"] = context["display_name"]
+    if "telefono" not in context and context.get("phone"):
+        context["telefono"] = context["phone"]
     return context
 
 
@@ -312,8 +314,21 @@ async def _run_envio_correo(
             estado="omitido",
             detalle={"reason": "sin_correo"},
         )
-    subject = _clean_text(payload.get("subject"))
-    body = payload.get("body")
+    subject_template = _clean_text(payload.get("subject"))
+    body_template = payload.get("body")
+    body_html_template = payload.get("body_html")
+    if not subject_template or not body_template:
+        return ContactEnvioResult(
+            estado="error",
+            detalle={"reason": "correo_payload_incompleto"},
+            error="correo_payload_incompleto",
+        )
+    context = _build_placeholder_context(envio, payload)
+    subject = _render_template_text(subject_template, context).strip()
+    body = _render_template_text(str(body_template), context).strip()
+    body_html = None
+    if isinstance(body_html_template, str) and body_html_template.strip():
+        body_html = _render_template_text(body_html_template, context).strip() or None
     if not subject or not body:
         return ContactEnvioResult(
             estado="error",
@@ -340,6 +355,7 @@ async def _run_envio_correo(
             send_email,
             subject=subject,
             body_text=body,
+            body_html=body_html,
             recipients=[email_value],
             mail_settings=mail_settings,
             brevo_settings=brevo_settings,

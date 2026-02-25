@@ -1479,6 +1479,7 @@ class ProspeccionCanalConfig(BaseModel):
     template_id: UUID | None = None
     subject: str | None = Field(default=None, max_length=200)
     body: str | None = Field(default=None, max_length=4000)
+    body_html: str | None = Field(default=None, max_length=8000)
     message: str | None = Field(default=None, max_length=1000)
     programado_en: datetime | None = None
     metadata: dict[str, Any] | None = Field(default=None)
@@ -4243,6 +4244,11 @@ def _resolve_contact_channels(
                     raise HTTPException(status_code=400, detail="correo_payload_incompleto")
                 entry["subject"] = subject
                 entry["body"] = body
+                body_html = canal_config.body_html
+                if body_html is None and template_row:
+                    body_html = template_row.get("cuerpo_html")
+                if body_html:
+                    entry["body_html"] = body_html
             elif canal == "whatsapp":
                 message = _clean_text(canal_config.body or canal_config.message)
                 if not message and template_row:

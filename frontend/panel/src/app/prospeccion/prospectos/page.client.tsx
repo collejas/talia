@@ -159,11 +159,14 @@ const initialFilters: Filters = {
 const initialContactForm = {
   correoAsunto: "",
   correoCuerpo: "",
+  correoHtml: "",
   whatsappMensaje: "",
   whatsappVariables: "",
   whatsappEmpresa: process.env.NEXT_PUBLIC_WHATSAPP_EMPRESA?.trim() || process.env.NEXT_PUBLIC_APP_NAME?.trim() || "Tal-IA",
   llamadaNotas: "",
 }
+
+const MAIL_VARIABLE_TOKENS = ["{{nombre}}", "{{empresa}}", "{{email}}", "{{telefono}}", "{{segmento}}"]
 
 type ProspectoFormState = {
   displayName: string
@@ -1371,6 +1374,7 @@ useEffect(() => {
         ...prev,
         correoAsunto: template.asunto ?? prev.correoAsunto,
         correoCuerpo: template.cuerpo_texto ?? prev.correoCuerpo,
+        correoHtml: template.cuerpo_html ?? prev.correoHtml,
       }))
     } else if (canal === "whatsapp") {
       const templateVariables = serializeWhatsappVariables(
@@ -1589,6 +1593,7 @@ useEffect(() => {
 
     const correoAsunto = contactForm.correoAsunto.trim()
     const correoCuerpo = contactForm.correoCuerpo.trim()
+    const correoHtml = contactForm.correoHtml.trim()
     const whatsappMensaje = contactForm.whatsappMensaje.trim()
     const whatsappVariablesRaw = contactForm.whatsappVariables.trim()
     const whatsappEmpresa = contactForm.whatsappEmpresa.trim()
@@ -1611,19 +1616,31 @@ useEffect(() => {
     if (correoTemplate) {
       const subject = correoAsunto || correoTemplate.asunto?.trim() || ""
       const body = correoCuerpo || correoTemplate.cuerpo_texto?.trim() || ""
+      const bodyHtml = correoHtml || correoTemplate.cuerpo_html?.trim() || ""
       if (!subject || !body) {
         setContactError("La plantilla de correo seleccionada necesita asunto y cuerpo.")
         return
       }
-      canalesPayload.push({
+      const correoEntry: ProspeccionCanalConfigInput = {
         canal: "correo",
         template_id: correoTemplate.id,
         subject,
         body,
-      })
+      }
+      if (bodyHtml) {
+        correoEntry.body_html = bodyHtml
+      }
+      canalesPayload.push(correoEntry)
     } else if (correoAsunto && correoCuerpo) {
-      payload.correo_asunto = correoAsunto
-      payload.correo_cuerpo = correoCuerpo
+      const correoEntry: ProspeccionCanalConfigInput = {
+        canal: "correo",
+        subject: correoAsunto,
+        body: correoCuerpo,
+      }
+      if (correoHtml) {
+        correoEntry.body_html = correoHtml
+      }
+      canalesPayload.push(correoEntry)
     }
 
     const whatsappTemplate = resolveTemplate("whatsapp")
@@ -1697,10 +1714,7 @@ useEffect(() => {
       payload.canales = canalesPayload
     }
 
-    const hasLegacyChannel =
-      Boolean(payload.correo_asunto && payload.correo_cuerpo) ||
-      Boolean(payload.whatsapp_mensaje) ||
-      Boolean(payload.llamada_notas)
+    const hasLegacyChannel = Boolean(payload.whatsapp_mensaje) || Boolean(payload.llamada_notas)
 
     if (!canalesPayload.length && !hasLegacyChannel) {
       setContactError("Define al menos un canal (correo, WhatsApp o llamada).")
@@ -1756,6 +1770,23 @@ useEffect(() => {
     selectedTemplates,
     templates,
   ])
+
+  const appendCorreoToken = useCallback(
+    (field: "correoAsunto" | "correoCuerpo" | "correoHtml", token: string) => {
+      setContactForm((prev) => {
+        const current = prev[field] ?? ""
+        const separator =
+          field === "correoAsunto"
+            ? (current && !/\s$/.test(current) ? " " : "")
+            : (current && !current.endsWith("\n") ? "\n" : "")
+        return {
+          ...prev,
+          [field]: `${current}${separator}${token}`,
+        }
+      })
+    },
+    [],
+  )
 
   const handlePlannerOpen = useCallback(() => {
     setPlannerMode(selectedCount ? "quick" : "campaign")
@@ -3190,6 +3221,20 @@ useEffect(() => {
                     value={contactForm.correoAsunto}
                     onChange={(event) => setContactForm((prev) => ({ ...prev, correoAsunto: event.target.value }))}
                   />
+                  <div className="flex flex-wrap gap-1">
+                    {MAIL_VARIABLE_TOKENS.map((token) => (
+                      <Button
+                        key={`contact-asunto-${token}`}
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="h-7 px-2 text-xs"
+                        onClick={() => appendCorreoToken("correoAsunto", token)}
+                      >
+                        {token}
+                      </Button>
+                    ))}
+                  </div>
                 </div>
                 <div className="space-y-1">
                   <Label>Previsualización</Label>
@@ -3204,6 +3249,46 @@ useEffect(() => {
                   rows={5}
                   placeholder="Hola {{nombre}}, vimos que..."
                 />
+                <div className="flex flex-wrap gap-1">
+                  {MAIL_VARIABLE_TOKENS.map((token) => (
+                    <Button
+                      key={`contact-cuerpo-${token}`}
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-7 px-2 text-xs"
+                      onClick={() => appendCorreoToken("correoCuerpo", token)}
+                    >
+                      {token}
+                    </Button>
+                  ))}
+                </div>
+              </div>
+              <div className="space-y-1">
+                <Label>HTML (opcional)</Label>
+                <Textarea
+                  value={contactForm.correoHtml}
+                  onChange={(event) => setContactForm((prev) => ({ ...prev, correoHtml: event.target.value }))}
+                  rows={6}
+                  placeholder={'<p>Hola {{nombre}}</p><p><img src="https://..." alt="Banner" /></p>'}
+                />
+                <div className="flex flex-wrap gap-1">
+                  {MAIL_VARIABLE_TOKENS.map((token) => (
+                    <Button
+                      key={`contact-html-${token}`}
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-7 px-2 text-xs"
+                      onClick={() => appendCorreoToken("correoHtml", token)}
+                    >
+                      {token}
+                    </Button>
+                  ))}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Usa URL pública para imágenes. Variables soportadas: {"{{nombre}}, {{empresa}}, {{email}}, {{telefono}}, {{segmento}}"}.
+                </p>
               </div>
             </TabsContent>
             <TabsContent value="whatsapp" className="space-y-3">

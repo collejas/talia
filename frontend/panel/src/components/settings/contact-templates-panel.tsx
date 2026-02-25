@@ -56,6 +56,8 @@ type TemplateFormValues = {
   twilioVariables: TwilioVariableEntry[]
 }
 
+const MAIL_VARIABLE_TOKENS = ["{{nombre}}", "{{empresa}}", "{{email}}", "{{telefono}}", "{{segmento}}"]
+
 const EMPTY_FORM: TemplateFormValues = {
   nombre: "",
   slug: "",
@@ -172,17 +174,30 @@ function twilioSummary(template: ContactTemplate): string {
   return sid || `${vars} var.`
 }
 
-export function ContactTemplatesPanel({ initialTemplates }: { initialTemplates: ContactTemplate[] }) {
-  const [templates, setTemplates] = useState<ContactTemplate[]>(() => sortTemplates(initialTemplates))
+export function ContactTemplatesPanel({
+  initialTemplates,
+  lockedChannel,
+}: {
+  initialTemplates: ContactTemplate[]
+  lockedChannel?: ContactTemplate["canal"]
+}) {
+  const [templates, setTemplates] = useState<ContactTemplate[]>(() =>
+    sortTemplates(initialTemplates.filter((item) => (lockedChannel ? item.canal === lockedChannel : true))),
+  )
   const [search, setSearch] = useState("")
-  const [channelFilter, setChannelFilter] = useState<"all" | ContactTemplate["canal"]>("all")
+  const [channelFilter, setChannelFilter] = useState<"all" | ContactTemplate["canal"]>(lockedChannel ?? "all")
   const [sheetOpen, setSheetOpen] = useState(false)
   const [editing, setEditing] = useState<ContactTemplate | null>(null)
   const [feedback, setFeedback] = useState<StatusBanner>(null)
   const [pendingAction, setPendingAction] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
 
-  const form = useForm<TemplateFormValues>({ defaultValues: EMPTY_FORM })
+  const form = useForm<TemplateFormValues>({
+    defaultValues: {
+      ...EMPTY_FORM,
+      canal: lockedChannel ?? EMPTY_FORM.canal,
+    },
+  })
   const { fields: twilioFields, append, remove, replace } = useFieldArray({
     control: form.control,
     name: "twilioVariables",
@@ -193,6 +208,9 @@ export function ContactTemplatesPanel({ initialTemplates }: { initialTemplates: 
   const filteredTemplates = useMemo(() => {
     const query = search.trim().toLowerCase()
     return templates.filter((template) => {
+      if (lockedChannel && template.canal !== lockedChannel) {
+        return false
+      }
       if (channelFilter !== "all" && template.canal !== channelFilter) {
         return false
       }
@@ -204,16 +222,19 @@ export function ContactTemplatesPanel({ initialTemplates }: { initialTemplates: 
         .toLowerCase()
       return haystack.includes(query)
     })
-  }, [templates, search, channelFilter])
+  }, [templates, search, channelFilter, lockedChannel])
 
   const activeTotal = useMemo(() => templates.filter((tpl) => tpl.activo).length, [templates])
 
   const resetForm = useCallback(() => {
-    form.reset(EMPTY_FORM)
+    form.reset({
+      ...EMPTY_FORM,
+      canal: lockedChannel ?? EMPTY_FORM.canal,
+    })
     replace([])
     setEditing(null)
     setFeedback(null)
-  }, [form, replace])
+  }, [form, lockedChannel, replace])
 
   const closeSheet = useCallback(() => {
     setSheetOpen(false)
@@ -337,6 +358,18 @@ export function ContactTemplatesPanel({ initialTemplates }: { initialTemplates: 
     })
   })
 
+  const appendTemplateToken = useCallback(
+    (field: "asunto" | "bodyText" | "bodyHtml", token: string) => {
+      const current = String(form.getValues(field) ?? "")
+      const separator =
+        field === "asunto"
+          ? (current && !/\s$/.test(current) ? " " : "")
+          : (current && !current.endsWith("\n") ? "\n" : "")
+      form.setValue(field, `${current}${separator}${token}`, { shouldDirty: true })
+    },
+    [form],
+  )
+
   return (
     <div className="flex flex-col gap-6">
       <Card>
@@ -363,20 +396,22 @@ export function ContactTemplatesPanel({ initialTemplates }: { initialTemplates: 
                 onChange={(event) => setSearch(event.target.value)}
                 className="max-w-xs"
               />
-              <Select
-                value={channelFilter}
-                onValueChange={(value) => setChannelFilter(value as "all" | ContactTemplate["canal"])}
-              >
-                <SelectTrigger className="w-[180px]">
-                  <SelectValue placeholder="Canal" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todos los canales</SelectItem>
-                  <SelectItem value="correo">Correo</SelectItem>
-                  <SelectItem value="whatsapp">WhatsApp</SelectItem>
-                  <SelectItem value="llamada">Llamada</SelectItem>
-                </SelectContent>
-              </Select>
+              {lockedChannel ? null : (
+                <Select
+                  value={channelFilter}
+                  onValueChange={(value) => setChannelFilter(value as "all" | ContactTemplate["canal"])}
+                >
+                  <SelectTrigger className="w-[180px]">
+                    <SelectValue placeholder="Canal" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todos los canales</SelectItem>
+                    <SelectItem value="correo">Correo</SelectItem>
+                    <SelectItem value="whatsapp">WhatsApp</SelectItem>
+                    <SelectItem value="llamada">Llamada</SelectItem>
+                  </SelectContent>
+                </Select>
+              )}
             </div>
             <div className="flex items-center gap-2">
               <Button variant="outline" size="sm" onClick={() => setTemplates(sortTemplates([...templates]))}>
@@ -507,22 +542,26 @@ export function ContactTemplatesPanel({ initialTemplates }: { initialTemplates: 
               <div className="grid gap-3 md:grid-cols-2">
                 <div className="space-y-1.5">
                   <Label>Canal</Label>
-                  <Controller
-                    control={form.control}
-                    name="canal"
-                    render={({ field }) => (
-                      <Select value={field.value} onValueChange={field.onChange}>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Selecciona un canal" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="correo">Correo</SelectItem>
-                          <SelectItem value="whatsapp">WhatsApp</SelectItem>
-                          <SelectItem value="llamada">Llamada</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    )}
-                  />
+                  {lockedChannel ? (
+                    <div className="rounded-md border px-3 py-2 text-sm">{formatChannelLabel(lockedChannel)}</div>
+                  ) : (
+                    <Controller
+                      control={form.control}
+                      name="canal"
+                      render={({ field }) => (
+                        <Select value={field.value} onValueChange={field.onChange}>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Selecciona un canal" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="correo">Correo</SelectItem>
+                            <SelectItem value="whatsapp">WhatsApp</SelectItem>
+                            <SelectItem value="llamada">Llamada</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      )}
+                    />
+                  )}
                 </div>
                 <div className="flex items-center justify-between rounded-lg border px-3 py-2">
                   <div>
@@ -560,16 +599,44 @@ export function ContactTemplatesPanel({ initialTemplates }: { initialTemplates: 
                 <div className="space-y-1.5">
                   <Label htmlFor="asunto">Asunto</Label>
                   <Input id="asunto" {...form.register("asunto")} placeholder="Seguimos con tu demo" />
+                  <div className="flex flex-wrap gap-1">
+                    {MAIL_VARIABLE_TOKENS.map((token) => (
+                      <Button key={`asunto-${token}`} type="button" variant="outline" size="sm" className="h-7 px-2 text-xs" onClick={() => appendTemplateToken("asunto", token)}>
+                        {token}
+                      </Button>
+                    ))}
+                  </div>
                 </div>
                 <div className="space-y-1.5">
                   <Label htmlFor="bodyText">Cuerpo (texto)</Label>
                   <Textarea id="bodyText" rows={6} {...form.register("bodyText")} placeholder="Hola {{display_name}}, gracias por agendar..." />
+                  <div className="flex flex-wrap gap-1">
+                    {MAIL_VARIABLE_TOKENS.map((token) => (
+                      <Button key={`body-${token}`} type="button" variant="outline" size="sm" className="h-7 px-2 text-xs" onClick={() => appendTemplateToken("bodyText", token)}>
+                        {token}
+                      </Button>
+                    ))}
+                  </div>
                 </div>
                 <div className="space-y-1.5">
                   <Label htmlFor="bodyHtml">
                     Cuerpo (HTML) <span className="text-xs text-muted-foreground">(opcional)</span>
                   </Label>
                   <Textarea id="bodyHtml" rows={6} {...form.register("bodyHtml")} placeholder="<p>Hola...</p>" />
+                  <div className="flex flex-wrap gap-1">
+                    {MAIL_VARIABLE_TOKENS.map((token) => (
+                      <Button key={`html-${token}`} type="button" variant="outline" size="sm" className="h-7 px-2 text-xs" onClick={() => appendTemplateToken("bodyHtml", token)}>
+                        {token}
+                      </Button>
+                    ))}
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Para imágenes usa URL pública: <code>{`<img src=\"https://...\" alt=\"...\" />`}</code>.
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    Variables disponibles: <code>{"{{nombre}}"}</code>, <code>{"{{empresa}}"}</code>,{" "}
+                    <code>{"{{email}}"}</code>, <code>{"{{telefono}}"}</code>, <code>{"{{segmento}}"}</code>.
+                  </p>
                 </div>
               </div>
             )}

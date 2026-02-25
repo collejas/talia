@@ -43,6 +43,7 @@ export type ProspeccionCanalConfigInput = {
   template_id?: string
   subject?: string | null
   body?: string | null
+  body_html?: string | null
   message?: string | null
   programado_en?: string | null
   metadata?: Record<string, unknown>
