@@ -76,3 +76,18 @@ Para cambios nuevos:
 - Logo de correo con estilo por defecto de `5/6` del cuerpo (`width:83.333%`, alto proporcional).
 - Imágenes en HTML de correo envueltas con link a `https://talia.mx/` con UTM + `kw` para atribución.
 - Carga de logos desde `settings/formato-cotizacion` corregida (insert con `organizacion_id` y compatibilidad RLS).
+
+## 9) Diseño acordado · Campañas + embudo actual (sin nueva vista)
+
+- Se mantiene una sola vista de embudo (la existente); no se creará un embudo “de prospección” separado.
+- El envío desde `prospeccion/prospectos` debe quedar siempre atribuido a campaña:
+  - `campana_id` obligatorio en modal de envío.
+  - opción de crear campaña rápida desde el mismo modal.
+- Trazabilidad mínima por envío:
+  - `campana_id`, `batch_id`, `prospecto_id`, `canal`, `template_id`.
+- Conversión al embudo actual:
+  - cuando se crea/actualiza oportunidad, conservar metadata de atribución de campaña/lote/canal.
+- Medición de impacto por campaña:
+  - correo: clics/sesiones por links con UTM + ids técnicos.
+  - whatsapp: respuestas entrantes vinculadas a campaña/lote origen.
+  - cierre comercial: oportunidad creada/ganada en el embudo actual.

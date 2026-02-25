@@ -32,6 +32,17 @@ Este archivo sirve para capturar próximos requerimientos sin mezclar historial 
     - envío libre sin plantilla (`asunto` + `cuerpo`) con variables.
   - Fase 2 (evolutiva): integrar catálogo/sync de plantillas vía API de Brevo (lectura/gestión desde app).
   - Medición y estadísticas: persistir y mostrar en app eventos de Brevo (enviado, entregado, primera apertura, aperturas, clics, rebotes, bloqueado, spam, unsubscribe, error).
+ - Atribución por campaña sin nueva pantalla de embudo:
+   - En `prospeccion/prospectos`, `campana_id` obligatorio al enviar (correo/whatsapp/llamada).
+   - Regla de no bloqueo para inbox general:
+     - La validación de `campana_id` aplica solo a envíos de prospección iniciados desde `prospeccion/prospectos` (`source=prospeccion`).
+     - Mensajes entrantes de WhatsApp fuera de prospección (`prospeccion_mode=false` o sin metadata de origen prospección) no deben bloquearse por falta de campaña.
+   - Desde el modal de envío, soportar `+ Campaña rápida` (crear campaña mínima sin salir de la vista).
+   - Persistir `campana_id` y `batch_id` en lote/envíos/logs para trazabilidad completa.
+   - Reusar embudo actual (sin crear embudo nuevo): oportunidad/tarjeta debe conservar metadata de atribución (`campana_id`, `batch_id`, `prospeccion_canal`, `template_id`).
+   - Correo: links con UTM + ids de atribución (`campaign_id`, `batch_id`, `prospecto_id`) para medir sesiones/clics.
+   - WhatsApp: respuestas entrantes vinculadas a envío/lote/campaña de origen.
+   - Reporte en `prospeccion/campanas` con métricas por campaña: enviados, respuestas, clics web, oportunidades creadas y cerradas.
 
 4. Operación
 - Alertas automáticas de fallos por canal.

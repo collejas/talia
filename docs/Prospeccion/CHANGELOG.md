@@ -90,3 +90,6 @@ Formato recomendado por entrada:
   - Nota de compatibilidad de cliente de correo:
     - SVG no es confiable en varios clientes; para logo se recomienda PNG/JPG.
     - Con imágenes remotas no se adjunta archivo; con inline CID algunos proveedores las muestran como adjunto.
+- Decisión de arquitectura comercial:
+  - Se reutiliza el embudo existente para medición de conversión (sin nueva pantalla de embudo de prospección).
+  - La atribución por campaña se concentrará en envíos/lotes y metadata de oportunidad.
