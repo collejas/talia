@@ -1531,6 +1531,7 @@ class ContactoTemplatePayload(BaseModel):
     cuerpo_html: str | None = Field(default=None, max_length=8000)
     metadata: dict[str, Any] | None = Field(default=None)
     activo: bool = Field(default=True)
+    campana_id: UUID | None = None
 
 
 class ContactoTemplateUpdatePayload(BaseModel):
@@ -1547,6 +1548,7 @@ class ContactoTemplateUpdatePayload(BaseModel):
     cuerpo_html: str | None = Field(default=None, max_length=8000)
     metadata: dict[str, Any] | None = Field(default=None)
     activo: bool | None = None
+    campana_id: UUID | None = None
 
 
 class ProspeccionCampanaQuery(BaseModel):
@@ -1729,6 +1731,7 @@ class ContactTemplateQuery(BaseModel):
     """Filtros simples para listar plantillas."""
 
     canal: Literal["correo", "whatsapp", "llamada", ""] | None = Field(default=None)
+    campana_id: UUID | None = Field(default=None)
 
 
 class ProspectoAuditEntryResponse(BaseModel):
@@ -12512,7 +12515,19 @@ async def listar_contacto_templates(
         )
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
-    if not params.canal or params.canal == "whatsapp":
+    if params.campana_id:
+        campana_key = str(params.campana_id)
+        filtered_items: list[dict[str, Any]] = []
+        for item in items:
+            if not isinstance(item, dict):
+                continue
+            metadata = item.get("metadata") if isinstance(item.get("metadata"), dict) else {}
+            linked = _clean_text(metadata.get("campana_id"))
+            if linked == campana_key:
+                filtered_items.append(item)
+        items = filtered_items
+
+    if (not params.canal or params.canal == "whatsapp") and not params.campana_id:
         runtime_settings = await tenant_runtime.get_whatsapp_runtime_settings(organizacion_id=organizacion_id)
         twilio_runtime = await tenant_runtime.get_twilio_runtime_settings(organizacion_id=organizacion_id)
         runtime_sids = runtime_settings.prospeccion_template_sids
@@ -12650,7 +12665,13 @@ async def crear_contacto_template(
     user_token: str = Depends(require_user_token),
     payload: ContactoTemplatePayload,
 ) -> dict[str, Any]:
-    body = _build_contact_template_payload(payload.model_dump(), include_metadata=True)
+    raw = payload.model_dump()
+    metadata = _ensure_dict(raw.get("metadata"), default={})
+    if payload.campana_id:
+        metadata["campana_id"] = str(payload.campana_id)
+    raw["metadata"] = metadata
+    raw.pop("campana_id", None)
+    body = _build_contact_template_payload(raw, include_metadata=True)
     try:
         template = await repo.create_contact_template(usuario_token=user_token, payload=body)
     except CRMRepositoryError as exc:
@@ -12670,6 +12691,14 @@ async def actualizar_contacto_template(
     raw_data = payload.model_dump(exclude_none=True)
     if not raw_data:
         raise HTTPException(status_code=400, detail="empty_update")
+    metadata_patch = _ensure_dict(raw_data.get("metadata"), default={}) if "metadata" in raw_data else {}
+    if "campana_id" in raw_data:
+        campana_raw = raw_data.pop("campana_id")
+        if campana_raw:
+            metadata_patch["campana_id"] = str(campana_raw)
+        else:
+            metadata_patch["campana_id"] = None
+        raw_data["metadata"] = metadata_patch
     body = _build_contact_template_payload(raw_data)
     try:
         template = await repo.update_contact_template(

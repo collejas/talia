@@ -794,9 +794,13 @@ export async function listProspectoAudit(
   return requestJson(url.toString())
 }
 
-export async function listContactoTemplates(params: { canal?: "correo" | "whatsapp" | "llamada" } = {}) {
+export async function listContactoTemplates(params: {
+  canal?: "correo" | "whatsapp" | "llamada"
+  campana_id?: string
+} = {}) {
   const url = buildClientUrl("/api/prospeccion/contacto/templates")
   if (params.canal) url.searchParams.set("canal", params.canal)
+  if (params.campana_id?.trim()) url.searchParams.set("campana_id", params.campana_id.trim())
   return requestJson<{ ok: boolean; items: ContactoTemplate[] }>(url.toString())
 }
 

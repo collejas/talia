@@ -1229,11 +1229,16 @@ useEffect(() => {
     if (!contactDialogOpen) {
       return
     }
+    if (!contactCampaignId) {
+      setTemplates([])
+      setTemplatesLoading(false)
+      return
+    }
     let active = true
     setTemplatesLoading(true)
     ;(async () => {
       try {
-        const response = await listContactoTemplates()
+        const response = await listContactoTemplates({ campana_id: contactCampaignId })
         if (!active) return
         setTemplates(response.items ?? [])
       } catch {
@@ -1245,7 +1250,7 @@ useEffect(() => {
     return () => {
       active = false
     }
-  }, [contactDialogOpen])
+  }, [contactDialogOpen, contactCampaignId])
 
   useEffect(() => {
     if (!formDialogOpen) {

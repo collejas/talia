@@ -207,14 +207,12 @@ export function ProspeccionCampaignWizard({
     }
     setError(null)
     setListasLoading(true)
-    setTemplatesLoading(true)
     setCampanasLoading(true)
     void Promise.all([
       listProspeccionListas({ limit: 50 }),
-      listContactoTemplates(),
       listCrmCampaigns(),
     ])
-      .then(([listasResponse, templatesResponse, campanasResponse]) => {
+      .then(([listasResponse, campanasResponse]) => {
         if (listasResponse?.items) {
           setListas(listasResponse.items)
           if (!listasResponse.items.length) {
@@ -227,9 +225,6 @@ export function ProspeccionCampaignWizard({
             const firstLista = listasResponse.items[0]
             return firstLista ? firstLista.id : prev
           })
-        }
-        if (templatesResponse?.items) {
-          setTemplates(templatesResponse.items)
         }
         if (Array.isArray(campanasResponse)) {
           setCampanas(campanasResponse)
@@ -248,10 +243,24 @@ export function ProspeccionCampaignWizard({
       })
       .finally(() => {
         setListasLoading(false)
-        setTemplatesLoading(false)
         setCampanasLoading(false)
       })
   }, [open, preset, presetApplied, resetState])
+
+  useEffect(() => {
+    if (!open) return
+    setTemplatesLoading(true)
+    void listContactoTemplates(campanaId ? { campana_id: campanaId } : {})
+      .then((response) => {
+        setTemplates(Array.isArray(response?.items) ? response.items : [])
+      })
+      .catch(() => {
+        setTemplates([])
+      })
+      .finally(() => {
+        setTemplatesLoading(false)
+      })
+  }, [open, campanaId])
 
   useEffect(() => {
     if (!campanaId) return
