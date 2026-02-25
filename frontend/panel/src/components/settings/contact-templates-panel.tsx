@@ -59,6 +59,7 @@ type TemplateFormValues = {
 
 const MAIL_VARIABLE_TOKENS = ["{{nombre}}", "{{empresa}}", "{{email}}", "{{telefono}}", "{{segmento}}", "{{logo_url}}"]
 const LEGACY_LOGO_PLACEHOLDER_REGEX = /{{\s*DATA:IMAGE:[^}]+}}/gi
+const EMAIL_LOGO_IMG_STYLE = "width:83.333%;height:auto;display:block;margin:0 auto;"
 
 const EMPTY_FORM: TemplateFormValues = {
   nombre: "",
@@ -446,7 +447,7 @@ export function ContactTemplatesPanel({
       const currentHtml = String(form.getValues("bodyHtml") ?? "").trim()
       const htmlFocused = typeof document !== "undefined" && document.activeElement === mailFieldRefs.current.bodyHtml
       if (htmlFocused || currentHtml) {
-        appendTemplateToken("bodyHtml", '<img src="{{logo_url}}" alt="Logo" style="max-width:180px;height:auto;" />')
+        appendTemplateToken("bodyHtml", `<img src="{{logo_url}}" alt="Logo" style="${EMAIL_LOGO_IMG_STYLE}" />`)
       }
     },
     [appendTemplateToken, form, setSelectedLogoUrl],

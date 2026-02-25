@@ -27,6 +27,7 @@ logger = get_logger("prospeccion.contact_sender")
 DEFAULT_BACKOFF_SECONDS: tuple[int, ...] = (30, 120, 300, 600)
 PLACEHOLDER_PATTERN = re.compile(r"{{\s*([\w\.-]+)\s*}}")
 LEGACY_IMAGE_PLACEHOLDER_PATTERN = re.compile(r"{{\s*DATA:IMAGE:[^}]+}}", re.IGNORECASE)
+EMAIL_LOGO_IMG_STYLE = "width:83.333%;height:auto;display:block;margin:0 auto;"
 
 
 @dataclass(slots=True)
@@ -146,7 +147,7 @@ def _build_basic_html_from_text(*, body_text: str, logo_url: str | None = None) 
     if logo_url:
         safe_logo_url = html_lib.escape(logo_url, quote=True)
         escaped_logo = html_lib.escape(logo_url)
-        logo_tag = f'<img src="{safe_logo_url}" alt="Logo" style="max-width:180px;height:auto;" />'
+        logo_tag = f'<img src="{safe_logo_url}" alt="Logo" style="{EMAIL_LOGO_IMG_STYLE}" />'
         if escaped_logo in escaped:
             escaped = escaped.replace(escaped_logo, logo_tag)
         else:

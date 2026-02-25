@@ -195,6 +195,8 @@ function hasEmailLogoPlaceholder(input: string): boolean {
   return LOGO_PLACEHOLDER_REGEX.test(input) || /{{\s*DATA:IMAGE:[^}]+}}/i.test(input)
 }
 
+const EMAIL_LOGO_IMG_STYLE = "width:83.333%;height:auto;display:block;margin:0 auto;"
+
 type ProspectoFormState = {
   displayName: string
   actividad: string
@@ -1915,7 +1917,7 @@ useEffect(() => {
       const htmlFocused = typeof document !== "undefined" && document.activeElement === correoHtmlRef.current
       const hasHtmlContent = Boolean(contactForm.correoHtml.trim())
       if (htmlFocused || hasHtmlContent) {
-        const token = '<img src="{{logo_url}}" alt="Logo" style="max-width:180px;height:auto;" />'
+        const token = `<img src="{{logo_url}}" alt="Logo" style="${EMAIL_LOGO_IMG_STYLE}" />`
         appendCorreoToken("correoHtml", token)
       }
     },

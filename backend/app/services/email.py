@@ -222,12 +222,28 @@ def _send_email_brevo(
     for attachment in attachments:
         content = _prepare_attachment_content(attachment)
         filename = str(attachment.get("filename") or "adjunto")
-        attachments_payload.append(
-            {
-                "name": filename,
-                "content": base64.b64encode(content).decode("ascii"),
-            }
-        )
+        encoded_content = base64.b64encode(content).decode("ascii")
+        headers_map = attachment.get("headers")
+        content_id: str | None = None
+        if isinstance(headers_map, dict):
+            raw_content_id = headers_map.get("Content-ID") or headers_map.get("Content-Id")
+            if raw_content_id is not None:
+                content_id = str(raw_content_id).strip().strip("<>")
+        if content_id:
+            attachments_payload.append(
+                {
+                    "name": filename,
+                    "content": encoded_content,
+                    "contentId": content_id,
+                }
+            )
+        else:
+            attachments_payload.append(
+                {
+                    "name": filename,
+                    "content": encoded_content,
+                }
+            )
     if attachments_payload:
         payload["attachment"] = attachments_payload
 
