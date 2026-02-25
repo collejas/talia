@@ -143,6 +143,73 @@ async def _sync_inbound_to_prospeccion_log(
             error=str(exc),
         )
         return False
+    envio: dict[str, Any] | None = None
+    if not prospecto:
+        normalized_from = _normalize_phone_number(message.from_number)
+        candidates: list[str] = []
+        if normalized_from:
+            candidates.append(normalized_from)
+            if normalized_from.startswith("+"):
+                candidates.append(normalized_from[1:])
+        for phone_candidate in candidates:
+            try:
+                envio = await repo.worker_get_latest_envio_by_phone(
+                    phone_e164=phone_candidate,
+                    canal="whatsapp",
+                )
+            except CRMRepositoryError as exc:
+                log_event(
+                    logger,
+                    "whatsapp.prospeccion_reply_envio_phone_lookup_failed",
+                    contact_id=contact_id,
+                    phone=phone_candidate,
+                    error=str(exc),
+                )
+                continue
+            if not envio:
+                continue
+            envio_prospecto_id = envio.get("prospecto_id")
+            if not envio_prospecto_id:
+                continue
+            prospecto = {"id": envio_prospecto_id}
+            log_event(
+                logger,
+                "whatsapp.prospeccion_reply_context_resolved_by_phone",
+                contact_id=contact_id,
+                phone=phone_candidate,
+                prospecto_id=str(envio_prospecto_id),
+                envio_id=str(envio.get("id")) if envio.get("id") else None,
+            )
+            break
+    if not prospecto:
+        normalized_from = _normalize_phone_number(message.from_number)
+        phone_candidates: list[str] = []
+        if normalized_from:
+            phone_candidates.append(normalized_from)
+            if normalized_from.startswith("+"):
+                phone_candidates.append(normalized_from[1:])
+        for phone_candidate in phone_candidates:
+            try:
+                prospecto = await repo.worker_find_latest_prospecto_by_phone(phone=phone_candidate)
+            except CRMRepositoryError as exc:
+                log_event(
+                    logger,
+                    "whatsapp.prospeccion_reply_prospect_phone_lookup_failed",
+                    contact_id=contact_id,
+                    phone=phone_candidate,
+                    error=str(exc),
+                )
+                continue
+            if not prospecto:
+                continue
+            log_event(
+                logger,
+                "whatsapp.prospeccion_reply_context_resolved_by_prospect_phone",
+                contact_id=contact_id,
+                phone=phone_candidate,
+                prospecto_id=str(prospecto.get("id")) if prospecto.get("id") else None,
+            )
+            break
     if not prospecto:
         return False
 
@@ -154,19 +221,19 @@ async def _sync_inbound_to_prospeccion_log(
     except (TypeError, ValueError):
         return False
 
-    envio: dict[str, Any] | None = None
-    try:
-        envio = await repo.worker_get_latest_envio_for_prospecto(
-            prospecto_id=prospecto_uuid,
-            canal="whatsapp",
-        )
-    except CRMRepositoryError as exc:
-        log_event(
-            logger,
-            "whatsapp.prospeccion_reply_envio_lookup_failed",
-            prospecto_id=str(prospecto_id),
-            error=str(exc),
-        )
+    if envio is None:
+        try:
+            envio = await repo.worker_get_latest_envio_for_prospecto(
+                prospecto_id=prospecto_uuid,
+                canal="whatsapp",
+            )
+        except CRMRepositoryError as exc:
+            log_event(
+                logger,
+                "whatsapp.prospeccion_reply_envio_lookup_failed",
+                prospecto_id=str(prospecto_id),
+                error=str(exc),
+            )
 
     envio_id_value = envio.get("id") if envio else None
     batch_id_value = envio.get("batch_id") if envio else None
@@ -220,6 +287,13 @@ async def _sync_inbound_to_prospeccion_log(
             "body": body_text,
         },
     }
+    organizacion_id_value = None
+    if envio and envio.get("organizacion_id"):
+        organizacion_id_value = envio.get("organizacion_id")
+    elif isinstance(prospecto, dict) and prospecto.get("organizacion_id"):
+        organizacion_id_value = prospecto.get("organizacion_id")
+    if organizacion_id_value:
+        log_entry["organizacion_id"] = str(organizacion_id_value)
     if envio_id_value:
         log_entry["envio_id"] = str(envio_id_value)
     if batch_id_value:
@@ -288,6 +362,11 @@ def _compact_whatsapp_reply(text: str | None, max_chars: int = _DEFAULT_WHATSAPP
     if len(compact) <= max_chars:
         return compact
     return compact[: max_chars - 1].rstrip() + "…"
+
+
+def _is_unknown_prompt_variable_error(exc: Exception) -> bool:
+    text = str(exc or "").lower()
+    return "prompt_variable_unknown" in text or "unknown prompt variables" in text
 
 
 async def _guard_booking_confirmation_claim(
@@ -942,6 +1021,9 @@ async def _sync_envio_status_from_whatsapp(callback: schemas.WhatsAppStatusCallb
         await repo.worker_insert_contact_logs(
             [
                 {
+                    "organizacion_id": (
+                        str(envio.get("organizacion_id")) if envio.get("organizacion_id") else None
+                    ),
                     "prospecto_id": (
                         str(envio.get("prospecto_id")) if envio.get("prospecto_id") else None
                     ),
@@ -1085,6 +1167,14 @@ async def _generate_assistant_reply(
     prospeccion_mode: bool = False,
 ) -> AssistantReply:
     assistant = _build_assistant_from_runtime(whatsapp_settings, prospeccion_mode=prospeccion_mode)
+    log_event(
+        logger,
+        "whatsapp.assistant_routing",
+        prospeccion_mode=prospeccion_mode,
+        prompt_id=assistant.prompt_id,
+        prompt_version=assistant.prompt_version,
+        assistant_id=assistant.assistant_id,
+    )
     client = openai_service.get_assistant_client(api_key=whatsapp_settings.voice_api_key)
     assistant_spec = None
     if not assistant.is_prompt:
@@ -1266,11 +1356,12 @@ async def _generate_assistant_reply(
             extra={"conversation_id": conversation_id, "error": str(exc)},
         )
 
+    prompt_variables: dict[str, Any] = {"conversacion_id": conversation_id}
+
     def _build_request_template(*, include_tools: bool = True) -> dict[str, Any]:
         if assistant.is_prompt:
-            variables = {"conversacion_id": conversation_id}
             return {
-                "prompt": build_prompt_payload(assistant, variables),
+                "prompt": build_prompt_payload(assistant, prompt_variables),
                 "text": {"format": {"type": "text"}},
             }
         if not assistant_spec:
@@ -1283,6 +1374,8 @@ async def _generate_assistant_reply(
         return payload
 
     request_kwargs.update(_build_request_template(include_tools=True))
+    if assistant.is_prompt:
+        request_kwargs.pop("temperature", None)
 
     if openai_conversation_id:
         request_kwargs["conversation"] = openai_conversation_id
@@ -1296,18 +1389,44 @@ async def _generate_assistant_reply(
         channel="whatsapp",
     )
 
-    result = await run_tool_loop(
-        client=client,
-        assistant=assistant,
-        assistant_spec=assistant_spec,
-        context=context_obj,
-        initial_request=request_kwargs,
-        request_template=lambda: _build_request_template(include_tools=True),
-        execute_tool=whatsapp_tools.execute_tool,
-        openai_conversation_id=openai_conversation_id,
-        previous_response_id=previous_response_id,
-        log=logger,
-    )
+    try:
+        result = await run_tool_loop(
+            client=client,
+            assistant=assistant,
+            assistant_spec=assistant_spec,
+            context=context_obj,
+            initial_request=request_kwargs,
+            request_template=lambda: _build_request_template(include_tools=True),
+            execute_tool=whatsapp_tools.execute_tool,
+            openai_conversation_id=openai_conversation_id,
+            previous_response_id=previous_response_id,
+            log=logger,
+        )
+    except Exception as exc:
+        if assistant.is_prompt and prompt_variables and _is_unknown_prompt_variable_error(exc):
+            log_event(
+                logger,
+                "whatsapp.prompt_variables_retry_without_variables",
+                conversation_id=conversation_id,
+                prompt_id=assistant.prompt_id,
+                prompt_version=assistant.prompt_version,
+            )
+            prompt_variables = {}
+            request_kwargs.update(_build_request_template(include_tools=True))
+            result = await run_tool_loop(
+                client=client,
+                assistant=assistant,
+                assistant_spec=assistant_spec,
+                context=context_obj,
+                initial_request=request_kwargs,
+                request_template=lambda: _build_request_template(include_tools=True),
+                execute_tool=whatsapp_tools.execute_tool,
+                openai_conversation_id=openai_conversation_id,
+                previous_response_id=previous_response_id,
+                log=logger,
+            )
+        else:
+            raise
 
     reply_text = _extract_text_from_response(result.response)
     final_text = reply_text
@@ -1333,6 +1452,8 @@ async def _generate_assistant_reply(
         "tool_choice": "none",
     }
     followup_kwargs.update(_build_request_template(include_tools=False))
+    if assistant.is_prompt:
+        followup_kwargs.pop("temperature", None)
     if result.conversation_id:
         followup_kwargs["conversation"] = result.conversation_id
     elif result.response_id:
@@ -1349,12 +1470,34 @@ async def _generate_assistant_reply(
             or result.conversation_id
         )
     except Exception as exc:  # pragma: no cover - tolerante a falla de red/SDK
-        logger.warning(
-            "whatsapp.concise_reply_generation_failed",
-            extra={"conversation_id": conversation_id, "error": str(exc)},
-        )
-        final_response_id = result.response_id
-        final_conversation_id = result.conversation_id
+        if assistant.is_prompt and prompt_variables and _is_unknown_prompt_variable_error(exc):
+            prompt_variables = {}
+            try:
+                followup_kwargs.update(_build_request_template(include_tools=False))
+                final_response = await client.responses.create(**followup_kwargs)
+                final_response_dict = final_response.model_dump()
+                followup_text = _extract_text_from_response(final_response_dict)
+                if followup_text:
+                    final_text = followup_text
+                final_response_id = final_response_dict.get("id") or result.response_id
+                final_conversation_id = (
+                    (final_response_dict.get("conversation") or {}).get("id")
+                    or result.conversation_id
+                )
+            except Exception as retry_exc:
+                logger.warning(
+                    "whatsapp.concise_reply_generation_failed",
+                    extra={"conversation_id": conversation_id, "error": str(retry_exc)},
+                )
+                final_response_id = result.response_id
+                final_conversation_id = result.conversation_id
+        else:
+            logger.warning(
+                "whatsapp.concise_reply_generation_failed",
+                extra={"conversation_id": conversation_id, "error": str(exc)},
+            )
+            final_response_id = result.response_id
+            final_conversation_id = result.conversation_id
 
     return AssistantReply(
         text=final_text.strip() if final_text else None,
@@ -1726,7 +1869,7 @@ def _build_assistant_from_runtime(
         return AssistantConfig(
             assistant_id=None,
             prompt_id=settings_values.prospeccion_prompt_id,
-            prompt_version=settings_values.prompt_version,
+            prompt_version=settings_values.prospeccion_prompt_version or settings_values.prompt_version,
             project_id=settings.openai_project_id,
         )
     if settings_values.prompt_id:

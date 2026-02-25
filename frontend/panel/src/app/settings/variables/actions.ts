@@ -676,6 +676,7 @@ export async function updateWhatsAppSettingsAction(_: CrudActionState, formData:
     const templateCancel = getText(formData, "whatsapp_template_cancel")
     const templateProspeccionRaw = getText(formData, "whatsapp_template_prospeccion_sids")
     const prospeccionPromptId = getText(formData, "whatsapp_prospeccion_prompt_id")
+    const prospeccionPromptVersion = getText(formData, "whatsapp_prospeccion_prompt_version")
 
     const whatsappPatch: Record<string, unknown> = {}
     if (promptId) whatsappPatch.prompt_id = promptId
@@ -701,6 +702,7 @@ export async function updateWhatsAppSettingsAction(_: CrudActionState, formData:
     }
     const prospeccionPatch: Record<string, unknown> = {}
     if (prospeccionPromptId) prospeccionPatch.prompt_id = prospeccionPromptId
+    if (prospeccionPromptVersion) prospeccionPatch.prompt_version = prospeccionPromptVersion
     if (Object.keys(prospeccionPatch).length) {
       whatsappPatch.prospeccion = prospeccionPatch
     }

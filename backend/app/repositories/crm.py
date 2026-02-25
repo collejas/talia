@@ -8506,6 +8506,33 @@ class CRMRepository:
             raise CRMRepositoryError(f"worker_find_prospecto_by_contacto_invalid:{row!r}")
         return row
 
+    async def worker_find_latest_prospecto_by_phone(
+        self,
+        *,
+        phone: str,
+    ) -> dict[str, Any] | None:
+        """Resuelve un prospecto por teléfono normalizado."""
+
+        trimmed = phone.strip() if isinstance(phone, str) else ""
+        if not trimmed:
+            return None
+        resp = await self._request(
+            "GET",
+            "/rest/v1/prospeccion_prospectos",
+            params={
+                "phone": f"eq.{trimmed}",
+                "order": "actualizado_en.desc.nullslast,creado_en.desc",
+                "limit": "1",
+            },
+        )
+        data = resp.json() or []
+        if not isinstance(data, list) or not data:
+            return None
+        row = data[0]
+        if not isinstance(row, dict):
+            raise CRMRepositoryError(f"worker_find_latest_prospecto_by_phone_invalid:{row!r}")
+        return row
+
     async def worker_get_latest_envio_for_prospecto(
         self,
         *,
@@ -8532,6 +8559,37 @@ class CRMRepository:
         row = data[0]
         if not isinstance(row, dict):
             raise CRMRepositoryError(f"worker_get_latest_envio_for_prospecto_invalid:{row!r}")
+        return row
+
+    async def worker_get_latest_envio_by_phone(
+        self,
+        *,
+        phone_e164: str,
+        canal: str | None = None,
+    ) -> dict[str, Any] | None:
+        """Obtiene el envío más reciente buscando por teléfono persistido en detalle->phone."""
+
+        trimmed = phone_e164.strip() if isinstance(phone_e164, str) else ""
+        if not trimmed:
+            return None
+        params: dict[str, str] = {
+            "detalle->>phone": f"eq.{trimmed}",
+            "order": "procesado_en.desc.nullslast,creado_en.desc",
+            "limit": "1",
+        }
+        if canal:
+            params["canal"] = f"eq.{canal.strip().lower()}"
+        resp = await self._request(
+            "GET",
+            "/rest/v1/prospeccion_contacto_envio",
+            params=params,
+        )
+        data = resp.json() or []
+        if not isinstance(data, list) or not data:
+            return None
+        row = data[0]
+        if not isinstance(row, dict):
+            raise CRMRepositoryError(f"worker_get_latest_envio_by_phone_invalid:{row!r}")
         return row
 
     async def worker_insert_contact_logs(self, entries: Sequence[dict[str, Any]]) -> None:

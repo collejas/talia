@@ -44,7 +44,7 @@ Formato recomendado por entrada:
 
 ### Operación/Notas
 - Se incorporaron badges/contexto de prospección y deep links de filtros en `/inbox`.
-- `Whats-Prosp` ahora soporta `whatsapp.prospeccion.prompt_id` en `settings/tenants` y `settings/variables`.
+- `Whats-Prosp` ahora soporta `whatsapp.prospeccion.prompt_id` y `whatsapp.prospeccion.prompt_version` en `settings/tenants` y `settings/variables`.
 - El runtime de WhatsApp enruta respuestas entrantes con contexto de prospección al prompt especializado (`whatsapp.prospeccion.prompt_id`).
 - `GET /crm/prospeccion/whatsapp/readiness` ahora reporta si existe `whatsapp.prospeccion.prompt_id` en runtime.
 - Ajustes de resolución de nombre de consulta para resultados DENUE.

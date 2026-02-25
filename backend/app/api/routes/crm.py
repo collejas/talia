@@ -12514,6 +12514,7 @@ async def prospeccion_whatsapp_readiness(
     has_twilio_phone_number = bool(_clean_text(twilio_runtime.phone_number))
     has_runtime_sales_template = bool(_clean_text(whatsapp_runtime.sales_template_sid))
     has_prospeccion_prompt_id = bool(_clean_text(whatsapp_runtime.prospeccion_prompt_id))
+    has_prospeccion_prompt_version = bool(_clean_text(whatsapp_runtime.prospeccion_prompt_version))
 
     try:
         whatsapp_templates = await repo.list_contact_templates(
@@ -12537,6 +12538,7 @@ async def prospeccion_whatsapp_readiness(
         "twilio_phone_number": has_twilio_phone_number,
         "whatsapp_template_source": has_template_source,
         "whatsapp_prospeccion_prompt_id": has_prospeccion_prompt_id,
+        "whatsapp_prospeccion_prompt_version": has_prospeccion_prompt_version,
     }
     missing: list[str] = []
     if not has_twilio_account_sid:
@@ -12549,10 +12551,13 @@ async def prospeccion_whatsapp_readiness(
         missing.append("whatsapp.templates.sales or template.metadata.twilio_content_sid")
     if not has_prospeccion_prompt_id:
         missing.append("whatsapp.prospeccion.prompt_id")
+    if not has_prospeccion_prompt_version:
+        missing.append("whatsapp.prospeccion.prompt_version")
 
     details = {
         "runtime_sales_template_sid": whatsapp_runtime.sales_template_sid,
         "runtime_prospeccion_prompt_id": whatsapp_runtime.prospeccion_prompt_id,
+        "runtime_prospeccion_prompt_version": whatsapp_runtime.prospeccion_prompt_version,
         "whatsapp_templates_total": len(whatsapp_templates),
         "whatsapp_templates_with_twilio_sid": templates_with_twilio_sid,
     }

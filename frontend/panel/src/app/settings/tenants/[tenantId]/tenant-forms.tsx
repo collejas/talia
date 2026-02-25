@@ -403,6 +403,7 @@ type WhatsAppInitialValues = {
   whatsapp_template_cancel?: string
   whatsapp_template_prospeccion_sids?: string
   whatsapp_prospeccion_prompt_id?: string
+  whatsapp_prospeccion_prompt_version?: string
 }
 
 type MessengerInitialValues = {
@@ -1708,7 +1709,10 @@ export function TenantWhatsAppProspeccionSettings({
   initialValues,
 }: {
   tenantId: string
-  initialValues: Pick<WhatsAppInitialValues, "whatsapp_template_prospeccion_sids" | "whatsapp_prospeccion_prompt_id">
+  initialValues: Pick<
+    WhatsAppInitialValues,
+    "whatsapp_template_prospeccion_sids" | "whatsapp_prospeccion_prompt_id" | "whatsapp_prospeccion_prompt_version"
+  >
 }) {
   const actions = useTenantSettingsActions()
   const [state, formAction] = useActionState(actions.updateWhatsAppSettingsAction, INITIAL_CRUD_STATE)
@@ -1727,6 +1731,18 @@ export function TenantWhatsAppProspeccionSettings({
           />
           <p className="text-xs text-muted-foreground">
             Se guarda en <code>organizaciones.config.whatsapp.prospeccion.prompt_id</code>.
+          </p>
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="whatsapp_prospeccion_prompt_version">Prompt version (prospección)</Label>
+          <Input
+            id="whatsapp_prospeccion_prompt_version"
+            name="whatsapp_prospeccion_prompt_version"
+            placeholder="1"
+            defaultValue={initialValues.whatsapp_prospeccion_prompt_version ?? ""}
+          />
+          <p className="text-xs text-muted-foreground">
+            Se guarda en <code>organizaciones.config.whatsapp.prospeccion.prompt_version</code>.
           </p>
         </div>
         <div className="space-y-2">

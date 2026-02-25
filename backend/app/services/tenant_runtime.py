@@ -747,6 +747,7 @@ class WhatsappRuntimeSettings:
     appointment_template_sid: str | None
     cancel_template_sid: str | None
     prospeccion_prompt_id: str | None
+    prospeccion_prompt_version: str | None
     prospeccion_template_sids: list[str]
     project_id: str | None
     voice_model: str | None
@@ -768,6 +769,7 @@ class WhatsappRuntimeSettings:
             appointment_template_sid=settings.whatsapp_sales_appointment_template_sid,
             cancel_template_sid=settings.whatsapp_sales_cancel_appointment_template_sid,
             prospeccion_prompt_id=None,
+            prospeccion_prompt_version=None,
             prospeccion_template_sids=[],
             project_id=settings.openai_project_id,
             voice_model=settings.openai_model,
@@ -838,6 +840,9 @@ async def get_whatsapp_runtime_settings(
     prospeccion_prompt_id = _coerce_str_or_none(prospeccion_cfg.get("prompt_id"))
     if prospeccion_prompt_id is not None:
         settings_payload.prospeccion_prompt_id = prospeccion_prompt_id
+    prospeccion_prompt_version = _coerce_str_or_none(prospeccion_cfg.get("prompt_version"))
+    if prospeccion_prompt_version is not None:
+        settings_payload.prospeccion_prompt_version = prospeccion_prompt_version
     prospeccion_templates_raw = templates.get("prospeccion")
     prospeccion_templates: list[str] = []
     if isinstance(prospeccion_templates_raw, list):

@@ -46,7 +46,7 @@ Por cada cambio nuevo:
 - Inbox con filtros de origen/canal/lote/campaña + deep links.
 - `prospeccion/denue-busqueda`: guardar como prospectos ahora pide `Segmento` en modal y lo persiste en `prospeccion_prospectos.segmento`.
 - `settings/tenants` y `settings/variables`: nueva pestaña `Whats-Prosp` para guardar múltiples SIDs en `whatsapp.templates.prospeccion`.
-- `settings/tenants` y `settings/variables`: soporte para `whatsapp.prospeccion.prompt_id` en pestaña `Whats-Prosp`.
+- `settings/tenants` y `settings/variables`: soporte para `whatsapp.prospeccion.prompt_id` y `whatsapp.prospeccion.prompt_version` en pestaña `Whats-Prosp`.
 - Modal `prospeccion/prospectos`:
   - consume plantillas Whats-Prosp desde config tenant.
   - muestra nombre/SID y preview real de plantilla Twilio Content.

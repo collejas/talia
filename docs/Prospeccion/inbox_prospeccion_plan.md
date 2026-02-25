@@ -92,7 +92,7 @@ Resultado esperado:
 - [x] Política de envío en frío:
   - Ajuste para evitar omisión por `whatsapp_no_permitido` cuando el envío proviene de lote de prospección en frío.
 - [x] Assistant IA especializado en prospección (routing inicial):
-  - `settings/variables` y `settings/tenants` permiten guardar `whatsapp.prospeccion.prompt_id` en pestaña `Whats-Prosp`.
+  - `settings/variables` y `settings/tenants` permiten guardar `whatsapp.prospeccion.prompt_id` y `whatsapp.prospeccion.prompt_version` en pestaña `Whats-Prosp`.
   - Runtime WhatsApp carga `whatsapp.prospeccion.prompt_id`.
   - En mensajes entrantes WhatsApp con contexto `source=prospeccion`, el backend usa el prompt de prospección.
   - Si no hay contexto de prospección, se mantiene el assistant/prompt operativo actual.
