@@ -131,6 +131,7 @@ def _find_blank_twilio_variables(variables: dict[str, str] | None) -> list[str]:
 
 def _build_contact_log_entry(
     *,
+    organizacion_id: Any | None = None,
     prospecto_id: Any,
     canal: str,
     estado: str,
@@ -145,6 +146,8 @@ def _build_contact_log_entry(
         "estado": estado,
         "detalle": detalle,
     }
+    if organizacion_id:
+        entry["organizacion_id"] = str(organizacion_id)
     if error:
         entry["error"] = error
     if batch_id:
@@ -655,6 +658,7 @@ class ProspeccionContactSender:
         metrics.increment(canal or "desconocido", update_payload["estado"])
 
         log_entry = _build_contact_log_entry(
+            organizacion_id=envio.get("organizacion_id"),
             prospecto_id=envio.get("prospecto_id"),
             canal=canal,
             estado=result.estado if update_payload["estado"] != "pendiente" else "reintento",

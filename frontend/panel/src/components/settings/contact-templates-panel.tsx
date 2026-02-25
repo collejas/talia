@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useMemo, useState, useTransition } from "react"
+import { useCallback, useMemo, useRef, useState, useTransition } from "react"
 import { Controller, useFieldArray, useForm } from "react-hook-form"
 import {
   IconAdjustments,
@@ -69,6 +69,16 @@ const EMPTY_FORM: TemplateFormValues = {
   activo: true,
   twilioSid: "",
   twilioVariables: [],
+}
+
+function toSlug(value: string): string {
+  return value
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "")
+    .slice(0, 160)
 }
 
 function sortTemplates(list: ContactTemplate[]): ContactTemplate[] {
@@ -191,6 +201,15 @@ export function ContactTemplatesPanel({
   const [feedback, setFeedback] = useState<StatusBanner>(null)
   const [pendingAction, setPendingAction] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
+  const mailFieldRefs = useRef<{
+    asunto: HTMLInputElement | null
+    bodyText: HTMLTextAreaElement | null
+    bodyHtml: HTMLTextAreaElement | null
+  }>({
+    asunto: null,
+    bodyText: null,
+    bodyHtml: null,
+  })
 
   const form = useForm<TemplateFormValues>({
     defaultValues: {
@@ -327,6 +346,9 @@ export function ContactTemplatesPanel({
   }
 
   const onSubmit = form.handleSubmit((values) => {
+    if (!values.slug.trim() && values.nombre.trim()) {
+      values.slug = toSlug(values.nombre)
+    }
     const validationError = validateForm(values)
     if (validationError) {
       setFeedback({ type: "error", message: validationError })
@@ -361,11 +383,28 @@ export function ContactTemplatesPanel({
   const appendTemplateToken = useCallback(
     (field: "asunto" | "bodyText" | "bodyHtml", token: string) => {
       const current = String(form.getValues(field) ?? "")
-      const separator =
-        field === "asunto"
-          ? (current && !/\s$/.test(current) ? " " : "")
-          : (current && !current.endsWith("\n") ? "\n" : "")
-      form.setValue(field, `${current}${separator}${token}`, { shouldDirty: true })
+      const input = mailFieldRefs.current[field]
+      if (!input) {
+        const separator =
+          field === "asunto"
+            ? (current && !/\s$/.test(current) ? " " : "")
+            : (current && !current.endsWith("\n") ? "\n" : "")
+        form.setValue(field, `${current}${separator}${token}`, { shouldDirty: true })
+        return
+      }
+      const start = input.selectionStart ?? current.length
+      const end = input.selectionEnd ?? current.length
+      const prefix = current.slice(0, start)
+      const suffix = current.slice(end)
+      const needsLeading =
+        field === "asunto" ? (prefix.length > 0 && !/\s$/.test(prefix) ? " " : "") : ""
+      const value = `${prefix}${needsLeading}${token}${suffix}`
+      const caret = prefix.length + needsLeading.length + token.length
+      form.setValue(field, value, { shouldDirty: true })
+      window.requestAnimationFrame(() => {
+        input.focus()
+        input.setSelectionRange(caret, caret)
+      })
     },
     [form],
   )
@@ -598,7 +637,20 @@ export function ContactTemplatesPanel({
                 </p>
                 <div className="space-y-1.5">
                   <Label htmlFor="asunto">Asunto</Label>
-                  <Input id="asunto" {...form.register("asunto")} placeholder="Seguimos con tu demo" />
+                  {(() => {
+                    const registerAsunto = form.register("asunto")
+                    return (
+                      <Input
+                        id="asunto"
+                        {...registerAsunto}
+                        ref={(element) => {
+                          registerAsunto.ref(element)
+                          mailFieldRefs.current.asunto = element
+                        }}
+                        placeholder="Seguimos con tu demo"
+                      />
+                    )
+                  })()}
                   <div className="flex flex-wrap gap-1">
                     {MAIL_VARIABLE_TOKENS.map((token) => (
                       <Button key={`asunto-${token}`} type="button" variant="outline" size="sm" className="h-7 px-2 text-xs" onClick={() => appendTemplateToken("asunto", token)}>
@@ -609,7 +661,21 @@ export function ContactTemplatesPanel({
                 </div>
                 <div className="space-y-1.5">
                   <Label htmlFor="bodyText">Cuerpo (texto)</Label>
-                  <Textarea id="bodyText" rows={6} {...form.register("bodyText")} placeholder="Hola {{display_name}}, gracias por agendar..." />
+                  {(() => {
+                    const registerBodyText = form.register("bodyText")
+                    return (
+                      <Textarea
+                        id="bodyText"
+                        rows={6}
+                        {...registerBodyText}
+                        ref={(element) => {
+                          registerBodyText.ref(element)
+                          mailFieldRefs.current.bodyText = element
+                        }}
+                        placeholder="Hola {{display_name}}, gracias por agendar..."
+                      />
+                    )
+                  })()}
                   <div className="flex flex-wrap gap-1">
                     {MAIL_VARIABLE_TOKENS.map((token) => (
                       <Button key={`body-${token}`} type="button" variant="outline" size="sm" className="h-7 px-2 text-xs" onClick={() => appendTemplateToken("bodyText", token)}>
@@ -622,7 +688,21 @@ export function ContactTemplatesPanel({
                   <Label htmlFor="bodyHtml">
                     Cuerpo (HTML) <span className="text-xs text-muted-foreground">(opcional)</span>
                   </Label>
-                  <Textarea id="bodyHtml" rows={6} {...form.register("bodyHtml")} placeholder="<p>Hola...</p>" />
+                  {(() => {
+                    const registerBodyHtml = form.register("bodyHtml")
+                    return (
+                      <Textarea
+                        id="bodyHtml"
+                        rows={6}
+                        {...registerBodyHtml}
+                        ref={(element) => {
+                          registerBodyHtml.ref(element)
+                          mailFieldRefs.current.bodyHtml = element
+                        }}
+                        placeholder="<p>Hola...</p>"
+                      />
+                    )
+                  })()}
                   <div className="flex flex-wrap gap-1">
                     {MAIL_VARIABLE_TOKENS.map((token) => (
                       <Button key={`html-${token}`} type="button" variant="outline" size="sm" className="h-7 px-2 text-xs" onClick={() => appendTemplateToken("bodyHtml", token)}>

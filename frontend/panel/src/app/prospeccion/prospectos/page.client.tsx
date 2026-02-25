@@ -625,6 +625,9 @@ function ProspectosView() {
   const [contactDrawerOpen, setContactDrawerOpen] = useState(false)
   const [contactDrawerData, setContactDrawerData] = useState<ContactDrawerData | null>(null)
   const [contactIndicators, setContactIndicators] = useState<Record<string, ProspectoContactIndicators>>({})
+  const correoAsuntoRef = useRef<HTMLInputElement | null>(null)
+  const correoCuerpoRef = useRef<HTMLTextAreaElement | null>(null)
+  const correoHtmlRef = useRef<HTMLTextAreaElement | null>(null)
   const [historyDialogOpen, setHistoryDialogOpen] = useState(false)
   const [historyProspect, setHistoryProspect] = useState<ProspectoItem | null>(null)
   const [historyEntries, setHistoryEntries] = useState<ContactoEnvio[]>([])
@@ -1773,15 +1776,34 @@ useEffect(() => {
 
   const appendCorreoToken = useCallback(
     (field: "correoAsunto" | "correoCuerpo" | "correoHtml", token: string) => {
+      const fieldRef =
+        field === "correoAsunto" ? correoAsuntoRef.current : field === "correoCuerpo" ? correoCuerpoRef.current : correoHtmlRef.current
       setContactForm((prev) => {
         const current = prev[field] ?? ""
-        const separator =
-          field === "correoAsunto"
-            ? (current && !/\s$/.test(current) ? " " : "")
-            : (current && !current.endsWith("\n") ? "\n" : "")
+        if (!fieldRef) {
+          const separator =
+            field === "correoAsunto"
+              ? (current && !/\s$/.test(current) ? " " : "")
+              : (current && !current.endsWith("\n") ? "\n" : "")
+          return {
+            ...prev,
+            [field]: `${current}${separator}${token}`,
+          }
+        }
+        const start = fieldRef.selectionStart ?? current.length
+        const end = fieldRef.selectionEnd ?? current.length
+        const prefix = current.slice(0, start)
+        const suffix = current.slice(end)
+        const needsLeading = field === "correoAsunto" && prefix.length > 0 && !/\s$/.test(prefix) ? " " : ""
+        const nextValue = `${prefix}${needsLeading}${token}${suffix}`
+        const caret = prefix.length + needsLeading.length + token.length
+        window.requestAnimationFrame(() => {
+          fieldRef.focus()
+          fieldRef.setSelectionRange(caret, caret)
+        })
         return {
           ...prev,
-          [field]: `${current}${separator}${token}`,
+          [field]: nextValue,
         }
       })
     },
@@ -3218,6 +3240,7 @@ useEffect(() => {
                 <div className="space-y-1">
                   <Label>Asunto</Label>
                   <Input
+                    ref={correoAsuntoRef}
                     value={contactForm.correoAsunto}
                     onChange={(event) => setContactForm((prev) => ({ ...prev, correoAsunto: event.target.value }))}
                   />
@@ -3244,6 +3267,7 @@ useEffect(() => {
               <div className="space-y-1">
                 <Label>Cuerpo</Label>
                 <Textarea
+                  ref={correoCuerpoRef}
                   value={contactForm.correoCuerpo}
                   onChange={(event) => setContactForm((prev) => ({ ...prev, correoCuerpo: event.target.value }))}
                   rows={5}
@@ -3267,6 +3291,7 @@ useEffect(() => {
               <div className="space-y-1">
                 <Label>HTML (opcional)</Label>
                 <Textarea
+                  ref={correoHtmlRef}
                   value={contactForm.correoHtml}
                   onChange={(event) => setContactForm((prev) => ({ ...prev, correoHtml: event.target.value }))}
                   rows={6}
