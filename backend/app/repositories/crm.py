@@ -1917,7 +1917,7 @@ class CRMRepository:
             return opportunity_id
 
         select_columns = (
-            "id,metadata,asignado_a_usuario_id,etapa_id,estado,titulo,descripcion,"
+            "id,contacto_principal_id,metadata,asignado_a_usuario_id,etapa_id,estado,titulo,descripcion,"
             "monto_estimado,moneda,probabilidad,"
             "etapa:etapas_pipeline!oportunidades_etapa_org_fkey(codigo,categoria)"
         )
@@ -1974,6 +1974,98 @@ class CRMRepository:
                 channel=canal,
             )
             return result_id, False, restart_sequence
+
+        # Dedupe cross-contact: si existe oportunidad activa con el mismo teléfono,
+        # reutilizarla en lugar de crear una nueva.
+        contact_phone: str | None = None
+        try:
+            contact_row = await self.get_contact(
+                organizacion_id=organizacion_id,
+                contacto_id=contacto_id,
+            )
+        except CRMRepositoryError:
+            contact_row = None
+        if isinstance(contact_row, dict):
+            raw_phone = contact_row.get("telefono_e164")
+            if isinstance(raw_phone, str) and raw_phone.strip():
+                contact_phone = raw_phone.strip()
+        if contact_phone:
+            contacts_params = {
+                "organizacion_id": f"eq.{organizacion_id}",
+                "telefono_e164": f"eq.{contact_phone}",
+                "select": "id",
+                "limit": "25",
+            }
+            contacts_resp = await self._request("GET", "/rest/v1/contactos", params=contacts_params)
+            contacts_rows = contacts_resp.json() or []
+            related_contact_ids: list[str] = []
+            if isinstance(contacts_rows, list):
+                for row in contacts_rows:
+                    if not isinstance(row, dict):
+                        continue
+                    candidate = str(row.get("id") or "").strip()
+                    if not candidate:
+                        continue
+                    if candidate == str(contacto_id):
+                        continue
+                    related_contact_ids.append(candidate)
+            if related_contact_ids:
+                in_filter = ",".join(related_contact_ids)
+                by_phone_params = {
+                    "organizacion_id": f"eq.{organizacion_id}",
+                    "contacto_principal_id": f"in.({in_filter})",
+                    "select": select_columns,
+                    "order": "creado_en.desc",
+                    "limit": "25",
+                }
+                by_phone_resp = await self._request("GET", "/rest/v1/oportunidades", params=by_phone_params)
+                by_phone_rows = by_phone_resp.json() or []
+                if isinstance(by_phone_rows, list):
+                    for candidate in by_phone_rows:
+                        if not isinstance(candidate, dict):
+                            continue
+                        if _is_closed_opportunity(candidate):
+                            continue
+                        opportunity_id = _coerce_uuid(candidate.get("id"), field="opportunity_id")
+                        metadata = _merged_metadata(candidate.get("metadata"))
+                        current_assignee = candidate.get("asignado_a_usuario_id")
+                        assignee_uuid = (
+                            _coerce_uuid(current_assignee, field="asignado_a_usuario_id")
+                            if current_assignee
+                            else None
+                        )
+                        payload: dict[str, Any] = {"metadata": metadata}
+                        existing_contact_raw = candidate.get("contacto_principal_id")
+                        if str(existing_contact_raw or "") != str(contacto_id):
+                            payload["contacto_principal_id"] = str(contacto_id)
+                        params = {
+                            "id": f"eq.{opportunity_id}",
+                            "organizacion_id": f"eq.{organizacion_id}",
+                            "limit": "1",
+                        }
+                        await self._request(
+                            "PATCH",
+                            "/rest/v1/oportunidades",
+                            params=params,
+                            json=payload,
+                            prefer="return=representation",
+                        )
+                        restart_sequence = _coerce_positive_int(metadata.get("restart_sequence"), default=1)
+                        await self._set_conversation_restart_sequence(
+                            conversation_id=conversation_key,
+                            restart_sequence=restart_sequence,
+                        )
+                        await self._assign_sales_rep_if_needed(
+                            oportunidad_id=opportunity_id,
+                            organizacion_id=organizacion_id,
+                            current_assignee=assignee_uuid,
+                            conversation_id=conversation_id,
+                            contact_id=str(contacto_id),
+                            contact_ready=contact_ready,
+                            require_contact_ready=require_contact_ready,
+                            channel=canal,
+                        )
+                        return opportunity_id, False, restart_sequence
 
         # Buscar por contacto principal
         params = {
@@ -7580,13 +7672,21 @@ class CRMRepository:
         *,
         prospecto_id: UUID,
         metadata: dict[str, Any],
+        organizacion_id: UUID | None = None,
     ) -> dict[str, Any]:
+        params: dict[str, str] = {"id": f"eq.{prospecto_id}"}
+        payload: dict[str, Any] = {"metadata": metadata}
+        if organizacion_id:
+            params["organizacion_id"] = f"eq.{organizacion_id}"
+            # Algunos triggers de prospección requieren tenant explícito en updates worker.
+            payload["organizacion_id"] = str(organizacion_id)
         resp = await self._request(
             "PATCH",
             "/rest/v1/prospeccion_prospectos",
-            params={"id": f"eq.{prospecto_id}"},
-            json={"metadata": metadata},
+            params=params,
+            json=payload,
             prefer="return=representation",
+            organizacion_id=organizacion_id,
         )
         data = resp.json() or []
         if not isinstance(data, list) or not data:

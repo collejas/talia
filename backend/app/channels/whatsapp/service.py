@@ -343,6 +343,46 @@ async def _sync_inbound_to_prospeccion_log(
     return True
 
 
+async def _resolve_prospeccion_prospecto_id(
+    *,
+    repo: CRMRepository,
+    contact_id: str,
+    message: schemas.WhatsAppIncomingMessage,
+) -> UUID | None:
+    """Resuelve prospecto relacionado al inbound usando contacto o teléfono."""
+    try:
+        contact_uuid = UUID(contact_id)
+    except (TypeError, ValueError):
+        contact_uuid = None
+    if contact_uuid:
+        try:
+            by_contact = await repo.worker_find_prospecto_by_contacto(contacto_id=contact_uuid)
+        except CRMRepositoryError:
+            by_contact = None
+        prospecto_id = (by_contact or {}).get("id") if isinstance(by_contact, dict) else None
+        try:
+            return UUID(str(prospecto_id))
+        except (TypeError, ValueError):
+            pass
+    normalized_from = _normalize_phone_number(message.from_number)
+    if not normalized_from:
+        return None
+    candidates: list[str] = [normalized_from]
+    if normalized_from.startswith("+"):
+        candidates.append(normalized_from[1:])
+    for phone_candidate in candidates:
+        try:
+            by_phone = await repo.worker_find_latest_prospecto_by_phone(phone=phone_candidate)
+        except CRMRepositoryError:
+            continue
+        prospecto_id = (by_phone or {}).get("id") if isinstance(by_phone, dict) else None
+        try:
+            return UUID(str(prospecto_id))
+        except (TypeError, ValueError):
+            continue
+    return None
+
+
 def _looks_like_booking_confirmation(text: str) -> bool:
     normalized = str(text or "").strip().lower()
     if not normalized:
@@ -551,10 +591,47 @@ async def handle_incoming_message(
 
     restart_context: dict[str, Any] | None = None
     opportunity_ref: str | None = None
+    ensure_contact_id = contact_id
+    if repo:
+        prospecto_uuid = await _resolve_prospeccion_prospecto_id(
+            repo=repo,
+            contact_id=contact_id,
+            message=message,
+        )
+        if prospecto_uuid:
+            try:
+                prospecto_opportunity = await repo.worker_find_opportunity_by_prospecto(
+                    organizacion_id=org_uuid,
+                    prospecto_id=prospecto_uuid,
+                )
+            except CRMRepositoryError as exc:
+                log_event(
+                    logger,
+                    "whatsapp.prospeccion_existing_opportunity_lookup_failed",
+                    prospecto_id=str(prospecto_uuid),
+                    error=str(exc),
+                )
+                prospecto_opportunity = None
+            if isinstance(prospecto_opportunity, dict):
+                opportunity_ref = str(prospecto_opportunity.get("id") or "").strip() or None
+                prospect_contact_id = str(
+                    prospecto_opportunity.get("contacto_principal_id") or ""
+                ).strip()
+                if prospect_contact_id:
+                    ensure_contact_id = prospect_contact_id
+                    log_event(
+                        logger,
+                        "whatsapp.prospeccion_reuse_opportunity_contact",
+                        conversation_id=conversation_id,
+                        prospecto_id=str(prospecto_uuid),
+                        opportunity_id=opportunity_ref,
+                        contact_id=prospect_contact_id,
+                        inbound_contact_id=contact_id,
+                    )
     try:
         ensure_payload = await storage.ensure_conversation_opportunity(
             conversation_id=conversation_id,
-            contact_id=contact_id,
+            contact_id=ensure_contact_id,
             channel="whatsapp",
             include_restart_metadata=True,
         )
@@ -1326,6 +1403,23 @@ async def _generate_assistant_reply(
                     {
                         "type": "input_text",
                         "text": booking_context,
+                    }
+                ],
+            },
+        )
+        initial_input.insert(
+            4,
+            {
+                "role": "developer",
+                "content": [
+                    {
+                        "type": "input_text",
+                        "text": (
+                            "Si ya existe demo confirmada en el contexto, no reinicies calificación ni agenda. "
+                            "No vuelvas a pedir nombre/correo/empresa. "
+                            "Solo confirma y responde dudas puntuales; "
+                            "si el usuario quiere cambiar/cancelar, usa reschedule_demo o cancel_demo."
+                        ),
                     }
                 ],
             },

@@ -849,6 +849,54 @@ def _build_schedule_prefilter_error_message(
     )
 
 
+def _is_prospeccion_opportunity(opportunity: dict[str, Any] | None) -> bool:
+    if not isinstance(opportunity, dict):
+        return False
+    metadata = opportunity.get("metadata")
+    if not isinstance(metadata, dict):
+        metadata = {}
+    if metadata.get("prospecto_id"):
+        return True
+    if metadata.get("prospeccion_canal"):
+        return True
+    source = str(metadata.get("source") or "").strip().lower()
+    return "prospe" in source
+
+
+def _missing_basic_contact_fields(contact: dict[str, Any] | None) -> list[str]:
+    if not isinstance(contact, dict):
+        return ["full_name", "email", "company_name"]
+    missing: list[str] = []
+    if not str(contact.get("nombre_completo") or "").strip():
+        missing.append("full_name")
+    if not str(contact.get("correo") or "").strip():
+        missing.append("email")
+    if not str(contact.get("company_name") or "").strip():
+        missing.append("company_name")
+    return missing
+
+
+def _build_contact_required_guidance(missing_fields: list[str]) -> str:
+    if not missing_fields:
+        return (
+            "Antes de agendar la demo falta un dato del contacto. "
+            "Haz una sola pregunta corta y vuelve a ejecutar schedule_demo."
+        )
+    first = missing_fields[0]
+    question_map = {
+        "full_name": "¿Me compartes tu nombre completo para la invitación?",
+        "email": "¿A qué correo te envío la invitación de la demo?",
+        "company_name": "¿Cuál es el nombre de tu empresa?",
+    }
+    question_text = question_map.get(first, "¿Me compartes ese dato para continuar?")
+    return (
+        "Antes de agendar la demo en prospección faltan datos básicos del contacto. "
+        f"Campo faltante: {first}. "
+        f"Haz una sola pregunta exacta al prospecto: {question_text} "
+        "Cuando responda, guarda el dato y vuelve a ejecutar schedule_demo con el mismo horario solicitado."
+    )
+
+
 async def _resolve_org_for_catalog(
     context: ToolRuntimeContext,
     arguments: dict[str, Any],
@@ -941,6 +989,38 @@ async def execute_tool(
         await storage.update_contact(context.contact_id, {"company_name": company})
         return {"status": "ok", "company_name": company}
 
+    if func == "set_prospect_context":
+        contact = await _resolve_contact(context.contact_id)
+        giro = str(arguments.get("giro") or "").strip()
+        necesidad = str(arguments.get("necesidad_principal") or "").strip()
+        volumen = str(arguments.get("volumen_mensajes_aprox") or "").strip()
+        herramienta = str(arguments.get("herramienta_actual") or "").strip()
+        notes_parts: list[str] = []
+        if giro:
+            notes_parts.append(f"Giro: {giro}")
+        if volumen:
+            notes_parts.append(f"Volumen: {volumen}")
+        if herramienta:
+            notes_parts.append(f"Herramienta actual: {herramienta}")
+        updates: dict[str, Any] = {}
+        if notes_parts:
+            current_notes = str((contact or {}).get("notes") or "").strip()
+            merged_notes = " | ".join([part for part in [current_notes, "; ".join(notes_parts)] if part])
+            updates["notes"] = merged_notes
+        if necesidad:
+            updates["necesidad_proposito"] = necesidad
+        if updates:
+            await storage.update_contact(context.contact_id, updates)
+        return {
+            "status": "ok",
+            "saved": {
+                "giro": giro or None,
+                "necesidad_principal": necesidad or None,
+                "volumen_mensajes_aprox": volumen or None,
+                "herramienta_actual": herramienta or None,
+            },
+        }
+
     if func == "send_information_email":
         return await _handle_information_email(arguments, context)
 
@@ -961,6 +1041,41 @@ async def execute_tool(
 
     if func == "cancel_demo":
         return await _handle_cancel_demo(arguments, context)
+
+    if func == "create_followup_task":
+        contact = await _resolve_contact(context.contact_id)
+        org_value = webchat_service._extract_contact_org(contact)
+        org_uuid_text = webchat_service._resolve_org_uuid(org_value)
+        if not org_uuid_text:
+            raise ValueError("No pude resolver la organización para crear la tarea")
+        org_uuid = UUID(org_uuid_text)
+        repo = CRMRepository()
+        title = str(arguments.get("title") or "").strip() or "Seguimiento comercial"
+        details = str(arguments.get("details") or "").strip() or None
+        priority_raw = str(arguments.get("priority") or "").strip().lower()
+        priority_map = {"alta": "alta", "high": "alta", "media": "media", "medium": "media", "baja": "baja", "low": "baja"}
+        priority = priority_map.get(priority_raw, "media")
+        due_at = arguments.get("due_at")
+        payload: dict[str, Any] = {
+            "tipo": "tarea",
+            "canal": "whatsapp",
+            "asunto": title,
+            "descripcion": details,
+            "estado": "pendiente",
+            "prioridad": priority,
+            "contacto_id": context.contact_id,
+            "metadata": {
+                "source": "prospeccion_whatsapp",
+                "conversation_id": context.conversation_id,
+            },
+        }
+        if isinstance(due_at, str) and due_at.strip():
+            payload["fecha_vencimiento"] = due_at.strip()
+        actividad = await repo.create_activity(
+            organizacion_id=org_uuid,
+            payload=payload,
+        )
+        return {"status": "ok", "task_id": actividad.get("id")}
 
     if func == "list_catalog_fraccionamientos":
         org_uuid = await _resolve_org_for_catalog(context, arguments)
@@ -1756,6 +1871,15 @@ async def _handle_schedule_demo(
     notes = (arguments.get("notes") or "").strip() or None
 
     contact = await _resolve_contact(context.contact_id)
+    channel_value = str(context.channel or "whatsapp").strip().lower() or "whatsapp"
+    contact_org = webchat_service._extract_contact_org(contact)
+    contact_org_uuid = webchat_service._resolve_org_uuid(contact_org)
+    profiling_enabled_for_channel = True
+    if contact_org_uuid and channel_value in {"whatsapp", "webchat"}:
+        profiling_enabled_for_channel = await tenant_runtime.is_profiling_enabled(
+            organizacion_id=UUID(contact_org_uuid),
+            channel=channel_value,
+        )
     try:
         tarjeta_id = await webchat_service._ensure_opportunity_when_contact_ready(
             conversation_id=context.conversation_id,
@@ -1769,72 +1893,93 @@ async def _handle_schedule_demo(
             extra={"conversation_id": context.conversation_id, "error": str(exc)},
         )
         raise ValueError("No pude asociar la oportunidad para agendar la demo.") from exc
-    prefilter_status = await _has_prefilter_for_schedule(
-        contact=contact,
-        opportunity_id=tarjeta_id,
-        conversation_id=context.conversation_id,
-    )
-    if not bool(prefilter_status.get("ready")):
-        missing_fields = [
-            str(item)
-            for item in (prefilter_status.get("missing_fields") or [])
-            if str(item).strip()
-        ]
+
+    # En prospección requerimos datos básicos antes de agendar.
+    if contact_org_uuid:
         try:
-            recent_messages = await storage.fetch_recent_messages(
-                conversation_id=context.conversation_id,
-                limit=40,
+            repo = CRMRepository()
+            opportunity = await repo.get_pipeline_opportunity(
+                organizacion_id=UUID(contact_org_uuid),
+                oportunidad_id=UUID(str(tarjeta_id)),
             )
-        except StorageError:
-            recent_messages = []
-        inferred_answers = _infer_prefilter_answers_from_messages(
-            recent_messages,
-            missing_fields=missing_fields,
+        except (CRMRepositoryError, ValueError):
+            opportunity = None
+        if _is_prospeccion_opportunity(opportunity):
+            missing_contact_fields = _missing_basic_contact_fields(contact)
+            if missing_contact_fields:
+                return {
+                    "status": "contact_missing",
+                    "missing_fields": missing_contact_fields,
+                    "guidance": _build_contact_required_guidance(missing_contact_fields),
+                }
+
+    if profiling_enabled_for_channel:
+        prefilter_status = await _has_prefilter_for_schedule(
+            contact=contact,
+            opportunity_id=tarjeta_id,
+            conversation_id=context.conversation_id,
         )
-        if inferred_answers:
+        if not bool(prefilter_status.get("ready")):
+            missing_fields = [
+                str(item)
+                for item in (prefilter_status.get("missing_fields") or [])
+                if str(item).strip()
+            ]
             try:
-                await storage.apply_lead_scoring(
+                recent_messages = await storage.fetch_recent_messages(
                     conversation_id=context.conversation_id,
-                    contact_id=context.contact_id,
-                    opportunity_id=str(tarjeta_id),
-                    answers=inferred_answers,
-                    events={
-                        "channel": context.channel or "whatsapp",
-                        "appointment_requested": True,
-                        "accepted_answering_questions": True,
-                    },
-                    source="schedule_demo_prefilter_infer",
-                )
-                prefilter_status = await _has_prefilter_for_schedule(
-                    contact=contact,
-                    opportunity_id=tarjeta_id,
-                    conversation_id=context.conversation_id,
+                    limit=40,
                 )
             except StorageError:
-                pass
-    if not bool(prefilter_status.get("ready")):
-        missing_fields = [
-            str(item)
-            for item in (prefilter_status.get("missing_fields") or [])
-            if str(item).strip()
-        ]
-        logger.info(
-            "whatsapp.schedule_demo.prefilter_missing",
-            extra={
-                "conversation_id": context.conversation_id,
-                "opportunity_id": str(tarjeta_id),
+                recent_messages = []
+            inferred_answers = _infer_prefilter_answers_from_messages(
+                recent_messages,
+                missing_fields=missing_fields,
+            )
+            if inferred_answers:
+                try:
+                    await storage.apply_lead_scoring(
+                        conversation_id=context.conversation_id,
+                        contact_id=context.contact_id,
+                        opportunity_id=str(tarjeta_id),
+                        answers=inferred_answers,
+                        events={
+                            "channel": context.channel or "whatsapp",
+                            "appointment_requested": True,
+                            "accepted_answering_questions": True,
+                        },
+                        source="schedule_demo_prefilter_infer",
+                    )
+                    prefilter_status = await _has_prefilter_for_schedule(
+                        contact=contact,
+                        opportunity_id=tarjeta_id,
+                        conversation_id=context.conversation_id,
+                    )
+                except StorageError:
+                    pass
+        if not bool(prefilter_status.get("ready")):
+            missing_fields = [
+                str(item)
+                for item in (prefilter_status.get("missing_fields") or [])
+                if str(item).strip()
+            ]
+            logger.info(
+                "whatsapp.schedule_demo.prefilter_missing",
+                extra={
+                    "conversation_id": context.conversation_id,
+                    "opportunity_id": str(tarjeta_id),
+                    "missing_fields": missing_fields,
+                },
+            )
+            guidance = _build_schedule_prefilter_error_message(
+                missing_fields=missing_fields,
+                question_by_field=_ensure_dict(prefilter_status.get("questions")),
+            )
+            return {
+                "status": "prefilter_missing",
                 "missing_fields": missing_fields,
-            },
-        )
-        guidance = _build_schedule_prefilter_error_message(
-            missing_fields=missing_fields,
-            question_by_field=_ensure_dict(prefilter_status.get("questions")),
-        )
-        return {
-            "status": "prefilter_missing",
-            "missing_fields": missing_fields,
-            "guidance": guidance,
-        }
+                "guidance": guidance,
+            }
 
     metadata_payload: dict[str, Any] = {
         "slot_id": slot_identifier,
@@ -1881,14 +2026,7 @@ async def _handle_schedule_demo(
     booking_response.hold_id = hold.get("hold_id")
     contact_record = contact
     channel_value = str(context.channel or "whatsapp").strip().lower() or "whatsapp"
-    profiling_enabled_for_channel = True
     contact_org = webchat_service._extract_contact_org(contact_record)
-    contact_org_uuid = webchat_service._resolve_org_uuid(contact_org)
-    if contact_org_uuid and channel_value in {"whatsapp", "webchat"}:
-        profiling_enabled_for_channel = await tenant_runtime.is_profiling_enabled(
-            organizacion_id=UUID(contact_org_uuid),
-            channel=channel_value,
-        )
 
     await webchat_service._sync_booking_with_opportunity(
         booking=booking_response,
