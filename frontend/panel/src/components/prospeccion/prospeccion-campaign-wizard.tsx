@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { IconAlertTriangle, IconChevronLeft, IconChevronRight, IconTargetArrow } from "@tabler/icons-react"
 
 import { Button } from "@/components/ui/button"
@@ -13,12 +13,13 @@ import { Separator } from "@/components/ui/separator"
 import { Textarea } from "@/components/ui/textarea"
 import {
   contactarProspectos,
-  getProspeccionCampanas,
+  createCrmCampaign,
   listContactoTemplates,
+  listCrmCampaigns,
   listProspeccionListas,
+  type CrmCampaign,
   type ContactarProspectosPayload,
   type ContactoTemplate,
-  type ProspeccionCampanaGroup,
   type ProspeccionLista,
   type ProspeccionCanalConfigInput,
   type ProspeccionOmitido,
@@ -36,7 +37,7 @@ const CHANNEL_OPTIONS: Array<{ key: "correo" | "whatsapp" | "llamada"; label: st
 ]
 
 const STAGES = [
-  { value: "", label: "Cualquiera" },
+  { value: "__all__", label: "Cualquiera" },
   { value: "discover", label: "Discover" },
   { value: "enrich", label: "Enrich" },
   { value: "prepare", label: "Prepare" },
@@ -44,15 +45,42 @@ const STAGES = [
   { value: "evaluate", label: "Evaluate" },
 ]
 
-const CAMPANA_NONE_OPTION = "__none__"
+const EMAIL_LOGO_IMG_STYLE = "display:block;max-width:83.333%;height:auto;margin:12px 0;"
+const MAIL_VARIABLE_TOKENS = ["{{nombre}}", "{{empresa}}", "{{email}}", "{{telefono}}", "{{segmento}}", "{{logo_url}}"]
+const LOGO_PLACEHOLDER_REGEX = /{{\s*logo_url\s*}}/i
+
+type LogoAsset = {
+  id: string
+  nombre: string
+  file_url: string
+}
+
+function normalizeLogoUrl(input: string): string {
+  const value = input.trim()
+  if (!value) return ""
+  if (/^https?:\/\//i.test(value)) return value
+  return `https://${value}`
+}
+
+function hasEmailLogoPlaceholder(input: string): boolean {
+  return LOGO_PLACEHOLDER_REGEX.test(input || "")
+}
 
 type ChannelState = Record<
   "correo" | "whatsapp" | "llamada",
-  { enabled: boolean; templateSlug?: string; subject?: string; body?: string; message?: string; schedule?: string }
+  {
+    enabled: boolean
+    templateSlug?: string
+    subject?: string
+    body?: string
+    bodyHtml?: string
+    message?: string
+    schedule?: string
+  }
 >
 
 const DEFAULT_CHANNEL_STATE: ChannelState = {
-  correo: { enabled: true, subject: "", body: "" },
+  correo: { enabled: true, subject: "", body: "", bodyHtml: "" },
   whatsapp: { enabled: false, body: "" },
   llamada: { enabled: false, message: "" },
 }
@@ -120,8 +148,9 @@ export function ProspeccionCampaignWizard({
   preset,
   onCompleted,
 }: ProspeccionCampaignWizardProps) {
+  const defaultSource: WizardSource = selectedIds.length > 0 ? "selected" : "filters"
   const [step, setStep] = useState(0)
-  const [source, setSource] = useState<WizardSource>("selected")
+  const [source, setSource] = useState<WizardSource>(defaultSource)
   const [presetApplied, setPresetApplied] = useState(false)
   const [listas, setListas] = useState<ProspeccionLista[]>([])
   const [listasLoading, setListasLoading] = useState(false)
@@ -129,11 +158,21 @@ export function ProspeccionCampaignWizard({
   const [filters, setFilters] = useState<ProspectoFiltroInput>(defaultFilters ?? {})
   const [templates, setTemplates] = useState<ContactoTemplate[]>([])
   const [templatesLoading, setTemplatesLoading] = useState(false)
-  const [campanas, setCampanas] = useState<ProspeccionCampanaGroup[]>([])
+  const [campanas, setCampanas] = useState<CrmCampaign[]>([])
   const [campanasLoading, setCampanasLoading] = useState(false)
   const [campanaId, setCampanaId] = useState<string | null>(null)
+  const [newCampaignOpen, setNewCampaignOpen] = useState(false)
+  const [newCampaignName, setNewCampaignName] = useState("")
+  const [newCampaignSaving, setNewCampaignSaving] = useState(false)
+  const correoAsuntoRef = useRef<HTMLInputElement | null>(null)
+  const correoCuerpoRef = useRef<HTMLTextAreaElement | null>(null)
+  const correoHtmlRef = useRef<HTMLTextAreaElement | null>(null)
   const [titulo, setTitulo] = useState("")
   const [channelState, setChannelState] = useState<ChannelState>(() => buildChannelState())
+  const [logos, setLogos] = useState<LogoAsset[]>([])
+  const [logosLoading, setLogosLoading] = useState(false)
+  const [selectedLogoUrl, setSelectedLogoUrl] = useState<string>("")
+  const [quoteLogoUrl, setQuoteLogoUrl] = useState<string>("")
   const [error, setError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
 
@@ -141,15 +180,20 @@ export function ProspeccionCampaignWizard({
 
   const resetState = useCallback(() => {
     setStep(0)
-    setSource("selected")
+    setSource(defaultSource)
     setSelectedListaId(null)
     setFilters(defaultFilters ?? {})
     setCampanaId(null)
     setTitulo("")
     setChannelState(buildChannelState())
+    setLogos([])
+    setSelectedLogoUrl("")
+    setQuoteLogoUrl("")
+    setNewCampaignOpen(false)
+    setNewCampaignName("")
     setError(null)
     setPresetApplied(false)
-  }, [defaultFilters])
+  }, [defaultFilters, defaultSource])
 
   useEffect(() => {
     if (!open) {
@@ -163,11 +207,14 @@ export function ProspeccionCampaignWizard({
     void Promise.all([
       listProspeccionListas({ limit: 50 }),
       listContactoTemplates(),
-      getProspeccionCampanas(25),
+      listCrmCampaigns(),
     ])
       .then(([listasResponse, templatesResponse, campanasResponse]) => {
         if (listasResponse?.items) {
           setListas(listasResponse.items)
+          if (!listasResponse.items.length) {
+            setSource((prev) => (prev === "lista" ? "filters" : prev))
+          }
           setSelectedListaId((prev) => {
             if (prev) return prev
             if (preset?.listaId) return preset.listaId
@@ -179,8 +226,12 @@ export function ProspeccionCampaignWizard({
         if (templatesResponse?.items) {
           setTemplates(templatesResponse.items)
         }
-        if (campanasResponse?.items) {
-          setCampanas(campanasResponse.items)
+        if (Array.isArray(campanasResponse)) {
+          setCampanas(campanasResponse)
+          setCampanaId((prev) => {
+            if (prev) return prev
+            return campanasResponse[0]?.id ?? null
+          })
         }
       })
       .catch((err) => {
@@ -240,6 +291,7 @@ export function ProspeccionCampaignWizard({
       if (canal === "correo") {
         next[canal].subject = template.asunto ?? current.subject
         next[canal].body = template.cuerpo_texto ?? current.body
+        next[canal].bodyHtml = template.cuerpo_html ?? current.bodyHtml
       } else if (canal === "whatsapp") {
         next[canal].body = twilioSid ? "" : template.cuerpo_texto ?? current.body
       } else if (canal === "llamada") {
@@ -278,24 +330,194 @@ export function ProspeccionCampaignWizard({
   const canContinueStepTwo = activeChannels.length > 0
 
   const campanaOptions = useMemo(() => {
-    const options: Array<{ value: string; label: string }> = [{ value: CAMPANA_NONE_OPTION, label: "Sin campaña" }]
+    const options: Array<{ value: string; label: string }> = []
     campanas.forEach((group) => {
-      if (group.campana_id) {
+      if (group.id) {
         options.push({
-          value: group.campana_id,
-          label: group.campana_nombre ?? `Campaña ${group.campana_id.slice(0, 8)}`,
+          value: group.id,
+          label: group.nombre ?? `Campaña ${group.id.slice(0, 8)}`,
         })
       }
     })
     return options
   }, [campanas])
 
+  const handleCreateCampaign = useCallback(async () => {
+    const nombre = newCampaignName.trim()
+    if (!nombre) {
+      setError("Escribe el nombre de la campaña CRM.")
+      return
+    }
+    setNewCampaignSaving(true)
+    setError(null)
+    try {
+      const created = await createCrmCampaign({ nombre, canal: "multicanal", tipo: "prospeccion" })
+      setCampanas((prev) => [created, ...prev])
+      setCampanaId(created.id)
+      setNewCampaignName("")
+      setNewCampaignOpen(false)
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "No se pudo crear la campaña CRM."
+      setError(message)
+    } finally {
+      setNewCampaignSaving(false)
+    }
+  }, [newCampaignName])
+
+  const resolvePreferredLogo = useCallback(async (): Promise<string> => {
+    if (quoteLogoUrl.trim()) return quoteLogoUrl.trim()
+    try {
+      const response = await fetch("/api/crm/settings/quote-template", { cache: "no-store" })
+      const payload = await response.json().catch(() => ({}))
+      if (response.ok) {
+        const fromConfig =
+          payload && typeof payload === "object" && payload.config && typeof payload.config === "object"
+            ? String((payload.config as Record<string, unknown>).logoUrl ?? "").trim()
+            : ""
+        if (fromConfig) {
+          setQuoteLogoUrl(fromConfig)
+          return fromConfig
+        }
+      }
+    } catch {
+      // fallback below
+    }
+    try {
+      const response = await fetch("/api/settings/logos", { cache: "no-store" })
+      const payload = await response.json().catch(() => ({}))
+      if (response.ok && Array.isArray(payload?.logos) && payload.logos.length) {
+        const first = payload.logos.find(
+          (item: unknown) =>
+            item &&
+            typeof item === "object" &&
+            typeof (item as Record<string, unknown>).file_url === "string" &&
+            String((item as Record<string, unknown>).file_url).trim().length,
+        ) as Record<string, unknown> | undefined
+        const fileUrl = first ? String(first.file_url).trim() : ""
+        if (fileUrl) return fileUrl
+      }
+    } catch {
+      // fallback below
+    }
+    if (typeof window !== "undefined") return `${window.location.origin}/assets/logos/Logo8.png`
+    return "https://talia.mx/assets/logos/Logo8.png"
+  }, [quoteLogoUrl])
+
+  const appendCorreoToken = useCallback(
+    (field: "subject" | "body" | "bodyHtml", token: string) => {
+      const fieldRef =
+        field === "subject" ? correoAsuntoRef.current : field === "body" ? correoCuerpoRef.current : correoHtmlRef.current
+      setChannelState((prev) => {
+        const current = prev.correo[field] ?? ""
+        if (!fieldRef) {
+          const separator = field === "subject" ? (current && !/\s$/.test(current) ? " " : "") : current && !current.endsWith("\n") ? "\n" : ""
+          return {
+            ...prev,
+            correo: { ...prev.correo, [field]: `${current}${separator}${token}` },
+          }
+        }
+        const start = fieldRef.selectionStart ?? current.length
+        const end = fieldRef.selectionEnd ?? current.length
+        const prefix = current.slice(0, start)
+        const suffix = current.slice(end)
+        const needsLeading = field === "subject" && prefix.length > 0 && !/\s$/.test(prefix) ? " " : ""
+        const nextValue = `${prefix}${needsLeading}${token}${suffix}`
+        const caret = prefix.length + needsLeading.length + token.length
+        window.requestAnimationFrame(() => {
+          fieldRef.focus()
+          fieldRef.setSelectionRange(caret, caret)
+        })
+        return {
+          ...prev,
+          correo: { ...prev.correo, [field]: nextValue },
+        }
+      })
+    },
+    [],
+  )
+
+  const insertCorreoLogo = useCallback(
+    (logoUrl: string) => {
+      const url = normalizeLogoUrl(logoUrl)
+      if (!url) return
+      setSelectedLogoUrl(url)
+      appendCorreoToken("body", "{{logo_url}}")
+      const htmlFocused = typeof document !== "undefined" && document.activeElement === correoHtmlRef.current
+      const hasHtmlContent = Boolean((channelState.correo.bodyHtml ?? "").trim())
+      if (htmlFocused || hasHtmlContent) {
+        appendCorreoToken("bodyHtml", `<img src="{{logo_url}}" alt="Logo" style="${EMAIL_LOGO_IMG_STYLE}" />`)
+      }
+    },
+    [appendCorreoToken, channelState.correo.bodyHtml],
+  )
+
+  const handleInsertQuoteLogo = useCallback(async () => {
+    try {
+      const logo = await resolvePreferredLogo()
+      insertCorreoLogo(logo)
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "No se pudo insertar el logo."
+      setError(message)
+    }
+  }, [insertCorreoLogo, resolvePreferredLogo])
+
+  const loadLogos = useCallback(async () => {
+    if (logosLoading) return
+    setLogosLoading(true)
+    try {
+      const response = await fetch("/api/settings/logos", { cache: "no-store" })
+      const payload = await response.json().catch(() => ({}))
+      if (!response.ok) {
+        throw new Error(typeof payload?.detail === "string" ? payload.detail : "No se pudieron cargar los logos.")
+      }
+      const items = Array.isArray(payload?.logos) ? payload.logos : []
+      const normalized = items
+        .map((item: unknown) => {
+          if (!item || typeof item !== "object") return null
+          const row = item as Record<string, unknown>
+          const fileUrl = typeof row.file_url === "string" ? row.file_url.trim() : ""
+          if (!fileUrl) return null
+          return {
+            id: String(row.id ?? fileUrl),
+            nombre: typeof row.nombre === "string" && row.nombre.trim() ? row.nombre.trim() : "Logo",
+            file_url: fileUrl,
+          } as LogoAsset
+        })
+        .filter((item: LogoAsset | null): item is LogoAsset => item != null)
+      setLogos(normalized)
+      if (normalized.length) setSelectedLogoUrl(normalized[0].file_url)
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "No se pudieron cargar los logos."
+      setError(message)
+    } finally {
+      setLogosLoading(false)
+    }
+  }, [logosLoading])
+
   const handleSubmit = async () => {
     setError(null)
+    if (!campanaId) {
+      setError("Selecciona una campaña para registrar el envío.")
+      setStep(2)
+      return
+    }
     if (!canContinueStepTwo) {
       setError("Selecciona al menos un canal para la campaña.")
       setStep(1)
       return
+    }
+    let resolvedLogoUrl = normalizeLogoUrl(selectedLogoUrl.trim() || quoteLogoUrl.trim())
+    const correoConfig = channelState.correo
+    const correoNeedsLogo =
+      correoConfig.enabled &&
+      (hasEmailLogoPlaceholder(correoConfig.subject ?? "") ||
+        hasEmailLogoPlaceholder(correoConfig.body ?? "") ||
+        hasEmailLogoPlaceholder(correoConfig.bodyHtml ?? ""))
+    if (!resolvedLogoUrl && correoNeedsLogo) {
+      resolvedLogoUrl = normalizeLogoUrl(await resolvePreferredLogo())
+      if (resolvedLogoUrl) {
+        setSelectedLogoUrl(resolvedLogoUrl)
+      }
     }
     const payload: ContactarProspectosPayload = {
       canales: activeChannels.map(({ key }) => {
@@ -309,12 +531,24 @@ export function ProspeccionCampaignWizard({
           template_id: template?.id,
           subject: config.subject,
           body: config.body,
+          body_html: config.bodyHtml,
           message: config.message,
           programado_en: config.schedule ? new Date(config.schedule).toISOString() : undefined,
         }
+        if (key === "correo") {
+          const requiresLogo =
+            hasEmailLogoPlaceholder(config.subject ?? "") ||
+            hasEmailLogoPlaceholder(config.body ?? "") ||
+            hasEmailLogoPlaceholder(config.bodyHtml ?? "")
+          if (requiresLogo) {
+            if (resolvedLogoUrl) {
+              channelPayload.metadata = { ...(channelPayload.metadata ?? {}), logo_url: resolvedLogoUrl }
+            }
+          }
+        }
         return channelPayload
       }),
-      campana_id: campanaId || undefined,
+      campana_id: campanaId,
       batch_titulo: titulo.trim() || undefined,
     }
     if (source === "selected") {
@@ -418,14 +652,19 @@ export function ProspeccionCampaignWizard({
           <div className="space-y-1">
             <Label>Fuente</Label>
             <Select
-              value={filters.fuente ?? ""}
-              onValueChange={(value) => setFilters((prev) => ({ ...prev, fuente: value as ProspectoFiltroInput["fuente"] }))}
+              value={filters.fuente ?? "__all__"}
+              onValueChange={(value) =>
+                setFilters((prev) => ({
+                  ...prev,
+                  fuente: value === "__all__" ? "" : (value as ProspectoFiltroInput["fuente"]),
+                }))
+              }
             >
               <SelectTrigger>
                 <SelectValue placeholder="Todas las fuentes" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">Todas</SelectItem>
+                <SelectItem value="__all__">Todas</SelectItem>
                 <SelectItem value="google_places">Google</SelectItem>
                 <SelectItem value="denue">DENUE</SelectItem>
                 <SelectItem value="usuario">Manual</SelectItem>
@@ -443,8 +682,13 @@ export function ProspeccionCampaignWizard({
           <div className="space-y-1">
             <Label>Stage</Label>
             <Select
-              value={filters.stage ?? ""}
-              onValueChange={(value) => setFilters((prev) => ({ ...prev, stage: value as ProspectoFiltroInput["stage"] }))}
+              value={filters.stage ?? "__all__"}
+              onValueChange={(value) =>
+                setFilters((prev) => ({
+                  ...prev,
+                  stage: value === "__all__" ? "" : (value as ProspectoFiltroInput["stage"]),
+                }))
+              }
             >
               <SelectTrigger>
                 <SelectValue placeholder="Cualquiera" />
@@ -534,6 +778,7 @@ export function ProspeccionCampaignWizard({
                     <div className="space-y-1">
                       <Label>Asunto</Label>
                       <Input
+                        ref={correoAsuntoRef}
                         value={state.subject ?? ""}
                         onChange={(event) =>
                           setChannelState((prev) => ({
@@ -542,10 +787,25 @@ export function ProspeccionCampaignWizard({
                           }))
                         }
                       />
+                      <div className="flex flex-wrap gap-1">
+                        {MAIL_VARIABLE_TOKENS.map((token) => (
+                          <Button
+                            key={`wizard-asunto-${token}`}
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="h-7 px-2 text-xs"
+                            onClick={() => appendCorreoToken("subject", token)}
+                          >
+                            {token}
+                          </Button>
+                        ))}
+                      </div>
                     </div>
                     <div className="space-y-1">
                       <Label>Cuerpo</Label>
                       <Textarea
+                        ref={correoCuerpoRef}
                         rows={4}
                         value={state.body ?? ""}
                         onChange={(event) =>
@@ -555,6 +815,88 @@ export function ProspeccionCampaignWizard({
                           }))
                         }
                       />
+                      <div className="flex flex-wrap gap-1">
+                        {MAIL_VARIABLE_TOKENS.map((token) => (
+                          <Button
+                            key={`wizard-cuerpo-${token}`}
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="h-7 px-2 text-xs"
+                            onClick={() => appendCorreoToken("body", token)}
+                          >
+                            {token}
+                          </Button>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="space-y-1">
+                      <Label>HTML (opcional)</Label>
+                      <Textarea
+                        ref={correoHtmlRef}
+                        rows={6}
+                        value={state.bodyHtml ?? ""}
+                        onChange={(event) =>
+                          setChannelState((prev) => ({
+                            ...prev,
+                            correo: { ...prev.correo, bodyHtml: event.target.value },
+                          }))
+                        }
+                        placeholder={'<p>Hola {{nombre}}</p><p><img src="https://..." alt="Banner" /></p>'}
+                      />
+                      <div className="flex flex-wrap gap-1">
+                        {MAIL_VARIABLE_TOKENS.map((token) => (
+                          <Button
+                            key={`wizard-html-${token}`}
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="h-7 px-2 text-xs"
+                            onClick={() => appendCorreoToken("bodyHtml", token)}
+                          >
+                            {token}
+                          </Button>
+                        ))}
+                      </div>
+                      <div className="space-y-2 rounded-md border border-dashed p-2">
+                        <Label className="text-xs">Logo para correo</Label>
+                        <div className="flex flex-wrap gap-2">
+                          <Button type="button" variant="outline" size="sm" onClick={() => void handleInsertQuoteLogo()}>
+                            Insertar logo
+                          </Button>
+                          <Button type="button" variant="outline" size="sm" onClick={() => void loadLogos()} disabled={logosLoading}>
+                            {logosLoading ? "Cargando..." : "Cargar galería"}
+                          </Button>
+                        </div>
+                        {logos.length ? (
+                          <div className="flex flex-wrap items-center gap-2">
+                            <Select value={selectedLogoUrl} onValueChange={setSelectedLogoUrl}>
+                              <SelectTrigger className="w-[280px]">
+                                <SelectValue placeholder="Selecciona un logo" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {logos.map((logo) => (
+                                  <SelectItem key={logo.id} value={logo.file_url}>
+                                    {logo.nombre}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              disabled={!selectedLogoUrl}
+                              onClick={() => insertCorreoLogo(selectedLogoUrl)}
+                            >
+                              Insertar seleccionado
+                            </Button>
+                          </div>
+                        ) : null}
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        Usa URL pública para imágenes. Variables soportadas: {"{{nombre}}, {{empresa}}, {{email}}, {{telefono}}, {{segmento}}, {{logo_url}}"}.
+                      </p>
                     </div>
                   </>
                 ) : null}
@@ -617,22 +959,40 @@ export function ProspeccionCampaignWizard({
           <Input value={titulo} onChange={(event) => setTitulo(event.target.value)} placeholder="Ej. Follow up semana 42" />
         </div>
         <div className="space-y-1">
-          <Label>Campaña CRM</Label>
+          <div className="flex items-center justify-between gap-2">
+            <Label>Campaña CRM</Label>
+            <Button type="button" variant="ghost" size="sm" onClick={() => setNewCampaignOpen((prev) => !prev)}>
+              {newCampaignOpen ? "Cancelar" : "Nueva campaña CRM"}
+            </Button>
+          </div>
           <Select
-            value={campanaId ?? CAMPANA_NONE_OPTION}
-            onValueChange={(value) => setCampanaId(value === CAMPANA_NONE_OPTION ? null : value)}
+            value={campanaId ?? ""}
+            onValueChange={setCampanaId}
+            disabled={campanasLoading || !campanaOptions.length}
           >
             <SelectTrigger>
-              <SelectValue placeholder={campanasLoading ? "Cargando..." : "Sin campaña"} />
+              <SelectValue placeholder={campanasLoading ? "Cargando..." : "Selecciona campaña"} />
             </SelectTrigger>
             <SelectContent>
               {campanaOptions.map((option) => (
-                <SelectItem key={option.value || "none"} value={option.value}>
+                <SelectItem key={option.value} value={option.value}>
                   {option.label}
                 </SelectItem>
               ))}
             </SelectContent>
           </Select>
+          {newCampaignOpen ? (
+            <div className="mt-2 flex flex-col gap-2 rounded-md border bg-muted/30 p-2 md:flex-row">
+              <Input
+                value={newCampaignName}
+                onChange={(event) => setNewCampaignName(event.target.value)}
+                placeholder="Ej. Prospección inmobiliarias Q1"
+              />
+              <Button type="button" onClick={() => void handleCreateCampaign()} disabled={newCampaignSaving}>
+                {newCampaignSaving ? "Guardando..." : "Guardar"}
+              </Button>
+            </div>
+          ) : null}
         </div>
       </div>
       <Separator />
@@ -655,11 +1015,7 @@ export function ProspeccionCampaignWizard({
           </li>
           <li>
             Campaña:{" "}
-            {
-              campanaOptions.find(
-                (option) => option.value === (campanaId ?? CAMPANA_NONE_OPTION)
-              )?.label
-            }
+            {campanaOptions.find((option) => option.value === campanaId)?.label ?? "No seleccionada"}
           </li>
         </ul>
       </div>
@@ -696,7 +1052,7 @@ export function ProspeccionCampaignWizard({
 
   return (
     <Dialog open={open} onOpenChange={(value) => (!value ? onClose() : null)}>
-      <DialogContent className="max-w-4xl">
+      <DialogContent className="w-[96vw] max-w-6xl max-h-[90vh] overflow-hidden">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-lg">
             <IconTargetArrow className="size-5 text-primary" />
@@ -733,7 +1089,7 @@ export function ProspeccionCampaignWizard({
             ))}
           </ol>
 
-          <div className="rounded-lg border bg-muted/10 p-4">{renderStep()}</div>
+          <div className="max-h-[62vh] overflow-y-auto rounded-lg border bg-muted/10 p-4 pr-2">{renderStep()}</div>
 
           {error ? (
             <div className="flex items-center gap-2 rounded border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">

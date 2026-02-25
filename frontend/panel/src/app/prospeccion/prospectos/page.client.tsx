@@ -76,6 +76,7 @@ import {
   listProspectoAudit,
   ejecutarChecklistLookup,
   ejecutarChecklistScraper,
+  listCrmCampaigns,
   type ProspectoItem,
   type ProspectoManualInput,
   type ProspectoAuditEntry,
@@ -135,6 +136,7 @@ type ContactDrawerData = {
   results: ProspeccionContactResult[]
   omitidos?: ProspeccionOmitido[]
 }
+type CampaignOption = { id: string; nombre: string }
 type LogoAsset = { id: string; nombre: string; file_url: string }
 type ChecklistSummary = {
   telefonos_pendientes: number
@@ -675,7 +677,10 @@ function ProspectosView() {
   const [historyTab, setHistoryTab] = useState<"timeline" | "envios" | "audit">("timeline")
   const [templates, setTemplates] = useState<ContactoTemplate[]>([])
   const [templatesLoading, setTemplatesLoading] = useState(false)
-const [selectedTemplates, setSelectedTemplates] = useState<Record<string, string>>({})
+  const [selectedTemplates, setSelectedTemplates] = useState<Record<string, string>>({})
+  const [campaignOptions, setCampaignOptions] = useState<CampaignOption[]>([])
+  const [campaignOptionsLoading, setCampaignOptionsLoading] = useState(false)
+  const [contactCampaignId, setContactCampaignId] = useState("")
   const [checklist, setChecklist] = useState<ChecklistSummary | null>(null)
   const [checklistLoading, setChecklistLoading] = useState(false)
   const [checklistAction, setChecklistAction] = useState<"lookup" | "scraper" | null>(null)
@@ -1661,12 +1666,19 @@ useEffect(() => {
     }
     const payload: {
       prospecto_ids: string[]
+      campana_id?: string
       correo_asunto?: string
       correo_cuerpo?: string
       whatsapp_mensaje?: string
       llamada_notas?: string
       canales?: ProspeccionCanalConfigInput[]
     } = { prospecto_ids: selectedIds }
+
+    if (!contactCampaignId) {
+      setContactError("Selecciona una campaña para medir resultados.")
+      return
+    }
+    payload.campana_id = contactCampaignId
 
     const correoAsunto = normalizeEmailLogoPlaceholders(contactForm.correoAsunto.trim())
     const correoCuerpo = normalizeEmailLogoPlaceholders(contactForm.correoCuerpo.trim())
@@ -1866,6 +1878,7 @@ useEffect(() => {
     openContactDrawer,
     selectedIds,
     selectedTemplates,
+    contactCampaignId,
     quoteLogoUrl,
     resolvePreferredLogo,
     selectedLogoUrl,
@@ -2008,6 +2021,7 @@ useEffect(() => {
         return
       }
       handlePlannerOpenChange(false)
+      setContactCampaignId("")
       setContactDialogOpen(true)
       return
     }
@@ -2023,6 +2037,37 @@ useEffect(() => {
     handlePlannerOpenChange(false)
     setCampaignWizardOpen(true)
   }, [canUseQuickPlan, handlePlannerOpenChange, plannerMode, plannerName])
+
+  const fetchCampaignOptions = useCallback(async () => {
+    setCampaignOptionsLoading(true)
+    try {
+      const campaigns = await listCrmCampaigns()
+      const ordered = (Array.isArray(campaigns) ? campaigns : [])
+        .map((campaign) => ({
+          id: campaign.id,
+          nombre: campaign.nombre ?? `Campaña ${campaign.id.slice(0, 8)}`,
+        }))
+        .sort((a, b) =>
+        a.nombre.localeCompare(b.nombre, "es", { sensitivity: "base" }),
+      )
+      setCampaignOptions(ordered)
+      setContactCampaignId((prev) => {
+        if (prev && ordered.some((item) => item.id === prev)) return prev
+        return ordered[0]?.id ?? ""
+      })
+    } catch (err) {
+      setCampaignOptions([])
+      const message = err instanceof Error ? err.message : "No se pudieron cargar las campañas."
+      setContactError(message)
+    } finally {
+      setCampaignOptionsLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!contactDialogOpen) return
+    void fetchCampaignOptions()
+  }, [contactDialogOpen, fetchCampaignOptions])
 
   const handleOpenConvertDialog = useCallback((prospecto: ProspectoItem) => {
     if (!prospecto.id) return
@@ -3364,6 +3409,41 @@ useEffect(() => {
               canales con texto configurado.
             </DialogDescription>
           </DialogHeader>
+          <div className="grid gap-2 rounded-md border border-dashed p-3 sm:grid-cols-[1fr_auto] sm:items-end">
+            <div className="space-y-1">
+              <Label>Campaña</Label>
+              <Select
+                value={contactCampaignId}
+                onValueChange={setContactCampaignId}
+                disabled={campaignOptionsLoading || !campaignOptions.length}
+              >
+                <SelectTrigger>
+                  <SelectValue
+                    placeholder={
+                      campaignOptionsLoading
+                        ? "Cargando campañas..."
+                        : campaignOptions.length
+                          ? "Selecciona campaña"
+                          : "No hay campañas disponibles"
+                    }
+                  />
+                </SelectTrigger>
+                <SelectContent>
+                  {campaignOptions.map((campaign) => (
+                    <SelectItem key={campaign.id} value={campaign.id}>
+                      {campaign.nombre}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                El envío se guardará con esta campaña para medir respuestas y conversiones.
+              </p>
+            </div>
+            <Button type="button" variant="outline" asChild>
+              <Link href="/prospeccion/campanas">Gestionar campañas</Link>
+            </Button>
+          </div>
           <Tabs defaultValue="correo" className="space-y-4">
             <TabsList>
               <TabsTrigger value="correo">Correo</TabsTrigger>
@@ -3622,7 +3702,10 @@ useEffect(() => {
             <Button variant="ghost" onClick={() => setContactDialogOpen(false)}>
               Cancelar
             </Button>
-            <Button onClick={() => void handleContactSubmit()} disabled={action === "contact"}>
+            <Button
+              onClick={() => void handleContactSubmit()}
+              disabled={action === "contact" || campaignOptionsLoading || !campaignOptions.length}
+            >
               {action === "contact" ? (
                 <>
                   <IconLoader className="mr-2 size-4 animate-spin" />

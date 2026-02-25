@@ -109,6 +109,17 @@ export type ProspeccionCampanaDuplicateDefaults = {
   }
 }
 
+export type CrmCampaign = {
+  id: string
+  nombre: string
+  tipo?: string | null
+  canal?: string | null
+  presupuesto?: number | null
+  fecha_inicio?: string | null
+  fecha_fin?: string | null
+  metadata?: Record<string, unknown> | null
+}
+
 export type ProspectosResponse = {
   ok: boolean
   items: ProspectoItem[]
@@ -620,6 +631,25 @@ export async function getProspeccionCampanaPreset(campanaId: string) {
   return requestJson<{ ok: boolean } & ProspeccionCampanaDuplicateDefaults>(
     `/api/prospeccion/campanas/${campanaId}/duplicar`
   )
+}
+
+export async function listCrmCampaigns() {
+  return requestJson<CrmCampaign[]>("/api/prospeccion/crm/campanas")
+}
+
+export async function createCrmCampaign(payload: {
+  nombre: string
+  tipo?: string
+  canal?: string
+  presupuesto?: number
+  fecha_inicio?: string
+  fecha_fin?: string
+  metadata?: Record<string, unknown>
+}) {
+  return requestJson<CrmCampaign>("/api/prospeccion/crm/campanas", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  })
 }
 
 export type ConvertirProspectoPayload = {

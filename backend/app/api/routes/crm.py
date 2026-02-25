@@ -13530,6 +13530,9 @@ async def contactar_prospectos(
 ) -> dict[str, Any]:
     """Envía correos, WhatsApps o llamadas registrando lotes y envíos individuales."""
 
+    if payload.campana_id is None:
+        raise HTTPException(status_code=400, detail="campana_id_required")
+
     template_map: dict[str, dict[str, Any]] = {}
     if payload.canales:
         template_ids = {config.template_id for config in payload.canales if config.template_id}

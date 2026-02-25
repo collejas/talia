@@ -112,7 +112,7 @@ export function CampanasMetricsClient() {
   }, [fetchCampanas])
 
   const handleNewCampaign = useCallback(() => {
-    setWizardPreset(null)
+    setWizardPreset({ source: "lista" })
     setWizardOpen(true)
   }, [])
 
