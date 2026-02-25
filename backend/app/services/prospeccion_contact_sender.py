@@ -15,7 +15,7 @@ from app.channels.whatsapp.routing import resolve_whatsapp_organizacion
 from app.core.config import settings
 from app.core.logging import get_logger, log_event
 from app.repositories.crm import CRMRepository, CRMRepositoryError
-from app.services import EmailSendError, send_email, storage
+from app.services import EmailSendError, send_email, storage, tenant_runtime
 from app.services.metrics import metrics
 from app.services.prospeccion_auto_promoter import auto_promote_prospecto, is_promotable_estado
 from app.services.prospeccion_progress import progress_hub
@@ -300,7 +300,12 @@ async def _send_whatsapp_message(
     )
 
 
-async def _run_envio_correo(envio: dict[str, Any], payload: dict[str, Any]) -> ContactEnvioResult:
+async def _run_envio_correo(
+    envio: dict[str, Any],
+    payload: dict[str, Any],
+    *,
+    organizacion_id: UUID | None = None,
+) -> ContactEnvioResult:
     email_value = _clean_text(envio.get("email"))
     if not email_value:
         return ContactEnvioResult(
@@ -315,12 +320,29 @@ async def _run_envio_correo(envio: dict[str, Any], payload: dict[str, Any]) -> C
             detalle={"reason": "correo_payload_incompleto"},
             error="correo_payload_incompleto",
         )
+    mail_settings = None
+    brevo_settings = None
+    if organizacion_id:
+        try:
+            mail_settings, brevo_settings = await asyncio.gather(
+                tenant_runtime.get_mail_runtime_settings(organizacion_id=organizacion_id),
+                tenant_runtime.get_brevo_runtime_settings(organizacion_id=organizacion_id),
+            )
+        except Exception as exc:  # pragma: no cover - fallback a settings globales
+            log_event(
+                logger,
+                "prospeccion.sender_mail_runtime_fallback",
+                organizacion_id=str(organizacion_id),
+                error=str(exc),
+            )
     try:
         message_id = await asyncio.to_thread(
             send_email,
             subject=subject,
             body_text=body,
             recipients=[email_value],
+            mail_settings=mail_settings,
+            brevo_settings=brevo_settings,
         )
     except EmailSendError as exc:
         return ContactEnvioResult(
@@ -569,15 +591,20 @@ class ProspeccionContactSender:
         detalle = envio.get("detalle") if isinstance(envio.get("detalle"), dict) else {}
         payload = envio.get("payload") if isinstance(envio.get("payload"), dict) else {}
 
+        org_value = envio.get("organizacion_id")
+        org_uuid: UUID | None = None
+        try:
+            org_uuid = UUID(str(org_value)) if org_value else None
+        except (TypeError, ValueError):
+            org_uuid = None
+
         if canal == "correo":
-            result = await _run_envio_correo(detalle, payload)
+            result = await _run_envio_correo(
+                detalle,
+                payload,
+                organizacion_id=org_uuid,
+            )
         elif canal == "whatsapp":
-            org_value = envio.get("organizacion_id")
-            org_uuid: UUID | None = None
-            try:
-                org_uuid = UUID(str(org_value)) if org_value else None
-            except (TypeError, ValueError):
-                org_uuid = None
             result = await _run_envio_whatsapp(
                 detalle,
                 payload,

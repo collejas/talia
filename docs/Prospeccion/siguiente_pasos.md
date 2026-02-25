@@ -26,6 +26,12 @@ Este archivo sirve para capturar próximos requerimientos sin mezclar historial 
   - Vector store dedicado (`talia_prospeccion_vs`) con propuesta por industria, objeciones, cierre demo y compliance.
   - Routing por metadata: `source=prospeccion` + `channel=whatsapp` para usar assistant de prospección. (Completado)
   - Mantener assistant operativo actual para conversaciones no comerciales de prospección.
+- Correo de prospección (Brevo):
+  - Fase 1 (inmediata): operar plantillas desde la app (sin depender de creación en Brevo), permitiendo:
+    - envío con plantilla guardada en app + variables dinámicas.
+    - envío libre sin plantilla (`asunto` + `cuerpo`) con variables.
+  - Fase 2 (evolutiva): integrar catálogo/sync de plantillas vía API de Brevo (lectura/gestión desde app).
+  - Medición y estadísticas: persistir y mostrar en app eventos de Brevo (enviado, entregado, primera apertura, aperturas, clics, rebotes, bloqueado, spam, unsubscribe, error).
 
 4. Operación
 - Alertas automáticas de fallos por canal.
@@ -67,3 +73,6 @@ Por cada cambio nuevo:
 - Post-agenda:
   - Mejoras para persistir contexto mínimo en contacto (`necesidad_proposito`, `notes`) y habilitar insights/título automático de oportunidad.
   - Notificación al asesor ajustada para caso de prospección sin exigir perfilamiento completo.
+- Correo prospección:
+  - Validado envío transaccional por Brevo desde worker de prospección.
+  - Definido roadmap de plantillas (app-first -> API Brevo) y de métricas/eventos para visualización en la app.

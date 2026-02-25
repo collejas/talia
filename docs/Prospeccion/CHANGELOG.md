@@ -69,3 +69,9 @@ Formato recomendado por entrada:
 ### Operación/Notas
 - Validación funcional: una sola oportunidad por conversación en escenarios de respuesta de campaña de prospección.
 - Queda habilitado el camino para marcar etapa demo + notificación de asesor en la confirmación real de agenda.
+- Correo prospección:
+  - Confirmado envío vía Brevo (`/v3/smtp/email`) desde flujo de prospección.
+  - Se acuerda estrategia por fases para plantillas:
+    - fase inicial administradas en app (con/sin plantilla y variables),
+    - fase evolutiva con integración de plantillas por API Brevo.
+  - Se define implementación de mediciones/eventos Brevo en app (enviado, entregado, apertura, clic, rebote, bloqueo, spam, unsubscribe, error).

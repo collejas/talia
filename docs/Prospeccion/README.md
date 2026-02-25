@@ -1,6 +1,6 @@
 # Prospección · Documentación vigente
 
-Última actualización: 2026-02-24.
+Última actualización: 2026-02-25.
 
 Esta carpeta quedó organizada así:
 
