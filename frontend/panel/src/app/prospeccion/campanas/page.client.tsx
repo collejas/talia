@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { IconAlertTriangle, IconLoader, IconPencil, IconRefresh, IconTargetArrow, IconX } from "@tabler/icons-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -47,6 +47,14 @@ const estadoPalette: Record<string, string> = {
   omitido: "text-slate-500",
 }
 
+type LogoAsset = {
+  id: string
+  nombre: string
+  file_url: string
+}
+
+const EMAIL_LOGO_IMG_STYLE = "width:83.333%;height:auto;display:block;margin:0 auto;"
+
 export function CampanasMetricsClient() {
   const [data, setData] = useState<ContactoMetrics | null>(null)
   const [loading, setLoading] = useState(false)
@@ -71,6 +79,11 @@ export function CampanasMetricsClient() {
   const [templateSaving, setTemplateSaving] = useState(false)
   const [templateDeletingId, setTemplateDeletingId] = useState<string | null>(null)
   const [templateError, setTemplateError] = useState<string | null>(null)
+  const [logos, setLogos] = useState<LogoAsset[]>([])
+  const [logosLoading, setLogosLoading] = useState(false)
+  const [selectedLogoUrl, setSelectedLogoUrl] = useState<string>("")
+  const correoTextoRef = useRef<HTMLTextAreaElement | null>(null)
+  const correoHtmlRef = useRef<HTMLTextAreaElement | null>(null)
   const [templateForm, setTemplateForm] = useState({
     id: "",
     canal: "correo" as "correo" | "whatsapp" | "llamada",
@@ -210,7 +223,13 @@ export function CampanasMetricsClient() {
 
   const dismissBanner = useCallback(() => setBanner(null), [])
 
+  const normalizeLogoUrl = useCallback((value: string) => {
+    const trimmed = value.trim()
+    return trimmed || ""
+  }, [])
+
   const resetTemplateForm = useCallback(() => {
+    setSelectedLogoUrl("")
     setTemplateForm({
       id: "",
       canal: templatesCampanaCanal ?? "correo",
@@ -225,6 +244,75 @@ export function CampanasMetricsClient() {
       nombreEmpresa: "",
     })
   }, [templatesCampanaCanal])
+
+  const appendTemplateToken = useCallback((field: "cuerpoTexto" | "cuerpoHtml", token: string) => {
+    const fieldRef = field === "cuerpoTexto" ? correoTextoRef.current : correoHtmlRef.current
+    setTemplateForm((prev) => {
+      const current = prev[field] ?? ""
+      if (!fieldRef) {
+        const separator = current && !current.endsWith("\n") ? "\n" : ""
+        return { ...prev, [field]: `${current}${separator}${token}` }
+      }
+      const start = fieldRef.selectionStart ?? current.length
+      const end = fieldRef.selectionEnd ?? current.length
+      const nextValue = `${current.slice(0, start)}${token}${current.slice(end)}`
+      const caret = start + token.length
+      window.requestAnimationFrame(() => {
+        fieldRef.focus()
+        fieldRef.setSelectionRange(caret, caret)
+      })
+      return { ...prev, [field]: nextValue }
+    })
+  }, [])
+
+  const insertCorreoLogo = useCallback(
+    (logoUrl: string) => {
+      const normalized = normalizeLogoUrl(logoUrl)
+      if (!normalized) return
+      setSelectedLogoUrl(normalized)
+      appendTemplateToken("cuerpoTexto", "{{logo_url}}")
+      const htmlFocused = typeof document !== "undefined" && document.activeElement === correoHtmlRef.current
+      const hasHtmlContent = Boolean((templateForm.cuerpoHtml ?? "").trim())
+      if (htmlFocused || hasHtmlContent) {
+        appendTemplateToken("cuerpoHtml", `<img src="{{logo_url}}" alt="Logo" style="${EMAIL_LOGO_IMG_STYLE}" />`)
+      }
+    },
+    [appendTemplateToken, normalizeLogoUrl, templateForm.cuerpoHtml]
+  )
+
+  const loadLogos = useCallback(async () => {
+    if (logosLoading) return
+    setLogosLoading(true)
+    setTemplateError(null)
+    try {
+      const response = await fetch("/api/settings/logos", { cache: "no-store" })
+      const payload = await response.json().catch(() => ({}))
+      if (!response.ok) {
+        throw new Error(typeof payload?.detail === "string" ? payload.detail : "No se pudieron cargar los logos.")
+      }
+      const items = Array.isArray(payload?.logos) ? payload.logos : []
+      const normalized = items
+        .map((item: unknown) => {
+          if (!item || typeof item !== "object") return null
+          const row = item as Record<string, unknown>
+          const fileUrl = typeof row.file_url === "string" ? row.file_url.trim() : ""
+          if (!fileUrl) return null
+          return {
+            id: String(row.id ?? fileUrl),
+            nombre: typeof row.nombre === "string" && row.nombre.trim() ? row.nombre.trim() : "Logo",
+            file_url: fileUrl,
+          } as LogoAsset
+        })
+        .filter((item: LogoAsset | null): item is LogoAsset => item != null)
+      setLogos(normalized)
+      if (normalized.length) setSelectedLogoUrl(normalized[0].file_url)
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "No se pudieron cargar los logos."
+      setTemplateError(message)
+    } finally {
+      setLogosLoading(false)
+    }
+  }, [logosLoading])
 
   const slugify = useCallback((value: string) => {
     return value
@@ -262,6 +350,7 @@ export function CampanasMetricsClient() {
       setTemplatesCampanaId(campanaId)
       setTemplatesCampanaNombre(campanaNombre ?? `Campaña ${campanaId.slice(0, 8)}`)
       setTemplatesCampanaCanal(canal)
+      setSelectedLogoUrl("")
       setTemplateForm({
         id: "",
         canal: canal ?? "correo",
@@ -283,6 +372,8 @@ export function CampanasMetricsClient() {
 
   const handleTemplateEdit = useCallback((template: ContactoTemplate) => {
     const metadata = template.metadata && typeof template.metadata === "object" ? template.metadata : {}
+    const logoFromMetadata = typeof metadata["logo_url"] === "string" ? metadata["logo_url"].trim() : ""
+    setSelectedLogoUrl(logoFromMetadata)
     setTemplateForm({
       id: template.id,
       canal: template.canal,
@@ -322,6 +413,10 @@ export function CampanasMetricsClient() {
     setTemplateError(null)
     const metadata: Record<string, unknown> = {}
     if (templateForm.twilioSid.trim()) metadata["twilio_content_sid"] = templateForm.twilioSid.trim()
+    const normalizedLogoUrl = normalizeLogoUrl(selectedLogoUrl)
+    if (templateForm.canal === "correo" && normalizedLogoUrl) {
+      metadata["logo_url"] = normalizedLogoUrl
+    }
     if (templateForm.nombreIa.trim()) {
       metadata["nombre_ia"] = templateForm.nombreIa.trim()
       metadata["assistant_name"] = templateForm.nombreIa.trim()
@@ -367,7 +462,7 @@ export function CampanasMetricsClient() {
     } finally {
       setTemplateSaving(false)
     }
-  }, [loadCampaignTemplates, resetTemplateForm, slugify, templateForm, templatesCampanaCanal, templatesCampanaId])
+  }, [loadCampaignTemplates, normalizeLogoUrl, resetTemplateForm, selectedLogoUrl, slugify, templateForm, templatesCampanaCanal, templatesCampanaId])
 
   const handleTemplateDelete = useCallback(
     async (templateId: string) => {
@@ -773,18 +868,57 @@ export function CampanasMetricsClient() {
                   <div className="space-y-1">
                     <Label>Cuerpo (texto)</Label>
                     <Textarea
+                      ref={correoTextoRef}
                       rows={4}
                       value={templateForm.cuerpoTexto}
                       onChange={(event) => setTemplateForm((prev) => ({ ...prev, cuerpoTexto: event.target.value }))}
                     />
                   </div>
+                  <div className="space-y-2 rounded-md border p-2">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Button type="button" variant="outline" size="sm" onClick={() => void loadLogos()} disabled={logosLoading}>
+                        {logosLoading ? "Cargando..." : "Cargar galería"}
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => insertCorreoLogo(selectedLogoUrl)}
+                        disabled={!selectedLogoUrl}
+                      >
+                        Insertar seleccionado
+                      </Button>
+                    </div>
+                    {logos.length ? (
+                      <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
+                        {logos.map((logo) => (
+                          <button
+                            key={logo.id}
+                            type="button"
+                            className={cn(
+                              "rounded border p-1 text-left",
+                              selectedLogoUrl === logo.file_url ? "border-primary" : "border-border"
+                            )}
+                            onClick={() => setSelectedLogoUrl(logo.file_url)}
+                          >
+                            <img src={logo.file_url} alt={logo.nombre} className="h-12 w-full rounded object-contain" />
+                            <p className="mt-1 truncate text-[10px] text-muted-foreground">{logo.nombre}</p>
+                          </button>
+                        ))}
+                      </div>
+                    ) : null}
+                  </div>
                   <div className="space-y-1">
                     <Label>Cuerpo (HTML)</Label>
                     <Textarea
+                      ref={correoHtmlRef}
                       rows={5}
                       value={templateForm.cuerpoHtml}
                       onChange={(event) => setTemplateForm((prev) => ({ ...prev, cuerpoHtml: event.target.value }))}
                     />
+                    <p className="text-xs text-muted-foreground">
+                      Variables: {"{{nombre}}, {{empresa}}, {{email}}, {{telefono}}, {{segmento}}, {{logo_url}}"}.
+                    </p>
                   </div>
                 </>
               ) : null}
