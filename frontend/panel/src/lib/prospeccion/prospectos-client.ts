@@ -672,7 +672,7 @@ export async function listCrmCampaigns() {
 export async function createCrmCampaign(payload: {
   nombre: string
   tipo?: string
-  canal?: string
+  canal: "correo" | "whatsapp" | "llamada"
   presupuesto?: number
   fecha_inicio?: string
   fecha_fin?: string

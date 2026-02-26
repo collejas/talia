@@ -60,10 +60,12 @@ export function CampanasMetricsClient() {
   const [campaignFormMode, setCampaignFormMode] = useState<"create" | "edit">("create")
   const [campaignFormId, setCampaignFormId] = useState<string | null>(null)
   const [campaignFormName, setCampaignFormName] = useState("")
+  const [campaignFormCanal, setCampaignFormCanal] = useState<"correo" | "whatsapp" | "llamada">("whatsapp")
   const [campaignSaving, setCampaignSaving] = useState(false)
   const [templatesDialogOpen, setTemplatesDialogOpen] = useState(false)
   const [templatesCampanaId, setTemplatesCampanaId] = useState<string | null>(null)
   const [templatesCampanaNombre, setTemplatesCampanaNombre] = useState<string>("")
+  const [templatesCampanaCanal, setTemplatesCampanaCanal] = useState<"correo" | "whatsapp" | "llamada" | null>(null)
   const [templatesItems, setTemplatesItems] = useState<ContactoTemplate[]>([])
   const [templatesLoading, setTemplatesLoading] = useState(false)
   const [templateSaving, setTemplateSaving] = useState(false)
@@ -142,6 +144,7 @@ export function CampanasMetricsClient() {
     setCampaignFormMode("create")
     setCampaignFormId(null)
     setCampaignFormName("")
+    setCampaignFormCanal("whatsapp")
     setCampaignDialogOpen(true)
   }, [])
 
@@ -151,6 +154,8 @@ export function CampanasMetricsClient() {
     setCampaignFormMode("edit")
     setCampaignFormId(campanaId)
     setCampaignFormName(current.nombre ?? "")
+    const canal = current.canal === "correo" || current.canal === "llamada" || current.canal === "whatsapp" ? current.canal : "whatsapp"
+    setCampaignFormCanal(canal)
     setCampaignDialogOpen(true)
   }, [crmCampaigns])
 
@@ -164,7 +169,7 @@ export function CampanasMetricsClient() {
     setBanner(null)
     try {
       if (campaignFormMode === "create") {
-        await createCrmCampaign({ nombre, tipo: "prospeccion", canal: "multicanal" })
+        await createCrmCampaign({ nombre, tipo: "prospeccion", canal: campaignFormCanal })
         setBanner({ type: "success", message: "Campaña creada." })
       } else if (campaignFormId) {
         await updateProspeccionCampana(campaignFormId, { campana_nombre: nombre })
@@ -178,7 +183,7 @@ export function CampanasMetricsClient() {
     } finally {
       setCampaignSaving(false)
     }
-  }, [campaignFormId, campaignFormMode, campaignFormName, fetchCampanas])
+  }, [campaignFormCanal, campaignFormId, campaignFormMode, campaignFormName, fetchCampanas])
 
   const handleDeleteCampana = useCallback(
     async (campanaId: string) => {
@@ -206,7 +211,7 @@ export function CampanasMetricsClient() {
   const resetTemplateForm = useCallback(() => {
     setTemplateForm({
       id: "",
-      canal: "correo",
+      canal: templatesCampanaCanal ?? "correo",
       nombre: "",
       slug: "",
       descripcion: "",
@@ -215,7 +220,7 @@ export function CampanasMetricsClient() {
       cuerpoHtml: "",
       twilioSid: "",
     })
-  }, [])
+  }, [templatesCampanaCanal])
 
   const slugify = useCallback((value: string) => {
     return value
@@ -245,13 +250,29 @@ export function CampanasMetricsClient() {
 
   const handleManageTemplates = useCallback(
     async (campanaId: string, campanaNombre?: string | null) => {
+      const campaign = crmCampaigns.find((item) => item.id === campanaId)
+      const canal =
+        campaign?.canal === "correo" || campaign?.canal === "whatsapp" || campaign?.canal === "llamada"
+          ? campaign.canal
+          : null
       setTemplatesCampanaId(campanaId)
       setTemplatesCampanaNombre(campanaNombre ?? `Campaña ${campanaId.slice(0, 8)}`)
-      resetTemplateForm()
+      setTemplatesCampanaCanal(canal)
+      setTemplateForm({
+        id: "",
+        canal: canal ?? "correo",
+        nombre: "",
+        slug: "",
+        descripcion: "",
+        asunto: "",
+        cuerpoTexto: "",
+        cuerpoHtml: "",
+        twilioSid: "",
+      })
       setTemplatesDialogOpen(true)
       await loadCampaignTemplates(campanaId)
     },
-    [loadCampaignTemplates, resetTemplateForm]
+    [crmCampaigns, loadCampaignTemplates]
   )
 
   const handleTemplateEdit = useCallback((template: ContactoTemplate) => {
@@ -274,6 +295,10 @@ export function CampanasMetricsClient() {
       setTemplateError("Selecciona una campaña.")
       return
     }
+    if (templatesCampanaCanal && templateForm.canal !== templatesCampanaCanal) {
+      setTemplateError(`Esta campaña solo permite plantillas del canal ${canalLabel[templatesCampanaCanal]}.`)
+      return
+    }
     const nombre = templateForm.nombre.trim()
     const slug = (templateForm.slug.trim() || slugify(nombre)).trim()
     if (!nombre || !slug) {
@@ -284,10 +309,11 @@ export function CampanasMetricsClient() {
     setTemplateError(null)
     const metadata: Record<string, unknown> = {}
     if (templateForm.twilioSid.trim()) metadata["twilio_content_sid"] = templateForm.twilioSid.trim()
+    const canalToSave = templatesCampanaCanal ?? templateForm.canal
     try {
       if (templateForm.id) {
         await updateContactoTemplate(templateForm.id, {
-          canal: templateForm.canal,
+          canal: canalToSave,
           nombre,
           slug,
           descripcion: templateForm.descripcion.trim() || null,
@@ -299,7 +325,7 @@ export function CampanasMetricsClient() {
         })
       } else {
         await createContactoTemplate({
-          canal: templateForm.canal,
+          canal: canalToSave,
           nombre,
           slug,
           descripcion: templateForm.descripcion.trim() || null,
@@ -319,7 +345,7 @@ export function CampanasMetricsClient() {
     } finally {
       setTemplateSaving(false)
     }
-  }, [loadCampaignTemplates, resetTemplateForm, slugify, templateForm, templatesCampanaId])
+  }, [loadCampaignTemplates, resetTemplateForm, slugify, templateForm, templatesCampanaCanal, templatesCampanaId])
 
   const handleTemplateDelete = useCallback(
     async (templateId: string) => {
@@ -562,6 +588,28 @@ export function CampanasMetricsClient() {
                 placeholder="Ej. Prospección Inmobiliaria Q1"
               />
             </div>
+            <div className="space-y-1">
+              <Label>Canal</Label>
+              <Select
+                value={campaignFormCanal}
+                onValueChange={(value) => setCampaignFormCanal(value as "correo" | "whatsapp" | "llamada")}
+                disabled={campaignFormMode === "edit"}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="whatsapp">WhatsApp</SelectItem>
+                  <SelectItem value="correo">Correo</SelectItem>
+                  <SelectItem value="llamada">Llamada</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                {campaignFormMode === "create"
+                  ? "La campaña queda ligada a un solo canal."
+                  : "El canal no se puede cambiar después de crear la campaña."}
+              </p>
+            </div>
             <Button type="button" className="w-full" onClick={() => void handleSaveCampaign()} disabled={campaignSaving}>
               {campaignSaving ? "Guardando..." : campaignFormMode === "create" ? "Crear campaña" : "Guardar cambios"}
             </Button>
@@ -632,6 +680,7 @@ export function CampanasMetricsClient() {
                   onValueChange={(value) =>
                     setTemplateForm((prev) => ({ ...prev, canal: value as "correo" | "whatsapp" | "llamada" }))
                   }
+                  disabled={Boolean(templatesCampanaCanal)}
                 >
                   <SelectTrigger>
                     <SelectValue />
@@ -642,6 +691,11 @@ export function CampanasMetricsClient() {
                     <SelectItem value="llamada">Llamada</SelectItem>
                   </SelectContent>
                 </Select>
+                {templatesCampanaCanal ? (
+                  <p className="text-xs text-muted-foreground">
+                    Canal fijo por campaña: {canalLabel[templatesCampanaCanal]}.
+                  </p>
+                ) : null}
               </div>
               <div className="space-y-1">
                 <Label>Nombre</Label>

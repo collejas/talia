@@ -12689,8 +12689,18 @@ async def crear_contacto_template(
     repo: CRMRepository = Depends(get_repository),
     _: str = Depends(require_permission("ejecutar_busquedas")),
     user_token: str = Depends(require_user_token),
+    organizacion_id: UUID = Depends(require_organizacion_id),
     payload: ContactoTemplatePayload,
 ) -> dict[str, Any]:
+    if payload.campana_id:
+        campana = await repo.get_campaign(organizacion_id=organizacion_id, campana_id=payload.campana_id)
+        if not campana:
+            raise HTTPException(status_code=404, detail="campana_not_found")
+        campana_canal = _clean_text(campana.get("canal")).lower()
+        if campana_canal not in {"correo", "whatsapp", "llamada"}:
+            raise HTTPException(status_code=400, detail="campana_canal_invalido")
+        if payload.canal != campana_canal:
+            raise HTTPException(status_code=400, detail="template_canal_mismatch_with_campana")
     raw = payload.model_dump()
     metadata = _ensure_dict(raw.get("metadata"), default={})
     if payload.campana_id:
@@ -12711,12 +12721,33 @@ async def actualizar_contacto_template(
     repo: CRMRepository = Depends(get_repository),
     _: str = Depends(require_permission("ejecutar_busquedas")),
     user_token: str = Depends(require_user_token),
+    organizacion_id: UUID = Depends(require_organizacion_id),
     template_id: UUID,
     payload: ContactoTemplateUpdatePayload,
 ) -> dict[str, Any]:
+    current = await repo.get_contact_template(usuario_token=user_token, template_id=template_id)
+    if not current:
+        raise HTTPException(status_code=404, detail="contact_template_not_found")
     raw_data = payload.model_dump(exclude_none=True)
     if not raw_data:
         raise HTTPException(status_code=400, detail="empty_update")
+    current_metadata = _ensure_dict(current.get("metadata"), default={})
+    current_campana_id = _clean_text(current_metadata.get("campana_id"))
+    effective_campana_id = str(raw_data["campana_id"]) if "campana_id" in raw_data and raw_data.get("campana_id") else current_campana_id
+    effective_canal = _clean_text(raw_data.get("canal") or current.get("canal")).lower()
+    if effective_campana_id:
+        try:
+            campana_uuid = UUID(effective_campana_id)
+        except (TypeError, ValueError) as exc:
+            raise HTTPException(status_code=400, detail="campana_id_invalid") from exc
+        campana = await repo.get_campaign(organizacion_id=organizacion_id, campana_id=campana_uuid)
+        if not campana:
+            raise HTTPException(status_code=404, detail="campana_not_found")
+        campana_canal = _clean_text(campana.get("canal")).lower()
+        if campana_canal not in {"correo", "whatsapp", "llamada"}:
+            raise HTTPException(status_code=400, detail="campana_canal_invalido")
+        if effective_canal and effective_canal != campana_canal:
+            raise HTTPException(status_code=400, detail="template_canal_mismatch_with_campana")
     metadata_patch = _ensure_dict(raw_data.get("metadata"), default={}) if "metadata" in raw_data else {}
     if "campana_id" in raw_data:
         campana_raw = raw_data.pop("campana_id")
@@ -14912,6 +14943,13 @@ async def create_campaign(
     _: str = Depends(require_permission("campaigns.view")),
     payload: CRMCampaignCreate,
 ) -> CRMCampaign:
+    if (payload.tipo or "").strip().lower() == "prospeccion":
+        canal = (payload.canal or "").strip().lower()
+        if canal not in {"correo", "whatsapp", "llamada"}:
+            raise HTTPException(
+                status_code=400,
+                detail="canal_requerido_para_prospeccion",
+            )
     try:
         row = await repo.create_campaign(
             organizacion_id=organizacion_id,

@@ -130,7 +130,12 @@ type ContactDrawerData = {
   results: ProspeccionContactResult[]
   omitidos?: ProspeccionOmitido[]
 }
-type CampaignOption = { id: string; nombre: string }
+type CampaignOption = { id: string; nombre: string; canal: "correo" | "whatsapp" | "llamada" | null }
+const plannerCanalLabel: Record<"correo" | "whatsapp" | "llamada", string> = {
+  correo: "Correo",
+  whatsapp: "WhatsApp",
+  llamada: "Llamada",
+}
 type ChecklistSummary = {
   telefonos_pendientes: number
   sin_email: number
@@ -598,6 +603,11 @@ function ProspectosView() {
   const currentIds = useMemo(() => items.map((item) => item.id).filter(Boolean) as string[], [items])
   const selectedIds = useMemo(() => Array.from(selected.values()), [selected])
   const selectedCount = selectedIds.length
+  const selectedPlannerCampaign = useMemo(
+    () => plannerCampaignOptions.find((item) => item.id === plannerCampaignId) ?? null,
+    [plannerCampaignId, plannerCampaignOptions]
+  )
+  const selectedPlannerCanal = selectedPlannerCampaign?.canal ?? null
   const orderSelectedByOptions = (selection: Set<string>, options: string[]) => {
     const ordered: string[] = []
     const seen = new Set<string>()
@@ -1437,10 +1447,16 @@ function ProspectosView() {
     try {
       const campaigns = await listCrmCampaigns()
       const ordered = (Array.isArray(campaigns) ? campaigns : [])
-        .map((campaign) => ({
-          id: campaign.id,
-          nombre: campaign.nombre ?? `Campaña ${campaign.id.slice(0, 8)}`,
-        }))
+        .map((campaign) => {
+          const canalRaw = typeof campaign.canal === "string" ? campaign.canal.toLowerCase().trim() : ""
+          const canal: CampaignOption["canal"] =
+            canalRaw === "correo" || canalRaw === "whatsapp" || canalRaw === "llamada" ? canalRaw : null
+          return {
+            id: campaign.id,
+            nombre: campaign.nombre ?? `Campaña ${campaign.id.slice(0, 8)}`,
+            canal,
+          }
+        })
         .sort((a, b) => a.nombre.localeCompare(b.nombre, "es", { sensitivity: "base" }))
       setPlannerCampaignOptions(ordered)
       setPlannerCampaignId((prev) => (prev && ordered.some((item) => item.id === prev) ? prev : ordered[0]?.id ?? ""))
@@ -1513,6 +1529,10 @@ function ProspectosView() {
       setPlannerError("Selecciona una campaña.")
       return
     }
+    if (!selectedPlannerCanal) {
+      setPlannerError("La campaña seleccionada no tiene un canal válido.")
+      return
+    }
     const separacion = Number.parseInt(plannerSeparationSeconds || "0", 10)
     if (Number.isNaN(separacion) || separacion < 0 || separacion > 3600) {
       setPlannerError("La separación debe estar entre 0 y 3600 segundos.")
@@ -1526,7 +1546,7 @@ function ProspectosView() {
         plannerScheduleMode === "programado" && plannerScheduleDate
           ? new Date(`${plannerScheduleDate}T${plannerScheduleTime || "00:00"}`).toISOString()
           : undefined
-      ;(["correo", "whatsapp", "llamada"] as const).forEach((canal) => {
+      ;([selectedPlannerCanal] as const).forEach((canal) => {
         const selectedTemplateId = plannerTemplateSelection[canal]
         if (!selectedTemplateId) return
         const template = templates.find((item) => item.id === selectedTemplateId && item.canal === canal)
@@ -1558,7 +1578,7 @@ function ProspectosView() {
         canalesPayload.push(entry)
       })
       if (!canalesPayload.length) {
-        setPlannerError("La campaña no tiene plantillas configuradas para ejecutar.")
+        setPlannerError("Selecciona una plantilla para el canal de la campaña.")
         return
       }
       const response = await contactarProspectos({
@@ -1607,6 +1627,7 @@ function ProspectosView() {
     plannerScheduleDate,
     plannerScheduleMode,
     plannerScheduleTime,
+    selectedPlannerCanal,
     plannerTemplateSelection,
     plannerTemplates,
     plannerSeparationSeconds,
@@ -2475,42 +2496,43 @@ function ProspectosView() {
                 </div>
               </div>
               <div className="rounded-lg border bg-background p-4">
-                <p className="text-sm font-semibold">2) Selecciona plantillas por canal</p>
-                <div className="mt-2 grid gap-3 md:grid-cols-3">
-                  {(["correo", "whatsapp", "llamada"] as const).map((canal) => (
-                    <div key={`planner-template-${canal}`} className="space-y-1">
-                      <Label className="capitalize">{canal}</Label>
-                      <Select
-                        value={plannerTemplateSelection[canal]}
-                        onValueChange={(value) =>
-                          setPlannerTemplateSelection((prev) => ({
-                            ...prev,
-                            [canal]: value,
-                          }))
-                        }
-                        disabled={plannerTemplatesLoading || !plannerCampaignId}
-                      >
-                        <SelectTrigger>
-                          <SelectValue
-                            placeholder={
-                              plannerTemplatesLoading
-                                ? "Cargando..."
-                                : `Sin plantilla ${canal}`
-                            }
-                          />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {plannerTemplates
-                            .filter((tpl) => tpl.canal === canal)
-                            .map((tpl) => (
-                              <SelectItem key={tpl.id} value={tpl.id}>
-                                {tpl.nombre}
-                              </SelectItem>
-                            ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  ))}
+                <p className="text-sm font-semibold">2) Selecciona plantilla del canal</p>
+                <div className="mt-2 grid gap-3 md:grid-cols-1">
+                  <div className="space-y-1">
+                    <Label>{selectedPlannerCanal ? plannerCanalLabel[selectedPlannerCanal] : "Canal"}</Label>
+                    <Select
+                      value={selectedPlannerCanal ? plannerTemplateSelection[selectedPlannerCanal] : ""}
+                      onValueChange={(value) => {
+                        if (!selectedPlannerCanal) return
+                        setPlannerTemplateSelection((prev) => ({
+                          ...prev,
+                          [selectedPlannerCanal]: value,
+                        }))
+                      }}
+                      disabled={plannerTemplatesLoading || !plannerCampaignId || !selectedPlannerCanal}
+                    >
+                      <SelectTrigger>
+                        <SelectValue
+                          placeholder={
+                            plannerTemplatesLoading
+                              ? "Cargando..."
+                              : selectedPlannerCanal
+                                ? `Sin plantilla ${plannerCanalLabel[selectedPlannerCanal]}`
+                                : "Selecciona una campaña"
+                          }
+                        />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {plannerTemplates
+                          .filter((tpl) => tpl.canal === selectedPlannerCanal)
+                          .map((tpl) => (
+                            <SelectItem key={tpl.id} value={tpl.id}>
+                              {tpl.nombre}
+                            </SelectItem>
+                          ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
               </div>
               <div className="rounded-lg border bg-background p-4">

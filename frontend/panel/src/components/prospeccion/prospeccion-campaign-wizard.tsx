@@ -386,7 +386,8 @@ export function ProspeccionCampaignWizard({
     setNewCampaignSaving(true)
     setError(null)
     try {
-      const created = await createCrmCampaign({ nombre, canal: "multicanal", tipo: "prospeccion" })
+      const preferredCanal = (activeChannels[0]?.key ?? "whatsapp") as "correo" | "whatsapp" | "llamada"
+      const created = await createCrmCampaign({ nombre, canal: preferredCanal, tipo: "prospeccion" })
       setCampanas((prev) => [created, ...prev])
       setCampanaId(created.id)
       setNewCampaignName("")
@@ -397,7 +398,7 @@ export function ProspeccionCampaignWizard({
     } finally {
       setNewCampaignSaving(false)
     }
-  }, [newCampaignName])
+  }, [activeChannels, newCampaignName])
 
   const resolvePreferredLogo = useCallback(async (): Promise<string> => {
     if (quoteLogoUrl.trim()) return quoteLogoUrl.trim()
