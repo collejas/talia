@@ -16,7 +16,6 @@ import {
   IconRefresh,
   IconSearch,
   IconSparkles,
-  IconSend2,
   IconTrash,
   IconMail,
   IconTargetArrow,
@@ -61,7 +60,6 @@ import { canalLabel, contactHistoryDetail, contactStatusLabel, contactStatusVari
 import {
   actualizarProspecto,
   crearProspectoManual,
-  contactarProspectos,
   eliminarProspecto,
   eliminarProspectos,
   convertirProspectoAContacto,
@@ -70,17 +68,14 @@ import {
   listProspectosQueryMetadata,
   listContactoEnviosPorProspecto,
   listContactoLogs,
-  listContactoTemplates,
   listProspectoContactIndicators,
   listProspectoAudit,
   ejecutarChecklistLookup,
   ejecutarChecklistScraper,
-  listCrmCampaigns,
   type ProspectoItem,
   type ProspectoManualInput,
   type ProspectoAuditEntry,
   type ContactoEnvio,
-  type ContactoTemplate,
   type ProspeccionOmitido,
   type ProspectoContactIndicators,
   type ContactoLog,
@@ -88,7 +83,6 @@ import {
   verificarProspectos,
   listContactoBatches,
   type ContactoBatch,
-  type ProspeccionCanalConfigInput,
 } from "@/lib/prospeccion/prospectos-client"
 
 type FuenteFilter = "" | "google_places" | "denue" | "usuario"
@@ -133,8 +127,6 @@ type ContactDrawerData = {
   results: ProspeccionContactResult[]
   omitidos?: ProspeccionOmitido[]
 }
-type CampaignOption = { id: string; nombre: string }
-type LogoAsset = { id: string; nombre: string; file_url: string }
 type ChecklistSummary = {
   telefonos_pendientes: number
   sin_email: number
@@ -155,46 +147,6 @@ const initialFilters: Filters = {
   customDateFrom: "",
   customDateTo: "",
 }
-
-const initialContactForm = {
-  correoAsunto: "",
-  correoCuerpo: "",
-  correoHtml: "",
-  whatsappMensaje: "",
-  whatsappVariables: "",
-  whatsappEmpresa: process.env.NEXT_PUBLIC_WHATSAPP_EMPRESA?.trim() || process.env.NEXT_PUBLIC_APP_NAME?.trim() || "Tal-IA",
-  llamadaNotas: "",
-}
-
-const MAIL_VARIABLE_TOKENS = ["{{nombre}}", "{{empresa}}", "{{email}}", "{{telefono}}", "{{segmento}}", "{{logo_url}}"]
-const LEGACY_LOGO_PLACEHOLDER_REGEX = /{{\s*DATA:IMAGE:[^}]+}}/gi
-const LOGO_PLACEHOLDER_REGEX = /{{\s*logo_url\s*}}/i
-
-function htmlToPlainText(input: string): string {
-  const cleaned = input.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim()
-  return cleaned || "Contenido HTML"
-}
-
-function normalizeLogoUrl(input: string): string {
-  const value = input.trim()
-  if (!value) return value
-  if (value.startsWith("/") && typeof window !== "undefined") {
-    return `${window.location.origin}${value}`
-  }
-  return value
-}
-
-function normalizeEmailLogoPlaceholders(input: string): string {
-  if (!input) return input
-  return input.replace(LEGACY_LOGO_PLACEHOLDER_REGEX, "{{logo_url}}")
-}
-
-function hasEmailLogoPlaceholder(input: string): boolean {
-  if (!input) return false
-  return LOGO_PLACEHOLDER_REGEX.test(input) || /{{\s*DATA:IMAGE:[^}]+}}/i.test(input)
-}
-
-const EMAIL_LOGO_IMG_STYLE = "width:83.333%;height:auto;display:block;margin:0 auto;"
 
 type ProspectoFormState = {
   displayName: string
@@ -224,82 +176,6 @@ function arraysEqual(a: string[], b: string[]) {
     if (a[i] !== b[i]) return false
   }
   return true
-}
-
-function serializeWhatsappVariables(value: unknown): string {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return ""
-  const entries = Object.entries(value as Record<string, unknown>)
-    .map(([key, raw]) => [String(key).trim(), raw == null ? "" : String(raw).trim()] as const)
-    .filter(([key]) => key.length > 0)
-  if (!entries.length) return ""
-  return entries.map(([key, entry]) => `${key}=${entry}`).join("\n")
-}
-
-function parseWhatsappVariables(raw: string): { value: Record<string, string> | null; error: string | null } {
-  const input = raw.trim()
-  if (!input) return { value: null, error: null }
-
-  if (input.startsWith("{")) {
-    try {
-      const parsed = JSON.parse(input)
-      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-        return { value: null, error: "Las variables de WhatsApp deben ser un objeto JSON (clave/valor)." }
-      }
-      const mapped = Object.entries(parsed as Record<string, unknown>)
-        .map(([key, val]) => [String(key).trim(), val == null ? "" : String(val)] as const)
-        .filter(([key]) => key.length > 0)
-      return { value: Object.fromEntries(mapped), error: null }
-    } catch {
-      return { value: null, error: "JSON inválido en variables de WhatsApp." }
-    }
-  }
-
-  const variables: Record<string, string> = {}
-  const lines = input.split(/\r?\n/)
-  for (const line of lines) {
-    const trimmed = line.trim()
-    if (!trimmed) continue
-    const separatorIndex = trimmed.search(/[:=]/)
-    if (separatorIndex <= 0) {
-      return { value: null, error: "Formato inválido. Usa `clave=valor` o JSON." }
-    }
-    const key = trimmed.slice(0, separatorIndex).trim()
-    const value = trimmed.slice(separatorIndex + 1).trim()
-    if (!key) {
-      return { value: null, error: "Cada variable de WhatsApp requiere una clave." }
-    }
-    variables[key] = value
-  }
-  return { value: Object.keys(variables).length ? variables : null, error: null }
-}
-
-function extractNumericWhatsappPlaceholders(text: string): string[] {
-  if (!text.trim()) return []
-  const keys = new Set<string>()
-  const regex = /{{\s*(\d+)\s*}}/g
-  let match: RegExpExecArray | null = regex.exec(text)
-  while (match) {
-    keys.add(match[1])
-    match = regex.exec(text)
-  }
-  return Array.from(keys)
-}
-
-function buildAutoWhatsappVariables(message: string, empresa: string): Record<string, string> | null {
-  const keys = extractNumericWhatsappPlaceholders(message)
-  if (!keys.length) return null
-  const out: Record<string, string> = {}
-  for (const key of keys) {
-    if (key === "1") out[key] = "{{display_name}}"
-    else if (key === "3") out[key] = empresa.trim() || "Tal-IA"
-    else if (key === "4") out[key] = "{{segmento}}"
-  }
-  return Object.keys(out).length ? out : null
-}
-
-function getTemplateTwilioSid(template: ContactoTemplate): string {
-  const metadata = template.metadata && typeof template.metadata === "object" ? template.metadata : null
-  return metadata && typeof metadata["twilio_content_sid"] === "string" ? metadata["twilio_content_sid"].trim() : ""
 }
 
 type ProspeccionStage = "discover" | "enrich" | "prepare" | "launch" | "evaluate"
@@ -633,9 +509,6 @@ function ProspectosView() {
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [banner, setBanner] = useState<BannerState | null>(null)
   const [action, setAction] = useState<"lookup" | "contact" | null>(null)
-  const [contactDialogOpen, setContactDialogOpen] = useState(false)
-  const [contactForm, setContactForm] = useState(initialContactForm)
-  const [contactError, setContactError] = useState<string | null>(null)
   const [formDialogOpen, setFormDialogOpen] = useState(false)
   const [formMode, setFormMode] = useState<"create" | "edit">("create")
   const [formValues, setFormValues] = useState<ProspectoFormState>(initialProspectoForm)
@@ -653,13 +526,6 @@ function ProspectosView() {
   const [contactDrawerOpen, setContactDrawerOpen] = useState(false)
   const [contactDrawerData, setContactDrawerData] = useState<ContactDrawerData | null>(null)
   const [contactIndicators, setContactIndicators] = useState<Record<string, ProspectoContactIndicators>>({})
-  const correoAsuntoRef = useRef<HTMLInputElement | null>(null)
-  const correoCuerpoRef = useRef<HTMLTextAreaElement | null>(null)
-  const correoHtmlRef = useRef<HTMLTextAreaElement | null>(null)
-  const [quoteLogoUrl, setQuoteLogoUrl] = useState<string>("")
-  const [logos, setLogos] = useState<LogoAsset[]>([])
-  const [logosLoading, setLogosLoading] = useState(false)
-  const [selectedLogoUrl, setSelectedLogoUrl] = useState<string>("")
   const [historyDialogOpen, setHistoryDialogOpen] = useState(false)
   const [historyProspect, setHistoryProspect] = useState<ProspectoItem | null>(null)
   const [historyEntries, setHistoryEntries] = useState<ContactoEnvio[]>([])
@@ -672,12 +538,6 @@ function ProspectosView() {
   const [auditLoading, setAuditLoading] = useState(false)
   const [auditError, setAuditError] = useState<string | null>(null)
   const [historyTab, setHistoryTab] = useState<"timeline" | "envios" | "audit">("timeline")
-  const [templates, setTemplates] = useState<ContactoTemplate[]>([])
-  const [templatesLoading, setTemplatesLoading] = useState(false)
-  const [selectedTemplates, setSelectedTemplates] = useState<Record<string, string>>({})
-  const [campaignOptions, setCampaignOptions] = useState<CampaignOption[]>([])
-  const [campaignOptionsLoading, setCampaignOptionsLoading] = useState(false)
-  const [contactCampaignId, setContactCampaignId] = useState("")
   const [checklist, setChecklist] = useState<ChecklistSummary | null>(null)
   const [checklistLoading, setChecklistLoading] = useState(false)
   const [checklistAction, setChecklistAction] = useState<"lookup" | "scraper" | null>(null)
@@ -1212,41 +1072,6 @@ function ProspectosView() {
     void fetchRecentBatches()
   }, [fetchRecentBatches])
 
-useEffect(() => {
-  if (!contactDialogOpen) {
-    setContactError(null)
-    setContactForm(initialContactForm)
-    setSelectedTemplates({})
-  }
-}, [contactDialogOpen])
-
-  useEffect(() => {
-    if (!contactDialogOpen) {
-      return
-    }
-    if (!contactCampaignId) {
-      setTemplates([])
-      setTemplatesLoading(false)
-      return
-    }
-    let active = true
-    setTemplatesLoading(true)
-    ;(async () => {
-      try {
-        const response = await listContactoTemplates({ campana_id: contactCampaignId })
-        if (!active) return
-        setTemplates(response.items ?? [])
-      } catch {
-        if (active) setTemplates([])
-      } finally {
-        if (active) setTemplatesLoading(false)
-      }
-    })()
-    return () => {
-      active = false
-    }
-  }, [contactDialogOpen, contactCampaignId])
-
   useEffect(() => {
     if (!formDialogOpen) {
       setFormValues(initialProspectoForm)
@@ -1405,35 +1230,6 @@ useEffect(() => {
     }
   }, [])
 
-  const handleTemplateSelect = (canal: "correo" | "whatsapp" | "llamada", slug: string) => {
-    setSelectedTemplates((prev) => ({ ...prev, [canal]: slug }))
-    const template = templates.find((item) => item.slug === slug && item.canal === canal)
-    if (!template) return
-    const metadata = template.metadata && typeof template.metadata === "object" ? template.metadata : null
-    if (canal === "correo") {
-      setContactForm((prev) => ({
-        ...prev,
-        correoAsunto: template.asunto ?? prev.correoAsunto,
-        correoCuerpo: template.cuerpo_texto ?? prev.correoCuerpo,
-        correoHtml: template.cuerpo_html ?? prev.correoHtml,
-      }))
-    } else if (canal === "whatsapp") {
-      const templateVariables = serializeWhatsappVariables(
-        metadata?.["twilio_variables"] ?? metadata?.["twilio_content_variables"]
-      )
-      setContactForm((prev) => ({
-        ...prev,
-        whatsappMensaje: template.cuerpo_texto ?? prev.whatsappMensaje,
-        whatsappVariables: templateVariables,
-      }))
-    } else if (canal === "llamada") {
-      setContactForm((prev) => ({
-        ...prev,
-        llamadaNotas: template.cuerpo_texto ?? prev.llamadaNotas,
-      }))
-    }
-  }
-
   useEffect(() => {
     if (!currentIds.length) {
       setContactIndicators({})
@@ -1466,11 +1262,6 @@ useEffect(() => {
   const showingFrom = items.length ? offset + 1 : 0
   const showingTo = items.length ? offset + items.length : 0
   const pageCount = limit ? Math.ceil(total / limit) : 1
-  const selectedWhatsappTemplate = useMemo(() => {
-    const slug = selectedTemplates.whatsapp
-    if (!slug) return null
-    return templates.find((template) => template.canal === "whatsapp" && template.slug === slug) ?? null
-  }, [selectedTemplates.whatsapp, templates])
   const currentPage = limit ? Math.floor(offset / limit) + 1 : 1
   const flowSteps = useMemo(() => {
     const pendingPhones = checklist?.telefonos_pendientes ?? 0
@@ -1618,360 +1409,6 @@ useEffect(() => {
     }
   }, [fetchProspectos, fetchStageSummary, offset, selectedIds])
 
-  const resolvePreferredLogo = useCallback(async (): Promise<string> => {
-    if (quoteLogoUrl.trim()) return quoteLogoUrl.trim()
-    try {
-      const response = await fetch("/api/crm/settings/quote-template", { cache: "no-store" })
-      const payload = await response.json().catch(() => ({}))
-      if (response.ok) {
-        const fromConfig =
-          payload && typeof payload === "object" && payload.config && typeof payload.config === "object"
-            ? String((payload.config as Record<string, unknown>).logoUrl ?? "").trim()
-            : ""
-        if (fromConfig) {
-          setQuoteLogoUrl(fromConfig)
-          return fromConfig
-        }
-      }
-    } catch {
-      // fallback below
-    }
-    try {
-      const response = await fetch("/api/settings/logos", { cache: "no-store" })
-      const payload = await response.json().catch(() => ({}))
-      if (response.ok && Array.isArray(payload?.logos) && payload.logos.length) {
-        const first = payload.logos.find(
-          (item: unknown) =>
-            item &&
-            typeof item === "object" &&
-            typeof (item as Record<string, unknown>).file_url === "string" &&
-            String((item as Record<string, unknown>).file_url).trim().length,
-        ) as Record<string, unknown> | undefined
-        const fileUrl = first ? String(first.file_url).trim() : ""
-        if (fileUrl) return fileUrl
-      }
-    } catch {
-      // fallback below
-    }
-    if (typeof window !== "undefined") {
-      return `${window.location.origin}/assets/logos/Logo8.png`
-    }
-    return "https://talia.mx/assets/logos/Logo8.png"
-  }, [quoteLogoUrl])
-
-  const handleContactSubmit = useCallback(async () => {
-    if (!selectedIds.length) {
-      setContactError("Selecciona al menos un prospecto.")
-      return
-    }
-    const payload: {
-      prospecto_ids: string[]
-      campana_id?: string
-      correo_asunto?: string
-      correo_cuerpo?: string
-      whatsapp_mensaje?: string
-      llamada_notas?: string
-      canales?: ProspeccionCanalConfigInput[]
-    } = { prospecto_ids: selectedIds }
-
-    if (!contactCampaignId) {
-      setContactError("Selecciona una campaña para medir resultados.")
-      return
-    }
-    if (!selectedTemplates.correo && !selectedTemplates.whatsapp && !selectedTemplates.llamada) {
-      setContactError("Selecciona al menos una plantilla (correo, WhatsApp o llamada).")
-      return
-    }
-    payload.campana_id = contactCampaignId
-
-    const correoAsunto = normalizeEmailLogoPlaceholders(contactForm.correoAsunto.trim())
-    const correoCuerpo = normalizeEmailLogoPlaceholders(contactForm.correoCuerpo.trim())
-    const correoHtml = normalizeEmailLogoPlaceholders(contactForm.correoHtml.trim())
-    const whatsappMensaje = contactForm.whatsappMensaje.trim()
-    const whatsappVariablesRaw = contactForm.whatsappVariables.trim()
-    const whatsappEmpresa = contactForm.whatsappEmpresa.trim()
-    const llamadaNotas = contactForm.llamadaNotas.trim()
-
-    const canalesPayload: ProspeccionCanalConfigInput[] = []
-
-    const resolveTemplate = (canal: "correo" | "whatsapp" | "llamada") => {
-      const slug = selectedTemplates[canal]
-      if (!slug) return null
-      const template = templates.find((item) => item.slug === slug && item.canal === canal)
-      return template ?? null
-    }
-
-    const correoTemplate = resolveTemplate("correo")
-    if (selectedTemplates.correo && !correoTemplate) {
-      setContactError("La plantilla de correo seleccionada ya no está disponible.")
-      return
-    }
-    if (correoTemplate) {
-      const templateSubject = normalizeEmailLogoPlaceholders(correoTemplate.asunto?.trim() || "")
-      const templateBodyHtml = normalizeEmailLogoPlaceholders(correoTemplate.cuerpo_html?.trim() || "")
-      const templateBodyText = normalizeEmailLogoPlaceholders(correoTemplate.cuerpo_texto?.trim() || "")
-      const subject = correoAsunto || templateSubject
-      const bodyHtml = correoHtml || templateBodyHtml || ""
-      const requiresLogo =
-        hasEmailLogoPlaceholder(subject) ||
-        hasEmailLogoPlaceholder(bodyHtml) ||
-        hasEmailLogoPlaceholder(templateBodyText) ||
-        hasEmailLogoPlaceholder(correoCuerpo) ||
-        hasEmailLogoPlaceholder(correoHtml)
-      const logoUrl =
-        requiresLogo ? normalizeLogoUrl(selectedLogoUrl.trim() || quoteLogoUrl.trim() || (await resolvePreferredLogo())) : ""
-      const body = correoCuerpo || templateBodyText || (bodyHtml ? htmlToPlainText(bodyHtml) : "")
-      if (!subject || !body) {
-        setContactError("La plantilla de correo seleccionada necesita asunto y cuerpo.")
-        return
-      }
-      const correoEntry: ProspeccionCanalConfigInput = {
-        canal: "correo",
-        template_id: correoTemplate.id,
-        subject,
-        body,
-      }
-      if (bodyHtml) {
-        correoEntry.body_html = bodyHtml
-      }
-      if (logoUrl) {
-        correoEntry.metadata = { ...(correoEntry.metadata ?? {}), logo_url: logoUrl }
-      }
-      canalesPayload.push(correoEntry)
-    } else if (correoAsunto || correoCuerpo || correoHtml) {
-      setContactError("Selecciona una plantilla de correo para enviar este canal.")
-      return
-    }
-
-    const whatsappTemplate = resolveTemplate("whatsapp")
-    if (selectedTemplates.whatsapp && !whatsappTemplate) {
-      setContactError("La plantilla de WhatsApp seleccionada ya no está disponible.")
-      return
-    }
-    if (whatsappTemplate) {
-      const message = whatsappMensaje || whatsappTemplate.cuerpo_texto?.trim() || ""
-      const parsedWhatsappVariables = parseWhatsappVariables(whatsappVariablesRaw)
-      if (parsedWhatsappVariables.error) {
-        setContactError(parsedWhatsappVariables.error)
-        return
-      }
-      const autoWhatsappVariables = buildAutoWhatsappVariables(message, whatsappEmpresa)
-      const templateMetadata =
-        whatsappTemplate.metadata && typeof whatsappTemplate.metadata === "object"
-          ? whatsappTemplate.metadata
-          : null
-      const twilioSidFromTemplate =
-        templateMetadata && typeof templateMetadata["twilio_content_sid"] === "string"
-          ? templateMetadata["twilio_content_sid"].trim()
-          : ""
-      const entry: ProspeccionCanalConfigInput = {
-        canal: "whatsapp",
-      }
-      const isTemplateIdUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
-        whatsappTemplate.id
-      )
-      if (isTemplateIdUuid) {
-        entry.template_id = whatsappTemplate.id
-      }
-      if (message) {
-        entry.body = message
-      }
-      const mergedWhatsappVariables = {
-        ...(autoWhatsappVariables ?? {}),
-        ...(parsedWhatsappVariables.value ?? {}),
-      }
-      if (twilioSidFromTemplate || Object.keys(mergedWhatsappVariables).length) {
-        entry.metadata = {
-          ...(twilioSidFromTemplate ? { twilio_content_sid: twilioSidFromTemplate } : {}),
-          ...(Object.keys(mergedWhatsappVariables).length ? { twilio_variables: mergedWhatsappVariables } : {}),
-        }
-      }
-      canalesPayload.push(entry)
-    } else if (whatsappMensaje || whatsappVariablesRaw || whatsappEmpresa) {
-      setContactError("Selecciona una plantilla de WhatsApp para enviar este canal.")
-      return
-    }
-
-    const llamadaTemplate = resolveTemplate("llamada")
-    if (selectedTemplates.llamada && !llamadaTemplate) {
-      setContactError("La plantilla de llamada seleccionada ya no está disponible.")
-      return
-    }
-    if (llamadaTemplate) {
-      const script = llamadaNotas || llamadaTemplate.cuerpo_texto?.trim() || llamadaTemplate.descripcion?.trim() || ""
-      const entry: ProspeccionCanalConfigInput = {
-        canal: "llamada",
-        template_id: llamadaTemplate.id,
-      }
-      if (script) {
-        entry.message = script
-      }
-      canalesPayload.push(entry)
-    } else if (llamadaNotas) {
-      setContactError("Selecciona una plantilla de llamada para enviar este canal.")
-      return
-    }
-
-    if (canalesPayload.length) {
-      payload.canales = canalesPayload
-    }
-
-    if (!canalesPayload.length) {
-      setContactError("Selecciona al menos una plantilla para generar el envío.")
-      return
-    }
-
-    setAction("contact")
-    setContactError(null)
-    try {
-      const response = await contactarProspectos(payload)
-      const nameMap = new Map(items.map((item) => [item.id, item.display_name]))
-      const enrichedResults = (response.contactos ?? []).map((resumen) => ({
-        ...resumen,
-        display_name: nameMap.get(resumen.prospecto_id) ?? resumen.display_name ?? null,
-      }))
-      if (enrichedResults.length) {
-        openContactDrawer({
-          batchId: response.batch_id ?? null,
-          results: enrichedResults,
-          omitidos: response.omitidos,
-        })
-      }
-      const totalAcciones = enrichedResults.length || payload.prospecto_ids?.length || 0
-      const omitidosTotal =
-        response.omitidos?.reduce((acc, item) => acc + (item.total ?? item.prospecto_ids.length ?? 0), 0) ?? 0
-      const omitidosMensaje =
-        omitidosTotal > 0 ? ` (${omitidosTotal} prospectos convertidos se omitieron automáticamente).` : ""
-      setBanner({
-        type: "success",
-        message: response.batch_id
-          ? `Se creó el lote ${response.batch_id} con ${totalAcciones} acciones.${omitidosMensaje}`
-          : `Se registraron ${totalAcciones} acciones de contacto.${omitidosMensaje}`,
-      })
-      setContactDialogOpen(false)
-      await fetchProspectos(offset)
-      void fetchRecentBatches()
-      void fetchStageSummary()
-    } catch (err) {
-      const message = err instanceof Error ? err.message : "No se pudo programar el contacto."
-      setContactError(message)
-    } finally {
-      setAction(null)
-    }
-  }, [
-    contactForm,
-    fetchProspectos,
-    fetchRecentBatches,
-    fetchStageSummary,
-    items,
-    offset,
-    openContactDrawer,
-    selectedIds,
-    selectedTemplates,
-    contactCampaignId,
-    quoteLogoUrl,
-    resolvePreferredLogo,
-    selectedLogoUrl,
-    templates,
-  ])
-
-  const appendCorreoToken = useCallback(
-    (field: "correoAsunto" | "correoCuerpo" | "correoHtml", token: string) => {
-      const fieldRef =
-        field === "correoAsunto" ? correoAsuntoRef.current : field === "correoCuerpo" ? correoCuerpoRef.current : correoHtmlRef.current
-      setContactForm((prev) => {
-        const current = prev[field] ?? ""
-        if (!fieldRef) {
-          const separator =
-            field === "correoAsunto"
-              ? (current && !/\s$/.test(current) ? " " : "")
-              : (current && !current.endsWith("\n") ? "\n" : "")
-          return {
-            ...prev,
-            [field]: `${current}${separator}${token}`,
-          }
-        }
-        const start = fieldRef.selectionStart ?? current.length
-        const end = fieldRef.selectionEnd ?? current.length
-        const prefix = current.slice(0, start)
-        const suffix = current.slice(end)
-        const needsLeading = field === "correoAsunto" && prefix.length > 0 && !/\s$/.test(prefix) ? " " : ""
-        const nextValue = `${prefix}${needsLeading}${token}${suffix}`
-        const caret = prefix.length + needsLeading.length + token.length
-        window.requestAnimationFrame(() => {
-          fieldRef.focus()
-          fieldRef.setSelectionRange(caret, caret)
-        })
-        return {
-          ...prev,
-          [field]: nextValue,
-        }
-      })
-    },
-    [],
-  )
-
-  const insertCorreoLogo = useCallback(
-    (logoUrl: string) => {
-      const url = normalizeLogoUrl(logoUrl)
-      if (!url) return
-      setSelectedLogoUrl(url)
-      appendCorreoToken("correoCuerpo", "{{logo_url}}")
-      const htmlFocused = typeof document !== "undefined" && document.activeElement === correoHtmlRef.current
-      const hasHtmlContent = Boolean(contactForm.correoHtml.trim())
-      if (htmlFocused || hasHtmlContent) {
-        const token = `<img src="{{logo_url}}" alt="Logo" style="${EMAIL_LOGO_IMG_STYLE}" />`
-        appendCorreoToken("correoHtml", token)
-      }
-    },
-    [appendCorreoToken, contactForm.correoHtml, setSelectedLogoUrl],
-  )
-
-  const handleInsertQuoteLogo = useCallback(async () => {
-    try {
-      const logo = await resolvePreferredLogo()
-      insertCorreoLogo(logo)
-    } catch (error) {
-      setContactError(error instanceof Error ? error.message : "No se pudo insertar el logo.")
-    }
-  }, [insertCorreoLogo, resolvePreferredLogo])
-
-  const loadLogos = useCallback(async () => {
-    if (logosLoading) return
-    setLogosLoading(true)
-    try {
-      const response = await fetch("/api/settings/logos", { cache: "no-store" })
-      const payload = await response.json().catch(() => ({}))
-      if (!response.ok) {
-        throw new Error(
-          typeof payload?.detail === "string" ? payload.detail : "No se pudieron cargar los logos.",
-        )
-      }
-      const items = Array.isArray(payload?.logos) ? payload.logos : []
-      const normalized = items
-        .map((item: unknown) => {
-          if (!item || typeof item !== "object") return null
-          const row = item as Record<string, unknown>
-          const fileUrl = typeof row.file_url === "string" ? row.file_url.trim() : ""
-          if (!fileUrl) return null
-          return {
-            id: String(row.id ?? fileUrl),
-            nombre: typeof row.nombre === "string" && row.nombre.trim() ? row.nombre.trim() : "Logo",
-            file_url: fileUrl,
-          } as LogoAsset
-        })
-        .filter((item: LogoAsset | null): item is LogoAsset => item != null)
-      setLogos(normalized)
-      if (normalized.length) {
-        setSelectedLogoUrl(normalized[0].file_url)
-      }
-    } catch (error) {
-      setContactError(error instanceof Error ? error.message : "No se pudieron cargar los logos.")
-    } finally {
-      setLogosLoading(false)
-    }
-  }, [logosLoading])
-
   const handlePlannerOpen = useCallback(() => {
     setPlannerName("")
     setPlannerError(null)
@@ -2003,37 +1440,6 @@ useEffect(() => {
     handlePlannerOpenChange(false)
     setCampaignWizardOpen(true)
   }, [handlePlannerOpenChange, plannerName, selectedCount])
-
-  const fetchCampaignOptions = useCallback(async () => {
-    setCampaignOptionsLoading(true)
-    try {
-      const campaigns = await listCrmCampaigns()
-      const ordered = (Array.isArray(campaigns) ? campaigns : [])
-        .map((campaign) => ({
-          id: campaign.id,
-          nombre: campaign.nombre ?? `Campaña ${campaign.id.slice(0, 8)}`,
-        }))
-        .sort((a, b) =>
-        a.nombre.localeCompare(b.nombre, "es", { sensitivity: "base" }),
-      )
-      setCampaignOptions(ordered)
-      setContactCampaignId((prev) => {
-        if (prev && ordered.some((item) => item.id === prev)) return prev
-        return ordered[0]?.id ?? ""
-      })
-    } catch (err) {
-      setCampaignOptions([])
-      const message = err instanceof Error ? err.message : "No se pudieron cargar las campañas."
-      setContactError(message)
-    } finally {
-      setCampaignOptionsLoading(false)
-    }
-  }, [])
-
-  useEffect(() => {
-    if (!contactDialogOpen) return
-    void fetchCampaignOptions()
-  }, [contactDialogOpen, fetchCampaignOptions])
 
   const handleOpenConvertDialog = useCallback((prospecto: ProspectoItem) => {
     if (!prospecto.id) return
@@ -3311,327 +2717,6 @@ useEffect(() => {
             </div>
           </div>
       </section>
-
-      <Dialog open={contactDialogOpen} onOpenChange={setContactDialogOpen}>
-        <DialogContent className="sm:max-w-3xl">
-          <DialogHeader>
-            <DialogTitle>Configurar envío de campaña</DialogTitle>
-            <DialogDescription>
-              Selecciona campaña y plantillas por canal. El envío quedará atribuido para medir respuestas y conversiones.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="grid gap-2 rounded-md border border-dashed p-3 sm:grid-cols-[1fr_auto] sm:items-end">
-            <div className="space-y-1">
-              <Label>Campaña</Label>
-              <Select
-                value={contactCampaignId}
-                onValueChange={setContactCampaignId}
-                disabled={campaignOptionsLoading || !campaignOptions.length}
-              >
-                <SelectTrigger>
-                  <SelectValue
-                    placeholder={
-                      campaignOptionsLoading
-                        ? "Cargando campañas..."
-                        : campaignOptions.length
-                          ? "Selecciona campaña"
-                          : "No hay campañas disponibles"
-                    }
-                  />
-                </SelectTrigger>
-                <SelectContent>
-                  {campaignOptions.map((campaign) => (
-                    <SelectItem key={campaign.id} value={campaign.id}>
-                      {campaign.nombre}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <p className="text-xs text-muted-foreground">
-                El envío se guardará con esta campaña para medir respuestas y conversiones.
-              </p>
-            </div>
-            <Button type="button" variant="outline" asChild>
-              <Link href="/prospeccion/campanas">Gestionar campañas</Link>
-            </Button>
-          </div>
-          <Tabs defaultValue="correo" className="space-y-4">
-            <TabsList>
-              <TabsTrigger value="correo">Correo</TabsTrigger>
-              <TabsTrigger value="whatsapp">WhatsApp</TabsTrigger>
-              <TabsTrigger value="llamada">Llamada</TabsTrigger>
-            </TabsList>
-            <TabsContent value="correo" className="space-y-3">
-              <div className="space-y-1">
-                <Label>Plantilla de correo</Label>
-                <Select
-                  value={selectedTemplates.correo ?? ""}
-                  onValueChange={(value) => handleTemplateSelect("correo", value)}
-                  disabled={templatesLoading || !templates.length}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder={templatesLoading ? "Cargando..." : "Selecciona una plantilla"} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {templates
-                      .filter((template) => template.canal === "correo")
-                      .map((template) => (
-                        <SelectItem key={template.slug} value={template.slug}>
-                          {template.nombre}
-                        </SelectItem>
-                      ))}
-                  </SelectContent>
-                </Select>
-                {!templatesLoading && !templates.some((tpl) => tpl.canal === "correo") ? (
-                  <p className="text-xs text-muted-foreground">Aún no has creado plantillas de correo.</p>
-                ) : null}
-              </div>
-              <div className="grid gap-4 md:grid-cols-2">
-                <div className="space-y-1">
-                  <Label>Asunto</Label>
-                  <Input
-                    ref={correoAsuntoRef}
-                    value={contactForm.correoAsunto}
-                    onChange={(event) => setContactForm((prev) => ({ ...prev, correoAsunto: event.target.value }))}
-                  />
-                  <div className="flex flex-wrap gap-1">
-                    {MAIL_VARIABLE_TOKENS.map((token) => (
-                      <Button
-                        key={`contact-asunto-${token}`}
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        className="h-7 px-2 text-xs"
-                        onClick={() => appendCorreoToken("correoAsunto", token)}
-                      >
-                        {token}
-                      </Button>
-                    ))}
-                  </div>
-                </div>
-                <div className="space-y-1">
-                  <Label>Previsualización</Label>
-                  <Input value={selectedTemplates.correo ?? ""} disabled placeholder="Template seleccionado" />
-                </div>
-              </div>
-              <div className="space-y-1">
-                <Label>Cuerpo</Label>
-                <Textarea
-                  ref={correoCuerpoRef}
-                  value={contactForm.correoCuerpo}
-                  onChange={(event) => setContactForm((prev) => ({ ...prev, correoCuerpo: event.target.value }))}
-                  rows={5}
-                  placeholder="Hola {{nombre}}, vimos que..."
-                />
-                <div className="flex flex-wrap gap-1">
-                  {MAIL_VARIABLE_TOKENS.map((token) => (
-                    <Button
-                      key={`contact-cuerpo-${token}`}
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className="h-7 px-2 text-xs"
-                      onClick={() => appendCorreoToken("correoCuerpo", token)}
-                    >
-                      {token}
-                    </Button>
-                  ))}
-                </div>
-              </div>
-              <div className="space-y-1">
-                <Label>HTML (opcional)</Label>
-                <Textarea
-                  ref={correoHtmlRef}
-                  value={contactForm.correoHtml}
-                  onChange={(event) => setContactForm((prev) => ({ ...prev, correoHtml: event.target.value }))}
-                  rows={6}
-                  placeholder={'<p>Hola {{nombre}}</p><p><img src="https://..." alt="Banner" /></p>'}
-                />
-                <div className="flex flex-wrap gap-1">
-                  {MAIL_VARIABLE_TOKENS.map((token) => (
-                    <Button
-                      key={`contact-html-${token}`}
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className="h-7 px-2 text-xs"
-                      onClick={() => appendCorreoToken("correoHtml", token)}
-                    >
-                      {token}
-                    </Button>
-                  ))}
-                </div>
-                <div className="space-y-2 rounded-md border border-dashed p-2">
-                  <Label className="text-xs">Logo para correo</Label>
-                  <div className="flex flex-wrap gap-2">
-                    <Button type="button" variant="outline" size="sm" onClick={() => void handleInsertQuoteLogo()}>
-                      Insertar logo
-                    </Button>
-                    <Button type="button" variant="outline" size="sm" onClick={() => void loadLogos()} disabled={logosLoading}>
-                      {logosLoading ? "Cargando..." : "Cargar galería"}
-                    </Button>
-                  </div>
-                  {logos.length ? (
-                    <div className="flex flex-wrap items-center gap-2">
-                      <Select value={selectedLogoUrl} onValueChange={setSelectedLogoUrl}>
-                        <SelectTrigger className="w-[280px]">
-                          <SelectValue placeholder="Selecciona un logo" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {logos.map((logo) => (
-                            <SelectItem key={logo.id} value={logo.file_url}>
-                              {logo.nombre}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        disabled={!selectedLogoUrl}
-                        onClick={() => insertCorreoLogo(selectedLogoUrl)}
-                      >
-                        Insertar seleccionado
-                      </Button>
-                    </div>
-                  ) : null}
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  Usa URL pública para imágenes. Variables soportadas: {"{{nombre}}, {{empresa}}, {{email}}, {{telefono}}, {{segmento}}, {{logo_url}}"}.
-                </p>
-              </div>
-            </TabsContent>
-            <TabsContent value="whatsapp" className="space-y-3">
-              <div className="space-y-1">
-                <Label>Plantilla de WhatsApp</Label>
-                <Select
-                  value={selectedTemplates.whatsapp ?? ""}
-                  onValueChange={(value) => handleTemplateSelect("whatsapp", value)}
-                  disabled={templatesLoading || !templates.length}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder={templatesLoading ? "Cargando..." : "Selecciona una plantilla"} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {templates
-                      .filter((template) => template.canal === "whatsapp")
-                      .map((template) => (
-                        <SelectItem key={template.slug} value={template.slug}>
-                          {template.nombre}
-                          {getTemplateTwilioSid(template) ? ` · ${getTemplateTwilioSid(template).slice(0, 10)}...` : ""}
-                        </SelectItem>
-                      ))}
-                  </SelectContent>
-                </Select>
-                {!templatesLoading && !templates.some((tpl) => tpl.canal === "whatsapp") ? (
-                  <p className="text-xs text-muted-foreground">Aún no has creado plantillas de WhatsApp.</p>
-                ) : null}
-                {selectedWhatsappTemplate?.cuerpo_texto ? (
-                  <p className="whitespace-pre-wrap rounded-md border border-border/60 bg-muted/30 p-2 text-xs text-muted-foreground">
-                    {selectedWhatsappTemplate.cuerpo_texto}
-                  </p>
-                ) : null}
-              </div>
-              <div className="space-y-1">
-                <Label>Mensaje</Label>
-                <Textarea
-                  value={contactForm.whatsappMensaje}
-                  onChange={(event) => setContactForm((prev) => ({ ...prev, whatsappMensaje: event.target.value }))}
-                  rows={4}
-                  placeholder="Hola, soy del equipo Tal-IA..."
-                />
-              </div>
-              <div className="space-y-1">
-                <Label>Variables</Label>
-                <Textarea
-                  value={contactForm.whatsappVariables}
-                  onChange={(event) => setContactForm((prev) => ({ ...prev, whatsappVariables: event.target.value }))}
-                  rows={4}
-                  placeholder={"1={{display_name}}\n2=Jorge\n3=GeoActiv"}
-                />
-                <p className="text-xs text-muted-foreground">
-                  {"Libre: usa `clave=valor` por línea o JSON. También puedes usar placeholders como {{display_name}}."}
-                </p>
-              </div>
-              <div className="space-y-1">
-                <Label>{"Empresa (auto para {{3}})"}</Label>
-                <Input
-                  value={contactForm.whatsappEmpresa}
-                  onChange={(event) => setContactForm((prev) => ({ ...prev, whatsappEmpresa: event.target.value }))}
-                  placeholder="Tal-IA"
-                />
-                <p className="text-xs text-muted-foreground">
-                  {"Auto en plantilla: {{1}} = nombre, {{3}} = empresa, {{4}} = segmento."}
-                </p>
-              </div>
-            </TabsContent>
-            <TabsContent value="llamada" className="space-y-3">
-              <div className="space-y-1">
-                <Label>Plantilla de llamada</Label>
-                <Select
-                  value={selectedTemplates.llamada ?? ""}
-                  onValueChange={(value) => handleTemplateSelect("llamada", value)}
-                  disabled={templatesLoading || !templates.length}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder={templatesLoading ? "Cargando..." : "Selecciona una plantilla"} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {templates
-                      .filter((template) => template.canal === "llamada")
-                      .map((template) => (
-                        <SelectItem key={template.slug} value={template.slug}>
-                          {template.nombre}
-                        </SelectItem>
-                      ))}
-                  </SelectContent>
-                </Select>
-                {!templatesLoading && !templates.some((tpl) => tpl.canal === "llamada") ? (
-                  <p className="text-xs text-muted-foreground">Aún no has creado plantillas de llamada.</p>
-                ) : null}
-              </div>
-              <div className="space-y-1">
-                <Label>Notas o guion</Label>
-                <Textarea
-                  value={contactForm.llamadaNotas}
-                  onChange={(event) => setContactForm((prev) => ({ ...prev, llamadaNotas: event.target.value }))}
-                  rows={3}
-                  placeholder="Recordatorios o bullets para el equipo de llamadas."
-                />
-              </div>
-            </TabsContent>
-          </Tabs>
-          {contactError ? (
-            <p className="text-sm text-destructive">{contactError}</p>
-          ) : (
-            <p className="text-xs text-muted-foreground">
-              {selectedCount ? `${selectedCount} prospectos serán procesados al guardar.` : "Selecciona prospectos antes de programar contacto."}
-            </p>
-          )}
-          <DialogFooter>
-            <Button variant="ghost" onClick={() => setContactDialogOpen(false)}>
-              Cancelar
-            </Button>
-            <Button
-              onClick={() => void handleContactSubmit()}
-              disabled={action === "contact" || campaignOptionsLoading || !campaignOptions.length}
-            >
-              {action === "contact" ? (
-                <>
-                  <IconLoader className="mr-2 size-4 animate-spin" />
-                  Enviando...
-                </>
-              ) : (
-                <>
-                  <IconSend2 className="mr-2 size-4" />
-                  Guardar envío
-                </>
-              )}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
 
       <Dialog open={convertDialogOpen} onOpenChange={setConvertDialogOpen}>
         <DialogContent className="sm:max-w-md">
