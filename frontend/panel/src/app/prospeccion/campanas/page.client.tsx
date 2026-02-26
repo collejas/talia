@@ -1,13 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useMemo, useState } from "react"
-import { IconAlertTriangle, IconCopy, IconLoader, IconRefresh, IconTargetArrow, IconX } from "@tabler/icons-react"
-
-import { ProspeccionCampaignWizard, type ProspeccionWizardPreset } from "@/components/prospeccion/prospeccion-campaign-wizard"
-import {
-  ProspeccionContactDrawer,
-  type ProspeccionContactDrawerData,
-} from "@/components/prospeccion/prospeccion-contact-drawer"
+import { IconAlertTriangle, IconLoader, IconPencil, IconRefresh, IconTargetArrow, IconX } from "@tabler/icons-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -19,14 +13,17 @@ import { Separator } from "@/components/ui/separator"
 import { Textarea } from "@/components/ui/textarea"
 import { cn } from "@/lib/utils"
 import {
+  createCrmCampaign,
   createContactoTemplate,
   deleteContactoTemplate,
   deleteProspeccionCampana,
   listContactoTemplates,
+  listCrmCampaigns,
   updateContactoTemplate,
+  updateProspeccionCampana,
   getContactoMetrics,
-  getProspeccionCampanaPreset,
   getProspeccionCampanas,
+  type CrmCampaign,
   type ContactoTemplate,
   type ContactoMetrics,
   type ProspeccionCampanaGroup,
@@ -50,26 +47,6 @@ const estadoPalette: Record<string, string> = {
   omitido: "text-slate-500",
 }
 
-type CampanaChannelRaw = {
-  enabled?: boolean
-  templateSlug?: string | null
-  subject?: string | null
-  body?: string | null
-  message?: string | null
-  schedule?: string | null
-}
-
-type CampanaChannelPresetEntry = {
-  enabled?: boolean
-  templateSlug?: string
-  subject?: string
-  body?: string
-  message?: string
-  schedule?: string
-}
-
-type CampanaChannelPreset = Partial<Record<"correo" | "whatsapp" | "llamada", CampanaChannelPresetEntry>>
-
 export function CampanasMetricsClient() {
   const [data, setData] = useState<ContactoMetrics | null>(null)
   const [loading, setLoading] = useState(false)
@@ -77,11 +54,13 @@ export function CampanasMetricsClient() {
   const [campanas, setCampanas] = useState<ProspeccionCampanaGroup[]>([])
   const [campanasLoading, setCampanasLoading] = useState(false)
   const [campanasError, setCampanasError] = useState<string | null>(null)
-  const [duplicateLoading, setDuplicateLoading] = useState<string | null>(null)
   const [deleteLoading, setDeleteLoading] = useState<string | null>(null)
-  const [wizardOpen, setWizardOpen] = useState(false)
-  const [wizardPreset, setWizardPreset] = useState<ProspeccionWizardPreset | null>(null)
-  const [editCampanaId, setEditCampanaId] = useState<string | null>(null)
+  const [crmCampaigns, setCrmCampaigns] = useState<CrmCampaign[]>([])
+  const [campaignDialogOpen, setCampaignDialogOpen] = useState(false)
+  const [campaignFormMode, setCampaignFormMode] = useState<"create" | "edit">("create")
+  const [campaignFormId, setCampaignFormId] = useState<string | null>(null)
+  const [campaignFormName, setCampaignFormName] = useState("")
+  const [campaignSaving, setCampaignSaving] = useState(false)
   const [templatesDialogOpen, setTemplatesDialogOpen] = useState(false)
   const [templatesCampanaId, setTemplatesCampanaId] = useState<string | null>(null)
   const [templatesCampanaNombre, setTemplatesCampanaNombre] = useState<string>("")
@@ -101,8 +80,6 @@ export function CampanasMetricsClient() {
     cuerpoHtml: "",
     twilioSid: "",
   })
-  const [drawerData, setDrawerData] = useState<ProspeccionContactDrawerData | null>(null)
-  const [drawerOpen, setDrawerOpen] = useState(false)
   const [banner, setBanner] = useState<{ type: "success" | "error"; message: string } | null>(null)
 
   const fetchMetrics = useCallback(async () => {
@@ -129,8 +106,26 @@ export function CampanasMetricsClient() {
     setCampanasLoading(true)
     setCampanasError(null)
     try {
-      const response = await getProspeccionCampanas(12)
-      setCampanas(response.items ?? [])
+      const [resumen, campaignList] = await Promise.all([getProspeccionCampanas(25), listCrmCampaigns()])
+      const campaignMap = new Map<string, ProspeccionCampanaGroup>()
+      ;(resumen.items ?? []).forEach((item) => {
+        if (item.campana_id) {
+          campaignMap.set(item.campana_id, item)
+        }
+      })
+      const full = (campaignList ?? []).map((campaign) => {
+        const fromResumen = campaignMap.get(campaign.id)
+        return (
+          fromResumen ?? {
+            campana_id: campaign.id,
+            campana_nombre: campaign.nombre ?? `Campaña ${campaign.id.slice(0, 8)}`,
+            batches: [],
+            totales: {},
+          }
+        )
+      })
+      setCrmCampaigns(campaignList ?? [])
+      setCampanas(full)
     } catch (err) {
       const message = err instanceof Error ? err.message : "No se pudieron cargar las campañas recientes."
       setCampanasError(message)
@@ -144,57 +139,46 @@ export function CampanasMetricsClient() {
   }, [fetchCampanas])
 
   const handleNewCampaign = useCallback(() => {
-    setWizardPreset({ source: "lista" })
-    setEditCampanaId(null)
-    setWizardOpen(true)
+    setCampaignFormMode("create")
+    setCampaignFormId(null)
+    setCampaignFormName("")
+    setCampaignDialogOpen(true)
   }, [])
 
-  const handleDuplicateCampana = useCallback(
-    async (campanaId: string) => {
-      setBanner(null)
-      setDuplicateLoading(campanaId)
-      try {
-        const response = await getProspeccionCampanaPreset(campanaId)
-        const canalesRaw = (response.defaults?.canales ?? {}) as Partial<
-          Record<"correo" | "whatsapp" | "llamada", CampanaChannelRaw>
-        >
-        const canalesPreset: CampanaChannelPreset = {}
-        const programacion = response.defaults?.programacion ?? {}
-        ;(["correo", "whatsapp", "llamada"] as const).forEach((canal) => {
-          const config = canalesRaw[canal]
-          if (!config) return
-          canalesPreset[canal] = {
-            enabled: config.enabled ?? true,
-            templateSlug: config.templateSlug ?? undefined,
-            subject: config.subject ?? undefined,
-            body: config.body ?? undefined,
-            message: config.message ?? undefined,
-            schedule: config.schedule ?? programacion[canal] ?? undefined,
-          }
-        })
-        setWizardPreset({
-          source: response.defaults?.source,
-          listaId: response.defaults?.lista_id ?? null,
-          filtros: response.defaults?.filtros,
-          canales: canalesPreset,
-          titulo: response.defaults?.titulo ?? "",
-          campanaId: response.defaults?.campana_id ?? response.campana?.id ?? null,
-          campanaNombre: response.campana?.nombre ?? undefined,
-        })
-        setEditCampanaId(campanaId)
-        setWizardOpen(true)
-      } catch (err) {
-        const message =
-          err instanceof Error
-            ? err.message
-            : "No se pudo preparar la duplicación. Verifica que la campaña tenga al menos un lote."
-        setBanner({ type: "error", message })
-      } finally {
-        setDuplicateLoading(null)
+  const handleEditCampana = useCallback((campanaId: string) => {
+    const current = crmCampaigns.find((item) => item.id === campanaId)
+    if (!current) return
+    setCampaignFormMode("edit")
+    setCampaignFormId(campanaId)
+    setCampaignFormName(current.nombre ?? "")
+    setCampaignDialogOpen(true)
+  }, [crmCampaigns])
+
+  const handleSaveCampaign = useCallback(async () => {
+    const nombre = campaignFormName.trim()
+    if (!nombre) {
+      setBanner({ type: "error", message: "Escribe el nombre de la campaña." })
+      return
+    }
+    setCampaignSaving(true)
+    setBanner(null)
+    try {
+      if (campaignFormMode === "create") {
+        await createCrmCampaign({ nombre, tipo: "prospeccion", canal: "multicanal" })
+        setBanner({ type: "success", message: "Campaña creada." })
+      } else if (campaignFormId) {
+        await updateProspeccionCampana(campaignFormId, { campana_nombre: nombre })
+        setBanner({ type: "success", message: "Campaña actualizada." })
       }
-    },
-    []
-  )
+      setCampaignDialogOpen(false)
+      await fetchCampanas()
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "No se pudo guardar la campaña."
+      setBanner({ type: "error", message })
+    } finally {
+      setCampaignSaving(false)
+    }
+  }, [campaignFormId, campaignFormMode, campaignFormName, fetchCampanas])
 
   const handleDeleteCampana = useCallback(
     async (campanaId: string) => {
@@ -213,28 +197,6 @@ export function CampanasMetricsClient() {
       } finally {
         setDeleteLoading(null)
       }
-    },
-    [fetchCampanas]
-  )
-
-  const handleWizardCompleted = useCallback(
-    (result: {
-      batchId?: string | null
-      contactos?: ProspeccionContactDrawerData["results"]
-      omitidos?: ProspeccionContactDrawerData["omitidos"]
-      total?: number
-    }) => {
-      setBanner({
-        type: "success",
-        message: `Lote programado correctamente${result.total ? ` para ${result.total} prospectos` : ""}.`,
-      })
-      setDrawerData({
-        batchId: result.batchId,
-        results: result.contactos ?? [],
-        omitidos: result.omitidos,
-      })
-      setDrawerOpen(true)
-      void fetchCampanas()
     },
     [fetchCampanas]
   )
@@ -399,9 +361,9 @@ export function CampanasMetricsClient() {
       <Card className="bg-gradient-to-br from-primary/10 via-background to-background">
         <CardHeader className="flex flex-wrap items-center justify-between gap-4">
           <div>
-            <CardTitle className="text-base font-semibold">Lanza una nueva campaña</CardTitle>
+            <CardTitle className="text-base font-semibold">Gestiona campañas</CardTitle>
             <p className="text-sm text-muted-foreground">
-              Define filtros, selecciona plantillas y programa envíos multicanal desde un solo wizard.
+              Crea campañas y administra sus plantillas. La ejecución se hace desde `prospeccion/prospectos`.
             </p>
           </div>
           <Button onClick={handleNewCampaign}>
@@ -411,16 +373,16 @@ export function CampanasMetricsClient() {
         </CardHeader>
         <CardContent className="grid gap-4 text-sm text-muted-foreground md:grid-cols-3">
           <div>
-            <p className="text-xs uppercase tracking-wide">Audiencias</p>
-            <p className="text-base text-foreground">Listas inteligentes o filtros dinámicos.</p>
+            <p className="text-xs uppercase tracking-wide">Campañas</p>
+            <p className="text-base text-foreground">Define nombre y objetivo comercial.</p>
           </div>
           <div>
-            <p className="text-xs uppercase tracking-wide">Canales</p>
-            <p className="text-base text-foreground">Correo, WhatsApp y llamadas coordinadas.</p>
+            <p className="text-xs uppercase tracking-wide">Plantillas</p>
+            <p className="text-base text-foreground">Variantes por canal ligadas a cada campaña.</p>
           </div>
           <div>
-            <p className="text-xs uppercase tracking-wide">Seguimiento</p>
-            <p className="text-base text-foreground">Monitorea resultados en Contactos y KPIs.</p>
+            <p className="text-xs uppercase tracking-wide">Ejecución</p>
+            <p className="text-base text-foreground">Selecciona prospectos y lanza desde la vista de Prospectos.</p>
           </div>
         </CardContent>
       </Card>
@@ -526,14 +488,10 @@ export function CampanasMetricsClient() {
                 <Button
                   variant="outline"
                   size="sm"
-                  disabled={!group.campana_id || duplicateLoading === group.campana_id}
-                  onClick={() => group.campana_id && void handleDuplicateCampana(group.campana_id)}
+                  disabled={!group.campana_id}
+                  onClick={() => group.campana_id && handleEditCampana(group.campana_id)}
                 >
-                  {duplicateLoading === group.campana_id ? (
-                    <IconLoader className="mr-2 size-4 animate-spin" />
-                  ) : (
-                    <IconCopy className="mr-2 size-4" />
-                  )}
+                  <IconPencil className="mr-2 size-4" />
                   Editar
                 </Button>
                 <Button
@@ -589,17 +547,27 @@ export function CampanasMetricsClient() {
         </CardContent>
       </Card>
 
-      <ProspeccionCampaignWizard
-        open={wizardOpen}
-        onClose={() => {
-          setWizardOpen(false)
-          setEditCampanaId(null)
-        }}
-        selectedIds={[]}
-        preset={wizardPreset}
-        editCampanaId={editCampanaId}
-        onCompleted={handleWizardCompleted}
-      />
+      <Dialog open={campaignDialogOpen} onOpenChange={setCampaignDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>{campaignFormMode === "create" ? "Crear campaña" : "Editar campaña"}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="space-y-1">
+              <Label htmlFor="campaign-name">Nombre</Label>
+              <Input
+                id="campaign-name"
+                value={campaignFormName}
+                onChange={(event) => setCampaignFormName(event.target.value)}
+                placeholder="Ej. Prospección Inmobiliaria Q1"
+              />
+            </div>
+            <Button type="button" className="w-full" onClick={() => void handleSaveCampaign()} disabled={campaignSaving}>
+              {campaignSaving ? "Guardando..." : campaignFormMode === "create" ? "Crear campaña" : "Guardar cambios"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={templatesDialogOpen} onOpenChange={setTemplatesDialogOpen}>
         <DialogContent className="w-[96vw] max-w-6xl max-h-[90vh] overflow-hidden">
@@ -768,7 +736,6 @@ export function CampanasMetricsClient() {
         </DialogContent>
       </Dialog>
 
-      <ProspeccionContactDrawer open={drawerOpen} onOpenChange={setDrawerOpen} data={drawerData} />
     </div>
   )
 }

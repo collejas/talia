@@ -12996,7 +12996,7 @@ async def prospeccion_campana_update(
     campana_id: UUID,
     payload: ProspeccionCampanaUpdatePayload,
 ) -> dict[str, Any]:
-    """Edita una campaña y reconfigura el lote más reciente no finalizado."""
+    """Edita campaña y, opcionalmente, reconfigura su lote más reciente."""
 
     campana = await repo.get_campaign(organizacion_id=organizacion_id, campana_id=campana_id)
     if not campana:
@@ -13012,6 +13012,16 @@ async def prospeccion_campana_update(
             payload=campaign_patch,
         )
 
+    has_batch_updates = any(
+        value is not None
+        for value in (
+            payload.batch_titulo,
+            payload.lista_id,
+            payload.filtros,
+            payload.canales,
+        )
+    )
+
     batches, _ = await repo.list_contact_batches(
         usuario_token=user_token,
         limit=100,
@@ -13020,7 +13030,18 @@ async def prospeccion_campana_update(
         order="creado_en.desc",
     )
     if not batches:
-        raise HTTPException(status_code=404, detail="campana_without_batches")
+        if has_batch_updates:
+            raise HTTPException(status_code=404, detail="campana_without_batches")
+        updated = await repo.get_campaign(organizacion_id=organizacion_id, campana_id=campana_id)
+        return {
+            "ok": True,
+            "campana_id": str(campana_id),
+            "batch_id": None,
+            "campana": {
+                "id": str(campana_id),
+                "nombre": updated.get("nombre") if updated else campaign_patch.get("nombre"),
+            },
+        }
     target_batch = None
     for row in batches:
         estado = _clean_text(row.get("estado")) or ""
