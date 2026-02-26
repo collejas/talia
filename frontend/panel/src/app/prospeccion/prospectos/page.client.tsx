@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react"
 import {
   IconAlertTriangle,
-  IconBolt,
   IconCircleCheck,
   IconDotsVertical,
   IconChevronDown,
@@ -128,8 +127,6 @@ type BannerState = {
   type: "success" | "error"
   message: string
 }
-
-type PlannerMode = "quick" | "campaign"
 
 type ContactDrawerData = {
   batchId?: string | null
@@ -695,7 +692,6 @@ function ProspectosView() {
   const [stageSummaryLoading, setStageSummaryLoading] = useState(false)
   const [campaignWizardOpen, setCampaignWizardOpen] = useState(false)
   const [plannerOpen, setPlannerOpen] = useState(false)
-  const [plannerMode, setPlannerMode] = useState<PlannerMode>("campaign")
   const [plannerName, setPlannerName] = useState("")
   const [plannerError, setPlannerError] = useState<string | null>(null)
   const [campaignWizardPreset, setCampaignWizardPreset] = useState<ProspeccionWizardPreset | null>(null)
@@ -725,7 +721,6 @@ function ProspectosView() {
   const currentIds = useMemo(() => items.map((item) => item.id).filter(Boolean) as string[], [items])
   const selectedIds = useMemo(() => Array.from(selected.values()), [selected])
   const selectedCount = selectedIds.length
-  const canUseQuickPlan = selectedCount > 0
   const orderSelectedByOptions = (selection: Set<string>, options: string[]) => {
     const ordered: string[] = []
     const seen = new Set<string>()
@@ -1978,11 +1973,10 @@ useEffect(() => {
   }, [logosLoading])
 
   const handlePlannerOpen = useCallback(() => {
-    setPlannerMode(selectedCount ? "quick" : "campaign")
     setPlannerName("")
     setPlannerError(null)
     setPlannerOpen(true)
-  }, [selectedCount])
+  }, [])
 
   const handlePlannerOpenChange = useCallback(
     (open: boolean) => {
@@ -1990,36 +1984,13 @@ useEffect(() => {
       if (!open) {
         setPlannerError(null)
         setPlannerName("")
-        setPlannerMode(selectedCount ? "quick" : "campaign")
       }
     },
-    [selectedCount]
-  )
-
-  const handlePlannerModeSelect = useCallback(
-    (mode: PlannerMode) => {
-      if (mode === "quick" && !canUseQuickPlan) {
-        setPlannerError("Selecciona al menos un prospecto para usar esta opción.")
-        return
-      }
-      setPlannerMode(mode)
-      setPlannerError(null)
-    },
-    [canUseQuickPlan]
+    []
   )
 
   const handlePlannerContinue = useCallback(() => {
     setPlannerError(null)
-    if (plannerMode === "quick") {
-      if (!canUseQuickPlan) {
-        setPlannerError("Selecciona al menos un prospecto para programar el contacto.")
-        return
-      }
-      handlePlannerOpenChange(false)
-      setContactCampaignId("")
-      setContactDialogOpen(true)
-      return
-    }
     const trimmedName = plannerName.trim()
     if (!trimmedName) {
       setPlannerError("Asigna un nombre interno a la campaña.")
@@ -2027,11 +1998,11 @@ useEffect(() => {
     }
     setCampaignWizardPreset({
       titulo: trimmedName,
-      source: canUseQuickPlan ? "selected" : "filters",
+      source: selectedCount ? "selected" : "filters",
     })
     handlePlannerOpenChange(false)
     setCampaignWizardOpen(true)
-  }, [canUseQuickPlan, handlePlannerOpenChange, plannerMode, plannerName])
+  }, [handlePlannerOpenChange, plannerName, selectedCount])
 
   const fetchCampaignOptions = useCallback(async () => {
     setCampaignOptionsLoading(true)
@@ -2877,8 +2848,7 @@ useEffect(() => {
           <DrawerHeader className="items-start space-y-2">
             <DrawerTitle>Elige cómo lanzar tu contacto</DrawerTitle>
             <DrawerDescription>
-              Define si quieres un envío rápido con la selección actual o abrir el wizard completo para convertirlo en
-              campaña.
+              Todo envío se ejecuta como campaña con plantillas por canal para mantener trazabilidad completa.
             </DrawerDescription>
           </DrawerHeader>
           <div className="flex-1 overflow-y-auto px-6 pb-8">
@@ -2906,54 +2876,9 @@ useEffect(() => {
                 </div>
               ) : null}
             </div>
-            <div className="mt-4 grid gap-4 md:grid-cols-2">
+            <div className="mt-4">
               <Card
-                role="button"
-                tabIndex={canUseQuickPlan ? 0 : -1}
-                aria-pressed={plannerMode === "quick"}
-                aria-disabled={!canUseQuickPlan}
-                onClick={() => handlePlannerModeSelect("quick")}
-                className={cn(
-                  "cursor-pointer border-2 transition hover:border-primary/40",
-                  plannerMode === "quick" ? "border-primary bg-primary/5 shadow-sm" : "border-border",
-                  !canUseQuickPlan && "cursor-not-allowed opacity-60"
-                )}
-              >
-                <CardContent className="space-y-3">
-                  <div className="flex items-start gap-3">
-                    <span className="rounded-full bg-primary/10 p-2 text-primary">
-                      <IconBolt className="size-5" />
-                    </span>
-                    <div>
-                      <p className="font-semibold">Programar ahora</p>
-                      <p className="text-sm text-muted-foreground">
-                        Abre el editor rápido y define los mensajes por canal para la selección actual.
-                      </p>
-                    </div>
-                  </div>
-                  <div className="rounded-lg border border-dashed bg-background/80 p-3 text-sm">
-                    <p className="font-medium">Incluye</p>
-                    <ul className="mt-1 list-disc space-y-1 pl-4 text-muted-foreground">
-                      <li>Asunto y cuerpo de correo</li>
-                      <li>Mensaje WhatsApp / guion de llamada</li>
-                      <li>Programación puntual por canal</li>
-                    </ul>
-                  </div>
-                  {canUseQuickPlan ? (
-                    <p className="text-xs text-muted-foreground">Ideal para recordatorios o outreach inmediato.</p>
-                  ) : (
-                    <p className="text-xs text-destructive">Selecciona al menos un prospecto para usar esta opción.</p>
-                  )}
-                </CardContent>
-              </Card>
-              <Card
-                role="button"
-                aria-pressed={plannerMode === "campaign"}
-                onClick={() => handlePlannerModeSelect("campaign")}
-                className={cn(
-                  "cursor-pointer border-2 transition hover:border-primary/40",
-                  plannerMode === "campaign" ? "border-primary bg-primary/5 shadow-sm" : "border-border"
-                )}
+                className="border-2 border-primary bg-primary/5 shadow-sm"
               >
                 <CardContent className="space-y-3">
                   <div className="flex items-start gap-3">
@@ -2975,7 +2900,6 @@ useEffect(() => {
                     <Input
                       value={plannerName}
                       onChange={(event) => setPlannerName(event.target.value)}
-                      onFocus={() => handlePlannerModeSelect("campaign")}
                       placeholder="Ej. Seguimiento hoteles Q4"
                     />
                     <p className="text-xs text-muted-foreground">
@@ -2998,18 +2922,11 @@ useEffect(() => {
             <Button variant="outline" onClick={() => handlePlannerOpenChange(false)}>
               Cancelar
             </Button>
-            <Button onClick={handlePlannerContinue} disabled={plannerMode === "quick" && !canUseQuickPlan}>
-              {plannerMode === "quick" ? (
-                <>
-                  <IconSend2 className="mr-2 size-4" />
-                  Configurar envío rápido
-                </>
-              ) : (
-                <>
-                  <IconTargetArrow className="mr-2 size-4" />
-                  Abrir wizard de campaña
-                </>
-              )}
+            <Button onClick={handlePlannerContinue}>
+              <>
+                <IconTargetArrow className="mr-2 size-4" />
+                Abrir wizard de campaña
+              </>
             </Button>
           </DrawerFooter>
         </DrawerContent>
