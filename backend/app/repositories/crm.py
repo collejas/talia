@@ -6991,13 +6991,20 @@ class CRMRepository:
         usuario_token: str,
         params: dict[str, str],
     ) -> tuple[list[dict[str, Any]], int | None]:
-        resp = await self._request_with_user(
-            "GET",
-            "/rest/v1/busquedas",
-            token=usuario_token,
-            params=params,
-            prefer="count=planned",
-        )
+        try:
+            resp = await self._request_with_user(
+                "GET",
+                "/rest/v1/busquedas",
+                token=usuario_token,
+                params=params,
+                prefer="count=planned",
+            )
+        except CRMRepositoryError as exc:
+            # PostgREST devuelve 416 cuando el offset queda fuera del rango disponible.
+            # Para paginación lo tratamos como página vacía.
+            if "error 416" in str(exc).lower():
+                return [], 0
+            raise
         data = resp.json() or []
         if not isinstance(data, list):
             raise CRMRepositoryError(f"Respuesta inesperada al listar búsquedas: {data!r}")

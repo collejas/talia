@@ -97,8 +97,13 @@ const RADIUS_MIN = 100;
 const RADIUS_MAX = 5_000;
 const LIST_PAGE_SIZE = 5000;
 const BUSQUEDAS_PAGE_SIZE = 100;
-const BUSQUEDAS_MAX_ITEMS = 2000;
 const JOB_POLL_INTERVAL_MS = 2000;
+
+function normalizeBusquedaLabel(value: string | null | undefined): string {
+  const base = (value ?? "").trim();
+  if (!base) return "(Sin texto)";
+  return base.replace(/\s*\(recuperada desde resultados\)\s*/gi, "").trim() || "(Sin texto)";
+}
 
 function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -456,11 +461,10 @@ export function DenueBusquedaView() {
       const allItems: DenueBusquedaItem[] = [];
       let offset = 0;
       let total = Number.POSITIVE_INFINITY;
-      while (offset < total && allItems.length < BUSQUEDAS_MAX_ITEMS) {
+      while (offset < total) {
         const response = await listDenueBusquedas({ limit: BUSQUEDAS_PAGE_SIZE, offset });
         const page = response.items ?? [];
         if (!page.length) {
-          total = 0;
           break;
         }
         allItems.push(...page);
@@ -469,12 +473,6 @@ export function DenueBusquedaView() {
         if (page.length < BUSQUEDAS_PAGE_SIZE) {
           break;
         }
-      }
-      if (allItems.length >= BUSQUEDAS_MAX_ITEMS) {
-        setFeedback({
-          type: "info",
-          message: `Se muestran las primeras ${numberFormatter.format(BUSQUEDAS_MAX_ITEMS)} búsquedas. Usa el filtro del backend para acotar si necesitas más.`,
-        });
       }
       setBusquedas(allItems);
       return allItems;
@@ -1267,20 +1265,20 @@ export function DenueBusquedaView() {
       const textoBusquedaB = metaB.filters?.texto_busqueda?.trim();
       const busquedaTituloA =
         modoA === "radio"
-          ? (a.query || "(Sin texto)")
+          ? normalizeBusquedaLabel(a.query)
           : textoBusquedaA
             ? textoBusquedaA
             : actividadA
               ? `Avanzada · ${actividadA}`
-              : (a.query || "Búsqueda avanzada");
+              : normalizeBusquedaLabel(a.query);
       const busquedaTituloB =
         modoB === "radio"
-          ? (b.query || "(Sin texto)")
+          ? normalizeBusquedaLabel(b.query)
           : textoBusquedaB
             ? textoBusquedaB
             : actividadB
               ? `Avanzada · ${actividadB}`
-              : (b.query || "Búsqueda avanzada");
+              : normalizeBusquedaLabel(b.query);
       const geoA = buildGeoDisplay(metaA.filters, geoLookups).label;
       const geoB = buildGeoDisplay(metaB.filters, geoLookups).label;
       const dateA = new Date(a.creado_en).getTime();
@@ -2388,12 +2386,12 @@ export function DenueBusquedaView() {
                       const textoBusqueda = meta.filters?.texto_busqueda?.trim();
                       const busquedaTitulo =
                         modo === "radio"
-                          ? (item.query || "(Sin texto)")
+                          ? normalizeBusquedaLabel(item.query)
                           : textoBusqueda
                             ? textoBusqueda
                             : actividad.label
                               ? `Avanzada · ${actividad.label}`
-                              : (item.query || "Búsqueda avanzada");
+                              : normalizeBusquedaLabel(item.query);
                       const tooltipParts: string[] = [];
                       if (modo !== "radio") {
                         if (textoBusqueda) {

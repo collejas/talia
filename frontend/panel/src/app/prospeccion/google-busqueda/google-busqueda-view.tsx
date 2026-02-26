@@ -85,7 +85,12 @@ const DEFAULT_TYPES = "restaurant,store";
 const LIST_PAGE_SIZE = 5000;
 const MAP_RESULTS_LIMIT = 5000;
 const BUSQUEDAS_PAGE_SIZE = 100;
-const BUSQUEDAS_MAX_ITEMS = 2000;
+
+function normalizeBusquedaLabel(value: string | null | undefined): string {
+  const base = (value ?? "").trim();
+  if (!base) return "(Sin texto)";
+  return base.replace(/\s*\(recuperada desde resultados\)\s*/gi, "").trim() || "(Sin texto)";
+}
 
 type ContactFilterValue = "any" | "with" | "without";
 type BusquedasSortKey = "busqueda" | "registros" | "radio" | "fecha";
@@ -183,11 +188,10 @@ export function GoogleBusquedaView() {
       const allItems: GoogleBusquedaItem[] = [];
       let offset = 0;
       let total = Number.POSITIVE_INFINITY;
-      while (offset < total && allItems.length < BUSQUEDAS_MAX_ITEMS) {
+      while (offset < total) {
         const response = await listGoogleBusquedas({ limit: BUSQUEDAS_PAGE_SIZE, offset });
         const page = response.items ?? [];
         if (!page.length) {
-          total = 0;
           break;
         }
         allItems.push(...page);
@@ -196,12 +200,6 @@ export function GoogleBusquedaView() {
         if (page.length < BUSQUEDAS_PAGE_SIZE) {
           break;
         }
-      }
-      if (allItems.length >= BUSQUEDAS_MAX_ITEMS) {
-        setFeedback({
-          type: "info",
-          message: `Se muestran las primeras ${numberFormatter.format(BUSQUEDAS_MAX_ITEMS)} búsquedas. Usa el filtro del backend para acotar si necesitas más.`,
-        });
       }
       setBusquedas(allItems);
       busquedasRef.current = allItems;
@@ -959,8 +957,8 @@ export function GoogleBusquedaView() {
   const sortedBusquedas = useMemo(() => {
     const rows = [...busquedas];
     rows.sort((a, b) => {
-      const labelA = a.query?.trim() || "(Sin texto)";
-      const labelB = b.query?.trim() || "(Sin texto)";
+      const labelA = normalizeBusquedaLabel(a.query);
+      const labelB = normalizeBusquedaLabel(b.query);
       const registrosA = typeof a.total_encontrados === "number" ? a.total_encontrados : -1;
       const registrosB = typeof b.total_encontrados === "number" ? b.total_encontrados : -1;
       const radioA = typeof a.radio_m === "number" ? a.radio_m : -1;
@@ -1871,7 +1869,7 @@ export function GoogleBusquedaView() {
                           </TableCell>
                           <TableCell>
                             <div className="space-y-1">
-                              <p className="font-medium">{item.query || "(Sin texto)"}</p>
+                              <p className="font-medium">{normalizeBusquedaLabel(item.query)}</p>
                             </div>
                           </TableCell>
                           <TableCell className="text-right">

@@ -12,6 +12,11 @@ as $$
 declare
     rec record;
     cascade_table text;
+    protected_tables constant text[] := array[
+        'public.campanas',
+        'public.prospeccion_contacto_templates',
+        'public.busquedas'
+    ];
     cascade_tables constant text[] := array[
         'public.conversation_summaries',
         'public.conversaciones_insights',
@@ -21,7 +26,6 @@ declare
         'public.prospeccion_contactos_log',
         'public.prospeccion_contacto_envio',
         'public.prospeccion_contacto_batch',
-        'public.prospeccion_contacto_templates',
         'public.prospeccion_prospecto_contacto_stats',
         'public.prospeccion_buscador_resultados',
         'public.prospeccion_buscador_jobs',
@@ -58,6 +62,7 @@ begin
             where a.attname = 'organizacion_id'
               and n.nspname = 'public'
               and c.relkind = 'r'
+              and format('%I.%I', n.nspname, c.relname) <> all(protected_tables)
         ),
         fk as (
             select
@@ -137,7 +142,10 @@ declare
         'public.roles_codigo_counters',
         'public.usuarios',
         'public.usuarios_roles',
-        'public.quote_templates'
+        'public.quote_templates',
+        'public.campanas',
+        'public.prospeccion_contacto_templates',
+        'public.busquedas'
     ];
     cascade_tables constant text[] := array[
         'public.conversation_summaries',
@@ -148,7 +156,6 @@ declare
         'public.prospeccion_contactos_log',
         'public.prospeccion_contacto_envio',
         'public.prospeccion_contacto_batch',
-        'public.prospeccion_contacto_templates',
         'public.prospeccion_prospecto_contacto_stats',
         'public.prospeccion_buscador_resultados',
         'public.prospeccion_buscador_jobs',
@@ -245,7 +252,6 @@ BEGIN
     DELETE FROM public.prospeccion_contactos_log      WHERE organizacion_id = target;
     DELETE FROM public.prospeccion_contacto_envio     WHERE organizacion_id = target;
     DELETE FROM public.prospeccion_contacto_batch     WHERE organizacion_id = target;
-    DELETE FROM public.prospeccion_contacto_templates WHERE organizacion_id = target;
     DELETE FROM public.prospeccion_buscador_resultados WHERE organizacion_id = target;
     DELETE FROM public.prospeccion_buscador_jobs      WHERE organizacion_id = target;
     DELETE FROM public.prospeccion_contacto_listas    WHERE organizacion_id = target;
@@ -275,7 +281,6 @@ BEGIN
     DELETE FROM public.contactos                      WHERE organizacion_id = target;
 
     -- Busquedas y eventos
-    DELETE FROM public.busquedas                      WHERE organizacion_id = target;
     DELETE FROM public.eventos_entrega                WHERE organizacion_id = target;
 
     SET session_replication_role = DEFAULT;
@@ -291,6 +296,11 @@ as $$
 declare
     rec record;
     cascade_table text;
+    protected_tables constant text[] := array[
+        'public.campanas',
+        'public.prospeccion_contacto_templates',
+        'public.busquedas'
+    ];
     cascade_tables constant text[] := array[
         'public.conversation_summaries',
         'public.conversaciones_insights',
@@ -300,7 +310,6 @@ declare
         'public.prospeccion_contactos_log',
         'public.prospeccion_contacto_envio',
         'public.prospeccion_contacto_batch',
-        'public.prospeccion_contacto_templates',
         'public.prospeccion_prospecto_contacto_stats',
         'public.prospeccion_buscador_resultados',
         'public.prospeccion_buscador_jobs',
@@ -337,6 +346,7 @@ begin
             where a.attname = 'organizacion_id'
               and n.nspname = 'public'
               and c.relkind = 'r'
+              and format('%I.%I', n.nspname, c.relname) <> all(protected_tables)
         ),
         fk as (
             select
@@ -410,7 +420,10 @@ declare
         'public.roles_codigo_counters',
         'public.usuarios',
         'public.usuarios_roles',
-        'public.quote_templates'
+        'public.quote_templates',
+        'public.campanas',
+        'public.prospeccion_contacto_templates',
+        'public.busquedas'
     ];
     cascade_tables constant text[] := array[
         'public.conversation_summaries',
@@ -421,7 +434,6 @@ declare
         'public.prospeccion_contactos_log',
         'public.prospeccion_contacto_envio',
         'public.prospeccion_contacto_batch',
-        'public.prospeccion_contacto_templates',
         'public.prospeccion_prospecto_contacto_stats',
         'public.prospeccion_buscador_resultados',
         'public.prospeccion_buscador_jobs',

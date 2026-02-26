@@ -11764,6 +11764,15 @@ async def listar_busquedas_google(
             usuario_token=user_token,
             params=params,
         )
+        # Fallback defensivo: si por cualquier inconsistencia histórica no existen
+        # filas en `busquedas`, reconstruimos una lista mínima desde `resultados`.
+        if not rows:
+            rows, total = await _listar_busquedas_google_desde_resultados(
+                repo=repo,
+                user_token=user_token,
+                limit=limit,
+                offset=offset,
+            )
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     return {
@@ -11773,6 +11782,64 @@ async def listar_busquedas_google(
         "offset": offset,
         "total": total or len(rows),
     }
+
+
+async def _listar_busquedas_google_desde_resultados(
+    *,
+    repo: CRMRepository,
+    user_token: str,
+    limit: int,
+    offset: int,
+) -> tuple[list[dict[str, Any]], int]:
+    target_unique = offset + limit
+    page_size = 1000
+    scan_offset = 0
+    max_scan_rows = 200_000
+    unique_rows: list[dict[str, Any]] = []
+    seen_ids: set[str] = set()
+
+    while len(unique_rows) < target_unique and scan_offset <= max_scan_rows:
+        source_params: dict[str, str] = {
+            "select": "busqueda_id,creado_en,lat,lng",
+            "order": "creado_en.desc",
+            "limit": str(page_size),
+            "offset": str(scan_offset),
+            "fuente": "eq.google_places",
+        }
+        source_rows, _ = await repo.list_prospeccion_resultados(
+            usuario_token=user_token,
+            path="/rest/v1/resultados",
+            params=source_params,
+        )
+        if not source_rows:
+            break
+        for row in source_rows:
+            busqueda_id = str(row.get("busqueda_id") or "").strip()
+            if not busqueda_id or busqueda_id in seen_ids:
+                continue
+            seen_ids.add(busqueda_id)
+            unique_rows.append(
+                {
+                    "id": busqueda_id,
+                    "fuente": "google_places",
+                    "query": "Busqueda Google",
+                    "radio_m": None,
+                    "lat": row.get("lat"),
+                    "lng": row.get("lng"),
+                    "meta": {"source": "fallback_resultados"},
+                    "total_encontrados": None,
+                    "creado_en": row.get("creado_en"),
+                }
+            )
+            if len(unique_rows) >= target_unique:
+                break
+        if len(source_rows) < page_size:
+            break
+        scan_offset += page_size
+
+    total = len(unique_rows)
+    paged = unique_rows[offset : offset + limit]
+    return paged, total
 
 
 @router.get("/prospeccion/denue/busquedas")
