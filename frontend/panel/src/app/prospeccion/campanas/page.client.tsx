@@ -81,6 +81,8 @@ export function CampanasMetricsClient() {
     cuerpoTexto: "",
     cuerpoHtml: "",
     twilioSid: "",
+    nombreIa: "",
+    nombreEmpresa: "",
   })
   const [banner, setBanner] = useState<{ type: "success" | "error"; message: string } | null>(null)
 
@@ -219,6 +221,8 @@ export function CampanasMetricsClient() {
       cuerpoTexto: "",
       cuerpoHtml: "",
       twilioSid: "",
+      nombreIa: "",
+      nombreEmpresa: "",
     })
   }, [templatesCampanaCanal])
 
@@ -268,6 +272,8 @@ export function CampanasMetricsClient() {
         cuerpoTexto: "",
         cuerpoHtml: "",
         twilioSid: "",
+        nombreIa: "",
+        nombreEmpresa: "",
       })
       setTemplatesDialogOpen(true)
       await loadCampaignTemplates(campanaId)
@@ -287,6 +293,13 @@ export function CampanasMetricsClient() {
       cuerpoTexto: template.cuerpo_texto ?? "",
       cuerpoHtml: template.cuerpo_html ?? "",
       twilioSid: typeof metadata["twilio_content_sid"] === "string" ? metadata["twilio_content_sid"] : "",
+      nombreIa:
+        (typeof metadata["nombre_ia"] === "string" ? metadata["nombre_ia"] : "") ||
+        (typeof metadata["assistant_name"] === "string" ? metadata["assistant_name"] : ""),
+      nombreEmpresa:
+        (typeof metadata["organizacion_nombre"] === "string" ? metadata["organizacion_nombre"] : "") ||
+        (typeof metadata["brand_name"] === "string" ? metadata["brand_name"] : "") ||
+        (typeof metadata["empresa"] === "string" ? metadata["empresa"] : ""),
     })
   }, [])
 
@@ -309,6 +322,15 @@ export function CampanasMetricsClient() {
     setTemplateError(null)
     const metadata: Record<string, unknown> = {}
     if (templateForm.twilioSid.trim()) metadata["twilio_content_sid"] = templateForm.twilioSid.trim()
+    if (templateForm.nombreIa.trim()) {
+      metadata["nombre_ia"] = templateForm.nombreIa.trim()
+      metadata["assistant_name"] = templateForm.nombreIa.trim()
+    }
+    if (templateForm.nombreEmpresa.trim()) {
+      metadata["organizacion_nombre"] = templateForm.nombreEmpresa.trim()
+      metadata["brand_name"] = templateForm.nombreEmpresa.trim()
+      metadata["empresa"] = templateForm.nombreEmpresa.trim()
+    }
     const canalToSave = templatesCampanaCanal ?? templateForm.canal
     try {
       if (templateForm.id) {
@@ -723,6 +745,24 @@ export function CampanasMetricsClient() {
               </div>
               {templateForm.canal === "correo" ? (
                 <>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div className="space-y-1">
+                      <Label>Nombre IA (opcional)</Label>
+                      <Input
+                        value={templateForm.nombreIa}
+                        onChange={(event) => setTemplateForm((prev) => ({ ...prev, nombreIa: event.target.value }))}
+                        placeholder="Tal-IA"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label>Empresa (opcional)</Label>
+                      <Input
+                        value={templateForm.nombreEmpresa}
+                        onChange={(event) => setTemplateForm((prev) => ({ ...prev, nombreEmpresa: event.target.value }))}
+                        placeholder="Geoactiv"
+                      />
+                    </div>
+                  </div>
                   <div className="space-y-1">
                     <Label>Asunto</Label>
                     <Input
@@ -750,6 +790,24 @@ export function CampanasMetricsClient() {
               ) : null}
               {templateForm.canal === "whatsapp" ? (
                 <>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div className="space-y-1">
+                      <Label>Nombre IA (opcional)</Label>
+                      <Input
+                        value={templateForm.nombreIa}
+                        onChange={(event) => setTemplateForm((prev) => ({ ...prev, nombreIa: event.target.value }))}
+                        placeholder="Tal-IA"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label>Empresa (opcional)</Label>
+                      <Input
+                        value={templateForm.nombreEmpresa}
+                        onChange={(event) => setTemplateForm((prev) => ({ ...prev, nombreEmpresa: event.target.value }))}
+                        placeholder="Geoactiv"
+                      />
+                    </div>
+                  </div>
                   <div className="space-y-1">
                     <Label>Mensaje</Label>
                     <Textarea
@@ -764,6 +822,9 @@ export function CampanasMetricsClient() {
                       value={templateForm.twilioSid}
                       onChange={(event) => setTemplateForm((prev) => ({ ...prev, twilioSid: event.target.value }))}
                     />
+                    <p className="text-xs text-muted-foreground">
+                      Si tu plantilla usa variables numéricas, estos campos cubren principalmente {"{{2}}"} (IA) y {"{{3}}"} (empresa).
+                    </p>
                   </div>
                 </>
               ) : null}

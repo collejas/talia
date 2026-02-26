@@ -27,6 +27,7 @@ logger = get_logger("prospeccion.contact_sender")
 
 DEFAULT_BACKOFF_SECONDS: tuple[int, ...] = (30, 120, 300, 600)
 PLACEHOLDER_PATTERN = re.compile(r"{{\s*([\w\.-]+)\s*}}")
+NUMERIC_PLACEHOLDER_PATTERN = re.compile(r"{{\s*(\d+)\s*}}")
 LEGACY_IMAGE_PLACEHOLDER_PATTERN = re.compile(r"{{\s*DATA:IMAGE:[^}]+}}", re.IGNORECASE)
 EMAIL_LOGO_IMG_STYLE = "width:83.333%;height:auto;display:block;margin:0 auto;"
 IMG_TAG_PATTERN = re.compile(r"<img\b[^>]*>", re.IGNORECASE)
@@ -217,7 +218,11 @@ def _render_twilio_variables(definition: Any, context: dict[str, Any]) -> dict[s
     for key, raw_value in definition.items():
         if raw_value is None:
             continue
-        text = _render_template_text(str(raw_value), context)
+        raw_text = str(raw_value).strip()
+        if "{{" in raw_text and "}}" in raw_text:
+            text = _render_template_text(raw_text, context).strip()
+        else:
+            text = _resolve_twilio_variable_value(raw_text, key=str(key), context=context)
         rendered[str(key)] = text
     return rendered or None
 
@@ -230,6 +235,71 @@ def _find_blank_twilio_variables(variables: dict[str, str] | None) -> list[str]:
         if not str(value or "").strip():
             missing.append(str(key))
     return missing
+
+
+def _normalize_context_key(value: str) -> str:
+    normalized = re.sub(r"[^a-zA-Z0-9]+", "_", value.strip().lower()).strip("_")
+    return normalized
+
+
+def _context_get_first(context: dict[str, Any], *candidates: str) -> str | None:
+    for candidate in candidates:
+        value = context.get(candidate)
+        text = _clean_text(value)
+        if text:
+            return text
+    return None
+
+
+def _resolve_twilio_variable_value(raw_value: str, *, key: str, context: dict[str, Any]) -> str:
+    value = _clean_text(raw_value) or ""
+    if not value:
+        return ""
+
+    direct = _clean_text(context.get(value))
+    if direct:
+        return direct
+
+    normalized = _normalize_context_key(value)
+    direct_normalized = _clean_text(context.get(normalized))
+    if direct_normalized:
+        return direct_normalized
+
+    if normalized in {"nombre", "name", "display_name", "full_name"}:
+        return _context_get_first(context, "nombre", "display_name", "full_name", "name") or ""
+    if normalized in {"nombre_ia", "nombre_asesor", "asesor", "assistant_name", "seller_name"}:
+        return _context_get_first(context, "nombre_ia", "assistant_name", "asesor_nombre", "seller_name") or "Tal-IA"
+    if normalized in {"empresa", "company", "company_name", "organizacion", "organization_name", "brand_name"}:
+        return _context_get_first(context, "empresa", "company_name", "organizacion_nombre", "brand_name") or "Tal-IA"
+    if normalized in {"segmento", "giro", "industry", "actividad"}:
+        return _context_get_first(context, "segmento", "giro", "actividad", "industry") or "tu negocio"
+    if normalized in {"beneficio", "benefit", "propuesta_valor", "value_prop"}:
+        return _context_get_first(context, "beneficio", "benefit", "propuesta_valor") or "más citas"
+
+    if key == "1":
+        return _context_get_first(context, "nombre", "display_name", "full_name", "name") or ""
+    if key == "2":
+        return _context_get_first(context, "nombre_ia", "assistant_name", "asesor_nombre", "seller_name") or "Tal-IA"
+    if key == "3":
+        return _context_get_first(context, "empresa", "company_name", "organizacion_nombre", "brand_name") or "Tal-IA"
+    if key == "4":
+        return _context_get_first(context, "segmento", "giro", "actividad", "industry") or "tu negocio"
+    if key == "5":
+        return _context_get_first(context, "beneficio", "benefit", "propuesta_valor") or "más citas"
+
+    return ""
+
+
+def _build_twilio_numeric_variables_from_body(*, body: str | None, context: dict[str, Any]) -> dict[str, str] | None:
+    if not body:
+        return None
+    keys = sorted({match.group(1) for match in NUMERIC_PLACEHOLDER_PATTERN.finditer(body)}, key=int)
+    if not keys:
+        return None
+    rendered: dict[str, str] = {}
+    for key in keys:
+        rendered[key] = _resolve_twilio_variable_value(key, key=key, context=context)
+    return rendered
 
 
 def _build_contact_log_entry(
@@ -514,6 +584,11 @@ async def _run_envio_whatsapp(
     preview_text: str | None = None
     if template_sid:
         rendered_vars = _render_twilio_variables(variables_def, context)
+        if not rendered_vars:
+            rendered_vars = _build_twilio_numeric_variables_from_body(
+                body=_clean_text(payload.get("body")) or "",
+                context=context,
+            )
         missing_vars = _find_blank_twilio_variables(rendered_vars)
         if missing_vars:
             return ContactEnvioResult(
