@@ -2560,7 +2560,7 @@ function ProspectosView() {
                           />
                           <Input
                             type="time"
-                            className="w-24"
+                            className="w-32 min-w-[7.5rem] shrink-0"
                             value={plannerScheduleTime}
                             onChange={(event) => setPlannerScheduleTime(event.target.value)}
                           />
