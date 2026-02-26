@@ -3315,7 +3315,7 @@ useEffect(() => {
       <Dialog open={contactDialogOpen} onOpenChange={setContactDialogOpen}>
         <DialogContent className="sm:max-w-3xl">
           <DialogHeader>
-            <DialogTitle>Programar contacto</DialogTitle>
+            <DialogTitle>Configurar envío de campaña</DialogTitle>
             <DialogDescription>
               Selecciona campaña y plantillas por canal. El envío quedará atribuido para medir respuestas y conversiones.
             </DialogDescription>
@@ -3625,7 +3625,7 @@ useEffect(() => {
               ) : (
                 <>
                   <IconSend2 className="mr-2 size-4" />
-                  Guardar acciones
+                  Guardar envío
                 </>
               )}
             </Button>
