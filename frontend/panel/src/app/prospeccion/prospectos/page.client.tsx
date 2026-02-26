@@ -1683,6 +1683,10 @@ useEffect(() => {
       setContactError("Selecciona una campaña para medir resultados.")
       return
     }
+    if (!selectedTemplates.correo && !selectedTemplates.whatsapp && !selectedTemplates.llamada) {
+      setContactError("Selecciona al menos una plantilla (correo, WhatsApp o llamada).")
+      return
+    }
     payload.campana_id = contactCampaignId
 
     const correoAsunto = normalizeEmailLogoPlaceholders(contactForm.correoAsunto.trim())
@@ -1739,23 +1743,9 @@ useEffect(() => {
         correoEntry.metadata = { ...(correoEntry.metadata ?? {}), logo_url: logoUrl }
       }
       canalesPayload.push(correoEntry)
-    } else if (correoAsunto && (correoCuerpo || correoHtml)) {
-      const requiresLogo = hasEmailLogoPlaceholder(correoAsunto) || hasEmailLogoPlaceholder(correoCuerpo) || hasEmailLogoPlaceholder(correoHtml)
-      const logoUrl =
-        requiresLogo ? normalizeLogoUrl(selectedLogoUrl.trim() || quoteLogoUrl.trim() || (await resolvePreferredLogo())) : ""
-      const plainBody = correoCuerpo || (correoHtml ? htmlToPlainText(correoHtml) : "")
-      const correoEntry: ProspeccionCanalConfigInput = {
-        canal: "correo",
-        subject: correoAsunto,
-        body: plainBody,
-      }
-      if (correoHtml) {
-        correoEntry.body_html = correoHtml
-      }
-      if (logoUrl) {
-        correoEntry.metadata = { ...(correoEntry.metadata ?? {}), logo_url: logoUrl }
-      }
-      canalesPayload.push(correoEntry)
+    } else if (correoAsunto || correoCuerpo || correoHtml) {
+      setContactError("Selecciona una plantilla de correo para enviar este canal.")
+      return
     }
 
     const whatsappTemplate = resolveTemplate("whatsapp")
@@ -1802,8 +1792,9 @@ useEffect(() => {
         }
       }
       canalesPayload.push(entry)
-    } else if (whatsappMensaje) {
-      payload.whatsapp_mensaje = whatsappMensaje
+    } else if (whatsappMensaje || whatsappVariablesRaw || whatsappEmpresa) {
+      setContactError("Selecciona una plantilla de WhatsApp para enviar este canal.")
+      return
     }
 
     const llamadaTemplate = resolveTemplate("llamada")
@@ -1822,17 +1813,16 @@ useEffect(() => {
       }
       canalesPayload.push(entry)
     } else if (llamadaNotas) {
-      payload.llamada_notas = llamadaNotas
+      setContactError("Selecciona una plantilla de llamada para enviar este canal.")
+      return
     }
 
     if (canalesPayload.length) {
       payload.canales = canalesPayload
     }
 
-    const hasLegacyChannel = Boolean(payload.whatsapp_mensaje) || Boolean(payload.llamada_notas)
-
-    if (!canalesPayload.length && !hasLegacyChannel) {
-      setContactError("Define al menos un canal (correo, WhatsApp o llamada).")
+    if (!canalesPayload.length) {
+      setContactError("Selecciona al menos una plantilla para generar el envío.")
       return
     }
 
@@ -3410,8 +3400,7 @@ useEffect(() => {
           <DialogHeader>
             <DialogTitle>Programar contacto</DialogTitle>
             <DialogDescription>
-              Define cada canal usando plantillas predefinidas o personaliza el contenido. Sólo se enviarán aquellos
-              canales con texto configurado.
+              Selecciona campaña y plantillas por canal. El envío quedará atribuido para medir respuestas y conversiones.
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-2 rounded-md border border-dashed p-3 sm:grid-cols-[1fr_auto] sm:items-end">

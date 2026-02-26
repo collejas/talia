@@ -13945,6 +13945,11 @@ async def contactar_prospectos(
 
     if payload.campana_id is None:
         raise HTTPException(status_code=400, detail="campana_id_required")
+    if not payload.canales:
+        raise HTTPException(status_code=400, detail="contact_templates_required")
+    for channel in payload.canales:
+        if channel.template_id is None:
+            raise HTTPException(status_code=400, detail=f"contact_template_required:{channel.canal}")
 
     template_map: dict[str, dict[str, Any]] = {}
     if payload.canales:
@@ -13955,6 +13960,20 @@ async def contactar_prospectos(
                 user_token=user_token,
                 template_ids=template_ids,
             )
+            campana_key = str(payload.campana_id)
+            for template_id, template in template_map.items():
+                metadata = template.get("metadata") if isinstance(template.get("metadata"), dict) else {}
+                template_campana = _clean_text(metadata.get("campana_id"))
+                if not template_campana:
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"contact_template_campaign_missing:{template_id}",
+                    )
+                if template_campana != campana_key:
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"contact_template_campaign_mismatch:{template_id}",
+                    )
 
     canales_config, programacion = _resolve_contact_channels(
         payload,
