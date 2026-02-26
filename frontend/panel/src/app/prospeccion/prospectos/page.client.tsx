@@ -1560,7 +1560,7 @@ function ProspectosView() {
       setBanner({
         type: "success",
         message: result.batchId
-          ? `Campaña programada. Lote ${result.batchId} con ${totalAcciones} acciones.${omitidosMensaje}`
+          ? `Campaña programada. Lote ${result.batchId} con ${totalAcciones} envíos.${omitidosMensaje}`
           : `Se programó la campaña correctamente.${omitidosMensaje}`,
       })
       void fetchProspectos(offset)
@@ -1954,7 +1954,7 @@ function ProspectosView() {
             ))
           ) : (
             <div className="rounded-xl border border-dashed bg-muted/30 p-4 text-sm text-muted-foreground">
-              No hay envíos recientes. Programa uno desde la tabla para verlo aquí.
+              No hay envíos recientes. Crea una campaña desde “Preparar envíos” para verla aquí.
             </div>
           )}
         </div>
@@ -2252,7 +2252,7 @@ function ProspectosView() {
       <Drawer open={plannerOpen} onOpenChange={handlePlannerOpenChange} direction="right">
         <DrawerContent className="flex flex-col data-[vaul-drawer-direction=right]:h-screen data-[vaul-drawer-direction=right]:max-h-screen data-[vaul-drawer-direction=right]:max-w-3xl data-[vaul-drawer-direction=right]:overflow-hidden">
           <DrawerHeader className="items-start space-y-2">
-            <DrawerTitle>Elige cómo lanzar tu contacto</DrawerTitle>
+            <DrawerTitle>Preparar campaña</DrawerTitle>
             <DrawerDescription>
               Todo envío se ejecuta como campaña con plantillas por canal para mantener trazabilidad completa.
             </DrawerDescription>
