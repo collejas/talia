@@ -560,6 +560,7 @@ function ProspectosView() {
   const [plannerSeparationSeconds, setPlannerSeparationSeconds] = useState("0")
   const [plannerCampaignOptions, setPlannerCampaignOptions] = useState<CampaignOption[]>([])
   const [plannerCampaignsLoading, setPlannerCampaignsLoading] = useState(false)
+  const [plannerScheduleMode, setPlannerScheduleMode] = useState<"ahora" | "programado">("ahora")
   const [plannerTemplates, setPlannerTemplates] = useState<ContactoTemplate[]>([])
   const [plannerTemplatesLoading, setPlannerTemplatesLoading] = useState(false)
   const [plannerTemplateSelection, setPlannerTemplateSelection] = useState<{
@@ -1420,6 +1421,7 @@ function ProspectosView() {
   const handlePlannerOpen = useCallback(() => {
     setPlannerCampaignId("")
     setPlannerScheduleAt("")
+    setPlannerScheduleMode("ahora")
     setPlannerSeparationSeconds("0")
     setPlannerTemplates([])
     setPlannerTemplateSelection({ correo: "", whatsapp: "", llamada: "" })
@@ -1488,6 +1490,7 @@ function ProspectosView() {
         setPlannerError(null)
         setPlannerCampaignId("")
         setPlannerScheduleAt("")
+        setPlannerScheduleMode("ahora")
         setPlannerSeparationSeconds("0")
         setPlannerTemplates([])
         setPlannerTemplateSelection({ correo: "", whatsapp: "", llamada: "" })
@@ -1515,7 +1518,10 @@ function ProspectosView() {
     try {
       const templates = plannerTemplates
       const canalesPayload: ProspeccionCanalConfigInput[] = []
-      const scheduleValue = plannerScheduleAt ? new Date(plannerScheduleAt).toISOString() : undefined
+      const scheduleValue =
+        plannerScheduleMode === "programado" && plannerScheduleAt
+          ? new Date(plannerScheduleAt).toISOString()
+          : undefined
       ;(["correo", "whatsapp", "llamada"] as const).forEach((canal) => {
         const selectedTemplateId = plannerTemplateSelection[canal]
         if (!selectedTemplateId) return
@@ -1594,6 +1600,7 @@ function ProspectosView() {
     offset,
     openContactDrawer,
     plannerCampaignId,
+    plannerScheduleMode,
     plannerTemplateSelection,
     plannerTemplates,
     plannerScheduleAt,
@@ -2493,19 +2500,36 @@ function ProspectosView() {
                 <div className="mt-2 grid gap-3 md:grid-cols-2">
                   <div className="space-y-1">
                     <Label>Programar lote (opcional)</Label>
-                    <Input
-                      type="datetime-local"
-                      value={plannerScheduleAt}
-                      onChange={(event) => setPlannerScheduleAt(event.target.value)}
-                    />
+                    <div className="space-y-2">
+                      <Select
+                        value={plannerScheduleMode}
+                        onValueChange={(value) => setPlannerScheduleMode(value as "ahora" | "programado")}
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="ahora">Ejecutar ahora</SelectItem>
+                          <SelectItem value="programado">Programar fecha y hora</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      {plannerScheduleMode === "programado" ? (
+                        <Input
+                          type="datetime-local"
+                          value={plannerScheduleAt}
+                          onChange={(event) => setPlannerScheduleAt(event.target.value)}
+                        />
+                      ) : null}
+                    </div>
                   </div>
                   <div className="space-y-1">
-                    <Label>Separación entre envíos (segundos)</Label>
+                    <Label>Separación entre envíos</Label>
                     <Input
                       type="number"
                       min={0}
                       max={3600}
                       step={1}
+                      className="w-32"
                       value={plannerSeparationSeconds}
                       onChange={(event) => setPlannerSeparationSeconds(event.target.value)}
                     />
