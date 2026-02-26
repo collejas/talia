@@ -1569,6 +1569,7 @@ class ProspeccionCampanaUpdatePayload(BaseModel):
     lista_id: UUID | None = None
     filtros: ProspectoFiltroPayload | None = None
     canales: list[ProspeccionCanalConfig] | None = None
+    separacion_segundos: int | None = Field(default=None, ge=0, le=3600)
 
 
 class ProspeccionCampanaDeletePayload(BaseModel):
@@ -1610,6 +1611,7 @@ class ProspectoContactarPayload(BaseModel):
     canales: list[ProspeccionCanalConfig] | None = None
     campana_id: UUID | None = None
     batch_titulo: str | None = Field(default=None, max_length=160)
+    separacion_segundos: int | None = Field(default=None, ge=0, le=3600)
 
     @field_validator("prospecto_ids")
     @classmethod
@@ -4430,6 +4432,8 @@ def _build_contact_batch_payload(
         "whatsapp_mensaje": payload.whatsapp_mensaje,
         "llamada_notas": payload.llamada_notas,
     }
+    if payload.separacion_segundos is not None:
+        metadata["separacion_segundos"] = payload.separacion_segundos
     if metadata_extra:
         metadata.update(metadata_extra)
     body["metadata"] = metadata
@@ -4491,9 +4495,26 @@ def _build_contact_envios_entries(
     prospectos: list[dict[str, Any]],
     canales: dict[str, dict[str, Any]],
     programacion: dict[str, str] | None = None,
+    separacion_segundos: int | None = None,
 ) -> list[dict[str, Any]]:
     entries: list[dict[str, Any]] = []
     batch_value = str(batch_id)
+    separacion_val = max(0, int(separacion_segundos or 0))
+    base_now = datetime.now(UTC)
+    envio_index = 0
+
+    def _parse_programmed(value: str | None) -> datetime | None:
+        if not value:
+            return None
+        try:
+            normalized = value.replace("Z", "+00:00")
+            dt = datetime.fromisoformat(normalized)
+        except ValueError:
+            return None
+        if dt.tzinfo is None:
+            return dt.replace(tzinfo=UTC)
+        return dt.astimezone(UTC)
+
     for prospecto in prospectos:
         prospecto_id = prospecto.get("id") or prospecto.get("prospecto_id")
         if not prospecto_id:
@@ -4519,9 +4540,14 @@ def _build_contact_envios_entries(
                 "payload": canal_payload,
                 "detalle": detalle,
             }
-            if programacion and programacion.get(canal):
-                entry["programado_en"] = programacion[canal]
+            base_programado = _parse_programmed(programacion.get(canal) if programacion else None)
+            if separacion_val > 0:
+                base_dt = base_programado or base_now
+                entry["programado_en"] = (base_dt + timedelta(seconds=envio_index * separacion_val)).isoformat()
+            elif base_programado is not None:
+                entry["programado_en"] = base_programado.isoformat()
             entries.append(entry)
+            envio_index += 1
     return entries
 
 
@@ -12944,6 +12970,12 @@ async def prospeccion_campana_duplicar_defaults(
     metadata = _ensure_dict(base_batch.get("metadata"), default={})
     canales_config = _ensure_dict(metadata.get("canales_config"), default={})
     programacion = _ensure_dict(base_batch.get("programacion"), default={})
+    batch_metadata = _ensure_dict(base_batch.get("metadata"), default={})
+    separacion_segundos_raw = batch_metadata.get("separacion_segundos")
+    try:
+        separacion_segundos = int(separacion_segundos_raw) if separacion_segundos_raw is not None else None
+    except (TypeError, ValueError):
+        separacion_segundos = None
     filtros = base_batch.get("filtros") if isinstance(base_batch.get("filtros"), dict) else {}
     lista_id = base_batch.get("lista_id")
     source: Literal["selected", "lista", "filters"] = "selected"
@@ -12974,6 +13006,7 @@ async def prospeccion_campana_duplicar_defaults(
         "filtros": filtros or {},
         "canales": canales_defaults,
         "programacion": programacion or {},
+        "separacion_segundos": separacion_segundos,
     }
     return {
         "ok": True,
@@ -13165,6 +13198,15 @@ async def prospeccion_campana_update(
     if not prospectos:
         raise HTTPException(status_code=400, detail="prospectos_not_found")
 
+    existing_batch_metadata = _ensure_dict(target_batch.get("metadata"), default={})
+    if payload.separacion_segundos is not None:
+        separacion_segundos = payload.separacion_segundos
+    else:
+        try:
+            separacion_segundos = int(existing_batch_metadata.get("separacion_segundos"))
+        except (TypeError, ValueError):
+            separacion_segundos = None
+
     existing_envios = await _list_batch_envios_all(repo=repo, user_token=user_token, batch_id=batch_id)
     for envio in existing_envios:
         envio_id_raw = envio.get("id")
@@ -13196,11 +13238,14 @@ async def prospeccion_campana_update(
         prospectos=prospectos,
         canales=canales_config,
         programacion=programacion or None,
+        separacion_segundos=separacion_segundos,
     )
     created_envios = await repo.insert_contact_envios(usuario_token=user_token, entries=new_entries)
 
-    metadata_existing = _ensure_dict(target_batch.get("metadata"), default={})
+    metadata_existing = existing_batch_metadata
     metadata_existing["canales_config"] = canales_config
+    if separacion_segundos is not None:
+        metadata_existing["separacion_segundos"] = separacion_segundos
     if bloqueados:
         metadata_existing["recontacto_bloqueados"] = {"total": len(bloqueados)}
 
@@ -14090,6 +14135,7 @@ async def contactar_prospectos(
         prospectos=prospectos,
         canales=canales_config,
         programacion=programacion,
+        separacion_segundos=payload.separacion_segundos,
     )
     try:
         envios = await repo.insert_contact_envios(

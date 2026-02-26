@@ -106,6 +106,7 @@ export type ProspeccionCampanaDuplicateDefaults = {
       }
     >
     programacion?: Record<string, string>
+    separacion_segundos?: number | null
   }
 }
 
@@ -162,6 +163,7 @@ export type ContactarProspectosPayload = {
   canales?: ProspeccionCanalConfigInput[]
   campana_id?: string
   batch_titulo?: string
+  separacion_segundos?: number
 }
 
 export type ProspectoContactoResumen = {
@@ -641,6 +643,7 @@ export async function updateProspeccionCampana(
     lista_id?: string | null
     filtros?: ProspectoFiltroInput
     canales?: ProspeccionCanalConfigInput[]
+    separacion_segundos?: number
   }
 ) {
   return requestJson<{

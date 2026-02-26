@@ -9,7 +9,6 @@ import {
   IconCalendar,
   IconHistory,
   IconLoader,
-  IconNotebook,
   IconPencil,
   IconPhoneCheck,
   IconPlus,
@@ -27,7 +26,6 @@ import {
 import Link from "next/link"
 
 import { ProspeccionViewLayout } from "@/components/layouts/prospeccion-view-layout"
-import { ProspeccionCampaignWizard, type ProspeccionWizardPreset } from "@/components/prospeccion/prospeccion-campaign-wizard"
 import { ProspeccionContactDrawer, type ProspeccionContactResult } from "@/components/prospeccion/prospeccion-contact-drawer"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -59,11 +57,14 @@ import { cn } from "@/lib/utils"
 import { canalLabel, contactHistoryDetail, contactStatusLabel, contactStatusVariant } from "@/lib/prospeccion/contact-utils"
 import {
   actualizarProspecto,
+  contactarProspectos,
   crearProspectoManual,
   eliminarProspecto,
   eliminarProspectos,
   convertirProspectoAContacto,
   type ConvertirProspectoPayload,
+  listContactoTemplates,
+  listCrmCampaigns,
   listProspectos,
   listProspectosQueryMetadata,
   listContactoEnviosPorProspecto,
@@ -79,7 +80,9 @@ import {
   type ProspeccionOmitido,
   type ProspectoContactIndicators,
   type ContactoLog,
+  type ContactoTemplate,
   type ProspectoQueryOption,
+  type ProspeccionCanalConfigInput,
   verificarProspectos,
   listContactoBatches,
   type ContactoBatch,
@@ -127,6 +130,7 @@ type ContactDrawerData = {
   results: ProspeccionContactResult[]
   omitidos?: ProspeccionOmitido[]
 }
+type CampaignOption = { id: string; nombre: string }
 type ChecklistSummary = {
   telefonos_pendientes: number
   sin_email: number
@@ -550,11 +554,21 @@ function ProspectosView() {
   const [activityOptionsLoading, setActivityOptionsLoading] = useState(false)
   const [stageSummary, setStageSummary] = useState<Partial<Record<FlowStepKey, number>>>({})
   const [stageSummaryLoading, setStageSummaryLoading] = useState(false)
-  const [campaignWizardOpen, setCampaignWizardOpen] = useState(false)
   const [plannerOpen, setPlannerOpen] = useState(false)
-  const [plannerName, setPlannerName] = useState("")
+  const [plannerCampaignId, setPlannerCampaignId] = useState("")
+  const [plannerScheduleAt, setPlannerScheduleAt] = useState("")
+  const [plannerSeparationSeconds, setPlannerSeparationSeconds] = useState("0")
+  const [plannerCampaignOptions, setPlannerCampaignOptions] = useState<CampaignOption[]>([])
+  const [plannerCampaignsLoading, setPlannerCampaignsLoading] = useState(false)
+  const [plannerTemplates, setPlannerTemplates] = useState<ContactoTemplate[]>([])
+  const [plannerTemplatesLoading, setPlannerTemplatesLoading] = useState(false)
+  const [plannerTemplateSelection, setPlannerTemplateSelection] = useState<{
+    correo: string
+    whatsapp: string
+    llamada: string
+  }>({ correo: "", whatsapp: "", llamada: "" })
+  const [plannerExecuting, setPlannerExecuting] = useState(false)
   const [plannerError, setPlannerError] = useState<string | null>(null)
-  const [campaignWizardPreset, setCampaignWizardPreset] = useState<ProspeccionWizardPreset | null>(null)
   const [convertDialogOpen, setConvertDialogOpen] = useState(false)
   const [convertProspect, setConvertProspect] = useState<ProspectoItem | null>(null)
   const [convertForm, setConvertForm] = useState<{
@@ -1207,12 +1221,6 @@ function ProspectosView() {
     }
   }, [historyDialogOpen])
 
-  useEffect(() => {
-    if (!campaignWizardOpen) {
-      setCampaignWizardPreset(null)
-    }
-  }, [campaignWizardOpen])
-
   const openContactDrawer = useCallback((data: ContactDrawerData) => {
     if (!data.results?.length) {
       setContactDrawerData(null)
@@ -1410,36 +1418,189 @@ function ProspectosView() {
   }, [fetchProspectos, fetchStageSummary, offset, selectedIds])
 
   const handlePlannerOpen = useCallback(() => {
-    setPlannerName("")
+    setPlannerCampaignId("")
+    setPlannerScheduleAt("")
+    setPlannerSeparationSeconds("0")
+    setPlannerTemplates([])
+    setPlannerTemplateSelection({ correo: "", whatsapp: "", llamada: "" })
     setPlannerError(null)
     setPlannerOpen(true)
   }, [])
+
+  const fetchPlannerCampaignOptions = useCallback(async () => {
+    setPlannerCampaignsLoading(true)
+    try {
+      const campaigns = await listCrmCampaigns()
+      const ordered = (Array.isArray(campaigns) ? campaigns : [])
+        .map((campaign) => ({
+          id: campaign.id,
+          nombre: campaign.nombre ?? `Campaña ${campaign.id.slice(0, 8)}`,
+        }))
+        .sort((a, b) => a.nombre.localeCompare(b.nombre, "es", { sensitivity: "base" }))
+      setPlannerCampaignOptions(ordered)
+      setPlannerCampaignId((prev) => (prev && ordered.some((item) => item.id === prev) ? prev : ordered[0]?.id ?? ""))
+    } catch (err) {
+      setPlannerCampaignOptions([])
+      const message = err instanceof Error ? err.message : "No se pudieron cargar las campañas."
+      setPlannerError(message)
+    } finally {
+      setPlannerCampaignsLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!plannerOpen) return
+    void fetchPlannerCampaignOptions()
+  }, [fetchPlannerCampaignOptions, plannerOpen])
+
+  const fetchPlannerTemplates = useCallback(async (campanaId: string) => {
+    setPlannerTemplatesLoading(true)
+    try {
+      const response = await listContactoTemplates({ campana_id: campanaId })
+      const items = (response.items ?? []) as ContactoTemplate[]
+      setPlannerTemplates(items)
+      const byCanal = (canal: "correo" | "whatsapp" | "llamada") =>
+        items.find((item) => item.canal === canal)?.id ?? ""
+      setPlannerTemplateSelection({
+        correo: byCanal("correo"),
+        whatsapp: byCanal("whatsapp"),
+        llamada: byCanal("llamada"),
+      })
+    } catch (err) {
+      setPlannerTemplates([])
+      setPlannerTemplateSelection({ correo: "", whatsapp: "", llamada: "" })
+      const message = err instanceof Error ? err.message : "No se pudieron cargar las plantillas de la campaña."
+      setPlannerError(message)
+    } finally {
+      setPlannerTemplatesLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!plannerOpen || !plannerCampaignId) return
+    void fetchPlannerTemplates(plannerCampaignId)
+  }, [fetchPlannerTemplates, plannerCampaignId, plannerOpen])
 
   const handlePlannerOpenChange = useCallback(
     (open: boolean) => {
       setPlannerOpen(open)
       if (!open) {
         setPlannerError(null)
-        setPlannerName("")
+        setPlannerCampaignId("")
+        setPlannerScheduleAt("")
+        setPlannerSeparationSeconds("0")
+        setPlannerTemplates([])
+        setPlannerTemplateSelection({ correo: "", whatsapp: "", llamada: "" })
       }
     },
     []
   )
 
-  const handlePlannerContinue = useCallback(() => {
+  const handlePlannerContinue = useCallback(async () => {
     setPlannerError(null)
-    const trimmedName = plannerName.trim()
-    if (!trimmedName) {
-      setPlannerError("Asigna un nombre interno a la campaña.")
+    if (!selectedCount) {
+      setPlannerError("Selecciona al menos un prospecto.")
       return
     }
-    setCampaignWizardPreset({
-      titulo: trimmedName,
-      source: selectedCount ? "selected" : "filters",
-    })
-    handlePlannerOpenChange(false)
-    setCampaignWizardOpen(true)
-  }, [handlePlannerOpenChange, plannerName, selectedCount])
+    if (!plannerCampaignId) {
+      setPlannerError("Selecciona una campaña.")
+      return
+    }
+    const separacion = Number.parseInt(plannerSeparationSeconds || "0", 10)
+    if (Number.isNaN(separacion) || separacion < 0 || separacion > 3600) {
+      setPlannerError("La separación debe estar entre 0 y 3600 segundos.")
+      return
+    }
+    setPlannerExecuting(true)
+    try {
+      const templates = plannerTemplates
+      const canalesPayload: ProspeccionCanalConfigInput[] = []
+      const scheduleValue = plannerScheduleAt ? new Date(plannerScheduleAt).toISOString() : undefined
+      ;(["correo", "whatsapp", "llamada"] as const).forEach((canal) => {
+        const selectedTemplateId = plannerTemplateSelection[canal]
+        if (!selectedTemplateId) return
+        const template = templates.find((item) => item.id === selectedTemplateId && item.canal === canal)
+        if (!template) return
+        const entry: ProspeccionCanalConfigInput = {
+          canal,
+          template_id: template.id,
+        }
+        if (canal === "correo") {
+          if (template.asunto) entry.subject = template.asunto
+          if (template.cuerpo_texto) entry.body = template.cuerpo_texto
+          if (template.cuerpo_html) entry.body_html = template.cuerpo_html
+        }
+        if (canal === "whatsapp") {
+          if (template.cuerpo_texto) entry.body = template.cuerpo_texto
+          const metadata = template.metadata && typeof template.metadata === "object" ? template.metadata : null
+          const twilioSid =
+            metadata && typeof metadata["twilio_content_sid"] === "string" ? metadata["twilio_content_sid"].trim() : ""
+          if (twilioSid) {
+            entry.metadata = { twilio_content_sid: twilioSid }
+          }
+        }
+        if (canal === "llamada") {
+          entry.message = template.cuerpo_texto?.trim() || template.descripcion?.trim() || ""
+        }
+        if (scheduleValue) {
+          entry.programado_en = scheduleValue
+        }
+        canalesPayload.push(entry)
+      })
+      if (!canalesPayload.length) {
+        setPlannerError("La campaña no tiene plantillas configuradas para ejecutar.")
+        return
+      }
+      const response = await contactarProspectos({
+        prospecto_ids: selectedIds,
+        campana_id: plannerCampaignId,
+        canales: canalesPayload,
+        separacion_segundos: separacion,
+      })
+      const nameMap = new Map(items.map((item) => [item.id, item.display_name]))
+      const enrichedResults = (response.contactos ?? []).map((resumen) => ({
+        ...resumen,
+        display_name: nameMap.get(resumen.prospecto_id) ?? resumen.display_name ?? null,
+      }))
+      if (enrichedResults.length) {
+        openContactDrawer({
+          batchId: response.batch_id ?? null,
+          results: enrichedResults,
+          omitidos: response.omitidos,
+        })
+      }
+      setBanner({
+        type: "success",
+        message: response.batch_id
+          ? `Lote ${response.batch_id} ejecutado con ${enrichedResults.length} envíos.`
+          : "Lote ejecutado.",
+      })
+      handlePlannerOpenChange(false)
+      await fetchProspectos(offset)
+      void fetchRecentBatches()
+      void fetchStageSummary()
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "No se pudo ejecutar el lote."
+      setPlannerError(message)
+    } finally {
+      setPlannerExecuting(false)
+    }
+  }, [
+    fetchProspectos,
+    fetchRecentBatches,
+    fetchStageSummary,
+    handlePlannerOpenChange,
+    items,
+    offset,
+    openContactDrawer,
+    plannerCampaignId,
+    plannerTemplateSelection,
+    plannerTemplates,
+    plannerScheduleAt,
+    plannerSeparationSeconds,
+    selectedCount,
+    selectedIds,
+  ])
 
   const handleOpenConvertDialog = useCallback((prospecto: ProspectoItem) => {
     if (!prospecto.id) return
@@ -1542,33 +1703,6 @@ function ProspectosView() {
       setConvertSubmitting(false)
     }
   }, [convertForm, convertProspect, fetchProspectos, fetchStageSummary, offset])
-
-  const handleWizardCompleted = useCallback(
-    (result: { batchId?: string | null; contactos?: ProspeccionContactResult[]; omitidos?: ProspeccionOmitido[] }) => {
-      if (result.contactos?.length) {
-        openContactDrawer({
-          batchId: result.batchId ?? null,
-          results: result.contactos,
-          omitidos: result.omitidos,
-        })
-      }
-      const omitidosTotal =
-        result.omitidos?.reduce((acc, item) => acc + (item.total ?? item.prospecto_ids.length ?? 0), 0) ?? 0
-      const omitidosMensaje =
-        omitidosTotal > 0 ? ` (${omitidosTotal} prospectos convertidos se omitieron automáticamente).` : ""
-      const totalAcciones = result.contactos?.length ?? 0
-      setBanner({
-        type: "success",
-        message: result.batchId
-          ? `Campaña programada. Lote ${result.batchId} con ${totalAcciones} envíos.${omitidosMensaje}`
-          : `Se programó la campaña correctamente.${omitidosMensaje}`,
-      })
-      void fetchProspectos(offset)
-      void fetchRecentBatches()
-      void fetchStageSummary()
-    },
-    [fetchProspectos, fetchRecentBatches, fetchStageSummary, offset, openContactDrawer]
-  )
 
   const handleOpenCreateDialog = () => {
     setFormMode("create")
@@ -2282,44 +2416,114 @@ function ProspectosView() {
                 </div>
               ) : null}
             </div>
-            <div className="mt-4">
-              <Card
-                className="border-2 border-primary bg-primary/5 shadow-sm"
-              >
-                <CardContent className="space-y-3">
-                  <div className="flex items-start gap-3">
-                    <span className="rounded-full bg-primary/10 p-2 text-primary">
-                      <IconNotebook className="size-5" />
-                    </span>
-                    <div>
-                      <p className="font-semibold">Campaña con nombre</p>
-                      <p className="text-sm text-muted-foreground">
-                        Abre el wizard para reutilizar listas inteligentes, definir canales y registrar un título claro.
-                      </p>
-                    </div>
-                  </div>
-                  <div
-                    className="space-y-2 rounded-lg border border-dashed bg-background/80 p-3"
-                    onClick={(event) => event.stopPropagation()}
+            <div className="mt-4 space-y-4">
+              <div className="rounded-lg border bg-background p-4">
+                <p className="text-sm font-semibold">1) Selecciona campaña activa</p>
+                <div className="mt-2 space-y-2">
+                  <Select
+                    value={plannerCampaignId}
+                    onValueChange={setPlannerCampaignId}
+                    disabled={plannerCampaignsLoading || !plannerCampaignOptions.length}
                   >
-                    <Label className="text-xs font-medium">Nombre interno</Label>
+                    <SelectTrigger>
+                      <SelectValue
+                        placeholder={
+                          plannerCampaignsLoading
+                            ? "Cargando campañas..."
+                            : plannerCampaignOptions.length
+                              ? "Selecciona campaña"
+                              : "No hay campañas activas"
+                        }
+                      />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {plannerCampaignOptions.map((campaign) => (
+                        <SelectItem key={campaign.id} value={campaign.id}>
+                          {campaign.nombre}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">
+                    Las plantillas se toman de la campaña seleccionada.
+                  </p>
+                </div>
+              </div>
+              <div className="rounded-lg border bg-background p-4">
+                <p className="text-sm font-semibold">2) Selecciona plantillas por canal</p>
+                <div className="mt-2 grid gap-3 md:grid-cols-3">
+                  {(["correo", "whatsapp", "llamada"] as const).map((canal) => (
+                    <div key={`planner-template-${canal}`} className="space-y-1">
+                      <Label className="capitalize">{canal}</Label>
+                      <Select
+                        value={plannerTemplateSelection[canal]}
+                        onValueChange={(value) =>
+                          setPlannerTemplateSelection((prev) => ({
+                            ...prev,
+                            [canal]: value,
+                          }))
+                        }
+                        disabled={plannerTemplatesLoading || !plannerCampaignId}
+                      >
+                        <SelectTrigger>
+                          <SelectValue
+                            placeholder={
+                              plannerTemplatesLoading
+                                ? "Cargando..."
+                                : `Sin plantilla ${canal}`
+                            }
+                          />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {plannerTemplates
+                            .filter((tpl) => tpl.canal === canal)
+                            .map((tpl) => (
+                              <SelectItem key={tpl.id} value={tpl.id}>
+                                {tpl.nombre}
+                              </SelectItem>
+                            ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div className="rounded-lg border bg-background p-4">
+                <p className="text-sm font-semibold">3) Configura programación y separación</p>
+                <div className="mt-2 grid gap-3 md:grid-cols-2">
+                  <div className="space-y-1">
+                    <Label>Programar lote (opcional)</Label>
                     <Input
-                      value={plannerName}
-                      onChange={(event) => setPlannerName(event.target.value)}
-                      placeholder="Ej. Seguimiento hoteles Q4"
+                      type="datetime-local"
+                      value={plannerScheduleAt}
+                      onChange={(event) => setPlannerScheduleAt(event.target.value)}
                     />
-                    <p className="text-xs text-muted-foreground">
-                      Podrás ajustar filtros, listas y canales antes de confirmar.
-                    </p>
                   </div>
-                </CardContent>
-              </Card>
+                  <div className="space-y-1">
+                    <Label>Separación entre envíos (segundos)</Label>
+                    <Input
+                      type="number"
+                      min={0}
+                      max={3600}
+                      step={1}
+                      value={plannerSeparationSeconds}
+                      onChange={(event) => setPlannerSeparationSeconds(event.target.value)}
+                    />
+                  </div>
+                </div>
+              </div>
+              <div className="rounded-lg border bg-muted/20 p-4 text-sm">
+                <p className="font-semibold">4) Ejecutar lote</p>
+                <p className="mt-1 text-muted-foreground">
+                  Se ejecutará sobre los prospectos seleccionados con las plantillas de la campaña.
+                </p>
+              </div>
             </div>
             <div className="mt-6 rounded-2xl border bg-muted/20 p-4 text-sm">
               <p className="font-semibold">¿Qué sucederá después?</p>
               <ul className="mt-2 list-disc space-y-1 pl-4 text-muted-foreground">
-                <li>Verás el detalle de cada canal antes de lanzar.</li>
                 <li>Se creará un lote con seguimiento en Campañas y Contactos.</li>
+                <li>Podrás monitorear estados de envío en la vista de Contactos.</li>
               </ul>
             </div>
             {plannerError ? <p className="mt-4 text-sm text-destructive">{plannerError}</p> : null}
@@ -2328,10 +2532,10 @@ function ProspectosView() {
             <Button variant="outline" onClick={() => handlePlannerOpenChange(false)}>
               Cancelar
             </Button>
-            <Button onClick={handlePlannerContinue}>
+            <Button onClick={() => void handlePlannerContinue()} disabled={plannerExecuting || plannerCampaignsLoading || !selectedCount}>
               <>
-                <IconTargetArrow className="mr-2 size-4" />
-                Abrir wizard de campaña
+                {plannerExecuting ? <IconLoader className="mr-2 size-4 animate-spin" /> : <IconTargetArrow className="mr-2 size-4" />}
+                Ejecutar lote
               </>
             </Button>
           </DrawerFooter>
@@ -2814,18 +3018,6 @@ function ProspectosView() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
-      <ProspeccionCampaignWizard
-        open={campaignWizardOpen}
-        onClose={() => setCampaignWizardOpen(false)}
-        selectedIds={selectedIds}
-        defaultFilters={{
-          fuente: filters.fuente || undefined,
-          segmento: filters.segmento || undefined,
-        }}
-        preset={campaignWizardPreset}
-        onCompleted={handleWizardCompleted}
-      />
 
       <Dialog open={formDialogOpen} onOpenChange={setFormDialogOpen}>
         <DialogContent className="sm:max-w-2xl">

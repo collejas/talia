@@ -112,6 +112,7 @@ export type ProspeccionWizardPreset = {
   titulo?: string | null
   campanaId?: string | null
   campanaNombre?: string | null
+  separacionSegundos?: number | null
 }
 
 function sanitizeFilters(filters: ProspectoFiltroInput): ProspectoFiltroInput {
@@ -168,6 +169,7 @@ export function ProspeccionCampaignWizard({
   const [newCampaignOpen, setNewCampaignOpen] = useState(false)
   const [newCampaignName, setNewCampaignName] = useState("")
   const [newCampaignSaving, setNewCampaignSaving] = useState(false)
+  const [separacionSegundos, setSeparacionSegundos] = useState<string>("0")
   const correoAsuntoRef = useRef<HTMLInputElement | null>(null)
   const correoCuerpoRef = useRef<HTMLTextAreaElement | null>(null)
   const correoHtmlRef = useRef<HTMLTextAreaElement | null>(null)
@@ -196,6 +198,7 @@ export function ProspeccionCampaignWizard({
     setQuoteLogoUrl("")
     setNewCampaignOpen(false)
     setNewCampaignName("")
+    setSeparacionSegundos("0")
     setError(null)
     setPresetApplied(false)
   }, [defaultFilters, defaultSource])
@@ -293,6 +296,10 @@ export function ProspeccionCampaignWizard({
     }
     if ("titulo" in preset) {
       setTitulo(preset.titulo ?? "")
+    }
+    if ("separacionSegundos" in preset) {
+      const safe = Math.max(0, Number(preset.separacionSegundos ?? 0))
+      setSeparacionSegundos(String(safe))
     }
     if (preset.canales) {
       setChannelState(buildChannelState(preset.canales))
@@ -534,6 +541,12 @@ export function ProspeccionCampaignWizard({
       setStep(1)
       return
     }
+    const separacionParsed = Number.parseInt(separacionSegundos || "0", 10)
+    if (Number.isNaN(separacionParsed) || separacionParsed < 0 || separacionParsed > 3600) {
+      setError("La separación entre envíos debe estar entre 0 y 3600 segundos.")
+      setStep(2)
+      return
+    }
     let resolvedLogoUrl = normalizeLogoUrl(selectedLogoUrl.trim() || quoteLogoUrl.trim())
     const correoConfig = channelState.correo
     const correoNeedsLogo =
@@ -578,6 +591,7 @@ export function ProspeccionCampaignWizard({
       }),
       campana_id: campanaId,
       batch_titulo: titulo.trim() || undefined,
+      separacion_segundos: separacionParsed,
     }
     if (source === "selected") {
       payload.prospecto_ids = selectedIds
@@ -605,6 +619,7 @@ export function ProspeccionCampaignWizard({
             lista_id: payload.lista_id ?? null,
             filtros: payload.filtros,
             canales: payload.canales,
+            separacion_segundos: separacionParsed,
           })
         : await contactarProspectos(payload)
       onCompleted?.({
@@ -1040,6 +1055,21 @@ export function ProspeccionCampaignWizard({
             </div>
           ) : null}
         </div>
+        <div className="space-y-1">
+          <Label>Separación entre envíos (segundos)</Label>
+          <Input
+            type="number"
+            min={0}
+            max={3600}
+            step={1}
+            value={separacionSegundos}
+            onChange={(event) => setSeparacionSegundos(event.target.value)}
+            placeholder="0"
+          />
+          <p className="text-xs text-muted-foreground">
+            `0` envía sin separación. Ejemplo: `30` programa un envío cada 30 segundos.
+          </p>
+        </div>
       </div>
       <Separator />
       <div className="space-y-2 rounded-lg border p-4 text-sm">
@@ -1063,6 +1093,7 @@ export function ProspeccionCampaignWizard({
             Campaña:{" "}
             {campanaOptions.find((option) => option.value === campanaId)?.label ?? "No seleccionada"}
           </li>
+          <li>Separación: {Math.max(0, Number.parseInt(separacionSegundos || "0", 10) || 0)} segundos</li>
         </ul>
       </div>
     </div>
@@ -1117,6 +1148,16 @@ export function ProspeccionCampaignWizard({
         </DialogHeader>
 
         <div className="space-y-4">
+          <div className="rounded-md border border-dashed bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+            <p className="font-medium text-foreground">Flujo de ejecución</p>
+            <ol className="mt-1 list-decimal space-y-1 pl-4">
+              <li>Se seleccionan prospectos.</li>
+              <li>Se elige campaña.</li>
+              <li>Se elige plantilla filtrada por campaña.</li>
+              <li>Se configura programación y separación entre envíos.</li>
+              <li>Se ejecuta lote.</li>
+            </ol>
+          </div>
           <ol className="flex flex-wrap items-center gap-3 text-sm">
             {["Audiencia", "Canales", "Programación"].map((label, index) => (
               <li key={label} className="flex items-center gap-2">
