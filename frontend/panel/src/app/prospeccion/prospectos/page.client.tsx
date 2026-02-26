@@ -556,7 +556,8 @@ function ProspectosView() {
   const [stageSummaryLoading, setStageSummaryLoading] = useState(false)
   const [plannerOpen, setPlannerOpen] = useState(false)
   const [plannerCampaignId, setPlannerCampaignId] = useState("")
-  const [plannerScheduleAt, setPlannerScheduleAt] = useState("")
+  const [plannerScheduleDate, setPlannerScheduleDate] = useState("")
+  const [plannerScheduleTime, setPlannerScheduleTime] = useState("10:00")
   const [plannerSeparationSeconds, setPlannerSeparationSeconds] = useState("0")
   const [plannerCampaignOptions, setPlannerCampaignOptions] = useState<CampaignOption[]>([])
   const [plannerCampaignsLoading, setPlannerCampaignsLoading] = useState(false)
@@ -592,6 +593,7 @@ function ProspectosView() {
   const [convertError, setConvertError] = useState<string | null>(null)
   const [convertSubmitting, setConvertSubmitting] = useState(false)
   const queryFiltersInitialEffect = useRef(true)
+  const plannerDateInputRef = useRef<HTMLInputElement | null>(null)
 
   const currentIds = useMemo(() => items.map((item) => item.id).filter(Boolean) as string[], [items])
   const selectedIds = useMemo(() => Array.from(selected.values()), [selected])
@@ -1420,7 +1422,8 @@ function ProspectosView() {
 
   const handlePlannerOpen = useCallback(() => {
     setPlannerCampaignId("")
-    setPlannerScheduleAt("")
+    setPlannerScheduleDate("")
+    setPlannerScheduleTime("10:00")
     setPlannerScheduleMode("ahora")
     setPlannerSeparationSeconds("0")
     setPlannerTemplates([])
@@ -1489,7 +1492,8 @@ function ProspectosView() {
       if (!open) {
         setPlannerError(null)
         setPlannerCampaignId("")
-        setPlannerScheduleAt("")
+        setPlannerScheduleDate("")
+        setPlannerScheduleTime("10:00")
         setPlannerScheduleMode("ahora")
         setPlannerSeparationSeconds("0")
         setPlannerTemplates([])
@@ -1519,8 +1523,8 @@ function ProspectosView() {
       const templates = plannerTemplates
       const canalesPayload: ProspeccionCanalConfigInput[] = []
       const scheduleValue =
-        plannerScheduleMode === "programado" && plannerScheduleAt
-          ? new Date(plannerScheduleAt).toISOString()
+        plannerScheduleMode === "programado" && plannerScheduleDate
+          ? new Date(`${plannerScheduleDate}T${plannerScheduleTime || "00:00"}`).toISOString()
           : undefined
       ;(["correo", "whatsapp", "llamada"] as const).forEach((canal) => {
         const selectedTemplateId = plannerTemplateSelection[canal]
@@ -1600,14 +1604,28 @@ function ProspectosView() {
     offset,
     openContactDrawer,
     plannerCampaignId,
+    plannerScheduleDate,
     plannerScheduleMode,
+    plannerScheduleTime,
     plannerTemplateSelection,
     plannerTemplates,
-    plannerScheduleAt,
     plannerSeparationSeconds,
     selectedCount,
     selectedIds,
   ])
+
+  const openPlannerDatePicker = useCallback(() => {
+    const input = plannerDateInputRef.current
+    if (!input) return
+    // Chromium supports showPicker; fallback keeps compatibility on Firefox.
+    const pickerInput = input as HTMLInputElement & { showPicker?: () => void }
+    if (typeof pickerInput.showPicker === "function") {
+      pickerInput.showPicker()
+      return
+    }
+    input.focus()
+    input.click()
+  }, [])
 
   const handleOpenConvertDialog = useCallback((prospecto: ProspectoItem) => {
     if (!prospecto.id) return
@@ -2514,11 +2532,31 @@ function ProspectosView() {
                         </SelectContent>
                       </Select>
                       {plannerScheduleMode === "programado" ? (
-                        <Input
-                          type="datetime-local"
-                          value={plannerScheduleAt}
-                          onChange={(event) => setPlannerScheduleAt(event.target.value)}
-                        />
+                        <div className="grid gap-2 md:grid-cols-2">
+                          <div className="flex items-center gap-2">
+                            <Input
+                              ref={plannerDateInputRef}
+                              type="date"
+                              className="min-w-0 flex-1"
+                              value={plannerScheduleDate}
+                              onChange={(event) => setPlannerScheduleDate(event.target.value)}
+                            />
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="icon"
+                              onClick={openPlannerDatePicker}
+                              aria-label="Abrir calendario"
+                            >
+                              <IconCalendar className="size-4" />
+                            </Button>
+                          </div>
+                          <Input
+                            type="time"
+                            value={plannerScheduleTime}
+                            onChange={(event) => setPlannerScheduleTime(event.target.value)}
+                          />
+                        </div>
                       ) : null}
                     </div>
                   </div>
