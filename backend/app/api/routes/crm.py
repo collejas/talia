@@ -9060,6 +9060,10 @@ async def upload_settings_logo(
     file: UploadFile = File(...),
     nombre: Annotated[str, Form()],
     descripcion: Annotated[str | None, Form()] = None,
+    campana_id: Annotated[str | None, Form()] = None,
+    canal: Annotated[str | None, Form()] = None,
+    template_id: Annotated[str | None, Form()] = None,
+    template_slug: Annotated[str | None, Form()] = None,
 ) -> CRMLogoAsset:
     if not file.filename:
         raise HTTPException(status_code=400, detail="logo_file_required")
@@ -9073,16 +9077,33 @@ async def upload_settings_logo(
 
     resolved_nombre = _clean_text(nombre) or (file.filename or "Logo")
     resolved_descripcion = _clean_text(descripcion)
+    resolved_campana_id = _clean_text(campana_id)
+    resolved_canal = _clean_text(canal)
+    resolved_template_id = _clean_text(template_id)
+    resolved_template_slug = _clean_text(template_slug)
+
+    metadata_payload: dict[str, Any] = {
+        "mime": upload.get("mime"),
+        "original_name": upload.get("name") or file.filename,
+    }
+    prospeccion_context: dict[str, Any] = {}
+    if resolved_campana_id:
+        prospeccion_context["campana_id"] = resolved_campana_id
+    if resolved_canal:
+        prospeccion_context["canal"] = resolved_canal
+    if resolved_template_id:
+        prospeccion_context["template_id"] = resolved_template_id
+    if resolved_template_slug:
+        prospeccion_context["template_slug"] = resolved_template_slug
+    if prospeccion_context:
+        metadata_payload["prospeccion_context"] = prospeccion_context
 
     payload = {
         "nombre": resolved_nombre,
         "descripcion": resolved_descripcion,
         "file_path": upload["path"],
         "file_url": upload["url"],
-        "metadata": {
-            "mime": upload.get("mime"),
-            "original_name": upload.get("name") or file.filename,
-        },
+        "metadata": metadata_payload,
         "uploaded_by": str(usuario_id) if usuario_id else None,
     }
 

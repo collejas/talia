@@ -81,7 +81,9 @@ export function CampanasMetricsClient() {
   const [templateError, setTemplateError] = useState<string | null>(null)
   const [logos, setLogos] = useState<LogoAsset[]>([])
   const [logosLoading, setLogosLoading] = useState(false)
+  const [logoUploading, setLogoUploading] = useState(false)
   const [selectedLogoUrl, setSelectedLogoUrl] = useState<string>("")
+  const logoFileInputRef = useRef<HTMLInputElement | null>(null)
   const correoTextoRef = useRef<HTMLTextAreaElement | null>(null)
   const correoHtmlRef = useRef<HTMLTextAreaElement | null>(null)
   const [templateForm, setTemplateForm] = useState({
@@ -314,6 +316,60 @@ export function CampanasMetricsClient() {
     }
   }, [logosLoading])
 
+  const whatsappMediaUrl = useMemo(() => {
+    const base = normalizeLogoUrl(selectedLogoUrl)
+    if (!base) return ""
+    try {
+      const url = new URL(base)
+      url.searchParams.set("utm_source", "prospeccion")
+      url.searchParams.set("utm_medium", "whatsapp_media")
+      if (templatesCampanaId) url.searchParams.set("utm_campaign", templatesCampanaId)
+      if (templateForm.slug.trim()) url.searchParams.set("template_slug", templateForm.slug.trim())
+      if (templateForm.id) url.searchParams.set("template_id", templateForm.id)
+      if (templateForm.canal) url.searchParams.set("canal", templateForm.canal)
+      return url.toString()
+    } catch {
+      return base
+    }
+  }, [normalizeLogoUrl, selectedLogoUrl, templateForm.canal, templateForm.id, templateForm.slug, templatesCampanaId])
+
+  const handleLogoFileChange = useCallback(
+    async (event: React.ChangeEvent<HTMLInputElement>) => {
+      const file = event.target.files?.[0]
+      if (!file) return
+      setLogoUploading(true)
+      setTemplateError(null)
+      try {
+        const formData = new FormData()
+        formData.append("file", file, file.name || "logo.png")
+        formData.append("nombre", file.name || "Logo prospeccion")
+        if (templatesCampanaId) formData.append("campana_id", templatesCampanaId)
+        if (templateForm.canal) formData.append("canal", templateForm.canal)
+        if (templateForm.id) formData.append("template_id", templateForm.id)
+        if (templateForm.slug.trim()) formData.append("template_slug", templateForm.slug.trim())
+
+        const response = await fetch("/api/settings/logos", {
+          method: "POST",
+          body: formData,
+        })
+        const payload = await response.json().catch(() => ({}))
+        if (!response.ok) {
+          throw new Error(typeof payload?.detail === "string" ? payload.detail : "No se pudo subir la imagen.")
+        }
+        const uploaded = payload as LogoAsset
+        setLogos((prev) => [uploaded, ...prev.filter((item) => item.id !== uploaded.id)])
+        setSelectedLogoUrl(uploaded.file_url)
+      } catch (err) {
+        const message = err instanceof Error ? err.message : "No se pudo subir la imagen."
+        setTemplateError(message)
+      } finally {
+        setLogoUploading(false)
+        if (logoFileInputRef.current) logoFileInputRef.current.value = ""
+      }
+    },
+    [templateForm.canal, templateForm.id, templateForm.slug, templatesCampanaId]
+  )
+
   const slugify = useCallback((value: string) => {
     return value
       .toLowerCase()
@@ -417,6 +473,10 @@ export function CampanasMetricsClient() {
     if (templateForm.canal === "correo" && normalizedLogoUrl) {
       metadata["logo_url"] = normalizedLogoUrl
     }
+    if (templateForm.canal === "whatsapp" && normalizedLogoUrl) {
+      metadata["media_url_base"] = normalizedLogoUrl
+      if (whatsappMediaUrl) metadata["media_url_tracked"] = whatsappMediaUrl
+    }
     if (templateForm.nombreIa.trim()) {
       metadata["nombre_ia"] = templateForm.nombreIa.trim()
       metadata["assistant_name"] = templateForm.nombreIa.trim()
@@ -462,7 +522,7 @@ export function CampanasMetricsClient() {
     } finally {
       setTemplateSaving(false)
     }
-  }, [loadCampaignTemplates, normalizeLogoUrl, resetTemplateForm, selectedLogoUrl, slugify, templateForm, templatesCampanaCanal, templatesCampanaId])
+  }, [loadCampaignTemplates, normalizeLogoUrl, resetTemplateForm, selectedLogoUrl, slugify, templateForm, templatesCampanaCanal, templatesCampanaId, whatsappMediaUrl])
 
   const handleTemplateDelete = useCallback(
     async (templateId: string) => {
@@ -875,7 +935,23 @@ export function CampanasMetricsClient() {
                     />
                   </div>
                   <div className="space-y-2 rounded-md border p-2">
+                    <input
+                      ref={logoFileInputRef}
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={(event) => void handleLogoFileChange(event)}
+                    />
                     <div className="flex flex-wrap items-center gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => logoFileInputRef.current?.click()}
+                        disabled={logoUploading}
+                      >
+                        {logoUploading ? "Subiendo..." : "Subir imagen"}
+                      </Button>
                       <Button type="button" variant="outline" size="sm" onClick={() => void loadLogos()} disabled={logosLoading}>
                         {logosLoading ? "Cargando..." : "Cargar galería"}
                       </Button>
@@ -889,6 +965,9 @@ export function CampanasMetricsClient() {
                         Insertar seleccionado
                       </Button>
                     </div>
+                    <p className="text-xs text-muted-foreground">
+                      La imagen se guarda con contexto de campaña/canal/plantilla para trazabilidad.
+                    </p>
                     {logos.length ? (
                       <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
                         {logos.map((logo) => (
@@ -949,6 +1028,72 @@ export function CampanasMetricsClient() {
                       value={templateForm.cuerpoTexto}
                       onChange={(event) => setTemplateForm((prev) => ({ ...prev, cuerpoTexto: event.target.value }))}
                     />
+                  </div>
+                  <div className="space-y-2 rounded-md border p-2">
+                    <input
+                      ref={logoFileInputRef}
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={(event) => void handleLogoFileChange(event)}
+                    />
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => logoFileInputRef.current?.click()}
+                        disabled={logoUploading}
+                      >
+                        {logoUploading ? "Subiendo..." : "Subir imagen"}
+                      </Button>
+                      <Button type="button" variant="outline" size="sm" onClick={() => void loadLogos()} disabled={logosLoading}>
+                        {logosLoading ? "Cargando..." : "Cargar galería"}
+                      </Button>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Se guarda con contexto de campaña/canal/plantilla para trazabilidad.
+                    </p>
+                    {logos.length ? (
+                      <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
+                        {logos.map((logo) => (
+                          <button
+                            key={logo.id}
+                            type="button"
+                            className={cn(
+                              "rounded border p-1 text-left",
+                              selectedLogoUrl === logo.file_url ? "border-primary" : "border-border"
+                            )}
+                            onClick={() => setSelectedLogoUrl(logo.file_url)}
+                          >
+                            <img src={logo.file_url} alt={logo.nombre} className="h-12 w-full rounded object-contain" />
+                            <p className="mt-1 truncate text-[10px] text-muted-foreground">{logo.nombre}</p>
+                          </button>
+                        ))}
+                      </div>
+                    ) : null}
+                    <div className="space-y-1">
+                      <Label>URL de imagen para Twilio Media</Label>
+                      <div className="flex gap-2">
+                        <Input value={whatsappMediaUrl} readOnly placeholder="Sube o selecciona una imagen..." />
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={async () => {
+                            if (!whatsappMediaUrl) return
+                            try {
+                              await navigator.clipboard.writeText(whatsappMediaUrl)
+                              setBanner({ type: "success", message: "URL de imagen copiada." })
+                            } catch {
+                              setTemplateError("No se pudo copiar la URL.")
+                            }
+                          }}
+                          disabled={!whatsappMediaUrl}
+                        >
+                          Copiar
+                        </Button>
+                      </div>
+                    </div>
                   </div>
                   <div className="space-y-1">
                     <Label>Twilio Content SID (opcional)</Label>
