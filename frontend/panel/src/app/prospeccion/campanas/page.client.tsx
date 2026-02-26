@@ -11,13 +11,23 @@ import {
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Separator } from "@/components/ui/separator"
+import { Textarea } from "@/components/ui/textarea"
 import { cn } from "@/lib/utils"
 import {
+  createContactoTemplate,
+  deleteContactoTemplate,
   deleteProspeccionCampana,
+  listContactoTemplates,
+  updateContactoTemplate,
   getContactoMetrics,
   getProspeccionCampanaPreset,
   getProspeccionCampanas,
+  type ContactoTemplate,
   type ContactoMetrics,
   type ProspeccionCampanaGroup,
 } from "@/lib/prospeccion/prospectos-client"
@@ -72,6 +82,25 @@ export function CampanasMetricsClient() {
   const [wizardOpen, setWizardOpen] = useState(false)
   const [wizardPreset, setWizardPreset] = useState<ProspeccionWizardPreset | null>(null)
   const [editCampanaId, setEditCampanaId] = useState<string | null>(null)
+  const [templatesDialogOpen, setTemplatesDialogOpen] = useState(false)
+  const [templatesCampanaId, setTemplatesCampanaId] = useState<string | null>(null)
+  const [templatesCampanaNombre, setTemplatesCampanaNombre] = useState<string>("")
+  const [templatesItems, setTemplatesItems] = useState<ContactoTemplate[]>([])
+  const [templatesLoading, setTemplatesLoading] = useState(false)
+  const [templateSaving, setTemplateSaving] = useState(false)
+  const [templateDeletingId, setTemplateDeletingId] = useState<string | null>(null)
+  const [templateError, setTemplateError] = useState<string | null>(null)
+  const [templateForm, setTemplateForm] = useState({
+    id: "",
+    canal: "correo" as "correo" | "whatsapp" | "llamada",
+    nombre: "",
+    slug: "",
+    descripcion: "",
+    asunto: "",
+    cuerpoTexto: "",
+    cuerpoHtml: "",
+    twilioSid: "",
+  })
   const [drawerData, setDrawerData] = useState<ProspeccionContactDrawerData | null>(null)
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [banner, setBanner] = useState<{ type: "success" | "error"; message: string } | null>(null)
@@ -212,6 +241,143 @@ export function CampanasMetricsClient() {
 
   const dismissBanner = useCallback(() => setBanner(null), [])
 
+  const resetTemplateForm = useCallback(() => {
+    setTemplateForm({
+      id: "",
+      canal: "correo",
+      nombre: "",
+      slug: "",
+      descripcion: "",
+      asunto: "",
+      cuerpoTexto: "",
+      cuerpoHtml: "",
+      twilioSid: "",
+    })
+  }, [])
+
+  const slugify = useCallback((value: string) => {
+    return value
+      .toLowerCase()
+      .trim()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 80)
+  }, [])
+
+  const loadCampaignTemplates = useCallback(async (campanaId: string) => {
+    setTemplatesLoading(true)
+    setTemplateError(null)
+    try {
+      const response = await listContactoTemplates({ campana_id: campanaId })
+      setTemplatesItems(Array.isArray(response?.items) ? response.items : [])
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "No se pudieron cargar las plantillas."
+      setTemplateError(message)
+      setTemplatesItems([])
+    } finally {
+      setTemplatesLoading(false)
+    }
+  }, [])
+
+  const handleManageTemplates = useCallback(
+    async (campanaId: string, campanaNombre?: string | null) => {
+      setTemplatesCampanaId(campanaId)
+      setTemplatesCampanaNombre(campanaNombre ?? `Campaña ${campanaId.slice(0, 8)}`)
+      resetTemplateForm()
+      setTemplatesDialogOpen(true)
+      await loadCampaignTemplates(campanaId)
+    },
+    [loadCampaignTemplates, resetTemplateForm]
+  )
+
+  const handleTemplateEdit = useCallback((template: ContactoTemplate) => {
+    const metadata = template.metadata && typeof template.metadata === "object" ? template.metadata : {}
+    setTemplateForm({
+      id: template.id,
+      canal: template.canal,
+      nombre: template.nombre ?? "",
+      slug: template.slug ?? "",
+      descripcion: template.descripcion ?? "",
+      asunto: template.asunto ?? "",
+      cuerpoTexto: template.cuerpo_texto ?? "",
+      cuerpoHtml: template.cuerpo_html ?? "",
+      twilioSid: typeof metadata["twilio_content_sid"] === "string" ? metadata["twilio_content_sid"] : "",
+    })
+  }, [])
+
+  const handleTemplateSave = useCallback(async () => {
+    if (!templatesCampanaId) {
+      setTemplateError("Selecciona una campaña.")
+      return
+    }
+    const nombre = templateForm.nombre.trim()
+    const slug = (templateForm.slug.trim() || slugify(nombre)).trim()
+    if (!nombre || !slug) {
+      setTemplateError("Nombre y slug son obligatorios.")
+      return
+    }
+    setTemplateSaving(true)
+    setTemplateError(null)
+    const metadata: Record<string, unknown> = {}
+    if (templateForm.twilioSid.trim()) metadata["twilio_content_sid"] = templateForm.twilioSid.trim()
+    try {
+      if (templateForm.id) {
+        await updateContactoTemplate(templateForm.id, {
+          canal: templateForm.canal,
+          nombre,
+          slug,
+          descripcion: templateForm.descripcion.trim() || null,
+          asunto: templateForm.asunto.trim() || null,
+          cuerpo_texto: templateForm.cuerpoTexto || null,
+          cuerpo_html: templateForm.cuerpoHtml || null,
+          metadata,
+          campana_id: templatesCampanaId,
+        })
+      } else {
+        await createContactoTemplate({
+          canal: templateForm.canal,
+          nombre,
+          slug,
+          descripcion: templateForm.descripcion.trim() || null,
+          asunto: templateForm.asunto.trim() || null,
+          cuerpo_texto: templateForm.cuerpoTexto || null,
+          cuerpo_html: templateForm.cuerpoHtml || null,
+          metadata,
+          activo: true,
+          campana_id: templatesCampanaId,
+        })
+      }
+      await loadCampaignTemplates(templatesCampanaId)
+      resetTemplateForm()
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "No se pudo guardar la plantilla."
+      setTemplateError(message)
+    } finally {
+      setTemplateSaving(false)
+    }
+  }, [loadCampaignTemplates, resetTemplateForm, slugify, templateForm, templatesCampanaId])
+
+  const handleTemplateDelete = useCallback(
+    async (templateId: string) => {
+      if (!templatesCampanaId) return
+      setTemplateDeletingId(templateId)
+      setTemplateError(null)
+      try {
+        await deleteContactoTemplate(templateId)
+        await loadCampaignTemplates(templatesCampanaId)
+        if (templateForm.id === templateId) resetTemplateForm()
+      } catch (err) {
+        const message = err instanceof Error ? err.message : "No se pudo eliminar la plantilla."
+        setTemplateError(message)
+      } finally {
+        setTemplateDeletingId(null)
+      }
+    },
+    [loadCampaignTemplates, resetTemplateForm, templateForm.id, templatesCampanaId]
+  )
+
   return (
     <div className="space-y-6">
       {banner ? (
@@ -350,6 +516,16 @@ export function CampanasMetricsClient() {
                 <Button
                   variant="outline"
                   size="sm"
+                  disabled={!group.campana_id}
+                  onClick={() =>
+                    group.campana_id && void handleManageTemplates(group.campana_id, group.campana_nombre)
+                  }
+                >
+                  Plantillas
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
                   disabled={!group.campana_id || duplicateLoading === group.campana_id}
                   onClick={() => group.campana_id && void handleDuplicateCampana(group.campana_id)}
                 >
@@ -424,6 +600,173 @@ export function CampanasMetricsClient() {
         editCampanaId={editCampanaId}
         onCompleted={handleWizardCompleted}
       />
+
+      <Dialog open={templatesDialogOpen} onOpenChange={setTemplatesDialogOpen}>
+        <DialogContent className="w-[96vw] max-w-6xl max-h-[90vh] overflow-hidden">
+          <DialogHeader>
+            <DialogTitle>Plantillas · {templatesCampanaNombre || "Campaña"}</DialogTitle>
+          </DialogHeader>
+          <div className="grid gap-4 md:grid-cols-[1.2fr_1fr] max-h-[72vh] overflow-hidden">
+            <div className="rounded-lg border p-3 overflow-y-auto">
+              {templatesLoading ? (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <IconLoader className="size-4 animate-spin" /> Cargando plantillas...
+                </div>
+              ) : null}
+              {!templatesLoading && !templatesItems.length ? (
+                <p className="text-sm text-muted-foreground">No hay plantillas para esta campaña.</p>
+              ) : null}
+              <div className="space-y-2">
+                {templatesItems.map((template) => (
+                  <div key={template.id} className="rounded-md border p-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <div>
+                        <p className="text-sm font-semibold">{template.nombre}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {template.canal} · {template.slug}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Button type="button" variant="outline" size="sm" onClick={() => handleTemplateEdit(template)}>
+                          Editar
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="text-destructive"
+                          disabled={templateDeletingId === template.id}
+                          onClick={() => void handleTemplateDelete(template.id)}
+                        >
+                          {templateDeletingId === template.id ? (
+                            <IconLoader className="size-4 animate-spin" />
+                          ) : (
+                            <IconX className="size-4" />
+                          )}
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div className="rounded-lg border p-3 overflow-y-auto space-y-3">
+              <div className="flex items-center justify-between">
+                <p className="text-sm font-semibold">{templateForm.id ? "Editar plantilla" : "Nueva plantilla"}</p>
+                <Button type="button" variant="ghost" size="sm" onClick={resetTemplateForm}>
+                  Limpiar
+                </Button>
+              </div>
+              <div className="space-y-1">
+                <Label>Canal</Label>
+                <Select
+                  value={templateForm.canal}
+                  onValueChange={(value) =>
+                    setTemplateForm((prev) => ({ ...prev, canal: value as "correo" | "whatsapp" | "llamada" }))
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="correo">Correo</SelectItem>
+                    <SelectItem value="whatsapp">WhatsApp</SelectItem>
+                    <SelectItem value="llamada">Llamada</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1">
+                <Label>Nombre</Label>
+                <Input
+                  value={templateForm.nombre}
+                  onChange={(event) =>
+                    setTemplateForm((prev) => ({
+                      ...prev,
+                      nombre: event.target.value,
+                      slug: prev.slug ? prev.slug : slugify(event.target.value),
+                    }))
+                  }
+                />
+              </div>
+              <div className="space-y-1">
+                <Label>Slug</Label>
+                <Input value={templateForm.slug} onChange={(event) => setTemplateForm((prev) => ({ ...prev, slug: event.target.value }))} />
+              </div>
+              <div className="space-y-1">
+                <Label>Descripción</Label>
+                <Input
+                  value={templateForm.descripcion}
+                  onChange={(event) => setTemplateForm((prev) => ({ ...prev, descripcion: event.target.value }))}
+                />
+              </div>
+              {templateForm.canal === "correo" ? (
+                <>
+                  <div className="space-y-1">
+                    <Label>Asunto</Label>
+                    <Input
+                      value={templateForm.asunto}
+                      onChange={(event) => setTemplateForm((prev) => ({ ...prev, asunto: event.target.value }))}
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label>Cuerpo (texto)</Label>
+                    <Textarea
+                      rows={4}
+                      value={templateForm.cuerpoTexto}
+                      onChange={(event) => setTemplateForm((prev) => ({ ...prev, cuerpoTexto: event.target.value }))}
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label>Cuerpo (HTML)</Label>
+                    <Textarea
+                      rows={5}
+                      value={templateForm.cuerpoHtml}
+                      onChange={(event) => setTemplateForm((prev) => ({ ...prev, cuerpoHtml: event.target.value }))}
+                    />
+                  </div>
+                </>
+              ) : null}
+              {templateForm.canal === "whatsapp" ? (
+                <>
+                  <div className="space-y-1">
+                    <Label>Mensaje</Label>
+                    <Textarea
+                      rows={4}
+                      value={templateForm.cuerpoTexto}
+                      onChange={(event) => setTemplateForm((prev) => ({ ...prev, cuerpoTexto: event.target.value }))}
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label>Twilio Content SID (opcional)</Label>
+                    <Input
+                      value={templateForm.twilioSid}
+                      onChange={(event) => setTemplateForm((prev) => ({ ...prev, twilioSid: event.target.value }))}
+                    />
+                  </div>
+                </>
+              ) : null}
+              {templateForm.canal === "llamada" ? (
+                <div className="space-y-1">
+                  <Label>Guion</Label>
+                  <Textarea
+                    rows={4}
+                    value={templateForm.cuerpoTexto}
+                    onChange={(event) => setTemplateForm((prev) => ({ ...prev, cuerpoTexto: event.target.value }))}
+                  />
+                </div>
+              ) : null}
+              {templateError ? (
+                <div className="rounded border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+                  {templateError}
+                </div>
+              ) : null}
+              <Button type="button" className="w-full" onClick={() => void handleTemplateSave()} disabled={templateSaving}>
+                {templateSaving ? "Guardando..." : templateForm.id ? "Guardar cambios" : "Crear plantilla"}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <ProspeccionContactDrawer open={drawerOpen} onOpenChange={setDrawerOpen} data={drawerData} />
     </div>

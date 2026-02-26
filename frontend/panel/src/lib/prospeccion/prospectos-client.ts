@@ -804,6 +804,51 @@ export async function listContactoTemplates(params: {
   return requestJson<{ ok: boolean; items: ContactoTemplate[] }>(url.toString())
 }
 
+export async function createContactoTemplate(payload: {
+  canal: "correo" | "whatsapp" | "llamada"
+  nombre: string
+  slug: string
+  descripcion?: string | null
+  asunto?: string | null
+  cuerpo_texto?: string | null
+  cuerpo_html?: string | null
+  metadata?: Record<string, unknown>
+  activo?: boolean
+  campana_id?: string | null
+}) {
+  return requestJson<{ ok: boolean; template: ContactoTemplate }>("/api/prospeccion/contacto/templates", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  })
+}
+
+export async function updateContactoTemplate(
+  templateId: string,
+  payload: {
+    canal?: "correo" | "whatsapp" | "llamada"
+    nombre?: string
+    slug?: string
+    descripcion?: string | null
+    asunto?: string | null
+    cuerpo_texto?: string | null
+    cuerpo_html?: string | null
+    metadata?: Record<string, unknown>
+    activo?: boolean
+    campana_id?: string | null
+  },
+) {
+  return requestJson<{ ok: boolean; template: ContactoTemplate }>(`/api/prospeccion/contacto/templates/${templateId}`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  })
+}
+
+export async function deleteContactoTemplate(templateId: string) {
+  await requestJson(`/api/prospeccion/contacto/templates/${templateId}`, {
+    method: "DELETE",
+  })
+}
+
 export async function getContactoBatchResumen(batchId: string) {
   return requestJson<ContactoBatchResumen>(`/api/prospeccion/contacto/batches/${batchId}`)
 }

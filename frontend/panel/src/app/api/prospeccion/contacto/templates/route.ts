@@ -6,3 +6,11 @@ export async function GET(request: Request) {
     backendPath: "/crm/prospeccion/contacto/templates",
   })
 }
+
+export async function POST(request: Request) {
+  return proxyProspeccionRequest(request, {
+    method: "POST",
+    backendPath: "/crm/prospeccion/contacto/templates",
+    forwardSearch: false,
+  })
+}

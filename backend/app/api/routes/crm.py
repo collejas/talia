@@ -13044,6 +13044,21 @@ async def prospeccion_campana_update(
                 user_token=user_token,
                 template_ids=template_ids,
             )
+            if payload.campana_id:
+                campana_key = str(payload.campana_id)
+                for template_id, template in template_map.items():
+                    metadata = template.get("metadata") if isinstance(template.get("metadata"), dict) else {}
+                    template_campana = _clean_text(metadata.get("campana_id"))
+                    if not template_campana:
+                        raise HTTPException(
+                            status_code=400,
+                            detail=f"contact_template_campaign_missing:{template_id}",
+                        )
+                    if template_campana != campana_key:
+                        raise HTTPException(
+                            status_code=400,
+                            detail=f"contact_template_campaign_mismatch:{template_id}",
+                        )
     canales_config, programacion = _resolve_contact_channels(
         ProspectoContactarPayload(
             prospecto_ids=[UUID("00000000-0000-0000-0000-000000000001")],
