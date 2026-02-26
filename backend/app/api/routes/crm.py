@@ -95,6 +95,7 @@ search_logger = get_logger("app.prospeccion.busquedas")
 import_debug_logger = get_logger("app.api.crm.import")
 sale_logger = get_logger("app.api.crm.sales")
 tenant_access_logger = get_logger("app.api.crm.tenant_access")
+UTC = timezone.utc
 
 MAPBOX_LOG_DIR = Path("/var/www/talia/logs")
 MAPBOX_LOG_FILE = MAPBOX_LOG_DIR / "mapbox-debug.log"

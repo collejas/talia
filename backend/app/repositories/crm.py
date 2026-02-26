@@ -4694,8 +4694,7 @@ class CRMRepository:
         pattern = f"*{sanitized}*"
         params = {
             "organizacion_id": f"eq.{organizacion_id}",
-            "select": "id,organizacion_id,nombre_completo,correo,telefono_e164,company_name,notes,necesidad_proposito,estado,metadata",
-            "order": "actualizado_en.desc.nullslast",
+            "select": "id,organizacion_id,nombre_completo,correo,telefono_e164,company_name,notes,necesidad_proposito,estado",
             "limit": str(limit),
             "offset": str(offset),
             "or": f"(nombre_completo.ilike.*{pattern}*,correo.ilike.*{pattern}*,telefono_e164.ilike.*{pattern}*,company_name.ilike.*{pattern}*)",
@@ -7712,7 +7711,7 @@ class CRMRepository:
         payload: dict[str, Any] = {"metadata": metadata}
         if organizacion_id:
             params["organizacion_id"] = f"eq.{organizacion_id}"
-            # Algunos triggers de prospección requieren tenant explícito en updates worker.
+            # Triggers multi-tenant de algunas tablas requieren tenant explícito también en el payload.
             payload["organizacion_id"] = str(organizacion_id)
         resp = await self._request(
             "PATCH",

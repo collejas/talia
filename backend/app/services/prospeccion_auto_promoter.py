@@ -381,6 +381,8 @@ async def _auto_promote_prospecto_locked(
     metadata["crm_auto_promovido_en"] = datetime.now(timezone.utc).isoformat()
     metadata["crm_origen_etapa"] = "prospeccion_primer_contacto"
     metadata["pipeline_ready"] = True
+    # Algunos triggers multi-tenant infieren tenant desde metadata cuando no hay contexto auth.
+    metadata["organizacion_id"] = str(org_uuid)
     if canal_label:
         metadata["ultimo_canal_prospeccion"] = canal_label
     metadata.setdefault("stage", "launch")
