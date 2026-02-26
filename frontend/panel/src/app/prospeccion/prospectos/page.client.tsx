@@ -2532,27 +2532,35 @@ function ProspectosView() {
                         </SelectContent>
                       </Select>
                       {plannerScheduleMode === "programado" ? (
-                        <div className="grid gap-2 md:grid-cols-2">
-                          <div className="flex items-center gap-2">
-                            <Input
-                              ref={plannerDateInputRef}
-                              type="date"
-                              className="min-w-0 flex-1"
-                              value={plannerScheduleDate}
-                              onChange={(event) => setPlannerScheduleDate(event.target.value)}
-                            />
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="icon"
-                              onClick={openPlannerDatePicker}
-                              aria-label="Abrir calendario"
-                            >
-                              <IconCalendar className="size-4" />
-                            </Button>
-                          </div>
+                        <div className="relative flex items-center gap-2">
+                          <input
+                            ref={plannerDateInputRef}
+                            type="date"
+                            value={plannerScheduleDate}
+                            onChange={(event) => setPlannerScheduleDate(event.target.value)}
+                            className="pointer-events-none absolute h-0 w-0 opacity-0"
+                            tabIndex={-1}
+                            aria-hidden="true"
+                          />
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="icon"
+                            onClick={openPlannerDatePicker}
+                            aria-label="Abrir calendario"
+                          >
+                            <IconCalendar className="size-4" />
+                          </Button>
+                          <Input
+                            type="text"
+                            className="min-w-[11rem] flex-1"
+                            value={plannerScheduleDate}
+                            readOnly
+                            onClick={openPlannerDatePicker}
+                          />
                           <Input
                             type="time"
+                            className="w-24"
                             value={plannerScheduleTime}
                             onChange={(event) => setPlannerScheduleTime(event.target.value)}
                           />
