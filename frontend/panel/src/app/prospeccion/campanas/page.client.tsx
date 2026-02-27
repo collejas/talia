@@ -1208,6 +1208,9 @@ export function CampanasMetricsClient() {
                                               <div className="mt-2 flex flex-wrap gap-3 text-xs text-muted-foreground">
                                                 <span>Entrega: {formatPercent(batchMetrics.tasaEntrega)}</span>
                                                 <span>Respuesta: {formatPercent(batchMetrics.tasaRespuesta)}</span>
+                                                {batchIsEmail ? (
+                                                  <span>Clic/Sesión: {formatPercent(batchMetrics.clickToSession)}</span>
+                                                ) : null}
                                               </div>
                                             </button>
 
@@ -2061,6 +2064,7 @@ function buildBatchMetrics(batch: ProspeccionCampanaGroup["batches"][number], de
   }
   const tasaEntrega = totales ? (entregados * 100) / totales : 0
   const tasaRespuesta = totales ? (respondidos * 100) / totales : 0
+  const clickToSession = sesionesUtm ? (clicks * 100) / sesionesUtm : 0
   return {
     totales,
     entregados,
@@ -2074,6 +2078,7 @@ function buildBatchMetrics(batch: ProspeccionCampanaGroup["batches"][number], de
     clicks,
     tasaEntrega,
     tasaRespuesta,
+    clickToSession,
     canal,
   }
 }
