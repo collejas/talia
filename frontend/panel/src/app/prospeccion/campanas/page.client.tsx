@@ -1,7 +1,16 @@
 "use client"
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
-import { IconAlertTriangle, IconLoader, IconPencil, IconRefresh, IconTargetArrow, IconX } from "@tabler/icons-react"
+import {
+  IconAlertTriangle,
+  IconChevronDown,
+  IconChevronRight,
+  IconLoader,
+  IconPencil,
+  IconRefresh,
+  IconTargetArrow,
+  IconX,
+} from "@tabler/icons-react"
 import Image from "next/image"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -19,6 +28,8 @@ import {
   deleteProspeccionCampana,
   getProspeccionCampanaAtribucion,
   importBrevoContactoTemplate,
+  listContactoEnvios,
+  listContactoLogs,
   listBrevoCatalogTemplates,
   listContactoTemplates,
   listCrmCampaigns,
@@ -29,6 +40,8 @@ import {
   type BrevoCatalogTemplate,
   type CrmCampaign,
   type ContactoTemplate,
+  type ContactoEnvio,
+  type ContactoLog,
   type ProspeccionCampanaAtribucionItem,
   type ProspeccionCampanaGroup,
 } from "@/lib/prospeccion/prospectos-client"
@@ -48,6 +61,31 @@ type LogoAsset = {
 
 const EMAIL_LOGO_IMG_STYLE = "width:83.333%;height:auto;display:block;margin:0 auto;"
 
+type HierarchyTemplateNode = {
+  key: string
+  template_id?: string | null
+  template_slug?: string | null
+  template_nombre?: string | null
+  canal?: string | null
+  metrics: ProspeccionCampanaAtribucionItem
+  batches: ProspeccionCampanaGroup["batches"]
+}
+
+type HierarchyCampaignNode = {
+  key: string
+  campana_id?: string | null
+  campana_nombre: string
+  metrics: ProspeccionCampanaAtribucionItem
+  templates: HierarchyTemplateNode[]
+}
+
+type BatchDetailState = {
+  loading: boolean
+  error: string | null
+  envios: ContactoEnvio[]
+  logs: ContactoLog[]
+}
+
 export function CampanasMetricsClient() {
   const [campanas, setCampanas] = useState<ProspeccionCampanaGroup[]>([])
   const [campanasLoading, setCampanasLoading] = useState(false)
@@ -55,6 +93,10 @@ export function CampanasMetricsClient() {
   const [atribucionItems, setAtribucionItems] = useState<ProspeccionCampanaAtribucionItem[]>([])
   const [atribucionLoading, setAtribucionLoading] = useState(false)
   const [atribucionError, setAtribucionError] = useState<string | null>(null)
+  const [expandedCampaigns, setExpandedCampaigns] = useState<Record<string, boolean>>({})
+  const [expandedTemplates, setExpandedTemplates] = useState<Record<string, boolean>>({})
+  const [expandedBatches, setExpandedBatches] = useState<Record<string, boolean>>({})
+  const [batchDetails, setBatchDetails] = useState<Record<string, BatchDetailState>>({})
   const [deleteLoading, setDeleteLoading] = useState<string | null>(null)
   const [crmCampaigns, setCrmCampaigns] = useState<CrmCampaign[]>([])
   const [campaignDialogOpen, setCampaignDialogOpen] = useState(false)
@@ -184,6 +226,168 @@ export function CampanasMetricsClient() {
       cancelled = true
     }
   }, [campanas])
+
+  const loadBatchDetails = useCallback(async (batchId: string) => {
+    const existing = batchDetails[batchId]
+    if (existing?.loading || existing?.envios?.length || existing?.error) return
+    setBatchDetails((prev) => ({
+      ...prev,
+      [batchId]: {
+        loading: true,
+        error: null,
+        envios: [],
+        logs: [],
+      },
+    }))
+    try {
+      const [enviosResp, logsResp] = await Promise.all([
+        listContactoEnvios({ batch_id: batchId, limit: 500 }),
+        listContactoLogs({ batch_id: batchId, limit: 500 }),
+      ])
+      setBatchDetails((prev) => ({
+        ...prev,
+        [batchId]: {
+          loading: false,
+          error: null,
+          envios: enviosResp.items ?? [],
+          logs: logsResp.items ?? [],
+        },
+      }))
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "No se pudo cargar el detalle del envío."
+      setBatchDetails((prev) => ({
+        ...prev,
+        [batchId]: {
+          loading: false,
+          error: message,
+          envios: [],
+          logs: [],
+        },
+      }))
+    }
+  }, [batchDetails])
+
+  const toggleCampaign = useCallback((campaignKey: string) => {
+    setExpandedCampaigns((prev) => ({ ...prev, [campaignKey]: !prev[campaignKey] }))
+  }, [])
+
+  const toggleTemplate = useCallback((templateNodeKey: string) => {
+    setExpandedTemplates((prev) => ({ ...prev, [templateNodeKey]: !prev[templateNodeKey] }))
+  }, [])
+
+  const toggleBatch = useCallback((batchId: string) => {
+    setExpandedBatches((prev) => {
+      const next = !prev[batchId]
+      if (next) {
+        void loadBatchDetails(batchId)
+      }
+      return { ...prev, [batchId]: next }
+    })
+  }, [loadBatchDetails])
+
+  const hierarchyCampaigns = useMemo<HierarchyCampaignNode[]>(() => {
+    const campaignMap = new Map<string, HierarchyCampaignNode>()
+    const campaignNameFallback = new Map<string, string>()
+    crmCampaigns.forEach((campaign) => {
+      campaignNameFallback.set(campaign.id, campaign.nombre || `Campaña ${campaign.id.slice(0, 8)}`)
+    })
+    campanas.forEach((group, index) => {
+      const key = group.campana_id || `sin-campana-${index}`
+      const baseMetrics = createEmptyAtribucionMetric({
+        campana_id: group.campana_id,
+        campana_nombre: group.campana_nombre || campaignNameFallback.get(group.campana_id || "") || "Sin campaña",
+      })
+      campaignMap.set(key, {
+        key,
+        campana_id: group.campana_id,
+        campana_nombre: baseMetrics.campana_nombre || "Sin campaña",
+        metrics: baseMetrics,
+        templates: [],
+      })
+    })
+
+    const templateMetricsMap = new Map<string, HierarchyTemplateNode>()
+    atribucionItems.forEach((item, index) => {
+      const campaignKey = item.campana_id || `sin-campana-atr-${index}`
+      if (!campaignMap.has(campaignKey)) {
+        campaignMap.set(campaignKey, {
+          key: campaignKey,
+          campana_id: item.campana_id,
+          campana_nombre: item.campana_nombre || campaignNameFallback.get(item.campana_id || "") || "Sin campaña",
+          metrics: createEmptyAtribucionMetric({
+            campana_id: item.campana_id,
+            campana_nombre: item.campana_nombre || campaignNameFallback.get(item.campana_id || "") || "Sin campaña",
+          }),
+          templates: [],
+        })
+      }
+      const campaignNode = campaignMap.get(campaignKey)
+      if (!campaignNode) return
+      campaignNode.metrics = sumAtribucionMetrics(campaignNode.metrics, item)
+      const templateKey = buildTemplateKey(item)
+      const templateNodeKey = `${campaignKey}::${templateKey}`
+      templateMetricsMap.set(templateNodeKey, {
+        key: templateNodeKey,
+        template_id: item.template_id,
+        template_slug: item.template_slug,
+        template_nombre: item.template_nombre,
+        canal: item.canal,
+        metrics: item,
+        batches: [],
+      })
+    })
+
+    campanas.forEach((group) => {
+      const campaignKey = group.campana_id || "sin-campana"
+      const campaignNode = campaignMap.get(campaignKey)
+      if (!campaignNode) return
+      const buckets = new Map<string, ProspeccionCampanaGroup["batches"]>()
+      group.batches.forEach((batch) => {
+        const identity = extractBatchTemplateIdentity(batch)
+        const templateKey = buildTemplateKey({
+          template_id: identity.templateId,
+          template_slug: identity.templateSlug,
+          canal: identity.canal,
+        })
+        const list = buckets.get(templateKey) ?? []
+        list.push(batch)
+        buckets.set(templateKey, list)
+      })
+      campaignNode.templates = Array.from(templateMetricsMap.values())
+        .filter((templateNode) => templateNode.key.startsWith(`${campaignKey}::`))
+        .map((templateNode) => ({
+          ...templateNode,
+          batches: buckets.get(buildTemplateKey(templateNode)) ?? [],
+        }))
+        .sort((a, b) => b.metrics.envios_totales - a.metrics.envios_totales)
+    })
+
+    return Array.from(campaignMap.values())
+      .map((campaignNode) => {
+        if (campaignNode.templates.length) return campaignNode
+        const group = campanas.find((item) => item.campana_id === campaignNode.campana_id)
+        if (!group?.batches?.length) return campaignNode
+        const fallbackTemplate = createEmptyAtribucionMetric({
+          campana_id: campaignNode.campana_id,
+          campana_nombre: campaignNode.campana_nombre,
+          template_nombre: "Sin plantilla",
+          canal: inferCampaignCanal(group.batches),
+        })
+        return {
+          ...campaignNode,
+          templates: [
+            {
+              key: `${campaignNode.key}::fallback`,
+              template_nombre: "Sin plantilla",
+              canal: fallbackTemplate.canal,
+              metrics: fallbackTemplate,
+              batches: group.batches,
+            },
+          ],
+        }
+      })
+      .sort((a, b) => b.metrics.envios_totales - a.metrics.envios_totales)
+  }, [atribucionItems, campanas, crmCampaigns])
 
   const handleNewCampaign = useCallback(() => {
     setCampaignFormMode("create")
@@ -846,8 +1050,8 @@ export function CampanasMetricsClient() {
       <Card>
         <CardHeader className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <CardTitle className="text-base font-semibold">Atribución por plantilla</CardTitle>
-            <p className="text-sm text-muted-foreground">Métricas persistentes por campaña/canal/plantilla.</p>
+            <CardTitle className="text-base font-semibold">Métricas jerárquicas de campaña</CardTitle>
+            <p className="text-sm text-muted-foreground">Campaña → plantilla → envío/lote → contacto/prospecto.</p>
           </div>
           <Button variant="outline" size="sm" onClick={() => void fetchAtribucion()} disabled={atribucionLoading}>
             <IconRefresh className={cn("mr-2 size-4", atribucionLoading && "animate-spin")} />
@@ -861,39 +1065,175 @@ export function CampanasMetricsClient() {
               <span>{atribucionError}</span>
             </div>
           ) : null}
-          {!atribucionItems.length && !atribucionLoading ? (
-            <p className="text-sm text-muted-foreground">Aún no hay datos de atribución por plantilla.</p>
+          {!hierarchyCampaigns.length && !atribucionLoading ? (
+            <p className="text-sm text-muted-foreground">Aún no hay datos de métricas para campañas.</p>
           ) : null}
-          {atribucionItems.length ? (
-            <div className="space-y-2">
-              {atribucionItems.slice(0, 25).map((item, index) => (
-                <div key={`${item.campana_id || "sin"}-${item.template_id || item.template_slug || index}`} className="rounded-md border p-3">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <div>
-                      <p className="text-sm font-semibold">{item.template_nombre || item.template_slug || "Plantilla"}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {(item.campana_nombre || "Sin campaña")} · {(canalLabel[item.canal || ""] || item.canal || "canal")}
-                      </p>
-                    </div>
-                    <div className="flex flex-wrap gap-2 text-xs">
-                      <Badge variant="outline">Totales: {item.envios_totales}</Badge>
-                      <Badge variant="outline">Entregados: {item.envios_entregados}</Badge>
-                      <Badge variant="outline">Respondidos: {item.envios_respondidos}</Badge>
-                      <Badge variant="outline">Aperturas: {item.brevo_aperturas}</Badge>
-                      <Badge variant="outline">Clics: {item.brevo_clicks}</Badge>
-                      <Badge variant="outline">Sesiones UTM: {item.sesiones_utm}</Badge>
-                    </div>
+          {hierarchyCampaigns.length ? (
+            <div className="space-y-3">
+              {hierarchyCampaigns.map((campaignNode) => {
+                const campaignOpen = Boolean(expandedCampaigns[campaignNode.key])
+                return (
+                  <div key={campaignNode.key} className="rounded-md border">
+                    <button
+                      type="button"
+                      className="w-full p-3 text-left hover:bg-muted/40"
+                      onClick={() => toggleCampaign(campaignNode.key)}
+                    >
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div className="flex items-center gap-2">
+                          {campaignOpen ? <IconChevronDown className="size-4" /> : <IconChevronRight className="size-4" />}
+                          <p className="text-sm font-semibold">{campaignNode.campana_nombre || "Sin campaña"}</p>
+                        </div>
+                        <div className="flex flex-wrap gap-2 text-xs">
+                          <Badge variant="outline">Totales: {campaignNode.metrics.envios_totales}</Badge>
+                          <Badge variant="outline">Entregados: {campaignNode.metrics.envios_entregados}</Badge>
+                          <Badge variant="outline">Respondidos: {campaignNode.metrics.envios_respondidos}</Badge>
+                          <Badge variant="outline">Aperturas: {campaignNode.metrics.brevo_aperturas}</Badge>
+                          <Badge variant="outline">Clics: {campaignNode.metrics.brevo_clicks}</Badge>
+                          <Badge variant="outline">Sesiones UTM: {campaignNode.metrics.sesiones_utm}</Badge>
+                        </div>
+                      </div>
+                      <div className="mt-2 flex flex-wrap gap-3 text-xs text-muted-foreground">
+                        <span>Enviados: {campaignNode.metrics.envios_enviados}</span>
+                        <span>Fallidos: {campaignNode.metrics.envios_fallidos}</span>
+                        <span>Omitidos: {campaignNode.metrics.envios_omitidos}</span>
+                        <span>Entrega: {formatPercent(campaignNode.metrics.tasa_entrega_pct)}</span>
+                        <span>Respuesta: {formatPercent(campaignNode.metrics.tasa_respuesta_pct)}</span>
+                        <span>Clic/Sesión: {formatPercent(campaignNode.metrics.click_to_session_pct)}</span>
+                      </div>
+                    </button>
+
+                    {campaignOpen ? (
+                      <div className="space-y-2 border-t p-3">
+                        {campaignNode.templates.length ? (
+                          campaignNode.templates.map((templateNode) => {
+                            const templateOpen = Boolean(expandedTemplates[templateNode.key])
+                            return (
+                              <div key={templateNode.key} className="rounded border bg-muted/20">
+                                <button
+                                  type="button"
+                                  className="w-full p-3 text-left hover:bg-muted/30"
+                                  onClick={() => toggleTemplate(templateNode.key)}
+                                >
+                                  <div className="flex flex-wrap items-center justify-between gap-2">
+                                    <div className="flex items-center gap-2">
+                                      {templateOpen ? <IconChevronDown className="size-4" /> : <IconChevronRight className="size-4" />}
+                                      <p className="text-sm font-medium">
+                                        {(campaignNode.campana_nombre || "Campaña")} ·{" "}
+                                        {templateNode.template_nombre || templateNode.template_slug || "Plantilla"}
+                                      </p>
+                                    </div>
+                                    <div className="flex flex-wrap gap-2 text-xs">
+                                      <Badge variant="outline">Totales: {templateNode.metrics.envios_totales}</Badge>
+                                      <Badge variant="outline">Entregados: {templateNode.metrics.envios_entregados}</Badge>
+                                      <Badge variant="outline">Respondidos: {templateNode.metrics.envios_respondidos}</Badge>
+                                      <Badge variant="outline">Aperturas: {templateNode.metrics.brevo_aperturas}</Badge>
+                                      <Badge variant="outline">Clics: {templateNode.metrics.brevo_clicks}</Badge>
+                                      <Badge variant="outline">Sesiones UTM: {templateNode.metrics.sesiones_utm}</Badge>
+                                    </div>
+                                  </div>
+                                  <div className="mt-2 flex flex-wrap gap-3 text-xs text-muted-foreground">
+                                    <span>Canal: {canalLabel[templateNode.canal || ""] || templateNode.canal || "—"}</span>
+                                    <span>Lotes: {templateNode.batches.length}</span>
+                                  </div>
+                                </button>
+
+                                {templateOpen ? (
+                                  <div className="space-y-2 border-t p-3">
+                                    {templateNode.batches.length ? (
+                                      templateNode.batches.map((batch) => {
+                                        const batchOpen = Boolean(expandedBatches[batch.id])
+                                        const detail = batchDetails[batch.id]
+                                        const batchMetrics = buildBatchMetrics(batch, detail)
+                                        return (
+                                          <div key={batch.id} className="rounded border bg-background">
+                                            <button
+                                              type="button"
+                                              className="w-full p-3 text-left hover:bg-muted/20"
+                                              onClick={() => toggleBatch(batch.id)}
+                                            >
+                                              <div className="flex flex-wrap items-center justify-between gap-2">
+                                                <div className="flex items-center gap-2">
+                                                  {batchOpen ? <IconChevronDown className="size-4" /> : <IconChevronRight className="size-4" />}
+                                                  <p className="text-sm font-medium">
+                                                    {batch.titulo || `Lote ${batch.id.slice(0, 8)}`}
+                                                  </p>
+                                                </div>
+                                                <div className="flex flex-wrap gap-2 text-xs">
+                                                  <Badge variant="outline">Totales: {batchMetrics.totales}</Badge>
+                                                  <Badge variant="outline">Entregados: {batchMetrics.entregados}</Badge>
+                                                  <Badge variant="outline">Respondidos: {batchMetrics.respondidos}</Badge>
+                                                  <Badge variant="outline">Aperturas: {batchMetrics.aperturas}</Badge>
+                                                  <Badge variant="outline">Clics: {batchMetrics.clicks}</Badge>
+                                                </div>
+                                              </div>
+                                              <div className="mt-2 flex flex-wrap gap-3 text-xs text-muted-foreground">
+                                                <span>Enviados: {batchMetrics.enviados}</span>
+                                                <span>Fallidos: {batchMetrics.fallidos}</span>
+                                                <span>Omitidos: {batchMetrics.omitidos}</span>
+                                                <span>Entrega: {formatPercent(batchMetrics.tasaEntrega)}</span>
+                                                <span>Respuesta: {formatPercent(batchMetrics.tasaRespuesta)}</span>
+                                                <span>Clic/Sesión: —</span>
+                                              </div>
+                                            </button>
+
+                                            {batchOpen ? (
+                                              <div className="border-t p-3">
+                                                {detail?.loading ? (
+                                                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                                                    <IconLoader className="size-4 animate-spin" /> Cargando detalle del envío...
+                                                  </div>
+                                                ) : detail?.error ? (
+                                                  <p className="text-xs text-destructive">{detail.error}</p>
+                                                ) : detail?.envios?.length ? (
+                                                  <div className="space-y-1">
+                                                    {detail.envios.map((envio) => {
+                                                      const envioMetrics = buildEnvioMetrics(envio, detail.logs)
+                                                      return (
+                                                        <div key={envio.id} className="rounded border bg-muted/10 p-2">
+                                                          <div className="flex flex-wrap items-center justify-between gap-2">
+                                                            <p className="text-xs font-medium">
+                                                              {resolveEnvioProspectLabel(envio)}
+                                                            </p>
+                                                            <div className="flex flex-wrap gap-2 text-[11px]">
+                                                              <Badge variant="outline">{envio.estado}</Badge>
+                                                              <Badge variant="outline">Aperturas: {envioMetrics.aperturas}</Badge>
+                                                              <Badge variant="outline">Clics: {envioMetrics.clicks}</Badge>
+                                                            </div>
+                                                          </div>
+                                                          <div className="mt-1 flex flex-wrap gap-3 text-[11px] text-muted-foreground">
+                                                            <span>Prospecto: {envio.prospecto_id}</span>
+                                                            <span>Mensaje: {envio.mensaje_id || "—"}</span>
+                                                            <span>Procesado: {formatDateTime(envio.procesado_en || envio.programado_en)}</span>
+                                                          </div>
+                                                        </div>
+                                                      )
+                                                    })}
+                                                  </div>
+                                                ) : (
+                                                  <p className="text-xs text-muted-foreground">Sin envíos registrados para este lote.</p>
+                                                )}
+                                              </div>
+                                            ) : null}
+                                          </div>
+                                        )
+                                      })
+                                    ) : (
+                                      <p className="text-xs text-muted-foreground">No hay lotes asociados a esta plantilla.</p>
+                                    )}
+                                  </div>
+                                ) : null}
+                              </div>
+                            )
+                          })
+                        ) : (
+                          <p className="text-xs text-muted-foreground">No hay plantillas con métricas para esta campaña.</p>
+                        )}
+                      </div>
+                    ) : null}
                   </div>
-                  <div className="mt-2 flex flex-wrap gap-3 text-xs text-muted-foreground">
-                    <span>Enviados: {item.envios_enviados}</span>
-                    <span>Fallidos: {item.envios_fallidos}</span>
-                    <span>Omitidos: {item.envios_omitidos}</span>
-                    <span>Entrega: {formatPercent(item.tasa_entrega_pct)}</span>
-                    <span>Respuesta: {formatPercent(item.tasa_respuesta_pct)}</span>
-                    <span>Clic/Sesión: {formatPercent(item.click_to_session_pct)}</span>
-                  </div>
-                </div>
-              ))}
+                )
+              })}
             </div>
           ) : null}
           {atribucionLoading ? (
@@ -1454,4 +1794,178 @@ function resolveBatchQueryLabel(rawFilters: unknown, labelMap: Record<string, st
 function formatPercent(value: number): string {
   if (!Number.isFinite(value)) return "0%"
   return `${value.toFixed(2)}%`
+}
+
+function formatDateTime(value?: string | null): string {
+  if (!value) return "—"
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return value
+  return new Intl.DateTimeFormat("es-MX", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(date)
+}
+
+function toNumber(value: unknown): number {
+  if (typeof value === "number" && Number.isFinite(value)) return value
+  const parsed = Number(value)
+  return Number.isFinite(parsed) ? parsed : 0
+}
+
+function createEmptyAtribucionMetric(seed: Partial<ProspeccionCampanaAtribucionItem> = {}): ProspeccionCampanaAtribucionItem {
+  return {
+    campana_id: seed.campana_id ?? null,
+    campana_nombre: seed.campana_nombre ?? null,
+    canal: seed.canal ?? null,
+    template_id: seed.template_id ?? null,
+    template_slug: seed.template_slug ?? null,
+    template_nombre: seed.template_nombre ?? null,
+    envios_totales: 0,
+    envios_enviados: 0,
+    envios_entregados: 0,
+    envios_fallidos: 0,
+    envios_omitidos: 0,
+    envios_respondidos: 0,
+    brevo_aperturas: 0,
+    brevo_clicks: 0,
+    sesiones_utm: 0,
+    tasa_entrega_pct: 0,
+    tasa_respuesta_pct: 0,
+    click_to_session_pct: 0,
+  }
+}
+
+function sumAtribucionMetrics(
+  current: ProspeccionCampanaAtribucionItem,
+  next: ProspeccionCampanaAtribucionItem,
+): ProspeccionCampanaAtribucionItem {
+  const totals = {
+    envios_totales: toNumber(current.envios_totales) + toNumber(next.envios_totales),
+    envios_enviados: toNumber(current.envios_enviados) + toNumber(next.envios_enviados),
+    envios_entregados: toNumber(current.envios_entregados) + toNumber(next.envios_entregados),
+    envios_fallidos: toNumber(current.envios_fallidos) + toNumber(next.envios_fallidos),
+    envios_omitidos: toNumber(current.envios_omitidos) + toNumber(next.envios_omitidos),
+    envios_respondidos: toNumber(current.envios_respondidos) + toNumber(next.envios_respondidos),
+    brevo_aperturas: toNumber(current.brevo_aperturas) + toNumber(next.brevo_aperturas),
+    brevo_clicks: toNumber(current.brevo_clicks) + toNumber(next.brevo_clicks),
+    sesiones_utm: toNumber(current.sesiones_utm) + toNumber(next.sesiones_utm),
+  }
+  const tasaEntrega = totals.envios_totales ? (totals.envios_entregados * 100) / totals.envios_totales : 0
+  const tasaRespuesta = totals.envios_totales ? (totals.envios_respondidos * 100) / totals.envios_totales : 0
+  const clickSesion = totals.sesiones_utm ? (totals.brevo_clicks * 100) / totals.sesiones_utm : 0
+  return {
+    ...current,
+    ...totals,
+    tasa_entrega_pct: tasaEntrega,
+    tasa_respuesta_pct: tasaRespuesta,
+    click_to_session_pct: clickSesion,
+  }
+}
+
+function buildTemplateKey(item: {
+  template_id?: string | null
+  template_slug?: string | null
+  canal?: string | null
+}): string {
+  const templateId = (item.template_id || "").trim().toLowerCase()
+  const templateSlug = (item.template_slug || "").trim().toLowerCase()
+  const canal = (item.canal || "").trim().toLowerCase()
+  return `${canal}::${templateId || "sin-id"}::${templateSlug || "sin-slug"}`
+}
+
+function inferCampaignCanal(batches: ProspeccionCampanaGroup["batches"]): string | null {
+  for (const batch of batches) {
+    if (Array.isArray(batch.canales) && batch.canales.length) return String(batch.canales[0] || "")
+  }
+  return null
+}
+
+function extractBatchTemplateIdentity(batch: ProspeccionCampanaGroup["batches"][number]): {
+  canal: string | null
+  templateId: string | null
+  templateSlug: string | null
+} {
+  const canal = Array.isArray(batch.canales) && batch.canales.length ? String(batch.canales[0] || "").trim() : ""
+  const metadata = isRecord(batch.metadata) ? batch.metadata : {}
+  const canalesConfig = isRecord(metadata["canales_config"]) ? (metadata["canales_config"] as Record<string, unknown>) : {}
+  const canalConfig = canal && isRecord(canalesConfig[canal]) ? (canalesConfig[canal] as Record<string, unknown>) : {}
+  const canalMeta = isRecord(canalConfig["metadata"]) ? (canalConfig["metadata"] as Record<string, unknown>) : {}
+  const templateId =
+    (typeof canalConfig["template_id"] === "string" && canalConfig["template_id"].trim()) ||
+    (typeof canalMeta["template_id"] === "string" && canalMeta["template_id"].trim()) ||
+    null
+  const templateSlug =
+    (typeof canalConfig["template_slug"] === "string" && canalConfig["template_slug"].trim()) ||
+    (typeof canalMeta["template_slug"] === "string" && canalMeta["template_slug"].trim()) ||
+    null
+  return {
+    canal: canal || null,
+    templateId,
+    templateSlug,
+  }
+}
+
+function resolveBrevoEventName(log: ContactoLog): string {
+  if (!isRecord(log.detalle)) return ""
+  const detail = log.detalle as Record<string, unknown>
+  const root = typeof detail["event"] === "string" ? detail["event"].trim().toLowerCase() : ""
+  if (root) return root
+  const brevo = isRecord(detail["brevo"]) ? (detail["brevo"] as Record<string, unknown>) : {}
+  const nested = typeof brevo["event"] === "string" ? brevo["event"].trim().toLowerCase() : ""
+  return nested
+}
+
+function buildBatchMetrics(batch: ProspeccionCampanaGroup["batches"][number], detail?: BatchDetailState) {
+  const totales = Object.values(batch.totales || {}).reduce((sum, value) => sum + toNumber(value), 0)
+  const entregados = toNumber(batch.totales?.entregado)
+  const respondidos = toNumber(batch.totales?.respondido)
+  const enviados = toNumber(batch.totales?.enviado) + entregados
+  const fallidos = toNumber(batch.totales?.fallido) + toNumber(batch.totales?.error)
+  const omitidos = toNumber(batch.totales?.omitido)
+  let aperturas = 0
+  let clicks = 0
+  ;(detail?.logs ?? []).forEach((log) => {
+    const eventName = resolveBrevoEventName(log)
+    if (eventName === "opened" || eventName === "unique_opened") aperturas += 1
+    if (eventName === "click" || eventName === "unique_click") clicks += 1
+  })
+  const tasaEntrega = totales ? (entregados * 100) / totales : 0
+  const tasaRespuesta = totales ? (respondidos * 100) / totales : 0
+  return {
+    totales,
+    entregados,
+    respondidos,
+    enviados,
+    fallidos,
+    omitidos,
+    aperturas,
+    clicks,
+    tasaEntrega,
+    tasaRespuesta,
+  }
+}
+
+function buildEnvioMetrics(envio: ContactoEnvio, logs: ContactoLog[]) {
+  let aperturas = 0
+  let clicks = 0
+  logs.forEach((log) => {
+    if (log.envio_id !== envio.id) return
+    const eventName = resolveBrevoEventName(log)
+    if (eventName === "opened" || eventName === "unique_opened") aperturas += 1
+    if (eventName === "click" || eventName === "unique_click") clicks += 1
+  })
+  return { aperturas, clicks }
+}
+
+function resolveEnvioProspectLabel(envio: ContactoEnvio): string {
+  if (isRecord(envio.detalle)) {
+    const detail = envio.detalle as Record<string, unknown>
+    const displayName = typeof detail["display_name"] === "string" ? detail["display_name"].trim() : ""
+    if (displayName) return displayName
+    const email = typeof detail["email"] === "string" ? detail["email"].trim() : ""
+    if (email) return email
+    const phone = typeof detail["phone"] === "string" ? detail["phone"].trim() : ""
+    if (phone) return phone
+  }
+  return `Prospecto ${envio.prospecto_id.slice(0, 8)}`
 }
