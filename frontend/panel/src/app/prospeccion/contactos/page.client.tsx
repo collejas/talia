@@ -720,6 +720,15 @@ function normalizeBusquedaLabel(value: unknown): string | null {
   return cleaned || null
 }
 
+function sanitizeQueryDisplayLabel(value: unknown): string | null {
+  const normalized = normalizeBusquedaLabel(value)
+  if (!normalized) return null
+  if (/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(normalized)) {
+    return null
+  }
+  return normalized
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value)
 }
@@ -752,7 +761,7 @@ function extractBatchQueryValues(batch: ContactoBatch): string[] {
 function resolveBatchQueryLabel(batch: ContactoBatch, labelMap: Record<string, string>): string | null {
   const values = extractBatchQueryValues(batch)
   if (!values.length) return null
-  const labels = values.map((value) => normalizeBusquedaLabel(labelMap[value] ?? value)).filter(Boolean) as string[]
+  const labels = values.map((value) => sanitizeQueryDisplayLabel(labelMap[value] ?? value)).filter(Boolean) as string[]
   if (!labels.length) return null
   const unique = Array.from(new Set(labels))
   if (unique.length <= 2) return unique.join(", ")

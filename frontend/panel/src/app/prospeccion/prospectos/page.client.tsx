@@ -4034,13 +4034,18 @@ function normalizeBusquedaLabel(value: string | null | undefined): string | null
   return cleaned || null
 }
 
+function sanitizeQueryDisplayLabel(value: string | null | undefined): string | null {
+  const normalized = normalizeBusquedaLabel(value)
+  if (!normalized) return null
+  if (/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(normalized)) {
+    return null
+  }
+  return normalized
+}
+
 function extractProspectoQueryValue(metadata: unknown, fuenteBusqueda?: string | null): string | null {
   const fuente = normalizeBusquedaLabel(fuenteBusqueda)
   if (isRecord(metadata)) {
-    const busquedaId = normalizeBusquedaLabel(String(metadata["busqueda_id"] ?? ""))
-    if (busquedaId) {
-      return busquedaId
-    }
     const query = normalizeBusquedaLabel(String(metadata["query"] ?? ""))
     if (query) {
       return query
@@ -4063,6 +4068,10 @@ function extractProspectoQueryValue(metadata: unknown, fuenteBusqueda?: string |
         }
       }
     }
+    const busquedaId = normalizeBusquedaLabel(String(metadata["busqueda_id"] ?? ""))
+    if (busquedaId) {
+      return busquedaId
+    }
   }
   return fuente
 }
@@ -4076,7 +4085,11 @@ function extractProspectoQueryLabel(
   if (!rawValue) {
     return null
   }
-  return normalizeBusquedaLabel(queryLabelMap.get(rawValue) ?? rawValue)
+  const mappedValue = normalizeBusquedaLabel(queryLabelMap.get(rawValue) ?? rawValue)
+  if (mappedValue && !sanitizeQueryDisplayLabel(mappedValue) && sanitizeQueryDisplayLabel(rawValue)) {
+    return sanitizeQueryDisplayLabel(rawValue)
+  }
+  return sanitizeQueryDisplayLabel(mappedValue)
 }
 
 function auditActionLabel(action: string): string {

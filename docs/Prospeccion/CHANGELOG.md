@@ -16,6 +16,9 @@ Formato recomendado por entrada:
   - se muestra etiqueta amigable de consulta por prospecto (`busqueda_id/query`) con fallback legible.
 - `prospeccion/contactos` y `prospeccion/campanas`:
   - lotes muestran etiqueta amigable de consulta (`query/busqueda_id`) resolviendo nombre desde metadata de prospectos cuando existe.
+- `prospeccion/prospectos`, `prospeccion/contactos`, `prospeccion/campanas`:
+  - se evita mostrar `busqueda_id` (UUID técnico) como texto de consulta cuando no existe etiqueta amigable.
+  - prioridad de etiqueta legible (`query/busqueda_query`) sobre fallback técnico.
 - `prospeccion/contactos`:
   - nueva tarjeta de conversión por fuente (`Google Places`, `DENUE`, `Usuario`) con porcentajes de contacto y conversión a contacto CRM.
 - Proxy nuevo:

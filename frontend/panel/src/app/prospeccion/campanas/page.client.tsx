@@ -1234,6 +1234,15 @@ function normalizeBusquedaLabel(value: unknown): string | null {
   return cleaned || null
 }
 
+function sanitizeQueryDisplayLabel(value: unknown): string | null {
+  const normalized = normalizeBusquedaLabel(value)
+  if (!normalized) return null
+  if (/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(normalized)) {
+    return null
+  }
+  return normalized
+}
+
 function extractBatchQueryValues(rawFilters: unknown): string[] {
   if (!isRecord(rawFilters)) return []
   const values: string[] = []
@@ -1261,7 +1270,7 @@ function extractBatchQueryValues(rawFilters: unknown): string[] {
 function resolveBatchQueryLabel(rawFilters: unknown, labelMap: Record<string, string>): string | null {
   const values = extractBatchQueryValues(rawFilters)
   if (!values.length) return null
-  const labels = values.map((value) => normalizeBusquedaLabel(labelMap[value] ?? value)).filter(Boolean) as string[]
+  const labels = values.map((value) => sanitizeQueryDisplayLabel(labelMap[value] ?? value)).filter(Boolean) as string[]
   if (!labels.length) return null
   const unique = Array.from(new Set(labels))
   if (unique.length <= 2) return unique.join(", ")

@@ -8,7 +8,7 @@ Este archivo sirve para capturar próximos requerimientos sin mezclar historial 
 - (Sin pendientes inmediatos en este bloque).
 
 2. Calidad de datos
-- Resolver nombre amigable de consulta por `busqueda_id` en toda la app.
+- (Sin pendientes inmediatos en este bloque).
 
 3. Campañas y contacto
 - Asistente IA especializado en prospección:
@@ -107,5 +107,6 @@ Por cada cambio nuevo:
 - Calidad de datos:
   - normalización de emails de prospectos al persistir (insert/update), no sólo en la UI.
   - backfill de correos existentes para estandarizar a minúsculas.
+  - resolución de nombre amigable de consulta por `busqueda_id` en `prospeccion/prospectos`, `prospeccion/contactos` y `prospeccion/campanas` (sin fallback visual a UUID técnico).
 - `prospeccion/contactos`:
   - dashboard de conversión por fuente (`google_places`, `denue`, `usuario`) con cálculo persistente (RPC SQL).
