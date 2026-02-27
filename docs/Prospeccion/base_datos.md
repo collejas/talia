@@ -51,6 +51,8 @@ Validación complementaria: MCP Supabase (instancia actual).
   - Agrega prospectos/contactados/convertidos por fuente (`google_places`, `denue`, `usuario`).
 - `prospeccion_brevo_eventos_resumen()`
   - Agrega eventos Brevo (`delivered`, `opened`, `click`, `bounce`, etc.) a partir de `prospeccion_contactos_log`.
+- `prospeccion_campana_template_atribucion(p_campana_id, p_limit)`
+  - Agrega desempeño persistente por campaña/canal/plantilla (totales, entrega, respuesta, aperturas, clics).
 
 Nota: en el backup ya existen variantes con `p_contact_match text default 'all'` para filtros de contacto tipo AND/OR en DENUE.
 

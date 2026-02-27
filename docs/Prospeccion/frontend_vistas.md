@@ -52,6 +52,7 @@ Ruta base: `frontend/panel/src/app/prospeccion`
 - Duplicación de configuración.
 - KPIs por canal.
 - Plantillas de correo: importación desde catálogo Brevo (lectura API + alta/sync local por campaña).
+- Dashboard de atribución por plantilla (persistente): envío/entrega/respuesta + aperturas/clics Brevo.
 
 ## Clientes frontend usados
 

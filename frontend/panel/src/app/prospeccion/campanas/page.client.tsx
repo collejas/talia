@@ -17,6 +17,7 @@ import {
   createContactoTemplate,
   deleteContactoTemplate,
   deleteProspeccionCampana,
+  getProspeccionCampanaAtribucion,
   importBrevoContactoTemplate,
   listBrevoCatalogTemplates,
   listContactoTemplates,
@@ -28,6 +29,7 @@ import {
   type BrevoCatalogTemplate,
   type CrmCampaign,
   type ContactoTemplate,
+  type ProspeccionCampanaAtribucionItem,
   type ProspeccionCampanaGroup,
 } from "@/lib/prospeccion/prospectos-client"
 
@@ -50,6 +52,9 @@ export function CampanasMetricsClient() {
   const [campanas, setCampanas] = useState<ProspeccionCampanaGroup[]>([])
   const [campanasLoading, setCampanasLoading] = useState(false)
   const [campanasError, setCampanasError] = useState<string | null>(null)
+  const [atribucionItems, setAtribucionItems] = useState<ProspeccionCampanaAtribucionItem[]>([])
+  const [atribucionLoading, setAtribucionLoading] = useState(false)
+  const [atribucionError, setAtribucionError] = useState<string | null>(null)
   const [deleteLoading, setDeleteLoading] = useState<string | null>(null)
   const [crmCampaigns, setCrmCampaigns] = useState<CrmCampaign[]>([])
   const [campaignDialogOpen, setCampaignDialogOpen] = useState(false)
@@ -130,6 +135,25 @@ export function CampanasMetricsClient() {
   useEffect(() => {
     void fetchCampanas()
   }, [fetchCampanas])
+
+  const fetchAtribucion = useCallback(async () => {
+    setAtribucionLoading(true)
+    setAtribucionError(null)
+    try {
+      const response = await getProspeccionCampanaAtribucion({ limit: 250 })
+      setAtribucionItems(Array.isArray(response?.items) ? response.items : [])
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "No se pudo cargar la atribución por plantilla."
+      setAtribucionError(message)
+      setAtribucionItems([])
+    } finally {
+      setAtribucionLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    void fetchAtribucion()
+  }, [fetchAtribucion])
 
   useEffect(() => {
     let cancelled = false
@@ -819,6 +843,65 @@ export function CampanasMetricsClient() {
         </CardContent>
       </Card>
 
+      <Card>
+        <CardHeader className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <CardTitle className="text-base font-semibold">Atribución por plantilla</CardTitle>
+            <p className="text-sm text-muted-foreground">Métricas persistentes por campaña/canal/plantilla.</p>
+          </div>
+          <Button variant="outline" size="sm" onClick={() => void fetchAtribucion()} disabled={atribucionLoading}>
+            <IconRefresh className={cn("mr-2 size-4", atribucionLoading && "animate-spin")} />
+            Actualizar
+          </Button>
+        </CardHeader>
+        <CardContent>
+          {atribucionError ? (
+            <div className="mb-3 flex items-center gap-2 rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
+              <IconAlertTriangle className="size-4" />
+              <span>{atribucionError}</span>
+            </div>
+          ) : null}
+          {!atribucionItems.length && !atribucionLoading ? (
+            <p className="text-sm text-muted-foreground">Aún no hay datos de atribución por plantilla.</p>
+          ) : null}
+          {atribucionItems.length ? (
+            <div className="space-y-2">
+              {atribucionItems.slice(0, 25).map((item, index) => (
+                <div key={`${item.campana_id || "sin"}-${item.template_id || item.template_slug || index}`} className="rounded-md border p-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                      <p className="text-sm font-semibold">{item.template_nombre || item.template_slug || "Plantilla"}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {(item.campana_nombre || "Sin campaña")} · {(canalLabel[item.canal || ""] || item.canal || "canal")}
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap gap-2 text-xs">
+                      <Badge variant="outline">Totales: {item.envios_totales}</Badge>
+                      <Badge variant="outline">Entregados: {item.envios_entregados}</Badge>
+                      <Badge variant="outline">Respondidos: {item.envios_respondidos}</Badge>
+                      <Badge variant="outline">Aperturas: {item.brevo_aperturas}</Badge>
+                      <Badge variant="outline">Clics: {item.brevo_clicks}</Badge>
+                    </div>
+                  </div>
+                  <div className="mt-2 flex flex-wrap gap-3 text-xs text-muted-foreground">
+                    <span>Enviados: {item.envios_enviados}</span>
+                    <span>Fallidos: {item.envios_fallidos}</span>
+                    <span>Omitidos: {item.envios_omitidos}</span>
+                    <span>Entrega: {formatPercent(item.tasa_entrega_pct)}</span>
+                    <span>Respuesta: {formatPercent(item.tasa_respuesta_pct)}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : null}
+          {atribucionLoading ? (
+            <div className="mt-3 flex items-center gap-2 text-sm text-muted-foreground">
+              <IconLoader className="size-4 animate-spin" /> Cargando atribución...
+            </div>
+          ) : null}
+        </CardContent>
+      </Card>
+
       <Dialog open={campaignDialogOpen} onOpenChange={setCampaignDialogOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
@@ -1364,4 +1447,9 @@ function resolveBatchQueryLabel(rawFilters: unknown, labelMap: Record<string, st
   const unique = Array.from(new Set(labels))
   if (unique.length <= 2) return unique.join(", ")
   return `${unique.slice(0, 2).join(", ")} +${unique.length - 2}`
+}
+
+function formatPercent(value: number): string {
+  if (!Number.isFinite(value)) return "0%"
+  return `${value.toFixed(2)}%`
 }

@@ -1582,6 +1582,15 @@ class ProspeccionCampanaQuery(BaseModel):
     limit: int = Field(default=15, ge=1, le=100)
 
 
+class ProspeccionCampanaAtribucionQuery(BaseModel):
+    """Parámetros para resumen de atribución por campaña/plantilla."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    campana_id: UUID | None = Field(default=None)
+    limit: int = Field(default=200, ge=1, le=1000)
+
+
 class ProspeccionCampanaUpdatePayload(BaseModel):
     """Edita una campaña de prospección y su lote más reciente."""
 
@@ -13659,6 +13668,51 @@ async def prospeccion_campanas_dashboard(
             group["totales"][estado] = group["totales"].get(estado, 0) + count
 
     return {"ok": True, "items": list(grouped.values())}
+
+
+@router.get("/prospeccion/campanas/atribucion")
+async def prospeccion_campanas_atribucion(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    _: str = Depends(require_permission("ejecutar_busquedas")),
+    user_token: str = Depends(require_user_token),
+    params: ProspeccionCampanaAtribucionQuery = Depends(),
+) -> dict[str, Any]:
+    """Resumen persistente de desempeño por campaña/plantilla."""
+
+    try:
+        rows = await repo.get_prospeccion_campana_template_atribucion(
+            usuario_token=user_token,
+            campana_id=params.campana_id,
+            limit=params.limit,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    items: list[dict[str, Any]] = []
+    for row in rows:
+        items.append(
+            {
+                "campana_id": row.get("campana_id"),
+                "campana_nombre": row.get("campana_nombre"),
+                "canal": row.get("canal"),
+                "template_id": row.get("template_id"),
+                "template_slug": row.get("template_slug"),
+                "template_nombre": row.get("template_nombre"),
+                "envios_totales": int(row.get("envios_totales") or 0),
+                "envios_enviados": int(row.get("envios_enviados") or 0),
+                "envios_entregados": int(row.get("envios_entregados") or 0),
+                "envios_fallidos": int(row.get("envios_fallidos") or 0),
+                "envios_omitidos": int(row.get("envios_omitidos") or 0),
+                "envios_respondidos": int(row.get("envios_respondidos") or 0),
+                "brevo_aperturas": int(row.get("brevo_aperturas") or 0),
+                "brevo_clicks": int(row.get("brevo_clicks") or 0),
+                "tasa_entrega_pct": float(row.get("tasa_entrega_pct") or 0),
+                "tasa_respuesta_pct": float(row.get("tasa_respuesta_pct") or 0),
+            }
+        )
+
+    return {"ok": True, "items": items}
 
 
 @router.get("/prospeccion/campanas/{campana_id}/duplicar")

@@ -105,6 +105,25 @@ export type ProspeccionCampanaGroup = {
   batches: ProspeccionCampanaBatch[]
 }
 
+export type ProspeccionCampanaAtribucionItem = {
+  campana_id?: string | null
+  campana_nombre?: string | null
+  canal?: string | null
+  template_id?: string | null
+  template_slug?: string | null
+  template_nombre?: string | null
+  envios_totales: number
+  envios_enviados: number
+  envios_entregados: number
+  envios_fallidos: number
+  envios_omitidos: number
+  envios_respondidos: number
+  brevo_aperturas: number
+  brevo_clicks: number
+  tasa_entrega_pct: number
+  tasa_respuesta_pct: number
+}
+
 export type ProspeccionCampanaDuplicateDefaults = {
   campana: {
     id: string
@@ -699,6 +718,17 @@ export async function getProspeccionCampanas(limit?: number) {
   const url = buildClientUrl("/api/prospeccion/campanas")
   if (typeof limit === "number") url.searchParams.set("limit", String(limit))
   return requestJson<{ ok: boolean; items: ProspeccionCampanaGroup[] }>(url.toString())
+}
+
+export async function getProspeccionCampanaAtribucion(params: { campana_id?: string; limit?: number } = {}) {
+  const url = buildClientUrl("/api/prospeccion/campanas/atribucion")
+  if (params.campana_id?.trim()) {
+    url.searchParams.set("campana_id", params.campana_id.trim())
+  }
+  if (typeof params.limit === "number") {
+    url.searchParams.set("limit", String(params.limit))
+  }
+  return requestJson<{ ok: boolean; items: ProspeccionCampanaAtribucionItem[] }>(url.toString())
 }
 
 export async function getProspeccionCampanaPreset(campanaId: string) {

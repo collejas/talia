@@ -8708,6 +8708,29 @@ class CRMRepository:
             raise CRMRepositoryError(f"prospeccion_brevo_eventos_resumen_invalid:{data!r}")
         return [row for row in data if isinstance(row, dict)]
 
+    async def get_prospeccion_campana_template_atribucion(
+        self,
+        *,
+        usuario_token: str,
+        campana_id: UUID | None = None,
+        limit: int = 200,
+    ) -> list[dict[str, Any]]:
+        """Resumen persistente de atribución por campaña/plantilla."""
+
+        payload: dict[str, Any] = {"p_limit": max(1, min(limit, 1000))}
+        if campana_id is not None:
+            payload["p_campana_id"] = str(campana_id)
+        resp = await self._request_with_user(
+            "POST",
+            "/rest/v1/rpc/prospeccion_campana_template_atribucion",
+            token=usuario_token,
+            json=payload,
+        )
+        data = resp.json() or []
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"prospeccion_campana_template_atribucion_invalid:{data!r}")
+        return [row for row in data if isinstance(row, dict)]
+
     async def cancel_pending_envios(
         self,
         *,

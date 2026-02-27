@@ -79,6 +79,7 @@ Repositorio principal: `backend/app/repositories/crm.py`
 - `GET /crm/prospeccion/whatsapp/readiness`
 - `POST /crm/prospeccion/contacto/brevo/webhook`
 - `GET /crm/prospeccion/campanas`
+- `GET /crm/prospeccion/campanas/atribucion`
 - `GET /crm/prospeccion/campanas/{campana_id}/duplicar`
 
 ## 5) Servicios internos relevantes
