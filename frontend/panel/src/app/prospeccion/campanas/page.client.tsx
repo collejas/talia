@@ -612,9 +612,12 @@ export function CampanasMetricsClient() {
       const normalized = normalizeLogoUrl(logoUrl)
       if (!normalized) return
       setSelectedLogoUrl(normalized)
-      appendTemplateToken("cuerpoTexto", "{{logo_url}}")
-      const htmlFocused = typeof document !== "undefined" && document.activeElement === correoHtmlRef.current
+      const textFocused = lastFocusedCorreoFieldRef.current === "cuerpoTexto"
+      const htmlFocused = lastFocusedCorreoFieldRef.current === "cuerpoHtml"
       const hasHtmlContent = Boolean((templateForm.cuerpoHtml ?? "").trim())
+      if (textFocused) {
+        appendTemplateToken("cuerpoTexto", "{{logo_url}}")
+      }
       if (htmlFocused || hasHtmlContent) {
         appendTemplateToken("cuerpoHtml", `<img src="{{logo_url}}" alt="Logo" style="${EMAIL_LOGO_IMG_STYLE}" />`)
       }
