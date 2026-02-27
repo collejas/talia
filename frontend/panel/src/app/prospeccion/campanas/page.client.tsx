@@ -823,12 +823,12 @@ export function CampanasMetricsClient() {
       </Dialog>
 
       <Dialog open={templatesDialogOpen} onOpenChange={setTemplatesDialogOpen}>
-        <DialogContent className="w-[96vw] max-w-6xl max-h-[90vh] overflow-hidden">
+        <DialogContent className="w-[98vw] max-w-7xl max-h-[92vh] overflow-hidden p-3 sm:p-4">
           <DialogHeader>
-            <DialogTitle>Plantillas · {templatesCampanaNombre || "Campaña"}</DialogTitle>
+            <DialogTitle className="text-base">Plantillas · {templatesCampanaNombre || "Campaña"}</DialogTitle>
           </DialogHeader>
-          <div className="grid gap-4 md:grid-cols-[1.2fr_1fr] max-h-[72vh] overflow-hidden">
-            <div className="rounded-lg border p-3 overflow-y-auto">
+          <div className="grid gap-3 md:grid-cols-[1.2fr_1fr] h-[78vh] overflow-hidden">
+            <div className="rounded-lg border p-2 overflow-y-auto text-xs">
               {templatesLoading ? (
                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
                   <IconLoader className="size-4 animate-spin" /> Cargando plantillas...
@@ -837,9 +837,9 @@ export function CampanasMetricsClient() {
               {!templatesLoading && !templatesItems.length ? (
                 <p className="text-sm text-muted-foreground">No hay plantillas para esta campaña.</p>
               ) : null}
-              <div className="space-y-2">
+              <div className="space-y-1.5">
                 {templatesItems.map((template) => (
-                  <div key={template.id} className="rounded-md border p-3">
+                  <div key={template.id} className="rounded-md border p-2">
                     <div className="flex items-center justify-between gap-2">
                       <div>
                         <p className="text-sm font-semibold">{template.nombre}</p>
@@ -871,7 +871,7 @@ export function CampanasMetricsClient() {
                 ))}
               </div>
             </div>
-            <div className="rounded-lg border p-3 overflow-y-auto space-y-3">
+            <div className="rounded-lg border p-2 overflow-y-auto space-y-2 text-xs">
               <div className="flex items-center justify-between">
                 <p className="text-sm font-semibold">{templateForm.id ? "Editar plantilla" : "Nueva plantilla"}</p>
                 <Button type="button" variant="ghost" size="sm" onClick={resetTemplateForm}>
