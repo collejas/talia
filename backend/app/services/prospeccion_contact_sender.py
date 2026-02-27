@@ -134,13 +134,14 @@ def _inject_text_fallback_into_html(*, body_text: str, body_html: str) -> str:
 
     if not body_html:
         return body_html
-    normalized_body_text = re.sub(r"\s+", " ", (body_text or "")).strip()
-    if not normalized_body_text:
+    raw_body_text = (body_text or "").strip()
+    if not raw_body_text:
         return body_html
+    compact_body = re.sub(r"\s+", " ", raw_body_text).strip().lower()
     visible_html = _extract_visible_text_from_html(body_html)
     if visible_html:
         html_compact = visible_html.lower()
-        body_compact = normalized_body_text.lower()
+        body_compact = compact_body
         # Si el texto principal ya está contenido en el HTML, no duplicar.
         if body_compact in html_compact:
             return body_html
@@ -148,7 +149,7 @@ def _inject_text_fallback_into_html(*, body_text: str, body_html: str) -> str:
         body_head = body_compact[:120]
         if body_head and body_head in html_compact:
             return body_html
-    escaped = html_lib.escape(normalized_body_text).replace("\n", "<br/>")
+    escaped = html_lib.escape(raw_body_text).replace("\n", "<br/>")
     if not escaped.strip():
         return body_html
     return f"<p>{escaped}</p>\n{body_html}"

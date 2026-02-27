@@ -592,28 +592,9 @@ export function CampanasMetricsClient() {
   )
 
   const insertCorreoTrackedLink = useCallback(() => {
-    const textToken = "Visitar sitio: {{website_url}}"
     const htmlToken = '<a href="{{tracking_url}}" target="_blank" rel="noopener noreferrer">Visitar sitio</a>'
-
-    const insertInto = (current: string, token: string, ref: HTMLTextAreaElement | null, focused: boolean): string => {
-      if (focused && ref) {
-        const start = ref.selectionStart ?? current.length
-        const end = ref.selectionEnd ?? current.length
-        return `${current.slice(0, start)}${token}${current.slice(end)}`
-      }
-      const separator = current && !current.endsWith("\n") ? "\n" : ""
-      return `${current}${separator}${token}`
-    }
-
-    const textFocused = lastFocusedCorreoFieldRef.current === "cuerpoTexto"
-    const htmlFocused = lastFocusedCorreoFieldRef.current === "cuerpoHtml"
-
-    setTemplateForm((prev) => ({
-      ...prev,
-      cuerpoTexto: insertInto(prev.cuerpoTexto ?? "", textToken, correoTextoRef.current, textFocused),
-      cuerpoHtml: insertInto(prev.cuerpoHtml ?? "", htmlToken, correoHtmlRef.current, htmlFocused),
-    }))
-  }, [])
+    appendTemplateToken("cuerpoHtml", htmlToken)
+  }, [appendTemplateToken])
 
   const loadLogos = useCallback(async () => {
     if (logosLoading) return
