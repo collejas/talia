@@ -1228,7 +1228,7 @@ export function CampanasMetricsClient() {
                                                         <div key={envio.id} className="rounded border bg-muted/10 p-2">
                                                           <div className="flex flex-wrap items-center justify-between gap-2">
                                                             <p className="text-xs font-medium">
-                                                              {resolveEnvioProspectLabel(envio)}
+                                                              Prospecto: {resolveEnvioProspectLabel(envio)}
                                                             </p>
                                                             <div className="flex flex-wrap gap-2 text-[11px]">
                                                               <Badge variant="outline">{envio.estado}</Badge>
@@ -1246,7 +1246,6 @@ export function CampanasMetricsClient() {
                                                             </div>
                                                           </div>
                                                           <div className="mt-1 flex flex-wrap gap-3 text-[11px] text-muted-foreground">
-                                                            <span>Prospecto: {resolveEnvioProspectLabel(envio)}</span>
                                                             <span>Segmento: {resolveEnvioSegmentoLabel(envio)}</span>
                                                             <span>Mensaje: {envio.mensaje_id || "—"}</span>
                                                             <span>Procesado: {formatDateTime(envio.procesado_en || envio.programado_en)}</span>
