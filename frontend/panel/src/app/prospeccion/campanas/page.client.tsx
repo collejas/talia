@@ -1198,6 +1198,7 @@ export function CampanasMetricsClient() {
                                                     <>
                                                       <Badge variant="outline">Aperturas: {batchMetrics.aperturas}</Badge>
                                                       <Badge variant="outline">Clics: {batchMetrics.clicks}</Badge>
+                                                      <Badge variant="outline">Sesiones UTM: {batchMetrics.sesionesUtm}</Badge>
                                                     </>
                                                   ) : (
                                                     <Badge variant="outline">Leídos: {batchMetrics.leidos}</Badge>
@@ -1235,6 +1236,7 @@ export function CampanasMetricsClient() {
                                                                 <>
                                                                   <Badge variant="outline">Aperturas: {envioMetrics.aperturas}</Badge>
                                                                   <Badge variant="outline">Clics: {envioMetrics.clicks}</Badge>
+                                                                  <Badge variant="outline">Sesión UTM: {envioMetrics.sesionUtm ? "Sí" : "No"}</Badge>
                                                                 </>
                                                               ) : (
                                                                 <>
@@ -2046,6 +2048,7 @@ function buildBatchMetrics(batch: ProspeccionCampanaGroup["batches"][number], de
   const entregados = toNumber(batch.totales?.entregado)
   const respondidos = toNumber(batch.totales?.respondido)
   const leidos = toNumber(batch.totales?.leido) + toNumber((batch.totales as Record<string, number> | undefined)?.read)
+  const sesionesUtm = (detail?.envios ?? []).reduce((sum, envio) => sum + toNumber(envio.sesiones_utm), 0)
   const enviados = toNumber(batch.totales?.enviado) + entregados
   const fallidos = toNumber(batch.totales?.fallido) + toNumber(batch.totales?.error)
   const omitidos = toNumber(batch.totales?.omitido)
@@ -2063,6 +2066,7 @@ function buildBatchMetrics(batch: ProspeccionCampanaGroup["batches"][number], de
     entregados,
     respondidos,
     leidos,
+    sesionesUtm,
     enviados,
     fallidos,
     omitidos,
@@ -2077,6 +2081,8 @@ function buildBatchMetrics(batch: ProspeccionCampanaGroup["batches"][number], de
 function buildEnvioMetrics(envio: ContactoEnvio, logs: ContactoLog[]) {
   let aperturas = 0
   let clicks = 0
+  const sesionesUtm = toNumber(envio.sesiones_utm)
+  const sesionUtm = sesionesUtm > 0
   let respondido = envio.estado === "respondido"
   let leido = envio.estado === "leido" || envio.estado === "read"
   const scopedLogs = logs.filter((log) => log.envio_id === envio.id)
@@ -2094,7 +2100,7 @@ function buildEnvioMetrics(envio: ContactoEnvio, logs: ContactoLog[]) {
       leido = true
     }
   })
-  return { aperturas, clicks, respondido, leido }
+  return { aperturas, clicks, respondido, leido, sesionesUtm, sesionUtm }
 }
 
 function resolveEnvioProspectLabel(envio: ContactoEnvio): string {

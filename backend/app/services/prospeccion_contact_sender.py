@@ -31,6 +31,8 @@ NUMERIC_PLACEHOLDER_PATTERN = re.compile(r"{{\s*(\d+)\s*}}")
 LEGACY_IMAGE_PLACEHOLDER_PATTERN = re.compile(r"{{\s*DATA:IMAGE:[^}]+}}", re.IGNORECASE)
 EMAIL_LOGO_IMG_STYLE = "width:83.333%;height:auto;display:block;margin:0 auto;"
 IMG_TAG_PATTERN = re.compile(r"<img\b[^>]*>", re.IGNORECASE)
+ANCHOR_HREF_PATTERN = re.compile(r'(<a\b[^>]*\bhref=")([^"]+)(")', re.IGNORECASE)
+PLAIN_URL_PATTERN = re.compile(r"(https?://[^\s<>\")]+)", re.IGNORECASE)
 
 
 @dataclass(slots=True)
@@ -164,7 +166,13 @@ def _sanitize_tracking_keyword(value: Any) -> str:
     return (normalized or "general")[:80]
 
 
-def _build_email_tracking_url(*, context: dict[str, Any], payload: dict[str, Any]) -> str:
+def _build_email_tracking_url(
+    *,
+    context: dict[str, Any],
+    payload: dict[str, Any],
+    envio_id: Any | None = None,
+    prospecto_id: Any | None = None,
+) -> str:
     metadata = payload.get("metadata") if isinstance(payload.get("metadata"), dict) else {}
     keyword = _sanitize_tracking_keyword(
         metadata.get("tracking_keyword")
@@ -178,6 +186,8 @@ def _build_email_tracking_url(*, context: dict[str, Any], payload: dict[str, Any
     existing = dict(parse_qsl(parsed.query, keep_blank_values=True))
     campana_id = _clean_text(metadata.get("campana_id"))
     template_id = _clean_text(metadata.get("template_id"))
+    envio_id_value = _clean_text(envio_id)
+    prospecto_id_value = _clean_text(prospecto_id)
     existing.update(
         {
             "utm_source": existing.get("utm_source") or "prospeccion",
@@ -187,6 +197,8 @@ def _build_email_tracking_url(*, context: dict[str, Any], payload: dict[str, Any
             "kw": keyword,
             **({"cid": campana_id} if campana_id else {}),
             **({"tid": template_id} if template_id else {}),
+            **({"eid": envio_id_value} if envio_id_value else {}),
+            **({"pid": prospecto_id_value} if prospecto_id_value else {}),
         }
     )
     query = urlencode(existing, doseq=True)
@@ -213,6 +225,79 @@ def _wrap_images_with_tracking_link(body_html: str, tracking_url: str) -> str:
         cursor = end
     chunks.append(body_html[cursor:])
     return "".join(chunks)
+
+
+def _append_tracking_params_to_anchor_hrefs(body_html: str, tracking_url: str) -> str:
+    if not body_html:
+        return body_html
+    parsed_tracking = urlparse(tracking_url)
+    tracking_params = dict(parse_qsl(parsed_tracking.query, keep_blank_values=True))
+    if not tracking_params:
+        return body_html
+
+    def _replace(match: re.Match[str]) -> str:
+        prefix, href, suffix = match.groups()
+        parsed_href = urlparse(href)
+        if parsed_href.scheme not in {"http", "https"}:
+            return match.group(0)
+        current = dict(parse_qsl(parsed_href.query, keep_blank_values=True))
+        changed = False
+        for key, value in tracking_params.items():
+            if key not in current and value:
+                current[key] = value
+                changed = True
+        if not changed:
+            return match.group(0)
+        query = urlencode(current, doseq=True)
+        patched_href = urlunparse(
+            (
+                parsed_href.scheme,
+                parsed_href.netloc,
+                parsed_href.path,
+                parsed_href.params,
+                query,
+                parsed_href.fragment,
+            )
+        )
+        return f"{prefix}{html_lib.escape(patched_href, quote=True)}{suffix}"
+
+    return ANCHOR_HREF_PATTERN.sub(_replace, body_html)
+
+
+def _append_tracking_params_to_plain_urls(body_text: str, tracking_url: str) -> str:
+    if not body_text:
+        return body_text
+    parsed_tracking = urlparse(tracking_url)
+    tracking_params = dict(parse_qsl(parsed_tracking.query, keep_blank_values=True))
+    if not tracking_params:
+        return body_text
+
+    def _replace(match: re.Match[str]) -> str:
+        raw_url = match.group(1)
+        parsed_href = urlparse(raw_url)
+        if parsed_href.scheme not in {"http", "https"}:
+            return raw_url
+        current = dict(parse_qsl(parsed_href.query, keep_blank_values=True))
+        changed = False
+        for key, value in tracking_params.items():
+            if key not in current and value:
+                current[key] = value
+                changed = True
+        if not changed:
+            return raw_url
+        query = urlencode(current, doseq=True)
+        return urlunparse(
+            (
+                parsed_href.scheme,
+                parsed_href.netloc,
+                parsed_href.path,
+                parsed_href.params,
+                query,
+                parsed_href.fragment,
+            )
+        )
+
+    return PLAIN_URL_PATTERN.sub(_replace, body_text)
 
 
 def _render_twilio_variables(definition: Any, context: dict[str, Any]) -> dict[str, str] | None:
@@ -506,6 +591,13 @@ async def _run_envio_correo(
     context = _build_placeholder_context(envio, payload, payload.get("metadata"))
     subject = _render_template_text(subject_template, context).strip()
     body = _render_template_text(str(body_template), context).strip()
+    tracking_url = _build_email_tracking_url(
+        context=context,
+        payload=payload,
+        envio_id=envio.get("id"),
+        prospecto_id=envio.get("prospecto_id"),
+    )
+    body = _append_tracking_params_to_plain_urls(body, tracking_url)
     body_html = None
     logo_url = _clean_text(context.get("logo_url"))
     if isinstance(body_html_template, str) and body_html_template.strip():
@@ -519,8 +611,8 @@ async def _run_envio_correo(
     ):
         body_html = _build_basic_html_from_text(body_text=body, logo_url=logo_url)
     if body_html:
-        tracking_url = _build_email_tracking_url(context=context, payload=payload)
         body_html = _wrap_images_with_tracking_link(body_html, tracking_url)
+        body_html = _append_tracking_params_to_anchor_hrefs(body_html, tracking_url)
     if not subject or not body:
         return ContactEnvioResult(
             estado="error",
@@ -561,7 +653,10 @@ async def _run_envio_correo(
         )
     return ContactEnvioResult(
         estado="enviado",
-        detalle={"email": email_value},
+        detalle={
+            "email": email_value,
+            "tracking_url": tracking_url,
+        },
         mensaje_id=message_id,
     )
 
@@ -818,6 +913,14 @@ class ProspeccionContactSender:
             except (TypeError, ValueError):
                 prospecto_uuid = None
 
+        correo_context = _merge_detalle(
+            detalle,
+            {
+                "id": envio.get("id"),
+                "prospecto_id": envio.get("prospecto_id"),
+            },
+        )
+
         if org_uuid and canal in {"correo", "whatsapp", "llamada"}:
             suppression = await repo.worker_find_active_contact_suppression(
                 organizacion_id=org_uuid,
@@ -841,7 +944,7 @@ class ProspeccionContactSender:
                 )
             elif canal == "correo":
                 result = await _run_envio_correo(
-                    detalle,
+                    correo_context,
                     payload,
                     organizacion_id=org_uuid,
                 )
@@ -855,7 +958,7 @@ class ProspeccionContactSender:
                 result = await _run_envio_llamada(detalle, payload)
         elif canal == "correo":
             result = await _run_envio_correo(
-                detalle,
+                correo_context,
                 payload,
                 organizacion_id=org_uuid,
             )

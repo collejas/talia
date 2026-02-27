@@ -329,6 +329,7 @@ export type ContactoEnvio = {
   estado: string
   detalle?: Record<string, unknown> | null
   mensaje_id?: string | null
+  sesiones_utm?: number | null
   programado_en?: string | null
   procesado_en?: string | null
 }

@@ -52,6 +52,8 @@ Formato recomendado por entrada:
   - `GET /crm/prospeccion/campanas/atribucion` (resumen persistente por campaña/plantilla).
 - Tracking correo de prospección:
   - URL de tracking ahora incluye ids técnicos `cid` (campaña) y `tid` (plantilla) para consolidar sesiones UTM por plantilla.
+  - URL de tracking añade `eid` (envío) y `pid` (prospecto) para habilitar atribución por destinatario.
+  - `GET /crm/prospeccion/contacto/envios` enriquece cada envío con `sesiones_utm` por `envio_id`.
 - Webhook Brevo (operativo E2E):
   - Se habilitó endpoint público en panel para recepción externa:
     - `POST /api/prospeccion/contacto/brevo/webhook` (proxy hacia backend `/crm/prospeccion/contacto/brevo/webhook`).
@@ -74,6 +76,8 @@ Formato recomendado por entrada:
   - `public.prospeccion_campana_template_atribucion(p_campana_id, p_limit)` para atribución persistente por plantilla.
   - extendida con `sesiones_utm` y `click_to_session_pct` (join con `webchat_visitantes` vía UTM + ids técnicos).
   - ajuste de agregación Brevo para dashboard: `brevo_aperturas`/`brevo_clicks` deduplicados por `envio_id` (prioriza `unique_*`, fallback a evento total).
+- Nueva función SQL:
+  - `public.prospeccion_envio_sesiones_utm(p_envio_ids)` para resolver sesiones UTM a nivel envío (`eid`).
 - Normalización de correos:
   - trigger `BEFORE INSERT/UPDATE` en `public.prospeccion_prospectos`.
   - backfill para pasar correos existentes a minúsculas.

@@ -12944,6 +12944,7 @@ async def listar_contacto_envios(
     repo: CRMRepository = Depends(get_repository),
     _: str = Depends(require_permission("ejecutar_busquedas")),
     user_token: str = Depends(require_user_token),
+    organizacion_id: UUID = Depends(require_organizacion_id),
     params: ContactEnvioQuery = Depends(),
 ) -> dict[str, Any]:
     """Lista envíos por lote o prospecto."""
@@ -12962,9 +12963,38 @@ async def listar_contacto_envios(
         )
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    envio_ids: list[UUID] = []
+    for row in rows:
+        raw_id = row.get("id") if isinstance(row, dict) else None
+        if not raw_id:
+            continue
+        try:
+            envio_ids.append(UUID(str(raw_id)))
+        except (TypeError, ValueError):
+            continue
+
+    sesiones_map: dict[str, int] = {}
+    if envio_ids:
+        try:
+            sesiones_map = await repo.get_prospeccion_envio_sesiones_utm(
+                organizacion_id=organizacion_id,
+                envio_ids=envio_ids,
+            )
+        except CRMRepositoryError as exc:
+            logger.warning("contact_envios_sesiones_utm_failed: %s", exc)
+
+    enriched_items: list[dict[str, Any]] = []
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        row_copy = dict(row)
+        row_copy["sesiones_utm"] = int(sesiones_map.get(str(row_copy.get("id")), 0))
+        enriched_items.append(row_copy)
+
     return {
         "ok": True,
-        "items": rows,
+        "items": enriched_items,
         "total": total,
         "limit": params.limit,
         "offset": params.offset,

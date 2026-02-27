@@ -8299,6 +8299,39 @@ class CRMRepository:
         total = self._extract_total_count(resp.headers.get("content-range")) or len(data)
         return data, total
 
+    async def get_prospeccion_envio_sesiones_utm(
+        self,
+        *,
+        organizacion_id: UUID,
+        envio_ids: list[UUID],
+    ) -> dict[str, int]:
+        """Devuelve sesiones UTM por envío para correos de prospección."""
+
+        if not envio_ids:
+            return {}
+        payload = {"p_envio_ids": [str(value) for value in envio_ids]}
+        resp = await self._request_service_role(
+            "POST",
+            "/rest/v1/rpc/prospeccion_envio_sesiones_utm",
+            json=payload,
+            organizacion_id=organizacion_id,
+        )
+        data = resp.json() or []
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"prospeccion_envio_sesiones_utm_invalid:{data!r}")
+        result: dict[str, int] = {}
+        for row in data:
+            if not isinstance(row, dict):
+                continue
+            envio_id = row.get("envio_id")
+            if not envio_id:
+                continue
+            try:
+                result[str(envio_id)] = int(row.get("sesiones_utm") or 0)
+            except (TypeError, ValueError):
+                result[str(envio_id)] = 0
+        return result
+
     async def list_contact_logs(
         self,
         *,
