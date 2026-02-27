@@ -20,6 +20,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { cn } from "@/lib/utils"
 import {
   createCrmCampaign,
@@ -1109,11 +1110,12 @@ export function CampanasMetricsClient() {
               <span>{atribucionError}</span>
             </div>
           ) : null}
-          {!filteredHierarchyCampaigns.length && !atribucionLoading ? (
-            <p className="text-sm text-muted-foreground">Aún no hay datos de métricas para campañas.</p>
-          ) : null}
-          {filteredHierarchyCampaigns.length ? (
-            <div className="space-y-3">
+          <TooltipProvider delayDuration={120}>
+            {!filteredHierarchyCampaigns.length && !atribucionLoading ? (
+              <p className="text-sm text-muted-foreground">Aún no hay datos de métricas para campañas.</p>
+            ) : null}
+            {filteredHierarchyCampaigns.length ? (
+              <div className="space-y-3">
               {filteredHierarchyCampaigns.map((campaignNode) => {
                 const campaignOpen = Boolean(expandedCampaigns[campaignNode.key])
                 const campaignCanal = resolveCampaignCanal(campaignNode)
@@ -1151,12 +1153,12 @@ export function CampanasMetricsClient() {
                         </div>
                       </div>
                       <div className="mt-2 flex flex-wrap gap-3 text-xs text-muted-foreground">
-                        <span>Entrega: {formatPercent(campaignKpis.entrega)}</span>
-                        <span>Respuesta: {formatPercent(campaignKpis.respuesta)}</span>
+                        <MetricInlineTip label="Entrega" value={formatPercent(campaignKpis.entrega)} help="Porcentaje de contactos a los que sí les llegó el mensaje." />
+                        <MetricInlineTip label="Respuesta" value={formatPercent(campaignKpis.respuesta)} help="Porcentaje de contactos que respondieron el mensaje." />
                         {campaignIsEmail ? (
                           <>
-                            <span>Clic/Total: {formatPercent(campaignKpis.clickTotal)}</span>
-                            <span>Sesiones/Clic: {formatPercent(campaignKpis.sesionesPorClick)}</span>
+                            <MetricInlineTip label="Clic/Total" value={formatPercent(campaignKpis.clickTotal)} help="Porcentaje de enviados que hicieron clic en el correo." />
+                            <MetricInlineTip label="Sesiones/Clic" value={formatPercent(campaignKpis.sesionesPorClick)} help="De quienes hicieron clic, cuántos iniciaron sesión en la web." />
                           </>
                         ) : null}
                       </div>
@@ -1207,12 +1209,12 @@ export function CampanasMetricsClient() {
                                   <div className="mt-2 flex flex-wrap gap-3 text-xs text-muted-foreground">
                                     <span>Canal: {canalLabel[templateNode.canal || ""] || templateNode.canal || "—"}</span>
                                     <span>Lotes: {templateNode.batches.length}</span>
-                                    <span>Entrega: {formatPercent(templateKpis.entrega)}</span>
-                                    <span>Respuesta: {formatPercent(templateKpis.respuesta)}</span>
+                                    <MetricInlineTip label="Entrega" value={formatPercent(templateKpis.entrega)} help="Porcentaje de contactos a los que sí les llegó el mensaje." />
+                                    <MetricInlineTip label="Respuesta" value={formatPercent(templateKpis.respuesta)} help="Porcentaje de contactos que respondieron el mensaje." />
                                     {templateIsEmail ? (
                                       <>
-                                        <span>Clic/Total: {formatPercent(templateKpis.clickTotal)}</span>
-                                        <span>Sesiones/Clic: {formatPercent(templateKpis.sesionesPorClick)}</span>
+                                        <MetricInlineTip label="Clic/Total" value={formatPercent(templateKpis.clickTotal)} help="Porcentaje de enviados que hicieron clic en el correo." />
+                                        <MetricInlineTip label="Sesiones/Clic" value={formatPercent(templateKpis.sesionesPorClick)} help="De quienes hicieron clic, cuántos iniciaron sesión en la web." />
                                       </>
                                     ) : null}
                                   </div>
@@ -1263,12 +1265,12 @@ export function CampanasMetricsClient() {
                                                 </div>
                                               </div>
                                               <div className="mt-2 flex flex-wrap gap-3 text-xs text-muted-foreground">
-                                                <span>Entrega: {formatPercent(batchMetrics.tasaEntrega)}</span>
-                                                <span>Respuesta: {formatPercent(batchMetrics.tasaRespuesta)}</span>
+                                                <MetricInlineTip label="Entrega" value={formatPercent(batchMetrics.tasaEntrega)} help="Porcentaje de contactos a los que sí les llegó el mensaje." />
+                                                <MetricInlineTip label="Respuesta" value={formatPercent(batchMetrics.tasaRespuesta)} help="Porcentaje de contactos que respondieron el mensaje." />
                                                 {batchIsEmail ? (
                                                   <>
-                                                    <span>Clic/Total: {formatPercent(batchMetrics.clickTotal)}</span>
-                                                    <span>Sesiones/Clic: {formatPercent(batchMetrics.sesionesPorClick)}</span>
+                                                    <MetricInlineTip label="Clic/Total" value={formatPercent(batchMetrics.clickTotal)} help="Porcentaje de enviados que hicieron clic en el correo." />
+                                                    <MetricInlineTip label="Sesiones/Clic" value={formatPercent(batchMetrics.sesionesPorClick)} help="De quienes hicieron clic, cuántos iniciaron sesión en la web." />
                                                   </>
                                                 ) : null}
                                               </div>
@@ -1312,12 +1314,12 @@ export function CampanasMetricsClient() {
                                                           <div className="mt-1 flex flex-wrap gap-3 text-[11px] text-muted-foreground">
                                                             <span>Segmento: {resolveEnvioSegmentoLabel(envio)}</span>
                                                             <span>Procesado: {formatDateTime(envio.procesado_en || envio.programado_en)}</span>
-                                                            <span>Entrega: {formatPercent(envioMetrics.tasaEntrega)}</span>
-                                                            <span>Respuesta: {formatPercent(envioMetrics.tasaRespuesta)}</span>
+                                                            <MetricInlineTip label="Entrega" value={formatPercent(envioMetrics.tasaEntrega)} help="Si este contacto recibió el mensaje." />
+                                                            <MetricInlineTip label="Respuesta" value={formatPercent(envioMetrics.tasaRespuesta)} help="Si este contacto respondió el mensaje." />
                                                             {envioIsEmail ? (
                                                               <>
-                                                                <span>Clic/Total: {formatPercent(envioMetrics.clickTotal)}</span>
-                                                                <span>Sesiones/Clic: {formatPercent(envioMetrics.sesionesPorClick)}</span>
+                                                                <MetricInlineTip label="Clic/Total" value={formatPercent(envioMetrics.clickTotal)} help="Si este contacto hizo clic en el correo." />
+                                                                <MetricInlineTip label="Sesiones/Clic" value={formatPercent(envioMetrics.sesionesPorClick)} help="Si el clic de este contacto llegó a sesión en la web." />
                                                               </>
                                                             ) : null}
                                                           </div>
@@ -1349,8 +1351,9 @@ export function CampanasMetricsClient() {
                   </div>
                 )
               })}
-            </div>
-          ) : null}
+              </div>
+            ) : null}
+          </TooltipProvider>
           {atribucionLoading ? (
             <div className="mt-3 flex items-center gap-2 text-sm text-muted-foreground">
               <IconLoader className="size-4 animate-spin" /> Cargando atribución...
@@ -1913,6 +1916,21 @@ function resolveBatchDisplayTitle(batchIndex: number): string {
 function formatPercent(value: number): string {
   if (!Number.isFinite(value)) return "0%"
   return `${value.toFixed(2)}%`
+}
+
+function MetricInlineTip({ label, value, help }: { label: string; value: string; help: string }) {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span className="cursor-help underline decoration-dotted underline-offset-2">
+          {label}: {value}
+        </span>
+      </TooltipTrigger>
+      <TooltipContent side="top" className="max-w-xs text-xs leading-snug">
+        {help}
+      </TooltipContent>
+    </Tooltip>
+  )
 }
 
 function formatDateTime(value?: string | null): string {
