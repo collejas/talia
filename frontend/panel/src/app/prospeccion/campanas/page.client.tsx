@@ -1135,19 +1135,17 @@ export function CampanasMetricsClient() {
                           <p className="text-sm font-semibold">{campaignNode.campana_nombre || "Sin campaña"}</p>
                         </div>
                         <div className="flex flex-wrap gap-2 text-xs">
-                          <Badge variant="outline">Totales: {campaignNode.metrics.envios_totales}</Badge>
-                          <Badge variant="outline">Enviados: {campaignNode.metrics.envios_enviados}</Badge>
-                          <Badge variant="outline">
-                            {campaignDeliveredLabel}: {campaignNode.metrics.envios_entregados}
-                          </Badge>
-                          <Badge variant="outline">Respondidos: {campaignNode.metrics.envios_respondidos}</Badge>
-                          <Badge variant="outline">Fallidos: {campaignNode.metrics.envios_fallidos}</Badge>
-                          <Badge variant="outline">Omitidos: {campaignNode.metrics.envios_omitidos}</Badge>
+                          <MetricBadgeTip label="Totales" value={campaignNode.metrics.envios_totales} help="Cantidad total de contactos incluidos en este nivel." />
+                          <MetricBadgeTip label="Enviados" value={campaignNode.metrics.envios_enviados} help="Mensajes que sí se intentaron enviar." />
+                          <MetricBadgeTip label={campaignDeliveredLabel} value={campaignNode.metrics.envios_entregados} help="Mensajes que sí llegaron al destinatario." />
+                          <MetricBadgeTip label="Respondidos" value={campaignNode.metrics.envios_respondidos} help="Contactos que respondieron." />
+                          <MetricBadgeTip label="Fallidos" value={campaignNode.metrics.envios_fallidos} help="Mensajes que no se pudieron entregar." />
+                          <MetricBadgeTip label="Omitidos" value={campaignNode.metrics.envios_omitidos} help="Contactos que se saltaron por reglas o filtros." />
                           {campaignIsEmail ? (
                             <>
-                              <Badge variant="outline">Aperturas: {campaignNode.metrics.brevo_aperturas}</Badge>
-                              <Badge variant="outline">Clics: {campaignNode.metrics.brevo_clicks}</Badge>
-                              <Badge variant="outline">Sesiones UTM: {campaignNode.metrics.sesiones_utm}</Badge>
+                              <MetricBadgeTip label="Aperturas" value={campaignNode.metrics.brevo_aperturas} help="Correos que fueron abiertos." />
+                              <MetricBadgeTip label="Clics" value={campaignNode.metrics.brevo_clicks} help="Correos donde se hizo clic en un enlace." />
+                              <MetricBadgeTip label="Visitas al sitio" value={campaignNode.metrics.sesiones_utm} help="Visitas a tu sitio originadas desde el correo." />
                             </>
                           ) : null}
                         </div>
@@ -1189,19 +1187,17 @@ export function CampanasMetricsClient() {
                                       </p>
                                     </div>
                                     <div className="flex flex-wrap gap-2 text-xs">
-                                      <Badge variant="outline">Totales: {templateNode.metrics.envios_totales}</Badge>
-                                      <Badge variant="outline">Enviados: {templateNode.metrics.envios_enviados}</Badge>
-                                      <Badge variant="outline">
-                                        {templateDeliveredLabel}: {templateNode.metrics.envios_entregados}
-                                      </Badge>
-                                      <Badge variant="outline">Respondidos: {templateNode.metrics.envios_respondidos}</Badge>
-                                      <Badge variant="outline">Fallidos: {templateNode.metrics.envios_fallidos}</Badge>
-                                      <Badge variant="outline">Omitidos: {templateNode.metrics.envios_omitidos}</Badge>
+                                      <MetricBadgeTip label="Totales" value={templateNode.metrics.envios_totales} help="Cantidad total de contactos incluidos en este nivel." />
+                                      <MetricBadgeTip label="Enviados" value={templateNode.metrics.envios_enviados} help="Mensajes que sí se intentaron enviar." />
+                                      <MetricBadgeTip label={templateDeliveredLabel} value={templateNode.metrics.envios_entregados} help="Mensajes que sí llegaron al destinatario." />
+                                      <MetricBadgeTip label="Respondidos" value={templateNode.metrics.envios_respondidos} help="Contactos que respondieron." />
+                                      <MetricBadgeTip label="Fallidos" value={templateNode.metrics.envios_fallidos} help="Mensajes que no se pudieron entregar." />
+                                      <MetricBadgeTip label="Omitidos" value={templateNode.metrics.envios_omitidos} help="Contactos que se saltaron por reglas o filtros." />
                                       {templateIsEmail ? (
                                         <>
-                                          <Badge variant="outline">Aperturas: {templateNode.metrics.brevo_aperturas}</Badge>
-                                          <Badge variant="outline">Clics: {templateNode.metrics.brevo_clicks}</Badge>
-                                          <Badge variant="outline">Sesiones UTM: {templateNode.metrics.sesiones_utm}</Badge>
+                                          <MetricBadgeTip label="Aperturas" value={templateNode.metrics.brevo_aperturas} help="Correos que fueron abiertos." />
+                                          <MetricBadgeTip label="Clics" value={templateNode.metrics.brevo_clicks} help="Correos donde se hizo clic en un enlace." />
+                                          <MetricBadgeTip label="Visitas al sitio" value={templateNode.metrics.sesiones_utm} help="Visitas a tu sitio originadas desde el correo." />
                                         </>
                                       ) : null}
                                     </div>
@@ -1245,22 +1241,20 @@ export function CampanasMetricsClient() {
                                                   </p>
                                                 </div>
                                                 <div className="flex flex-wrap gap-2 text-xs">
-                                                  <Badge variant="outline">Totales: {batchMetrics.totales}</Badge>
-                                                  <Badge variant="outline">Enviados: {batchMetrics.enviados}</Badge>
-                                                  <Badge variant="outline">
-                                                    {batchDeliveredLabel}: {batchMetrics.entregados}
-                                                  </Badge>
-                                                  <Badge variant="outline">Respondidos: {batchMetrics.respondidos}</Badge>
-                                                  <Badge variant="outline">Fallidos: {batchMetrics.fallidos}</Badge>
-                                                  <Badge variant="outline">Omitidos: {batchMetrics.omitidos}</Badge>
+                                                  <MetricBadgeTip label="Totales" value={batchMetrics.totales} help="Cantidad total de contactos incluidos en este nivel." />
+                                                  <MetricBadgeTip label="Enviados" value={batchMetrics.enviados} help="Mensajes que sí se intentaron enviar." />
+                                                  <MetricBadgeTip label={batchDeliveredLabel} value={batchMetrics.entregados} help="Mensajes que sí llegaron al destinatario." />
+                                                  <MetricBadgeTip label="Respondidos" value={batchMetrics.respondidos} help="Contactos que respondieron." />
+                                                  <MetricBadgeTip label="Fallidos" value={batchMetrics.fallidos} help="Mensajes que no se pudieron entregar." />
+                                                  <MetricBadgeTip label="Omitidos" value={batchMetrics.omitidos} help="Contactos que se saltaron por reglas o filtros." />
                                                   {batchIsEmail ? (
                                                     <>
-                                                      <Badge variant="outline">Aperturas: {batchMetrics.aperturas}</Badge>
-                                                      <Badge variant="outline">Clics: {batchMetrics.clicks}</Badge>
-                                                      <Badge variant="outline">Sesiones UTM: {batchMetrics.sesionesUtm}</Badge>
+                                                      <MetricBadgeTip label="Aperturas" value={batchMetrics.aperturas} help="Correos que fueron abiertos." />
+                                                      <MetricBadgeTip label="Clics" value={batchMetrics.clicks} help="Correos donde se hizo clic en un enlace." />
+                                                      <MetricBadgeTip label="Visitas al sitio" value={batchMetrics.sesionesUtm} help="Visitas a tu sitio originadas desde el correo." />
                                                     </>
                                                   ) : (
-                                                    <Badge variant="outline">Leídos: {batchMetrics.leidos}</Badge>
+                                                    <MetricBadgeTip label="Leídos" value={batchMetrics.leidos} help="Mensajes vistos por el contacto." />
                                                   )}
                                                 </div>
                                               </div>
@@ -1299,14 +1293,14 @@ export function CampanasMetricsClient() {
                                                               <Badge variant="outline">{envio.estado}</Badge>
                                                               {envioIsEmail ? (
                                                                 <>
-                                                                  <Badge variant="outline">Aperturas: {envioMetrics.aperturas}</Badge>
-                                                                  <Badge variant="outline">Clics: {envioMetrics.clicks}</Badge>
-                                                                  <Badge variant="outline">Sesión UTM: {envioMetrics.sesionUtm ? "Sí" : "No"}</Badge>
+                                                                  <MetricBadgeTip label="Aperturas" value={envioMetrics.aperturas} help="Si este correo fue abierto." />
+                                                                  <MetricBadgeTip label="Clics" value={envioMetrics.clicks} help="Si este correo recibió clic en enlace." />
+                                                                  <MetricBadgeTip label="Visita al sitio" value={envioMetrics.sesionUtm ? "Sí" : "No"} help="Si este clic terminó en una visita al sitio." />
                                                                 </>
                                                               ) : (
                                                                 <>
-                                                                  <Badge variant="outline">Respondido: {envioMetrics.respondido ? "Sí" : "No"}</Badge>
-                                                                  <Badge variant="outline">Leído: {envioMetrics.leido ? "Sí" : "No"}</Badge>
+                                                                  <MetricBadgeTip label="Respondido" value={envioMetrics.respondido ? "Sí" : "No"} help="Si este contacto respondió el mensaje." />
+                                                                  <MetricBadgeTip label="Leído" value={envioMetrics.leido ? "Sí" : "No"} help="Si este contacto vio el mensaje." />
                                                                 </>
                                                               )}
                                                             </div>
@@ -1925,6 +1919,21 @@ function MetricInlineTip({ label, value, help }: { label: string; value: string;
         <span className="cursor-help underline decoration-dotted underline-offset-2">
           {label}: {value}
         </span>
+      </TooltipTrigger>
+      <TooltipContent side="top" className="max-w-xs text-xs leading-snug">
+        {help}
+      </TooltipContent>
+    </Tooltip>
+  )
+}
+
+function MetricBadgeTip({ label, value, help }: { label: string; value: string | number; help: string }) {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Badge variant="outline" className="cursor-help">
+          {label}: {value}
+        </Badge>
       </TooltipTrigger>
       <TooltipContent side="top" className="max-w-xs text-xs leading-snug">
         {help}
