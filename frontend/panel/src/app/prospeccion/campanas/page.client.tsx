@@ -592,7 +592,8 @@ export function CampanasMetricsClient() {
   )
 
   const insertCorreoTrackedLink = useCallback(() => {
-    const htmlToken = '<a href="{{tracking_url}}" target="_blank" rel="noopener noreferrer">Visitar sitio</a>'
+    const htmlToken =
+      '<a href="{{tracking_url}}" target="_blank" rel="noopener noreferrer">Visitar Sitio {{website_url}}</a>'
     appendTemplateToken("cuerpoHtml", htmlToken)
   }, [appendTemplateToken])
 
