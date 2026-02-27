@@ -1831,6 +1831,54 @@ class ContactLogQuery(BaseModel):
     order: Literal["reciente", "antiguo"] = Field(default="reciente")
 
 
+class ContactSuppressionQuery(BaseModel):
+    """Filtros para listar suppressions/opt-out."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    limit: int = Field(default=200, ge=1, le=500)
+    offset: int = Field(default=0, ge=0, le=10_000)
+    canal: Literal["correo", "whatsapp", "llamada", "all", ""] | None = Field(default=None)
+    activo: bool | None = Field(default=None)
+
+
+class ContactSuppressionPayload(BaseModel):
+    """Registra una regla de opt-out por canal."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    canal: Literal["correo", "whatsapp", "llamada", "all"]
+    prospecto_id: UUID | None = None
+    email: str | None = Field(default=None, max_length=320)
+    phone_e164: str | None = Field(default=None, max_length=20)
+    motivo: str | None = Field(default=None, max_length=200)
+    origen: str | None = Field(default=None, max_length=80)
+    metadata: dict[str, Any] | None = Field(default=None)
+    activo: bool = True
+
+    @model_validator(mode="after")
+    def _ensure_target(self) -> "ContactSuppressionPayload":
+        if not self.prospecto_id and not _clean_text(self.email) and not _clean_text(self.phone_e164):
+            raise ValueError("suppression_target_required")
+        return self
+
+
+class ContactSuppressionUpdatePayload(BaseModel):
+    """Actualiza una regla de opt-out por canal."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    activo: bool | None = None
+    motivo: str | None = Field(default=None, max_length=200)
+    metadata: dict[str, Any] | None = Field(default=None)
+
+    @model_validator(mode="after")
+    def _ensure_changes(self) -> "ContactSuppressionUpdatePayload":
+        if self.activo is None and self.motivo is None and self.metadata is None:
+            raise ValueError("suppression_update_required")
+        return self
+
+
 class ContactTemplateQuery(BaseModel):
     """Filtros simples para listar plantillas."""
 
@@ -4624,6 +4672,58 @@ def _split_recontact_blocked_prospectos(
     return permitidos, bloqueados
 
 
+def _build_suppression_channel_map(rows: Sequence[dict[str, Any]]) -> dict[str, set[str]]:
+    """Indexa suppressions por prospecto y canal."""
+
+    index: dict[str, set[str]] = {}
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        prospecto_id = _clean_text(row.get("prospecto_id"))
+        canal = (_clean_text(row.get("canal")) or "").lower()
+        if not prospecto_id or not canal:
+            continue
+        index.setdefault(prospecto_id, set()).add(canal)
+    return index
+
+
+def _is_suppressed_for_channel(
+    suppression_map: dict[str, set[str]],
+    *,
+    prospecto_id: str,
+    canal: str,
+) -> bool:
+    blocked = suppression_map.get(prospecto_id)
+    if not blocked:
+        return False
+    canal_norm = canal.strip().lower()
+    return canal_norm in blocked or "all" in blocked
+
+
+def _attach_suppressions_to_prospectos(
+    prospectos: list[dict[str, Any]],
+    suppression_map: dict[str, set[str]],
+) -> list[dict[str, Any]]:
+    if not suppression_map:
+        return prospectos
+    enriched: list[dict[str, Any]] = []
+    for prospecto in prospectos:
+        prospecto_id = _clean_text(prospecto.get("id") or prospecto.get("prospecto_id"))
+        if not prospecto_id:
+            enriched.append(prospecto)
+            continue
+        channels = suppression_map.get(prospecto_id)
+        if not channels:
+            enriched.append(prospecto)
+            continue
+        metadata = _ensure_dict(prospecto.get("metadata"), default={})
+        metadata["prospeccion_suppressions"] = {channel: True for channel in channels}
+        next_row = dict(prospecto)
+        next_row["metadata"] = metadata
+        enriched.append(next_row)
+    return enriched
+
+
 def _build_contact_envios_entries(
     *,
     batch_id: Any,
@@ -4631,8 +4731,9 @@ def _build_contact_envios_entries(
     canales: dict[str, dict[str, Any]],
     programacion: dict[str, str] | None = None,
     separacion_segundos: int | None = None,
-) -> list[dict[str, Any]]:
+) -> tuple[list[dict[str, Any]], dict[str, list[str]]]:
     entries: list[dict[str, Any]] = []
+    suppressed_by_channel: dict[str, list[str]] = {}
     batch_value = str(batch_id)
     separacion_val = max(0, int(separacion_segundos or 0))
     base_now = datetime.now(UTC)
@@ -4654,6 +4755,7 @@ def _build_contact_envios_entries(
         prospecto_id = prospecto.get("id") or prospecto.get("prospecto_id")
         if not prospecto_id:
             continue
+        prospecto_id_text = str(prospecto_id)
         metadata = _ensure_dict(prospecto.get("metadata"), default={})
         detalle = {
             "display_name": prospecto.get("display_name"),
@@ -4668,9 +4770,19 @@ def _build_contact_envios_entries(
             "stage": metadata.get("stage"),
         }
         for canal, canal_payload in canales.items():
+            suppression_map = metadata.get("prospeccion_suppressions")
+            if isinstance(suppression_map, dict):
+                blocked = bool(
+                    suppression_map.get("all")
+                    or suppression_map.get(canal)
+                    or suppression_map.get(canal.strip().lower())
+                )
+                if blocked:
+                    suppressed_by_channel.setdefault(canal, []).append(prospecto_id_text)
+                    continue
             entry = {
                 "batch_id": batch_value,
-                "prospecto_id": str(prospecto_id),
+                "prospecto_id": prospecto_id_text,
                 "canal": canal,
                 "payload": canal_payload,
                 "detalle": detalle,
@@ -4683,7 +4795,7 @@ def _build_contact_envios_entries(
                 entry["programado_en"] = base_programado.isoformat()
             entries.append(entry)
             envio_index += 1
-    return entries
+    return entries, suppressed_by_channel
 
 
 def _build_contact_resumen(envios: Sequence[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -12858,6 +12970,95 @@ async def listar_contacto_logs(
     }
 
 
+@router.get("/prospeccion/contacto/suppressions")
+async def listar_contacto_suppressions(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    _: str = Depends(require_permission("ejecutar_busquedas")),
+    user_token: str = Depends(require_user_token),
+    params: ContactSuppressionQuery = Depends(),
+) -> dict[str, Any]:
+    """Lista reglas activas/inactivas de opt-out por canal."""
+
+    try:
+        rows, total = await repo.list_contact_suppressions(
+            usuario_token=user_token,
+            limit=params.limit,
+            offset=params.offset,
+            canal=params.canal or None,
+            activo=params.activo,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return {
+        "ok": True,
+        "items": rows,
+        "total": total,
+        "limit": params.limit,
+        "offset": params.offset,
+    }
+
+
+@router.post("/prospeccion/contacto/suppressions")
+async def crear_contacto_suppression(
+    *,
+    payload: ContactSuppressionPayload,
+    repo: CRMRepository = Depends(get_repository),
+    _: str = Depends(require_permission("ejecutar_busquedas")),
+    user_token: str = Depends(require_user_token),
+) -> dict[str, Any]:
+    """Crea una regla de opt-out para evitar contacto por canal."""
+
+    body = {
+        "canal": payload.canal,
+        "prospecto_id": str(payload.prospecto_id) if payload.prospecto_id else None,
+        "email": _normalize_email(payload.email),
+        "phone_e164": _clean_text(payload.phone_e164),
+        "motivo": _clean_text(payload.motivo),
+        "origen": _clean_text(payload.origen) or "manual",
+        "activo": payload.activo,
+        "metadata": payload.metadata or {},
+    }
+    body = {k: v for k, v in body.items() if v is not None}
+    try:
+        row = await repo.create_contact_suppression(
+            usuario_token=user_token,
+            payload=body,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return {"ok": True, "suppression": row}
+
+
+@router.patch("/prospeccion/contacto/suppressions/{suppression_id}")
+async def actualizar_contacto_suppression(
+    *,
+    suppression_id: UUID,
+    payload: ContactSuppressionUpdatePayload,
+    repo: CRMRepository = Depends(get_repository),
+    _: str = Depends(require_permission("ejecutar_busquedas")),
+    user_token: str = Depends(require_user_token),
+) -> dict[str, Any]:
+    """Actualiza una regla de opt-out."""
+
+    updates: dict[str, Any] = {}
+    if payload.activo is not None:
+        updates["activo"] = payload.activo
+    if payload.motivo is not None:
+        updates["motivo"] = _clean_text(payload.motivo)
+    if payload.metadata is not None:
+        updates["metadata"] = payload.metadata
+    try:
+        row = await repo.update_contact_suppression(
+            usuario_token=user_token,
+            suppression_id=suppression_id,
+            payload=updates,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return {"ok": True, "suppression": row}
+
+
 @router.get("/prospeccion/contacto/templates")
 async def listar_contacto_templates(
     *,
@@ -13599,7 +13800,25 @@ async def prospeccion_campana_update(
             },
         )
 
-    new_entries = _build_contact_envios_entries(
+    prospecto_ids: list[UUID] = []
+    for item in prospectos:
+        raw_id = item.get("id")
+        if not raw_id:
+            continue
+        try:
+            prospecto_ids.append(UUID(str(raw_id)))
+        except (TypeError, ValueError):
+            continue
+
+    suppressions = await repo.list_active_contact_suppressions_for_prospectos(
+        usuario_token=user_token,
+        prospecto_ids=prospecto_ids,
+        canales=list(canales_config.keys()),
+    )
+    suppression_map = _build_suppression_channel_map(suppressions)
+    prospectos = _attach_suppressions_to_prospectos(prospectos, suppression_map)
+
+    new_entries, suppressed_by_channel = _build_contact_envios_entries(
         batch_id=batch_id,
         prospectos=prospectos,
         canales=canales_config,
@@ -13614,6 +13833,10 @@ async def prospeccion_campana_update(
         metadata_existing["separacion_segundos"] = separacion_segundos
     if bloqueados:
         metadata_existing["recontacto_bloqueados"] = {"total": len(bloqueados)}
+    if suppressed_by_channel:
+        metadata_existing["suppressions_bloqueados"] = {
+            canal: len(ids) for canal, ids in suppressed_by_channel.items()
+        }
 
     batch_patch: dict[str, Any] = {
         "canales": list(canales_config.keys()),
@@ -13637,17 +13860,19 @@ async def prospeccion_campana_update(
         payload=batch_patch,
     )
     resumen = _build_contact_resumen(created_envios)
+    omitidos = []
+    if bloqueados:
+        omitidos.append({"motivo": "convertido_contacto", "prospecto_ids": bloqueados, "total": len(bloqueados)})
+    for canal, ids in suppressed_by_channel.items():
+        omitidos.append({"motivo": f"opt_out_{canal}", "prospecto_ids": ids, "total": len(ids)})
+
     return {
         "ok": True,
         "campana_id": str(campana_id),
         "batch_id": str(batch_id),
         "batch": updated_batch,
         "contactos": resumen,
-        "omitidos": (
-            [{"motivo": "convertido_contacto", "prospecto_ids": bloqueados, "total": len(bloqueados)}]
-            if bloqueados
-            else []
-        ),
+        "omitidos": omitidos,
     }
 
 
@@ -14477,6 +14702,22 @@ async def contactar_prospectos(
         )
         metadata_extra["recontacto_bloqueados"] = {"total": len(bloqueados)}
 
+    prospecto_uuid_ids: list[UUID] = []
+    for item in prospectos:
+        raw_id = item.get("id") or item.get("prospecto_id")
+        try:
+            if raw_id:
+                prospecto_uuid_ids.append(UUID(str(raw_id)))
+        except (TypeError, ValueError):
+            continue
+    suppressions = await repo.list_active_contact_suppressions_for_prospectos(
+        usuario_token=user_token,
+        prospecto_ids=prospecto_uuid_ids,
+        canales=list(canales_config.keys()),
+    )
+    suppression_map = _build_suppression_channel_map(suppressions)
+    prospectos = _attach_suppressions_to_prospectos(prospectos, suppression_map)
+
     try:
         batch = await repo.create_contact_batch(
             usuario_token=user_token,
@@ -14496,13 +14737,31 @@ async def contactar_prospectos(
     if not batch_id:
         raise HTTPException(status_code=502, detail="contact_batch_invalid")
 
-    envios_entries = _build_contact_envios_entries(
+    envios_entries, suppressed_by_channel = _build_contact_envios_entries(
         batch_id=batch_id,
         prospectos=prospectos,
         canales=canales_config,
         programacion=programacion,
         separacion_segundos=payload.separacion_segundos,
     )
+    if suppressed_by_channel:
+        for canal, ids in suppressed_by_channel.items():
+            omitidos.append(
+                {
+                    "motivo": f"opt_out_{canal}",
+                    "prospecto_ids": ids,
+                    "total": len(ids),
+                }
+            )
+        batch_meta = _ensure_dict(batch.get("metadata"), default={})
+        batch_meta["suppressions_bloqueados"] = {
+            canal: len(ids) for canal, ids in suppressed_by_channel.items()
+        }
+        await repo.update_contact_batch(
+            usuario_token=user_token,
+            batch_id=UUID(str(batch_id)),
+            payload={"metadata": batch_meta},
+        )
     try:
         envios = await repo.insert_contact_envios(
             usuario_token=user_token,

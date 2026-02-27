@@ -27,6 +27,8 @@ Validación complementaria: MCP Supabase (instancia actual).
   - Listas/filtros guardados.
 - `public.prospeccion_user_preferences`
   - Preferencias de UI por usuario para módulos de prospección.
+- `public.prospeccion_contacto_suppressions`
+  - Reglas de opt-out/suppressions por canal (correo/whatsapp/llamada/all).
 
 ## 2) Vistas y funciones clave
 

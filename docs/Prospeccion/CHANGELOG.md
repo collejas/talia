@@ -28,10 +28,17 @@ Formato recomendado por entrada:
   - `PUT /crm/prospeccion/prospectos/views`.
 - Persistencia multi-tenant por usuario para preferencias de UI de prospección.
 - Normalización de email en capa API al crear/editar prospectos (manual y desde resultados).
+- Suppressions/opt-out por canal:
+  - nuevos endpoints para listar/crear/actualizar reglas (`/prospeccion/contacto/suppressions`).
+  - aplicación de suppressions durante `contactar_prospectos` y actualización de campañas.
+  - enforcement adicional en worker al procesar envíos (evita salida si hay opt-out activo).
+  - webhook Brevo `unsubscribe` ahora crea suppression de correo automáticamente.
 
 ### Base de datos
 - Nueva tabla:
   - `public.prospeccion_user_preferences` (RLS + índices + triggers).
+- Nueva tabla:
+  - `public.prospeccion_contacto_suppressions` (RLS + índices + triggers).
 - Normalización de correos:
   - trigger `BEFORE INSERT/UPDATE` en `public.prospeccion_prospectos`.
   - backfill para pasar correos existentes a minúsculas.

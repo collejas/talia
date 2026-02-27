@@ -8344,6 +8344,128 @@ class CRMRepository:
         total = self._extract_total_count(resp.headers.get("content-range")) or len(data)
         return data, total
 
+    async def list_contact_suppressions(
+        self,
+        *,
+        usuario_token: str,
+        limit: int = 200,
+        offset: int = 0,
+        canal: str | None = None,
+        activo: bool | None = None,
+    ) -> tuple[list[dict[str, Any]], int]:
+        """Lista suppressions/opt-out de prospección."""
+
+        params: dict[str, str] = {
+            "select": "*",
+            "limit": str(max(1, min(limit, 500))),
+            "offset": str(max(0, offset)),
+            "order": "actualizado_en.desc,creado_en.desc",
+        }
+        if canal:
+            params["canal"] = f"eq.{canal}"
+        if activo is not None:
+            params["activo"] = f"eq.{str(activo).lower()}"
+        resp = await self._request_with_user(
+            "GET",
+            "/rest/v1/prospeccion_contacto_suppressions",
+            token=usuario_token,
+            params=params,
+            prefer="count=exact",
+        )
+        data = resp.json() or []
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"contact_suppressions_invalid:{data!r}")
+        total = self._extract_total_count(resp.headers.get("content-range")) or len(data)
+        return data, total
+
+    async def create_contact_suppression(
+        self,
+        *,
+        usuario_token: str,
+        payload: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Crea una suppression/opt-out."""
+
+        resp = await self._request_with_user(
+            "POST",
+            "/rest/v1/prospeccion_contacto_suppressions",
+            token=usuario_token,
+            json=[payload],
+            prefer="return=representation",
+        )
+        data = resp.json() or []
+        if not isinstance(data, list) or not data:
+            raise CRMRepositoryError("contact_suppression_create_failed")
+        row = data[0]
+        if not isinstance(row, dict):
+            raise CRMRepositoryError(f"contact_suppression_create_invalid:{row!r}")
+        return row
+
+    async def update_contact_suppression(
+        self,
+        *,
+        usuario_token: str,
+        suppression_id: UUID,
+        payload: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Actualiza una suppression/opt-out."""
+
+        resp = await self._request_with_user(
+            "PATCH",
+            "/rest/v1/prospeccion_contacto_suppressions",
+            token=usuario_token,
+            params={"id": f"eq.{suppression_id}"},
+            json=payload,
+            prefer="return=representation",
+        )
+        data = resp.json() or []
+        if not isinstance(data, list) or not data:
+            raise CRMRepositoryError("contact_suppression_update_failed")
+        row = data[0]
+        if not isinstance(row, dict):
+            raise CRMRepositoryError(f"contact_suppression_update_invalid:{row!r}")
+        return row
+
+    async def list_active_contact_suppressions_for_prospectos(
+        self,
+        *,
+        usuario_token: str,
+        prospecto_ids: Sequence[UUID],
+        canales: Sequence[str],
+    ) -> list[dict[str, Any]]:
+        """Obtiene suppressions activas por prospecto/canal."""
+
+        if not prospecto_ids or not canales:
+            return []
+        ids_param = ",".join(str(value) for value in prospecto_ids)
+        canal_values = sorted(
+            {
+                value.strip().lower()
+                for value in canales
+                if isinstance(value, str) and value.strip()
+            }
+        )
+        if not canal_values:
+            return []
+        canal_values.append("all")
+        params = {
+            "select": "id,prospecto_id,canal,motivo,origen,metadata",
+            "activo": "eq.true",
+            "prospecto_id": f"in.({ids_param})",
+            "canal": _postgrest_in_clause(canal_values),
+            "limit": "5000",
+        }
+        resp = await self._request_with_user(
+            "GET",
+            "/rest/v1/prospeccion_contacto_suppressions",
+            token=usuario_token,
+            params=params,
+        )
+        data = resp.json() or []
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"contact_suppression_by_prospect_invalid:{data!r}")
+        return data
+
     async def list_prospecto_contact_indicators(
         self,
         *,
@@ -8792,6 +8914,71 @@ class CRMRepository:
         row = data[0]
         if not isinstance(row, dict):
             raise CRMRepositoryError(f"worker_get_latest_envio_by_phone_invalid:{row!r}")
+        return row
+
+    async def worker_find_active_contact_suppression(
+        self,
+        *,
+        organizacion_id: UUID,
+        canal: str,
+        prospecto_id: UUID | None = None,
+        email: str | None = None,
+        phone_e164: str | None = None,
+    ) -> dict[str, Any] | None:
+        """Busca una suppression activa para el objetivo/canal indicado."""
+
+        canal_norm = canal.strip().lower()
+        canal_match = f"(canal.eq.{canal_norm},canal.eq.all)"
+        base_params = {
+            "select": "id,canal,motivo,origen,metadata",
+            "organizacion_id": f"eq.{organizacion_id}",
+            "activo": "eq.true",
+            "or": canal_match,
+            "order": "actualizado_en.desc,creado_en.desc",
+            "limit": "1",
+        }
+        checks: list[dict[str, str]] = []
+        if prospecto_id:
+            checks.append({**base_params, "prospecto_id": f"eq.{prospecto_id}"})
+        if email:
+            checks.append({**base_params, "email": f"eq.{email.strip().lower()}"})
+        if phone_e164:
+            checks.append({**base_params, "phone_e164": f"eq.{phone_e164.strip()}"})
+
+        for params in checks:
+            resp = await self._request(
+                "GET",
+                "/rest/v1/prospeccion_contacto_suppressions",
+                params=params,
+            )
+            data = resp.json() or []
+            if not isinstance(data, list) or not data:
+                continue
+            row = data[0]
+            if not isinstance(row, dict):
+                raise CRMRepositoryError(f"worker_contact_suppression_invalid:{row!r}")
+            return row
+        return None
+
+    async def worker_create_contact_suppression(
+        self,
+        *,
+        payload: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Crea una suppression usando service-role."""
+
+        resp = await self._request(
+            "POST",
+            "/rest/v1/prospeccion_contacto_suppressions",
+            json=[payload],
+            prefer="return=representation",
+        )
+        data = resp.json() or []
+        if not isinstance(data, list) or not data:
+            raise CRMRepositoryError("worker_contact_suppression_create_failed")
+        row = data[0]
+        if not isinstance(row, dict):
+            raise CRMRepositoryError(f"worker_contact_suppression_create_invalid:{row!r}")
         return row
 
     async def worker_insert_contact_logs(self, entries: Sequence[dict[str, Any]]) -> None:

@@ -806,8 +806,50 @@ class ProspeccionContactSender:
             org_uuid = UUID(str(org_value)) if org_value else None
         except (TypeError, ValueError):
             org_uuid = None
+        prospecto_uuid: UUID | None = None
+        raw_prospecto_id = envio.get("prospecto_id")
+        if raw_prospecto_id:
+            try:
+                prospecto_uuid = UUID(str(raw_prospecto_id))
+            except (TypeError, ValueError):
+                prospecto_uuid = None
 
-        if canal == "correo":
+        if org_uuid and canal in {"correo", "whatsapp", "llamada"}:
+            suppression = await repo.worker_find_active_contact_suppression(
+                organizacion_id=org_uuid,
+                canal=canal,
+                prospecto_id=prospecto_uuid,
+                email=_clean_text(detalle.get("email")),
+                phone_e164=_clean_text(detalle.get("phone")),
+            )
+            if suppression:
+                result = ContactEnvioResult(
+                    estado="omitido",
+                    detalle={
+                        "reason": "opt_out",
+                        "suppression_id": suppression.get("id"),
+                        "suppression_canal": suppression.get("canal"),
+                        "suppression_motivo": suppression.get("motivo"),
+                        "suppression_origen": suppression.get("origen"),
+                    },
+                    error=None,
+                    retryable=False,
+                )
+            elif canal == "correo":
+                result = await _run_envio_correo(
+                    detalle,
+                    payload,
+                    organizacion_id=org_uuid,
+                )
+            elif canal == "whatsapp":
+                result = await _run_envio_whatsapp(
+                    detalle,
+                    payload,
+                    organizacion_id=org_uuid,
+                )
+            else:
+                result = await _run_envio_llamada(detalle, payload)
+        elif canal == "correo":
             result = await _run_envio_correo(
                 detalle,
                 payload,

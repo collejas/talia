@@ -60,8 +60,11 @@ Repositorio principal: `backend/app/repositories/crm.py`
 - `GET /crm/prospeccion/contacto/envios`
 - `POST /crm/prospeccion/contacto/envios/{envio_id}/reintentar`
 - `GET /crm/prospeccion/contacto/logs`
+- `GET /crm/prospeccion/contacto/suppressions`
 - `GET /crm/prospeccion/contacto/templates`
 - `POST /crm/prospeccion/contacto/templates`
+- `POST /crm/prospeccion/contacto/suppressions`
+- `PATCH /crm/prospeccion/contacto/suppressions/{suppression_id}`
 - `PATCH /crm/prospeccion/contacto/templates/{template_id}`
 - `DELETE /crm/prospeccion/contacto/templates/{template_id}`
 - `GET /crm/prospeccion/contacto/listas`

@@ -11,7 +11,6 @@ Este archivo sirve para capturar próximos requerimientos sin mezclar historial 
 - Resolver nombre amigable de consulta por `busqueda_id` en toda la app.
 
 3. Campañas y contacto
-- Reglas de suppressions/opt-out por canal.
 - Dashboard de conversión por fuente (`google_places`, `denue`, `usuario`).
 - Asistente IA especializado en prospección:
   - Mantener assistant operativo actual para conversaciones no comerciales de prospección.

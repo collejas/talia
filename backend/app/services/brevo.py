@@ -132,6 +132,43 @@ async def process_brevo_events(
                     envio_id=str(envio_uuid),
                 )
                 continue
+            event_name = _clean_text(event.get("event")) or ""
+            if event_name.lower() == "unsubscribe":
+                raw_org = envio.get("organizacion_id")
+                try:
+                    org_uuid = UUID(str(raw_org)) if raw_org else None
+                except (TypeError, ValueError):
+                    org_uuid = None
+                suppression_email = _clean_text(event.get("email")) or _clean_text(
+                    (envio.get("detalle") if isinstance(envio.get("detalle"), dict) else {}).get("email")
+                )
+                if org_uuid and suppression_email:
+                    try:
+                        await repo.worker_create_contact_suppression(
+                            payload={
+                                "organizacion_id": str(org_uuid),
+                                "canal": "correo",
+                                "prospecto_id": (
+                                    str(envio.get("prospecto_id")) if envio.get("prospecto_id") else None
+                                ),
+                                "email": suppression_email.lower(),
+                                "motivo": "brevo_unsubscribe",
+                                "origen": "brevo_webhook",
+                                "activo": True,
+                                "metadata": {
+                                    "event": event.get("event"),
+                                    "message_id": message_id,
+                                    "date": event.get("date"),
+                                },
+                            }
+                        )
+                    except CRMRepositoryError as exc:
+                        log_event(
+                            logger,
+                            "brevo.webhook_suppression_create_failed",
+                            error=str(exc),
+                            email=suppression_email,
+                        )
             metrics.increment("correo", estado)
             batch_id_value = envio.get("batch_id")
             if batch_id_value:
