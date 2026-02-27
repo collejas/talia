@@ -43,6 +43,24 @@ const fuenteLabel: Record<string, string> = {
   usuario: "Usuario",
 }
 
+const brevoEventLabel: Record<string, string> = {
+  request: "Enviado",
+  processed: "Procesado",
+  deferred: "Diferido",
+  delivered: "Entregado",
+  opened: "Apertura",
+  unique_opened: "Primera apertura",
+  click: "Clic",
+  unique_click: "Primer clic",
+  soft_bounce: "Rebote suave",
+  hard_bounce: "Rebote duro",
+  blocked: "Bloqueado",
+  spam: "Spam",
+  invalid: "Inválido",
+  error: "Error",
+  unsubscribe: "Unsubscribe",
+}
+
 const envioEstadoVariant: Record<string, "default" | "secondary" | "outline" | "destructive"> = {
   pendiente: "secondary",
   procesando: "secondary",
@@ -285,6 +303,7 @@ export default function ContactosPageClient() {
     const sourceOrder = ["google_places", "denue", "usuario"]
     return [...rows].sort((a, b) => sourceOrder.indexOf(a.fuente) - sourceOrder.indexOf(b.fuente))
   }, [metrics?.conversion_por_fuente])
+  const brevoEntries = useMemo(() => metrics?.brevo_eventos ?? [], [metrics?.brevo_eventos])
 
   return (
     <div className="space-y-6">
@@ -432,6 +451,28 @@ export default function ContactosPageClient() {
             </div>
           ) : (
             <p className="text-sm text-muted-foreground">Aún no hay datos de conversión por fuente.</p>
+          )}
+        </CardContent>
+      </Card>
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base font-semibold">Eventos Brevo</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {brevoEntries.length ? (
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {brevoEntries.map((item) => (
+                <div key={item.evento} className="rounded-lg border p-3">
+                  <p className="text-xs uppercase tracking-wide text-muted-foreground">
+                    {brevoEventLabel[item.evento] ?? item.evento}
+                  </p>
+                  <p className="text-xl font-bold">{item.total}</p>
+                  <p className="text-xs text-muted-foreground">Último: {formatDate(item.ultimo_evento_en)}</p>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-sm text-muted-foreground">Aún no hay eventos Brevo registrados.</p>
           )}
         </CardContent>
       </Card>

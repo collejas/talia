@@ -62,7 +62,9 @@ Repositorio principal: `backend/app/repositories/crm.py`
 - `GET /crm/prospeccion/contacto/logs`
 - `GET /crm/prospeccion/contacto/suppressions`
 - `GET /crm/prospeccion/contacto/templates`
+- `GET /crm/prospeccion/contacto/templates/brevo-catalog`
 - `POST /crm/prospeccion/contacto/templates`
+- `POST /crm/prospeccion/contacto/templates/import-brevo`
 - `POST /crm/prospeccion/contacto/suppressions`
 - `PATCH /crm/prospeccion/contacto/suppressions/{suppression_id}`
 - `PATCH /crm/prospeccion/contacto/templates/{template_id}`
@@ -73,6 +75,7 @@ Repositorio principal: `backend/app/repositories/crm.py`
 - `DELETE /crm/prospeccion/contacto/listas/{lista_id}`
 - `GET /crm/prospeccion/contacto/metrics`
   - Incluye `conversion_por_fuente` (`google_places`, `denue`, `usuario`) con base persistente vía RPC SQL.
+  - Incluye `brevo_eventos` agregados desde logs persistentes de prospección.
 - `GET /crm/prospeccion/whatsapp/readiness`
 - `POST /crm/prospeccion/contacto/brevo/webhook`
 - `GET /crm/prospeccion/campanas`

@@ -75,6 +75,11 @@ from app.services.google_search_jobs import GOOGLE_SEARCH_JOB_MANAGER, GoogleSea
 from app.services.buscador_runner import BuscadorParams
 from app.services.calendar import CalendarError
 from app.services.brevo import process_brevo_events
+from app.services.brevo_templates import (
+    BrevoTemplateServiceError,
+    get_brevo_smtp_template,
+    list_brevo_smtp_templates,
+)
 from app.services.catalog_embeddings import CatalogEmbeddingService
 from app.services.catalog_fraccionamientos import (
     list_catalog_fraccionamientos as list_fraccionamientos,
@@ -1884,6 +1889,25 @@ class ContactTemplateQuery(BaseModel):
 
     canal: Literal["correo", "whatsapp", "llamada", ""] | None = Field(default=None)
     campana_id: UUID | None = Field(default=None)
+
+
+class BrevoTemplateCatalogQuery(BaseModel):
+    """Filtros para consultar catálogo de plantillas SMTP en Brevo."""
+
+    limit: int = Field(default=50, ge=1, le=100)
+    search: str | None = Field(default=None, max_length=120)
+
+
+class BrevoTemplateImportPayload(BaseModel):
+    """Importa una plantilla de Brevo al catálogo local de prospección."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    brevo_template_id: int = Field(..., ge=1)
+    campana_id: UUID
+    slug: str | None = Field(default=None, max_length=160)
+    nombre: str | None = Field(default=None, max_length=160)
+    descripcion: str | None = Field(default=None, max_length=400)
 
 
 class ProspectoAuditEntryResponse(BaseModel):
@@ -13142,6 +13166,134 @@ async def listar_contacto_templates(
     return {"ok": True, "items": items}
 
 
+@router.get("/prospeccion/contacto/templates/brevo-catalog")
+async def listar_brevo_templates_catalogo(
+    *,
+    _: str = Depends(require_permission("ejecutar_busquedas")),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    params: BrevoTemplateCatalogQuery = Depends(),
+) -> dict[str, Any]:
+    """Lista plantillas SMTP disponibles en Brevo para importación."""
+
+    brevo_settings = await tenant_runtime.get_brevo_runtime_settings(organizacion_id=organizacion_id)
+    if not _clean_text(brevo_settings.api_key):
+        raise HTTPException(status_code=400, detail="brevo_not_configured")
+    try:
+        items = await list_brevo_smtp_templates(
+            api_key=str(brevo_settings.api_key),
+            base_url=brevo_settings.base_url,
+            limit=params.limit,
+        )
+    except BrevoTemplateServiceError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    search = _clean_text(params.search)
+    if search:
+        search_lower = search.lower()
+        items = [
+            item
+            for item in items
+            if search_lower in str(item.get("name") or "").lower()
+            or search_lower in str(item.get("subject") or "").lower()
+        ]
+
+    return {"ok": True, "items": items}
+
+
+@router.post("/prospeccion/contacto/templates/import-brevo")
+async def importar_brevo_template(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    _: str = Depends(require_permission("ejecutar_busquedas")),
+    user_token: str = Depends(require_user_token),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    payload: BrevoTemplateImportPayload,
+) -> dict[str, Any]:
+    """Importa o sincroniza una plantilla Brevo dentro de plantillas de contacto."""
+
+    campana = await repo.get_campaign(organizacion_id=organizacion_id, campana_id=payload.campana_id)
+    if not campana:
+        raise HTTPException(status_code=404, detail="campana_not_found")
+    campana_canal = _clean_text(campana.get("canal")).lower()
+    if campana_canal != "correo":
+        raise HTTPException(status_code=400, detail="template_canal_mismatch_with_campana")
+
+    brevo_settings = await tenant_runtime.get_brevo_runtime_settings(organizacion_id=organizacion_id)
+    if not _clean_text(brevo_settings.api_key):
+        raise HTTPException(status_code=400, detail="brevo_not_configured")
+
+    try:
+        remote = await get_brevo_smtp_template(
+            api_key=str(brevo_settings.api_key),
+            base_url=brevo_settings.base_url,
+            template_id=payload.brevo_template_id,
+        )
+    except BrevoTemplateServiceError as exc:
+        detail = str(exc)
+        if detail == "brevo_template_not_found":
+            raise HTTPException(status_code=404, detail=detail) from exc
+        raise HTTPException(status_code=502, detail=detail) from exc
+
+    nombre = _clean_text(payload.nombre) or _clean_text(remote.get("name")) or f"Brevo {payload.brevo_template_id}"
+    slug = _clean_text(payload.slug) or _slugify(nombre) or f"brevo-{payload.brevo_template_id}"
+    html_content = _clean_text(remote.get("html_content"))
+    text_content = _html_to_text(html_content) if html_content else None
+    metadata = {
+        "campana_id": str(payload.campana_id),
+        "template_source": "brevo.smtp",
+        "brevo_template_id": str(payload.brevo_template_id),
+        "brevo_template_name": _clean_text(remote.get("name")),
+        "brevo_updated_at": _clean_text(remote.get("updated_at")),
+        "brevo_is_active": bool(remote.get("is_active")),
+        "brevo_synced_at": datetime.now(timezone.utc).isoformat(),
+    }
+
+    local_templates = await repo.list_contact_templates(usuario_token=user_token, canal="correo")
+    current_template: dict[str, Any] | None = None
+    for item in local_templates:
+        if not isinstance(item, dict):
+            continue
+        current_meta = item.get("metadata") if isinstance(item.get("metadata"), dict) else {}
+        if _clean_text(current_meta.get("campana_id")) != str(payload.campana_id):
+            continue
+        if _clean_text(current_meta.get("brevo_template_id")) != str(payload.brevo_template_id):
+            continue
+        current_template = item
+        break
+
+    template_payload = _build_contact_template_payload(
+        {
+            "canal": "correo",
+            "nombre": nombre,
+            "slug": slug,
+            "descripcion": _clean_text(payload.descripcion) or "Importada desde Brevo",
+            "asunto": _clean_text(remote.get("subject")),
+            "cuerpo_texto": text_content,
+            "cuerpo_html": html_content,
+            "metadata": metadata,
+            "activo": True,
+        },
+        include_metadata=True,
+    )
+
+    try:
+        if current_template and current_template.get("id"):
+            template = await repo.update_contact_template(
+                usuario_token=user_token,
+                template_id=UUID(str(current_template["id"])),
+                payload=template_payload,
+            )
+        else:
+            template = await repo.create_contact_template(
+                usuario_token=user_token,
+                payload=template_payload,
+            )
+    except (ValueError, CRMRepositoryError) as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    return {"ok": True, "template": template}
+
+
 @router.get(
     "/prospeccion/whatsapp/readiness",
     response_model=ProspeccionWhatsappReadiness,
@@ -15001,6 +15153,11 @@ async def obtener_metrics_contacto(
         conversion_rows = await repo.get_prospeccion_conversion_fuente(usuario_token=user_token)
     except CRMRepositoryError as exc:
         logger.warning("prospeccion.metrics.conversion_fuente_failed", extra={"error": str(exc)})
+    brevo_rows: list[dict[str, Any]] = []
+    try:
+        brevo_rows = await repo.get_prospeccion_brevo_eventos_resumen(usuario_token=user_token)
+    except CRMRepositoryError as exc:
+        logger.warning("prospeccion.metrics.brevo_eventos_failed", extra={"error": str(exc)})
 
     conversion_por_fuente: list[dict[str, Any]] = []
     for row in conversion_rows:
@@ -15018,10 +15175,24 @@ async def obtener_metrics_contacto(
             }
         )
 
+    brevo_eventos: list[dict[str, Any]] = []
+    for row in brevo_rows:
+        evento = _clean_text(row.get("evento"))
+        if not evento:
+            continue
+        brevo_eventos.append(
+            {
+                "evento": evento,
+                "total": int(row.get("total") or 0),
+                "ultimo_evento_en": row.get("ultimo_evento_en"),
+            }
+        )
+
     return {
         "ok": True,
         "canales": transformado,
         "conversion_por_fuente": conversion_por_fuente,
+        "brevo_eventos": brevo_eventos,
     }
 
 

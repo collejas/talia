@@ -21,6 +21,9 @@ Formato recomendado por entrada:
   - prioridad de etiqueta legible (`query/busqueda_query`) sobre fallback técnico.
 - `prospeccion/contactos`:
   - nueva tarjeta de conversión por fuente (`Google Places`, `DENUE`, `Usuario`) con porcentajes de contacto y conversión a contacto CRM.
+  - nueva tarjeta de eventos Brevo (delivered/opened/click/bounce/spam/unsubscribe) con timestamp del último evento por tipo.
+- `prospeccion/campanas`:
+  - importación de plantillas de correo desde catálogo Brevo (botón `Importar` por plantilla).
 - Proxy nuevo:
   - `GET/PUT /api/prospeccion/prospectos/preferences`.
   - `GET/PUT /api/prospeccion/prospectos/views`.
@@ -40,6 +43,10 @@ Formato recomendado por entrada:
   - webhook Brevo `unsubscribe` ahora crea suppression de correo automáticamente.
 - `GET /crm/prospeccion/contacto/metrics`:
   - incorpora `conversion_por_fuente` con base persistente (RPC) en lugar de cálculo in-memory.
+  - incorpora `brevo_eventos` agregados desde logs persistentes de prospección.
+- Nuevos endpoints Brevo para plantillas de correo:
+  - `GET /crm/prospeccion/contacto/templates/brevo-catalog` (lectura catálogo SMTP).
+  - `POST /crm/prospeccion/contacto/templates/import-brevo` (import/sync a plantilla local ligada a campaña de correo).
 
 ### Base de datos
 - Nueva tabla:
@@ -48,6 +55,8 @@ Formato recomendado por entrada:
   - `public.prospeccion_contacto_suppressions` (RLS + índices + triggers).
 - Nueva función SQL:
   - `public.prospeccion_conversion_fuente()` para agregación de conversión por fuente.
+- Nueva función SQL:
+  - `public.prospeccion_brevo_eventos_resumen()` para agregación de eventos Brevo por tipo.
 - Normalización de correos:
   - trigger `BEFORE INSERT/UPDATE` en `public.prospeccion_prospectos`.
   - backfill para pasar correos existentes a minúsculas.

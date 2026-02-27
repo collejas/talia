@@ -45,11 +45,13 @@ Ruta base: `frontend/panel/src/app/prospeccion`
 - Estado de lotes y envíos.
 - Reintentos, cancelación, seguimiento por estado.
 - Dashboard de conversión por fuente (`Google Places`, `DENUE`, `Usuario`) con base persistente.
+- Dashboard de eventos Brevo (enviado/entregado/aperturas/clics/rebotes/spam/unsubscribe).
 
 ### `campanas`
 - Agrupación por campaña.
 - Duplicación de configuración.
 - KPIs por canal.
+- Plantillas de correo: importación desde catálogo Brevo (lectura API + alta/sync local por campaña).
 
 ## Clientes frontend usados
 

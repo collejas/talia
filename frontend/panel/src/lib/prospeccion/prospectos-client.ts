@@ -345,6 +345,14 @@ export type ContactoTemplate = {
   metadata?: Record<string, unknown> | null
 }
 
+export type BrevoCatalogTemplate = {
+  id: number
+  name: string
+  subject?: string | null
+  is_active: boolean
+  updated_at?: string | null
+}
+
 export type ProspectoManualInput = {
   display_name: string
   actividad?: string | null
@@ -916,6 +924,26 @@ export async function deleteContactoTemplate(templateId: string) {
   })
 }
 
+export async function listBrevoCatalogTemplates(params: { limit?: number; search?: string } = {}) {
+  const url = buildClientUrl("/api/prospeccion/contacto/templates/brevo-catalog")
+  if (typeof params.limit === "number") url.searchParams.set("limit", String(params.limit))
+  if (params.search?.trim()) url.searchParams.set("search", params.search.trim())
+  return requestJson<{ ok: boolean; items: BrevoCatalogTemplate[] }>(url.toString())
+}
+
+export async function importBrevoContactoTemplate(payload: {
+  brevo_template_id: number
+  campana_id: string
+  slug?: string | null
+  nombre?: string | null
+  descripcion?: string | null
+}) {
+  return requestJson<{ ok: boolean; template: ContactoTemplate }>("/api/prospeccion/contacto/templates/import-brevo", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  })
+}
+
 export async function getContactoBatchResumen(batchId: string) {
   return requestJson<ContactoBatchResumen>(`/api/prospeccion/contacto/batches/${batchId}`)
 }
@@ -956,6 +984,11 @@ export type ContactoMetrics = {
     prospectos_convertidos: number
     conversion_contacto_pct: number
     conversion_convertido_pct: number
+  }>
+  brevo_eventos?: Array<{
+    evento: string
+    total: number
+    ultimo_evento_en?: string | null
   }>
 }
 

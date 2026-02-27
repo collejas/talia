@@ -8690,6 +8690,24 @@ class CRMRepository:
             raise CRMRepositoryError(f"prospeccion_conversion_fuente_invalid:{data!r}")
         return [row for row in data if isinstance(row, dict)]
 
+    async def get_prospeccion_brevo_eventos_resumen(
+        self,
+        *,
+        usuario_token: str,
+    ) -> list[dict[str, Any]]:
+        """Obtiene resumen de eventos Brevo registrados en logs de prospección."""
+
+        resp = await self._request_with_user(
+            "POST",
+            "/rest/v1/rpc/prospeccion_brevo_eventos_resumen",
+            token=usuario_token,
+            json={},
+        )
+        data = resp.json() or []
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"prospeccion_brevo_eventos_resumen_invalid:{data!r}")
+        return [row for row in data if isinstance(row, dict)]
+
     async def cancel_pending_envios(
         self,
         *,

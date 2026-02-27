@@ -14,8 +14,7 @@ Este archivo sirve para capturar próximos requerimientos sin mezclar historial 
 - Asistente IA especializado en prospección:
   - Mantener assistant operativo actual para conversaciones no comerciales de prospección.
 - Correo de prospección (Brevo):
-  - Fase 2 (evolutiva): integrar catálogo/sync de plantillas vía API de Brevo (lectura/gestión desde app; Fase 1 ya operativa).
-  - Medición y estadísticas: persistir y mostrar en app eventos de Brevo (enviado, entregado, primera apertura, aperturas, clics, rebotes, bloqueado, spam, unsubscribe, error).
+  - Fase 2 (evolutiva): completar sync avanzado de plantillas vía API de Brevo (edición/publicación remota y reconciliación masiva; catálogo/import ya operativo).
 - Atribución por campaña:
   - Completar reporte persistente por campaña/plantilla (evitar métricas in-memory).
   - Correo: consolidar medición de sesiones/clics por UTM + ids técnicos.
@@ -110,3 +109,8 @@ Por cada cambio nuevo:
   - resolución de nombre amigable de consulta por `busqueda_id` en `prospeccion/prospectos`, `prospeccion/contactos` y `prospeccion/campanas` (sin fallback visual a UUID técnico).
 - `prospeccion/contactos`:
   - dashboard de conversión por fuente (`google_places`, `denue`, `usuario`) con cálculo persistente (RPC SQL).
+- Correo prospección (Brevo):
+  - catálogo de plantillas SMTP en backend (`/prospeccion/contacto/templates/brevo-catalog`).
+  - importación/sync de plantilla Brevo a plantilla local de campaña (`/prospeccion/contacto/templates/import-brevo`).
+  - UI en `prospeccion/campanas` para importar plantillas de correo desde Brevo.
+  - métricas persistentes de eventos en `prospeccion/contactos` (resumen por evento desde `prospeccion_contactos_log`).

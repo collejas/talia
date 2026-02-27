@@ -17,12 +17,15 @@ import {
   createContactoTemplate,
   deleteContactoTemplate,
   deleteProspeccionCampana,
+  importBrevoContactoTemplate,
+  listBrevoCatalogTemplates,
   listContactoTemplates,
   listCrmCampaigns,
   updateContactoTemplate,
   updateProspeccionCampana,
   getProspeccionCampanas,
   listProspectosQueryMetadata,
+  type BrevoCatalogTemplate,
   type CrmCampaign,
   type ContactoTemplate,
   type ProspeccionCampanaGroup,
@@ -65,6 +68,9 @@ export function CampanasMetricsClient() {
   const [templateDeletingId, setTemplateDeletingId] = useState<string | null>(null)
   const [templateError, setTemplateError] = useState<string | null>(null)
   const [queryLabelMap, setQueryLabelMap] = useState<Record<string, string>>({})
+  const [brevoCatalog, setBrevoCatalog] = useState<BrevoCatalogTemplate[]>([])
+  const [brevoLoading, setBrevoLoading] = useState(false)
+  const [brevoImportingId, setBrevoImportingId] = useState<number | null>(null)
   const [tenantBaseUrl, setTenantBaseUrl] = useState<string>("")
   const [logos, setLogos] = useState<LogoAsset[]>([])
   const [logosLoading, setLogosLoading] = useState(false)
@@ -448,6 +454,25 @@ export function CampanasMetricsClient() {
     }
   }, [])
 
+  const loadBrevoCatalog = useCallback(async (canalOverride?: "correo" | "whatsapp" | "llamada" | null) => {
+    const effectiveCanal = canalOverride ?? templatesCampanaCanal
+    if (!effectiveCanal || effectiveCanal !== "correo") {
+      setBrevoCatalog([])
+      return
+    }
+    setBrevoLoading(true)
+    try {
+      const response = await listBrevoCatalogTemplates({ limit: 50 })
+      setBrevoCatalog(Array.isArray(response?.items) ? response.items : [])
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "No se pudo cargar el catálogo Brevo."
+      setTemplateError(message)
+      setBrevoCatalog([])
+    } finally {
+      setBrevoLoading(false)
+    }
+  }, [templatesCampanaCanal])
+
   const handleManageTemplates = useCallback(
     async (campanaId: string, campanaNombre?: string | null) => {
       const campaign = crmCampaigns.find((item) => item.id === campanaId)
@@ -475,8 +500,13 @@ export function CampanasMetricsClient() {
       })
       setTemplatesDialogOpen(true)
       await loadCampaignTemplates(campanaId)
+      if (canal === "correo") {
+        await loadBrevoCatalog(canal)
+      } else {
+        setBrevoCatalog([])
+      }
     },
-    [crmCampaigns, loadCampaignTemplates]
+    [crmCampaigns, loadBrevoCatalog, loadCampaignTemplates]
   )
 
   const handleTemplateEdit = useCallback((template: ContactoTemplate) => {
@@ -600,6 +630,31 @@ export function CampanasMetricsClient() {
       }
     },
     [loadCampaignTemplates, resetTemplateForm, templateForm.id, templatesCampanaId]
+  )
+
+  const handleImportBrevoTemplate = useCallback(
+    async (brevoTemplateId: number) => {
+      if (!templatesCampanaId) {
+        setTemplateError("Selecciona una campaña.")
+        return
+      }
+      setBrevoImportingId(brevoTemplateId)
+      setTemplateError(null)
+      try {
+        await importBrevoContactoTemplate({
+          brevo_template_id: brevoTemplateId,
+          campana_id: templatesCampanaId,
+        })
+        await loadCampaignTemplates(templatesCampanaId)
+        setBanner({ type: "success", message: "Plantilla importada desde Brevo." })
+      } catch (err) {
+        const message = err instanceof Error ? err.message : "No se pudo importar la plantilla Brevo."
+        setTemplateError(message)
+      } finally {
+        setBrevoImportingId(null)
+      }
+    },
+    [loadCampaignTemplates, templatesCampanaId]
   )
 
   return (
@@ -815,6 +870,40 @@ export function CampanasMetricsClient() {
           </DialogHeader>
           <div className="grid gap-3 lg:grid-cols-[0.6fr_1.4fr] h-[78vh] overflow-hidden">
             <div className="rounded-lg border p-2 overflow-y-auto text-xs">
+              {templatesCampanaCanal === "correo" ? (
+                <div className="mb-3 rounded-md border bg-muted/30 p-2">
+                  <div className="mb-2 flex items-center justify-between gap-2">
+                    <p className="text-xs font-semibold uppercase tracking-wide">Catálogo Brevo</p>
+                    <Button type="button" variant="outline" size="sm" onClick={() => void loadBrevoCatalog()} disabled={brevoLoading}>
+                      {brevoLoading ? "Cargando..." : "Actualizar"}
+                    </Button>
+                  </div>
+                  {!brevoCatalog.length ? (
+                    <p className="text-xs text-muted-foreground">Sin plantillas Brevo disponibles o sin configuración.</p>
+                  ) : (
+                    <div className="space-y-1.5">
+                      {brevoCatalog.slice(0, 12).map((item) => (
+                        <div key={item.id} className="rounded border bg-background p-2">
+                          <p className="text-xs font-medium">{item.name}</p>
+                          <p className="truncate text-[11px] text-muted-foreground">{item.subject || "Sin asunto"}</p>
+                          <div className="mt-1 flex items-center justify-between gap-2">
+                            <Badge variant="outline">{item.is_active ? "Activa" : "Inactiva"}</Badge>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              disabled={brevoImportingId === item.id}
+                              onClick={() => void handleImportBrevoTemplate(item.id)}
+                            >
+                              {brevoImportingId === item.id ? "Importando..." : "Importar"}
+                            </Button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ) : null}
               {templatesLoading ? (
                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
                   <IconLoader className="size-4 animate-spin" /> Cargando plantillas...
