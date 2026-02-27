@@ -244,6 +244,21 @@ QUOTE_WITH_ITEMS_SELECT = "*,items:lead_cotizacion_items(*,catalog_item:catalog_
 QUOTE_DEFAULT_TAX_RATE = Decimal("0.16")
 CURRENCY_QUANTUM = Decimal("0.01")
 MAX_PROSPECCION_BATCH = 500
+PROSPECTOS_PREFS_MODULO = "prospeccion.prospectos"
+PROSPECTOS_PREFS_CLAVE_TABLA = "tabla"
+PROSPECTOS_PREFS_COLUMNS: tuple[str, ...] = (
+    "prospecto",
+    "correo",
+    "sitio_web",
+    "telefono",
+    "tipo_linea",
+    "telefono_verificado",
+    "fuente",
+    "tamano_rating",
+    "campana",
+    "con_envio",
+    "creado",
+)
 
 
 def _get_nested_dict_value(config: Mapping[str, Any] | None, path: Sequence[str]) -> Any:
@@ -1690,6 +1705,56 @@ class ProspectoUpdatePayload(BaseModel):
         return self
 
 
+class ProspectosTablePreferencePayload(BaseModel):
+    """Preferencias de visualización para la tabla de prospectos."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    order: list[str] | None = None
+    visibility: dict[str, bool] | None = None
+
+    @field_validator("order")
+    @classmethod
+    def _validate_order(cls, value: list[str] | None) -> list[str] | None:
+        if value is None:
+            return None
+        normalized: list[str] = []
+        seen: set[str] = set()
+        for raw in value:
+            candidate = str(raw or "").strip()
+            if not candidate:
+                continue
+            if candidate not in PROSPECTOS_PREFS_COLUMNS:
+                continue
+            if candidate in seen:
+                continue
+            seen.add(candidate)
+            normalized.append(candidate)
+        if not normalized:
+            return None
+        missing = [column for column in PROSPECTOS_PREFS_COLUMNS if column not in seen]
+        return [*normalized, *missing]
+
+    @field_validator("visibility")
+    @classmethod
+    def _validate_visibility(cls, value: dict[str, bool] | None) -> dict[str, bool] | None:
+        if value is None:
+            return None
+        normalized: dict[str, bool] = {}
+        for raw_key, raw_value in value.items():
+            key = str(raw_key or "").strip()
+            if key not in PROSPECTOS_PREFS_COLUMNS:
+                continue
+            normalized[key] = bool(raw_value)
+        return normalized or None
+
+    @model_validator(mode="after")
+    def _ensure_payload(self) -> "ProspectosTablePreferencePayload":
+        if self.order is None and self.visibility is None:
+            raise ValueError("preferences_payload_required")
+        return self
+
+
 class ContactBatchQuery(BaseModel):
     """Filtros de paginación para los lotes de contacto."""
 
@@ -3066,6 +3131,13 @@ def _clean_text(value: Any) -> str | None:
     return trimmed or None
 
 
+def _normalize_email(value: Any) -> str | None:
+    cleaned = _clean_text(value)
+    if not cleaned:
+        return None
+    return cleaned.lower()
+
+
 def _html_to_text(value: Any) -> str | None:
     if not isinstance(value, str):
         return None
@@ -4136,7 +4208,9 @@ def _build_manual_prospecto_payload(payload: ProspectoManualPayload) -> dict[str
         if field not in raw:
             continue
         value = raw[field]
-        if isinstance(value, str):
+        if field == "email":
+            data[field] = _normalize_email(value)
+        elif isinstance(value, str):
             data[field] = _clean_text(value)
         else:
             data[field] = value
@@ -4164,7 +4238,9 @@ def _build_prospecto_update_payload(
         if field not in raw:
             continue
         value = raw[field]
-        if isinstance(value, str):
+        if field == "email":
+            updates[field] = _normalize_email(value)
+        elif isinstance(value, str):
             updates[field] = _clean_text(value)
         else:
             updates[field] = value
@@ -4223,7 +4299,7 @@ def _build_prospecto_from_contactable(
         "actividad": row.get("actividad"),
         "estrato": row.get("estrato"),
         "phone": phone_value,
-        "email": _clean_text(row.get("email")),
+        "email": _normalize_email(row.get("email")),
         "website": _clean_text(row.get("website")),
         "address": _clean_text(row.get("address")),
         "lat": row.get("lat"),
@@ -12489,6 +12565,62 @@ async def listar_prospectos_query_metadata(
         "queries": metadata.get("queries", []),
         "activities": metadata.get("activities", []),
     }
+
+
+@router.get("/prospeccion/prospectos/preferences")
+async def obtener_preferencias_tabla_prospectos(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    _: str = Depends(require_permission("ejecutar_busquedas")),
+    user_token: str = Depends(require_user_token),
+) -> dict[str, Any]:
+    """Recupera preferencias persistidas de la tabla de prospectos para el usuario autenticado."""
+
+    try:
+        row = await repo.get_prospeccion_user_preference(
+            usuario_token=user_token,
+            modulo=PROSPECTOS_PREFS_MODULO,
+            clave=PROSPECTOS_PREFS_CLAVE_TABLA,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    if not row:
+        return {"ok": True, "preferences": None}
+
+    raw_value = row.get("valor")
+    if not isinstance(raw_value, dict):
+        return {"ok": True, "preferences": None}
+    try:
+        normalized = ProspectosTablePreferencePayload(**raw_value)
+    except ValidationError:
+        return {"ok": True, "preferences": None}
+    return {"ok": True, "preferences": normalized.model_dump(exclude_none=True)}
+
+
+@router.put("/prospeccion/prospectos/preferences")
+async def guardar_preferencias_tabla_prospectos(
+    *,
+    payload: ProspectosTablePreferencePayload,
+    repo: CRMRepository = Depends(get_repository),
+    _: str = Depends(require_permission("ejecutar_busquedas")),
+    user_token: str = Depends(require_user_token),
+) -> dict[str, Any]:
+    """Guarda preferencias persistidas de la tabla de prospectos para el usuario autenticado."""
+
+    value = payload.model_dump(exclude_none=True)
+    try:
+        row = await repo.upsert_prospeccion_user_preference(
+            usuario_token=user_token,
+            modulo=PROSPECTOS_PREFS_MODULO,
+            clave=PROSPECTOS_PREFS_CLAVE_TABLA,
+            valor=value,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    persisted = row.get("valor")
+    if not isinstance(persisted, dict):
+        persisted = value
+    return {"ok": True, "preferences": persisted}
 
 
 @router.get("/prospeccion/prospectos/contact-indicadores")

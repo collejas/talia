@@ -33,7 +33,7 @@ function buildBackendUrl(request: Request, backendPath: string, forwardSearch: b
 export async function proxyProspeccionRequest(
   request: Request,
   init: {
-    method: "GET" | "POST" | "PATCH" | "DELETE"
+    method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE"
     backendPath: string
     forwardSearch?: boolean
   }

@@ -27,6 +27,24 @@ export type ProspectoItem = {
   metadata?: Record<string, unknown> | null
 }
 
+export type ProspectosTableColumnPreference =
+  | "prospecto"
+  | "correo"
+  | "sitio_web"
+  | "telefono"
+  | "tipo_linea"
+  | "telefono_verificado"
+  | "fuente"
+  | "tamano_rating"
+  | "campana"
+  | "con_envio"
+  | "creado"
+
+export type ProspectosTablePreferences = {
+  order?: ProspectosTableColumnPreference[]
+  visibility?: Partial<Record<ProspectosTableColumnPreference, boolean>>
+}
+
 export type ProspectoFiltroInput = {
   search?: string | null
   fuente?: "google_places" | "denue" | "usuario" | ""
@@ -217,6 +235,27 @@ export type ChecklistScraperResponse = {
   ok: boolean
   programados: number
   jobs: BuscadorJob[]
+}
+
+export async function getProspectosTablePreferences(): Promise<ProspectosTablePreferences | null> {
+  const response = await requestJson<{
+    ok: boolean
+    preferences?: ProspectosTablePreferences | null
+  }>("/api/prospeccion/prospectos/preferences")
+  return response.preferences ?? null
+}
+
+export async function saveProspectosTablePreferences(
+  preferences: ProspectosTablePreferences
+): Promise<ProspectosTablePreferences | null> {
+  const response = await requestJson<{
+    ok: boolean
+    preferences?: ProspectosTablePreferences | null
+  }>("/api/prospeccion/prospectos/preferences", {
+    method: "PUT",
+    body: JSON.stringify(preferences),
+  })
+  return response.preferences ?? null
 }
 
 export type ContactoBatch = {

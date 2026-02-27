@@ -1,6 +1,6 @@
 # Prospección · Base de datos
 
-Referencia principal de esquema: `backups/postgres_20260223_215144/postgres_20260223_215144_schema.sql`
+Referencia principal de esquema: `backups/postgres_20260227_012134/postgres_20260227_012134_schema.sql`
 Validación complementaria: MCP Supabase (instancia actual).
 
 ## 1) Entidades principales
@@ -25,6 +25,8 @@ Validación complementaria: MCP Supabase (instancia actual).
   - Plantillas por canal.
 - `public.prospeccion_contacto_listas`
   - Listas/filtros guardados.
+- `public.prospeccion_user_preferences`
+  - Preferencias de UI por usuario para módulos de prospección.
 
 ## 2) Vistas y funciones clave
 
@@ -82,4 +84,4 @@ El patrón es multi-tenant por `organizacion_id` con políticas para `authentica
 - En DENUE, `estrato` viene poblado y debe usarse como “Tamaño”.
 - Hay registros DENUE con `busqueda_query` técnico (p. ej. `Avanzada:area_act ...`), por lo que la UI debe resolver etiqueta amigable cuando sea posible.
 - Emails DENUE pueden venir en mayúsculas (conviene normalizar en capa de presentación).
-
+- Emails de prospectos deben normalizarse en persistencia (insert/update) para evitar inconsistencias en filtros y deduplicación.

@@ -7685,6 +7685,68 @@ class CRMRepository:
             "activities": sorted(activity_values),
         }
 
+    async def get_prospeccion_user_preference(
+        self,
+        *,
+        usuario_token: str,
+        modulo: str,
+        clave: str,
+    ) -> dict[str, Any] | None:
+        """Obtiene una preferencia de prospección para el usuario autenticado."""
+
+        params = {
+            "select": "id,modulo,clave,valor,actualizado_en",
+            "modulo": f"eq.{modulo}",
+            "clave": f"eq.{clave}",
+            "limit": "1",
+        }
+        resp = await self._request_with_user(
+            "GET",
+            "/rest/v1/prospeccion_user_preferences",
+            token=usuario_token,
+            params=params,
+        )
+        data = resp.json() or []
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"preferencia_usuario_invalid:{data!r}")
+        if not data:
+            return None
+        row = data[0]
+        if not isinstance(row, dict):
+            raise CRMRepositoryError(f"preferencia_usuario_row_invalid:{row!r}")
+        return row
+
+    async def upsert_prospeccion_user_preference(
+        self,
+        *,
+        usuario_token: str,
+        modulo: str,
+        clave: str,
+        valor: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Crea o actualiza una preferencia de prospección para el usuario autenticado."""
+
+        body = {
+            "modulo": modulo,
+            "clave": clave,
+            "valor": valor,
+        }
+        resp = await self._request_with_user(
+            "POST",
+            "/rest/v1/prospeccion_user_preferences",
+            token=usuario_token,
+            params={"on_conflict": "organizacion_id,usuario_id,modulo,clave"},
+            json=[body],
+            prefer="return=representation,resolution=merge-duplicates",
+        )
+        data = resp.json() or []
+        if not isinstance(data, list) or not data:
+            raise CRMRepositoryError("preferencia_usuario_upsert_failed")
+        row = data[0]
+        if not isinstance(row, dict):
+            raise CRMRepositoryError(f"preferencia_usuario_upsert_invalid:{row!r}")
+        return row
+
     async def worker_get_prospecto(
         self,
         *,

@@ -73,6 +73,7 @@ import {
   listProspectoAudit,
   ejecutarChecklistLookup,
   ejecutarChecklistScraper,
+  getProspectosTablePreferences,
   type ProspectoItem,
   type ProspectoManualInput,
   type ProspectoAuditEntry,
@@ -81,8 +82,10 @@ import {
   type ProspectoContactIndicators,
   type ContactoLog,
   type ContactoTemplate,
+  type ProspectosTablePreferences,
   type ProspectoQueryOption,
   type ProspeccionCanalConfigInput,
+  saveProspectosTablePreferences,
   verificarProspectos,
   listContactoBatches,
   type ContactoBatch,
@@ -418,6 +421,46 @@ const TABLE_COLUMN_META: Record<
   con_envio: { label: "Con envío", widthClass: "w-[110px]" },
   creado: { label: "Creado", widthClass: "w-[120px]" },
 }
+
+type ProspectosTablePrefsState = {
+  order: ProspectTableColumnId[]
+  visibility: Record<ProspectTableColumnId, boolean>
+}
+
+function normalizeProspectosTablePrefs(raw: unknown): ProspectosTablePrefsState | null {
+  if (!raw || typeof raw !== "object") return null
+  const payload = raw as ProspectosTablePreferences
+  const parsedOrder = Array.isArray(payload.order)
+    ? payload.order.filter((id): id is ProspectTableColumnId => id in TABLE_COLUMN_META)
+    : []
+  const order = parsedOrder.length
+    ? [...parsedOrder, ...DEFAULT_TABLE_COLUMN_ORDER.filter((id) => !parsedOrder.includes(id))]
+    : DEFAULT_TABLE_COLUMN_ORDER
+
+  const visibility: Record<ProspectTableColumnId, boolean> = {
+    prospecto: true,
+    correo: true,
+    sitio_web: true,
+    telefono: true,
+    tipo_linea: true,
+    telefono_verificado: true,
+    fuente: true,
+    tamano_rating: true,
+    campana: true,
+    con_envio: true,
+    creado: true,
+  }
+  if (payload.visibility && typeof payload.visibility === "object") {
+    for (const columnId of DEFAULT_TABLE_COLUMN_ORDER) {
+      const value = payload.visibility[columnId]
+      if (typeof value === "boolean") {
+        visibility[columnId] = value
+      }
+    }
+  }
+  return { order, visibility }
+}
+
 const DATE_TIME_FORMATTER = new Intl.DateTimeFormat("es-MX", {
   dateStyle: "medium",
   timeStyle: "short",
@@ -508,6 +551,7 @@ function ProspectosView() {
     con_envio: true,
     creado: true,
   })
+  const [tablePrefsHydrated, setTablePrefsHydrated] = useState(false)
   const [searchInput, setSearchInput] = useState(initialFilters.search)
   const [items, setItems] = useState<ProspectoItem[]>([])
   const [total, setTotal] = useState(0)
@@ -599,6 +643,8 @@ function ProspectosView() {
   const [convertSubmitting, setConvertSubmitting] = useState(false)
   const queryFiltersInitialEffect = useRef(true)
   const plannerDateInputRef = useRef<HTMLInputElement | null>(null)
+  const tablePrefsSaveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const tablePrefsLastSavedRef = useRef<string>("")
 
   const currentIds = useMemo(() => items.map((item) => item.id).filter(Boolean) as string[], [items])
   const selectedIds = useMemo(() => Array.from(selected.values()), [selected])
@@ -720,42 +766,71 @@ function ProspectosView() {
 
   useEffect(() => {
     if (typeof window === "undefined") return
-    const raw = window.localStorage.getItem(PROSPECTOS_TABLE_PREFS_KEY)
-    if (!raw) return
-    try {
-      const parsed = JSON.parse(raw) as {
-        order?: ProspectTableColumnId[]
-        visibility?: Partial<Record<ProspectTableColumnId, boolean>>
+    let cancelled = false
+    const hydratePrefs = async () => {
+      const localRaw = window.localStorage.getItem(PROSPECTOS_TABLE_PREFS_KEY)
+      const localPrefs = (() => {
+        if (!localRaw) return null
+        try {
+          return normalizeProspectosTablePrefs(JSON.parse(localRaw))
+        } catch {
+          return null
+        }
+      })()
+      if (localPrefs) {
+        setColumnOrder(localPrefs.order)
+        setColumnVisibility(localPrefs.visibility)
       }
-      const parsedOrder = Array.isArray(parsed.order) ? parsed.order.filter((id): id is ProspectTableColumnId => id in TABLE_COLUMN_META) : []
-      if (parsedOrder.length) {
-        const missing = DEFAULT_TABLE_COLUMN_ORDER.filter((id) => !parsedOrder.includes(id))
-        setColumnOrder([...parsedOrder, ...missing])
+      try {
+        const remotePrefs = await getProspectosTablePreferences()
+        const normalizedRemote = normalizeProspectosTablePrefs(remotePrefs)
+        if (cancelled) return
+        if (normalizedRemote) {
+          setColumnOrder(normalizedRemote.order)
+          setColumnVisibility(normalizedRemote.visibility)
+          window.localStorage.setItem(
+            PROSPECTOS_TABLE_PREFS_KEY,
+            JSON.stringify({ order: normalizedRemote.order, visibility: normalizedRemote.visibility })
+          )
+        } else if (localPrefs) {
+          void saveProspectosTablePreferences({
+            order: localPrefs.order,
+            visibility: localPrefs.visibility,
+          }).catch(() => undefined)
+        }
+      } catch {
+        // Si backend falla, se conserva fallback local.
+      } finally {
+        if (!cancelled) {
+          setTablePrefsHydrated(true)
+        }
       }
-      if (parsed.visibility && typeof parsed.visibility === "object") {
-        setColumnVisibility((prev) => {
-          const next: Record<ProspectTableColumnId, boolean> = { ...prev }
-          for (const columnId of DEFAULT_TABLE_COLUMN_ORDER) {
-            const value = parsed.visibility?.[columnId]
-            if (typeof value === "boolean") {
-              next[columnId] = value
-            }
-          }
-          return next
-        })
-      }
-    } catch {
-      // ignore persisted parse issues
+    }
+    void hydratePrefs()
+    return () => {
+      cancelled = true
     }
   }, [])
 
   useEffect(() => {
-    if (typeof window === "undefined") return
-    window.localStorage.setItem(
-      PROSPECTOS_TABLE_PREFS_KEY,
-      JSON.stringify({ order: columnOrder, visibility: columnVisibility })
-    )
-  }, [columnOrder, columnVisibility])
+    if (typeof window === "undefined" || !tablePrefsHydrated) return
+    const payload = { order: columnOrder, visibility: columnVisibility }
+    const snapshot = JSON.stringify(payload)
+    window.localStorage.setItem(PROSPECTOS_TABLE_PREFS_KEY, snapshot)
+    if (snapshot === tablePrefsLastSavedRef.current) return
+    tablePrefsLastSavedRef.current = snapshot
+    if (tablePrefsSaveTimeoutRef.current) {
+      clearTimeout(tablePrefsSaveTimeoutRef.current)
+    }
+    tablePrefsSaveTimeoutRef.current = setTimeout(() => {
+      void saveProspectosTablePreferences(payload).catch(() => undefined)
+    }, 400)
+    return () => {
+      if (tablePrefsSaveTimeoutRef.current) {
+        clearTimeout(tablePrefsSaveTimeoutRef.current)
+      }
+    }
+  }, [columnOrder, columnVisibility, tablePrefsHydrated])
 
   const moveTableColumn = useCallback((draggedId: ProspectTableColumnId, targetId: ProspectTableColumnId) => {
     if (draggedId === targetId) return

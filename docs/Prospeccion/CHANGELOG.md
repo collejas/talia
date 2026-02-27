@@ -6,6 +6,33 @@ Formato recomendado por entrada:
 - `Base de datos`
 - `Operación/Notas`
 
+## 2026-02-27
+
+### Frontend
+- `prospeccion/prospectos`:
+  - lectura/escritura de preferencias de tabla (orden y visibilidad de columnas) en backend.
+  - fallback local (`localStorage`) cuando el backend no responde o no hay preferencia guardada.
+- Proxy nuevo:
+  - `GET/PUT /api/prospeccion/prospectos/preferences`.
+
+### Backend
+- Nuevos endpoints:
+  - `GET /crm/prospeccion/prospectos/preferences`.
+  - `PUT /crm/prospeccion/prospectos/preferences`.
+- Persistencia multi-tenant por usuario para preferencias de UI de prospección.
+- Normalización de email en capa API al crear/editar prospectos (manual y desde resultados).
+
+### Base de datos
+- Nueva tabla:
+  - `public.prospeccion_user_preferences` (RLS + índices + triggers).
+- Normalización de correos:
+  - trigger `BEFORE INSERT/UPDATE` en `public.prospeccion_prospectos`.
+  - backfill para pasar correos existentes a minúsculas.
+
+### Operación/Notas
+- Se cierra pendiente de `siguiente_pasos.md` sobre persistencia backend de preferencias de tabla.
+- Se cierra pendiente de normalización de email al persistir.
+
 ## 2026-02-24
 
 ### Frontend

@@ -90,18 +90,8 @@ sudo systemctl restart talia-panel.service
 
 sudo rsync -a landing/src/ /var/www/talia-landing/
 
-codex resume 019c770e-a670-7c72-9b54-8c804c9c7c60
-
-siguiente paso te lo dejo en formato de prueba E2E exacta (crear plantilla con imagen + enviar a 1 prospecto + verificar en logs/envíos).
-
-whastapp 3 codex resume 019c8b69-d1f5-71e3-ab11-1e4ccc06e5e3
-Whatsapp 2 codex resume 019c8673-587a-74c3-a2a1-6b341f3ddd4d
-Whatsapp: codex resume 019c6d2c-fbf1-7ca2-99b7-78d39aec1c82
-codex resume 019c63bb-9e0b-7420-92d8-9a6a81f0f386
-
-Oportunidades codex resume 019c5d7c-59e7-7f01-b700-8d473efe8c49
-Roles codex resume 019c5274-f35c-70a3-a73e-c32f020b7cfb
-
+  1. Si quieres, aplico la migración ahora por MCP Supabase y te confirmo resultado.
+  2. Después puedo tomar el siguiente pendiente prioritario: “vistas guardadas” (filtros+orden+preset completo).
 
 # Gilberto Nunez director comercial comebi cel personal +5215530862988   cel trabajo +5214441692305
 

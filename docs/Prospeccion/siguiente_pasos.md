@@ -5,11 +5,9 @@ Este archivo sirve para capturar próximos requerimientos sin mezclar historial 
 ## Backlog sugerido (priorizado)
 
 1. UX de tabla de prospectos
-- Guardar preferencias de columnas por usuario en backend (no sólo `localStorage`).
 - Vistas guardadas (preset de columnas + filtros + orden).
 
 2. Calidad de datos
-- Normalizar emails a minúsculas al persistir (no sólo en UI).
 - Resolver nombre amigable de consulta por `busqueda_id` en toda la app.
 
 3. Campañas y contacto
@@ -103,3 +101,11 @@ Por cada cambio nuevo:
   - fallback a `dominio_principal` del tenant,
   - sin fallback a dominio maestro.
 - Se eliminó de `prospeccion/campanas` la tarjeta “Salud por canal” por no ser tenant-safe (métrica in-memory global).
+
+## Completado recientemente (2026-02-27)
+
+- `prospeccion/prospectos`:
+  - preferencias de tabla (orden/visibilidad de columnas) ahora persisten por usuario en backend, con fallback local.
+- Calidad de datos:
+  - normalización de emails de prospectos al persistir (insert/update), no sólo en la UI.
+  - backfill de correos existentes para estandarizar a minúsculas.
