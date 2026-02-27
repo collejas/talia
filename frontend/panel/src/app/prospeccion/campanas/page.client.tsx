@@ -1167,8 +1167,7 @@ export function CampanasMetricsClient() {
                                     <div className="flex items-center gap-2">
                                       {templateOpen ? <IconChevronDown className="size-4" /> : <IconChevronRight className="size-4" />}
                                       <p className="text-sm font-medium">
-                                        {(campaignNode.campana_nombre || "Campaña")} ·{" "}
-                                        {templateNode.template_nombre || templateNode.template_slug || "Plantilla"}
+                                        Plantilla: {templateNode.template_nombre || templateNode.template_slug || "Sin nombre"}
                                       </p>
                                     </div>
                                     <div className="flex flex-wrap gap-2 text-xs">
