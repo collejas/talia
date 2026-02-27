@@ -98,6 +98,7 @@ export function CampanasMetricsClient() {
     twilioSid: "",
     nombreIa: "",
     nombreEmpresa: "",
+    ctaBaseUrl: "https://talia.mx/",
   })
   const [banner, setBanner] = useState<{ type: "success" | "error"; message: string } | null>(null)
 
@@ -244,6 +245,7 @@ export function CampanasMetricsClient() {
       twilioSid: "",
       nombreIa: "",
       nombreEmpresa: "",
+      ctaBaseUrl: "https://talia.mx/",
     })
   }, [templatesCampanaCanal])
 
@@ -333,6 +335,25 @@ export function CampanasMetricsClient() {
     }
   }, [normalizeLogoUrl, selectedLogoUrl, templateForm.canal, templateForm.id, templateForm.slug, templatesCampanaId])
 
+  const whatsappCtaUrl = useMemo(() => {
+    const base = (templateForm.ctaBaseUrl || "https://talia.mx/").trim() || "https://talia.mx/"
+    try {
+      const url = new URL(base)
+      url.searchParams.set("utm_source", "prospeccion")
+      url.searchParams.set("utm_medium", "whatsapp_cta")
+      if (templatesCampanaId) url.searchParams.set("utm_campaign", templatesCampanaId)
+      if (templateForm.slug.trim()) {
+        url.searchParams.set("template_slug", templateForm.slug.trim())
+        url.searchParams.set("kw", templateForm.slug.trim())
+      }
+      if (templateForm.id) url.searchParams.set("template_id", templateForm.id)
+      if (templateForm.canal) url.searchParams.set("canal", templateForm.canal)
+      return url.toString()
+    } catch {
+      return base
+    }
+  }, [templateForm.canal, templateForm.ctaBaseUrl, templateForm.id, templateForm.slug, templatesCampanaId])
+
   const handleLogoFileChange = useCallback(
     async (event: React.ChangeEvent<HTMLInputElement>) => {
       const file = event.target.files?.[0]
@@ -419,6 +440,7 @@ export function CampanasMetricsClient() {
         twilioSid: "",
         nombreIa: "",
         nombreEmpresa: "",
+        ctaBaseUrl: "https://talia.mx/",
       })
       setTemplatesDialogOpen(true)
       await loadCampaignTemplates(campanaId)
@@ -447,6 +469,8 @@ export function CampanasMetricsClient() {
         (typeof metadata["organizacion_nombre"] === "string" ? metadata["organizacion_nombre"] : "") ||
         (typeof metadata["brand_name"] === "string" ? metadata["brand_name"] : "") ||
         (typeof metadata["empresa"] === "string" ? metadata["empresa"] : ""),
+      ctaBaseUrl:
+        (typeof metadata["tracking_base_url"] === "string" && metadata["tracking_base_url"].trim()) || "https://talia.mx/",
     })
   }, [])
 
@@ -476,6 +500,10 @@ export function CampanasMetricsClient() {
     if (templateForm.canal === "whatsapp" && normalizedLogoUrl) {
       metadata["media_url_base"] = normalizedLogoUrl
       if (whatsappMediaUrl) metadata["media_url_tracked"] = whatsappMediaUrl
+    }
+    if (templateForm.canal === "whatsapp") {
+      metadata["tracking_base_url"] = (templateForm.ctaBaseUrl || "https://talia.mx/").trim() || "https://talia.mx/"
+      if (whatsappCtaUrl) metadata["cta_url_tracked"] = whatsappCtaUrl
     }
     if (templateForm.nombreIa.trim()) {
       metadata["nombre_ia"] = templateForm.nombreIa.trim()
@@ -522,7 +550,7 @@ export function CampanasMetricsClient() {
     } finally {
       setTemplateSaving(false)
     }
-  }, [loadCampaignTemplates, normalizeLogoUrl, resetTemplateForm, selectedLogoUrl, slugify, templateForm, templatesCampanaCanal, templatesCampanaId, whatsappMediaUrl])
+  }, [loadCampaignTemplates, normalizeLogoUrl, resetTemplateForm, selectedLogoUrl, slugify, templateForm, templatesCampanaCanal, templatesCampanaId, whatsappCtaUrl, whatsappMediaUrl])
 
   const handleTemplateDelete = useCallback(
     async (templateId: string) => {
@@ -1089,6 +1117,36 @@ export function CampanasMetricsClient() {
                             }
                           }}
                           disabled={!whatsappMediaUrl}
+                        >
+                          Copiar
+                        </Button>
+                      </div>
+                    </div>
+                    <div className="space-y-1">
+                      <Label>Base URL CTA (botón Twilio/Meta)</Label>
+                      <Input
+                        value={templateForm.ctaBaseUrl}
+                        onChange={(event) => setTemplateForm((prev) => ({ ...prev, ctaBaseUrl: event.target.value }))}
+                        placeholder="https://talia.mx/"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label>URL CTA con seguimiento</Label>
+                      <div className="flex gap-2">
+                        <Input value={whatsappCtaUrl} readOnly />
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={async () => {
+                            if (!whatsappCtaUrl) return
+                            try {
+                              await navigator.clipboard.writeText(whatsappCtaUrl)
+                              setBanner({ type: "success", message: "URL CTA copiada." })
+                            } catch {
+                              setTemplateError("No se pudo copiar la URL CTA.")
+                            }
+                          }}
+                          disabled={!whatsappCtaUrl}
                         >
                           Copiar
                         </Button>
