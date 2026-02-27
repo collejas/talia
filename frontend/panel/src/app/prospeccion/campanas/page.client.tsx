@@ -389,6 +389,24 @@ export function CampanasMetricsClient() {
       .sort((a, b) => b.metrics.envios_totales - a.metrics.envios_totales)
   }, [atribucionItems, campanas, crmCampaigns])
 
+  useEffect(() => {
+    const pendingBatchIds: string[] = []
+    hierarchyCampaigns.forEach((campaignNode) => {
+      campaignNode.templates.forEach((templateNode) => {
+        if (!expandedTemplates[templateNode.key]) return
+        templateNode.batches.forEach((batch) => {
+          const existing = batchDetails[batch.id]
+          if (existing?.loading || existing?.envios?.length || existing?.error) return
+          pendingBatchIds.push(batch.id)
+        })
+      })
+    })
+    if (!pendingBatchIds.length) return
+    pendingBatchIds.forEach((batchId) => {
+      void loadBatchDetails(batchId)
+    })
+  }, [batchDetails, expandedTemplates, hierarchyCampaigns, loadBatchDetails])
+
   const handleNewCampaign = useCallback(() => {
     setCampaignFormMode("create")
     setCampaignFormId(null)
