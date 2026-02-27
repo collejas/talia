@@ -1074,6 +1074,7 @@ export function CampanasMetricsClient() {
                 const campaignOpen = Boolean(expandedCampaigns[campaignNode.key])
                 const campaignCanal = resolveCampaignCanal(campaignNode)
                 const campaignIsEmail = isEmailCanal(campaignCanal)
+                const campaignDeliveredLabel = deliveryMetricLabel(campaignCanal)
                 return (
                   <div key={campaignNode.key} className="rounded-md border">
                     <button
@@ -1089,7 +1090,9 @@ export function CampanasMetricsClient() {
                         <div className="flex flex-wrap gap-2 text-xs">
                           <Badge variant="outline">Totales: {campaignNode.metrics.envios_totales}</Badge>
                           <Badge variant="outline">Enviados: {campaignNode.metrics.envios_enviados}</Badge>
-                          <Badge variant="outline">Entregados: {campaignNode.metrics.envios_entregados}</Badge>
+                          <Badge variant="outline">
+                            {campaignDeliveredLabel}: {campaignNode.metrics.envios_entregados}
+                          </Badge>
                           <Badge variant="outline">Respondidos: {campaignNode.metrics.envios_respondidos}</Badge>
                           <Badge variant="outline">Fallidos: {campaignNode.metrics.envios_fallidos}</Badge>
                           <Badge variant="outline">Omitidos: {campaignNode.metrics.envios_omitidos}</Badge>
@@ -1118,6 +1121,7 @@ export function CampanasMetricsClient() {
                             const templateOpen = Boolean(expandedTemplates[templateNode.key])
                             const templateCanal = normalizeMetricCanal(templateNode.canal)
                             const templateIsEmail = isEmailCanal(templateCanal)
+                            const templateDeliveredLabel = deliveryMetricLabel(templateCanal)
                             return (
                               <div key={templateNode.key} className="rounded border bg-muted/20">
                                 <button
@@ -1136,7 +1140,9 @@ export function CampanasMetricsClient() {
                                     <div className="flex flex-wrap gap-2 text-xs">
                                       <Badge variant="outline">Totales: {templateNode.metrics.envios_totales}</Badge>
                                       <Badge variant="outline">Enviados: {templateNode.metrics.envios_enviados}</Badge>
-                                      <Badge variant="outline">Entregados: {templateNode.metrics.envios_entregados}</Badge>
+                                      <Badge variant="outline">
+                                        {templateDeliveredLabel}: {templateNode.metrics.envios_entregados}
+                                      </Badge>
                                       <Badge variant="outline">Respondidos: {templateNode.metrics.envios_respondidos}</Badge>
                                       <Badge variant="outline">Fallidos: {templateNode.metrics.envios_fallidos}</Badge>
                                       <Badge variant="outline">Omitidos: {templateNode.metrics.envios_omitidos}</Badge>
@@ -1164,6 +1170,7 @@ export function CampanasMetricsClient() {
                                         const batchMetrics = buildBatchMetrics(batch, detail)
                                         const batchCanal = normalizeMetricCanal(batchMetrics.canal)
                                         const batchIsEmail = isEmailCanal(batchCanal)
+                                        const batchDeliveredLabel = deliveryMetricLabel(batchCanal)
                                         return (
                                           <div key={batch.id} className="rounded border bg-background">
                                             <button
@@ -1181,7 +1188,9 @@ export function CampanasMetricsClient() {
                                                 <div className="flex flex-wrap gap-2 text-xs">
                                                   <Badge variant="outline">Totales: {batchMetrics.totales}</Badge>
                                                   <Badge variant="outline">Enviados: {batchMetrics.enviados}</Badge>
-                                                  <Badge variant="outline">Entregados: {batchMetrics.entregados}</Badge>
+                                                  <Badge variant="outline">
+                                                    {batchDeliveredLabel}: {batchMetrics.entregados}
+                                                  </Badge>
                                                   <Badge variant="outline">Respondidos: {batchMetrics.respondidos}</Badge>
                                                   <Badge variant="outline">Fallidos: {batchMetrics.fallidos}</Badge>
                                                   <Badge variant="outline">Omitidos: {batchMetrics.omitidos}</Badge>
@@ -1854,6 +1863,12 @@ function isEmailCanal(value: string | null | undefined): boolean {
   return normalizeMetricCanal(value) === "correo"
 }
 
+function deliveryMetricLabel(value: string | null | undefined): string {
+  const canal = normalizeMetricCanal(value)
+  if (canal === "whatsapp") return "Recibidos"
+  return "Entregados"
+}
+
 function resolveCampaignCanal(node: HierarchyCampaignNode): "correo" | "whatsapp" | "llamada" | "multi" | "otro" {
   const canales = new Set<string>()
   node.templates.forEach((template) => {
@@ -1975,9 +1990,56 @@ function resolveBrevoEventName(log: ContactoLog): string {
   return nested
 }
 
+function pickUniqueMetricCount(
+  rawTotals: Record<string, unknown> | undefined,
+  uniqueKeys: string[],
+  totalKeys: string[],
+): number {
+  if (!rawTotals) return 0
+  const uniqueCount = uniqueKeys.reduce((sum, key) => sum + toNumber(rawTotals[key]), 0)
+  if (uniqueCount > 0) return uniqueCount
+  return totalKeys.reduce((sum, key) => sum + toNumber(rawTotals[key]), 0)
+}
+
+function buildLogMetricsByEnvio(logs: ContactoLog[]): Record<string, { opened: boolean; clicked: boolean }> {
+  const byEnvio: Record<string, { opened: boolean; clicked: boolean }> = {}
+  const sawUniqueOpened = new Set<string>()
+  const sawOpened = new Set<string>()
+  const sawUniqueClicked = new Set<string>()
+  const sawClicked = new Set<string>()
+
+  logs.forEach((log) => {
+    const envioId = (log.envio_id || "").trim()
+    if (!envioId) return
+    const eventName = resolveBrevoEventName(log)
+    if (eventName === "unique_opened") sawUniqueOpened.add(envioId)
+    if (eventName === "opened") sawOpened.add(envioId)
+    if (eventName === "unique_click") sawUniqueClicked.add(envioId)
+    if (eventName === "click") sawClicked.add(envioId)
+  })
+
+  const envioIds = new Set<string>([
+    ...Array.from(sawUniqueOpened),
+    ...Array.from(sawOpened),
+    ...Array.from(sawUniqueClicked),
+    ...Array.from(sawClicked),
+  ])
+
+  envioIds.forEach((envioId) => {
+    byEnvio[envioId] = {
+      // Regla comercial: usar únicos cuando existen; fallback a total.
+      opened: sawUniqueOpened.has(envioId) || (!sawUniqueOpened.has(envioId) && sawOpened.has(envioId)),
+      clicked: sawUniqueClicked.has(envioId) || (!sawUniqueClicked.has(envioId) && sawClicked.has(envioId)),
+    }
+  })
+
+  return byEnvio
+}
+
 function buildBatchMetrics(batch: ProspeccionCampanaGroup["batches"][number], detail?: BatchDetailState) {
   const canal =
     Array.isArray(batch.canales) && batch.canales.length ? String(batch.canales[0] || "").trim().toLowerCase() : ""
+  const rawTotals = (batch.totales || {}) as Record<string, unknown>
   const totales = Object.values(batch.totales || {}).reduce((sum, value) => sum + toNumber(value), 0)
   const entregados = toNumber(batch.totales?.entregado)
   const respondidos = toNumber(batch.totales?.respondido)
@@ -1985,13 +2047,13 @@ function buildBatchMetrics(batch: ProspeccionCampanaGroup["batches"][number], de
   const enviados = toNumber(batch.totales?.enviado) + entregados
   const fallidos = toNumber(batch.totales?.fallido) + toNumber(batch.totales?.error)
   const omitidos = toNumber(batch.totales?.omitido)
-  let aperturas = 0
-  let clicks = 0
-  ;(detail?.logs ?? []).forEach((log) => {
-    const eventName = resolveBrevoEventName(log)
-    if (eventName === "opened" || eventName === "unique_opened") aperturas += 1
-    if (eventName === "click" || eventName === "unique_click") clicks += 1
-  })
+  let aperturas = pickUniqueMetricCount(rawTotals, ["unique_opened", "brevo_unique_opened"], ["opened", "brevo_opened"])
+  let clicks = pickUniqueMetricCount(rawTotals, ["unique_click", "brevo_unique_click"], ["click", "brevo_click"])
+  if (detail?.logs?.length) {
+    const byEnvio = buildLogMetricsByEnvio(detail.logs)
+    aperturas = Object.values(byEnvio).reduce((sum, item) => sum + (item.opened ? 1 : 0), 0)
+    clicks = Object.values(byEnvio).reduce((sum, item) => sum + (item.clicked ? 1 : 0), 0)
+  }
   const tasaEntrega = totales ? (entregados * 100) / totales : 0
   const tasaRespuesta = totales ? (respondidos * 100) / totales : 0
   return {
@@ -2015,11 +2077,11 @@ function buildEnvioMetrics(envio: ContactoEnvio, logs: ContactoLog[]) {
   let clicks = 0
   let respondido = envio.estado === "respondido"
   let leido = envio.estado === "leido" || envio.estado === "read"
-  logs.forEach((log) => {
-    if (log.envio_id !== envio.id) return
-    const eventName = resolveBrevoEventName(log)
-    if (eventName === "opened" || eventName === "unique_opened") aperturas += 1
-    if (eventName === "click" || eventName === "unique_click") clicks += 1
+  const scopedLogs = logs.filter((log) => log.envio_id === envio.id)
+  const byEnvio = buildLogMetricsByEnvio(scopedLogs)
+  if (byEnvio[envio.id]?.opened) aperturas = 1
+  if (byEnvio[envio.id]?.clicked) clicks = 1
+  scopedLogs.forEach((log) => {
     const action = (log.accion || "").toLowerCase()
     const status = (log.estado || "").toLowerCase()
     const direction = isRecord(log.detalle) && typeof log.detalle?.direction === "string" ? String(log.detalle.direction).toLowerCase() : ""
