@@ -18,6 +18,23 @@ Este archivo sirve para capturar próximos requerimientos sin mezclar historial 
 - Atribución por campaña:
   - WhatsApp: consolidar medición de respuestas y CTA por campaña/plantilla.
   - Embudo: consolidar conversión a oportunidad cerrada por campaña.
+- Vista jerárquica de métricas en `prospeccion/campanas` (general -> detalle):
+  - Objetivo:
+    - concentrar en una sola vista la lectura de métricas desde nivel campaña hasta nivel contacto/prospecto.
+  - Nivel 1 (campaña):
+    - mostrar por campaña métricas agregadas:
+      - `totales`, `entregados`, `respondidos`, `aperturas`, `clics`, `sesiones_utm`,
+      - `enviados`, `fallidos`, `omitidos`,
+      - `tasa_entrega_pct`, `tasa_respuesta_pct`, `click_to_session_pct`.
+  - Nivel 2 (plantillas de la campaña):
+    - al expandir una campaña, listar plantillas asociadas con sus totales consolidados.
+  - Nivel 3 (envíos/lotes por plantilla):
+    - al expandir una plantilla, listar sus envíos/lotes con métricas de ese envío.
+  - Nivel 4 (contactos/prospectos por envío):
+    - al expandir un envío, mostrar destinatarios con estado/métrica particular del envío.
+  - Criterio funcional:
+    - navegación tipo drill-down en una sola pantalla, sin perder contexto de campaña.
+    - consistencia de métricas entre niveles (suma de hijos = total del padre, salvo reglas explícitas de deduplicación).
 - Pendientes de métricas (correo + WhatsApp):
   - `Respondidos` por correo (inbound real):
     - implementar ingesta de correos entrantes (IMAP polling o webhook inbound del proveedor),
