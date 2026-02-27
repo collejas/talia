@@ -14,6 +14,7 @@ import {
   listContactoBatches,
   listContactoEnvios,
   listContactoLogs,
+  listProspectosQueryMetadata,
   reintentarContactoEnvio,
   type ContactoBatch,
   type ContactoBatchResumen,
@@ -61,6 +62,7 @@ export default function ContactosPageClient() {
   const [retryingEnvioId, setRetryingEnvioId] = useState<string | null>(null)
   const [cancelLoading, setCancelLoading] = useState(false)
   const [cancelError, setCancelError] = useState<string | null>(null)
+  const [queryLabelMap, setQueryLabelMap] = useState<Record<string, string>>({})
 
   const fetchBatches = useCallback(async () => {
     setBatchLoading(true)
@@ -136,6 +138,35 @@ export default function ContactosPageClient() {
     void fetchBatches()
     void fetchMetrics()
   }, [fetchBatches, fetchMetrics])
+
+  useEffect(() => {
+    let cancelled = false
+    const loadQueryLabels = async () => {
+      const values = Array.from(new Set(batches.flatMap((batch) => extractBatchQueryValues(batch))))
+      if (!values.length) {
+        setQueryLabelMap({})
+        return
+      }
+      try {
+        const response = await listProspectosQueryMetadata({ queries: values })
+        if (cancelled) return
+        const next: Record<string, string> = {}
+        ;(response.queries ?? []).forEach((item) => {
+          if (!item?.value) return
+          next[item.value] = item.label || item.value
+        })
+        setQueryLabelMap(next)
+      } catch {
+        if (!cancelled) {
+          setQueryLabelMap({})
+        }
+      }
+    }
+    void loadQueryLabels()
+    return () => {
+      cancelled = true
+    }
+  }, [batches])
 
   const fetchEnvios = useCallback(
     async (batchId: string | null) => {
@@ -294,7 +325,14 @@ export default function ContactosPageClient() {
                         className={cn("cursor-pointer", selectedBatchId === batch.id && "bg-muted/50")}
                         onClick={() => setSelectedBatchId(batch.id)}
                       >
-                        <TableCell className="font-medium">{batchLabel(batch)}</TableCell>
+                        <TableCell className="font-medium">
+                          <div>{batchLabel(batch)}</div>
+                          {resolveBatchQueryLabel(batch, queryLabelMap) ? (
+                            <p className="text-xs font-normal text-muted-foreground">
+                              Consulta: {resolveBatchQueryLabel(batch, queryLabelMap)}
+                            </p>
+                          ) : null}
+                        </TableCell>
                         <TableCell className="space-x-1">
                           {batch.canales.map((canal) => (
                             <Badge key={canal} variant="outline">
@@ -618,4 +656,51 @@ function extractLogHighlights(detalle?: Record<string, unknown> | null) {
     }
   }
   return highlights
+}
+
+function normalizeBusquedaLabel(value: unknown): string | null {
+  if (typeof value !== "string") return null
+  const base = value.trim()
+  if (!base) return null
+  const cleaned = base.replace(/\s*\(recuperada desde resultados\)\s*/gi, "").trim()
+  return cleaned || null
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value)
+}
+
+function extractBatchQueryValues(batch: ContactoBatch): string[] {
+  const values: string[] = []
+  const filters = isRecord(batch.filtros) ? batch.filtros : null
+  if (!filters) return values
+  const queryFilters = filters["query_filters"]
+  if (Array.isArray(queryFilters)) {
+    queryFilters.forEach((item) => {
+      const normalized = normalizeBusquedaLabel(item)
+      if (normalized) values.push(normalized)
+    })
+  }
+  const metadataQueries = filters["metadata_queries"]
+  if (Array.isArray(metadataQueries)) {
+    metadataQueries.forEach((item) => {
+      const normalized = normalizeBusquedaLabel(item)
+      if (normalized) values.push(normalized)
+    })
+  }
+  ;["query", "busqueda_query", "busqueda_id"].forEach((key) => {
+    const normalized = normalizeBusquedaLabel(filters[key])
+    if (normalized) values.push(normalized)
+  })
+  return values
+}
+
+function resolveBatchQueryLabel(batch: ContactoBatch, labelMap: Record<string, string>): string | null {
+  const values = extractBatchQueryValues(batch)
+  if (!values.length) return null
+  const labels = values.map((value) => normalizeBusquedaLabel(labelMap[value] ?? value)).filter(Boolean) as string[]
+  if (!labels.length) return null
+  const unique = Array.from(new Set(labels))
+  if (unique.length <= 2) return unique.join(", ")
+  return `${unique.slice(0, 2).join(", ")} +${unique.length - 2}`
 }

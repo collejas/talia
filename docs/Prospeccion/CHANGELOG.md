@@ -14,6 +14,8 @@ Formato recomendado por entrada:
   - fallback local (`localStorage`) cuando el backend no responde o no hay preferencia guardada.
   - vistas guardadas por usuario (crear/aplicar/eliminar) con preset de filtros + orden + columnas.
   - se muestra etiqueta amigable de consulta por prospecto (`busqueda_id/query`) con fallback legible.
+- `prospeccion/contactos` y `prospeccion/campanas`:
+  - lotes muestran etiqueta amigable de consulta (`query/busqueda_id`) resolviendo nombre desde metadata de prospectos cuando existe.
 - Proxy nuevo:
   - `GET/PUT /api/prospeccion/prospectos/preferences`.
   - `GET/PUT /api/prospeccion/prospectos/views`.

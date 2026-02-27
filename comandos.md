@@ -90,9 +90,6 @@ sudo systemctl restart talia-panel.service
 
 sudo rsync -a landing/src/ /var/www/talia-landing/
 
-  1. Si quieres, aplico la migración ahora por MCP Supabase y te confirmo resultado.
-  2. Después puedo tomar el siguiente pendiente prioritario: “vistas guardadas” (filtros+orden+preset completo).
-
 # Gilberto Nunez director comercial comebi cel personal +5215530862988   cel trabajo +5214441692305
 
 sudo cat /proc/$(pgrep -f "next start")/environ | tr '\0' '\n' | grep -E 'SUPABASE|PANEL'
