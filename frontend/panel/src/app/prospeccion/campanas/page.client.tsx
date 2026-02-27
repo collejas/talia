@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { IconAlertTriangle, IconLoader, IconPencil, IconRefresh, IconTargetArrow, IconX } from "@tabler/icons-react"
+import Image from "next/image"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -1050,7 +1051,14 @@ export function CampanasMetricsClient() {
                             )}
                             onClick={() => setSelectedLogoUrl(logo.file_url)}
                           >
-                            <img src={logo.file_url} alt={logo.nombre} className="h-12 w-full rounded object-contain" />
+                            <Image
+                              src={logo.file_url}
+                              alt={logo.nombre}
+                              width={160}
+                              height={48}
+                              unoptimized
+                              className="h-12 w-full rounded object-contain"
+                            />
                             <p className="mt-1 truncate text-[10px] text-muted-foreground">{logo.nombre}</p>
                           </button>
                         ))}
@@ -1175,7 +1183,14 @@ export function CampanasMetricsClient() {
                             )}
                             onClick={() => setSelectedLogoUrl(logo.file_url)}
                           >
-                            <img src={logo.file_url} alt={logo.nombre} className="h-12 w-full rounded object-contain" />
+                            <Image
+                              src={logo.file_url}
+                              alt={logo.nombre}
+                              width={160}
+                              height={48}
+                              unoptimized
+                              className="h-12 w-full rounded object-contain"
+                            />
                             <p className="mt-1 truncate text-[10px] text-muted-foreground">{logo.nombre}</p>
                           </button>
                         ))}
