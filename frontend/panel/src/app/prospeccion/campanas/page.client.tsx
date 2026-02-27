@@ -79,6 +79,7 @@ export function CampanasMetricsClient() {
   const [templateSaving, setTemplateSaving] = useState(false)
   const [templateDeletingId, setTemplateDeletingId] = useState<string | null>(null)
   const [templateError, setTemplateError] = useState<string | null>(null)
+  const [tenantBaseUrl, setTenantBaseUrl] = useState<string>("")
   const [logos, setLogos] = useState<LogoAsset[]>([])
   const [logosLoading, setLogosLoading] = useState(false)
   const [logoUploading, setLogoUploading] = useState(false)
@@ -231,6 +232,39 @@ export function CampanasMetricsClient() {
     return trimmed || ""
   }, [])
 
+  const normalizeWebBaseUrl = useCallback((value: string | null | undefined) => {
+    const raw = (value || "").trim()
+    if (!raw) return ""
+    if (/^https?:\/\//i.test(raw)) return raw
+    return `https://${raw}`
+  }, [])
+
+  useEffect(() => {
+    if (!templatesDialogOpen) return
+    void (async () => {
+      try {
+        const response = await fetch("/api/settings/variables", { cache: "no-store" })
+        const payload = await response.json().catch(() => ({}))
+        if (!response.ok || !payload || typeof payload !== "object") return
+        const sitioWeb = normalizeWebBaseUrl(
+          typeof (payload as Record<string, unknown>).sitio_web === "string"
+            ? ((payload as Record<string, unknown>).sitio_web as string)
+            : "",
+        )
+        const dominio = normalizeWebBaseUrl(
+          typeof (payload as Record<string, unknown>).dominio_principal === "string"
+            ? ((payload as Record<string, unknown>).dominio_principal as string)
+            : "",
+        )
+        const resolved = sitioWeb || dominio || ""
+        setTenantBaseUrl(resolved)
+        setTemplateForm((prev) => ({ ...prev, ctaBaseUrl: resolved }))
+      } catch {
+        // keep fallback
+      }
+    })()
+  }, [normalizeWebBaseUrl, templatesDialogOpen])
+
   const resetTemplateForm = useCallback(() => {
     setSelectedLogoUrl("")
     setTemplateForm({
@@ -336,7 +370,8 @@ export function CampanasMetricsClient() {
   }, [normalizeLogoUrl, selectedLogoUrl, templateForm.canal, templateForm.id, templateForm.slug, templatesCampanaId])
 
   const whatsappCtaUrl = useMemo(() => {
-    const base = (templateForm.ctaBaseUrl || "https://talia.mx/").trim() || "https://talia.mx/"
+    const base = (tenantBaseUrl || templateForm.ctaBaseUrl || "").trim()
+    if (!base) return ""
     try {
       const url = new URL(base)
       url.searchParams.set("utm_source", "prospeccion")
@@ -352,7 +387,7 @@ export function CampanasMetricsClient() {
     } catch {
       return base
     }
-  }, [templateForm.canal, templateForm.ctaBaseUrl, templateForm.id, templateForm.slug, templatesCampanaId])
+  }, [templateForm.canal, templateForm.ctaBaseUrl, templateForm.id, templateForm.slug, templatesCampanaId, tenantBaseUrl])
 
   const handleLogoFileChange = useCallback(
     async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -502,7 +537,7 @@ export function CampanasMetricsClient() {
       if (whatsappMediaUrl) metadata["media_url_tracked"] = whatsappMediaUrl
     }
     if (templateForm.canal === "whatsapp") {
-      metadata["tracking_base_url"] = (templateForm.ctaBaseUrl || "https://talia.mx/").trim() || "https://talia.mx/"
+      metadata["tracking_base_url"] = (tenantBaseUrl || templateForm.ctaBaseUrl || "").trim() || null
       if (whatsappCtaUrl) metadata["cta_url_tracked"] = whatsappCtaUrl
     }
     if (templateForm.nombreIa.trim()) {
@@ -550,7 +585,7 @@ export function CampanasMetricsClient() {
     } finally {
       setTemplateSaving(false)
     }
-  }, [loadCampaignTemplates, normalizeLogoUrl, resetTemplateForm, selectedLogoUrl, slugify, templateForm, templatesCampanaCanal, templatesCampanaId, whatsappCtaUrl, whatsappMediaUrl])
+  }, [loadCampaignTemplates, normalizeLogoUrl, resetTemplateForm, selectedLogoUrl, slugify, templateForm, templatesCampanaCanal, templatesCampanaId, tenantBaseUrl, whatsappCtaUrl, whatsappMediaUrl])
 
   const handleTemplateDelete = useCallback(
     async (templateId: string) => {
@@ -902,30 +937,37 @@ export function CampanasMetricsClient() {
                   </p>
                 ) : null}
               </div>
-              <div className="space-y-1">
-                <Label>Nombre</Label>
-                <Input
-                  value={templateForm.nombre}
-                  onChange={(event) =>
-                    setTemplateForm((prev) => ({
-                      ...prev,
-                      nombre: event.target.value,
-                      slug: prev.slug ? prev.slug : slugify(event.target.value),
-                    }))
-                  }
-                />
-              </div>
-              <div className="space-y-1">
-                <Label>Slug</Label>
-                <Input value={templateForm.slug} onChange={(event) => setTemplateForm((prev) => ({ ...prev, slug: event.target.value }))} />
-              </div>
-              <div className="space-y-1">
-                <Label>Descripción</Label>
-                <Input
-                  value={templateForm.descripcion}
-                  onChange={(event) => setTemplateForm((prev) => ({ ...prev, descripcion: event.target.value }))}
-                />
-              </div>
+              {templateForm.canal !== "whatsapp" ? (
+                <>
+                  <div className="space-y-1">
+                    <Label>Nombre</Label>
+                    <Input
+                      value={templateForm.nombre}
+                      onChange={(event) =>
+                        setTemplateForm((prev) => ({
+                          ...prev,
+                          nombre: event.target.value,
+                          slug: prev.slug ? prev.slug : slugify(event.target.value),
+                        }))
+                      }
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label>Slug</Label>
+                    <Input
+                      value={templateForm.slug}
+                      onChange={(event) => setTemplateForm((prev) => ({ ...prev, slug: event.target.value }))}
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label>Descripción</Label>
+                    <Input
+                      value={templateForm.descripcion}
+                      onChange={(event) => setTemplateForm((prev) => ({ ...prev, descripcion: event.target.value }))}
+                    />
+                  </div>
+                </>
+              ) : null}
               {templateForm.canal === "correo" ? (
                 <>
                   <div className="grid gap-3 sm:grid-cols-2">
@@ -1031,7 +1073,46 @@ export function CampanasMetricsClient() {
               ) : null}
               {templateForm.canal === "whatsapp" ? (
                 <>
-                  <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    <div className="space-y-1">
+                      <Label>Twilio Content SID</Label>
+                      <Input
+                        value={templateForm.twilioSid}
+                        onChange={(event) => setTemplateForm((prev) => ({ ...prev, twilioSid: event.target.value }))}
+                        placeholder="HX..."
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label>Nombre</Label>
+                      <Input
+                        value={templateForm.nombre}
+                        onChange={(event) =>
+                          setTemplateForm((prev) => ({
+                            ...prev,
+                            nombre: event.target.value,
+                            slug: prev.slug ? prev.slug : slugify(event.target.value),
+                          }))
+                        }
+                      />
+                    </div>
+                  </div>
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    <div className="space-y-1">
+                      <Label>Slug</Label>
+                      <Input
+                        value={templateForm.slug}
+                        onChange={(event) => setTemplateForm((prev) => ({ ...prev, slug: event.target.value }))}
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label>Descripción</Label>
+                      <Input
+                        value={templateForm.descripcion}
+                        onChange={(event) => setTemplateForm((prev) => ({ ...prev, descripcion: event.target.value }))}
+                      />
+                    </div>
+                  </div>
+                  <div className="grid gap-2 sm:grid-cols-2">
                     <div className="space-y-1">
                       <Label>Nombre IA (opcional)</Label>
                       <Input
@@ -1100,68 +1181,63 @@ export function CampanasMetricsClient() {
                         ))}
                       </div>
                     ) : null}
-                    <div className="space-y-1">
-                      <Label>URL de imagen para Twilio Media</Label>
-                      <div className="flex gap-2">
-                        <Input value={whatsappMediaUrl} readOnly placeholder="Sube o selecciona una imagen..." />
-                        <Button
-                          type="button"
-                          variant="outline"
-                          onClick={async () => {
-                            if (!whatsappMediaUrl) return
-                            try {
-                              await navigator.clipboard.writeText(whatsappMediaUrl)
-                              setBanner({ type: "success", message: "URL de imagen copiada." })
-                            } catch {
-                              setTemplateError("No se pudo copiar la URL.")
-                            }
-                          }}
-                          disabled={!whatsappMediaUrl}
-                        >
-                          Copiar
-                        </Button>
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      <div className="space-y-1">
+                        <Label>URL de imagen para Twilio Media</Label>
+                        <div className="flex gap-2">
+                          <Input value={whatsappMediaUrl} readOnly placeholder="Sube o selecciona una imagen..." />
+                          <Button
+                            type="button"
+                            variant="outline"
+                            onClick={async () => {
+                              if (!whatsappMediaUrl) return
+                              try {
+                                await navigator.clipboard.writeText(whatsappMediaUrl)
+                                setBanner({ type: "success", message: "URL de imagen copiada." })
+                              } catch {
+                                setTemplateError("No se pudo copiar la URL.")
+                              }
+                            }}
+                            disabled={!whatsappMediaUrl}
+                          >
+                            Copiar
+                          </Button>
+                        </div>
+                      </div>
+                      <div className="space-y-1">
+                        <Label>URL CTA con seguimiento</Label>
+                        <div className="flex gap-2">
+                          <Input value={whatsappCtaUrl} readOnly />
+                          <Button
+                            type="button"
+                            variant="outline"
+                            onClick={async () => {
+                              if (!whatsappCtaUrl) return
+                              try {
+                                await navigator.clipboard.writeText(whatsappCtaUrl)
+                                setBanner({ type: "success", message: "URL CTA copiada." })
+                              } catch {
+                                setTemplateError("No se pudo copiar la URL CTA.")
+                              }
+                            }}
+                            disabled={!whatsappCtaUrl}
+                          >
+                            Copiar
+                          </Button>
+                        </div>
                       </div>
                     </div>
                     <div className="space-y-1">
                       <Label>Base URL CTA (botón Twilio/Meta)</Label>
                       <Input
-                        value={templateForm.ctaBaseUrl}
-                        onChange={(event) => setTemplateForm((prev) => ({ ...prev, ctaBaseUrl: event.target.value }))}
-                        placeholder="https://talia.mx/"
+                        value={tenantBaseUrl || templateForm.ctaBaseUrl}
+                        readOnly
+                        placeholder="Configura Sitio web o Dominio principal en Settings/Variables"
                       />
+                      <p className="text-xs text-muted-foreground">
+                        Tomada automáticamente de Settings/Variables: Sitio web o Dominio principal.
+                      </p>
                     </div>
-                    <div className="space-y-1">
-                      <Label>URL CTA con seguimiento</Label>
-                      <div className="flex gap-2">
-                        <Input value={whatsappCtaUrl} readOnly />
-                        <Button
-                          type="button"
-                          variant="outline"
-                          onClick={async () => {
-                            if (!whatsappCtaUrl) return
-                            try {
-                              await navigator.clipboard.writeText(whatsappCtaUrl)
-                              setBanner({ type: "success", message: "URL CTA copiada." })
-                            } catch {
-                              setTemplateError("No se pudo copiar la URL CTA.")
-                            }
-                          }}
-                          disabled={!whatsappCtaUrl}
-                        >
-                          Copiar
-                        </Button>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="space-y-1">
-                    <Label>Twilio Content SID (opcional)</Label>
-                    <Input
-                      value={templateForm.twilioSid}
-                      onChange={(event) => setTemplateForm((prev) => ({ ...prev, twilioSid: event.target.value }))}
-                    />
-                    <p className="text-xs text-muted-foreground">
-                      Si tu plantilla usa variables numéricas, estos campos cubren principalmente {"{{2}}"} (IA) y {"{{3}}"} (empresa).
-                    </p>
                   </div>
                 </>
               ) : null}
