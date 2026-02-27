@@ -182,6 +182,7 @@ async def process_brevo_events(
                     },
                 )
             log_entry = {
+                "organizacion_id": str(envio.get("organizacion_id")) if envio.get("organizacion_id") else None,
                 "prospecto_id": str(envio.get("prospecto_id")) if envio.get("prospecto_id") else None,
                 "canal": "correo",
                 "estado": estado,

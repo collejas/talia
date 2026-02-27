@@ -94,6 +94,8 @@ Después te conecto una UI rápida en prospeccion/contactos para alta/baja de su
 
 siguiente pendiente del backlog (plantillas Brevo API o métricas persistentes por campaña/plantilla).
 
+sigo inmediatamente con el siguiente pendiente: WhatsApp (respuestas + CTA por campaña/plantilla).
+
 # Gilberto Nunez director comercial comebi cel personal +5215530862988   cel trabajo +5214441692305
 
 sudo cat /proc/$(pgrep -f "next start")/environ | tr '\0' '\n' | grep -E 'SUPABASE|PANEL'
