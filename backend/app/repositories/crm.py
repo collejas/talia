@@ -8712,6 +8712,7 @@ class CRMRepository:
         self,
         *,
         usuario_token: str,
+        organizacion_id: UUID | None = None,
         campana_id: UUID | None = None,
         limit: int = 200,
     ) -> list[dict[str, Any]]:
@@ -8720,11 +8721,13 @@ class CRMRepository:
         payload: dict[str, Any] = {"p_limit": max(1, min(limit, 1000))}
         if campana_id is not None:
             payload["p_campana_id"] = str(campana_id)
-        resp = await self._request_with_user(
+        # Use service-role for this RPC so attribution is resolved strictly by tenant header
+        # and does not depend on auth.uid() mapping of the current access token.
+        resp = await self._request_service_role(
             "POST",
             "/rest/v1/rpc/prospeccion_campana_template_atribucion",
-            token=usuario_token,
             json=payload,
+            organizacion_id=organizacion_id,
         )
         data = resp.json() or []
         if not isinstance(data, list):

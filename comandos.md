@@ -90,6 +90,10 @@ sudo systemctl restart talia-panel.service
 
 codex resume 019c9cb6-0b2c-7db1-918a-9e7ad8ce1f6d
 
+      - brevo_clicks = 4
+      - sesiones_utm = 5
+      - click_to_session_pct = 80.00
+
 sudo rsync -a landing/src/ /var/www/talia-landing/ que mas nos faltaria par ala idea
 
 # Gilberto Nunez director comercial comebi cel personal +5215530862988   cel trabajo +5214441692305

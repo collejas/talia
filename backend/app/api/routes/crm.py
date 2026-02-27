@@ -13678,6 +13678,7 @@ async def prospeccion_campanas_atribucion(
     repo: CRMRepository = Depends(get_repository),
     _: str = Depends(require_permission("ejecutar_busquedas")),
     user_token: str = Depends(require_user_token),
+    organizacion_id: UUID = Depends(require_organizacion_id),
     params: ProspeccionCampanaAtribucionQuery = Depends(),
 ) -> dict[str, Any]:
     """Resumen persistente de desempeño por campaña/plantilla."""
@@ -13685,6 +13686,7 @@ async def prospeccion_campanas_atribucion(
     try:
         rows = await repo.get_prospeccion_campana_template_atribucion(
             usuario_token=user_token,
+            organizacion_id=organizacion_id,
             campana_id=params.campana_id,
             limit=params.limit,
         )
