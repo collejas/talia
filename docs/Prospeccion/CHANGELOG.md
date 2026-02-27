@@ -12,13 +12,17 @@ Formato recomendado por entrada:
 - `prospeccion/prospectos`:
   - lectura/escritura de preferencias de tabla (orden y visibilidad de columnas) en backend.
   - fallback local (`localStorage`) cuando el backend no responde o no hay preferencia guardada.
+  - vistas guardadas por usuario (crear/aplicar/eliminar) con preset de filtros + orden + columnas.
 - Proxy nuevo:
   - `GET/PUT /api/prospeccion/prospectos/preferences`.
+  - `GET/PUT /api/prospeccion/prospectos/views`.
 
 ### Backend
 - Nuevos endpoints:
   - `GET /crm/prospeccion/prospectos/preferences`.
   - `PUT /crm/prospeccion/prospectos/preferences`.
+  - `GET /crm/prospeccion/prospectos/views`.
+  - `PUT /crm/prospeccion/prospectos/views`.
 - Persistencia multi-tenant por usuario para preferencias de UI de prospección.
 - Normalización de email en capa API al crear/editar prospectos (manual y desde resultados).
 
@@ -32,6 +36,7 @@ Formato recomendado por entrada:
 ### Operación/Notas
 - Se cierra pendiente de `siguiente_pasos.md` sobre persistencia backend de preferencias de tabla.
 - Se cierra pendiente de normalización de email al persistir.
+- Se cierra pendiente de vistas guardadas para la tabla de prospectos.
 
 ## 2026-02-24
 

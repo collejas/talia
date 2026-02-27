@@ -74,6 +74,7 @@ import {
   ejecutarChecklistLookup,
   ejecutarChecklistScraper,
   getProspectosTablePreferences,
+  listProspectosSavedViews,
   type ProspectoItem,
   type ProspectoManualInput,
   type ProspectoAuditEntry,
@@ -83,9 +84,11 @@ import {
   type ContactoLog,
   type ContactoTemplate,
   type ProspectosTablePreferences,
+  type ProspectosSavedView,
   type ProspectoQueryOption,
   type ProspeccionCanalConfigInput,
   saveProspectosTablePreferences,
+  saveProspectosSavedViews,
   verificarProspectos,
   listContactoBatches,
   type ContactoBatch,
@@ -427,6 +430,12 @@ type ProspectosTablePrefsState = {
   visibility: Record<ProspectTableColumnId, boolean>
 }
 
+type ProspectosSavedViewState = {
+  filters: Filters
+  tableSort: { key: ProspectosSortKey; direction: "asc" | "desc" }
+  columns: ProspectosTablePrefsState
+}
+
 function normalizeProspectosTablePrefs(raw: unknown): ProspectosTablePrefsState | null {
   if (!raw || typeof raw !== "object") return null
   const payload = raw as ProspectosTablePreferences
@@ -459,6 +468,90 @@ function normalizeProspectosTablePrefs(raw: unknown): ProspectosTablePrefsState 
     }
   }
   return { order, visibility }
+}
+
+function normalizeSavedViewState(raw: unknown): ProspectosSavedViewState | null {
+  if (!raw || typeof raw !== "object") return null
+  const state = raw as Record<string, unknown>
+  const rawFilters = state["filters"]
+  const rawTableSort = state["tableSort"]
+  const rawColumns = state["columns"]
+  if (!rawFilters || typeof rawFilters !== "object") return null
+  if (!rawTableSort || typeof rawTableSort !== "object") return null
+  const filtersObj = rawFilters as Record<string, unknown>
+  const tableSortObj = rawTableSort as Record<string, unknown>
+  const columnsState = normalizeProspectosTablePrefs(rawColumns)
+  if (!columnsState) return null
+
+  const nextFilters: Filters = {
+    search: typeof filtersObj["search"] === "string" ? filtersObj["search"] : "",
+    fuente:
+      filtersObj["fuente"] === "google_places" || filtersObj["fuente"] === "denue" || filtersObj["fuente"] === "usuario"
+        ? filtersObj["fuente"]
+        : "",
+    lookupStatus:
+      filtersObj["lookupStatus"] === "pendiente" ||
+      filtersObj["lookupStatus"] === "verificado" ||
+      filtersObj["lookupStatus"] === "sin_numero" ||
+      filtersObj["lookupStatus"] === "error"
+        ? filtersObj["lookupStatus"]
+        : "",
+    segmento: typeof filtersObj["segmento"] === "string" ? filtersObj["segmento"] : "",
+    order: filtersObj["order"] === "nombre" ? "nombre" : "creado",
+    carrierType:
+      filtersObj["carrierType"] === "mobile" || filtersObj["carrierType"] === "landline" || filtersObj["carrierType"] === "voip"
+        ? filtersObj["carrierType"]
+        : "",
+    contactFilters: Array.isArray(filtersObj["contactFilters"])
+      ? (filtersObj["contactFilters"] as unknown[]).filter(
+          (value): value is ContactPresenceFilter =>
+            value === "phone_has" ||
+            value === "phone_missing" ||
+            value === "email_has" ||
+            value === "email_missing" ||
+            value === "website_has" ||
+            value === "website_missing"
+        )
+      : [],
+    queryFilters: Array.isArray(filtersObj["queryFilters"])
+      ? (filtersObj["queryFilters"] as unknown[]).filter((value): value is string => typeof value === "string")
+      : [],
+    actividadFilters: Array.isArray(filtersObj["actividadFilters"])
+      ? (filtersObj["actividadFilters"] as unknown[]).filter((value): value is string => typeof value === "string")
+      : [],
+    dateOption:
+      filtersObj["dateOption"] === "today" ||
+      filtersObj["dateOption"] === "week" ||
+      filtersObj["dateOption"] === "month" ||
+      filtersObj["dateOption"] === "last_30" ||
+      filtersObj["dateOption"] === "custom"
+        ? filtersObj["dateOption"]
+        : "",
+    customDateFrom: typeof filtersObj["customDateFrom"] === "string" ? filtersObj["customDateFrom"] : "",
+    customDateTo: typeof filtersObj["customDateTo"] === "string" ? filtersObj["customDateTo"] : "",
+  }
+  const key = tableSortObj["key"]
+  const direction = tableSortObj["direction"]
+  const sortKey: ProspectosSortKey =
+    key === "prospecto" ||
+    key === "correo" ||
+    key === "sitio_web" ||
+    key === "telefono" ||
+    key === "tipo_linea" ||
+    key === "telefono_verificado" ||
+    key === "fuente" ||
+    key === "tamano_rating" ||
+    key === "campana" ||
+    key === "con_envio" ||
+    key === "creado"
+      ? key
+      : "creado"
+  const sortDirection: "asc" | "desc" = direction === "asc" ? "asc" : "desc"
+  return {
+    filters: nextFilters,
+    tableSort: { key: sortKey, direction: sortDirection },
+    columns: columnsState,
+  }
 }
 
 const DATE_TIME_FORMATTER = new Intl.DateTimeFormat("es-MX", {
@@ -552,6 +645,11 @@ function ProspectosView() {
     creado: true,
   })
   const [tablePrefsHydrated, setTablePrefsHydrated] = useState(false)
+  const [savedViews, setSavedViews] = useState<ProspectosSavedView[]>([])
+  const [savedViewId, setSavedViewId] = useState("")
+  const [savedViewName, setSavedViewName] = useState("")
+  const [savedViewsLoading, setSavedViewsLoading] = useState(false)
+  const [savedViewsSaving, setSavedViewsSaving] = useState(false)
   const [searchInput, setSearchInput] = useState(initialFilters.search)
   const [items, setItems] = useState<ProspectoItem[]>([])
   const [total, setTotal] = useState(0)
@@ -831,6 +929,109 @@ function ProspectosView() {
       }
     }
   }, [columnOrder, columnVisibility, tablePrefsHydrated])
+
+  useEffect(() => {
+    let cancelled = false
+    const loadSavedViews = async () => {
+      setSavedViewsLoading(true)
+      try {
+        const rows = await listProspectosSavedViews()
+        if (cancelled) return
+        setSavedViews(rows)
+      } catch {
+        if (!cancelled) {
+          setSavedViews([])
+        }
+      } finally {
+        if (!cancelled) {
+          setSavedViewsLoading(false)
+        }
+      }
+    }
+    void loadSavedViews()
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  const applySavedView = useCallback((view: ProspectosSavedView) => {
+    const state = normalizeSavedViewState(view.state)
+    if (!state) return false
+    setFilters(state.filters)
+    setSearchInput(state.filters.search)
+    setTableSort(state.tableSort)
+    setColumnOrder(state.columns.order)
+    setColumnVisibility(state.columns.visibility)
+    setBanner({ type: "success", message: `Vista aplicada: ${view.name}` })
+    return true
+  }, [])
+
+  const handleSelectSavedView = useCallback(
+    (value: string) => {
+      setSavedViewId(value)
+      if (value === "none") return
+      const selectedView = savedViews.find((item) => item.id === value)
+      if (!selectedView) return
+      applySavedView(selectedView)
+      setSavedViewName(selectedView.name)
+    },
+    [applySavedView, savedViews]
+  )
+
+  const handleSaveCurrentView = useCallback(async () => {
+    const name = savedViewName.trim()
+    if (!name) {
+      setBanner({ type: "error", message: "Escribe un nombre para guardar la vista." })
+      return
+    }
+    const state: ProspectosSavedViewState = {
+      filters,
+      tableSort,
+      columns: { order: columnOrder, visibility: columnVisibility },
+    }
+    const viewId =
+      savedViewId && savedViewId !== "none"
+        ? savedViewId
+        : typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+          ? crypto.randomUUID()
+          : `view-${Date.now()}`
+    const next: ProspectosSavedView[] = [
+      ...savedViews.filter((item) => item.id !== viewId),
+      { id: viewId, name, state: state as unknown as Record<string, unknown> },
+    ].slice(0, 20)
+    setSavedViewsSaving(true)
+    try {
+      const persisted = await saveProspectosSavedViews(next)
+      setSavedViews(persisted)
+      setSavedViewId(viewId)
+      setBanner({ type: "success", message: `Vista guardada: ${name}` })
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "No se pudo guardar la vista."
+      setBanner({ type: "error", message })
+    } finally {
+      setSavedViewsSaving(false)
+    }
+  }, [columnOrder, columnVisibility, filters, savedViewId, savedViewName, savedViews, tableSort])
+
+  const handleDeleteSavedView = useCallback(async () => {
+    if (!savedViewId || savedViewId === "none") return
+    const target = savedViews.find((item) => item.id === savedViewId)
+    if (!target) return
+    const next = savedViews.filter((item) => item.id !== savedViewId)
+    setSavedViewsSaving(true)
+    try {
+      const persisted = await saveProspectosSavedViews(next)
+      setSavedViews(persisted)
+      setSavedViewId("")
+      setSavedViewName("")
+      setBanner({ type: "success", message: `Vista eliminada: ${target.name}` })
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "No se pudo eliminar la vista."
+      setBanner({ type: "error", message })
+    } finally {
+      setSavedViewsSaving(false)
+    }
+  }, [savedViewId, savedViews])
 
   const moveTableColumn = useCallback((draggedId: ProspectTableColumnId, targetId: ProspectTableColumnId) => {
     if (draggedId === targetId) return
@@ -2243,6 +2444,56 @@ function ProspectosView() {
               Limpiar filtros
             </Button>
           </div>
+          <div className="grid gap-2 lg:grid-cols-[minmax(240px,320px)_minmax(220px,1fr)_auto_auto]">
+            <div className="space-y-1">
+              <Label>Vistas guardadas</Label>
+              <Select value={savedViewId || "none"} onValueChange={handleSelectSavedView}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Sin vista seleccionada" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Sin vista seleccionada</SelectItem>
+                  {savedViews.map((view) => (
+                    <SelectItem key={view.id} value={view.id}>
+                      {view.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1">
+              <Label>Nombre de la vista</Label>
+              <Input
+                value={savedViewName}
+                onChange={(event) => setSavedViewName(event.target.value)}
+                placeholder="Ej. Prospectos DENUE Norte"
+                maxLength={120}
+              />
+            </div>
+            <div className="flex items-end">
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                onClick={() => void handleSaveCurrentView()}
+                disabled={savedViewsSaving}
+              >
+                Guardar vista
+              </Button>
+            </div>
+            <div className="flex items-end">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => void handleDeleteSavedView()}
+                disabled={!savedViewId || savedViewId === "none" || savedViewsSaving}
+              >
+                Eliminar vista
+              </Button>
+            </div>
+          </div>
+          {savedViewsLoading ? <p className="text-xs text-muted-foreground">Cargando vistas guardadas...</p> : null}
           <div className="flex flex-wrap gap-4">
             <div className="space-y-1">
               <Label>Fuente</Label>

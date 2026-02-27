@@ -37,6 +37,7 @@ Ruta base: `frontend/panel/src/app/prospeccion`
 - Preparación y lanzamiento de contacto/campaña.
 - Tabla configurable: orden por columnas, reordenamiento drag&drop y visibilidad de columnas.
 - Preferencias de tabla persistidas por usuario (backend) con fallback local (`localStorage`).
+- Vistas guardadas por usuario (preset de filtros + orden + columnas) para aplicar/reusar.
 - Ajustes visuales: densidad compacta, encabezados en mayúsculas/negrita y campos de fuente simplificados.
 - Contacto WhatsApp desde modal usando proxy con cabeceras multi-tenant.
 

@@ -45,6 +45,12 @@ export type ProspectosTablePreferences = {
   visibility?: Partial<Record<ProspectosTableColumnPreference, boolean>>
 }
 
+export type ProspectosSavedView = {
+  id: string
+  name: string
+  state: Record<string, unknown>
+}
+
 export type ProspectoFiltroInput = {
   search?: string | null
   fuente?: "google_places" | "denue" | "usuario" | ""
@@ -256,6 +262,25 @@ export async function saveProspectosTablePreferences(
     body: JSON.stringify(preferences),
   })
   return response.preferences ?? null
+}
+
+export async function listProspectosSavedViews(): Promise<ProspectosSavedView[]> {
+  const response = await requestJson<{
+    ok: boolean
+    views?: ProspectosSavedView[]
+  }>("/api/prospeccion/prospectos/views")
+  return Array.isArray(response.views) ? response.views : []
+}
+
+export async function saveProspectosSavedViews(views: ProspectosSavedView[]): Promise<ProspectosSavedView[]> {
+  const response = await requestJson<{
+    ok: boolean
+    views?: ProspectosSavedView[]
+  }>("/api/prospeccion/prospectos/views", {
+    method: "PUT",
+    body: JSON.stringify({ views }),
+  })
+  return Array.isArray(response.views) ? response.views : []
 }
 
 export type ContactoBatch = {

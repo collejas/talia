@@ -32,11 +32,13 @@ Repositorio principal: `backend/app/repositories/crm.py`
 
 - `GET /crm/prospeccion/prospectos`
 - `GET /crm/prospeccion/prospectos/preferences`
+- `GET /crm/prospeccion/prospectos/views`
 - `GET /crm/prospeccion/prospectos/queries`
 - `GET /crm/prospeccion/prospectos/contact-indicadores`
 - `POST /crm/prospeccion/prospectos`
 - `POST /crm/prospeccion/prospectos/manual`
 - `PUT /crm/prospeccion/prospectos/preferences`
+- `PUT /crm/prospeccion/prospectos/views`
 - `PATCH /crm/prospeccion/prospectos/{prospecto_id}`
 - `DELETE /crm/prospeccion/prospectos/{prospecto_id}`
 - `POST /crm/prospeccion/prospectos/bulk-delete`

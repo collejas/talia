@@ -5,7 +5,7 @@ Este archivo sirve para capturar próximos requerimientos sin mezclar historial 
 ## Backlog sugerido (priorizado)
 
 1. UX de tabla de prospectos
-- Vistas guardadas (preset de columnas + filtros + orden).
+- (Sin pendientes inmediatos en este bloque).
 
 2. Calidad de datos
 - Resolver nombre amigable de consulta por `busqueda_id` en toda la app.

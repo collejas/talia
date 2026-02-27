@@ -246,6 +246,8 @@ CURRENCY_QUANTUM = Decimal("0.01")
 MAX_PROSPECCION_BATCH = 500
 PROSPECTOS_PREFS_MODULO = "prospeccion.prospectos"
 PROSPECTOS_PREFS_CLAVE_TABLA = "tabla"
+PROSPECTOS_PREFS_CLAVE_VIEWS = "views"
+PROSPECTOS_PREFS_VIEWS_MAX = 20
 PROSPECTOS_PREFS_COLUMNS: tuple[str, ...] = (
     "prospecto",
     "correo",
@@ -1755,6 +1757,40 @@ class ProspectosTablePreferencePayload(BaseModel):
         return self
 
 
+class ProspectosSavedViewItemPayload(BaseModel):
+    """Vista guardada de prospectos (preset de filtros y tabla)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    id: str | None = Field(default=None, max_length=64)
+    name: str = Field(..., min_length=2, max_length=120)
+    state: dict[str, Any] = Field(default_factory=dict)
+
+    @field_validator("id")
+    @classmethod
+    def _normalize_id(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        trimmed = value.strip()
+        return trimmed or None
+
+    @field_validator("name")
+    @classmethod
+    def _normalize_name(cls, value: str) -> str:
+        trimmed = value.strip()
+        if not trimmed:
+            raise ValueError("view_name_required")
+        return trimmed
+
+
+class ProspectosSavedViewsPayload(BaseModel):
+    """Colección completa de vistas guardadas por usuario."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    views: list[ProspectosSavedViewItemPayload] = Field(default_factory=list, max_length=PROSPECTOS_PREFS_VIEWS_MAX)
+
+
 class ContactBatchQuery(BaseModel):
     """Filtros de paginación para los lotes de contacto."""
 
@@ -3136,6 +3172,28 @@ def _normalize_email(value: Any) -> str | None:
     if not cleaned:
         return None
     return cleaned.lower()
+
+
+def _normalize_saved_views(raw_value: Any) -> list[dict[str, Any]]:
+    if not isinstance(raw_value, dict):
+        return []
+    raw_views = raw_value.get("views")
+    if not isinstance(raw_views, list):
+        return []
+    normalized: list[dict[str, Any]] = []
+    for entry in raw_views[:PROSPECTOS_PREFS_VIEWS_MAX]:
+        if not isinstance(entry, dict):
+            continue
+        name = _clean_text(entry.get("name"))
+        if not name:
+            continue
+        raw_id = _clean_text(entry.get("id"))
+        view_id = raw_id or str(uuid4())
+        state = entry.get("state")
+        if not isinstance(state, dict):
+            state = {}
+        normalized.append({"id": view_id, "name": name, "state": state})
+    return normalized
 
 
 def _html_to_text(value: Any) -> str | None:
@@ -12621,6 +12679,62 @@ async def guardar_preferencias_tabla_prospectos(
     if not isinstance(persisted, dict):
         persisted = value
     return {"ok": True, "preferences": persisted}
+
+
+@router.get("/prospeccion/prospectos/views")
+async def obtener_vistas_guardadas_prospectos(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    _: str = Depends(require_permission("ejecutar_busquedas")),
+    user_token: str = Depends(require_user_token),
+) -> dict[str, Any]:
+    """Obtiene vistas guardadas por usuario para prospectos."""
+
+    try:
+        row = await repo.get_prospeccion_user_preference(
+            usuario_token=user_token,
+            modulo=PROSPECTOS_PREFS_MODULO,
+            clave=PROSPECTOS_PREFS_CLAVE_VIEWS,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    raw_value = row.get("valor") if isinstance(row, dict) else None
+    views = _normalize_saved_views(raw_value)
+    return {"ok": True, "views": views}
+
+
+@router.put("/prospeccion/prospectos/views")
+async def guardar_vistas_prospectos(
+    *,
+    payload: ProspectosSavedViewsPayload,
+    repo: CRMRepository = Depends(get_repository),
+    _: str = Depends(require_permission("ejecutar_busquedas")),
+    user_token: str = Depends(require_user_token),
+) -> dict[str, Any]:
+    """Reemplaza la colección de vistas guardadas por usuario para prospectos."""
+
+    views: list[dict[str, Any]] = []
+    for item in payload.views[:PROSPECTOS_PREFS_VIEWS_MAX]:
+        view_id = item.id or str(uuid4())
+        state = item.state if isinstance(item.state, dict) else {}
+        views.append(
+            {
+                "id": view_id,
+                "name": item.name,
+                "state": state,
+            }
+        )
+    value = {"views": views}
+    try:
+        await repo.upsert_prospeccion_user_preference(
+            usuario_token=user_token,
+            modulo=PROSPECTOS_PREFS_MODULO,
+            clave=PROSPECTOS_PREFS_CLAVE_VIEWS,
+            valor=value,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return {"ok": True, "views": views}
 
 
 @router.get("/prospeccion/prospectos/contact-indicadores")
