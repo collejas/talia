@@ -11,7 +11,6 @@ Este archivo sirve para capturar próximos requerimientos sin mezclar historial 
 - Resolver nombre amigable de consulta por `busqueda_id` en toda la app.
 
 3. Campañas y contacto
-- Dashboard de conversión por fuente (`google_places`, `denue`, `usuario`).
 - Asistente IA especializado en prospección:
   - Mantener assistant operativo actual para conversaciones no comerciales de prospección.
 - Correo de prospección (Brevo):
@@ -108,3 +107,5 @@ Por cada cambio nuevo:
 - Calidad de datos:
   - normalización de emails de prospectos al persistir (insert/update), no sólo en la UI.
   - backfill de correos existentes para estandarizar a minúsculas.
+- `prospeccion/contactos`:
+  - dashboard de conversión por fuente (`google_places`, `denue`, `usuario`) con cálculo persistente (RPC SQL).

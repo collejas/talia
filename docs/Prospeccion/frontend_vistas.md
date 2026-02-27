@@ -44,6 +44,7 @@ Ruta base: `frontend/panel/src/app/prospeccion`
 ### `contactos`
 - Estado de lotes y envíos.
 - Reintentos, cancelación, seguimiento por estado.
+- Dashboard de conversión por fuente (`Google Places`, `DENUE`, `Usuario`) con base persistente.
 
 ### `campanas`
 - Agrupación por campaña.

@@ -46,6 +46,10 @@ Validación complementaria: MCP Supabase (instancia actual).
 - `denue_resultados_bounds(...)`
 - `denue_resultados_actividades(...)`
 
+### Funciones Prospección (métricas)
+- `prospeccion_conversion_fuente()`
+  - Agrega prospectos/contactados/convertidos por fuente (`google_places`, `denue`, `usuario`).
+
 Nota: en el backup ya existen variantes con `p_contact_match text default 'all'` para filtros de contacto tipo AND/OR en DENUE.
 
 ## 3) Índices importantes

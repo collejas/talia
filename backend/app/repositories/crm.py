@@ -8672,6 +8672,24 @@ class CRMRepository:
             bucket[estado] = bucket.get(estado, 0) + count_value
         return resultado
 
+    async def get_prospeccion_conversion_fuente(
+        self,
+        *,
+        usuario_token: str,
+    ) -> list[dict[str, Any]]:
+        """Obtiene métricas de conversión por fuente de prospectos."""
+
+        resp = await self._request_with_user(
+            "POST",
+            "/rest/v1/rpc/prospeccion_conversion_fuente",
+            token=usuario_token,
+            json={},
+        )
+        data = resp.json() or []
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"prospeccion_conversion_fuente_invalid:{data!r}")
+        return [row for row in data if isinstance(row, dict)]
+
     async def cancel_pending_envios(
         self,
         *,

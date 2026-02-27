@@ -947,6 +947,16 @@ export type ContactoMetrics = {
       por_estado: Record<string, number>
     }
   >
+  conversion_por_fuente?: Array<{
+    fuente: string
+    total_prospectos: number
+    prospectos_contactados: number
+    envios_totales: number
+    envios_enviados: number
+    prospectos_convertidos: number
+    conversion_contacto_pct: number
+    conversion_convertido_pct: number
+  }>
 }
 
 export async function getContactoMetrics() {

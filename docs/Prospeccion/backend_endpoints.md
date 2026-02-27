@@ -72,6 +72,7 @@ Repositorio principal: `backend/app/repositories/crm.py`
 - `PATCH /crm/prospeccion/contacto/listas/{lista_id}`
 - `DELETE /crm/prospeccion/contacto/listas/{lista_id}`
 - `GET /crm/prospeccion/contacto/metrics`
+  - Incluye `conversion_por_fuente` (`google_places`, `denue`, `usuario`) con base persistente vía RPC SQL.
 - `GET /crm/prospeccion/whatsapp/readiness`
 - `POST /crm/prospeccion/contacto/brevo/webhook`
 - `GET /crm/prospeccion/campanas`

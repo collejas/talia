@@ -16,6 +16,8 @@ Formato recomendado por entrada:
   - se muestra etiqueta amigable de consulta por prospecto (`busqueda_id/query`) con fallback legible.
 - `prospeccion/contactos` y `prospeccion/campanas`:
   - lotes muestran etiqueta amigable de consulta (`query/busqueda_id`) resolviendo nombre desde metadata de prospectos cuando existe.
+- `prospeccion/contactos`:
+  - nueva tarjeta de conversión por fuente (`Google Places`, `DENUE`, `Usuario`) con porcentajes de contacto y conversión a contacto CRM.
 - Proxy nuevo:
   - `GET/PUT /api/prospeccion/prospectos/preferences`.
   - `GET/PUT /api/prospeccion/prospectos/views`.
@@ -33,12 +35,16 @@ Formato recomendado por entrada:
   - aplicación de suppressions durante `contactar_prospectos` y actualización de campañas.
   - enforcement adicional en worker al procesar envíos (evita salida si hay opt-out activo).
   - webhook Brevo `unsubscribe` ahora crea suppression de correo automáticamente.
+- `GET /crm/prospeccion/contacto/metrics`:
+  - incorpora `conversion_por_fuente` con base persistente (RPC) en lugar de cálculo in-memory.
 
 ### Base de datos
 - Nueva tabla:
   - `public.prospeccion_user_preferences` (RLS + índices + triggers).
 - Nueva tabla:
   - `public.prospeccion_contacto_suppressions` (RLS + índices + triggers).
+- Nueva función SQL:
+  - `public.prospeccion_conversion_fuente()` para agregación de conversión por fuente.
 - Normalización de correos:
   - trigger `BEFORE INSERT/UPDATE` en `public.prospeccion_prospectos`.
   - backfill para pasar correos existentes a minúsculas.

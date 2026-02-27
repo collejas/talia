@@ -37,6 +37,12 @@ const canalLabel: Record<string, string> = {
   llamada: "Llamada",
 }
 
+const fuenteLabel: Record<string, string> = {
+  google_places: "Google Places",
+  denue: "DENUE",
+  usuario: "Usuario",
+}
+
 const envioEstadoVariant: Record<string, "default" | "secondary" | "outline" | "destructive"> = {
   pendiente: "secondary",
   procesando: "secondary",
@@ -274,6 +280,11 @@ export default function ContactosPageClient() {
     selectedBatch && !["completado", "cancelado"].includes(selectedBatch.estado ?? "")
 
   const metricEntries = metrics?.canales ? Object.entries(metrics.canales) : []
+  const conversionEntries = useMemo(() => {
+    const rows = metrics?.conversion_por_fuente ?? []
+    const sourceOrder = ["google_places", "denue", "usuario"]
+    return [...rows].sort((a, b) => sourceOrder.indexOf(a.fuente) - sourceOrder.indexOf(b.fuente))
+  }, [metrics?.conversion_por_fuente])
 
   return (
     <div className="space-y-6">
@@ -383,6 +394,44 @@ export default function ContactosPageClient() {
             </div>
           ) : (
             <p className="text-sm text-muted-foreground">Aún no hay métricas registradas.</p>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base font-semibold">Conversión por fuente</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {conversionEntries.length ? (
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Fuente</TableHead>
+                    <TableHead className="text-right">Prospectos</TableHead>
+                    <TableHead className="text-right">Contactados</TableHead>
+                    <TableHead className="text-right">% Contacto</TableHead>
+                    <TableHead className="text-right">Convertidos</TableHead>
+                    <TableHead className="text-right">% Conversión</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {conversionEntries.map((item) => (
+                    <TableRow key={item.fuente}>
+                      <TableCell className="font-medium">{fuenteLabel[item.fuente] ?? item.fuente}</TableCell>
+                      <TableCell className="text-right">{item.total_prospectos}</TableCell>
+                      <TableCell className="text-right">{item.prospectos_contactados}</TableCell>
+                      <TableCell className="text-right">{formatPercent(item.conversion_contacto_pct)}</TableCell>
+                      <TableCell className="text-right">{item.prospectos_convertidos}</TableCell>
+                      <TableCell className="text-right">{formatPercent(item.conversion_convertido_pct)}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          ) : (
+            <p className="text-sm text-muted-foreground">Aún no hay datos de conversión por fuente.</p>
           )}
         </CardContent>
       </Card>
@@ -618,6 +667,11 @@ function prospectoLabel(envio: ContactoEnvio): string {
   const email = detalle && typeof detalle["email"] === "string" ? detalle["email"] : null
   if (email) return email
   return "Prospecto sin nombre"
+}
+
+function formatPercent(value: number): string {
+  if (!Number.isFinite(value)) return "0%"
+  return `${value.toFixed(2)}%`
 }
 
 function formatLogMessage(detalle?: Record<string, unknown> | null): string {

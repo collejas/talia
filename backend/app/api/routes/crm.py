@@ -14984,7 +14984,10 @@ async def cancelar_contacto_batch(
 
 @router.get("/prospeccion/contacto/metrics")
 async def obtener_metrics_contacto(
+    *,
+    repo: CRMRepository = Depends(get_repository),
     _: str = Depends(require_permission("reports.view")),
+    user_token: str = Depends(require_user_token),
 ) -> dict[str, Any]:
     """Snapshot simple de envíos por canal y estado."""
 
@@ -14993,7 +14996,33 @@ async def obtener_metrics_contacto(
         canal: {"totales": sum(counter.values()), "por_estado": dict(counter)}
         for canal, counter in snapshot.por_canal.items()
     }
-    return {"ok": True, "canales": transformado}
+    conversion_rows: list[dict[str, Any]] = []
+    try:
+        conversion_rows = await repo.get_prospeccion_conversion_fuente(usuario_token=user_token)
+    except CRMRepositoryError as exc:
+        logger.warning("prospeccion.metrics.conversion_fuente_failed", extra={"error": str(exc)})
+
+    conversion_por_fuente: list[dict[str, Any]] = []
+    for row in conversion_rows:
+        fuente = _clean_text(row.get("fuente")) or "desconocido"
+        conversion_por_fuente.append(
+            {
+                "fuente": fuente,
+                "total_prospectos": int(row.get("total_prospectos") or 0),
+                "prospectos_contactados": int(row.get("prospectos_contactados") or 0),
+                "envios_totales": int(row.get("envios_totales") or 0),
+                "envios_enviados": int(row.get("envios_enviados") or 0),
+                "prospectos_convertidos": int(row.get("prospectos_convertidos") or 0),
+                "conversion_contacto_pct": float(row.get("conversion_contacto_pct") or 0),
+                "conversion_convertido_pct": float(row.get("conversion_convertido_pct") or 0),
+            }
+        )
+
+    return {
+        "ok": True,
+        "canales": transformado,
+        "conversion_por_fuente": conversion_por_fuente,
+    }
 
 
 @router.post("/prospeccion/contacto/brevo/webhook", include_in_schema=False)
