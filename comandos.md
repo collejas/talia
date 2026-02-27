@@ -92,9 +92,9 @@ sudo rsync -a landing/src/ /var/www/talia-landing/
 
   Siguiente pendiente natural:
 
-  1. Definir si quieres implementar respondidos por correo (inbound real desde buzón/IMAP o proveedor).
-  2. Confirmar estrategia de sesiones UTM (que la landing donde cae el clic dispare webchat/visit con UTM).
-  3. WhatsApp (respuestas + CTA por campaña/plantilla).
+  - reglas de agregación (por ejemplo deduplicar unique_opened/unique_click vs totales) para que coincida 1:1 con tu criterio
+  comercial
+  - siguiente paso es ajustar etiquetas/textos exactos por canal (por ejemplo, renombrar “Entregados” a “Recibidos” en WhatsApp si te parece más claro).
 
 # Gilberto Nunez director comercial comebi cel personal +5215530862988   cel trabajo +5214441692305
 

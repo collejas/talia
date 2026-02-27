@@ -1072,6 +1072,8 @@ export function CampanasMetricsClient() {
             <div className="space-y-3">
               {hierarchyCampaigns.map((campaignNode) => {
                 const campaignOpen = Boolean(expandedCampaigns[campaignNode.key])
+                const campaignCanal = resolveCampaignCanal(campaignNode)
+                const campaignIsEmail = isEmailCanal(campaignCanal)
                 return (
                   <div key={campaignNode.key} className="rounded-md border">
                     <button
@@ -1086,20 +1088,26 @@ export function CampanasMetricsClient() {
                         </div>
                         <div className="flex flex-wrap gap-2 text-xs">
                           <Badge variant="outline">Totales: {campaignNode.metrics.envios_totales}</Badge>
+                          <Badge variant="outline">Enviados: {campaignNode.metrics.envios_enviados}</Badge>
                           <Badge variant="outline">Entregados: {campaignNode.metrics.envios_entregados}</Badge>
                           <Badge variant="outline">Respondidos: {campaignNode.metrics.envios_respondidos}</Badge>
-                          <Badge variant="outline">Aperturas: {campaignNode.metrics.brevo_aperturas}</Badge>
-                          <Badge variant="outline">Clics: {campaignNode.metrics.brevo_clicks}</Badge>
-                          <Badge variant="outline">Sesiones UTM: {campaignNode.metrics.sesiones_utm}</Badge>
+                          <Badge variant="outline">Fallidos: {campaignNode.metrics.envios_fallidos}</Badge>
+                          <Badge variant="outline">Omitidos: {campaignNode.metrics.envios_omitidos}</Badge>
+                          {campaignIsEmail ? (
+                            <>
+                              <Badge variant="outline">Aperturas: {campaignNode.metrics.brevo_aperturas}</Badge>
+                              <Badge variant="outline">Clics: {campaignNode.metrics.brevo_clicks}</Badge>
+                              <Badge variant="outline">Sesiones UTM: {campaignNode.metrics.sesiones_utm}</Badge>
+                            </>
+                          ) : null}
                         </div>
                       </div>
                       <div className="mt-2 flex flex-wrap gap-3 text-xs text-muted-foreground">
-                        <span>Enviados: {campaignNode.metrics.envios_enviados}</span>
-                        <span>Fallidos: {campaignNode.metrics.envios_fallidos}</span>
-                        <span>Omitidos: {campaignNode.metrics.envios_omitidos}</span>
                         <span>Entrega: {formatPercent(campaignNode.metrics.tasa_entrega_pct)}</span>
                         <span>Respuesta: {formatPercent(campaignNode.metrics.tasa_respuesta_pct)}</span>
-                        <span>Clic/Sesión: {formatPercent(campaignNode.metrics.click_to_session_pct)}</span>
+                        {campaignIsEmail ? (
+                          <span>Clic/Sesión: {formatPercent(campaignNode.metrics.click_to_session_pct)}</span>
+                        ) : null}
                       </div>
                     </button>
 
@@ -1108,6 +1116,8 @@ export function CampanasMetricsClient() {
                         {campaignNode.templates.length ? (
                           campaignNode.templates.map((templateNode) => {
                             const templateOpen = Boolean(expandedTemplates[templateNode.key])
+                            const templateCanal = normalizeMetricCanal(templateNode.canal)
+                            const templateIsEmail = isEmailCanal(templateCanal)
                             return (
                               <div key={templateNode.key} className="rounded border bg-muted/20">
                                 <button
@@ -1125,11 +1135,18 @@ export function CampanasMetricsClient() {
                                     </div>
                                     <div className="flex flex-wrap gap-2 text-xs">
                                       <Badge variant="outline">Totales: {templateNode.metrics.envios_totales}</Badge>
+                                      <Badge variant="outline">Enviados: {templateNode.metrics.envios_enviados}</Badge>
                                       <Badge variant="outline">Entregados: {templateNode.metrics.envios_entregados}</Badge>
                                       <Badge variant="outline">Respondidos: {templateNode.metrics.envios_respondidos}</Badge>
-                                      <Badge variant="outline">Aperturas: {templateNode.metrics.brevo_aperturas}</Badge>
-                                      <Badge variant="outline">Clics: {templateNode.metrics.brevo_clicks}</Badge>
-                                      <Badge variant="outline">Sesiones UTM: {templateNode.metrics.sesiones_utm}</Badge>
+                                      <Badge variant="outline">Fallidos: {templateNode.metrics.envios_fallidos}</Badge>
+                                      <Badge variant="outline">Omitidos: {templateNode.metrics.envios_omitidos}</Badge>
+                                      {templateIsEmail ? (
+                                        <>
+                                          <Badge variant="outline">Aperturas: {templateNode.metrics.brevo_aperturas}</Badge>
+                                          <Badge variant="outline">Clics: {templateNode.metrics.brevo_clicks}</Badge>
+                                          <Badge variant="outline">Sesiones UTM: {templateNode.metrics.sesiones_utm}</Badge>
+                                        </>
+                                      ) : null}
                                     </div>
                                   </div>
                                   <div className="mt-2 flex flex-wrap gap-3 text-xs text-muted-foreground">
@@ -1145,6 +1162,8 @@ export function CampanasMetricsClient() {
                                         const batchOpen = Boolean(expandedBatches[batch.id])
                                         const detail = batchDetails[batch.id]
                                         const batchMetrics = buildBatchMetrics(batch, detail)
+                                        const batchCanal = normalizeMetricCanal(batchMetrics.canal)
+                                        const batchIsEmail = isEmailCanal(batchCanal)
                                         return (
                                           <div key={batch.id} className="rounded border bg-background">
                                             <button
@@ -1161,19 +1180,25 @@ export function CampanasMetricsClient() {
                                                 </div>
                                                 <div className="flex flex-wrap gap-2 text-xs">
                                                   <Badge variant="outline">Totales: {batchMetrics.totales}</Badge>
+                                                  <Badge variant="outline">Enviados: {batchMetrics.enviados}</Badge>
                                                   <Badge variant="outline">Entregados: {batchMetrics.entregados}</Badge>
                                                   <Badge variant="outline">Respondidos: {batchMetrics.respondidos}</Badge>
-                                                  <Badge variant="outline">Aperturas: {batchMetrics.aperturas}</Badge>
-                                                  <Badge variant="outline">Clics: {batchMetrics.clicks}</Badge>
+                                                  <Badge variant="outline">Fallidos: {batchMetrics.fallidos}</Badge>
+                                                  <Badge variant="outline">Omitidos: {batchMetrics.omitidos}</Badge>
+                                                  {batchIsEmail ? (
+                                                    <>
+                                                      <Badge variant="outline">Aperturas: {batchMetrics.aperturas}</Badge>
+                                                      <Badge variant="outline">Clics: {batchMetrics.clicks}</Badge>
+                                                    </>
+                                                  ) : (
+                                                    <Badge variant="outline">Leídos: {batchMetrics.leidos}</Badge>
+                                                  )}
                                                 </div>
                                               </div>
                                               <div className="mt-2 flex flex-wrap gap-3 text-xs text-muted-foreground">
-                                                <span>Enviados: {batchMetrics.enviados}</span>
-                                                <span>Fallidos: {batchMetrics.fallidos}</span>
-                                                <span>Omitidos: {batchMetrics.omitidos}</span>
                                                 <span>Entrega: {formatPercent(batchMetrics.tasaEntrega)}</span>
                                                 <span>Respuesta: {formatPercent(batchMetrics.tasaRespuesta)}</span>
-                                                <span>Clic/Sesión: —</span>
+                                                {batchIsEmail ? <span>Clic/Sesión: —</span> : null}
                                               </div>
                                             </button>
 
@@ -1189,6 +1214,7 @@ export function CampanasMetricsClient() {
                                                   <div className="space-y-1">
                                                     {detail.envios.map((envio) => {
                                                       const envioMetrics = buildEnvioMetrics(envio, detail.logs)
+                                                      const envioIsEmail = isEmailCanal(envio.canal)
                                                       return (
                                                         <div key={envio.id} className="rounded border bg-muted/10 p-2">
                                                           <div className="flex flex-wrap items-center justify-between gap-2">
@@ -1197,8 +1223,17 @@ export function CampanasMetricsClient() {
                                                             </p>
                                                             <div className="flex flex-wrap gap-2 text-[11px]">
                                                               <Badge variant="outline">{envio.estado}</Badge>
-                                                              <Badge variant="outline">Aperturas: {envioMetrics.aperturas}</Badge>
-                                                              <Badge variant="outline">Clics: {envioMetrics.clicks}</Badge>
+                                                              {envioIsEmail ? (
+                                                                <>
+                                                                  <Badge variant="outline">Aperturas: {envioMetrics.aperturas}</Badge>
+                                                                  <Badge variant="outline">Clics: {envioMetrics.clicks}</Badge>
+                                                                </>
+                                                              ) : (
+                                                                <>
+                                                                  <Badge variant="outline">Respondido: {envioMetrics.respondido ? "Sí" : "No"}</Badge>
+                                                                  <Badge variant="outline">Leído: {envioMetrics.leido ? "Sí" : "No"}</Badge>
+                                                                </>
+                                                              )}
                                                             </div>
                                                           </div>
                                                           <div className="mt-1 flex flex-wrap gap-3 text-[11px] text-muted-foreground">
@@ -1806,6 +1841,30 @@ function formatDateTime(value?: string | null): string {
   }).format(date)
 }
 
+function normalizeMetricCanal(value: string | null | undefined): "correo" | "whatsapp" | "llamada" | "multi" | "otro" {
+  const normalized = String(value || "").trim().toLowerCase()
+  if (normalized === "correo") return "correo"
+  if (normalized === "whatsapp") return "whatsapp"
+  if (normalized === "llamada") return "llamada"
+  if (normalized === "multi") return "multi"
+  return "otro"
+}
+
+function isEmailCanal(value: string | null | undefined): boolean {
+  return normalizeMetricCanal(value) === "correo"
+}
+
+function resolveCampaignCanal(node: HierarchyCampaignNode): "correo" | "whatsapp" | "llamada" | "multi" | "otro" {
+  const canales = new Set<string>()
+  node.templates.forEach((template) => {
+    const channel = normalizeMetricCanal(template.canal)
+    if (channel !== "otro") canales.add(channel)
+  })
+  if (canales.size === 1) return normalizeMetricCanal(Array.from(canales)[0])
+  if (canales.size > 1) return "multi"
+  return normalizeMetricCanal(node.metrics.canal)
+}
+
 function toNumber(value: unknown): number {
   if (typeof value === "number" && Number.isFinite(value)) return value
   const parsed = Number(value)
@@ -1855,6 +1914,7 @@ function sumAtribucionMetrics(
   const clickSesion = totals.sesiones_utm ? (totals.brevo_clicks * 100) / totals.sesiones_utm : 0
   return {
     ...current,
+    canal: current.canal || next.canal || null,
     ...totals,
     tasa_entrega_pct: tasaEntrega,
     tasa_respuesta_pct: tasaRespuesta,
@@ -1916,9 +1976,12 @@ function resolveBrevoEventName(log: ContactoLog): string {
 }
 
 function buildBatchMetrics(batch: ProspeccionCampanaGroup["batches"][number], detail?: BatchDetailState) {
+  const canal =
+    Array.isArray(batch.canales) && batch.canales.length ? String(batch.canales[0] || "").trim().toLowerCase() : ""
   const totales = Object.values(batch.totales || {}).reduce((sum, value) => sum + toNumber(value), 0)
   const entregados = toNumber(batch.totales?.entregado)
   const respondidos = toNumber(batch.totales?.respondido)
+  const leidos = toNumber(batch.totales?.leido) + toNumber((batch.totales as Record<string, number> | undefined)?.read)
   const enviados = toNumber(batch.totales?.enviado) + entregados
   const fallidos = toNumber(batch.totales?.fallido) + toNumber(batch.totales?.error)
   const omitidos = toNumber(batch.totales?.omitido)
@@ -1935,6 +1998,7 @@ function buildBatchMetrics(batch: ProspeccionCampanaGroup["batches"][number], de
     totales,
     entregados,
     respondidos,
+    leidos,
     enviados,
     fallidos,
     omitidos,
@@ -1942,19 +2006,31 @@ function buildBatchMetrics(batch: ProspeccionCampanaGroup["batches"][number], de
     clicks,
     tasaEntrega,
     tasaRespuesta,
+    canal,
   }
 }
 
 function buildEnvioMetrics(envio: ContactoEnvio, logs: ContactoLog[]) {
   let aperturas = 0
   let clicks = 0
+  let respondido = envio.estado === "respondido"
+  let leido = envio.estado === "leido" || envio.estado === "read"
   logs.forEach((log) => {
     if (log.envio_id !== envio.id) return
     const eventName = resolveBrevoEventName(log)
     if (eventName === "opened" || eventName === "unique_opened") aperturas += 1
     if (eventName === "click" || eventName === "unique_click") clicks += 1
+    const action = (log.accion || "").toLowerCase()
+    const status = (log.estado || "").toLowerCase()
+    const direction = isRecord(log.detalle) && typeof log.detalle?.direction === "string" ? String(log.detalle.direction).toLowerCase() : ""
+    if (action === "reply_inbound" || status === "respondido" || direction === "inbound") {
+      respondido = true
+    }
+    if (status === "leido" || status === "read") {
+      leido = true
+    }
   })
-  return { aperturas, clicks }
+  return { aperturas, clicks, respondido, leido }
 }
 
 function resolveEnvioProspectLabel(envio: ContactoEnvio): string {
