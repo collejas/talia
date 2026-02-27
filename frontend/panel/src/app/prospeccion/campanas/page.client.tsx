@@ -827,7 +827,7 @@ export function CampanasMetricsClient() {
           <DialogHeader>
             <DialogTitle className="text-base">Plantillas · {templatesCampanaNombre || "Campaña"}</DialogTitle>
           </DialogHeader>
-          <div className="grid gap-3 md:grid-cols-[1.2fr_1fr] h-[78vh] overflow-hidden">
+          <div className="grid gap-3 lg:grid-cols-[0.6fr_1.4fr] h-[78vh] overflow-hidden">
             <div className="rounded-lg border p-2 overflow-y-auto text-xs">
               {templatesLoading ? (
                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
