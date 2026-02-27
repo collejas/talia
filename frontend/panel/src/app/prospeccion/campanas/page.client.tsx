@@ -1207,7 +1207,6 @@ export function CampanasMetricsClient() {
                                               <div className="mt-2 flex flex-wrap gap-3 text-xs text-muted-foreground">
                                                 <span>Entrega: {formatPercent(batchMetrics.tasaEntrega)}</span>
                                                 <span>Respuesta: {formatPercent(batchMetrics.tasaRespuesta)}</span>
-                                                {batchIsEmail ? <span>Clic/Sesión: —</span> : null}
                                               </div>
                                             </button>
 
