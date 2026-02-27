@@ -90,11 +90,11 @@ sudo systemctl restart talia-panel.service
 
 sudo rsync -a landing/src/ /var/www/talia-landing/
 
-Después te conecto una UI rápida en prospeccion/contactos para alta/baja de suppressions sin usar API manual.
+  Siguiente pendiente natural:
 
-siguiente pendiente del backlog (plantillas Brevo API o métricas persistentes por campaña/plantilla).
-
-sigo inmediatamente con el siguiente pendiente: WhatsApp (respuestas + CTA por campaña/plantilla).
+  1. Definir si quieres implementar respondidos por correo (inbound real desde buzón/IMAP o proveedor).
+  2. Confirmar estrategia de sesiones UTM (que la landing donde cae el clic dispare webchat/visit con UTM).
+  3. WhatsApp (respuestas + CTA por campaña/plantilla).
 
 # Gilberto Nunez director comercial comebi cel personal +5215530862988   cel trabajo +5214441692305
 

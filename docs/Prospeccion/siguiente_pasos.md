@@ -21,7 +21,7 @@ Este archivo sirve para capturar próximos requerimientos sin mezclar historial 
 
 4. Operación
 - Alertas automáticas de fallos por canal.
-- Runbook técnico consolidado para soporte.
+- Runbook técnico consolidado para soporte. (Completado: ver `runbook_metricas_brevo.md`)
 
 ## Cómo registrar nuevos cambios
 
@@ -116,3 +116,14 @@ Por cada cambio nuevo:
   - endpoint persistente `GET /prospeccion/campanas/atribucion`.
   - bloque visual en `prospeccion/campanas` con entrega/respuesta + aperturas/clics + sesiones UTM por plantilla.
   - tracking de correo ahora incluye ids técnicos en URL (`cid` campaña, `tid` plantilla) para atribución web más precisa.
+- Webhook Brevo y métricas:
+  - habilitado endpoint público de recepción:
+    - `POST /api/prospeccion/contacto/brevo/webhook` (proxy a backend CRM).
+  - confirmado flujo de actualización de `entregado` vía webhook.
+  - fix aplicado en backend para persistir eventos en logs con tenant correcto (`organizacion_id`) y habilitar conteo de `aperturas/clics`.
+  - nota operativa:
+    - `respondidos` en correo depende de implementar/activar inbound reply.
+    - `sesiones UTM` depende de que la landing cree sesión en `webchat_visitantes` con UTM de prospección.
+- Runbook operativo:
+  - se documentó guía de diagnóstico de métricas de correo en:
+    - `docs/Prospeccion/runbook_metricas_brevo.md`

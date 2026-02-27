@@ -78,6 +78,9 @@ Repositorio principal: `backend/app/repositories/crm.py`
   - Incluye `brevo_eventos` agregados desde logs persistentes de prospección.
 - `GET /crm/prospeccion/whatsapp/readiness`
 - `POST /crm/prospeccion/contacto/brevo/webhook`
+  - Exposición pública recomendada (panel/proxy):
+    - `POST /api/prospeccion/contacto/brevo/webhook`
+    - Reenvía a backend `POST /crm/prospeccion/contacto/brevo/webhook`.
 - `GET /crm/prospeccion/campanas`
 - `GET /crm/prospeccion/campanas/atribucion`
   - Incluye `sesiones_utm` y `click_to_session_pct` para atribución correo (UTM + ids técnicos `cid/tid`).

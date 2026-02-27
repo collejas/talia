@@ -1,6 +1,6 @@
 # Prospección · Documentación vigente
 
-Última actualización: 2026-02-25.
+Última actualización: 2026-02-27.
 
 Esta carpeta quedó organizada así:
 
@@ -9,6 +9,7 @@ Esta carpeta quedó organizada así:
 - `frontend_vistas.md`: vistas de UI y responsabilidades.
 - `backend_endpoints.md`: endpoints y capas backend.
 - `base_datos.md`: modelo de datos, funciones y RLS (referencia: `backups/postgres_20260223_215144`).
+- `runbook_metricas_brevo.md`: guia operativa de diagnostico para metricas de correo (Brevo + app).
 - `inbox_prospeccion_plan.md`: plan y avance de operación de conversaciones de prospección reutilizando `/inbox`.
 - `_archivo/`: documentos históricos que ya no reflejan el estado actual.
 

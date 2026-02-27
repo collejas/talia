@@ -52,6 +52,14 @@ Formato recomendado por entrada:
   - `GET /crm/prospeccion/campanas/atribucion` (resumen persistente por campaña/plantilla).
 - Tracking correo de prospección:
   - URL de tracking ahora incluye ids técnicos `cid` (campaña) y `tid` (plantilla) para consolidar sesiones UTM por plantilla.
+- Webhook Brevo (operativo E2E):
+  - Se habilitó endpoint público en panel para recepción externa:
+    - `POST /api/prospeccion/contacto/brevo/webhook` (proxy hacia backend `/crm/prospeccion/contacto/brevo/webhook`).
+  - Se corrigió persistencia de logs de eventos Brevo en backend:
+    - `backend/app/services/brevo.py` ahora envía `organizacion_id` al insertar `prospeccion_contactos_log`.
+  - Resultado esperado tras fix:
+    - `entregados` continúa actualizando desde estado de `prospeccion_contacto_envio`.
+    - `aperturas/clics` se contabilizan desde eventos webhook persistidos en `prospeccion_contactos_log`.
 
 ### Base de datos
 - Nueva tabla:
@@ -73,6 +81,14 @@ Formato recomendado por entrada:
 - Se cierra pendiente de `siguiente_pasos.md` sobre persistencia backend de preferencias de tabla.
 - Se cierra pendiente de normalización de email al persistir.
 - Se cierra pendiente de vistas guardadas para la tabla de prospectos.
+- Configuración requerida en Brevo para métricas de app:
+  - Webhook `Transactional` activo apuntando a:
+    - `https://talia.mx/api/prospeccion/contacto/brevo/webhook`
+  - Eventos mínimos recomendados:
+    - `delivered`, `opened`, `unique_opened`, `click`, `unique_click`, `hard_bounce`, `soft_bounce`, `blocked`, `spam`, `invalid`, `error`, `unsubscribe`.
+- Aclaración de métricas en campaña correo:
+  - `Respondidos` para correo requiere flujo de inbound email/reply hacia logs de prospección.
+  - `Sesiones UTM` sube cuando la landing genera sesión en `webchat_visitantes` con `utm_source=prospeccion`, `utm_medium=email` y señales `cid/tid/kw`.
 
 ## 2026-02-24
 
