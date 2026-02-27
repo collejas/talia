@@ -122,6 +122,7 @@ type ContactFilterValue = "any" | "with" | "without";
 type ContactMatchMode = "all" | "any";
 type EstratoFilterValue = "any" | "micro" | "pequena" | "mediana" | "grande";
 type BusquedasSortKey = "busqueda" | "registros" | "radio" | "geo" | "fecha";
+type SearchMode = "radial" | "advanced";
 
 type FormValues = {
   query: string;
@@ -352,6 +353,7 @@ export function DenueBusquedaView() {
   const [saveProspectosSegmentoError, setSaveProspectosSegmentoError] = useState<string | null>(null);
   const [advancedModalOpen, setAdvancedModalOpen] = useState(false);
   const [advancedFilters, setAdvancedFilters] = useState<DenueAdvancedFilters | null>(null);
+  const [searchMode, setSearchMode] = useState<SearchMode>("radial");
   const [geoLookups, setGeoLookups] = useState<GeoLookups | null>(null);
   const [scianLookups, setScianLookups] = useState<ScianLookups | null>(null);
   const [geoStatesCatalog, setGeoStatesCatalog] = useState<DenueCatalogosResponse["geo"]["states"]>([]);
@@ -377,6 +379,8 @@ export function DenueBusquedaView() {
     return typeof maybe === "string" && maybe.trim().length ? maybe.trim() : "radio";
   }, [activeBusqueda?.meta]);
   const mapIsAdvanced = activeModo !== "radio";
+  const uiIsAdvanced = searchMode === "advanced";
+  const mapCenterLocked = uiIsAdvanced || (mapIsAdvanced && !canRunBusquedas);
 
   const selectedActividadesList = useMemo(
     () => Array.from(selectedActividades).sort((a, b) => a.localeCompare(b, "es")),
@@ -625,6 +629,8 @@ export function DenueBusquedaView() {
       try {
         const selectedBusqueda = busquedasRef.current.find((item) => item.id === busquedaId);
         if (selectedBusqueda) {
+          const selectedMeta = extractBusquedaMeta(selectedBusqueda);
+          setSearchMode(selectedMeta.modo === "radio" ? "radial" : "advanced");
           setFormValues((prev) => ({
             ...prev,
             query: selectedBusqueda.query ?? prev.query,
@@ -1335,6 +1341,14 @@ export function DenueBusquedaView() {
     updateFormValue("lng", Number(coords.lng.toFixed(6)));
   }, [updateFormValue]);
 
+  const handleSearchModeChange = useCallback((mode: SearchMode) => {
+    setSearchMode(mode);
+    if (mode === "radial") {
+      setAdvancedFilters(null);
+      setAdvancedModalOpen(false);
+    }
+  }, []);
+
   const buildAdvancedQueryLabel = useCallback((filters: DenueAdvancedFilters, payload: AdvancedSearchPayload) => {
     const parts: string[] = [];
     parts.push(`Avanzada:${payload.modo}`);
@@ -1423,9 +1437,13 @@ export function DenueBusquedaView() {
   }, []);
 
   const runBusqueda = useCallback(
-    async (overrideFilters?: DenueAdvancedFilters | null) => {
+    async (options?: { filters?: DenueAdvancedFilters | null; forceStandard?: boolean }) => {
       setFeedback(null);
-      const activeAdvanced = overrideFilters ?? advancedFilters;
+      const activeAdvanced = options?.forceStandard
+        ? null
+        : options && "filters" in options
+          ? (options.filters ?? null)
+          : advancedFilters;
       const advancedPayload = buildAdvancedPayload(activeAdvanced);
       const isAdvanced = Boolean(activeAdvanced && advancedPayload);
       if (activeAdvanced && !advancedPayload) {
@@ -1523,13 +1541,16 @@ export function DenueBusquedaView() {
   );
 
   const handleStandardSearch = useCallback(() => {
-    void runBusqueda();
+    setSearchMode("radial");
+    setAdvancedFilters(null);
+    void runBusqueda({ forceStandard: true });
   }, [runBusqueda]);
 
   const handleAdvancedApply = useCallback(
     (filters: DenueAdvancedFilters) => {
+      setSearchMode("advanced");
       setAdvancedFilters(filters);
-      void runBusqueda(filters);
+      void runBusqueda({ filters });
     },
     [runBusqueda],
   );
@@ -1625,6 +1646,27 @@ export function DenueBusquedaView() {
           <CardDescription>Define el centro y el radio antes de consultar DENUE.</CardDescription>
         </CardHeader>
         <CardContent>
+          <div className="mb-4 flex flex-wrap items-center gap-2">
+            <Label className="text-xs font-medium text-muted-foreground">Tipo de búsqueda</Label>
+            <div className="inline-flex rounded-md border border-border/60 p-1">
+              <Button
+                type="button"
+                size="sm"
+                variant={searchMode === "radial" ? "secondary" : "ghost"}
+                onClick={() => handleSearchModeChange("radial")}
+              >
+                Radial
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant={searchMode === "advanced" ? "secondary" : "ghost"}
+                onClick={() => handleSearchModeChange("advanced")}
+              >
+                Avanzada
+              </Button>
+            </div>
+          </div>
           <div className="grid gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(0,1.2fr)_repeat(2,minmax(0,1fr))_minmax(0,1fr)]">
             <div className="space-y-2">
               <div className="flex items-start gap-2">
@@ -1661,6 +1703,7 @@ export function DenueBusquedaView() {
                 placeholder="Ej. cafeterías, autolavado, ferretería"
                 value={formValues.query}
                 onChange={(event) => updateFormValue("query", event.target.value)}
+                disabled={searchMode !== "radial"}
                 title={QUERY_TOOLTIP_TEXT}
                 aria-describedby={QUERY_TOOLTIP_ID}
               />
@@ -1679,6 +1722,7 @@ export function DenueBusquedaView() {
                   step={100}
                   value={formValues.radio_m}
                   onChange={(event) => updateFormValue("radio_m", Number(event.target.value))}
+                  disabled={searchMode !== "radial"}
                   className="w-full"
                 />
                 <p className="text-[11px] text-muted-foreground">
@@ -1696,6 +1740,7 @@ export function DenueBusquedaView() {
                 value={formValues.lat}
                 onChange={(event) => updateFormValue("lat", Number(event.target.value))}
                 step={0.000001}
+                disabled={searchMode !== "radial"}
               />
             </div>
             <div className="space-y-2">
@@ -1706,12 +1751,13 @@ export function DenueBusquedaView() {
                 value={formValues.lng}
                 onChange={(event) => updateFormValue("lng", Number(event.target.value))}
                 step={0.000001}
+                disabled={searchMode !== "radial"}
               />
             </div>
             <div className="space-y-2">
               <Label className="text-xs font-medium text-muted-foreground">Acciones</Label>
             <div className="flex flex-wrap gap-2">
-              {canRunBusquedas ? (
+              {canRunBusquedas && searchMode === "radial" ? (
                 <Button onClick={handleStandardSearch} disabled={isSearching || Boolean(activeDenueJobId)} className="flex-1 min-w-[140px]">
                   {isSearching ? (
                     <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
@@ -1721,7 +1767,7 @@ export function DenueBusquedaView() {
                   Buscar y guardar
                 </Button>
               ) : null}
-              {canRunBusquedas ? (
+              {canRunBusquedas && searchMode === "advanced" ? (
                 <Button
                   type="button"
                   variant="outline"
@@ -1732,15 +1778,17 @@ export function DenueBusquedaView() {
                   Búsqueda avanzada
                 </Button>
               ) : null}
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={() => {
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    setSearchMode("radial");
                   updateFormValue("lat", DEFAULT_CENTER.lat);
                     updateFormValue("lng", DEFAULT_CENTER.lng);
                     updateFormValue("radio_m", 1500);
                   }}
+                  disabled={searchMode !== "radial"}
                 >
                   Restablecer centro
                 </Button>
@@ -2259,7 +2307,7 @@ export function DenueBusquedaView() {
 	            <div>
 	              <CardTitle className="text-base">Mapa de resultados</CardTitle>
 	              <CardDescription>
-	                {mapIsAdvanced ? "Se centra automáticamente en los resultados encontrados." : "Mueve el marcador para actualizar el centro."}
+	                {mapCenterLocked ? "Se centra automáticamente en los resultados encontrados." : "Mueve el marcador para actualizar el centro."}
 	                {mapTruncated ? <span className="mt-1 block">Demasiados puntos en esta vista: acerca el zoom.</span> : null}
 	              </CardDescription>
 	            </div>
@@ -2270,7 +2318,7 @@ export function DenueBusquedaView() {
 	              onClick={() => {
 	                setFeedback({
 	                  type: "info",
-	                  message: mapIsAdvanced
+	                  message: mapCenterLocked
 	                    ? "El mapa se ajusta automáticamente a los resultados de la búsqueda avanzada."
 	                    : "Haz clic en el mapa o arrastra el marcador azul para ajustar la búsqueda.",
 	                });
@@ -2286,12 +2334,12 @@ export function DenueBusquedaView() {
 	                radius={formValues.radio_m}
 	                results={mapResults}
 	                highlightIds={selectedIds}
-	                onCenterChange={mapIsAdvanced ? undefined : handleCenterChange}
+	                onCenterChange={mapCenterLocked ? undefined : handleCenterChange}
 	                onViewportChange={setMapViewport}
-	                fitBounds={mapIsAdvanced ? mapFitBounds : null}
+	                fitBounds={uiIsAdvanced && mapIsAdvanced ? mapFitBounds : null}
 	                fitBoundsKey={`${activeBusquedaId ?? ""}:${filtersKey}`}
-	                showSearchCircle={!mapIsAdvanced}
-	                enableCenterControls={!mapIsAdvanced}
+	                showSearchCircle={!mapCenterLocked}
+	                enableCenterControls={!mapCenterLocked}
 	              />
 	            </div>
 	          </CardContent>

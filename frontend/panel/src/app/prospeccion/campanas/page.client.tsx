@@ -1006,12 +1006,12 @@ export function CampanasMetricsClient() {
                 </div>
               </div>
               <div className="mt-4 space-y-3">
-                {group.batches.map((batch) => (
+                {group.batches.map((batch, batchIndex) => (
                   <div key={batch.id} className="rounded-md border bg-muted/30 p-3 text-sm shadow-sm">
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <div>
                         <p className="font-medium">
-                          {batch.titulo || batch.campana_nombre || `Lote ${batch.id.slice(0, 8)}`}
+                          {resolveBatchDisplayTitle(batchIndex)}
                         </p>
                         <p className="text-xs text-muted-foreground">
                           {(batch.total_prospectos ?? 0).toLocaleString("es-MX")} prospectos ·{" "}
@@ -1164,7 +1164,7 @@ export function CampanasMetricsClient() {
                                 {templateOpen ? (
                                   <div className="space-y-2 border-t p-3">
                                     {templateNode.batches.length ? (
-                                      templateNode.batches.map((batch) => {
+                                      templateNode.batches.map((batch, batchIndex) => {
                                         const batchOpen = Boolean(expandedBatches[batch.id])
                                         const detail = batchDetails[batch.id]
                                         const batchMetrics = buildBatchMetrics(batch, detail)
@@ -1182,7 +1182,7 @@ export function CampanasMetricsClient() {
                                                 <div className="flex items-center gap-2">
                                                   {batchOpen ? <IconChevronDown className="size-4" /> : <IconChevronRight className="size-4" />}
                                                   <p className="text-sm font-medium">
-                                                    {batch.titulo || `Lote ${batch.id.slice(0, 8)}`}
+                                                    {resolveBatchDisplayTitle(batchIndex)}
                                                   </p>
                                                 </div>
                                                 <div className="flex flex-wrap gap-2 text-xs">
@@ -1246,7 +1246,8 @@ export function CampanasMetricsClient() {
                                                             </div>
                                                           </div>
                                                           <div className="mt-1 flex flex-wrap gap-3 text-[11px] text-muted-foreground">
-                                                            <span>Prospecto: {envio.prospecto_id}</span>
+                                                            <span>Prospecto: {resolveEnvioProspectLabel(envio)}</span>
+                                                            <span>Segmento: {resolveEnvioSegmentoLabel(envio)}</span>
                                                             <span>Mensaje: {envio.mensaje_id || "—"}</span>
                                                             <span>Procesado: {formatDateTime(envio.procesado_en || envio.programado_en)}</span>
                                                           </div>
@@ -1835,6 +1836,10 @@ function resolveBatchQueryLabel(rawFilters: unknown, labelMap: Record<string, st
   return `${unique.slice(0, 2).join(", ")} +${unique.length - 2}`
 }
 
+function resolveBatchDisplayTitle(batchIndex: number): string {
+  return `Lote ${batchIndex + 1}`
+}
+
 function formatPercent(value: number): string {
   if (!Number.isFinite(value)) return "0%"
   return `${value.toFixed(2)}%`
@@ -2105,5 +2110,14 @@ function resolveEnvioProspectLabel(envio: ContactoEnvio): string {
     const phone = typeof detail["phone"] === "string" ? detail["phone"].trim() : ""
     if (phone) return phone
   }
-  return `Prospecto ${envio.prospecto_id.slice(0, 8)}`
+  return "Prospecto sin nombre"
+}
+
+function resolveEnvioSegmentoLabel(envio: ContactoEnvio): string {
+  if (isRecord(envio.detalle)) {
+    const detail = envio.detalle as Record<string, unknown>
+    const segmento = typeof detail["segmento"] === "string" ? detail["segmento"].trim() : ""
+    if (segmento) return segmento
+  }
+  return "Sin segmento"
 }
