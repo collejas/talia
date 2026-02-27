@@ -4599,10 +4599,14 @@ def _build_contact_template_payload(
     data: dict[str, Any],
     *,
     include_metadata: bool = False,
+    allow_null_keys: set[str] | None = None,
 ) -> dict[str, Any]:
     payload: dict[str, Any] = {}
+    allow_null = allow_null_keys or set()
     for key, value in data.items():
         if value is None:
+            if key in allow_null:
+                payload[key] = None
             continue
         if isinstance(value, str):
             trimmed = value.strip()
@@ -13457,7 +13461,7 @@ async def actualizar_contacto_template(
     current = await repo.get_contact_template(usuario_token=user_token, template_id=template_id)
     if not current:
         raise HTTPException(status_code=404, detail="contact_template_not_found")
-    raw_data = payload.model_dump(exclude_none=True)
+    raw_data = payload.model_dump(exclude_unset=True)
     if not raw_data:
         raise HTTPException(status_code=400, detail="empty_update")
     current_metadata = _ensure_dict(current.get("metadata"), default={})
@@ -13485,7 +13489,10 @@ async def actualizar_contacto_template(
         else:
             metadata_patch["campana_id"] = None
         raw_data["metadata"] = metadata_patch
-    body = _build_contact_template_payload(raw_data)
+    body = _build_contact_template_payload(
+        raw_data,
+        allow_null_keys={"descripcion", "asunto", "cuerpo_texto", "cuerpo_html"},
+    )
     try:
         template = await repo.update_contact_template(
             usuario_token=user_token,

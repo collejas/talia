@@ -130,13 +130,25 @@ def _extract_visible_text_from_html(value: str) -> str:
 
 
 def _inject_text_fallback_into_html(*, body_text: str, body_html: str) -> str:
-    """Si el HTML queda sin texto visible (solo imagen/logo), antepone el texto plano."""
+    """Garantiza que el HTML incluya el texto base cuando no esté presente."""
 
     if not body_html:
         return body_html
-    if _extract_visible_text_from_html(body_html):
+    normalized_body_text = re.sub(r"\s+", " ", (body_text or "")).strip()
+    if not normalized_body_text:
         return body_html
-    escaped = html_lib.escape(body_text or "").replace("\n", "<br/>")
+    visible_html = _extract_visible_text_from_html(body_html)
+    if visible_html:
+        html_compact = visible_html.lower()
+        body_compact = normalized_body_text.lower()
+        # Si el texto principal ya está contenido en el HTML, no duplicar.
+        if body_compact in html_compact:
+            return body_html
+        # Fallback tolerante: compara inicio del cuerpo para cubrir variaciones menores.
+        body_head = body_compact[:120]
+        if body_head and body_head in html_compact:
+            return body_html
+    escaped = html_lib.escape(normalized_body_text).replace("\n", "<br/>")
     if not escaped.strip():
         return body_html
     return f"<p>{escaped}</p>\n{body_html}"
@@ -203,6 +215,13 @@ def _build_email_tracking_url(
     )
     query = urlencode(existing, doseq=True)
     return urlunparse((parsed.scheme or "https", parsed.netloc or "talia.mx", parsed.path or "/", "", query, ""))
+
+
+def _resolve_tracking_base_url(payload: dict[str, Any]) -> str:
+    metadata = payload.get("metadata") if isinstance(payload.get("metadata"), dict) else {}
+    base_url = _clean_text(metadata.get("tracking_base_url")) or "https://talia.mx/"
+    parsed = urlparse(base_url)
+    return urlunparse((parsed.scheme or "https", parsed.netloc or "talia.mx", parsed.path or "/", "", "", ""))
 
 
 def _wrap_images_with_tracking_link(body_html: str, tracking_url: str) -> str:
@@ -589,15 +608,16 @@ async def _run_envio_correo(
             error="correo_payload_incompleto",
         )
     context = _build_placeholder_context(envio, payload, payload.get("metadata"))
-    subject = _render_template_text(subject_template, context).strip()
-    body = _render_template_text(str(body_template), context).strip()
     tracking_url = _build_email_tracking_url(
         context=context,
         payload=payload,
         envio_id=envio.get("id"),
         prospecto_id=envio.get("prospecto_id"),
     )
-    body = _append_tracking_params_to_plain_urls(body, tracking_url)
+    context["tracking_url"] = tracking_url
+    context["website_url"] = _resolve_tracking_base_url(payload)
+    subject = _render_template_text(subject_template, context).strip()
+    body = _render_template_text(str(body_template), context).strip()
     body_html = None
     logo_url = _clean_text(context.get("logo_url"))
     if isinstance(body_html_template, str) and body_html_template.strip():

@@ -129,6 +129,7 @@ export function CampanasMetricsClient() {
   const logoFileInputRef = useRef<HTMLInputElement | null>(null)
   const correoTextoRef = useRef<HTMLTextAreaElement | null>(null)
   const correoHtmlRef = useRef<HTMLTextAreaElement | null>(null)
+  const lastFocusedCorreoFieldRef = useRef<"cuerpoTexto" | "cuerpoHtml" | null>(null)
   const [templateForm, setTemplateForm] = useState({
     id: "",
     canal: "correo" as "correo" | "whatsapp" | "llamada",
@@ -590,6 +591,30 @@ export function CampanasMetricsClient() {
     [appendTemplateToken, normalizeLogoUrl, templateForm.cuerpoHtml]
   )
 
+  const insertCorreoTrackedLink = useCallback(() => {
+    const textToken = "Visitar sitio: {{website_url}}"
+    const htmlToken = '<a href="{{tracking_url}}" target="_blank" rel="noopener noreferrer">Visitar sitio</a>'
+
+    const insertInto = (current: string, token: string, ref: HTMLTextAreaElement | null, focused: boolean): string => {
+      if (focused && ref) {
+        const start = ref.selectionStart ?? current.length
+        const end = ref.selectionEnd ?? current.length
+        return `${current.slice(0, start)}${token}${current.slice(end)}`
+      }
+      const separator = current && !current.endsWith("\n") ? "\n" : ""
+      return `${current}${separator}${token}`
+    }
+
+    const textFocused = lastFocusedCorreoFieldRef.current === "cuerpoTexto"
+    const htmlFocused = lastFocusedCorreoFieldRef.current === "cuerpoHtml"
+
+    setTemplateForm((prev) => ({
+      ...prev,
+      cuerpoTexto: insertInto(prev.cuerpoTexto ?? "", textToken, correoTextoRef.current, textFocused),
+      cuerpoHtml: insertInto(prev.cuerpoHtml ?? "", htmlToken, correoHtmlRef.current, htmlFocused),
+    }))
+  }, [])
+
   const loadLogos = useCallback(async () => {
     if (logosLoading) return
     setLogosLoading(true)
@@ -832,8 +857,10 @@ export function CampanasMetricsClient() {
       metadata["media_url_base"] = normalizedLogoUrl
       if (whatsappMediaUrl) metadata["media_url_tracked"] = whatsappMediaUrl
     }
-    if (templateForm.canal === "whatsapp") {
+    if (templateForm.canal === "correo" || templateForm.canal === "whatsapp") {
       metadata["tracking_base_url"] = (tenantBaseUrl || templateForm.ctaBaseUrl || "").trim() || null
+    }
+    if (templateForm.canal === "whatsapp") {
       if (whatsappCtaUrl) metadata["cta_url_tracked"] = whatsappCtaUrl
     }
     if (templateForm.nombreIa.trim()) {
@@ -1531,6 +1558,17 @@ export function CampanasMetricsClient() {
               ) : null}
               {templateForm.canal === "correo" ? (
                 <>
+                  <div className="space-y-1">
+                    <Label>Web destino</Label>
+                    <Input
+                      value={templateForm.ctaBaseUrl}
+                      onChange={(event) => setTemplateForm((prev) => ({ ...prev, ctaBaseUrl: event.target.value }))}
+                      placeholder="https://tu-dominio.com"
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Se usa para redireccionar clics del correo con seguimiento en segundo plano.
+                    </p>
+                  </div>
                   <div className="grid gap-3 sm:grid-cols-2">
                     <div className="space-y-1">
                       <Label>Nombre IA (opcional)</Label>
@@ -1563,6 +1601,9 @@ export function CampanasMetricsClient() {
                       rows={4}
                       value={templateForm.cuerpoTexto}
                       onChange={(event) => setTemplateForm((prev) => ({ ...prev, cuerpoTexto: event.target.value }))}
+                      onFocus={() => {
+                        lastFocusedCorreoFieldRef.current = "cuerpoTexto"
+                      }}
                     />
                   </div>
                   <div className="space-y-2 rounded-md border p-2">
@@ -1627,14 +1668,22 @@ export function CampanasMetricsClient() {
                   </div>
                   <div className="space-y-1">
                     <Label>Cuerpo (HTML)</Label>
+                    <div className="mb-2 flex flex-wrap items-center gap-2">
+                      <Button type="button" variant="outline" size="sm" onClick={() => insertCorreoTrackedLink()}>
+                        Insertar enlace web
+                      </Button>
+                    </div>
                     <Textarea
                       ref={correoHtmlRef}
                       rows={5}
                       value={templateForm.cuerpoHtml}
                       onChange={(event) => setTemplateForm((prev) => ({ ...prev, cuerpoHtml: event.target.value }))}
+                      onFocus={() => {
+                        lastFocusedCorreoFieldRef.current = "cuerpoHtml"
+                      }}
                     />
                     <p className="text-xs text-muted-foreground">
-                      Variables: {"{{nombre}}, {{empresa}}, {{email}}, {{telefono}}, {{segmento}}, {{logo_url}}"}.
+                      Variables: {"{{nombre}}, {{empresa}}, {{email}}, {{telefono}}, {{segmento}}, {{logo_url}}, {{tracking_url}}, {{website_url}}"}.
                     </p>
                   </div>
                 </>
