@@ -1227,17 +1227,6 @@ export function CampanasMetricsClient() {
                         </div>
                       </div>
                     </div>
-                    <div className="space-y-1">
-                      <Label>Base URL CTA (botón Twilio/Meta)</Label>
-                      <Input
-                        value={tenantBaseUrl || templateForm.ctaBaseUrl}
-                        readOnly
-                        placeholder="Configura Sitio web o Dominio principal en Settings/Variables"
-                      />
-                      <p className="text-xs text-muted-foreground">
-                        Tomada automáticamente de Settings/Variables: Sitio web o Dominio principal.
-                      </p>
-                    </div>
                   </div>
                 </>
               ) : null}
