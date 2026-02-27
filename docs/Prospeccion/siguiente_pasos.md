@@ -45,6 +45,28 @@ Este archivo sirve para capturar próximos requerimientos sin mezclar historial 
     - validar que la landing de destino del clic ejecute alta de visita (`/api/webchat/visit`),
     - garantizar persistencia de `utm_source=prospeccion`, `utm_medium=email` y señales `cid/tid/kw`,
     - cerrar trazabilidad end-to-end de clic -> sesión atribuida por campaña/plantilla.
+  - `Sesiones UTM` por prospecto/envío (nuevo objetivo):
+    - objetivo:
+      - bajar la métrica de atribución desde campaña/plantilla a nivel lote y prospecto.
+    - diseño:
+      - agregar identificador único por envío en links de correo (`eid` firmado o token corto),
+      - persistir ese `eid` cuando la landing/webchat crea visita en `webchat_visitantes` (o tabla puente),
+      - resolver relación 1:1 entre `prospeccion_contacto_envio.id` y sesión web.
+    - KPIs nuevos por detalle:
+      - `clico` (sí/no),
+      - `sesion_atribuida` (sí/no),
+      - `click_to_session` por envío/lote.
+    - cambios esperados:
+      - backend:
+        - generar y validar token de atribución por envío en render de links,
+        - endpoint de visita webchat registra referencia de envío/prospecto.
+      - base de datos:
+        - columna o tabla de relación (`envio_id` <-> `session_id`) indexada por tenant.
+      - frontend:
+        - mostrar sesión atribuida en nivel prospecto/lote y mantener `Clic/Sesión` agregado en campaña/plantilla.
+    - criterio de aceptación:
+      - un clic de correo que abre landing y dispara visita debe reflejarse en el prospecto correcto,
+      - suma de sesiones por prospecto/lote consistente con total por plantilla/campaña (salvo deduplicaciones definidas).
   - WhatsApp por campaña/plantilla:
     - consolidar atribución de respuestas entrantes por plantilla/campaña,
     - medir y persistir CTA/clics por plantilla,
