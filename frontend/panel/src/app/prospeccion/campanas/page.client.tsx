@@ -97,6 +97,7 @@ export function CampanasMetricsClient() {
   const [expandedTemplates, setExpandedTemplates] = useState<Record<string, boolean>>({})
   const [expandedBatches, setExpandedBatches] = useState<Record<string, boolean>>({})
   const [batchDetails, setBatchDetails] = useState<Record<string, BatchDetailState>>({})
+  const [metricCanalFilter, setMetricCanalFilter] = useState<"todos" | "correo" | "whatsapp" | "llamada">("todos")
   const [deleteLoading, setDeleteLoading] = useState<string | null>(null)
   const [crmCampaigns, setCrmCampaigns] = useState<CrmCampaign[]>([])
   const [campaignDialogOpen, setCampaignDialogOpen] = useState(false)
@@ -388,6 +389,15 @@ export function CampanasMetricsClient() {
       })
       .sort((a, b) => b.metrics.envios_totales - a.metrics.envios_totales)
   }, [atribucionItems, campanas, crmCampaigns])
+
+  const filteredHierarchyCampaigns = useMemo(() => {
+    if (metricCanalFilter === "todos") return hierarchyCampaigns
+    return hierarchyCampaigns.filter((campaignNode) => {
+      const campaignCanal = resolveCampaignCanal(campaignNode)
+      if (campaignCanal === metricCanalFilter) return true
+      return campaignNode.templates.some((templateNode) => normalizeMetricCanal(templateNode.canal) === metricCanalFilter)
+    })
+  }, [hierarchyCampaigns, metricCanalFilter])
 
   useEffect(() => {
     const pendingBatchIds: string[] = []
@@ -1071,10 +1081,26 @@ export function CampanasMetricsClient() {
             <CardTitle className="text-base font-semibold">Métricas jerárquicas de campaña</CardTitle>
             <p className="text-sm text-muted-foreground">Campaña → plantilla → envío/lote → contacto/prospecto.</p>
           </div>
-          <Button variant="outline" size="sm" onClick={() => void fetchAtribucion()} disabled={atribucionLoading}>
-            <IconRefresh className={cn("mr-2 size-4", atribucionLoading && "animate-spin")} />
-            Actualizar
-          </Button>
+          <div className="flex items-center gap-2">
+            <Select
+              value={metricCanalFilter}
+              onValueChange={(value) => setMetricCanalFilter(value as "todos" | "correo" | "whatsapp" | "llamada")}
+            >
+              <SelectTrigger className="h-8 w-[170px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="todos">Canal: Todos</SelectItem>
+                <SelectItem value="correo">Canal: Correo</SelectItem>
+                <SelectItem value="whatsapp">Canal: WhatsApp</SelectItem>
+                <SelectItem value="llamada">Canal: Llamada</SelectItem>
+              </SelectContent>
+            </Select>
+            <Button variant="outline" size="sm" onClick={() => void fetchAtribucion()} disabled={atribucionLoading}>
+              <IconRefresh className={cn("mr-2 size-4", atribucionLoading && "animate-spin")} />
+              Actualizar
+            </Button>
+          </div>
         </CardHeader>
         <CardContent>
           {atribucionError ? (
@@ -1083,16 +1109,17 @@ export function CampanasMetricsClient() {
               <span>{atribucionError}</span>
             </div>
           ) : null}
-          {!hierarchyCampaigns.length && !atribucionLoading ? (
+          {!filteredHierarchyCampaigns.length && !atribucionLoading ? (
             <p className="text-sm text-muted-foreground">Aún no hay datos de métricas para campañas.</p>
           ) : null}
-          {hierarchyCampaigns.length ? (
+          {filteredHierarchyCampaigns.length ? (
             <div className="space-y-3">
-              {hierarchyCampaigns.map((campaignNode) => {
+              {filteredHierarchyCampaigns.map((campaignNode) => {
                 const campaignOpen = Boolean(expandedCampaigns[campaignNode.key])
                 const campaignCanal = resolveCampaignCanal(campaignNode)
                 const campaignIsEmail = isEmailCanal(campaignCanal)
                 const campaignDeliveredLabel = deliveryMetricLabel(campaignCanal)
+                const campaignKpis = buildAtribucionKpis(campaignNode.metrics)
                 return (
                   <div key={campaignNode.key} className="rounded-md border">
                     <button
@@ -1124,10 +1151,13 @@ export function CampanasMetricsClient() {
                         </div>
                       </div>
                       <div className="mt-2 flex flex-wrap gap-3 text-xs text-muted-foreground">
-                        <span>Entrega: {formatPercent(campaignNode.metrics.tasa_entrega_pct)}</span>
-                        <span>Respuesta: {formatPercent(campaignNode.metrics.tasa_respuesta_pct)}</span>
+                        <span>Entrega: {formatPercent(campaignKpis.entrega)}</span>
+                        <span>Respuesta: {formatPercent(campaignKpis.respuesta)}</span>
                         {campaignIsEmail ? (
-                          <span>Clic/Sesión: {formatPercent(campaignNode.metrics.click_to_session_pct)}</span>
+                          <>
+                            <span>Clic/Total: {formatPercent(campaignKpis.clickTotal)}</span>
+                            <span>Sesiones/Clic: {formatPercent(campaignKpis.sesionesPorClick)}</span>
+                          </>
                         ) : null}
                       </div>
                     </button>
@@ -1140,6 +1170,7 @@ export function CampanasMetricsClient() {
                             const templateCanal = normalizeMetricCanal(templateNode.canal)
                             const templateIsEmail = isEmailCanal(templateCanal)
                             const templateDeliveredLabel = deliveryMetricLabel(templateCanal)
+                            const templateKpis = buildAtribucionKpis(templateNode.metrics)
                             return (
                               <div key={templateNode.key} className="rounded border bg-muted/20">
                                 <button
@@ -1176,10 +1207,13 @@ export function CampanasMetricsClient() {
                                   <div className="mt-2 flex flex-wrap gap-3 text-xs text-muted-foreground">
                                     <span>Canal: {canalLabel[templateNode.canal || ""] || templateNode.canal || "—"}</span>
                                     <span>Lotes: {templateNode.batches.length}</span>
-                                    <span>Entrega: {formatPercent(templateNode.metrics.tasa_entrega_pct)}</span>
-                                    <span>Respuesta: {formatPercent(templateNode.metrics.tasa_respuesta_pct)}</span>
+                                    <span>Entrega: {formatPercent(templateKpis.entrega)}</span>
+                                    <span>Respuesta: {formatPercent(templateKpis.respuesta)}</span>
                                     {templateIsEmail ? (
-                                      <span>Clic/Sesión: {formatPercent(templateNode.metrics.click_to_session_pct)}</span>
+                                      <>
+                                        <span>Clic/Total: {formatPercent(templateKpis.clickTotal)}</span>
+                                        <span>Sesiones/Clic: {formatPercent(templateKpis.sesionesPorClick)}</span>
+                                      </>
                                     ) : null}
                                   </div>
                                 </button>
@@ -1232,7 +1266,10 @@ export function CampanasMetricsClient() {
                                                 <span>Entrega: {formatPercent(batchMetrics.tasaEntrega)}</span>
                                                 <span>Respuesta: {formatPercent(batchMetrics.tasaRespuesta)}</span>
                                                 {batchIsEmail ? (
-                                                  <span>Clic/Sesión: {formatPercent(batchMetrics.clickToSession)}</span>
+                                                  <>
+                                                    <span>Clic/Total: {formatPercent(batchMetrics.clickTotal)}</span>
+                                                    <span>Sesiones/Clic: {formatPercent(batchMetrics.sesionesPorClick)}</span>
+                                                  </>
                                                 ) : null}
                                               </div>
                                             </button>
@@ -1275,6 +1312,14 @@ export function CampanasMetricsClient() {
                                                           <div className="mt-1 flex flex-wrap gap-3 text-[11px] text-muted-foreground">
                                                             <span>Segmento: {resolveEnvioSegmentoLabel(envio)}</span>
                                                             <span>Procesado: {formatDateTime(envio.procesado_en || envio.programado_en)}</span>
+                                                            <span>Entrega: {formatPercent(envioMetrics.tasaEntrega)}</span>
+                                                            <span>Respuesta: {formatPercent(envioMetrics.tasaRespuesta)}</span>
+                                                            {envioIsEmail ? (
+                                                              <>
+                                                                <span>Clic/Total: {formatPercent(envioMetrics.clickTotal)}</span>
+                                                                <span>Sesiones/Clic: {formatPercent(envioMetrics.sesionesPorClick)}</span>
+                                                              </>
+                                                            ) : null}
                                                           </div>
                                                         </div>
                                                       )
@@ -1967,6 +2012,25 @@ function sumAtribucionMetrics(
   }
 }
 
+function buildAtribucionKpis(metric: ProspeccionCampanaAtribucionItem): {
+  entrega: number
+  respuesta: number
+  clickTotal: number
+  sesionesPorClick: number
+} {
+  const totales = toNumber(metric.envios_totales)
+  const entregados = toNumber(metric.envios_entregados)
+  const respondidos = toNumber(metric.envios_respondidos)
+  const clicks = toNumber(metric.brevo_clicks)
+  const sesiones = toNumber(metric.sesiones_utm)
+  return {
+    entrega: totales ? (entregados * 100) / totales : 0,
+    respuesta: totales ? (respondidos * 100) / totales : 0,
+    clickTotal: totales ? (clicks * 100) / totales : 0,
+    sesionesPorClick: clicks ? (sesiones * 100) / clicks : 0,
+  }
+}
+
 function buildTemplateKey(item: {
   template_id?: string | null
   template_slug?: string | null
@@ -2087,8 +2151,8 @@ function buildBatchMetrics(batch: ProspeccionCampanaGroup["batches"][number], de
   }
   const tasaEntrega = totales ? (entregados * 100) / totales : 0
   const tasaRespuesta = totales ? (respondidos * 100) / totales : 0
-  // Regla UI por nivel: el tercer porcentaje del lote se calcula sobre el total del lote.
-  const clickToSession = totales ? (clicks * 100) / totales : 0
+  const clickTotal = totales ? (clicks * 100) / totales : 0
+  const sesionesPorClick = clicks ? (sesionesUtm * 100) / clicks : 0
   return {
     totales,
     entregados,
@@ -2102,7 +2166,8 @@ function buildBatchMetrics(batch: ProspeccionCampanaGroup["batches"][number], de
     clicks,
     tasaEntrega,
     tasaRespuesta,
-    clickToSession,
+    clickTotal,
+    sesionesPorClick,
     canal,
   }
 }
@@ -2114,6 +2179,8 @@ function buildEnvioMetrics(envio: ContactoEnvio, logs: ContactoLog[]) {
   const sesionUtm = sesionesUtm > 0
   let respondido = envio.estado === "respondido"
   let leido = envio.estado === "leido" || envio.estado === "read"
+  const estadoNormalizado = (envio.estado || "").toLowerCase()
+  let entregado = ["entregado", "delivered", "leido", "read", "respondido"].includes(estadoNormalizado)
   const scopedLogs = logs.filter((log) => log.envio_id === envio.id)
   const byEnvio = buildLogMetricsByEnvio(scopedLogs)
   if (byEnvio[envio.id]?.opened) aperturas = 1
@@ -2122,6 +2189,9 @@ function buildEnvioMetrics(envio: ContactoEnvio, logs: ContactoLog[]) {
     const action = (log.accion || "").toLowerCase()
     const status = (log.estado || "").toLowerCase()
     const direction = isRecord(log.detalle) && typeof log.detalle?.direction === "string" ? String(log.detalle.direction).toLowerCase() : ""
+    if (status === "entregado" || status === "delivered") {
+      entregado = true
+    }
     if (action === "reply_inbound" || status === "respondido" || direction === "inbound") {
       respondido = true
     }
@@ -2129,7 +2199,11 @@ function buildEnvioMetrics(envio: ContactoEnvio, logs: ContactoLog[]) {
       leido = true
     }
   })
-  return { aperturas, clicks, respondido, leido, sesionesUtm, sesionUtm }
+  const tasaEntrega = entregado ? 100 : 0
+  const tasaRespuesta = respondido ? 100 : 0
+  const clickTotal = clicks > 0 ? 100 : 0
+  const sesionesPorClick = clicks > 0 ? (sesionesUtm * 100) / clicks : 0
+  return { aperturas, clicks, respondido, leido, sesionesUtm, sesionUtm, tasaEntrega, tasaRespuesta, clickTotal, sesionesPorClick }
 }
 
 function resolveEnvioProspectLabel(envio: ContactoEnvio): string {

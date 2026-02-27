@@ -89,6 +89,10 @@ Formato recomendado por entrada:
   - `public.prospeccion_campana_template_atribucion(p_campana_id, p_limit)` para atribución persistente por plantilla.
   - extendida con `sesiones_utm` y `click_to_session_pct` (join con `webchat_visitantes` vía UTM + ids técnicos).
   - ajuste de agregación Brevo para dashboard: `brevo_aperturas`/`brevo_clicks` deduplicados por `envio_id` (prioriza `unique_*`, fallback a evento total).
+  - ajuste de atribución de sesiones para evitar inflado:
+    - campañas/plantillas ahora contabilizan `sesiones_utm` solo cuando existe `eid/envio_id` en la URL.
+    - se elimina fallback por `cid/tid` y por `campana_id` para el conteo de sesiones agregadas.
+    - impacto: `Sesiones/Clic` queda alineado con niveles `lote/prospecto`.
 - Nueva función SQL:
   - `public.prospeccion_envio_sesiones_utm(p_envio_ids)` para resolver sesiones UTM a nivel envío (`eid`).
 - Normalización de correos:
