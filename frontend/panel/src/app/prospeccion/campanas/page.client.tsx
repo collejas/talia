@@ -1158,6 +1158,11 @@ export function CampanasMetricsClient() {
                                   <div className="mt-2 flex flex-wrap gap-3 text-xs text-muted-foreground">
                                     <span>Canal: {canalLabel[templateNode.canal || ""] || templateNode.canal || "—"}</span>
                                     <span>Lotes: {templateNode.batches.length}</span>
+                                    <span>Entrega: {formatPercent(templateNode.metrics.tasa_entrega_pct)}</span>
+                                    <span>Respuesta: {formatPercent(templateNode.metrics.tasa_respuesta_pct)}</span>
+                                    {templateIsEmail ? (
+                                      <span>Clic/Sesión: {formatPercent(templateNode.metrics.click_to_session_pct)}</span>
+                                    ) : null}
                                   </div>
                                 </button>
 
@@ -2064,7 +2069,8 @@ function buildBatchMetrics(batch: ProspeccionCampanaGroup["batches"][number], de
   }
   const tasaEntrega = totales ? (entregados * 100) / totales : 0
   const tasaRespuesta = totales ? (respondidos * 100) / totales : 0
-  const clickToSession = sesionesUtm ? (clicks * 100) / sesionesUtm : 0
+  // Regla UI por nivel: el tercer porcentaje del lote se calcula sobre el total del lote.
+  const clickToSession = totales ? (clicks * 100) / totales : 0
   return {
     totales,
     entregados,
