@@ -3110,6 +3110,11 @@ function ProspectosView() {
                   ? sortedItems.map((prospecto) => {
                       const notas = extractProspectoNotes(prospecto.metadata)
                       const campaignName = extractProspectoCampaignName(prospecto.metadata)
+                      const queryLabel = extractProspectoQueryLabel(
+                        prospecto.metadata,
+                        prospecto.fuente_busqueda,
+                        queryLabelMap
+                      )
                       const indicator = prospecto.id ? contactIndicators[prospecto.id] : undefined
                       const hasEnvios = (indicator?.total_envios ?? 0) > 0
                       return (
@@ -3153,6 +3158,11 @@ function ProspectosView() {
                                     {notas ? (
                                       <p className="mt-1 max-w-[220px] truncate text-xs text-muted-foreground" title={`Notas: ${notas}`}>
                                         Notas: {notas}
+                                      </p>
+                                    ) : null}
+                                    {queryLabel ? (
+                                      <p className="mt-1 max-w-[220px] truncate text-xs text-muted-foreground" title={`Consulta: ${queryLabel}`}>
+                                        Consulta: {queryLabel}
                                       </p>
                                     ) : null}
                                   </TableCell>
@@ -4015,6 +4025,58 @@ function extractProspectoCampaignName(metadata: unknown): string | null {
     }
   }
   return null
+}
+
+function normalizeBusquedaLabel(value: string | null | undefined): string | null {
+  const base = (value ?? "").trim()
+  if (!base) return null
+  const cleaned = base.replace(/\s*\(recuperada desde resultados\)\s*/gi, "").trim()
+  return cleaned || null
+}
+
+function extractProspectoQueryValue(metadata: unknown, fuenteBusqueda?: string | null): string | null {
+  const fuente = normalizeBusquedaLabel(fuenteBusqueda)
+  if (isRecord(metadata)) {
+    const busquedaId = normalizeBusquedaLabel(String(metadata["busqueda_id"] ?? ""))
+    if (busquedaId) {
+      return busquedaId
+    }
+    const query = normalizeBusquedaLabel(String(metadata["query"] ?? ""))
+    if (query) {
+      return query
+    }
+    const busquedaQuery = normalizeBusquedaLabel(String(metadata["busqueda_query"] ?? ""))
+    if (busquedaQuery) {
+      return busquedaQuery
+    }
+    const busquedaMeta = metadata["busqueda_meta"]
+    if (isRecord(busquedaMeta)) {
+      const nestedQuery = normalizeBusquedaLabel(String(busquedaMeta["query"] ?? ""))
+      if (nestedQuery) {
+        return nestedQuery
+      }
+      const advanced = busquedaMeta["advanced_filters"]
+      if (isRecord(advanced)) {
+        const textoBusqueda = normalizeBusquedaLabel(String(advanced["texto_busqueda"] ?? ""))
+        if (textoBusqueda) {
+          return textoBusqueda
+        }
+      }
+    }
+  }
+  return fuente
+}
+
+function extractProspectoQueryLabel(
+  metadata: unknown,
+  fuenteBusqueda: string | null | undefined,
+  queryLabelMap: ReadonlyMap<string, string>
+): string | null {
+  const rawValue = extractProspectoQueryValue(metadata, fuenteBusqueda)
+  if (!rawValue) {
+    return null
+  }
+  return normalizeBusquedaLabel(queryLabelMap.get(rawValue) ?? rawValue)
 }
 
 function auditActionLabel(action: string): string {

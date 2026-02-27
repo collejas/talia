@@ -13,6 +13,7 @@ Formato recomendado por entrada:
   - lectura/escritura de preferencias de tabla (orden y visibilidad de columnas) en backend.
   - fallback local (`localStorage`) cuando el backend no responde o no hay preferencia guardada.
   - vistas guardadas por usuario (crear/aplicar/eliminar) con preset de filtros + orden + columnas.
+  - se muestra etiqueta amigable de consulta por prospecto (`busqueda_id/query`) con fallback legible.
 - Proxy nuevo:
   - `GET/PUT /api/prospeccion/prospectos/preferences`.
   - `GET/PUT /api/prospeccion/prospectos/views`.
