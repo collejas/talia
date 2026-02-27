@@ -112,6 +112,7 @@ export function CampanasMetricsClient() {
   const [templatesCampanaNombre, setTemplatesCampanaNombre] = useState<string>("")
   const [templatesCampanaCanal, setTemplatesCampanaCanal] = useState<"correo" | "whatsapp" | "llamada" | null>(null)
   const [templatesItems, setTemplatesItems] = useState<ContactoTemplate[]>([])
+  const [templateCountByCampaign, setTemplateCountByCampaign] = useState<Record<string, number>>({})
   const [templatesLoading, setTemplatesLoading] = useState(false)
   const [templateSaving, setTemplateSaving] = useState(false)
   const [templateDeletingId, setTemplateDeletingId] = useState<string | null>(null)
@@ -148,12 +149,23 @@ export function CampanasMetricsClient() {
     setCampanasLoading(true)
     setCampanasError(null)
     try {
-      const [resumen, campaignList] = await Promise.all([getProspeccionCampanas(25), listCrmCampaigns()])
+      const [resumen, campaignList, templatesResponse] = await Promise.all([
+        getProspeccionCampanas(25),
+        listCrmCampaigns(),
+        listContactoTemplates(),
+      ])
       const campaignMap = new Map<string, ProspeccionCampanaGroup>()
       ;(resumen.items ?? []).forEach((item) => {
         if (item.campana_id) {
           campaignMap.set(item.campana_id, item)
         }
+      })
+      const nextTemplateCounts: Record<string, number> = {}
+      ;(templatesResponse.items ?? []).forEach((template) => {
+        const metadata = template?.metadata && typeof template.metadata === "object" ? template.metadata : {}
+        const campanaId = typeof metadata["campana_id"] === "string" ? metadata["campana_id"].trim() : ""
+        if (!campanaId) return
+        nextTemplateCounts[campanaId] = (nextTemplateCounts[campanaId] ?? 0) + 1
       })
       const full = (campaignList ?? []).map((campaign) => {
         const fromResumen = campaignMap.get(campaign.id)
@@ -168,6 +180,7 @@ export function CampanasMetricsClient() {
       })
       setCrmCampaigns(campaignList ?? [])
       setCampanas(full)
+      setTemplateCountByCampaign(nextTemplateCounts)
     } catch (err) {
       const message = err instanceof Error ? err.message : "No se pudieron cargar las campañas recientes."
       setCampanasError(message)
@@ -989,10 +1002,12 @@ export function CampanasMetricsClient() {
                   return sum + ((String(batch.estado || "").trim().toLowerCase() === "completado") ? 1 : 0)
                 }, 0)
                 const entregados = toNumber((group.totales as Record<string, unknown>)?.entregado)
+                const totalPlantillas = group.campana_id ? (templateCountByCampaign[group.campana_id] ?? 0) : 0
                 return (
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
                   <p className="text-sm font-semibold">{group.campana_nombre ?? "Sin campaña"}</p>
+                  <p className="text-xs text-muted-foreground">Total de plantillas: {totalPlantillas}</p>
                 </div>
                 <div className="flex flex-wrap gap-2 text-xs">
                   <Badge variant="outline">Entregados: {entregados}</Badge>
