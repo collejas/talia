@@ -73,6 +73,7 @@ Formato recomendado por entrada:
 - Nueva función SQL:
   - `public.prospeccion_campana_template_atribucion(p_campana_id, p_limit)` para atribución persistente por plantilla.
   - extendida con `sesiones_utm` y `click_to_session_pct` (join con `webchat_visitantes` vía UTM + ids técnicos).
+  - ajuste de agregación Brevo para dashboard: `brevo_aperturas`/`brevo_clicks` deduplicados por `envio_id` (prioriza `unique_*`, fallback a evento total).
 - Normalización de correos:
   - trigger `BEFORE INSERT/UPDATE` en `public.prospeccion_prospectos`.
   - backfill para pasar correos existentes a minúsculas.

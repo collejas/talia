@@ -88,13 +88,7 @@ npm run build
 sudo systemctl restart talia-api.service
 sudo systemctl restart talia-panel.service
 
-sudo rsync -a landing/src/ /var/www/talia-landing/
-
-  Siguiente pendiente natural:
-
-  - reglas de agregación (por ejemplo deduplicar unique_opened/unique_click vs totales) para que coincida 1:1 con tu criterio
-  comercial
-  - siguiente paso es ajustar etiquetas/textos exactos por canal (por ejemplo, renombrar “Entregados” a “Recibidos” en WhatsApp si te parece más claro).
+sudo rsync -a landing/src/ /var/www/talia-landing/ que mas nos faltaria par ala idea
 
 # Gilberto Nunez director comercial comebi cel personal +5215530862988   cel trabajo +5214441692305
 

@@ -16,8 +16,8 @@ Objetivo: diagnosticar rapido por que en la app no suben metricas de correo (`en
 
 - `Totales`: registros de `prospeccion_contacto_envio` del lote/campana.
 - `Entregados`: estado `entregado` en `prospeccion_contacto_envio` (actualizado por webhook).
-- `Aperturas`: eventos `opened/unique_opened` en `prospeccion_contactos_log`.
-- `Clics`: eventos `click/unique_click` en `prospeccion_contactos_log`.
+- `Aperturas` (dashboard): conteo deduplicado por `envio_id` (1 por envío), priorizando `unique_opened`; si no existe, fallback a `opened`.
+- `Clics` (dashboard): conteo deduplicado por `envio_id` (1 por envío), priorizando `unique_click`; si no existe, fallback a `click`.
 - `Respondidos` (correo): requiere flujo de respuesta entrante (inbound email/reply) que registre `reply_inbound/respondido` en logs.
 - `Sesiones UTM`: sesiones en `webchat_visitantes` con `utm_source=prospeccion`, `utm_medium=email` y senales `cid/tid/kw`.
 
