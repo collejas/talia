@@ -173,6 +173,28 @@ def _build_basic_html_from_text(*, body_text: str, logo_url: str | None = None) 
     return f"<p>{escaped}</p>"
 
 
+def _preserve_html_line_breaks(body_html: str) -> str:
+    """Preserva saltos de línea cuando el usuario escribe texto plano en el campo HTML."""
+
+    if not body_html:
+        return body_html
+    normalized = body_html.replace("\r\n", "\n")
+    if "\n" not in normalized:
+        return body_html
+
+    # Si no hay markup, tratarlo como texto y convertir saltos a <br/>.
+    if "<" not in normalized and ">" not in normalized:
+        escaped = html_lib.escape(normalized).replace("\n", "<br/>\n")
+        return escaped
+
+    # Si ya tiene etiquetas de bloque/salto, respetar tal cual.
+    if re.search(r"<\s*(br|p|div|li|ul|ol|h[1-6]|table|tr|td|section|article)\b", normalized, re.IGNORECASE):
+        return normalized
+
+    # Caso mixto (ej. texto + <a>): preservar saltos de línea.
+    return normalized.replace("\n", "<br/>\n")
+
+
 def _sanitize_tracking_keyword(value: Any) -> str:
     text = _clean_text(value) or ""
     normalized = re.sub(r"[^a-zA-Z0-9_-]+", "-", text).strip("-").lower()
@@ -624,6 +646,8 @@ async def _run_envio_correo(
     if isinstance(body_html_template, str) and body_html_template.strip():
         normalized_html_template = _normalize_email_html_template(body_html_template)
         body_html = _render_template_text(normalized_html_template, context).strip() or None
+    if body_html:
+        body_html = _preserve_html_line_breaks(body_html)
     if body_html:
         body_html = _inject_text_fallback_into_html(body_text=body, body_html=body_html)
     elif logo_url and (

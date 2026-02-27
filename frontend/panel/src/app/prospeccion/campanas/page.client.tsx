@@ -576,6 +576,37 @@ export function CampanasMetricsClient() {
     })
   }, [])
 
+  const wrapTemplateSelection = useCallback(
+    (
+      field: "cuerpoTexto" | "cuerpoHtml",
+      openTag: string,
+      closeTag: string,
+      placeholder = "texto",
+    ) => {
+      const fieldRef = field === "cuerpoTexto" ? correoTextoRef.current : correoHtmlRef.current
+      setTemplateForm((prev) => {
+        const current = prev[field] ?? ""
+        if (!fieldRef) {
+          const separator = current && !current.endsWith("\n") ? "\n" : ""
+          return { ...prev, [field]: `${current}${separator}${openTag}${placeholder}${closeTag}` }
+        }
+        const start = fieldRef.selectionStart ?? current.length
+        const end = fieldRef.selectionEnd ?? current.length
+        const selected = current.slice(start, end) || placeholder
+        const replacement = `${openTag}${selected}${closeTag}`
+        const nextValue = `${current.slice(0, start)}${replacement}${current.slice(end)}`
+        const caretStart = start + openTag.length
+        const caretEnd = caretStart + selected.length
+        window.requestAnimationFrame(() => {
+          fieldRef.focus()
+          fieldRef.setSelectionRange(caretStart, caretEnd)
+        })
+        return { ...prev, [field]: nextValue }
+      })
+    },
+    []
+  )
+
   const insertCorreoLogo = useCallback(
     (logoUrl: string) => {
       const normalized = normalizeLogoUrl(logoUrl)
@@ -1578,6 +1609,40 @@ export function CampanasMetricsClient() {
                   </div>
                   <div className="space-y-1">
                     <Label>Cuerpo (texto)</Label>
+                    <div className="mb-2 flex flex-wrap items-center gap-2">
+                      <Button type="button" variant="outline" size="sm" onClick={() => appendTemplateToken("cuerpoTexto", "\n")}>
+                        Salto de línea
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => appendTemplateToken("cuerpoTexto", "\n--------------------\n")}
+                      >
+                        Separador
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => appendTemplateToken("cuerpoTexto", "\n- Punto 1\n- Punto 2\n")}
+                      >
+                        Viñetas
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() =>
+                          appendTemplateToken(
+                            "cuerpoTexto",
+                            "\n¿Te parece si agendamos una llamada esta semana?\n"
+                          )
+                        }
+                      >
+                        CTA rápida
+                      </Button>
+                    </div>
                     <Textarea
                       ref={correoTextoRef}
                       rows={4}
@@ -1651,6 +1716,40 @@ export function CampanasMetricsClient() {
                   <div className="space-y-1">
                     <Label>Cuerpo (HTML)</Label>
                     <div className="mb-2 flex flex-wrap items-center gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => wrapTemplateSelection("cuerpoHtml", "<strong>", "</strong>")}
+                      >
+                        Negrita
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => wrapTemplateSelection("cuerpoHtml", "<em>", "</em>")}
+                      >
+                        Cursiva
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => wrapTemplateSelection("cuerpoHtml", "<h3>", "</h3>", "Subtítulo")}
+                      >
+                        Subtítulo
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() =>
+                          appendTemplateToken("cuerpoHtml", "<ul><li>Punto 1</li><li>Punto 2</li></ul>")
+                        }
+                      >
+                        Lista
+                      </Button>
                       <Button type="button" variant="outline" size="sm" onClick={() => insertCorreoTrackedLink()}>
                         Insertar enlace web
                       </Button>
