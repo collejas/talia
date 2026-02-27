@@ -881,6 +881,7 @@ export function CampanasMetricsClient() {
                       <Badge variant="outline">Respondidos: {item.envios_respondidos}</Badge>
                       <Badge variant="outline">Aperturas: {item.brevo_aperturas}</Badge>
                       <Badge variant="outline">Clics: {item.brevo_clicks}</Badge>
+                      <Badge variant="outline">Sesiones UTM: {item.sesiones_utm}</Badge>
                     </div>
                   </div>
                   <div className="mt-2 flex flex-wrap gap-3 text-xs text-muted-foreground">
@@ -889,6 +890,7 @@ export function CampanasMetricsClient() {
                     <span>Omitidos: {item.envios_omitidos}</span>
                     <span>Entrega: {formatPercent(item.tasa_entrega_pct)}</span>
                     <span>Respuesta: {formatPercent(item.tasa_respuesta_pct)}</span>
+                    <span>Clic/Sesión: {formatPercent(item.click_to_session_pct)}</span>
                   </div>
                 </div>
               ))}

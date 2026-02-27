@@ -4482,6 +4482,8 @@ def _resolve_contact_channels(
                 slug_value = _clean_text(template_row.get("slug"))
                 if slug_value:
                     entry_metadata.setdefault("template_slug", slug_value)
+            if canal_config.template_id:
+                entry_metadata.setdefault("template_id", str(canal_config.template_id))
             if canal_config.metadata:
                 entry_metadata.update(canal_config.metadata)
             if entry_metadata:
@@ -13707,8 +13709,10 @@ async def prospeccion_campanas_atribucion(
                 "envios_respondidos": int(row.get("envios_respondidos") or 0),
                 "brevo_aperturas": int(row.get("brevo_aperturas") or 0),
                 "brevo_clicks": int(row.get("brevo_clicks") or 0),
+                "sesiones_utm": int(row.get("sesiones_utm") or 0),
                 "tasa_entrega_pct": float(row.get("tasa_entrega_pct") or 0),
                 "tasa_respuesta_pct": float(row.get("tasa_respuesta_pct") or 0),
+                "click_to_session_pct": float(row.get("click_to_session_pct") or 0),
             }
         )
 

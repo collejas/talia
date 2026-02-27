@@ -24,7 +24,7 @@ Formato recomendado por entrada:
   - nueva tarjeta de eventos Brevo (delivered/opened/click/bounce/spam/unsubscribe) con timestamp del último evento por tipo.
 - `prospeccion/campanas`:
   - importación de plantillas de correo desde catálogo Brevo (botón `Importar` por plantilla).
-  - nuevo bloque de atribución por plantilla con métricas persistentes (envíos/entregas/respuestas + aperturas/clics).
+  - nuevo bloque de atribución por plantilla con métricas persistentes (envíos/entregas/respuestas + aperturas/clics + sesiones UTM).
 - Proxy nuevo:
   - `GET/PUT /api/prospeccion/prospectos/preferences`.
   - `GET/PUT /api/prospeccion/prospectos/views`.
@@ -50,6 +50,8 @@ Formato recomendado por entrada:
   - `POST /crm/prospeccion/contacto/templates/import-brevo` (import/sync a plantilla local ligada a campaña de correo).
 - Nuevo endpoint de atribución:
   - `GET /crm/prospeccion/campanas/atribucion` (resumen persistente por campaña/plantilla).
+- Tracking correo de prospección:
+  - URL de tracking ahora incluye ids técnicos `cid` (campaña) y `tid` (plantilla) para consolidar sesiones UTM por plantilla.
 
 ### Base de datos
 - Nueva tabla:
@@ -62,6 +64,7 @@ Formato recomendado por entrada:
   - `public.prospeccion_brevo_eventos_resumen()` para agregación de eventos Brevo por tipo.
 - Nueva función SQL:
   - `public.prospeccion_campana_template_atribucion(p_campana_id, p_limit)` para atribución persistente por plantilla.
+  - extendida con `sesiones_utm` y `click_to_session_pct` (join con `webchat_visitantes` vía UTM + ids técnicos).
 - Normalización de correos:
   - trigger `BEFORE INSERT/UPDATE` en `public.prospeccion_prospectos`.
   - backfill para pasar correos existentes a minúsculas.

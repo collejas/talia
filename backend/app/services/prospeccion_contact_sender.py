@@ -176,6 +176,8 @@ def _build_email_tracking_url(*, context: dict[str, Any], payload: dict[str, Any
     base_url = _clean_text(metadata.get("tracking_base_url")) or "https://talia.mx/"
     parsed = urlparse(base_url)
     existing = dict(parse_qsl(parsed.query, keep_blank_values=True))
+    campana_id = _clean_text(metadata.get("campana_id"))
+    template_id = _clean_text(metadata.get("template_id"))
     existing.update(
         {
             "utm_source": existing.get("utm_source") or "prospeccion",
@@ -183,6 +185,8 @@ def _build_email_tracking_url(*, context: dict[str, Any], payload: dict[str, Any
             "utm_campaign": existing.get("utm_campaign") or "cold_outreach",
             "utm_content": existing.get("utm_content") or "image",
             "kw": keyword,
+            **({"cid": campana_id} if campana_id else {}),
+            **({"tid": template_id} if template_id else {}),
         }
     )
     query = urlencode(existing, doseq=True)

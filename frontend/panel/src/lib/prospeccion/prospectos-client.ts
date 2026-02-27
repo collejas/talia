@@ -120,8 +120,10 @@ export type ProspeccionCampanaAtribucionItem = {
   envios_respondidos: number
   brevo_aperturas: number
   brevo_clicks: number
+  sesiones_utm: number
   tasa_entrega_pct: number
   tasa_respuesta_pct: number
+  click_to_session_pct: number
 }
 
 export type ProspeccionCampanaDuplicateDefaults = {

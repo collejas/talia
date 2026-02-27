@@ -80,6 +80,7 @@ Repositorio principal: `backend/app/repositories/crm.py`
 - `POST /crm/prospeccion/contacto/brevo/webhook`
 - `GET /crm/prospeccion/campanas`
 - `GET /crm/prospeccion/campanas/atribucion`
+  - Incluye `sesiones_utm` y `click_to_session_pct` para atribución correo (UTM + ids técnicos `cid/tid`).
 - `GET /crm/prospeccion/campanas/{campana_id}/duplicar`
 
 ## 5) Servicios internos relevantes

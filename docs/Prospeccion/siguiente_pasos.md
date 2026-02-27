@@ -16,7 +16,6 @@ Este archivo sirve para capturar próximos requerimientos sin mezclar historial 
 - Correo de prospección (Brevo):
   - Fase 2 (evolutiva): completar sync avanzado de plantillas vía API de Brevo (edición/publicación remota y reconciliación masiva; catálogo/import ya operativo).
 - Atribución por campaña:
-  - Correo: consolidar medición de sesiones/clics por UTM + ids técnicos.
   - WhatsApp: consolidar medición de respuestas y CTA por campaña/plantilla.
   - Embudo: consolidar conversión a oportunidad cerrada por campaña.
 
@@ -115,4 +114,5 @@ Por cada cambio nuevo:
   - métricas persistentes de eventos en `prospeccion/contactos` (resumen por evento desde `prospeccion_contactos_log`).
 - Atribución por campaña/plantilla:
   - endpoint persistente `GET /prospeccion/campanas/atribucion`.
-  - bloque visual en `prospeccion/campanas` con entrega/respuesta + aperturas/clics por plantilla.
+  - bloque visual en `prospeccion/campanas` con entrega/respuesta + aperturas/clics + sesiones UTM por plantilla.
+  - tracking de correo ahora incluye ids técnicos en URL (`cid` campaña, `tid` plantilla) para atribución web más precisa.
