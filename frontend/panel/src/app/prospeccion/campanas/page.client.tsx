@@ -984,19 +984,19 @@ export function CampanasMetricsClient() {
           ) : null}
           {campanas.map((group, index) => (
             <div key={group.campana_id ?? `sin-${index}`} className="rounded-lg border p-4">
+              {(() => {
+                const lotesCompletados = group.batches.reduce((sum, batch) => {
+                  return sum + ((String(batch.estado || "").trim().toLowerCase() === "completado") ? 1 : 0)
+                }, 0)
+                const entregados = toNumber((group.totales as Record<string, unknown>)?.entregado)
+                return (
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
                   <p className="text-sm font-semibold">{group.campana_nombre ?? "Sin campaña"}</p>
-                  <p className="text-xs text-muted-foreground">
-                    {group.batches.length} lote{group.batches.length === 1 ? "" : "s"}
-                  </p>
                 </div>
                 <div className="flex flex-wrap gap-2 text-xs">
-                  {Object.entries(group.totales).map(([estado, count]) => (
-                    <Badge key={`${group.campana_id ?? "sin"}-${estado}`} variant="outline">
-                      {estado}: {count}
-                    </Badge>
-                  ))}
+                  <Badge variant="outline">Entregados: {entregados}</Badge>
+                  <Badge variant="outline">Lotes completados: {lotesCompletados}</Badge>
                 </div>
                 <div className="flex items-center gap-2">
                 <Button
@@ -1034,38 +1034,8 @@ export function CampanasMetricsClient() {
                 </Button>
                 </div>
               </div>
-              <div className="mt-4 space-y-3">
-                {group.batches.map((batch, batchIndex) => (
-                  <div key={batch.id} className="rounded-md border bg-muted/30 p-3 text-sm shadow-sm">
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <div>
-                        <p className="font-medium">
-                          {resolveBatchDisplayTitle(batchIndex)}
-                        </p>
-                        <p className="text-xs text-muted-foreground">
-                          {(batch.total_prospectos ?? 0).toLocaleString("es-MX")} prospectos ·{" "}
-                          {(batch.canales ?? []).join(", ") || "Sin canales"}
-                        </p>
-                        {resolveBatchQueryLabel(batch.filtros, queryLabelMap) ? (
-                          <p className="text-xs text-muted-foreground">
-                            Consulta: {resolveBatchQueryLabel(batch.filtros, queryLabelMap)}
-                          </p>
-                        ) : null}
-                      </div>
-                      <Badge variant="secondary" className="capitalize">
-                        {batch.estado ?? "pendiente"}
-                      </Badge>
-                    </div>
-                    <div className="mt-2 flex flex-wrap gap-2 text-xs text-muted-foreground">
-                      {Object.entries(batch.totales).map(([estado, count]) => (
-                        <span key={`${batch.id}-${estado}`} className="rounded bg-background/80 px-2 py-0.5">
-                          {estado}: {count}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                ))}
-              </div>
+                )
+              })()}
             </div>
           ))}
           {campanasLoading ? (
