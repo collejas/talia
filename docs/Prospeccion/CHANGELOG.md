@@ -93,3 +93,39 @@ Formato recomendado por entrada:
 - Decisión de arquitectura comercial:
   - Se reutiliza el embudo existente para medición de conversión (sin nueva pantalla de embudo de prospección).
   - La atribución por campaña se concentrará en envíos/lotes y metadata de oportunidad.
+
+## 2026-02-26
+
+### Frontend
+- `prospeccion/prospectos`:
+  - ejecución de contacto forzada a campaña + plantilla (sin flujo rápido).
+  - modal de preparación ajustado a flujo final: selección de campaña, plantilla, programación, separación y ejecución.
+- `prospeccion/campanas`:
+  - campañas con canal único (sin multicanal).
+  - modal de plantillas compactado y remaquetado para mejor operación.
+  - plantillas WhatsApp con carga de imagen desde el modal y generación de URL media/CTA con tracking.
+  - plantillas Correo con carga de imagen desde el modal.
+  - eliminación de tarjeta “Salud por canal” (métrica in-memory global).
+
+### Backend
+- Contact sender WhatsApp:
+  - resolución robusta de variables numéricas de plantilla (`{{1}}..{{5}}`) con fallback semántico.
+- Settings/logos:
+  - `POST /settings/logos` acepta contexto opcional de prospección (`campana_id`, `canal`, `template_id`, `template_slug`) y lo persiste en metadata para trazabilidad de assets.
+
+### Base de datos
+- Sin migraciones nuevas para este bloque.
+- Persistencia usada en operación:
+  - `campanas`,
+  - `prospeccion_contacto_templates`,
+  - `prospeccion_contacto_batch`,
+  - `prospeccion_contacto_envio`,
+  - `prospeccion_contactos_log`,
+  - `eventos_entrega`,
+  - `logos` (metadata con contexto de prospección).
+
+### Operación/Notas
+- Base URL para CTA de WhatsApp tomada automáticamente por tenant:
+  - prioridad `sitio_web`,
+  - fallback `dominio_principal`,
+  - sin fallback a `talia.mx` para evitar mezcla de atribución entre tenants.

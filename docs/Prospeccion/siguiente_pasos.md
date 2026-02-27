@@ -4,21 +4,6 @@ Este archivo sirve para capturar próximos requerimientos sin mezclar historial 
 
 ## Backlog sugerido (priorizado)
 
-0. Refactor de flujo (acordado)
-- Simplificar a modelo único:
-  - Gestión de campañas/plantillas en `prospeccion/campanas`.
-  - Ejecución de envíos sólo en `prospeccion/prospectos`.
-- Eliminar ruta operativa duplicada:
-  - retirar `settings/prospeccion/plantillas`.
-- Ligadura fuerte campaña-plantilla:
-  - plantillas con `campana_id` obligatorio.
-  - en `prospeccion/prospectos`, al elegir campaña, mostrar sólo plantillas de esa campaña.
-- Programación operativa de envío:
-  - soportar fecha/hora opcional.
-  - soportar separación entre envíos por canal/lote.
-- Métricas:
-  - tablero por campaña (principal) + desglose por plantilla.
-
 1. UX de tabla de prospectos
 - Guardar preferencias de columnas por usuario en backend (no sólo `localStorage`).
 - Vistas guardadas (preset de columnas + filtros + orden).
@@ -30,34 +15,16 @@ Este archivo sirve para capturar próximos requerimientos sin mezclar historial 
 3. Campañas y contacto
 - Reglas de suppressions/opt-out por canal.
 - Dashboard de conversión por fuente (`google_places`, `denue`, `usuario`).
-- Integrar `/inbox` con filtros de prospección (`source`, `batch`, `campana`) según `inbox_prospeccion_plan.md`. (Completado en fase inicial y validado funcional)
-- Completar operación de WhatsApp en frío: (Completado en fase base)
-  - Alta y mapeo de plantillas comerciales en Twilio para prospección.
-  - Prueba E2E de envío real desde lote de prospectos.
-  - Confirmar trazabilidad completa en `/inbox` para respuestas reales.
 - Asistente IA especializado en prospección:
-  - Crear assistant separado de WhatsApp operativo (`talia_prospeccion_whatsapp`).
-  - Prompt y tools específicos de prospección en frío (captar interés -> calificar -> agendar demo).
-  - Vector store dedicado (`talia_prospeccion_vs`) con propuesta por industria, objeciones, cierre demo y compliance.
-  - Routing por metadata: `source=prospeccion` + `channel=whatsapp` para usar assistant de prospección. (Completado)
   - Mantener assistant operativo actual para conversaciones no comerciales de prospección.
 - Correo de prospección (Brevo):
-  - Fase 1 (inmediata): operar plantillas desde la app (sin depender de creación en Brevo), permitiendo:
-    - envío con plantilla guardada en app + variables dinámicas.
-    - envío libre sin plantilla (`asunto` + `cuerpo`) con variables.
-  - Fase 2 (evolutiva): integrar catálogo/sync de plantillas vía API de Brevo (lectura/gestión desde app).
+  - Fase 2 (evolutiva): integrar catálogo/sync de plantillas vía API de Brevo (lectura/gestión desde app; Fase 1 ya operativa).
   - Medición y estadísticas: persistir y mostrar en app eventos de Brevo (enviado, entregado, primera apertura, aperturas, clics, rebotes, bloqueado, spam, unsubscribe, error).
- - Atribución por campaña sin nueva pantalla de embudo:
-   - En `prospeccion/prospectos`, `campana_id` obligatorio al enviar (correo/whatsapp/llamada).
-   - Regla de no bloqueo para inbox general:
-     - La validación de `campana_id` aplica solo a envíos de prospección iniciados desde `prospeccion/prospectos` (`source=prospeccion`).
-     - Mensajes entrantes de WhatsApp fuera de prospección (`prospeccion_mode=false` o sin metadata de origen prospección) no deben bloquearse por falta de campaña.
-   - Desde el modal de envío, soportar `+ Campaña rápida` (crear campaña mínima sin salir de la vista).
-   - Persistir `campana_id` y `batch_id` en lote/envíos/logs para trazabilidad completa.
-   - Reusar embudo actual (sin crear embudo nuevo): oportunidad/tarjeta debe conservar metadata de atribución (`campana_id`, `batch_id`, `prospeccion_canal`, `template_id`).
-   - Correo: links con UTM + ids de atribución (`campaign_id`, `batch_id`, `prospecto_id`) para medir sesiones/clics.
-   - WhatsApp: respuestas entrantes vinculadas a envío/lote/campaña de origen.
-   - Reporte en `prospeccion/campanas` con métricas por campaña: enviados, respuestas, clics web, oportunidades creadas y cerradas.
+- Atribución por campaña:
+  - Completar reporte persistente por campaña/plantilla (evitar métricas in-memory).
+  - Correo: consolidar medición de sesiones/clics por UTM + ids técnicos.
+  - WhatsApp: consolidar medición de respuestas y CTA por campaña/plantilla.
+  - Embudo: consolidar conversión a oportunidad cerrada por campaña.
 
 4. Operación
 - Alertas automáticas de fallos por canal.
@@ -107,3 +74,32 @@ Por cada cambio nuevo:
   - Enlace de tracking en imágenes de correo hacia `https://talia.mx/` con UTM + `kw` para atribución.
   - Fix de carga de logos en `settings/formato-cotizacion` (RLS/tenant en `logos`).
   - Definido roadmap de plantillas (app-first -> API Brevo) y de métricas/eventos para visualización en la app.
+
+## Completado recientemente (2026-02-26)
+
+- Se consolidó el flujo único de ejecución en `prospeccion/prospectos`:
+  - campaña obligatoria,
+  - plantilla obligatoria filtrada por campaña,
+  - programación + separación entre envíos,
+  - ejecución de lote.
+- Se consolidó el flujo único de gestión en `prospeccion/campanas`:
+  - creación/edición/eliminación de campañas,
+  - plantillas ligadas a campaña y canal.
+- Campañas de canal único (sin multicanal) y validación cruzada campaña-plantilla.
+- Se retiró el flujo rápido/duplicado sin campaña para evitar ejecuciones fuera del modelo acordado.
+- Modal de plantillas rediseñado (compacto, más ancho útil, scroll interno).
+- Plantillas WhatsApp:
+  - campos operativos reorganizados,
+  - carga de imagen desde el propio modal,
+  - URL para media de Twilio con tracking,
+  - URL CTA con tracking para botón de plantilla Meta/Twilio.
+- Plantillas Correo:
+  - carga de imagen desde el propio modal,
+  - persistencia de `logo_url` en metadata.
+- Subida de imágenes con trazabilidad:
+  - `campana_id`, `canal`, `template_id`, `template_slug` en metadata del asset.
+- Base de tracking CTA ya no usa fallback global:
+  - toma `sitio_web` del tenant,
+  - fallback a `dominio_principal` del tenant,
+  - sin fallback a dominio maestro.
+- Se eliminó de `prospeccion/campanas` la tarjeta “Salud por canal” por no ser tenant-safe (métrica in-memory global).

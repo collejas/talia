@@ -52,70 +52,30 @@ Para cambios nuevos:
 2. Revisar contrato en `backend_endpoints.md`.
 3. Validar impacto de datos en `base_datos.md`.
 
-## 6) Avance WhatsApp en frío (2026-02-24)
+## 6) Decisiones vigentes (sin historial repetido)
 
-- Endpoint de verificación operativa disponible: `GET /crm/prospeccion/whatsapp/readiness`.
-- Envío WhatsApp de prospección exige plantilla y usa fallback por tenant (`whatsapp.templates.sales`).
-- Proxy frontend de `POST /api/prospeccion/prospectos/contactar` ya propaga `X-Organizacion-Id`.
-- Resultado: desde modal de `prospeccion/prospectos`, `Guardar acciones` para canal WhatsApp ya no falla por header faltante.
+- Modelo operativo único:
+  - gestionar campañas y plantillas en `prospeccion/campanas`,
+  - ejecutar envíos en `prospeccion/prospectos`.
+- Campaña y plantilla son obligatorias para ejecución.
+- Plantillas quedan ligadas a campaña y al canal de la campaña.
+- Regla de no bloqueo:
+  - mensajes entrantes no-prospección no se bloquean por ausencia de campaña.
+- Embudo:
+  - se mantiene el embudo actual (no se crea uno nuevo de prospección).
 
-## 7) Avance WhatsApp en frío (2026-02-25)
+## 7) Estado de implementación actual
 
-- Se estabilizó la relación conversación ↔ oportunidad para evitar oportunidades duplicadas en respuestas de prospección.
-- Se fortaleció el flujo de agenda para que el assistant use tools (`list_demo_slots`/`schedule_demo`) al confirmar horario.
-- Se completó el post-agenda de prospección:
-  - persistencia de contexto mínimo en contacto,
-  - guardado de insights de conversación,
-  - ajuste automático de título/descripción cuando la oportunidad queda con nombre genérico.
-- La notificación al asesor en `booking_confirmed` ahora contempla el caso prospección sin requerir perfilamiento completo.
+- WhatsApp en frío operativo con prompt especializado y routing por contexto de prospección.
+- Correo de prospección operativo por Brevo con plantillas y `{{logo_url}}`.
+- Carga de imágenes desde modal de plantillas (correo/whatsapp) con metadata de trazabilidad.
+- URLs de tracking para media/CTA en WhatsApp y links de correo.
+- Base URL CTA por tenant desde `settings/variables`:
+  - `sitio_web` y fallback `dominio_principal`,
+  - sin fallback global a `talia.mx`.
+- Retirada de “Salud por canal” en `prospeccion/campanas` por no ser tenant-safe.
 
-## 8) Avance Correo de prospección (2026-02-25)
+## 8) Dónde ver el historial detallado
 
-- Envío operativo por Brevo validado con `subject/body/body_html`.
-- Plantillas/modales de correo con variable `{{logo_url}}` (incluye normalización desde `{{DATA:IMAGE:...}}`).
-- Logo de correo con estilo por defecto de `5/6` del cuerpo (`width:83.333%`, alto proporcional).
-- Imágenes en HTML de correo envueltas con link a `https://talia.mx/` con UTM + `kw` para atribución.
-- Carga de logos desde `settings/formato-cotizacion` corregida (insert con `organizacion_id` y compatibilidad RLS).
-
-## 9) Diseño acordado · Campañas + embudo actual (sin nueva vista)
-
-- Se mantiene una sola vista de embudo (la existente); no se creará un embudo “de prospección” separado.
-- El envío desde `prospeccion/prospectos` debe quedar siempre atribuido a campaña:
-  - `campana_id` obligatorio en modal de envío.
-  - opción de crear campaña rápida desde el mismo modal.
-- Trazabilidad mínima por envío:
-  - `campana_id`, `batch_id`, `prospecto_id`, `canal`, `template_id`.
-- Conversión al embudo actual:
-  - cuando se crea/actualiza oportunidad, conservar metadata de atribución de campaña/lote/canal.
-- Medición de impacto por campaña:
-  - correo: clics/sesiones por links con UTM + ids técnicos.
-  - whatsapp: respuestas entrantes vinculadas a campaña/lote origen.
-  - cierre comercial: oportunidad creada/ganada en el embudo actual.
-
-## 10) Refactor acordado · Modelo simple Campaña→Plantillas→Ejecución (2026-02-25)
-
-- Objetivo: reducir complejidad operativa y dejar una sola ruta mental para prospección.
-
-### Decisiones de producto
-
-1. Gestión (creación/edición) en un solo lugar: `prospeccion/campanas`.
-- Ahí se administra campaña y sus plantillas.
-- `settings/prospeccion/plantillas` se retira del flujo.
-
-2. Ejecución en un solo lugar: `prospeccion/prospectos`.
-- Se seleccionan prospectos.
-- Se elige campaña.
-- Se elige plantilla filtrada por campaña.
-- Se configura programación y separación entre envíos.
-- Se ejecuta lote.
-
-3. Relación obligatoria de datos.
-- Cada plantilla queda ligada a `campana_id`.
-- Cada envío conserva `campana_id`, `batch_id`, `template_id/template_slug`, `canal`, `prospecto_id`.
-
-4. Medición.
-- Reporte principal por campaña.
-- Corte secundario por plantilla dentro de campaña (A/B de texto/gancho/CTA).
-
-5. Regla de no bloqueo para WhatsApp general.
-- Mensajes entrantes no-prospección no se bloquean por ausencia de campaña.
+- Detalle cronológico de cambios: `docs/Prospeccion/CHANGELOG.md`.
+- Pendientes reales actuales: `docs/Prospeccion/siguiente_pasos.md`.
