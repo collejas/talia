@@ -1247,7 +1247,6 @@ export function CampanasMetricsClient() {
                                                           </div>
                                                           <div className="mt-1 flex flex-wrap gap-3 text-[11px] text-muted-foreground">
                                                             <span>Segmento: {resolveEnvioSegmentoLabel(envio)}</span>
-                                                            <span>Mensaje: {envio.mensaje_id || "—"}</span>
                                                             <span>Procesado: {formatDateTime(envio.procesado_en || envio.programado_en)}</span>
                                                           </div>
                                                         </div>
