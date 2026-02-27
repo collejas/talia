@@ -25,6 +25,17 @@ Formato recomendado por entrada:
 - `prospeccion/campanas`:
   - importación de plantillas de correo desde catálogo Brevo (botón `Importar` por plantilla).
   - nuevo bloque de atribución por plantilla con métricas persistentes (envíos/entregas/respuestas + aperturas/clics + sesiones UTM).
+  - vista jerárquica operativa en 4 niveles: `Campaña -> Plantilla -> Lote -> Prospecto`.
+  - métricas por canal diferenciadas (correo vs WhatsApp) y etiquetas ajustadas por contexto.
+  - nivel `Plantilla` ahora muestra porcentajes (`Entrega`, `Respuesta`, `Clic/Sesión` en correo).
+  - nivel `Lote`:
+    - muestra `Sesiones UTM` y `Clic/Sesión`.
+    - `Clic/Sesión` se alinea al criterio de nivel y se calcula sobre el total del lote.
+    - precarga de detalle al expandir plantilla para evitar valor inicial `0.00%` antes de abrir el lote.
+  - nivel `Prospecto`:
+    - se muestra `Prospecto: <nombre>` y `Segmento`.
+    - se removió campo técnico `Mensaje` del detalle.
+  - lotes se muestran como `Lote 1`, `Lote 2`, ... (evita UUID en UI).
 - Proxy nuevo:
   - `GET/PUT /api/prospeccion/prospectos/preferences`.
   - `GET/PUT /api/prospeccion/prospectos/views`.
@@ -54,6 +65,8 @@ Formato recomendado por entrada:
   - URL de tracking ahora incluye ids técnicos `cid` (campaña) y `tid` (plantilla) para consolidar sesiones UTM por plantilla.
   - URL de tracking añade `eid` (envío) y `pid` (prospecto) para habilitar atribución por destinatario.
   - `GET /crm/prospeccion/contacto/envios` enriquece cada envío con `sesiones_utm` por `envio_id`.
+  - fix en worker de correo para pasar `id` de envío al render de tracking; sin este fix no se emitía `eid` en algunos envíos.
+  - fallback de inyección de tracking en links de texto plano (además de `a[href]`/imágenes HTML).
 - Webhook Brevo (operativo E2E):
   - Se habilitó endpoint público en panel para recepción externa:
     - `POST /api/prospeccion/contacto/brevo/webhook` (proxy hacia backend `/crm/prospeccion/contacto/brevo/webhook`).
