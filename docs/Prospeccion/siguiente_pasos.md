@@ -18,6 +18,20 @@ Este archivo sirve para capturar próximos requerimientos sin mezclar historial 
 - Atribución por campaña:
   - WhatsApp: consolidar medición de respuestas y CTA por campaña/plantilla.
   - Embudo: consolidar conversión a oportunidad cerrada por campaña.
+- Pendientes de métricas (correo + WhatsApp):
+  - `Respondidos` por correo (inbound real):
+    - implementar ingesta de correos entrantes (IMAP polling o webhook inbound del proveedor),
+    - extraer `In-Reply-To`/`References`/`Message-ID`,
+    - mapear contra `prospeccion_contacto_envio.mensaje_id`,
+    - persistir `reply_inbound/respondido` en `prospeccion_contactos_log` y actualizar estado del envío.
+  - `Sesiones UTM`:
+    - validar que la landing de destino del clic ejecute alta de visita (`/api/webchat/visit`),
+    - garantizar persistencia de `utm_source=prospeccion`, `utm_medium=email` y señales `cid/tid/kw`,
+    - cerrar trazabilidad end-to-end de clic -> sesión atribuida por campaña/plantilla.
+  - WhatsApp por campaña/plantilla:
+    - consolidar atribución de respuestas entrantes por plantilla/campaña,
+    - medir y persistir CTA/clics por plantilla,
+    - exponer KPIs en endpoint/UI de atribución (equivalente al bloque de correo).
 
 4. Operación
 - Alertas automáticas de fallos por canal.
