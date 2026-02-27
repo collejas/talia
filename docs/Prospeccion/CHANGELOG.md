@@ -36,6 +36,28 @@ Formato recomendado por entrada:
     - se muestra `Prospecto: <nombre>` y `Segmento`.
     - se removió campo técnico `Mensaje` del detalle.
   - lotes se muestran como `Lote 1`, `Lote 2`, ... (evita UUID en UI).
+  - se añadió filtro por canal en métricas jerárquicas (`Todos`, `Correo`, `WhatsApp`, `Llamada`).
+  - KPIs de lectura comercial ajustados:
+    - `Clic/Total` (interés),
+    - `Sesiones/Clic`,
+    - `Entrega` y `Respuesta`.
+  - tooltips explicativos (lenguaje no técnico) en porcentajes y badges de métricas.
+  - renombre de etiqueta para usuario final:
+    - `Sesiones UTM` -> `Visitas al sitio`.
+  - `Campañas recientes` simplificada para gestión:
+    - muestra nombre de campaña, `Entregados`, `Lotes completados`, `Total de plantillas`, y acciones (`Plantillas`, `Editar`, `Eliminar`).
+  - título del segundo nivel ajustado a:
+    - `Plantilla: <nombre>`.
+  - contador de plantillas por campaña corregido para WhatsApp:
+    - ahora cuenta plantillas reales vinculadas por `campana_id` (no inferidas por lotes).
+  - modal de plantillas de correo:
+    - nuevo campo `Web destino` (usa dominio del tenant para tracking base).
+    - botón `Insertar enlace web` en `Cuerpo (HTML)` con anchor trackeable.
+    - barra rápida de edición:
+      - `Cuerpo (texto)`: saltos, separador, viñetas, CTA rápida.
+      - `Cuerpo (HTML)`: negrita, cursiva, subtítulo, lista, insertar enlace.
+    - inserción de imagen corregida:
+      - si se edita `Cuerpo (HTML)`, no contamina `Cuerpo (texto)`.
 - Proxy nuevo:
   - `GET/PUT /api/prospeccion/prospectos/preferences`.
   - `GET/PUT /api/prospeccion/prospectos/views`.
@@ -66,7 +88,17 @@ Formato recomendado por entrada:
   - URL de tracking añade `eid` (envío) y `pid` (prospecto) para habilitar atribución por destinatario.
   - `GET /crm/prospeccion/contacto/envios` enriquece cada envío con `sesiones_utm` por `envio_id`.
   - fix en worker de correo para pasar `id` de envío al render de tracking; sin este fix no se emitía `eid` en algunos envíos.
-  - fallback de inyección de tracking en links de texto plano (además de `a[href]`/imágenes HTML).
+  - render de contexto de plantilla de correo con:
+    - `{{tracking_url}}` (URL completa con tracking),
+    - `{{website_url}}` (URL limpia del sitio).
+  - ajuste de envío para no ensuciar texto plano con query de tracking.
+  - preservación de saltos de línea:
+    - `Cuerpo (texto)` y `Cuerpo (HTML)` mantienen separaciones al render final de correo.
+  - robustez del fallback texto->HTML:
+    - cuando el HTML trae solo enlace/imagen, se inyecta también el cuerpo base para no perder contenido en clientes como Gmail.
+- Actualización de plantillas (PATCH):
+  - se corrige persistencia de limpieza de campos (`cuerpo_html`, `cuerpo_texto`, `asunto`, `descripcion`) permitiendo guardar `null` explícito.
+  - evita que reaparezca `Cuerpo (HTML)` borrado al reabrir plantilla.
 - Webhook Brevo (operativo E2E):
   - Se habilitó endpoint público en panel para recepción externa:
     - `POST /api/prospeccion/contacto/brevo/webhook` (proxy hacia backend `/crm/prospeccion/contacto/brevo/webhook`).
