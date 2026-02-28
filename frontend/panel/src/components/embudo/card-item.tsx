@@ -41,14 +41,16 @@ export function EmbudoCardItem({
     }
   }, [card.actualizadoEn])
 
-  const contactName =
+  const rawContactName =
     card.nombre && card.nombre.trim().length ? card.nombre.trim() : "Sin contacto";
-  const opportunityName =
+  const rawOpportunityName =
     card.titulo && card.titulo.trim().length
       ? card.titulo.trim()
       : card.proyectoNombre && card.proyectoNombre.trim().length
         ? card.proyectoNombre.trim()
         : "Oportunidad sin nombre";
+  const contactName = isGenericConversationLabel(rawContactName) ? "<->" : rawContactName;
+  const opportunityName = isGenericConversationLabel(rawOpportunityName) ? "<->" : rawOpportunityName;
   const contactInfo = card.correo || card.telefono || card.empresa || null;
   const scoreValue = card.leadScoring?.scoreTotal;
   const gradeValue = card.leadScoring?.grade;
@@ -255,4 +257,11 @@ function scoreTone(score: number): string {
 
 function isWhatsappChannel(channel: string | null): boolean {
   return (channel || "").trim().toLowerCase() === "whatsapp";
+}
+
+function isGenericConversationLabel(value: string | null | undefined): boolean {
+  if (!value) return false;
+  const normalized = value.trim().toLowerCase();
+  if (!normalized.length) return false;
+  return normalized.startsWith("conversación ") || normalized.startsWith("conversacion ");
 }
