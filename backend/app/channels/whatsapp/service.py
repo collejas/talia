@@ -561,6 +561,67 @@ async def _maybe_apply_publicidad_whatsapp_attribution(
     return created_event
 
 
+async def _mark_opportunity_as_prospeccion_whatsapp(
+    *,
+    repo: CRMRepository,
+    organizacion_id: UUID,
+    opportunity_id: str | None,
+    attribution_event: Mapping[str, Any] | None,
+) -> None:
+    if not opportunity_id or not attribution_event:
+        return
+    try:
+        opportunity_uuid = UUID(str(opportunity_id))
+    except (TypeError, ValueError):
+        return
+    try:
+        opportunity = await repo.get_pipeline_opportunity(
+            organizacion_id=organizacion_id,
+            oportunidad_id=opportunity_uuid,
+        )
+    except CRMRepositoryError as exc:
+        log_event(
+            logger,
+            "whatsapp.publicidad_atribucion_opportunity_fetch_failed",
+            opportunity_id=opportunity_id,
+            error=str(exc),
+        )
+        return
+    if not isinstance(opportunity, dict):
+        return
+    metadata = opportunity.get("metadata")
+    metadata_dict = dict(metadata) if isinstance(metadata, dict) else {}
+    source_current = str(metadata_dict.get("source") or "").strip().lower()
+    if source_current in {"", "assistant", "whatsapp", "publicidad_whatsapp", "whatsapp_inbound"}:
+        metadata_dict["source"] = "prospeccion_whatsapp"
+    metadata_dict["prospeccion_canal"] = "whatsapp"
+    metadata_dict["publicidad_whatsapp_atribucion"] = {
+        "source": "publicidad_whatsapp",
+        "regla_id": str(attribution_event.get("regla_id") or "").strip() or None,
+        "canal_publicitario": str(attribution_event.get("canal_publicitario") or "").strip() or None,
+        "campana_publicitaria": str(attribution_event.get("campana_publicitaria") or "").strip() or None,
+        "adset": str(attribution_event.get("adset") or "").strip() or None,
+        "anuncio": str(attribution_event.get("anuncio") or "").strip() or None,
+        "tipo_match": str(attribution_event.get("tipo_match") or "").strip() or None,
+        "frase_normalizada": str(attribution_event.get("frase_normalizada") or "").strip() or None,
+        "conversacion_id": str(attribution_event.get("conversacion_id") or "").strip() or None,
+        "atribuido_en": str(attribution_event.get("creado_en") or "").strip() or datetime.now(timezone.utc).isoformat(),
+    }
+    try:
+        await repo.update_opportunity(
+            organizacion_id=organizacion_id,
+            oportunidad_id=opportunity_uuid,
+            payload={"metadata": metadata_dict},
+        )
+    except CRMRepositoryError as exc:
+        log_event(
+            logger,
+            "whatsapp.publicidad_atribucion_opportunity_update_failed",
+            opportunity_id=opportunity_id,
+            error=str(exc),
+        )
+
+
 def _looks_like_booking_confirmation(text: str) -> bool:
     normalized = str(text or "").strip().lower()
     if not normalized:
@@ -760,13 +821,14 @@ async def handle_incoming_message(
         log_event(logger, "whatsapp.prospeccion_reply_repo_error", error=str(exc))
         repo = None
     is_prospeccion_context = False
+    publicidad_atribucion_event: Mapping[str, Any] | None = None
     if repo:
         is_prospeccion_context = await _sync_inbound_to_prospeccion_log(
             repo=repo,
             contact_id=contact_id,
             message=message,
         )
-        await _maybe_apply_publicidad_whatsapp_attribution(
+        publicidad_atribucion_event = await _maybe_apply_publicidad_whatsapp_attribution(
             repo=repo,
             organizacion_id=org_uuid,
             conversation_id=conversation_id,
@@ -836,6 +898,13 @@ async def handle_incoming_message(
                 "restart_created": False,
                 "restart_sequence": 1,
             }
+    if repo and opportunity_ref and publicidad_atribucion_event:
+        await _mark_opportunity_as_prospeccion_whatsapp(
+            repo=repo,
+            organizacion_id=org_uuid,
+            opportunity_id=opportunity_ref,
+            attribution_event=publicidad_atribucion_event,
+        )
 
     contact_record = await _maybe_update_contact_location(contact_id)
 
