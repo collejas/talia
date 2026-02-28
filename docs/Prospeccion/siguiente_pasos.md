@@ -132,6 +132,7 @@ Este archivo sirve para capturar próximos requerimientos sin mezclar historial 
   - el conteo por canal/regla incrementa en métricas sin duplicar por la misma conversación.
 - Estado actual (2026-02-28):
   - Fase 1 (MVP) implementada y validada en operación.
+  - Fase 2 implementada en versión base (dashboard unificado en `prospeccion/metricas`).
   - Implementado:
     - tablas `prospeccion_whatsapp_atribucion_reglas` y `prospeccion_whatsapp_atribucion_eventos` con RLS.
     - vista `prospeccion/whatsapp-atribucion` con CRUD + filtros + simulador de frase.
@@ -142,9 +143,15 @@ Este archivo sirve para capturar próximos requerimientos sin mezclar historial 
       - anti-duplicado por contacto (ventana 24h).
     - persistencia de resumen en `contactos.contacto_datos.publicidad_whatsapp_atribucion`.
     - Inbox enriquecido con `source=publicidad_whatsapp` y filtro por source.
-  - Pendiente (siguiente fase):
-    - dashboard de métricas por `canal_publicitario` y por `regla` (conversaciones, contactos únicos, oportunidades, tasa conv, monto).
-    - endpoint agregador SQL/API para métricas de atribución publicitaria WhatsApp.
+    - endpoint agregador `GET /crm/prospeccion/metricas` con filtros globales.
+    - vista `prospeccion/metricas` con:
+      - KPIs de campañas y frases WhatsApp,
+      - detalle por campañas, canal y regla,
+      - gráficas de tendencia diaria en ambos bloques.
+  - Pendiente (siguientes iteraciones):
+    - drill-down a nivel conversación/oportunidad desde la tabla de métricas.
+    - exportación (CSV/XLSX) de métricas filtradas.
+    - alertas por variaciones bruscas (caída de entrega o conversión).
     - simulador avanzado con ranking de reglas candidatas y explicación de por qué matcheó.
     - logging analítico de no-match para sugerir nuevas frases frecuentes.
 

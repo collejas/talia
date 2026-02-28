@@ -8401,6 +8401,37 @@ class CRMRepository:
         total = self._extract_total_count(resp.headers.get("content-range")) or len(data)
         return data, total
 
+    async def list_contact_envios_for_batches(
+        self,
+        *,
+        usuario_token: str,
+        batch_ids: Sequence[UUID],
+        canal: str | None = None,
+        limit: int = 10000,
+    ) -> list[dict[str, Any]]:
+        """Lista envíos para un conjunto de lotes en una sola consulta."""
+
+        if not batch_ids:
+            return []
+        params: dict[str, str] = {
+            "select": "id,batch_id,canal,estado,creado_en,programado_en,procesado_en",
+            "batch_id": _postgrest_in_clause([str(value) for value in batch_ids]),
+            "order": "creado_en.asc",
+            "limit": str(max(1, min(limit, 20000))),
+        }
+        if canal:
+            params["canal"] = f"eq.{canal.strip().lower()}"
+        resp = await self._request_with_user(
+            "GET",
+            "/rest/v1/prospeccion_contacto_envio",
+            token=usuario_token,
+            params=params,
+        )
+        data = resp.json() or []
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"contact_envio_batches_invalid:{data!r}")
+        return [row for row in data if isinstance(row, dict)]
+
     async def get_prospeccion_envio_sesiones_utm(
         self,
         *,

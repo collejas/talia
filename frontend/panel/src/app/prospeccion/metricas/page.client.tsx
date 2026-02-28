@@ -2,6 +2,16 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { IconLoader } from "@tabler/icons-react"
+import {
+  CartesianGrid,
+  Legend,
+  Line,
+  LineChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts"
 
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -20,6 +30,7 @@ import {
 
 const money = new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN", maximumFractionDigits: 0 })
 const number = new Intl.NumberFormat("es-MX")
+const shortDate = new Intl.DateTimeFormat("es-MX", { month: "short", day: "2-digit" })
 
 export default function ProspeccionMetricasPageClient() {
   const [activeTab, setActiveTab] = useState<"campanas" | "frases">("campanas")
@@ -90,6 +101,22 @@ export default function ProspeccionMetricasPageClient() {
 
   const summaryCampaign = data?.campanas.summary
   const summaryPhrases = data?.frases_whatsapp.summary
+  const campaignChartData = useMemo(
+    () =>
+      (data?.campanas.timeseries ?? []).map((item) => ({
+        ...item,
+        fecha_label: shortDate.format(new Date(`${item.fecha}T00:00:00`)),
+      })),
+    [data?.campanas.timeseries],
+  )
+  const phrasesChartData = useMemo(
+    () =>
+      (data?.frases_whatsapp.timeseries ?? []).map((item) => ({
+        ...item,
+        fecha_label: shortDate.format(new Date(`${item.fecha}T00:00:00`)),
+      })),
+    [data?.frases_whatsapp.timeseries],
+  )
 
   const topCards = useMemo(() => {
     const cards: Array<{ title: string; value: string; hint: string }> = []
@@ -210,47 +237,100 @@ export default function ProspeccionMetricasPageClient() {
       ) : null}
 
       {activeTab === "campanas" ? (
-        <Card>
-          <CardHeader>
-            <CardTitle>Detalle de campañas</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[960px] text-sm">
-                <thead>
-                  <tr className="border-b text-left text-xs uppercase tracking-wide text-muted-foreground">
-                    <th className="px-2 py-2">Campaña</th>
-                    <th className="px-2 py-2">Canal</th>
-                    <th className="px-2 py-2">Plantilla</th>
-                    <th className="px-2 py-2">Totales</th>
-                    <th className="px-2 py-2">Entregados</th>
-                    <th className="px-2 py-2">Respondidos</th>
-                    <th className="px-2 py-2">Aperturas</th>
-                    <th className="px-2 py-2">Clics</th>
-                    <th className="px-2 py-2">Sesiones</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {(data?.campanas.items ?? []).map((item, idx) => (
-                    <tr key={`${item.template_id ?? item.template_slug ?? idx}`} className="border-b">
-                      <td className="px-2 py-2">{item.campana_nombre ?? "-"}</td>
-                      <td className="px-2 py-2"><Badge variant="secondary">{item.canal ?? "-"}</Badge></td>
-                      <td className="px-2 py-2">{item.template_nombre ?? item.template_slug ?? "-"}</td>
-                      <td className="px-2 py-2">{number.format(item.envios_totales)}</td>
-                      <td className="px-2 py-2">{number.format(item.envios_entregados)}</td>
-                      <td className="px-2 py-2">{number.format(item.envios_respondidos)}</td>
-                      <td className="px-2 py-2">{number.format(item.brevo_aperturas)}</td>
-                      <td className="px-2 py-2">{number.format(item.brevo_clicks)}</td>
-                      <td className="px-2 py-2">{number.format(item.sesiones_utm)}</td>
+        <div className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>Tendencia diaria de campañas</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="h-72 w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={campaignChartData}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="fecha_label" tickMargin={8} />
+                    <YAxis allowDecimals={false} />
+                    <Tooltip formatter={(value) => number.format(Number(value) || 0)} />
+                    <Legend />
+                    <Line type="monotone" dataKey="envios_totales" stroke="#0f766e" strokeWidth={2} dot={false} name="Envíos totales" />
+                    <Line type="monotone" dataKey="envios_entregados" stroke="#2563eb" strokeWidth={2} dot={false} name="Entregados" />
+                    <Line type="monotone" dataKey="envios_respondidos" stroke="#ea580c" strokeWidth={2} dot={false} name="Respondidos" />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Detalle de campañas</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[960px] text-sm">
+                  <thead>
+                    <tr className="border-b text-left text-xs uppercase tracking-wide text-muted-foreground">
+                      <th className="px-2 py-2">Campaña</th>
+                      <th className="px-2 py-2">Canal</th>
+                      <th className="px-2 py-2">Plantilla</th>
+                      <th className="px-2 py-2">Totales</th>
+                      <th className="px-2 py-2">Entregados</th>
+                      <th className="px-2 py-2">Respondidos</th>
+                      <th className="px-2 py-2">Aperturas</th>
+                      <th className="px-2 py-2">Clics</th>
+                      <th className="px-2 py-2">Sesiones</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </CardContent>
-        </Card>
+                  </thead>
+                  <tbody>
+                    {(data?.campanas.items ?? []).map((item, idx) => (
+                      <tr key={`${item.template_id ?? item.template_slug ?? idx}`} className="border-b">
+                        <td className="px-2 py-2">{item.campana_nombre ?? "-"}</td>
+                        <td className="px-2 py-2"><Badge variant="secondary">{item.canal ?? "-"}</Badge></td>
+                        <td className="px-2 py-2">{item.template_nombre ?? item.template_slug ?? "-"}</td>
+                        <td className="px-2 py-2">{number.format(item.envios_totales)}</td>
+                        <td className="px-2 py-2">{number.format(item.envios_entregados)}</td>
+                        <td className="px-2 py-2">{number.format(item.envios_respondidos)}</td>
+                        <td className="px-2 py-2">{number.format(item.brevo_aperturas)}</td>
+                        <td className="px-2 py-2">{number.format(item.brevo_clicks)}</td>
+                        <td className="px-2 py-2">{number.format(item.sesiones_utm)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
       ) : (
         <div className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>Tendencia diaria de frases WhatsApp</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="h-72 w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={phrasesChartData}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="fecha_label" tickMargin={8} />
+                    <YAxis yAxisId="left" allowDecimals={false} />
+                    <YAxis yAxisId="right" orientation="right" tickFormatter={(value) => money.format(Number(value) || 0)} />
+                    <Tooltip
+                      formatter={(value, name) =>
+                        name === "Monto estimado"
+                          ? money.format(Number(value) || 0)
+                          : number.format(Number(value) || 0)
+                      }
+                    />
+                    <Legend />
+                    <Line type="monotone" yAxisId="left" dataKey="conversaciones_atribuidas" stroke="#0f766e" strokeWidth={2} dot={false} name="Conversaciones" />
+                    <Line type="monotone" yAxisId="left" dataKey="oportunidades_creadas" stroke="#2563eb" strokeWidth={2} dot={false} name="Oportunidades" />
+                    <Line type="monotone" yAxisId="right" dataKey="monto_estimado_total" stroke="#ea580c" strokeWidth={2} dot={false} name="Monto estimado" />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            </CardContent>
+          </Card>
+
           <Card>
             <CardHeader>
               <CardTitle>Frases por canal publicitario</CardTitle>

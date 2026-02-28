@@ -11,6 +11,7 @@ Ruta base: `frontend/panel/src/app/prospeccion`
 - `contactos`
 - `campanas`
 - `whatsapp-atribucion`
+- `metricas`
 - `mensajes` (simple)
 
 ## Responsabilidad por vista
@@ -60,6 +61,19 @@ Ruta base: `frontend/panel/src/app/prospeccion`
 - Filtros por canal publicitario, estado y texto.
 - Simulador rápido para validar qué regla matchea antes de guardar.
 
+### `metricas`
+- Vista exclusiva de métricas de prospección (campañas + frases WhatsApp) con filtros globales.
+- KPIs ejecutivos unificados:
+  - envíos/entregas/respuestas de campañas,
+  - conversaciones atribuidas, oportunidades y monto estimado de frases.
+- Gráficas de tendencia diaria:
+  - campañas (`envios_totales`, `envios_entregados`, `envios_respondidos`),
+  - frases WhatsApp (`conversaciones_atribuidas`, `oportunidades_creadas`, `monto_estimado_total`).
+- Tablas de detalle:
+  - campañas por plantilla/canal,
+  - frases por `canal_publicitario`,
+  - frases por `regla`.
+
 ## Clientes frontend usados
 
 Ruta: `frontend/panel/src/lib/prospeccion`
@@ -75,4 +89,6 @@ Ruta: `frontend/panel/src/lib/prospeccion`
 Ruta: `frontend/panel/src/app/api/prospeccion`
 
 - Cubre Google, DENUE, Prospectos, Contacto, Campañas, Buscador y Stage resumen.
+- Incluye proxy de métricas consolidado:
+  - `GET /api/prospeccion/metricas` -> `GET /crm/prospeccion/metricas`.
 - Función: pasar token/cookies y proxear a backend `/crm/prospeccion/*`.

@@ -11,7 +11,7 @@ import os
 import re
 import secrets
 import unicodedata
-from collections import Counter
+from collections import Counter, defaultdict
 from datetime import date, datetime, timedelta, timezone
 from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 from enum import Enum
@@ -14754,6 +14754,73 @@ async def prospeccion_metricas_dashboard(
         else 0.0,
         2,
     )
+    campaign_timeseries_raw: dict[str, dict[str, int]] = defaultdict(
+        lambda: {
+            "envios_totales": 0,
+            "envios_enviados": 0,
+            "envios_entregados": 0,
+            "envios_respondidos": 0,
+        }
+    )
+    try:
+        batches_rows, _ = await repo.list_contact_batches(
+            usuario_token=user_token,
+            limit=1000,
+            offset=0,
+            campana_id=params.campana_id,
+            order="creado_en.asc",
+        )
+    except CRMRepositoryError as exc:
+        logger.warning("prospeccion.metricas.batches_fetch_failed", extra={"error": str(exc)})
+        batches_rows = []
+    batch_ids_for_series: list[UUID] = []
+    for row in batches_rows:
+        raw_batch_id = row.get("id")
+        if not raw_batch_id:
+            continue
+        try:
+            batch_ids_for_series.append(UUID(str(raw_batch_id)))
+        except (TypeError, ValueError):
+            continue
+    if batch_ids_for_series:
+        try:
+            envios_rows = await repo.list_contact_envios_for_batches(
+                usuario_token=user_token,
+                batch_ids=batch_ids_for_series,
+                canal=None if params.canal == "todos" else params.canal,
+                limit=20000,
+            )
+        except CRMRepositoryError as exc:
+            logger.warning("prospeccion.metricas.envios_series_fetch_failed", extra={"error": str(exc)})
+            envios_rows = []
+        sent_states = {"enviado", "entregado", "leido", "completado", "respondido"}
+        delivered_states = {"entregado", "leido", "completado", "respondido"}
+        for envio in envios_rows:
+            event_ts = (
+                _parse_datetime(envio.get("procesado_en"))
+                or _parse_datetime(envio.get("creado_en"))
+                or _parse_datetime(envio.get("programado_en"))
+            )
+            if event_ts is None:
+                continue
+            if date_from_dt and event_ts < date_from_dt:
+                continue
+            if date_to_dt and event_ts > date_to_dt:
+                continue
+            day_key = event_ts.date().isoformat()
+            bucket = campaign_timeseries_raw[day_key]
+            bucket["envios_totales"] += 1
+            estado = (_clean_text(envio.get("estado")) or "").lower()
+            if estado in sent_states:
+                bucket["envios_enviados"] += 1
+            if estado in delivered_states:
+                bucket["envios_entregados"] += 1
+            if estado == "respondido":
+                bucket["envios_respondidos"] += 1
+    campaign_timeseries = [
+        {"fecha": day, **metrics}
+        for day, metrics in sorted(campaign_timeseries_raw.items(), key=lambda item: item[0])
+    ]
 
     try:
         frase_events = await repo.list_whatsapp_atribucion_eventos_for_metrics(
@@ -14916,6 +14983,38 @@ async def prospeccion_metricas_dashboard(
         float(sum(float(item["monto_estimado_total"]) for item in by_channel_items)),
         2,
     )
+    frases_timeseries_raw: dict[str, dict[str, float]] = defaultdict(
+        lambda: {
+            "conversaciones_atribuidas": 0,
+            "oportunidades_creadas": 0,
+            "monto_estimado_total": 0.0,
+        }
+    )
+    for event in frase_events:
+        event_ts = _parse_datetime(event.get("creado_en"))
+        if event_ts is None:
+            continue
+        day_key = event_ts.date().isoformat()
+        bucket = frases_timeseries_raw[day_key]
+        bucket["conversaciones_atribuidas"] += 1
+        conversation_id_value = _clean_text(event.get("conversacion_id"))
+        if conversation_id_value and conversation_id_value in opp_by_conversation:
+            bucket["oportunidades_creadas"] += 1
+            try:
+                bucket["monto_estimado_total"] += float(
+                    opp_by_conversation[conversation_id_value].get("monto_estimado") or 0
+                )
+            except (TypeError, ValueError):
+                pass
+    frases_timeseries = [
+        {
+            "fecha": day,
+            "conversaciones_atribuidas": int(values["conversaciones_atribuidas"]),
+            "oportunidades_creadas": int(values["oportunidades_creadas"]),
+            "monto_estimado_total": round(float(values["monto_estimado_total"]), 2),
+        }
+        for day, values in sorted(frases_timeseries_raw.items(), key=lambda item: item[0])
+    ]
 
     return {
         "ok": True,
@@ -14930,6 +15029,7 @@ async def prospeccion_metricas_dashboard(
         "campanas": {
             "summary": campaign_summary,
             "items": campaign_items,
+            "timeseries": campaign_timeseries,
         },
         "frases_whatsapp": {
             "summary": {
@@ -14944,6 +15044,7 @@ async def prospeccion_metricas_dashboard(
             },
             "by_channel": by_channel_items,
             "by_rule": by_rule_items,
+            "timeseries": frases_timeseries,
         },
     }
 

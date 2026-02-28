@@ -13,14 +13,24 @@ Formato recomendado por entrada:
   - alta/edición/borrado de reglas por frase,
   - filtros por canal/estado/búsqueda,
   - simulador de frase para validar match antes de guardar.
+- Nueva vista `prospeccion/metricas`:
+  - dashboard unificado de prospección con filtros globales (fecha/canal/campaña/regla),
+  - KPIs combinados de campañas + atribución WhatsApp por frase,
+  - tablas de detalle (`campañas`, `frases por canal`, `frases por regla`),
+  - gráficas de tendencia diaria para campañas y frases.
 - Sidebar de Prospección:
   - nuevo acceso `Atribución WhatsApp`.
+  - nuevo acceso `Métricas`.
 
 ### Backend
 - Nuevos endpoints de reglas de atribución WhatsApp:
   - `GET/POST /crm/prospeccion/whatsapp/atribucion/reglas`
   - `PATCH/DELETE /crm/prospeccion/whatsapp/atribucion/reglas/{regla_id}`
   - `POST /crm/prospeccion/whatsapp/atribucion/reglas/simular`
+- Nuevo endpoint agregador:
+  - `GET /crm/prospeccion/metricas`
+  - combina en una sola respuesta métricas de campañas y frases WhatsApp.
+  - incluye `timeseries` diaria para ambos bloques.
 - Webhook inbound WhatsApp:
   - evalúa reglas activas por prioridad y aplica primera coincidencia.
   - guardas operativas:

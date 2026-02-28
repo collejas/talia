@@ -82,6 +82,12 @@ Repositorio principal: `backend/app/repositories/crm.py`
 - `PATCH /crm/prospeccion/whatsapp/atribucion/reglas/{regla_id}`
 - `DELETE /crm/prospeccion/whatsapp/atribucion/reglas/{regla_id}`
 - `POST /crm/prospeccion/whatsapp/atribucion/reglas/simular`
+- `GET /crm/prospeccion/metricas`
+  - Dashboard unificado de prospección (campañas + frases WhatsApp).
+  - Filtros globales: `date_from`, `date_to`, `campana_id`, `canal`, `campana_publicitaria`, `regla_id`, `limit`.
+  - Incluye:
+    - `campanas.summary`, `campanas.items`, `campanas.timeseries`.
+    - `frases_whatsapp.summary`, `frases_whatsapp.by_channel`, `frases_whatsapp.by_rule`, `frases_whatsapp.timeseries`.
 - `POST /crm/prospeccion/contacto/brevo/webhook`
   - Exposición pública recomendada (panel/proxy):
     - `POST /api/prospeccion/contacto/brevo/webhook`

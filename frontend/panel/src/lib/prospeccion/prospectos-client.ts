@@ -1170,6 +1170,21 @@ export type ProspeccionMetricasFrasesByRule = {
   monto_estimado_total: number
 }
 
+export type ProspeccionMetricasCampanaTimeseriesItem = {
+  fecha: string
+  envios_totales: number
+  envios_enviados: number
+  envios_entregados: number
+  envios_respondidos: number
+}
+
+export type ProspeccionMetricasFrasesTimeseriesItem = {
+  fecha: string
+  conversaciones_atribuidas: number
+  oportunidades_creadas: number
+  monto_estimado_total: number
+}
+
 export type ProspeccionMetricasResponse = {
   ok: boolean
   filters: {
@@ -1183,11 +1198,13 @@ export type ProspeccionMetricasResponse = {
   campanas: {
     summary: ProspeccionMetricasCampanaSummary
     items: ProspeccionCampanaAtribucionItem[]
+    timeseries: ProspeccionMetricasCampanaTimeseriesItem[]
   }
   frases_whatsapp: {
     summary: ProspeccionMetricasFrasesSummary
     by_channel: ProspeccionMetricasFrasesByChannel[]
     by_rule: ProspeccionMetricasFrasesByRule[]
+    timeseries: ProspeccionMetricasFrasesTimeseriesItem[]
   }
 }
 
