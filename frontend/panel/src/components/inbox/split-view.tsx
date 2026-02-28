@@ -12,7 +12,18 @@ import type { InboxThread, InboxMessage } from "@/lib/inbox/data";
 import type { InboxAttachment } from "@/lib/inbox/types";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { InboxComposer } from "@/components/inbox/composer";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { useCurrentUser } from "@/hooks/use-current-user";
 import type { DateFilterOption } from "@/components/inbox/toolbar";
 import { matchesReengageFilter } from "@/lib/inbox/reengage-filter";
@@ -137,6 +148,16 @@ type PromoteOpportunityResponse = {
   error?: string;
   detail?: string;
   message?: string;
+};
+
+type InboxPromoteFormState = {
+  nombre_completo: string;
+  correo: string;
+  telefono_e164: string;
+  company_name: string;
+  proyecto_nombre: string;
+  necesidad: string;
+  monto_estimado: string;
 };
 
 type PendingAttachment = InboxAttachment & { id: string };
@@ -306,6 +327,19 @@ function extractNameCandidate(value: unknown): string | null {
     }
   }
   return null;
+}
+
+function buildPromoteFormState(thread: InboxThread): InboxPromoteFormState {
+  const baseName = thread.contactoNombre?.trim();
+  return {
+    nombre_completo: baseName && baseName !== "Contacto sin nombre" ? baseName : "",
+    correo: thread.contactoCorreo?.trim() ?? "",
+    telefono_e164: thread.contactoTelefono?.trim() ?? "",
+    company_name: "",
+    proyecto_nombre: "",
+    necesidad: "",
+    monto_estimado: "",
+  };
 }
 
 function extractAgentSenderType(metadata: Record<string, unknown> | null | undefined): "assistant" | "human" | "user" | undefined {
@@ -574,6 +608,9 @@ export function InboxSplitView({
   const [manualToggleError, setManualToggleError] = React.useState<string | null>(null);
   const [promotingOpportunity, setPromotingOpportunity] = React.useState(false);
   const [promoteError, setPromoteError] = React.useState<string | null>(null);
+  const [promoteDialogOpen, setPromoteDialogOpen] = React.useState(false);
+  const [promoteForm, setPromoteForm] = React.useState<InboxPromoteFormState | null>(null);
+  const [promoteFormError, setPromoteFormError] = React.useState<string | null>(null);
   const [currentMessages, setCurrentMessages] = React.useState<InboxMessage[]>(threads[0]?.messages ?? []);
   const [pendingAttachments, setPendingAttachments] = React.useState<PendingAttachment[]>([]);
   const [uploadingAttachments, setUploadingAttachments] = React.useState(false);
@@ -1259,16 +1296,59 @@ export function InboxSplitView({
     }
   }, [selectedThread]);
 
+  const openPromoteDialog = React.useCallback(() => {
+    if (!selectedThread || selectedThread.opportunityId) {
+      return;
+    }
+    setPromoteError(null);
+    setPromoteFormError(null);
+    setPromoteForm(buildPromoteFormState(selectedThread));
+    setPromoteDialogOpen(true);
+  }, [selectedThread]);
+
   const handlePromoteOpportunity = React.useCallback(async () => {
     if (!selectedThread || selectedThread.opportunityId) {
       return false;
     }
+    if (!promoteForm) {
+      setPromoteFormError("Completa el formulario para crear la oportunidad.");
+      return false;
+    }
+    const nombre = promoteForm.nombre_completo.trim();
+    const correo = promoteForm.correo.trim();
+    const telefono = promoteForm.telefono_e164.trim();
+    const empresa = promoteForm.company_name.trim();
+    const proyecto = promoteForm.proyecto_nombre.trim();
+    const necesidad = promoteForm.necesidad.trim();
+    const montoRaw = promoteForm.monto_estimado.trim();
+
+    if (!nombre || !correo || !telefono || !empresa || !proyecto || !necesidad || !montoRaw) {
+      setPromoteFormError("Completa todos los campos para crear la oportunidad.");
+      return false;
+    }
+    const monto = Number(montoRaw.replace(/,/g, ""));
+    if (!Number.isFinite(monto) || monto < 0) {
+      setPromoteFormError("Monto estimado inválido.");
+      return false;
+    }
+
     const targetId = selectedThread.id;
+    setPromoteFormError(null);
     setPromoteError(null);
     setPromotingOpportunity(true);
     try {
       const response = await fetch(`/api/inbox/${targetId}/promote`, {
         method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          nombre_completo: nombre,
+          correo,
+          telefono_e164: telefono,
+          company_name: empresa,
+          proyecto_nombre: proyecto,
+          necesidad,
+          monto_estimado: monto,
+        }),
       });
       const text = await response.text();
       const payload = parsePromotePayload(text);
@@ -1295,11 +1375,15 @@ export function InboxSplitView({
             ? {
                 ...thread,
                 opportunityId,
+                contactoNombre: nombre || thread.contactoNombre,
+                contactoCorreo: correo || thread.contactoCorreo,
+                contactoTelefono: telefono || thread.contactoTelefono,
               }
             : thread,
         ),
       );
       setPromoteError(null);
+      setPromoteDialogOpen(false);
       return true;
     } catch (error) {
       console.error("[inbox] promote opportunity failed", error);
@@ -1308,7 +1392,7 @@ export function InboxSplitView({
     } finally {
       setPromotingOpportunity(false);
     }
-  }, [selectedThread]);
+  }, [selectedThread, promoteForm]);
 
   return (
     <div className="flex gap-4">
@@ -1462,7 +1546,7 @@ export function InboxSplitView({
                     variant="outline"
                     size="sm"
                     className="gap-2"
-                    onClick={handlePromoteOpportunity}
+                    onClick={openPromoteDialog}
                     disabled={promotingOpportunity}
                   >
                     <IconTargetArrow className="size-4" />
@@ -1603,6 +1687,210 @@ export function InboxSplitView({
           </div>
         )}
       </section>
+
+      <Dialog open={promoteDialogOpen} onOpenChange={(open) => (!promotingOpportunity ? setPromoteDialogOpen(open) : null)}>
+        <DialogContent className="sm:max-w-xl">
+          <DialogHeader>
+            <DialogTitle>Crear oportunidad desde Inbox</DialogTitle>
+            <DialogDescription>
+              Completa los datos del contacto y de la oportunidad para registrar correctamente el lead.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="grid gap-4">
+            <div className="grid gap-2">
+              <Label htmlFor="promote-nombre">Nombre</Label>
+              <Input
+                id="promote-nombre"
+                value={promoteForm?.nombre_completo ?? ""}
+                onChange={(event) =>
+                  setPromoteForm((prev) => ({
+                    ...(prev ?? {
+                      nombre_completo: "",
+                      correo: "",
+                      telefono_e164: "",
+                      company_name: "",
+                      proyecto_nombre: "",
+                      necesidad: "",
+                      monto_estimado: "",
+                    }),
+                    nombre_completo: event.target.value,
+                  }))
+                }
+                disabled={promotingOpportunity}
+              />
+            </div>
+
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <div className="grid gap-2">
+                <Label htmlFor="promote-correo">Correo</Label>
+                <Input
+                  id="promote-correo"
+                  type="email"
+                  value={promoteForm?.correo ?? ""}
+                  onChange={(event) =>
+                    setPromoteForm((prev) => ({
+                      ...(prev ?? {
+                        nombre_completo: "",
+                        correo: "",
+                        telefono_e164: "",
+                        company_name: "",
+                        proyecto_nombre: "",
+                        necesidad: "",
+                        monto_estimado: "",
+                      }),
+                      correo: event.target.value,
+                    }))
+                  }
+                  disabled={promotingOpportunity}
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="promote-telefono">Teléfono</Label>
+                <Input
+                  id="promote-telefono"
+                  value={promoteForm?.telefono_e164 ?? ""}
+                  onChange={(event) =>
+                    setPromoteForm((prev) => ({
+                      ...(prev ?? {
+                        nombre_completo: "",
+                        correo: "",
+                        telefono_e164: "",
+                        company_name: "",
+                        proyecto_nombre: "",
+                        necesidad: "",
+                        monto_estimado: "",
+                      }),
+                      telefono_e164: event.target.value,
+                    }))
+                  }
+                  disabled={promotingOpportunity}
+                />
+              </div>
+            </div>
+
+            <div className="grid gap-2">
+              <Label htmlFor="promote-empresa">Empresa</Label>
+              <Input
+                id="promote-empresa"
+                value={promoteForm?.company_name ?? ""}
+                onChange={(event) =>
+                  setPromoteForm((prev) => ({
+                    ...(prev ?? {
+                      nombre_completo: "",
+                      correo: "",
+                      telefono_e164: "",
+                      company_name: "",
+                      proyecto_nombre: "",
+                      necesidad: "",
+                      monto_estimado: "",
+                    }),
+                    company_name: event.target.value,
+                  }))
+                }
+                disabled={promotingOpportunity}
+              />
+            </div>
+
+            <div className="grid gap-2">
+              <Label htmlFor="promote-proyecto">Nombre del proyecto</Label>
+              <Input
+                id="promote-proyecto"
+                value={promoteForm?.proyecto_nombre ?? ""}
+                onChange={(event) =>
+                  setPromoteForm((prev) => ({
+                    ...(prev ?? {
+                      nombre_completo: "",
+                      correo: "",
+                      telefono_e164: "",
+                      company_name: "",
+                      proyecto_nombre: "",
+                      necesidad: "",
+                      monto_estimado: "",
+                    }),
+                    proyecto_nombre: event.target.value,
+                  }))
+                }
+                disabled={promotingOpportunity}
+              />
+            </div>
+
+            <div className="grid gap-2">
+              <Label htmlFor="promote-necesidad">Necesidad</Label>
+              <Textarea
+                id="promote-necesidad"
+                rows={3}
+                value={promoteForm?.necesidad ?? ""}
+                onChange={(event) =>
+                  setPromoteForm((prev) => ({
+                    ...(prev ?? {
+                      nombre_completo: "",
+                      correo: "",
+                      telefono_e164: "",
+                      company_name: "",
+                      proyecto_nombre: "",
+                      necesidad: "",
+                      monto_estimado: "",
+                    }),
+                    necesidad: event.target.value,
+                  }))
+                }
+                disabled={promotingOpportunity}
+              />
+            </div>
+
+            <div className="grid gap-2">
+              <Label htmlFor="promote-monto">Monto estimado</Label>
+              <Input
+                id="promote-monto"
+                type="number"
+                min="0"
+                step="0.01"
+                value={promoteForm?.monto_estimado ?? ""}
+                onChange={(event) =>
+                  setPromoteForm((prev) => ({
+                    ...(prev ?? {
+                      nombre_completo: "",
+                      correo: "",
+                      telefono_e164: "",
+                      company_name: "",
+                      proyecto_nombre: "",
+                      necesidad: "",
+                      monto_estimado: "",
+                    }),
+                    monto_estimado: event.target.value,
+                  }))
+                }
+                disabled={promotingOpportunity}
+              />
+            </div>
+
+            {promoteFormError ? (
+              <div className="rounded border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+                {promoteFormError}
+              </div>
+            ) : null}
+            {promoteError ? (
+              <div className="rounded border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+                {promoteError}
+              </div>
+            ) : null}
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setPromoteDialogOpen(false)}
+              disabled={promotingOpportunity}
+            >
+              Cancelar
+            </Button>
+            <Button onClick={() => void handlePromoteOpportunity()} disabled={promotingOpportunity}>
+              {promotingOpportunity ? "Creando..." : "Crear oportunidad"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

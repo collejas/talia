@@ -42,8 +42,18 @@ export async function POST(
     return NextResponse.json({ error: "conversation_required" }, { status: 400 });
   }
 
+  let body: unknown = undefined;
+  try {
+    if (request.headers.get("content-length") !== "0") {
+      body = await request.json();
+    }
+  } catch {
+    body = undefined;
+  }
+
   const response = await callCrmApi(`/crm/inbox/conversations/${conversationId}/promote`, {
     method: "POST",
+    body,
     withUserToken: true,
   });
 

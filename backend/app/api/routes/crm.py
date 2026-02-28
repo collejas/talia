@@ -2080,6 +2080,16 @@ class ManualOverridePayload(BaseModel):
     manual: bool = Field(..., description="True para pausar al asistente")
 
 
+class InboxPromoteOpportunityPayload(BaseModel):
+    nombre_completo: str | None = Field(default=None, max_length=160)
+    correo: str | None = Field(default=None, max_length=255)
+    telefono_e164: str | None = Field(default=None, max_length=32)
+    company_name: str | None = Field(default=None, max_length=160)
+    proyecto_nombre: str | None = Field(default=None, max_length=255)
+    necesidad: str | None = Field(default=None, max_length=2000)
+    monto_estimado: float | None = Field(default=None, ge=0)
+
+
 def _first_state_from_payload(payload: DenueBusquedaPayload) -> str | None:
     if payload.geo_estados:
         return str(payload.geo_estados[0]).zfill(2)
@@ -10284,6 +10294,7 @@ async def promote_inbox_conversation_to_opportunity(
     repo: CRMRepository = Depends(get_repository),
     _: str = Depends(require_permission("pipeline.view")),
     conversacion_id: UUID,
+    payload: InboxPromoteOpportunityPayload | None = None,
 ) -> dict[str, Any]:
     try:
         conversation_meta = await storage.fetch_webchat_conversation(str(conversacion_id))
@@ -10309,19 +10320,41 @@ async def promote_inbox_conversation_to_opportunity(
         organizacion_id=organizacion_id,
         conversation_id=str(conversacion_id),
     )
-    if existing and existing.get("id"):
-        return {
-            "ok": True,
-            "created": False,
-            "oportunidad_id": str(existing.get("id")),
-            "titulo": existing.get("titulo"),
-            "estado": existing.get("estado"),
-        }
+    had_existing = bool(existing and existing.get("id"))
 
-    stage = await repo.ensure_prospeccion_stage(organizacion_id=organizacion_id)
-    stage_id = stage.get("id")
-    if not stage_id:
-        raise HTTPException(status_code=502, detail="stage_not_available")
+    try:
+        contact_uuid = UUID(str(contact_id_value))
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=409, detail="conversation_contact_invalid")
+
+    form_nombre = _clean_text(payload.nombre_completo) if payload else None
+    form_correo = _normalize_email(payload.correo) if payload else None
+    form_telefono = _clean_text(payload.telefono_e164) if payload else None
+    form_company = _clean_text(payload.company_name) if payload else None
+    form_proyecto = _clean_text(payload.proyecto_nombre) if payload else None
+    form_necesidad = _clean_text(payload.necesidad) if payload else None
+    form_monto = payload.monto_estimado if payload and payload.monto_estimado is not None else None
+
+    contact_patch: dict[str, Any] = {}
+    if form_nombre:
+        contact_patch["nombre_completo"] = form_nombre
+    if form_correo is not None:
+        contact_patch["correo"] = form_correo
+    if form_telefono:
+        contact_patch["telefono_e164"] = form_telefono
+    if form_company:
+        contact_patch["company_name"] = form_company
+    if form_necesidad:
+        contact_patch["necesidad_proposito"] = form_necesidad
+    if contact_patch:
+        try:
+            contact_row = await repo.update_contact(
+                organizacion_id=organizacion_id,
+                contacto_id=contact_uuid,
+                payload=contact_patch,
+            )
+        except CRMRepositoryError as exc:
+            raise HTTPException(status_code=502, detail=f"contact_update_failed:{exc}") from exc
 
     contact_name = _clean_text(contact_row.get("nombre_completo")) or "Contacto"
     recent_messages = await storage.fetch_recent_messages(conversation_id=str(conversacion_id), limit=20)
@@ -10343,40 +10376,62 @@ async def promote_inbox_conversation_to_opportunity(
             if latest_inbound_text:
                 break
 
-    title = latest_subject or f"Inbound correo - {contact_name}"
-    description = latest_inbound_text or "Conversación iniciada desde correo entrante en Inbox."
-
+    title = form_proyecto or latest_subject or f"Inbound correo - {contact_name}"
+    description = form_necesidad or latest_inbound_text or "Conversación iniciada desde correo entrante en Inbox."
+    channel = _clean_text(conversation_meta.get("channel")) or "correo"
     try:
-        contact_uuid = UUID(str(contact_id_value))
-    except (TypeError, ValueError):
-        raise HTTPException(status_code=409, detail="conversation_contact_invalid")
-    opportunity_payload: dict[str, Any] = {
-        "contacto_principal_id": str(contact_uuid),
-        "etapa_id": str(stage_id),
-        "titulo": title,
-        "descripcion": description,
-        "metadata": {
-            "source": "inbox_email",
-            "created_via": "inbox_email_promote",
-            "conversation_id": str(conversacion_id),
-            "channel": "correo",
-            "contact_id": str(contact_uuid),
-        },
-    }
-    try:
-        created = await repo.create_opportunity(
+        ensured_opportunity_id, _, _ = await repo.ensure_conversation_opportunity(
             organizacion_id=organizacion_id,
-            payload=opportunity_payload,
+            contacto_id=contact_uuid,
+            conversation_id=str(conversacion_id),
+            canal=channel,
+            contacto_nombre=contact_name,
+            contacto_empresa=_clean_text(contact_row.get("company_name")),
         )
     except CRMRepositoryError as exc:
-        raise HTTPException(status_code=502, detail=f"opportunity_create_failed:{exc}") from exc
+        raise HTTPException(status_code=502, detail=f"opportunity_ensure_failed:{exc}") from exc
+
+    ensured_row = await repo.get_opportunity(
+        organizacion_id=organizacion_id,
+        opportunity_id=ensured_opportunity_id,
+    )
+    if not ensured_row:
+        raise HTTPException(status_code=502, detail="opportunity_not_found_after_ensure")
+
+    current_metadata = _ensure_dict(ensured_row.get("metadata"), default={})
+    current_metadata.update(
+        {
+            "source": "inbox_email",
+            "created_via": "inbox_promote_modal",
+            "conversation_id": str(conversacion_id),
+            "channel": channel,
+            "contact_id": str(contact_uuid),
+            **({"project_name": title} if title else {}),
+            **({"proyecto_necesidades": description} if description else {}),
+        }
+    )
+    opportunity_patch: dict[str, Any] = {
+        "titulo": title,
+        "descripcion": description,
+        "metadata": current_metadata,
+    }
+    if form_monto is not None:
+        opportunity_patch["monto_estimado"] = form_monto
+    try:
+        updated = await repo.update_opportunity(
+            organizacion_id=organizacion_id,
+            oportunidad_id=ensured_opportunity_id,
+            payload=opportunity_patch,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=f"opportunity_update_failed:{exc}") from exc
 
     return {
         "ok": True,
-        "created": True,
-        "oportunidad_id": str(created.get("id")) if created.get("id") else None,
-        "titulo": created.get("titulo") or title,
-        "estado": created.get("estado"),
+        "created": not had_existing,
+        "oportunidad_id": str(updated.get("id")) if updated.get("id") else str(ensured_opportunity_id),
+        "titulo": updated.get("titulo") or title,
+        "estado": updated.get("estado"),
     }
 
 
