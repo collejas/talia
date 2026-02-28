@@ -10223,6 +10223,14 @@ async def reply_inbox_conversation(
             recipient_email = _clean_text(contact_row.get("correo"))
             if not recipient_email:
                 raise HTTPException(status_code=409, detail="contact_email_not_found")
+            org_value = contact_row.get("organizacion_id")
+            org_uuid: UUID | None = None
+            if org_value:
+                try:
+                    org_uuid = UUID(str(org_value))
+                except (TypeError, ValueError):
+                    org_uuid = None
+            runtime_org_id = org_uuid or tenant_runtime.MASTER_ORGANIZACION_ID
 
             subject = _clean_text(payload.metadata.get("subject")) if isinstance(payload.metadata, dict) else None
             recent_messages = await storage.fetch_recent_messages(conversation_id=str(conversacion_id), limit=20)
@@ -10258,6 +10266,16 @@ async def reply_inbox_conversation(
                 headers["In-Reply-To"] = f"<{in_reply_to}>"
             if references:
                 headers["References"] = " ".join(f"<{value}>" for value in references[:15])
+            try:
+                mail_settings, brevo_settings = await asyncio.gather(
+                    tenant_runtime.get_mail_runtime_settings(organizacion_id=runtime_org_id),
+                    tenant_runtime.get_brevo_runtime_settings(organizacion_id=runtime_org_id),
+                )
+            except Exception as exc:
+                raise HTTPException(status_code=502, detail=f"mail_runtime_error:{exc}") from exc
+            reply_to_value = _clean_text(getattr(mail_settings, "reply_to", None))
+            if reply_to_value and "Reply-To" not in headers:
+                headers["Reply-To"] = reply_to_value
 
             try:
                 sent_message_id = send_email(
@@ -10265,17 +10283,12 @@ async def reply_inbox_conversation(
                     body_text=content,
                     recipients=[recipient_email],
                     headers=headers or None,
+                    mail_settings=mail_settings,
+                    brevo_settings=brevo_settings,
                 )
             except EmailSendError as exc:
                 raise HTTPException(status_code=502, detail=str(exc)) from exc
 
-            org_value = contact_row.get("organizacion_id")
-            org_uuid: UUID | None = None
-            if org_value:
-                try:
-                    org_uuid = UUID(str(org_value))
-                except (TypeError, ValueError):
-                    org_uuid = None
             message_metadata = {
                 "channel": "correo",
                 "source": "operativo",
@@ -10287,7 +10300,8 @@ async def reply_inbox_conversation(
                 "references": references,
             }
             try:
-                inserted = await repo.insert_inbox_message(
+                system_repo = CRMRepository()
+                inserted = await system_repo.insert_inbox_message(
                     conversation_id=conversacion_id,
                     direction="saliente",
                     text=content,
