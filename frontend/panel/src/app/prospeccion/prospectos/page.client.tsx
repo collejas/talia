@@ -137,6 +137,7 @@ type ContactDrawerData = {
   omitidos?: ProspeccionOmitido[]
 }
 type CampaignOption = { id: string; nombre: string; canal: "correo" | "whatsapp" | "llamada" | null }
+const PLANNER_ALL_TEMPLATES_VALUE = "__all_templates__"
 const plannerCanalLabel: Record<"correo" | "whatsapp" | "llamada", string> = {
   correo: "Correo",
   whatsapp: "WhatsApp",
@@ -752,6 +753,10 @@ function ProspectosView() {
     [plannerCampaignId, plannerCampaignOptions]
   )
   const selectedPlannerCanal = selectedPlannerCampaign?.canal ?? null
+  const selectedPlannerTemplatesByCanal = useMemo(
+    () => (selectedPlannerCanal ? plannerTemplates.filter((tpl) => tpl.canal === selectedPlannerCanal) : []),
+    [plannerTemplates, selectedPlannerCanal]
+  )
   const orderSelectedByOptions = (selection: Set<string>, options: string[]) => {
     const ordered: string[] = []
     const seen = new Set<string>()
@@ -1817,16 +1822,14 @@ function ProspectosView() {
     setPlannerExecuting(true)
     try {
       const templates = plannerTemplates
-      const canalesPayload: ProspeccionCanalConfigInput[] = []
       const scheduleValue =
         plannerScheduleMode === "programado" && plannerScheduleDate
           ? new Date(`${plannerScheduleDate}T${plannerScheduleTime || "00:00"}`).toISOString()
           : undefined
-      ;([selectedPlannerCanal] as const).forEach((canal) => {
-        const selectedTemplateId = plannerTemplateSelection[canal]
-        if (!selectedTemplateId) return
-        const template = templates.find((item) => item.id === selectedTemplateId && item.canal === canal)
-        if (!template) return
+      const buildCanalPayload = (
+        canal: "correo" | "whatsapp" | "llamada",
+        template: ContactoTemplate
+      ): ProspeccionCanalConfigInput => {
         const entry: ProspeccionCanalConfigInput = {
           canal,
           template_id: template.id,
@@ -1851,36 +1854,95 @@ function ProspectosView() {
         if (scheduleValue) {
           entry.programado_en = scheduleValue
         }
-        canalesPayload.push(entry)
-      })
-      if (!canalesPayload.length) {
+        return entry
+      }
+
+      const canal = selectedPlannerCanal
+      const selectedTemplateId = plannerTemplateSelection[canal]
+      if (!selectedTemplateId) {
         setPlannerError("Selecciona una plantilla para el canal de la campaña.")
         return
       }
-      const response = await contactarProspectos({
-        prospecto_ids: selectedIds,
-        campana_id: plannerCampaignId,
-        canales: canalesPayload,
-        separacion_segundos: separacion,
-      })
       const nameMap = new Map(items.map((item) => [item.id, item.display_name]))
-      const enrichedResults = (response.contactos ?? []).map((resumen) => ({
-        ...resumen,
-        display_name: nameMap.get(resumen.prospecto_id) ?? resumen.display_name ?? null,
-      }))
-      if (enrichedResults.length) {
-        openContactDrawer({
-          batchId: response.batch_id ?? null,
-          results: enrichedResults,
-          omitidos: response.omitidos,
+      if (selectedTemplateId === PLANNER_ALL_TEMPLATES_VALUE) {
+        const canalTemplates = templates.filter((item) => item.canal === canal)
+        if (!canalTemplates.length) {
+          setPlannerError("No hay plantillas disponibles para repartir el envío.")
+          return
+        }
+        const prospectosPorTemplate = canalTemplates.map(() => [] as string[])
+        selectedIds.forEach((prospectoId, index) => {
+          prospectosPorTemplate[index % canalTemplates.length].push(prospectoId)
+        })
+
+        const aggregatedResults: ProspeccionContactResult[] = []
+        const aggregatedOmitidos: ProspeccionOmitido[] = []
+        const createdBatchIds: string[] = []
+        for (let index = 0; index < canalTemplates.length; index += 1) {
+          const prospectosLote = prospectosPorTemplate[index]
+          if (!prospectosLote.length) continue
+          const template = canalTemplates[index]
+          const response = await contactarProspectos({
+            prospecto_ids: prospectosLote,
+            campana_id: plannerCampaignId,
+            canales: [buildCanalPayload(canal, template)],
+            separacion_segundos: separacion,
+          })
+          if (response.batch_id) {
+            createdBatchIds.push(response.batch_id)
+          }
+          aggregatedResults.push(
+            ...(response.contactos ?? []).map((resumen) => ({
+              ...resumen,
+              display_name: nameMap.get(resumen.prospecto_id) ?? resumen.display_name ?? null,
+            }))
+          )
+          if (Array.isArray(response.omitidos) && response.omitidos.length) {
+            aggregatedOmitidos.push(...response.omitidos)
+          }
+        }
+
+        if (aggregatedResults.length) {
+          openContactDrawer({
+            batchId: null,
+            results: aggregatedResults,
+            omitidos: aggregatedOmitidos,
+          })
+        }
+        setBanner({
+          type: "success",
+          message: `Se crearon ${createdBatchIds.length} lotes con ${aggregatedResults.length} envíos repartidos entre ${canalTemplates.length} plantillas.`,
+        })
+      } else {
+        const template = templates.find((item) => item.id === selectedTemplateId && item.canal === canal)
+        if (!template) {
+          setPlannerError("Selecciona una plantilla válida para continuar.")
+          return
+        }
+        const response = await contactarProspectos({
+          prospecto_ids: selectedIds,
+          campana_id: plannerCampaignId,
+          canales: [buildCanalPayload(canal, template)],
+          separacion_segundos: separacion,
+        })
+        const enrichedResults = (response.contactos ?? []).map((resumen) => ({
+          ...resumen,
+          display_name: nameMap.get(resumen.prospecto_id) ?? resumen.display_name ?? null,
+        }))
+        if (enrichedResults.length) {
+          openContactDrawer({
+            batchId: response.batch_id ?? null,
+            results: enrichedResults,
+            omitidos: response.omitidos,
+          })
+        }
+        setBanner({
+          type: "success",
+          message: response.batch_id
+            ? `Lote ${response.batch_id} ejecutado con ${enrichedResults.length} envíos.`
+            : "Lote ejecutado.",
         })
       }
-      setBanner({
-        type: "success",
-        message: response.batch_id
-          ? `Lote ${response.batch_id} ejecutado con ${enrichedResults.length} envíos.`
-          : "Lote ejecutado.",
-      })
       handlePlannerOpenChange(false)
       await fetchProspectos(offset)
       void fetchRecentBatches()
@@ -2849,15 +2911,24 @@ function ProspectosView() {
                         />
                       </SelectTrigger>
                       <SelectContent>
-                        {plannerTemplates
-                          .filter((tpl) => tpl.canal === selectedPlannerCanal)
-                          .map((tpl) => (
-                            <SelectItem key={tpl.id} value={tpl.id}>
-                              {tpl.nombre}
-                            </SelectItem>
-                          ))}
+                        {selectedPlannerTemplatesByCanal.length > 1 ? (
+                          <SelectItem value={PLANNER_ALL_TEMPLATES_VALUE}>Todas las plantillas (repartir)</SelectItem>
+                        ) : null}
+                        {selectedPlannerTemplatesByCanal.map((tpl) => (
+                          <SelectItem key={tpl.id} value={tpl.id}>
+                            {tpl.nombre}
+                          </SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
+                    {selectedPlannerCanal &&
+                    plannerTemplateSelection[selectedPlannerCanal] === PLANNER_ALL_TEMPLATES_VALUE &&
+                    selectedPlannerTemplatesByCanal.length ? (
+                      <p className="text-xs text-muted-foreground">
+                        Se crearán hasta {Math.min(selectedCount, selectedPlannerTemplatesByCanal.length)} lotes: uno por
+                        plantilla, repartiendo prospectos sin repetir.
+                      </p>
+                    ) : null}
                   </div>
                 </div>
               </div>
