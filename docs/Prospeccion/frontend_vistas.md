@@ -73,6 +73,8 @@ Ruta base: `frontend/panel/src/app/prospeccion`
   - campañas por plantilla/canal,
   - frases por `canal_publicitario`,
   - frases por `regla`.
+- Exportación:
+  - botón `Exportar CSV` del bloque activo (`campañas` o `frases`) con filtros aplicados.
 
 ## Clientes frontend usados
 

@@ -18,6 +18,7 @@ Formato recomendado por entrada:
   - KPIs combinados de campañas + atribución WhatsApp por frase,
   - tablas de detalle (`campañas`, `frases por canal`, `frases por regla`),
   - gráficas de tendencia diaria para campañas y frases.
+  - exportación CSV del bloque activo (campañas o frases).
 - Sidebar de Prospección:
   - nuevo acceso `Atribución WhatsApp`.
   - nuevo acceso `Métricas`.

@@ -1,7 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useMemo, useState } from "react"
-import { IconLoader } from "@tabler/icons-react"
+import { IconDownload, IconLoader } from "@tabler/icons-react"
 import {
   CartesianGrid,
   Legend,
@@ -31,6 +31,32 @@ import {
 const money = new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN", maximumFractionDigits: 0 })
 const number = new Intl.NumberFormat("es-MX")
 const shortDate = new Intl.DateTimeFormat("es-MX", { month: "short", day: "2-digit" })
+
+function escapeCsvValue(value: string | number | null | undefined) {
+  if (value === null || value === undefined) return ""
+  const normalized = String(value).replace(/"/g, '""')
+  return /[",\n]/.test(normalized) ? `"${normalized}"` : normalized
+}
+
+function buildCsv(headers: string[], rows: Array<Array<string | number | null | undefined>>) {
+  const lines = [headers.map((header) => escapeCsvValue(header)).join(",")]
+  for (const row of rows) {
+    lines.push(row.map((value) => escapeCsvValue(value)).join(","))
+  }
+  return lines.join("\n")
+}
+
+function downloadCsv(filename: string, csvContent: string) {
+  const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" })
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement("a")
+  link.href = url
+  link.setAttribute("download", filename)
+  document.body.appendChild(link)
+  link.click()
+  document.body.removeChild(link)
+  URL.revokeObjectURL(url)
+}
 
 export default function ProspeccionMetricasPageClient() {
   const [activeTab, setActiveTab] = useState<"campanas" | "frases">("campanas")
@@ -143,6 +169,94 @@ export default function ProspeccionMetricasPageClient() {
     return cards
   }, [summaryCampaign, summaryPhrases])
 
+  const exportActiveCsv = useCallback(() => {
+    if (!data) return
+    const timestamp = new Date().toISOString().replace(/[:.]/g, "-")
+    if (activeTab === "campanas") {
+      const csv = buildCsv(
+        [
+          "campana_id",
+          "campana_nombre",
+          "canal",
+          "template_id",
+          "template_slug",
+          "template_nombre",
+          "envios_totales",
+          "envios_enviados",
+          "envios_entregados",
+          "envios_fallidos",
+          "envios_omitidos",
+          "envios_respondidos",
+          "brevo_aperturas",
+          "brevo_clicks",
+          "sesiones_utm",
+          "tasa_entrega_pct",
+          "tasa_respuesta_pct",
+          "click_to_session_pct",
+        ],
+        (data.campanas.items ?? []).map((item) => [
+          item.campana_id,
+          item.campana_nombre,
+          item.canal,
+          item.template_id,
+          item.template_slug,
+          item.template_nombre,
+          item.envios_totales,
+          item.envios_enviados,
+          item.envios_entregados,
+          item.envios_fallidos,
+          item.envios_omitidos,
+          item.envios_respondidos,
+          item.brevo_aperturas,
+          item.brevo_clicks,
+          item.sesiones_utm,
+          item.tasa_entrega_pct,
+          item.tasa_respuesta_pct,
+          item.click_to_session_pct,
+        ]),
+      )
+      downloadCsv(`prospeccion_metricas_campanas_${timestamp}.csv`, csv)
+      return
+    }
+    const byChannelRows = (data.frases_whatsapp.by_channel ?? []).map((item) => [
+      "por_canal",
+      "",
+      item.canal_publicitario,
+      "",
+      item.conversaciones_atribuidas,
+      item.contactos_unicos,
+      item.oportunidades_creadas,
+      item.tasa_conversacion_oportunidad_pct,
+      item.monto_estimado_total,
+    ])
+    const byRuleRows = (data.frases_whatsapp.by_rule ?? []).map((item) => [
+      "por_regla",
+      item.regla_id ?? "",
+      item.canal_publicitario,
+      item.campana_publicitaria ?? "",
+      item.conversaciones_atribuidas,
+      item.contactos_unicos,
+      item.oportunidades_creadas,
+      item.tasa_conversacion_oportunidad_pct,
+      item.monto_estimado_total,
+    ])
+    const csv = buildCsv(
+      [
+        "seccion",
+        "regla_id",
+        "canal_publicitario",
+        "campana_publicitaria",
+        "conversaciones_atribuidas",
+        "contactos_unicos",
+        "oportunidades_creadas",
+        "tasa_conversacion_oportunidad_pct",
+        "monto_estimado_total",
+      ],
+      [...byChannelRows, ...byRuleRows],
+    )
+    downloadCsv(`prospeccion_metricas_frases_${timestamp}.csv`, csv)
+  }, [activeTab, data])
+
   return (
     <div className="space-y-4">
       <Card>
@@ -225,9 +339,18 @@ export default function ProspeccionMetricasPageClient() {
         ))}
       </div>
 
-      <div className="flex gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         <Button variant={activeTab === "campanas" ? "default" : "outline"} onClick={() => setActiveTab("campanas")}>Campañas</Button>
         <Button variant={activeTab === "frases" ? "default" : "outline"} onClick={() => setActiveTab("frases")}>Frases WhatsApp</Button>
+        <Button
+          variant="outline"
+          onClick={exportActiveCsv}
+          disabled={loading || !data}
+          className="ml-auto"
+        >
+          <IconDownload className="mr-2 h-4 w-4" />
+          Exportar CSV ({activeTab === "campanas" ? "campañas" : "frases"})
+        </Button>
       </div>
 
       {error ? (
