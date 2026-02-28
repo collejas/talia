@@ -8733,6 +8733,83 @@ class CRMRepository:
             raise CRMRepositoryError(f"whatsapp_atribucion_events_by_conversation_invalid:{data!r}")
         return [row for row in data if isinstance(row, dict)]
 
+    async def list_whatsapp_atribucion_eventos_for_metrics(
+        self,
+        *,
+        usuario_token: str,
+        limit: int = 5000,
+        date_from_iso: str | None = None,
+        date_to_iso: str | None = None,
+        canal_publicitario: str | None = None,
+        campana_publicitaria: str | None = None,
+        regla_id: UUID | None = None,
+    ) -> list[dict[str, Any]]:
+        """Lista eventos de atribución WhatsApp para tablero de métricas."""
+
+        params: dict[str, str] = {
+            "select": (
+                "id,regla_id,conversacion_id,contacto_id,canal_publicitario,"
+                "campana_publicitaria,adset,anuncio,creado_en"
+            ),
+            "order": "creado_en.desc",
+            "limit": str(max(1, min(limit, 10000))),
+        }
+        if date_from_iso:
+            params["creado_en"] = f"gte.{_postgrest_eq_literal(date_from_iso)}"
+        if date_to_iso:
+            params["creado_en"] = f"lte.{_postgrest_eq_literal(date_to_iso)}"
+        if canal_publicitario:
+            literal = _postgrest_eq_literal(canal_publicitario.strip())
+            params["canal_publicitario"] = f"eq.{literal}"
+        if campana_publicitaria:
+            literal = _postgrest_eq_literal(campana_publicitaria.strip())
+            params["campana_publicitaria"] = f"eq.{literal}"
+        if regla_id:
+            params["regla_id"] = f"eq.{regla_id}"
+
+        resp = await self._request_with_user(
+            "GET",
+            "/rest/v1/prospeccion_whatsapp_atribucion_eventos",
+            token=usuario_token,
+            params=params,
+        )
+        data = resp.json() or []
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"whatsapp_atribucion_eventos_metrics_invalid:{data!r}")
+        return [row for row in data if isinstance(row, dict)]
+
+    async def list_opportunities_by_conversation_ids(
+        self,
+        *,
+        organizacion_id: UUID,
+        conversation_ids: Sequence[str],
+    ) -> list[dict[str, Any]]:
+        """Obtiene oportunidades ligadas por metadata a conversation_id/conversacion_id."""
+
+        if not conversation_ids:
+            return []
+        safe_ids = [value.strip() for value in conversation_ids if isinstance(value, str) and value.strip()]
+        if not safe_ids:
+            return []
+        in_clause = _postgrest_in_clause(safe_ids)
+        params = {
+            "select": "id,monto_estimado,metadata,creado_en",
+            "organizacion_id": f"eq.{organizacion_id}",
+            "or": f"(metadata->>conversation_id.{in_clause},metadata->>conversacion_id.{in_clause})",
+            "order": "creado_en.desc",
+            "limit": str(min(max(len(safe_ids) * 5, 200), 5000)),
+        }
+        resp = await self._request_service_role(
+            "GET",
+            "/rest/v1/oportunidades",
+            params=params,
+            organizacion_id=organizacion_id,
+        )
+        data = resp.json() or []
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"opportunities_by_conversation_invalid:{data!r}")
+        return [row for row in data if isinstance(row, dict)]
+
     async def create_contact_suppression(
         self,
         *,

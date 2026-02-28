@@ -1129,8 +1129,90 @@ export type ContactoMetrics = {
   }>
 }
 
+export type ProspeccionMetricasCampanaSummary = {
+  envios_totales: number
+  envios_enviados: number
+  envios_entregados: number
+  envios_respondidos: number
+  brevo_aperturas: number
+  brevo_clicks: number
+  sesiones_utm: number
+  tasa_entrega_pct: number
+  tasa_respuesta_pct: number
+}
+
+export type ProspeccionMetricasFrasesSummary = {
+  conversaciones_atribuidas: number
+  contactos_unicos: number
+  oportunidades_creadas: number
+  tasa_conversacion_oportunidad_pct: number
+  monto_estimado_total: number
+}
+
+export type ProspeccionMetricasFrasesByChannel = {
+  canal_publicitario: string
+  conversaciones_atribuidas: number
+  contactos_unicos: number
+  oportunidades_creadas: number
+  tasa_conversacion_oportunidad_pct: number
+  monto_estimado_total: number
+}
+
+export type ProspeccionMetricasFrasesByRule = {
+  regla_id?: string | null
+  regla_nombre: string
+  canal_publicitario: string
+  campana_publicitaria?: string | null
+  conversaciones_atribuidas: number
+  contactos_unicos: number
+  oportunidades_creadas: number
+  tasa_conversacion_oportunidad_pct: number
+  monto_estimado_total: number
+}
+
+export type ProspeccionMetricasResponse = {
+  ok: boolean
+  filters: {
+    date_from?: string | null
+    date_to?: string | null
+    campana_id?: string | null
+    canal: "todos" | "correo" | "whatsapp" | "llamada"
+    campana_publicitaria?: string | null
+    regla_id?: string | null
+  }
+  campanas: {
+    summary: ProspeccionMetricasCampanaSummary
+    items: ProspeccionCampanaAtribucionItem[]
+  }
+  frases_whatsapp: {
+    summary: ProspeccionMetricasFrasesSummary
+    by_channel: ProspeccionMetricasFrasesByChannel[]
+    by_rule: ProspeccionMetricasFrasesByRule[]
+  }
+}
+
 export async function getContactoMetrics() {
   return requestJson<ContactoMetrics>("/api/prospeccion/contacto/metrics")
+}
+
+export async function getProspeccionMetricas(params: {
+  date_from?: string
+  date_to?: string
+  campana_id?: string
+  canal?: "todos" | "correo" | "whatsapp" | "llamada"
+  campana_publicitaria?: string
+  regla_id?: string
+  limit?: number
+} = {}) {
+  const url = buildClientUrl("/api/prospeccion/metricas")
+  if (params.date_from) url.searchParams.set("date_from", params.date_from)
+  if (params.date_to) url.searchParams.set("date_to", params.date_to)
+  if (params.campana_id) url.searchParams.set("campana_id", params.campana_id)
+  if (params.canal) url.searchParams.set("canal", params.canal)
+  if (params.campana_publicitaria) url.searchParams.set("campana_publicitaria", params.campana_publicitaria)
+  if (params.regla_id) url.searchParams.set("regla_id", params.regla_id)
+  if (typeof params.limit === "number") url.searchParams.set("limit", String(params.limit))
+  return requestJson<ProspeccionMetricasResponse>(url.toString())
 }
 
 function delay(ms: number) {

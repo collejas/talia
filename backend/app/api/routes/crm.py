@@ -1592,6 +1592,20 @@ class ProspeccionCampanaAtribucionQuery(BaseModel):
     limit: int = Field(default=200, ge=1, le=1000)
 
 
+class ProspeccionMetricasQuery(BaseModel):
+    """Parámetros para tablero consolidado de métricas de prospección."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    date_from: date | None = Field(default=None)
+    date_to: date | None = Field(default=None)
+    campana_id: UUID | None = Field(default=None)
+    canal: Literal["todos", "correo", "whatsapp", "llamada"] = Field(default="todos")
+    campana_publicitaria: str | None = Field(default=None, max_length=200)
+    regla_id: UUID | None = Field(default=None)
+    limit: int = Field(default=500, ge=1, le=5000)
+
+
 class ProspeccionCampanaUpdatePayload(BaseModel):
     """Edita una campaña de prospección y su lote más reciente."""
 
@@ -14657,6 +14671,281 @@ async def prospeccion_campanas_atribucion(
         )
 
     return {"ok": True, "items": items}
+
+
+@router.get("/prospeccion/metricas")
+async def prospeccion_metricas_dashboard(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    _: str = Depends(require_permission("reports.view")),
+    user_token: str = Depends(require_user_token),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    params: ProspeccionMetricasQuery = Depends(),
+) -> dict[str, Any]:
+    """Tablero consolidado de métricas: campañas + atribución de frases WhatsApp."""
+
+    date_from_dt = (
+        datetime.combine(params.date_from, datetime.min.time(), tzinfo=timezone.utc)
+        if params.date_from
+        else None
+    )
+    date_to_dt = (
+        datetime.combine(params.date_to, datetime.max.time(), tzinfo=timezone.utc)
+        if params.date_to
+        else None
+    )
+    if date_from_dt and date_to_dt and date_from_dt > date_to_dt:
+        raise HTTPException(status_code=400, detail="metricas_date_range_invalid")
+
+    try:
+        campaign_rows = await repo.get_prospeccion_campana_template_atribucion(
+            usuario_token=user_token,
+            organizacion_id=organizacion_id,
+            campana_id=params.campana_id,
+            limit=min(params.limit, 2000),
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    campaign_items: list[dict[str, Any]] = []
+    for row in campaign_rows:
+        item = {
+            "campana_id": row.get("campana_id"),
+            "campana_nombre": row.get("campana_nombre"),
+            "canal": row.get("canal"),
+            "template_id": row.get("template_id"),
+            "template_slug": row.get("template_slug"),
+            "template_nombre": row.get("template_nombre"),
+            "envios_totales": int(row.get("envios_totales") or 0),
+            "envios_enviados": int(row.get("envios_enviados") or 0),
+            "envios_entregados": int(row.get("envios_entregados") or 0),
+            "envios_fallidos": int(row.get("envios_fallidos") or 0),
+            "envios_omitidos": int(row.get("envios_omitidos") or 0),
+            "envios_respondidos": int(row.get("envios_respondidos") or 0),
+            "brevo_aperturas": int(row.get("brevo_aperturas") or 0),
+            "brevo_clicks": int(row.get("brevo_clicks") or 0),
+            "sesiones_utm": int(row.get("sesiones_utm") or 0),
+            "tasa_entrega_pct": float(row.get("tasa_entrega_pct") or 0),
+            "tasa_respuesta_pct": float(row.get("tasa_respuesta_pct") or 0),
+            "click_to_session_pct": float(row.get("click_to_session_pct") or 0),
+        }
+        if params.canal != "todos" and _clean_text(item.get("canal")) != params.canal:
+            continue
+        campaign_items.append(item)
+
+    campaign_summary = {
+        "envios_totales": sum(int(item["envios_totales"]) for item in campaign_items),
+        "envios_enviados": sum(int(item["envios_enviados"]) for item in campaign_items),
+        "envios_entregados": sum(int(item["envios_entregados"]) for item in campaign_items),
+        "envios_respondidos": sum(int(item["envios_respondidos"]) for item in campaign_items),
+        "brevo_aperturas": sum(int(item["brevo_aperturas"]) for item in campaign_items),
+        "brevo_clicks": sum(int(item["brevo_clicks"]) for item in campaign_items),
+        "sesiones_utm": sum(int(item["sesiones_utm"]) for item in campaign_items),
+    }
+    campaign_summary["tasa_entrega_pct"] = round(
+        (campaign_summary["envios_entregados"] / campaign_summary["envios_totales"] * 100)
+        if campaign_summary["envios_totales"] > 0
+        else 0.0,
+        2,
+    )
+    campaign_summary["tasa_respuesta_pct"] = round(
+        (campaign_summary["envios_respondidos"] / campaign_summary["envios_totales"] * 100)
+        if campaign_summary["envios_totales"] > 0
+        else 0.0,
+        2,
+    )
+
+    try:
+        frase_events = await repo.list_whatsapp_atribucion_eventos_for_metrics(
+            usuario_token=user_token,
+            limit=params.limit,
+            date_from_iso=date_from_dt.isoformat() if date_from_dt else None,
+            date_to_iso=date_to_dt.isoformat() if date_to_dt else None,
+            campana_publicitaria=_clean_text(params.campana_publicitaria),
+            regla_id=params.regla_id,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    rule_name_map: dict[str, str] = {}
+    try:
+        rules_for_map, _ = await repo.list_whatsapp_atribucion_reglas(
+            usuario_token=user_token,
+            limit=500,
+            offset=0,
+        )
+    except CRMRepositoryError:
+        rules_for_map = []
+    for rule in rules_for_map:
+        rule_id_value = _clean_text(rule.get("id"))
+        rule_name = _clean_text(rule.get("nombre_regla"))
+        if rule_id_value and rule_name:
+            rule_name_map[rule_id_value] = rule_name
+
+    conversation_ids = {
+        _clean_text(row.get("conversacion_id"))
+        for row in frase_events
+        if _clean_text(row.get("conversacion_id"))
+    }
+    try:
+        opportunities = await repo.list_opportunities_by_conversation_ids(
+            organizacion_id=organizacion_id,
+            conversation_ids=[value for value in conversation_ids if value],
+        )
+    except CRMRepositoryError as exc:
+        logger.warning("prospeccion.metricas.opportunities_by_conversation_failed", extra={"error": str(exc)})
+        opportunities = []
+
+    opp_by_conversation: dict[str, dict[str, Any]] = {}
+    for opportunity in opportunities:
+        conversation_id_value = _extract_opportunity_conversation_id(opportunity)
+        if not conversation_id_value or conversation_id_value in opp_by_conversation:
+            continue
+        opp_by_conversation[conversation_id_value] = opportunity
+
+    by_channel: dict[str, dict[str, Any]] = {}
+    by_rule: dict[str, dict[str, Any]] = {}
+
+    for row in frase_events:
+        conversation_id_value = _clean_text(row.get("conversacion_id"))
+        contact_id_value = _clean_text(row.get("contacto_id"))
+        channel_value = _clean_text(row.get("canal_publicitario")) or "sin_canal"
+        rule_id_value = _clean_text(row.get("regla_id"))
+        rule_key = rule_id_value or f"sin_regla::{channel_value}"
+        rule_name = rule_name_map.get(rule_id_value or "") or "Sin regla"
+        campana_publicitaria_value = _clean_text(row.get("campana_publicitaria"))
+        if params.canal == "whatsapp" or params.canal == "todos":
+            pass
+        else:
+            continue
+
+        channel_bucket = by_channel.setdefault(
+            channel_value,
+            {
+                "canal_publicitario": channel_value,
+                "conversaciones": set(),
+                "contactos": set(),
+                "oportunidades": set(),
+                "monto_estimado_total": 0.0,
+            },
+        )
+        rule_bucket = by_rule.setdefault(
+            rule_key,
+            {
+                "regla_id": rule_id_value,
+                "regla_nombre": rule_name,
+                "canal_publicitario": channel_value,
+                "campana_publicitaria": campana_publicitaria_value,
+                "conversaciones": set(),
+                "contactos": set(),
+                "oportunidades": set(),
+                "monto_estimado_total": 0.0,
+            },
+        )
+
+        if conversation_id_value:
+            channel_bucket["conversaciones"].add(conversation_id_value)
+            rule_bucket["conversaciones"].add(conversation_id_value)
+        if contact_id_value:
+            channel_bucket["contactos"].add(contact_id_value)
+            rule_bucket["contactos"].add(contact_id_value)
+
+        opportunity = opp_by_conversation.get(conversation_id_value or "")
+        if opportunity and conversation_id_value:
+            channel_bucket["oportunidades"].add(conversation_id_value)
+            rule_bucket["oportunidades"].add(conversation_id_value)
+            try:
+                monto = float(opportunity.get("monto_estimado") or 0)
+            except (TypeError, ValueError):
+                monto = 0.0
+            channel_bucket["monto_estimado_total"] += monto
+            rule_bucket["monto_estimado_total"] += monto
+
+    by_channel_items: list[dict[str, Any]] = []
+    for bucket in by_channel.values():
+        conversaciones = len(bucket["conversaciones"])
+        oportunidades_count = len(bucket["oportunidades"])
+        by_channel_items.append(
+            {
+                "canal_publicitario": bucket["canal_publicitario"],
+                "conversaciones_atribuidas": conversaciones,
+                "contactos_unicos": len(bucket["contactos"]),
+                "oportunidades_creadas": oportunidades_count,
+                "tasa_conversacion_oportunidad_pct": round(
+                    (oportunidades_count / conversaciones * 100) if conversaciones > 0 else 0.0,
+                    2,
+                ),
+                "monto_estimado_total": round(float(bucket["monto_estimado_total"]), 2),
+            }
+        )
+
+    by_rule_items: list[dict[str, Any]] = []
+    for bucket in by_rule.values():
+        conversaciones = len(bucket["conversaciones"])
+        oportunidades_count = len(bucket["oportunidades"])
+        by_rule_items.append(
+            {
+                "regla_id": bucket["regla_id"],
+                "regla_nombre": bucket["regla_nombre"],
+                "canal_publicitario": bucket["canal_publicitario"],
+                "campana_publicitaria": bucket["campana_publicitaria"],
+                "conversaciones_atribuidas": conversaciones,
+                "contactos_unicos": len(bucket["contactos"]),
+                "oportunidades_creadas": oportunidades_count,
+                "tasa_conversacion_oportunidad_pct": round(
+                    (oportunidades_count / conversaciones * 100) if conversaciones > 0 else 0.0,
+                    2,
+                ),
+                "monto_estimado_total": round(float(bucket["monto_estimado_total"]), 2),
+            }
+        )
+
+    by_channel_items.sort(key=lambda item: item["conversaciones_atribuidas"], reverse=True)
+    by_rule_items.sort(key=lambda item: item["conversaciones_atribuidas"], reverse=True)
+
+    total_conversations = len({cid for cid in conversation_ids if cid})
+    total_contacts = len(
+        {
+            _clean_text(row.get("contacto_id"))
+            for row in frase_events
+            if _clean_text(row.get("contacto_id"))
+        }
+    )
+    total_opportunities = len(opp_by_conversation)
+    total_amount = round(
+        float(sum(float(item["monto_estimado_total"]) for item in by_channel_items)),
+        2,
+    )
+
+    return {
+        "ok": True,
+        "filters": {
+            "date_from": date_from_dt.isoformat() if date_from_dt else None,
+            "date_to": date_to_dt.isoformat() if date_to_dt else None,
+            "campana_id": str(params.campana_id) if params.campana_id else None,
+            "canal": params.canal,
+            "campana_publicitaria": _clean_text(params.campana_publicitaria),
+            "regla_id": str(params.regla_id) if params.regla_id else None,
+        },
+        "campanas": {
+            "summary": campaign_summary,
+            "items": campaign_items,
+        },
+        "frases_whatsapp": {
+            "summary": {
+                "conversaciones_atribuidas": total_conversations,
+                "contactos_unicos": total_contacts,
+                "oportunidades_creadas": total_opportunities,
+                "tasa_conversacion_oportunidad_pct": round(
+                    (total_opportunities / total_conversations * 100) if total_conversations > 0 else 0.0,
+                    2,
+                ),
+                "monto_estimado_total": total_amount,
+            },
+            "by_channel": by_channel_items,
+            "by_rule": by_rule_items,
+        },
+    }
 
 
 @router.get("/prospeccion/campanas/{campana_id}/duplicar")

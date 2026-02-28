@@ -50,7 +50,7 @@ const STAGES: StageConfig[] = [
     label: "Evaluar",
     description: "Monitorea métricas y campañas recientes.",
     href: "/prospeccion/campanas",
-    matches: ["/prospeccion/campanas", "/prospeccion/mensajes"],
+    matches: ["/prospeccion/campanas", "/prospeccion/metricas", "/prospeccion/mensajes"],
   },
 ]
 
