@@ -37,7 +37,6 @@ import {
   updateContactoTemplate,
   updateProspeccionCampana,
   getProspeccionCampanas,
-  listProspectosQueryMetadata,
   type BrevoCatalogTemplate,
   type CrmCampaign,
   type ContactoTemplate,
@@ -117,7 +116,6 @@ export function CampanasMetricsClient() {
   const [templateSaving, setTemplateSaving] = useState(false)
   const [templateDeletingId, setTemplateDeletingId] = useState<string | null>(null)
   const [templateError, setTemplateError] = useState<string | null>(null)
-  const [queryLabelMap, setQueryLabelMap] = useState<Record<string, string>>({})
   const [brevoCatalog, setBrevoCatalog] = useState<BrevoCatalogTemplate[]>([])
   const [brevoLoading, setBrevoLoading] = useState(false)
   const [brevoImportingId, setBrevoImportingId] = useState<number | null>(null)
@@ -212,36 +210,6 @@ export function CampanasMetricsClient() {
   useEffect(() => {
     void fetchAtribucion()
   }, [fetchAtribucion])
-
-  useEffect(() => {
-    let cancelled = false
-    const loadQueryLabels = async () => {
-      const batches = campanas.flatMap((group) => group.batches ?? [])
-      const values = Array.from(new Set(batches.flatMap((batch) => extractBatchQueryValues(batch.filtros))))
-      if (!values.length) {
-        setQueryLabelMap({})
-        return
-      }
-      try {
-        const response = await listProspectosQueryMetadata({ queries: values })
-        if (cancelled) return
-        const next: Record<string, string> = {}
-        ;(response.queries ?? []).forEach((item) => {
-          if (!item?.value) return
-          next[item.value] = item.label || item.value
-        })
-        setQueryLabelMap(next)
-      } catch {
-        if (!cancelled) {
-          setQueryLabelMap({})
-        }
-      }
-    }
-    void loadQueryLabels()
-    return () => {
-      cancelled = true
-    }
-  }, [campanas])
 
   const loadBatchDetails = useCallback(async (batchId: string) => {
     const existing = batchDetails[batchId]
@@ -1967,57 +1935,6 @@ export function CampanasMetricsClient() {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value)
-}
-
-function normalizeBusquedaLabel(value: unknown): string | null {
-  if (typeof value !== "string") return null
-  const base = value.trim()
-  if (!base) return null
-  const cleaned = base.replace(/\s*\(recuperada desde resultados\)\s*/gi, "").trim()
-  return cleaned || null
-}
-
-function sanitizeQueryDisplayLabel(value: unknown): string | null {
-  const normalized = normalizeBusquedaLabel(value)
-  if (!normalized) return null
-  if (/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(normalized)) {
-    return null
-  }
-  return normalized
-}
-
-function extractBatchQueryValues(rawFilters: unknown): string[] {
-  if (!isRecord(rawFilters)) return []
-  const values: string[] = []
-  const queryFilters = rawFilters["query_filters"]
-  if (Array.isArray(queryFilters)) {
-    queryFilters.forEach((item) => {
-      const normalized = normalizeBusquedaLabel(item)
-      if (normalized) values.push(normalized)
-    })
-  }
-  const metadataQueries = rawFilters["metadata_queries"]
-  if (Array.isArray(metadataQueries)) {
-    metadataQueries.forEach((item) => {
-      const normalized = normalizeBusquedaLabel(item)
-      if (normalized) values.push(normalized)
-    })
-  }
-  ;["query", "busqueda_query", "busqueda_id"].forEach((key) => {
-    const normalized = normalizeBusquedaLabel(rawFilters[key])
-    if (normalized) values.push(normalized)
-  })
-  return values
-}
-
-function resolveBatchQueryLabel(rawFilters: unknown, labelMap: Record<string, string>): string | null {
-  const values = extractBatchQueryValues(rawFilters)
-  if (!values.length) return null
-  const labels = values.map((value) => sanitizeQueryDisplayLabel(labelMap[value] ?? value)).filter(Boolean) as string[]
-  if (!labels.length) return null
-  const unique = Array.from(new Set(labels))
-  if (unique.length <= 2) return unique.join(", ")
-  return `${unique.slice(0, 2).join(", ")} +${unique.length - 2}`
 }
 
 function resolveBatchDisplayTitle(batchIndex: number): string {

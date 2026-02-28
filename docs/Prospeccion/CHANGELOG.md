@@ -6,6 +6,42 @@ Formato recomendado por entrada:
 - `Base de datos`
 - `Operación/Notas`
 
+## 2026-02-28
+
+### Frontend
+- `inbox`:
+  - se habilitó canal `Correo` en filtros de bandeja.
+  - se agregó badge visual para conversaciones de correo.
+
+### Backend
+- Brevo webhook de prospección:
+  - ahora procesa eventos transaccionales y correos entrantes (inbound reply) en el mismo endpoint.
+- Inbound correo:
+  - parsea remitente y encabezados (`In-Reply-To`, `References`, `Message-ID`) para asociar la respuesta con el envío de prospección.
+  - actualiza `prospeccion_contacto_envio` a `respondido` cuando aplica.
+  - registra log `reply_inbound` y publica progreso para métricas.
+  - dispara autopromoción de prospecto cuando hay respuesta real por correo.
+- Inbox:
+  - se guarda el inbound como mensaje en conversación manual con `channel=correo`.
+  - reply manual desde Inbox ahora soporta envío de correo saliente usando proveedor configurado (con headers de hilo para continuidad).
+- Email service:
+  - soporte de headers personalizados en envío SMTP/Brevo para threading de respuestas.
+
+### Base de datos
+- Nueva migración:
+  - `20260228_001000_inbox_email_channel_derivado.sql`.
+  - índice por `mensajes.datos->>'channel'`.
+  - actualización de `panel_inbox_threads` para derivar canal desde metadata del último mensaje y filtrar correctamente por `correo`.
+
+### Operación/Notas
+- Objetivo cubierto:
+  - habilitar base técnica para medir `Respondidos` por correo desde inbound real.
+- Validación mínima recomendada:
+  - enviar correo de prospección, responder desde cliente externo, confirmar:
+    - estado `respondido` en envío,
+    - log `reply_inbound`,
+    - visibilidad en `inbox` canal `Correo`.
+
 ## 2026-02-27
 
 ### Frontend

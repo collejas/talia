@@ -21,6 +21,7 @@ const DATE_FILTER_OPTIONS: { value: DateFilterOption; label: string }[] = [
 const CHANNEL_FILTER_OPTIONS = [
   { id: "all", label: "Todos" },
   { id: "whatsapp", label: "WhatsApp" },
+  { id: "correo", label: "Correo" },
   { id: "messenger", label: "Messenger" },
   { id: "webchat", label: "Webchat" },
 ];

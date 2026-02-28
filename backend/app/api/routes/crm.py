@@ -9948,7 +9948,7 @@ async def reply_inbox_conversation(
     channel = (conversation_meta.get("channel") or "").lower()
 
     contact_id = conversation_meta.get("contact_id")
-    if channel not in {"webchat", "whatsapp"}:
+    if channel not in {"webchat", "whatsapp", "correo"}:
         raise HTTPException(status_code=400, detail="unsupported_channel")
     if not contact_id:
         raise HTTPException(status_code=500, detail="conversation_contact_missing")
@@ -10068,7 +10068,7 @@ async def reply_inbox_conversation(
                 user_payload.setdefault("type", "human")
                 agent_payload["user"] = user_payload
 
-        if channel == "whatsapp" and attachments_payload:
+        if channel in {"whatsapp", "correo"} and attachments_payload:
             raise HTTPException(status_code=415, detail="attachments_not_supported")
 
         if agent_payload:
@@ -10213,6 +10213,105 @@ async def reply_inbox_conversation(
                 "ok": True,
                 "reply": None,
                 "metadata": metadata,
+            }
+
+        if channel == "correo":
+            try:
+                contact_row = await storage.fetch_contact(str(contact_id))
+            except StorageError as exc:
+                raise HTTPException(status_code=502, detail="contact_lookup_failed") from exc
+            recipient_email = _clean_text(contact_row.get("correo"))
+            if not recipient_email:
+                raise HTTPException(status_code=409, detail="contact_email_not_found")
+
+            subject = _clean_text(payload.metadata.get("subject")) if isinstance(payload.metadata, dict) else None
+            recent_messages = await storage.fetch_recent_messages(conversation_id=str(conversacion_id), limit=20)
+            latest_subject: str | None = None
+            in_reply_to: str | None = None
+            references: list[str] = []
+            for message_row in reversed(recent_messages):
+                if not isinstance(message_row, dict):
+                    continue
+                datos = message_row.get("datos")
+                if isinstance(datos, str):
+                    try:
+                        datos = json.loads(datos)
+                    except json.JSONDecodeError:
+                        datos = {}
+                if not isinstance(datos, dict):
+                    continue
+                if latest_subject is None:
+                    latest_subject = _clean_text(datos.get("subject"))
+                message_id_value = _clean_text(datos.get("message_id"))
+                if message_id_value and message_id_value not in references:
+                    references.append(message_id_value)
+                if in_reply_to is None and message_id_value and message_row.get("direccion") == "entrante":
+                    in_reply_to = message_id_value
+
+            resolved_subject = subject or latest_subject or "Seguimiento"
+            if resolved_subject.lower().startswith("re:"):
+                mail_subject = resolved_subject
+            else:
+                mail_subject = f"Re: {resolved_subject}"
+            headers: dict[str, str] = {}
+            if in_reply_to:
+                headers["In-Reply-To"] = f"<{in_reply_to}>"
+            if references:
+                headers["References"] = " ".join(f"<{value}>" for value in references[:15])
+
+            try:
+                sent_message_id = send_email(
+                    subject=mail_subject,
+                    body_text=content,
+                    recipients=[recipient_email],
+                    headers=headers or None,
+                )
+            except EmailSendError as exc:
+                raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+            org_value = contact_row.get("organizacion_id")
+            org_uuid: UUID | None = None
+            if org_value:
+                try:
+                    org_uuid = UUID(str(org_value))
+                except (TypeError, ValueError):
+                    org_uuid = None
+            message_metadata = {
+                "channel": "correo",
+                "source": "operativo",
+                "action": "reply_manual",
+                "subject": mail_subject,
+                "recipient_email": recipient_email,
+                "message_id": sent_message_id,
+                "in_reply_to": in_reply_to,
+                "references": references,
+            }
+            try:
+                inserted = await repo.insert_inbox_message(
+                    conversation_id=conversacion_id,
+                    direction="saliente",
+                    text=content,
+                    datos=message_metadata,
+                    estado="enviada",
+                    provider_message_id=sent_message_id,
+                    organizacion_id=org_uuid,
+                )
+            except CRMRepositoryError as exc:
+                raise HTTPException(status_code=502, detail=f"inbox_message_save_failed:{exc}") from exc
+
+            return {
+                "ok": True,
+                "reply": None,
+                "metadata": {
+                    "conversation_id": str(conversacion_id),
+                    "client_message_id": client_message_id,
+                    "manual_mode": True,
+                    "contact_id": str(contact_id),
+                    "channel": "correo",
+                    "message_id": sent_message_id,
+                    "inbox_message_id": inserted.get("id"),
+                    "recipient_email": recipient_email,
+                },
             }
 
         raise HTTPException(status_code=400, detail="unsupported_channel")
@@ -15308,8 +15407,14 @@ async def prospeccion_contacto_brevo_webhook(
         events = [payload]
     if not events:
         raise HTTPException(status_code=400, detail="payload_invalid")
-    processed = await process_brevo_events(repo=repo, events=events)
-    return {"ok": True, "procesados": processed}
+    processed_events = await process_brevo_events(repo=repo, events=events)
+    processed_inbound = 0
+    return {
+        "ok": True,
+        "procesados": processed_events + processed_inbound,
+        "procesados_eventos": processed_events,
+        "procesados_inbound": processed_inbound,
+    }
 
 
 @router.get("/visitas/kpis")

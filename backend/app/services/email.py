@@ -63,6 +63,7 @@ def send_email(
     recipients: Sequence[str],
     body_html: str | None = None,
     attachments: Sequence[dict[str, object]] | None = None,
+    headers: dict[str, str] | None = None,
     mail_settings: MailRuntimeSettings | None = None,
     brevo_settings: BrevoRuntimeSettings | None = None,
 ) -> str:
@@ -84,6 +85,7 @@ def send_email(
             body_html=body_html,
             recipients=to_recipients,
             attachments=attachments or (),
+            headers=headers or {},
             mail_settings=mail_config,
             brevo_settings=brevo_settings_resolved,
         )
@@ -95,6 +97,7 @@ def send_email(
             body_html=body_html,
             recipients=to_recipients,
             attachments=attachments or (),
+            headers=headers or {},
             mail_settings=mail_config,
         )
 
@@ -123,6 +126,7 @@ def _send_email_smtp(
     body_html: str | None,
     recipients: Sequence[str],
     attachments: Sequence[dict[str, object]],
+    headers: dict[str, str],
     mail_settings: MailRuntimeSettings,
 ) -> str:
     smtp_host = (mail_settings.outgoing_server or "").strip()
@@ -142,6 +146,14 @@ def _send_email_smtp(
         message["From"] = username
     message["To"] = ", ".join(recipients)
     message["Message-ID"] = message_id
+    for header_name, header_value in (headers or {}).items():
+        header_key = str(header_name or "").strip()
+        header_content = str(header_value or "").strip()
+        if not header_key or not header_content:
+            continue
+        if header_key in message:
+            del message[header_key]
+        message[header_key] = header_content
     message.set_content(body_text)
     if body_html:
         message.add_alternative(body_html, subtype="html")
@@ -195,6 +207,7 @@ def _send_email_brevo(
     body_html: str | None,
     recipients: Sequence[str],
     attachments: Sequence[dict[str, object]],
+    headers: dict[str, str],
     mail_settings: MailRuntimeSettings,
     brevo_settings: BrevoRuntimeSettings,
 ) -> str:
@@ -208,12 +221,19 @@ def _send_email_brevo(
 
     sender_name = (mail_settings.from_name or "").strip() or sender_email
     endpoint = f"{base_url}/smtp/email"
+    brevo_headers: dict[str, str] = {"Message-ID": message_id}
+    for header_name, header_value in (headers or {}).items():
+        header_key = str(header_name or "").strip()
+        header_content = str(header_value or "").strip()
+        if not header_key or not header_content:
+            continue
+        brevo_headers[header_key] = header_content
     payload: dict[str, object] = {
         "sender": {"email": sender_email, "name": sender_name},
         "to": [{"email": email} for email in recipients],
         "subject": subject,
         "textContent": body_text or "",
-        "headers": {"Message-ID": message_id},
+        "headers": brevo_headers,
     }
     if body_html:
         payload["htmlContent"] = body_html

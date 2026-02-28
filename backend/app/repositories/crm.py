@@ -3197,6 +3197,79 @@ class CRMRepository:
             raise CRMRepositoryError("conversation_create_failed")
         return row
 
+    async def insert_inbox_message(
+        self,
+        *,
+        conversation_id: UUID,
+        direction: Literal["entrante", "saliente"],
+        text: str,
+        datos: dict[str, Any] | None = None,
+        tipo_contenido: Literal["texto", "medio", "sistema"] = "texto",
+        estado: Literal["enviada", "entregada", "leida", "fallida"] = "entregada",
+        provider_message_id: str | None = None,
+        organizacion_id: UUID | None = None,
+    ) -> dict[str, Any]:
+        conversation_key = str(conversation_id)
+        convo_resp = await self._request(
+            "GET",
+            "/rest/v1/conversaciones",
+            params={
+                "id": f"eq.{conversation_key}",
+                "select": "id,organizacion_id,no_leidos",
+                "limit": "1",
+            },
+        )
+        convo_data = convo_resp.json() or []
+        if not isinstance(convo_data, list) or not convo_data or not isinstance(convo_data[0], dict):
+            raise CRMRepositoryError("conversation_not_found")
+        convo_row = convo_data[0]
+        org_value = organizacion_id or _safe_uuid(convo_row.get("organizacion_id"))
+
+        message_payload: dict[str, Any] = {
+            "conversacion_id": conversation_key,
+            "direccion": direction,
+            "tipo_contenido": tipo_contenido,
+            "texto": text or "",
+            "datos": datos or {},
+            "estado": estado,
+        }
+        if provider_message_id:
+            message_payload["proveedor_mensaje_id"] = provider_message_id
+        if org_value:
+            message_payload["organizacion_id"] = str(org_value)
+        msg_resp = await self._request(
+            "POST",
+            "/rest/v1/mensajes",
+            json=message_payload,
+            prefer="return=representation",
+        )
+        msg_data = msg_resp.json() or []
+        if not isinstance(msg_data, list) or not msg_data or not isinstance(msg_data[0], dict):
+            raise CRMRepositoryError("inbox_message_insert_failed")
+        message_row = msg_data[0]
+        message_id = message_row.get("id")
+
+        now_iso = datetime.now(timezone.utc).isoformat()
+        patch_payload: dict[str, Any] = {
+            "ultimo_mensaje_en": now_iso,
+            "ultimo_mensaje_id": message_id,
+        }
+        current_unread = int(convo_row.get("no_leidos") or 0)
+        if direction == "entrante":
+            patch_payload["ultimo_entrante_en"] = now_iso
+            patch_payload["no_leidos"] = current_unread + 1
+        else:
+            patch_payload["ultimo_saliente_en"] = now_iso
+
+        await self._request(
+            "PATCH",
+            "/rest/v1/conversaciones",
+            params={"id": f"eq.{conversation_key}"},
+            json=patch_payload,
+            prefer="return=minimal",
+        )
+        return message_row
+
     async def get_webchat_contact_id_by_session(self, *, session_id: str) -> str | None:
         session_key = session_id.strip()
         if not session_key:
@@ -4794,6 +4867,35 @@ class CRMRepository:
             return None
         params: dict[str, str] = {
             "telefono_e164": f"eq.{phone_key}",
+            "limit": "1",
+            "select": (
+                "id,organizacion_id,nombre_completo,correo,telefono_e164,company_name,notes,"
+                "necesidad_proposito,contacto_datos"
+            ),
+        }
+        if organizacion_id:
+            params["organizacion_id"] = f"eq.{organizacion_id}"
+        resp = await self._request("GET", "/rest/v1/contactos", params=params)
+        data = resp.json() or []
+        if isinstance(data, list) and data:
+            row = data[0]
+        elif isinstance(data, dict):
+            row = data
+        else:
+            row = None
+        return row if isinstance(row, dict) else None
+
+    async def get_contact_by_email(
+        self,
+        *,
+        email: str,
+        organizacion_id: UUID | None = None,
+    ) -> dict[str, Any] | None:
+        email_key = str(email or "").strip().lower()
+        if not email_key:
+            return None
+        params: dict[str, str] = {
+            "correo": f"eq.{email_key}",
             "limit": "1",
             "select": (
                 "id,organizacion_id,nombre_completo,correo,telefono_e164,company_name,notes,"
@@ -9009,6 +9111,37 @@ class CRMRepository:
         row = data[0]
         if not isinstance(row, dict):
             raise CRMRepositoryError(f"worker_get_latest_envio_by_phone_invalid:{row!r}")
+        return row
+
+    async def worker_get_latest_envio_by_email(
+        self,
+        *,
+        email: str,
+        canal: str | None = None,
+    ) -> dict[str, Any] | None:
+        """Obtiene el envío más reciente buscando por correo persistido en detalle->email."""
+
+        trimmed = email.strip().lower() if isinstance(email, str) else ""
+        if not trimmed:
+            return None
+        params: dict[str, str] = {
+            "detalle->>email": f"eq.{trimmed}",
+            "order": "procesado_en.desc.nullslast,creado_en.desc",
+            "limit": "1",
+        }
+        if canal:
+            params["canal"] = f"eq.{canal.strip().lower()}"
+        resp = await self._request(
+            "GET",
+            "/rest/v1/prospeccion_contacto_envio",
+            params=params,
+        )
+        data = resp.json() or []
+        if not isinstance(data, list) or not data:
+            return None
+        row = data[0]
+        if not isinstance(row, dict):
+            raise CRMRepositoryError(f"worker_get_latest_envio_by_email_invalid:{row!r}")
         return row
 
     async def worker_find_active_contact_suppression(

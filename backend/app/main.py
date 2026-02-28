@@ -21,6 +21,7 @@ from app.core.config import settings
 from app.core.logging import configure_logging, get_logger, resolve_log_level
 from app.core.middleware import RequestLoggingMiddleware
 from app.services.prospeccion_contact_sender import contact_sender
+from app.services.prospeccion_email_inbound_reader import email_inbound_reader
 from app.services.role_permissions_sync import maybe_sync_role_permissions_on_start
 from app.services.webchat_followups import (
     closure_rescue_runner as webchat_closure_rescue_runner,
@@ -35,6 +36,7 @@ async def app_lifespan(_: FastAPI):
 
     await maybe_sync_role_permissions_on_start()
     await contact_sender.start()
+    await email_inbound_reader.start()
     await whatsapp_followup_runner.start()
     await webchat_followup_runner.start()
     await webchat_closure_rescue_runner.start()
@@ -44,6 +46,7 @@ async def app_lifespan(_: FastAPI):
         await webchat_closure_rescue_runner.shutdown()
         await webchat_followup_runner.shutdown()
         await whatsapp_followup_runner.shutdown()
+        await email_inbound_reader.shutdown()
         await contact_sender.shutdown()
 
 

@@ -21,6 +21,7 @@ const MESSAGES_REFRESH_INTERVAL_MS = 1500;
 
 const CHANNEL_BADGE_STYLES: Record<string, string> = {
   whatsapp: "bg-emerald-500/10 text-emerald-700 border-emerald-500/40",
+  correo: "bg-amber-500/10 text-amber-700 border-amber-500/40",
   messenger: "bg-sky-500/10 text-sky-700 border-sky-500/40",
   webchat: "bg-violet-500/10 text-violet-700 border-violet-500/40",
   default: "bg-muted-foreground/10 text-muted-foreground border-muted-foreground/30",

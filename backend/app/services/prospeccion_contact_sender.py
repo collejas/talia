@@ -680,12 +680,17 @@ async def _run_envio_correo(
                 error=str(exc),
             )
     try:
+        headers: dict[str, str] | None = None
+        reply_to = _clean_text(getattr(mail_settings, "reply_to", None)) if mail_settings else None
+        if reply_to:
+            headers = {"Reply-To": reply_to}
         message_id = await asyncio.to_thread(
             send_email,
             subject=subject,
             body_text=body,
             body_html=body_html,
             recipients=[email_value],
+            headers=headers,
             mail_settings=mail_settings,
             brevo_settings=brevo_settings,
         )

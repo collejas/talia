@@ -1268,11 +1268,28 @@ async def fetch_conversation(conversation_id: str) -> dict[str, Any]:
     except CRMRepositoryError as exc:
         raise StorageError(str(exc)) from exc
     ctrl = row.get("conversaciones_controles")
+    channel_value = row.get("canal")
+    try:
+        latest_messages = await repo.fetch_recent_messages(conversation_id=conversation_id, limit=1)
+    except CRMRepositoryError:
+        latest_messages = []
+    if latest_messages:
+        latest = latest_messages[-1]
+        datos = latest.get("datos")
+        if isinstance(datos, str):
+            try:
+                datos = json.loads(datos)
+            except json.JSONDecodeError:
+                datos = {}
+        if isinstance(datos, dict):
+            override_channel = datos.get("channel") or datos.get("canal")
+            if isinstance(override_channel, str) and override_channel.strip():
+                channel_value = override_channel.strip().lower()
     manual_override = _normalize_manual_override(ctrl)
     return {
         "id": row.get("id"),
         "contact_id": row.get("contacto_id"),
-        "channel": row.get("canal"),
+        "channel": channel_value,
         "openai_conversation_id": row.get("conversacion_openai_id"),
         "last_response_id": row.get("last_response_id"),
         "manual_override": manual_override,

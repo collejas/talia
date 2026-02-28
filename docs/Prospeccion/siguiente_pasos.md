@@ -41,10 +41,17 @@ Este archivo sirve para capturar próximos requerimientos sin mezclar historial 
     - lotes numerados de forma legible (`Lote N`) en lugar de UUID.
 - Pendientes de métricas (correo + WhatsApp):
   - `Respondidos` por correo (inbound real):
-    - implementar ingesta de correos entrantes (IMAP polling o webhook inbound del proveedor),
-    - extraer `In-Reply-To`/`References`/`Message-ID`,
-    - mapear contra `prospeccion_contacto_envio.mensaje_id`,
-    - persistir `reply_inbound/respondido` en `prospeccion_contactos_log` y actualizar estado del envío.
+    - implementado base (IMAP directo a buzón + parse de headers + mapeo a envío + update a `respondido` + log `reply_inbound` + registro en Inbox canal `correo`).
+    - criterio actual de marcado `respondido`:
+      - entra correo por IMAP con remitente válido,
+      - se intenta match por `In-Reply-To`/`References` contra `prospeccion_contacto_envio.mensaje_id`,
+      - fallback por email remitente al último envío de correo,
+      - si hay match, se marca envío `respondido` y se registra `reply_inbound`.
+    - pendiente de endurecimiento:
+      - regla final para colisiones de hilo (múltiples envíos al mismo email en ventana corta),
+      - monitoreo/alerta operativa de fallos de parseo inbound,
+      - pruebas E2E con variaciones de clientes de correo (Gmail/Outlook),
+      - distinguir respuesta humana vs autorespuesta/notificación automática (ejemplo actual detectado: correos de calendario tipo `Accepted: ...` que hoy también cuentan como `respondido`).
   - `Sesiones UTM`:
     - validar que la landing de destino del clic ejecute alta de visita (`/api/webchat/visit`),
     - garantizar persistencia de `utm_source=prospeccion`, `utm_medium=email` y señales `cid/tid/kw`,

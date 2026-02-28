@@ -406,6 +406,7 @@ class MailRuntimeSettings:
     use_ssl: bool
     use_tls: bool
     from_name: str | None
+    reply_to: str | None
 
     @staticmethod
     def from_settings() -> "MailRuntimeSettings":
@@ -419,6 +420,7 @@ class MailRuntimeSettings:
             use_ssl=settings.mail_use_ssl,
             use_tls=settings.mail_use_tls,
             from_name=settings.mail_from_name,
+            reply_to=None,
         )
 
 
@@ -465,6 +467,9 @@ async def get_mail_runtime_settings(
     from_name = _coerce_str(mail_cfg.get("from_name"))
     if from_name is not None:
         settings_payload.from_name = from_name
+    reply_to = _coerce_str(mail_cfg.get("reply_to"))
+    if reply_to is not None:
+        settings_payload.reply_to = reply_to
 
     username_secret = await get_secret_plaintext(organizacion_id=organizacion_id, clave="mail.username")
     if username_secret:
