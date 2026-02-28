@@ -13,10 +13,7 @@ from app.repositories.crm import CRMRepository, CRMRepositoryError
 logger = get_logger("prospeccion.auto_promoter")
 
 PROMOTABLE_ESTADOS = {
-    "enviado",
-    "entregado",
-    "leido",
-    "completado",
+    # Solo promover cuando existe señal explícita de respuesta/interacción real.
     "respondido",
     "answered",
 }
