@@ -77,6 +77,11 @@ Repositorio principal: `backend/app/repositories/crm.py`
   - Incluye `conversion_por_fuente` (`google_places`, `denue`, `usuario`) con base persistente vía RPC SQL.
   - Incluye `brevo_eventos` agregados desde logs persistentes de prospección.
 - `GET /crm/prospeccion/whatsapp/readiness`
+- `GET /crm/prospeccion/whatsapp/atribucion/reglas`
+- `POST /crm/prospeccion/whatsapp/atribucion/reglas`
+- `PATCH /crm/prospeccion/whatsapp/atribucion/reglas/{regla_id}`
+- `DELETE /crm/prospeccion/whatsapp/atribucion/reglas/{regla_id}`
+- `POST /crm/prospeccion/whatsapp/atribucion/reglas/simular`
 - `POST /crm/prospeccion/contacto/brevo/webhook`
   - Exposición pública recomendada (panel/proxy):
     - `POST /api/prospeccion/contacto/brevo/webhook`
@@ -98,6 +103,7 @@ Repositorio principal: `backend/app/repositories/crm.py`
 - Endpoint base: `GET /crm/inbox/threads`
 - Filtros ya soportados para prospección:
   - `source` (ej. `prospeccion`)
+  - `source=publicidad_whatsapp` (atribución por frase)
   - `channel` (ej. `whatsapp`)
   - `batch_id`
   - `campana_id`

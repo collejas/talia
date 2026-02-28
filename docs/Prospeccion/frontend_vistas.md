@@ -10,6 +10,7 @@ Ruta base: `frontend/panel/src/app/prospeccion`
 - `prospectos`
 - `contactos`
 - `campanas`
+- `whatsapp-atribucion`
 - `mensajes` (simple)
 
 ## Responsabilidad por vista
@@ -53,6 +54,11 @@ Ruta base: `frontend/panel/src/app/prospeccion`
 - KPIs por canal.
 - Plantillas de correo: importación desde catálogo Brevo (lectura API + alta/sync local por campaña).
 - Dashboard de atribución por plantilla (persistente): envío/entrega/respuesta + aperturas/clics Brevo + sesiones UTM.
+
+### `whatsapp-atribucion`
+- CRUD de reglas de atribución de publicidad WhatsApp por frase.
+- Filtros por canal publicitario, estado y texto.
+- Simulador rápido para validar qué regla matchea antes de guardar.
 
 ## Clientes frontend usados
 

@@ -29,6 +29,10 @@ Validación complementaria: MCP Supabase (instancia actual).
   - Preferencias de UI por usuario para módulos de prospección.
 - `public.prospeccion_contacto_suppressions`
   - Reglas de opt-out/suppressions por canal (correo/whatsapp/llamada/all).
+- `public.prospeccion_whatsapp_atribucion_reglas`
+  - Reglas por tenant para atribución de publicidad WhatsApp por frase (`exacta`/`contiene`/`regex`).
+- `public.prospeccion_whatsapp_atribucion_eventos`
+  - Evento inmutable de atribución por conversación (anti-duplicado por `organizacion_id + conversacion_id`).
 
 ## 2) Vistas y funciones clave
 
@@ -80,6 +84,8 @@ RLS habilitado en tablas críticas de prospección, incluyendo:
 - `prospeccion_contacto_listas`
 - `prospeccion_contactos_log`
 - `prospeccion_denue_jobs`
+- `prospeccion_whatsapp_atribucion_reglas`
+- `prospeccion_whatsapp_atribucion_eventos`
 
 El patrón es multi-tenant por `organizacion_id` con políticas para `authenticated`.
 

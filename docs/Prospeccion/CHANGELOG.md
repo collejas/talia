@@ -9,6 +9,42 @@ Formato recomendado por entrada:
 ## 2026-02-28
 
 ### Frontend
+- Nueva vista `prospeccion/whatsapp-atribucion`:
+  - alta/edición/borrado de reglas por frase,
+  - filtros por canal/estado/búsqueda,
+  - simulador de frase para validar match antes de guardar.
+- Sidebar de Prospección:
+  - nuevo acceso `Atribución WhatsApp`.
+
+### Backend
+- Nuevos endpoints de reglas de atribución WhatsApp:
+  - `GET/POST /crm/prospeccion/whatsapp/atribucion/reglas`
+  - `PATCH/DELETE /crm/prospeccion/whatsapp/atribucion/reglas/{regla_id}`
+  - `POST /crm/prospeccion/whatsapp/atribucion/reglas/simular`
+- Webhook inbound WhatsApp:
+  - evalúa reglas activas por prioridad y aplica primera coincidencia.
+  - guardas operativas:
+    - sólo primer mensaje de conversación nueva,
+    - anti-duplicado por conversación,
+    - ventana anti-duplicado por contacto (24h).
+  - persistencia rápida en contacto:
+    - `contactos.contacto_datos.publicidad_whatsapp_atribucion`.
+- Inbox:
+  - cuando existe evento de atribución, la conversación se expone con `source=publicidad_whatsapp`.
+  - soporte de filtro `source=publicidad_whatsapp` en `GET /crm/inbox/threads`.
+
+### Base de datos
+- Nueva migración aplicada:
+  - `20280421_120000_prospeccion_whatsapp_atribucion_frases.sql`.
+- Nuevas tablas:
+  - `public.prospeccion_whatsapp_atribucion_reglas` (catálogo editable por tenant, RLS).
+  - `public.prospeccion_whatsapp_atribucion_eventos` (evento inmutable de atribución por conversación, RLS).
+
+### Operación/Notas
+- Validación funcional completada:
+  - al enviar WhatsApp con frase registrada, se genera evento de atribución y queda visible en UI/Inbox.
+
+### Frontend
 - `inbox`:
   - se habilitó canal `Correo` en filtros de bandeja.
   - se agregó badge visual para conversaciones de correo.

@@ -130,6 +130,23 @@ Este archivo sirve para capturar próximos requerimientos sin mezclar historial 
   - al enviar un WhatsApp con frase registrada, la conversación queda atribuida al canal correcto.
   - la atribución persiste en BD y se ve en UI.
   - el conteo por canal/regla incrementa en métricas sin duplicar por la misma conversación.
+- Estado actual (2026-02-28):
+  - Fase 1 (MVP) implementada y validada en operación.
+  - Implementado:
+    - tablas `prospeccion_whatsapp_atribucion_reglas` y `prospeccion_whatsapp_atribucion_eventos` con RLS.
+    - vista `prospeccion/whatsapp-atribucion` con CRUD + filtros + simulador de frase.
+    - matcher inbound en webhook WhatsApp (`exacta`, `contiene`, `regex`) por prioridad.
+    - guardas:
+      - sólo primer mensaje de conversación,
+      - anti-duplicado por conversación,
+      - anti-duplicado por contacto (ventana 24h).
+    - persistencia de resumen en `contactos.contacto_datos.publicidad_whatsapp_atribucion`.
+    - Inbox enriquecido con `source=publicidad_whatsapp` y filtro por source.
+  - Pendiente (siguiente fase):
+    - dashboard de métricas por `canal_publicitario` y por `regla` (conversaciones, contactos únicos, oportunidades, tasa conv, monto).
+    - endpoint agregador SQL/API para métricas de atribución publicitaria WhatsApp.
+    - simulador avanzado con ranking de reglas candidatas y explicación de por qué matcheó.
+    - logging analítico de no-match para sugerir nuevas frases frecuentes.
 
 ## Cómo registrar nuevos cambios
 
@@ -235,3 +252,23 @@ Por cada cambio nuevo:
 - Runbook operativo:
   - se documentó guía de diagnóstico de métricas de correo en:
     - `docs/Prospeccion/runbook_metricas_brevo.md`
+
+## Completado recientemente (2026-02-28)
+
+- Atribución de publicidad WhatsApp por frase (MVP):
+  - migración aplicada para reglas/eventos:
+    - `prospeccion_whatsapp_atribucion_reglas`,
+    - `prospeccion_whatsapp_atribucion_eventos`.
+  - backend CRUD + simulador:
+    - `GET/POST/PATCH/DELETE /crm/prospeccion/whatsapp/atribucion/reglas`,
+    - `POST /crm/prospeccion/whatsapp/atribucion/reglas/simular`.
+  - integración inbound en webhook WhatsApp:
+    - matching por frase (`exacta`, `contiene`, `regex`) y prioridad,
+    - guardas de primer mensaje y anti-duplicado,
+    - persistencia de evento de match.
+  - persistencia rápida en contacto:
+    - `contactos.contacto_datos.publicidad_whatsapp_atribucion`.
+  - nueva vista frontend:
+    - `prospeccion/whatsapp-atribucion` (CRUD + filtros + simulador).
+  - Inbox:
+    - conversaciones atribuidas visibles con `source=publicidad_whatsapp`.
