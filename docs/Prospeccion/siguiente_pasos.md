@@ -150,7 +150,7 @@ Este archivo sirve para capturar próximos requerimientos sin mezclar historial 
       - gráficas de tendencia diaria en ambos bloques.
   - Pendiente (siguientes iteraciones):
     - drill-down a nivel conversación/oportunidad desde la tabla de métricas.
-    - exportación XLSX (el CSV de métricas filtradas ya está implementado en UI).
+    - exportación programada/automática (el CSV y XLSX bajo demanda ya están implementados en UI).
     - alertas por variaciones bruscas (caída de entrega o conversión).
     - simulador avanzado con ranking de reglas candidatas y explicación de por qué matcheó.
     - logging analítico de no-match para sugerir nuevas frases frecuentes.

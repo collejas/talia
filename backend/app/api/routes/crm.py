@@ -40,8 +40,9 @@ from fastapi import (
 )
 from fastapi.responses import JSONResponse, StreamingResponse
 try:
-    from openpyxl import load_workbook
+    from openpyxl import Workbook, load_workbook
 except ModuleNotFoundError:  # pragma: no cover
+    Workbook = None
     load_workbook = None
 from pydantic import BaseModel, ConfigDict, Field, HttpUrl, ValidationError, field_validator, model_validator
 
@@ -15047,6 +15048,220 @@ async def prospeccion_metricas_dashboard(
             "timeseries": frases_timeseries,
         },
     }
+
+
+@router.get("/prospeccion/metricas/export/xlsx")
+async def prospeccion_metricas_export_xlsx(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    _: str = Depends(require_permission("reports.view")),
+    user_token: str = Depends(require_user_token),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    params: ProspeccionMetricasQuery = Depends(),
+) -> Response:
+    if Workbook is None:
+        raise HTTPException(status_code=500, detail="openpyxl_required")
+
+    payload = await prospeccion_metricas_dashboard(
+        repo=repo,
+        _="reports.view",
+        user_token=user_token,
+        organizacion_id=organizacion_id,
+        params=params,
+    )
+
+    workbook = Workbook()
+    summary_sheet = workbook.active
+    summary_sheet.title = "Resumen"
+    summary_sheet.append(["Seccion", "Metrica", "Valor"])
+
+    camp_summary = _ensure_dict(_ensure_dict(payload.get("campanas"), default={}).get("summary"), default={})
+    frases_summary = _ensure_dict(_ensure_dict(payload.get("frases_whatsapp"), default={}).get("summary"), default={})
+    filters_summary = _ensure_dict(payload.get("filters"), default={})
+
+    for key in ("date_from", "date_to", "campana_id", "canal", "campana_publicitaria", "regla_id"):
+        summary_sheet.append(["filtros", key, filters_summary.get(key)])
+
+    for key in (
+        "envios_totales",
+        "envios_enviados",
+        "envios_entregados",
+        "envios_respondidos",
+        "brevo_aperturas",
+        "brevo_clicks",
+        "sesiones_utm",
+        "tasa_entrega_pct",
+        "tasa_respuesta_pct",
+    ):
+        summary_sheet.append(["campanas", key, camp_summary.get(key)])
+
+    for key in (
+        "conversaciones_atribuidas",
+        "contactos_unicos",
+        "oportunidades_creadas",
+        "tasa_conversacion_oportunidad_pct",
+        "monto_estimado_total",
+    ):
+        summary_sheet.append(["frases_whatsapp", key, frases_summary.get(key)])
+
+    campanas_sheet = workbook.create_sheet("Campanas")
+    campanas_sheet.append(
+        [
+            "campana_id",
+            "campana_nombre",
+            "canal",
+            "template_id",
+            "template_slug",
+            "template_nombre",
+            "envios_totales",
+            "envios_enviados",
+            "envios_entregados",
+            "envios_fallidos",
+            "envios_omitidos",
+            "envios_respondidos",
+            "brevo_aperturas",
+            "brevo_clicks",
+            "sesiones_utm",
+            "tasa_entrega_pct",
+            "tasa_respuesta_pct",
+            "click_to_session_pct",
+        ]
+    )
+    campanas_items = _ensure_dict(payload.get("campanas"), default={}).get("items")
+    if not isinstance(campanas_items, list):
+        campanas_items = []
+    for item in campanas_items:
+        row = _ensure_dict(item, default={})
+        campanas_sheet.append(
+            [
+                row.get("campana_id"),
+                row.get("campana_nombre"),
+                row.get("canal"),
+                row.get("template_id"),
+                row.get("template_slug"),
+                row.get("template_nombre"),
+                row.get("envios_totales"),
+                row.get("envios_enviados"),
+                row.get("envios_entregados"),
+                row.get("envios_fallidos"),
+                row.get("envios_omitidos"),
+                row.get("envios_respondidos"),
+                row.get("brevo_aperturas"),
+                row.get("brevo_clicks"),
+                row.get("sesiones_utm"),
+                row.get("tasa_entrega_pct"),
+                row.get("tasa_respuesta_pct"),
+                row.get("click_to_session_pct"),
+            ]
+        )
+
+    campanas_series_sheet = workbook.create_sheet("CampanasSeries")
+    campanas_series_sheet.append(
+        ["fecha", "envios_totales", "envios_enviados", "envios_entregados", "envios_respondidos"]
+    )
+    campanas_timeseries = _ensure_dict(payload.get("campanas"), default={}).get("timeseries")
+    if not isinstance(campanas_timeseries, list):
+        campanas_timeseries = []
+    for item in campanas_timeseries:
+        row = _ensure_dict(item, default={})
+        campanas_series_sheet.append(
+            [
+                row.get("fecha"),
+                row.get("envios_totales"),
+                row.get("envios_enviados"),
+                row.get("envios_entregados"),
+                row.get("envios_respondidos"),
+            ]
+        )
+
+    frases_channel_sheet = workbook.create_sheet("FrasesPorCanal")
+    frases_channel_sheet.append(
+        [
+            "canal_publicitario",
+            "conversaciones_atribuidas",
+            "contactos_unicos",
+            "oportunidades_creadas",
+            "tasa_conversacion_oportunidad_pct",
+            "monto_estimado_total",
+        ]
+    )
+    frases_by_channel = _ensure_dict(payload.get("frases_whatsapp"), default={}).get("by_channel")
+    if not isinstance(frases_by_channel, list):
+        frases_by_channel = []
+    for item in frases_by_channel:
+        row = _ensure_dict(item, default={})
+        frases_channel_sheet.append(
+            [
+                row.get("canal_publicitario"),
+                row.get("conversaciones_atribuidas"),
+                row.get("contactos_unicos"),
+                row.get("oportunidades_creadas"),
+                row.get("tasa_conversacion_oportunidad_pct"),
+                row.get("monto_estimado_total"),
+            ]
+        )
+
+    frases_rule_sheet = workbook.create_sheet("FrasesPorRegla")
+    frases_rule_sheet.append(
+        [
+            "regla_id",
+            "regla_nombre",
+            "canal_publicitario",
+            "campana_publicitaria",
+            "conversaciones_atribuidas",
+            "contactos_unicos",
+            "oportunidades_creadas",
+            "tasa_conversacion_oportunidad_pct",
+            "monto_estimado_total",
+        ]
+    )
+    frases_by_rule = _ensure_dict(payload.get("frases_whatsapp"), default={}).get("by_rule")
+    if not isinstance(frases_by_rule, list):
+        frases_by_rule = []
+    for item in frases_by_rule:
+        row = _ensure_dict(item, default={})
+        frases_rule_sheet.append(
+            [
+                row.get("regla_id"),
+                row.get("regla_nombre"),
+                row.get("canal_publicitario"),
+                row.get("campana_publicitaria"),
+                row.get("conversaciones_atribuidas"),
+                row.get("contactos_unicos"),
+                row.get("oportunidades_creadas"),
+                row.get("tasa_conversacion_oportunidad_pct"),
+                row.get("monto_estimado_total"),
+            ]
+        )
+
+    frases_series_sheet = workbook.create_sheet("FrasesSeries")
+    frases_series_sheet.append(
+        ["fecha", "conversaciones_atribuidas", "oportunidades_creadas", "monto_estimado_total"]
+    )
+    frases_timeseries = _ensure_dict(payload.get("frases_whatsapp"), default={}).get("timeseries")
+    if not isinstance(frases_timeseries, list):
+        frases_timeseries = []
+    for item in frases_timeseries:
+        row = _ensure_dict(item, default={})
+        frases_series_sheet.append(
+            [
+                row.get("fecha"),
+                row.get("conversaciones_atribuidas"),
+                row.get("oportunidades_creadas"),
+                row.get("monto_estimado_total"),
+            ]
+        )
+
+    output = io.BytesIO()
+    workbook.save(output)
+    output.seek(0)
+
+    filename = f"prospeccion_metricas_{datetime.now(tz=timezone.utc).strftime('%Y%m%d_%H%M%S')}.xlsx"
+    return Response(
+        content=output.getvalue(),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @router.get("/prospeccion/campanas/{campana_id}/duplicar")

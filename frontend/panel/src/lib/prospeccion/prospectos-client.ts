@@ -1232,6 +1232,48 @@ export async function getProspeccionMetricas(params: {
   return requestJson<ProspeccionMetricasResponse>(url.toString())
 }
 
+export async function downloadProspeccionMetricasXlsx(params: {
+  date_from?: string
+  date_to?: string
+  campana_id?: string
+  canal?: "todos" | "correo" | "whatsapp" | "llamada"
+  campana_publicitaria?: string
+  regla_id?: string
+  limit?: number
+} = {}) {
+  const url = buildClientUrl("/api/prospeccion/metricas/export/xlsx")
+  if (params.date_from) url.searchParams.set("date_from", params.date_from)
+  if (params.date_to) url.searchParams.set("date_to", params.date_to)
+  if (params.campana_id) url.searchParams.set("campana_id", params.campana_id)
+  if (params.canal) url.searchParams.set("canal", params.canal)
+  if (params.campana_publicitaria) url.searchParams.set("campana_publicitaria", params.campana_publicitaria)
+  if (params.regla_id) url.searchParams.set("regla_id", params.regla_id)
+  if (typeof params.limit === "number") url.searchParams.set("limit", String(params.limit))
+
+  const response = await fetch(url.toString(), {
+    method: "GET",
+    cache: "no-store",
+  })
+  if (!response.ok) {
+    let message = `HTTP ${response.status}`
+    try {
+      const payload = (await response.json()) as { error?: string }
+      if (payload?.error) {
+        message = payload.error
+      }
+    } catch {
+      // ignore invalid json payload
+    }
+    throw new Error(message)
+  }
+
+  const blob = await response.blob()
+  const disposition = response.headers.get("content-disposition") || ""
+  const match = disposition.match(/filename="?([^"]+)"?/)
+  const filename = match?.[1] || `prospeccion_metricas_${Date.now()}.xlsx`
+  return { blob, filename }
+}
+
 function delay(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }

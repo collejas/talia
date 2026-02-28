@@ -88,6 +88,9 @@ Repositorio principal: `backend/app/repositories/crm.py`
   - Incluye:
     - `campanas.summary`, `campanas.items`, `campanas.timeseries`.
     - `frases_whatsapp.summary`, `frases_whatsapp.by_channel`, `frases_whatsapp.by_rule`, `frases_whatsapp.timeseries`.
+- `GET /crm/prospeccion/metricas/export/xlsx`
+  - Exporta workbook XLSX multi-hoja del tablero de métricas.
+  - Respeta los mismos filtros que `GET /crm/prospeccion/metricas`.
 - `POST /crm/prospeccion/contacto/brevo/webhook`
   - Exposición pública recomendada (panel/proxy):
     - `POST /api/prospeccion/contacto/brevo/webhook`

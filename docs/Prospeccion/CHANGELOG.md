@@ -19,6 +19,7 @@ Formato recomendado por entrada:
   - tablas de detalle (`campañas`, `frases por canal`, `frases por regla`),
   - gráficas de tendencia diaria para campañas y frases.
   - exportación CSV del bloque activo (campañas o frases).
+  - exportación XLSX con workbook multi-hoja.
 - Sidebar de Prospección:
   - nuevo acceso `Atribución WhatsApp`.
   - nuevo acceso `Métricas`.
@@ -32,6 +33,9 @@ Formato recomendado por entrada:
   - `GET /crm/prospeccion/metricas`
   - combina en una sola respuesta métricas de campañas y frases WhatsApp.
   - incluye `timeseries` diaria para ambos bloques.
+- Nuevo endpoint de exportación:
+  - `GET /crm/prospeccion/metricas/export/xlsx`
+  - genera archivo XLSX con hojas de resumen y detalle.
 - Webhook inbound WhatsApp:
   - evalúa reglas activas por prioridad y aplica primera coincidencia.
   - guardas operativas:

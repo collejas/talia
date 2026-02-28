@@ -1,7 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useMemo, useState } from "react"
-import { IconDownload, IconLoader } from "@tabler/icons-react"
+import { IconDownload, IconFileSpreadsheet, IconLoader } from "@tabler/icons-react"
 import {
   CartesianGrid,
   Legend,
@@ -23,6 +23,7 @@ import {
   getProspeccionMetricas,
   listCrmCampaigns,
   listWhatsAppAtribucionReglas,
+  downloadProspeccionMetricasXlsx,
   type CrmCampaign,
   type ProspeccionMetricasResponse,
   type WhatsAppAtribucionRule,
@@ -48,6 +49,10 @@ function buildCsv(headers: string[], rows: Array<Array<string | number | null | 
 
 function downloadCsv(filename: string, csvContent: string) {
   const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" })
+  downloadBlob(filename, blob)
+}
+
+function downloadBlob(filename: string, blob: Blob) {
   const url = URL.createObjectURL(blob)
   const link = document.createElement("a")
   link.href = url
@@ -257,6 +262,24 @@ export default function ProspeccionMetricasPageClient() {
     downloadCsv(`prospeccion_metricas_frases_${timestamp}.csv`, csv)
   }, [activeTab, data])
 
+  const exportXlsx = useCallback(async () => {
+    try {
+      const result = await downloadProspeccionMetricasXlsx({
+        date_from: dateFrom || undefined,
+        date_to: dateTo || undefined,
+        canal,
+        campana_id: campanaId !== "todos" ? campanaId : undefined,
+        campana_publicitaria: campanaPublicitaria.trim() || undefined,
+        regla_id: reglaId !== "todos" ? reglaId : undefined,
+        limit: 2000,
+      })
+      downloadBlob(result.filename, result.blob)
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "No se pudo exportar el XLSX."
+      setError(message)
+    }
+  }, [dateFrom, dateTo, canal, campanaId, campanaPublicitaria, reglaId])
+
   return (
     <div className="space-y-4">
       <Card>
@@ -350,6 +373,10 @@ export default function ProspeccionMetricasPageClient() {
         >
           <IconDownload className="mr-2 h-4 w-4" />
           Exportar CSV ({activeTab === "campanas" ? "campañas" : "frases"})
+        </Button>
+        <Button variant="outline" onClick={() => void exportXlsx()} disabled={loading || !data}>
+          <IconFileSpreadsheet className="mr-2 h-4 w-4" />
+          Exportar XLSX
         </Button>
       </div>
 

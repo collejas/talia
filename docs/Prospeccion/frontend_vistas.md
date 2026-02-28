@@ -75,6 +75,7 @@ Ruta base: `frontend/panel/src/app/prospeccion`
   - frases por `regla`.
 - Exportación:
   - botón `Exportar CSV` del bloque activo (`campañas` o `frases`) con filtros aplicados.
+  - botón `Exportar XLSX` con workbook multi-hoja (resumen, campañas, frases y series) con filtros aplicados.
 
 ## Clientes frontend usados
 
@@ -93,4 +94,5 @@ Ruta: `frontend/panel/src/app/api/prospeccion`
 - Cubre Google, DENUE, Prospectos, Contacto, Campañas, Buscador y Stage resumen.
 - Incluye proxy de métricas consolidado:
   - `GET /api/prospeccion/metricas` -> `GET /crm/prospeccion/metricas`.
+  - `GET /api/prospeccion/metricas/export/xlsx` -> `GET /crm/prospeccion/metricas/export/xlsx`.
 - Función: pasar token/cookies y proxear a backend `/crm/prospeccion/*`.
