@@ -20,7 +20,12 @@ export type InboxThreadRow = {
   canal: string | null;
   source?: string | null;
   batch_id?: string | null;
+  batch_label?: string | null;
   campana_id?: string | null;
+  campana_label?: string | null;
+  template_id?: string | null;
+  template_slug?: string | null;
+  template_label?: string | null;
   estado: string | null;
   prioridad: number | null;
   iniciada_en: string | null;
@@ -83,7 +88,12 @@ export type InboxThread = {
   canal: string;
   source: string | null;
   batchId: string | null;
+  batchLabel: string | null;
   campanaId: string | null;
+  campanaLabel: string | null;
+  templateId: string | null;
+  templateSlug: string | null;
+  templateLabel: string | null;
   estado: string;
   prioridad: number;
   iniciadoEn: string | null;

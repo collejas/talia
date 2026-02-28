@@ -1348,6 +1348,9 @@ export function InboxSplitView({
                         <span className="text-xs text-muted-foreground">{formattedTime}</span>
                       </div>
                       <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                        <Badge variant="outline" className={`uppercase ${channelBadgeClass}`}>
+                          {thread.canal}
+                        </Badge>
                         {thread.source?.toLowerCase() === "prospeccion" ? (
                           <Badge variant="secondary" className="uppercase">
                             Prospección
@@ -1357,17 +1360,23 @@ export function InboxSplitView({
                             Correo general
                           </Badge>
                         ) : null}
-                        <Badge variant="outline" className={`uppercase ${channelBadgeClass}`}>
-                          {thread.canal}
-                        </Badge>
-                        {thread.batchId ? (
-                          <Badge variant="outline" className="max-w-[160px] truncate">
-                            {batchLabelMap.get(thread.batchId) ?? `Batch ${thread.batchId.slice(0, 8)}`}
-                          </Badge>
-                        ) : null}
                         {thread.campanaId ? (
                           <Badge variant="outline" className="max-w-[160px] truncate">
-                            {campanaLabelMap.get(thread.campanaId) ?? `Campaña ${thread.campanaId.slice(0, 8)}`}
+                            {thread.campanaLabel ??
+                              campanaLabelMap.get(thread.campanaId) ??
+                              `Campaña ${thread.campanaId.slice(0, 8)}`}
+                          </Badge>
+                        ) : null}
+                        {thread.templateLabel ? (
+                          <Badge variant="outline" className="max-w-[160px] truncate">
+                            {thread.templateLabel}
+                          </Badge>
+                        ) : null}
+                        {thread.batchId ? (
+                          <Badge variant="outline" className="max-w-[160px] truncate">
+                            {thread.batchLabel ??
+                              batchLabelMap.get(thread.batchId) ??
+                              `Lote ${thread.batchId.slice(0, 8)}`}
                           </Badge>
                         ) : null}
                         {thread.asignadoNombre ? <span>Asignado a {thread.asignadoNombre}</span> : null}
@@ -1419,16 +1428,23 @@ export function InboxSplitView({
                     Correo general
                   </Badge>
                 ) : null}
-                {selectedThread.batchId ? (
-                  <Badge variant="outline" className="max-w-[220px] truncate">
-                    {batchLabelMap.get(selectedThread.batchId) ??
-                      `Batch ${selectedThread.batchId.slice(0, 8)}`}
-                  </Badge>
-                ) : null}
                 {selectedThread.campanaId ? (
                   <Badge variant="outline" className="max-w-[220px] truncate">
-                    {campanaLabelMap.get(selectedThread.campanaId) ??
+                    {selectedThread.campanaLabel ??
+                      campanaLabelMap.get(selectedThread.campanaId) ??
                       `Campaña ${selectedThread.campanaId.slice(0, 8)}`}
+                  </Badge>
+                ) : null}
+                {selectedThread.templateLabel ? (
+                  <Badge variant="outline" className="max-w-[220px] truncate">
+                    {selectedThread.templateLabel}
+                  </Badge>
+                ) : null}
+                {selectedThread.batchId ? (
+                  <Badge variant="outline" className="max-w-[220px] truncate">
+                    {selectedThread.batchLabel ??
+                      batchLabelMap.get(selectedThread.batchId) ??
+                      `Lote ${selectedThread.batchId.slice(0, 8)}`}
                   </Badge>
                 ) : null}
                 {selectedThread.contactoTelefono ? (

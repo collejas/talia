@@ -6118,7 +6118,12 @@ class CRMInboxThread(BaseModel):
     canal: str | None = None
     source: str | None = None
     batch_id: UUID | None = None
+    batch_label: str | None = None
     campana_id: UUID | None = None
+    campana_label: str | None = None
+    template_id: UUID | None = None
+    template_slug: str | None = None
+    template_label: str | None = None
     estado: str | None = None
     prioridad: int | None = None
     iniciada_en: datetime | None = None
@@ -6159,6 +6164,45 @@ class CRMInboxContextOption(BaseModel):
 class CRMInboxContextFilters(BaseModel):
     batches: list[CRMInboxContextOption] = Field(default_factory=list)
     campanas: list[CRMInboxContextOption] = Field(default_factory=list)
+
+
+def _extract_thread_template_hints(row: dict[str, Any]) -> tuple[str | None, str | None]:
+    template_id = _clean_text(row.get("template_id"))
+    template_slug = _clean_text(row.get("template_slug"))
+    if template_id and template_slug:
+        return template_id, template_slug.lower()
+
+    messages = row.get("messages")
+    if not isinstance(messages, list):
+        return template_id, template_slug.lower() if template_slug else None
+
+    for message in reversed(messages):
+        if not isinstance(message, dict):
+            continue
+        datos = message.get("datos")
+        if not isinstance(datos, dict):
+            continue
+        metadata = datos.get("metadata") if isinstance(datos.get("metadata"), dict) else {}
+        candidate_id = _clean_text(
+            datos.get("template_id")
+            or metadata.get("template_id")
+            or datos.get("template_uuid")
+            or metadata.get("template_uuid")
+        )
+        candidate_slug = _clean_text(
+            datos.get("template_slug")
+            or metadata.get("template_slug")
+            or datos.get("kw")
+            or metadata.get("kw")
+        )
+        if candidate_id and not template_id:
+            template_id = candidate_id
+        if candidate_slug and not template_slug:
+            template_slug = candidate_slug
+        if template_id and template_slug:
+            break
+
+    return template_id, template_slug.lower() if template_slug else None
 
 
 class ProspeccionWhatsappReadiness(BaseModel):
@@ -9740,6 +9784,7 @@ async def get_inbox_threads(
     repo: CRMRepository = Depends(get_repository),
     _: str = Depends(require_permission("ver_inbox")),
     user_token: str = Depends(require_user_token),
+    organizacion_id: UUID = Depends(require_organizacion_id),
     estado: str | None = Query(default=None, max_length=50),
     source: str | None = Query(default=None, max_length=80),
     channel: str | None = Query(default=None, max_length=30),
@@ -9779,7 +9824,178 @@ async def get_inbox_threads(
         logger.warning("crm.inbox.threads.slow_query", extra=log_payload)
     else:
         logger.info("crm.inbox.threads.query", extra=log_payload)
-    return [CRMInboxThread.model_validate(row) for row in rows]
+    batch_ids: set[str] = set()
+    campana_ids: set[str] = set()
+    template_ids: set[str] = set()
+    template_slugs: set[str] = set()
+    thread_template_hints: dict[str, tuple[str | None, str | None]] = {}
+
+    for row in rows:
+        conversacion_id = _clean_text(row.get("conversacion_id"))
+        if not conversacion_id:
+            continue
+        batch_value = _clean_text(row.get("batch_id"))
+        if batch_value:
+            batch_ids.add(batch_value)
+        campana_value = _clean_text(row.get("campana_id"))
+        if campana_value:
+            campana_ids.add(campana_value)
+        template_id_hint, template_slug_hint = _extract_thread_template_hints(row)
+        thread_template_hints[conversacion_id] = (template_id_hint, template_slug_hint)
+        if template_id_hint:
+            template_ids.add(template_id_hint)
+        if template_slug_hint:
+            template_slugs.add(template_slug_hint)
+
+    batch_label_map: dict[str, str] = {}
+    batch_number_map: dict[str, int] = {}
+    batch_template_hint_map: dict[str, tuple[str | None, str | None, str | None]] = {}
+    if batch_ids:
+        try:
+            batch_rows, _ = await repo.list_contact_batches(
+                usuario_token=user_token,
+                limit=max(300, min(1000, len(batch_ids) * 3)),
+                offset=0,
+                order="campana_id.asc,creado_en.asc,id.asc",
+            )
+        except CRMRepositoryError:
+            batch_rows = []
+        batches_by_campaign: dict[str, list[tuple[str, datetime | None]]] = {}
+        for batch in batch_rows:
+            batch_id_value = _clean_text(batch.get("id"))
+            if not batch_id_value or batch_id_value not in batch_ids:
+                continue
+            title = _clean_text(batch.get("titulo"))
+            metadata = batch.get("metadata") if isinstance(batch.get("metadata"), dict) else {}
+            if not title:
+                title = _clean_text(metadata.get("campana_nombre")) or _clean_text(
+                    metadata.get("lista_nombre")
+                )
+            if title:
+                batch_label_map[batch_id_value] = title
+            campaign_key = _clean_text(batch.get("campana_id")) or "__sin_campana__"
+            batches_by_campaign.setdefault(campaign_key, []).append(
+                (batch_id_value, _parse_datetime(batch.get("creado_en")))
+            )
+
+            batch_template_id = _clean_text(
+                metadata.get("template_id") or metadata.get("contact_template_id")
+            )
+            batch_template_slug = _clean_text(
+                metadata.get("template_slug") or metadata.get("kw")
+            )
+            batch_template_name = _clean_text(
+                metadata.get("template_nombre") or metadata.get("template_name")
+            )
+            if batch_template_id:
+                template_ids.add(batch_template_id)
+            if batch_template_slug:
+                normalized_slug = batch_template_slug.lower()
+                template_slugs.add(normalized_slug)
+                batch_template_slug = normalized_slug
+            batch_template_hint_map[batch_id_value] = (
+                batch_template_id,
+                batch_template_slug,
+                batch_template_name,
+            )
+        for campaign_key, campaign_batches in batches_by_campaign.items():
+            sorted_batches = sorted(
+                campaign_batches,
+                key=lambda item: (
+                    item[1] is None,
+                    item[1] or datetime.max.replace(tzinfo=timezone.utc),
+                    item[0],
+                ),
+            )
+            for index, (batch_id_value, _) in enumerate(sorted_batches, start=1):
+                batch_number_map[batch_id_value] = index
+
+    campana_label_map: dict[str, str] = {}
+    if campana_ids:
+        try:
+            campaign_rows = await repo.list_campaigns(organizacion_id=organizacion_id)
+        except CRMRepositoryError:
+            campaign_rows = []
+        for campaign in campaign_rows:
+            campaign_id_value = _clean_text(campaign.get("id"))
+            if not campaign_id_value or campaign_id_value not in campana_ids:
+                continue
+            name = _clean_text(campaign.get("nombre"))
+            if name:
+                campana_label_map[campaign_id_value] = name
+
+    template_label_by_id: dict[str, str] = {}
+    template_label_by_slug: dict[str, str] = {}
+    if template_ids or template_slugs:
+        try:
+            template_rows = await repo.list_contact_templates(usuario_token=user_token)
+        except CRMRepositoryError:
+            template_rows = []
+        for template in template_rows:
+            template_id_value = _clean_text(template.get("id"))
+            metadata = template.get("metadata") if isinstance(template.get("metadata"), dict) else {}
+            template_slug_value = _clean_text(
+                template.get("slug") or metadata.get("template_slug")
+            )
+            template_label = _clean_text(template.get("nombre")) or template_slug_value
+            if not template_label:
+                continue
+            if template_id_value:
+                template_label_by_id[template_id_value] = template_label
+            if template_slug_value:
+                template_label_by_slug[template_slug_value.lower()] = template_label
+
+    enriched_rows: list[dict[str, Any]] = []
+    for row in rows:
+        row_payload = dict(row)
+        batch_value = _clean_text(row_payload.get("batch_id"))
+        campana_value = _clean_text(row_payload.get("campana_id"))
+        conversacion_value = _clean_text(row_payload.get("conversacion_id"))
+        template_id_hint, template_slug_hint = thread_template_hints.get(
+            conversacion_value or "",
+            (None, None),
+        )
+        batch_template_hint = (
+            batch_template_hint_map.get(batch_value) if batch_value else (None, None, None)
+        )
+        batch_template_id, batch_template_slug, batch_template_name = batch_template_hint
+        resolved_template_id = template_id_hint or batch_template_id
+        resolved_template_slug = template_slug_hint or batch_template_slug
+        template_label = (
+            (template_label_by_id.get(resolved_template_id) if resolved_template_id else None)
+            or (
+                template_label_by_slug.get(resolved_template_slug)
+                if resolved_template_slug
+                else None
+            )
+            or batch_template_name
+        )
+
+        if batch_value:
+            batch_number = batch_number_map.get(batch_value)
+            row_payload["batch_label"] = (
+                f"Lote {batch_number}"
+                if batch_number is not None
+                else (batch_label_map.get(batch_value) or f"Lote {batch_value[:8]}")
+            )
+        if campana_value:
+            row_payload["campana_label"] = (
+                campana_label_map.get(campana_value) or f"Campaña {campana_value[:8]}"
+            )
+        if resolved_template_id:
+            row_payload["template_id"] = resolved_template_id
+        if resolved_template_slug:
+            row_payload["template_slug"] = resolved_template_slug
+        if template_label:
+            row_payload["template_label"] = template_label
+        elif resolved_template_slug:
+            row_payload["template_label"] = f"Plantilla {resolved_template_slug}"
+        elif resolved_template_id:
+            row_payload["template_label"] = f"Plantilla {resolved_template_id[:8]}"
+
+        enriched_rows.append(row_payload)
+
+    return [CRMInboxThread.model_validate(row) for row in enriched_rows]
 
 
 @router.get("/inbox/filter-options", response_model=CRMInboxContextFilters)
