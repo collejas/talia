@@ -9917,6 +9917,108 @@ async def set_inbox_manual_mode(
     return {"ok": True, "manual": payload.manual}
 
 
+@router.post("/inbox/conversations/{conversacion_id}/promote")
+async def promote_inbox_conversation_to_opportunity(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    _: str = Depends(require_permission("pipeline.view")),
+    conversacion_id: UUID,
+) -> dict[str, Any]:
+    try:
+        conversation_meta = await storage.fetch_webchat_conversation(str(conversacion_id))
+    except StorageError as exc:
+        raise HTTPException(status_code=502, detail=f"conversation_lookup_failed:{exc}") from exc
+
+    contact_id_value = conversation_meta.get("contact_id")
+    if not contact_id_value:
+        raise HTTPException(status_code=409, detail="conversation_contact_missing")
+
+    try:
+        contact_row = await storage.fetch_contact(str(contact_id_value))
+    except StorageError as exc:
+        raise HTTPException(status_code=502, detail=f"contact_lookup_failed:{exc}") from exc
+
+    org_value = contact_row.get("organizacion_id")
+    try:
+        organizacion_id = UUID(str(org_value))
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=409, detail="contact_org_missing")
+
+    existing = await repo.find_open_opportunity_by_conversation(
+        organizacion_id=organizacion_id,
+        conversation_id=str(conversacion_id),
+    )
+    if existing and existing.get("id"):
+        return {
+            "ok": True,
+            "created": False,
+            "oportunidad_id": str(existing.get("id")),
+            "titulo": existing.get("titulo"),
+            "estado": existing.get("estado"),
+        }
+
+    stage = await repo.ensure_prospeccion_stage(organizacion_id=organizacion_id)
+    stage_id = stage.get("id")
+    if not stage_id:
+        raise HTTPException(status_code=502, detail="stage_not_available")
+
+    contact_name = _clean_text(contact_row.get("nombre_completo")) or "Contacto"
+    recent_messages = await storage.fetch_recent_messages(conversation_id=str(conversacion_id), limit=20)
+    latest_subject: str | None = None
+    latest_inbound_text: str | None = None
+    for message_row in reversed(recent_messages):
+        if not isinstance(message_row, dict):
+            continue
+        datos = message_row.get("datos")
+        if isinstance(datos, str):
+            try:
+                datos = json.loads(datos)
+            except json.JSONDecodeError:
+                datos = {}
+        if isinstance(datos, dict) and latest_subject is None:
+            latest_subject = _clean_text(datos.get("subject"))
+        if message_row.get("direccion") == "entrante":
+            latest_inbound_text = _clean_text(message_row.get("texto"))
+            if latest_inbound_text:
+                break
+
+    title = latest_subject or f"Inbound correo - {contact_name}"
+    description = latest_inbound_text or "Conversación iniciada desde correo entrante en Inbox."
+
+    try:
+        contact_uuid = UUID(str(contact_id_value))
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=409, detail="conversation_contact_invalid")
+    opportunity_payload: dict[str, Any] = {
+        "contacto_principal_id": str(contact_uuid),
+        "etapa_id": str(stage_id),
+        "titulo": title,
+        "descripcion": description,
+        "metadata": {
+            "source": "inbox_email",
+            "created_via": "inbox_email_promote",
+            "conversation_id": str(conversacion_id),
+            "channel": "correo",
+            "contact_id": str(contact_uuid),
+        },
+    }
+    try:
+        created = await repo.create_opportunity(
+            organizacion_id=organizacion_id,
+            payload=opportunity_payload,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=f"opportunity_create_failed:{exc}") from exc
+
+    return {
+        "ok": True,
+        "created": True,
+        "oportunidad_id": str(created.get("id")) if created.get("id") else None,
+        "titulo": created.get("titulo") or title,
+        "estado": created.get("estado"),
+    }
+
+
 @router.post("/inbox/conversations/{conversacion_id}/reply")
 async def reply_inbox_conversation(
     *,

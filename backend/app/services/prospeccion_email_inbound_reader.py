@@ -11,6 +11,7 @@ from email.utils import parseaddr, parsedate_to_datetime
 import imaplib
 import re
 from typing import Any, Sequence
+from uuid import UUID
 
 from app.core.config import settings
 from app.core.logging import get_logger, log_event
@@ -217,6 +218,97 @@ def _imap_fetch_unseen_events(
     return events
 
 
+async def _ensure_general_email_inbox_context(
+    *,
+    repo: CRMRepository,
+    organizacion_id: UUID,
+    sender_email: str,
+    sender_name: str | None,
+) -> tuple[UUID, UUID] | None:
+    contact = await repo.get_contact_by_email(email=sender_email, organizacion_id=organizacion_id)
+    if not contact:
+        contact_payload: dict[str, Any] = {
+            "nombre_completo": sender_name or sender_email.split("@")[0],
+            "correo": sender_email,
+            "contacto_datos": {
+                "source": "inbox_email_inbound",
+                "prospeccion_canal": "correo",
+            },
+        }
+        contact = await repo.create_contact(organizacion_id=organizacion_id, payload=contact_payload)
+    contact_id = contact.get("id")
+    try:
+        contact_uuid = UUID(str(contact_id))
+    except (TypeError, ValueError):
+        return None
+
+    conversation = await repo.get_latest_conversation_for_contact(contacto_id=contact_uuid, canal="manual")
+    if not conversation:
+        conversation = await repo.create_conversation(
+            contacto_id=contact_uuid,
+            canal="manual",
+            estado="abierta",
+        )
+    conversation_id = conversation.get("id")
+    try:
+        conversation_uuid = UUID(str(conversation_id))
+    except (TypeError, ValueError):
+        return None
+    return organizacion_id, conversation_uuid
+
+
+async def _record_unmatched_inbox_email(
+    *,
+    repo: CRMRepository,
+    organizacion_id: UUID,
+    event: dict[str, Any],
+) -> bool:
+    sender_raw = _clean_text(str(event.get("from") or "")) if event.get("from") else None
+    sender_email = sender_raw.lower() if sender_raw else None
+    if not sender_email or "@" not in sender_email:
+        return False
+    sender_name, _ = parseaddr(str(event.get("from") or ""))
+    sender_name = _clean_text(sender_name)
+    context = await _ensure_general_email_inbox_context(
+        repo=repo,
+        organizacion_id=organizacion_id,
+        sender_email=sender_email,
+        sender_name=sender_name,
+    )
+    if not context:
+        return False
+    org_uuid, conversation_uuid = context
+    subject = _clean_text(str(event.get("subject") or ""))
+    body = _clean_text(str(event.get("text") or "")) or "(correo entrante sin texto)"
+    message_id = _clean_text(str(event.get("Message-Id") or ""))
+    in_reply_to = _clean_text(str(event.get("In-Reply-To") or ""))
+    references = _clean_text(str(event.get("References") or ""))
+    received_at = _clean_text(str(event.get("Date") or ""))
+    message_data: dict[str, Any] = {
+        "channel": "correo",
+        "source": "operativo",
+        "action": "inbound_email",
+        "sender_email": sender_email,
+        "sender_name": sender_name,
+        "subject": subject,
+        "message_id": message_id,
+        "in_reply_to": in_reply_to,
+        "references": references,
+        "received_at": received_at,
+    }
+    message_data = {key: value for key, value in message_data.items() if value not in (None, "")}
+    await repo.insert_inbox_message(
+        conversation_id=conversation_uuid,
+        direction="entrante",
+        text=body,
+        datos=message_data,
+        estado="entregada",
+        provider_message_id=message_id,
+        organizacion_id=org_uuid,
+    )
+    return True
+
+
 class ProspeccionEmailInboundReader:
     """Lector IMAP de correos entrantes para marcar respuestas en prospección."""
 
@@ -299,6 +391,14 @@ class ProspeccionEmailInboundReader:
             try:
                 processed = await process_brevo_inbound_emails(repo=repo, events=[event])
                 processed_total += int(processed or 0)
+                if not processed:
+                    unmatched_saved = await _record_unmatched_inbox_email(
+                        repo=repo,
+                        organizacion_id=MASTER_ORGANIZACION_ID,
+                        event=event,
+                    )
+                    if unmatched_saved:
+                        processed_total += 1
             except CRMRepositoryError as exc:
                 log_event(logger, "prospeccion.email_inbound_reader_repo_error", error=str(exc))
             except Exception as exc:  # pragma: no cover

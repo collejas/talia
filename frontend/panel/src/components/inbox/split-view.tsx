@@ -5,6 +5,7 @@ import {
   IconCircleFilled,
   IconRobot,
   IconRobotOff,
+  IconTargetArrow,
 } from "@tabler/icons-react";
 
 import type { InboxThread, InboxMessage } from "@/lib/inbox/data";
@@ -127,6 +128,17 @@ type ManualToggleResponse = {
   message?: string;
 };
 
+type PromoteOpportunityResponse = {
+  ok?: boolean;
+  created?: boolean;
+  oportunidad_id?: string | null;
+  titulo?: string | null;
+  estado?: string | null;
+  error?: string;
+  detail?: string;
+  message?: string;
+};
+
 type PendingAttachment = InboxAttachment & { id: string };
 
 function formatShortTimeLabel(timestamp: string | null | undefined, hydrated: boolean): string {
@@ -238,6 +250,38 @@ function extractManualToggleError(payload: ManualToggleResponse): string | undef
     return payload.message;
   }
   return undefined;
+}
+
+function parsePromotePayload(raw: string): PromoteOpportunityResponse {
+  if (!raw) return {};
+  try {
+    const json = JSON.parse(raw);
+    if (typeof json !== "object" || json === null) {
+      return {};
+    }
+    const record = json as Record<string, unknown>;
+    return {
+      ok: typeof record.ok === "boolean" ? record.ok : undefined,
+      created: typeof record.created === "boolean" ? record.created : undefined,
+      oportunidad_id:
+        typeof record.oportunidad_id === "string" || record.oportunidad_id === null
+          ? (record.oportunidad_id as string | null)
+          : undefined,
+      titulo:
+        typeof record.titulo === "string" || record.titulo === null
+          ? (record.titulo as string | null)
+          : undefined,
+      estado:
+        typeof record.estado === "string" || record.estado === null
+          ? (record.estado as string | null)
+          : undefined,
+      error: typeof record.error === "string" ? record.error : undefined,
+      detail: typeof record.detail === "string" ? record.detail : undefined,
+      message: typeof record.message === "string" ? record.message : undefined,
+    };
+  } catch {
+    return {};
+  }
 }
 
 function normaliseSenderType(value: unknown): "assistant" | "human" | "user" | undefined {
@@ -527,6 +571,8 @@ export function InboxSplitView({
   const [sendError, setSendError] = React.useState<string | null>(null);
   const [manualToggling, setManualToggling] = React.useState(false);
   const [manualToggleError, setManualToggleError] = React.useState<string | null>(null);
+  const [promotingOpportunity, setPromotingOpportunity] = React.useState(false);
+  const [promoteError, setPromoteError] = React.useState<string | null>(null);
   const [currentMessages, setCurrentMessages] = React.useState<InboxMessage[]>(threads[0]?.messages ?? []);
   const [pendingAttachments, setPendingAttachments] = React.useState<PendingAttachment[]>([]);
   const [uploadingAttachments, setUploadingAttachments] = React.useState(false);
@@ -1203,6 +1249,57 @@ export function InboxSplitView({
     }
   }, [selectedThread]);
 
+  const handlePromoteOpportunity = React.useCallback(async () => {
+    if (!selectedThread || selectedThread.opportunityId) {
+      return false;
+    }
+    const targetId = selectedThread.id;
+    setPromoteError(null);
+    setPromotingOpportunity(true);
+    try {
+      const response = await fetch(`/api/inbox/${targetId}/promote`, {
+        method: "POST",
+      });
+      const text = await response.text();
+      const payload = parsePromotePayload(text);
+      if (!response.ok) {
+        const message =
+          payload.error ??
+          payload.detail ??
+          payload.message ??
+          "No se pudo crear la oportunidad desde esta conversación.";
+        setPromoteError(message);
+        return false;
+      }
+      const opportunityId =
+        typeof payload.oportunidad_id === "string" && payload.oportunidad_id.trim().length
+          ? payload.oportunidad_id
+          : null;
+      if (!opportunityId) {
+        setPromoteError("No se recibió un ID de oportunidad válido.");
+        return false;
+      }
+      setThreadItems((current) =>
+        current.map((thread) =>
+          thread.id === targetId
+            ? {
+                ...thread,
+                opportunityId,
+              }
+            : thread,
+        ),
+      );
+      setPromoteError(null);
+      return true;
+    } catch (error) {
+      console.error("[inbox] promote opportunity failed", error);
+      setPromoteError("Ocurrió un error inesperado al crear la oportunidad.");
+      return false;
+    } finally {
+      setPromotingOpportunity(false);
+    }
+  }, [selectedThread]);
+
   return (
     <div className="flex gap-4">
       <aside className="flex h-[calc(100vh-13rem)] min-h-[320px] w-[320px] flex-col overflow-hidden rounded-lg border bg-card">
@@ -1322,6 +1419,22 @@ export function InboxSplitView({
                 ) : null}
               </div>
               <div className="flex items-center gap-2">
+                {selectedThread.canal.toLowerCase() === "correo" && selectedThread.opportunityId ? (
+                  <Badge variant="outline" className="uppercase">
+                    Oportunidad creada
+                  </Badge>
+                ) : selectedThread.canal.toLowerCase() === "correo" ? (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="gap-2"
+                    onClick={handlePromoteOpportunity}
+                    disabled={promotingOpportunity}
+                  >
+                    <IconTargetArrow className="size-4" />
+                    {promotingOpportunity ? "Creando..." : "Crear oportunidad"}
+                  </Button>
+                ) : null}
                 <Button
                   variant={selectedThread.manualMode ? "default" : "outline"}
                   size="sm"
@@ -1349,6 +1462,11 @@ export function InboxSplitView({
               {manualToggleError ? (
                 <div className="mb-4 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">
                   {manualToggleError}
+                </div>
+              ) : null}
+              {promoteError ? (
+                <div className="mb-4 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+                  {promoteError}
                 </div>
               ) : null}
               {selectedThread.manualMode ? (
