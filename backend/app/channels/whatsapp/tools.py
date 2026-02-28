@@ -864,15 +864,17 @@ def _is_prospeccion_opportunity(opportunity: dict[str, Any] | None) -> bool:
 
 
 def _missing_basic_contact_fields(contact: dict[str, Any] | None) -> list[str]:
+    required_order: tuple[tuple[str, str], ...] = (
+        ("full_name", "nombre_completo"),
+        ("email", "correo"),
+        ("company_name", "company_name"),
+    )
     if not isinstance(contact, dict):
-        return ["full_name", "email", "company_name"]
+        return [field for field, _ in required_order]
     missing: list[str] = []
-    if not str(contact.get("nombre_completo") or "").strip():
-        missing.append("full_name")
-    if not str(contact.get("correo") or "").strip():
-        missing.append("email")
-    if not str(contact.get("company_name") or "").strip():
-        missing.append("company_name")
+    for field, contact_key in required_order:
+        if not str(contact.get(contact_key) or "").strip():
+            missing.append(field)
     return missing
 
 
@@ -1894,24 +1896,15 @@ async def _handle_schedule_demo(
         )
         raise ValueError("No pude asociar la oportunidad para agendar la demo.") from exc
 
-    # En prospección requerimos datos básicos antes de agendar.
-    if contact_org_uuid:
-        try:
-            repo = CRMRepository()
-            opportunity = await repo.get_pipeline_opportunity(
-                organizacion_id=UUID(contact_org_uuid),
-                oportunidad_id=UUID(str(tarjeta_id)),
-            )
-        except (CRMRepositoryError, ValueError):
-            opportunity = None
-        if _is_prospeccion_opportunity(opportunity):
-            missing_contact_fields = _missing_basic_contact_fields(contact)
-            if missing_contact_fields:
-                return {
-                    "status": "contact_missing",
-                    "missing_fields": missing_contact_fields,
-                    "guidance": _build_contact_required_guidance(missing_contact_fields),
-                }
+    # Regla comercial: antes de agendar por WhatsApp siempre requerimos
+    # datos básicos de contacto, independientemente del perfilamiento IA.
+    missing_contact_fields = _missing_basic_contact_fields(contact)
+    if missing_contact_fields:
+        return {
+            "status": "contact_missing",
+            "missing_fields": missing_contact_fields,
+            "guidance": _build_contact_required_guidance(missing_contact_fields),
+        }
 
     if profiling_enabled_for_channel:
         prefilter_status = await _has_prefilter_for_schedule(

@@ -1604,7 +1604,8 @@ async def _generate_assistant_reply(
                             "Regla de agenda en prospección: nunca digas que no puedes agendar. "
                             "Si el prospecto confirma fecha/hora o acepta demo, DEBES usar tools "
                             "(list_demo_slots y/o schedule_demo) antes de responder. "
-                            "Si falta algún dato requerido, pide solo ese dato faltante en una pregunta corta."
+                            "Si falta algún dato requerido, pide solo ese dato faltante en una pregunta corta. "
+                            "Orden obligatorio de captura antes de agendar: nombre completo, luego correo, luego empresa."
                         ),
                     }
                 ],
