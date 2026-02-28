@@ -899,6 +899,157 @@ def _build_contact_required_guidance(missing_fields: list[str]) -> str:
     )
 
 
+async def _refresh_opportunity_context_from_contact(
+    context: ToolRuntimeContext,
+    *,
+    reason: str,
+    ensure_capture: bool = False,
+) -> None:
+    if ensure_capture:
+        try:
+            await storage.capture_opportunity_if_ready(
+                conversation_id=context.conversation_id,
+                contact_id=context.contact_id,
+                channel=context.channel or "whatsapp",
+            )
+        except StorageError as exc:
+            logger.warning(
+                "whatsapp.contact_context.capture_failed",
+                extra={
+                    "conversation_id": context.conversation_id,
+                    "contact_id": context.contact_id,
+                    "reason": reason,
+                    "error": str(exc),
+                },
+            )
+
+    try:
+        opportunity_id = await storage.ensure_conversation_opportunity(
+            conversation_id=context.conversation_id,
+            contact_id=context.contact_id,
+            channel=context.channel or "whatsapp",
+        )
+    except StorageError as exc:
+        logger.warning(
+            "whatsapp.contact_context.ensure_failed",
+            extra={
+                "conversation_id": context.conversation_id,
+                "contact_id": context.contact_id,
+                "reason": reason,
+                "error": str(exc),
+            },
+        )
+        return
+
+    contact = await _resolve_contact(context.contact_id)
+    if not isinstance(contact, dict):
+        return
+
+    full_name = str(contact.get("nombre_completo") or "").strip()
+    company_name = str(contact.get("company_name") or "").strip()
+    notes = str(contact.get("notes") or "").strip()
+    need = str(contact.get("necesidad_proposito") or "").strip()
+    summary = notes or need
+    intent = need or None
+
+    if summary or intent:
+        try:
+            await storage.upsert_conversation_insights(
+                conversation_id=context.conversation_id,
+                resumen=summary or None,
+                intencion=intent or None,
+                siguiente_accion="continuar_conversacion",
+            )
+        except StorageError as exc:
+            logger.warning(
+                "whatsapp.contact_context.insights_failed",
+                extra={
+                    "conversation_id": context.conversation_id,
+                    "contact_id": context.contact_id,
+                    "reason": reason,
+                    "error": str(exc),
+                },
+            )
+
+    try:
+        await storage.maybe_auto_name_opportunity(
+            conversation_id=context.conversation_id,
+            contact_id=context.contact_id,
+            opportunity_id=str(opportunity_id),
+            intent=intent,
+            summary=summary or None,
+            channel=context.channel or "whatsapp",
+        )
+    except StorageError as exc:
+        logger.warning(
+            "whatsapp.contact_context.auto_name_failed",
+            extra={
+                "conversation_id": context.conversation_id,
+                "contact_id": context.contact_id,
+                "reason": reason,
+                "error": str(exc),
+            },
+        )
+
+    org_uuid_text = webchat_service._resolve_org_uuid(webchat_service._extract_contact_org(contact))
+    if not org_uuid_text:
+        return
+    try:
+        repo = CRMRepository()
+        opportunity_row = await repo.get_pipeline_opportunity(
+            organizacion_id=UUID(org_uuid_text),
+            oportunidad_id=UUID(str(opportunity_id)),
+        )
+    except (CRMRepositoryError, ValueError) as exc:
+        logger.warning(
+            "whatsapp.contact_context.fetch_opportunity_failed",
+            extra={
+                "conversation_id": context.conversation_id,
+                "contact_id": context.contact_id,
+                "reason": reason,
+                "error": str(exc),
+            },
+        )
+        return
+    if not isinstance(opportunity_row, dict):
+        return
+
+    current_title = str(opportunity_row.get("titulo") or "").strip()
+    current_description = str(opportunity_row.get("descripcion") or "").strip()
+    label = company_name or full_name
+    looks_generic = (
+        not current_title
+        or current_title.lower().startswith("conversación ")
+        or current_title.lower().startswith("conversacion ")
+        or (full_name and current_title.casefold() == full_name.casefold())
+    )
+    if not label and not summary:
+        return
+    patch_opp: dict[str, Any] = {}
+    if looks_generic and label:
+        patch_opp["titulo"] = f"Lead WhatsApp - {label}"[:120]
+    if not current_description and summary:
+        patch_opp["descripcion"] = summary[:1000]
+    if not patch_opp:
+        return
+    try:
+        await repo.update_opportunity(
+            organizacion_id=UUID(org_uuid_text),
+            oportunidad_id=UUID(str(opportunity_id)),
+            payload=patch_opp,
+        )
+    except (CRMRepositoryError, ValueError) as exc:
+        logger.warning(
+            "whatsapp.contact_context.opportunity_patch_failed",
+            extra={
+                "conversation_id": context.conversation_id,
+                "contact_id": context.contact_id,
+                "reason": reason,
+                "error": str(exc),
+            },
+        )
+
+
 async def _resolve_org_for_catalog(
     context: ToolRuntimeContext,
     arguments: dict[str, Any],
@@ -964,31 +1115,41 @@ async def execute_tool(
     if func == "set_full_name":
         full_name = _require(arguments, "full_name")
         await storage.update_contact(context.contact_id, {"nombre_completo": full_name})
+        await _refresh_opportunity_context_from_contact(
+            context,
+            reason="set_full_name",
+            ensure_capture=True,
+        )
         return {"status": "ok", "full_name": full_name}
 
     if func == "set_email":
         email = _require(arguments, "email").lower()
         await storage.update_contact(context.contact_id, {"correo": email})
-        await storage.capture_opportunity_if_ready(
-            conversation_id=context.conversation_id,
-            contact_id=context.contact_id,
-            channel=context.channel or "whatsapp",
+        await _refresh_opportunity_context_from_contact(
+            context,
+            reason="set_email",
+            ensure_capture=True,
         )
         return {"status": "ok", "email": email}
 
     if func == "set_phone_number":
         phone = _require(arguments, "phone_number")
         await storage.update_contact(context.contact_id, {"telefono_e164": phone})
-        await storage.capture_opportunity_if_ready(
-            conversation_id=context.conversation_id,
-            contact_id=context.contact_id,
-            channel=context.channel or "whatsapp",
+        await _refresh_opportunity_context_from_contact(
+            context,
+            reason="set_phone_number",
+            ensure_capture=True,
         )
         return {"status": "ok", "phone_number": phone}
 
     if func == "set_company_name":
         company = _require(arguments, "company_name")
         await storage.update_contact(context.contact_id, {"company_name": company})
+        await _refresh_opportunity_context_from_contact(
+            context,
+            reason="set_company_name",
+            ensure_capture=True,
+        )
         return {"status": "ok", "company_name": company}
 
     if func == "set_prospect_context":
@@ -1013,6 +1174,11 @@ async def execute_tool(
             updates["necesidad_proposito"] = necesidad
         if updates:
             await storage.update_contact(context.contact_id, updates)
+            await _refresh_opportunity_context_from_contact(
+                context,
+                reason="set_prospect_context",
+                ensure_capture=True,
+            )
         return {
             "status": "ok",
             "saved": {
