@@ -72,6 +72,65 @@ Este archivo sirve para capturar próximos requerimientos sin mezclar historial 
 - Alertas automáticas de fallos por canal.
 - Runbook técnico consolidado para soporte. (Completado: ver `runbook_metricas_brevo.md`)
 
+5. Atribución de publicidad WhatsApp por frase (nuevo)
+- Objetivo:
+  - identificar conversaciones entrantes de WhatsApp que provienen de campañas digitales usando frases semilla (prefill message),
+  - persistir canal/fuente de publicidad para medición comercial.
+- Alcance funcional:
+  - nueva vista en `prospeccion` para administrar reglas de atribución por frase.
+  - cada regla define:
+    - `nombre_regla`,
+    - `canal_publicitario` (Meta Ads, Google Ads, TikTok, etc.),
+    - `frase_objetivo`,
+    - `tipo_match` (`exacta`, `contiene`, `regex`),
+    - `campana_publicitaria` (opcional),
+    - `adset` (opcional),
+    - `anuncio` (opcional),
+    - `prioridad`,
+    - `activo`.
+- Persistencia propuesta:
+  - `public.prospeccion_whatsapp_atribucion_reglas`:
+    - catálogo editable por tenant.
+  - `public.prospeccion_whatsapp_atribucion_eventos`:
+    - evento inmutable por conversación atribuida (evita duplicados y permite auditoría).
+  - resumen en conversación/contacto:
+    - `conversaciones.metadata` y/o `contactos.contacto_datos` con campos de atribución para lectura rápida.
+- Backend (captura):
+  - punto de entrada: webhook inbound de WhatsApp.
+  - evaluación:
+    - normalizar texto entrante (trim, minúsculas, sin acentos),
+    - aplicar reglas activas por prioridad,
+    - resolver la primera coincidencia.
+  - guardado:
+    - registrar evento de atribución + marcar conversación con `source=publicidad_whatsapp`.
+  - guardas operativas:
+    - atribuir sólo en el primer mensaje de conversación nueva,
+    - ventana anti-duplicado por contacto (configurable),
+    - log de no-match (opcional) para optimizar reglas.
+- Frontend (nueva vista):
+  - listado CRUD de reglas con filtros por canal/estado.
+  - simulador rápido:
+    - pegar frase de prueba,
+    - mostrar regla que matchea antes de guardar.
+- Métricas a exponer:
+  - por `canal_publicitario` y por `regla/frase`:
+    - conversaciones atribuidas,
+    - contactos únicos,
+    - oportunidades creadas,
+    - tasa conversación→oportunidad,
+    - monto estimado total de oportunidades atribuidas.
+- Plan de implementación (fases):
+  - Fase 1 (MVP):
+    - tablas + RLS + CRUD de reglas + matcher inbound + guardado de evento + badge en Inbox/prospección.
+  - Fase 2:
+    - dashboard de métricas por canal/regla con filtros de fecha.
+  - Fase 3:
+    - simulador avanzado + sugerencias de nuevas frases desde no-match frecuentes.
+- Criterio de aceptación:
+  - al enviar un WhatsApp con frase registrada, la conversación queda atribuida al canal correcto.
+  - la atribución persiste en BD y se ve en UI.
+  - el conteo por canal/regla incrementa en métricas sin duplicar por la misma conversación.
+
 ## Cómo registrar nuevos cambios
 
 Por cada cambio nuevo:
