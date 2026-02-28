@@ -564,6 +564,7 @@ export function InboxSplitView({
   dateFilter,
   reengageFilter,
 }: InboxSplitViewProps) {
+  const compactKpiTagClass = "text-[8px] leading-none";
   const [threadItems, setThreadItems] = React.useState<InboxThread[]>(threads);
   const [selectedId, setSelectedId] = React.useState<string | null>(threads[0]?.id ?? null);
   const [searchTerm] = React.useState("");
@@ -1348,32 +1349,32 @@ export function InboxSplitView({
                         <span className="text-xs text-muted-foreground">{formattedTime}</span>
                       </div>
                       <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                        <Badge variant="outline" className={`uppercase ${channelBadgeClass}`}>
+                        <Badge variant="outline" className={`uppercase ${channelBadgeClass} ${compactKpiTagClass}`}>
                           {thread.canal}
                         </Badge>
                         {thread.source?.toLowerCase() === "prospeccion" ? (
-                          <Badge variant="secondary" className="uppercase">
+                          <Badge variant="secondary" className={`uppercase ${compactKpiTagClass}`}>
                             Prospección
                           </Badge>
                         ) : thread.canal?.toLowerCase() === "correo" ? (
-                          <Badge variant="outline" className="uppercase">
+                          <Badge variant="outline" className={`uppercase ${compactKpiTagClass}`}>
                             Correo general
                           </Badge>
                         ) : null}
                         {thread.campanaId ? (
-                          <Badge variant="outline" className="max-w-[160px] truncate">
+                          <Badge variant="outline" className={`max-w-[160px] truncate ${compactKpiTagClass}`}>
                             {thread.campanaLabel ??
                               campanaLabelMap.get(thread.campanaId) ??
                               `Campaña ${thread.campanaId.slice(0, 8)}`}
                           </Badge>
                         ) : null}
                         {thread.templateLabel ? (
-                          <Badge variant="outline" className="max-w-[160px] truncate">
+                          <Badge variant="outline" className={`max-w-[160px] truncate ${compactKpiTagClass}`}>
                             {thread.templateLabel}
                           </Badge>
                         ) : null}
                         {thread.batchId ? (
-                          <Badge variant="outline" className="max-w-[160px] truncate">
+                          <Badge variant="outline" className={`max-w-[160px] truncate ${compactKpiTagClass}`}>
                             {thread.batchLabel ??
                               batchLabelMap.get(thread.batchId) ??
                               `Lote ${thread.batchId.slice(0, 8)}`}
@@ -1413,35 +1414,35 @@ export function InboxSplitView({
               <div className="flex flex-wrap items-center gap-3">
                 <h3 className="text-lg font-semibold">{selectedThread.contactoNombre}</h3>
                 <span
-                  className={`text-[10px] uppercase tracking-[0.3em] rounded-full border px-3 py-1 ${getChannelBadgeClass(
+                  className={`text-[6px] uppercase tracking-[0.3em] rounded-full border px-3 py-1 ${getChannelBadgeClass(
                     selectedThread.canal,
                   )}`}
                 >
                   {selectedThread.canal}
                 </span>
                 {selectedThread.source?.toLowerCase() === "prospeccion" ? (
-                  <Badge variant="secondary" className="uppercase">
+                  <Badge variant="secondary" className={`uppercase ${compactKpiTagClass}`}>
                     Prospección
                   </Badge>
                 ) : selectedThread.canal?.toLowerCase() === "correo" ? (
-                  <Badge variant="outline" className="uppercase">
+                  <Badge variant="outline" className={`uppercase ${compactKpiTagClass}`}>
                     Correo general
                   </Badge>
                 ) : null}
                 {selectedThread.campanaId ? (
-                  <Badge variant="outline" className="max-w-[220px] truncate">
+                  <Badge variant="outline" className={`max-w-[220px] truncate ${compactKpiTagClass}`}>
                     {selectedThread.campanaLabel ??
                       campanaLabelMap.get(selectedThread.campanaId) ??
                       `Campaña ${selectedThread.campanaId.slice(0, 8)}`}
                   </Badge>
                 ) : null}
                 {selectedThread.templateLabel ? (
-                  <Badge variant="outline" className="max-w-[220px] truncate">
+                  <Badge variant="outline" className={`max-w-[220px] truncate ${compactKpiTagClass}`}>
                     {selectedThread.templateLabel}
                   </Badge>
                 ) : null}
                 {selectedThread.batchId ? (
-                  <Badge variant="outline" className="max-w-[220px] truncate">
+                  <Badge variant="outline" className={`max-w-[220px] truncate ${compactKpiTagClass}`}>
                     {selectedThread.batchLabel ??
                       batchLabelMap.get(selectedThread.batchId) ??
                       `Lote ${selectedThread.batchId.slice(0, 8)}`}

@@ -6166,15 +6166,18 @@ class CRMInboxContextFilters(BaseModel):
     campanas: list[CRMInboxContextOption] = Field(default_factory=list)
 
 
-def _extract_thread_template_hints(row: dict[str, Any]) -> tuple[str | None, str | None]:
+def _extract_thread_prospeccion_hints(
+    row: dict[str, Any],
+) -> tuple[str | None, str | None, str | None, str | None, str | None]:
+    batch_id = _clean_text(row.get("batch_id"))
+    campana_id = _clean_text(row.get("campana_id"))
     template_id = _clean_text(row.get("template_id"))
     template_slug = _clean_text(row.get("template_slug"))
-    if template_id and template_slug:
-        return template_id, template_slug.lower()
+    template_label = _clean_text(row.get("template_label"))
 
     messages = row.get("messages")
     if not isinstance(messages, list):
-        return template_id, template_slug.lower() if template_slug else None
+        return batch_id, campana_id, template_id, template_slug.lower() if template_slug else None, template_label
 
     for message in reversed(messages):
         if not isinstance(message, dict):
@@ -6183,6 +6186,12 @@ def _extract_thread_template_hints(row: dict[str, Any]) -> tuple[str | None, str
         if not isinstance(datos, dict):
             continue
         metadata = datos.get("metadata") if isinstance(datos.get("metadata"), dict) else {}
+        candidate_batch = _clean_text(
+            datos.get("batch_id") or metadata.get("batch_id")
+        )
+        candidate_campana = _clean_text(
+            datos.get("campana_id") or metadata.get("campana_id")
+        )
         candidate_id = _clean_text(
             datos.get("template_id")
             or metadata.get("template_id")
@@ -6194,15 +6203,74 @@ def _extract_thread_template_hints(row: dict[str, Any]) -> tuple[str | None, str
             or metadata.get("template_slug")
             or datos.get("kw")
             or metadata.get("kw")
+            or datos.get("twilio_content_sid")
+            or metadata.get("twilio_content_sid")
+            or datos.get("template_sid")
+            or metadata.get("template_sid")
         )
+        candidate_label = _clean_text(
+            datos.get("template_nombre")
+            or metadata.get("template_nombre")
+            or datos.get("template_name")
+            or metadata.get("template_name")
+            or datos.get("template_label")
+            or metadata.get("template_label")
+        )
+        if candidate_batch and not batch_id:
+            batch_id = candidate_batch
+        if candidate_campana and not campana_id:
+            campana_id = candidate_campana
         if candidate_id and not template_id:
             template_id = candidate_id
         if candidate_slug and not template_slug:
             template_slug = candidate_slug
-        if template_id and template_slug:
+        if candidate_label and not template_label:
+            template_label = candidate_label
+        if batch_id and campana_id and template_id and template_slug and template_label:
             break
 
-    return template_id, template_slug.lower() if template_slug else None
+    return (
+        batch_id,
+        campana_id,
+        template_id,
+        template_slug.lower() if template_slug else None,
+        template_label,
+    )
+
+
+def _extract_envio_prospeccion_hints(
+    envio: dict[str, Any] | None,
+) -> tuple[str | None, str | None, str | None, str | None, str | None]:
+    if not isinstance(envio, dict):
+        return None, None, None, None, None
+    payload = envio.get("payload") if isinstance(envio.get("payload"), dict) else {}
+    payload_meta = payload.get("metadata") if isinstance(payload.get("metadata"), dict) else {}
+    detalle = envio.get("detalle") if isinstance(envio.get("detalle"), dict) else {}
+    batch_id = _clean_text(envio.get("batch_id"))
+    campana_id = _clean_text(envio.get("campana_id")) or _clean_text(payload_meta.get("campana_id"))
+    template_id = _clean_text(
+        payload.get("template_id")
+        or payload_meta.get("template_id")
+    )
+    template_slug = _clean_text(
+        payload.get("template_slug")
+        or payload_meta.get("template_slug")
+        or payload_meta.get("kw")
+        or payload_meta.get("twilio_content_sid")
+        or detalle.get("template_sid")
+    )
+    template_label = _clean_text(
+        payload_meta.get("template_nombre")
+        or payload_meta.get("template_name")
+        or payload_meta.get("template_label")
+    )
+    return (
+        batch_id,
+        campana_id,
+        template_id,
+        template_slug.lower() if template_slug else None,
+        template_label,
+    )
 
 
 class ProspeccionWhatsappReadiness(BaseModel):
@@ -9828,24 +9896,85 @@ async def get_inbox_threads(
     campana_ids: set[str] = set()
     template_ids: set[str] = set()
     template_slugs: set[str] = set()
-    thread_template_hints: dict[str, tuple[str | None, str | None]] = {}
+    thread_prospeccion_hints: dict[
+        str, tuple[str | None, str | None, str | None, str | None, str | None]
+    ] = {}
+    thread_channel_map: dict[str, str] = {}
+    thread_phone_map: dict[str, str | None] = {}
 
     for row in rows:
         conversacion_id = _clean_text(row.get("conversacion_id"))
         if not conversacion_id:
             continue
+        thread_channel_map[conversacion_id] = (_clean_text(row.get("canal")) or "").lower()
+        thread_phone_map[conversacion_id] = _clean_text(row.get("contacto_telefono"))
         batch_value = _clean_text(row.get("batch_id"))
+        campana_value = _clean_text(row.get("campana_id"))
+        (
+            batch_hint,
+            campana_hint,
+            template_id_hint,
+            template_slug_hint,
+            template_label_hint,
+        ) = _extract_thread_prospeccion_hints(row)
+        if not batch_value and batch_hint and _safe_uuid(batch_hint):
+            batch_value = batch_hint
+        if not campana_value and campana_hint and _safe_uuid(campana_hint):
+            campana_value = campana_hint
         if batch_value:
             batch_ids.add(batch_value)
-        campana_value = _clean_text(row.get("campana_id"))
         if campana_value:
             campana_ids.add(campana_value)
-        template_id_hint, template_slug_hint = _extract_thread_template_hints(row)
-        thread_template_hints[conversacion_id] = (template_id_hint, template_slug_hint)
-        if template_id_hint:
+        thread_prospeccion_hints[conversacion_id] = (
+            batch_hint,
+            campana_hint,
+            template_id_hint,
+            template_slug_hint,
+            template_label_hint,
+        )
+        if template_id_hint and _safe_uuid(template_id_hint):
             template_ids.add(template_id_hint)
         if template_slug_hint:
             template_slugs.add(template_slug_hint)
+
+    # Fallback: cuando la conversación de WhatsApp no trae metadata prospección
+    # en mensajes, intentamos enlazar con el envío más reciente por teléfono.
+    whatsapp_phone_cache: dict[str, tuple[str | None, str | None, str | None, str | None, str | None]] = {}
+    for conversacion_id, hints in list(thread_prospeccion_hints.items()):
+        batch_hint, campana_hint, template_id_hint, template_slug_hint, template_label_hint = hints
+        if batch_hint or campana_hint or template_id_hint or template_slug_hint:
+            continue
+        if thread_channel_map.get(conversacion_id) != "whatsapp":
+            continue
+        phone_value = thread_phone_map.get(conversacion_id)
+        if not phone_value:
+            continue
+        if phone_value not in whatsapp_phone_cache:
+            try:
+                linked_envio = await repo.worker_get_latest_envio_by_phone(
+                    phone_e164=phone_value,
+                    canal="whatsapp",
+                )
+            except CRMRepositoryError:
+                linked_envio = None
+            whatsapp_phone_cache[phone_value] = _extract_envio_prospeccion_hints(linked_envio)
+        fallback_hints = whatsapp_phone_cache.get(phone_value) or (None, None, None, None, None)
+        merged_hints = (
+            batch_hint or fallback_hints[0],
+            campana_hint or fallback_hints[1],
+            template_id_hint or fallback_hints[2],
+            template_slug_hint or fallback_hints[3],
+            template_label_hint or fallback_hints[4],
+        )
+        thread_prospeccion_hints[conversacion_id] = merged_hints
+        if merged_hints[0] and _safe_uuid(merged_hints[0]):
+            batch_ids.add(merged_hints[0])
+        if merged_hints[1] and _safe_uuid(merged_hints[1]):
+            campana_ids.add(merged_hints[1])
+        if merged_hints[2] and _safe_uuid(merged_hints[2]):
+            template_ids.add(merged_hints[2])
+        if merged_hints[3]:
+            template_slugs.add(merged_hints[3])
 
     batch_label_map: dict[str, str] = {}
     batch_number_map: dict[str, int] = {}
@@ -9951,10 +10080,22 @@ async def get_inbox_threads(
         batch_value = _clean_text(row_payload.get("batch_id"))
         campana_value = _clean_text(row_payload.get("campana_id"))
         conversacion_value = _clean_text(row_payload.get("conversacion_id"))
-        template_id_hint, template_slug_hint = thread_template_hints.get(
+        (
+            batch_hint,
+            campana_hint,
+            template_id_hint,
+            template_slug_hint,
+            template_label_hint,
+        ) = thread_prospeccion_hints.get(
             conversacion_value or "",
-            (None, None),
+            (None, None, None, None, None),
         )
+        if not batch_value and batch_hint and _safe_uuid(batch_hint):
+            batch_value = batch_hint
+            row_payload["batch_id"] = batch_value
+        if not campana_value and campana_hint and _safe_uuid(campana_hint):
+            campana_value = campana_hint
+            row_payload["campana_id"] = campana_value
         batch_template_hint = (
             batch_template_hint_map.get(batch_value) if batch_value else (None, None, None)
         )
@@ -9968,6 +10109,7 @@ async def get_inbox_threads(
                 if resolved_template_slug
                 else None
             )
+            or template_label_hint
             or batch_template_name
         )
 
@@ -9982,7 +10124,7 @@ async def get_inbox_threads(
             row_payload["campana_label"] = (
                 campana_label_map.get(campana_value) or f"Campaña {campana_value[:8]}"
             )
-        if resolved_template_id:
+        if resolved_template_id and _safe_uuid(resolved_template_id):
             row_payload["template_id"] = resolved_template_id
         if resolved_template_slug:
             row_payload["template_slug"] = resolved_template_slug
@@ -9992,6 +10134,9 @@ async def get_inbox_threads(
             row_payload["template_label"] = f"Plantilla {resolved_template_slug}"
         elif resolved_template_id:
             row_payload["template_label"] = f"Plantilla {resolved_template_id[:8]}"
+        current_source = _clean_text(row_payload.get("source"))
+        if not current_source and (batch_value or campana_value or resolved_template_id or resolved_template_slug):
+            row_payload["source"] = "prospeccion"
 
         enriched_rows.append(row_payload)
 
