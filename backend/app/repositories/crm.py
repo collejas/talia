@@ -8513,6 +8513,226 @@ class CRMRepository:
         total = self._extract_total_count(resp.headers.get("content-range")) or len(data)
         return data, total
 
+    async def list_whatsapp_atribucion_reglas(
+        self,
+        *,
+        usuario_token: str,
+        limit: int = 200,
+        offset: int = 0,
+        canal_publicitario: str | None = None,
+        activo: bool | None = None,
+        search: str | None = None,
+    ) -> tuple[list[dict[str, Any]], int]:
+        """Lista reglas de atribución publicitaria para WhatsApp."""
+
+        params: dict[str, str] = {
+            "select": "*",
+            "limit": str(max(1, min(limit, 500))),
+            "offset": str(max(0, offset)),
+            "order": "prioridad.asc,creado_en.asc",
+        }
+        if canal_publicitario:
+            literal = _postgrest_eq_literal(canal_publicitario.strip())
+            params["canal_publicitario"] = f"eq.{literal}"
+        if activo is not None:
+            params["activo"] = f"eq.{str(activo).lower()}"
+        search_pattern = _sanitize_search_pattern(search)
+        if search_pattern:
+            ilike = _postgrest_ilike_literal(search_pattern)
+            params["or"] = (
+                f"(nombre_regla.ilike.{ilike},frase_objetivo.ilike.{ilike},"
+                f"canal_publicitario.ilike.{ilike},campana_publicitaria.ilike.{ilike})"
+            )
+        resp = await self._request_with_user(
+            "GET",
+            "/rest/v1/prospeccion_whatsapp_atribucion_reglas",
+            token=usuario_token,
+            params=params,
+            prefer="count=exact",
+        )
+        data = resp.json() or []
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"whatsapp_atribucion_reglas_invalid:{data!r}")
+        total = self._extract_total_count(resp.headers.get("content-range")) or len(data)
+        return data, total
+
+    async def create_whatsapp_atribucion_regla(
+        self,
+        *,
+        usuario_token: str,
+        payload: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Crea una regla de atribución publicitaria para WhatsApp."""
+
+        resp = await self._request_with_user(
+            "POST",
+            "/rest/v1/prospeccion_whatsapp_atribucion_reglas",
+            token=usuario_token,
+            json=[payload],
+            prefer="return=representation",
+        )
+        data = resp.json() or []
+        if not isinstance(data, list) or not data:
+            raise CRMRepositoryError("whatsapp_atribucion_regla_create_failed")
+        row = data[0]
+        if not isinstance(row, dict):
+            raise CRMRepositoryError(f"whatsapp_atribucion_regla_create_invalid:{row!r}")
+        return row
+
+    async def update_whatsapp_atribucion_regla(
+        self,
+        *,
+        usuario_token: str,
+        regla_id: UUID,
+        payload: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Actualiza una regla de atribución publicitaria para WhatsApp."""
+
+        resp = await self._request_with_user(
+            "PATCH",
+            "/rest/v1/prospeccion_whatsapp_atribucion_reglas",
+            token=usuario_token,
+            params={"id": f"eq.{regla_id}"},
+            json=payload,
+            prefer="return=representation",
+        )
+        data = resp.json() or []
+        if not isinstance(data, list) or not data:
+            raise CRMRepositoryError("whatsapp_atribucion_regla_not_found")
+        row = data[0]
+        if not isinstance(row, dict):
+            raise CRMRepositoryError(f"whatsapp_atribucion_regla_update_invalid:{row!r}")
+        return row
+
+    async def delete_whatsapp_atribucion_regla(
+        self,
+        *,
+        usuario_token: str,
+        regla_id: UUID,
+    ) -> None:
+        """Elimina una regla de atribución publicitaria para WhatsApp."""
+
+        resp = await self._request_with_user(
+            "DELETE",
+            "/rest/v1/prospeccion_whatsapp_atribucion_reglas",
+            token=usuario_token,
+            params={"id": f"eq.{regla_id}"},
+        )
+        data = resp.json() or []
+        if isinstance(data, dict) and data.get("message") == "No rows deleted":
+            raise CRMRepositoryError("whatsapp_atribucion_regla_not_found")
+
+    async def list_active_whatsapp_atribucion_reglas(
+        self,
+        *,
+        organizacion_id: UUID,
+    ) -> list[dict[str, Any]]:
+        """Carga reglas activas de atribución para el tenant (service-role)."""
+
+        resp = await self._request_service_role(
+            "GET",
+            "/rest/v1/prospeccion_whatsapp_atribucion_reglas",
+            params={
+                "select": "*",
+                "organizacion_id": f"eq.{organizacion_id}",
+                "activo": "eq.true",
+                "order": "prioridad.asc,creado_en.asc",
+                "limit": "500",
+            },
+            organizacion_id=organizacion_id,
+        )
+        data = resp.json() or []
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"whatsapp_atribucion_reglas_active_invalid:{data!r}")
+        return [row for row in data if isinstance(row, dict)]
+
+    async def worker_get_recent_whatsapp_atribucion_event_for_contact(
+        self,
+        *,
+        organizacion_id: UUID,
+        contacto_id: UUID,
+        since_iso: str,
+    ) -> dict[str, Any] | None:
+        """Devuelve el evento de atribución más reciente por contacto en una ventana."""
+
+        resp = await self._request_service_role(
+            "GET",
+            "/rest/v1/prospeccion_whatsapp_atribucion_eventos",
+            params={
+                "select": "id,conversacion_id,contacto_id,regla_id,canal_publicitario,creado_en",
+                "organizacion_id": f"eq.{organizacion_id}",
+                "contacto_id": f"eq.{contacto_id}",
+                "creado_en": f"gte.{_postgrest_eq_literal(since_iso)}",
+                "order": "creado_en.desc",
+                "limit": "1",
+            },
+            organizacion_id=organizacion_id,
+        )
+        data = resp.json() or []
+        if not isinstance(data, list) or not data:
+            return None
+        row = data[0]
+        if not isinstance(row, dict):
+            raise CRMRepositoryError(f"whatsapp_atribucion_event_recent_invalid:{row!r}")
+        return row
+
+    async def worker_create_whatsapp_atribucion_event(
+        self,
+        *,
+        organizacion_id: UUID,
+        payload: dict[str, Any],
+    ) -> dict[str, Any] | None:
+        """Crea un evento de atribución; ignora duplicado por conversación."""
+
+        resp = await self._request_service_role(
+            "POST",
+            "/rest/v1/prospeccion_whatsapp_atribucion_eventos",
+            params={"on_conflict": "organizacion_id,conversacion_id"},
+            json=[payload],
+            prefer="resolution=ignore-duplicates,return=representation",
+            organizacion_id=organizacion_id,
+        )
+        data = resp.json() or []
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"whatsapp_atribucion_event_create_invalid:{data!r}")
+        if not data:
+            return None
+        row = data[0]
+        if not isinstance(row, dict):
+            raise CRMRepositoryError(f"whatsapp_atribucion_event_create_invalid_row:{row!r}")
+        return row
+
+    async def worker_list_whatsapp_atribucion_events_by_conversations(
+        self,
+        *,
+        organizacion_id: UUID,
+        conversation_ids: Sequence[str],
+    ) -> list[dict[str, Any]]:
+        """Consulta eventos de atribución para un conjunto de conversaciones."""
+
+        if not conversation_ids:
+            return []
+        safe_ids = [value.strip() for value in conversation_ids if isinstance(value, str) and value.strip()]
+        if not safe_ids:
+            return []
+        params = {
+            "select": "conversacion_id,regla_id,canal_publicitario,campana_publicitaria,adset,anuncio,creado_en",
+            "organizacion_id": f"eq.{organizacion_id}",
+            "conversacion_id": _postgrest_in_clause(safe_ids),
+            "order": "creado_en.desc",
+            "limit": str(min(len(safe_ids) * 3, 1000)),
+        }
+        resp = await self._request_service_role(
+            "GET",
+            "/rest/v1/prospeccion_whatsapp_atribucion_eventos",
+            params=params,
+            organizacion_id=organizacion_id,
+        )
+        data = resp.json() or []
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"whatsapp_atribucion_events_by_conversation_invalid:{data!r}")
+        return [row for row in data if isinstance(row, dict)]
+
     async def create_contact_suppression(
         self,
         *,

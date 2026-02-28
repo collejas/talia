@@ -88,6 +88,7 @@ from app.services.catalog_fraccionamientos import (
 from app.services.catalog_item_lookup import lookup_catalog_items_sql_first
 from app.services.demografia_service import DemografiaServiceError
 from app.services.metrics import metrics as contact_metrics
+from app.services.prospeccion_whatsapp_atribucion import resolve_first_matching_rule
 from app.services.prospeccion_contact_sender import contact_sender
 from app.services.prospeccion_progress import progress_hub
 from app.services.storage import StorageError
@@ -1917,6 +1918,67 @@ class BrevoTemplateImportPayload(BaseModel):
     slug: str | None = Field(default=None, max_length=160)
     nombre: str | None = Field(default=None, max_length=160)
     descripcion: str | None = Field(default=None, max_length=400)
+
+
+class WhatsAppAtribucionRuleQuery(BaseModel):
+    """Filtros para listar reglas de atribución publicitaria de WhatsApp."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    limit: int = Field(default=200, ge=1, le=500)
+    offset: int = Field(default=0, ge=0, le=10_000)
+    canal_publicitario: str | None = Field(default=None, max_length=120)
+    activo: bool | None = Field(default=None)
+    search: str | None = Field(default=None, max_length=120)
+
+
+class WhatsAppAtribucionRulePayload(BaseModel):
+    """Regla de atribución de publicidad por frase para WhatsApp inbound."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    nombre_regla: str = Field(..., min_length=2, max_length=200)
+    canal_publicitario: str = Field(..., min_length=2, max_length=120)
+    frase_objetivo: str = Field(..., min_length=1, max_length=600)
+    tipo_match: Literal["exacta", "contiene", "regex"] = Field(default="contiene")
+    campana_publicitaria: str | None = Field(default=None, max_length=200)
+    adset: str | None = Field(default=None, max_length=200)
+    anuncio: str | None = Field(default=None, max_length=200)
+    prioridad: int = Field(default=100, ge=1, le=100_000)
+    activo: bool = Field(default=True)
+    metadata: dict[str, Any] | None = Field(default=None)
+
+
+class WhatsAppAtribucionRuleUpdatePayload(BaseModel):
+    """Campos editables de una regla de atribución de WhatsApp."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    nombre_regla: str | None = Field(default=None, min_length=2, max_length=200)
+    canal_publicitario: str | None = Field(default=None, min_length=2, max_length=120)
+    frase_objetivo: str | None = Field(default=None, min_length=1, max_length=600)
+    tipo_match: Literal["exacta", "contiene", "regex"] | None = Field(default=None)
+    campana_publicitaria: str | None = Field(default=None, max_length=200)
+    adset: str | None = Field(default=None, max_length=200)
+    anuncio: str | None = Field(default=None, max_length=200)
+    prioridad: int | None = Field(default=None, ge=1, le=100_000)
+    activo: bool | None = Field(default=None)
+    metadata: dict[str, Any] | None = Field(default=None)
+
+    @model_validator(mode="after")
+    def _ensure_changes(self) -> "WhatsAppAtribucionRuleUpdatePayload":
+        if not self.model_dump(exclude_unset=True):
+            raise ValueError("whatsapp_atribucion_rule_update_required")
+        return self
+
+
+class WhatsAppAtribucionRuleSimulatePayload(BaseModel):
+    """Frase de prueba para simular matching contra reglas guardadas."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    frase: str = Field(..., min_length=1, max_length=800)
+    include_inactive: bool = Field(default=False)
 
 
 class ProspectoAuditEntryResponse(BaseModel):
@@ -4630,6 +4692,35 @@ def _build_contact_template_payload(
     if metadata_requested:
         metadata_value = data.get("metadata") or {}
         payload["metadata"] = metadata_value if isinstance(metadata_value, dict) else {}
+    return payload
+
+
+def _build_whatsapp_atribucion_rule_payload(
+    data: dict[str, Any],
+    *,
+    allow_null_keys: set[str] | None = None,
+) -> dict[str, Any]:
+    payload: dict[str, Any] = {}
+    allow_null = allow_null_keys or set()
+    for key, value in data.items():
+        if value is None:
+            if key in allow_null:
+                payload[key] = None
+            continue
+        if isinstance(value, str):
+            trimmed = value.strip()
+            if not trimmed:
+                if key in allow_null:
+                    payload[key] = None
+                continue
+            payload[key] = trimmed
+            continue
+        payload[key] = value
+
+    if "metadata" not in payload:
+        payload["metadata"] = {}
+    elif not isinstance(payload.get("metadata"), dict):
+        payload["metadata"] = {}
     return payload
 
 
@@ -9873,11 +9964,13 @@ async def get_inbox_threads(
     offset: Annotated[int, Query(ge=0)] = 0,
     message_limit: Annotated[int, Query(ge=1, le=50)] = 20,
 ) -> list[CRMInboxThread]:
+    source_requested = _clean_text(source)
+    source_for_repo = None if source_requested == "publicidad_whatsapp" else source
     start = time.perf_counter()
     rows = await repo.inbox_threads(
         usuario_token=user_token,
         estado=estado,
-        source=source,
+        source=source_for_repo,
         channel=channel,
         batch_id=batch_id,
         campana_id=campana_id,
@@ -9891,7 +9984,7 @@ async def get_inbox_threads(
         "duration_ms": round(duration_ms, 2),
         "rows": len(rows),
         "estado": estado,
-        "source": source,
+        "source": source_requested,
         "channel": channel,
         "has_batch": bool(batch_id),
         "has_campana": bool(campana_id),
@@ -10084,6 +10177,26 @@ async def get_inbox_threads(
             if template_slug_value:
                 template_label_by_slug[template_slug_value.lower()] = template_label
 
+    conversation_ids = [
+        _clean_text(row.get("conversacion_id"))
+        for row in rows
+        if _clean_text(row.get("conversacion_id"))
+    ]
+    wa_atribucion_by_conversation: dict[str, dict[str, Any]] = {}
+    if conversation_ids:
+        try:
+            wa_atribucion_rows = await repo.worker_list_whatsapp_atribucion_events_by_conversations(
+                organizacion_id=organizacion_id,
+                conversation_ids=conversation_ids,
+            )
+        except CRMRepositoryError:
+            wa_atribucion_rows = []
+        for event_row in wa_atribucion_rows:
+            conversation_id_value = _clean_text(event_row.get("conversacion_id"))
+            if not conversation_id_value or conversation_id_value in wa_atribucion_by_conversation:
+                continue
+            wa_atribucion_by_conversation[conversation_id_value] = event_row
+
     enriched_rows: list[dict[str, Any]] = []
     for row in rows:
         row_payload = dict(row)
@@ -10145,11 +10258,34 @@ async def get_inbox_threads(
         elif resolved_template_id:
             row_payload["template_label"] = f"Plantilla {resolved_template_id[:8]}"
         current_source = _clean_text(row_payload.get("source"))
+        conversation_attribution = (
+            wa_atribucion_by_conversation.get(conversacion_value or "")
+            if conversacion_value
+            else None
+        )
+        if isinstance(conversation_attribution, dict):
+            if not current_source or current_source in {"prospeccion", "whatsapp"}:
+                row_payload["source"] = "publicidad_whatsapp"
+            row_payload["source_detail"] = {
+                "canal_publicitario": _clean_text(conversation_attribution.get("canal_publicitario")),
+                "campana_publicitaria": _clean_text(conversation_attribution.get("campana_publicitaria")),
+                "adset": _clean_text(conversation_attribution.get("adset")),
+                "anuncio": _clean_text(conversation_attribution.get("anuncio")),
+                "regla_id": _clean_text(conversation_attribution.get("regla_id")),
+                "atribuido_en": _clean_text(conversation_attribution.get("creado_en")),
+            }
+            current_source = _clean_text(row_payload.get("source"))
         if not current_source and (batch_value or campana_value or resolved_template_id or resolved_template_slug):
             row_payload["source"] = "prospeccion"
 
         enriched_rows.append(row_payload)
 
+    if source_requested == "publicidad_whatsapp":
+        return [
+            CRMInboxThread.model_validate(row)
+            for row in enriched_rows
+            if _clean_text(row.get("source")) == "publicidad_whatsapp"
+        ]
     return [CRMInboxThread.model_validate(row) for row in enriched_rows]
 
 
@@ -13757,6 +13893,140 @@ async def actualizar_contacto_suppression(
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     return {"ok": True, "suppression": row}
+
+
+@router.get("/prospeccion/whatsapp/atribucion/reglas")
+async def listar_whatsapp_atribucion_reglas(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    _: str = Depends(require_permission("ejecutar_busquedas")),
+    user_token: str = Depends(require_user_token),
+    params: WhatsAppAtribucionRuleQuery = Depends(),
+) -> dict[str, Any]:
+    """Lista reglas de atribución de publicidad por frase para WhatsApp."""
+
+    try:
+        rows, total = await repo.list_whatsapp_atribucion_reglas(
+            usuario_token=user_token,
+            limit=params.limit,
+            offset=params.offset,
+            canal_publicitario=_clean_text(params.canal_publicitario),
+            activo=params.activo,
+            search=params.search,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return {
+        "ok": True,
+        "items": rows,
+        "total": total,
+        "limit": params.limit,
+        "offset": params.offset,
+    }
+
+
+@router.post("/prospeccion/whatsapp/atribucion/reglas")
+async def crear_whatsapp_atribucion_regla(
+    *,
+    payload: WhatsAppAtribucionRulePayload,
+    repo: CRMRepository = Depends(get_repository),
+    _: str = Depends(require_permission("ejecutar_busquedas")),
+    user_token: str = Depends(require_user_token),
+) -> dict[str, Any]:
+    """Crea una regla de atribución de WhatsApp por frase semilla."""
+
+    body = _build_whatsapp_atribucion_rule_payload(payload.model_dump(), allow_null_keys={"campana_publicitaria", "adset", "anuncio"})
+    try:
+        row = await repo.create_whatsapp_atribucion_regla(
+            usuario_token=user_token,
+            payload=body,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return {"ok": True, "regla": row}
+
+
+@router.patch("/prospeccion/whatsapp/atribucion/reglas/{regla_id}")
+async def actualizar_whatsapp_atribucion_regla(
+    *,
+    regla_id: UUID,
+    payload: WhatsAppAtribucionRuleUpdatePayload,
+    repo: CRMRepository = Depends(get_repository),
+    _: str = Depends(require_permission("ejecutar_busquedas")),
+    user_token: str = Depends(require_user_token),
+) -> dict[str, Any]:
+    """Actualiza una regla de atribución de WhatsApp por frase semilla."""
+
+    body = _build_whatsapp_atribucion_rule_payload(
+        payload.model_dump(exclude_unset=True),
+        allow_null_keys={"campana_publicitaria", "adset", "anuncio"},
+    )
+    try:
+        row = await repo.update_whatsapp_atribucion_regla(
+            usuario_token=user_token,
+            regla_id=regla_id,
+            payload=body,
+        )
+    except CRMRepositoryError as exc:
+        if "whatsapp_atribucion_regla_not_found" in str(exc):
+            raise HTTPException(status_code=404, detail="whatsapp_atribucion_regla_not_found") from exc
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return {"ok": True, "regla": row}
+
+
+@router.delete("/prospeccion/whatsapp/atribucion/reglas/{regla_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def eliminar_whatsapp_atribucion_regla(
+    *,
+    regla_id: UUID,
+    repo: CRMRepository = Depends(get_repository),
+    _: str = Depends(require_permission("ejecutar_busquedas")),
+    user_token: str = Depends(require_user_token),
+) -> Response:
+    """Elimina una regla de atribución de WhatsApp por frase semilla."""
+
+    try:
+        await repo.delete_whatsapp_atribucion_regla(
+            usuario_token=user_token,
+            regla_id=regla_id,
+        )
+    except CRMRepositoryError as exc:
+        if "whatsapp_atribucion_regla_not_found" in str(exc):
+            raise HTTPException(status_code=404, detail="whatsapp_atribucion_regla_not_found") from exc
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.post("/prospeccion/whatsapp/atribucion/reglas/simular")
+async def simular_whatsapp_atribucion_regla(
+    *,
+    payload: WhatsAppAtribucionRuleSimulatePayload,
+    repo: CRMRepository = Depends(get_repository),
+    _: str = Depends(require_permission("ejecutar_busquedas")),
+    user_token: str = Depends(require_user_token),
+) -> dict[str, Any]:
+    """Simula qué regla de WhatsApp haría match para una frase dada."""
+
+    try:
+        rules, _ = await repo.list_whatsapp_atribucion_reglas(
+            usuario_token=user_token,
+            limit=500,
+            offset=0,
+            activo=None if payload.include_inactive else True,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    matched_rule, applied_match, normalized = resolve_first_matching_rule(
+        incoming_text=payload.frase,
+        rules=rules,
+    )
+    return {
+        "ok": True,
+        "frase_normalizada": normalized,
+        "match": bool(matched_rule),
+        "applied_match_type": applied_match,
+        "regla": matched_rule,
+    }
 
 
 @router.get("/prospeccion/contacto/templates")

@@ -367,6 +367,48 @@ export type ContactoTemplate = {
   metadata?: Record<string, unknown> | null
 }
 
+export type WhatsAppAtribucionTipoMatch = "exacta" | "contiene" | "regex"
+
+export type WhatsAppAtribucionRule = {
+  id: string
+  nombre_regla: string
+  canal_publicitario: string
+  frase_objetivo: string
+  frase_normalizada?: string | null
+  tipo_match: WhatsAppAtribucionTipoMatch
+  campana_publicitaria?: string | null
+  adset?: string | null
+  anuncio?: string | null
+  prioridad: number
+  activo: boolean
+  metadata?: Record<string, unknown> | null
+  creado_en?: string | null
+  actualizado_en?: string | null
+}
+
+export type WhatsAppAtribucionRuleInput = {
+  nombre_regla: string
+  canal_publicitario: string
+  frase_objetivo: string
+  tipo_match: WhatsAppAtribucionTipoMatch
+  campana_publicitaria?: string | null
+  adset?: string | null
+  anuncio?: string | null
+  prioridad?: number
+  activo?: boolean
+  metadata?: Record<string, unknown> | null
+}
+
+export type WhatsAppAtribucionRuleUpdateInput = Partial<WhatsAppAtribucionRuleInput>
+
+export type WhatsAppAtribucionSimulation = {
+  ok: boolean
+  match: boolean
+  frase_normalizada: string
+  applied_match_type?: WhatsAppAtribucionTipoMatch | null
+  regla?: WhatsAppAtribucionRule | null
+}
+
 export type BrevoCatalogTemplate = {
   id: number
   name: string
@@ -732,6 +774,68 @@ export async function getProspeccionCampanaAtribucion(params: { campana_id?: str
     url.searchParams.set("limit", String(params.limit))
   }
   return requestJson<{ ok: boolean; items: ProspeccionCampanaAtribucionItem[] }>(url.toString())
+}
+
+export async function listWhatsAppAtribucionReglas(params: {
+  limit?: number
+  offset?: number
+  canal_publicitario?: string
+  activo?: boolean
+  search?: string
+} = {}) {
+  const url = buildClientUrl("/api/prospeccion/whatsapp/atribucion/reglas")
+  if (typeof params.limit === "number") {
+    url.searchParams.set("limit", String(params.limit))
+  }
+  if (typeof params.offset === "number") {
+    url.searchParams.set("offset", String(params.offset))
+  }
+  if (params.canal_publicitario?.trim()) {
+    url.searchParams.set("canal_publicitario", params.canal_publicitario.trim())
+  }
+  if (typeof params.activo === "boolean") {
+    url.searchParams.set("activo", params.activo ? "true" : "false")
+  }
+  if (params.search?.trim()) {
+    url.searchParams.set("search", params.search.trim())
+  }
+  return requestJson<{
+    ok: boolean
+    items: WhatsAppAtribucionRule[]
+    total: number
+    limit: number
+    offset: number
+  }>(url.toString())
+}
+
+export async function createWhatsAppAtribucionRegla(payload: WhatsAppAtribucionRuleInput) {
+  return requestJson<{ ok: boolean; regla: WhatsAppAtribucionRule }>("/api/prospeccion/whatsapp/atribucion/reglas", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  })
+}
+
+export async function updateWhatsAppAtribucionRegla(reglaId: string, payload: WhatsAppAtribucionRuleUpdateInput) {
+  return requestJson<{ ok: boolean; regla: WhatsAppAtribucionRule }>(
+    `/api/prospeccion/whatsapp/atribucion/reglas/${reglaId}`,
+    {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    }
+  )
+}
+
+export async function deleteWhatsAppAtribucionRegla(reglaId: string) {
+  await requestJson(`/api/prospeccion/whatsapp/atribucion/reglas/${reglaId}`, {
+    method: "DELETE",
+  })
+}
+
+export async function simulateWhatsAppAtribucionRegla(payload: { frase: string; include_inactive?: boolean }) {
+  return requestJson<WhatsAppAtribucionSimulation>("/api/prospeccion/whatsapp/atribucion/reglas/simular", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  })
 }
 
 export async function getProspeccionCampanaPreset(campanaId: string) {

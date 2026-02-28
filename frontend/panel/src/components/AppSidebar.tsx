@@ -113,6 +113,7 @@ const NAVIGATION: {
         { title: "Prospectos", url: "/prospeccion/prospectos", permission: "busquedas.run" },
         { title: "Contactos", url: "/prospeccion/contactos", permission: "contacts.read" },
         { title: "Campañas", url: "/prospeccion/campanas", permission: "campaigns.view" },
+        { title: "Atribución WhatsApp", url: "/prospeccion/whatsapp-atribucion", permission: "busquedas.run" },
         { title: "Mensajes automatizados", url: "/prospeccion/mensajes", permission: "messages.read" },
       ],
     },

@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any, Mapping
 from uuid import UUID
 
@@ -25,6 +25,7 @@ from app.core.logging import get_logger, log_event
 from app.repositories.crm import CRMRepository, CRMRepositoryError
 from app.services import conversation_summary, leads_geo, storage
 from app.services import openai as openai_service
+from app.services.prospeccion_whatsapp_atribucion import resolve_first_matching_rule
 from app.services.context_formatter import build_crm_context_lines
 from app.services import tenant_runtime
 from app.services import twilio as twilio_service
@@ -89,6 +90,7 @@ _DETAILED_REPLY_HINTS: tuple[str, ...] = (
 _DEFAULT_WHATSAPP_MAX_CHARS = 280
 _MAX_PROSPECCION_REPLY_PREVIEW_CHARS = 500
 _PROSPECCION_REPLY_ENVIO_SOURCE_STATES = {"pendiente", "procesando", "enviado", "entregado", "leido", "completado"}
+_WHATSAPP_ATTRIB_CONTACT_DEDUP_MINUTES = 60 * 24
 
 
 @dataclass(slots=True)
@@ -383,6 +385,182 @@ async def _resolve_prospeccion_prospecto_id(
     return None
 
 
+async def _maybe_apply_publicidad_whatsapp_attribution(
+    *,
+    repo: CRMRepository,
+    organizacion_id: UUID,
+    conversation_id: str,
+    contact_id: str,
+    message: schemas.WhatsAppIncomingMessage,
+) -> dict[str, Any] | None:
+    """Evalúa reglas de atribución publicitaria y persiste evento en primer inbound."""
+
+    phrase_original = _trim_text(message.body)
+    if not phrase_original:
+        return None
+
+    try:
+        recent_messages = await storage.fetch_recent_messages(conversation_id=conversation_id, limit=2)
+    except StorageError:
+        recent_messages = []
+    if len(recent_messages) > 1:
+        return None
+
+    try:
+        contact_uuid = UUID(contact_id)
+    except (TypeError, ValueError):
+        return None
+
+    try:
+        active_rules = await repo.list_active_whatsapp_atribucion_reglas(organizacion_id=organizacion_id)
+    except CRMRepositoryError as exc:
+        log_event(
+            logger,
+            "whatsapp.publicidad_atribucion_rules_fetch_failed",
+            conversation_id=conversation_id,
+            contact_id=contact_id,
+            error=str(exc),
+        )
+        return None
+    if not active_rules:
+        return None
+
+    matched_rule, applied_match_type, normalized_phrase = resolve_first_matching_rule(
+        incoming_text=phrase_original,
+        rules=active_rules,
+    )
+    if not matched_rule:
+        log_event(
+            logger,
+            "whatsapp.publicidad_atribucion_no_match",
+            conversation_id=conversation_id,
+            contact_id=contact_id,
+            phrase=normalized_phrase,
+        )
+        return None
+
+    since_iso = (datetime.now(timezone.utc) - timedelta(minutes=_WHATSAPP_ATTRIB_CONTACT_DEDUP_MINUTES)).isoformat()
+    try:
+        recent_event = await repo.worker_get_recent_whatsapp_atribucion_event_for_contact(
+            organizacion_id=organizacion_id,
+            contacto_id=contact_uuid,
+            since_iso=since_iso,
+        )
+    except CRMRepositoryError as exc:
+        log_event(
+            logger,
+            "whatsapp.publicidad_atribucion_recent_lookup_failed",
+            conversation_id=conversation_id,
+            contact_id=contact_id,
+            error=str(exc),
+        )
+        recent_event = None
+    if isinstance(recent_event, dict):
+        recent_conversation_id = _trim_text(recent_event.get("conversacion_id"))
+        if recent_conversation_id and recent_conversation_id != conversation_id:
+            log_event(
+                logger,
+                "whatsapp.publicidad_atribucion_skipped_recent_contact_window",
+                conversation_id=conversation_id,
+                contact_id=contact_id,
+                recent_conversation_id=recent_conversation_id,
+                window_minutes=_WHATSAPP_ATTRIB_CONTACT_DEDUP_MINUTES,
+            )
+            return None
+
+    event_payload = {
+        "organizacion_id": str(organizacion_id),
+        "regla_id": _trim_text(matched_rule.get("id")),
+        "conversacion_id": conversation_id,
+        "contacto_id": contact_id,
+        "mensaje_id": _trim_text(message.message_sid),
+        "frase_original": phrase_original,
+        "frase_normalizada": normalized_phrase,
+        "tipo_match": applied_match_type,
+        "canal_publicitario": _trim_text(matched_rule.get("canal_publicitario")),
+        "campana_publicitaria": _trim_text(matched_rule.get("campana_publicitaria")),
+        "adset": _trim_text(matched_rule.get("adset")),
+        "anuncio": _trim_text(matched_rule.get("anuncio")),
+        "metadata": {
+            "source": "whatsapp_inbound",
+            "rule_name": _trim_text(matched_rule.get("nombre_regla")),
+            "rule_priority": matched_rule.get("prioridad"),
+        },
+    }
+    event_payload = {k: v for k, v in event_payload.items() if v is not None}
+    try:
+        created_event = await repo.worker_create_whatsapp_atribucion_event(
+            organizacion_id=organizacion_id,
+            payload=event_payload,
+        )
+    except CRMRepositoryError as exc:
+        log_event(
+            logger,
+            "whatsapp.publicidad_atribucion_event_create_failed",
+            conversation_id=conversation_id,
+            contact_id=contact_id,
+            error=str(exc),
+        )
+        return None
+    if not created_event:
+        return None
+
+    try:
+        contact_row = await repo.get_contact_by_id(contact_id=contact_id)
+    except CRMRepositoryError as exc:
+        log_event(
+            logger,
+            "whatsapp.publicidad_atribucion_contact_fetch_failed",
+            conversation_id=conversation_id,
+            contact_id=contact_id,
+            error=str(exc),
+        )
+        contact_row = None
+    if isinstance(contact_row, dict):
+        contact_data = contact_row.get("contacto_datos") if isinstance(contact_row.get("contacto_datos"), dict) else {}
+        patched_contact_data = {
+            **contact_data,
+            "publicidad_whatsapp_atribucion": {
+                "source": "publicidad_whatsapp",
+                "regla_id": _trim_text(created_event.get("regla_id")) or _trim_text(matched_rule.get("id")),
+                "regla_nombre": _trim_text(matched_rule.get("nombre_regla")),
+                "canal_publicitario": event_payload.get("canal_publicitario"),
+                "campana_publicitaria": event_payload.get("campana_publicitaria"),
+                "adset": event_payload.get("adset"),
+                "anuncio": event_payload.get("anuncio"),
+                "tipo_match": applied_match_type,
+                "frase_normalizada": normalized_phrase,
+                "conversacion_id": conversation_id,
+                "atribuido_en": _trim_text(created_event.get("creado_en")) or datetime.now(timezone.utc).isoformat(),
+            },
+        }
+        patch_payload: dict[str, Any] = {"contacto_datos": patched_contact_data}
+        current_origen = _trim_text(contact_row.get("origen"))
+        if (current_origen or "").lower() in {"", "whatsapp", "prospeccion"}:
+            patch_payload["origen"] = "publicidad_whatsapp"
+        try:
+            await repo.update_contact_by_id(contact_id=contact_id, patch=patch_payload)
+        except CRMRepositoryError as exc:
+            log_event(
+                logger,
+                "whatsapp.publicidad_atribucion_contact_update_failed",
+                conversation_id=conversation_id,
+                contact_id=contact_id,
+                error=str(exc),
+            )
+
+    log_event(
+        logger,
+        "whatsapp.publicidad_atribucion_applied",
+        conversation_id=conversation_id,
+        contact_id=contact_id,
+        regla_id=_trim_text(matched_rule.get("id")),
+        canal_publicitario=event_payload.get("canal_publicitario"),
+        tipo_match=applied_match_type,
+    )
+    return created_event
+
+
 def _looks_like_booking_confirmation(text: str) -> bool:
     normalized = str(text or "").strip().lower()
     if not normalized:
@@ -585,6 +763,13 @@ async def handle_incoming_message(
     if repo:
         is_prospeccion_context = await _sync_inbound_to_prospeccion_log(
             repo=repo,
+            contact_id=contact_id,
+            message=message,
+        )
+        await _maybe_apply_publicidad_whatsapp_attribution(
+            repo=repo,
+            organizacion_id=org_uuid,
+            conversation_id=conversation_id,
             contact_id=contact_id,
             message=message,
         )
