@@ -3440,7 +3440,7 @@ async def _run_assistant_turn(
         }
     )
     wants_detail = _wants_detailed_reply(user_message.content)
-    max_output_tokens = 900 if wants_detail else 240
+    max_output_tokens = 900 if wants_detail else 500
     request_kwargs: dict[str, Any] = {
         "input": base_input,
         "store": True,

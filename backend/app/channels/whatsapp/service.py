@@ -87,7 +87,7 @@ _DETAILED_REPLY_HINTS: tuple[str, ...] = (
     "cotización",
     "cotizacion",
 )
-_DEFAULT_WHATSAPP_MAX_CHARS = 280
+_DEFAULT_WHATSAPP_MAX_CHARS = 500
 _MAX_PROSPECCION_REPLY_PREVIEW_CHARS = 500
 _PROSPECCION_REPLY_ENVIO_SOURCE_STATES = {"pendiente", "procesando", "enviado", "entregado", "leido", "completado"}
 _WHATSAPP_ATTRIB_CONTACT_DEDUP_MINUTES = 60 * 24
@@ -1737,7 +1737,7 @@ async def _generate_assistant_reply(
                         "type": "input_text",
                         "text": (
                             "Redacta SOLO el mensaje final para WhatsApp al último usuario. "
-                            "Máximo 280 caracteres, 1-3 frases, directo, sin listas largas."
+                            "Máximo 500 caracteres, 1-3 frases, directo, sin listas largas."
                         ),
                     }
                 ],
