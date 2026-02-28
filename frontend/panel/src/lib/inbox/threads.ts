@@ -13,6 +13,10 @@ export function mapThreads(payload?: InboxThreadRow[] | null): InboxThread[] {
       contactoTelefono: row.contacto_telefono,
       canal: row.canal ?? "webchat",
       source: row.source ?? null,
+      sourceDetail:
+        row.source_detail && typeof row.source_detail === "object" && !Array.isArray(row.source_detail)
+          ? row.source_detail
+          : null,
       batchId: row.batch_id ?? null,
       batchLabel: row.batch_label ?? null,
       campanaId: row.campana_id ?? null,

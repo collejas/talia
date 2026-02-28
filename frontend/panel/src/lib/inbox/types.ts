@@ -19,6 +19,7 @@ export type InboxThreadRow = {
   contacto_telefono: string | null;
   canal: string | null;
   source?: string | null;
+  source_detail?: Record<string, unknown> | null;
   batch_id?: string | null;
   batch_label?: string | null;
   campana_id?: string | null;
@@ -87,6 +88,7 @@ export type InboxThread = {
   contactoTelefono: string | null;
   canal: string;
   source: string | null;
+  sourceDetail: Record<string, unknown> | null;
   batchId: string | null;
   batchLabel: string | null;
   campanaId: string | null;

@@ -32,6 +32,7 @@ def _resolve_match_type(value: Any) -> str:
 
 def match_phrase_against_rule(
     *,
+    incoming_raw: str,
     incoming_normalized: str,
     rule: dict[str, Any],
 ) -> tuple[bool, str]:
@@ -51,11 +52,25 @@ def match_phrase_against_rule(
     if match_type == "contiene":
         return target_normalized in incoming_normalized, match_type
 
+    # Compatibilidad robusta:
+    # 1) intenta regex contra texto original entrante,
+    # 2) si no matchea, intenta regex normalizado contra texto normalizado.
     try:
-        pattern = re.compile(phrase_target, flags=re.IGNORECASE)
+        pattern_raw = re.compile(phrase_target, flags=re.IGNORECASE)
     except re.error:
         return False, "regex"
-    return bool(pattern.search(incoming_normalized)), "regex"
+    if pattern_raw.search(str(incoming_raw or "")):
+        return True, "regex"
+    pattern_normalized_source = normalize_whatsapp_phrase(
+        _safe_text(rule.get("frase_normalizada")) or phrase_target
+    )
+    if not pattern_normalized_source:
+        return False, "regex"
+    try:
+        pattern_normalized = re.compile(pattern_normalized_source, flags=re.IGNORECASE)
+    except re.error:
+        return False, "regex"
+    return bool(pattern_normalized.search(incoming_normalized)), "regex"
 
 
 def resolve_first_matching_rule(
@@ -75,6 +90,7 @@ def resolve_first_matching_rule(
         if rule.get("activo") is False:
             continue
         matched, applied_match = match_phrase_against_rule(
+            incoming_raw=incoming_text,
             incoming_normalized=normalized_incoming,
             rule=rule,
         )

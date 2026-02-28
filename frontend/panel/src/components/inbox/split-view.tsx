@@ -44,6 +44,61 @@ function getChannelBadgeClass(channel: string | null | undefined): string {
   return CHANNEL_BADGE_STYLES[key] ?? CHANNEL_BADGE_STYLES.default;
 }
 
+function isProspeccionSource(source: string | null | undefined): boolean {
+  const normalized = (source ?? "").trim().toLowerCase();
+  if (!normalized) return false;
+  return normalized.includes("prospeccion");
+}
+
+function getSourceBadge(
+  source: string | null | undefined,
+  channel: string | null | undefined,
+): { label: string; variant: "secondary" | "outline" } | null {
+  const normalized = (source ?? "").trim().toLowerCase();
+  if (normalized === "publicidad_whatsapp") {
+    return { label: "Publicidad WhatsApp", variant: "secondary" };
+  }
+  if (isProspeccionSource(normalized)) {
+    return { label: "Prospección", variant: "secondary" };
+  }
+  if ((channel ?? "").trim().toLowerCase() === "correo") {
+    return { label: "Correo general", variant: "outline" };
+  }
+  return null;
+}
+
+function getSourceDetailText(
+  thread: InboxThread,
+): { reglaNombre: string | null; canalPublicitario: string | null; campanaPublicitaria: string | null } {
+  const detail =
+    thread.sourceDetail && typeof thread.sourceDetail === "object" && !Array.isArray(thread.sourceDetail)
+      ? (thread.sourceDetail as Record<string, unknown>)
+      : null;
+  if (!detail) {
+    return { reglaNombre: null, canalPublicitario: null, campanaPublicitaria: null };
+  }
+  const reglaNombreRaw = detail["regla_nombre"];
+  const canalRaw = detail["canal_publicitario"];
+  const campanaRaw = detail["campana_publicitaria"];
+  return {
+    reglaNombre:
+      typeof reglaNombreRaw === "string" && reglaNombreRaw.trim().length ? reglaNombreRaw.trim() : null,
+    canalPublicitario: typeof canalRaw === "string" && canalRaw.trim().length ? canalRaw.trim() : null,
+    campanaPublicitaria:
+      typeof campanaRaw === "string" && campanaRaw.trim().length ? campanaRaw.trim() : null,
+  };
+}
+
+function getAttributionBadgeClass(kind: "regla" | "canal" | "campana"): string {
+  if (kind === "regla") {
+    return "border-sky-300 bg-sky-50 text-sky-800";
+  }
+  if (kind === "canal") {
+    return "border-emerald-300 bg-emerald-50 text-emerald-800";
+  }
+  return "border-amber-300 bg-amber-50 text-amber-800";
+}
+
 const SERVER_SHORT_TIME_FORMAT = new Intl.DateTimeFormat("es-MX", {
   hour: "2-digit",
   minute: "2-digit",
@@ -779,10 +834,10 @@ export function InboxSplitView({
         if (normalizedSourceFilter === "correo_general") {
           const threadChannel = (thread.canal ?? "").toLowerCase();
           const threadSource = (thread.source ?? "").toLowerCase();
-          return threadChannel === "correo" && threadSource !== "prospeccion";
+          return threadChannel === "correo" && !isProspeccionSource(threadSource);
         }
         if (normalizedSourceFilter === "operativo") {
-          return (thread.source ?? "").toLowerCase() !== "prospeccion";
+          return !isProspeccionSource(thread.source);
         }
         return (thread.source ?? "").toLowerCase() === normalizedSourceFilter;
       })
@@ -840,6 +895,12 @@ export function InboxSplitView({
     const inAll = threadItems.find((thread) => thread.id === selectedId);
     return inAll ?? filteredThreads[0] ?? null;
   }, [selectedId, filteredThreads, threadItems]);
+  const selectedSourceBadge = selectedThread
+    ? getSourceBadge(selectedThread.source, selectedThread.canal)
+    : null;
+  const selectedSourceDetail = selectedThread
+    ? getSourceDetailText(selectedThread)
+    : { reglaNombre: null, canalPublicitario: null, campanaPublicitaria: null };
 
   React.useEffect(() => {
     const initialMessages = selectedThread?.messages ?? [];
@@ -1408,6 +1469,8 @@ export function InboxSplitView({
                 const restartSequence = Math.max(1, thread.restartSequence ?? 1);
                 const isRestart = restartSequence > 1;
                 const channelBadgeClass = getChannelBadgeClass(thread.canal);
+                const sourceBadge = getSourceBadge(thread.source, thread.canal);
+                const sourceDetailText = getSourceDetailText(thread);
                 return (
                   <li key={thread.id}>
                     <button
@@ -1436,13 +1499,36 @@ export function InboxSplitView({
                         <Badge variant="outline" className={`uppercase ${channelBadgeClass} ${compactKpiTagClass}`}>
                           {thread.canal}
                         </Badge>
-                        {thread.source?.toLowerCase() === "prospeccion" ? (
-                          <Badge variant="secondary" className={`uppercase ${compactKpiTagClass}`}>
-                            Prospección
+                        {sourceBadge ? (
+                          <Badge
+                            variant={sourceBadge.variant}
+                            className={`uppercase ${compactKpiTagClass}`}
+                          >
+                            {sourceBadge.label}
                           </Badge>
-                        ) : thread.canal?.toLowerCase() === "correo" ? (
-                          <Badge variant="outline" className={`uppercase ${compactKpiTagClass}`}>
-                            Correo general
+                        ) : null}
+                        {sourceBadge?.label === "Publicidad WhatsApp" && sourceDetailText.reglaNombre ? (
+                          <Badge
+                            variant="outline"
+                            className={`max-w-[200px] truncate ${compactKpiTagClass} ${getAttributionBadgeClass("regla")}`}
+                          >
+                            {sourceDetailText.reglaNombre}
+                          </Badge>
+                        ) : null}
+                        {sourceBadge?.label === "Publicidad WhatsApp" && sourceDetailText.canalPublicitario ? (
+                          <Badge
+                            variant="outline"
+                            className={`max-w-[180px] truncate ${compactKpiTagClass} ${getAttributionBadgeClass("canal")}`}
+                          >
+                            {sourceDetailText.canalPublicitario}
+                          </Badge>
+                        ) : null}
+                        {sourceBadge?.label === "Publicidad WhatsApp" && sourceDetailText.campanaPublicitaria ? (
+                          <Badge
+                            variant="outline"
+                            className={`max-w-[180px] truncate ${compactKpiTagClass} ${getAttributionBadgeClass("campana")}`}
+                          >
+                            {sourceDetailText.campanaPublicitaria}
                           </Badge>
                         ) : null}
                         {thread.campanaId ? (
@@ -1504,13 +1590,36 @@ export function InboxSplitView({
                 >
                   {selectedThread.canal}
                 </span>
-                {selectedThread.source?.toLowerCase() === "prospeccion" ? (
-                  <Badge variant="secondary" className={`uppercase ${compactKpiTagClass}`}>
-                    Prospección
+                {selectedSourceBadge ? (
+                  <Badge
+                    variant={selectedSourceBadge.variant}
+                    className={`uppercase ${compactKpiTagClass}`}
+                  >
+                    {selectedSourceBadge.label}
                   </Badge>
-                ) : selectedThread.canal?.toLowerCase() === "correo" ? (
-                  <Badge variant="outline" className={`uppercase ${compactKpiTagClass}`}>
-                    Correo general
+                ) : null}
+                {selectedSourceBadge?.label === "Publicidad WhatsApp" && selectedSourceDetail.reglaNombre ? (
+                  <Badge
+                    variant="outline"
+                    className={`max-w-[220px] truncate ${compactKpiTagClass} ${getAttributionBadgeClass("regla")}`}
+                  >
+                    {selectedSourceDetail.reglaNombre}
+                  </Badge>
+                ) : null}
+                {selectedSourceBadge?.label === "Publicidad WhatsApp" && selectedSourceDetail.canalPublicitario ? (
+                  <Badge
+                    variant="outline"
+                    className={`max-w-[220px] truncate ${compactKpiTagClass} ${getAttributionBadgeClass("canal")}`}
+                  >
+                    {selectedSourceDetail.canalPublicitario}
+                  </Badge>
+                ) : null}
+                {selectedSourceBadge?.label === "Publicidad WhatsApp" && selectedSourceDetail.campanaPublicitaria ? (
+                  <Badge
+                    variant="outline"
+                    className={`max-w-[220px] truncate ${compactKpiTagClass} ${getAttributionBadgeClass("campana")}`}
+                  >
+                    {selectedSourceDetail.campanaPublicitaria}
                   </Badge>
                 ) : null}
                 {selectedThread.campanaId ? (

@@ -6234,6 +6234,7 @@ class CRMInboxThread(BaseModel):
     contacto_telefono: str | None = None
     canal: str | None = None
     source: str | None = None
+    source_detail: dict[str, Any] | None = None
     batch_id: UUID | None = None
     batch_label: str | None = None
     campana_id: UUID | None = None
@@ -10199,6 +10200,7 @@ async def get_inbox_threads(
         if _clean_text(row.get("conversacion_id"))
     ]
     wa_atribucion_by_conversation: dict[str, dict[str, Any]] = {}
+    wa_rule_ids: set[str] = set()
     if conversation_ids:
         try:
             wa_atribucion_rows = await repo.worker_list_whatsapp_atribucion_events_by_conversations(
@@ -10212,6 +10214,32 @@ async def get_inbox_threads(
             if not conversation_id_value or conversation_id_value in wa_atribucion_by_conversation:
                 continue
             wa_atribucion_by_conversation[conversation_id_value] = event_row
+            rule_id_value = _clean_text(event_row.get("regla_id"))
+            if rule_id_value:
+                wa_rule_ids.add(rule_id_value)
+
+    wa_rule_label_map: dict[str, str] = {}
+    wa_rule_channel_map: dict[str, str] = {}
+    if wa_rule_ids:
+        try:
+            wa_rules_rows, _ = await repo.list_whatsapp_atribucion_reglas(
+                usuario_token=user_token,
+                limit=500,
+                offset=0,
+                include_historial=True,
+            )
+        except CRMRepositoryError:
+            wa_rules_rows = []
+        for rule_row in wa_rules_rows:
+            rule_id_value = _clean_text(rule_row.get("id"))
+            if not rule_id_value or rule_id_value not in wa_rule_ids:
+                continue
+            rule_name = _clean_text(rule_row.get("nombre_regla"))
+            if rule_name:
+                wa_rule_label_map[rule_id_value] = rule_name
+            channel_name = _clean_text(rule_row.get("canal_publicitario"))
+            if channel_name:
+                wa_rule_channel_map[rule_id_value] = channel_name
 
     enriched_rows: list[dict[str, Any]] = []
     for row in rows:
@@ -10280,14 +10308,26 @@ async def get_inbox_threads(
             else None
         )
         if isinstance(conversation_attribution, dict):
-            if not current_source or current_source in {"prospeccion", "whatsapp"}:
+            if not current_source or current_source in {
+                "prospeccion",
+                "prospeccion_whatsapp",
+                "whatsapp",
+                "assistant",
+                "whatsapp_inbound",
+            }:
                 row_payload["source"] = "publicidad_whatsapp"
+            rule_id_value = _clean_text(conversation_attribution.get("regla_id"))
+            channel_publicitario = _clean_text(conversation_attribution.get("canal_publicitario"))
             row_payload["source_detail"] = {
-                "canal_publicitario": _clean_text(conversation_attribution.get("canal_publicitario")),
+                "canal_publicitario": (
+                    channel_publicitario
+                    or wa_rule_channel_map.get(rule_id_value or "")
+                ),
                 "campana_publicitaria": _clean_text(conversation_attribution.get("campana_publicitaria")),
                 "adset": _clean_text(conversation_attribution.get("adset")),
                 "anuncio": _clean_text(conversation_attribution.get("anuncio")),
-                "regla_id": _clean_text(conversation_attribution.get("regla_id")),
+                "regla_id": rule_id_value,
+                "regla_nombre": wa_rule_label_map.get(rule_id_value or ""),
                 "atribuido_en": _clean_text(conversation_attribution.get("creado_en")),
             }
             current_source = _clean_text(row_payload.get("source"))
