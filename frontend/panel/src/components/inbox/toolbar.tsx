@@ -29,6 +29,7 @@ const CHANNEL_FILTER_OPTIONS = [
 const SOURCE_FILTER_OPTIONS = [
   { id: "all", label: "Todos" },
   { id: "prospeccion", label: "Prospección" },
+  { id: "correo_general", label: "Correo general" },
   { id: "operativo", label: "Operativo" },
 ];
 

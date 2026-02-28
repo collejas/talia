@@ -738,6 +738,11 @@ export function InboxSplitView({
     return threadItems
       .filter((thread) => {
         if (!normalizedSourceFilter || normalizedSourceFilter === "all") return true;
+        if (normalizedSourceFilter === "correo_general") {
+          const threadChannel = (thread.canal ?? "").toLowerCase();
+          const threadSource = (thread.source ?? "").toLowerCase();
+          return threadChannel === "correo" && threadSource !== "prospeccion";
+        }
         if (normalizedSourceFilter === "operativo") {
           return (thread.source ?? "").toLowerCase() !== "prospeccion";
         }
@@ -866,8 +871,12 @@ export function InboxSplitView({
           limit: "25",
           message_limit: "20",
         });
-        if (sourceFilter && sourceFilter !== "all") {
-          params.set("source", sourceFilter);
+        const normalizedSource = sourceFilter ? sourceFilter.toLowerCase() : "";
+        if (normalizedSource && normalizedSource !== "all" && normalizedSource !== "correo_general") {
+          params.set("source", normalizedSource);
+        }
+        if (normalizedSource === "correo_general") {
+          params.set("channel", "correo");
         }
         if (channelFilter && channelFilter !== "all") {
           params.set("channel", channelFilter);
@@ -1343,6 +1352,10 @@ export function InboxSplitView({
                           <Badge variant="secondary" className="uppercase">
                             Prospección
                           </Badge>
+                        ) : thread.canal?.toLowerCase() === "correo" ? (
+                          <Badge variant="outline" className="uppercase">
+                            Correo general
+                          </Badge>
                         ) : null}
                         <Badge variant="outline" className={`uppercase ${channelBadgeClass}`}>
                           {thread.canal}
@@ -1400,6 +1413,10 @@ export function InboxSplitView({
                 {selectedThread.source?.toLowerCase() === "prospeccion" ? (
                   <Badge variant="secondary" className="uppercase">
                     Prospección
+                  </Badge>
+                ) : selectedThread.canal?.toLowerCase() === "correo" ? (
+                  <Badge variant="outline" className="uppercase">
+                    Correo general
                   </Badge>
                 ) : null}
                 {selectedThread.batchId ? (

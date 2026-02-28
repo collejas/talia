@@ -286,7 +286,7 @@ async def _record_unmatched_inbox_email(
     received_at = _clean_text(str(event.get("Date") or ""))
     message_data: dict[str, Any] = {
         "channel": "correo",
-        "source": "operativo",
+        "source": "correo_general",
         "action": "inbound_email",
         "sender_email": sender_email,
         "sender_name": sender_name,
