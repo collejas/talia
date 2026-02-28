@@ -1945,6 +1945,7 @@ class WhatsAppAtribucionRuleQuery(BaseModel):
     canal_publicitario: str | None = Field(default=None, max_length=120)
     activo: bool | None = Field(default=None)
     search: str | None = Field(default=None, max_length=120)
+    include_historial: bool = Field(default=False)
 
 
 class WhatsAppAtribucionRulePayload(BaseModel):
@@ -13928,6 +13929,7 @@ async def listar_whatsapp_atribucion_reglas(
             canal_publicitario=_clean_text(params.canal_publicitario),
             activo=params.activo,
             search=params.search,
+            include_historial=params.include_historial,
         )
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
@@ -13972,21 +13974,112 @@ async def actualizar_whatsapp_atribucion_regla(
 ) -> dict[str, Any]:
     """Actualiza una regla de atribución de WhatsApp por frase semilla."""
 
+    raw_updates = payload.model_dump(exclude_unset=True)
     body = _build_whatsapp_atribucion_rule_payload(
         payload.model_dump(exclude_unset=True),
         allow_null_keys={"campana_publicitaria", "adset", "anuncio"},
     )
     try:
-        row = await repo.update_whatsapp_atribucion_regla(
+        current_rule = await repo.get_whatsapp_atribucion_regla_by_id(
             usuario_token=user_token,
             regla_id=regla_id,
-            payload=body,
         )
     except CRMRepositoryError as exc:
-        if "whatsapp_atribucion_regla_not_found" in str(exc):
-            raise HTTPException(status_code=404, detail="whatsapp_atribucion_regla_not_found") from exc
         raise HTTPException(status_code=502, detail=str(exc)) from exc
-    return {"ok": True, "regla": row}
+    if not current_rule:
+        raise HTTPException(status_code=404, detail="whatsapp_atribucion_regla_not_found")
+
+    versioned_fields = {
+        "frase_objetivo",
+        "tipo_match",
+        "canal_publicitario",
+        "campana_publicitaria",
+        "adset",
+        "anuncio",
+        "prioridad",
+    }
+    requires_new_version = any(field in raw_updates for field in versioned_fields)
+    if not requires_new_version:
+        try:
+            row = await repo.update_whatsapp_atribucion_regla(
+                usuario_token=user_token,
+                regla_id=regla_id,
+                payload=body,
+            )
+        except CRMRepositoryError as exc:
+            if "whatsapp_atribucion_regla_not_found" in str(exc):
+                raise HTTPException(status_code=404, detail="whatsapp_atribucion_regla_not_found") from exc
+            raise HTTPException(status_code=502, detail=str(exc)) from exc
+        return {"ok": True, "regla": row, "versionado": False}
+
+    if current_rule.get("vigente_hasta") is not None:
+        raise HTTPException(status_code=409, detail="whatsapp_atribucion_regla_historica_read_only")
+
+    now_iso = datetime.now(timezone.utc).isoformat()
+    previous_active = bool(current_rule.get("activo") is not False)
+    lineage_id_value = _clean_text(current_rule.get("parent_regla_id")) or str(regla_id)
+    try:
+        lineage_id = UUID(lineage_id_value)
+    except (TypeError, ValueError):
+        lineage_id = regla_id
+
+    try:
+        current_version = int(current_rule.get("version") or 1)
+    except (TypeError, ValueError):
+        current_version = 1
+
+    next_payload: dict[str, Any] = {
+        "nombre_regla": _clean_text(current_rule.get("nombre_regla")),
+        "canal_publicitario": _clean_text(current_rule.get("canal_publicitario")),
+        "frase_objetivo": _clean_text(current_rule.get("frase_objetivo")),
+        "tipo_match": _clean_text(current_rule.get("tipo_match")) or "contiene",
+        "campana_publicitaria": _clean_text(current_rule.get("campana_publicitaria")),
+        "adset": _clean_text(current_rule.get("adset")),
+        "anuncio": _clean_text(current_rule.get("anuncio")),
+        "prioridad": current_rule.get("prioridad"),
+        "activo": previous_active,
+        "metadata": current_rule.get("metadata") if isinstance(current_rule.get("metadata"), dict) else {},
+        "parent_regla_id": str(lineage_id),
+        "version": max(1, current_version + 1),
+        "vigente_desde": now_iso,
+        "vigente_hasta": None,
+    }
+    for field, value in body.items():
+        next_payload[field] = value
+    next_payload = _build_whatsapp_atribucion_rule_payload(
+        next_payload,
+        allow_null_keys={"campana_publicitaria", "adset", "anuncio", "vigente_hasta"},
+    )
+
+    try:
+        await repo.update_whatsapp_atribucion_regla(
+            usuario_token=user_token,
+            regla_id=regla_id,
+            payload={"vigente_hasta": now_iso, "activo": False},
+        )
+        row = await repo.create_whatsapp_atribucion_regla(
+            usuario_token=user_token,
+            payload=next_payload,
+        )
+    except CRMRepositoryError as exc:
+        try:
+            await repo.update_whatsapp_atribucion_regla(
+                usuario_token=user_token,
+                regla_id=regla_id,
+                payload={"vigente_hasta": None, "activo": previous_active},
+            )
+        except CRMRepositoryError:
+            logger.warning(
+                "whatsapp_atribucion_rule_versioning_rollback_failed",
+                extra={"regla_id": str(regla_id)},
+            )
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return {
+        "ok": True,
+        "regla": row,
+        "versionado": True,
+        "regla_anterior_id": str(regla_id),
+    }
 
 
 @router.delete("/prospeccion/whatsapp/atribucion/reglas/{regla_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -14841,6 +14934,7 @@ async def prospeccion_metricas_dashboard(
             usuario_token=user_token,
             limit=500,
             offset=0,
+            include_historial=True,
         )
     except CRMRepositoryError:
         rules_for_map = []

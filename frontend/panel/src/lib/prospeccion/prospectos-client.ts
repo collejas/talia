@@ -371,6 +371,10 @@ export type WhatsAppAtribucionTipoMatch = "exacta" | "contiene" | "regex"
 
 export type WhatsAppAtribucionRule = {
   id: string
+  parent_regla_id?: string | null
+  version?: number | null
+  vigente_desde?: string | null
+  vigente_hasta?: string | null
   nombre_regla: string
   canal_publicitario: string
   frase_objetivo: string
@@ -782,6 +786,7 @@ export async function listWhatsAppAtribucionReglas(params: {
   canal_publicitario?: string
   activo?: boolean
   search?: string
+  include_historial?: boolean
 } = {}) {
   const url = buildClientUrl("/api/prospeccion/whatsapp/atribucion/reglas")
   if (typeof params.limit === "number") {
@@ -798,6 +803,9 @@ export async function listWhatsAppAtribucionReglas(params: {
   }
   if (params.search?.trim()) {
     url.searchParams.set("search", params.search.trim())
+  }
+  if (typeof params.include_historial === "boolean") {
+    url.searchParams.set("include_historial", params.include_historial ? "true" : "false")
   }
   return requestJson<{
     ok: boolean
@@ -816,7 +824,7 @@ export async function createWhatsAppAtribucionRegla(payload: WhatsAppAtribucionR
 }
 
 export async function updateWhatsAppAtribucionRegla(reglaId: string, payload: WhatsAppAtribucionRuleUpdateInput) {
-  return requestJson<{ ok: boolean; regla: WhatsAppAtribucionRule }>(
+  return requestJson<{ ok: boolean; regla: WhatsAppAtribucionRule; versionado?: boolean; regla_anterior_id?: string }>(
     `/api/prospeccion/whatsapp/atribucion/reglas/${reglaId}`,
     {
       method: "PATCH",

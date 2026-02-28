@@ -8553,6 +8553,7 @@ class CRMRepository:
         canal_publicitario: str | None = None,
         activo: bool | None = None,
         search: str | None = None,
+        include_historial: bool = False,
     ) -> tuple[list[dict[str, Any]], int]:
         """Lista reglas de atribución publicitaria para WhatsApp."""
 
@@ -8567,6 +8568,8 @@ class CRMRepository:
             params["canal_publicitario"] = f"eq.{literal}"
         if activo is not None:
             params["activo"] = f"eq.{str(activo).lower()}"
+        if not include_historial:
+            params["vigente_hasta"] = "is.null"
         search_pattern = _sanitize_search_pattern(search)
         if search_pattern:
             ilike = _postgrest_ilike_literal(search_pattern)
@@ -8586,6 +8589,34 @@ class CRMRepository:
             raise CRMRepositoryError(f"whatsapp_atribucion_reglas_invalid:{data!r}")
         total = self._extract_total_count(resp.headers.get("content-range")) or len(data)
         return data, total
+
+    async def get_whatsapp_atribucion_regla_by_id(
+        self,
+        *,
+        usuario_token: str,
+        regla_id: UUID,
+    ) -> dict[str, Any] | None:
+        """Obtiene una regla de atribución por ID."""
+
+        resp = await self._request_with_user(
+            "GET",
+            "/rest/v1/prospeccion_whatsapp_atribucion_reglas",
+            token=usuario_token,
+            params={
+                "select": "*",
+                "id": f"eq.{regla_id}",
+                "limit": "1",
+            },
+        )
+        data = resp.json() or []
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"whatsapp_atribucion_regla_get_invalid:{data!r}")
+        if not data:
+            return None
+        row = data[0]
+        if not isinstance(row, dict):
+            raise CRMRepositoryError(f"whatsapp_atribucion_regla_get_row_invalid:{row!r}")
+        return row
 
     async def create_whatsapp_atribucion_regla(
         self,
@@ -8667,6 +8698,7 @@ class CRMRepository:
                 "select": "*",
                 "organizacion_id": f"eq.{organizacion_id}",
                 "activo": "eq.true",
+                "vigente_hasta": "is.null",
                 "order": "prioridad.asc,creado_en.asc",
                 "limit": "500",
             },

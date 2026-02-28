@@ -140,8 +140,8 @@ export default function WhatsAppAtribucionPageClient() {
         activo: form.activo,
       }
       if (form.id) {
-        await updateWhatsAppAtribucionRegla(form.id, payload)
-        setNotice("Regla actualizada.")
+        const response = await updateWhatsAppAtribucionRegla(form.id, payload)
+        setNotice(response.versionado ? "Regla versionada: se conservó historial y se creó una nueva versión vigente." : "Regla actualizada.")
       } else {
         await createWhatsAppAtribucionRegla(payload)
         setNotice("Regla creada.")
@@ -398,7 +398,10 @@ export default function WhatsAppAtribucionPageClient() {
                   const deleting = deletingId === rule.id
                   return (
                     <tr key={rule.id} className="border-b align-top">
-                      <td className="px-2 py-2 font-medium">{rule.nombre_regla}</td>
+                      <td className="px-2 py-2 font-medium">
+                        {rule.nombre_regla}
+                        {rule.version ? <span className="ml-2 text-xs text-muted-foreground">v{rule.version}</span> : null}
+                      </td>
                       <td className="px-2 py-2">{rule.canal_publicitario}</td>
                       <td className="px-2 py-2">{rule.frase_objetivo}</td>
                       <td className="px-2 py-2">{rule.tipo_match}</td>

@@ -44,6 +44,9 @@ Formato recomendado por entrada:
     - ventana anti-duplicado por contacto (24h).
   - persistencia rápida en contacto:
     - `contactos.contacto_datos.publicidad_whatsapp_atribucion`.
+- Versionado de reglas de atribución:
+  - al editar campos de atribución en `PATCH /crm/prospeccion/whatsapp/atribucion/reglas/{regla_id}`, la versión vigente se cierra (`vigente_hasta`) y se crea una nueva versión.
+  - evita mezclar semánticas distintas de frase en una misma regla histórica.
 - Inbox:
   - cuando existe evento de atribución, la conversación se expone con `source=publicidad_whatsapp`.
   - soporte de filtro `source=publicidad_whatsapp` en `GET /crm/inbox/threads`.
@@ -51,9 +54,13 @@ Formato recomendado por entrada:
 ### Base de datos
 - Nueva migración aplicada:
   - `20280421_120000_prospeccion_whatsapp_atribucion_frases.sql`.
+- Nueva migración:
+  - `20280422_120000_prospeccion_whatsapp_atribucion_reglas_versionado.sql`.
 - Nuevas tablas:
   - `public.prospeccion_whatsapp_atribucion_reglas` (catálogo editable por tenant, RLS).
   - `public.prospeccion_whatsapp_atribucion_eventos` (evento inmutable de atribución por conversación, RLS).
+- Nuevas columnas en reglas:
+  - `version`, `parent_regla_id`, `vigente_desde`, `vigente_hasta`.
 
 ### Operación/Notas
 - Validación funcional completada:

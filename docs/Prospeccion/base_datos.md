@@ -31,6 +31,11 @@ Validación complementaria: MCP Supabase (instancia actual).
   - Reglas de opt-out/suppressions por canal (correo/whatsapp/llamada/all).
 - `public.prospeccion_whatsapp_atribucion_reglas`
   - Reglas por tenant para atribución de publicidad WhatsApp por frase (`exacta`/`contiene`/`regex`).
+  - Versionado de reglas:
+    - `version`,
+    - `parent_regla_id`,
+    - `vigente_desde`,
+    - `vigente_hasta` (NULL = versión vigente).
 - `public.prospeccion_whatsapp_atribucion_eventos`
   - Evento inmutable de atribución por conversación (anti-duplicado por `organizacion_id + conversacion_id`).
 

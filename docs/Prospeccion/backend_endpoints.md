@@ -78,8 +78,11 @@ Repositorio principal: `backend/app/repositories/crm.py`
   - Incluye `brevo_eventos` agregados desde logs persistentes de prospección.
 - `GET /crm/prospeccion/whatsapp/readiness`
 - `GET /crm/prospeccion/whatsapp/atribucion/reglas`
+  - Soporta `include_historial=true` para incluir versiones cerradas (`vigente_hasta` no nulo).
 - `POST /crm/prospeccion/whatsapp/atribucion/reglas`
 - `PATCH /crm/prospeccion/whatsapp/atribucion/reglas/{regla_id}`
+  - Versiona automáticamente cuando cambian campos de atribución (`frase_objetivo`, `tipo_match`, `canal_publicitario`, `campana_publicitaria`, `adset`, `anuncio`, `prioridad`).
+  - Conserva histórico y crea nueva versión vigente.
 - `DELETE /crm/prospeccion/whatsapp/atribucion/reglas/{regla_id}`
 - `POST /crm/prospeccion/whatsapp/atribucion/reglas/simular`
 - `GET /crm/prospeccion/metricas`

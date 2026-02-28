@@ -136,6 +136,10 @@ Este archivo sirve para capturar próximos requerimientos sin mezclar historial 
   - Implementado:
     - tablas `prospeccion_whatsapp_atribucion_reglas` y `prospeccion_whatsapp_atribucion_eventos` con RLS.
     - vista `prospeccion/whatsapp-atribucion` con CRUD + filtros + simulador de frase.
+    - versionado de reglas al editar frase/campos de atribución:
+      - la versión vigente se cierra (`vigente_hasta`),
+      - se crea nueva versión (`version` incremental),
+      - histórico de métricas no se altera.
     - matcher inbound en webhook WhatsApp (`exacta`, `contiene`, `regex`) por prioridad.
     - guardas:
       - sólo primer mensaje de conversación,
