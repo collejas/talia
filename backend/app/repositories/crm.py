@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import unicodedata
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 from typing import Any, Iterable, Literal, Sequence
@@ -14,6 +15,7 @@ import httpx
 
 from app.core.config import settings
 from app.core.logging import get_logger
+from app.data.geo.locations import get_municipality_name, get_state_name
 
 
 class CRMRepositoryError(RuntimeError):
@@ -79,6 +81,172 @@ def _sanitize_search_pattern(value: str | None) -> str | None:
     if not trimmed:
         return None
     return trimmed.replace("%", "").replace("*", "")
+
+
+def _search_variants(value: str | None) -> list[str]:
+    sanitized = _sanitize_search_pattern(value)
+    if not sanitized:
+        return []
+    variants: list[str] = []
+    seen: set[str] = set()
+    for candidate in (
+        sanitized,
+        unicodedata.normalize("NFKD", sanitized).encode("ascii", "ignore").decode("ascii"),
+    ):
+        text = candidate.strip()
+        if not text:
+            continue
+        key = text.casefold()
+        if key in seen:
+            continue
+        seen.add(key)
+        variants.append(text)
+    return variants
+
+
+def _normalize_geo_text(value: Any) -> str:
+    text = str(value or "").strip().lower()
+    if not text:
+        return ""
+    normalized = unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode("ascii")
+    return " ".join(normalized.split())
+
+
+def _digits_only(value: Any) -> str:
+    return "".join(ch for ch in str(value or "") if ch.isdigit())
+
+
+def _extract_geo_values(container: Any, keys: Sequence[str]) -> list[str]:
+    if not isinstance(container, dict):
+        return []
+    values: list[str] = []
+    for key in keys:
+        value = container.get(key)
+        if value is None:
+            continue
+        text = str(value).strip()
+        if text:
+            values.append(text)
+    return values
+
+
+def _row_matches_geo_filters(
+    row: dict[str, Any],
+    *,
+    geo_estado: str | None = None,
+    geo_municipio: str | None = None,
+) -> bool:
+    metadata = _ensure_metadata(row.get("metadata"))
+    busqueda_meta = metadata.get("busqueda_meta") if isinstance(metadata.get("busqueda_meta"), dict) else {}
+    ubicacion_meta = metadata.get("ubicacion") if isinstance(metadata.get("ubicacion"), dict) else {}
+    ubicacion_busqueda = (
+        busqueda_meta.get("ubicacion") if isinstance(busqueda_meta.get("ubicacion"), dict) else {}
+    )
+
+    state_code_keys = ("estado_cve", "cve_ent", "state_code", "codigo_estado")
+    state_name_keys = (
+        "estado",
+        "estado_nombre",
+        "nom_ent",
+        "state",
+        "entidad",
+        "entidad_federativa",
+    )
+    municipality_code_keys = ("municipio_cve", "cve_mun", "municipio_code", "codigo_municipio")
+    municipality_name_keys = ("municipio", "municipio_nombre", "nom_mun", "city", "localidad")
+
+    state_code_values: list[str] = []
+    state_name_values: list[str] = []
+    municipality_code_values: list[str] = []
+    municipality_name_values: list[str] = []
+    for source in (metadata, busqueda_meta, ubicacion_meta, ubicacion_busqueda):
+        state_code_values.extend(_extract_geo_values(source, state_code_keys))
+        state_name_values.extend(_extract_geo_values(source, state_name_keys))
+        municipality_code_values.extend(_extract_geo_values(source, municipality_code_keys))
+        municipality_name_values.extend(_extract_geo_values(source, municipality_name_keys))
+
+    corpus_parts: list[str] = []
+    address_value = row.get("address")
+    if isinstance(address_value, str) and address_value.strip():
+        corpus_parts.append(address_value)
+    corpus_parts.extend(state_name_values)
+    corpus_parts.extend(municipality_name_values)
+    if metadata:
+        try:
+            corpus_parts.append(json.dumps(metadata, ensure_ascii=False))
+        except Exception:
+            pass
+    corpus = _normalize_geo_text(" ".join(corpus_parts))
+
+    if geo_estado:
+        raw_state = str(geo_estado).strip()
+        expected_state_digits = _digits_only(raw_state)
+        expected_state_code = expected_state_digits[-2:].zfill(2) if expected_state_digits else None
+        state_name_candidates: list[str] = []
+        if expected_state_code:
+            state_name_candidates.extend(_search_variants(get_state_name(expected_state_code)))
+        else:
+            state_name_candidates.extend(_search_variants(raw_state))
+
+        state_match = False
+        if expected_state_code:
+            compact = expected_state_code.lstrip("0")
+            for value in state_code_values:
+                candidate_digits = _digits_only(value)
+                if not candidate_digits:
+                    continue
+                padded = candidate_digits[-2:].zfill(2)
+                if padded == expected_state_code or (compact and candidate_digits == compact):
+                    state_match = True
+                    break
+        if not state_match and state_name_candidates:
+            for name_candidate in state_name_candidates:
+                normalized_candidate = _normalize_geo_text(name_candidate)
+                if normalized_candidate and normalized_candidate in corpus:
+                    state_match = True
+                    break
+        if not state_match:
+            return False
+
+    if geo_municipio:
+        raw_municipality = str(geo_municipio).strip()
+        expected_municipality_digits = _digits_only(raw_municipality)
+        expected_municipality_code = (
+            expected_municipality_digits[-3:].zfill(3) if expected_municipality_digits else None
+        )
+        state_for_municipality_digits = _digits_only(geo_estado)
+        state_for_municipality_code = (
+            state_for_municipality_digits[-2:].zfill(2) if state_for_municipality_digits else None
+        )
+        municipality_name_candidates: list[str] = []
+        if expected_municipality_code:
+            municipality_name_candidates.extend(
+                _search_variants(get_municipality_name(state_for_municipality_code, expected_municipality_code))
+            )
+        else:
+            municipality_name_candidates.extend(_search_variants(raw_municipality))
+
+        municipality_match = False
+        if expected_municipality_code:
+            compact = expected_municipality_code.lstrip("0")
+            for value in municipality_code_values:
+                candidate_digits = _digits_only(value)
+                if not candidate_digits:
+                    continue
+                padded = candidate_digits[-3:].zfill(3)
+                if padded == expected_municipality_code or (compact and candidate_digits == compact):
+                    municipality_match = True
+                    break
+        if not municipality_match and municipality_name_candidates:
+            for name_candidate in municipality_name_candidates:
+                normalized_candidate = _normalize_geo_text(name_candidate)
+                if normalized_candidate and normalized_candidate in corpus:
+                    municipality_match = True
+                    break
+        if not municipality_match:
+            return False
+
+    return True
 
 
 def _coerce_positive_int(value: Any, default: int = 1) -> int:
@@ -7610,71 +7778,8 @@ class CRMRepository:
             )
             and_filters.append(f"or({or_filters})")
 
-        if geo_estado:
-            raw_state = str(geo_estado).strip()
-            state_digits = "".join(ch for ch in raw_state if ch.isdigit())
-            state_filters_list: list[str] = []
-            if state_digits:
-                state_code = state_digits[-2:].zfill(2)
-                state_code_literal = _postgrest_eq_literal(state_code)
-                state_filters_list.extend(
-                    [
-                        f"metadata->>estado_cve.eq.{state_code_literal}",
-                        f"metadata->>cve_ent.eq.{state_code_literal}",
-                        f"metadata->busqueda_meta->>estado_cve.eq.{state_code_literal}",
-                        f"metadata->busqueda_meta->>cve_ent.eq.{state_code_literal}",
-                    ]
-                )
-            sanitized_state = _sanitize_search_pattern(raw_state)
-            if sanitized_state:
-                state_pattern = _postgrest_ilike_literal(sanitized_state)
-                state_filters_list.extend(
-                    [
-                        f"address.ilike.{state_pattern}",
-                        f"metadata->>estado.ilike.{state_pattern}",
-                        f"metadata->>estado_nombre.ilike.{state_pattern}",
-                        f"metadata->>nom_ent.ilike.{state_pattern}",
-                        f"metadata->>state.ilike.{state_pattern}",
-                        f"metadata->busqueda_meta->>estado.ilike.{state_pattern}",
-                        f"metadata->busqueda_meta->>estado_nombre.ilike.{state_pattern}",
-                        f"metadata->busqueda_meta->>nom_ent.ilike.{state_pattern}",
-                    ]
-                )
-            if state_filters_list:
-                and_filters.append(f"or({','.join(state_filters_list)})")
-
-        if geo_municipio:
-            raw_municipality = str(geo_municipio).strip()
-            municipality_digits = "".join(ch for ch in raw_municipality if ch.isdigit())
-            municipality_filters_list: list[str] = []
-            if municipality_digits:
-                municipality_code = municipality_digits[-3:].zfill(3)
-                municipality_code_literal = _postgrest_eq_literal(municipality_code)
-                municipality_filters_list.extend(
-                    [
-                        f"metadata->>municipio_cve.eq.{municipality_code_literal}",
-                        f"metadata->>cve_mun.eq.{municipality_code_literal}",
-                        f"metadata->busqueda_meta->>municipio_cve.eq.{municipality_code_literal}",
-                        f"metadata->busqueda_meta->>cve_mun.eq.{municipality_code_literal}",
-                    ]
-                )
-            sanitized_municipality = _sanitize_search_pattern(raw_municipality)
-            if sanitized_municipality:
-                municipality_pattern = _postgrest_ilike_literal(sanitized_municipality)
-                municipality_filters_list.extend(
-                    [
-                        f"address.ilike.{municipality_pattern}",
-                        f"metadata->>municipio.ilike.{municipality_pattern}",
-                        f"metadata->>municipio_nombre.ilike.{municipality_pattern}",
-                        f"metadata->>nom_mun.ilike.{municipality_pattern}",
-                        f"metadata->>city.ilike.{municipality_pattern}",
-                        f"metadata->busqueda_meta->>municipio.ilike.{municipality_pattern}",
-                        f"metadata->busqueda_meta->>municipio_nombre.ilike.{municipality_pattern}",
-                        f"metadata->busqueda_meta->>nom_mun.ilike.{municipality_pattern}",
-                    ]
-                )
-            if municipality_filters_list:
-                and_filters.append(f"or({','.join(municipality_filters_list)})")
+        # Geo filters are applied in Python scan mode to support heterogeneous metadata
+        # formats and addresses (legacy rows may not keep normalized cve fields).
 
         if metadata_queries:
             unique_queries: list[str] = []
@@ -7729,10 +7834,22 @@ class CRMRepository:
                     excluded_ids=envio_prospecto_ids,
                     limit=limit,
                     offset=offset,
+                    geo_estado=geo_estado,
+                    geo_municipio=geo_municipio,
                 )
 
         if and_filters:
             params["and"] = "(" + ",".join(and_filters) + ")"
+
+        if geo_estado or geo_municipio:
+            return await self._list_prospectos_with_geo_scan(
+                usuario_token=usuario_token,
+                params=params,
+                limit=limit,
+                offset=offset,
+                geo_estado=geo_estado,
+                geo_municipio=geo_municipio,
+            )
 
         resp = await self._request_with_user(
             "GET",
@@ -7755,6 +7872,8 @@ class CRMRepository:
         excluded_ids: set[str],
         limit: int,
         offset: int,
+        geo_estado: str | None = None,
+        geo_municipio: str | None = None,
     ) -> tuple[list[dict[str, Any]], int]:
         """Aplica exclusión por IDs en backend para evitar URLs enormes con not.in(...)."""
 
@@ -7788,6 +7907,68 @@ class CRMRepository:
                     continue
                 row_id = row.get("id")
                 if row_id is None or str(row_id) in excluded_ids:
+                    continue
+                if not _row_matches_geo_filters(
+                    row,
+                    geo_estado=geo_estado,
+                    geo_municipio=geo_municipio,
+                ):
+                    continue
+                if filtered_total >= offset and len(filtered_rows) < limit:
+                    filtered_rows.append(row)
+                filtered_total += 1
+
+            if len(data) < page_size:
+                break
+            scan_offset += len(data)
+
+        return filtered_rows, filtered_total
+
+    async def _list_prospectos_with_geo_scan(
+        self,
+        *,
+        usuario_token: str,
+        params: dict[str, str],
+        limit: int,
+        offset: int,
+        geo_estado: str | None = None,
+        geo_municipio: str | None = None,
+    ) -> tuple[list[dict[str, Any]], int]:
+        """Filtra por estado/municipio en backend para soportar formatos de metadata heterogéneos."""
+
+        if limit <= 0:
+            return [], 0
+        filtered_rows: list[dict[str, Any]] = []
+        filtered_total = 0
+        scan_offset = 0
+        page_size = max(500, min(1000, limit * 2))
+        max_scan_rows = 200_000
+
+        while scan_offset < max_scan_rows:
+            scan_params = dict(params)
+            scan_params["limit"] = str(page_size)
+            scan_params["offset"] = str(scan_offset)
+            resp = await self._request_with_user(
+                "GET",
+                "/rest/v1/prospeccion_prospectos",
+                token=usuario_token,
+                params=scan_params,
+                prefer="count=exact",
+            )
+            data = resp.json() or []
+            if not isinstance(data, list):
+                raise CRMRepositoryError(f"Respuesta inesperada al listar prospectos (geo scan): {data!r}")
+            if not data:
+                break
+
+            for row in data:
+                if not isinstance(row, dict):
+                    continue
+                if not _row_matches_geo_filters(
+                    row,
+                    geo_estado=geo_estado,
+                    geo_municipio=geo_municipio,
+                ):
                     continue
                 if filtered_total >= offset and len(filtered_rows) < limit:
                     filtered_rows.append(row)
