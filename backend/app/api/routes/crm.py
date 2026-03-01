@@ -1482,6 +1482,8 @@ class ProspectoListQuery(BaseModel):
     date_to: date | None = Field(default=None)
     geo_estado: str | None = Field(default=None, max_length=120)
     geo_municipio: str | None = Field(default=None, max_length=120)
+    campana_id: UUID | None = Field(default=None)
+    con_envio: bool | None = Field(default=None)
 
 
 class ProspectoFiltroPayload(BaseModel):
@@ -1497,6 +1499,8 @@ class ProspectoFiltroPayload(BaseModel):
     stage: Literal["discover", "enrich", "prepare", "launch", "evaluate", ""] | None = Field(default=None)
     whatsapp_permitido: bool | None = Field(default=None)
     llamada_permitida: bool | None = Field(default=None)
+    campana_id: UUID | None = Field(default=None)
+    con_envio: bool | None = Field(default=None)
 
 
 class ProspeccionCanalConfig(BaseModel):
@@ -4793,6 +4797,8 @@ def _prospecto_filters_to_kwargs(filters: ProspectoFiltroPayload) -> dict[str, A
         "stage": filters.stage or None,
         "whatsapp_permitido": filters.whatsapp_permitido,
         "llamada_permitida": filters.llamada_permitida,
+        "campana_id": filters.campana_id,
+        "con_envio": filters.con_envio,
     }
 
 
@@ -13600,6 +13606,8 @@ async def listar_prospectos(
             geo_municipio=params.geo_municipio,
             metadata_queries=metadata_query,
             actividades=actividad,
+            campana_id=params.campana_id,
+            con_envio=params.con_envio,
         )
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc

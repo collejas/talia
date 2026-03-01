@@ -532,6 +532,8 @@ export async function listProspectos(params: {
   dateTo?: string
   geoEstado?: string
   geoMunicipio?: string
+  campanaId?: string
+  conEnvio?: boolean
 } = {}): Promise<ProspectosResponse> {
   const url = buildClientUrl("/api/prospeccion/prospectos")
   if (typeof params.limit === "number") url.searchParams.set("limit", String(params.limit))
@@ -569,6 +571,12 @@ export async function listProspectos(params: {
   }
   if (params.geoMunicipio?.trim().length) {
     url.searchParams.set("geo_municipio", params.geoMunicipio.trim())
+  }
+  if (params.campanaId?.trim().length) {
+    url.searchParams.set("campana_id", params.campanaId.trim())
+  }
+  if (typeof params.conEnvio === "boolean") {
+    url.searchParams.set("con_envio", params.conEnvio ? "true" : "false")
   }
   if (params.metadataQueries?.length) {
     for (const value of params.metadataQueries) {
@@ -974,19 +982,39 @@ export async function listContactoEnviosPorProspecto(
 }
 
 export async function listProspectoContactIndicators(prospectoIds: string[]) {
-  if (!prospectoIds.length) {
+  const normalizedIds = Array.from(
+    new Set(
+      prospectoIds
+        .map((value) => (value || "").trim())
+        .filter((value) => value.length > 0)
+    )
+  )
+  if (!normalizedIds.length) {
     return { ok: true, items: [] as ProspectoContactIndicators[] }
   }
-  const url = buildClientUrl("/api/prospeccion/prospectos/contact-indicadores")
-  const search = new URLSearchParams(url.search)
-  for (const id of prospectoIds) {
-    const trimmed = (id || "").trim()
-    if (trimmed) {
-      search.append("prospecto_id", trimmed)
+  const CHUNK_SIZE = 40
+  const chunks: string[][] = []
+  for (let index = 0; index < normalizedIds.length; index += CHUNK_SIZE) {
+    chunks.push(normalizedIds.slice(index, index + CHUNK_SIZE))
+  }
+  const responses = await Promise.all(
+    chunks.map(async (chunk) => {
+      const url = buildClientUrl("/api/prospeccion/prospectos/contact-indicadores")
+      const search = new URLSearchParams(url.search)
+      for (const id of chunk) {
+        search.append("prospecto_id", id)
+      }
+      url.search = search.toString()
+      return requestJson<{ ok: boolean; items: ProspectoContactIndicators[] }>(url.toString())
+    })
+  )
+  const mergedItems: ProspectoContactIndicators[] = []
+  for (const response of responses) {
+    if (Array.isArray(response.items)) {
+      mergedItems.push(...response.items)
     }
   }
-  url.search = search.toString()
-  return requestJson<{ ok: boolean; items: ProspectoContactIndicators[] }>(url.toString())
+  return { ok: true, items: mergedItems }
 }
 
 export async function listContactoLogs(params: {

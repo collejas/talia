@@ -7540,6 +7540,8 @@ class CRMRepository:
         geo_municipio: str | None = None,
         metadata_queries: list[str] | None = None,
         actividades: list[str] | None = None,
+        campana_id: UUID | None = None,
+        con_envio: bool | None = None,
     ) -> tuple[list[dict[str, Any]], int]:
         """Lista prospectos con filtros de búsqueda y totalizador."""
 
@@ -7706,6 +7708,24 @@ class CRMRepository:
             if unique_activities:
                 params["actividad"] = _postgrest_in_clause(unique_activities)
 
+        envio_prospecto_ids: set[str] | None = None
+        if campana_id is not None or con_envio is not None:
+            envio_prospecto_ids = await self._list_prospecto_ids_with_contact_envios(
+                usuario_token=usuario_token,
+                campana_id=campana_id,
+            )
+        if campana_id is not None and con_envio is False:
+            return [], 0
+
+        if campana_id is not None or con_envio is True:
+            if not envio_prospecto_ids:
+                return [], 0
+            params["id"] = _postgrest_in_clause(sorted(envio_prospecto_ids))
+        elif con_envio is False:
+            if envio_prospecto_ids:
+                excluded_ids = ",".join(sorted(envio_prospecto_ids))
+                params["id"] = f"not.in.({excluded_ids})"
+
         if and_filters:
             params["and"] = "(" + ",".join(and_filters) + ")"
 
@@ -7721,6 +7741,48 @@ class CRMRepository:
             raise CRMRepositoryError(f"Respuesta inesperada al listar prospectos: {data!r}")
         total = self._extract_total_count(resp.headers.get("content-range")) or len(data)
         return data, total
+
+    async def _list_prospecto_ids_with_contact_envios(
+        self,
+        *,
+        usuario_token: str,
+        campana_id: UUID | None = None,
+    ) -> set[str]:
+        ids: set[str] = set()
+        offset = 0
+        page_size = 5000
+        max_scan = 50000
+        while offset < max_scan:
+            params: dict[str, str] = {
+                "select": "prospecto_id",
+                "limit": str(page_size),
+                "offset": str(offset),
+                "order": "creado_en.desc",
+            }
+            if campana_id is not None:
+                params["campana_id"] = f"eq.{campana_id}"
+            resp = await self._request_with_user(
+                "GET",
+                "/rest/v1/prospeccion_contacto_envio",
+                token=usuario_token,
+                params=params,
+            )
+            data = resp.json() or []
+            if not isinstance(data, list):
+                raise CRMRepositoryError(f"contact_envio_ids_invalid:{data!r}")
+            if not data:
+                break
+            for row in data:
+                if not isinstance(row, dict):
+                    continue
+                prospecto_id = row.get("prospecto_id")
+                if prospecto_id is None:
+                    continue
+                ids.add(str(prospecto_id))
+            if len(data) < page_size:
+                break
+            offset += len(data)
+        return ids
 
     async def list_prospecto_query_metadata(
         self,

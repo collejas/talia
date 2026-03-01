@@ -96,6 +96,7 @@ import {
 
 type FuenteFilter = "" | "google_places" | "denue" | "usuario"
 type LookupFilter = "" | "pendiente" | "verificado" | "sin_numero" | "error"
+type ConEnvioFilter = "" | "si" | "no"
 type OrderOption = "creado" | "nombre"
 type ProspectosSortKey =
   | "prospecto"
@@ -115,6 +116,8 @@ type Filters = {
   search: string
   fuente: FuenteFilter
   lookupStatus: LookupFilter
+  campanaId: string
+  conEnvio: ConEnvioFilter
   segmento: string
   geoEstado: string
   geoMunicipio: string
@@ -157,6 +160,8 @@ const initialFilters: Filters = {
   search: "",
   fuente: "",
   lookupStatus: "",
+  campanaId: "",
+  conEnvio: "",
   segmento: "",
   geoEstado: "",
   geoMunicipio: "",
@@ -503,6 +508,11 @@ function normalizeSavedViewState(raw: unknown): ProspectosSavedViewState | null 
       filtersObj["lookupStatus"] === "error"
         ? filtersObj["lookupStatus"]
         : "",
+    campanaId: typeof filtersObj["campanaId"] === "string" ? filtersObj["campanaId"] : "",
+    conEnvio:
+      filtersObj["conEnvio"] === "si" || filtersObj["conEnvio"] === "no"
+        ? filtersObj["conEnvio"]
+        : "",
     segmento: typeof filtersObj["segmento"] === "string" ? filtersObj["segmento"] : "",
     geoEstado: typeof filtersObj["geoEstado"] === "string" ? filtersObj["geoEstado"] : "",
     geoMunicipio: typeof filtersObj["geoMunicipio"] === "string" ? filtersObj["geoMunicipio"] : "",
@@ -718,6 +728,8 @@ function ProspectosView() {
   const [plannerScheduleDate, setPlannerScheduleDate] = useState("")
   const [plannerScheduleTime, setPlannerScheduleTime] = useState("10:00")
   const [plannerSeparationSeconds, setPlannerSeparationSeconds] = useState("0")
+  const [campaignFilterOptions, setCampaignFilterOptions] = useState<CampaignOption[]>([])
+  const [campaignFilterLoading, setCampaignFilterLoading] = useState(false)
   const [plannerCampaignOptions, setPlannerCampaignOptions] = useState<CampaignOption[]>([])
   const [plannerCampaignsLoading, setPlannerCampaignsLoading] = useState(false)
   const [plannerScheduleMode, setPlannerScheduleMode] = useState<"ahora" | "programado">("ahora")
@@ -795,6 +807,10 @@ function ProspectosView() {
   const queryLabelMap = useMemo(
     () => new Map(queryOptions.map((option) => [option.value, option.label])),
     [queryOptions]
+  )
+  const campaignLabelMap = useMemo(
+    () => new Map(campaignFilterOptions.map((option) => [option.id, option.nombre])),
+    [campaignFilterOptions]
   )
   const toggleTableSort = useCallback((key: ProspectosSortKey) => {
     setTableSort((current) => {
@@ -1091,6 +1107,12 @@ function ProspectosView() {
     if (filters.lookupStatus) {
       chips.push(`Verificación: ${LOOKUP_STATUS_LABELS[filters.lookupStatus] ?? filters.lookupStatus}`)
     }
+    if (filters.campanaId) {
+      chips.push(`Campaña: ${campaignLabelMap.get(filters.campanaId) ?? filters.campanaId}`)
+    }
+    if (filters.conEnvio) {
+      chips.push(`Con envío: ${filters.conEnvio === "si" ? "Sí" : "No"}`)
+    }
     if (filters.carrierType) {
       const label = carrierLabel(filters.carrierType)
       chips.push(`Línea: ${label || filters.carrierType}`)
@@ -1112,7 +1134,7 @@ function ProspectosView() {
       chips.push(`Fecha: ${dateChip}`)
     }
     return chips
-  }, [filters, geoEstadoLabelMap, geoMunicipioLabelMap, queryLabelMap])
+  }, [campaignLabelMap, filters, geoEstadoLabelMap, geoMunicipioLabelMap, queryLabelMap])
   const fetchProspectos = useCallback(
     async (nextOffset = 0) => {
       setLoading(true)
@@ -1141,6 +1163,9 @@ function ProspectosView() {
           search: filters.search || undefined,
           fuente: filters.fuente || undefined,
           lookupStatus: filters.lookupStatus || undefined,
+          campanaId: filters.campanaId || undefined,
+          conEnvio:
+            filters.conEnvio === "si" ? true : filters.conEnvio === "no" ? false : undefined,
           segmento: filters.segmento || undefined,
           geoEstado: filters.geoEstado || undefined,
           geoMunicipio: filters.geoMunicipio || undefined,
@@ -1205,6 +1230,9 @@ function ProspectosView() {
           search: filters.search || undefined,
           fuente: filters.fuente || undefined,
           lookupStatus: filters.lookupStatus || undefined,
+          campanaId: filters.campanaId || undefined,
+          conEnvio:
+            filters.conEnvio === "si" ? true : filters.conEnvio === "no" ? false : undefined,
           segmento: filters.segmento || undefined,
           geoEstado: filters.geoEstado || undefined,
           geoMunicipio: filters.geoMunicipio || undefined,
@@ -1801,6 +1829,39 @@ function ProspectosView() {
       setAction(null)
     }
   }, [fetchProspectos, fetchStageSummary, offset, selectedIds])
+
+  const loadCampaignFilterOptions = useCallback(async () => {
+    setCampaignFilterLoading(true)
+    try {
+      const campaigns = await listCrmCampaigns()
+      const ordered = (Array.isArray(campaigns) ? campaigns : [])
+        .map((campaign) => {
+          const canalRaw = typeof campaign.canal === "string" ? campaign.canal.toLowerCase().trim() : ""
+          const canal: CampaignOption["canal"] =
+            canalRaw === "correo" || canalRaw === "whatsapp" || canalRaw === "llamada" ? canalRaw : null
+          return {
+            id: campaign.id,
+            nombre: campaign.nombre ?? `Campaña ${campaign.id.slice(0, 8)}`,
+            canal,
+          }
+        })
+        .sort((a, b) => a.nombre.localeCompare(b.nombre, "es", { sensitivity: "base" }))
+      setCampaignFilterOptions(ordered)
+      setFilters((prev) => {
+        if (!prev.campanaId) return prev
+        return ordered.some((item) => item.id === prev.campanaId) ? prev : { ...prev, campanaId: "" }
+      })
+    } catch {
+      setCampaignFilterOptions([])
+      setFilters((prev) => ({ ...prev, campanaId: "" }))
+    } finally {
+      setCampaignFilterLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    void loadCampaignFilterOptions()
+  }, [loadCampaignFilterOptions])
 
   const handlePlannerOpen = useCallback(() => {
     setPlannerCampaignId("")
@@ -2690,6 +2751,53 @@ function ProspectosView() {
                   <SelectItem value="verificado">Verificado</SelectItem>
                   <SelectItem value="sin_numero">Sin número</SelectItem>
                   <SelectItem value="error">Error</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1">
+              <Label>Campaña</Label>
+              <Select
+                value={filters.campanaId || "all"}
+                onValueChange={(value) =>
+                  setFilters((prev) => ({
+                    ...prev,
+                    campanaId: value === "all" ? "" : value,
+                  }))
+                }
+              >
+                <SelectTrigger className="w-[220px]">
+                  <SelectValue
+                    placeholder={campaignFilterLoading ? "Cargando..." : "Todas las campañas"}
+                  />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todas</SelectItem>
+                  {campaignFilterOptions.map((option) => (
+                    <SelectItem key={option.id} value={option.id}>
+                      {option.nombre}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1">
+              <Label>Con envío</Label>
+              <Select
+                value={filters.conEnvio || "all"}
+                onValueChange={(value) =>
+                  setFilters((prev) => ({
+                    ...prev,
+                    conEnvio: value === "all" ? "" : (value as ConEnvioFilter),
+                  }))
+                }
+              >
+                <SelectTrigger className="w-[140px]">
+                  <SelectValue placeholder="Todos" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos</SelectItem>
+                  <SelectItem value="si">Sí</SelectItem>
+                  <SelectItem value="no">No</SelectItem>
                 </SelectContent>
               </Select>
             </div>
