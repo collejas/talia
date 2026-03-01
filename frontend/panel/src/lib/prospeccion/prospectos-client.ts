@@ -530,6 +530,8 @@ export async function listProspectos(params: {
   actividades?: string[]
   dateFrom?: string
   dateTo?: string
+  geoEstado?: string
+  geoMunicipio?: string
 } = {}): Promise<ProspectosResponse> {
   const url = buildClientUrl("/api/prospeccion/prospectos")
   if (typeof params.limit === "number") url.searchParams.set("limit", String(params.limit))
@@ -561,6 +563,12 @@ export async function listProspectos(params: {
   }
   if (params.dateTo) {
     url.searchParams.set("date_to", params.dateTo)
+  }
+  if (params.geoEstado?.trim().length) {
+    url.searchParams.set("geo_estado", params.geoEstado.trim())
+  }
+  if (params.geoMunicipio?.trim().length) {
+    url.searchParams.set("geo_municipio", params.geoMunicipio.trim())
   }
   if (params.metadataQueries?.length) {
     for (const value of params.metadataQueries) {

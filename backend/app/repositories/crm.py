@@ -7506,6 +7506,8 @@ class CRMRepository:
         website_present: bool | None = None,
         date_from: date | None = None,
         date_to: date | None = None,
+        geo_estado: str | None = None,
+        geo_municipio: str | None = None,
         metadata_queries: list[str] | None = None,
         actividades: list[str] | None = None,
     ) -> tuple[list[dict[str, Any]], int]:
@@ -7575,6 +7577,72 @@ class CRMRepository:
                 ]
             )
             and_filters.append(f"or({or_filters})")
+
+        if geo_estado:
+            raw_state = str(geo_estado).strip()
+            state_digits = "".join(ch for ch in raw_state if ch.isdigit())
+            state_filters_list: list[str] = []
+            if state_digits:
+                state_code = state_digits[-2:].zfill(2)
+                state_code_literal = _postgrest_eq_literal(state_code)
+                state_filters_list.extend(
+                    [
+                        f"metadata->>estado_cve.eq.{state_code_literal}",
+                        f"metadata->>cve_ent.eq.{state_code_literal}",
+                        f"metadata->busqueda_meta->>estado_cve.eq.{state_code_literal}",
+                        f"metadata->busqueda_meta->>cve_ent.eq.{state_code_literal}",
+                    ]
+                )
+            sanitized_state = _sanitize_search_pattern(raw_state)
+            if sanitized_state:
+                state_pattern = _postgrest_ilike_literal(sanitized_state)
+                state_filters_list.extend(
+                    [
+                        f"address.ilike.{state_pattern}",
+                        f"metadata->>estado.ilike.{state_pattern}",
+                        f"metadata->>estado_nombre.ilike.{state_pattern}",
+                        f"metadata->>nom_ent.ilike.{state_pattern}",
+                        f"metadata->>state.ilike.{state_pattern}",
+                        f"metadata->busqueda_meta->>estado.ilike.{state_pattern}",
+                        f"metadata->busqueda_meta->>estado_nombre.ilike.{state_pattern}",
+                        f"metadata->busqueda_meta->>nom_ent.ilike.{state_pattern}",
+                    ]
+                )
+            if state_filters_list:
+                and_filters.append(f"or({','.join(state_filters_list)})")
+
+        if geo_municipio:
+            raw_municipality = str(geo_municipio).strip()
+            municipality_digits = "".join(ch for ch in raw_municipality if ch.isdigit())
+            municipality_filters_list: list[str] = []
+            if municipality_digits:
+                municipality_code = municipality_digits[-3:].zfill(3)
+                municipality_code_literal = _postgrest_eq_literal(municipality_code)
+                municipality_filters_list.extend(
+                    [
+                        f"metadata->>municipio_cve.eq.{municipality_code_literal}",
+                        f"metadata->>cve_mun.eq.{municipality_code_literal}",
+                        f"metadata->busqueda_meta->>municipio_cve.eq.{municipality_code_literal}",
+                        f"metadata->busqueda_meta->>cve_mun.eq.{municipality_code_literal}",
+                    ]
+                )
+            sanitized_municipality = _sanitize_search_pattern(raw_municipality)
+            if sanitized_municipality:
+                municipality_pattern = _postgrest_ilike_literal(sanitized_municipality)
+                municipality_filters_list.extend(
+                    [
+                        f"address.ilike.{municipality_pattern}",
+                        f"metadata->>municipio.ilike.{municipality_pattern}",
+                        f"metadata->>municipio_nombre.ilike.{municipality_pattern}",
+                        f"metadata->>nom_mun.ilike.{municipality_pattern}",
+                        f"metadata->>city.ilike.{municipality_pattern}",
+                        f"metadata->busqueda_meta->>municipio.ilike.{municipality_pattern}",
+                        f"metadata->busqueda_meta->>municipio_nombre.ilike.{municipality_pattern}",
+                        f"metadata->busqueda_meta->>nom_mun.ilike.{municipality_pattern}",
+                    ]
+                )
+            if municipality_filters_list:
+                and_filters.append(f"or({','.join(municipality_filters_list)})")
 
         if metadata_queries:
             unique_queries: list[str] = []

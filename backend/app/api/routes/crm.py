@@ -1480,6 +1480,8 @@ class ProspectoListQuery(BaseModel):
     website_present: bool | None = Field(default=None)
     date_from: date | None = Field(default=None)
     date_to: date | None = Field(default=None)
+    geo_estado: str | None = Field(default=None, max_length=120)
+    geo_municipio: str | None = Field(default=None, max_length=120)
 
 
 class ProspectoFiltroPayload(BaseModel):
@@ -13554,6 +13556,8 @@ async def listar_prospectos(
             website_present=params.website_present,
             date_from=params.date_from,
             date_to=params.date_to,
+            geo_estado=params.geo_estado,
+            geo_municipio=params.geo_municipio,
             metadata_queries=metadata_query,
             actividades=actividad,
         )

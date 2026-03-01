@@ -116,6 +116,8 @@ type Filters = {
   fuente: FuenteFilter
   lookupStatus: LookupFilter
   segmento: string
+  geoEstado: string
+  geoMunicipio: string
   order: OrderOption
   carrierType: "" | "mobile" | "landline" | "voip"
   contactFilters: ContactPresenceFilter[]
@@ -136,6 +138,8 @@ type ContactDrawerData = {
   results: ProspeccionContactResult[]
   omitidos?: ProspeccionOmitido[]
 }
+type LocationOption = { value: string; label: string }
+type GeoFeature = { properties?: Record<string, unknown> }
 type CampaignOption = { id: string; nombre: string; canal: "correo" | "whatsapp" | "llamada" | null }
 const PLANNER_ALL_TEMPLATES_VALUE = "__all_templates__"
 const plannerCanalLabel: Record<"correo" | "whatsapp" | "llamada", string> = {
@@ -154,6 +158,8 @@ const initialFilters: Filters = {
   fuente: "",
   lookupStatus: "",
   segmento: "",
+  geoEstado: "",
+  geoMunicipio: "",
   order: "creado",
   carrierType: "",
   contactFilters: [],
@@ -390,7 +396,7 @@ const BATCH_STATE_VARIANTS: Record<string, "default" | "secondary" | "outline" |
   fallido: "destructive",
 }
 
-const PAGE_SIZE_OPTIONS = [10, 25, 50] as const
+const PAGE_SIZE_OPTIONS = [500] as const
 const PROSPECTOS_TABLE_PREFS_KEY = "prospeccion_prospectos_table_prefs_v1"
 const DEFAULT_TABLE_COLUMN_ORDER: ProspectTableColumnId[] = [
   "prospecto",
@@ -498,6 +504,8 @@ function normalizeSavedViewState(raw: unknown): ProspectosSavedViewState | null 
         ? filtersObj["lookupStatus"]
         : "",
     segmento: typeof filtersObj["segmento"] === "string" ? filtersObj["segmento"] : "",
+    geoEstado: typeof filtersObj["geoEstado"] === "string" ? filtersObj["geoEstado"] : "",
+    geoMunicipio: typeof filtersObj["geoMunicipio"] === "string" ? filtersObj["geoMunicipio"] : "",
     order: filtersObj["order"] === "nombre" ? "nombre" : "creado",
     carrierType:
       filtersObj["carrierType"] === "mobile" || filtersObj["carrierType"] === "landline" || filtersObj["carrierType"] === "voip"
@@ -654,7 +662,7 @@ function ProspectosView() {
   const [searchInput, setSearchInput] = useState(initialFilters.search)
   const [items, setItems] = useState<ProspectoItem[]>([])
   const [total, setTotal] = useState(0)
-  const [limit, setLimit] = useState<number>(25)
+  const [limit, setLimit] = useState<number>(500)
   const [offset, setOffset] = useState(0)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -702,6 +710,9 @@ function ProspectosView() {
   const [activityOptionsLoading, setActivityOptionsLoading] = useState(false)
   const [stageSummary, setStageSummary] = useState<Partial<Record<FlowStepKey, number>>>({})
   const [stageSummaryLoading, setStageSummaryLoading] = useState(false)
+  const [geoEstadoOptions, setGeoEstadoOptions] = useState<LocationOption[]>([])
+  const [geoMunicipioOptions, setGeoMunicipioOptions] = useState<LocationOption[]>([])
+  const [geoLoading, setGeoLoading] = useState(false)
   const [plannerOpen, setPlannerOpen] = useState(false)
   const [plannerCampaignId, setPlannerCampaignId] = useState("")
   const [plannerScheduleDate, setPlannerScheduleDate] = useState("")
@@ -746,6 +757,14 @@ function ProspectosView() {
   const tablePrefsLastSavedRef = useRef<string>("")
 
   const currentIds = useMemo(() => items.map((item) => item.id).filter(Boolean) as string[], [items])
+  const geoEstadoLabelMap = useMemo(
+    () => new Map(geoEstadoOptions.map((option) => [option.value, option.label])),
+    [geoEstadoOptions]
+  )
+  const geoMunicipioLabelMap = useMemo(
+    () => new Map(geoMunicipioOptions.map((option) => [option.value, option.label])),
+    [geoMunicipioOptions]
+  )
   const selectedIds = useMemo(() => Array.from(selected.values()), [selected])
   const selectedCount = selectedIds.length
   const selectedPlannerCampaign = useMemo(
@@ -1063,6 +1082,12 @@ function ProspectosView() {
     if (filters.segmento.trim()) {
       chips.push(`Segmento: ${filters.segmento.trim()}`)
     }
+    if (filters.geoEstado.trim()) {
+      chips.push(`Estado: ${geoEstadoLabelMap.get(filters.geoEstado.trim()) ?? filters.geoEstado.trim()}`)
+    }
+    if (filters.geoMunicipio.trim()) {
+      chips.push(`Municipio: ${geoMunicipioLabelMap.get(filters.geoMunicipio.trim()) ?? filters.geoMunicipio.trim()}`)
+    }
     if (filters.lookupStatus) {
       chips.push(`Verificación: ${LOOKUP_STATUS_LABELS[filters.lookupStatus] ?? filters.lookupStatus}`)
     }
@@ -1087,7 +1112,7 @@ function ProspectosView() {
       chips.push(`Fecha: ${dateChip}`)
     }
     return chips
-  }, [filters, queryLabelMap])
+  }, [filters, geoEstadoLabelMap, geoMunicipioLabelMap, queryLabelMap])
   const fetchProspectos = useCallback(
     async (nextOffset = 0) => {
       setLoading(true)
@@ -1117,6 +1142,8 @@ function ProspectosView() {
           fuente: filters.fuente || undefined,
           lookupStatus: filters.lookupStatus || undefined,
           segmento: filters.segmento || undefined,
+          geoEstado: filters.geoEstado || undefined,
+          geoMunicipio: filters.geoMunicipio || undefined,
           carrierType: filters.carrierType || undefined,
           order: filters.order,
           phonePresent,
@@ -1179,6 +1206,8 @@ function ProspectosView() {
           fuente: filters.fuente || undefined,
           lookupStatus: filters.lookupStatus || undefined,
           segmento: filters.segmento || undefined,
+          geoEstado: filters.geoEstado || undefined,
+          geoMunicipio: filters.geoMunicipio || undefined,
           carrierType: filters.carrierType || undefined,
           order: filters.order,
           phonePresent,
@@ -1206,6 +1235,68 @@ function ProspectosView() {
   useEffect(() => {
     void fetchProspectos(0)
   }, [fetchProspectos])
+
+  useEffect(() => {
+    let cancelled = false
+    setGeoLoading(true)
+    fetch("/api/crm/demografia/geo/estados", { cache: "no-store" })
+      .then((response) => response.json())
+      .then((body) => {
+        if (cancelled) return
+        const features: GeoFeature[] = Array.isArray(body?.geojson?.features) ? body.geojson.features : []
+        const options = features
+          .map((feature) => {
+            const props = (feature?.properties ?? {}) as Record<string, unknown>
+            const value = String(props.cve_ent ?? props.CVE_ENT ?? props.cveent ?? "").padStart(2, "0")
+            const label = props.nom_ent ?? props.NOM_ENT ?? props.name
+            if (!value || !label) return null
+            return { value, label: String(label) }
+          })
+          .filter((item: LocationOption | null): item is LocationOption => Boolean(item))
+          .sort((a: LocationOption, b: LocationOption) => a.label.localeCompare(b.label, "es"))
+        setGeoEstadoOptions(options)
+      })
+      .catch(() => {
+        if (!cancelled) setGeoEstadoOptions([])
+      })
+      .finally(() => {
+        if (!cancelled) setGeoLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!filters.geoEstado) {
+      setGeoMunicipioOptions([])
+      return
+    }
+    let cancelled = false
+    fetch(`/api/crm/demografia/geo/municipios/${encodeURIComponent(filters.geoEstado)}`, { cache: "no-store" })
+      .then((response) => response.json())
+      .then((body) => {
+        if (cancelled) return
+        const features: GeoFeature[] = Array.isArray(body?.geojson?.features) ? body.geojson.features : []
+        const options = features
+          .map((feature) => {
+            const props = (feature?.properties ?? {}) as Record<string, unknown>
+            const value = String(props.cve_mun ?? props.CVE_MUN ?? props.cvemun ?? "").padStart(3, "0")
+            const label = props.nom_mun ?? props.NOM_MUN ?? props.name
+            if (!value || !label) return null
+            return { value, label: String(label) }
+          })
+          .filter((item: LocationOption | null): item is LocationOption => Boolean(item))
+          .sort((a: LocationOption, b: LocationOption) => a.label.localeCompare(b.label, "es"))
+        setGeoMunicipioOptions(options)
+      })
+      .catch(() => {
+        if (!cancelled) setGeoMunicipioOptions([])
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [filters.geoEstado])
 
   const loadQueryOptions = useCallback(async (scope: { fuente?: FuenteFilter; dateFrom?: string; dateTo?: string }) => {
     setQueryOptionsLoading(true)
@@ -2794,6 +2885,56 @@ function ProspectosView() {
               />
             </div>
             <div className="space-y-1">
+              <Label>Estado</Label>
+              <Select
+                value={filters.geoEstado || "all"}
+                onValueChange={(value) =>
+                  setFilters((prev) => ({
+                    ...prev,
+                    geoEstado: value === "all" ? "" : value,
+                    geoMunicipio: "",
+                  }))
+                }
+              >
+                <SelectTrigger className="w-[180px]">
+                  <SelectValue placeholder={geoLoading ? "Cargando..." : "Todos los estados"} />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos</SelectItem>
+                  {geoEstadoOptions.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1">
+              <Label>Municipio</Label>
+              <Select
+                value={filters.geoMunicipio || "all"}
+                onValueChange={(value) =>
+                  setFilters((prev) => ({
+                    ...prev,
+                    geoMunicipio: value === "all" ? "" : value,
+                  }))
+                }
+                disabled={!filters.geoEstado || !geoMunicipioOptions.length}
+              >
+                <SelectTrigger className="w-[180px]">
+                  <SelectValue placeholder={filters.geoEstado ? "Todos los municipios" : "Selecciona estado"} />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos</SelectItem>
+                  {geoMunicipioOptions.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1">
               <Label>Ordenar por</Label>
               <Select
                 value={filters.order}
@@ -3039,11 +3180,29 @@ function ProspectosView() {
                 {Math.max(pageCount, 1)}
               </p>
             </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <Button size="sm" onClick={handleOpenCreateDialog}>
-                <IconPlus className="mr-1.5 size-4" />
-                Agregar prospecto
-              </Button>
+	            <div className="flex flex-wrap items-center gap-2">
+	              <div className="flex items-center gap-2">
+	                <Button
+	                  variant="outline"
+	                  size="sm"
+	                  onClick={() => void fetchProspectos(Math.max(0, offset - limit))}
+	                  disabled={loading || offset === 0}
+	                >
+	                  Anterior
+	                </Button>
+	                <Button
+	                  variant="outline"
+	                  size="sm"
+	                  onClick={() => void fetchProspectos(offset + limit)}
+	                  disabled={loading || offset + limit >= total}
+	                >
+	                  Siguiente
+	                </Button>
+	              </div>
+	              <Button size="sm" onClick={handleOpenCreateDialog}>
+	                <IconPlus className="mr-1.5 size-4" />
+	                Agregar prospecto
+	              </Button>
               <Button variant="ghost" size="sm" onClick={() => void fetchProspectos(offset)} disabled={loading}>
                 <IconRefresh className={cn("mr-1.5 size-4", loading && "animate-spin")} />
                 Actualizar
