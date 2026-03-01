@@ -1717,7 +1717,9 @@ async def _generate_assistant_reply(
                             "Si el prospecto confirma fecha/hora o acepta demo, DEBES usar tools "
                             "(list_demo_slots y/o schedule_demo) antes de responder. "
                             "Si falta algún dato requerido, pide solo ese dato faltante en una pregunta corta. "
-                            "Orden obligatorio de captura antes de agendar: nombre completo, luego correo, luego empresa."
+                            "Orden obligatorio de captura antes de agendar: nombre completo, luego correo, luego empresa. "
+                            "Si el usuario ya dio uno o varios datos en su(s) último(s) mensaje(s), extráelos y guárdalos "
+                            "con tools de captura antes de preguntar; no los vuelvas a pedir."
                         ),
                     }
                 ],
@@ -1742,6 +1744,23 @@ async def _generate_assistant_reply(
         )
         initial_input.insert(
             5,
+            {
+                "role": "developer",
+                "content": [
+                    {
+                        "type": "input_text",
+                        "text": (
+                            "Evita preguntas de reconfirmación redundantes. "
+                            "Solo confirma un dato cuando sea ambiguo o potencialmente inválido "
+                            "(por ejemplo, correo con formato dudoso). "
+                            "Si nombre/correo/empresa ya están claros en contexto, continúa sin pedirlos otra vez."
+                        ),
+                    }
+                ],
+            },
+        )
+        initial_input.insert(
+            6,
             {
                 "role": "developer",
                 "content": [
