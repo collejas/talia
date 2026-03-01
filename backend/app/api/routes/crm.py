@@ -6232,6 +6232,7 @@ class CRMInboxThread(BaseModel):
     conversacion_id: UUID
     contacto_id: UUID | None = None
     contacto_nombre: str | None = None
+    contacto_profile_name: str | None = None
     contacto_correo: str | None = None
     contacto_telefono: str | None = None
     canal: str | None = None
@@ -10023,6 +10024,7 @@ async def get_inbox_threads(
     ] = {}
     thread_channel_map: dict[str, str] = {}
     thread_phone_map: dict[str, str | None] = {}
+    missing_contact_name_ids: set[UUID] = set()
 
     for row in rows:
         conversacion_id = _clean_text(row.get("conversacion_id"))
@@ -10030,6 +10032,10 @@ async def get_inbox_threads(
             continue
         thread_channel_map[conversacion_id] = (_clean_text(row.get("canal")) or "").lower()
         thread_phone_map[conversacion_id] = _clean_text(row.get("contacto_telefono"))
+        if not _clean_text(row.get("contacto_nombre")):
+            contacto_uuid = _safe_uuid(row.get("contacto_id"))
+            if contacto_uuid:
+                missing_contact_name_ids.add(contacto_uuid)
         batch_value = _clean_text(row.get("batch_id"))
         campana_value = _clean_text(row.get("campana_id"))
         (
@@ -10243,6 +10249,28 @@ async def get_inbox_threads(
             if channel_name:
                 wa_rule_channel_map[rule_id_value] = channel_name
 
+    contact_profile_name_map: dict[str, str] = {}
+    contact_phone_map: dict[str, str] = {}
+    if missing_contact_name_ids:
+        try:
+            contacts_rows = await repo.get_contacts_by_ids(
+                organizacion_id=organizacion_id,
+                contacto_ids=sorted(missing_contact_name_ids, key=str),
+            )
+        except CRMRepositoryError:
+            contacts_rows = []
+        for contact_row in contacts_rows:
+            contact_id_value = _clean_text(contact_row.get("id"))
+            if not contact_id_value:
+                continue
+            contact_data = _ensure_dict(contact_row.get("contacto_datos"), default={})
+            profile_name = _clean_text(contact_data.get("profile_name"))
+            if profile_name:
+                contact_profile_name_map[contact_id_value] = profile_name
+            phone_value = _clean_text(contact_row.get("telefono_e164"))
+            if phone_value:
+                contact_phone_map[contact_id_value] = phone_value
+
     enriched_rows: list[dict[str, Any]] = []
     for row in rows:
         row_payload = dict(row)
@@ -10335,6 +10363,17 @@ async def get_inbox_threads(
             current_source = _clean_text(row_payload.get("source"))
         if not current_source and (batch_value or campana_value or resolved_template_id or resolved_template_slug):
             row_payload["source"] = "prospeccion"
+        contact_id_value = _clean_text(row_payload.get("contacto_id"))
+        if contact_id_value:
+            profile_name = contact_profile_name_map.get(contact_id_value)
+            if profile_name and not _clean_text(row_payload.get("contacto_nombre")):
+                row_payload["contacto_profile_name"] = profile_name
+            elif profile_name:
+                row_payload["contacto_profile_name"] = profile_name
+            if not _clean_text(row_payload.get("contacto_telefono")):
+                fallback_phone = contact_phone_map.get(contact_id_value)
+                if fallback_phone:
+                    row_payload["contacto_telefono"] = fallback_phone
 
         enriched_rows.append(row_payload)
 

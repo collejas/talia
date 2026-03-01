@@ -15,6 +15,7 @@ export type InboxThreadRow = {
   conversacion_id: string;
   contacto_id: string;
   contacto_nombre: string | null;
+  contacto_profile_name?: string | null;
   contacto_correo: string | null;
   contacto_telefono: string | null;
   canal: string | null;
@@ -84,6 +85,7 @@ export type InboxThread = {
   id: string;
   contactoId: string;
   contactoNombre: string;
+  contactoProfileName: string | null;
   contactoCorreo: string | null;
   contactoTelefono: string | null;
   canal: string;

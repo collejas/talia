@@ -3,12 +3,15 @@ import type { InboxThread, InboxThreadRow } from "@/lib/inbox/types";
 
 export function mapThreads(payload?: InboxThreadRow[] | null): InboxThread[] {
   if (!payload || !payload.length) return [];
-    return payload.map((row) => {
-      const messages = mapMessagesFromRaw(row.messages);
-      return {
-        id: row.conversacion_id,
+  return payload.map((row) => {
+    const contactoNombre = row.contacto_nombre?.trim() || "";
+    const contactoProfileName = row.contacto_profile_name?.trim() || "";
+    const messages = mapMessagesFromRaw(row.messages);
+    return {
+      id: row.conversacion_id,
       contactoId: row.contacto_id,
-      contactoNombre: row.contacto_nombre?.trim() || "Contacto sin nombre",
+      contactoNombre: contactoNombre || contactoProfileName || "Contacto sin nombre",
+      contactoProfileName: contactoProfileName || null,
       contactoCorreo: row.contacto_correo,
       contactoTelefono: row.contacto_telefono,
       canal: row.canal ?? "webchat",
@@ -42,6 +45,6 @@ export function mapThreads(payload?: InboxThreadRow[] | null): InboxThread[] {
       conversationHistory: row.conversation_history?.filter((id): id is string => Boolean(id && id.length)) ??
         (row.conversacion_id ? [row.conversacion_id] : []),
       reengageAttempts: row.reengage_attempts ? Math.max(0, row.reengage_attempts) : 0,
-      };
-    });
+    };
+  });
 }

@@ -103,7 +103,7 @@ function gatherReengageTagsFromThreads(threads: InboxThread[]): string[] {
 
 export async function loadInboxData(filters?: InboxThreadsFilters): Promise<InboxPayload> {
   const normalizedFilters: Record<string, string> = {
-    limit: "25",
+    limit: "100",
     message_limit: "20",
   };
   const normalizedEstado = filters?.estado?.trim();

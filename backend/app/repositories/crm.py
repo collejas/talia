@@ -4798,6 +4798,36 @@ class CRMRepository:
             raise CRMRepositoryError(f"Respuesta inválida al obtener contacto: {row!r}")
         return row
 
+    async def get_contacts_by_ids(
+        self,
+        *,
+        organizacion_id: UUID,
+        contacto_ids: list[UUID],
+    ) -> list[dict[str, Any]]:
+        if not contacto_ids:
+            return []
+        unique_ids: list[str] = []
+        seen: set[str] = set()
+        for contacto_id in contacto_ids:
+            key = str(contacto_id).strip()
+            if not key or key in seen:
+                continue
+            seen.add(key)
+            unique_ids.append(key)
+        if not unique_ids:
+            return []
+        params = {
+            "organizacion_id": f"eq.{organizacion_id}",
+            "id": f"in.({','.join(unique_ids)})",
+            "select": "id,nombre_completo,telefono_e164,contacto_datos",
+            "limit": str(min(1000, len(unique_ids))),
+        }
+        resp = await self._request("GET", "/rest/v1/contactos", params=params)
+        data = resp.json()
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"Respuesta inesperada al consultar contactos por ids: {data!r}")
+        return [row for row in data if isinstance(row, dict)]
+
     async def update_contact(
         self,
         *,

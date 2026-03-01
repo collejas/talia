@@ -30,6 +30,7 @@ import { matchesReengageFilter } from "@/lib/inbox/reengage-filter";
 
 const THREADS_REFRESH_INTERVAL_MS = 1600;
 const MESSAGES_REFRESH_INTERVAL_MS = 1500;
+const THREADS_PAGE_SIZE = 100;
 
 const CHANNEL_BADGE_STYLES: Record<string, string> = {
   whatsapp: "bg-emerald-500/10 text-emerald-700 border-emerald-500/40",
@@ -655,6 +656,8 @@ export function InboxSplitView({
 }: InboxSplitViewProps) {
   const compactKpiTagClass = "text-[8px] leading-none";
   const [threadItems, setThreadItems] = React.useState<InboxThread[]>(threads);
+  const [totalThreads, setTotalThreads] = React.useState<number>(threads.length);
+  const [loadingMoreThreads, setLoadingMoreThreads] = React.useState(false);
   const [selectedId, setSelectedId] = React.useState<string | null>(threads[0]?.id ?? null);
   const [searchTerm] = React.useState("");
   const [sending, setSending] = React.useState(false);
@@ -813,6 +816,7 @@ export function InboxSplitView({
 
   React.useEffect(() => {
     setThreadItems(threads);
+    setTotalThreads(threads.length);
   }, [threads]);
 
   React.useEffect(() => {
@@ -967,7 +971,8 @@ export function InboxSplitView({
       threadsRefreshingRef.current = true;
       try {
         const params = new URLSearchParams({
-          limit: "25",
+          limit: String(THREADS_PAGE_SIZE),
+          offset: "0",
           message_limit: "20",
         });
         const normalizedSource = sourceFilter ? sourceFilter.toLowerCase() : "";
@@ -995,8 +1000,11 @@ export function InboxSplitView({
         if (!response.ok) {
           return;
         }
-        const data = (await response.json()) as { threads?: InboxThread[] };
+        const data = (await response.json()) as { threads?: InboxThread[]; total_threads?: number };
         const incoming = Array.isArray(data?.threads) ? (data.threads as InboxThread[]) : [];
+        if (typeof data?.total_threads === "number") {
+          setTotalThreads(Math.max(0, data.total_threads));
+        }
         if (!incoming.length) {
           return;
         }
@@ -1021,6 +1029,64 @@ export function InboxSplitView({
       threadsRefreshingRef.current = false;
     };
   }, [sourceFilter, channelFilter, estadoFilter, batchFilter, campanaFilter]);
+
+  const handleLoadMoreThreads = React.useCallback(async () => {
+    if (loadingMoreThreads) return;
+    if (threadItems.length >= totalThreads) return;
+    setLoadingMoreThreads(true);
+    try {
+      const params = new URLSearchParams({
+        limit: String(THREADS_PAGE_SIZE),
+        offset: String(Math.max(0, threadItems.length)),
+        message_limit: "20",
+      });
+      const normalizedSource = sourceFilter ? sourceFilter.toLowerCase() : "";
+      if (normalizedSource && normalizedSource !== "all" && normalizedSource !== "correo_general") {
+        params.set("source", normalizedSource);
+      }
+      if (normalizedSource === "correo_general") {
+        params.set("channel", "correo");
+      }
+      if (channelFilter && channelFilter !== "all") {
+        params.set("channel", channelFilter);
+      }
+      if (estadoFilter) {
+        params.set("estado", estadoFilter);
+      }
+      if (batchFilter) {
+        params.set("batch_id", batchFilter);
+      }
+      if (campanaFilter) {
+        params.set("campana_id", campanaFilter);
+      }
+      const response = await fetch(`/api/inbox/threads?${params.toString()}`, {
+        cache: "no-store",
+      });
+      if (!response.ok) {
+        return;
+      }
+      const data = (await response.json()) as { threads?: InboxThread[]; total_threads?: number };
+      if (typeof data?.total_threads === "number") {
+        setTotalThreads(Math.max(0, data.total_threads));
+      }
+      const incoming = Array.isArray(data?.threads) ? (data.threads as InboxThread[]) : [];
+      if (!incoming.length) return;
+      setThreadItems((current) => appendThreadPage(current, incoming));
+    } catch (error) {
+      console.error("[inbox] load more threads failed", error);
+    } finally {
+      setLoadingMoreThreads(false);
+    }
+  }, [
+    loadingMoreThreads,
+    threadItems.length,
+    totalThreads,
+    sourceFilter,
+    channelFilter,
+    estadoFilter,
+    batchFilter,
+    campanaFilter,
+  ]);
 
   const refreshMessages = React.useCallback(
     async (conversationId: string, options: { force?: boolean } = {}) => {
@@ -1460,8 +1526,9 @@ export function InboxSplitView({
       <aside className="flex h-[calc(100vh-13rem)] min-h-[320px] w-[320px] flex-col overflow-hidden rounded-lg border bg-card">
         <div className="flex-1 overflow-y-auto">
           {filteredThreads.length ? (
-            <ul className="divide-y">
-              {filteredThreads.map((thread) => {
+            <>
+              <ul className="divide-y">
+                {filteredThreads.map((thread) => {
                 const isActive = thread.id === selectedId;
                 const displayTime = thread.previewAt || thread.ultimoMensajeEn || thread.iniciadoEn || null;
                 const unread = thread.noLeidos > 0;
@@ -1480,7 +1547,9 @@ export function InboxSplitView({
                     >
                       <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <span className="font-medium">{thread.contactoNombre}</span>
+                  <span className="font-medium" title={thread.contactoTelefono || undefined}>
+                    {thread.contactoNombre}
+                  </span>
                   {isRestart ? (
                     <Badge variant="secondary" className="text-[10px] uppercase tracking-tight">
                       {`Reinicio #${restartSequence}`}
@@ -1567,8 +1636,25 @@ export function InboxSplitView({
                     </button>
                   </li>
                 );
-              })}
-            </ul>
+                })}
+              </ul>
+              {threadItems.length < totalThreads ? (
+                <div className="border-t px-3 py-3">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="w-full"
+                    onClick={() => void handleLoadMoreThreads()}
+                    disabled={loadingMoreThreads}
+                  >
+                    {loadingMoreThreads
+                      ? "Cargando..."
+                      : `Cargar más (${threadItems.length}/${totalThreads})`}
+                  </Button>
+                </div>
+              ) : null}
+            </>
           ) : (
             <div className="flex h-full items-center justify-center px-6 py-12 text-center text-sm text-muted-foreground">
               No hay conversaciones que coincidan con la búsqueda.
@@ -1582,7 +1668,9 @@ export function InboxSplitView({
           <>
             <header className="flex items-center justify-between gap-4 border-b px-5 py-4">
               <div className="flex flex-wrap items-center gap-3">
-                <h3 className="text-lg font-semibold">{selectedThread.contactoNombre}</h3>
+                <h3 className="text-lg font-semibold" title={selectedThread.contactoTelefono || undefined}>
+                  {selectedThread.contactoNombre}
+                </h3>
                 <span
                   className={`text-[6px] uppercase tracking-[0.3em] rounded-full border px-3 py-1 ${getChannelBadgeClass(
                     selectedThread.canal,
@@ -2031,4 +2119,17 @@ function mergeThreadLists(current: InboxThread[], incoming: InboxThread[]): Inbo
     }
   }
   return merged;
+}
+
+function appendThreadPage(current: InboxThread[], incoming: InboxThread[]): InboxThread[] {
+  if (!incoming.length) return current;
+  const seen = new Set(current.map((item) => item.id));
+  const next = [...current];
+  for (const thread of incoming) {
+    if (!seen.has(thread.id)) {
+      next.push(thread);
+      seen.add(thread.id);
+    }
+  }
+  return next;
 }

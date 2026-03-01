@@ -14,6 +14,7 @@ function parseNumber(value: string | null, fallback: number, options: { min: num
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const limit = parseNumber(searchParams.get("limit"), 25, { min: 1, max: 100 });
+  const offset = parseNumber(searchParams.get("offset"), 0, { min: 0, max: 10_000 });
   const messageLimit = parseNumber(searchParams.get("message_limit"), 20, { min: 1, max: 100 });
   const estado = searchParams.get("estado")?.trim() || "";
   const source = searchParams.get("source")?.trim() || "";
@@ -25,6 +26,7 @@ export async function GET(request: Request) {
     withUserToken: true,
     searchParams: {
       limit: String(limit),
+      offset: String(offset),
       message_limit: String(messageLimit),
       ...(estado ? { estado } : {}),
       ...(source ? { source } : {}),
@@ -40,9 +42,13 @@ export async function GET(request: Request) {
     return NextResponse.json({ error }, { status });
   }
 
-  const threads = mapThreads(response.data);
+  const rows = Array.isArray(response.data) ? response.data : [];
+  const totalThreads =
+    rows.length && typeof rows[0]?.total_rows === "number" ? rows[0].total_rows : rows.length;
+  const threads = mapThreads(rows);
   return NextResponse.json({
     ok: true,
     threads,
+    total_threads: totalThreads,
   });
 }
