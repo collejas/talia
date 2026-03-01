@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import json
+import re
 import unicodedata
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
+from functools import lru_cache
 from typing import Any, Iterable, Literal, Sequence
 from urllib.parse import quote as urlquote
 from uuid import UUID
@@ -15,7 +17,7 @@ import httpx
 
 from app.core.config import settings
 from app.core.logging import get_logger
-from app.data.geo.locations import get_municipality_name, get_state_name
+from app.data.geo.locations import get_municipality_name, get_state_name, list_states
 
 
 class CRMRepositoryError(RuntimeError):
@@ -130,6 +132,40 @@ def _extract_geo_values(container: Any, keys: Sequence[str]) -> list[str]:
     return values
 
 
+@lru_cache(maxsize=1)
+def _known_state_names_normalized() -> tuple[str, ...]:
+    names: list[str] = []
+    seen: set[str] = set()
+    for item in list_states():
+        raw = item.get("name")
+        normalized = _normalize_geo_text(raw)
+        if not normalized or normalized in seen:
+            continue
+        seen.add(normalized)
+        names.append(normalized)
+    names.sort(key=len, reverse=True)
+    return tuple(names)
+
+
+def _extract_state_names_from_text(text: str) -> set[str]:
+    normalized_text = _normalize_geo_text(text)
+    if not normalized_text:
+        return set()
+    matches: list[str] = []
+    for state_name in _known_state_names_normalized():
+        if state_name not in normalized_text:
+            continue
+        pattern = r"(^|[^a-z0-9])" + r"\s+".join(re.escape(part) for part in state_name.split()) + r"([^a-z0-9]|$)"
+        if re.search(pattern, normalized_text):
+            matches.append(state_name)
+    pruned: set[str] = set()
+    for candidate in matches:
+        if any(other != candidate and other.startswith(candidate + " ") for other in matches):
+            continue
+        pruned.add(candidate)
+    return pruned
+
+
 def _row_matches_geo_filters(
     row: dict[str, Any],
     *,
@@ -200,9 +236,15 @@ def _row_matches_geo_filters(
                     state_match = True
                     break
         if not state_match and state_name_candidates:
+            detected_states = _extract_state_names_from_text(corpus)
             for name_candidate in state_name_candidates:
                 normalized_candidate = _normalize_geo_text(name_candidate)
-                if normalized_candidate and normalized_candidate in corpus:
+                if not normalized_candidate:
+                    continue
+                if normalized_candidate in detected_states:
+                    state_match = True
+                    break
+                if not detected_states and normalized_candidate in corpus:
                     state_match = True
                     break
         if not state_match:

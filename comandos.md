@@ -88,7 +88,7 @@ npm run build
 sudo systemctl restart talia-api.service
 sudo systemctl restart talia-panel.service
 
-codex resume 019c9cb6-0b2c-7db1-918a-9e7ad8ce1f6d
+codex resume 019ca4f9-e6a0-7d93-afc1-5945c309c0da
 
 correo → Prospección → Campaña → Plantilla → Lote
 
