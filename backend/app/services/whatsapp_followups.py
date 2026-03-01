@@ -19,10 +19,7 @@ from app.services.storage import StorageError
 
 logger = get_logger("app.services.whatsapp_followups")
 
-REENGAGE_TEMPLATE = (
-    "¿Seguimos en contacto? Tengo ejemplos y demos listos si quieres ver cómo Tal-IA te ayuda "
-    "a atender leads 24/7 sin cargar a tu equipo. ¿Te interesa que sigamos?"
-)
+REENGAGE_TEMPLATE = "¿Seguimos en contacto?"
 
 # El query inicial no puede usar configuración por tenant.
 # Usamos una ventana corta para no excluir tenants con reengage_minutes bajos
