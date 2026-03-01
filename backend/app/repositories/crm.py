@@ -7855,6 +7855,9 @@ class CRMRepository:
             if unique_activities:
                 params["actividad"] = _postgrest_in_clause(unique_activities)
 
+        if and_filters:
+            params["and"] = "(" + ",".join(and_filters) + ")"
+
         envio_prospecto_ids: set[str] | None = None
         if campana_id is not None or con_envio is not None:
             envio_prospecto_ids = await self._list_prospecto_ids_with_contact_envios(
@@ -7867,6 +7870,18 @@ class CRMRepository:
         if campana_id is not None or con_envio is True:
             if not envio_prospecto_ids:
                 return [], 0
+            # Avoid extremely long URLs with id=in(...) when envío IDs are large.
+            # Use a backend scan mode in that case (it also preserves other filters).
+            if len(envio_prospecto_ids) > 400:
+                return await self._list_prospectos_matching_ids(
+                    usuario_token=usuario_token,
+                    params=params,
+                    included_ids=envio_prospecto_ids,
+                    limit=limit,
+                    offset=offset,
+                    geo_estado=geo_estado,
+                    geo_municipio=geo_municipio,
+                )
             params["id"] = _postgrest_in_clause(sorted(envio_prospecto_ids))
         elif con_envio is False:
             if envio_prospecto_ids:
@@ -7879,9 +7894,6 @@ class CRMRepository:
                     geo_estado=geo_estado,
                     geo_municipio=geo_municipio,
                 )
-
-        if and_filters:
-            params["and"] = "(" + ",".join(and_filters) + ")"
 
         if geo_estado or geo_municipio:
             return await self._list_prospectos_with_geo_scan(
@@ -7949,6 +7961,69 @@ class CRMRepository:
                     continue
                 row_id = row.get("id")
                 if row_id is None or str(row_id) in excluded_ids:
+                    continue
+                if not _row_matches_geo_filters(
+                    row,
+                    geo_estado=geo_estado,
+                    geo_municipio=geo_municipio,
+                ):
+                    continue
+                if filtered_total >= offset and len(filtered_rows) < limit:
+                    filtered_rows.append(row)
+                filtered_total += 1
+
+            if len(data) < page_size:
+                break
+            scan_offset += len(data)
+
+        return filtered_rows, filtered_total
+
+    async def _list_prospectos_matching_ids(
+        self,
+        *,
+        usuario_token: str,
+        params: dict[str, str],
+        included_ids: set[str],
+        limit: int,
+        offset: int,
+        geo_estado: str | None = None,
+        geo_municipio: str | None = None,
+    ) -> tuple[list[dict[str, Any]], int]:
+        """Aplica inclusión por IDs en backend para evitar URLs grandes con in(...)."""
+
+        if limit <= 0:
+            return [], 0
+        if not included_ids:
+            return [], 0
+
+        filtered_rows: list[dict[str, Any]] = []
+        filtered_total = 0
+        scan_offset = 0
+        page_size = max(500, min(1000, limit * 2))
+        max_scan_rows = 200_000
+
+        while scan_offset < max_scan_rows:
+            scan_params = dict(params)
+            scan_params["limit"] = str(page_size)
+            scan_params["offset"] = str(scan_offset)
+            resp = await self._request_with_user(
+                "GET",
+                "/rest/v1/prospeccion_prospectos",
+                token=usuario_token,
+                params=scan_params,
+                prefer="count=exact",
+            )
+            data = resp.json() or []
+            if not isinstance(data, list):
+                raise CRMRepositoryError(f"Respuesta inesperada al listar prospectos (scan include): {data!r}")
+            if not data:
+                break
+
+            for row in data:
+                if not isinstance(row, dict):
+                    continue
+                row_id = row.get("id")
+                if row_id is None or str(row_id) not in included_ids:
                     continue
                 if not _row_matches_geo_filters(
                     row,
