@@ -100,6 +100,7 @@ const STAGE_REQUIRED_FIELDS: Record<string, Array<{ key: string; label: string }
     { key: "close_date", label: "Fecha de cierre" },
   ],
 };
+const BOARD_LIVE_REFRESH_MS = 5000;
 
 function sortStages(stages: EmbudoStage[]): EmbudoStage[] {
   return [...stages].sort((a, b) => {
@@ -212,6 +213,7 @@ export function EmbudoBoardClient({
   const [boardLoading, setBoardLoading] = useState(false);
   const [boardFetchError, setBoardFetchError] = useState<string | null>(null);
   const hasMountedRef = useRef(false);
+  const boardFetchInFlightRef = useRef(false);
 
   const scheduleMinValue = useMemo(() => toDateTimeLocalInput(new Date().toISOString()), []);
 
@@ -254,9 +256,19 @@ export function EmbudoBoardClient({
     return formatter.format(safeValue);
   }, [boardState.visitantesSinChat]);
 
-  const fetchBoardData = useCallback(async (asignadoId?: string | null) => {
-    setBoardLoading(true);
-    setBoardFetchError(null);
+  const fetchBoardData = useCallback(async (
+    asignadoId?: string | null,
+    options?: { silent?: boolean },
+  ) => {
+    const silent = Boolean(options?.silent);
+    if (boardFetchInFlightRef.current) {
+      return;
+    }
+    boardFetchInFlightRef.current = true;
+    if (!silent) {
+      setBoardLoading(true);
+      setBoardFetchError(null);
+    }
     try {
       const params = new URLSearchParams();
       params.set("limit", "400");
@@ -292,11 +304,16 @@ export function EmbudoBoardClient({
         errors: Array.isArray(data.errors) ? data.errors : [],
       });
     } catch (error) {
-      setBoardFetchError(
-        error instanceof Error ? error.message : "No se pudo actualizar el embudo.",
-      );
+      if (!silent) {
+        setBoardFetchError(
+          error instanceof Error ? error.message : "No se pudo actualizar el embudo.",
+        );
+      }
     } finally {
-      setBoardLoading(false);
+      if (!silent) {
+        setBoardLoading(false);
+      }
+      boardFetchInFlightRef.current = false;
     }
   }, [appliedDays, appliedCanal, appliedEstado, appliedQuery, appliedTieneCita, appliedEtapaIds]);
 
@@ -345,6 +362,30 @@ export function EmbudoBoardClient({
     }
     void fetchBoardData(selectedVendedorId || undefined);
   }, [selectedVendedorId, appliedDays, appliedCanal, appliedEstado, appliedQuery, appliedTieneCita, appliedEtapaIds, fetchBoardData]);
+
+  useEffect(() => {
+    const refresh = () => {
+      if (document.hidden) return;
+      if (movePending || schedulePending) return;
+      void fetchBoardData(selectedVendedorId || undefined, { silent: true });
+    };
+
+    const timer = window.setInterval(refresh, BOARD_LIVE_REFRESH_MS);
+    const handleVisibilityChange = () => refresh();
+    const handleFocus = () => refresh();
+    const handleOnline = () => refresh();
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    window.addEventListener("focus", handleFocus);
+    window.addEventListener("online", handleOnline);
+
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      window.removeEventListener("focus", handleFocus);
+      window.removeEventListener("online", handleOnline);
+    };
+  }, [fetchBoardData, movePending, schedulePending, selectedVendedorId]);
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
