@@ -112,6 +112,7 @@ export type ProspeccionCampanaAtribucionItem = {
   template_id?: string | null
   template_slug?: string | null
   template_nombre?: string | null
+  twilio_content_sid?: string | null
   envios_totales: number
   envios_enviados: number
   envios_entregados: number

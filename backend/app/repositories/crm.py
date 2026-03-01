@@ -9784,6 +9784,36 @@ class CRMRepository:
             raise CRMRepositoryError(f"prospeccion_campana_template_atribucion_invalid:{data!r}")
         return [row for row in data if isinstance(row, dict)]
 
+    async def get_prospeccion_campana_template_atribucion_rango(
+        self,
+        *,
+        usuario_token: str,
+        organizacion_id: UUID | None = None,
+        campana_id: UUID | None = None,
+        date_from_iso: str | None = None,
+        date_to_iso: str | None = None,
+        limit: int = 200,
+    ) -> list[dict[str, Any]]:
+        """Resumen de atribución por campaña/plantilla con filtro por rango y SID."""
+
+        payload: dict[str, Any] = {"p_limit": max(1, min(limit, 1000))}
+        if campana_id is not None:
+            payload["p_campana_id"] = str(campana_id)
+        if date_from_iso:
+            payload["p_date_from"] = date_from_iso
+        if date_to_iso:
+            payload["p_date_to"] = date_to_iso
+        resp = await self._request_service_role(
+            "POST",
+            "/rest/v1/rpc/prospeccion_campana_template_atribucion_rango",
+            json=payload,
+            organizacion_id=organizacion_id,
+        )
+        data = resp.json() or []
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"prospeccion_campana_template_atribucion_rango_invalid:{data!r}")
+        return [row for row in data if isinstance(row, dict)]
+
     async def cancel_pending_envios(
         self,
         *,

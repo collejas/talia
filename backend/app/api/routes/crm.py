@@ -1596,6 +1596,8 @@ class ProspeccionCampanaAtribucionQuery(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     campana_id: UUID | None = Field(default=None)
+    date_from: date | None = Field(default=None)
+    date_to: date | None = Field(default=None)
     limit: int = Field(default=200, ge=1, le=1000)
 
 
@@ -14821,11 +14823,26 @@ async def prospeccion_campanas_atribucion(
 ) -> dict[str, Any]:
     """Resumen persistente de desempeño por campaña/plantilla."""
 
+    date_from_dt = (
+        datetime.combine(params.date_from, datetime.min.time(), tzinfo=timezone.utc)
+        if params.date_from
+        else None
+    )
+    date_to_dt = (
+        datetime.combine(params.date_to, datetime.max.time(), tzinfo=timezone.utc)
+        if params.date_to
+        else None
+    )
+    if date_from_dt and date_to_dt and date_from_dt > date_to_dt:
+        raise HTTPException(status_code=400, detail="metricas_date_range_invalid")
+
     try:
-        rows = await repo.get_prospeccion_campana_template_atribucion(
+        rows = await repo.get_prospeccion_campana_template_atribucion_rango(
             usuario_token=user_token,
             organizacion_id=organizacion_id,
             campana_id=params.campana_id,
+            date_from_iso=date_from_dt.isoformat() if date_from_dt else None,
+            date_to_iso=date_to_dt.isoformat() if date_to_dt else None,
             limit=params.limit,
         )
     except CRMRepositoryError as exc:
@@ -14841,6 +14858,7 @@ async def prospeccion_campanas_atribucion(
                 "template_id": row.get("template_id"),
                 "template_slug": row.get("template_slug"),
                 "template_nombre": row.get("template_nombre"),
+                "twilio_content_sid": row.get("twilio_content_sid"),
                 "envios_totales": int(row.get("envios_totales") or 0),
                 "envios_enviados": int(row.get("envios_enviados") or 0),
                 "envios_entregados": int(row.get("envios_entregados") or 0),
@@ -14884,10 +14902,12 @@ async def prospeccion_metricas_dashboard(
         raise HTTPException(status_code=400, detail="metricas_date_range_invalid")
 
     try:
-        campaign_rows = await repo.get_prospeccion_campana_template_atribucion(
+        campaign_rows = await repo.get_prospeccion_campana_template_atribucion_rango(
             usuario_token=user_token,
             organizacion_id=organizacion_id,
             campana_id=params.campana_id,
+            date_from_iso=date_from_dt.isoformat() if date_from_dt else None,
+            date_to_iso=date_to_dt.isoformat() if date_to_dt else None,
             limit=min(params.limit, 2000),
         )
     except CRMRepositoryError as exc:
@@ -14902,6 +14922,7 @@ async def prospeccion_metricas_dashboard(
             "template_id": row.get("template_id"),
             "template_slug": row.get("template_slug"),
             "template_nombre": row.get("template_nombre"),
+            "twilio_content_sid": row.get("twilio_content_sid"),
             "envios_totales": int(row.get("envios_totales") or 0),
             "envios_enviados": int(row.get("envios_enviados") or 0),
             "envios_entregados": int(row.get("envios_entregados") or 0),

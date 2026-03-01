@@ -186,6 +186,7 @@ export default function ProspeccionMetricasPageClient() {
           "template_id",
           "template_slug",
           "template_nombre",
+          "twilio_content_sid",
           "envios_totales",
           "envios_enviados",
           "envios_entregados",
@@ -206,6 +207,7 @@ export default function ProspeccionMetricasPageClient() {
           item.template_id,
           item.template_slug,
           item.template_nombre,
+          item.twilio_content_sid,
           item.envios_totales,
           item.envios_enviados,
           item.envios_entregados,
@@ -422,6 +424,7 @@ export default function ProspeccionMetricasPageClient() {
                       <th className="px-2 py-2">Campaña</th>
                       <th className="px-2 py-2">Canal</th>
                       <th className="px-2 py-2">Plantilla</th>
+                      <th className="px-2 py-2">Twilio Content SID</th>
                       <th className="px-2 py-2">Totales</th>
                       <th className="px-2 py-2">Entregados</th>
                       <th className="px-2 py-2">Respondidos</th>
@@ -432,10 +435,11 @@ export default function ProspeccionMetricasPageClient() {
                   </thead>
                   <tbody>
                     {(data?.campanas.items ?? []).map((item, idx) => (
-                      <tr key={`${item.template_id ?? item.template_slug ?? idx}`} className="border-b">
+                      <tr key={`${item.template_id ?? item.template_slug ?? item.twilio_content_sid ?? idx}`} className="border-b">
                         <td className="px-2 py-2">{item.campana_nombre ?? "-"}</td>
                         <td className="px-2 py-2"><Badge variant="secondary">{item.canal ?? "-"}</Badge></td>
                         <td className="px-2 py-2">{item.template_nombre ?? item.template_slug ?? "-"}</td>
+                        <td className="px-2 py-2 font-mono text-xs">{item.twilio_content_sid ?? "-"}</td>
                         <td className="px-2 py-2">{number.format(item.envios_totales)}</td>
                         <td className="px-2 py-2">{number.format(item.envios_entregados)}</td>
                         <td className="px-2 py-2">{number.format(item.envios_respondidos)}</td>
