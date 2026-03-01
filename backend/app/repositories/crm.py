@@ -7723,8 +7723,13 @@ class CRMRepository:
             params["id"] = _postgrest_in_clause(sorted(envio_prospecto_ids))
         elif con_envio is False:
             if envio_prospecto_ids:
-                excluded_ids = ",".join(sorted(envio_prospecto_ids))
-                params["id"] = f"not.in.({excluded_ids})"
+                return await self._list_prospectos_excluding_ids(
+                    usuario_token=usuario_token,
+                    params=params,
+                    excluded_ids=envio_prospecto_ids,
+                    limit=limit,
+                    offset=offset,
+                )
 
         if and_filters:
             params["and"] = "(" + ",".join(and_filters) + ")"
@@ -7741,6 +7746,58 @@ class CRMRepository:
             raise CRMRepositoryError(f"Respuesta inesperada al listar prospectos: {data!r}")
         total = self._extract_total_count(resp.headers.get("content-range")) or len(data)
         return data, total
+
+    async def _list_prospectos_excluding_ids(
+        self,
+        *,
+        usuario_token: str,
+        params: dict[str, str],
+        excluded_ids: set[str],
+        limit: int,
+        offset: int,
+    ) -> tuple[list[dict[str, Any]], int]:
+        """Aplica exclusión por IDs en backend para evitar URLs enormes con not.in(...)."""
+
+        if limit <= 0:
+            return [], 0
+        filtered_rows: list[dict[str, Any]] = []
+        filtered_total = 0
+        scan_offset = 0
+        page_size = max(500, min(1000, limit * 2))
+        max_scan_rows = 200_000
+
+        while scan_offset < max_scan_rows:
+            scan_params = dict(params)
+            scan_params["limit"] = str(page_size)
+            scan_params["offset"] = str(scan_offset)
+            resp = await self._request_with_user(
+                "GET",
+                "/rest/v1/prospeccion_prospectos",
+                token=usuario_token,
+                params=scan_params,
+                prefer="count=exact",
+            )
+            data = resp.json() or []
+            if not isinstance(data, list):
+                raise CRMRepositoryError(f"Respuesta inesperada al listar prospectos (scan): {data!r}")
+            if not data:
+                break
+
+            for row in data:
+                if not isinstance(row, dict):
+                    continue
+                row_id = row.get("id")
+                if row_id is None or str(row_id) in excluded_ids:
+                    continue
+                if filtered_total >= offset and len(filtered_rows) < limit:
+                    filtered_rows.append(row)
+                filtered_total += 1
+
+            if len(data) < page_size:
+                break
+            scan_offset += len(data)
+
+        return filtered_rows, filtered_total
 
     async def _list_prospecto_ids_with_contact_envios(
         self,
