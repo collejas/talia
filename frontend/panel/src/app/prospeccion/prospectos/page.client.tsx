@@ -670,6 +670,7 @@ function ProspectosView() {
   const [savedViewsSaving, setSavedViewsSaving] = useState(false)
   const [searchInput, setSearchInput] = useState(initialFilters.search)
   const [prospectosViewMode, setProspectosViewMode] = useState<ProspectosViewMode>("grupos")
+  const [openedQueryScope, setOpenedQueryScope] = useState<string | null>(null)
   const [groupSort, setGroupSort] = useState<{ key: GroupSortKey; direction: "asc" | "desc" }>({
     key: "created_at",
     direction: "desc",
@@ -812,6 +813,10 @@ function ProspectosView() {
     () => new Map(queryOptions.map((option) => [option.value, option.label])),
     [queryOptions]
   )
+  const effectiveMetadataQueries = useMemo(() => {
+    if (openedQueryScope) return [openedQueryScope]
+    return filters.queryFilters.length ? filters.queryFilters : undefined
+  }, [filters.queryFilters, openedQueryScope])
   const groupedQueryOptions = useMemo(() => {
     const rows = [...queryOptions]
     rows.sort((a, b) => {
@@ -1210,7 +1215,7 @@ function ProspectosView() {
           phonePresent,
           emailPresent,
           websitePresent,
-          metadataQueries: filters.queryFilters.length ? filters.queryFilters : undefined,
+          metadataQueries: effectiveMetadataQueries,
           actividades: filters.actividadFilters.length ? filters.actividadFilters : undefined,
           dateFrom,
           dateTo,
@@ -1236,7 +1241,7 @@ function ProspectosView() {
         setLoading(false)
       }
     },
-    [filters, limit]
+    [effectiveMetadataQueries, filters, limit]
   )
 
   const appendProspectos = useCallback(
@@ -1277,7 +1282,7 @@ function ProspectosView() {
           phonePresent,
           emailPresent,
           websitePresent,
-          metadataQueries: filters.queryFilters.length ? filters.queryFilters : undefined,
+          metadataQueries: effectiveMetadataQueries,
           actividades: filters.actividadFilters.length ? filters.actividadFilters : undefined,
           dateFrom,
           dateTo,
@@ -1293,7 +1298,7 @@ function ProspectosView() {
         // Silencioso: solo relleno de huecos.
       }
     },
-    [filters]
+    [effectiveMetadataQueries, filters]
   )
 
   useEffect(() => {
@@ -1454,15 +1459,15 @@ function ProspectosView() {
   )
 
   useEffect(() => {
-    if (filters.queryFilters.length !== 1) return
+    if (!openedQueryScope) return
     if (prospectosViewMode !== "prospectos") return
-    const selectedQuery = filters.queryFilters[0]
-    const stillExists = queryOptions.some((item) => item.value === selectedQuery)
+    const stillExists = queryOptions.some((item) => item.value === openedQueryScope)
     if (!stillExists) {
+      setOpenedQueryScope(null)
       setFilters((prev) => ({ ...prev, queryFilters: [] }))
       setProspectosViewMode("grupos")
     }
-  }, [filters.queryFilters, prospectosViewMode, queryOptions])
+  }, [openedQueryScope, prospectosViewMode, queryOptions])
 
   useEffect(() => {
     const { from: dateFrom, to: dateTo } = getDateRangeFromFilters(
@@ -1478,8 +1483,8 @@ function ProspectosView() {
       queryFiltersInitialEffect.current = false
       return
     }
-    void loadActivitiesForQueries(filters.queryFilters)
-  }, [filters.queryFilters, loadActivitiesForQueries])
+    void loadActivitiesForQueries(effectiveMetadataQueries ?? [])
+  }, [effectiveMetadataQueries, loadActivitiesForQueries])
 
   const refreshChecklist = useCallback(async () => {
     setChecklistLoading(true)
@@ -1746,7 +1751,7 @@ function ProspectosView() {
   const showingTo = items.length ? offset + items.length : 0
   const pageCount = limit ? Math.ceil(total / limit) : 1
   const currentPage = limit ? Math.floor(offset / limit) + 1 : 1
-  const activeQueryGroup = filters.queryFilters.length === 1 ? filters.queryFilters[0] : null
+  const activeQueryGroup = openedQueryScope ?? (filters.queryFilters.length === 1 ? filters.queryFilters[0] : null)
   const activeQueryGroupLabel = activeQueryGroup ? queryLabelMap.get(activeQueryGroup) ?? activeQueryGroup : null
   const flowSteps = useMemo(() => {
     const pendingPhones = checklist?.telefonos_pendientes ?? 0
@@ -1818,9 +1823,11 @@ function ProspectosView() {
     setFilters(initialFilters)
     setSearchInput(initialFilters.search)
     setProspectosViewMode("grupos")
+    setOpenedQueryScope(null)
   }
 
   const handleOpenQueryGroup = useCallback((queryValue: string) => {
+    setOpenedQueryScope(queryValue || null)
     setFilters((prev) => ({
       ...prev,
       queryFilters: queryValue ? [queryValue] : [],
@@ -1829,6 +1836,7 @@ function ProspectosView() {
   }, [])
 
   const handleBackToQueryGroups = useCallback(() => {
+    setOpenedQueryScope(null)
     setFilters((prev) => ({ ...prev, queryFilters: [] }))
     setProspectosViewMode("grupos")
   }, [])
@@ -1849,6 +1857,7 @@ function ProspectosView() {
   }
 
   const handleQueryFilterToggle = (value: string, enabled: boolean) => {
+    if (openedQueryScope) return
     setFilters((prev) => {
       const next = new Set(prev.queryFilters)
       if (enabled) {
@@ -2980,10 +2989,16 @@ function ProspectosView() {
                     variant="outline"
                     size="sm"
                     className="min-w-[220px] justify-between text-sm normal-case"
+                    disabled={Boolean(openedQueryScope)}
+                    title={
+                      openedQueryScope
+                        ? "Lote abierto: la consulta se mantiene fija hasta volver a Grupos."
+                        : undefined
+                    }
                   >
                     <span className="max-w-[160px] truncate text-left text-sm">
-                      {filters.queryFilters.length
-                        ? filters.queryFilters
+                      {(effectiveMetadataQueries?.length ?? 0) > 0
+                        ? (effectiveMetadataQueries ?? [])
                             .map((value) => queryOptions.find((option) => option.value === value)?.label ?? value)
                             .join(", ")
                         : QUERY_FILTER_PLACEHOLDER}
