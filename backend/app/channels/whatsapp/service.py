@@ -93,7 +93,9 @@ _MAX_PROSPECCION_REPLY_PREVIEW_CHARS = 500
 _PROSPECCION_REPLY_ENVIO_SOURCE_STATES = {"pendiente", "procesando", "enviado", "entregado", "leido", "completado"}
 _WHATSAPP_ATTRIB_CONTACT_DEDUP_MINUTES = 60 * 24
 _WHATSAPP_TYPING_INDICATOR_URL = "https://messaging.twilio.com/v2/Indicators/Typing.json"
+_WHATSAPP_READ_INDICATOR_URL = "https://messaging.twilio.com/v2/Indicators/Read.json"
 _WHATSAPP_TYPING_TIMEOUT_SECONDS = 6.0
+_WHATSAPP_READ_TIMEOUT_SECONDS = 6.0
 
 
 @dataclass(slots=True)
@@ -994,7 +996,11 @@ async def handle_incoming_message(
             },
         )
 
-    # Best-effort UX: mostrar "escribiendo..." mientras se procesa la respuesta.
+    # Best-effort UX: marcar leído y mostrar "escribiendo..." mientras se procesa la respuesta.
+    await _send_whatsapp_read_indicator(
+        incoming_message_sid=message.message_sid,
+        organizacion_id=org_uuid,
+    )
     await _send_whatsapp_typing_indicator(
         incoming_message_sid=message.message_sid,
         organizacion_id=org_uuid,
@@ -2021,6 +2027,51 @@ async def _send_whatsapp_typing_indicator(
     except Exception as exc:  # pragma: no cover - red/servicio externo
         logger.info(
             "whatsapp.typing_indicator_failed",
+            extra={"message_sid": message_sid, "error": str(exc)},
+        )
+        return False
+
+
+async def _send_whatsapp_read_indicator(
+    *,
+    incoming_message_sid: str | None,
+    organizacion_id: UUID | None,
+) -> bool:
+    """Marca como leído el mensaje entrante vía Twilio (best-effort)."""
+
+    message_sid = str(incoming_message_sid or "").strip()
+    if not message_sid:
+        return False
+    if organizacion_id is None:
+        return False
+
+    runtime = await tenant_runtime.get_twilio_runtime_settings(organizacion_id=organizacion_id)
+    if not runtime.account_sid or not runtime.auth_token:
+        return False
+
+    try:
+        async with httpx.AsyncClient(timeout=_WHATSAPP_READ_TIMEOUT_SECONDS) as client:
+            response = await client.post(
+                _WHATSAPP_READ_INDICATOR_URL,
+                data={"messageId": message_sid, "channel": "whatsapp"},
+                auth=(runtime.account_sid, runtime.auth_token),
+                headers={"Accept": "application/json"},
+            )
+        if 200 <= response.status_code < 300:
+            log_event(logger, "whatsapp.read_indicator_sent", message_sid=message_sid)
+            return True
+        logger.info(
+            "whatsapp.read_indicator_not_sent",
+            extra={
+                "message_sid": message_sid,
+                "status_code": response.status_code,
+                "response_preview": response.text[:300],
+            },
+        )
+        return False
+    except Exception as exc:  # pragma: no cover - red/servicio externo
+        logger.info(
+            "whatsapp.read_indicator_failed",
             extra={"message_sid": message_sid, "error": str(exc)},
         )
         return False
