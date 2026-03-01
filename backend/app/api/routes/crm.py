@@ -6804,7 +6804,8 @@ class CRMPipelineBoardCard(BaseModel):
     contacto_id: UUID | None = None
     conversacion_id: UUID | None = None
     titulo: str
-    nombre: str
+    nombre: str | None = None
+    contacto_profile_name: str | None = None
     correo: str | None = None
     telefono: str | None = None
     empresa: str | None = None
@@ -21503,7 +21504,9 @@ def _card_from_opportunity(row: dict[str, Any]) -> CRMPipelineBoardCard | None:
         contacto_nombre = contacto_nombre.strip()
     else:
         contacto_nombre = None
-    nombre = contacto_nombre or titulo_value or cuenta.get("nombre") or "Oportunidad sin nombre"
+    contacto_datos = _ensure_dict(contacto.get("contacto_datos"), default={})
+    contacto_profile_name = _clean_text(contacto_datos.get("profile_name"))
+    nombre = contacto_nombre or contacto_profile_name or None
     conversacion_id = _safe_uuid(metadata.get("conversacion_id"))
     asignado_nombre = asignado.get("nombre_completo") or asignado.get("correo")
     prioridad = metadata.get("lead_score")
@@ -21522,6 +21525,7 @@ def _card_from_opportunity(row: dict[str, Any]) -> CRMPipelineBoardCard | None:
         conversacion_id=conversacion_id,
         titulo=titulo_value,
         nombre=nombre,
+        contacto_profile_name=contacto_profile_name,
         correo=contacto.get("correo"),
         telefono=contacto.get("telefono_e164"),
         empresa=contacto.get("company_name"),

@@ -22,8 +22,14 @@ export function adaptCard(card: PipelineBoardCard): EmbudoCard {
       : null;
   const resolvedConversationId = card.conversacion_id ?? metadataConversationId;
   const resolvedTitulo = resolveTitulo(card);
+  const resolvedProfileName =
+    typeof card.contacto_profile_name === "string" && card.contacto_profile_name.trim().length
+      ? card.contacto_profile_name.trim()
+      : null;
   const resolvedNombre =
-    typeof card.nombre === "string" && card.nombre.trim().length ? card.nombre.trim() : null;
+    typeof card.nombre === "string" && card.nombre.trim().length
+      ? card.nombre.trim()
+      : resolvedProfileName;
   const resolvedMonto =
     typeof card.monto_estimado === "number" && Number.isFinite(card.monto_estimado)
       ? card.monto_estimado
@@ -42,6 +48,7 @@ export function adaptCard(card: PipelineBoardCard): EmbudoCard {
     conversacionId: resolvedConversationId,
     titulo: resolvedTitulo,
     nombre: resolvedNombre,
+    contactoProfileName: resolvedProfileName,
     correo: card.correo,
     telefono: card.telefono,
     empresa: card.empresa,

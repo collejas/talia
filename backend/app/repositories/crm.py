@@ -156,7 +156,7 @@ class CRMRepository:
             "asignado:usuarios!oportunidades_asignado_usuario_org_fkey(id,nombre_completo,correo,telefono_e164)",
             "propietario:usuarios!oportunidades_propietario_usuario_org_fkey(id,nombre_completo,correo,telefono_e164)",
             "etapa:etapas_pipeline!oportunidades_etapa_org_fkey(id,nombre,codigo,categoria,orden,metadata)",
-            "contacto:contactos!oportunidades_contacto_principal_org_fkey(id,nombre_completo,correo,telefono_e164,company_name,notes,necesidad_proposito,estado,captura_estado,organizacion_id)",
+            "contacto:contactos!oportunidades_contacto_principal_org_fkey(id,nombre_completo,correo,telefono_e164,company_name,notes,necesidad_proposito,estado,captura_estado,organizacion_id,contacto_datos)",
             "cuenta:cuentas!oportunidades_cuenta_org_fkey(id,nombre,telefono,correo)",
         ]
     )
