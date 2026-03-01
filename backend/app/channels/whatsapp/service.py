@@ -96,6 +96,9 @@ _WHATSAPP_TYPING_INDICATOR_URL = "https://messaging.twilio.com/v2/Indicators/Typ
 _WHATSAPP_READ_INDICATOR_URL = "https://messaging.twilio.com/v2/Indicators/Read.json"
 _WHATSAPP_TYPING_TIMEOUT_SECONDS = 6.0
 _WHATSAPP_READ_TIMEOUT_SECONDS = 6.0
+_WHATSAPP_INBOUND_DEBOUNCE_SECONDS = 5.0
+_WHATSAPP_INBOUND_MERGE_MAX_MESSAGES = 4
+_WHATSAPP_INBOUND_MERGE_MAX_WINDOW_SECONDS = 12
 
 
 @dataclass(slots=True)
@@ -800,6 +803,7 @@ async def handle_incoming_message(
 
     conversation_id = str(registration.get("conversation_id") or "")
     contact_id = str(registration.get("contact_id") or "")
+    current_message_id = str(registration.get("message_id") or "")
     openai_conversation_id = registration.get("openai_conversation_id")
     org_uuid = _parse_org_uuid(organizacion_hint)
 
@@ -819,6 +823,15 @@ async def handle_incoming_message(
             extra={"conversation_id": conversation_id},
         )
         return
+
+    should_continue, merged_body = await _coalesce_inbound_burst(
+        conversation_id=conversation_id,
+        current_message_id=current_message_id,
+        fallback_body=message.body,
+    )
+    if not should_continue:
+        return
+    message.body = merged_body
 
     try:
         repo = CRMRepository()
@@ -2331,6 +2344,115 @@ def _normalize_phone_number(value: str | None) -> str | None:
     if text.lower().startswith("whatsapp:"):
         return text.split(":", 1)[1]
     return text
+
+
+def _parse_iso_datetime(value: Any) -> datetime | None:
+    if not value:
+        return None
+    raw = str(value).strip()
+    if not raw:
+        return None
+    normalized = raw.replace("Z", "+00:00")
+    try:
+        parsed = datetime.fromisoformat(normalized)
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        return parsed.replace(tzinfo=timezone.utc)
+    return parsed
+
+
+async def _coalesce_inbound_burst(
+    *,
+    conversation_id: str,
+    current_message_id: str | None,
+    fallback_body: str | None,
+) -> tuple[bool, str | None]:
+    """Agrupa mensajes entrantes consecutivos y evita respuestas duplicadas."""
+
+    message_id = str(current_message_id or "").strip()
+    fallback_text = str(fallback_body or "").strip() or None
+    if not conversation_id or not message_id:
+        return True, fallback_text
+
+    if _WHATSAPP_INBOUND_DEBOUNCE_SECONDS > 0:
+        await asyncio.sleep(_WHATSAPP_INBOUND_DEBOUNCE_SECONDS)
+
+    try:
+        recent_messages = await storage.fetch_recent_messages(
+            conversation_id=conversation_id,
+            limit=max(8, _WHATSAPP_INBOUND_MERGE_MAX_MESSAGES + 4),
+        )
+    except StorageError as exc:
+        logger.warning(
+            "whatsapp.inbound_burst_fetch_failed",
+            extra={"conversation_id": conversation_id, "error": str(exc)},
+        )
+        return True, fallback_text
+
+    if not recent_messages:
+        return True, fallback_text
+
+    latest_inbound: dict[str, Any] | None = None
+    for row in reversed(recent_messages):
+        if str(row.get("direccion") or "").strip().lower() == "entrante":
+            latest_inbound = row
+            break
+
+    if not isinstance(latest_inbound, dict):
+        return True, fallback_text
+
+    latest_inbound_id = str(latest_inbound.get("id") or "").strip()
+    if not latest_inbound_id:
+        return True, fallback_text
+
+    if latest_inbound_id != message_id:
+        log_event(
+            logger,
+            "whatsapp.inbound_burst_skip_older_fragment",
+            conversation_id=conversation_id,
+            message_id=message_id,
+            latest_inbound_id=latest_inbound_id,
+        )
+        return False, None
+
+    latest_created = _parse_iso_datetime(latest_inbound.get("creado_en"))
+    fragments: list[str] = []
+    for row in reversed(recent_messages):
+        if str(row.get("direccion") or "").strip().lower() != "entrante":
+            if fragments:
+                break
+            continue
+        if len(fragments) >= _WHATSAPP_INBOUND_MERGE_MAX_MESSAGES:
+            break
+        if latest_created is not None:
+            created_at = _parse_iso_datetime(row.get("creado_en"))
+            if created_at is None:
+                if fragments:
+                    break
+            elif (latest_created - created_at).total_seconds() > _WHATSAPP_INBOUND_MERGE_MAX_WINDOW_SECONDS:
+                break
+        candidate = str(row.get("texto") or "").strip()
+        if candidate:
+            fragments.append(candidate)
+
+    if not fragments:
+        return True, fallback_text
+
+    fragments.reverse()
+    merged_text = " ".join(fragment for fragment in fragments if fragment).strip()
+    if not merged_text:
+        return True, fallback_text
+
+    if len(fragments) > 1:
+        log_event(
+            logger,
+            "whatsapp.inbound_burst_coalesced",
+            conversation_id=conversation_id,
+            message_id=message_id,
+            fragments=len(fragments),
+        )
+    return True, merged_text
 
 
 def _map_status_to_event(status: str | None) -> str | None:
