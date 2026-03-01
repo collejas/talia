@@ -7749,39 +7749,78 @@ class CRMRepository:
         campana_id: UUID | None = None,
     ) -> set[str]:
         ids: set[str] = set()
-        offset = 0
+        batch_ids_filter: set[str] | None = None
+        if campana_id is not None:
+            batch_ids_filter = set()
+            batch_offset = 0
+            batch_page_size = 200
+            while True:
+                batch_rows, _ = await self.list_contact_batches(
+                    usuario_token=usuario_token,
+                    limit=batch_page_size,
+                    offset=batch_offset,
+                    campana_id=campana_id,
+                )
+                if not batch_rows:
+                    break
+                for row in batch_rows:
+                    if not isinstance(row, dict):
+                        continue
+                    batch_id = row.get("id")
+                    if batch_id is None:
+                        continue
+                    batch_ids_filter.add(str(batch_id))
+                if len(batch_rows) < batch_page_size:
+                    break
+                batch_offset += len(batch_rows)
+            if not batch_ids_filter:
+                return ids
+
+        batch_chunks: list[list[str]]
+        if batch_ids_filter:
+            batch_values = sorted(batch_ids_filter)
+            chunk_size = 100
+            batch_chunks = [
+                batch_values[index : index + chunk_size]
+                for index in range(0, len(batch_values), chunk_size)
+            ]
+        else:
+            batch_chunks = [[]]
+
         page_size = 5000
         max_scan = 50000
-        while offset < max_scan:
-            params: dict[str, str] = {
-                "select": "prospecto_id",
-                "limit": str(page_size),
-                "offset": str(offset),
-                "order": "creado_en.desc",
-            }
-            if campana_id is not None:
-                params["campana_id"] = f"eq.{campana_id}"
-            resp = await self._request_with_user(
-                "GET",
-                "/rest/v1/prospeccion_contacto_envio",
-                token=usuario_token,
-                params=params,
-            )
-            data = resp.json() or []
-            if not isinstance(data, list):
-                raise CRMRepositoryError(f"contact_envio_ids_invalid:{data!r}")
-            if not data:
-                break
-            for row in data:
-                if not isinstance(row, dict):
-                    continue
-                prospecto_id = row.get("prospecto_id")
-                if prospecto_id is None:
-                    continue
-                ids.add(str(prospecto_id))
-            if len(data) < page_size:
-                break
-            offset += len(data)
+        for batch_chunk in batch_chunks:
+            offset = 0
+            while offset < max_scan:
+                params: dict[str, str] = {
+                    "select": "prospecto_id",
+                    "limit": str(page_size),
+                    "offset": str(offset),
+                    "order": "creado_en.desc",
+                }
+                if batch_chunk:
+                    params["batch_id"] = _postgrest_in_clause(batch_chunk)
+                resp = await self._request_with_user(
+                    "GET",
+                    "/rest/v1/prospeccion_contacto_envio",
+                    token=usuario_token,
+                    params=params,
+                )
+                data = resp.json() or []
+                if not isinstance(data, list):
+                    raise CRMRepositoryError(f"contact_envio_ids_invalid:{data!r}")
+                if not data:
+                    break
+                for row in data:
+                    if not isinstance(row, dict):
+                        continue
+                    prospecto_id = row.get("prospecto_id")
+                    if prospecto_id is None:
+                        continue
+                    ids.add(str(prospecto_id))
+                if len(data) < page_size:
+                    break
+                offset += len(data)
         return ids
 
     async def list_prospecto_query_metadata(
