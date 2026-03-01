@@ -112,6 +112,7 @@ type ProspectosSortKey =
   | "creado"
 type ProspectTableColumnId = ProspectosSortKey
 type ProspectosViewMode = "grupos" | "prospectos"
+type GroupSortKey = "query" | "estado" | "municipio" | "count" | "created_at"
 
 type Filters = {
   search: string
@@ -672,6 +673,10 @@ function ProspectosView() {
   const [savedViewsSaving, setSavedViewsSaving] = useState(false)
   const [searchInput, setSearchInput] = useState(initialFilters.search)
   const [prospectosViewMode, setProspectosViewMode] = useState<ProspectosViewMode>("grupos")
+  const [groupSort, setGroupSort] = useState<{ key: GroupSortKey; direction: "asc" | "desc" }>({
+    key: "created_at",
+    direction: "desc",
+  })
   const [items, setItems] = useState<ProspectoItem[]>([])
   const [total, setTotal] = useState(0)
   const [limit, setLimit] = useState<number>(500)
@@ -810,15 +815,30 @@ function ProspectosView() {
     () => new Map(queryOptions.map((option) => [option.value, option.label])),
     [queryOptions]
   )
-  const groupedQueryOptions = useMemo(
-    () =>
-      [...queryOptions].sort((a, b) => {
-        const countDiff = (b.count ?? 0) - (a.count ?? 0)
-        if (countDiff !== 0) return countDiff
-        return a.label.localeCompare(b.label, "es", { sensitivity: "base" })
-      }),
-    [queryOptions]
-  )
+  const groupedQueryOptions = useMemo(() => {
+    const rows = [...queryOptions]
+    rows.sort((a, b) => {
+      let base = 0
+      if (groupSort.key === "query") {
+        base = (a.label || "").localeCompare(b.label || "", "es", { sensitivity: "base" })
+      } else if (groupSort.key === "estado") {
+        base = (a.estado || "").localeCompare(b.estado || "", "es", { sensitivity: "base" })
+      } else if (groupSort.key === "municipio") {
+        base = (a.municipio || "").localeCompare(b.municipio || "", "es", { sensitivity: "base" })
+      } else if (groupSort.key === "count") {
+        base = (a.count ?? 0) - (b.count ?? 0)
+      } else {
+        const aTs = a.created_at ? new Date(a.created_at).getTime() : 0
+        const bTs = b.created_at ? new Date(b.created_at).getTime() : 0
+        base = aTs - bTs
+      }
+      if (base === 0) {
+        base = (a.label || "").localeCompare(b.label || "", "es", { sensitivity: "base" })
+      }
+      return groupSort.direction === "asc" ? base : -base
+    })
+    return rows
+  }, [groupSort.direction, groupSort.key, queryOptions])
   const campaignLabelMap = useMemo(
     () => new Map(campaignFilterOptions.map((option) => [option.id, option.nombre])),
     [campaignFilterOptions]
@@ -829,6 +849,14 @@ function ProspectosView() {
         return { key, direction: current.direction === "asc" ? "desc" : "asc" }
       }
       return { key, direction: "asc" }
+    })
+  }, [])
+  const toggleGroupSort = useCallback((key: GroupSortKey) => {
+    setGroupSort((current) => {
+      if (current.key === key) {
+        return { key, direction: current.direction === "asc" ? "desc" : "asc" }
+      }
+      return { key, direction: key === "created_at" ? "desc" : "asc" }
     })
   }, [])
   const sortedItems = useMemo(() => {
@@ -3454,37 +3482,91 @@ function ProspectosView() {
           ) : null}
 
           {prospectosViewMode === "grupos" ? (
-            <div className="grid gap-3 p-4 sm:grid-cols-2 sm:px-6 sm:py-5 lg:grid-cols-3">
+            <div className="overflow-x-auto">
+              <Table className="text-[11px]">
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-[36%]">
+                      <button type="button" onClick={() => toggleGroupSort("query")}>
+                        Consulta {groupSort.key === "query" ? (groupSort.direction === "asc" ? "↑" : "↓") : ""}
+                      </button>
+                    </TableHead>
+                    <TableHead className="w-[17%]">
+                      <button type="button" onClick={() => toggleGroupSort("estado")}>
+                        Estado {groupSort.key === "estado" ? (groupSort.direction === "asc" ? "↑" : "↓") : ""}
+                      </button>
+                    </TableHead>
+                    <TableHead className="w-[17%]">
+                      <button type="button" onClick={() => toggleGroupSort("municipio")}>
+                        Municipio {groupSort.key === "municipio" ? (groupSort.direction === "asc" ? "↑" : "↓") : ""}
+                      </button>
+                    </TableHead>
+                    <TableHead className="w-[10%] text-right">
+                      <button type="button" onClick={() => toggleGroupSort("count")}>
+                        Prospectos {groupSort.key === "count" ? (groupSort.direction === "asc" ? "↑" : "↓") : ""}
+                      </button>
+                    </TableHead>
+                    <TableHead className="w-[15%] text-right">
+                      <button type="button" onClick={() => toggleGroupSort("created_at")}>
+                        Creado {groupSort.key === "created_at" ? (groupSort.direction === "asc" ? "↑" : "↓") : ""}
+                      </button>
+                    </TableHead>
+                    <TableHead className="w-[5%] text-right">Acción</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
               {queryOptionsLoading ? (
-                <div className="col-span-full rounded-md border border-dashed p-6 text-sm text-muted-foreground">
-                  Cargando grupos de búsqueda...
-                </div>
+                    <TableRow>
+                      <TableCell colSpan={6} className="py-8 text-center text-sm text-muted-foreground">
+                        Cargando grupos de búsqueda...
+                      </TableCell>
+                    </TableRow>
               ) : groupedQueryOptions.length ? (
                 groupedQueryOptions.map((group) => {
                   const isActive = activeQueryGroup === group.value
                   return (
-                    <button
+                        <TableRow
                       key={group.value}
-                      type="button"
-                      onClick={() => handleOpenQueryGroup(group.value)}
-                      className={cn(
-                        "rounded-lg border p-4 text-left transition hover:border-primary/50 hover:bg-muted/30",
-                        isActive && "border-primary bg-primary/5"
-                      )}
-                    >
-                      <p className="line-clamp-2 text-sm font-medium">{group.label}</p>
-                      <p className="mt-2 text-xs text-muted-foreground">
-                        {(group.count ?? 0).toLocaleString("es-MX")} prospectos
-                      </p>
-                      <p className="mt-1 text-xs text-primary">Abrir resultados</p>
-                    </button>
+                          className={cn(isActive && "bg-primary/5")}
+                        >
+                          <TableCell>
+                            <div className="max-w-[640px] truncate font-medium" title={group.label}>
+                              {group.label}
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <span className="block max-w-[220px] truncate" title={group.estado || "—"}>
+                              {group.estado || "—"}
+                            </span>
+                          </TableCell>
+                          <TableCell>
+                            <span className="block max-w-[220px] truncate" title={group.municipio || "—"}>
+                              {group.municipio || "—"}
+                            </span>
+                          </TableCell>
+                          <TableCell className="text-right">
+                            {(group.count ?? 0).toLocaleString("es-MX")}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            {formatDate(group.created_at || null)}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <Button variant="outline" size="sm" onClick={() => handleOpenQueryGroup(group.value)}>
+                              Abrir
+                            </Button>
+                          </TableCell>
+                        </TableRow>
                   )
                 })
               ) : (
-                <div className="col-span-full rounded-md border border-dashed p-6 text-sm text-muted-foreground">
-                  No hay grupos de búsqueda para los filtros actuales.
-                </div>
+                    <TableRow>
+                      <TableCell colSpan={6} className="py-8 text-center text-sm text-muted-foreground">
+                        No hay grupos de búsqueda para los filtros actuales.
+                      </TableCell>
+                    </TableRow>
               )}
+                </TableBody>
+              </Table>
             </div>
           ) : (
           <div className="overflow-x-auto">

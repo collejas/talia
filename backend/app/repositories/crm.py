@@ -8113,7 +8113,7 @@ class CRMRepository:
         date_to: date | None = None,
     ) -> dict[str, Any]:
         params: dict[str, str] = {
-            "select": "actividad,metadata",
+            "select": "actividad,metadata,creado_en",
             "order": "metadata->>query.asc,actividad.asc",
             "limit": "5000",
         }
@@ -8178,12 +8178,17 @@ class CRMRepository:
         query_labels: dict[str, str] = {}
         query_values: set[str] = set()
         query_counts: dict[str, int] = {}
+        query_latest_created_at: dict[str, str] = {}
+        query_state_labels: dict[str, str] = {}
+        query_municipality_labels: dict[str, str] = {}
         activity_values: set[str] = set()
         for row in data:
             metadata = row.get("metadata")
             row_queries: list[str] = []
             value: str | None = None
             label: str | None = None
+            state_label: str | None = None
+            municipality_label: str | None = None
             if isinstance(metadata, dict):
                 busqueda_id = metadata.get("busqueda_id")
                 busqueda_id_value = None
@@ -8204,6 +8209,59 @@ class CRMRepository:
                         candidate = raw_texto.strip()
                         if candidate:
                             texto_busqueda = candidate
+                    geo_estados_raw = advanced.get("geo_estados")
+                    geo_municipios_raw = advanced.get("geo_municipios")
+                    state_codes: list[str] = []
+                    municipality_pairs: list[tuple[str | None, str | None]] = []
+                    if isinstance(geo_estados_raw, list):
+                        for raw_state in geo_estados_raw:
+                            code_digits = "".join(ch for ch in str(raw_state or "") if ch.isdigit())
+                            if code_digits:
+                                state_codes.append(code_digits[-2:].zfill(2))
+                    if isinstance(geo_municipios_raw, list):
+                        for raw_pair in geo_municipios_raw:
+                            parts = str(raw_pair or "").split("::")
+                            state_part = "".join(ch for ch in (parts[0] if parts else "") if ch.isdigit())
+                            muni_part = "".join(ch for ch in (parts[1] if len(parts) >= 2 else "") if ch.isdigit())
+                            state_code = state_part[-2:].zfill(2) if state_part else None
+                            muni_code = muni_part[-3:].zfill(3) if muni_part else None
+                            if state_code:
+                                state_codes.append(state_code)
+                            municipality_pairs.append((state_code, muni_code))
+
+                    unique_state_codes: list[str] = []
+                    seen_state_codes: set[str] = set()
+                    for code in state_codes:
+                        if code in seen_state_codes:
+                            continue
+                        seen_state_codes.add(code)
+                        unique_state_codes.append(code)
+                    state_names = [
+                        name
+                        for name in (get_state_name(code) for code in unique_state_codes)
+                        if isinstance(name, str) and name.strip()
+                    ]
+                    if len(state_names) == 1:
+                        state_label = state_names[0]
+                    elif len(state_names) > 1:
+                        state_label = "Múltiples"
+
+                    municipality_names: list[str] = []
+                    seen_municipality_names: set[str] = set()
+                    for state_code, municipality_code in municipality_pairs:
+                        name = get_municipality_name(state_code, municipality_code)
+                        if not isinstance(name, str) or not name.strip():
+                            continue
+                        normalized_name = name.strip().casefold()
+                        if normalized_name in seen_municipality_names:
+                            continue
+                        seen_municipality_names.add(normalized_name)
+                        municipality_names.append(name.strip())
+                    if len(municipality_names) == 1:
+                        municipality_label = municipality_names[0]
+                    elif len(municipality_names) > 1:
+                        municipality_label = "Múltiples"
+
                     raw_codes = advanced.get("actividad_codigos")
                     if isinstance(raw_codes, list):
                         actividad_codigos = [
@@ -8239,6 +8297,15 @@ class CRMRepository:
                 query_values.add(value)
                 query_labels.setdefault(value, label or value)
                 query_counts[value] = query_counts.get(value, 0) + 1
+                if state_label and not query_state_labels.get(value):
+                    query_state_labels[value] = state_label
+                if municipality_label and not query_municipality_labels.get(value):
+                    query_municipality_labels[value] = municipality_label
+                created_at = row.get("creado_en")
+                if isinstance(created_at, str) and created_at.strip():
+                    current_latest = query_latest_created_at.get(value)
+                    if current_latest is None or created_at > current_latest:
+                        query_latest_created_at[value] = created_at
                 row_queries.append(value)
 
             if selected_queries is not None:
@@ -8259,7 +8326,14 @@ class CRMRepository:
         if selected_queries is not None:
             query_values = {str(value).strip() for value in (query_filters or []) if str(value or "").strip()}
         queries = [
-            {"value": value, "label": query_labels.get(value, value), "count": query_counts.get(value, 0)}
+            {
+                "value": value,
+                "label": query_labels.get(value, value),
+                "count": query_counts.get(value, 0),
+                "created_at": query_latest_created_at.get(value),
+                "estado": query_state_labels.get(value),
+                "municipio": query_municipality_labels.get(value),
+            }
             for value in query_values
         ]
         queries.sort(key=lambda item: item["label"].casefold())

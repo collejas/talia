@@ -597,7 +597,14 @@ export async function listProspectos(params: {
   return requestJson<ProspectosResponse>(url.toString())
 }
 
-export type ProspectoQueryOption = { value: string; label: string; count?: number }
+export type ProspectoQueryOption = {
+  value: string
+  label: string
+  count?: number
+  created_at?: string | null
+  estado?: string | null
+  municipio?: string | null
+}
 
 export async function listProspectosQueryMetadata(params?: {
   queries?: string[]
@@ -624,13 +631,32 @@ export async function listProspectosQueryMetadata(params?: {
     url.searchParams.set("date_to", params.dateTo)
   }
   const response = await requestJson<{
-    queries: Array<string | { value: string; label?: string; count?: number }>
+    queries: Array<
+      | string
+      | {
+          value: string
+          label?: string
+          count?: number
+          created_at?: string | null
+          estado?: string | null
+          municipio?: string | null
+        }
+    >
     activities: string[]
   }>(url.toString())
   const normalizedQueries = (response.queries ?? [])
     .map((item) => {
-      if (typeof item === "string") return { value: item, label: item, count: undefined }
-      return { value: item.value, label: item.label ?? item.value, count: item.count }
+      if (typeof item === "string") {
+        return { value: item, label: item, count: undefined, created_at: null, estado: null, municipio: null }
+      }
+      return {
+        value: item.value,
+        label: item.label ?? item.value,
+        count: item.count,
+        created_at: item.created_at ?? null,
+        estado: item.estado ?? null,
+        municipio: item.municipio ?? null,
+      }
     })
     .filter((item) => item.value)
   return {
