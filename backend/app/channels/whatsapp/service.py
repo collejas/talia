@@ -835,6 +835,14 @@ async def handle_incoming_message(
             contact_id=contact_id,
             message=message,
         )
+    origin_type = (
+        "publicidad_whatsapp"
+        if publicidad_atribucion_event
+        else "prospeccion"
+        if is_prospeccion_context
+        else "general_whatsapp"
+    )
+    is_prospeccion_mode = is_prospeccion_context or bool(publicidad_atribucion_event)
 
     restart_context: dict[str, Any] | None = None
     opportunity_ref: str | None = None
@@ -994,7 +1002,8 @@ async def handle_incoming_message(
             booking_context=booking_context_text,
             whatsapp_settings=whatsapp_settings,
             organizacion_id=org_uuid,
-            prospeccion_mode=is_prospeccion_context,
+            prospeccion_mode=is_prospeccion_mode,
+            origin_type=origin_type,
         )
         log_event(
             logger,
@@ -1496,12 +1505,14 @@ async def _generate_assistant_reply(
     whatsapp_settings: tenant_runtime.WhatsappRuntimeSettings,
     organizacion_id: UUID | None,
     prospeccion_mode: bool = False,
+    origin_type: str | None = None,
 ) -> AssistantReply:
     assistant = _build_assistant_from_runtime(whatsapp_settings, prospeccion_mode=prospeccion_mode)
     log_event(
         logger,
         "whatsapp.assistant_routing",
         prospeccion_mode=prospeccion_mode,
+        origin_type=origin_type,
         prompt_id=assistant.prompt_id,
         prompt_version=assistant.prompt_version,
         assistant_id=assistant.assistant_id,
@@ -1519,6 +1530,7 @@ async def _generate_assistant_reply(
         "channel": "whatsapp",
         "message_sid": message.message_sid,
         "prospeccion_mode": str(bool(prospeccion_mode)).lower(),
+        "origin_type": str(origin_type or "").strip().lower() or "general_whatsapp",
     }
     context_payload: dict[str, Any] | None = None
     try:
@@ -1566,6 +1578,9 @@ async def _generate_assistant_reply(
     if booking_context:
         context_payload = context_payload or {}
         context_payload["booking_context"] = booking_context
+    if origin_type:
+        context_payload = context_payload or {}
+        context_payload["origin_type"] = origin_type
 
     initial_input = _build_openai_input(
         message,
@@ -1692,6 +1707,23 @@ async def _generate_assistant_reply(
                             "No vuelvas a pedir nombre/correo/empresa. "
                             "Solo confirma y responde dudas puntuales; "
                             "si el usuario quiere cambiar/cancelar, usa reschedule_demo o cancel_demo."
+                        ),
+                    }
+                ],
+            },
+        )
+        initial_input.insert(
+            5,
+            {
+                "role": "developer",
+                "content": [
+                    {
+                        "type": "input_text",
+                        "text": (
+                            "origin_type de esta conversación: "
+                            f"{str(origin_type or 'prospeccion').strip().lower()}. "
+                            "Si es publicidad_whatsapp, llegó por frase atribuida. "
+                            "Si es prospeccion, llegó por campaña/plantilla."
                         ),
                     }
                 ],
