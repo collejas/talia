@@ -319,6 +319,8 @@ export type ContactoBatch = {
   titulo?: string | null
   filtros?: Record<string, unknown> | null
   programacion?: Record<string, unknown> | null
+  totales?: Record<string, number> | null
+  total_envios?: number | null
 }
 
 export type ContactoEnvio = {
@@ -978,6 +980,10 @@ export async function listContactoBatches(params: {
   return requestJson(url.toString())
 }
 
+export async function getContactoBatchResumen(batchId: string): Promise<ContactoBatchResumen> {
+  return requestJson<ContactoBatchResumen>(`/api/prospeccion/contacto/batches/${batchId}`)
+}
+
 export async function listContactoEnvios(params: {
   limit?: number
   offset?: number
@@ -1150,10 +1156,6 @@ export async function importBrevoContactoTemplate(payload: {
     method: "POST",
     body: JSON.stringify(payload),
   })
-}
-
-export async function getContactoBatchResumen(batchId: string) {
-  return requestJson<ContactoBatchResumen>(`/api/prospeccion/contacto/batches/${batchId}`)
 }
 
 export async function reintentarContactoEnvio(envioId: string) {

@@ -74,6 +74,7 @@ import {
   ejecutarChecklistLookup,
   ejecutarChecklistScraper,
   getProspectosTablePreferences,
+  getContactoBatchResumen,
   listProspectosSavedViews,
   type ProspectoItem,
   type ProspectoManualInput,
@@ -230,6 +231,12 @@ const CANAL_LABELS: Record<ProspeccionCanal, string> = {
   whatsapp: "WhatsApp",
   llamada: "Llamada/voz",
   otro: "Otro",
+}
+
+const CANAL_BADGE_CLASS: Record<"correo" | "whatsapp" | "llamada", string> = {
+  correo: "border-sky-200 bg-sky-50 text-sky-700",
+  whatsapp: "border-emerald-200 bg-emerald-50 text-emerald-700",
+  llamada: "border-amber-200 bg-amber-50 text-amber-700",
 }
 
 const LOOKUP_STATUS_LABELS: Record<string, string> = {
@@ -391,16 +398,6 @@ const FUENTE_LABELS: Record<string, string> = {
   google_places: "Google Places",
   denue: "DENUE",
   usuario: "Usuario",
-}
-
-const BATCH_STATE_VARIANTS: Record<string, "default" | "secondary" | "outline" | "destructive"> = {
-  pendiente: "secondary",
-  procesando: "secondary",
-  completado: "default",
-  enviado: "default",
-  cancelado: "outline",
-  error: "destructive",
-  fallido: "destructive",
 }
 
 const PAGE_SIZE_OPTIONS = [500] as const
@@ -1505,7 +1502,22 @@ function ProspectosView() {
     setRecentBatchError(null)
     try {
       const response = await listContactoBatches({ limit: 3 })
-      setRecentBatches(response.items ?? [])
+      const rows = response.items ?? []
+      const enriched = await Promise.all(
+        rows.map(async (batch) => {
+          try {
+            const resumen = await getContactoBatchResumen(batch.id)
+            return {
+              ...batch,
+              totales: resumen.totales ?? {},
+              total_envios: typeof resumen.total_envios === "number" ? resumen.total_envios : null,
+            }
+          } catch {
+            return batch
+          }
+        })
+      )
+      setRecentBatches(enriched)
     } catch (err) {
       const message = err instanceof Error ? err.message : "No se pudieron cargar los lotes recientes."
       setRecentBatchError(message)
@@ -2637,7 +2649,7 @@ function ProspectosView() {
             <span className="flex-1">{recentBatchError}</span>
           </div>
         ) : null}
-        <div className="mt-4 grid gap-3 md:grid-cols-3">
+        <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
           {recentBatchLoading && !recentBatches.length ? (
             Array.from({ length: 3 }).map((_, index) => (
               <div
@@ -2649,46 +2661,60 @@ function ProspectosView() {
               </div>
             ))
           ) : recentBatches.length ? (
-            recentBatches.map((batch) => (
-              <div key={batch.id} className="flex h-full flex-col rounded-xl border bg-background/80 p-4 shadow-sm">
+            recentBatches.map((batch) => {
+              const metrics = batchDeliveryMetrics(batch.totales, batch.total_envios)
+              return (
+              <div key={batch.id} className="flex h-full max-w-[280px] flex-col rounded-lg border bg-background/80 p-2.5 shadow-sm">
                 <div className="flex items-start justify-between gap-2">
                   <div>
-                    <p className="text-sm font-semibold">
+                    <p className="text-xs font-semibold">
                       {batch.titulo?.trim() || `Lote ${batch.id.slice(0, 8)}`}
                     </p>
                     <p className="text-xs text-muted-foreground">
                       {formatDate(batch.programado_en ?? batch.creado_en)}
                     </p>
                   </div>
-                  <Badge variant={BATCH_STATE_VARIANTS[batch.estado?.toLowerCase() ?? ""] ?? "outline"} className="capitalize">
-                    {batchStateLabel(batch.estado)}
+                  <Badge
+                    variant="secondary"
+                    className="text-[11px]"
+                    title="Enviados positivos / total de envíos procesados en el lote."
+                  >
+                    {metrics.positives.toLocaleString("es-MX")}/{metrics.total.toLocaleString("es-MX")} (
+                    {metrics.percent.toFixed(1)}%)
                   </Badge>
                 </div>
-                <p className="mt-3 text-xs text-muted-foreground">
+                <p className="mt-2 text-[11px] text-muted-foreground">
                   {(batch.total_prospectos ?? 0).toLocaleString("es-MX")} prospectos ·{" "}
                   {(batch.canales ?? []).map((canal) => CANAL_LABELS[canal as keyof typeof CANAL_LABELS] ?? canal).join(", ") ||
                     "Sin canales"}
                 </p>
                 {batch.metadata && typeof batch.metadata["campana_nombre"] === "string" ? (
-                  <p className="mt-1 text-xs text-muted-foreground">
+                  <p className="mt-1 text-[11px] text-muted-foreground">
                     Campaña: {String(batch.metadata["campana_nombre"])}
                   </p>
                 ) : null}
-                <div className="mt-3 flex flex-wrap gap-2">
+                <div className="mt-2 flex flex-wrap gap-1.5">
                   {(batch.canales ?? []).map((canal) => (
-                    <Badge key={`${batch.id}-${canal}`} variant="outline" className="text-[11px]">
+                    <Badge
+                      key={`${batch.id}-${canal}`}
+                      variant="outline"
+                      className={cn(
+                        "px-1.5 py-0 text-[10px]",
+                        CANAL_BADGE_CLASS[canal as keyof typeof CANAL_BADGE_CLASS] ?? "border-muted text-muted-foreground"
+                      )}
+                    >
                       {CANAL_LABELS[canal as keyof typeof CANAL_LABELS] ?? canal}
                     </Badge>
                   ))}
                 </div>
-                <div className="mt-4 flex flex-1 items-end justify-between text-xs text-muted-foreground">
-                  <span>ID: {batch.id.slice(0, 8)}</span>
-                  <Button asChild variant="ghost" size="sm" className="text-xs">
+                <div className="mt-2 flex flex-1 items-end justify-end text-[11px] text-muted-foreground">
+                  <Button asChild variant="ghost" size="sm" className="h-7 px-2 text-[11px]">
                     <Link href="/prospeccion/contactos">Ver detalle</Link>
                   </Button>
                 </div>
               </div>
-            ))
+              )
+            })
           ) : (
             <div className="rounded-xl border border-dashed bg-muted/30 p-4 text-sm text-muted-foreground">
               No hay envíos recientes. Crea una campaña desde “Preparar envíos” para verla aquí.
@@ -4365,27 +4391,32 @@ function formatContactLogDetail(entry: ContactoLog) {
   return parts.length ? parts.join(" · ") : "—"
 }
 
-function batchStateLabel(value?: string | null) {
-  if (!value) return "Desconocido"
-  const normalized = value.toLowerCase()
-  switch (normalized) {
-    case "pendiente":
-      return "Pendiente"
-    case "procesando":
-      return "Procesando"
-    case "completado":
-      return "Completado"
-    case "cancelado":
-      return "Cancelado"
-    case "error":
-      return "Error"
-    case "fallido":
-      return "Fallido"
-    case "enviado":
-      return "Enviado"
-    default:
-      return normalized.charAt(0).toUpperCase() + normalized.slice(1)
-  }
+function batchDeliveryMetrics(
+  totals?: Record<string, number> | null,
+  totalEnvios?: number | null
+): { positives: number; total: number; percent: number } {
+  const source = totals ?? {}
+  const positives = Object.entries(source).reduce((acc, [rawState, rawCount]) => {
+    const state = String(rawState || "").toLowerCase()
+    const count = Number(rawCount) || 0
+    if (count <= 0) return acc
+    if (
+      state === "enviada" ||
+      state === "enviado" ||
+      state === "entregada" ||
+      state === "entregado" ||
+      state === "leida" ||
+      state === "leido" ||
+      state === "respondido"
+    ) {
+      return acc + count
+    }
+    return acc
+  }, 0)
+  const computedTotal = Object.values(source).reduce((acc, rawCount) => acc + (Number(rawCount) || 0), 0)
+  const total = Math.max(positives, Number(totalEnvios) || computedTotal || 0)
+  const percent = total > 0 ? (positives / total) * 100 : 0
+  return { positives, total, percent }
 }
 
 type EnrichmentChecklistProps = {
