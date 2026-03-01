@@ -111,6 +111,7 @@ type ProspectosSortKey =
   | "con_envio"
   | "creado"
 type ProspectTableColumnId = ProspectosSortKey
+type ProspectosViewMode = "grupos" | "prospectos"
 
 type Filters = {
   search: string
@@ -670,6 +671,7 @@ function ProspectosView() {
   const [savedViewsLoading, setSavedViewsLoading] = useState(false)
   const [savedViewsSaving, setSavedViewsSaving] = useState(false)
   const [searchInput, setSearchInput] = useState(initialFilters.search)
+  const [prospectosViewMode, setProspectosViewMode] = useState<ProspectosViewMode>("grupos")
   const [items, setItems] = useState<ProspectoItem[]>([])
   const [total, setTotal] = useState(0)
   const [limit, setLimit] = useState<number>(500)
@@ -806,6 +808,15 @@ function ProspectosView() {
   }
   const queryLabelMap = useMemo(
     () => new Map(queryOptions.map((option) => [option.value, option.label])),
+    [queryOptions]
+  )
+  const groupedQueryOptions = useMemo(
+    () =>
+      [...queryOptions].sort((a, b) => {
+        const countDiff = (b.count ?? 0) - (a.count ?? 0)
+        if (countDiff !== 0) return countDiff
+        return a.label.localeCompare(b.label, "es", { sensitivity: "base" })
+      }),
     [queryOptions]
   )
   const campaignLabelMap = useMemo(
@@ -1418,6 +1429,17 @@ function ProspectosView() {
   )
 
   useEffect(() => {
+    if (filters.queryFilters.length !== 1) return
+    if (prospectosViewMode !== "prospectos") return
+    const selectedQuery = filters.queryFilters[0]
+    const stillExists = queryOptions.some((item) => item.value === selectedQuery)
+    if (!stillExists) {
+      setFilters((prev) => ({ ...prev, queryFilters: [] }))
+      setProspectosViewMode("grupos")
+    }
+  }, [filters.queryFilters, prospectosViewMode, queryOptions])
+
+  useEffect(() => {
     const { from: dateFrom, to: dateTo } = getDateRangeFromFilters(
       filters.dateOption,
       filters.customDateFrom,
@@ -1684,6 +1706,8 @@ function ProspectosView() {
   const showingTo = items.length ? offset + items.length : 0
   const pageCount = limit ? Math.ceil(total / limit) : 1
   const currentPage = limit ? Math.floor(offset / limit) + 1 : 1
+  const activeQueryGroup = filters.queryFilters.length === 1 ? filters.queryFilters[0] : null
+  const activeQueryGroupLabel = activeQueryGroup ? queryLabelMap.get(activeQueryGroup) ?? activeQueryGroup : null
   const flowSteps = useMemo(() => {
     const pendingPhones = checklist?.telefonos_pendientes ?? 0
     const pendingEmails = checklist?.sin_email ?? 0
@@ -1753,7 +1777,21 @@ function ProspectosView() {
   const handleClearFilters = () => {
     setFilters(initialFilters)
     setSearchInput(initialFilters.search)
+    setProspectosViewMode("grupos")
   }
+
+  const handleOpenQueryGroup = useCallback((queryValue: string) => {
+    setFilters((prev) => ({
+      ...prev,
+      queryFilters: queryValue ? [queryValue] : [],
+    }))
+    setProspectosViewMode("prospectos")
+  }, [])
+
+  const handleBackToQueryGroups = useCallback(() => {
+    setFilters((prev) => ({ ...prev, queryFilters: [] }))
+    setProspectosViewMode("grupos")
+  }, [])
 
   const handleContactFilterToggle = (value: ContactPresenceFilter, enabled: boolean) => {
     setFilters((prev) => {
@@ -1786,6 +1824,7 @@ function ProspectosView() {
         ),
       }
     })
+    setProspectosViewMode("prospectos")
   }
 
   const handleActividadFilterToggle = (value: string, enabled: boolean) => {
@@ -2909,6 +2948,7 @@ function ProspectosView() {
                       onCheckedChange={(checked) => handleQueryFilterToggle(option.value, Boolean(checked))}
                     >
                       {option.label}
+                      {typeof option.count === "number" ? ` (${option.count})` : ""}
                     </DropdownMenuCheckboxItem>
                   ))
                 ) : (
@@ -3284,17 +3324,41 @@ function ProspectosView() {
             <div>
               <p className="text-sm font-medium">Prospectos guardados</p>
               <p className="text-xs text-muted-foreground">
-                {showingFrom}-{Math.max(showingFrom, showingTo)} de {total} registros · Página {currentPage} de{" "}
-                {Math.max(pageCount, 1)}
+                {prospectosViewMode === "grupos"
+                  ? `${groupedQueryOptions.length} grupos de búsqueda`
+                  : `${showingFrom}-${Math.max(showingFrom, showingTo)} de ${total} registros · Página ${currentPage} de ${Math.max(pageCount, 1)}`}
+                {activeQueryGroupLabel && prospectosViewMode === "prospectos"
+                  ? ` · Grupo: ${activeQueryGroupLabel}`
+                  : ""}
               </p>
             </div>
 	            <div className="flex flex-wrap items-center gap-2">
+              <div className="flex items-center rounded-md border p-0.5">
+                <Button
+                  type="button"
+                  variant={prospectosViewMode === "grupos" ? "secondary" : "ghost"}
+                  size="sm"
+                  className="h-7 px-2 text-xs"
+                  onClick={() => setProspectosViewMode("grupos")}
+                >
+                  Grupos
+                </Button>
+                <Button
+                  type="button"
+                  variant={prospectosViewMode === "prospectos" ? "secondary" : "ghost"}
+                  size="sm"
+                  className="h-7 px-2 text-xs"
+                  onClick={() => setProspectosViewMode("prospectos")}
+                >
+                  Prospectos
+                </Button>
+              </div>
 	              <div className="flex items-center gap-2">
 	                <Button
 	                  variant="outline"
 	                  size="sm"
 	                  onClick={() => void fetchProspectos(Math.max(0, offset - limit))}
-	                  disabled={loading || offset === 0}
+	                  disabled={prospectosViewMode === "grupos" || loading || offset === 0}
 	                >
 	                  Anterior
 	                </Button>
@@ -3302,11 +3366,16 @@ function ProspectosView() {
 	                  variant="outline"
 	                  size="sm"
 	                  onClick={() => void fetchProspectos(offset + limit)}
-	                  disabled={loading || offset + limit >= total}
+	                  disabled={prospectosViewMode === "grupos" || loading || offset + limit >= total}
 	                >
 	                  Siguiente
 	                </Button>
 	              </div>
+              {prospectosViewMode === "prospectos" && activeQueryGroup ? (
+                <Button variant="outline" size="sm" onClick={handleBackToQueryGroups}>
+                  Ver grupos
+                </Button>
+              ) : null}
 	              <Button size="sm" onClick={handleOpenCreateDialog}>
 	                <IconPlus className="mr-1.5 size-4" />
 	                Agregar prospecto
@@ -3384,6 +3453,40 @@ function ProspectosView() {
             </div>
           ) : null}
 
+          {prospectosViewMode === "grupos" ? (
+            <div className="grid gap-3 p-4 sm:grid-cols-2 sm:px-6 sm:py-5 lg:grid-cols-3">
+              {queryOptionsLoading ? (
+                <div className="col-span-full rounded-md border border-dashed p-6 text-sm text-muted-foreground">
+                  Cargando grupos de búsqueda...
+                </div>
+              ) : groupedQueryOptions.length ? (
+                groupedQueryOptions.map((group) => {
+                  const isActive = activeQueryGroup === group.value
+                  return (
+                    <button
+                      key={group.value}
+                      type="button"
+                      onClick={() => handleOpenQueryGroup(group.value)}
+                      className={cn(
+                        "rounded-lg border p-4 text-left transition hover:border-primary/50 hover:bg-muted/30",
+                        isActive && "border-primary bg-primary/5"
+                      )}
+                    >
+                      <p className="line-clamp-2 text-sm font-medium">{group.label}</p>
+                      <p className="mt-2 text-xs text-muted-foreground">
+                        {(group.count ?? 0).toLocaleString("es-MX")} prospectos
+                      </p>
+                      <p className="mt-1 text-xs text-primary">Abrir resultados</p>
+                    </button>
+                  )
+                })
+              ) : (
+                <div className="col-span-full rounded-md border border-dashed p-6 text-sm text-muted-foreground">
+                  No hay grupos de búsqueda para los filtros actuales.
+                </div>
+              )}
+            </div>
+          ) : (
           <div className="overflow-x-auto">
             <Table className="text-[11px]">
               <TableHeader>
@@ -3641,7 +3744,9 @@ function ProspectosView() {
               </TableBody>
             </Table>
           </div>
+          )}
 
+          {prospectosViewMode === "prospectos" ? (
           <div className="flex flex-wrap items-center justify-between gap-3 border-t px-4 py-3 text-sm text-muted-foreground sm:px-6">
             <div>
               {selectedCount ? (
@@ -3686,6 +3791,7 @@ function ProspectosView() {
               </div>
             </div>
           </div>
+          ) : null}
       </section>
 
       <Dialog open={convertDialogOpen} onOpenChange={setConvertDialogOpen}>

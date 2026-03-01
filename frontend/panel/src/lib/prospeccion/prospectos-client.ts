@@ -597,7 +597,7 @@ export async function listProspectos(params: {
   return requestJson<ProspectosResponse>(url.toString())
 }
 
-export type ProspectoQueryOption = { value: string; label: string }
+export type ProspectoQueryOption = { value: string; label: string; count?: number }
 
 export async function listProspectosQueryMetadata(params?: {
   queries?: string[]
@@ -624,13 +624,14 @@ export async function listProspectosQueryMetadata(params?: {
     url.searchParams.set("date_to", params.dateTo)
   }
   const response = await requestJson<{
-    queries: Array<string | { value: string; label?: string }>
+    queries: Array<string | { value: string; label?: string; count?: number }>
     activities: string[]
   }>(url.toString())
   const normalizedQueries = (response.queries ?? [])
-    .map((item) =>
-      typeof item === "string" ? { value: item, label: item } : { value: item.value, label: item.label ?? item.value }
-    )
+    .map((item) => {
+      if (typeof item === "string") return { value: item, label: item, count: undefined }
+      return { value: item.value, label: item.label ?? item.value, count: item.count }
+    })
     .filter((item) => item.value)
   return {
     queries: normalizedQueries,

@@ -8111,7 +8111,7 @@ class CRMRepository:
         fuente: str | None = None,
         date_from: date | None = None,
         date_to: date | None = None,
-    ) -> dict[str, list[dict[str, str]] | list[str]]:
+    ) -> dict[str, Any]:
         params: dict[str, str] = {
             "select": "actividad,metadata",
             "order": "metadata->>query.asc,actividad.asc",
@@ -8177,6 +8177,7 @@ class CRMRepository:
 
         query_labels: dict[str, str] = {}
         query_values: set[str] = set()
+        query_counts: dict[str, int] = {}
         activity_values: set[str] = set()
         for row in data:
             metadata = row.get("metadata")
@@ -8237,6 +8238,7 @@ class CRMRepository:
             if value:
                 query_values.add(value)
                 query_labels.setdefault(value, label or value)
+                query_counts[value] = query_counts.get(value, 0) + 1
                 row_queries.append(value)
 
             if selected_queries is not None:
@@ -8257,7 +8259,7 @@ class CRMRepository:
         if selected_queries is not None:
             query_values = {str(value).strip() for value in (query_filters or []) if str(value or "").strip()}
         queries = [
-            {"value": value, "label": query_labels.get(value, value)}
+            {"value": value, "label": query_labels.get(value, value), "count": query_counts.get(value, 0)}
             for value in query_values
         ]
         queries.sort(key=lambda item: item["label"].casefold())
