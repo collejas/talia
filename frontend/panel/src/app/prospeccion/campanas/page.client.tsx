@@ -138,6 +138,7 @@ export function CampanasMetricsClient() {
     cuerpoTexto: "",
     cuerpoHtml: "",
     twilioSid: "",
+    twilioVariable6: "",
     nombreIa: "",
     nombreEmpresa: "",
     ctaBaseUrl: "https://talia.mx/",
@@ -518,6 +519,7 @@ export function CampanasMetricsClient() {
       cuerpoTexto: "",
       cuerpoHtml: "",
       twilioSid: "",
+      twilioVariable6: "",
       nombreIa: "",
       nombreEmpresa: "",
       ctaBaseUrl: "https://talia.mx/",
@@ -773,6 +775,7 @@ export function CampanasMetricsClient() {
         cuerpoTexto: "",
         cuerpoHtml: "",
         twilioSid: "",
+        twilioVariable6: "",
         nombreIa: "",
         nombreEmpresa: "",
         ctaBaseUrl: "https://talia.mx/",
@@ -802,6 +805,10 @@ export function CampanasMetricsClient() {
       cuerpoTexto: template.cuerpo_texto ?? "",
       cuerpoHtml: template.cuerpo_html ?? "",
       twilioSid: typeof metadata["twilio_content_sid"] === "string" ? metadata["twilio_content_sid"] : "",
+      twilioVariable6:
+        metadata["twilio_variables"] && typeof metadata["twilio_variables"] === "object"
+          ? String((metadata["twilio_variables"] as Record<string, unknown>)["6"] ?? "")
+          : "",
       nombreIa:
         (typeof metadata["nombre_ia"] === "string" ? metadata["nombre_ia"] : "") ||
         (typeof metadata["assistant_name"] === "string" ? metadata["assistant_name"] : ""),
@@ -833,6 +840,9 @@ export function CampanasMetricsClient() {
     setTemplateError(null)
     const metadata: Record<string, unknown> = {}
     if (templateForm.twilioSid.trim()) metadata["twilio_content_sid"] = templateForm.twilioSid.trim()
+    if (templateForm.twilioVariable6.trim()) {
+      metadata["twilio_variables"] = { "6": templateForm.twilioVariable6.trim() }
+    }
     const normalizedLogoUrl = normalizeLogoUrl(selectedLogoUrl)
     if (templateForm.canal === "correo" && normalizedLogoUrl) {
       metadata["logo_url"] = normalizedLogoUrl
@@ -1749,6 +1759,16 @@ export function CampanasMetricsClient() {
                         value={templateForm.twilioSid}
                         onChange={(event) => setTemplateForm((prev) => ({ ...prev, twilioSid: event.target.value }))}
                         placeholder="HX..."
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label>Texto libre variable 6</Label>
+                      <Input
+                        value={templateForm.twilioVariable6}
+                        onChange={(event) =>
+                          setTemplateForm((prev) => ({ ...prev, twilioVariable6: event.target.value }))
+                        }
+                        placeholder="Texto que se inyecta en {{6}}"
                       />
                     </div>
                     <div className="space-y-1">
