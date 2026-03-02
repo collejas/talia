@@ -163,6 +163,7 @@ export function DenueAdvancedSearchModal({ open, onOpenChange, onApply, canApply
   const [expandedStates, setExpandedStates] = useState<Set<string>>(() => new Set())
   const [claseIndice, setClaseIndice] = useState<Record<string, string[]>>({})
   const [loadingClaseIndice, setLoadingClaseIndice] = useState<Set<string>>(() => new Set())
+  const [scianIndiceErrors, setScianIndiceErrors] = useState<Record<string, string>>({})
   const [allActivitiesSelected, setAllActivitiesSelected] = useState(false)
 
   useEffect(() => {
@@ -241,12 +242,21 @@ export function DenueAdvancedSearchModal({ open, onOpenChange, onApply, canApply
         next.add(codigo)
         return next
       })
+      setScianIndiceErrors((prev) => {
+        const next = { ...prev }
+        delete next[codigo]
+        return next
+      })
       try {
         const response = await listScianClaseIndice({ codigoClase: codigo })
         const items = response.items.map((item) => item.item).filter(Boolean)
         setClaseIndice((prev) => ({ ...prev, [codigo]: items }))
       } catch {
         setClaseIndice((prev) => ({ ...prev, [codigo]: [] }))
+        setScianIndiceErrors((prev) => ({
+          ...prev,
+          [codigo]: "No fue posible cargar el índice. Revisa que los datos SCIAN estén disponibles.",
+        }))
       } finally {
         setLoadingClaseIndice((prev) => {
           const next = new Set(prev)
@@ -387,7 +397,7 @@ export function DenueAdvancedSearchModal({ open, onOpenChange, onApply, canApply
               </div>
             </div>
             {isLeaf && isExpanded ? (
-              <div className="ml-6 space-y-1 rounded-xl border border-border/60 bg-muted/5 p-2 text-xs">
+              <div className="ml-6 space-y-2 rounded-xl border border-border/60 bg-muted/5 p-2 text-xs">
                 {loadingIndex ? (
                   <div className="flex items-center gap-2">
                     <RefreshCw className="h-3 w-3 animate-spin" />
@@ -404,9 +414,27 @@ export function DenueAdvancedSearchModal({ open, onOpenChange, onApply, canApply
                     </div>
                   </ScrollArea>
                 ) : (
-                  <Button type="button" size="sm" variant="ghost" onClick={() => loadScianClaseIndice(node.codigo, { force: true })}>
-                    Cargar índice
-                  </Button>
+                  <>
+                    <Button type="button" size="sm" variant="ghost" onClick={() => loadScianClaseIndice(node.codigo, { force: true })}>
+                      Cargar índice
+                    </Button>
+                    {scianIndiceErrors[node.codigo] ? (
+                      <p className="text-[10px] text-destructive">{scianIndiceErrors[node.codigo]}</p>
+                    ) : (
+                      <p className="text-[10px] text-muted-foreground">
+                        No se encontró contenido del índice para esta clase de actividad.
+                      </p>
+                    )}
+                    {node.descripcion ? (
+                      <p className="text-[10px] text-muted-foreground">{node.descripcion}</p>
+                    ) : null}
+                    {node.incluye ? (
+                      <p className="text-[10px] text-muted-foreground">Incluye: {node.incluye}</p>
+                    ) : null}
+                    {node.excluye ? (
+                      <p className="text-[10px] text-muted-foreground">Excluye: {node.excluye}</p>
+                    ) : null}
+                  </>
                 )}
               </div>
             ) : null}
@@ -418,7 +446,7 @@ export function DenueAdvancedSearchModal({ open, onOpenChange, onApply, canApply
           </div>
         )
       }),
-    [claseIndice, expandedScianCodes, loadingClaseIndice, selectedScianCodes, toggleScianExpansion, toggleScianSelection, loadScianClaseIndice],
+    [claseIndice, expandedScianCodes, loadingClaseIndice, selectedScianCodes, toggleScianExpansion, toggleScianSelection, loadScianClaseIndice, scianIndiceErrors],
   )
 
   const geoStates = catalogs?.geo.states ?? []
