@@ -13593,6 +13593,13 @@ async def listar_scian_clase_indice(
             limit=limit,
             offset=offset,
         )
+        if not items:
+            items = await repo.list_scian_clase_indice(
+                codigo_clase=codigo_clase,
+                limit=limit,
+                offset=offset,
+                prefix=True,
+            )
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     return {"ok": True, "items": items}

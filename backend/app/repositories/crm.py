@@ -7632,12 +7632,13 @@ class CRMRepository:
         codigo_clase: str,
         limit: int | None = None,
         offset: int | None = None,
+        prefix: bool = False,
     ) -> list[dict[str, Any]]:
         """Obtiene los ítems de índice para una clase específica."""
 
         params: dict[str, Any] = {
             "select": "id,codigo_clase,item",
-            "codigo_clase": f"eq.{codigo_clase}",
+            "codigo_clase": f"{'like' if prefix else 'eq'}.{codigo_clase}{'%' if prefix else ''}",
             "order": "item.asc",
         }
         if limit is not None:
