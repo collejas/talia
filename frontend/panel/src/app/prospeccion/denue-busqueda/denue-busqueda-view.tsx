@@ -138,7 +138,7 @@ type FeedbackState = {
 
 type AdvancedSearchPayload = Pick<
   CreateDenueSearchPayload,
-  "modo" | "texto_busqueda" | "actividad_codigos" | "estrato_ids" | "geo_estados" | "geo_municipios"
+  "modo" | "texto_busqueda" | "actividad_codigos" | "actividad_nombres" | "estrato_ids" | "geo_estados" | "geo_municipios"
 >;
 
 type BusquedaMetaFilters = {
@@ -367,6 +367,7 @@ export function DenueBusquedaView() {
   const [searchMode, setSearchMode] = useState<SearchMode>("radial");
   const [geoLookups, setGeoLookups] = useState<GeoLookups | null>(null);
   const [scianLookups, setScianLookups] = useState<ScianLookups | null>(null);
+  const scianTitles = scianLookups?.titles;
   const [geoStatesCatalog, setGeoStatesCatalog] = useState<DenueCatalogosResponse["geo"]["states"]>([]);
   const [geoEstadoFilter, setGeoEstadoFilter] = useState<string>("any");
   const [geoMunicipioFilter, setGeoMunicipioFilter] = useState<string>("any");
@@ -1437,15 +1438,23 @@ export function DenueBusquedaView() {
     if (modo === "entidad" && !texto) {
       return undefined;
     }
+    const actividadNames =
+      actividadCodes.length && actividadCodes[0] !== "0"
+        ? actividadCodes
+          .map((code) => scianTitles?.get(code) ?? "")
+          .map((value) => value.trim())
+          .filter((value) => value.length > 0)
+        : undefined;
     return {
       modo,
       texto_busqueda: texto || undefined,
       actividad_codigos: actividadCodes,
+      actividad_nombres: actividadNames?.length ? actividadNames : undefined,
       estrato_ids: estrato.length ? estrato : undefined,
       geo_estados: geoEstados,
       geo_municipios: geoMunicipios,
     };
-  }, []);
+  }, [scianTitles]);
 
   const runBusqueda = useCallback(
     async (options?: { filters?: DenueAdvancedFilters | null; forceStandard?: boolean }) => {

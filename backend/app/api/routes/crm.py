@@ -2116,6 +2116,10 @@ class DenueBusquedaPayload(BaseModel):
         default=None,
         description="Lista de códigos SCIAN seleccionados.",
     )
+    actividad_nombres: list[str] | None = Field(
+        default=None,
+        description="Nombres de las actividades económicas seleccionadas.",
+    )
     estrato_ids: list[str] | None = Field(
         default=None,
         description="Lista de estratos seleccionados (valores 1-7).",
@@ -2241,7 +2245,14 @@ async def _build_advanced_meta(payload: DenueBusquedaPayload, repo: CRMRepositor
     activity_codes = _activity_codes_from_payload(payload)
     if activity_codes:
         meta["actividad_codigos"] = activity_codes
-        if repo:
+        provided_names: list[str] = []
+        if payload.actividad_nombres:
+            provided_names = _unique_preserve_order(
+                [str(value).strip() for value in payload.actividad_nombres if value and str(value).strip()]
+            )
+        if provided_names:
+            meta["actividad_nombres"] = provided_names
+        elif repo:
             names: list[str] = []
             try:
                 titles = await repo.list_scian_clase_titles(codes=activity_codes)
