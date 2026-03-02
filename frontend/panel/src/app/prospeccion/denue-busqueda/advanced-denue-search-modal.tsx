@@ -230,41 +230,52 @@ export function DenueAdvancedSearchModal({ open, onOpenChange, onApply, canApply
     setAllActivitiesSelected(false)
   }, [])
 
+  const loadScianClaseIndice = useCallback(
+    async (codigo: string, options?: { force?: boolean }) => {
+      const force = options?.force ?? false
+      if (!force && claseIndice[codigo]) {
+        return
+      }
+      setLoadingClaseIndice((prev) => {
+        const next = new Set(prev)
+        next.add(codigo)
+        return next
+      })
+      try {
+        const response = await listScianClaseIndice({ codigoClase: codigo })
+        const items = response.items.map((item) => item.item).filter(Boolean)
+        setClaseIndice((prev) => ({ ...prev, [codigo]: items }))
+      } catch {
+        setClaseIndice((prev) => ({ ...prev, [codigo]: [] }))
+      } finally {
+        setLoadingClaseIndice((prev) => {
+          const next = new Set(prev)
+          next.delete(codigo)
+          return next
+        })
+      }
+    },
+    [claseIndice],
+  )
+
   const toggleScianExpansion = useCallback(
     (codigo: string, isLeaf: boolean) => {
+      let shouldLoad = false
       setExpandedScianCodes((prev) => {
         const next = new Set(prev)
         if (next.has(codigo)) {
           next.delete(codigo)
         } else {
           next.add(codigo)
+          shouldLoad = true
         }
         return next
       })
-      if (isLeaf && !claseIndice[codigo]) {
-        void (async () => {
-          setLoadingClaseIndice((prev) => {
-            const next = new Set(prev)
-            next.add(codigo)
-            return next
-          })
-          try {
-            const response = await listScianClaseIndice({ codigoClase: codigo })
-            const items = response.items.map((item) => item.item).filter(Boolean)
-            setClaseIndice((prev) => ({ ...prev, [codigo]: items }))
-          } catch {
-            setClaseIndice((prev) => ({ ...prev, [codigo]: [] }))
-          } finally {
-            setLoadingClaseIndice((prev) => {
-              const next = new Set(prev)
-              next.delete(codigo)
-              return next
-            })
-          }
-        })()
+      if (isLeaf && shouldLoad) {
+        void loadScianClaseIndice(codigo)
       }
     },
-    [claseIndice],
+    [loadScianClaseIndice],
   )
 
   const toggleSize = useCallback((value: string) => {
@@ -393,7 +404,7 @@ export function DenueAdvancedSearchModal({ open, onOpenChange, onApply, canApply
                     </div>
                   </ScrollArea>
                 ) : (
-                  <Button type="button" size="sm" variant="ghost" onClick={() => toggleScianExpansion(node.codigo, isLeaf)}>
+                  <Button type="button" size="sm" variant="ghost" onClick={() => loadScianClaseIndice(node.codigo, { force: true })}>
                     Cargar índice
                   </Button>
                 )}
@@ -407,7 +418,7 @@ export function DenueAdvancedSearchModal({ open, onOpenChange, onApply, canApply
           </div>
         )
       }),
-    [claseIndice, expandedScianCodes, loadingClaseIndice, selectedScianCodes, toggleScianExpansion, toggleScianSelection],
+    [claseIndice, expandedScianCodes, loadingClaseIndice, selectedScianCodes, toggleScianExpansion, toggleScianSelection, loadScianClaseIndice],
   )
 
   const geoStates = catalogs?.geo.states ?? []

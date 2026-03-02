@@ -2234,12 +2234,27 @@ def _geo_targets_from_payload(payload: DenueBusquedaPayload) -> list[tuple[str |
     return targets
 
 
-def _build_advanced_meta(payload: DenueBusquedaPayload) -> dict[str, Any]:
+async def _build_advanced_meta(payload: DenueBusquedaPayload, repo: CRMRepository | None = None) -> dict[str, Any]:
     meta: dict[str, Any] = {"modo": payload.modo}
     if payload.texto_busqueda:
         meta["texto_busqueda"] = payload.texto_busqueda
-    if payload.actividad_codigos:
-        meta["actividad_codigos"] = payload.actividad_codigos
+    activity_codes = _activity_codes_from_payload(payload)
+    if activity_codes:
+        meta["actividad_codigos"] = activity_codes
+        if repo:
+            names: list[str] = []
+            try:
+                titles = await repo.list_scian_clase_titles(codes=activity_codes)
+            except CRMRepositoryError:
+                titles = {}
+            for code in activity_codes:
+                title = titles.get(code)
+                if isinstance(title, str) and title.strip():
+                    names.append(title.strip())
+                else:
+                    names.append(code)
+            if names:
+                meta["actividad_nombres"] = names
     if payload.estrato_ids:
         meta["estrato_ids"] = payload.estrato_ids
     if payload.geo_estados:
@@ -12550,7 +12565,7 @@ async def crear_busqueda_denue(
         organizacion_id=tenant_organizacion_id
     )
     client = DenueClient(token=denue_settings.token, base_url=denue_settings.base_url)
-    advanced_meta = _build_advanced_meta(payload)
+    advanced_meta = await _build_advanced_meta(payload, repo)
     modo = payload.modo or "radio"
     text_query = (payload.texto_busqueda or "").strip()
     search_logger.info(

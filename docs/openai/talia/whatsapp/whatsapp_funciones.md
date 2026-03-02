@@ -134,6 +134,31 @@
 ---
 
 {
+  "name": "mark_lost_negacion",
+  "description": "Marca la oportunidad actual como cerrada (perdida) luego de que el prospecto expresa una negación definitiva. Evita que el asistente reingrese al flujo comercial.",
+  "strict": false,
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "conversacion_id": {
+        "type": "string",
+        "description": "ID único de la conversación activa."
+      },
+      "reason": {
+        "type": "string",
+        "description": "Breve motivo por el cual se marcó como perdido (ej. 'no me interesa')."
+      }
+    },
+    "required": [
+      "conversacion_id"
+    ],
+    "additionalProperties": false
+  }
+}
+
+---
+
+{
   "name": "send_information_email",
   "description": "Enviar al prospecto la información solicitada sobre Tal-IA cuando prefiere recibirla por correo en lugar de agendar demo.",
   "strict": true,

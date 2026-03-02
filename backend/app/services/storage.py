@@ -2876,6 +2876,64 @@ async def promote_opportunity_stage(
     return True
 
 
+async def mark_opportunity_lost(
+    *,
+    oportunidad_id: str,
+    organizacion_id: str,
+    reason: str | None = None,
+    conversation_id: str | None = None,
+) -> None:
+    """Cierra una oportunidad en la etapa `cerrado_perdido` destacando la razón."""
+    await promote_opportunity_stage(
+        oportunidad_id=oportunidad_id,
+        organizacion_id=organizacion_id,
+        stage_code="cerrado_perdido",
+        source="assistant_negacion",
+    )
+
+    try:
+        org_uuid = UUID(str(organizacion_id))
+        opp_uuid = UUID(str(oportunidad_id))
+    except (TypeError, ValueError) as exc:
+        raise StorageError("opportunity_stage_invalid_id") from exc
+
+    repo = CRMRepository()
+    try:
+        opportunity = await repo.get_pipeline_opportunity(
+            organizacion_id=org_uuid,
+            oportunidad_id=opp_uuid,
+        )
+    except CRMRepositoryError as exc:
+        raise StorageError(str(exc)) from exc
+    if not opportunity:
+        log_event(
+            logger,
+            "storage.mark_opportunity_lost.missing_opportunity",
+            oportunidad_id=str(opp_uuid),
+            organizacion_id=str(org_uuid),
+        )
+        return
+
+    metadata = _ensure_dict(opportunity.get("metadata"))
+    closure_meta = _ensure_dict(metadata.get("closure"))
+    closure_meta["assistant_negacion"] = {
+        "reason": str(reason or "Negación definitiva detectada por Tal-IA").strip(),
+        "marked_at": datetime.now(timezone.utc).isoformat(),
+        "conversation_id": conversation_id,
+    }
+    metadata["closure"] = closure_meta
+
+    payload = {"estado": "perdida", "metadata": metadata}
+    try:
+        await repo.update_opportunity(
+            organizacion_id=org_uuid,
+            oportunidad_id=opp_uuid,
+            payload=payload,
+        )
+    except CRMRepositoryError as exc:
+        raise StorageError(str(exc)) from exc
+
+
 async def record_demo_booking_metadata(
     *,
     oportunidad_id: str,

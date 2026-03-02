@@ -1192,6 +1192,9 @@ async def execute_tool(
     if func == "send_information_email":
         return await _handle_information_email(arguments, context)
 
+    if func == "mark_lost_negacion":
+        return await _handle_mark_lost_negacion(arguments, context)
+
     if func == "close_lead":
         return await _handle_close_lead(arguments, context)
 
@@ -1717,6 +1720,62 @@ async def _handle_information_email(
             )
 
     return {"status": "sent", "email": email_value, "message_id": message_id}
+
+
+async def _handle_mark_lost_negacion(
+    arguments: dict[str, Any], context: ToolRuntimeContext
+) -> dict[str, Any]:
+    conversation_id = _require(arguments, "conversacion_id")
+    reason = str(arguments.get("reason") or "").strip() or "Negación definitiva detectada"
+    contact = await _resolve_contact(context.contact_id)
+    if not contact:
+        raise ValueError("No se encontró el contacto asociado a la conversación")
+
+    org_value = webchat_service._extract_contact_org(contact)
+    org_uuid = webchat_service._resolve_org_uuid(org_value)
+    if not org_uuid:
+        raise ValueError("No se pudo determinar organización para esta conversación")
+
+    if context.conversation_id and conversation_id != context.conversation_id:
+        logger.info(
+            "whatsapp.mark_lost_negacion.conversation_mismatch",
+            extra={
+                "expected": context.conversation_id,
+                "received": conversation_id,
+            },
+        )
+
+    try:
+        tarjeta_id = await storage.ensure_conversation_opportunity(
+            conversation_id=conversation_id,
+            contact_id=context.contact_id,
+            channel=context.channel or "whatsapp",
+        )
+    except StorageError as exc:
+        logger.warning(
+            "whatsapp.mark_lost_negacion.ensure_opportunity_failed",
+            extra={"conversation_id": conversation_id, "error": str(exc)},
+        )
+        raise
+
+    if not tarjeta_id:
+        raise ValueError("No se pudo asociar la oportunidad de ventas")
+
+    try:
+        await storage.mark_opportunity_lost(
+            oportunidad_id=tarjeta_id,
+            organizacion_id=org_uuid,
+            reason=reason,
+            conversation_id=conversation_id,
+        )
+    except StorageError as exc:
+        logger.warning(
+            "whatsapp.mark_lost_negacion.mark_failed",
+            extra={"conversation_id": conversation_id, "error": str(exc)},
+        )
+        raise
+
+    return {"status": "ok", "reason": reason}
 
 
 async def _handle_close_lead(

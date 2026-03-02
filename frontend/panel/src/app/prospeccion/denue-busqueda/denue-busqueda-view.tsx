@@ -145,6 +145,7 @@ type BusquedaMetaFilters = {
   geo_estados?: string[];
   geo_municipios?: string[];
   actividad_codigos?: string[];
+  actividad_nombres?: string[];
   estrato_ids?: string[];
   texto_busqueda?: string;
 };
@@ -166,6 +167,14 @@ function extractBusquedaMeta(item: DenueBusquedaItem): { source?: string; modo?:
   const source = typeof (meta as Record<string, unknown>).source === "string" ? String((meta as Record<string, unknown>).source) : undefined;
   const modo = typeof (meta as Record<string, unknown>).modo === "string" ? String((meta as Record<string, unknown>).modo) : undefined;
   const advanced = (meta as Record<string, unknown>).advanced_filters;
+  const actividadNombres =
+    advanced &&
+    typeof advanced === "object" &&
+    Array.isArray((advanced as Record<string, unknown>).actividad_nombres)
+      ? ((advanced as Record<string, unknown>).actividad_nombres as unknown[])
+          .map((value) => (typeof value === "string" ? value.trim() : String(value ?? "").trim()))
+          .filter((value) => value.length > 0)
+      : undefined;
   const filters =
     advanced && typeof advanced === "object"
       ? {
@@ -178,6 +187,7 @@ function extractBusquedaMeta(item: DenueBusquedaItem): { source?: string; modo?:
         actividad_codigos: Array.isArray((advanced as Record<string, unknown>).actividad_codigos)
           ? ((advanced as Record<string, unknown>).actividad_codigos as unknown[]).map(String)
           : undefined,
+        actividad_nombres: actividadNombres,
         estrato_ids: Array.isArray((advanced as Record<string, unknown>).estrato_ids)
           ? ((advanced as Record<string, unknown>).estrato_ids as unknown[]).map(String)
           : undefined,
@@ -288,7 +298,8 @@ function buildActividadDisplay(
   if (codes.includes("0")) {
     return { label: "Todas las actividades", tooltip: "Actividades: Todas las actividades" };
   }
-  const names = codes.map((code) => scian?.titles.get(code) ?? code);
+  const metaNames = (filters?.actividad_nombres ?? []).map((value) => value.trim()).filter(Boolean);
+  const names = metaNames.length ? metaNames : codes.map((code) => scian?.titles.get(code) ?? code);
   const base = names[0] ?? "";
   if (!base) {
     return { label: "" };

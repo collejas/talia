@@ -179,6 +179,31 @@
 ---
 
 {
+  "name": "mark_lost_negacion",
+  "description": "Marca la oportunidad actual como cerrada (perdida) cuando el prospecto expresa una negación definitiva desde prospección.",
+  "strict": false,
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "conversacion_id": {
+        "type": "string",
+        "description": "Conversación activa que se debe cerrar."
+      },
+      "reason": {
+        "type": "string",
+        "description": "Motivo breve, por ejemplo 'la plantilla fue ignorada y el usuario dijo no me interesa.'"
+      }
+    },
+    "required": [
+      "conversacion_id"
+    ],
+    "additionalProperties": false
+  }
+}
+
+---
+
+{
   "name": "list_demo_slots",
   "description": "Consultar disponibilidad para ofrecer horarios de demo.",
   "strict": true,

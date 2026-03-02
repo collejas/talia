@@ -3,7 +3,7 @@
 from typing import Sequence
 
 from fastapi import APIRouter, HTTPException, Response
-from pydantic import BaseModel, EmailStr, Extra, Field
+from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
 from app.services.propuesta_pdf import PropuestaDocument, render_propuesta_pdf
 from app.services import EmailSendError, send_email
@@ -16,8 +16,7 @@ class TableRowPayload(BaseModel):
     label: str
     cells: list[str]
 
-    class Config:
-        extra = Extra.forbid
+    model_config = ConfigDict(extra="forbid")
 
 
 class HeroCardPayload(BaseModel):
@@ -25,8 +24,7 @@ class HeroCardPayload(BaseModel):
     title: str
     description: str
 
-    class Config:
-        extra = Extra.forbid
+    model_config = ConfigDict(extra="forbid")
 
 
 class ProposalTablePayload(BaseModel):
@@ -50,8 +48,7 @@ class ProposalTablePayload(BaseModel):
         alias="configuracionRows",
     )
 
-    class Config:
-        allow_population_by_field_name = True
+    model_config = ConfigDict(populate_by_name=True)
 
 
 def _extract_payload_rows(rows: list[TableRowPayload] | None) -> list[dict[str, Sequence[str]]] | None:
@@ -131,8 +128,7 @@ class ProposalEmailPayload(BaseModel):
     message: str | None = None
     proposal: ProposalTablePayload | None = None
 
-    class Config:
-        allow_population_by_field_name = True
+    model_config = ConfigDict(populate_by_name=True)
 
 
 @router.post("/tal-ia/email", include_in_schema=True)

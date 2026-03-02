@@ -155,3 +155,11 @@ async def test_run_followups_escalates_after_reengage(monkeypatch):
 
     assert escalated["trigger"] == "followup_escalate"
     assert repo.updated_payloads, "Debe registrar metadata de escalación"
+
+
+def test_should_skip_reengage_when_opportunity_closed():
+    opportunity = {
+        "estado": "en progreso",
+        "etapa": {"codigo": "cerrado_perdido", "categoria": "perdida"},
+    }
+    assert whatsapp_followups._should_skip_reengage_for_business_rules(opportunity)
