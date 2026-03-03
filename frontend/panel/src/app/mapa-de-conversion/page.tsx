@@ -244,6 +244,9 @@ export default async function Page({
   const utmSource = utmSourceParam.length ? utmSourceParam : null;
   const utmMedium = utmMediumParam.length ? utmMediumParam : null;
   const utmCampaign = utmCampaignParam.length ? utmCampaignParam : null;
+  const attributionFilterActive = Boolean(
+    sourceClass || utmSource || utmMedium || utmCampaign,
+  );
   const rangoParam = typeof params.rango === "string" ? params.rango.trim().toLowerCase() : "";
   const rango = rangoParam.length ? rangoParam : "mes";
   const desdeParam = typeof params.desde === "string" ? params.desde.trim() : "";
@@ -332,7 +335,11 @@ export default async function Page({
   const topLocationName = topLocation?.name ?? "Sin datos";
   const topLocationLeads = topLocation?.leads_total ?? 0;
   const topLocationVisits = topLocation?.total_visitas ?? 0;
-  const locationStageLeader = topLocation ? getLocationStageLeader(topLocation) : { name: "", total: 0 };
+  const locationStageLeader = attributionFilterActive
+    ? { name: "No atribuible por origen", total: 0 }
+    : topLocation
+      ? getLocationStageLeader(topLocation)
+      : { name: "", total: 0 };
   const topSource = (() => {
     if (!demografiaResponse) return { source: "", total: 0 };
     const totals = new Map<string, number>();

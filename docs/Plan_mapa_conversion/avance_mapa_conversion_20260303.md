@@ -135,6 +135,9 @@ Incluye:
     - `utm_top`
     usando señales de `webchat_visitantes`.
   - Cuando hay filtros de atribución (`source_class`, `utm_*`), también aplica el filtro a métricas de `webchat_total`, `visitas_con_chat`, `visitas_sin_chat` y `total_visitas` para que mapa + resumen cambien de forma consistente.
+  - Ajuste adicional de consistencia:
+    - Con filtros de atribución activos, `conversaciones_whatsapp` y `conversaciones_voz` se recalculan sólo para contactos atribuibles (vía `webchat_visitantes.contacto_id` -> `conversaciones.contacto_id`).
+    - `Etapa líder` no se reporta como métrica atribuible bajo estos filtros y se muestra como `No atribuible por origen` para evitar mezclar datos no filtrables.
 
 ### 6) Ajuste de nomenclatura UI (sin tecnicismos)
 Archivos:

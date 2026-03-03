@@ -74,6 +74,7 @@ tenant AS (
 webchat_as_web_raw AS (
     SELECT
         w.session_id,
+        w.contacto_id,
         COALESCE(w.ultimo_evento_en, now()) AS activity_at,
         CASE
             WHEN EXISTS (
@@ -116,6 +117,9 @@ webchat_as_web_raw AS (
 webchat_as_web_norm AS (
     SELECT
         r.session_id,
+        r.contacto_id,
+        r.activity_at,
+        r.tuvo_chat,
         CASE
             WHEN r.country_code_raw IS NULL OR r.country_code_raw = '' THEN 'UNK'
             WHEN length(r.country_code_raw) = 2 THEN upper(r.country_code_raw)
@@ -156,6 +160,8 @@ webchat_as_web_scoped AS (
     SELECT
         nl.nivel AS location_level,
         n.session_id,
+        n.contacto_id,
+        n.activity_at,
         n.tuvo_chat,
         n.source_class,
         n.utm_source,
@@ -205,6 +211,141 @@ fallback_webchat_metrics AS (
         COUNT(DISTINCT f.session_id) FILTER (WHERE NOT f.tuvo_chat)::bigint AS sesiones_sin_chat_webchat
     FROM webchat_as_web_filtered f
     GROUP BY f.location_level, f.location_key, f.location_name
+),
+attributed_contacts AS (
+    SELECT DISTINCT f.contacto_id
+    FROM webchat_as_web_filtered f
+    WHERE f.contacto_id IS NOT NULL
+),
+fallback_conversation_base AS (
+    SELECT
+        conv.id,
+        lower(COALESCE(conv.canal, '')) AS canal,
+        COALESCE(conv.ultimo_mensaje_en, conv.iniciada_en, now()) AS activity_at,
+        ct.contacto_datos,
+        ct.telefono_e164
+    FROM public.conversaciones conv
+    JOIN tenant t ON conv.organizacion_id = t.organizacion_id
+    JOIN attributed_contacts ac ON ac.contacto_id = conv.contacto_id
+    JOIN public.contactos ct ON ct.id = conv.contacto_id AND ct.organizacion_id = t.organizacion_id
+    WHERE lower(COALESCE(conv.canal, '')) IN ('whatsapp', 'voz')
+      AND public.puede_ver_contacto(ct.id)
+      AND (p_from IS NULL OR COALESCE(conv.ultimo_mensaje_en, conv.iniciada_en, now()) >= p_from)
+      AND (p_to IS NULL OR COALESCE(conv.ultimo_mensaje_en, conv.iniciada_en, now()) <= p_to)
+),
+fallback_conversation_geo AS (
+    SELECT
+        cb.*,
+        COALESCE(
+            NULLIF(cb.contacto_datos #>> '{ubicacion,country_code}', ''),
+            NULLIF(cb.contacto_datos #>> '{country_code}', ''),
+            NULLIF(cb.contacto_datos #>> '{ubicacion,pais_codigo}', ''),
+            NULLIF(cb.contacto_datos #>> '{pais_codigo}', '')
+        ) AS raw_country_code,
+        COALESCE(
+            NULLIF(cb.contacto_datos #>> '{ubicacion,country_name}', ''),
+            NULLIF(cb.contacto_datos #>> '{country_name}', ''),
+            NULLIF(cb.contacto_datos #>> '{ubicacion,pais_nombre}', ''),
+            NULLIF(cb.contacto_datos #>> '{pais_nombre}', ''),
+            NULLIF(cb.contacto_datos #>> '{ubicacion,pais}', ''),
+            NULLIF(cb.contacto_datos #>> '{pais}', '')
+        ) AS raw_country_name,
+        COALESCE(
+            NULLIF(cb.contacto_datos #>> '{ubicacion,cve_ent}', ''),
+            NULLIF(cb.contacto_datos #>> '{cve_ent}', '')
+        ) AS raw_cve_ent,
+        COALESCE(
+            NULLIF(cb.contacto_datos #>> '{ubicacion,nom_ent}', ''),
+            NULLIF(cb.contacto_datos #>> '{nom_ent}', '')
+        ) AS raw_nom_ent,
+        COALESCE(
+            NULLIF(cb.contacto_datos #>> '{ubicacion,cve_mun}', ''),
+            NULLIF(cb.contacto_datos #>> '{cve_mun}', '')
+        ) AS raw_cve_mun,
+        COALESCE(
+            NULLIF(cb.contacto_datos #>> '{ubicacion,nom_mun}', ''),
+            NULLIF(cb.contacto_datos #>> '{nom_mun}', '')
+        ) AS raw_nom_mun,
+        COALESCE(
+            NULLIF(cb.contacto_datos #>> '{ubicacion,cvegeo}', ''),
+            NULLIF(cb.contacto_datos #>> '{cvegeo}', '')
+        ) AS raw_cvegeo,
+        regexp_replace(COALESCE(cb.telefono_e164, ''), '\\D', '', 'g') AS telefono_digits
+    FROM fallback_conversation_base cb
+),
+fallback_conversation_normalized AS (
+    SELECT
+        cg.id,
+        cg.canal,
+        CASE
+            WHEN cg.raw_country_code IS NOT NULL AND cg.raw_country_code <> '' THEN
+                CASE
+                    WHEN length(cg.raw_country_code) = 2 THEN upper(cg.raw_country_code)
+                    WHEN length(cg.raw_country_code) = 3 AND cg.raw_country_code ~ '^[A-Za-z]{3}$'
+                        THEN upper(cg.raw_country_code)
+                    ELSE upper(substr(cg.raw_country_code, 1, 2))
+                END
+            WHEN cg.telefono_digits LIKE '52%' THEN 'MX'
+            ELSE 'UNK'
+        END AS country_code,
+        CASE
+            WHEN cg.raw_country_name IS NOT NULL AND cg.raw_country_name <> '' THEN cg.raw_country_name
+            WHEN cg.telefono_digits LIKE '52%' THEN 'México'
+            ELSE 'País desconocido'
+        END AS country_name,
+        CASE
+            WHEN cg.raw_cve_ent IS NOT NULL AND cg.raw_cve_ent <> '' THEN lpad(regexp_replace(cg.raw_cve_ent, '\\D', '', 'g'), 2, '0')
+            ELSE NULL
+        END AS cve_ent,
+        COALESCE(cg.raw_nom_ent, CASE WHEN cg.telefono_digits LIKE '52%' THEN 'Estado desconocido' END) AS nom_ent,
+        CASE
+            WHEN cg.raw_cve_mun IS NOT NULL AND cg.raw_cve_mun <> '' THEN lpad(regexp_replace(cg.raw_cve_mun, '\\D', '', 'g'), 3, '0')
+            ELSE NULL
+        END AS cve_mun,
+        cg.raw_nom_mun AS nom_mun,
+        CASE
+            WHEN cg.raw_cvegeo IS NOT NULL AND cg.raw_cvegeo <> '' THEN lpad(regexp_replace(cg.raw_cvegeo, '\\D', '', 'g'), 5, '0')
+            WHEN cg.raw_cve_ent IS NOT NULL AND cg.raw_cve_mun IS NOT NULL THEN
+                lpad(regexp_replace(cg.raw_cve_ent, '\\D', '', 'g'), 2, '0')
+                || lpad(regexp_replace(cg.raw_cve_mun, '\\D', '', 'g'), 3, '0')
+            ELSE NULL
+        END AS cvegeo
+    FROM fallback_conversation_geo cg
+),
+fallback_conversation_scoped AS (
+    SELECT
+        nl.nivel AS location_level,
+        n.canal,
+        CASE
+            WHEN nl.nivel = 'pais' THEN COALESCE(NULLIF(n.country_code, ''), 'UNK')
+            WHEN nl.nivel = 'municipio' THEN COALESCE(NULLIF(n.cvegeo, ''), 'UNK')
+            ELSE COALESCE(NULLIF(n.cve_ent, ''), 'UNK')
+        END AS location_key,
+        CASE
+            WHEN nl.nivel = 'pais' THEN COALESCE(NULLIF(n.country_name, ''), 'País desconocido')
+            WHEN nl.nivel = 'municipio' THEN COALESCE(NULLIF(n.nom_mun, ''), COALESCE(NULLIF(n.cvegeo, ''), 'Municipio desconocido'))
+            ELSE COALESCE(NULLIF(n.nom_ent, ''), COALESCE(NULLIF(n.cve_ent, ''), 'Estado desconocido'))
+        END AS location_name,
+        n.cve_ent
+    FROM fallback_conversation_normalized n
+    CROSS JOIN normalized_level nl
+),
+fallback_conversation_filtered AS (
+    SELECT s.*
+    FROM fallback_conversation_scoped s
+    CROSS JOIN normalized_level nl
+    CROSS JOIN state_filter sf
+    WHERE nl.nivel <> 'municipio' OR sf.estado IS NULL OR s.cve_ent = sf.estado
+),
+fallback_conversation_metrics AS (
+    SELECT
+        s.location_level,
+        s.location_key,
+        s.location_name,
+        COUNT(*) FILTER (WHERE s.canal = 'whatsapp')::bigint AS conversaciones_whatsapp,
+        COUNT(*) FILTER (WHERE s.canal = 'voz')::bigint AS conversaciones_voz
+    FROM fallback_conversation_filtered s
+    GROUP BY s.location_level, s.location_key, s.location_name
 ),
 fallback_source_rank AS (
     SELECT
@@ -292,8 +433,14 @@ SELECT
         WHEN af.is_active THEN COALESCE(fwm.sesiones_sin_chat_webchat, 0)
         ELSE b.sesiones_sin_chat_webchat
     END::bigint AS sesiones_sin_chat_webchat,
-    b.conversaciones_whatsapp,
-    b.conversaciones_voz,
+    CASE
+        WHEN af.is_active THEN LEAST(COALESCE(b.conversaciones_whatsapp, 0), COALESCE(fcm.conversaciones_whatsapp, 0))
+        ELSE b.conversaciones_whatsapp
+    END::bigint AS conversaciones_whatsapp,
+    CASE
+        WHEN af.is_active THEN LEAST(COALESCE(b.conversaciones_voz, 0), COALESCE(fcm.conversaciones_voz, 0))
+        ELSE b.conversaciones_voz
+    END::bigint AS conversaciones_voz,
     CASE
         WHEN jsonb_array_length(COALESCE(b.fuentes_top, '[]'::jsonb)) > 0 THEN b.fuentes_top
         ELSE COALESCE(fs.fuentes_top, '[]'::jsonb)
@@ -332,8 +479,14 @@ SELECT
         WHEN af.is_active THEN COALESCE(fwm.sesiones_sin_chat_webchat, 0)
         ELSE b.webchat_sin_chat
     END::bigint AS webchat_sin_chat,
-    b.whatsapp_total,
-    b.voz_total,
+    CASE
+        WHEN af.is_active THEN LEAST(COALESCE(b.whatsapp_total, 0), COALESCE(fcm.conversaciones_whatsapp, 0))
+        ELSE b.whatsapp_total
+    END::bigint AS whatsapp_total,
+    CASE
+        WHEN af.is_active THEN LEAST(COALESCE(b.voz_total, 0), COALESCE(fcm.conversaciones_voz, 0))
+        ELSE b.voz_total
+    END::bigint AS voz_total,
     (
         (
             CASE
@@ -345,8 +498,14 @@ SELECT
                 ELSE b.sesiones_webchat_total
               END
         )
-        + COALESCE(b.conversaciones_whatsapp, 0)
-        + COALESCE(b.conversaciones_voz, 0)
+        + CASE
+            WHEN af.is_active THEN LEAST(COALESCE(b.conversaciones_whatsapp, 0), COALESCE(fcm.conversaciones_whatsapp, 0))
+            ELSE COALESCE(b.conversaciones_whatsapp, 0)
+          END
+        + CASE
+            WHEN af.is_active THEN LEAST(COALESCE(b.conversaciones_voz, 0), COALESCE(fcm.conversaciones_voz, 0))
+            ELSE COALESCE(b.conversaciones_voz, 0)
+          END
     ) > 0 AS has_data
 FROM base b
 CROSS JOIN attribution_filter_active af
@@ -358,6 +517,10 @@ LEFT JOIN fallback_webchat_metrics fwm
        ON fwm.location_level = b.location_level
       AND fwm.location_key = b.location_key
       AND fwm.location_name = b.location_name
+LEFT JOIN fallback_conversation_metrics fcm
+       ON fcm.location_level = b.location_level
+      AND fcm.location_key = b.location_key
+      AND fcm.location_name = b.location_name
 LEFT JOIN fallback_source_top fs
        ON fs.location_level = b.location_level
       AND fs.location_key = b.location_key
