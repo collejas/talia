@@ -3,16 +3,12 @@
 import { useEffect, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
 
-type SupabaseUser = {
-  id: string
-  email: string
-  user_metadata?: Record<string, unknown>
-  app_metadata?: Record<string, unknown>
-  [key: string]: unknown
-}
+import { SessionPayload, SupabaseUser, TenantInfo } from "@/lib/auth/session"
 
 type UseCurrentUserState = {
   user: SupabaseUser | null
+  tenant: TenantInfo | null
+  employeePosition: string | null
   loading: boolean
   error: string | null
 }
@@ -21,6 +17,8 @@ export function useCurrentUser() {
   const router = useRouter()
   const [state, setState] = useState<UseCurrentUserState>({
     user: null,
+    tenant: null,
+    employeePosition: null,
     loading: true,
     error: null,
   })
@@ -46,22 +44,28 @@ export function useCurrentUser() {
             router.replace("/auth/login")
           }
         }
-        setState({ user: null, loading: false, error: "auth_required" })
+        setState({ user: null, tenant: null, employeePosition: null, loading: false, error: "auth_required" })
         return
       }
 
       if (!response.ok) {
         const message = `auth_error_${response.status}`
-        setState({ user: null, loading: false, error: message })
+        setState({ user: null, tenant: null, employeePosition: null, loading: false, error: message })
         return
       }
 
-      const data = (await response.json()) as { user: SupabaseUser }
-      setState({ user: data.user, loading: false, error: null })
+      const data = (await response.json()) as SessionPayload
+      setState({
+        user: data.user ?? null,
+        tenant: data.tenant ?? null,
+        employeePosition: data.employeePosition ?? null,
+        loading: false,
+        error: data.user ? null : "auth_invalid_payload",
+      })
     } catch (error) {
       if ((error as Error).name === "AbortError") return
       console.error("[auth] error fetching current user", error)
-      setState({ user: null, loading: false, error: "auth_network_error" })
+      setState({ user: null, tenant: null, employeePosition: null, loading: false, error: "auth_network_error" })
     }
   }
 

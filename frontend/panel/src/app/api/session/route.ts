@@ -9,6 +9,20 @@ import {
 } from "@/lib/auth/cookies"
 import { getSupabaseConfig } from "@/lib/auth/supabase"
 import { SupabaseErrorResponse, SupabaseTokenResponse } from "@/lib/auth/types"
+import { callCrmApi } from "@/lib/api/crm"
+import { callSupabaseRest } from "@/lib/supabase/rest"
+import { SessionPayload, SupabaseUser, TenantInfo } from "@/lib/auth/session"
+
+type TenantSettingsResponse = {
+  organizacion_id: string
+  nombre: string
+  razon_social?: string | null
+}
+
+type SupabaseEmployeeRow = {
+  usuario_id: string
+  puesto?: { nombre?: string | null } | null
+}
 
 async function fetchSupabaseUser(
   config: { url: string; anonKey: string },
@@ -38,6 +52,57 @@ async function refreshSupabaseTokens(
     body: JSON.stringify({ refresh_token: refreshToken }),
     cache: "no-store",
   })
+}
+
+async function fetchTenantMetadata(): Promise<TenantInfo | null> {
+  const response = await callCrmApi<TenantSettingsResponse>("/tenant/me/settings", {
+    organizacionId: null,
+    withUserToken: true,
+  })
+  if (!response.ok || !response.data) {
+    return null
+  }
+  const { nombre, razon_social } = response.data
+  if (!nombre && !razon_social) {
+    return null
+  }
+  return {
+    nombre: nombre ?? "",
+    razon_social: razon_social ?? null,
+  }
+}
+
+async function fetchEmployeePosition(usuarioId: string | null): Promise<string | null> {
+  if (!usuarioId) return null
+  const response = await callSupabaseRest<SupabaseEmployeeRow[]>("/rest/v1/empleados", {
+    searchParams: {
+      select: "usuario_id,puesto:puestos(nombre)",
+      usuario_id: `eq.${usuarioId}`,
+      limit: "1",
+      order: "creado_en.desc",
+    },
+    enforceOrganization: true,
+    forceServiceToken: true,
+  })
+  if (!response.ok) {
+    return null
+  }
+  if (!Array.isArray(response.data) || response.data.length === 0) {
+    return null
+  }
+  return response.data[0]?.puesto?.nombre?.trim() || null
+}
+
+async function buildSessionPayload(user: SupabaseUser): Promise<SessionPayload> {
+  const [tenant, employeePosition] = await Promise.all([
+    fetchTenantMetadata(),
+    fetchEmployeePosition(user.id),
+  ])
+  return {
+    user,
+    tenant,
+    employeePosition,
+  }
 }
 
 function applySessionCookies(
@@ -114,8 +179,9 @@ export async function GET() {
     try {
       const userResponse = await fetchSupabaseUser(config, accessToken)
       if (userResponse.ok) {
-        const user = await userResponse.json()
-        return NextResponse.json({ user })
+        const user = (await userResponse.json()) as SupabaseUser
+        const payload = await buildSessionPayload(user)
+        return NextResponse.json(payload)
       }
 
       if (userResponse.status !== 401) {
@@ -160,7 +226,8 @@ export async function GET() {
   }
 
   const tokens = (await refreshResponse.json()) as SupabaseTokenResponse
-  const response = NextResponse.json({ user: tokens.user })
+  const payload = await buildSessionPayload(tokens.user)
+  const response = NextResponse.json(payload)
   applySessionCookies(response, tokens, remember)
   return response
 }
