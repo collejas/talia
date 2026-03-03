@@ -7615,6 +7615,34 @@ class CRMRepository:
                 mapping[code] = title
         return mapping
 
+    async def list_scian_titles(self, *, codes: list[str]) -> dict[str, str]:
+        """Devuelve un mapa codigo -> titulo para cualquier nivel SCIAN."""
+
+        if not codes:
+            return {}
+        normalized_codes = sorted({str(code).strip() for code in codes if str(code or "").strip()})
+        if not normalized_codes:
+            return {}
+
+        params: dict[str, Any] = {
+            "select": "codigo,titulo",
+            "codigo": _postgrest_in_clause(normalized_codes),
+        }
+        mapping: dict[str, str] = {}
+        for table in ("scian_sector", "scian_subsector", "scian_rama", "scian_subrama", "scian_clase"):
+            resp = await self._request("GET", f"/rest/v1/{table}", params=params)
+            data = resp.json() or []
+            if not isinstance(data, list):
+                raise CRMRepositoryError(f"Respuesta inesperada al listar catálogo SCIAN {table}: {data!r}")
+            for row in data:
+                if not isinstance(row, dict):
+                    continue
+                code = row.get("codigo")
+                title = row.get("titulo")
+                if isinstance(code, str) and isinstance(title, str) and title.strip():
+                    mapping[code] = title.strip()
+        return mapping
+
     async def list_scian_catalogs(self) -> dict[str, list[dict[str, Any]]]:
         """Consulta los catálogos SCIAN (sector → clase) desde Supabase."""
 
@@ -8249,7 +8277,7 @@ class CRMRepository:
 
         scian_titles: dict[str, str] = {}
         if activity_codes:
-            scian_titles = await self.list_scian_clase_titles(codes=sorted(activity_codes))
+            scian_titles = await self.list_scian_titles(codes=sorted(activity_codes))
 
         query_labels: dict[str, str] = {}
         query_values: set[str] = set()
