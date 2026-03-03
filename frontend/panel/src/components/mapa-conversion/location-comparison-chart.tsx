@@ -27,6 +27,7 @@ export type LocationComparisonChartProps = {
   channelFilter?: ChannelKey[];
   globalStages?: Record<string, number>;
   stageKeys?: string[];
+  attributionFilterActive?: boolean;
 };
 
 const NIVEL_LABELS: Record<DemografiaMapResponse["nivel"], string> = {
@@ -95,6 +96,7 @@ function resolveChannelTotal(
   entry: DemografiaMapResponse["dataset"][number],
   channel: ChannelKey,
   allowedChannels?: Set<ChannelKey>,
+  allowLeadFallback: boolean = true,
 ): number {
   if (allowedChannels && allowedChannels.size && !allowedChannels.has(channel)) {
     return 0;
@@ -107,6 +109,9 @@ function resolveChannelTotal(
   if (typeof totales === "number" && Number.isFinite(totales)) {
     return totales;
   }
+  if (!allowLeadFallback) {
+    return 0;
+  }
   const leads = entry.leads_totales_por_canal?.[channel];
   if (typeof leads === "number" && Number.isFinite(leads)) {
     return leads;
@@ -117,20 +122,25 @@ function resolveChannelTotal(
 function resolveFilteredEntryTotal(
   entry: DemografiaMapResponse["dataset"][number],
   allowedChannels?: Set<ChannelKey>,
+  allowLeadFallback: boolean = true,
 ): number {
   if (!allowedChannels || !allowedChannels.size || allowedChannels.size === CHANNEL_KEYS.length) {
-    return resolveEntryTotal(entry);
+    return resolveEntryTotal(entry, allowLeadFallback);
   }
   let total = 0;
   for (const channel of allowedChannels) {
-    total += resolveChannelTotal(entry, channel);
+    total += resolveChannelTotal(entry, channel, undefined, allowLeadFallback);
   }
   return total;
 }
 
-function resolveEntryTotal(entry: DemografiaMapResponse["dataset"][number]): number {
+function resolveEntryTotal(
+  entry: DemografiaMapResponse["dataset"][number],
+  allowLeadFallback: boolean = true,
+): number {
   const visits = entry.total_visitas ?? 0;
   if (visits > 0) return visits;
+  if (!allowLeadFallback) return 0;
   return entry.leads_total ?? 0;
 }
 
@@ -142,6 +152,7 @@ export function LocationComparisonChart({
   channelFilter,
   globalStages,
   stageKeys: stageKeysProp,
+  attributionFilterActive = false,
 }: LocationComparisonChartProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -158,6 +169,7 @@ export function LocationComparisonChart({
   }, [channelFilter]);
   const activeChannelSet = useMemo(() => new Set<ChannelKey>(activeChannels), [activeChannels]);
   const showConversationMetrics = activeChannelSet.has("webchat");
+  const allowLeadFallback = !attributionFilterActive;
   const displayedChannelKeys = activeChannels.length ? activeChannels : CHANNEL_KEYS;
 
   const datasetMap = useMemo(() => {
@@ -216,12 +228,12 @@ export function LocationComparisonChart({
         (max, entry) =>
           Math.max(
             max,
-            resolveFilteredEntryTotal(entry, activeChannelSet),
+            resolveFilteredEntryTotal(entry, activeChannelSet, allowLeadFallback),
           ),
         0,
       ) || 1
     );
-  }, [activeChannelSet, data]);
+  }, [activeChannelSet, allowLeadFallback, data]);
 
   const keysWithData = useMemo(() => {
     const set = new Set<string>();
@@ -245,6 +257,9 @@ export function LocationComparisonChart({
 
   const aggregatedStages = useMemo(() => {
     const totals = createEmptyStageTotals(stageKeys);
+    if (attributionFilterActive) {
+      return totals;
+    }
     for (const entry of data) {
       const stages = (entry.etapas_totales || {}) as Record<string, number | undefined>;
       for (const stageKey of stageKeys) {
@@ -252,7 +267,7 @@ export function LocationComparisonChart({
       }
     }
     return totals;
-  }, [data, stageKeys]);
+  }, [attributionFilterActive, data, stageKeys]);
 
   const datasetSummary = useMemo<MetricsPayload>(() => {
     const summary: MetricsPayload = {
@@ -272,22 +287,32 @@ export function LocationComparisonChart({
         whatsapp: 0,
         voz: 0,
       },
-      stages: globalStages ? { ...globalStages } : { ...aggregatedStages },
+      stages:
+        attributionFilterActive
+          ? createEmptyStageTotals(stageKeys)
+          : globalStages
+            ? { ...globalStages }
+            : { ...aggregatedStages },
     };
 
     for (const entry of data) {
       const conversation = showConversationMetrics
-        ? resolveFilteredConversation(entry, activeChannelSet)
+        ? resolveFilteredConversation(entry, activeChannelSet, allowLeadFallback)
         : { con_conversacion: 0, sin_conversacion: 0 };
-      summary.totalVisitas += resolveFilteredEntryTotal(entry, activeChannelSet);
+      summary.totalVisitas += resolveFilteredEntryTotal(entry, activeChannelSet, allowLeadFallback);
       summary.conversation.con_conversacion += conversation.con_conversacion ?? 0;
       summary.conversation.sin_conversacion += conversation.sin_conversacion ?? 0;
-      summary.channels.webchat += resolveChannelTotal(entry, "webchat", activeChannelSet);
-      summary.channels.whatsapp += resolveChannelTotal(entry, "whatsapp", activeChannelSet);
-      summary.channels.voz += resolveChannelTotal(entry, "voz", activeChannelSet);
+      summary.channels.webchat += resolveChannelTotal(entry, "webchat", activeChannelSet, allowLeadFallback);
+      summary.channels.whatsapp += resolveChannelTotal(entry, "whatsapp", activeChannelSet, allowLeadFallback);
+      summary.channels.voz += resolveChannelTotal(entry, "voz", activeChannelSet, allowLeadFallback);
     }
 
-    summary.stages = globalStages ? { ...globalStages } : { ...aggregatedStages };
+    summary.stages =
+      attributionFilterActive
+        ? createEmptyStageTotals(stageKeys)
+        : globalStages
+          ? { ...globalStages }
+          : { ...aggregatedStages };
 
     const locationSubtitle =
       data.length === 1
@@ -295,38 +320,40 @@ export function LocationComparisonChart({
         : `${formatNumber(data.length)} ubicaciones`;
     summary.subtitle = `${formatNumber(summary.totalVisitas)} visitas totales · ${locationSubtitle}`;
     return summary;
-  }, [activeChannelSet, aggregatedStages, data, globalStages, showConversationMetrics]);
+  }, [activeChannelSet, aggregatedStages, allowLeadFallback, attributionFilterActive, data, globalStages, showConversationMetrics, stageKeys]);
 
   const activeMetrics = useMemo<MetricsPayload | null>(() => {
     if (!activeEntry) return null;
 
     const conversation = showConversationMetrics
-      ? resolveFilteredConversation(activeEntry, activeChannelSet)
+      ? resolveFilteredConversation(activeEntry, activeChannelSet, allowLeadFallback)
       : { con_conversacion: 0, sin_conversacion: 0 };
 
     const stageTotals = createEmptyStageTotals(stageKeys);
-    const rawStages = (activeEntry.etapas_totales || {}) as Record<string, number | undefined>;
-    for (const stageKey of stageKeys) {
-      stageTotals[stageKey] = rawStages[stageKey] ?? 0;
+    if (!attributionFilterActive) {
+      const rawStages = (activeEntry.etapas_totales || {}) as Record<string, number | undefined>;
+      for (const stageKey of stageKeys) {
+        stageTotals[stageKey] = rawStages[stageKey] ?? 0;
+      }
     }
 
     return {
       scope: "location",
       title: activeEntry.name,
-      subtitle: `${NIVEL_LABELS[activeEntry.nivel as keyof typeof NIVEL_LABELS] ?? "Ubicación"} · ${formatNumber(resolveFilteredEntryTotal(activeEntry, activeChannelSet))} visitas`,
-      totalVisitas: resolveFilteredEntryTotal(activeEntry, activeChannelSet),
+      subtitle: `${NIVEL_LABELS[activeEntry.nivel as keyof typeof NIVEL_LABELS] ?? "Ubicación"} · ${formatNumber(resolveFilteredEntryTotal(activeEntry, activeChannelSet, allowLeadFallback))} visitas`,
+      totalVisitas: resolveFilteredEntryTotal(activeEntry, activeChannelSet, allowLeadFallback),
       conversation: {
         con_conversacion: conversation.con_conversacion ?? 0,
         sin_conversacion: conversation.sin_conversacion ?? 0,
       },
       channels: {
-        webchat: resolveChannelTotal(activeEntry, "webchat", activeChannelSet),
-        whatsapp: resolveChannelTotal(activeEntry, "whatsapp", activeChannelSet),
-        voz: resolveChannelTotal(activeEntry, "voz", activeChannelSet),
+        webchat: resolveChannelTotal(activeEntry, "webchat", activeChannelSet, allowLeadFallback),
+        whatsapp: resolveChannelTotal(activeEntry, "whatsapp", activeChannelSet, allowLeadFallback),
+        voz: resolveChannelTotal(activeEntry, "voz", activeChannelSet, allowLeadFallback),
       },
       stages: stageTotals,
     };
-  }, [activeChannelSet, activeEntry, showConversationMetrics, stageKeys]);
+  }, [activeChannelSet, activeEntry, allowLeadFallback, attributionFilterActive, showConversationMetrics, stageKeys]);
 
   const metrics = activeMetrics ?? datasetSummary;
 
@@ -370,7 +397,7 @@ export function LocationComparisonChart({
         datasetMap.get(key) ||
         datasetMap.get(key.padStart(2, "0")) ||
         datasetMap.get(key.toUpperCase());
-      const total = entry ? resolveFilteredEntryTotal(entry, activeChannelSet) : 0;
+      const total = entry ? resolveFilteredEntryTotal(entry, activeChannelSet, allowLeadFallback) : 0;
       const isSelected = entry?.key && selectedKey && entry.key === selectedKey;
       const isHovered = entry?.key && hoveredKey && entry.key === hoveredKey;
 
@@ -409,7 +436,7 @@ export function LocationComparisonChart({
         fillOpacity: isSelected || isHovered ? 0.82 : 0.72,
       };
     },
-    [activeChannelSet, colorMode, datasetMap, hoveredKey, maxTotal, selectedKey],
+    [activeChannelSet, allowLeadFallback, colorMode, datasetMap, hoveredKey, maxTotal, selectedKey],
   );
 
   const onEachFeature = useCallback(
@@ -449,17 +476,17 @@ export function LocationComparisonChart({
 
       if (typeof tooltipLayer.bindTooltip !== "function") return;
 
-      const conversation = resolveFilteredConversation(entry, activeChannelSet);
+      const conversation = resolveFilteredConversation(entry, activeChannelSet, allowLeadFallback);
       const rows: MapTooltipRow[] = [
         {
           key: "total",
           label: "Visitas totales",
-          value: formatNumber(resolveFilteredEntryTotal(entry, activeChannelSet)),
+          value: formatNumber(resolveFilteredEntryTotal(entry, activeChannelSet, allowLeadFallback)),
           color: "var(--chart-1)",
         },
       ];
       for (const channel of displayedChannelKeys) {
-        const total = resolveChannelTotal(entry, channel, activeChannelSet);
+        const total = resolveChannelTotal(entry, channel, activeChannelSet, allowLeadFallback);
         rows.push({
           key: `channel-${channel}`,
           label: `Total ${CHANNEL_LABELS[channel]}`,
@@ -501,7 +528,7 @@ export function LocationComparisonChart({
 
       tooltipLayer.bindTooltip?.(tooltip, tooltipOptions);
     },
-    [activeChannelSet, datasetMap, displayedChannelKeys, handleFeatureClick, setHoveredKey, showConversationMetrics],
+    [activeChannelSet, allowLeadFallback, datasetMap, displayedChannelKeys, handleFeatureClick, setHoveredKey, showConversationMetrics],
   );
 
   const center =
@@ -834,6 +861,7 @@ type LeafletMapType = {
 function resolveFilteredConversation(
   entry: DemografiaMapResponse["dataset"][number],
   allowedChannels?: Set<ChannelKey>,
+  allowLeadFallback: boolean = true,
 ) {
   const base =
     entry.conversacion_totales ??
@@ -855,7 +883,7 @@ function resolveFilteredConversation(
       con += value;
     }
   }
-  const total = resolveFilteredEntryTotal(entry, allowedChannels);
+  const total = resolveFilteredEntryTotal(entry, allowedChannels, allowLeadFallback);
   const sin = Math.max(0, total - con);
   return { con_conversacion: con, sin_conversacion: sin };
 }

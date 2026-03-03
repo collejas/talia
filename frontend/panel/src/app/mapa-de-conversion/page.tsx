@@ -473,6 +473,7 @@ export default async function Page({
                     globalStages={globalStages}
                     channelFilter={canalesSelected}
                     stageKeys={stageKeys}
+                    attributionFilterActive={attributionFilterActive}
                   />
                 </div>
               ) : null}
