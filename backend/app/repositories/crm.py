@@ -2166,17 +2166,36 @@ class CRMRepository:
             "etapa:etapas_pipeline!oportunidades_etapa_org_fkey(codigo,categoria)"
         )
 
-        # Buscar por metadata->>conversation_id
+        # Buscar por metadata->>conversation_id (y fallback legacy conversacion_id)
         params = {
             "organizacion_id": f"eq.{organizacion_id}",
             "metadata->>conversation_id": f"eq.{conversation_key}",
             "select": select_columns,
-            "limit": "1",
+            "order": "creado_en.desc",
+            "limit": "25",
         }
         resp = await self._request("GET", "/rest/v1/oportunidades", params=params)
         rows = resp.json() or []
+        if not rows:
+            legacy_params = {
+                "organizacion_id": f"eq.{organizacion_id}",
+                "metadata->>conversacion_id": f"eq.{conversation_key}",
+                "select": select_columns,
+                "order": "creado_en.desc",
+                "limit": "25",
+            }
+            legacy_resp = await self._request("GET", "/rest/v1/oportunidades", params=legacy_params)
+            rows = legacy_resp.json() or []
         if isinstance(rows, list) and rows:
-            row = rows[0]
+            row: dict[str, Any] | None = None
+            for candidate in rows:
+                if isinstance(candidate, dict) and not _is_closed_opportunity(candidate):
+                    row = candidate
+                    break
+            if row is None and isinstance(rows[0], dict):
+                row = rows[0]
+            if row is None:
+                raise CRMRepositoryError(f"opportunity_row_invalid:{rows[0]!r}")
             opportunity_id = _coerce_uuid(row.get("id"), field="opportunity_id")
             metadata = _merged_metadata(row.get("metadata"))
             current_assignee = row.get("asignado_a_usuario_id")
@@ -2186,21 +2205,15 @@ class CRMRepository:
                 else None
             )
             if _is_closed_opportunity(row):
-                return await self._create_opportunity_from_contact(
-                    organizacion_id=organizacion_id,
-                    contacto_id=contacto_id,
+                # Si ya existe una oportunidad cerrada para la MISMA conversación,
+                # no creamos "restart": reutilizamos esa oportunidad.
+                result_id = await _patch_metadata(opportunity_id, metadata)
+                restart_sequence = _coerce_positive_int(metadata.get("restart_sequence"), default=1)
+                await self._set_conversation_restart_sequence(
                     conversation_id=conversation_key,
-                    canal=canal,
-                    contacto_nombre=contacto_nombre,
-                    contacto_empresa=contacto_empresa,
-                    base_metadata=base_metadata,
-                    parent_row=row,
-                    parent_metadata=metadata,
-                    parent_assignee=assignee_uuid,
-                    is_restart=True,
-                    contact_ready=contact_ready,
-                    require_contact_ready=require_contact_ready,
+                    restart_sequence=restart_sequence,
                 )
+                return result_id, False, restart_sequence
             result_id = await _patch_metadata(opportunity_id, metadata)
             restart_sequence = _coerce_positive_int(metadata.get("restart_sequence"), default=1)
             await self._set_conversation_restart_sequence(
@@ -2432,7 +2445,39 @@ class CRMRepository:
     ) -> tuple[UUID, bool, int]:
         stage_id_value = parent_row.get("etapa_id") if parent_row else None
         stage_id: UUID | None = None
-        if stage_id_value:
+
+        parent_is_closed = False
+        if parent_row:
+            parent_state = str(parent_row.get("estado") or "").strip().lower()
+            if parent_state in {
+                "cerrada",
+                "ganada",
+                "perdida",
+                "closed",
+                "won",
+                "lost",
+                "cerrado_ganado",
+                "cerrado_perdido",
+            }:
+                parent_is_closed = True
+            parent_stage = parent_row.get("etapa")
+            parent_stage_category = ""
+            parent_stage_code = ""
+            if isinstance(parent_stage, dict):
+                parent_stage_category = str(parent_stage.get("categoria") or "").strip().lower()
+                parent_stage_code = str(parent_stage.get("codigo") or "").strip().lower()
+            elif isinstance(parent_stage, list) and parent_stage and isinstance(parent_stage[0], dict):
+                parent_stage_category = str(parent_stage[0].get("categoria") or "").strip().lower()
+                parent_stage_code = str(parent_stage[0].get("codigo") or "").strip().lower()
+            if parent_stage_category in {"ganada", "perdida", "cerrada"} or parent_stage_code in {
+                "cerrado_ganado",
+                "cerrado_perdido",
+                "ganada",
+                "perdida",
+            }:
+                parent_is_closed = True
+
+        if stage_id_value and not parent_is_closed:
             try:
                 stage_id = UUID(str(stage_id_value))
             except (TypeError, ValueError):
