@@ -366,6 +366,7 @@ export function EmbudoBoardClient({
   useEffect(() => {
     const refresh = () => {
       if (document.hidden) return;
+      if (drawerOpen) return;
       if (movePending || schedulePending) return;
       void fetchBoardData(selectedVendedorId || undefined, { silent: true });
     };
@@ -385,7 +386,7 @@ export function EmbudoBoardClient({
       window.removeEventListener("focus", handleFocus);
       window.removeEventListener("online", handleOnline);
     };
-  }, [fetchBoardData, movePending, schedulePending, selectedVendedorId]);
+  }, [fetchBoardData, movePending, schedulePending, selectedVendedorId, drawerOpen]);
 
   const sensors = useSensors(
     useSensor(PointerSensor, {

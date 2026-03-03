@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState, useTransition } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import type { CheckedState } from "@radix-ui/react-checkbox";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
@@ -789,14 +789,32 @@ export function LeadDrawer({
   const [contactSearchPending, startContactSearch] = useTransition();
   const [quotePending, startQuoteAction] = useTransition();
   const isBusy = pending || deletePending;
+  const wasOpenRef = useRef(false);
+  const lastDrawerRecordKeyRef = useRef<string | null>(null);
+
+  const drawerRecordKey = isCreateMode
+    ? `create:${currentStage?.id ?? "sin-etapa"}`
+    : `edit:${card?.oportunidadId ?? "sin-oportunidad"}`;
 
   useEffect(() => {
+    if (!open) {
+      wasOpenRef.current = false;
+      return;
+    }
+
+    const shouldReset = !wasOpenRef.current || lastDrawerRecordKeyRef.current !== drawerRecordKey;
+    if (!shouldReset) {
+      return;
+    }
+
+    wasOpenRef.current = true;
+    lastDrawerRecordKeyRef.current = drawerRecordKey;
     reset(defaultFormValues);
     setStagePrep(initialStagePrepState);
     setError(null);
     setPending(false);
     setDeletePending(false);
-  }, [defaultFormValues, initialStagePrepState, reset, open]);
+  }, [defaultFormValues, initialStagePrepState, reset, open, drawerRecordKey]);
 
   useEffect(() => {
     setHistoryState({ status: "idle", data: [] });
