@@ -9,7 +9,10 @@ type SessionRecoveryProps = {
 
 function hasExpiredToken(errors: string[]): boolean {
   return errors.some((message) =>
-    /jwt\s+expired/i.test(message) || /invalid\s+jwt/i.test(message),
+    /jwt\s+expired/i.test(message) ||
+    /invalid\s+jwt/i.test(message) ||
+    /auth_required/i.test(message) ||
+    /token\s+expired/i.test(message),
   );
 }
 
