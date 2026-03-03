@@ -248,6 +248,43 @@ def _lada_localities() -> dict[str, list[dict[str, Any]]]:
     return mapping
 
 
+def _state_from_lada(lada: str | None) -> tuple[str | None, str | None]:
+    """Resuelve estado por LADA incluso cuando existe más de una entidad."""
+    if not lada:
+        return None, None
+    lada_key = str(lada).strip()
+    if not lada_key:
+        return None, None
+
+    states = _lada_states().get(lada_key) or {}
+    if len(states) == 1:
+        code, name = next(iter(states.items()))
+        return str(code).zfill(2), str(name)
+    if not states:
+        return None, None
+
+    counts: dict[str, int] = {}
+    for entry in _lada_localities().get(lada_key) or []:
+        if not isinstance(entry, dict):
+            continue
+        raw_code = entry.get("cve_ent")
+        if raw_code in (None, ""):
+            continue
+        code = str(raw_code).zfill(2)
+        counts[code] = counts.get(code, 0) + 1
+
+    if not counts:
+        return None, None
+
+    ordered = sorted(counts.items(), key=lambda item: item[1], reverse=True)
+    top_code, top_count = ordered[0]
+    is_tie = any(count == top_count and code != top_code for code, count in ordered[1:])
+    if is_tie:
+        return None, None
+
+    return top_code, states.get(top_code) or state_display_name(top_code)
+
+
 def _country_from_phone(phone_e164: str | None) -> tuple[str | None, str | None]:
     if not phone_e164:
         return None, None
@@ -347,13 +384,7 @@ def infer_contact_location(
     if not estado:
         lada = lada or _lada_from_phone(data.get("telefono_e164"))
         if lada:
-            catalog = _lada_states()
-            states = catalog.get(lada)
-            if states and len(states) == 1:
-                estado, estado_nombre = next(iter(states.items()))
-            else:
-                estado = None
-                estado_nombre = None
+            estado, estado_nombre = _state_from_lada(lada)
 
     if estado and not municipio and lada:
         municipio_candidates: dict[str, str] = {}
@@ -424,9 +455,7 @@ def phone_location_from_number(phone_e164: str | None) -> PhoneLocationSummary:
     if country_code == "MX":
         lada = _lada_from_phone(phone_e164)
         if lada:
-            states = _lada_states().get(lada)
-            if states and len(states) == 1:
-                estado, estado_nombre = next(iter(states.items()))
+            estado, estado_nombre = _state_from_lada(lada)
             entries = _lada_localities().get(lada) or []
             if not estado:
                 estados = {
