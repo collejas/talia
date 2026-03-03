@@ -90,6 +90,19 @@ Incluye:
   - `GET /crm/demografia/resumen-v2`
   - `GET /crm/demografia/mapa-v2`
   - mediante `loadDemografiaData(...)`.
+- La vista de mapa ahora soporta filtros de atribución en URL/UI:
+  - `source_class`
+  - `utm_source`
+  - `utm_medium`
+  - `utm_campaign`
+- El detalle por ubicación muestra:
+  - `sesiones_web_total`
+  - `fuentes_top`
+  - `utm_top`
+- KPIs superiores refinados para v2:
+  - `sesiones_web_total` global
+  - conversaciones por canal (`webchat`, `whatsapp`, `voz`)
+  - fuente principal agregada desde `fuentes_top`
 
 ## Validaciones realizadas
 
@@ -119,7 +132,7 @@ Incluye:
 - Endpoint e instrumentación implementados. Falta despliegue/validación en producción con datos reales.
 
 3. Frontend mapa:
-- API de datos ya migrada a `resumen-v2/mapa-v2`. Falta iteración visual para exponer campos nuevos (`traffic_web`, `fuentes_top`, `utm_top`) en la UI.
+- API migrada a `resumen-v2/mapa-v2` y UI base de atribución ya visible. Falta refinar visualización global de KPIs de tráfico web.
 
 4. Exportacion XLSX:
 - Implementar `GET /crm/demografia/mapa-v2/export/xlsx` respetando filtros activos.

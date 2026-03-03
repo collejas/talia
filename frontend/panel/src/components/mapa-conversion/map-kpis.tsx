@@ -1,4 +1,4 @@
-import { IconRocket, IconRoute, IconActivity, IconChartBar } from "@tabler/icons-react"
+import { IconRocket, IconRoute, IconMessageCircle, IconWorld } from "@tabler/icons-react"
 
 import {
   Card,
@@ -9,13 +9,16 @@ import {
 } from "@/components/ui/card"
 type MapKpisProps = {
   nivelLabel: string
-  leadsTotal: number
   visitasTotales: number
+  sesionesWebTotales: number
+  sesionesWebchatTotales: number
+  conversacionesWhatsapp: number
+  conversacionesVoz: number
   topLocationName: string
   topLocationLeads: number
   topLocationVisits: number
-  channelLeader: string
-  channelLeaderValue: number
+  topSource: string
+  topSourceValue: number
   stageLeader: string
   stageLeaderValue: number
 }
@@ -29,13 +32,16 @@ function formatDisplayNumber(value: number | undefined | null): string {
 
 export function MapKpis({
   nivelLabel,
-  leadsTotal,
   visitasTotales,
+  sesionesWebTotales,
+  sesionesWebchatTotales,
+  conversacionesWhatsapp,
+  conversacionesVoz,
   topLocationName,
   topLocationLeads,
   topLocationVisits,
-  channelLeader,
-  channelLeaderValue,
+  topSource,
+  topSourceValue,
   stageLeader,
   stageLeaderValue,
 }: MapKpisProps) {
@@ -49,26 +55,28 @@ export function MapKpis({
       icon: IconRocket,
     },
     {
-      title: "Leads totales",
-      value: formatDisplayNumber(leadsTotal),
+      title: "Tráfico web",
+      value: formatDisplayNumber(sesionesWebTotales),
       helper: `Nivel ${nivelLabel} · Visitas totales ${formatDisplayNumber(visitasTotales)}`,
-      icon: IconChartBar,
+      icon: IconWorld,
     },
     {
-      title: "Canal dominante",
-      value: channelLeader
-        ? `${channelLeader} (${formatDisplayNumber(channelLeaderValue)})`
+      title: "Fuente principal",
+      value: topSource
+        ? `${topSource} (${formatDisplayNumber(topSourceValue)})`
         : "Sin datos",
-      helper: `Nivel ${nivelLabel} · Canal principal en ${topLocationName || "esta zona"}`,
-      icon: IconActivity,
-    },
-    {
-      title: "Etapa dominante",
-      value: stageLeader
-        ? `${stageLeader} (${formatDisplayNumber(stageLeaderValue)})`
-        : "Sin datos",
-      helper: `Nivel ${nivelLabel} · Etapa líder en ${topLocationName || "esta zona"}`,
+      helper: `Nivel ${nivelLabel} · Top source de sesiones web`,
       icon: IconRoute,
+    },
+    {
+      title: "Conversaciones",
+      value: formatDisplayNumber(
+        sesionesWebchatTotales + conversacionesWhatsapp + conversacionesVoz,
+      ),
+      helper: `Webchat ${formatDisplayNumber(sesionesWebchatTotales)} · WA ${formatDisplayNumber(
+        conversacionesWhatsapp,
+      )} · Voz ${formatDisplayNumber(conversacionesVoz)} · Etapa líder ${stageLeader || "N/A"} (${formatDisplayNumber(stageLeaderValue)})`,
+      icon: IconMessageCircle,
     },
   ]
 

@@ -66,6 +66,23 @@ export type DemografiaMapDataset = {
   has_data: boolean;
   next_level: "estado" | "municipio" | null;
   parent_state: string | null;
+  traffic_web?: {
+    sesiones_web_total: number;
+    fuentes_top: Array<{ source: string; total: number }>;
+    utm_top: Array<{
+      utm_source: string;
+      utm_medium: string;
+      utm_campaign: string;
+      total: number;
+    }>;
+  };
+  conversation_channels?: {
+    sesiones_webchat_total: number;
+    sesiones_con_chat_webchat: number;
+    sesiones_sin_chat_webchat: number;
+    conversaciones_whatsapp: number;
+    conversaciones_voz: number;
+  };
 };
 
 export type DemografiaSummaryResponse = {
@@ -93,6 +110,19 @@ export type DemografiaSummaryResponse = {
       webchat_sin_chat: number;
       whatsapp_total: number;
       voz_total: number;
+      sesiones_web_total?: number;
+      sesiones_webchat_total?: number;
+      sesiones_con_chat_webchat?: number;
+      sesiones_sin_chat_webchat?: number;
+      conversaciones_whatsapp?: number;
+      conversaciones_voz?: number;
+      fuentes_top?: Array<{ source: string; total: number }>;
+      utm_top?: Array<{
+        utm_source: string;
+        utm_medium: string;
+        utm_campaign: string;
+        total: number;
+      }>;
       has_data: boolean;
     }>;
     totals: {
@@ -101,6 +131,10 @@ export type DemografiaSummaryResponse = {
       sin_chat: number;
       webchat_con_chat: number;
       webchat_sin_chat: number;
+      sesiones_web_total?: number;
+      sesiones_webchat_total?: number;
+      conversaciones_whatsapp?: number;
+      conversaciones_voz?: number;
     };
   };
 };
@@ -149,7 +183,15 @@ async function callDemografiaEndpoint<T>(
 
 export async function loadDemografiaData(
   nivel: "pais" | "estado" | "municipio" = "estado",
-  options: { estado?: string | null; canales?: string[]; etapas?: string[] } = {},
+  options: {
+    estado?: string | null;
+    canales?: string[];
+    etapas?: string[];
+    sourceClass?: string | null;
+    utmSource?: string | null;
+    utmMedium?: string | null;
+    utmCampaign?: string | null;
+  } = {},
 ): Promise<DemografiaData> {
   const resumenParams: DemografiaQueryParams = { nivel };
   const mapaParams: DemografiaQueryParams = { nivel };
@@ -166,6 +208,23 @@ export async function loadDemografiaData(
   }
   if (nivel === "municipio" && options.estado) {
     mapaParams.estado = options.estado;
+    resumenParams.estado = options.estado;
+  }
+  if (options.sourceClass) {
+    resumenParams.source_class = options.sourceClass;
+    mapaParams.source_class = options.sourceClass;
+  }
+  if (options.utmSource) {
+    resumenParams.utm_source = options.utmSource;
+    mapaParams.utm_source = options.utmSource;
+  }
+  if (options.utmMedium) {
+    resumenParams.utm_medium = options.utmMedium;
+    mapaParams.utm_medium = options.utmMedium;
+  }
+  if (options.utmCampaign) {
+    resumenParams.utm_campaign = options.utmCampaign;
+    mapaParams.utm_campaign = options.utmCampaign;
   }
 
   const [summary, map] = await Promise.all([

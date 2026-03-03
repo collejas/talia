@@ -59,16 +59,6 @@ function combineChannelTotals(entry: DemografiaDataset[number]) {
   return combined;
 }
 
-function getLocationChannelLeader(entry: DemografiaDataset[number]) {
-  const combined = combineChannelTotals(entry);
-  const top = Array.from(combined.entries()).sort(([, a], [, b]) => (b ?? 0) - (a ?? 0))[0];
-  const label = top?.[0] ?? "";
-  return {
-    name: label ? formatChannelLabel(label) : "",
-    total: top?.[1] ?? 0,
-  };
-}
-
 function getLocationStageLeader(entry: DemografiaDataset[number]) {
   const stages = entry.etapas_totales || {};
   const topStage = Object.entries(stages).sort(([, a], [, b]) => (b ?? 0) - (a ?? 0))[0];
@@ -240,6 +230,14 @@ export default async function Page({
       : [];
   const colorParam = typeof params.color === "string" ? params.color.toLowerCase() : "";
   const colorMode: ColorMode = colorParam === "channel" ? "channel" : "sequential";
+  const sourceClassParam = typeof params.source_class === "string" ? params.source_class.trim().toLowerCase() : "";
+  const sourceClass = sourceClassParam.length ? sourceClassParam : null;
+  const utmSourceParam = typeof params.utm_source === "string" ? params.utm_source.trim().toLowerCase() : "";
+  const utmMediumParam = typeof params.utm_medium === "string" ? params.utm_medium.trim().toLowerCase() : "";
+  const utmCampaignParam = typeof params.utm_campaign === "string" ? params.utm_campaign.trim().toLowerCase() : "";
+  const utmSource = utmSourceParam.length ? utmSourceParam : null;
+  const utmMedium = utmMediumParam.length ? utmMediumParam : null;
+  const utmCampaign = utmCampaignParam.length ? utmCampaignParam : null;
 
   let demografiaResponse: Awaited<ReturnType<typeof loadDemografiaData>> | null = null;
   let visitsPayload: Awaited<ReturnType<typeof loadVisitsData>> | null = null;
@@ -250,6 +248,10 @@ export default async function Page({
       canales: canalesFilter,
       etapas,
       estado: nivel === "municipio" ? normalizedEstado : null,
+      sourceClass,
+      utmSource,
+      utmMedium,
+      utmCampaign,
     });
   } catch (error) {
     errores.push(
@@ -297,24 +299,46 @@ export default async function Page({
         return acc;
       }, createEmptyStageTotals(stageKeys))
     : createEmptyStageTotals(stageKeys);
-  const leadsTotal = demografiaResponse?.summary.leads.totals.total ?? 0;
   const visitantesTotal = demografiaResponse?.summary.visitantes.totals.total ?? 0;
+  const sesionesWebTotales = demografiaResponse?.summary.visitantes.totals.sesiones_web_total ?? 0;
+  const sesionesWebchatTotales =
+    demografiaResponse?.summary.visitantes.totals.sesiones_webchat_total ?? 0;
+  const conversacionesWhatsapp =
+    demografiaResponse?.summary.visitantes.totals.conversaciones_whatsapp ?? 0;
+  const conversacionesVoz = demografiaResponse?.summary.visitantes.totals.conversaciones_voz ?? 0;
   const topLocation = demografiaResponse ? selectTopLocation(demografiaResponse.map.dataset) : null;
   const topLocationName = topLocation?.name ?? "Sin datos";
   const topLocationLeads = topLocation?.leads_total ?? 0;
   const topLocationVisits = topLocation?.total_visitas ?? 0;
-  const locationChannelLeader = topLocation ? getLocationChannelLeader(topLocation) : { name: "", total: 0 };
   const locationStageLeader = topLocation ? getLocationStageLeader(topLocation) : { name: "", total: 0 };
+  const topSource = (() => {
+    if (!demografiaResponse) return { source: "", total: 0 };
+    const totals = new Map<string, number>();
+    for (const entry of demografiaResponse.map.dataset) {
+      const sources = entry.traffic_web?.fuentes_top ?? [];
+      for (const source of sources) {
+        const key = (source.source || "").trim().toLowerCase();
+        if (!key) continue;
+        totals.set(key, (totals.get(key) ?? 0) + (source.total ?? 0));
+      }
+    }
+    const first = Array.from(totals.entries()).sort((a, b) => b[1] - a[1])[0];
+    if (!first) return { source: "", total: 0 };
+    return { source: formatChannelLabel(first[0]), total: first[1] };
+  })();
   const nivelLabel = nivel.charAt(0).toUpperCase() + nivel.slice(1);
   const mapKpisData = {
     nivelLabel,
-    leadsTotal,
     visitasTotales: visitantesTotal,
+    sesionesWebTotales,
+    sesionesWebchatTotales,
+    conversacionesWhatsapp,
+    conversacionesVoz,
     topLocationName,
     topLocationLeads,
     topLocationVisits,
-    channelLeader: locationChannelLeader.name,
-    channelLeaderValue: locationChannelLeader.total,
+    topSource: topSource.source,
+    topSourceValue: topSource.total,
     stageLeader: locationStageLeader.name,
     stageLeaderValue: locationStageLeader.total,
   };
@@ -356,6 +380,10 @@ export default async function Page({
                 canales={canalesSelected}
                 etapas={etapas}
                 color={colorMode}
+                sourceClass={sourceClass}
+                utmSource={utmSource}
+                utmMedium={utmMedium}
+                utmCampaign={utmCampaign}
               />
               <SessionRecovery errors={errores} />
               {demografiaResponse ? (

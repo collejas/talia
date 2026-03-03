@@ -79,6 +79,7 @@ export function MapaConversionRowDetail({ row, nivel, summary }: Props) {
   const conversacionTotales = (entry.conversacion_totales as Record<string, unknown>) ?? {};
   const metrics = (entry.metrics as Record<string, unknown>) ?? {};
   const canalMeta = (entry.canal_meta as Record<string, unknown>) ?? {};
+  const trafficWeb = (entry.traffic_web as Record<string, unknown>) ?? {};
 
   const totalVisitas = sanitizeNumber(metrics.visitantes_total ?? entry.total_visitas);
   const leadsTotal = sanitizeNumber(metrics.leads_total ?? entry.leads_total);
@@ -164,6 +165,11 @@ export function MapaConversionRowDetail({ row, nivel, summary }: Props) {
           value={formatLabel(principalChannel)}
           description="Fuente con mayor participación"
         />
+        <MetricCard
+          title="Sesiones web"
+          value={formatNumber(sanitizeNumber(trafficWeb.sesiones_web_total))}
+          description="Tráfico web first-party"
+        />
       </section>
 
       <section className="grid gap-4 lg:grid-cols-2">
@@ -243,6 +249,48 @@ export function MapaConversionRowDetail({ row, nivel, summary }: Props) {
               </div>
             </div>
           ))}
+        </div>
+      </section>
+
+      <section className="grid gap-3">
+        <h4 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+          Atribución web
+        </h4>
+        <div className="grid gap-2">
+          {(Array.isArray(trafficWeb.fuentes_top) ? trafficWeb.fuentes_top : []).length ? (
+            (trafficWeb.fuentes_top as Array<Record<string, unknown>>).slice(0, 5).map((source, index) => (
+              <div
+                key={`source-${index}`}
+                className="bg-muted/50 flex items-center justify-between rounded-lg px-3 py-2 text-sm"
+              >
+                <span className="text-muted-foreground">
+                  {formatLabel(typeof source.source === "string" ? source.source : "desconocido")}
+                </span>
+                <span className="font-medium">{formatNumber(sanitizeNumber(source.total))}</span>
+              </div>
+            ))
+          ) : (
+            <p className="text-muted-foreground text-sm">Sin fuentes top en este filtro.</p>
+          )}
+        </div>
+        <div className="grid gap-2">
+          {(Array.isArray(trafficWeb.utm_top) ? trafficWeb.utm_top : []).length ? (
+            (trafficWeb.utm_top as Array<Record<string, unknown>>).slice(0, 5).map((utm, index) => (
+              <div
+                key={`utm-${index}`}
+                className="bg-muted/50 flex items-center justify-between rounded-lg px-3 py-2 text-sm"
+              >
+                <span className="text-muted-foreground">
+                  {`${typeof utm.utm_source === "string" ? utm.utm_source : "(none)"} / ${
+                    typeof utm.utm_medium === "string" ? utm.utm_medium : "(none)"
+                  } / ${typeof utm.utm_campaign === "string" ? utm.utm_campaign : "(none)"}`}
+                </span>
+                <span className="font-medium">{formatNumber(sanitizeNumber(utm.total))}</span>
+              </div>
+            ))
+          ) : (
+            <p className="text-muted-foreground text-sm">Sin UTM top en este filtro.</p>
+          )}
         </div>
       </section>
 

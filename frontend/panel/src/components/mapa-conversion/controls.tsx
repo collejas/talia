@@ -26,6 +26,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
 
 const CHANNEL_OPTIONS = [
   { value: "webchat", label: "Webchat" },
@@ -44,17 +45,41 @@ const STAGE_OPTIONS = [
 ];
 
 const DEFAULT_STAGES = STAGE_OPTIONS.map((item) => item.value);
+const SOURCE_CLASS_OPTIONS = [
+  { value: "all", label: "Todas las fuentes" },
+  { value: "direct", label: "Directo" },
+  { value: "campaign", label: "Campaña" },
+  { value: "organic_search", label: "Búsqueda orgánica" },
+  { value: "organic_social", label: "Social orgánico" },
+  { value: "referral", label: "Referido" },
+];
 
 type DemografiaControlsProps = {
   nivel: "pais" | "estado" | "municipio";
   canales: string[];
   etapas: string[];
   color: "sequential" | "channel";
+  sourceClass: string | null;
+  utmSource: string | null;
+  utmMedium: string | null;
+  utmCampaign: string | null;
 };
 
-export function DemografiaControls({ nivel, canales, etapas, color }: DemografiaControlsProps) {
+export function DemografiaControls({
+  nivel,
+  canales,
+  etapas,
+  color,
+  sourceClass,
+  utmSource,
+  utmMedium,
+  utmCampaign,
+}: DemografiaControlsProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const [utmSourceDraft, setUtmSourceDraft] = React.useState(utmSource ?? "");
+  const [utmMediumDraft, setUtmMediumDraft] = React.useState(utmMedium ?? "");
+  const [utmCampaignDraft, setUtmCampaignDraft] = React.useState(utmCampaign ?? "");
 
   const normalizedChannelsArray = React.useMemo(() => {
     const source = canales.length ? canales : DEFAULT_CHANNELS;
@@ -74,6 +99,15 @@ export function DemografiaControls({ nivel, canales, etapas, color }: Demografia
   React.useEffect(() => {
     setChannelDraft(new Set(normalizedChannelsArray));
   }, [normalizedChannelsArray]);
+  React.useEffect(() => {
+    setUtmSourceDraft(utmSource ?? "");
+  }, [utmSource]);
+  React.useEffect(() => {
+    setUtmMediumDraft(utmMedium ?? "");
+  }, [utmMedium]);
+  React.useEffect(() => {
+    setUtmCampaignDraft(utmCampaign ?? "");
+  }, [utmCampaign]);
 
   const normalizedStages = React.useMemo(() => {
     if (!etapas.length) return new Set(DEFAULT_STAGES);
@@ -157,6 +191,26 @@ export function DemografiaControls({ nivel, canales, etapas, color }: Demografia
     setChannelDraft(new Set(DEFAULT_CHANNELS));
     updateParams({ canales: null });
     setChannelMenuOpen(false);
+  }
+
+  function applyAttributionFilters() {
+    updateParams({
+      utm_source: utmSourceDraft.trim().toLowerCase() || null,
+      utm_medium: utmMediumDraft.trim().toLowerCase() || null,
+      utm_campaign: utmCampaignDraft.trim().toLowerCase() || null,
+    });
+  }
+
+  function clearAttributionFilters() {
+    setUtmSourceDraft("");
+    setUtmMediumDraft("");
+    setUtmCampaignDraft("");
+    updateParams({
+      source_class: null,
+      utm_source: null,
+      utm_medium: null,
+      utm_campaign: null,
+    });
   }
 
   return (
@@ -299,6 +353,49 @@ export function DemografiaControls({ nivel, canales, etapas, color }: Demografia
             </Button>
           </div>
         </div>
+
+        <Select
+          value={sourceClass ?? "all"}
+          onValueChange={(value) => {
+            updateParams({ source_class: value === "all" ? null : value });
+          }}
+        >
+          <SelectTrigger className="w-[220px]">
+            <SelectValue placeholder="Fuente de tráfico" />
+          </SelectTrigger>
+          <SelectContent className="z-50">
+            {SOURCE_CLASS_OPTIONS.map((option) => (
+              <SelectItem key={option.value} value={option.value}>
+                {option.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
+        <Input
+          value={utmSourceDraft}
+          onChange={(event) => setUtmSourceDraft(event.target.value)}
+          placeholder="utm_source"
+          className="h-8 w-[160px]"
+        />
+        <Input
+          value={utmMediumDraft}
+          onChange={(event) => setUtmMediumDraft(event.target.value)}
+          placeholder="utm_medium"
+          className="h-8 w-[160px]"
+        />
+        <Input
+          value={utmCampaignDraft}
+          onChange={(event) => setUtmCampaignDraft(event.target.value)}
+          placeholder="utm_campaign"
+          className="h-8 w-[180px]"
+        />
+        <Button type="button" size="sm" variant="outline" onClick={applyAttributionFilters}>
+          Aplicar UTM
+        </Button>
+        <Button type="button" size="sm" variant="ghost" onClick={clearAttributionFilters}>
+          Limpiar atribución
+        </Button>
       </div>
     </div>
   );
