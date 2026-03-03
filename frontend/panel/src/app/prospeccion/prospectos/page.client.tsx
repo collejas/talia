@@ -1747,11 +1747,19 @@ function ProspectosView() {
     }
   }, [currentIds])
   const allSelected = currentIds.length > 0 && currentIds.every((id) => selected.has(id))
+  const activeQueryGroup = openedQueryScope ?? (filters.queryFilters.length === 1 ? filters.queryFilters[0] : null)
+  const activeQueryGroupCount =
+    activeQueryGroup && prospectosViewMode === "prospectos"
+      ? queryOptions.find((option) => option.value === activeQueryGroup)?.count
+      : undefined
+  const effectiveTotal =
+    typeof activeQueryGroupCount === "number" && activeQueryGroupCount > 0 && total <= limit
+      ? Math.max(total, activeQueryGroupCount)
+      : total
   const showingFrom = items.length ? offset + 1 : 0
   const showingTo = items.length ? offset + items.length : 0
-  const pageCount = limit ? Math.ceil(total / limit) : 1
+  const pageCount = limit ? Math.ceil(effectiveTotal / limit) : 1
   const currentPage = limit ? Math.floor(offset / limit) + 1 : 1
-  const activeQueryGroup = openedQueryScope ?? (filters.queryFilters.length === 1 ? filters.queryFilters[0] : null)
   const activeQueryGroupLabel = activeQueryGroup ? queryLabelMap.get(activeQueryGroup) ?? activeQueryGroup : null
   const flowSteps = useMemo(() => {
     const pendingPhones = checklist?.telefonos_pendientes ?? 0
@@ -1760,7 +1768,7 @@ function ProspectosView() {
       let meta: string
       switch (step.key) {
         case "discover":
-          meta = total ? `${total.toLocaleString("es-MX")} prospectos` : "Sin búsquedas guardadas"
+          meta = effectiveTotal ? `${effectiveTotal.toLocaleString("es-MX")} prospectos` : "Sin búsquedas guardadas"
           break
         case "enrich": {
           const parts = []
@@ -1785,7 +1793,7 @@ function ProspectosView() {
       return { ...step, meta, count, isCurrent: step.key === "prepare" }
     })
     return steps
-  }, [checklist, selectedCount, stageSummary, total])
+  }, [checklist, effectiveTotal, selectedCount, stageSummary])
 
   const handleToggleRow = (id: string, checked: boolean) => {
     setSelected((prev) => {
@@ -1827,6 +1835,7 @@ function ProspectosView() {
   }
 
   const handleOpenQueryGroup = useCallback((queryValue: string) => {
+    setOffset(0)
     setOpenedQueryScope(queryValue || null)
     setFilters((prev) => ({
       ...prev,
@@ -1836,6 +1845,7 @@ function ProspectosView() {
   }, [])
 
   const handleBackToQueryGroups = useCallback(() => {
+    setOffset(0)
     setOpenedQueryScope(null)
     setFilters((prev) => ({ ...prev, queryFilters: [] }))
     setProspectosViewMode("grupos")
@@ -1893,6 +1903,7 @@ function ProspectosView() {
 
   const handleLimitChange = (value: string) => {
     const parsed = Number(value) || PAGE_SIZE_OPTIONS[0]
+    setOffset(0)
     setLimit(parsed)
   }
 
@@ -3395,7 +3406,7 @@ function ProspectosView() {
               <p className="text-xs text-muted-foreground">
                 {prospectosViewMode === "grupos"
                   ? `${groupedQueryOptions.length} grupos de búsqueda`
-                  : `${showingFrom}-${Math.max(showingFrom, showingTo)} de ${total} registros · Página ${currentPage} de ${Math.max(pageCount, 1)}`}
+                  : `${showingFrom}-${Math.max(showingFrom, showingTo)} de ${effectiveTotal} registros · Página ${currentPage} de ${Math.max(pageCount, 1)}`}
                 {activeQueryGroupLabel && prospectosViewMode === "prospectos"
                   ? ` · Grupo: ${activeQueryGroupLabel}`
                   : ""}
@@ -3435,7 +3446,7 @@ function ProspectosView() {
 	                  variant="outline"
 	                  size="sm"
 	                  onClick={() => void fetchProspectos(offset + limit)}
-	                  disabled={prospectosViewMode === "grupos" || loading || offset + limit >= total}
+	                  disabled={prospectosViewMode === "grupos" || loading || offset + limit >= effectiveTotal}
 	                >
 	                  Siguiente
 	                </Button>
@@ -3907,7 +3918,7 @@ function ProspectosView() {
                   variant="outline"
                   size="sm"
                   onClick={() => void fetchProspectos(offset + limit)}
-                  disabled={loading || offset + limit >= total}
+                  disabled={loading || offset + limit >= effectiveTotal}
                 >
                   Siguiente
                 </Button>

@@ -7944,8 +7944,52 @@ class CRMRepository:
         data = resp.json() or []
         if not isinstance(data, list):
             raise CRMRepositoryError(f"Respuesta inesperada al listar prospectos: {data!r}")
-        total = self._extract_total_count(resp.headers.get("content-range")) or len(data)
+        total_from_header = self._extract_total_count(resp.headers.get("content-range"))
+        if total_from_header is not None:
+            total = total_from_header
+        else:
+            total = len(data)
+            # Fallback: algunos entornos no regresan content-range total con filtros complejos.
+            # Si la página viene llena, recalculamos el total real por escaneo paginado.
+            if len(data) >= limit:
+                total = await self._count_prospectos_scan(
+                    usuario_token=usuario_token,
+                    params=params,
+                )
         return data, total
+
+    async def _count_prospectos_scan(
+        self,
+        *,
+        usuario_token: str,
+        params: dict[str, str],
+    ) -> int:
+        """Cuenta filas reales por escaneo cuando PostgREST no devuelve total en content-range."""
+
+        total = 0
+        scan_offset = 0
+        page_size = 1000
+        max_scan_rows = 200_000
+
+        while scan_offset < max_scan_rows:
+            scan_params = dict(params)
+            scan_params["limit"] = str(page_size)
+            scan_params["offset"] = str(scan_offset)
+            resp = await self._request_with_user(
+                "GET",
+                "/rest/v1/prospeccion_prospectos",
+                token=usuario_token,
+                params=scan_params,
+            )
+            page = resp.json() or []
+            if not isinstance(page, list):
+                raise CRMRepositoryError(f"Respuesta inesperada al contar prospectos (scan): {page!r}")
+            if not page:
+                break
+            total += len(page)
+            scan_offset += len(page)
+
+        return total
 
     async def _list_prospectos_excluding_ids(
         self,
@@ -8001,8 +8045,6 @@ class CRMRepository:
                     filtered_rows.append(row)
                 filtered_total += 1
 
-            if len(data) < page_size:
-                break
             scan_offset += len(data)
 
         return filtered_rows, filtered_total
@@ -8064,8 +8106,6 @@ class CRMRepository:
                     filtered_rows.append(row)
                 filtered_total += 1
 
-            if len(data) < page_size:
-                break
             scan_offset += len(data)
 
         return filtered_rows, filtered_total
@@ -8120,8 +8160,6 @@ class CRMRepository:
                     filtered_rows.append(row)
                 filtered_total += 1
 
-            if len(data) < page_size:
-                break
             scan_offset += len(data)
 
         return filtered_rows, filtered_total
@@ -8202,8 +8240,6 @@ class CRMRepository:
                     if prospecto_id is None:
                         continue
                     ids.add(str(prospecto_id))
-                if len(data) < page_size:
-                    break
                 offset += len(data)
         return ids
 
@@ -8261,8 +8297,6 @@ class CRMRepository:
             for row in page:
                 if isinstance(row, dict):
                     data.append(row)
-            if len(page) < page_size:
-                break
             scan_offset += len(page)
         selected_queries: set[str] | None = None
         if query_filters:
