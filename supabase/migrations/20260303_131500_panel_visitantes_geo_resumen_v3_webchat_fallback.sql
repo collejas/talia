@@ -54,6 +54,14 @@ normalized_level AS (
         ELSE 'estado'
     END AS nivel
 ),
+attribution_filter_active AS (
+    SELECT (
+        p_source_class IS NOT NULL OR
+        p_utm_source IS NOT NULL OR
+        p_utm_medium IS NOT NULL OR
+        p_utm_campaign IS NOT NULL
+    ) AS is_active
+),
 state_filter AS (
     SELECT CASE
         WHEN p_estado IS NULL OR btrim(p_estado) = '' THEN NULL::text
@@ -67,6 +75,16 @@ webchat_as_web_raw AS (
     SELECT
         w.session_id,
         COALESCE(w.ultimo_evento_en, now()) AS activity_at,
+        CASE
+            WHEN EXISTS (
+                SELECT 1
+                FROM public.mensajes m
+                WHERE m.datos ->> 'session_id' = w.session_id
+                  AND m.direccion = 'entrante'
+            )
+            THEN TRUE
+            ELSE FALSE
+        END AS tuvo_chat,
         NULLIF(lower(substring(COALESCE(w.landing_url, '') FROM '(?:\\?|&)utm_source=([^&#]+)')), '') AS utm_source,
         NULLIF(lower(substring(COALESCE(w.landing_url, '') FROM '(?:\\?|&)utm_medium=([^&#]+)')), '') AS utm_medium,
         NULLIF(lower(substring(COALESCE(w.landing_url, '') FROM '(?:\\?|&)utm_campaign=([^&#]+)')), '') AS utm_campaign,
@@ -138,6 +156,7 @@ webchat_as_web_scoped AS (
     SELECT
         nl.nivel AS location_level,
         n.session_id,
+        n.tuvo_chat,
         n.source_class,
         n.utm_source,
         n.utm_medium,
@@ -173,6 +192,17 @@ fallback_metrics AS (
         f.location_key,
         f.location_name,
         COUNT(DISTINCT f.session_id)::bigint AS sesiones_web_fallback
+    FROM webchat_as_web_filtered f
+    GROUP BY f.location_level, f.location_key, f.location_name
+),
+fallback_webchat_metrics AS (
+    SELECT
+        f.location_level,
+        f.location_key,
+        f.location_name,
+        COUNT(DISTINCT f.session_id)::bigint AS sesiones_webchat_total,
+        COUNT(DISTINCT f.session_id) FILTER (WHERE f.tuvo_chat)::bigint AS sesiones_con_chat_webchat,
+        COUNT(DISTINCT f.session_id) FILTER (WHERE NOT f.tuvo_chat)::bigint AS sesiones_sin_chat_webchat
     FROM webchat_as_web_filtered f
     GROUP BY f.location_level, f.location_key, f.location_name
 ),
@@ -250,9 +280,18 @@ SELECT
         WHEN COALESCE(b.sesiones_web_total, 0) > 0 THEN b.sesiones_web_total
         ELSE COALESCE(fm.sesiones_web_fallback, 0)
     END::bigint AS sesiones_web_total,
-    b.sesiones_webchat_total,
-    b.sesiones_con_chat_webchat,
-    b.sesiones_sin_chat_webchat,
+    CASE
+        WHEN af.is_active THEN COALESCE(fwm.sesiones_webchat_total, 0)
+        ELSE b.sesiones_webchat_total
+    END::bigint AS sesiones_webchat_total,
+    CASE
+        WHEN af.is_active THEN COALESCE(fwm.sesiones_con_chat_webchat, 0)
+        ELSE b.sesiones_con_chat_webchat
+    END::bigint AS sesiones_con_chat_webchat,
+    CASE
+        WHEN af.is_active THEN COALESCE(fwm.sesiones_sin_chat_webchat, 0)
+        ELSE b.sesiones_sin_chat_webchat
+    END::bigint AS sesiones_sin_chat_webchat,
     b.conversaciones_whatsapp,
     b.conversaciones_voz,
     CASE
@@ -263,20 +302,62 @@ SELECT
         WHEN jsonb_array_length(COALESCE(b.utm_top, '[]'::jsonb)) > 0 THEN b.utm_top
         ELSE COALESCE(fu.utm_top, '[]'::jsonb)
     END AS utm_top,
-    b.total_visitas,
-    b.visitas_con_chat,
-    b.visitas_sin_chat,
-    b.webchat_total,
-    b.webchat_con_chat,
-    b.webchat_sin_chat,
+    (
+        CASE
+            WHEN COALESCE(b.sesiones_web_total, 0) > 0 THEN b.sesiones_web_total
+            ELSE COALESCE(fm.sesiones_web_fallback, 0)
+        END
+        + CASE
+            WHEN af.is_active THEN COALESCE(fwm.sesiones_webchat_total, 0)
+            ELSE b.sesiones_webchat_total
+          END
+    )::bigint AS total_visitas,
+    CASE
+        WHEN af.is_active THEN COALESCE(fwm.sesiones_con_chat_webchat, 0)
+        ELSE b.visitas_con_chat
+    END::bigint AS visitas_con_chat,
+    CASE
+        WHEN af.is_active THEN COALESCE(fwm.sesiones_sin_chat_webchat, 0)
+        ELSE b.visitas_sin_chat
+    END::bigint AS visitas_sin_chat,
+    CASE
+        WHEN af.is_active THEN COALESCE(fwm.sesiones_webchat_total, 0)
+        ELSE b.webchat_total
+    END::bigint AS webchat_total,
+    CASE
+        WHEN af.is_active THEN COALESCE(fwm.sesiones_con_chat_webchat, 0)
+        ELSE b.webchat_con_chat
+    END::bigint AS webchat_con_chat,
+    CASE
+        WHEN af.is_active THEN COALESCE(fwm.sesiones_sin_chat_webchat, 0)
+        ELSE b.webchat_sin_chat
+    END::bigint AS webchat_sin_chat,
     b.whatsapp_total,
     b.voz_total,
-    b.has_data
+    (
+        (
+            CASE
+                WHEN COALESCE(b.sesiones_web_total, 0) > 0 THEN b.sesiones_web_total
+                ELSE COALESCE(fm.sesiones_web_fallback, 0)
+            END
+            + CASE
+                WHEN af.is_active THEN COALESCE(fwm.sesiones_webchat_total, 0)
+                ELSE b.sesiones_webchat_total
+              END
+        )
+        + COALESCE(b.conversaciones_whatsapp, 0)
+        + COALESCE(b.conversaciones_voz, 0)
+    ) > 0 AS has_data
 FROM base b
+CROSS JOIN attribution_filter_active af
 LEFT JOIN fallback_metrics fm
        ON fm.location_level = b.location_level
       AND fm.location_key = b.location_key
       AND fm.location_name = b.location_name
+LEFT JOIN fallback_webchat_metrics fwm
+       ON fwm.location_level = b.location_level
+      AND fwm.location_key = b.location_key
+      AND fwm.location_name = b.location_name
 LEFT JOIN fallback_source_top fs
        ON fs.location_level = b.location_level
       AND fs.location_key = b.location_key

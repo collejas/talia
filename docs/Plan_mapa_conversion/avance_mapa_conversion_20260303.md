@@ -134,6 +134,7 @@ Incluye:
     - `fuentes_top`
     - `utm_top`
     usando señales de `webchat_visitantes`.
+  - Cuando hay filtros de atribución (`source_class`, `utm_*`), también aplica el filtro a métricas de `webchat_total`, `visitas_con_chat`, `visitas_sin_chat` y `total_visitas` para que mapa + resumen cambien de forma consistente.
 
 ### 6) Ajuste de nomenclatura UI (sin tecnicismos)
 Archivos:
