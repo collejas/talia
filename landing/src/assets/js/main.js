@@ -2,6 +2,7 @@ import { initialiseTheme } from './modules/theme.js';
 import { initialiseChat } from './modules/chat.js';
 import { initialiseMobileNav } from './modules/mobile-nav.js';
 import { initialiseLayoutObservers } from './modules/layout.js';
+import { initialiseVisitTracking } from './modules/visit-tracking.js';
 
 initialiseTheme();
 initialiseMobileNav();
@@ -31,4 +32,8 @@ async function bootstrapChat() {
     console.warn('[main] No se pudo obtener configuración del webchat.', error);
   }
   initialiseChat(options);
+  initialiseVisitTracking({
+    tenantAlias: options.tenantAlias ?? null,
+    linkedSessionStorageKey: options.storageSessionKey ?? 'talia-webchat-session',
+  });
 }

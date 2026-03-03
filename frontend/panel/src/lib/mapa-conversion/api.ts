@@ -169,8 +169,8 @@ export async function loadDemografiaData(
   }
 
   const [summary, map] = await Promise.all([
-    callDemografiaEndpoint<DemografiaSummaryResponse>("resumen", resumenParams),
-    callDemografiaEndpoint<DemografiaMapResponse>("mapa", mapaParams),
+    callDemografiaEndpoint<DemografiaSummaryResponse>("resumen-v2", resumenParams),
+    callDemografiaEndpoint<DemografiaMapResponse>("mapa-v2", mapaParams),
   ]);
 
   return { summary, map };

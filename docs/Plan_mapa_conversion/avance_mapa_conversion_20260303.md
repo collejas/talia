@@ -70,6 +70,27 @@ Incluye:
   - Soporta resolución de tenant por `tenant_alias` (payload/header/meta) y fallback al tenant maestro.
   - Captura `session_id`, `landing/referrer`, `user_agent`, `ip`, geografía, UTM y metadata.
 
+### 4) Instrumentación frontend de visitas web + consumo v2 en panel
+Archivos:
+- `landing/src/assets/js/modules/visit-tracking.js`
+- `landing/src/assets/js/main.js`
+- `frontend/panel/src/lib/mapa-conversion/api.ts`
+
+Estado:
+- Implementado en código.
+
+Incluye:
+- Nuevo tracker first-party en `talia.mx`:
+  - Envía `POST /api/crm/web/visit` con `session_id`, `landing_url`, `referrer`, `user_agent`, `device_type`, `utm_*`, `tenant_alias` y metadata.
+  - Dispara en:
+    - carga inicial (`page_load`)
+    - navegación cliente (`history push/replace`, `popstate`, `hashchange`).
+  - Mantiene `session_id` persistente (`talia-web-session`) y reutiliza `talia-webchat-session` cuando exista para facilitar unión de funnels web <-> webchat.
+- El panel de `mapa-de-conversion` ahora consume:
+  - `GET /crm/demografia/resumen-v2`
+  - `GET /crm/demografia/mapa-v2`
+  - mediante `loadDemografiaData(...)`.
+
 ## Validaciones realizadas
 
 1. Existencia de funciones:
@@ -95,10 +116,10 @@ Incluye:
 - Endpoints v2 ya implementados. Falta conectarlos en frontend.
 
 2. Ingesta web:
-- Endpoint implementado. Falta instrumentar `talia.mx` para invocarlo en page-load/ruta.
+- Endpoint e instrumentación implementados. Falta despliegue/validación en producción con datos reales.
 
 3. Frontend mapa:
-- Migrar vista `mapa-de-conversion` a contrato v2 (bloques web/conversacion/leads/atribucion).
+- API de datos ya migrada a `resumen-v2/mapa-v2`. Falta iteración visual para exponer campos nuevos (`traffic_web`, `fuentes_top`, `utm_top`) en la UI.
 
 4. Exportacion XLSX:
 - Implementar `GET /crm/demografia/mapa-v2/export/xlsx` respetando filtros activos.
