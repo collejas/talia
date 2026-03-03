@@ -88,6 +88,7 @@ npm run build
 sudo systemctl restart talia-api.service
 sudo systemctl restart talia-panel.service
 
+hacer que este modal muestre también secciones/títulos exactamente igual al sidepanel (no solo lista plana de campos requeridos).
 codex resume 019ca4f9-e6a0-7d93-afc1-5945c309c0da
 
 codex resume 019caf3c-82db-7fb0-a43a-b16e88ab801b

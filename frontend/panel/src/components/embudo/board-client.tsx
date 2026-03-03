@@ -79,6 +79,35 @@ type ScheduleContext = {
   destinationStage: EmbudoStage;
 };
 
+type ProgressionContext = {
+  card: EmbudoCard;
+  originStage: EmbudoStage;
+  destinationStage: EmbudoStage;
+  pathStages: EmbudoStage[];
+};
+
+type ProgressionFieldType =
+  | "text"
+  | "textarea"
+  | "number"
+  | "date"
+  | "datetime"
+  | "select"
+  | "checkbox"
+  | "url";
+
+type ProgressionOption = {
+  value: string;
+  label: string;
+};
+
+type ProgressionRequirementField = {
+  key: string;
+  label: string;
+  type: ProgressionFieldType;
+  options?: ProgressionOption[];
+};
+
 type SalesRepOption = {
   id: string;
   label: string;
@@ -166,6 +195,11 @@ export function EmbudoBoardClient({
   const [schedulePending, setSchedulePending] = useState(false);
   const [scheduleFormat, setScheduleFormat] = useState("");
   const [scheduleLink, setScheduleLink] = useState("");
+  const [progressionContext, setProgressionContext] = useState<ProgressionContext | null>(null);
+  const [progressionDialogOpen, setProgressionDialogOpen] = useState(false);
+  const [progressionStagePrep, setProgressionStagePrep] = useState<StagePrepMetadata>({});
+  const [progressionError, setProgressionError] = useState<string | null>(null);
+  const [progressionPending, setProgressionPending] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [appliedDays, setAppliedDays] = useState(7);
   const [appliedCanal, setAppliedCanal] = useState("");
@@ -450,6 +484,151 @@ export function EmbudoBoardClient({
       closeScheduleDialog();
     } else if (scheduleContext) {
       setScheduleDialogOpen(true);
+    }
+  };
+
+  const openProgressionDialog = useCallback((context: ProgressionContext) => {
+    setProgressionContext(context);
+    setProgressionStagePrep(extractStagePrep(context.card));
+    setProgressionError(null);
+    setProgressionPending(false);
+    setProgressionDialogOpen(true);
+  }, []);
+
+  const closeProgressionDialog = useCallback(() => {
+    setProgressionDialogOpen(false);
+    setProgressionContext(null);
+    setProgressionStagePrep({});
+    setProgressionError(null);
+    setProgressionPending(false);
+  }, []);
+
+  const handleProgressionFieldChange = useCallback(
+    (stageCode: string, fieldKey: string, value: string | boolean) => {
+      setProgressionStagePrep((prev) => {
+        const next = { ...prev };
+        const current = { ...(next[stageCode] ?? {}) };
+        if (typeof value === "boolean") {
+          current[fieldKey] = value;
+        } else if (value.trim().length === 0) {
+          delete current[fieldKey];
+        } else {
+          current[fieldKey] = value;
+        }
+        if (!Object.keys(current).length) {
+          delete next[stageCode];
+        } else {
+          next[stageCode] = current;
+        }
+        return next;
+      });
+    },
+    [],
+  );
+
+  const handleProgressionSubmit = async () => {
+    if (!progressionContext) return;
+
+    const { card, originStage, destinationStage, pathStages } = progressionContext;
+    setProgressionPending(true);
+    setProgressionError(null);
+    setMovePending(true);
+
+    try {
+      let acceptedForWon = true;
+      const pathIncludesWon = pathStages.some((stage) =>
+        matchesStageCode(normalizeStageCode(stage), "cerrado_ganado"),
+      );
+      if (pathIncludesWon) {
+        const acceptedCheck = await ensureLeadHasAcceptedQuote(card.oportunidadId);
+        if (!acceptedCheck.ok) {
+          setProgressionError(
+            acceptedCheck.error || "No se pudo verificar las cotizaciones del lead.",
+          );
+          return;
+        }
+        acceptedForWon = acceptedCheck.accepted;
+      }
+
+      let furthestValidStage: EmbudoStage | null = null;
+      let blockMessage: string | null = null;
+
+      for (const stage of pathStages) {
+        const stageCode = normalizeStageCode(stage);
+        if (matchesStageCode(stageCode, "cerrado_ganado") && !acceptedForWon) {
+          blockMessage =
+            "Necesitas una cotización aceptada antes de mover el lead a Cerrado (Ganado).";
+          break;
+        }
+        const missingRequirement = getMissingStageRequirementFromPrep(stage, progressionStagePrep);
+        if (missingRequirement) {
+          blockMessage = `Falta “${missingRequirement}” para completar la etapa “${stage.nombre}”.`;
+          break;
+        }
+        furthestValidStage = stage;
+      }
+
+      const updateResult = await updateLeadCard({
+        oportunidadId: card.oportunidadId,
+        contactoId: card.contactoId,
+        oportunidad: {
+          metadata: {
+            stage_prep: progressionStagePrep,
+          },
+        },
+        mergeMetadata: true,
+      });
+
+      if (!updateResult.ok) {
+        setProgressionError(updateResult.error || "No se pudieron guardar los datos del avance.");
+        return;
+      }
+
+      if (!furthestValidStage) {
+        setProgressionError(
+          blockMessage || "No se pudo avanzar porque faltan datos de etapas intermedias.",
+        );
+        return;
+      }
+
+      const moveResult = await moveLeadCard({
+        oportunidadId: card.oportunidadId,
+        etapaDestino: furthestValidStage.id,
+        fuente: "humano",
+        expectedEtapa: originStage.id,
+      });
+
+      if (!moveResult.ok) {
+        applyLeadResult(moveResult);
+        setProgressionError(moveResult.error || "No se pudo mover el lead.");
+        return;
+      }
+
+      const patchedResult: LeadActionResult = {
+        ...moveResult,
+        card: {
+          ...moveResult.card,
+          metadata: {
+            ...(moveResult.card.metadata ?? {}),
+            stage_prep: progressionStagePrep,
+          },
+        },
+      };
+      applyLeadResult(patchedResult);
+
+      if (furthestValidStage.id !== destinationStage.id) {
+        const info = blockMessage
+          ? `${blockMessage} Se movió a “${furthestValidStage.nombre}”.`
+          : `Se movió hasta “${furthestValidStage.nombre}” porque faltan datos en etapas posteriores.`;
+        setDragMessage(info);
+      } else {
+        setDragMessage(null);
+      }
+
+      closeProgressionDialog();
+    } finally {
+      setProgressionPending(false);
+      setMovePending(false);
     }
   };
 
@@ -919,8 +1098,38 @@ export function EmbudoBoardClient({
       handleDragCancel();
       return;
     }
+    const orderedDraggableStages = sortStages(stages).filter(
+      (stage) => (stage.orden ?? Number.MAX_SAFE_INTEGER) >= 2,
+    );
+    const currentStageIndex = orderedDraggableStages.findIndex(
+      (stage) => stage.id === activeDragStage.id,
+    );
+    const destinationStageIndex = orderedDraggableStages.findIndex(
+      (stage) => stage.id === destinationStage.id,
+    );
+    if (currentStageIndex === -1 || destinationStageIndex === -1) {
+      setDragMessage("No se pudo validar la secuencia de etapas para mover la tarjeta.");
+      handleDragCancel();
+      return;
+    }
+    if (destinationStageIndex <= currentStageIndex) {
+      setDragMessage("Solo puedes mover la tarjeta hacia adelante en el embudo.");
+      handleDragCancel();
+      return;
+    }
     if (destinationStage.orden != null && destinationStage.orden < 2) {
       setDragMessage("No puedes mover leads a etapas anteriores a Precalificado.");
+      handleDragCancel();
+      return;
+    }
+    const pathStages = orderedDraggableStages.slice(currentStageIndex + 1, destinationStageIndex + 1);
+    if (pathStages.length > 1) {
+      openProgressionDialog({
+        card: activeDragCard,
+        originStage: activeDragStage,
+        destinationStage,
+        pathStages,
+      });
       handleDragCancel();
       return;
     }
@@ -1400,6 +1609,137 @@ export function EmbudoBoardClient({
           </form>
         </SheetContent>
       </Sheet>
+
+      <Dialog
+        open={progressionDialogOpen && !!progressionContext}
+        onOpenChange={(open) => {
+          if (!open) closeProgressionDialog();
+        }}
+      >
+        <DialogContent className="sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Avance de etapas</DialogTitle>
+            <DialogDescription>
+              Completa los campos requeridos para avanzar desde
+              {` “${progressionContext?.originStage.nombre ?? ""}” `}
+              hasta
+              {` “${progressionContext?.destinationStage.nombre ?? ""}”.`}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="max-h-[65vh] space-y-4 overflow-auto pr-1">
+            {(progressionContext?.pathStages ?? []).map((stage) => {
+              const requirements = getStageRequirements(stage);
+              if (!requirements.length) {
+                return (
+                  <div key={stage.id} className="rounded-lg border p-3">
+                    <p className="text-sm font-medium">{stage.nombre}</p>
+                    <p className="text-xs text-muted-foreground">Sin campos obligatorios.</p>
+                  </div>
+                );
+              }
+              const stageEntry = resolveStagePrepEntry(
+                progressionStagePrep,
+                stage.codigo,
+                normalizeStageCode(stage),
+                resolveStageRequirementKey(normalizeStageCode(stage)) ?? undefined,
+              );
+              const stageKey =
+                stageEntry?.key ||
+                normalizeStageCode(stage) ||
+                stage.codigo.toLowerCase();
+
+              return (
+                <div key={stage.id} className="space-y-3 rounded-lg border p-3">
+                  <p className="text-sm font-medium">{stage.nombre}</p>
+                  {requirements.map((requirement) => {
+                    const value = readStagePrepFieldValue(
+                      progressionStagePrep,
+                      stage,
+                      requirement.key,
+                    );
+                    const inputId = `progression-${stage.id}-${requirement.key}`;
+                    const fieldType = requirement.type;
+                    const stringValue = typeof value === "string" ? value : "";
+                    const boolValue = value === true;
+                    return (
+                      <div key={requirement.key} className="space-y-1">
+                        <Label htmlFor={inputId} className="text-xs font-medium">
+                          {requirement.label} *
+                        </Label>
+                        {fieldType === "select" ? (
+                          <select
+                            id={inputId}
+                            className="bg-background border-input focus-visible:border-ring focus-visible:ring-ring/50 flex h-10 w-full items-center rounded-md border px-3 py-2 text-sm shadow-xs outline-none focus-visible:ring-[3px]"
+                            value={stringValue}
+                            onChange={(event) =>
+                              handleProgressionFieldChange(stageKey, requirement.key, event.target.value)
+                            }
+                            disabled={progressionPending}
+                          >
+                            <option value="">Selecciona una opción</option>
+                            {(requirement.options ?? []).map((option) => (
+                              <option key={option.value} value={option.value}>
+                                {option.label}
+                              </option>
+                            ))}
+                          </select>
+                        ) : fieldType === "checkbox" ? (
+                          <label className="flex items-center gap-2 text-sm">
+                            <input
+                              id={inputId}
+                              type="checkbox"
+                              className="h-4 w-4"
+                              checked={boolValue}
+                              onChange={(event) =>
+                                handleProgressionFieldChange(stageKey, requirement.key, event.target.checked)
+                              }
+                              disabled={progressionPending}
+                            />
+                            <span>Marcar como completado</span>
+                          </label>
+                        ) : fieldType === "textarea" ? (
+                          <textarea
+                            id={inputId}
+                            className="bg-background border-input focus-visible:border-ring focus-visible:ring-ring/50 min-h-[90px] w-full rounded-md border px-3 py-2 text-sm shadow-xs outline-none focus-visible:ring-[3px]"
+                            value={stringValue}
+                            onChange={(event) =>
+                              handleProgressionFieldChange(stageKey, requirement.key, event.target.value)
+                            }
+                            disabled={progressionPending}
+                          />
+                        ) : (
+                          <Input
+                            id={inputId}
+                            type={resolveProgressionInputType(fieldType)}
+                            value={stringValue}
+                            onChange={(event) =>
+                              handleProgressionFieldChange(stageKey, requirement.key, event.target.value)
+                            }
+                            disabled={progressionPending}
+                          />
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })}
+            {progressionError ? (
+              <p className="rounded border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+                {progressionError}
+              </p>
+            ) : null}
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={closeProgressionDialog} disabled={progressionPending}>
+              Cancelar
+            </Button>
+            <Button type="button" onClick={() => void handleProgressionSubmit()} disabled={progressionPending}>
+              Guardar y avanzar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }
@@ -1621,6 +1961,154 @@ function getMissingStageRequirement(stage: EmbudoStage, card: EmbudoCard): strin
     const hasValue =
       typeof rawValue === "string" ? rawValue.trim().length > 0 : rawValue === true;
     if (!hasValue) {
+      return requirement.label;
+    }
+  }
+  return null;
+}
+
+function getStageRequirements(stage: EmbudoStage): ProgressionRequirementField[] {
+  const fromDrawerPrep = getStageRequirementsFromDrawerPrep(stage);
+  if (fromDrawerPrep.length) {
+    return fromDrawerPrep;
+  }
+  const stageCode = normalizeStageCode(stage);
+  const requirementKey = resolveStageRequirementKey(stageCode);
+  const fallback = requirementKey ? STAGE_REQUIRED_FIELDS[requirementKey] ?? [] : [];
+  return fallback.map((field) => ({
+    ...field,
+    type: field.key.endsWith("_date") ? "date" : field.key === "demo_format" ? "select" : "text",
+    options: field.key === "demo_format" ? DEMO_FORMAT_OPTIONS : undefined,
+  }));
+}
+
+function getStageRequirementsFromDrawerPrep(stage: EmbudoStage): ProgressionRequirementField[] {
+  const prep = findDrawerPrepCandidate(stage.metadatos);
+  if (!prep) return [];
+  const sections = Array.isArray(prep.sections) ? prep.sections : [];
+  const fields: ProgressionRequirementField[] = [];
+
+  for (const rawSection of sections) {
+    if (!isPlainRecord(rawSection)) continue;
+    const sectionFields = Array.isArray(rawSection.fields) ? rawSection.fields : [];
+    for (const rawField of sectionFields) {
+      if (!isPlainRecord(rawField)) continue;
+      if (rawField.required !== true) continue;
+      const key = typeof rawField.key === "string" ? rawField.key.trim() : "";
+      if (!key) continue;
+      const labelRaw = typeof rawField.label === "string" ? rawField.label.trim() : "";
+      const typeRaw = typeof rawField.type === "string" ? rawField.type.toLowerCase() : "text";
+      const type = resolveProgressionFieldType(typeRaw);
+      const options = type === "select" ? parseProgressionOptions(rawField.options) : undefined;
+      fields.push({
+        key,
+        label: labelRaw || key,
+        type,
+        options,
+      });
+    }
+  }
+
+  return fields;
+}
+
+function resolveProgressionFieldType(value: string): ProgressionFieldType {
+  switch (value) {
+    case "textarea":
+    case "number":
+    case "date":
+    case "datetime":
+    case "select":
+    case "checkbox":
+    case "url":
+      return value;
+    default:
+      return "text";
+  }
+}
+
+function parseProgressionOptions(rawOptions: unknown): ProgressionOption[] | undefined {
+  if (!Array.isArray(rawOptions)) return undefined;
+  const options = rawOptions
+    .map((option) => {
+      if (typeof option === "string") {
+        const trimmed = option.trim();
+        return trimmed ? { value: trimmed, label: trimmed } : null;
+      }
+      if (!isPlainRecord(option)) return null;
+      const value = typeof option.value === "string" ? option.value.trim() : "";
+      const label = typeof option.label === "string" ? option.label.trim() : value;
+      if (!value) return null;
+      return { value, label: label || value };
+    })
+    .filter((item): item is ProgressionOption => !!item);
+  return options.length ? options : undefined;
+}
+
+function findDrawerPrepCandidate(meta: Record<string, unknown>): Record<string, unknown> | null {
+  const visited = new Set<Record<string, unknown>>();
+  const walk = (node: Record<string, unknown>): Record<string, unknown> | null => {
+    if (visited.has(node)) return null;
+    visited.add(node);
+    const direct = node["drawer_prep"];
+    if (isPlainRecord(direct)) return direct;
+    for (const nestedKey of ["metadatos", "metadata"]) {
+      const nested = node[nestedKey];
+      if (isPlainRecord(nested)) {
+        const found = walk(nested);
+        if (found) return found;
+      }
+    }
+    return null;
+  };
+  return walk(meta);
+}
+
+function resolveProgressionInputType(type: ProgressionFieldType): "text" | "number" | "date" | "datetime-local" | "url" {
+  switch (type) {
+    case "date":
+      return "date";
+    case "datetime":
+      return "datetime-local";
+    case "number":
+      return "number";
+    case "url":
+      return "url";
+    default:
+      return "text";
+  }
+}
+
+function readStagePrepFieldValue(
+  stagePrep: StagePrepMetadata,
+  stage: EmbudoStage,
+  fieldKey: string,
+): string | boolean | undefined {
+  const stageCode = normalizeStageCode(stage);
+  const requirementKey = resolveStageRequirementKey(stageCode);
+  const entry = resolveStagePrepEntry(stagePrep, stage.codigo, stageCode, requirementKey ?? undefined);
+  const rawValue = entry?.value?.[fieldKey];
+  if (typeof rawValue === "string" || typeof rawValue === "boolean") {
+    return rawValue;
+  }
+  return undefined;
+}
+
+function getMissingStageRequirementFromPrep(
+  stage: EmbudoStage,
+  stagePrep: StagePrepMetadata,
+): string | null {
+  const requirements = getStageRequirements(stage);
+  if (!requirements.length) {
+    return null;
+  }
+  for (const requirement of requirements) {
+    const value = readStagePrepFieldValue(stagePrep, stage, requirement.key);
+    const complete =
+      requirement.type === "checkbox"
+        ? value === true
+        : typeof value === "string" && value.trim().length > 0;
+    if (!complete) {
       return requirement.label;
     }
   }
