@@ -88,8 +88,9 @@ export async function POST(request: Request) {
     redirectTo,
   })
 
-  const cookieMaxAge = rememberMe ? 60 * 60 * 24 * 7 : undefined // 7 días
-  const refreshMaxAge = rememberMe ? 60 * 60 * 24 * 30 : undefined // 30 días
+  // Sesión extendida por defecto para reducir expiraciones percibidas por el usuario.
+  const cookieMaxAge = rememberMe ? 60 * 60 * 24 * 30 : 60 * 60 * 24 // 30d / 1d
+  const refreshMaxAge = rememberMe ? 60 * 60 * 24 * 90 : 60 * 60 * 24 * 7 // 90d / 7d
 
   response.cookies.set({
     ...COOKIE_BASE_OPTIONS,

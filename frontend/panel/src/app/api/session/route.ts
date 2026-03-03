@@ -45,8 +45,8 @@ function applySessionCookies(
   tokens: SupabaseTokenResponse,
   remember: boolean,
 ) {
-  const accessMaxAge = remember ? 60 * 60 * 24 * 7 : undefined
-  const refreshMaxAge = remember ? 60 * 60 * 24 * 30 : undefined
+  const accessMaxAge = remember ? 60 * 60 * 24 * 30 : 60 * 60 * 24
+  const refreshMaxAge = remember ? 60 * 60 * 24 * 90 : 60 * 60 * 24 * 7
 
   response.cookies.set({
     ...COOKIE_BASE_OPTIONS,

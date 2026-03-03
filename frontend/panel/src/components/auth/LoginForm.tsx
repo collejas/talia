@@ -36,7 +36,7 @@ export function LoginForm({ redirectTo }: LoginFormProps) {
   const [fields, setFields] = useState<LoginFields>({
     email: "",
     password: "",
-    rememberMe: false,
+    rememberMe: true,
   })
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
