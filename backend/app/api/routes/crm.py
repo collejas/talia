@@ -1367,7 +1367,7 @@ class ProspectoSeleccionPayload(BaseModel):
 
     fuente: Literal["google_places", "denue"]
     resultado_ids: list[UUID] = Field(
-        ..., min_length=1, max_length=500, description="Resultados a preservar."
+        ..., min_length=1, max_length=5000, description="Resultados a preservar."
     )
     segmento: str | None = Field(default=None, max_length=120)
     metadata: dict[str, Any] | None = Field(default=None)
@@ -16223,6 +16223,8 @@ async def guardar_prospectos(
     return {
         "ok": True,
         "total": len(prospectos),
+        "solicitados": len(payload.resultado_ids),
+        "contactables_encontrados": len(contactables),
         "prospectos": prospectos,
     }
 

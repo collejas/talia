@@ -7403,27 +7403,56 @@ class CRMRepository:
         payload: dict[str, Any],
     ) -> tuple[list[dict[str, Any]], int]:
         """Lista resultados DENUE con filtros globales (RPC) y devuelve total exacto."""
+        requested_limit = max(1, int(payload.get("p_limit") or 250))
+        requested_offset = max(0, int(payload.get("p_offset") or 0))
+        chunk_size = 1000
 
-        resp = await self._request_with_user(
-            "POST",
-            "/rest/v1/rpc/denue_resultados_list",
-            token=usuario_token,
-            json=payload,
-        )
-        try:
-            data = resp.json() or []
-        except ValueError as exc:  # pragma: no cover
-            raise CRMRepositoryError("denue_resultados_list_invalid_response") from exc
-        if not isinstance(data, list):
-            raise CRMRepositoryError(f"denue_resultados_list_invalid:{data!r}")
-        if not data:
-            return [], 0
-        first = data[0]
-        total = int(first.get("total_count") or 0) if isinstance(first, dict) else 0
-        for row in data:
-            if isinstance(row, dict):
+        rows: list[dict[str, Any]] = []
+        total = 0
+        remaining = requested_limit
+        current_offset = requested_offset
+
+        while remaining > 0:
+            current_payload = dict(payload)
+            current_payload["p_limit"] = min(chunk_size, remaining)
+            current_payload["p_offset"] = current_offset
+            resp = await self._request_with_user(
+                "POST",
+                "/rest/v1/rpc/denue_resultados_list",
+                token=usuario_token,
+                json=current_payload,
+            )
+            try:
+                data = resp.json() or []
+            except ValueError as exc:  # pragma: no cover
+                raise CRMRepositoryError("denue_resultados_list_invalid_response") from exc
+            if not isinstance(data, list):
+                raise CRMRepositoryError(f"denue_resultados_list_invalid:{data!r}")
+            if not data:
+                break
+
+            first = data[0]
+            if isinstance(first, dict):
+                total = int(first.get("total_count") or total or 0)
+
+            page_rows: list[dict[str, Any]] = []
+            for row in data:
+                if not isinstance(row, dict):
+                    continue
                 row.pop("total_count", None)
-        return data, total
+                page_rows.append(row)
+            if not page_rows:
+                break
+
+            rows.extend(page_rows)
+            fetched = len(page_rows)
+            remaining -= fetched
+            current_offset += fetched
+
+            if fetched < int(current_payload["p_limit"]):
+                break
+
+        return rows, total
 
     async def denue_resultados_map(
         self,
@@ -7569,7 +7598,6 @@ class CRMRepository:
 
         if not resultado_ids:
             return []
-        ids_param = ",".join(str(value) for value in resultado_ids)
         path_map = {
             "google_places": "/rest/v1/v_google_places_contactables",
             "denue": "/rest/v1/v_denue_contactables",
@@ -7577,20 +7605,32 @@ class CRMRepository:
         path = path_map.get(fuente)
         if not path:
             raise CRMRepositoryError(f"fuente_contactable_desconocida:{fuente}")
-        params = {
-            "select": "*",
-            "resultado_id": f"in.({ids_param})",
-        }
-        resp = await self._request_with_user(
-            "GET",
-            path,
-            token=usuario_token,
-            params=params,
-        )
-        data = resp.json() or []
-        if not isinstance(data, list):
-            raise CRMRepositoryError(f"Respuesta inesperada al listar contactables: {data!r}")
-        return data
+        chunk_size = 200
+        ids_order = [str(value) for value in resultado_ids]
+        rows_by_id: dict[str, dict[str, Any]] = {}
+        for start in range(0, len(ids_order), chunk_size):
+            chunk = ids_order[start : start + chunk_size]
+            params = {
+                "select": "*",
+                "resultado_id": _postgrest_in_clause(chunk),
+            }
+            resp = await self._request_with_user(
+                "GET",
+                path,
+                token=usuario_token,
+                params=params,
+            )
+            data = resp.json() or []
+            if not isinstance(data, list):
+                raise CRMRepositoryError(f"Respuesta inesperada al listar contactables: {data!r}")
+            for row in data:
+                if not isinstance(row, dict):
+                    continue
+                resultado_id = row.get("resultado_id")
+                if resultado_id is None:
+                    continue
+                rows_by_id[str(resultado_id)] = row
+        return [rows_by_id[item_id] for item_id in ids_order if item_id in rows_by_id]
 
     async def list_scian_clase_titles(self, *, codes: list[str]) -> dict[str, str]:
         """Devuelve un mapa codigo -> titulo para clases SCIAN."""
@@ -7689,18 +7729,39 @@ class CRMRepository:
 
         if not items:
             return []
-        resp = await self._request_with_user(
-            "POST",
-            "/rest/v1/prospeccion_prospectos",
-            token=usuario_token,
-            params={"on_conflict": "resultado_id"},
-            json=items,
-            prefer="return=representation,resolution=merge-duplicates",
-        )
-        data = resp.json() or []
-        if not isinstance(data, list):
-            raise CRMRepositoryError(f"Respuesta inválida al upsert prospectos: {data!r}")
-        return data
+        # Evita recortes en algunos entornos PostgREST/Supabase cuando el payload masivo
+        # supera los límites prácticos de request/response.
+        chunk_size = 200
+        upserted_by_resultado: dict[str, dict[str, Any]] = {}
+        for start in range(0, len(items), chunk_size):
+            chunk = items[start : start + chunk_size]
+            resp = await self._request_with_user(
+                "POST",
+                "/rest/v1/prospeccion_prospectos",
+                token=usuario_token,
+                params={"on_conflict": "resultado_id"},
+                json=chunk,
+                prefer="return=representation,resolution=merge-duplicates",
+            )
+            data = resp.json() or []
+            if not isinstance(data, list):
+                raise CRMRepositoryError(f"Respuesta inválida al upsert prospectos: {data!r}")
+            for row in data:
+                if not isinstance(row, dict):
+                    continue
+                resultado_id = row.get("resultado_id")
+                if resultado_id is None:
+                    continue
+                upserted_by_resultado[str(resultado_id)] = row
+        ordered_rows: list[dict[str, Any]] = []
+        for item in items:
+            resultado_id = item.get("resultado_id")
+            if resultado_id is None:
+                continue
+            row = upserted_by_resultado.get(str(resultado_id))
+            if row:
+                ordered_rows.append(row)
+        return ordered_rows
 
     async def create_prospecto_manual(
         self,
