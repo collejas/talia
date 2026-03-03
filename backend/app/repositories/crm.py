@@ -8219,7 +8219,6 @@ class CRMRepository:
         params: dict[str, str] = {
             "select": "actividad,metadata,creado_en",
             "order": "metadata->>query.asc,actividad.asc",
-            "limit": "5000",
         }
         if fuente:
             params["fuente"] = f"eq.{fuente}"
@@ -8238,15 +8237,33 @@ class CRMRepository:
             if and_filters:
                 params["and"] = "(" + ",".join(and_filters) + ")"
 
-        resp = await self._request_with_user(
-            "GET",
-            "/rest/v1/prospeccion_prospectos",
-            token=usuario_token,
-            params=params,
-        )
-        data = resp.json() or []
-        if not isinstance(data, list):
-            raise CRMRepositoryError(f"Respuesta inesperada al listar metadata de prospectos: {data!r}")
+        # Leemos en páginas para evitar recortes silenciosos en tenants con más de 5k prospectos.
+        # Esta metadata alimenta los contadores por consulta/lote en UI y debe ser exacta.
+        data: list[dict[str, Any]] = []
+        scan_offset = 0
+        page_size = 1000
+        max_scan_rows = 200_000
+        while scan_offset < max_scan_rows:
+            scan_params = dict(params)
+            scan_params["limit"] = str(page_size)
+            scan_params["offset"] = str(scan_offset)
+            resp = await self._request_with_user(
+                "GET",
+                "/rest/v1/prospeccion_prospectos",
+                token=usuario_token,
+                params=scan_params,
+            )
+            page = resp.json() or []
+            if not isinstance(page, list):
+                raise CRMRepositoryError(f"Respuesta inesperada al listar metadata de prospectos: {page!r}")
+            if not page:
+                break
+            for row in page:
+                if isinstance(row, dict):
+                    data.append(row)
+            if len(page) < page_size:
+                break
+            scan_offset += len(page)
         selected_queries: set[str] | None = None
         if query_filters:
             normalized: set[str] = set()
