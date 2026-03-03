@@ -8314,8 +8314,9 @@ class CRMRepository:
         date_to: date | None = None,
     ) -> dict[str, Any]:
         params: dict[str, str] = {
-            "select": "actividad,metadata,creado_en",
-            "order": "metadata->>query.asc,actividad.asc",
+            "select": "id,actividad,metadata,creado_en",
+            # Orden estable para paginación con offset: evita duplicados/saltos entre páginas.
+            "order": "metadata->>query.asc,actividad.asc,id.asc",
         }
         if fuente:
             params["fuente"] = f"eq.{fuente}"
@@ -8337,6 +8338,7 @@ class CRMRepository:
         # Leemos en páginas para evitar recortes silenciosos en tenants con más de 5k prospectos.
         # Esta metadata alimenta los contadores por consulta/lote en UI y debe ser exacta.
         data: list[dict[str, Any]] = []
+        seen_row_ids: set[str] = set()
         scan_offset = 0
         page_size = 1000
         max_scan_rows = 200_000
@@ -8356,8 +8358,15 @@ class CRMRepository:
             if not page:
                 break
             for row in page:
-                if isinstance(row, dict):
-                    data.append(row)
+                if not isinstance(row, dict):
+                    continue
+                row_id = row.get("id")
+                if row_id is not None:
+                    row_id_key = str(row_id)
+                    if row_id_key in seen_row_ids:
+                        continue
+                    seen_row_ids.add(row_id_key)
+                data.append(row)
             scan_offset += len(page)
         selected_queries: set[str] | None = None
         if query_filters:
