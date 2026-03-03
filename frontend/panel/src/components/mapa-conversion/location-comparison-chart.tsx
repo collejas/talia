@@ -217,10 +217,25 @@ export function LocationComparisonChart({
     } satisfies FeatureCollection;
   }, [shape]);
 
+  const dataSignature = useMemo(() => {
+    return data
+      .map((entry) => {
+        const channels = entry.visitantes_totales_por_canal || {};
+        return [
+          entry.key || "UNK",
+          entry.total_visitas ?? 0,
+          channels.webchat ?? 0,
+          channels.whatsapp ?? 0,
+          channels.voz ?? 0,
+        ].join(":");
+      })
+      .join("|");
+  }, [data]);
+
   const mapLayerKey = useMemo(() => {
     if (!enhancedGeojson) return `empty-${activeChannels.join("|")}`;
-    return `${JSON.stringify(enhancedGeojson)}-${activeChannels.join("|")}-${colorMode}`;
-  }, [activeChannels, colorMode, enhancedGeojson]);
+    return `${JSON.stringify(enhancedGeojson)}-${activeChannels.join("|")}-${colorMode}-${attributionFilterActive ? "attr-on" : "attr-off"}-${dataSignature}`;
+  }, [activeChannels, attributionFilterActive, colorMode, dataSignature, enhancedGeojson]);
 
   const maxTotal = useMemo(() => {
     return (
