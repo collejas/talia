@@ -165,7 +165,7 @@ Cambios de nombres aplicados:
   - `utm_source` -> `Origen de campaña`.
   - `utm_medium` -> `Tipo de medio`.
   - `utm_campaign` -> `Nombre de campaña`.
-  - Botón `Aplicar UTM` -> `Aplicar campaña`.
+  - Los 3 campos dejaron de ser texto libre y ahora son `select` con opciones existentes en BD para el filtro activo (tomadas de `utm_top` del resumen y dataset).
 - Detalle por ubicación:
   - Etiquetas de `fuentes_top` ahora usan el mismo mapeo de negocio.
   - Mensaje `Sin UTM top...` -> `Sin campañas top...`.

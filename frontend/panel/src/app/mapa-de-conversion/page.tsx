@@ -357,6 +357,39 @@ export default async function Page({
     if (!first) return { source: "", total: 0 };
     return { source: first[0], total: first[1] };
   })();
+  const utmOptions = (() => {
+    const sourceSet = new Set<string>();
+    const mediumSet = new Set<string>();
+    const campaignSet = new Set<string>();
+    if (!demografiaResponse) {
+      return { sources: [] as string[], media: [] as string[], campaigns: [] as string[] };
+    }
+    const pushValue = (set: Set<string>, value: string | null | undefined) => {
+      if (!value) return;
+      const normalized = value.trim().toLowerCase();
+      if (!normalized || normalized === "(none)") return;
+      set.add(normalized);
+    };
+    for (const item of demografiaResponse.summary.visitantes.items ?? []) {
+      for (const utm of item.utm_top ?? []) {
+        pushValue(sourceSet, utm.utm_source);
+        pushValue(mediumSet, utm.utm_medium);
+        pushValue(campaignSet, utm.utm_campaign);
+      }
+    }
+    for (const entry of demografiaResponse.map.dataset) {
+      for (const utm of entry.traffic_web?.utm_top ?? []) {
+        pushValue(sourceSet, utm.utm_source);
+        pushValue(mediumSet, utm.utm_medium);
+        pushValue(campaignSet, utm.utm_campaign);
+      }
+    }
+    return {
+      sources: Array.from(sourceSet).sort(),
+      media: Array.from(mediumSet).sort(),
+      campaigns: Array.from(campaignSet).sort(),
+    };
+  })();
   const nivelLabel = nivel.charAt(0).toUpperCase() + nivel.slice(1);
   const mapKpisData = {
     nivelLabel,
@@ -415,6 +448,9 @@ export default async function Page({
                 utmSource={utmSource}
                 utmMedium={utmMedium}
                 utmCampaign={utmCampaign}
+                utmSourceOptions={utmOptions.sources}
+                utmMediumOptions={utmOptions.media}
+                utmCampaignOptions={utmOptions.campaigns}
                 rango={rango}
                 desde={desde}
                 hasta={hasta}

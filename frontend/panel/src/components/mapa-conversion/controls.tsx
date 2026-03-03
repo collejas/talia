@@ -55,6 +55,9 @@ type DemografiaControlsProps = {
   utmSource: string | null;
   utmMedium: string | null;
   utmCampaign: string | null;
+  utmSourceOptions: string[];
+  utmMediumOptions: string[];
+  utmCampaignOptions: string[];
   rango: string | null;
   desde: string | null;
   hasta: string | null;
@@ -69,15 +72,15 @@ export function DemografiaControls({
   utmSource,
   utmMedium,
   utmCampaign,
+  utmSourceOptions,
+  utmMediumOptions,
+  utmCampaignOptions,
   rango,
   desde,
   hasta,
 }: DemografiaControlsProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [utmSourceDraft, setUtmSourceDraft] = React.useState(utmSource ?? "");
-  const [utmMediumDraft, setUtmMediumDraft] = React.useState(utmMedium ?? "");
-  const [utmCampaignDraft, setUtmCampaignDraft] = React.useState(utmCampaign ?? "");
   const [desdeDraft, setDesdeDraft] = React.useState(desde ?? "");
   const [hastaDraft, setHastaDraft] = React.useState(hasta ?? "");
 
@@ -99,15 +102,6 @@ export function DemografiaControls({
   React.useEffect(() => {
     setChannelDraft(new Set(normalizedChannelsArray));
   }, [normalizedChannelsArray]);
-  React.useEffect(() => {
-    setUtmSourceDraft(utmSource ?? "");
-  }, [utmSource]);
-  React.useEffect(() => {
-    setUtmMediumDraft(utmMedium ?? "");
-  }, [utmMedium]);
-  React.useEffect(() => {
-    setUtmCampaignDraft(utmCampaign ?? "");
-  }, [utmCampaign]);
   React.useEffect(() => {
     setDesdeDraft(desde ?? "");
   }, [desde]);
@@ -199,18 +193,7 @@ export function DemografiaControls({
     setChannelMenuOpen(false);
   }
 
-  function applyAttributionFilters() {
-    updateParams({
-      utm_source: utmSourceDraft.trim().toLowerCase() || null,
-      utm_medium: utmMediumDraft.trim().toLowerCase() || null,
-      utm_campaign: utmCampaignDraft.trim().toLowerCase() || null,
-    });
-  }
-
   function clearAttributionFilters() {
-    setUtmSourceDraft("");
-    setUtmMediumDraft("");
-    setUtmCampaignDraft("");
     updateParams({
       source_class: null,
       utm_source: null,
@@ -387,27 +370,72 @@ export function DemografiaControls({
           </SelectContent>
         </Select>
 
-        <Input
-          value={utmSourceDraft}
-          onChange={(event) => setUtmSourceDraft(event.target.value)}
-          placeholder="Origen de campaña"
-          className="h-8 w-[160px]"
-        />
-        <Input
-          value={utmMediumDraft}
-          onChange={(event) => setUtmMediumDraft(event.target.value)}
-          placeholder="Tipo de medio"
-          className="h-8 w-[160px]"
-        />
-        <Input
-          value={utmCampaignDraft}
-          onChange={(event) => setUtmCampaignDraft(event.target.value)}
-          placeholder="Nombre de campaña"
-          className="h-8 w-[180px]"
-        />
-        <Button type="button" size="sm" variant="outline" onClick={applyAttributionFilters}>
-          Aplicar campaña
-        </Button>
+        <Select
+          value={utmSource ?? "all"}
+          onValueChange={(value) => {
+            updateParams({ utm_source: value === "all" ? null : value });
+          }}
+        >
+          <SelectTrigger className="w-[200px]">
+            <SelectValue placeholder="Origen de campaña" />
+          </SelectTrigger>
+          <SelectContent className="z-50">
+            <SelectItem value="all">Todos</SelectItem>
+            {utmSource && !utmSourceOptions.includes(utmSource) ? (
+              <SelectItem value={utmSource}>{utmSource}</SelectItem>
+            ) : null}
+            {utmSourceOptions.map((option) => (
+              <SelectItem key={`utm-source-${option}`} value={option}>
+                {option}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
+        <Select
+          value={utmMedium ?? "all"}
+          onValueChange={(value) => {
+            updateParams({ utm_medium: value === "all" ? null : value });
+          }}
+        >
+          <SelectTrigger className="w-[200px]">
+            <SelectValue placeholder="Tipo de medio" />
+          </SelectTrigger>
+          <SelectContent className="z-50">
+            <SelectItem value="all">Todos</SelectItem>
+            {utmMedium && !utmMediumOptions.includes(utmMedium) ? (
+              <SelectItem value={utmMedium}>{utmMedium}</SelectItem>
+            ) : null}
+            {utmMediumOptions.map((option) => (
+              <SelectItem key={`utm-medium-${option}`} value={option}>
+                {option}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
+        <Select
+          value={utmCampaign ?? "all"}
+          onValueChange={(value) => {
+            updateParams({ utm_campaign: value === "all" ? null : value });
+          }}
+        >
+          <SelectTrigger className="w-[220px]">
+            <SelectValue placeholder="Nombre de campaña" />
+          </SelectTrigger>
+          <SelectContent className="z-50">
+            <SelectItem value="all">Todos</SelectItem>
+            {utmCampaign && !utmCampaignOptions.includes(utmCampaign) ? (
+              <SelectItem value={utmCampaign}>{utmCampaign}</SelectItem>
+            ) : null}
+            {utmCampaignOptions.map((option) => (
+              <SelectItem key={`utm-campaign-${option}`} value={option}>
+                {option}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
         <Button type="button" size="sm" variant="ghost" onClick={clearAttributionFilters}>
           Limpiar atribución
         </Button>
