@@ -82,6 +82,42 @@ function createScianMap(rows: DenueScianNode[]): Map<string, ScianTreeNode> {
   return map
 }
 
+function expandScianSectorKeys(codigo: string): string[] {
+  const normalized = codigo.trim()
+  if (!normalized) {
+    return []
+  }
+  const rangeMatch = normalized.match(/^(\d{2})-(\d{2})$/)
+  if (!rangeMatch) {
+    return [normalized]
+  }
+  const start = Number.parseInt(rangeMatch[1], 10)
+  const end = Number.parseInt(rangeMatch[2], 10)
+  if (!Number.isFinite(start) || !Number.isFinite(end) || end < start) {
+    return [normalized]
+  }
+  const keys: string[] = []
+  for (let value = start; value <= end; value += 1) {
+    keys.push(String(value).padStart(2, "0"))
+  }
+  return keys
+}
+
+function createScianSectorLookup(
+  sectorMap: Map<string, ScianTreeNode>,
+): Map<string, ScianTreeNode> {
+  const lookup = new Map<string, ScianTreeNode>()
+  sectorMap.forEach((node, codigo) => {
+    lookup.set(codigo, node)
+    for (const key of expandScianSectorKeys(codigo)) {
+      if (!lookup.has(key)) {
+        lookup.set(key, node)
+      }
+    }
+  })
+  return lookup
+}
+
 function attachScianChildren(
   parent: Map<string, ScianTreeNode>,
   child: Map<string, ScianTreeNode>,
@@ -110,12 +146,13 @@ function buildScianTree(scian: DenueCatalogosResponse["scian"] | null): ScianTre
     return []
   }
   const sectorMap = createScianMap(scian.sector)
+  const sectorLookup = createScianSectorLookup(sectorMap)
   const subsectorMap = createScianMap(scian.subsector)
   const ramaMap = createScianMap(scian.rama)
   const subramaMap = createScianMap(scian.subrama)
   const claseMap = createScianMap(scian.clase)
 
-  attachScianChildren(sectorMap, subsectorMap, 2)
+  attachScianChildren(sectorLookup, subsectorMap, 2)
   attachScianChildren(subsectorMap, ramaMap, 3)
   attachScianChildren(ramaMap, subramaMap, 4)
   attachScianChildren(subramaMap, claseMap, 5)
