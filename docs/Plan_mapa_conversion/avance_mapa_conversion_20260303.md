@@ -135,6 +135,41 @@ Incluye:
     - `utm_top`
     usando señales de `webchat_visitantes`.
 
+### 6) Ajuste de nomenclatura UI (sin tecnicismos)
+Archivos:
+- `frontend/panel/src/lib/mapa-conversion/source-class.ts`
+- `frontend/panel/src/components/mapa-conversion/map-kpis.tsx`
+- `frontend/panel/src/components/mapa-conversion/controls.tsx`
+- `frontend/panel/src/components/mapa-conversion/row-detail.tsx`
+- `frontend/panel/src/app/mapa-de-conversion/page.tsx`
+
+Estado:
+- Implementado en código.
+
+Objetivo:
+- Evitar términos técnicos confusos (`campaign`, `UTM`, `source_class`) en textos visibles al usuario final.
+
+Cambios de nombres aplicados:
+- Tarjeta KPI:
+  - `Fuente principal` -> `Origen principal`.
+  - Subtexto: `Top source de sesiones web` -> `Origen principal de sesiones web`.
+- Catálogo de origen (`source_class`) en UI:
+  - `campaign` -> `Enlace de campaña`
+  - `direct` -> `Entrada directa`
+  - `organic_search` -> `Búsqueda en Google`
+  - `organic_social` -> `Redes sociales`
+  - `referral` -> `Otro sitio web`
+  - vacío/desconocido -> `Sin identificar`
+- Controles de atribución:
+  - Placeholder selector: `Fuente de tráfico` -> `Origen de visita`.
+  - `utm_source` -> `Origen de campaña`.
+  - `utm_medium` -> `Tipo de medio`.
+  - `utm_campaign` -> `Nombre de campaña`.
+  - Botón `Aplicar UTM` -> `Aplicar campaña`.
+- Detalle por ubicación:
+  - Etiquetas de `fuentes_top` ahora usan el mismo mapeo de negocio.
+  - Mensaje `Sin UTM top...` -> `Sin campañas top...`.
+
 ## Validaciones realizadas
 
 1. Existencia de funciones:
@@ -180,4 +215,5 @@ Incluye:
 - `supabase/migrations/20260303_123000_panel_visitantes_geo_resumen_v2.sql`
 - `supabase/migrations/20260303_131500_panel_visitantes_geo_resumen_v3_webchat_fallback.sql`
 - `frontend/panel/src/app/api/crm/web/visit/route.ts`
+- `frontend/panel/src/lib/mapa-conversion/source-class.ts`
 - `docs/Plan_mapa_conversion/plan_mapa_conversion_integral.md`

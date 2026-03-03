@@ -21,6 +21,7 @@ import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } f
 import { Separator } from "@/components/ui/separator";
 import type { DataTableRow } from "@/components/data-table";
 import type { DemografiaSummaryResponse } from "@/lib/mapa-conversion/api";
+import { formatSourceClassLabel } from "@/lib/mapa-conversion/source-class";
 
 type Props = {
   row: DataTableRow;
@@ -264,7 +265,7 @@ export function MapaConversionRowDetail({ row, nivel, summary }: Props) {
                 className="bg-muted/50 flex items-center justify-between rounded-lg px-3 py-2 text-sm"
               >
                 <span className="text-muted-foreground">
-                  {formatLabel(typeof source.source === "string" ? source.source : "desconocido")}
+                  {formatSourceClassLabel(typeof source.source === "string" ? source.source : "desconocido")}
                 </span>
                 <span className="font-medium">{formatNumber(sanitizeNumber(source.total))}</span>
               </div>
@@ -289,7 +290,7 @@ export function MapaConversionRowDetail({ row, nivel, summary }: Props) {
               </div>
             ))
           ) : (
-            <p className="text-muted-foreground text-sm">Sin UTM top en este filtro.</p>
+            <p className="text-muted-foreground text-sm">Sin campañas top en este filtro.</p>
           )}
         </div>
       </section>

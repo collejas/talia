@@ -27,6 +27,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
+import { SOURCE_CLASS_OPTIONS } from "@/lib/mapa-conversion/source-class";
 
 const CHANNEL_OPTIONS = [
   { value: "webchat", label: "Webchat" },
@@ -45,15 +46,6 @@ const STAGE_OPTIONS = [
 ];
 
 const DEFAULT_STAGES = STAGE_OPTIONS.map((item) => item.value);
-const SOURCE_CLASS_OPTIONS = [
-  { value: "all", label: "Todas las fuentes" },
-  { value: "direct", label: "Directo" },
-  { value: "campaign", label: "Campaña" },
-  { value: "organic_search", label: "Búsqueda orgánica" },
-  { value: "organic_social", label: "Social orgánico" },
-  { value: "referral", label: "Referido" },
-];
-
 type DemografiaControlsProps = {
   nivel: "pais" | "estado" | "municipio";
   canales: string[];
@@ -384,7 +376,7 @@ export function DemografiaControls({
           }}
         >
           <SelectTrigger className="w-[220px]">
-            <SelectValue placeholder="Fuente de tráfico" />
+            <SelectValue placeholder="Origen de visita" />
           </SelectTrigger>
           <SelectContent className="z-50">
             {SOURCE_CLASS_OPTIONS.map((option) => (
@@ -398,23 +390,23 @@ export function DemografiaControls({
         <Input
           value={utmSourceDraft}
           onChange={(event) => setUtmSourceDraft(event.target.value)}
-          placeholder="utm_source"
+          placeholder="Origen de campaña"
           className="h-8 w-[160px]"
         />
         <Input
           value={utmMediumDraft}
           onChange={(event) => setUtmMediumDraft(event.target.value)}
-          placeholder="utm_medium"
+          placeholder="Tipo de medio"
           className="h-8 w-[160px]"
         />
         <Input
           value={utmCampaignDraft}
           onChange={(event) => setUtmCampaignDraft(event.target.value)}
-          placeholder="utm_campaign"
+          placeholder="Nombre de campaña"
           className="h-8 w-[180px]"
         />
         <Button type="button" size="sm" variant="outline" onClick={applyAttributionFilters}>
-          Aplicar UTM
+          Aplicar campaña
         </Button>
         <Button type="button" size="sm" variant="ghost" onClick={clearAttributionFilters}>
           Limpiar atribución

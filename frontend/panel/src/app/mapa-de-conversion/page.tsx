@@ -355,7 +355,7 @@ export default async function Page({
     }
     const first = Array.from(totals.entries()).sort((a, b) => b[1] - a[1])[0];
     if (!first) return { source: "", total: 0 };
-    return { source: formatChannelLabel(first[0]), total: first[1] };
+    return { source: first[0], total: first[1] };
   })();
   const nivelLabel = nivel.charAt(0).toUpperCase() + nivel.slice(1);
   const mapKpisData = {

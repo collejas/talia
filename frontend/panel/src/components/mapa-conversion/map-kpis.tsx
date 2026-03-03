@@ -7,6 +7,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
+import { formatSourceClassLabel } from "@/lib/mapa-conversion/source-class"
 type MapKpisProps = {
   nivelLabel: string
   visitasTotales: number
@@ -61,11 +62,11 @@ export function MapKpis({
       icon: IconWorld,
     },
     {
-      title: "Fuente principal",
+      title: "Origen principal",
       value: topSource
-        ? `${topSource} (${formatDisplayNumber(topSourceValue)})`
+        ? `${formatSourceClassLabel(topSource)} (${formatDisplayNumber(topSourceValue)})`
         : "Sin datos",
-      helper: `Nivel ${nivelLabel} · Top source de sesiones web`,
+      helper: `Nivel ${nivelLabel} · Origen principal de sesiones web`,
       icon: IconRoute,
     },
     {
