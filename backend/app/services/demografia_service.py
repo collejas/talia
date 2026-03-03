@@ -309,6 +309,114 @@ async def fetch_visitantes_resumen(
     }
 
 
+async def fetch_visitantes_resumen_v2(
+    *,
+    nivel: str,
+    date_from: datetime | None,
+    date_to: datetime | None,
+    state_code: str | None = None,
+    source_class: str | None = None,
+    utm_source: str | None = None,
+    utm_medium: str | None = None,
+    utm_campaign: str | None = None,
+    jwt: str | None = None,
+) -> dict[str, Any]:
+    payload: dict[str, Any] = {"p_nivel": nivel}
+    if date_from:
+        payload["p_from"] = date_from.isoformat()
+    if date_to:
+        payload["p_to"] = date_to.isoformat()
+    if state_code:
+        payload["p_estado"] = state_code
+    if source_class:
+        payload["p_source_class"] = source_class
+    if utm_source:
+        payload["p_utm_source"] = utm_source
+    if utm_medium:
+        payload["p_utm_medium"] = utm_medium
+    if utm_campaign:
+        payload["p_utm_campaign"] = utm_campaign
+
+    rows = await _call_rpc("panel_visitantes_geo_resumen_v2", payload, jwt=jwt)
+    if not isinstance(rows, list):
+        raise DemografiaServiceError(
+            f"Respuesta inesperada de panel_visitantes_geo_resumen_v2: {rows!r}"
+        )
+
+    items: list[dict[str, Any]] = []
+    totals = {
+        "total": 0,
+        "con_chat": 0,
+        "sin_chat": 0,
+        "webchat_con_chat": 0,
+        "webchat_sin_chat": 0,
+        "whatsapp_total": 0,
+        "voz_total": 0,
+        "sesiones_web_total": 0,
+        "sesiones_webchat_total": 0,
+        "conversaciones_whatsapp": 0,
+        "conversaciones_voz": 0,
+    }
+
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        sesiones_web_total = _to_number(row.get("sesiones_web_total"))
+        sesiones_webchat_total = _to_number(row.get("sesiones_webchat_total"))
+        sesiones_con_chat_webchat = _to_number(row.get("sesiones_con_chat_webchat"))
+        sesiones_sin_chat_webchat = _to_number(row.get("sesiones_sin_chat_webchat"))
+        conversaciones_whatsapp = _to_number(row.get("conversaciones_whatsapp"))
+        conversaciones_voz = _to_number(row.get("conversaciones_voz"))
+
+        fuentes_top = row.get("fuentes_top")
+        if not isinstance(fuentes_top, list):
+            fuentes_top = []
+        utm_top = row.get("utm_top")
+        if not isinstance(utm_top, list):
+            utm_top = []
+
+        item = {
+            "level": str(row.get("location_level") or nivel),
+            "key": str(row.get("location_key") or "UNK"),
+            "name": str(row.get("location_name") or "Desconocido"),
+            "total": _to_number(row.get("total_visitas")),
+            "con_chat": _to_number(row.get("visitas_con_chat")),
+            "sin_chat": _to_number(row.get("visitas_sin_chat")),
+            "webchat_total": _to_number(row.get("webchat_total")),
+            "webchat_con_chat": _to_number(row.get("webchat_con_chat")),
+            "webchat_sin_chat": _to_number(row.get("webchat_sin_chat")),
+            "whatsapp_total": _to_number(row.get("whatsapp_total")),
+            "voz_total": _to_number(row.get("voz_total")),
+            "sesiones_web_total": sesiones_web_total,
+            "sesiones_webchat_total": sesiones_webchat_total,
+            "sesiones_con_chat_webchat": sesiones_con_chat_webchat,
+            "sesiones_sin_chat_webchat": sesiones_sin_chat_webchat,
+            "conversaciones_whatsapp": conversaciones_whatsapp,
+            "conversaciones_voz": conversaciones_voz,
+            "fuentes_top": fuentes_top,
+            "utm_top": utm_top,
+            "has_data": bool(row.get("has_data")),
+        }
+        items.append(item)
+
+        totals["total"] += item["total"]
+        totals["con_chat"] += item["con_chat"]
+        totals["sin_chat"] += item["sin_chat"]
+        totals["webchat_con_chat"] += item["webchat_con_chat"]
+        totals["webchat_sin_chat"] += item["webchat_sin_chat"]
+        totals["whatsapp_total"] += item["whatsapp_total"]
+        totals["voz_total"] += item["voz_total"]
+        totals["sesiones_web_total"] += sesiones_web_total
+        totals["sesiones_webchat_total"] += sesiones_webchat_total
+        totals["conversaciones_whatsapp"] += conversaciones_whatsapp
+        totals["conversaciones_voz"] += conversaciones_voz
+
+    return {
+        "items": items,
+        "totals": totals,
+    }
+
+
 def build_map_dataset(
     *,
     nivel: str,

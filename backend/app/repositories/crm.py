@@ -4321,6 +4321,30 @@ class CRMRepository:
         body = {"p_session_id": session_key, **payload}
         await self._rpc("record_webchat_visitante", body)
 
+    async def record_web_session(self, *, session_id: str, payload: dict[str, Any]) -> str | None:
+        session_key = session_id.strip()
+        if not session_key:
+            raise CRMRepositoryError("session_id_required")
+        body = {"p_session_id": session_key, **payload}
+        result = await self._rpc("record_web_session", body)
+        if isinstance(result, str):
+            return result
+        if isinstance(result, list) and result:
+            first = result[0]
+            if isinstance(first, str):
+                return first
+            if isinstance(first, dict):
+                for key in ("record_web_session", "id"):
+                    value = first.get(key)
+                    if isinstance(value, str) and value.strip():
+                        return value.strip()
+        if isinstance(result, dict):
+            for key in ("record_web_session", "id"):
+                value = result.get(key)
+                if isinstance(value, str) and value.strip():
+                    return value.strip()
+        return None
+
     async def update_conversation(
         self, *, conversation_id: str, patch: dict[str, Any]
     ) -> dict[str, Any]:

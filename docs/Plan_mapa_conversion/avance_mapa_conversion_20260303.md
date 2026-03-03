@@ -49,6 +49,27 @@ Campos de compatibilidad conservados:
 - `webchat_total`, `webchat_con_chat`, `webchat_sin_chat`
 - `whatsapp_total`, `voz_total`, `has_data`
 
+### 3) Backend conectado a la capa v2 y endpoint de ingesta web
+Archivos:
+- `backend/app/services/demografia_service.py`
+- `backend/app/api/routes/crm.py`
+- `backend/app/repositories/crm.py`
+
+Estado:
+- Implementado en código.
+
+Incluye:
+- Nuevo consumo RPC en backend:
+  - `fetch_visitantes_resumen_v2(...)` -> usa `panel_visitantes_geo_resumen_v2`.
+- Nuevos endpoints CRM:
+  - `GET /crm/demografia/resumen-v2`
+  - `GET /crm/demografia/mapa-v2`
+- Nuevo endpoint público de ingesta web first-party:
+  - `POST /crm/web/visit`
+  - Registra sesiones en `web_sessions` vía RPC `record_web_session`.
+  - Soporta resolución de tenant por `tenant_alias` (payload/header/meta) y fallback al tenant maestro.
+  - Captura `session_id`, `landing/referrer`, `user_agent`, `ip`, geografía, UTM y metadata.
+
 ## Validaciones realizadas
 
 1. Existencia de funciones:
@@ -71,10 +92,10 @@ Campos de compatibilidad conservados:
 ## Siguientes pasos (orden recomendado)
 
 1. Backend:
-- Crear endpoints `GET /crm/demografia/resumen-v2` y `GET /crm/demografia/mapa-v2` consumiendo `panel_visitantes_geo_resumen_v2`.
+- Endpoints v2 ya implementados. Falta conectarlos en frontend.
 
 2. Ingesta web:
-- Implementar `POST /crm/web/visit` para poblar `web_sessions` desde `talia.mx`.
+- Endpoint implementado. Falta instrumentar `talia.mx` para invocarlo en page-load/ruta.
 
 3. Frontend mapa:
 - Migrar vista `mapa-de-conversion` a contrato v2 (bloques web/conversacion/leads/atribucion).

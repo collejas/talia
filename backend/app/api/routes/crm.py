@@ -68,6 +68,7 @@ from app.services import (
     storage,
     tenant_runtime,
 )
+from app.services.channel_routing import resolve_organizacion_id
 from app.services import calendar as calendar_service
 from app.services import quotes as quotes_service
 from app.services.buscador_jobs import BUSCADOR_JOB_MANAGER
@@ -2164,6 +2165,67 @@ class DenueBusquedaPayload(BaseModel):
         return self
 
 
+class WebVisitPayload(BaseModel):
+    """Payload público para registrar una sesión web first-party."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    session_id: str = Field(..., min_length=4, max_length=255)
+    tenant_alias: str | None = Field(default=None, max_length=120)
+    location_href: str | None = Field(default=None, max_length=2048)
+    landing_url: str | None = Field(default=None, max_length=2048)
+    referrer: str | None = Field(default=None, max_length=2048)
+    user_agent: str | None = Field(default=None, max_length=1024)
+    device_type: str | None = Field(default=None, max_length=64)
+    country_code: str | None = Field(default=None, max_length=8)
+    country_name: str | None = Field(default=None, max_length=120)
+    cve_ent: str | None = Field(default=None, max_length=8)
+    nom_ent: str | None = Field(default=None, max_length=120)
+    cve_mun: str | None = Field(default=None, max_length=8)
+    nom_mun: str | None = Field(default=None, max_length=120)
+    cvegeo: str | None = Field(default=None, max_length=12)
+    utm_source: str | None = Field(default=None, max_length=120)
+    utm_medium: str | None = Field(default=None, max_length=120)
+    utm_campaign: str | None = Field(default=None, max_length=160)
+    utm_term: str | None = Field(default=None, max_length=160)
+    utm_content: str | None = Field(default=None, max_length=160)
+    source_class: str | None = Field(default=None, max_length=80)
+    eid: UUID | None = None
+    cid: UUID | None = None
+    tid: UUID | None = None
+    contacto_id: UUID | None = None
+    metadata: dict[str, Any] | None = Field(default=None)
+
+    @field_validator(
+        "session_id",
+        "tenant_alias",
+        "location_href",
+        "landing_url",
+        "referrer",
+        "user_agent",
+        "device_type",
+        "country_code",
+        "country_name",
+        "cve_ent",
+        "nom_ent",
+        "cve_mun",
+        "nom_mun",
+        "cvegeo",
+        "utm_source",
+        "utm_medium",
+        "utm_campaign",
+        "utm_term",
+        "utm_content",
+        "source_class",
+        mode="before",
+    )
+    @classmethod
+    def _strip_text(cls, value: Any) -> Any:
+        if value is None:
+            return None
+        return str(value).strip()
+
+
 class ManualOverridePayload(BaseModel):
     """Payload para activar/desactivar modo manual."""
 
@@ -3023,6 +3085,19 @@ def _request_ip(request: Request | None) -> str | None:
         return forwarded.split(",")[0].strip()
     client = request.client
     return client.host if client else None
+
+
+def _infer_device_type(user_agent: str | None) -> str | None:
+    ua = (user_agent or "").strip().lower()
+    if not ua:
+        return None
+    if any(token in ua for token in ("bot", "spider", "crawler")):
+        return "bot"
+    if any(token in ua for token in ("mobile", "iphone", "android")):
+        return "mobile"
+    if any(token in ua for token in ("ipad", "tablet")):
+        return "tablet"
+    return "desktop"
 
 
 def _build_portal_link(token: str) -> str:
@@ -18338,6 +18413,102 @@ async def analytics_catalog_sales_export(
     )
 
 
+@router.post(
+    "/web/visit",
+    status_code=204,
+    summary="Registra una visita web first-party para mapa de conversión",
+)
+async def register_web_visit(
+    payload: WebVisitPayload,
+    request: Request,
+) -> Response:
+    session_id = (payload.session_id or "").strip()
+    if not session_id:
+        raise HTTPException(status_code=400, detail="session_id_required")
+
+    raw_metadata = payload.metadata if isinstance(payload.metadata, dict) else {}
+    metadata = dict(raw_metadata)
+
+    tenant_alias = (payload.tenant_alias or "").strip().lower()
+    if not tenant_alias:
+        meta_alias = raw_metadata.get("tenant_alias")
+        if isinstance(meta_alias, str) and meta_alias.strip():
+            tenant_alias = meta_alias.strip().lower()
+    if not tenant_alias:
+        header_alias = request.headers.get("x-tenant-alias")
+        if header_alias and header_alias.strip():
+            tenant_alias = header_alias.strip().lower()
+
+    organizacion_id: str | None = None
+    if tenant_alias:
+        organizacion_id = await resolve_organizacion_id(canal="webchat", clave=tenant_alias)
+    if not organizacion_id:
+        explicit_org = raw_metadata.get("organizacion_id")
+        if isinstance(explicit_org, str) and explicit_org.strip():
+            try:
+                organizacion_id = str(UUID(explicit_org.strip()))
+            except ValueError:
+                organizacion_id = None
+    if not organizacion_id:
+        organizacion_id = str(tenant_runtime.MASTER_ORGANIZACION_ID)
+
+    user_agent = (payload.user_agent or request.headers.get("user-agent") or "").strip() or None
+    referrer = (payload.referrer or request.headers.get("referer") or "").strip() or None
+    landing_url = (payload.landing_url or payload.location_href or "").strip() or None
+    device_type = (payload.device_type or _infer_device_type(user_agent) or "").strip() or None
+    source_class = (payload.source_class or "").strip().lower() or None
+    ip_value = _request_ip(request)
+    referrer_host: str | None = None
+    if referrer:
+        parsed_ref = urlparse(referrer)
+        referrer_host = (parsed_ref.hostname or "").strip().lower() or None
+
+    metadata.setdefault("tenant_alias", tenant_alias or None)
+    metadata.setdefault("request_ip", ip_value)
+    metadata.setdefault("referrer_host", referrer_host)
+    metadata.setdefault("path", request.url.path if request else None)
+
+    rpc_payload: dict[str, Any] = {
+        "p_ip": ip_value,
+        "p_user_agent": user_agent,
+        "p_device_type": device_type,
+        "p_country_code": payload.country_code or None,
+        "p_country_name": payload.country_name or None,
+        "p_cve_ent": payload.cve_ent or None,
+        "p_nom_ent": payload.nom_ent or None,
+        "p_cve_mun": payload.cve_mun or None,
+        "p_nom_mun": payload.nom_mun or None,
+        "p_cvegeo": payload.cvegeo or None,
+        "p_landing_url": landing_url,
+        "p_referrer": referrer,
+        "p_utm_source": payload.utm_source or None,
+        "p_utm_medium": payload.utm_medium or None,
+        "p_utm_campaign": payload.utm_campaign or None,
+        "p_utm_term": payload.utm_term or None,
+        "p_utm_content": payload.utm_content or None,
+        "p_eid": str(payload.eid) if payload.eid else None,
+        "p_cid": str(payload.cid) if payload.cid else None,
+        "p_tid": str(payload.tid) if payload.tid else None,
+        "p_source_class": source_class,
+        "p_contacto_id": str(payload.contacto_id) if payload.contacto_id else None,
+        "p_metadata": metadata,
+        "p_organizacion_id": organizacion_id,
+    }
+    rpc_payload = {key: value for key, value in rpc_payload.items() if value is not None}
+
+    repo = CRMRepository()
+    try:
+        await repo.record_web_session(session_id=session_id, payload=rpc_payload)
+    except CRMRepositoryError as exc:
+        logger.exception(
+            "crm.web.visit_failed",
+            extra={"session_id": session_id, "tenant_alias": tenant_alias, "error": str(exc)},
+        )
+        raise HTTPException(status_code=502, detail="web_visit_register_failed") from exc
+
+    return Response(status_code=204)
+
+
 @router.get("/dashboard/kpis")
 async def dashboard_kpis(
     *,
@@ -18501,6 +18672,235 @@ async def demografia_mapa(
         "canales": channel_values,
         "etapas": stage_values,
         "range": _build_range_payload(rango, date_from, date_to),
+        "totales_leads": (leads_payload.get("totals") if isinstance(leads_payload, dict) else {}),
+        "totales_visitantes": (
+            visitantes_payload.get("totals") if isinstance(visitantes_payload, dict) else {}
+        ),
+        "totales_leads_por_canal": (
+            leads_payload.get("totals_by_channel") if isinstance(leads_payload, dict) else {}
+        ),
+        "captado_orden": (
+            leads_payload.get("captado_orden") if isinstance(leads_payload, dict) else None
+        ),
+        "dataset": dataset,
+        "geojson": geojson,
+    }
+
+
+@router.get("/demografia/resumen-v2")
+async def demografia_resumen_v2(
+    *,
+    organizacion_id: UUID = Depends(require_organizacion_id),  # noqa: ARG001
+    _: str = Depends(require_permission("reports.view")),
+    user_token: str = Depends(require_user_token),
+    nivel: Annotated[str, Query(pattern="^(pais|estado|municipio)$")] = "estado",
+    estado: str | None = Query(default=None),
+    canales: str | None = Query(default=None),
+    etapas: str | None = Query(default=None),
+    source_class: str | None = Query(default=None),
+    utm_source: str | None = Query(default=None),
+    utm_medium: str | None = Query(default=None),
+    utm_campaign: str | None = Query(default=None),
+    rango: str | None = Query(default=None),
+    desde: str | None = Query(default=None),
+    hasta: str | None = Query(default=None),
+) -> dict[str, Any]:
+    nivel_normalizado = (nivel or "estado").strip().lower() or "estado"
+    state_code: str | None = None
+    if nivel_normalizado == "municipio":
+        if not estado:
+            raise HTTPException(status_code=400, detail="estado_required")
+        state_code = _ensure_state_code(estado)
+
+    date_from, date_to = _resolve_date_range(rango, desde, hasta)
+    channel_values = _parse_channels_param(canales)
+    stage_values = _parse_stages_param(etapas)
+
+    source_class_value = (source_class or "").strip().lower() or None
+    utm_source_value = (utm_source or "").strip().lower() or None
+    utm_medium_value = (utm_medium or "").strip().lower() or None
+    utm_campaign_value = (utm_campaign or "").strip().lower() or None
+
+    try:
+        leads_payload = await demografia_service.fetch_leads_resumen(
+            nivel=nivel_normalizado,
+            channels=channel_values,
+            stages=stage_values,
+            date_from=date_from,
+            date_to=date_to,
+            jwt=user_token,
+        )
+        visitantes_payload = await demografia_service.fetch_visitantes_resumen_v2(
+            nivel=nivel_normalizado,
+            date_from=date_from,
+            date_to=date_to,
+            state_code=state_code,
+            source_class=source_class_value,
+            utm_source=utm_source_value,
+            utm_medium=utm_medium_value,
+            utm_campaign=utm_campaign_value,
+            jwt=user_token,
+        )
+    except DemografiaServiceError as exc:
+        logger.exception("crm.demografia.resumen_v2_failed")
+        raise HTTPException(
+            status_code=502, detail=str(exc) or "Error consultando demografía v2"
+        ) from exc
+
+    return {
+        "ok": True,
+        "nivel": nivel_normalizado,
+        "estado": state_code,
+        "canales": channel_values,
+        "etapas": stage_values,
+        "range": _build_range_payload(rango, date_from, date_to),
+        "attribution_filters": {
+            "source_class": source_class_value,
+            "utm_source": utm_source_value,
+            "utm_medium": utm_medium_value,
+            "utm_campaign": utm_campaign_value,
+        },
+        "leads": leads_payload,
+        "visitantes": visitantes_payload,
+    }
+
+
+@router.get("/demografia/mapa-v2")
+async def demografia_mapa_v2(
+    *,
+    organizacion_id: UUID = Depends(require_organizacion_id),  # noqa: ARG001
+    _: str = Depends(require_permission("reports.view")),
+    user_token: str = Depends(require_user_token),
+    nivel: Annotated[str, Query(pattern="^(pais|estado|municipio)$")] = "estado",
+    estado: str | None = Query(default=None),
+    canales: str | None = Query(default=None),
+    etapas: str | None = Query(default=None),
+    source_class: str | None = Query(default=None),
+    utm_source: str | None = Query(default=None),
+    utm_medium: str | None = Query(default=None),
+    utm_campaign: str | None = Query(default=None),
+    rango: str | None = Query(default=None),
+    desde: str | None = Query(default=None),
+    hasta: str | None = Query(default=None),
+) -> dict[str, Any]:
+    nivel_normalizado = (nivel or "estado").strip().lower() or "estado"
+    state_code: str | None = None
+    if nivel_normalizado == "municipio":
+        if not estado:
+            raise HTTPException(status_code=400, detail="estado_required")
+        state_code = _ensure_state_code(estado)
+
+    date_from, date_to = _resolve_date_range(rango, desde, hasta)
+    channel_values = _parse_channels_param(canales)
+    stage_values = _parse_stages_param(etapas)
+
+    source_class_value = (source_class or "").strip().lower() or None
+    utm_source_value = (utm_source or "").strip().lower() or None
+    utm_medium_value = (utm_medium or "").strip().lower() or None
+    utm_campaign_value = (utm_campaign or "").strip().lower() or None
+
+    try:
+        leads_payload = await demografia_service.fetch_leads_resumen(
+            nivel=nivel_normalizado,
+            channels=channel_values,
+            stages=stage_values,
+            date_from=date_from,
+            date_to=date_to,
+            jwt=user_token,
+        )
+        fallback_leads_payload = None
+        if nivel_normalizado == "municipio":
+            fallback_leads_payload = await demografia_service.fetch_leads_resumen(
+                nivel="estado",
+                channels=channel_values,
+                stages=stage_values,
+                date_from=date_from,
+                date_to=date_to,
+                jwt=user_token,
+            )
+        visitantes_payload = await demografia_service.fetch_visitantes_resumen_v2(
+            nivel=nivel_normalizado,
+            date_from=date_from,
+            date_to=date_to,
+            state_code=state_code,
+            source_class=source_class_value,
+            utm_source=utm_source_value,
+            utm_medium=utm_medium_value,
+            utm_campaign=utm_campaign_value,
+            jwt=user_token,
+        )
+        dataset = demografia_service.build_map_dataset(
+            nivel=nivel_normalizado,
+            leads_payload=leads_payload,
+            visitantes_payload=visitantes_payload,
+            state_filter=state_code,
+            fallback_leads_payload=fallback_leads_payload,
+        )
+    except DemografiaServiceError as exc:
+        logger.exception("crm.demografia.mapa_v2_failed")
+        raise HTTPException(
+            status_code=502, detail=str(exc) or "Error consultando demografía mapa v2"
+        ) from exc
+
+    visitantes_map: dict[str, dict[str, Any]] = {}
+    visitantes_items = visitantes_payload.get("items")
+    if isinstance(visitantes_items, list):
+        for raw in visitantes_items:
+            if not isinstance(raw, dict):
+                continue
+            key = str(raw.get("key") or "UNK")
+            visitantes_map[key] = raw
+
+    for row in dataset:
+        if not isinstance(row, dict):
+            continue
+        key = str(row.get("key") or "UNK")
+        visitor_row = visitantes_map.get(key, {})
+        fuentes_top = visitor_row.get("fuentes_top")
+        if not isinstance(fuentes_top, list):
+            fuentes_top = []
+        utm_top = visitor_row.get("utm_top")
+        if not isinstance(utm_top, list):
+            utm_top = []
+        row["traffic_web"] = {
+            "sesiones_web_total": int(visitor_row.get("sesiones_web_total") or 0),
+            "fuentes_top": fuentes_top,
+            "utm_top": utm_top,
+        }
+        row["conversation_channels"] = {
+            "sesiones_webchat_total": int(visitor_row.get("sesiones_webchat_total") or 0),
+            "sesiones_con_chat_webchat": int(visitor_row.get("sesiones_con_chat_webchat") or 0),
+            "sesiones_sin_chat_webchat": int(visitor_row.get("sesiones_sin_chat_webchat") or 0),
+            "conversaciones_whatsapp": int(visitor_row.get("conversaciones_whatsapp") or 0),
+            "conversaciones_voz": int(visitor_row.get("conversaciones_voz") or 0),
+        }
+
+    try:
+        if nivel_normalizado == "pais":
+            geojson = leads_geo.load_world_countries_geojson()
+        elif nivel_normalizado == "estado":
+            geojson = leads_geo.load_full_states_geojson()
+        else:
+            geojson = leads_geo.load_state_municipalities_geojson(state_code or "00")
+    except FileNotFoundError as exc:  # pragma: no cover - depende del despliegue
+        logger.exception("crm.demografia.geo_missing")
+        raise HTTPException(status_code=500, detail="geojson_missing") from exc
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="estado_not_found") from exc
+
+    return {
+        "ok": True,
+        "nivel": nivel_normalizado,
+        "estado": state_code,
+        "canales": channel_values,
+        "etapas": stage_values,
+        "range": _build_range_payload(rango, date_from, date_to),
+        "attribution_filters": {
+            "source_class": source_class_value,
+            "utm_source": utm_source_value,
+            "utm_medium": utm_medium_value,
+            "utm_campaign": utm_campaign_value,
+        },
         "totales_leads": (leads_payload.get("totals") if isinstance(leads_payload, dict) else {}),
         "totales_visitantes": (
             visitantes_payload.get("totals") if isinstance(visitantes_payload, dict) else {}
