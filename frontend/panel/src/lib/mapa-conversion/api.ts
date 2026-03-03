@@ -191,6 +191,9 @@ export async function loadDemografiaData(
     utmSource?: string | null;
     utmMedium?: string | null;
     utmCampaign?: string | null;
+    rango?: string | null;
+    desde?: string | null;
+    hasta?: string | null;
   } = {},
 ): Promise<DemografiaData> {
   const resumenParams: DemografiaQueryParams = { nivel };
@@ -225,6 +228,18 @@ export async function loadDemografiaData(
   if (options.utmCampaign) {
     resumenParams.utm_campaign = options.utmCampaign;
     mapaParams.utm_campaign = options.utmCampaign;
+  }
+  if (options.rango) {
+    resumenParams.rango = options.rango;
+    mapaParams.rango = options.rango;
+  }
+  if (options.desde) {
+    resumenParams.desde = options.desde;
+    mapaParams.desde = options.desde;
+  }
+  if (options.hasta) {
+    resumenParams.hasta = options.hasta;
+    mapaParams.hasta = options.hasta;
   }
 
   const [summary, map] = await Promise.all([

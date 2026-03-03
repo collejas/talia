@@ -42,7 +42,13 @@ const STAGE_LABELS: Record<string, string> = {
 
 function selectTopLocation(dataset: DemografiaDataset) {
   if (!dataset.length) return null;
-  return [...dataset].sort((a, b) => (b.total_visitas ?? 0) - (a.total_visitas ?? 0))[0];
+  const sorted = [...dataset].sort((a, b) => (b.total_visitas ?? 0) - (a.total_visitas ?? 0));
+  const preferred = sorted.find((entry) => {
+    const key = (entry.key || "").toString().trim().toUpperCase();
+    const name = (entry.name || "").toString().trim().toLowerCase();
+    return key && key !== "UNK" && !name.includes("desconocido");
+  });
+  return preferred ?? sorted[0];
 }
 
 function combineChannelTotals(entry: DemografiaDataset[number]) {
@@ -238,6 +244,12 @@ export default async function Page({
   const utmSource = utmSourceParam.length ? utmSourceParam : null;
   const utmMedium = utmMediumParam.length ? utmMediumParam : null;
   const utmCampaign = utmCampaignParam.length ? utmCampaignParam : null;
+  const rangoParam = typeof params.rango === "string" ? params.rango.trim().toLowerCase() : "";
+  const rango = rangoParam.length ? rangoParam : "mes";
+  const desdeParam = typeof params.desde === "string" ? params.desde.trim() : "";
+  const hastaParam = typeof params.hasta === "string" ? params.hasta.trim() : "";
+  const desde = desdeParam.length ? desdeParam : null;
+  const hasta = hastaParam.length ? hastaParam : null;
 
   let demografiaResponse: Awaited<ReturnType<typeof loadDemografiaData>> | null = null;
   let visitsPayload: Awaited<ReturnType<typeof loadVisitsData>> | null = null;
@@ -252,6 +264,9 @@ export default async function Page({
       utmSource,
       utmMedium,
       utmCampaign,
+      rango,
+      desde,
+      hasta,
     });
   } catch (error) {
     errores.push(
@@ -300,7 +315,14 @@ export default async function Page({
       }, createEmptyStageTotals(stageKeys))
     : createEmptyStageTotals(stageKeys);
   const visitantesTotal = demografiaResponse?.summary.visitantes.totals.total ?? 0;
-  const sesionesWebTotales = demografiaResponse?.summary.visitantes.totals.sesiones_web_total ?? 0;
+  const sesionesWebSummary = demografiaResponse?.summary.visitantes.totals.sesiones_web_total ?? 0;
+  const sesionesWebDataset = demografiaResponse
+    ? demografiaResponse.map.dataset.reduce(
+        (acc, entry) => acc + (entry.traffic_web?.sesiones_web_total ?? 0),
+        0,
+      )
+    : 0;
+  const sesionesWebTotales = Math.max(sesionesWebSummary, sesionesWebDataset);
   const sesionesWebchatTotales =
     demografiaResponse?.summary.visitantes.totals.sesiones_webchat_total ?? 0;
   const conversacionesWhatsapp =
@@ -314,6 +336,15 @@ export default async function Page({
   const topSource = (() => {
     if (!demografiaResponse) return { source: "", total: 0 };
     const totals = new Map<string, number>();
+    const summaryItems = demografiaResponse.summary.visitantes.items ?? [];
+    for (const item of summaryItems) {
+      const sources = item.fuentes_top ?? [];
+      for (const source of sources) {
+        const key = (source.source || "").trim().toLowerCase();
+        if (!key) continue;
+        totals.set(key, (totals.get(key) ?? 0) + (source.total ?? 0));
+      }
+    }
     for (const entry of demografiaResponse.map.dataset) {
       const sources = entry.traffic_web?.fuentes_top ?? [];
       for (const source of sources) {
@@ -384,6 +415,9 @@ export default async function Page({
                 utmSource={utmSource}
                 utmMedium={utmMedium}
                 utmCampaign={utmCampaign}
+                rango={rango}
+                desde={desde}
+                hasta={hasta}
               />
               <SessionRecovery errors={errores} />
               {demografiaResponse ? (

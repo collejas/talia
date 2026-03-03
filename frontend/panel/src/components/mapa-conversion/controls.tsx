@@ -63,6 +63,9 @@ type DemografiaControlsProps = {
   utmSource: string | null;
   utmMedium: string | null;
   utmCampaign: string | null;
+  rango: string | null;
+  desde: string | null;
+  hasta: string | null;
 };
 
 export function DemografiaControls({
@@ -74,12 +77,17 @@ export function DemografiaControls({
   utmSource,
   utmMedium,
   utmCampaign,
+  rango,
+  desde,
+  hasta,
 }: DemografiaControlsProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [utmSourceDraft, setUtmSourceDraft] = React.useState(utmSource ?? "");
   const [utmMediumDraft, setUtmMediumDraft] = React.useState(utmMedium ?? "");
   const [utmCampaignDraft, setUtmCampaignDraft] = React.useState(utmCampaign ?? "");
+  const [desdeDraft, setDesdeDraft] = React.useState(desde ?? "");
+  const [hastaDraft, setHastaDraft] = React.useState(hasta ?? "");
 
   const normalizedChannelsArray = React.useMemo(() => {
     const source = canales.length ? canales : DEFAULT_CHANNELS;
@@ -108,6 +116,12 @@ export function DemografiaControls({
   React.useEffect(() => {
     setUtmCampaignDraft(utmCampaign ?? "");
   }, [utmCampaign]);
+  React.useEffect(() => {
+    setDesdeDraft(desde ?? "");
+  }, [desde]);
+  React.useEffect(() => {
+    setHastaDraft(hasta ?? "");
+  }, [hasta]);
 
   const normalizedStages = React.useMemo(() => {
     if (!etapas.length) return new Set(DEFAULT_STAGES);
@@ -210,6 +224,15 @@ export function DemografiaControls({
       utm_source: null,
       utm_medium: null,
       utm_campaign: null,
+    });
+  }
+
+  function applyDateFilters() {
+    const customRange = Boolean(desdeDraft.trim() || hastaDraft.trim());
+    updateParams({
+      rango: customRange ? "fechas" : rango || null,
+      desde: desdeDraft.trim() || null,
+      hasta: hastaDraft.trim() || null,
     });
   }
 
@@ -395,6 +418,44 @@ export function DemografiaControls({
         </Button>
         <Button type="button" size="sm" variant="ghost" onClick={clearAttributionFilters}>
           Limpiar atribución
+        </Button>
+
+        <Select
+          value={rango ?? "mes"}
+          onValueChange={(value) => {
+            const isCustom = value === "fechas";
+            updateParams({
+              rango: value,
+              desde: isCustom ? (desdeDraft.trim() || null) : null,
+              hasta: isCustom ? (hastaDraft.trim() || null) : null,
+            });
+          }}
+        >
+          <SelectTrigger className="w-[170px]">
+            <SelectValue placeholder="Rango" />
+          </SelectTrigger>
+          <SelectContent className="z-50">
+            <SelectItem value="hoy">Hoy</SelectItem>
+            <SelectItem value="7d">Últimos 7 días</SelectItem>
+            <SelectItem value="30d">Últimos 30 días</SelectItem>
+            <SelectItem value="mes">Último mes</SelectItem>
+            <SelectItem value="fechas">Rango personalizado</SelectItem>
+          </SelectContent>
+        </Select>
+        <Input
+          type="date"
+          value={desdeDraft}
+          onChange={(event) => setDesdeDraft(event.target.value)}
+          className="h-8 w-[150px]"
+        />
+        <Input
+          type="date"
+          value={hastaDraft}
+          onChange={(event) => setHastaDraft(event.target.value)}
+          className="h-8 w-[150px]"
+        />
+        <Button type="button" size="sm" variant="outline" onClick={applyDateFilters}>
+          Aplicar fechas
         </Button>
       </div>
     </div>

@@ -103,6 +103,37 @@ Incluye:
   - `sesiones_web_total` global
   - conversaciones por canal (`webchat`, `whatsapp`, `voz`)
   - fuente principal agregada desde `fuentes_top`
+- Ajustes de calidad aplicados:
+  - `Top ubicación` evita priorizar `UNK/Desconocido` cuando existen ubicaciones válidas.
+  - `Tráfico web` toma fallback por suma de dataset (`traffic_web.sesiones_web_total`) si el total resumido llega en 0.
+  - `Fuente principal` agrega señales desde `summary.visitantes.items.fuentes_top` + `map.dataset[*].traffic_web.fuentes_top`.
+- Filtro de fechas global para toda la vista:
+  - soporta `rango` (`hoy`, `7d`, `30d`, `mes`, `fechas`)
+  - soporta `desde` / `hasta`
+  - aplica tanto a `resumen-v2` como a `mapa-v2`.
+
+### 5) Fix de ingesta web en dominio `talia.mx` + fallback KPI v3
+Archivos:
+- `frontend/panel/src/app/api/crm/web/visit/route.ts`
+- `backend/app/services/demografia_service.py`
+- `supabase/migrations/20260303_131500_panel_visitantes_geo_resumen_v3_webchat_fallback.sql`
+
+Estado:
+- Implementado en código y migración aplicada en Supabase via MCP.
+
+Incluye:
+- Nuevo proxy Next público:
+  - `POST /api/crm/web/visit` (en `frontend/panel`) reenviando a `POST /crm/web/visit` del backend.
+  - Conserva cabeceras de trazabilidad (`X-Forwarded-For`, `X-Real-IP`, `Referer`, `User-Agent`) para no perder contexto de origen.
+- Ajuste backend demografía:
+  - `fetch_visitantes_resumen_v2(...)` ahora consulta `panel_visitantes_geo_resumen_v3(...)`.
+- Nueva función SQL `panel_visitantes_geo_resumen_v3(...)`:
+  - Mantiene salida compatible con v2.
+  - Si `web_sessions` está vacío, calcula fallback de:
+    - `sesiones_web_total`
+    - `fuentes_top`
+    - `utm_top`
+    usando señales de `webchat_visitantes`.
 
 ## Validaciones realizadas
 
@@ -114,6 +145,7 @@ Incluye:
 - La funcion `panel_visitantes_geo_resumen_v2('estado', ...)` responde con datos.
 - En el entorno actual se observan datos en `webchat`.
 - `web_sessions` aun aparece en 0, esperado hasta habilitar la ingesta web first-party desde `talia.mx`.
+- La funcion `panel_visitantes_geo_resumen_v3('pais', ...)` devuelve `sesiones_web_total` y `fuentes_top` con fallback desde `webchat_visitantes` cuando `web_sessions = 0`.
 
 ## Decisiones tecnicas
 
@@ -126,13 +158,18 @@ Incluye:
 ## Siguientes pasos (orden recomendado)
 
 1. Backend:
-- Endpoints v2 ya implementados. Falta conectarlos en frontend.
+- Endpoints v2 ya implementados y conectados. Verificar despliegue activo tras reinicio de `talia-api.service`.
 
 2. Ingesta web:
-- Endpoint e instrumentación implementados. Falta despliegue/validación en producción con datos reales.
+- Endpoint e instrumentación implementados. Verificar que `frontend/panel` desplegado incluya el nuevo route handler `/api/crm/web/visit`.
+- Validar en producción:
+  - abrir `https://talia.mx/`
+  - confirmar `POST /api/crm/web/visit` con `204`
+  - confirmar filas nuevas en `public.web_sessions`.
 
 3. Frontend mapa:
-- API migrada a `resumen-v2/mapa-v2` y UI base de atribución ya visible. Falta refinar visualización global de KPIs de tráfico web.
+- API migrada a `resumen-v2/mapa-v2` y UI base de atribución ya visible.
+- Con v3 activo, `Tráfico web` y `Fuente principal` ya no dependen exclusivamente de `web_sessions` para mostrar señal útil inicial.
 
 4. Exportacion XLSX:
 - Implementar `GET /crm/demografia/mapa-v2/export/xlsx` respetando filtros activos.
@@ -141,4 +178,6 @@ Incluye:
 
 - `supabase/migrations/20260303_120000_web_sessions_base.sql`
 - `supabase/migrations/20260303_123000_panel_visitantes_geo_resumen_v2.sql`
+- `supabase/migrations/20260303_131500_panel_visitantes_geo_resumen_v3_webchat_fallback.sql`
+- `frontend/panel/src/app/api/crm/web/visit/route.ts`
 - `docs/Plan_mapa_conversion/plan_mapa_conversion_integral.md`
