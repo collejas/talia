@@ -2560,6 +2560,7 @@ class CRMRepository:
             audit_metadata: dict[str, Any] = {"source": "restart"}
             if parent_id:
                 audit_metadata["parent_opportunity_id"] = str(parent_id)
+            assignment_channel = (canal or "").strip().lower() or "assistant"
             await self._insert_assignment_audit(
                 organizacion_id=organizacion_id,
                 oportunidad_id=opportunity_id,
@@ -2568,6 +2569,7 @@ class CRMRepository:
                 contact_id=str(contacto_id),
                 trigger="restart_conversation",
                 metadata=audit_metadata,
+                canal=assignment_channel,
             )
 
         await self._set_conversation_restart_sequence(
@@ -2887,11 +2889,13 @@ class CRMRepository:
         notification_sid: str | None = None,
         canal: str | None = None,
     ) -> None:
+        channel_value = (canal or "").strip().lower() or "assistant"
         payload: dict[str, Any] = {
             "organizacion_id": str(organizacion_id),
             "vendedor_usuario_id": str(vendedor_id),
             "trigger_event": trigger,
             "metadata": metadata or {},
+            "canal": channel_value,
         }
         if oportunidad_id:
             payload["oportunidad_id"] = str(oportunidad_id)
@@ -2901,8 +2905,6 @@ class CRMRepository:
             payload["contacto_id"] = str(contact_id)
         if notification_sid:
             payload["notificacion_message_sid"] = notification_sid
-        if canal:
-            payload["canal"] = canal
         await self._request(
             "POST",
             "/rest/v1/asignaciones_vendedores",

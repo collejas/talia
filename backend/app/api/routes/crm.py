@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import base64
 import csv
+import hashlib
 import io
 import json
 import os
@@ -124,6 +125,43 @@ SALE_TARGET_STAGE_CODES = (
     "demo",
 )
 WINNING_STAGE_CODES = ("general_cerrado_ganado", "cerrado_ganado")
+INBOX_THREADS_CACHE_TTL_SECONDS = 4.0
+INBOX_THREADS_CACHE_MAX_ENTRIES = 256
+_INBOX_THREADS_CACHE: dict[str, tuple[float, list[Any]]] = {}
+_INBOX_THREADS_CACHE_LOCK = asyncio.Lock()
+
+
+def _build_inbox_threads_cache_key(payload: dict[str, Any]) -> str:
+    raw = json.dumps(payload, sort_keys=True, default=str, separators=(",", ":"))
+    return hashlib.sha1(raw.encode("utf-8")).hexdigest()
+
+
+async def _read_inbox_threads_cache(cache_key: str) -> list[Any] | None:
+    now = time.monotonic()
+    async with _INBOX_THREADS_CACHE_LOCK:
+        entry = _INBOX_THREADS_CACHE.get(cache_key)
+        if not entry:
+            return None
+        expires_at, cached_value = entry
+        if expires_at <= now:
+            _INBOX_THREADS_CACHE.pop(cache_key, None)
+            return None
+        return list(cached_value)
+
+
+async def _write_inbox_threads_cache(cache_key: str, rows: list[Any]) -> None:
+    now = time.monotonic()
+    expires_at = now + INBOX_THREADS_CACHE_TTL_SECONDS
+    async with _INBOX_THREADS_CACHE_LOCK:
+        expired = [key for key, (ttl, _) in _INBOX_THREADS_CACHE.items() if ttl <= now]
+        for key in expired:
+            _INBOX_THREADS_CACHE.pop(key, None)
+        _INBOX_THREADS_CACHE[cache_key] = (expires_at, list(rows))
+        while len(_INBOX_THREADS_CACHE) > INBOX_THREADS_CACHE_MAX_ENTRIES:
+            oldest_key = next(iter(_INBOX_THREADS_CACHE), None)
+            if not oldest_key:
+                break
+            _INBOX_THREADS_CACHE.pop(oldest_key, None)
 
 def _write_mapbox_debug_log(tag: str, payload: Any) -> None:
     try:
@@ -10096,6 +10134,39 @@ async def get_inbox_threads(
 ) -> list[CRMInboxThread]:
     source_requested = _clean_text(source)
     source_for_repo = None if source_requested == "publicidad_whatsapp" else source
+    cache_key = _build_inbox_threads_cache_key(
+        {
+            "org": str(organizacion_id),
+            "user": user_token,
+            "estado": estado or "",
+            "source_requested": source_requested or "",
+            "source_repo": _clean_text(source_for_repo) or "",
+            "channel": _clean_text(channel) or "",
+            "batch_id": str(batch_id) if batch_id else "",
+            "campana_id": str(campana_id) if campana_id else "",
+            "asignado_id": str(asignado_id) if asignado_id else "",
+            "limit": limit,
+            "offset": offset,
+            "message_limit": message_limit,
+        }
+    )
+    cached_threads = await _read_inbox_threads_cache(cache_key)
+    if cached_threads is not None:
+        logger.info(
+            "crm.inbox.threads.cache_hit",
+            extra={
+                "rows": len(cached_threads),
+                "estado": estado,
+                "source": source_requested,
+                "channel": channel,
+                "has_batch": bool(batch_id),
+                "has_campana": bool(campana_id),
+                "limit": limit,
+                "offset": offset,
+            },
+        )
+        return [thread for thread in cached_threads if isinstance(thread, CRMInboxThread)]
+
     start = time.perf_counter()
     rows = await repo.inbox_threads(
         usuario_token=user_token,
@@ -10488,12 +10559,16 @@ async def get_inbox_threads(
         enriched_rows.append(row_payload)
 
     if source_requested == "publicidad_whatsapp":
-        return [
+        result_threads = [
             CRMInboxThread.model_validate(row)
             for row in enriched_rows
             if _clean_text(row.get("source")) == "publicidad_whatsapp"
         ]
-    return [CRMInboxThread.model_validate(row) for row in enriched_rows]
+    else:
+        result_threads = [CRMInboxThread.model_validate(row) for row in enriched_rows]
+
+    await _write_inbox_threads_cache(cache_key, result_threads)
+    return result_threads
 
 
 @router.get("/inbox/filter-options", response_model=CRMInboxContextFilters)

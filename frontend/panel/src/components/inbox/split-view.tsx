@@ -28,7 +28,7 @@ import { useCurrentUser } from "@/hooks/use-current-user";
 import type { DateFilterOption } from "@/components/inbox/toolbar";
 import { matchesReengageFilter } from "@/lib/inbox/reengage-filter";
 
-const THREADS_REFRESH_INTERVAL_MS = 1600;
+const THREADS_REFRESH_INTERVAL_MS = 12000;
 const MESSAGES_REFRESH_INTERVAL_MS = 1500;
 const THREADS_PAGE_SIZE = 100;
 
@@ -973,6 +973,7 @@ export function InboxSplitView({
     let cancelled = false;
 
     async function refreshThreads() {
+      if (typeof document !== "undefined" && document.hidden) return;
       if (threadsRefreshingRef.current) return;
       threadsRefreshingRef.current = true;
       try {
