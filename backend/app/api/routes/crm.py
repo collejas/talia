@@ -5420,6 +5420,11 @@ def _rpc_field(data: Any, *keys: str) -> Any:
     return None
 
 
+def _is_jwt_expired_repo_error(exc: Exception) -> bool:
+    message = str(exc).lower()
+    return "jwt expired" in message or "pgrst303" in message
+
+
 async def require_admin_user(
     *,
     repo: CRMRepository = Depends(get_repository),
@@ -5439,10 +5444,18 @@ def require_permission(permission_code: str):
             return user_token
         repo = CRMRepository(user_token=user_token)
         user_id = _jwt_verify_and_sub(user_token)
-        permission_context = await repo.get_permission_context()
-        es_admin = _coerce_bool(permission_context.get("es_admin")) is True
-        es_owner = _coerce_bool(permission_context.get("es_owner")) is True
-        allowed = es_admin or es_owner or await repo.current_user_has_perm(codigo=permission_code)
+        try:
+            permission_context = await repo.get_permission_context()
+            es_admin = _coerce_bool(permission_context.get("es_admin")) is True
+            es_owner = _coerce_bool(permission_context.get("es_owner")) is True
+            allowed = es_admin or es_owner or await repo.current_user_has_perm(codigo=permission_code)
+        except CRMRepositoryError as exc:
+            if _is_jwt_expired_repo_error(exc):
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="auth_required",
+                ) from exc
+            raise HTTPException(status_code=502, detail=str(exc)) from exc
         logger.info(
             "permission.check",
             extra={
@@ -5466,15 +5479,23 @@ def require_any_permission(permission_codes: list[str]):
             return user_token
         repo = CRMRepository(user_token=user_token)
         user_id = _jwt_verify_and_sub(user_token)
-        permission_context = await repo.get_permission_context()
-        es_admin = _coerce_bool(permission_context.get("es_admin")) is True
-        es_owner = _coerce_bool(permission_context.get("es_owner")) is True
-        allowed = es_admin or es_owner
-        if not allowed:
-            for code in permission_codes:
-                if await repo.current_user_has_perm(codigo=code):
-                    allowed = True
-                    break
+        try:
+            permission_context = await repo.get_permission_context()
+            es_admin = _coerce_bool(permission_context.get("es_admin")) is True
+            es_owner = _coerce_bool(permission_context.get("es_owner")) is True
+            allowed = es_admin or es_owner
+            if not allowed:
+                for code in permission_codes:
+                    if await repo.current_user_has_perm(codigo=code):
+                        allowed = True
+                        break
+        except CRMRepositoryError as exc:
+            if _is_jwt_expired_repo_error(exc):
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="auth_required",
+                ) from exc
+            raise HTTPException(status_code=502, detail=str(exc)) from exc
         logger.info(
             "permission.check.any",
             extra={
@@ -5497,8 +5518,16 @@ def require_owner_only():
         if settings.environment.strip().lower() == "test" or _is_pytest_runtime():
             return user_token
         repo = CRMRepository(user_token=user_token)
-        permission_context = await repo.get_permission_context()
-        es_owner = _coerce_bool(permission_context.get("es_owner")) is True
+        try:
+            permission_context = await repo.get_permission_context()
+            es_owner = _coerce_bool(permission_context.get("es_owner")) is True
+        except CRMRepositoryError as exc:
+            if _is_jwt_expired_repo_error(exc):
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="auth_required",
+                ) from exc
+            raise HTTPException(status_code=502, detail=str(exc)) from exc
         if not es_owner:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="owner_required")
         return user_token
@@ -9907,6 +9936,11 @@ async def get_my_permissions(
     try:
         context = await repo.get_permission_context()
     except CRMRepositoryError as exc:
+        if _is_jwt_expired_repo_error(exc):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="auth_required",
+            ) from exc
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     return context
 
