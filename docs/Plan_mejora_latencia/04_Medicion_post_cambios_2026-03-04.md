@@ -268,3 +268,53 @@ Se aplicó ajuste en backend:
 Objetivo:
 
 - capturar repeticiones reales de filtros en ciclos de refresh de la UI y aumentar hit-rate de `prospectos/queries`.
+
+## 13) Verificación posterior a TTL `600s`
+
+Fecha/hora de corte: `2026-03-04T22:55:09.410+00:00`.
+
+### 13.1 Latencia (última 1 hora)
+
+1. `/api/crm/prospeccion/prospectos/queries`
+- count: `16`
+- avg: `1647.51 ms`
+- p50: `915.05 ms`
+- p90: `3418.26 ms`
+- p95: `4361.85 ms`
+- max: `6036.72 ms`
+
+2. `/api/crm/inbox/threads`
+- p95: `2346.88 ms`
+
+3. `/api/crm/prospeccion/prospectos/contact-indicadores`
+- p95: `1280.04 ms`
+
+### 13.2 Latencia (últimas 4 horas)
+
+1. `/api/crm/prospeccion/prospectos/queries`
+- count: `31`
+- p95: `6482.06 ms`
+
+Nota: esta ventana mezcla periodos antes y después del ajuste de TTL, por lo que no sirve sola para atribución directa del cambio.
+
+### 13.3 Cache events `queries` (hit/miss/store)
+
+Ventana analizada:
+
+- última 1 hora respecto al último evento cache: `2026-03-04T22:48:24.076+00:00`
+
+Conteo:
+
+- `cache_miss`: `6`
+- `cache_store`: `6`
+- `cache_hit`: `2`
+
+Hit-rate observado (sobre lecturas `hit+miss`):
+
+- `2 / (2 + 6) = 25%`
+
+Conclusión operativa:
+
+1. Con `TTL=600s` ya hay `cache_hit` confirmado en `prospectos/queries`.
+2. El endpoint mejora en tendencia de 1h, pero `p95` aún puede superar meta fase 1 (`3500 ms`) por cola de misses y variabilidad de filtros.
+3. Se requiere nueva medición de `4-8h` completamente posterior al ajuste para decidir si mantener `600s` o subir a `900s`.
