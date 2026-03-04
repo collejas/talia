@@ -29,6 +29,7 @@ import type { DateFilterOption } from "@/components/inbox/toolbar";
 import { matchesReengageFilter } from "@/lib/inbox/reengage-filter";
 
 const THREADS_REFRESH_INTERVAL_MS = 12000;
+const RUNTIME_PROFILE_REFRESH_INTERVAL_MS = 60000;
 const MESSAGES_REFRESH_INTERVAL_MS = 1500;
 const THREADS_PAGE_SIZE = 100;
 
@@ -659,6 +660,9 @@ export function InboxSplitView({
   const compactKpiTagClass = "text-[8px] leading-none";
   const [threadItems, setThreadItems] = React.useState<InboxThread[]>(threads);
   const [totalThreads, setTotalThreads] = React.useState<number>(threads.length);
+  const [threadsRefreshIntervalMs, setThreadsRefreshIntervalMs] = React.useState<number>(
+    THREADS_REFRESH_INTERVAL_MS,
+  );
   const [loadingMoreThreads, setLoadingMoreThreads] = React.useState(false);
   const [selectedId, setSelectedId] = React.useState<string | null>(threads[0]?.id ?? null);
   const [searchTerm] = React.useState("");
@@ -972,6 +976,43 @@ export function InboxSplitView({
   React.useEffect(() => {
     let cancelled = false;
 
+    async function refreshRuntimeProfile() {
+      if (typeof document !== "undefined" && document.hidden) return;
+      try {
+        const response = await fetch("/api/inbox/runtime-profile", {
+          cache: "no-store",
+        });
+        if (!response.ok) return;
+        const data = (await response.json()) as {
+          recommended_threads_poll_seconds?: number;
+        };
+        const recommendedSeconds = Number(data?.recommended_threads_poll_seconds);
+        if (!Number.isFinite(recommendedSeconds) || recommendedSeconds <= 0) return;
+        const nextIntervalMs = Math.max(5000, Math.trunc(recommendedSeconds * 1000));
+        setThreadsRefreshIntervalMs((current) =>
+          current === nextIntervalMs ? current : nextIntervalMs,
+        );
+      } catch (error) {
+        console.error("[inbox] runtime profile fetch failed", error);
+      }
+    }
+
+    refreshRuntimeProfile();
+    const interval = setInterval(() => {
+      if (!cancelled) {
+        refreshRuntimeProfile();
+      }
+    }, RUNTIME_PROFILE_REFRESH_INTERVAL_MS);
+
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, []);
+
+  React.useEffect(() => {
+    let cancelled = false;
+
     async function refreshThreads() {
       if (typeof document !== "undefined" && document.hidden) return;
       if (threadsRefreshingRef.current) return;
@@ -1028,14 +1069,14 @@ export function InboxSplitView({
       if (!cancelled) {
         refreshThreads();
       }
-    }, THREADS_REFRESH_INTERVAL_MS);
+    }, threadsRefreshIntervalMs);
 
     return () => {
       cancelled = true;
       clearInterval(interval);
       threadsRefreshingRef.current = false;
     };
-  }, [sourceFilter, channelFilter, estadoFilter, batchFilter, campanaFilter]);
+  }, [sourceFilter, channelFilter, estadoFilter, batchFilter, campanaFilter, threadsRefreshIntervalMs]);
 
   const handleLoadMoreThreads = React.useCallback(async () => {
     if (loadingMoreThreads) return;

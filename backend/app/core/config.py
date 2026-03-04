@@ -598,6 +598,50 @@ class Settings(BaseSettings):
             "TALIA_HIGH_DEMAND_RECOMMENDED_INBOX_POLL_SECONDS",
         ),
     )
+    inbox_threads_default_poll_seconds: int = Field(
+        default=12,
+        ge=5,
+        le=120,
+        description="Intervalo base de polling de Inbox cuando no hay alta demanda.",
+        validation_alias=AliasChoices(
+            "INBOX_THREADS_DEFAULT_POLL_SECONDS",
+            "TALIA_INBOX_THREADS_DEFAULT_POLL_SECONDS",
+        ),
+    )
+    high_demand_alerts_enabled: bool = Field(
+        default=True,
+        description="Activa alertas externas del modo alta demanda.",
+        validation_alias=AliasChoices(
+            "HIGH_DEMAND_ALERTS_ENABLED",
+            "TALIA_HIGH_DEMAND_ALERTS_ENABLED",
+        ),
+    )
+    high_demand_alert_webhook_url: str | None = Field(
+        default=None,
+        description="Webhook HTTP para alertas de alta demanda (Slack/Teams/automation).",
+        validation_alias=AliasChoices(
+            "HIGH_DEMAND_ALERT_WEBHOOK_URL",
+            "TALIA_HIGH_DEMAND_ALERT_WEBHOOK_URL",
+        ),
+    )
+    high_demand_alert_email_recipients: str | None = Field(
+        default=None,
+        description="Lista CSV de destinatarios para alertas de alta demanda.",
+        validation_alias=AliasChoices(
+            "HIGH_DEMAND_ALERT_EMAIL_RECIPIENTS",
+            "TALIA_HIGH_DEMAND_ALERT_EMAIL_RECIPIENTS",
+        ),
+    )
+    high_demand_alert_cooldown_seconds: int = Field(
+        default=300,
+        ge=30,
+        le=7200,
+        description="Cooldown mínimo entre alertas externas de alta demanda.",
+        validation_alias=AliasChoices(
+            "HIGH_DEMAND_ALERT_COOLDOWN_SECONDS",
+            "TALIA_HIGH_DEMAND_ALERT_COOLDOWN_SECONDS",
+        ),
+    )
     webchat_inactivity_minutes: int | None = Field(
         default=None,
         validation_alias=AliasChoices(

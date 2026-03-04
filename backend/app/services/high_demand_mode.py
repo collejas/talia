@@ -9,15 +9,25 @@ from collections import deque
 from datetime import datetime, timezone
 from typing import Any
 
+import httpx
+
 from app.core.config import settings
 from app.core.logging import get_logger, log_event
 from app.repositories.crm import CRMRepository, CRMRepositoryError
+from app.services import EmailSendError, send_email
 
 logger = get_logger("app.services.high_demand_mode")
 
 _MIN_SNAPSHOT_WINDOW_SECONDS = 60
 _MAX_SNAPSHOT_WINDOW_SECONDS = 3600
 _DEFAULT_WINDOW_SECONDS = 300
+
+
+def _parse_csv_recipients(value: str | None) -> list[str]:
+    raw = str(value or "").strip()
+    if not raw:
+        return []
+    return [item.strip() for item in raw.split(",") if item.strip()]
 
 
 def _percentile(values: list[float], percentile: float) -> float:
@@ -280,6 +290,7 @@ class HighDemandModeRunner:
         self._controller = controller
         self._task: asyncio.Task[None] | None = None
         self._stop = asyncio.Event()
+        self._last_alert_at: float = 0.0
 
     async def start(self) -> None:
         if self._task and not self._task.done():
@@ -324,13 +335,108 @@ class HighDemandModeRunner:
             if evaluation.get("mode_changed"):
                 if evaluation.get("active"):
                     log_event(logger, "high_demand.mode_activated", reasons=evaluation.get("reasons"))
+                    await self._notify_external_alert(
+                        title="Modo alta demanda ACTIVADO",
+                        evaluation=evaluation,
+                        snapshot=snapshot,
+                    )
                 else:
                     log_event(logger, "high_demand.mode_deactivated")
+                    await self._notify_external_alert(
+                        title="Modo alta demanda DESACTIVADO",
+                        evaluation=evaluation,
+                        snapshot=snapshot,
+                    )
 
             try:
                 await asyncio.wait_for(self._stop.wait(), timeout=interval_seconds)
             except asyncio.TimeoutError:
                 continue
+
+    async def _notify_external_alert(
+        self,
+        *,
+        title: str,
+        evaluation: dict[str, Any],
+        snapshot: dict[str, Any],
+    ) -> None:
+        if not bool(getattr(settings, "high_demand_alerts_enabled", True)):
+            return
+
+        now = time.monotonic()
+        cooldown_seconds = max(30, int(getattr(settings, "high_demand_alert_cooldown_seconds", 300)))
+        if (now - self._last_alert_at) < cooldown_seconds:
+            log_event(
+                logger,
+                "high_demand.alert_suppressed_cooldown",
+                cooldown_seconds=cooldown_seconds,
+            )
+            return
+
+        mode = await self._controller.current_mode()
+        kpis = snapshot.get("kpis") if isinstance(snapshot, dict) else {}
+        if not isinstance(kpis, dict):
+            kpis = {}
+
+        text_lines = [
+            title,
+            f"activo={mode.get('active')}",
+            f"razones={','.join(mode.get('reasons') or []) or 'n/a'}",
+            f"inbound_count={kpis.get('inbound_count')}",
+            f"assistant_p95_ms={kpis.get('assistant_reply_latency_p95_ms')}",
+            f"inbox_p95_ms={kpis.get('inbox_threads_latency_p95_ms')}",
+            f"twilio_error_rate={kpis.get('twilio_error_rate')}",
+            f"queue_depth={kpis.get('queue_depth')}",
+        ]
+        text_body = "\n".join(text_lines)
+        webhook_url = str(getattr(settings, "high_demand_alert_webhook_url", "") or "").strip()
+        recipients = _parse_csv_recipients(
+            getattr(settings, "high_demand_alert_email_recipients", None)
+        )
+
+        delivered_any = False
+        if webhook_url:
+            payload = {
+                "event": "high_demand_mode",
+                "title": title,
+                "mode": mode,
+                "evaluation": evaluation,
+                "snapshot": snapshot,
+                "text": text_body,
+            }
+            try:
+                async with httpx.AsyncClient(timeout=8.0) as client:
+                    response = await client.post(webhook_url, json=payload)
+                if response.status_code >= 400:
+                    log_event(
+                        logger,
+                        "high_demand.alert_webhook_failed",
+                        status=response.status_code,
+                        body=response.text[:500],
+                    )
+                else:
+                    delivered_any = True
+                    log_event(logger, "high_demand.alert_webhook_sent", status=response.status_code)
+            except Exception as exc:  # pragma: no cover - red de terceros
+                log_event(logger, "high_demand.alert_webhook_exception", error=str(exc))
+
+        if recipients:
+            try:
+                await asyncio.to_thread(
+                    send_email,
+                    subject=f"[TalIA] {title}",
+                    body_text=text_body,
+                    recipients=recipients,
+                )
+                delivered_any = True
+                log_event(logger, "high_demand.alert_email_sent", recipients=recipients)
+            except EmailSendError as exc:
+                log_event(logger, "high_demand.alert_email_failed", error=str(exc))
+            except Exception as exc:  # pragma: no cover
+                log_event(logger, "high_demand.alert_email_exception", error=str(exc))
+
+        if delivered_any:
+            self._last_alert_at = now
 
 
 high_demand_controller = HighDemandController()

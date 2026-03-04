@@ -250,10 +250,12 @@ Estado del plan documentado en `02_Plan_soluciones_priorizado.md`.
 
 ## Estado de pendientes
 
-### Fase 3.2 (pendiente)
+### Fase 3.2 (parcial completada)
 
-- Conectar la recomendación de polling del modo alta demanda al cliente Inbox en tiempo real.
-- Añadir alertas externas (Slack/Email) además del logging estructurado.
+- Completado: polling de Inbox ajustable en tiempo real por perfil de runtime.
+  - Backend: `GET /crm/inbox/runtime-profile` (permission `conv.read`).
+  - Frontend: `split-view` consume `/api/inbox/runtime-profile` y adapta el intervalo de refresh de threads.
+- Pendiente: alertas externas (Slack/Email) además del logging estructurado.
 
 ## Checklist de verificación operativa
 

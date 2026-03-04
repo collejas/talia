@@ -10982,6 +10982,30 @@ async def get_high_demand_mode_status(
     return {"ok": True, "snapshot": snapshot, "mode": mode}
 
 
+@router.get("/inbox/runtime-profile")
+async def get_inbox_runtime_profile(
+    *,
+    _: str = Depends(require_permission("conv.read")),
+) -> dict[str, Any]:
+    mode = await high_demand_controller.current_mode()
+    high_demand_active = bool(mode.get("active"))
+    if high_demand_active:
+        recommended_seconds = max(
+            5,
+            int(mode.get("recommended_inbox_poll_seconds") or settings.high_demand_recommended_inbox_poll_seconds),
+        )
+        source = "high_demand"
+    else:
+        recommended_seconds = max(5, int(settings.inbox_threads_default_poll_seconds))
+        source = "default"
+    return {
+        "ok": True,
+        "high_demand_mode": high_demand_active,
+        "recommended_threads_poll_seconds": int(recommended_seconds),
+        "source": source,
+    }
+
+
 @router.get("/inbox/messages/{conversacion_id}", response_model=list[CRMInboxMessage])
 async def get_inbox_messages(
     *,
