@@ -640,6 +640,7 @@ type InboxSplitViewProps = {
   campanaFilter?: string | null;
   dateFilter: DateFilterOption;
   reengageFilter: string;
+  onVisibleThreadsCountChange?: (count: number) => void;
 };
 
 export function InboxSplitView({
@@ -653,6 +654,7 @@ export function InboxSplitView({
   campanaFilter,
   dateFilter,
   reengageFilter,
+  onVisibleThreadsCountChange,
 }: InboxSplitViewProps) {
   const compactKpiTagClass = "text-[8px] leading-none";
   const [threadItems, setThreadItems] = React.useState<InboxThread[]>(threads);
@@ -887,6 +889,10 @@ export function InboxSplitView({
     dateFilter,
     reengageFilter,
   ]);
+
+  React.useEffect(() => {
+    onVisibleThreadsCountChange?.(filteredThreads.length);
+  }, [filteredThreads.length, onVisibleThreadsCountChange]);
 
   const selectedThread = React.useMemo(() => {
     if (!selectedId) {

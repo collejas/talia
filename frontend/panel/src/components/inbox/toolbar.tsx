@@ -43,6 +43,7 @@ const STATE_FILTER_OPTIONS = [
 
 type InboxToolbarProps = {
   summary: InboxSummary;
+  visibleTotal?: number;
   stateFilterValue: string;
   onStateFilterValueChange?: (value: string) => void;
   channelFilterValue: string;
@@ -66,6 +67,7 @@ type InboxToolbarProps = {
 
 export function InboxToolbar({
   summary,
+  visibleTotal,
   stateFilterValue,
   onStateFilterValueChange,
   channelFilterValue,
@@ -86,7 +88,7 @@ export function InboxToolbar({
   reengageOptions,
   onReengageFilterChange,
 }: InboxToolbarProps) {
-  const total = summary.total ?? 0;
+  const total = typeof visibleTotal === "number" ? visibleTotal : (summary.total ?? 0);
   const unread = summary.unread ?? 0;
   const awaiting = summary.awaiting ?? 0;
   const closed = summary.folders.find((folder) => folder.id === "closed")?.count ?? 0;
