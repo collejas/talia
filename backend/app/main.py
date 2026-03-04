@@ -9,7 +9,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from starlette.staticfiles import StaticFiles
 
 from app.api.routes.admin import router as admin_router
-from app.api.routes.crm import router as crm_router
+from app.api.routes.crm import (
+    inbox_threads_metrics_snapshot_runner,
+    router as crm_router,
+)
 from app.api.routes.propuesta import router as propuesta_router
 from app.api.routes.health import router as health_router
 from app.api.routes.tenant import router as tenant_router
@@ -40,9 +43,11 @@ async def app_lifespan(_: FastAPI):
     await whatsapp_followup_runner.start()
     await webchat_followup_runner.start()
     await webchat_closure_rescue_runner.start()
+    await inbox_threads_metrics_snapshot_runner.start()
     try:
         yield
     finally:
+        await inbox_threads_metrics_snapshot_runner.shutdown()
         await webchat_closure_rescue_runner.shutdown()
         await webchat_followup_runner.shutdown()
         await whatsapp_followup_runner.shutdown()

@@ -112,6 +112,9 @@ MAPBOX_LOG_FILE = MAPBOX_LOG_DIR / "mapbox-debug.log"
 SALE_LOG_FILE = MAPBOX_LOG_DIR / "propiedades-ventas.log"
 SALE_LOG_TAIL_BYTES = 64 * 1024
 DEFAULT_SALE_LOG_LIMIT = 20
+INBOX_THREADS_METRICS_LOG_FILE = MAPBOX_LOG_DIR / "inbox-threads-metrics.log"
+INBOX_THREADS_METRICS_LOG_TAIL_BYTES = 256 * 1024
+DEFAULT_INBOX_THREADS_METRICS_HISTORY_LIMIT = 100
 
 LEAD_SALES_READY_STAGES = frozenset({"etapa_3", "etapa_4"})
 OPPORTUNITY_SALE_STAGE_TOKENS = frozenset(
@@ -227,6 +230,85 @@ async def _snapshot_inbox_threads_metrics(*, window_seconds: int) -> dict[str, A
         "slow_queries_over_3000ms": slow_queries,
     }
 
+
+async def _capture_inbox_threads_snapshot_entry(
+    *,
+    window_seconds: int,
+    actor_user_id: str | None,
+) -> dict[str, Any]:
+    snapshot = await _snapshot_inbox_threads_metrics(window_seconds=window_seconds)
+    entry = {
+        "captured_at": datetime.now(timezone.utc).isoformat(),
+        "window_seconds": window_seconds,
+        "actor_user_id": actor_user_id,
+        "snapshot": snapshot,
+    }
+    _append_inbox_threads_metrics_snapshot(entry)
+    return entry
+
+
+class InboxThreadsMetricsSnapshotRunner:
+    """Guarda snapshots periódicos de métricas de Inbox threads en logs."""
+
+    def __init__(self, *, interval_minutes: int = 5, window_seconds: int = 300) -> None:
+        self._interval_seconds = max(60, interval_minutes * 60)
+        self._window_seconds = max(60, window_seconds)
+        self._task: asyncio.Task[None] | None = None
+        self._stop = asyncio.Event()
+
+    async def start(self) -> None:
+        if self._task and not self._task.done():
+            return
+        self._stop = asyncio.Event()
+        self._task = asyncio.create_task(self._run_loop(), name="inbox-threads-metrics-snapshot")
+        logger.info(
+            "crm.inbox.threads.metrics.runner_started",
+            extra={
+                "interval_seconds": self._interval_seconds,
+                "window_seconds": self._window_seconds,
+            },
+        )
+
+    async def shutdown(self) -> None:
+        self._stop.set()
+        if self._task:
+            await self._task
+            self._task = None
+        logger.info("crm.inbox.threads.metrics.runner_stopped")
+
+    async def _run_loop(self) -> None:
+        while not self._stop.is_set():
+            try:
+                entry = await _capture_inbox_threads_snapshot_entry(
+                    window_seconds=self._window_seconds,
+                    actor_user_id="system:auto_runner",
+                )
+                snapshot = entry.get("snapshot") if isinstance(entry, dict) else {}
+                logger.info(
+                    "crm.inbox.threads.metrics.auto_snapshot_saved",
+                    extra={
+                        "window_seconds": self._window_seconds,
+                        "sample_count": (
+                            snapshot.get("sample_count") if isinstance(snapshot, dict) else None
+                        ),
+                    },
+                )
+            except Exception as exc:  # pragma: no cover - defensivo
+                logger.warning(
+                    "crm.inbox.threads.metrics.auto_snapshot_failed",
+                    extra={"error": str(exc)},
+                )
+            try:
+                await asyncio.wait_for(self._stop.wait(), timeout=self._interval_seconds)
+            except asyncio.TimeoutError:
+                continue
+
+
+inbox_threads_metrics_snapshot_runner = InboxThreadsMetricsSnapshotRunner(
+    interval_minutes=5,
+    window_seconds=300,
+)
+
 def _write_mapbox_debug_log(tag: str, payload: Any) -> None:
     try:
         MAPBOX_LOG_DIR.mkdir(parents=True, exist_ok=True)
@@ -296,6 +378,60 @@ def _read_propiedad_sale_log_records(limit: int = DEFAULT_SALE_LOG_LIMIT) -> lis
             entries.append(json.loads(line))
         except json.JSONDecodeError:
             entries.append({"raw": line})
+    return entries
+
+
+def _append_inbox_threads_metrics_snapshot(entry: dict[str, Any]) -> None:
+    try:
+        MAPBOX_LOG_DIR.mkdir(parents=True, exist_ok=True)
+        with INBOX_THREADS_METRICS_LOG_FILE.open("a", encoding="utf-8") as handle:
+            handle.write(f"{json.dumps(entry, default=str)}\n")
+    except Exception as exc:  # pragma: no cover - best-effort logging
+        logger.warning("crm.inbox.threads.metrics.snapshot_log_failed", extra={"error": str(exc)})
+
+
+def _read_inbox_threads_metrics_snapshots(
+    limit: int = DEFAULT_INBOX_THREADS_METRICS_HISTORY_LIMIT,
+) -> list[dict[str, Any]]:
+    if limit <= 0:
+        return []
+    if not INBOX_THREADS_METRICS_LOG_FILE.exists():
+        return []
+    try:
+        file_stats = INBOX_THREADS_METRICS_LOG_FILE.stat()
+    except OSError:
+        return []
+    chunk_size = (
+        min(file_stats.st_size, INBOX_THREADS_METRICS_LOG_TAIL_BYTES)
+        if file_stats.st_size > 0
+        else 0
+    )
+    if chunk_size <= 0:
+        return []
+    start_position = max(0, file_stats.st_size - chunk_size)
+    try:
+        with INBOX_THREADS_METRICS_LOG_FILE.open("rb") as handle:
+            handle.seek(start_position)
+            buffer = handle.read(chunk_size)
+    except OSError:
+        return []
+    text = buffer.decode("utf-8", errors="ignore")
+    lines = text.splitlines()
+    if start_position > 0 and lines:
+        lines = lines[1:]
+    lines = [line for line in lines if line.strip()]
+    if not lines:
+        return []
+    selected_lines = lines[-limit:] if limit < len(lines) else lines[:]
+    selected_lines.reverse()
+    entries: list[dict[str, Any]] = []
+    for line in selected_lines:
+        try:
+            parsed = json.loads(line)
+            if isinstance(parsed, dict):
+                entries.append(parsed)
+        except json.JSONDecodeError:
+            continue
     return entries
 
 
@@ -5351,6 +5487,20 @@ def require_any_permission(permission_codes: list[str]):
         )
         if not allowed:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden")
+        return user_token
+
+    return _dependency
+
+
+def require_owner_only():
+    async def _dependency(user_token: str = Depends(require_user_token)) -> str:
+        if settings.environment.strip().lower() == "test" or _is_pytest_runtime():
+            return user_token
+        repo = CRMRepository(user_token=user_token)
+        permission_context = await repo.get_permission_context()
+        es_owner = _coerce_bool(permission_context.get("es_owner")) is True
+        if not es_owner:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="owner_required")
         return user_token
 
     return _dependency
@@ -10742,7 +10892,7 @@ async def get_inbox_filter_options(
 @router.get("/inbox/threads/metrics")
 async def get_inbox_threads_metrics(
     *,
-    _: str = Depends(require_permission("ver_inbox")),
+    _: str = Depends(require_owner_only()),
     window_seconds: Annotated[int, Query(ge=60, le=3600)] = 300,
 ) -> dict[str, Any]:
     """Métricas in-memory de latencia/cache para Inbox threads."""
@@ -10750,6 +10900,39 @@ async def get_inbox_threads_metrics(
     snapshot = await _snapshot_inbox_threads_metrics(window_seconds=window_seconds)
     logger.info("crm.inbox.threads.metrics", extra=snapshot)
     return {"ok": True, **snapshot}
+
+
+@router.post("/inbox/threads/metrics/snapshots")
+async def create_inbox_threads_metrics_snapshot(
+    *,
+    user_token: str = Depends(require_owner_only()),
+    window_seconds: Annotated[int, Query(ge=60, le=3600)] = 300,
+) -> dict[str, Any]:
+    actor_id = _jwt_verify_and_sub(user_token)
+    entry = await _capture_inbox_threads_snapshot_entry(
+        window_seconds=window_seconds,
+        actor_user_id=actor_id,
+    )
+    snapshot = entry.get("snapshot") if isinstance(entry, dict) else {}
+    logger.info(
+        "crm.inbox.threads.metrics.snapshot_saved",
+        extra={
+            "actor_user_id": actor_id,
+            "window_seconds": window_seconds,
+            "sample_count": snapshot.get("sample_count") if isinstance(snapshot, dict) else None,
+        },
+    )
+    return {"ok": True, "snapshot": entry}
+
+
+@router.get("/inbox/threads/metrics/snapshots")
+async def list_inbox_threads_metrics_snapshots(
+    *,
+    _: str = Depends(require_owner_only()),
+    limit: Annotated[int, Query(ge=1, le=500)] = DEFAULT_INBOX_THREADS_METRICS_HISTORY_LIMIT,
+) -> dict[str, Any]:
+    items = _read_inbox_threads_metrics_snapshots(limit=limit)
+    return {"ok": True, "items": items}
 
 
 @router.get("/inbox/messages/{conversacion_id}", response_model=list[CRMInboxMessage])
