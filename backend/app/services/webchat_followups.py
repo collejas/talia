@@ -13,6 +13,7 @@ from app.channels.whatsapp import tools as whatsapp_tools
 from app.core.config import settings
 from app.core.logging import get_logger, log_event
 from app.repositories.crm import CRMRepository, CRMRepositoryError
+from app.services.non_critical_job_gate import should_defer_non_critical_jobs
 from app.services import storage
 from app.services.storage import StorageError
 
@@ -965,10 +966,14 @@ class WebchatFollowupRunner:
         interval_seconds = self._interval * 60
         while not self._stop_event.is_set():
             try:
-                self._cursor_last_out, self._cursor_last_id = await run_followups_with_cursor(
-                    cursor_last_out=self._cursor_last_out,
-                    cursor_last_id=self._cursor_last_id,
-                )
+                defer, details = await should_defer_non_critical_jobs(job_name="webchat_followups")
+                if defer:
+                    logger.info("webchat.followup.deferred_due_to_blast", extra=details)
+                else:
+                    self._cursor_last_out, self._cursor_last_id = await run_followups_with_cursor(
+                        cursor_last_out=self._cursor_last_out,
+                        cursor_last_id=self._cursor_last_id,
+                    )
             except Exception as exc:  # pragma: no cover
                 logger.exception("webchat.followup.loop_error", extra={"error": str(exc)})
             try:
@@ -1015,7 +1020,11 @@ class WebchatClosureRescueRunner:
         interval_seconds = self._interval * 60
         while not self._stop_event.is_set():
             try:
-                await run_session_closure_rescue()
+                defer, details = await should_defer_non_critical_jobs(job_name="webchat_closure_rescue")
+                if defer:
+                    logger.info("webchat.session_closed.rescue_deferred_due_to_blast", extra=details)
+                else:
+                    await run_session_closure_rescue()
             except Exception as exc:  # pragma: no cover
                 logger.exception("webchat.session_closed.rescue_loop_error", extra={"error": str(exc)})
             try:

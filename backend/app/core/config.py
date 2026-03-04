@@ -414,6 +414,34 @@ class Settings(BaseSettings):
             "TALIA_PROSPECCION_SENDER_BACKPRESSURE_COOLDOWN_SECONDS",
         ),
     )
+    non_critical_jobs_blast_protection_enabled: bool = Field(
+        default=True,
+        description="Activa diferimiento de jobs no críticos cuando hay backlog alto de envíos.",
+        validation_alias=AliasChoices(
+            "NON_CRITICAL_JOBS_BLAST_PROTECTION_ENABLED",
+            "TALIA_NON_CRITICAL_JOBS_BLAST_PROTECTION_ENABLED",
+        ),
+    )
+    non_critical_jobs_defer_pending_threshold: int = Field(
+        default=300,
+        ge=1,
+        le=100000,
+        description="Umbral de backlog operativo (pendiente listo + procesando) para diferir jobs no críticos.",
+        validation_alias=AliasChoices(
+            "NON_CRITICAL_JOBS_DEFER_PENDING_THRESHOLD",
+            "TALIA_NON_CRITICAL_JOBS_DEFER_PENDING_THRESHOLD",
+        ),
+    )
+    non_critical_jobs_gate_cache_seconds: int = Field(
+        default=20,
+        ge=5,
+        le=300,
+        description="TTL de cache para evaluar el gate de jobs no críticos y evitar sobreconsultar la DB.",
+        validation_alias=AliasChoices(
+            "NON_CRITICAL_JOBS_GATE_CACHE_SECONDS",
+            "TALIA_NON_CRITICAL_JOBS_GATE_CACHE_SECONDS",
+        ),
+    )
     webchat_inactivity_minutes: int | None = Field(
         default=None,
         validation_alias=AliasChoices(

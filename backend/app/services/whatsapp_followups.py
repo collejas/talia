@@ -14,6 +14,7 @@ from app.channels.whatsapp import tools as whatsapp_tools
 from app.core.config import settings
 from app.core.logging import get_logger
 from app.repositories.crm import CRMRepository, CRMRepositoryError
+from app.services.non_critical_job_gate import should_defer_non_critical_jobs
 from app.services import storage, tenant_runtime
 from app.services.storage import StorageError
 
@@ -130,10 +131,14 @@ class WhatsAppFollowupRunner:
         interval_seconds = self._interval * 60
         while not self._stop_event.is_set():
             try:
-                self._cursor_last_out, self._cursor_last_id = await run_followups(
-                    cursor_last_out=self._cursor_last_out,
-                    cursor_last_id=self._cursor_last_id,
-                )
+                defer, details = await should_defer_non_critical_jobs(job_name="whatsapp_followups")
+                if defer:
+                    logger.info("whatsapp.followup.deferred_due_to_blast", extra=details)
+                else:
+                    self._cursor_last_out, self._cursor_last_id = await run_followups(
+                        cursor_last_out=self._cursor_last_out,
+                        cursor_last_id=self._cursor_last_id,
+                    )
             except Exception as exc:  # pragma: no cover
                 logger.exception("whatsapp.followup.loop_error", extra={"error": str(exc)})
             try:

@@ -10187,6 +10187,40 @@ class CRMRepository:
             raise CRMRepositoryError(f"worker_pending_envios_invalid:{data!r}")
         return data
 
+    async def worker_count_ready_or_processing_envios(self) -> int:
+        """Cuenta backlog operativo para envíos (pendiente listo + procesando)."""
+
+        now_iso = datetime.now(timezone.utc).isoformat()
+
+        pending_params = {
+            "select": "id",
+            "estado": "eq.pendiente",
+            "programado_en": f"lte.{now_iso}",
+            "limit": "1",
+        }
+        pending_resp = await self._request(
+            "GET",
+            "/rest/v1/prospeccion_contacto_envio",
+            params=pending_params,
+            prefer="count=exact",
+        )
+        pending_count = self._extract_total_count(pending_resp.headers.get("content-range")) or 0
+
+        processing_params = {
+            "select": "id",
+            "estado": "eq.procesando",
+            "limit": "1",
+        }
+        processing_resp = await self._request(
+            "GET",
+            "/rest/v1/prospeccion_contacto_envio",
+            params=processing_params,
+            prefer="count=exact",
+        )
+        processing_count = self._extract_total_count(processing_resp.headers.get("content-range")) or 0
+
+        return int(pending_count) + int(processing_count)
+
     async def worker_mark_envio_processing(
         self,
         *,

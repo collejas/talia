@@ -7,7 +7,8 @@ Estado del plan documentado en `02_Plan_soluciones_priorizado.md`.
 - Fase 0.1: **Completada**
 - Fase 0.2: **Completada**
 - Fase 1.1: **Completada (primera iteración)**
-- Fase 1.2+: **Pendiente**
+- Fase 1.2: **Completada (primera iteración)**
+- Fase 2+: **Pendiente**
 
 ## Entregables completados
 
@@ -93,6 +94,35 @@ Estado del plan documentado en `02_Plan_soluciones_priorizado.md`.
   - `backpressure_cooldown_seconds`
 - El worker registra sus parámetros efectivos al arrancar (`prospeccion.sender_started`), para auditoría operativa.
 
+### Fase 1.2 Prioridad de jobs no críticos durante blast (primera iteración)
+
+1. Señal de presión operativa para decidir diferimiento.
+- Se agregó conteo de backlog de prospección en backend:
+  - `pendiente` listo para ejecutar (`programado_en <= now`)
+  - `procesando`
+- Este conteo se usa como condición para proteger jobs no críticos.
+
+2. Gate centralizado para jobs no críticos.
+- Se implementó módulo dedicado para evaluar si conviene diferir:
+  - cachea resultado por TTL corto para no sobreconsultar DB.
+  - expone detalles de decisión (`reason`, `backlog`, `threshold`, `cached`).
+- Objetivo: aplicar una única regla consistente a múltiples runners.
+
+3. Integración en runners no críticos.
+- `whatsapp_followups`: difiere el ciclo cuando hay blast activo.
+- `webchat_followups`: difiere el ciclo cuando hay blast activo.
+- `webchat_closure_rescue`: difiere el ciclo cuando hay blast activo.
+- En todos los casos se registra log explícito de diferimiento.
+
+4. Parámetros externalizados de Fase 1.2.
+- `NON_CRITICAL_JOBS_BLAST_PROTECTION_ENABLED` (default: `true`)
+- `NON_CRITICAL_JOBS_DEFER_PENDING_THRESHOLD` (default: `300`)
+- `NON_CRITICAL_JOBS_GATE_CACHE_SECONDS` (default: `20`)
+
+5. Resultado esperado de primera iteración.
+- Menor contención entre envíos masivos de prospección y jobs de seguimiento/rescate.
+- Protección simple y reversible vía configuración (feature toggle).
+
 ## Seguridad y acceso
 
 1. Métricas/snapshots de Inbox restringidos a owner.
@@ -100,10 +130,6 @@ Estado del plan documentado en `02_Plan_soluciones_priorizado.md`.
 - El panel de métricas también valida `es_owner` y redirige a `/unauthorized` si no cumple.
 
 ## Estado de pendientes
-
-### Fase 1.2 (pendiente)
-
-- Priorización de jobs para reducir contención durante blasts.
 
 ### Fase 2.1 (pendiente)
 
@@ -126,6 +152,9 @@ Estado del plan documentado en `02_Plan_soluciones_priorizado.md`.
 - `prospeccion.sender_started` (con parámetros efectivos)
 - `prospeccion.sender_rate_limited`
 - `prospeccion.sender_backpressure_activated`
+- `whatsapp.followup.deferred_due_to_blast`
+- `webchat.followup.deferred_due_to_blast`
+- `webchat.session_closed.rescue_deferred_due_to_blast`
 3. Confirmar escritura de histórico:
 - `tail -n 20 /var/www/talia/logs/inbox-threads-metrics.log`
 4. Confirmar acceso owner-only:
