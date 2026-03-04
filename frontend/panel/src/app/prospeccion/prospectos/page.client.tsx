@@ -1633,6 +1633,7 @@ function ProspectosView() {
       const response = await ejecutarChecklistLookup({
         limit: targetLimit,
         reintentar: true,
+        proveedor: "gratis",
       })
       if (!response.procesados) {
         setBanner({ type: "success", message: "No hay teléfonos pendientes de validar." })
@@ -2041,6 +2042,7 @@ function ProspectosView() {
     try {
       const response = await verificarProspectos({
         prospecto_ids: selectedIds,
+        proveedor: "gratis",
       })
       setBanner({
         type: "success",
@@ -4546,10 +4548,10 @@ function EnrichmentChecklist({
     {
       key: "telefonos",
       title: "Verificar teléfonos",
-      description: "Confirma el tipo de línea antes de lanzar WhatsApp o voz.",
+      description: "Confirma móvil/fijo antes de lanzar WhatsApp o voz (modo gratis).",
       count: data?.telefonos_pendientes ?? 0,
       icon: <IconPhoneCheck className="size-4 text-primary" />,
-      actionLabel: "Ejecutar lookup",
+      actionLabel: "Verificar gratis",
       actionKey: "lookup" as const,
       onAction: onVerifyPhones,
     },
@@ -4635,6 +4637,22 @@ function carrierLabel(value: string | null | undefined) {
       return "Línea fija"
     case "voip":
       return "VoIP"
+    case "toll_free":
+      return "Toll-free"
+    case "premium_rate":
+      return "Premium"
+    case "shared_cost":
+      return "Costo compartido"
+    case "short_code":
+      return "Código corto"
+    case "pager":
+      return "Pager"
+    case "uan":
+      return "UAN"
+    case "voicemail":
+      return "Voicemail"
+    case "personal_number":
+      return "Número personal"
     default:
       return normalized
   }

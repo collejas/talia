@@ -65,6 +65,7 @@ from app.services import (
     demografia_service,
     leads_geo,
     lookup_phone_number,
+    lookup_phone_number_free,
     normalize_denue_place,
             send_email,
     storage,
@@ -1744,7 +1745,7 @@ class ProspectoSeleccionPayload(BaseModel):
 
 
 class ProspectoLookupPayload(BaseModel):
-    """Solicita verificación de teléfono con Twilio Lookup."""
+    """Solicita verificación de teléfono con proveedor configurable."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -1753,6 +1754,10 @@ class ProspectoLookupPayload(BaseModel):
     )
     country_code: str | None = Field(
         default="MX", description="Código de país ISO2 para normalizar el número."
+    )
+    proveedor: Literal["gratis", "twilio"] = Field(
+        default="gratis",
+        description="Proveedor de verificación: gratis (phonenumbers) o twilio.",
     )
     reintentar: bool = Field(
         default=False,
@@ -1779,6 +1784,7 @@ class ProspectoChecklistLookupPayload(BaseModel):
 
     limit: int = Field(default=200, ge=1, le=200)
     country_code: str | None = Field(default="MX", max_length=4)
+    proveedor: Literal["gratis", "twilio"] = Field(default="gratis")
     reintentar: bool = Field(
         default=True,
         description="Si es falso se omiten prospectos previamente marcados como verificados.",
@@ -3919,10 +3925,11 @@ async def _run_prospecto_lookup(
     prospectos: Sequence[Mapping[str, Any]],
     country_code: str | None,
     reintentar: bool,
+    proveedor: Literal["gratis", "twilio"] = "gratis",
     twilio_account_sid: str | None = None,
     twilio_auth_token: str | None = None,
 ) -> list[dict[str, Any]]:
-    """Ejecuta Twilio Lookup para una colección de prospectos y persiste los resultados."""
+    """Ejecuta verificación telefónica para una colección de prospectos y persiste los resultados."""
 
     processed: list[dict[str, Any]] = []
     for prospecto in prospectos:
@@ -3944,12 +3951,15 @@ async def _run_prospecto_lookup(
             }
         else:
             try:
-                lookup = await lookup_phone_number(
-                    phone,
-                    country_code=country_code,
-                    account_sid=twilio_account_sid,
-                    auth_token=twilio_auth_token,
-                )
+                if proveedor == "twilio":
+                    lookup = await lookup_phone_number(
+                        phone,
+                        country_code=country_code,
+                        account_sid=twilio_account_sid,
+                        auth_token=twilio_auth_token,
+                    )
+                else:
+                    lookup = await lookup_phone_number_free(phone, country_code=country_code)
             except TwilioLookupError as exc:
                 updates = {
                     "lookup_status": "error",
@@ -17070,7 +17080,7 @@ async def verificar_prospectos(
     user_token: str = Depends(require_user_token),
     payload: ProspectoLookupPayload,
 ) -> dict[str, Any]:
-    """Verifica los teléfonos de prospectos con Twilio Lookup."""
+    """Verifica los teléfonos de prospectos con proveedor configurable."""
 
     tenant_organizacion_id: UUID | None = None
     user_sub = _jwt_verify_and_sub(user_token)
@@ -17082,30 +17092,32 @@ async def verificar_prospectos(
         if user_uuid:
             tenant_organizacion_id = await repo.get_usuario_organizacion_id(usuario_id=user_uuid)
 
-    twilio_runtime = await tenant_runtime.get_twilio_runtime_settings(
-        organizacion_id=tenant_organizacion_id
-    )
-    if not twilio_runtime.account_sid or not twilio_runtime.auth_token:
-        logger.warning(
-            "twilio.not_configured",
+    twilio_runtime = None
+    if payload.proveedor == "twilio":
+        twilio_runtime = await tenant_runtime.get_twilio_runtime_settings(
+            organizacion_id=tenant_organizacion_id
+        )
+        if not twilio_runtime.account_sid or not twilio_runtime.auth_token:
+            logger.warning(
+                "twilio.not_configured",
+                extra={
+                    "user_sub_present": bool(user_sub),
+                    "organizacion_id": str(tenant_organizacion_id) if tenant_organizacion_id else None,
+                    "settings_account_sid_present": bool(settings.twilio_account_sid),
+                    "settings_auth_token_present": bool(settings.twilio_auth_token),
+                },
+            )
+            raise HTTPException(status_code=503, detail="twilio_not_configured")
+        logger.info(
+            "twilio.config_resolved",
             extra={
                 "user_sub_present": bool(user_sub),
                 "organizacion_id": str(tenant_organizacion_id) if tenant_organizacion_id else None,
-                "settings_account_sid_present": bool(settings.twilio_account_sid),
-                "settings_auth_token_present": bool(settings.twilio_auth_token),
+                "account_sid_prefix": (twilio_runtime.account_sid or "")[:6],
+                "auth_token_len": len(twilio_runtime.auth_token or ""),
+                "source": "org_secret" if tenant_organizacion_id else "settings_or_global",
             },
         )
-        raise HTTPException(status_code=503, detail="twilio_not_configured")
-    logger.info(
-        "twilio.config_resolved",
-        extra={
-            "user_sub_present": bool(user_sub),
-            "organizacion_id": str(tenant_organizacion_id) if tenant_organizacion_id else None,
-            "account_sid_prefix": (twilio_runtime.account_sid or "")[:6],
-            "auth_token_len": len(twilio_runtime.auth_token or ""),
-            "source": "org_secret" if tenant_organizacion_id else "settings_or_global",
-        },
-    )
 
     try:
         prospectos = await repo.list_prospectos_by_ids(
@@ -17124,8 +17136,9 @@ async def verificar_prospectos(
             prospectos=prospectos,
             country_code=payload.country_code,
             reintentar=payload.reintentar,
-            twilio_account_sid=twilio_runtime.account_sid,
-            twilio_auth_token=twilio_runtime.auth_token,
+            proveedor=payload.proveedor,
+            twilio_account_sid=(twilio_runtime.account_sid if twilio_runtime else None),
+            twilio_auth_token=(twilio_runtime.auth_token if twilio_runtime else None),
         )
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
@@ -17141,7 +17154,7 @@ async def prospeccion_checklist_lookup(
     user_token: str = Depends(require_user_token),
     payload: ProspectoChecklistLookupPayload,
 ) -> dict[str, Any]:
-    """Acción automática: ejecuta Twilio Lookup sobre los pendientes detectados en el checklist."""
+    """Acción automática: ejecuta verificación telefónica sobre pendientes del checklist."""
 
     tenant_organizacion_id: UUID | None = None
     user_sub = _jwt_verify_and_sub(user_token)
@@ -17153,30 +17166,32 @@ async def prospeccion_checklist_lookup(
         if user_uuid:
             tenant_organizacion_id = await repo.get_usuario_organizacion_id(usuario_id=user_uuid)
 
-    twilio_runtime = await tenant_runtime.get_twilio_runtime_settings(
-        organizacion_id=tenant_organizacion_id
-    )
-    if not twilio_runtime.account_sid or not twilio_runtime.auth_token:
-        logger.warning(
-            "twilio.not_configured",
+    twilio_runtime = None
+    if payload.proveedor == "twilio":
+        twilio_runtime = await tenant_runtime.get_twilio_runtime_settings(
+            organizacion_id=tenant_organizacion_id
+        )
+        if not twilio_runtime.account_sid or not twilio_runtime.auth_token:
+            logger.warning(
+                "twilio.not_configured",
+                extra={
+                    "user_sub_present": bool(user_sub),
+                    "organizacion_id": str(tenant_organizacion_id) if tenant_organizacion_id else None,
+                    "settings_account_sid_present": bool(settings.twilio_account_sid),
+                    "settings_auth_token_present": bool(settings.twilio_auth_token),
+                },
+            )
+            raise HTTPException(status_code=503, detail="twilio_not_configured")
+        logger.info(
+            "twilio.config_resolved",
             extra={
                 "user_sub_present": bool(user_sub),
                 "organizacion_id": str(tenant_organizacion_id) if tenant_organizacion_id else None,
-                "settings_account_sid_present": bool(settings.twilio_account_sid),
-                "settings_auth_token_present": bool(settings.twilio_auth_token),
+                "account_sid_prefix": (twilio_runtime.account_sid or "")[:6],
+                "auth_token_len": len(twilio_runtime.auth_token or ""),
+                "source": "org_secret" if tenant_organizacion_id else "settings_or_global",
             },
         )
-        raise HTTPException(status_code=503, detail="twilio_not_configured")
-    logger.info(
-        "twilio.config_resolved",
-        extra={
-            "user_sub_present": bool(user_sub),
-            "organizacion_id": str(tenant_organizacion_id) if tenant_organizacion_id else None,
-            "account_sid_prefix": (twilio_runtime.account_sid or "")[:6],
-            "auth_token_len": len(twilio_runtime.auth_token or ""),
-            "source": "org_secret" if tenant_organizacion_id else "settings_or_global",
-        },
-    )
 
     try:
         prospectos = await repo.list_lookup_pending_prospectos(
@@ -17190,15 +17205,16 @@ async def prospeccion_checklist_lookup(
         return {"ok": True, "procesados": 0, "detalles": [], "prospecto_ids": []}
 
     try:
-            processed = await _run_prospecto_lookup(
-                repo=repo,
-                user_token=user_token,
-                prospectos=prospectos,
-                country_code=payload.country_code,
-                reintentar=payload.reintentar,
-                twilio_account_sid=twilio_runtime.account_sid,
-                twilio_auth_token=twilio_runtime.auth_token,
-            )
+        processed = await _run_prospecto_lookup(
+            repo=repo,
+            user_token=user_token,
+            prospectos=prospectos,
+            country_code=payload.country_code,
+            reintentar=payload.reintentar,
+            proveedor=payload.proveedor,
+            twilio_account_sid=(twilio_runtime.account_sid if twilio_runtime else None),
+            twilio_auth_token=(twilio_runtime.auth_token if twilio_runtime else None),
+        )
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 

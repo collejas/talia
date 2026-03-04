@@ -90,7 +90,7 @@ sudo systemctl restart talia-panel.service
 
 codex resume 019cba7e-7b41-7123-a176-e940ff165a66
 
-
+codex resume 019cbb13-4fbd-76f3-9467-0b22087046f7
 correo → Prospección → Campaña → Plantilla → Lote
 
 sudo rsync -a landing/src/ /var/www/talia-landing/ que mas nos faltaria par ala idea

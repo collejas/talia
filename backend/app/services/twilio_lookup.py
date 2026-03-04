@@ -4,6 +4,10 @@ import asyncio
 import logging
 from typing import Any
 
+import phonenumbers
+from phonenumbers import shortnumberinfo
+from phonenumbers import PhoneNumberType
+from phonenumbers.phonenumberutil import NumberParseException
 from twilio.base.exceptions import TwilioException
 
 from app.services.twilio import get_twilio_client, get_twilio_client_for_credentials
@@ -13,6 +17,99 @@ logger = logging.getLogger(__name__)
 
 class TwilioLookupError(RuntimeError):
     """Errores al consultar Twilio Lookup."""
+
+
+_PHONE_NUMBER_TYPE_LABELS: dict[int, str] = {
+    PhoneNumberType.FIXED_LINE: "fixed_line",
+    PhoneNumberType.MOBILE: "mobile",
+    PhoneNumberType.FIXED_LINE_OR_MOBILE: "fixed_line_or_mobile",
+    PhoneNumberType.TOLL_FREE: "toll_free",
+    PhoneNumberType.PREMIUM_RATE: "premium_rate",
+    PhoneNumberType.SHARED_COST: "shared_cost",
+    PhoneNumberType.VOIP: "voip",
+    PhoneNumberType.PERSONAL_NUMBER: "personal_number",
+    PhoneNumberType.PAGER: "pager",
+    PhoneNumberType.UAN: "uan",
+    PhoneNumberType.VOICEMAIL: "voicemail",
+    PhoneNumberType.UNKNOWN: "unknown",
+}
+
+
+def _carrier_type_from_phone_number_type(number_type: int) -> str | None:
+    if number_type == PhoneNumberType.MOBILE:
+        return "mobile"
+    if number_type == PhoneNumberType.FIXED_LINE_OR_MOBILE:
+        # Para clasificación binaria móvil/no móvil en modo gratis, tratamos este caso ambiguo como móvil.
+        return "mobile"
+    if number_type == PhoneNumberType.FIXED_LINE:
+        return "landline"
+    if number_type == PhoneNumberType.VOIP:
+        return "voip"
+    if number_type == PhoneNumberType.TOLL_FREE:
+        return "toll_free"
+    if number_type == PhoneNumberType.PREMIUM_RATE:
+        return "premium_rate"
+    if number_type == PhoneNumberType.SHARED_COST:
+        return "shared_cost"
+    if number_type == PhoneNumberType.PAGER:
+        return "pager"
+    if number_type == PhoneNumberType.UAN:
+        return "uan"
+    if number_type == PhoneNumberType.VOICEMAIL:
+        return "voicemail"
+    if number_type == PhoneNumberType.PERSONAL_NUMBER:
+        return "personal_number"
+    return None
+
+
+def _normalize_country_code(country_code: str | None) -> str | None:
+    code = (country_code or "").strip().upper()
+    if len(code) == 2 and code.isalpha():
+        return code
+    return None
+
+
+async def lookup_phone_number_free(
+    phone_number: str,
+    *,
+    country_code: str | None = None,
+) -> dict[str, Any]:
+    """Clasifica un teléfono con metadata local de phonenumbers (sin API externa)."""
+
+    region = _normalize_country_code(country_code)
+    try:
+        parsed = phonenumbers.parse(phone_number, region)
+    except NumberParseException as exc:
+        raise TwilioLookupError(str(exc) or "phone_parse_failed") from exc
+    if region and shortnumberinfo.is_valid_short_number_for_region(parsed, region):
+        return {
+            "phone_number": phone_number,
+            "country_code": region,
+            "national_format": phone_number,
+            "carrier": {
+                "type": "short_code",
+                "number_type": "short_code",
+                "source": "phonenumbers",
+            },
+        }
+    if not phonenumbers.is_possible_number(parsed):
+        raise TwilioLookupError("phone_not_possible")
+    if not phonenumbers.is_valid_number(parsed):
+        raise TwilioLookupError("phone_not_valid")
+
+    number_type = phonenumbers.number_type(parsed)
+    number_type_label = _PHONE_NUMBER_TYPE_LABELS.get(number_type, "unknown")
+    carrier_type = _carrier_type_from_phone_number_type(number_type)
+    return {
+        "phone_number": phonenumbers.format_number(parsed, phonenumbers.PhoneNumberFormat.E164),
+        "country_code": phonenumbers.region_code_for_number(parsed),
+        "national_format": phonenumbers.format_number(parsed, phonenumbers.PhoneNumberFormat.NATIONAL),
+        "carrier": {
+            "type": carrier_type,
+            "number_type": number_type_label,
+            "source": "phonenumbers",
+        },
+    }
 
 
 async def lookup_phone_number(

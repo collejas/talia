@@ -7,7 +7,7 @@ from .google_places import (
     GooglePlacesError,
     normalize_place_for_result,
 )
-from .twilio_lookup import TwilioLookupError, lookup_phone_number
+from .twilio_lookup import TwilioLookupError, lookup_phone_number, lookup_phone_number_free
 from . import webchat_followups
 
 __all__ = [
@@ -20,6 +20,7 @@ __all__ = [
     "normalize_place_for_result",
     "send_email",
     "lookup_phone_number",
+    "lookup_phone_number_free",
     "TwilioLookupError",
     "webchat_followups",
 ]

@@ -684,16 +684,20 @@ export async function guardarProspectos(payload: {
 }
 
 /**
- * Run Twilio Lookup verification for the provided prospect IDs.
+ * Run phone verification for the provided prospect IDs.
  */
 export async function verificarProspectos(payload: {
   prospecto_ids: string[]
   country_code?: string
   reintentar?: boolean
+  proveedor?: "gratis" | "twilio"
 }): Promise<ProspectoLookupResponse> {
   return requestJson<ProspectoLookupResponse>("/api/prospeccion/prospectos/verificar-telefonos", {
     method: "POST",
-    body: JSON.stringify(payload),
+    body: JSON.stringify({
+      proveedor: payload.proveedor ?? "gratis",
+      ...payload,
+    }),
   })
 }
 
@@ -701,8 +705,10 @@ export async function ejecutarChecklistLookup(payload: {
   limit?: number
   reintentar?: boolean
   countryCode?: string
+  proveedor?: "gratis" | "twilio"
 } = {}): Promise<ChecklistLookupResponse> {
   const body: Record<string, unknown> = {}
+  body.proveedor = payload.proveedor ?? "gratis"
   if (typeof payload.limit === "number") {
     body.limit = payload.limit
   }
