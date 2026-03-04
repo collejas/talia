@@ -8403,6 +8403,123 @@ class CRMRepository:
         date_from: date | None = None,
         date_to: date | None = None,
     ) -> dict[str, Any]:
+        normalized_query_filters: list[str] | None = None
+        if query_filters:
+            normalized_values = sorted(
+                {
+                    str(value or "").strip()
+                    for value in query_filters
+                    if str(value or "").strip()
+                }
+            )
+            normalized_query_filters = normalized_values or None
+
+        tz_name = settings.webchat_calendar_timezone or "America/Mexico_City"
+        zone = ZoneInfo(tz_name)
+        date_from_utc: str | None = None
+        date_to_utc: str | None = None
+        if date_from:
+            start_local = datetime.combine(date_from, datetime.min.time(), tzinfo=zone)
+            date_from_utc = start_local.astimezone(timezone.utc).isoformat()
+        if date_to:
+            end_local = datetime.combine(date_to + timedelta(days=1), datetime.min.time(), tzinfo=zone)
+            date_to_utc = end_local.astimezone(timezone.utc).isoformat()
+
+        # Fast path: usamos RPCs agregados en DB para evitar scans masivos en Python.
+        # Si algo falla (migración faltante o error puntual), se usa fallback legacy.
+        try:
+            query_payload: dict[str, Any] = {
+                "p_query_filters": normalized_query_filters,
+                "p_fuente": fuente or None,
+                "p_date_from": date_from_utc,
+                "p_date_to": date_to_utc,
+            }
+            queries_resp = await self._request_with_user(
+                "POST",
+                "/rest/v1/rpc/prospeccion_queries_resumen",
+                token=usuario_token,
+                json=query_payload,
+            )
+            queries_data = queries_resp.json() or []
+            if not isinstance(queries_data, list):
+                raise CRMRepositoryError(f"prospecto_queries_resumen_invalid:{queries_data!r}")
+
+            activities_resp = await self._request_with_user(
+                "POST",
+                "/rest/v1/rpc/prospeccion_activities_resumen",
+                token=usuario_token,
+                json=query_payload,
+            )
+            activities_data = activities_resp.json() or []
+            if not isinstance(activities_data, list):
+                raise CRMRepositoryError(f"prospecto_activities_resumen_invalid:{activities_data!r}")
+
+            queries: list[dict[str, Any]] = []
+            for row in queries_data:
+                if not isinstance(row, dict):
+                    continue
+                value = str(row.get("value") or "").strip()
+                if not value:
+                    continue
+                label = str(row.get("label") or value).strip() or value
+                count_raw = row.get("count")
+                try:
+                    count_value = int(count_raw or 0)
+                except (TypeError, ValueError):
+                    count_value = 0
+                created_at = row.get("created_at")
+                queries.append(
+                    {
+                        "value": value,
+                        "label": label,
+                        "count": count_value,
+                        "created_at": created_at if isinstance(created_at, str) else None,
+                        "estado": None,
+                        "municipio": None,
+                    }
+                )
+
+            query_values = {item["value"] for item in queries}
+            if normalized_query_filters is not None:
+                query_values = set(normalized_query_filters)
+            activities = sorted(
+                {
+                    str(row.get("activity") or "").strip()
+                    for row in activities_data
+                    if isinstance(row, dict) and str(row.get("activity") or "").strip()
+                }
+            )
+            if normalized_query_filters is not None:
+                queries = [
+                    {
+                        "value": value,
+                        "label": next(
+                            (item["label"] for item in queries if item["value"] == value),
+                            value,
+                        ),
+                        "count": next(
+                            (item["count"] for item in queries if item["value"] == value),
+                            0,
+                        ),
+                        "created_at": next(
+                            (item["created_at"] for item in queries if item["value"] == value),
+                            None,
+                        ),
+                        "estado": None,
+                        "municipio": None,
+                    }
+                    for value in sorted(query_values, key=lambda item: item.casefold())
+                ]
+            else:
+                queries.sort(key=lambda item: item["label"].casefold())
+
+            return {
+                "queries": queries,
+                "activities": activities,
+            }
+        except CRMRepositoryError:
+            pass
+
         params: dict[str, str] = {
             "select": "id,actividad,metadata,creado_en",
             # Orden estable para paginación con offset: evita duplicados/saltos entre páginas.
@@ -8412,8 +8529,6 @@ class CRMRepository:
             params["fuente"] = f"eq.{fuente}"
         if date_from or date_to:
             and_filters: list[str] = []
-            tz_name = settings.webchat_calendar_timezone or "America/Mexico_City"
-            zone = ZoneInfo(tz_name)
             if date_from:
                 start_local = datetime.combine(date_from, datetime.min.time(), tzinfo=zone)
                 start_utc = start_local.astimezone(timezone.utc).isoformat()
@@ -8459,13 +8574,8 @@ class CRMRepository:
                 data.append(row)
             scan_offset += len(page)
         selected_queries: set[str] | None = None
-        if query_filters:
-            normalized: set[str] = set()
-            for value in query_filters:
-                candidate = str(value or "").strip()
-                if candidate:
-                    normalized.add(candidate.casefold())
-            selected_queries = normalized if normalized else None
+        if normalized_query_filters:
+            selected_queries = {value.casefold() for value in normalized_query_filters}
 
         activity_codes: set[str] = set()
         for row in data:
@@ -8639,7 +8749,7 @@ class CRMRepository:
                     activity_values.add(candidate)
 
         if selected_queries is not None:
-            query_values = {str(value).strip() for value in (query_filters or []) if str(value or "").strip()}
+            query_values = {str(value).strip() for value in (normalized_query_filters or []) if str(value or "").strip()}
         queries = [
             {
                 "value": value,

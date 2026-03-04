@@ -19,6 +19,7 @@ Actualización adicional (mismo día):
 3. **Día 4 (versión estructural):** Completado con cache persistente SQL + RPC cacheado en repositorio.
 4. **Día 5 (versión incremental):** Parcial completado con cache backend para endpoint `/prospectos/queries`.
 5. **Día 6 (versión incremental):** Parcial completado con ACK rápido en webhook Brevo.
+6. **Día 5 (versión estructural):** Completado con RPC + índices para `prospectos/queries`.
 
 ## 2) Cambios completados
 
@@ -189,6 +190,35 @@ Beneficio esperado:
 
 - reducir repeticiones de scans costosos en ráfagas de filtros equivalentes de UI.
 
+## 2.11 `prospectos/queries` versión estructural (RPC + índices)
+
+Archivos:
+
+- `backend/app/api/routes/crm.py`
+- `backend/app/repositories/crm.py`
+- `supabase/migrations/20280424_140000_prospeccion_queries_resumen_rpc.sql`
+
+Cambios aplicados:
+
+1. Endpoint `GET /crm/prospeccion/prospectos/queries` con key de cache más estable:
+   - se elimina dependencia de token efímero en cache key.
+   - se usa `organizacion_id` para favorecer reuso de cache por tenant.
+2. Repositorio con fast path SQL:
+   - `POST /rest/v1/rpc/prospeccion_queries_resumen`
+   - `POST /rest/v1/rpc/prospeccion_activities_resumen`
+   - fallback automático al flujo legado si RPC falla.
+3. Optimización en DB:
+   - índices por tenant/fecha/fuente.
+   - índice de expresión para query normalizada desde metadata.
+4. RPCs en Postgres:
+   - `public.prospeccion_queries_resumen(text[], text, timestamptz, timestamptz)`
+   - `public.prospeccion_activities_resumen(text[], text, timestamptz, timestamptz)`
+   - ambas con `security definer`, grants a `authenticated` y `service_role`.
+
+Estado:
+
+- **aplicado exitosamente en Supabase MCP** (`success: true`).
+
 ## 2.10 Webhook Brevo con modo asíncrono por defecto
 
 Archivo: `backend/app/api/routes/crm.py`
@@ -241,12 +271,18 @@ Beneficio esperado:
 5. Compilación Python tras cambio de webhook Brevo async:
    - comando: `python3 -m py_compile backend/app/api/routes/crm.py backend/app/repositories/crm.py`
    - resultado: OK
+6. Verificación DB de `prospectos/queries` estructural:
+   - `pg_proc`: funciones `prospeccion_queries_resumen` y `prospeccion_activities_resumen` presentes con `prosecdef=true`.
+   - `pg_indexes`: índices nuevos de `public.prospeccion_prospectos` presentes.
+7. Smoke test funcional de RPC:
+   - ejecución con `request.jwt.claim.sub` de usuario real.
+   - resultado: retorno de filas `{value,label,count,created_at}` correcto.
 
 ## 4) Estado de despliegue
 
 - Cambios **implementados localmente** en workspace.
-- No se ha registrado aún despliegue productivo dentro de este avance.
-- La migración SQL está creada pero no aplicada.
+- Migraciones SQL de `contact-indicadores` y `prospectos/queries` **aplicadas** en base de datos (Supabase MCP).
+- Se mantiene pendiente confirmar despliegue/restart de backend en ambiente operativo para observar efecto completo.
 
 ## 5) Impacto esperado (a verificar post-deploy)
 
@@ -259,9 +295,10 @@ Beneficio esperado:
 ## 6) Pendientes inmediatos
 
 1. Medir baseline vs post-cambio en ventana real (p50/p90/p95 por endpoint crítico).
-2. Ajustar `p_max_age_seconds` del RPC según comportamiento real de p95/carga.
-3. Evaluar invalidación activa de cache en eventos de alta escritura (contacto/envíos) si se observa desfase.
-4. Evaluar mover `BackgroundTasks` a cola persistente (tabla + worker) para robustez ante reinicios.
+2. Confirmar restart/deploy backend para activar fast path RPC en tráfico real.
+3. Ajustar TTLs de cache (`contact-indicadores` / `queries`) según patrón real de uso.
+4. Evaluar invalidación activa de cache en eventos de alta escritura (contacto/envíos) si se observa desfase.
+5. Evaluar mover `BackgroundTasks` a cola persistente (tabla + worker) para robustez ante reinicios.
 
 ## 7) Archivos modificados en esta iteración
 
@@ -272,8 +309,46 @@ Beneficio esperado:
 5. `frontend/panel/src/app/prospeccion/google-busqueda/google-busqueda-view.tsx`
 6. `supabase/migrations/20280424_120000_prospeccion_contacto_envio_lookup_indexes.sql`
 7. `supabase/migrations/20280424_130000_prospeccion_contacto_indicadores_cache.sql` (nuevo)
+8. `supabase/migrations/20280424_140000_prospeccion_queries_resumen_rpc.sql` (nuevo)
 
 ## 8) Nota operativa
 
 Este avance documenta implementación técnica previa a despliegue.  
 La verificación de cumplimiento de metas p95 del plan requiere captura post-deploy durante tráfico real.
+
+## 9) Comandos operativos para revisar latencias
+
+1. Métrica por endpoint en la última hora (`inbox/threads`, `contact-indicadores`, `prospectos/queries`):
+
+```bash
+jq -s '
+  def norm: gsub("[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}";":id");
+  def to_epoch: (sub("\\+00:00$";"Z") | sub("\\.[0-9]+Z$";"Z") | fromdateiso8601);
+  [.[] | select(.message=="request.completed" and (.duration_ms|type=="number")) | . + {path_n:(.path|norm)}] as $rows |
+  ($rows | map(.timestamp) | sort | last) as $last |
+  (($last | to_epoch) - 3600) as $cutoff |
+  [$rows[] | select((.timestamp|to_epoch) >= $cutoff)] as $recent |
+  def pct($arr;$p): ($arr|sort)|.[((($arr|length)-1)*$p|floor)];
+  def stats($arr): if ($arr|length)==0 then {count:0} else {
+    count:($arr|length),
+    avg_ms:(($arr|map(.duration_ms)|add)/($arr|length)),
+    p50_ms:(pct(($arr|map(.duration_ms));0.50)),
+    p90_ms:(pct(($arr|map(.duration_ms));0.90)),
+    p95_ms:(pct(($arr|map(.duration_ms));0.95)),
+    max_ms:(($arr|map(.duration_ms)|max))
+  } end;
+  {
+    window_last_timestamp:$last,
+    sample_size:($recent|length),
+    inbox_threads:([$recent[]|select(.path_n=="/api/crm/inbox/threads")] | stats(.)),
+    contact_indicadores:([$recent[]|select(.path_n=="/api/crm/prospeccion/prospectos/contact-indicadores")] | stats(.)),
+    prospectos_queries:([$recent[]|select(.path_n=="/api/crm/prospeccion/prospectos/queries")] | stats(.))
+  }
+' /var/www/talia/logs/api.log*
+```
+
+2. Verificación de cache hits en logs:
+
+```bash
+cat /var/www/talia/logs/api.log* | jq -R 'fromjson? | select(type=="object" and (.message=="crm.prospectos.contact_indicadores.cache_hit" or .message=="crm.prospectos.queries.cache_hit")) | [.timestamp,.message,.rows,.requested_ids,.query_filters] | @tsv'
+```

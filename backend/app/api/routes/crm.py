@@ -14301,6 +14301,7 @@ async def listar_prospectos_query_metadata(
     repo: CRMRepository = Depends(get_repository),
     _: str = Depends(require_permission("ejecutar_busquedas")),
     user_token: str = Depends(require_user_token),
+    organizacion_id: UUID = Depends(require_organizacion_id),
     query: Annotated[list[str] | None, Query(alias="query")] = None,
     fuente: Annotated[Literal["google_places", "denue", "usuario", ""] | None, Query(alias="fuente")] = None,
     date_from: Annotated[date | None, Query(alias="date_from")] = None,
@@ -14317,7 +14318,7 @@ async def listar_prospectos_query_metadata(
     )
     cache_key = _build_prospecto_queries_cache_key(
         {
-            "user": user_token,
+            "org": str(organizacion_id),
             "query": normalized_query_filters,
             "fuente": fuente or "",
             "date_from": date_from.isoformat() if date_from else "",
