@@ -12,6 +12,11 @@ Avance implementado en código:
 3. **Día 3 (índices lookup JSON):** Preparado (migración creada, pendiente aplicar).
 4. **Día 4 en adelante:** Pendiente.
 
+Actualización adicional (mismo día):
+
+1. **Día 4 (versión incremental):** Parcial completado con cache backend para `contact-indicadores`.
+2. **Día 3 (índices):** Completado en base de datos (migración aplicada vía Supabase MCP).
+
 ## 2) Cambios completados
 
 ## 2.1 Prospección frontend (carga y frecuencia)
@@ -81,6 +86,43 @@ Contenido:
 
 Estado: **pendiente aplicar en base de datos**.
 
+Actualización:
+
+- Migración aplicada exitosamente en Supabase MCP (`success: true`).
+- Índices verificados en `pg_indexes`:
+  - `prospeccion_contacto_envio_detalle_phone_canal_creado_idx`
+  - `prospeccion_contacto_envio_detalle_email_canal_creado_idx`
+
+## 2.5 Backend `contact-indicadores` (cache incremental)
+
+Archivo: `backend/app/api/routes/crm.py`
+
+Cambios aplicados:
+
+1. Se agregó cache read-through para endpoint:
+   - `CONTACT_INDICATORS_CACHE_TTL_SECONDS = 20`
+   - `CONTACT_INDICATORS_CACHE_MAX_ENTRIES = 1024`
+2. Se agregó key hash por usuario + lista de prospectos:
+   - `_build_contact_indicators_cache_key(...)`
+3. Se normaliza la entrada:
+   - IDs deduplicados y ordenados (`normalized_ids`) antes de consultar.
+4. Se agregó log de `cache_hit`:
+   - `crm.prospectos.contact_indicadores.cache_hit`
+
+Beneficio esperado:
+
+- bajar presión sobre la vista agregada en lecturas repetidas de la UI en ventanas cortas.
+
+## 2.6 Corrección de cache de WhatsApp hints
+
+Archivo: `backend/app/api/routes/crm.py`
+
+Corrección aplicada:
+
+1. Se corrigió la poda de entradas para que aplique sobre el cache correcto (`_INBOX_THREADS_WHATSAPP_HINT_CACHE`).
+2. Se agregó límite explícito:
+   - `INBOX_THREADS_WHATSAPP_HINT_CACHE_MAX_ENTRIES = 2048`.
+
 ## 3) Validaciones ejecutadas
 
 ## 3.1 Frontend
@@ -101,6 +143,10 @@ Estado: **pendiente aplicar en base de datos**.
    - comando: `python3 -m py_compile backend/app/api/routes/crm.py`
    - resultado: OK
 
+2. Verificación de índices en DB:
+   - consulta a `pg_indexes` para tabla `prospeccion_contacto_envio`
+   - resultado: OK (índices nuevos presentes)
+
 ## 4) Estado de despliegue
 
 - Cambios **implementados localmente** en workspace.
@@ -117,9 +163,8 @@ Estado: **pendiente aplicar en base de datos**.
 
 ## 6) Pendientes inmediatos
 
-1. Aplicar migración de índices en DB (`20280424_120000_prospeccion_contacto_envio_lookup_indexes.sql`).
-2. Medir baseline vs post-cambio en ventana real (p50/p90/p95 por endpoint crítico).
-3. Ejecutar siguiente bloque del plan:
+1. Medir baseline vs post-cambio en ventana real (p50/p90/p95 por endpoint crítico).
+2. Ejecutar siguiente bloque del plan:
    - Día 4: cache/preagregado de `contact-indicadores`.
 
 ## 7) Archivos modificados en esta iteración

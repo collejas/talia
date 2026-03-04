@@ -145,10 +145,15 @@ _INBOX_THREADS_METRICS_CACHE_MISSES = 0
 _INBOX_THREADS_METRICS_SLOW_QUERIES = 0
 INBOX_THREADS_WHATSAPP_HINT_CACHE_TTL_SECONDS = 60.0
 INBOX_THREADS_WHATSAPP_HINT_LOOKUP_CONCURRENCY = 8
+INBOX_THREADS_WHATSAPP_HINT_CACHE_MAX_ENTRIES = 2048
 _INBOX_THREADS_WHATSAPP_HINT_CACHE: dict[
     str, tuple[float, tuple[str | None, str | None, str | None, str | None, str | None]]
 ] = {}
 _INBOX_THREADS_WHATSAPP_HINT_CACHE_LOCK = asyncio.Lock()
+CONTACT_INDICATORS_CACHE_TTL_SECONDS = 20.0
+CONTACT_INDICATORS_CACHE_MAX_ENTRIES = 1024
+_CONTACT_INDICATORS_CACHE: dict[str, tuple[float, list[dict[str, Any]]]] = {}
+_CONTACT_INDICATORS_CACHE_LOCK = asyncio.Lock()
 
 
 def _build_inbox_threads_cache_key(payload: dict[str, Any]) -> str:
@@ -207,11 +212,44 @@ async def _write_whatsapp_envio_hint_cache(
         for key in expired:
             _INBOX_THREADS_WHATSAPP_HINT_CACHE.pop(key, None)
         _INBOX_THREADS_WHATSAPP_HINT_CACHE[phone_value] = (expires_at, hint)
-        while len(_INBOX_THREADS_CACHE) > INBOX_THREADS_CACHE_MAX_ENTRIES:
-            oldest_key = next(iter(_INBOX_THREADS_CACHE), None)
+        while len(_INBOX_THREADS_WHATSAPP_HINT_CACHE) > INBOX_THREADS_WHATSAPP_HINT_CACHE_MAX_ENTRIES:
+            oldest_key = next(iter(_INBOX_THREADS_WHATSAPP_HINT_CACHE), None)
             if not oldest_key:
                 break
-            _INBOX_THREADS_CACHE.pop(oldest_key, None)
+            _INBOX_THREADS_WHATSAPP_HINT_CACHE.pop(oldest_key, None)
+
+
+def _build_contact_indicators_cache_key(payload: dict[str, Any]) -> str:
+    raw = json.dumps(payload, sort_keys=True, default=str, separators=(",", ":"))
+    return hashlib.sha1(raw.encode("utf-8")).hexdigest()
+
+
+async def _read_contact_indicators_cache(cache_key: str) -> list[dict[str, Any]] | None:
+    now = time.monotonic()
+    async with _CONTACT_INDICATORS_CACHE_LOCK:
+        entry = _CONTACT_INDICATORS_CACHE.get(cache_key)
+        if not entry:
+            return None
+        expires_at, cached_rows = entry
+        if expires_at <= now:
+            _CONTACT_INDICATORS_CACHE.pop(cache_key, None)
+            return None
+        return [dict(row) for row in cached_rows]
+
+
+async def _write_contact_indicators_cache(cache_key: str, rows: list[dict[str, Any]]) -> None:
+    now = time.monotonic()
+    expires_at = now + CONTACT_INDICATORS_CACHE_TTL_SECONDS
+    async with _CONTACT_INDICATORS_CACHE_LOCK:
+        expired = [key for key, (ttl, _) in _CONTACT_INDICATORS_CACHE.items() if ttl <= now]
+        for key in expired:
+            _CONTACT_INDICATORS_CACHE.pop(key, None)
+        _CONTACT_INDICATORS_CACHE[cache_key] = (expires_at, [dict(row) for row in rows])
+        while len(_CONTACT_INDICATORS_CACHE) > CONTACT_INDICATORS_CACHE_MAX_ENTRIES:
+            oldest_key = next(iter(_CONTACT_INDICATORS_CACHE), None)
+            if not oldest_key:
+                break
+            _CONTACT_INDICATORS_CACHE.pop(oldest_key, None)
 
 
 def _percentile(values: list[float], percentile: float) -> float:
@@ -14374,15 +14412,31 @@ async def listar_prospecto_contact_indicadores(
 
     if not prospecto_ids:
         raise HTTPException(status_code=400, detail="prospecto_ids_required")
-    if len(prospecto_ids) > 50:
+    normalized_ids = sorted(set(prospecto_ids), key=str)
+    if len(normalized_ids) > 50:
         raise HTTPException(status_code=400, detail="prospecto_ids_limit_exceeded")
+    cache_key = _build_contact_indicators_cache_key(
+        {
+            "user": user_token,
+            "prospecto_ids": [str(value) for value in normalized_ids],
+        }
+    )
+    cached_rows = await _read_contact_indicators_cache(cache_key)
+    if cached_rows is not None:
+        logger.info(
+            "crm.prospectos.contact_indicadores.cache_hit",
+            extra={"rows": len(cached_rows), "requested_ids": len(normalized_ids)},
+        )
+        return {"ok": True, "items": cached_rows}
     try:
         rows = await repo.list_prospecto_contact_indicators(
             usuario_token=user_token,
-            prospecto_ids=prospecto_ids,
+            prospecto_ids=normalized_ids,
         )
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
+    serializable_rows = [row for row in rows if isinstance(row, dict)]
+    await _write_contact_indicators_cache(cache_key, serializable_rows)
     return {"ok": True, "items": rows}
 
 
