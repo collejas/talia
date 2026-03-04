@@ -143,6 +143,12 @@ _INBOX_THREADS_METRICS_SAMPLES: deque[tuple[float, float]] = deque(
 _INBOX_THREADS_METRICS_CACHE_HITS = 0
 _INBOX_THREADS_METRICS_CACHE_MISSES = 0
 _INBOX_THREADS_METRICS_SLOW_QUERIES = 0
+INBOX_THREADS_WHATSAPP_HINT_CACHE_TTL_SECONDS = 60.0
+INBOX_THREADS_WHATSAPP_HINT_LOOKUP_CONCURRENCY = 8
+_INBOX_THREADS_WHATSAPP_HINT_CACHE: dict[
+    str, tuple[float, tuple[str | None, str | None, str | None, str | None, str | None]]
+] = {}
+_INBOX_THREADS_WHATSAPP_HINT_CACHE_LOCK = asyncio.Lock()
 
 
 def _build_inbox_threads_cache_key(payload: dict[str, Any]) -> str:
@@ -171,6 +177,36 @@ async def _write_inbox_threads_cache(cache_key: str, rows: list[Any]) -> None:
         for key in expired:
             _INBOX_THREADS_CACHE.pop(key, None)
         _INBOX_THREADS_CACHE[cache_key] = (expires_at, list(rows))
+
+
+async def _read_whatsapp_envio_hint_cache(
+    phone_value: str,
+) -> tuple[str | None, str | None, str | None, str | None, str | None] | None:
+    now = time.monotonic()
+    async with _INBOX_THREADS_WHATSAPP_HINT_CACHE_LOCK:
+        entry = _INBOX_THREADS_WHATSAPP_HINT_CACHE.get(phone_value)
+        if not entry:
+            return None
+        expires_at, hint = entry
+        if expires_at <= now:
+            _INBOX_THREADS_WHATSAPP_HINT_CACHE.pop(phone_value, None)
+            return None
+        return hint
+
+
+async def _write_whatsapp_envio_hint_cache(
+    phone_value: str,
+    hint: tuple[str | None, str | None, str | None, str | None, str | None],
+) -> None:
+    now = time.monotonic()
+    expires_at = now + INBOX_THREADS_WHATSAPP_HINT_CACHE_TTL_SECONDS
+    async with _INBOX_THREADS_WHATSAPP_HINT_CACHE_LOCK:
+        expired = [
+            key for key, (ttl, _) in _INBOX_THREADS_WHATSAPP_HINT_CACHE.items() if ttl <= now
+        ]
+        for key in expired:
+            _INBOX_THREADS_WHATSAPP_HINT_CACHE.pop(key, None)
+        _INBOX_THREADS_WHATSAPP_HINT_CACHE[phone_value] = (expires_at, hint)
         while len(_INBOX_THREADS_CACHE) > INBOX_THREADS_CACHE_MAX_ENTRIES:
             oldest_key = next(iter(_INBOX_THREADS_CACHE), None)
             if not oldest_key:
@@ -10506,6 +10542,53 @@ async def get_inbox_threads(
     # Fallback: cuando la conversación de WhatsApp no trae metadata prospección
     # en mensajes, intentamos enlazar con el envío más reciente por teléfono.
     whatsapp_phone_cache: dict[str, tuple[str | None, str | None, str | None, str | None, str | None]] = {}
+    phones_needing_fallback: set[str] = set()
+    for conversacion_id, hints in list(thread_prospeccion_hints.items()):
+        batch_hint, campana_hint, template_id_hint, template_slug_hint, _template_label_hint = hints
+        if batch_hint or campana_hint or template_id_hint or template_slug_hint:
+            continue
+        if thread_channel_map.get(conversacion_id) != "whatsapp":
+            continue
+        phone_value = thread_phone_map.get(conversacion_id)
+        if phone_value:
+            phones_needing_fallback.add(phone_value)
+
+    phones_to_lookup: list[str] = []
+    for phone_value in sorted(phones_needing_fallback):
+        cached_hint = await _read_whatsapp_envio_hint_cache(phone_value)
+        if cached_hint is not None:
+            whatsapp_phone_cache[phone_value] = cached_hint
+        else:
+            phones_to_lookup.append(phone_value)
+
+    if phones_to_lookup:
+        semaphore = asyncio.Semaphore(INBOX_THREADS_WHATSAPP_HINT_LOOKUP_CONCURRENCY)
+
+        async def _lookup_hint_by_phone(
+            phone_value: str,
+        ) -> tuple[str, tuple[str | None, str | None, str | None, str | None, str | None]]:
+            async with semaphore:
+                try:
+                    linked_envio = await repo.worker_get_latest_envio_by_phone(
+                        phone_e164=phone_value,
+                        canal="whatsapp",
+                    )
+                except CRMRepositoryError:
+                    linked_envio = None
+                hint = _extract_envio_prospeccion_hints(linked_envio)
+                await _write_whatsapp_envio_hint_cache(phone_value, hint)
+                return phone_value, hint
+
+        lookup_results = await asyncio.gather(
+            *(_lookup_hint_by_phone(phone_value) for phone_value in phones_to_lookup),
+            return_exceptions=True,
+        )
+        for result in lookup_results:
+            if isinstance(result, Exception):
+                continue
+            phone_value, hint = result
+            whatsapp_phone_cache[phone_value] = hint
+
     for conversacion_id, hints in list(thread_prospeccion_hints.items()):
         batch_hint, campana_hint, template_id_hint, template_slug_hint, template_label_hint = hints
         if batch_hint or campana_hint or template_id_hint or template_slug_hint:
@@ -10515,15 +10598,6 @@ async def get_inbox_threads(
         phone_value = thread_phone_map.get(conversacion_id)
         if not phone_value:
             continue
-        if phone_value not in whatsapp_phone_cache:
-            try:
-                linked_envio = await repo.worker_get_latest_envio_by_phone(
-                    phone_e164=phone_value,
-                    canal="whatsapp",
-                )
-            except CRMRepositoryError:
-                linked_envio = None
-            whatsapp_phone_cache[phone_value] = _extract_envio_prospeccion_hints(linked_envio)
         fallback_hints = whatsapp_phone_cache.get(phone_value) or (None, None, None, None, None)
         merged_hints = (
             batch_hint or fallback_hints[0],

@@ -401,6 +401,9 @@ const FUENTE_LABELS: Record<string, string> = {
 }
 
 const PROSPECTOS_TABLE_PREFS_KEY = "prospeccion_prospectos_table_prefs_v1"
+const PROSPECTOS_DEFAULT_LIMIT = 200
+const PROSPECTOS_METADATA_DEBOUNCE_MS = 350
+const PROSPECTOS_INDICATORS_MAX_IDS = 120
 const DEFAULT_TABLE_COLUMN_ORDER: ProspectTableColumnId[] = [
   "prospecto",
   "correo",
@@ -676,8 +679,8 @@ function ProspectosView() {
   })
   const [items, setItems] = useState<ProspectoItem[]>([])
   const [total, setTotal] = useState(0)
-  const [limit, setLimit] = useState<number>(500)
-  const [limitInput, setLimitInput] = useState("500")
+  const [limit, setLimit] = useState<number>(PROSPECTOS_DEFAULT_LIMIT)
+  const [limitInput, setLimitInput] = useState(String(PROSPECTOS_DEFAULT_LIMIT))
   const [offset, setOffset] = useState(0)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -769,6 +772,8 @@ function ProspectosView() {
   const [convertError, setConvertError] = useState<string | null>(null)
   const [convertSubmitting, setConvertSubmitting] = useState(false)
   const queryFiltersInitialEffect = useRef(true)
+  const lastQueryScopeRef = useRef("")
+  const lastActivitiesScopeRef = useRef("")
   const plannerDateInputRef = useRef<HTMLInputElement | null>(null)
   const tablePrefsSaveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const tablePrefsLastSavedRef = useRef<string>("")
@@ -1475,7 +1480,21 @@ function ProspectosView() {
       filters.customDateFrom,
       filters.customDateTo
     )
-    void loadQueryOptions({ fuente: filters.fuente || undefined, dateFrom, dateTo })
+    const scopeKey = JSON.stringify({
+      fuente: filters.fuente || "",
+      dateFrom: dateFrom || "",
+      dateTo: dateTo || "",
+    })
+    if (scopeKey === lastQueryScopeRef.current) {
+      return
+    }
+    const timerId = setTimeout(() => {
+      lastQueryScopeRef.current = scopeKey
+      void loadQueryOptions({ fuente: filters.fuente || undefined, dateFrom, dateTo })
+    }, PROSPECTOS_METADATA_DEBOUNCE_MS)
+    return () => {
+      clearTimeout(timerId)
+    }
   }, [filters.customDateFrom, filters.customDateTo, filters.dateOption, filters.fuente, loadQueryOptions])
 
   useEffect(() => {
@@ -1483,8 +1502,36 @@ function ProspectosView() {
       queryFiltersInitialEffect.current = false
       return
     }
-    void loadActivitiesForQueries(effectiveMetadataQueries ?? [])
-  }, [effectiveMetadataQueries, loadActivitiesForQueries])
+    const selectedQueries = effectiveMetadataQueries ?? []
+    const { from: dateFrom, to: dateTo } = getDateRangeFromFilters(
+      filters.dateOption,
+      filters.customDateFrom,
+      filters.customDateTo
+    )
+    const scopeKey = JSON.stringify({
+      queries: selectedQueries,
+      fuente: filters.fuente || "",
+      dateFrom: dateFrom || "",
+      dateTo: dateTo || "",
+    })
+    if (scopeKey === lastActivitiesScopeRef.current) {
+      return
+    }
+    const timerId = setTimeout(() => {
+      lastActivitiesScopeRef.current = scopeKey
+      void loadActivitiesForQueries(selectedQueries)
+    }, PROSPECTOS_METADATA_DEBOUNCE_MS)
+    return () => {
+      clearTimeout(timerId)
+    }
+  }, [
+    effectiveMetadataQueries,
+    filters.customDateFrom,
+    filters.customDateTo,
+    filters.dateOption,
+    filters.fuente,
+    loadActivitiesForQueries,
+  ])
 
   const refreshChecklist = useCallback(async () => {
     setChecklistLoading(true)
@@ -1719,33 +1766,53 @@ function ProspectosView() {
   }, [])
 
   useEffect(() => {
+    if (prospectosViewMode !== "prospectos") {
+      setContactIndicators({})
+      return
+    }
     if (!currentIds.length) {
       setContactIndicators({})
       return
     }
-    let cancelled = false
-    ;(async () => {
-      try {
-        const response = await listProspectoContactIndicators(currentIds)
-        if (cancelled) return
-        const indicators: Record<string, ProspectoContactIndicators> = {}
-        for (const indicator of response.items ?? []) {
-          const key = indicator?.prospecto_id
-          if (key) {
-            indicators[key] = indicator
-          }
+    const candidateIds = currentIds.slice(0, PROSPECTOS_INDICATORS_MAX_IDS)
+    if (selectedIds.length) {
+      const selectedSet = new Set(selectedIds)
+      for (const id of currentIds) {
+        if (!selectedSet.has(id) || candidateIds.includes(id)) {
+          continue
         }
-        setContactIndicators(indicators)
-      } catch {
-        if (!cancelled) {
-          setContactIndicators({})
+        candidateIds.push(id)
+        if (candidateIds.length >= PROSPECTOS_INDICATORS_MAX_IDS) {
+          break
         }
       }
-    })()
+    }
+    let cancelled = false
+    const timerId = setTimeout(() => {
+      ;(async () => {
+        try {
+          const response = await listProspectoContactIndicators(candidateIds)
+          if (cancelled) return
+          const indicators: Record<string, ProspectoContactIndicators> = {}
+          for (const indicator of response.items ?? []) {
+            const key = indicator?.prospecto_id
+            if (key) {
+              indicators[key] = indicator
+            }
+          }
+          setContactIndicators(indicators)
+        } catch {
+          if (!cancelled) {
+            setContactIndicators({})
+          }
+        }
+      })()
+    }, PROSPECTOS_METADATA_DEBOUNCE_MS)
     return () => {
       cancelled = true
+      clearTimeout(timerId)
     }
-  }, [currentIds])
+  }, [currentIds, prospectosViewMode, selectedIds])
   const allSelected = currentIds.length > 0 && currentIds.every((id) => selected.has(id))
   const activeQueryGroup = openedQueryScope ?? (filters.queryFilters.length === 1 ? filters.queryFilters[0] : null)
   const activeQueryGroupCount =

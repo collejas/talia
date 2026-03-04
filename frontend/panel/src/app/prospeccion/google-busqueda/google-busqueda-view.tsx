@@ -82,8 +82,8 @@ const numberFormatter = new Intl.NumberFormat("es-MX");
 const RADIUS_MIN = 100;
 const RADIUS_MAX = 10_000;
 const DEFAULT_TYPES = "restaurant,store";
-const LIST_PAGE_SIZE = 5000;
-const MAP_RESULTS_LIMIT = 5000;
+const LIST_PAGE_SIZE = 1000;
+const MAP_RESULTS_LIMIT = 1000;
 const BUSQUEDAS_PAGE_SIZE = 100;
 
 function normalizeBusquedaLabel(value: string | null | undefined): string {

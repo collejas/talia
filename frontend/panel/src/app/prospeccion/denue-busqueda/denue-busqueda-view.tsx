@@ -95,7 +95,7 @@ const DEFAULT_CENTER = { lat: 19.432608, lng: -99.133209 };
 const numberFormatter = new Intl.NumberFormat("es-MX");
 const RADIUS_MIN = 100;
 const RADIUS_MAX = 5_000;
-const LIST_PAGE_SIZE = 5000;
+const LIST_PAGE_SIZE = 1000;
 const BUSQUEDAS_PAGE_SIZE = 100;
 const JOB_POLL_INTERVAL_MS = 2000;
 
@@ -901,7 +901,7 @@ export function DenueBusquedaView() {
         actividades: currentResultFilters.actividades,
         geoEstado: currentResultFilters.geoEstado,
         geoMunicipio: currentResultFilters.geoMunicipio,
-        limit: 5000,
+        limit: 1000,
       })
         .then((response) => {
           if (cancelled) return;
