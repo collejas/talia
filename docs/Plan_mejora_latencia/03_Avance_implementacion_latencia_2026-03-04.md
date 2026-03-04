@@ -174,7 +174,7 @@ Archivo: `backend/app/api/routes/crm.py`
 Cambios aplicados:
 
 1. Cache read-through para respuesta completa del endpoint:
-   - `PROSPECTO_QUERIES_CACHE_TTL_SECONDS = 30`
+   - `PROSPECTO_QUERIES_CACHE_TTL_SECONDS = 600` (ajustado desde 30s por patrón real de repetición)
    - `PROSPECTO_QUERIES_CACHE_MAX_ENTRIES = 512`
 2. Key por:
    - usuario
@@ -218,6 +218,26 @@ Cambios aplicados:
 Estado:
 
 - **aplicado exitosamente en Supabase MCP** (`success: true`).
+
+## 2.12 Instrumentación de cache en `prospectos/queries`
+
+Archivo:
+
+- `backend/app/api/routes/crm.py`
+
+Cambios aplicados:
+
+1. Se agregó trazabilidad explícita de cache para endpoint `GET /crm/prospeccion/prospectos/queries`:
+   - `crm.prospectos.queries.cache_miss`
+   - `crm.prospectos.queries.cache_store`
+   - `crm.prospectos.queries.cache_hit` (extendido)
+2. Se agregó `query_signature` (hash corto de filtros normalizados) para detectar repetición real de parámetros.
+3. Se agregó `cache_key` truncado (`12` chars) para correlación de miss/store/hit sin exponer payload sensible.
+4. Se agregó `cache_entries` en `cache_hit` para ver ocupación efectiva del cache en runtime.
+
+Objetivo:
+
+- confirmar si la falta de `cache_hit` en `queries` es por baja repetición de filtros o por otro factor de flujo.
 
 ## 2.10 Webhook Brevo con modo asíncrono por defecto
 
@@ -277,6 +297,9 @@ Beneficio esperado:
 7. Smoke test funcional de RPC:
    - ejecución con `request.jwt.claim.sub` de usuario real.
    - resultado: retorno de filas `{value,label,count,created_at}` correcto.
+8. Compilación Python tras instrumentación de cache `queries`:
+   - comando: `python3 -m py_compile backend/app/api/routes/crm.py`
+   - resultado: OK
 
 ## 4) Estado de despliegue
 
@@ -310,6 +333,7 @@ Beneficio esperado:
 6. `supabase/migrations/20280424_120000_prospeccion_contacto_envio_lookup_indexes.sql`
 7. `supabase/migrations/20280424_130000_prospeccion_contacto_indicadores_cache.sql` (nuevo)
 8. `supabase/migrations/20280424_140000_prospeccion_queries_resumen_rpc.sql` (nuevo)
+9. `docs/Plan_mejora_latencia/04_Medicion_post_cambios_2026-03-04.md`
 
 ## 8) Nota operativa
 

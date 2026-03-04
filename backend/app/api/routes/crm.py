@@ -154,7 +154,7 @@ CONTACT_INDICATORS_CACHE_TTL_SECONDS = 20.0
 CONTACT_INDICATORS_CACHE_MAX_ENTRIES = 1024
 _CONTACT_INDICATORS_CACHE: dict[str, tuple[float, list[dict[str, Any]]]] = {}
 _CONTACT_INDICATORS_CACHE_LOCK = asyncio.Lock()
-PROSPECTO_QUERIES_CACHE_TTL_SECONDS = 30.0
+PROSPECTO_QUERIES_CACHE_TTL_SECONDS = 600.0
 PROSPECTO_QUERIES_CACHE_MAX_ENTRIES = 512
 _PROSPECTO_QUERIES_CACHE: dict[str, tuple[float, dict[str, Any]]] = {}
 _PROSPECTO_QUERIES_CACHE_LOCK = asyncio.Lock()
@@ -287,6 +287,11 @@ async def _write_prospecto_queries_cache(cache_key: str, payload: dict[str, Any]
             if not oldest_key:
                 break
             _PROSPECTO_QUERIES_CACHE.pop(oldest_key, None)
+
+
+async def _prospecto_queries_cache_size() -> int:
+    async with _PROSPECTO_QUERIES_CACHE_LOCK:
+        return len(_PROSPECTO_QUERIES_CACHE)
 
 
 def _percentile(values: list[float], percentile: float) -> float:
@@ -14316,6 +14321,9 @@ async def listar_prospectos_query_metadata(
             if isinstance(value, str) and value.strip()
         }
     )
+    query_signature = hashlib.sha1(
+        json.dumps(normalized_query_filters, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    ).hexdigest()[:12]
     cache_key = _build_prospecto_queries_cache_key(
         {
             "org": str(organizacion_id),
@@ -14327,9 +14335,13 @@ async def listar_prospectos_query_metadata(
     )
     cached_payload = await _read_prospecto_queries_cache(cache_key)
     if cached_payload is not None:
+        cache_entries = await _prospecto_queries_cache_size()
         logger.info(
             "crm.prospectos.queries.cache_hit",
             extra={
+                "cache_key": cache_key[:12],
+                "query_signature": query_signature,
+                "cache_entries": cache_entries,
                 "query_filters": len(normalized_query_filters),
                 "fuente": fuente or "",
                 "has_date_from": bool(date_from),
@@ -14337,6 +14349,17 @@ async def listar_prospectos_query_metadata(
             },
         )
         return cached_payload
+    logger.info(
+        "crm.prospectos.queries.cache_miss",
+        extra={
+            "cache_key": cache_key[:12],
+            "query_signature": query_signature,
+            "query_filters": len(normalized_query_filters),
+            "fuente": fuente or "",
+            "has_date_from": bool(date_from),
+            "has_date_to": bool(date_to),
+        },
+    )
 
     try:
         metadata = await repo.list_prospecto_query_metadata(
@@ -14354,6 +14377,16 @@ async def listar_prospectos_query_metadata(
         "activities": metadata.get("activities", []),
     }
     await _write_prospecto_queries_cache(cache_key, payload)
+    logger.info(
+        "crm.prospectos.queries.cache_store",
+        extra={
+            "cache_key": cache_key[:12],
+            "query_signature": query_signature,
+            "query_filters": len(normalized_query_filters),
+            "queries_rows": len(payload.get("queries", [])),
+            "activities_rows": len(payload.get("activities", [])),
+        },
+    )
     return payload
 
 
