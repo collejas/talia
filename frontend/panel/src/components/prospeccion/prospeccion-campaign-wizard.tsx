@@ -169,7 +169,7 @@ export function ProspeccionCampaignWizard({
   const [newCampaignOpen, setNewCampaignOpen] = useState(false)
   const [newCampaignName, setNewCampaignName] = useState("")
   const [newCampaignSaving, setNewCampaignSaving] = useState(false)
-  const [separacionSegundos, setSeparacionSegundos] = useState<string>("0")
+  const [separacionSegundos, setSeparacionSegundos] = useState<string>("5")
   const correoAsuntoRef = useRef<HTMLInputElement | null>(null)
   const correoCuerpoRef = useRef<HTMLTextAreaElement | null>(null)
   const correoHtmlRef = useRef<HTMLTextAreaElement | null>(null)
@@ -198,7 +198,7 @@ export function ProspeccionCampaignWizard({
     setQuoteLogoUrl("")
     setNewCampaignOpen(false)
     setNewCampaignName("")
-    setSeparacionSegundos("0")
+    setSeparacionSegundos("5")
     setError(null)
     setPresetApplied(false)
   }, [defaultFilters, defaultSource])
@@ -298,7 +298,7 @@ export function ProspeccionCampaignWizard({
       setTitulo(preset.titulo ?? "")
     }
     if ("separacionSegundos" in preset) {
-      const safe = Math.max(0, Number(preset.separacionSegundos ?? 0))
+      const safe = Math.max(5, Number(preset.separacionSegundos ?? 5))
       setSeparacionSegundos(String(safe))
     }
     if (preset.canales) {
@@ -542,9 +542,9 @@ export function ProspeccionCampaignWizard({
       setStep(1)
       return
     }
-    const separacionParsed = Number.parseInt(separacionSegundos || "0", 10)
-    if (Number.isNaN(separacionParsed) || separacionParsed < 0 || separacionParsed > 3600) {
-      setError("La separación entre envíos debe estar entre 0 y 3600 segundos.")
+    const separacionParsed = Number.parseInt(separacionSegundos || "5", 10)
+    if (Number.isNaN(separacionParsed) || separacionParsed < 5 || separacionParsed > 3600) {
+      setError("La separación entre envíos debe estar entre 5 y 3600 segundos.")
       setStep(2)
       return
     }
@@ -1060,15 +1060,15 @@ export function ProspeccionCampaignWizard({
           <Label>Separación entre envíos (segundos)</Label>
           <Input
             type="number"
-            min={0}
+            min={5}
             max={3600}
             step={1}
             value={separacionSegundos}
             onChange={(event) => setSeparacionSegundos(event.target.value)}
-            placeholder="0"
+            placeholder="5"
           />
           <p className="text-xs text-muted-foreground">
-            `0` envía sin separación. Ejemplo: `30` programa un envío cada 30 segundos.
+            Mínimo `5` segundos. Ejemplo: `30` programa un envío cada 30 segundos.
           </p>
         </div>
       </div>
@@ -1094,7 +1094,7 @@ export function ProspeccionCampaignWizard({
             Campaña:{" "}
             {campanaOptions.find((option) => option.value === campanaId)?.label ?? "No seleccionada"}
           </li>
-          <li>Separación: {Math.max(0, Number.parseInt(separacionSegundos || "0", 10) || 0)} segundos</li>
+          <li>Separación: {Math.max(5, Number.parseInt(separacionSegundos || "5", 10) || 5)} segundos</li>
         </ul>
       </div>
     </div>

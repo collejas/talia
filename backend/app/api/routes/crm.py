@@ -492,6 +492,7 @@ QUOTE_WITH_ITEMS_SELECT = "*,items:lead_cotizacion_items(*,catalog_item:catalog_
 QUOTE_DEFAULT_TAX_RATE = Decimal("0.16")
 CURRENCY_QUANTUM = Decimal("0.01")
 MAX_PROSPECCION_BATCH = 500
+MIN_PROSPECCION_SEPARACION_SEGUNDOS = 5
 PROSPECTOS_PREFS_MODULO = "prospeccion.prospectos"
 PROSPECTOS_PREFS_CLAVE_TABLA = "tabla"
 PROSPECTOS_PREFS_CLAVE_VIEWS = "views"
@@ -1866,7 +1867,7 @@ class ProspeccionCampanaUpdatePayload(BaseModel):
     lista_id: UUID | None = None
     filtros: ProspectoFiltroPayload | None = None
     canales: list[ProspeccionCanalConfig] | None = None
-    separacion_segundos: int | None = Field(default=None, ge=0, le=3600)
+    separacion_segundos: int | None = Field(default=None, ge=MIN_PROSPECCION_SEPARACION_SEGUNDOS, le=3600)
 
 
 class ProspeccionCampanaDeletePayload(BaseModel):
@@ -1908,7 +1909,7 @@ class ProspectoContactarPayload(BaseModel):
     canales: list[ProspeccionCanalConfig] | None = None
     campana_id: UUID | None = None
     batch_titulo: str | None = Field(default=None, max_length=160)
-    separacion_segundos: int | None = Field(default=None, ge=0, le=3600)
+    separacion_segundos: int | None = Field(default=None, ge=MIN_PROSPECCION_SEPARACION_SEGUNDOS, le=3600)
 
     @field_validator("prospecto_ids")
     @classmethod
@@ -5120,8 +5121,10 @@ def _build_contact_batch_payload(
         "whatsapp_mensaje": payload.whatsapp_mensaje,
         "llamada_notas": payload.llamada_notas,
     }
-    if payload.separacion_segundos is not None:
-        metadata["separacion_segundos"] = payload.separacion_segundos
+    metadata["separacion_segundos"] = max(
+        MIN_PROSPECCION_SEPARACION_SEGUNDOS,
+        int(payload.separacion_segundos or MIN_PROSPECCION_SEPARACION_SEGUNDOS),
+    )
     if metadata_extra:
         metadata.update(metadata_extra)
     body["metadata"] = metadata
@@ -5242,7 +5245,10 @@ def _build_contact_envios_entries(
     entries: list[dict[str, Any]] = []
     suppressed_by_channel: dict[str, list[str]] = {}
     batch_value = str(batch_id)
-    separacion_val = max(0, int(separacion_segundos or 0))
+    separacion_val = max(
+        MIN_PROSPECCION_SEPARACION_SEGUNDOS,
+        int(separacion_segundos or MIN_PROSPECCION_SEPARACION_SEGUNDOS),
+    )
     base_now = datetime.now(UTC)
     envio_index = 0
 
@@ -5295,11 +5301,8 @@ def _build_contact_envios_entries(
                 "detalle": detalle,
             }
             base_programado = _parse_programmed(programacion.get(canal) if programacion else None)
-            if separacion_val > 0:
-                base_dt = base_programado or base_now
-                entry["programado_en"] = (base_dt + timedelta(seconds=envio_index * separacion_val)).isoformat()
-            elif base_programado is not None:
-                entry["programado_en"] = base_programado.isoformat()
+            base_dt = base_programado or base_now
+            entry["programado_en"] = (base_dt + timedelta(seconds=envio_index * separacion_val)).isoformat()
             entries.append(entry)
             envio_index += 1
     return entries, suppressed_by_channel
@@ -16022,9 +16025,13 @@ async def prospeccion_campana_duplicar_defaults(
     batch_metadata = _ensure_dict(base_batch.get("metadata"), default={})
     separacion_segundos_raw = batch_metadata.get("separacion_segundos")
     try:
-        separacion_segundos = int(separacion_segundos_raw) if separacion_segundos_raw is not None else None
+        separacion_segundos = (
+            max(MIN_PROSPECCION_SEPARACION_SEGUNDOS, int(separacion_segundos_raw))
+            if separacion_segundos_raw is not None
+            else MIN_PROSPECCION_SEPARACION_SEGUNDOS
+        )
     except (TypeError, ValueError):
-        separacion_segundos = None
+        separacion_segundos = MIN_PROSPECCION_SEPARACION_SEGUNDOS
     filtros = base_batch.get("filtros") if isinstance(base_batch.get("filtros"), dict) else {}
     lista_id = base_batch.get("lista_id")
     source: Literal["selected", "lista", "filters"] = "selected"
@@ -16252,9 +16259,12 @@ async def prospeccion_campana_update(
         separacion_segundos = payload.separacion_segundos
     else:
         try:
-            separacion_segundos = int(existing_batch_metadata.get("separacion_segundos"))
+            separacion_segundos = max(
+                MIN_PROSPECCION_SEPARACION_SEGUNDOS,
+                int(existing_batch_metadata.get("separacion_segundos")),
+            )
         except (TypeError, ValueError):
-            separacion_segundos = None
+            separacion_segundos = MIN_PROSPECCION_SEPARACION_SEGUNDOS
 
     existing_envios = await _list_batch_envios_all(repo=repo, user_token=user_token, batch_id=batch_id)
     for envio in existing_envios:

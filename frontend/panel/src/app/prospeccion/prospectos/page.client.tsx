@@ -400,7 +400,6 @@ const FUENTE_LABELS: Record<string, string> = {
   usuario: "Usuario",
 }
 
-const PAGE_SIZE_OPTIONS = [500] as const
 const PROSPECTOS_TABLE_PREFS_KEY = "prospeccion_prospectos_table_prefs_v1"
 const DEFAULT_TABLE_COLUMN_ORDER: ProspectTableColumnId[] = [
   "prospecto",
@@ -678,6 +677,7 @@ function ProspectosView() {
   const [items, setItems] = useState<ProspectoItem[]>([])
   const [total, setTotal] = useState(0)
   const [limit, setLimit] = useState<number>(500)
+  const [limitInput, setLimitInput] = useState("500")
   const [offset, setOffset] = useState(0)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -1761,6 +1761,10 @@ function ProspectosView() {
   const pageCount = limit ? Math.ceil(effectiveTotal / limit) : 1
   const currentPage = limit ? Math.floor(offset / limit) + 1 : 1
   const activeQueryGroupLabel = activeQueryGroup ? queryLabelMap.get(activeQueryGroup) ?? activeQueryGroup : null
+
+  useEffect(() => {
+    setLimitInput(String(limit))
+  }, [limit])
   const flowSteps = useMemo(() => {
     const pendingPhones = checklist?.telefonos_pendientes ?? 0
     const pendingEmails = checklist?.sin_email ?? 0
@@ -1901,11 +1905,67 @@ function ProspectosView() {
     })
   }
 
-  const handleLimitChange = (value: string) => {
-    const parsed = Number(value) || PAGE_SIZE_OPTIONS[0]
-    setOffset(0)
-    setLimit(parsed)
-  }
+  const handleLimitCommit = useCallback(
+    (rawValue: string) => {
+      const parsed = Number.parseInt(rawValue, 10)
+      if (Number.isNaN(parsed) || parsed < 1) {
+        setLimitInput(String(limit))
+        return
+      }
+      const normalized = Math.min(500, parsed)
+      setLimitInput(String(normalized))
+      if (normalized !== limit) {
+        setOffset(0)
+        setLimit(normalized)
+      }
+    },
+    [limit]
+  )
+
+  const renderProspectosPaginationControls = () => (
+    <div className="flex flex-wrap items-center gap-3">
+      <div className="flex items-center gap-2">
+        <span className="text-xs">Filas:</span>
+        <Input
+          type="number"
+          min={1}
+          max={500}
+          step={1}
+          className="h-8 w-24"
+          value={limitInput}
+          onChange={(event) => setLimitInput(event.target.value)}
+          onBlur={(event) => handleLimitCommit(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") {
+              event.preventDefault()
+              handleLimitCommit(event.currentTarget.value)
+            }
+          }}
+        />
+      </div>
+      <div className="text-xs text-muted-foreground">
+        Página {currentPage} de {Math.max(pageCount, 1)}
+      </div>
+      <div className="flex items-center gap-2">
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => void fetchProspectos(Math.max(0, offset - limit))}
+          disabled={loading || offset === 0}
+        >
+          Anterior
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => void fetchProspectos(offset + limit)}
+          disabled={loading || offset + limit >= effectiveTotal}
+        >
+          Siguiente
+        </Button>
+      </div>
+    </div>
+  )
 
   const handleVerify = useCallback(async () => {
     if (!selectedIds.length) return
@@ -3433,24 +3493,7 @@ function ProspectosView() {
                   Prospectos
                 </Button>
               </div>
-	              <div className="flex items-center gap-2">
-	                <Button
-	                  variant="outline"
-	                  size="sm"
-	                  onClick={() => void fetchProspectos(Math.max(0, offset - limit))}
-	                  disabled={prospectosViewMode === "grupos" || loading || offset === 0}
-	                >
-	                  Anterior
-	                </Button>
-	                <Button
-	                  variant="outline"
-	                  size="sm"
-	                  onClick={() => void fetchProspectos(offset + limit)}
-	                  disabled={prospectosViewMode === "grupos" || loading || offset + limit >= effectiveTotal}
-	                >
-	                  Siguiente
-	                </Button>
-	              </div>
+              {prospectosViewMode === "prospectos" ? renderProspectosPaginationControls() : null}
               {prospectosViewMode === "prospectos" && activeQueryGroup ? (
                 <Button variant="outline" size="sm" onClick={handleBackToQueryGroups}>
                   Ver grupos
@@ -3890,39 +3933,7 @@ function ProspectosView() {
               )}
             </div>
             <div className="flex flex-wrap items-center gap-3">
-              <div className="flex items-center gap-2">
-                <span className="text-xs">Filas:</span>
-                <Select value={String(limit)} onValueChange={handleLimitChange}>
-                  <SelectTrigger className="h-8 w-24">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {PAGE_SIZE_OPTIONS.map((value) => (
-                      <SelectItem key={value} value={String(value)}>
-                        {value}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="flex items-center gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => void fetchProspectos(Math.max(0, offset - limit))}
-                  disabled={loading || offset === 0}
-                >
-                  Anterior
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => void fetchProspectos(offset + limit)}
-                  disabled={loading || offset + limit >= effectiveTotal}
-                >
-                  Siguiente
-                </Button>
-              </div>
+              {renderProspectosPaginationControls()}
             </div>
           </div>
           ) : null}
