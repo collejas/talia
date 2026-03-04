@@ -3329,6 +3329,8 @@ class CRMRepository:
         *,
         inactive_since: datetime,
         limit: int = 100,
+        cursor_last_out: datetime | None = None,
+        cursor_last_id: str | None = None,
     ) -> list[dict[str, Any]]:
         """Lista conversaciones WhatsApp que superaron el umbral de inactividad."""
         cutoff = inactive_since.astimezone(timezone.utc).isoformat()
@@ -3338,10 +3340,18 @@ class CRMRepository:
                 "conversaciones_controles(manual_override)"
             ),
             "canal": "eq.whatsapp",
+            "estado": "in.(abierta,pendiente)",
             "ultimo_saliente_en": f"lte.{cutoff}",
-            "order": "ultimo_saliente_en.asc",
+            "order": "ultimo_saliente_en.asc,id.asc",
             "limit": str(max(1, limit)),
         }
+        cursor_out = cursor_last_out.astimezone(timezone.utc).isoformat() if cursor_last_out else ""
+        cursor_id = str(cursor_last_id or "").strip()
+        if cursor_out and cursor_id:
+            params["or"] = (
+                f"(ultimo_saliente_en.gt.{cursor_out},"
+                f"and(ultimo_saliente_en.eq.{cursor_out},id.gt.{cursor_id}))"
+            )
         resp = await self._request("GET", "/rest/v1/conversaciones", params=params)
         data = resp.json() or []
         if not isinstance(data, list):
@@ -3353,6 +3363,8 @@ class CRMRepository:
         *,
         inactive_since: datetime,
         limit: int = 100,
+        cursor_last_out: datetime | None = None,
+        cursor_last_id: str | None = None,
     ) -> list[dict[str, Any]]:
         """Lista conversaciones Webchat candidatas para reenganche."""
         cutoff = inactive_since.astimezone(timezone.utc).isoformat()
@@ -3364,9 +3376,16 @@ class CRMRepository:
             "canal": "eq.webchat",
             "estado": "in.(abierta,pendiente)",
             "ultimo_saliente_en": f"lte.{cutoff}",
-            "order": "ultimo_saliente_en.asc",
+            "order": "ultimo_saliente_en.asc,id.asc",
             "limit": str(max(1, limit)),
         }
+        cursor_out = cursor_last_out.astimezone(timezone.utc).isoformat() if cursor_last_out else ""
+        cursor_id = str(cursor_last_id or "").strip()
+        if cursor_out and cursor_id:
+            params["or"] = (
+                f"(ultimo_saliente_en.gt.{cursor_out},"
+                f"and(ultimo_saliente_en.eq.{cursor_out},id.gt.{cursor_id}))"
+            )
         resp = await self._request("GET", "/rest/v1/conversaciones", params=params)
         data = resp.json() or []
         return data if isinstance(data, list) else []

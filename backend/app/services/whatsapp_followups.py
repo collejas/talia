@@ -27,21 +27,53 @@ REENGAGE_TEMPLATE = "¿Seguimos en contacto?"
 WHATSAPP_FOLLOWUP_PREFILTER_MINUTES = 3
 
 
-async def run_followups(*, now: datetime | None = None, limit: int | None = None) -> None:
+def _extract_cursor(conversation: dict[str, Any]) -> tuple[datetime, str] | None:
+    convo_id = str(conversation.get("id") or "").strip()
+    last_out = _parse_ts(conversation.get("ultimo_saliente_en"))
+    if not convo_id or not last_out:
+        return None
+    return last_out, convo_id
+
+
+async def run_followups(
+    *,
+    now: datetime | None = None,
+    limit: int | None = None,
+    cursor_last_out: datetime | None = None,
+    cursor_last_id: str | None = None,
+) -> tuple[datetime | None, str | None]:
     """Ejecuta el flujo de reenganche y escalación para conversaciones inactivas."""
     current_ts = (now or datetime.now(timezone.utc)).astimezone(timezone.utc)
     reengage_delta = timedelta(minutes=WHATSAPP_FOLLOWUP_PREFILTER_MINUTES)
     cutoff = current_ts - reengage_delta
     batch_limit = limit or 50
     repo = CRMRepository()
+    active_cursor_out = cursor_last_out
+    active_cursor_id = str(cursor_last_id or "").strip() or None
     try:
         conversations = await repo.list_whatsapp_conversations_for_followup(
             inactive_since=cutoff,
             limit=batch_limit,
+            cursor_last_out=active_cursor_out,
+            cursor_last_id=active_cursor_id,
         )
     except CRMRepositoryError as exc:
         logger.warning("whatsapp.followup.list_failed", extra={"error": str(exc)})
-        return
+        return active_cursor_out, active_cursor_id
+
+    if not conversations and active_cursor_out and active_cursor_id:
+        try:
+            conversations = await repo.list_whatsapp_conversations_for_followup(
+                inactive_since=cutoff,
+                limit=batch_limit,
+            )
+            if conversations:
+                logger.info("whatsapp.followup.cursor_wrapped")
+                active_cursor_out = None
+                active_cursor_id = None
+        except CRMRepositoryError as exc:
+            logger.warning("whatsapp.followup.list_failed", extra={"error": str(exc)})
+            return active_cursor_out, active_cursor_id
 
     for conversation in conversations:
         try:
@@ -55,6 +87,10 @@ async def run_followups(*, now: datetime | None = None, limit: int | None = None
                 "whatsapp.followup.unexpected_error",
                 extra={"conversation_id": conversation.get("id"), "error": str(exc)},
             )
+    last_cursor = _extract_cursor(conversations[-1]) if conversations else None
+    if last_cursor is None:
+        return active_cursor_out, active_cursor_id
+    return last_cursor
 
 
 class WhatsAppFollowupRunner:
@@ -65,6 +101,8 @@ class WhatsAppFollowupRunner:
         self._task: asyncio.Task[None] | None = None
         self._stop_event = asyncio.Event()
         self._enabled = True
+        self._cursor_last_out: datetime | None = None
+        self._cursor_last_id: str | None = None
 
     async def start(self) -> None:
         if self._task and not self._task.done():
@@ -92,7 +130,10 @@ class WhatsAppFollowupRunner:
         interval_seconds = self._interval * 60
         while not self._stop_event.is_set():
             try:
-                await run_followups()
+                self._cursor_last_out, self._cursor_last_id = await run_followups(
+                    cursor_last_out=self._cursor_last_out,
+                    cursor_last_id=self._cursor_last_id,
+                )
             except Exception as exc:  # pragma: no cover
                 logger.exception("whatsapp.followup.loop_error", extra={"error": str(exc)})
             try:

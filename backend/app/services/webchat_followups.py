@@ -511,19 +511,56 @@ def _escalate_delay_reached(
 
 async def run_followups(*, now: datetime | None = None, limit: int | None = None) -> None:
     """Ejecuta el flujo automático de reenganche para canales webchat."""
+    await run_followups_with_cursor(now=now, limit=limit)
+
+
+def _extract_cursor(conversation: dict[str, Any]) -> tuple[datetime, str] | None:
+    convo_id = _strip_text(conversation.get("id"))
+    last_out = _parse_ts(conversation.get("ultimo_saliente_en"))
+    if not convo_id or not last_out:
+        return None
+    return last_out, convo_id
+
+
+async def run_followups_with_cursor(
+    *,
+    now: datetime | None = None,
+    limit: int | None = None,
+    cursor_last_out: datetime | None = None,
+    cursor_last_id: str | None = None,
+) -> tuple[datetime | None, str | None]:
+    """Ejecuta el flujo automático de reenganche para canales webchat."""
     reference = (now or datetime.now(timezone.utc)).astimezone(timezone.utc)
     reengage_delta = timedelta(minutes=max(1, settings.webchat_reengage_minutes))
     cutoff = reference - reengage_delta
     batch_limit = limit or 50
     repo = CRMRepository()
+    active_cursor_out = cursor_last_out
+    active_cursor_id = _strip_text(cursor_last_id)
     try:
         conversations = await repo.list_webchat_conversations_for_followup(
             inactive_since=cutoff,
             limit=batch_limit,
+            cursor_last_out=active_cursor_out,
+            cursor_last_id=active_cursor_id,
         )
     except CRMRepositoryError as exc:
         logger.warning("webchat.followup.list_failed", extra={"error": str(exc)})
-        return
+        return active_cursor_out, (active_cursor_id or None)
+
+    if not conversations and active_cursor_out and active_cursor_id:
+        try:
+            conversations = await repo.list_webchat_conversations_for_followup(
+                inactive_since=cutoff,
+                limit=batch_limit,
+            )
+            if conversations:
+                logger.info("webchat.followup.cursor_wrapped")
+                active_cursor_out = None
+                active_cursor_id = None
+        except CRMRepositoryError as exc:
+            logger.warning("webchat.followup.list_failed", extra={"error": str(exc)})
+            return active_cursor_out, (active_cursor_id or None)
 
     for conversation in conversations:
         try:
@@ -537,6 +574,10 @@ async def run_followups(*, now: datetime | None = None, limit: int | None = None
                 "webchat.followup.unexpected_error",
                 extra={"conversation_id": conversation.get("id"), "error": str(exc)},
             )
+    last_cursor = _extract_cursor(conversations[-1]) if conversations else None
+    if last_cursor is None:
+        return active_cursor_out, (active_cursor_id or None)
+    return last_cursor
 
 
 async def _process_conversation(
@@ -895,6 +936,8 @@ class WebchatFollowupRunner:
         self._task: asyncio.Task[None] | None = None
         self._stop_event = asyncio.Event()
         self._enabled = True
+        self._cursor_last_out: datetime | None = None
+        self._cursor_last_id: str | None = None
 
     async def start(self) -> None:
         if self._task and not self._task.done():
@@ -922,7 +965,10 @@ class WebchatFollowupRunner:
         interval_seconds = self._interval * 60
         while not self._stop_event.is_set():
             try:
-                await run_followups()
+                self._cursor_last_out, self._cursor_last_id = await run_followups_with_cursor(
+                    cursor_last_out=self._cursor_last_out,
+                    cursor_last_id=self._cursor_last_id,
+                )
             except Exception as exc:  # pragma: no cover
                 logger.exception("webchat.followup.loop_error", extra={"error": str(exc)})
             try:
