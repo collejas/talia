@@ -9,7 +9,8 @@ Estado del plan documentado en `02_Plan_soluciones_priorizado.md`.
 - Fase 1.1: **Completada (primera iteración)**
 - Fase 1.2: **Completada (primera iteración)**
 - Fase 2.1: **Completada (primera iteración)**
-- Fase 2.2+: **Pendiente**
+- Fase 2.2: **Completada (primera iteración)**
+- Fase 3+: **Pendiente**
 
 ## Entregables completados
 
@@ -164,6 +165,42 @@ Estado del plan documentado en `02_Plan_soluciones_priorizado.md`.
 - Evitar respuestas parciales/truncadas visibles al usuario final.
 - Mantener una sola salida consistente cuando falle calidad (sin mezclar parcial + fallback).
 
+### Fase 2.2 Trazabilidad por `inbound_message_id` (primera iteración)
+
+1. Correlación añadida en WhatsApp (entrada -> AI -> dispatch -> persistencia).
+- Se normaliza y propaga `inbound_message_id` desde el registro del mensaje entrante.
+- Se añade a metadata de OpenAI y a metadata del mensaje saliente persistido.
+- Se registra traza estructurada por etapas:
+  - `whatsapp.message_trace` con `stage`:
+    - `inbound_persisted`
+    - `assistant_generation_started`
+    - `assistant_generated`
+    - `dispatch_attempted`
+    - `assistant_persisted`
+
+2. Correlación añadida en Webchat (entrada -> AI -> persistencia -> respuesta al cliente).
+- Se toma `inbound_message_id` desde el registro del mensaje entrante.
+- Se añade a metadata de OpenAI y al metadata del mensaje saliente persistido.
+- Se registra traza estructurada por etapas:
+  - `webchat.message_trace` con `stage`:
+    - `inbound_persisted`
+    - `assistant_generation_started`
+    - `assistant_generated`
+    - `assistant_persisted`
+    - `response_returned`
+
+3. Enriquecimiento de eventos existentes.
+- En WhatsApp se añadió `inbound_message_id` a:
+  - `whatsapp.reply_generated`
+  - `whatsapp.reply_dispatched`
+  - `whatsapp.reply_registered`
+  - `whatsapp.reply_register_failed`
+- Esto permite reconstruir el flujo sin depender de correlación manual por timestamp.
+
+4. Resultado esperado de primera iteración.
+- Diagnóstico más rápido de incidentes por mensaje puntual.
+- Capacidad de seguir un inbound específico de extremo a extremo en ambos canales.
+
 ## Seguridad y acceso
 
 1. Métricas/snapshots de Inbox restringidos a owner.
@@ -171,10 +208,6 @@ Estado del plan documentado en `02_Plan_soluciones_priorizado.md`.
 - El panel de métricas también valida `es_owner` y redirige a `/unauthorized` si no cumple.
 
 ## Estado de pendientes
-
-### Fase 2.2 (pendiente)
-
-- Trazabilidad end-to-end por `inbound_message_id`.
 
 ### Fase 3 (pendiente)
 
@@ -195,6 +228,8 @@ Estado del plan documentado en `02_Plan_soluciones_priorizado.md`.
 - `whatsapp.reply_quality_low`
 - `webchat.reply_quality_low`
 - `webchat.reply_fallback_applied`
+- `whatsapp.message_trace`
+- `webchat.message_trace`
 3. Confirmar escritura de histórico:
 - `tail -n 20 /var/www/talia/logs/inbox-threads-metrics.log`
 4. Confirmar acceso owner-only:

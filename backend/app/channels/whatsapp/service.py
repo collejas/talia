@@ -102,6 +102,30 @@ _WHATSAPP_INBOUND_MERGE_MAX_MESSAGES = 4
 _WHATSAPP_INBOUND_MERGE_MAX_WINDOW_SECONDS = 12
 
 
+def _normalize_inbound_message_id(value: Any) -> str | None:
+    parsed = str(value or "").strip()
+    return parsed or None
+
+
+def _log_trace_stage(
+    *,
+    stage: str,
+    conversation_id: str | None,
+    contact_id: str | None,
+    inbound_message_id: str | None,
+    extra: dict[str, Any] | None = None,
+) -> None:
+    payload: dict[str, Any] = {
+        "stage": stage,
+        "conversation_id": conversation_id,
+        "contact_id": contact_id,
+        "inbound_message_id": inbound_message_id,
+    }
+    if extra:
+        payload.update(extra)
+    log_event(logger, "whatsapp.message_trace", **payload)
+
+
 @dataclass(slots=True)
 class AssistantReply:
     """Respuesta del asistente junto con metadatos para persistencia."""
@@ -805,9 +829,20 @@ async def handle_incoming_message(
     conversation_id = str(registration.get("conversation_id") or "")
     contact_id = str(registration.get("contact_id") or "")
     current_message_id = str(registration.get("message_id") or "")
+    inbound_message_id = _normalize_inbound_message_id(current_message_id)
     openai_conversation_id = registration.get("openai_conversation_id")
     org_uuid = _parse_org_uuid(organizacion_hint)
 
+    _log_trace_stage(
+        stage="inbound_persisted",
+        conversation_id=conversation_id,
+        contact_id=contact_id,
+        inbound_message_id=inbound_message_id,
+        extra={
+            "message_sid": _trim_text(message.message_sid),
+            "source": source,
+        },
+    )
 
     if conversation_id:
         try:
@@ -1021,6 +1056,16 @@ async def handle_incoming_message(
     )
 
     try:
+        _log_trace_stage(
+            stage="assistant_generation_started",
+            conversation_id=conversation_id,
+            contact_id=contact_id,
+            inbound_message_id=inbound_message_id,
+            extra={
+                "previous_response_id": _trim_text(previous_response_id),
+                "openai_conversation_id": _trim_text(openai_conversation_id),
+            },
+        )
         assistant_reply = await _generate_assistant_reply(
             message=message,
             conversation_id=conversation_id,
@@ -1033,6 +1078,7 @@ async def handle_incoming_message(
             organizacion_id=org_uuid,
             prospeccion_mode=is_prospeccion_mode,
             origin_type=origin_type,
+            inbound_message_id=inbound_message_id,
         )
         log_event(
             logger,
@@ -1040,6 +1086,17 @@ async def handle_incoming_message(
             conversation_id=conversation_id,
             response_id=assistant_reply.response_id,
             openai_conversation_id=assistant_reply.openai_conversation_id,
+            inbound_message_id=inbound_message_id,
+        )
+        _log_trace_stage(
+            stage="assistant_generated",
+            conversation_id=conversation_id,
+            contact_id=contact_id,
+            inbound_message_id=inbound_message_id,
+            extra={
+                "response_id": _trim_text(assistant_reply.response_id),
+                "openai_conversation_id": _trim_text(assistant_reply.openai_conversation_id),
+            },
         )
     except Exception as exc:  # pragma: no cover - errores inesperados de OpenAI
         error_meta = classify_runtime_error(exc)
@@ -1051,6 +1108,7 @@ async def handle_incoming_message(
                 "error_type": error_meta.get("error_type"),
                 "status_code": error_meta.get("status_code"),
                 "retryable": bool(error_meta.get("retryable")),
+                "inbound_message_id": inbound_message_id,
             },
         )
         assistant_reply = AssistantReply(
@@ -1093,19 +1151,33 @@ async def handle_incoming_message(
         conversation_id=conversation_id,
         status=send_result.status,
         error=send_result.error,
+        inbound_message_id=inbound_message_id,
+    )
+    _log_trace_stage(
+        stage="dispatch_attempted",
+        conversation_id=conversation_id,
+        contact_id=contact_id,
+        inbound_message_id=inbound_message_id,
+        extra={
+            "twilio_sid": _trim_text(send_result.sid),
+            "delivery_status": _trim_text(send_result.status),
+            "delivery_error": _trim_text(send_result.error),
+        },
     )
 
     metadata = {
         "openai_conversation_id": assistant_reply.openai_conversation_id,
         "response_id": assistant_reply.response_id,
         "delivery_status": send_result.status,
+        "inbound_message_id": inbound_message_id,
+        "inbound_message_sid": _trim_text(message.message_sid),
     }
     if send_result.error:
         metadata["delivery_error"] = send_result.error
 
     resolved_contact_org = await resolve_whatsapp_organizacion(contact=contact_record)
     try:
-        await storage.register_whatsapp_message(
+        outgoing_registration = await storage.register_whatsapp_message(
             direction="saliente",
             conversation_id=conversation_id,
             contact_id=contact_id,
@@ -1127,6 +1199,7 @@ async def handle_incoming_message(
             "whatsapp.reply_register_failed",
             conversation_id=conversation_id,
             error=str(exc),
+            inbound_message_id=inbound_message_id,
         )
     else:
         log_event(
@@ -1134,6 +1207,18 @@ async def handle_incoming_message(
             "whatsapp.reply_registered",
             conversation_id=conversation_id,
             message_sid=send_result.sid,
+            inbound_message_id=inbound_message_id,
+            outbound_message_id=outgoing_registration.get("message_id"),
+        )
+        _log_trace_stage(
+            stage="assistant_persisted",
+            conversation_id=conversation_id,
+            contact_id=contact_id,
+            inbound_message_id=inbound_message_id,
+            extra={
+                "outbound_message_id": outgoing_registration.get("message_id"),
+                "twilio_sid": _trim_text(send_result.sid),
+            },
         )
 
 
@@ -1535,6 +1620,7 @@ async def _generate_assistant_reply(
     organizacion_id: UUID | None,
     prospeccion_mode: bool = False,
     origin_type: str | None = None,
+    inbound_message_id: str | None = None,
 ) -> AssistantReply:
     assistant = _build_assistant_from_runtime(whatsapp_settings, prospeccion_mode=prospeccion_mode)
     log_event(
@@ -1558,6 +1644,7 @@ async def _generate_assistant_reply(
         "contact_id": contact_id,
         "channel": "whatsapp",
         "message_sid": message.message_sid,
+        "inbound_message_id": inbound_message_id,
         "prospeccion_mode": str(bool(prospeccion_mode)).lower(),
         "origin_type": str(origin_type or "").strip().lower() or "general_whatsapp",
     }

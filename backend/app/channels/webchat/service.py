@@ -226,6 +226,31 @@ MASTER_ORGANIZACION_UUID = UUID(MASTER_ORGANIZACION_ID)
 _REMINDER_SETTINGS_CACHE: dict[str, Any] | None = None
 _REMINDER_SETTINGS_LOADED_AT: datetime | None = None
 
+
+def _normalize_inbound_message_id(value: Any) -> str | None:
+    parsed = str(value or "").strip()
+    return parsed or None
+
+
+def _log_trace_stage(
+    *,
+    stage: str,
+    conversation_id: str | None,
+    contact_id: str | None,
+    inbound_message_id: str | None,
+    extra: dict[str, Any] | None = None,
+) -> None:
+    payload: dict[str, Any] = {
+        "stage": stage,
+        "conversation_id": conversation_id,
+        "contact_id": contact_id,
+        "inbound_message_id": inbound_message_id,
+    }
+    if extra:
+        payload.update(extra)
+    log_event(logger, "webchat.message_trace", **payload)
+
+
 def _has_text(value: Any) -> bool:
     return bool(str(value or "").strip())
 
@@ -2724,6 +2749,7 @@ async def handle_message(
     conversation_id = registration.get("conversation_id")
     if not conversation_id:
         raise HTTPException(status_code=500, detail="No se pudo identificar la conversación")
+    inbound_message_id = _normalize_inbound_message_id(registration.get("message_id"))
 
     try:
         conversation_meta = await storage.fetch_webchat_conversation(conversation_id)
@@ -2776,6 +2802,13 @@ async def handle_message(
         raise HTTPException(
             status_code=500, detail="No se pudo asociar la conversación al contacto"
         )
+    _log_trace_stage(
+        stage="inbound_persisted",
+        conversation_id=str(conversation_id),
+        contact_id=str(contact_id),
+        inbound_message_id=inbound_message_id,
+        extra={"session_id": payload.session_id},
+    )
     contact: dict[str, Any] | None = await _resolve_contact(str(contact_id))
     resolved_organizacion_id = (
         await resolve_webchat_organizacion(metadata_dict, contact=contact) or organizacion_hint
@@ -2860,6 +2893,16 @@ async def handle_message(
             },
         )
     try:
+        _log_trace_stage(
+            stage="assistant_generation_started",
+            conversation_id=str(conversation_id),
+            contact_id=str(contact_id),
+            inbound_message_id=inbound_message_id,
+            extra={
+                "previous_response_id": conversation_meta.get("last_response_id"),
+                "openai_conversation_id": openai_conversation_id,
+            },
+        )
         (
             assistant_reply,
             response_payload,
@@ -2878,6 +2921,7 @@ async def handle_message(
             organizacion_id=resolved_organizacion_id,
             catalog_context=catalog_context,
             booking_context=booking_context_text,
+            inbound_message_id=inbound_message_id,
         )
     except Exception as exc:  # pragma: no cover - se registra y responde fallback
         error_meta = classify_runtime_error(exc)
@@ -2910,6 +2954,16 @@ async def handle_message(
         metadata.booking = side_effects["booking"]
 
     if assistant_reply:
+        _log_trace_stage(
+            stage="assistant_generated",
+            conversation_id=str(conversation_id),
+            contact_id=str(contact_id),
+            inbound_message_id=inbound_message_id,
+            extra={
+                "response_id": metadata.assistant_response_id,
+                "openai_conversation_id": metadata.openai_conversation_id,
+            },
+        )
         assistant_reply = await _guard_booking_confirmation_claim(
             conversation_id=str(conversation_id),
             reply_text=assistant_reply,
@@ -2929,12 +2983,13 @@ async def handle_message(
                 "openai_conversation_id": metadata.openai_conversation_id,
                 "tools_called": tools_called,
                 "tool_call_ids": tool_call_ids,
+                "inbound_message_id": inbound_message_id,
             }
             if side_effects:
                 for key, value in side_effects.items():
                     if value is not None:
                         message_metadata[key] = value
-            await storage.register_webchat_message(
+            outgoing_registration = await storage.register_webchat_message(
                 session_id=payload.session_id,
                 author="assistant",
                 content=assistant_reply,
@@ -2958,8 +3013,25 @@ async def handle_message(
                     "conversation_id": str(conversation_id),
                     "response_id": metadata.assistant_response_id,
                     "error": str(exc),
+                    "inbound_message_id": inbound_message_id,
                 },
             )
+        else:
+            _log_trace_stage(
+                stage="assistant_persisted",
+                conversation_id=str(conversation_id),
+                contact_id=str(contact_id),
+                inbound_message_id=inbound_message_id,
+                extra={"outbound_message_id": outgoing_registration.get("message_id")},
+            )
+
+    _log_trace_stage(
+        stage="response_returned",
+        conversation_id=str(conversation_id),
+        contact_id=str(contact_id),
+        inbound_message_id=inbound_message_id,
+        extra={"fallback_used": assistant_reply == DEFAULT_FALLBACK},
+    )
 
     return schemas.MessageResponse(
         reply=assistant_reply,
@@ -3275,12 +3347,14 @@ async def _run_assistant_turn(
     organizacion_id: str | None = None,
     catalog_context: CatalogContext | None = None,
     booking_context: str | None = None,
+    inbound_message_id: str | None = None,
 ) -> tuple[str | None, dict[str, Any], list[str], list[str], str | None, dict[str, Any]]:
     """Gestiona la interacción con OpenAI y la resolución de tool calls."""
     metadata_payload = {
         "session_id": context.session_id,
         "conversation_id": context.conversation_id,
         "client_message_id": user_message.client_message_id,
+        "inbound_message_id": inbound_message_id,
         "locale": user_message.locale,
     }
     sanitized_metadata = {k: v for k, v in metadata_payload.items() if v is not None}
