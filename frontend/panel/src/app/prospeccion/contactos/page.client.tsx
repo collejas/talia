@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { IconAlertTriangle, IconLoader, IconRefresh, IconRepeat } from "@tabler/icons-react"
 
 import { Badge } from "@/components/ui/badge"
@@ -72,6 +72,7 @@ const envioEstadoVariant: Record<string, "default" | "secondary" | "outline" | "
 }
 
 const RETRYABLE_ESTADOS = new Set(["error", "fallido", "omitido"])
+const TERMINAL_BATCH_STATES = new Set(["completado", "cancelado", "error", "fallido"])
 
 export default function ContactosPageClient() {
   const [batches, setBatches] = useState<ContactoBatch[]>([])
@@ -87,6 +88,7 @@ export default function ContactosPageClient() {
   const [cancelLoading, setCancelLoading] = useState(false)
   const [cancelError, setCancelError] = useState<string | null>(null)
   const [queryLabelMap, setQueryLabelMap] = useState<Record<string, string>>({})
+  const lastHandledTerminalBatchEventRef = useRef<string>("")
 
   const fetchBatches = useCallback(async () => {
     setBatchLoading(true)
@@ -267,14 +269,24 @@ export default function ContactosPageClient() {
     source.onmessage = (event) => {
       if (!event?.data) return
       try {
-        const payload = JSON.parse(event.data) as { type?: string }
+        const payload = JSON.parse(event.data) as { type?: string; estado?: string }
         if (payload?.type === "ping" || payload?.type === "connected") {
           return
         }
-        if (payload?.type === "batch") {
-          void fetchBatches()
-          void fetchMetrics()
+        if (payload?.type !== "batch") {
+          return
         }
+        const estado = (payload?.estado || "").toLowerCase()
+        if (!TERMINAL_BATCH_STATES.has(estado)) {
+          return
+        }
+        const dedupeKey = `${selectedBatchId}:${estado}`
+        if (lastHandledTerminalBatchEventRef.current === dedupeKey) {
+          return
+        }
+        lastHandledTerminalBatchEventRef.current = dedupeKey
+        void fetchBatches()
+        void fetchMetrics()
       } catch {
         return
       }
