@@ -344,6 +344,76 @@ class Settings(BaseSettings):
         ge=0,
         description="Cantidad máxima de lotes consecutivos que descargamos (0 = sin límite práctico).",
     )
+    prospeccion_sender_batch_size: int = Field(
+        default=25,
+        ge=1,
+        le=500,
+        description="Tamaño de lote por ciclo del worker de envío de prospección.",
+        validation_alias=AliasChoices(
+            "PROSPECCION_SENDER_BATCH_SIZE",
+            "TALIA_PROSPECCION_SENDER_BATCH_SIZE",
+        ),
+    )
+    prospeccion_sender_max_concurrency: int = Field(
+        default=5,
+        ge=1,
+        le=100,
+        description="Concurrencia máxima del worker de envío de prospección por ciclo.",
+        validation_alias=AliasChoices(
+            "PROSPECCION_SENDER_MAX_CONCURRENCY",
+            "TALIA_PROSPECCION_SENDER_MAX_CONCURRENCY",
+        ),
+    )
+    prospeccion_sender_per_minute_limit: int = Field(
+        default=40,
+        ge=1,
+        le=2000,
+        description="Límite de envíos por minuto por scope (organización+canal).",
+        validation_alias=AliasChoices(
+            "PROSPECCION_SENDER_PER_MINUTE_LIMIT",
+            "TALIA_PROSPECCION_SENDER_PER_MINUTE_LIMIT",
+        ),
+    )
+    prospeccion_sender_rate_limit_defer_seconds: int = Field(
+        default=20,
+        ge=5,
+        le=600,
+        description="Segundos de reprogramación cuando se alcanza el límite por minuto.",
+        validation_alias=AliasChoices(
+            "PROSPECCION_SENDER_RATE_LIMIT_DEFER_SECONDS",
+            "TALIA_PROSPECCION_SENDER_RATE_LIMIT_DEFER_SECONDS",
+        ),
+    )
+    prospeccion_sender_error_window_seconds: int = Field(
+        default=120,
+        ge=30,
+        le=3600,
+        description="Ventana de tiempo para detectar ráfagas de errores de proveedor/plantilla.",
+        validation_alias=AliasChoices(
+            "PROSPECCION_SENDER_ERROR_WINDOW_SECONDS",
+            "TALIA_PROSPECCION_SENDER_ERROR_WINDOW_SECONDS",
+        ),
+    )
+    prospeccion_sender_error_threshold: int = Field(
+        default=5,
+        ge=1,
+        le=200,
+        description="Cantidad de errores en ventana para activar cooldown automático.",
+        validation_alias=AliasChoices(
+            "PROSPECCION_SENDER_ERROR_THRESHOLD",
+            "TALIA_PROSPECCION_SENDER_ERROR_THRESHOLD",
+        ),
+    )
+    prospeccion_sender_backpressure_cooldown_seconds: int = Field(
+        default=60,
+        ge=10,
+        le=3600,
+        description="Cooldown aplicado al scope cuando se detecta ráfaga de errores.",
+        validation_alias=AliasChoices(
+            "PROSPECCION_SENDER_BACKPRESSURE_COOLDOWN_SECONDS",
+            "TALIA_PROSPECCION_SENDER_BACKPRESSURE_COOLDOWN_SECONDS",
+        ),
+    )
     webchat_inactivity_minutes: int | None = Field(
         default=None,
         validation_alias=AliasChoices(

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from collections import deque
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 import html as html_lib
@@ -26,6 +27,13 @@ from app.services.storage import StorageError
 logger = get_logger("prospeccion.contact_sender")
 
 DEFAULT_BACKOFF_SECONDS: tuple[int, ...] = (30, 120, 300, 600)
+DEFAULT_SENDER_MAX_CONCURRENCY = 5
+DEFAULT_SENDER_PER_MINUTE_LIMIT = 40
+DEFAULT_SENDER_RATE_LIMIT_DEFER_SECONDS = 20
+DEFAULT_SENDER_ERROR_WINDOW_SECONDS = 120
+DEFAULT_SENDER_ERROR_THRESHOLD = 5
+DEFAULT_SENDER_BACKPRESSURE_COOLDOWN_SECONDS = 60
+BACKPRESSURE_TWILIO_ERROR_CODES = {"63024", "63049", "63032"}
 PLACEHOLDER_PATTERN = re.compile(r"{{\s*([\w\.-]+)\s*}}")
 NUMERIC_PLACEHOLDER_PATTERN = re.compile(r"{{\s*(\d+)\s*}}")
 LEGACY_IMAGE_PLACEHOLDER_PATTERN = re.compile(r"{{\s*DATA:IMAGE:[^}]+}}", re.IGNORECASE)
@@ -845,9 +853,21 @@ class ProspeccionContactSender:
         poll_interval: float = 5.0,
         batch_size: int = 25,
         retry_backoff: Sequence[int] = DEFAULT_BACKOFF_SECONDS,
+        max_concurrency: int = DEFAULT_SENDER_MAX_CONCURRENCY,
+        per_minute_limit: int = DEFAULT_SENDER_PER_MINUTE_LIMIT,
+        rate_limit_defer_seconds: int = DEFAULT_SENDER_RATE_LIMIT_DEFER_SECONDS,
+        error_window_seconds: int = DEFAULT_SENDER_ERROR_WINDOW_SECONDS,
+        error_threshold: int = DEFAULT_SENDER_ERROR_THRESHOLD,
+        backpressure_cooldown_seconds: int = DEFAULT_SENDER_BACKPRESSURE_COOLDOWN_SECONDS,
     ) -> None:
         self._poll_interval = poll_interval
         self._batch_size = batch_size
+        self._max_concurrency = max(1, int(max_concurrency))
+        self._per_minute_limit = max(1, int(per_minute_limit))
+        self._rate_limit_defer_seconds = max(5, int(rate_limit_defer_seconds))
+        self._error_window_seconds = max(30, int(error_window_seconds))
+        self._error_threshold = max(1, int(error_threshold))
+        self._backpressure_cooldown_seconds = max(10, int(backpressure_cooldown_seconds))
         self._retry_backoff = tuple(int(value) for value in retry_backoff if value > 0) or (
             DEFAULT_BACKOFF_SECONDS
         )
@@ -855,6 +875,10 @@ class ProspeccionContactSender:
         self._stop_event = asyncio.Event()
         self._task: asyncio.Task[None] | None = None
         self._enabled = True
+        self._throttle_lock = asyncio.Lock()
+        self._send_events: dict[tuple[str, str], deque[float]] = {}
+        self._error_events: dict[tuple[str, str], deque[float]] = {}
+        self._cooldown_until: dict[tuple[str, str], float] = {}
 
     async def start(self) -> None:
         if self._task and not self._task.done():
@@ -871,7 +895,17 @@ class ProspeccionContactSender:
         self._stop_event.clear()
         self._wake_event.clear()
         self._task = asyncio.create_task(self._run_loop(), name="prospeccion-contact-sender")
-        log_event(logger, "prospeccion.sender_started")
+        log_event(
+            logger,
+            "prospeccion.sender_started",
+            batch_size=self._batch_size,
+            max_concurrency=self._max_concurrency,
+            per_minute_limit=self._per_minute_limit,
+            rate_limit_defer_seconds=self._rate_limit_defer_seconds,
+            error_window_seconds=self._error_window_seconds,
+            error_threshold=self._error_threshold,
+            backpressure_cooldown_seconds=self._backpressure_cooldown_seconds,
+        )
 
     async def shutdown(self) -> None:
         if not self._task:
@@ -916,16 +950,30 @@ class ProspeccionContactSender:
         if not envios:
             return False
 
+        semaphore = asyncio.Semaphore(self._max_concurrency)
+        tasks: list[asyncio.Task[Exception | None]] = []
+
+        async def _run_one(envio: dict[str, Any]) -> Exception | None:
+            async with semaphore:
+                try:
+                    await self._process_envio(repo, envio)
+                    return None
+                except CRMRepositoryError as exc:
+                    return exc
+                except Exception as exc:  # pragma: no cover - protección adicional
+                    logger.exception(
+                        "prospeccion.sender_envio_failed",
+                        extra={"envio_id": envio.get("id"), "error": str(exc)},
+                    )
+                    return None
+
         for envio in envios:
-            try:
-                await self._process_envio(repo, envio)
-            except CRMRepositoryError:
-                raise
-            except Exception as exc:  # pragma: no cover - protección adicional
-                logger.exception(
-                    "prospeccion.sender_envio_failed",
-                    extra={"envio_id": envio.get("id"), "error": str(exc)},
-                )
+            tasks.append(asyncio.create_task(_run_one(envio)))
+        results = await asyncio.gather(*tasks)
+        for maybe_error in results:
+            if isinstance(maybe_error, CRMRepositoryError):
+                raise maybe_error
+
         return len(envios) >= self._batch_size
 
     async def _process_envio(self, repo: CRMRepository, envio: dict[str, Any]) -> None:
@@ -970,6 +1018,45 @@ class ProspeccionContactSender:
                 "prospecto_id": envio.get("prospecto_id"),
             },
         )
+
+        if canal in {"correo", "whatsapp", "llamada"}:
+            throttle_key = self._throttle_key(
+                organizacion_id=org_uuid,
+                canal=canal,
+            )
+            allowed, reason = await self._acquire_send_slot(throttle_key)
+            if not allowed:
+                defer_until = (
+                    datetime.now(timezone.utc) + timedelta(seconds=self._rate_limit_defer_seconds)
+                ).isoformat()
+                current_detalle = envio.get("detalle") if isinstance(envio.get("detalle"), dict) else {}
+                throttled_detalle = _merge_detalle(
+                    current_detalle,
+                    {
+                        "reason": reason,
+                        "throttle_scope": f"{throttle_key[0]}:{throttle_key[1]}",
+                    },
+                )
+                await repo.worker_complete_envio(
+                    envio_id=envio_id,
+                    payload={
+                        "estado": "pendiente",
+                        "programado_en": defer_until,
+                        "error": "rate_limited",
+                        "detalle": throttled_detalle,
+                        "procesado_en": datetime.now(timezone.utc).isoformat(),
+                    },
+                )
+                log_event(
+                    logger,
+                    "prospeccion.sender_rate_limited",
+                    envio_id=str(envio_id),
+                    canal=canal,
+                    organizacion_id=str(org_uuid) if org_uuid else None,
+                    reason=reason,
+                    defer_seconds=self._rate_limit_defer_seconds,
+                )
+                return
 
         if org_uuid and canal in {"correo", "whatsapp", "llamada"}:
             suppression = await repo.worker_find_active_contact_suppression(
@@ -1033,8 +1120,12 @@ class ProspeccionContactSender:
             result=result,
             intento=intento_actual,
             max_reintentos=max_reintentos,
+            extra_backoff_seconds=self._extra_backoff_seconds(result),
         )
         await repo.worker_complete_envio(envio_id=envio_id, payload=update_payload)
+        if canal in {"correo", "whatsapp", "llamada"}:
+            throttle_key = self._throttle_key(organizacion_id=org_uuid, canal=canal)
+            await self._register_backpressure_signal(throttle_key, result)
 
         await _broadcast_batch_event(
             batch_id=envio.get("batch_id"),
@@ -1098,6 +1189,7 @@ class ProspeccionContactSender:
         result: ContactEnvioResult,
         intento: int,
         max_reintentos: int,
+        extra_backoff_seconds: int = 0,
     ) -> dict[str, Any]:
         now_iso = datetime.now(timezone.utc).isoformat()
         current_detalle = envio.get("detalle") if isinstance(envio.get("detalle"), dict) else {}
@@ -1115,7 +1207,7 @@ class ProspeccionContactSender:
         should_retry = result.estado == "error" and result.retryable and intento < max_reintentos
         if should_retry:
             payload["estado"] = "pendiente"
-            backoff_seconds = self._next_backoff(intento)
+            backoff_seconds = max(self._next_backoff(intento), max(0, int(extra_backoff_seconds)))
             payload["programado_en"] = (
                 datetime.now(timezone.utc) + timedelta(seconds=backoff_seconds)
             ).isoformat()
@@ -1127,8 +1219,101 @@ class ProspeccionContactSender:
             return self._retry_backoff[-1]
         return self._retry_backoff[index]
 
+    @staticmethod
+    def _throttle_key(*, organizacion_id: UUID | None, canal: str) -> tuple[str, str]:
+        org_key = str(organizacion_id) if organizacion_id else "global"
+        channel_key = (canal or "desconocido").strip().lower() or "desconocido"
+        return org_key, channel_key
 
-contact_sender = ProspeccionContactSender()
+    async def _acquire_send_slot(self, key: tuple[str, str]) -> tuple[bool, str]:
+        now = asyncio.get_running_loop().time()
+        async with self._throttle_lock:
+            cooldown_until = self._cooldown_until.get(key, 0.0)
+            if cooldown_until > now:
+                return False, "cooldown"
+
+            bucket = self._send_events.setdefault(key, deque())
+            window_start = now - 60.0
+            while bucket and bucket[0] < window_start:
+                bucket.popleft()
+            if len(bucket) >= self._per_minute_limit:
+                return False, "per_minute_limit"
+            bucket.append(now)
+            return True, "ok"
+
+    async def _register_backpressure_signal(
+        self,
+        key: tuple[str, str],
+        result: ContactEnvioResult,
+    ) -> None:
+        error_signature = self._extract_error_signature(result)
+        if not error_signature:
+            return
+
+        now = asyncio.get_running_loop().time()
+        async with self._throttle_lock:
+            bucket = self._error_events.setdefault(key, deque())
+            window_start = now - float(self._error_window_seconds)
+            while bucket and bucket[0] < window_start:
+                bucket.popleft()
+            bucket.append(now)
+            if len(bucket) < self._error_threshold:
+                return
+            self._cooldown_until[key] = now + float(self._backpressure_cooldown_seconds)
+
+        log_event(
+            logger,
+            "prospeccion.sender_backpressure_activated",
+            organizacion_scope=key[0],
+            canal=key[1],
+            error_signature=error_signature,
+            cooldown_seconds=self._backpressure_cooldown_seconds,
+            threshold=self._error_threshold,
+            window_seconds=self._error_window_seconds,
+        )
+
+    @staticmethod
+    def _extract_error_signature(result: ContactEnvioResult) -> str | None:
+        detail = result.detalle if isinstance(result.detalle, dict) else {}
+        reason = _clean_text(detail.get("reason")) or _clean_text(result.error)
+        if reason == "whatsapp_template_variables_incompletas":
+            return reason
+        error_text = (_clean_text(result.error) or "").lower()
+        for code in BACKPRESSURE_TWILIO_ERROR_CODES:
+            if code in error_text:
+                return f"twilio_error_{code}"
+        return None
+
+    @staticmethod
+    def _extra_backoff_seconds(result: ContactEnvioResult) -> int:
+        detail = result.detalle if isinstance(result.detalle, dict) else {}
+        reason = _clean_text(detail.get("reason")) or _clean_text(result.error) or ""
+        if reason == "whatsapp_template_variables_incompletas":
+            return 300
+        error_text = (_clean_text(result.error) or "").lower()
+        for code in BACKPRESSURE_TWILIO_ERROR_CODES:
+            if code in error_text:
+                return 180
+        return 0
+
+
+contact_sender = ProspeccionContactSender(
+    batch_size=getattr(settings, "prospeccion_sender_batch_size", 25),
+    max_concurrency=getattr(settings, "prospeccion_sender_max_concurrency", DEFAULT_SENDER_MAX_CONCURRENCY),
+    per_minute_limit=getattr(settings, "prospeccion_sender_per_minute_limit", DEFAULT_SENDER_PER_MINUTE_LIMIT),
+    rate_limit_defer_seconds=getattr(
+        settings, "prospeccion_sender_rate_limit_defer_seconds", DEFAULT_SENDER_RATE_LIMIT_DEFER_SECONDS
+    ),
+    error_window_seconds=getattr(
+        settings, "prospeccion_sender_error_window_seconds", DEFAULT_SENDER_ERROR_WINDOW_SECONDS
+    ),
+    error_threshold=getattr(settings, "prospeccion_sender_error_threshold", DEFAULT_SENDER_ERROR_THRESHOLD),
+    backpressure_cooldown_seconds=getattr(
+        settings,
+        "prospeccion_sender_backpressure_cooldown_seconds",
+        DEFAULT_SENDER_BACKPRESSURE_COOLDOWN_SECONDS,
+    ),
+)
 
 __all__ = [
     "ContactEnvioResult",
