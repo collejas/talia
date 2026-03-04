@@ -291,6 +291,7 @@ class HighDemandModeRunner:
         self._task: asyncio.Task[None] | None = None
         self._stop = asyncio.Event()
         self._last_alert_at: float = 0.0
+        self._last_alert_title: str | None = None
 
     async def start(self) -> None:
         if self._task and not self._task.done():
@@ -365,11 +366,12 @@ class HighDemandModeRunner:
 
         now = time.monotonic()
         cooldown_seconds = max(30, int(getattr(settings, "high_demand_alert_cooldown_seconds", 300)))
-        if (now - self._last_alert_at) < cooldown_seconds:
+        if self._last_alert_title == title and (now - self._last_alert_at) < cooldown_seconds:
             log_event(
                 logger,
                 "high_demand.alert_suppressed_cooldown",
                 cooldown_seconds=cooldown_seconds,
+                title=title,
             )
             return
 
@@ -437,6 +439,7 @@ class HighDemandModeRunner:
 
         if delivered_any:
             self._last_alert_at = now
+            self._last_alert_title = title
 
 
 high_demand_controller = HighDemandController()

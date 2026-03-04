@@ -255,7 +255,17 @@ Estado del plan documentado en `02_Plan_soluciones_priorizado.md`.
 - Completado: polling de Inbox ajustable en tiempo real por perfil de runtime.
   - Backend: `GET /crm/inbox/runtime-profile` (permission `conv.read`).
   - Frontend: `split-view` consume `/api/inbox/runtime-profile` y adapta el intervalo de refresh de threads.
-- Pendiente: alertas externas (Slack/Email) además del logging estructurado.
+- Completado: alertas externas en cambios de estado del modo alta demanda.
+  - Webhook configurable: `HIGH_DEMAND_ALERT_WEBHOOK_URL`
+  - Email configurable: `HIGH_DEMAND_ALERT_EMAIL_RECIPIENTS`
+  - Toggle y cooldown:
+    - `HIGH_DEMAND_ALERTS_ENABLED`
+    - `HIGH_DEMAND_ALERT_COOLDOWN_SECONDS`
+  - Eventos:
+    - `high_demand.alert_webhook_sent`
+    - `high_demand.alert_email_sent`
+    - `high_demand.alert_webhook_failed`
+    - `high_demand.alert_email_failed`
 
 ## Checklist de verificación operativa
 
