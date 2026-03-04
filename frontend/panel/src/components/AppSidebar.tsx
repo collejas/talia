@@ -145,6 +145,18 @@ const NAVIGATION: {
           icon: IconBuilding,
           permission: "settings.manage",
         },
+        {
+          title: "Inbox Metrics",
+          url: "/settings/inbox-metrics",
+          icon: IconInbox,
+          permission: "settings.manage",
+        },
+        {
+          title: "Ops Alta Demanda",
+          url: "/settings/ops",
+          icon: IconGauge,
+          permission: "settings.manage",
+        },
         { title: "Recursos Humanos", url: "/settings/rh", icon: IconUsersGroup, permission: "user.manage" },
         
       ],
