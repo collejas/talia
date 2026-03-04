@@ -16,6 +16,9 @@ Actualización adicional (mismo día):
 
 1. **Día 4 (versión incremental):** Parcial completado con cache backend para `contact-indicadores`.
 2. **Día 3 (índices):** Completado en base de datos (migración aplicada vía Supabase MCP).
+3. **Día 4 (versión estructural):** Completado con cache persistente SQL + RPC cacheado en repositorio.
+4. **Día 5 (versión incremental):** Parcial completado con cache backend para endpoint `/prospectos/queries`.
+5. **Día 6 (versión incremental):** Parcial completado con ACK rápido en webhook Brevo.
 
 ## 2) Cambios completados
 
@@ -123,6 +126,86 @@ Corrección aplicada:
 2. Se agregó límite explícito:
    - `INBOX_THREADS_WHATSAPP_HINT_CACHE_MAX_ENTRIES = 2048`.
 
+## 2.7 Cache persistente SQL para `contact-indicadores` (estructural)
+
+Se creó y aplicó migración:
+
+- `supabase/migrations/20280424_130000_prospeccion_contacto_indicadores_cache.sql`
+
+Incluye:
+
+1. Tabla cache:
+   - `public.prospeccion_prospecto_contacto_stats_cache`
+   - PK compuesta: `(organizacion_id, prospecto_id)`
+   - índice por actualización: `prospeccion_prospecto_contacto_stats_cache_updated_idx`
+2. RLS:
+   - habilitado en tabla cache.
+   - policy de lectura por tenant (`usuario_organizacion_id(auth.uid())`).
+3. Función RPC:
+   - `public.prospeccion_contacto_indicadores_cached(uuid[], integer default 120)`
+   - `security definer`
+   - refresco incremental por `stale/missing` IDs y retorno ordenado.
+4. Grants:
+   - `authenticated`
+   - `service_role`
+
+Estado: **aplicado exitosamente en Supabase MCP** (`success: true`).
+
+## 2.8 Repositorio backend: consumo de RPC cacheado
+
+Archivo: `backend/app/repositories/crm.py`
+
+Cambio aplicado:
+
+1. `list_prospecto_contact_indicators(...)` ahora intenta primero:
+   - `POST /rest/v1/rpc/prospeccion_contacto_indicadores_cached`
+2. Si falla RPC (compatibilidad/despliegue parcial), hace fallback automático a:
+   - `GET /rest/v1/prospeccion_prospecto_contacto_stats` (comportamiento previo)
+
+Beneficio:
+
+- transición segura sin downtime ni ruptura funcional.
+
+## 2.9 Endpoint `/prospeccion/prospectos/queries` (cache backend)
+
+Archivo: `backend/app/api/routes/crm.py`
+
+Cambios aplicados:
+
+1. Cache read-through para respuesta completa del endpoint:
+   - `PROSPECTO_QUERIES_CACHE_TTL_SECONDS = 30`
+   - `PROSPECTO_QUERIES_CACHE_MAX_ENTRIES = 512`
+2. Key por:
+   - usuario
+   - `query_filters` normalizados
+   - `fuente`
+   - `date_from` / `date_to`
+3. Normalización de entrada:
+   - dedupe + sort de `query_filters` antes de consultar repositorio.
+4. Log de hit:
+   - `crm.prospectos.queries.cache_hit`
+
+Beneficio esperado:
+
+- reducir repeticiones de scans costosos en ráfagas de filtros equivalentes de UI.
+
+## 2.10 Webhook Brevo con modo asíncrono por defecto
+
+Archivo: `backend/app/api/routes/crm.py`
+
+Cambio aplicado:
+
+1. Endpoint `POST /prospeccion/contacto/brevo/webhook` ahora soporta:
+   - `mode=async` (default): responde rápido y procesa en `BackgroundTasks`.
+   - `mode=sync`: conserva comportamiento previo para pruebas/diagnóstico.
+2. Se añadió logging para el flujo asíncrono:
+   - `crm.prospeccion.brevo_webhook.async_processed`
+   - `crm.prospeccion.brevo_webhook.async_failed`
+
+Beneficio esperado:
+
+- bajar latencia p95 del webhook al sacar el procesamiento pesado del tiempo de respuesta HTTP.
+
 ## 3) Validaciones ejecutadas
 
 ## 3.1 Frontend
@@ -147,6 +230,18 @@ Corrección aplicada:
    - consulta a `pg_indexes` para tabla `prospeccion_contacto_envio`
    - resultado: OK (índices nuevos presentes)
 
+3. Verificación de función cacheada en DB:
+   - consulta a `pg_proc` para `prospeccion_contacto_indicadores_cached`
+   - resultado: OK (`prosecdef = true`)
+
+4. Compilación Python tras cambios adicionales en cache de endpoint `queries`:
+   - comando: `python3 -m py_compile backend/app/api/routes/crm.py backend/app/repositories/crm.py`
+   - resultado: OK
+
+5. Compilación Python tras cambio de webhook Brevo async:
+   - comando: `python3 -m py_compile backend/app/api/routes/crm.py backend/app/repositories/crm.py`
+   - resultado: OK
+
 ## 4) Estado de despliegue
 
 - Cambios **implementados localmente** en workspace.
@@ -164,16 +259,19 @@ Corrección aplicada:
 ## 6) Pendientes inmediatos
 
 1. Medir baseline vs post-cambio en ventana real (p50/p90/p95 por endpoint crítico).
-2. Ejecutar siguiente bloque del plan:
-   - Día 4: cache/preagregado de `contact-indicadores`.
+2. Ajustar `p_max_age_seconds` del RPC según comportamiento real de p95/carga.
+3. Evaluar invalidación activa de cache en eventos de alta escritura (contacto/envíos) si se observa desfase.
+4. Evaluar mover `BackgroundTasks` a cola persistente (tabla + worker) para robustez ante reinicios.
 
 ## 7) Archivos modificados en esta iteración
 
 1. `backend/app/api/routes/crm.py`
-2. `frontend/panel/src/app/prospeccion/prospectos/page.client.tsx`
-3. `frontend/panel/src/app/prospeccion/denue-busqueda/denue-busqueda-view.tsx`
-4. `frontend/panel/src/app/prospeccion/google-busqueda/google-busqueda-view.tsx`
-5. `supabase/migrations/20280424_120000_prospeccion_contacto_envio_lookup_indexes.sql` (nuevo)
+2. `backend/app/repositories/crm.py`
+3. `frontend/panel/src/app/prospeccion/prospectos/page.client.tsx`
+4. `frontend/panel/src/app/prospeccion/denue-busqueda/denue-busqueda-view.tsx`
+5. `frontend/panel/src/app/prospeccion/google-busqueda/google-busqueda-view.tsx`
+6. `supabase/migrations/20280424_120000_prospeccion_contacto_envio_lookup_indexes.sql`
+7. `supabase/migrations/20280424_130000_prospeccion_contacto_indicadores_cache.sql` (nuevo)
 
 ## 8) Nota operativa
 

@@ -154,6 +154,10 @@ CONTACT_INDICATORS_CACHE_TTL_SECONDS = 20.0
 CONTACT_INDICATORS_CACHE_MAX_ENTRIES = 1024
 _CONTACT_INDICATORS_CACHE: dict[str, tuple[float, list[dict[str, Any]]]] = {}
 _CONTACT_INDICATORS_CACHE_LOCK = asyncio.Lock()
+PROSPECTO_QUERIES_CACHE_TTL_SECONDS = 30.0
+PROSPECTO_QUERIES_CACHE_MAX_ENTRIES = 512
+_PROSPECTO_QUERIES_CACHE: dict[str, tuple[float, dict[str, Any]]] = {}
+_PROSPECTO_QUERIES_CACHE_LOCK = asyncio.Lock()
 
 
 def _build_inbox_threads_cache_key(payload: dict[str, Any]) -> str:
@@ -250,6 +254,39 @@ async def _write_contact_indicators_cache(cache_key: str, rows: list[dict[str, A
             if not oldest_key:
                 break
             _CONTACT_INDICATORS_CACHE.pop(oldest_key, None)
+
+
+def _build_prospecto_queries_cache_key(payload: dict[str, Any]) -> str:
+    raw = json.dumps(payload, sort_keys=True, default=str, separators=(",", ":"))
+    return hashlib.sha1(raw.encode("utf-8")).hexdigest()
+
+
+async def _read_prospecto_queries_cache(cache_key: str) -> dict[str, Any] | None:
+    now = time.monotonic()
+    async with _PROSPECTO_QUERIES_CACHE_LOCK:
+        entry = _PROSPECTO_QUERIES_CACHE.get(cache_key)
+        if not entry:
+            return None
+        expires_at, cached_value = entry
+        if expires_at <= now:
+            _PROSPECTO_QUERIES_CACHE.pop(cache_key, None)
+            return None
+        return dict(cached_value)
+
+
+async def _write_prospecto_queries_cache(cache_key: str, payload: dict[str, Any]) -> None:
+    now = time.monotonic()
+    expires_at = now + PROSPECTO_QUERIES_CACHE_TTL_SECONDS
+    async with _PROSPECTO_QUERIES_CACHE_LOCK:
+        expired = [key for key, (ttl, _) in _PROSPECTO_QUERIES_CACHE.items() if ttl <= now]
+        for key in expired:
+            _PROSPECTO_QUERIES_CACHE.pop(key, None)
+        _PROSPECTO_QUERIES_CACHE[cache_key] = (expires_at, dict(payload))
+        while len(_PROSPECTO_QUERIES_CACHE) > PROSPECTO_QUERIES_CACHE_MAX_ENTRIES:
+            oldest_key = next(iter(_PROSPECTO_QUERIES_CACHE), None)
+            if not oldest_key:
+                break
+            _PROSPECTO_QUERIES_CACHE.pop(oldest_key, None)
 
 
 def _percentile(values: list[float], percentile: float) -> float:
@@ -14271,21 +14308,52 @@ async def listar_prospectos_query_metadata(
 ) -> dict[str, Any]:
     """Lista nombres de consulta y actividades asociadas para los prospectos guardados."""
 
+    normalized_query_filters = sorted(
+        {
+            value.strip()
+            for value in (query or [])
+            if isinstance(value, str) and value.strip()
+        }
+    )
+    cache_key = _build_prospecto_queries_cache_key(
+        {
+            "user": user_token,
+            "query": normalized_query_filters,
+            "fuente": fuente or "",
+            "date_from": date_from.isoformat() if date_from else "",
+            "date_to": date_to.isoformat() if date_to else "",
+        }
+    )
+    cached_payload = await _read_prospecto_queries_cache(cache_key)
+    if cached_payload is not None:
+        logger.info(
+            "crm.prospectos.queries.cache_hit",
+            extra={
+                "query_filters": len(normalized_query_filters),
+                "fuente": fuente or "",
+                "has_date_from": bool(date_from),
+                "has_date_to": bool(date_to),
+            },
+        )
+        return cached_payload
+
     try:
         metadata = await repo.list_prospecto_query_metadata(
             usuario_token=user_token,
-            query_filters=query,
+            query_filters=normalized_query_filters,
             fuente=fuente or None,
             date_from=date_from,
             date_to=date_to,
         )
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
-    return {
+    payload = {
         "ok": True,
         "queries": metadata.get("queries", []),
         "activities": metadata.get("activities", []),
     }
+    await _write_prospecto_queries_cache(cache_key, payload)
+    return payload
 
 
 @router.get("/prospeccion/prospectos/preferences")
@@ -17670,6 +17738,8 @@ async def obtener_metrics_contacto(
 async def prospeccion_contacto_brevo_webhook(
     *,
     repo: CRMRepository = Depends(get_repository),
+    background_tasks: BackgroundTasks,
+    mode: Annotated[Literal["async", "sync"], Query()] = "async",
     payload: Any = Body(...),
 ) -> dict[str, Any]:
     """Recibe eventos desde Brevo y sincroniza los envíos."""
@@ -17681,13 +17751,40 @@ async def prospeccion_contacto_brevo_webhook(
         events = [payload]
     if not events:
         raise HTTPException(status_code=400, detail="payload_invalid")
-    processed_events = await process_brevo_events(repo=repo, events=events)
-    processed_inbound = 0
+
+    async def _process_brevo_events_background(*, repo: CRMRepository, events: list[dict[str, Any]]) -> None:
+        try:
+            processed_events = await process_brevo_events(repo=repo, events=events)
+            logger.info(
+                "crm.prospeccion.brevo_webhook.async_processed",
+                extra={"events": len(events), "processed_events": processed_events},
+            )
+        except Exception as exc:  # pragma: no cover - defensive logging in async background task
+            logger.exception(
+                "crm.prospeccion.brevo_webhook.async_failed",
+                extra={"events": len(events), "error": str(exc)},
+            )
+
+    if mode == "sync":
+        processed_events = await process_brevo_events(repo=repo, events=events)
+        processed_inbound = 0
+        return {
+            "ok": True,
+            "mode": mode,
+            "recibidos": len(events),
+            "procesados": processed_events + processed_inbound,
+            "procesados_eventos": processed_events,
+            "procesados_inbound": processed_inbound,
+        }
+
+    background_tasks.add_task(_process_brevo_events_background, repo=repo, events=events)
     return {
         "ok": True,
-        "procesados": processed_events + processed_inbound,
-        "procesados_eventos": processed_events,
-        "procesados_inbound": processed_inbound,
+        "mode": mode,
+        "recibidos": len(events),
+        "procesados": 0,
+        "procesados_eventos": 0,
+        "procesados_inbound": 0,
     }
 
 

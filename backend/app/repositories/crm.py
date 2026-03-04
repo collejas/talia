@@ -9841,22 +9841,40 @@ class CRMRepository:
 
         if not prospecto_ids:
             return []
-        ids_param = ",".join(str(value) for value in prospecto_ids)
-        params = {
-            "select": "prospecto_id,canales,total_envios,ultimo_contacto_en,total_respuestas,respondio,ultima_respuesta_en",
-            "prospecto_id": f"in.({ids_param})",
-            "order": "prospecto_id.asc",
+        # Preferimos el RPC cacheado para evitar recalcular agregados pesados en cada request.
+        rpc_payload = {
+            "p_prospecto_ids": [str(value) for value in prospecto_ids],
+            "p_max_age_seconds": 120,
         }
-        resp = await self._request_with_user(
-            "GET",
-            "/rest/v1/prospeccion_prospecto_contacto_stats",
-            token=usuario_token,
-            params=params,
-        )
-        data = resp.json() or []
-        if not isinstance(data, list):
-            raise CRMRepositoryError(f"contact_indicator_list_invalid:{data!r}")
-        return data
+        try:
+            resp = await self._request_with_user(
+                "POST",
+                "/rest/v1/rpc/prospeccion_contacto_indicadores_cached",
+                token=usuario_token,
+                json=rpc_payload,
+            )
+            data = resp.json() or []
+            if not isinstance(data, list):
+                raise CRMRepositoryError(f"contact_indicator_cached_list_invalid:{data!r}")
+            return data
+        except CRMRepositoryError:
+            # Fallback seguro: mantiene compatibilidad si el RPC no existe o falla.
+            ids_param = ",".join(str(value) for value in prospecto_ids)
+            params = {
+                "select": "prospecto_id,canales,total_envios,ultimo_contacto_en,total_respuestas,respondio,ultima_respuesta_en",
+                "prospecto_id": f"in.({ids_param})",
+                "order": "prospecto_id.asc",
+            }
+            resp = await self._request_with_user(
+                "GET",
+                "/rest/v1/prospeccion_prospecto_contacto_stats",
+                token=usuario_token,
+                params=params,
+            )
+            data = resp.json() or []
+            if not isinstance(data, list):
+                raise CRMRepositoryError(f"contact_indicator_list_invalid:{data!r}")
+            return data
 
     async def list_prospecto_audit(
         self,
