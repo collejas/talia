@@ -99,6 +99,13 @@ sudo rsync -a landing/src/ /var/www/talia-landing/ que mas nos faltaria par ala 
 
 sudo cat /proc/$(pgrep -f "next start")/environ | tr '\0' '\n' | grep -E 'SUPABASE|PANEL'
 
+
+# EJECUTAR LIMPIEZA DE MI TELEFONO:
+  select public.cleanup_test_phone_whatsapp(
+    '+5214441302811',
+    '00000000-0000-0000-0000-000000000001'::uuid
+  );
+  
 # GENERAR CONTRASENAS:
 python3 - <<'PY'
 import base64, os
