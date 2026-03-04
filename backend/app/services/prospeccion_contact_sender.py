@@ -18,6 +18,7 @@ from app.channels.whatsapp.routing import resolve_whatsapp_organizacion
 from app.core.config import settings
 from app.core.logging import get_logger, log_event
 from app.repositories.crm import CRMRepository, CRMRepositoryError
+from app.services.high_demand_mode import high_demand_controller
 from app.services import EmailSendError, send_email, storage, tenant_runtime
 from app.services.metrics import metrics
 from app.services.prospeccion_auto_promoter import auto_promote_prospecto, is_promotable_estado
@@ -946,11 +947,21 @@ class ProspeccionContactSender:
 
     async def _process_pending_envios(self) -> bool:
         repo = CRMRepository()
-        envios = await repo.worker_list_pending_envios(limit=self._batch_size)
+        (
+            effective_batch_size,
+            effective_concurrency,
+            high_demand_details,
+        ) = await high_demand_controller.get_sender_limits(
+            base_batch_size=self._batch_size,
+            base_max_concurrency=self._max_concurrency,
+        )
+        envios = await repo.worker_list_pending_envios(limit=effective_batch_size)
         if not envios:
             return False
 
-        semaphore = asyncio.Semaphore(self._max_concurrency)
+        semaphore = asyncio.Semaphore(effective_concurrency)
+        if high_demand_details.get("high_demand_mode"):
+            log_event(logger, "prospeccion.sender_high_demand_profile", **high_demand_details)
         tasks: list[asyncio.Task[Exception | None]] = []
 
         async def _run_one(envio: dict[str, Any]) -> Exception | None:
@@ -974,7 +985,7 @@ class ProspeccionContactSender:
             if isinstance(maybe_error, CRMRepositoryError):
                 raise maybe_error
 
-        return len(envios) >= self._batch_size
+        return len(envios) >= effective_batch_size
 
     async def _process_envio(self, repo: CRMRepository, envio: dict[str, Any]) -> None:
         envio_id_value = envio.get("id")

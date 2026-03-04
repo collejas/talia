@@ -70,6 +70,7 @@ from app.services import (
     storage,
     tenant_runtime,
 )
+from app.services.high_demand_mode import high_demand_controller
 from app.services.channel_routing import resolve_organizacion_id
 from app.services import calendar as calendar_service
 from app.services import quotes as quotes_service
@@ -198,6 +199,7 @@ async def _record_inbox_threads_metrics(*, duration_ms: float, cache_hit: bool) 
         cutoff = now - INBOX_THREADS_METRICS_WINDOW_SECONDS
         while _INBOX_THREADS_METRICS_SAMPLES and _INBOX_THREADS_METRICS_SAMPLES[0][0] < cutoff:
             _INBOX_THREADS_METRICS_SAMPLES.popleft()
+    await high_demand_controller.record_inbox_threads_latency(latency_ms=duration_ms)
 
 
 async def _snapshot_inbox_threads_metrics(*, window_seconds: int) -> dict[str, Any]:
@@ -10967,6 +10969,17 @@ async def list_inbox_threads_metrics_snapshots(
 ) -> dict[str, Any]:
     items = _read_inbox_threads_metrics_snapshots(limit=limit)
     return {"ok": True, "items": items}
+
+
+@router.get("/ops/high-demand-mode")
+async def get_high_demand_mode_status(
+    *,
+    _: str = Depends(require_owner_only()),
+    window_seconds: Annotated[int, Query(ge=60, le=3600)] = 300,
+) -> dict[str, Any]:
+    snapshot = await high_demand_controller.snapshot(window_seconds=window_seconds)
+    mode = await high_demand_controller.current_mode()
+    return {"ok": True, "snapshot": snapshot, "mode": mode}
 
 
 @router.get("/inbox/messages/{conversacion_id}", response_model=list[CRMInboxMessage])

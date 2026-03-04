@@ -10,7 +10,7 @@ Estado del plan documentado en `02_Plan_soluciones_priorizado.md`.
 - Fase 1.2: **Completada (primera iteración)**
 - Fase 2.1: **Completada (primera iteración)**
 - Fase 2.2: **Completada (primera iteración)**
-- Fase 3+: **Pendiente**
+- Fase 3: **Completada (primera iteración)**
 
 ## Entregables completados
 
@@ -201,6 +201,47 @@ Estado del plan documentado en `02_Plan_soluciones_priorizado.md`.
 - Diagnóstico más rápido de incidentes por mensaje puntual.
 - Capacidad de seguir un inbound específico de extremo a extremo en ambos canales.
 
+### Fase 3 Observabilidad + modo alta demanda (primera iteración)
+
+1. Controlador central de KPIs operativos.
+- Se agregó `high_demand_mode.py` con métricas en memoria de:
+  - `inbound_count` / `inbound_per_minute`
+  - `assistant_reply_latency_p95_ms`
+  - `inbox_threads_latency_p95_ms`
+  - `twilio_error_rate` y desglose por código
+  - `queue_depth` (pendiente listo + procesando)
+- El cálculo se hace por ventana configurable (default 300s).
+
+2. Runner automático de evaluación.
+- Se añadió runner periódico (`high_demand_mode_runner`) al lifecycle de la API.
+- Registra snapshot por corrida:
+  - `high_demand.kpi_snapshot`
+- Registra cambios de estado:
+  - `high_demand.mode_activated`
+  - `high_demand.mode_deactivated`
+
+3. Modo alta demanda aplicado al backend.
+- Sender de prospección adapta carga automáticamente cuando el modo está activo:
+  - reduce `batch_size` efectivo
+  - reduce `max_concurrency` efectivo
+  - log: `prospeccion.sender_high_demand_profile`
+- Jobs no críticos se diferen automáticamente cuando aplica:
+  - `non_critical_job_gate` ahora considera `high_demand_mode` además de backlog.
+
+4. Instrumentación de entradas/canales para KPIs.
+- Webchat y WhatsApp registran inbound y latencia de respuesta del asistente.
+- WhatsApp registra intentos/error de dispatch para tasa de error Twilio.
+- Inbox threads alimenta el KPI de `inbox_threads_latency`.
+
+5. Consulta owner-only del estado.
+- Nuevo endpoint:
+  - `GET /crm/ops/high-demand-mode?window_seconds=300`
+- Devuelve snapshot + estado actual del modo (activo/reasons/recomendación de polling).
+
+6. Resultado esperado de primera iteración.
+- Alertas y activación automáticas sin intervención manual.
+- Autoprotección básica en campañas intensas reduciendo contención entre flujos.
+
 ## Seguridad y acceso
 
 1. Métricas/snapshots de Inbox restringidos a owner.
@@ -209,9 +250,10 @@ Estado del plan documentado en `02_Plan_soluciones_priorizado.md`.
 
 ## Estado de pendientes
 
-### Fase 3 (pendiente)
+### Fase 3.2 (pendiente)
 
-- Alertas automáticas y modo alta demanda.
+- Conectar la recomendación de polling del modo alta demanda al cliente Inbox en tiempo real.
+- Añadir alertas externas (Slack/Email) además del logging estructurado.
 
 ## Checklist de verificación operativa
 
@@ -230,8 +272,15 @@ Estado del plan documentado en `02_Plan_soluciones_priorizado.md`.
 - `webchat.reply_fallback_applied`
 - `whatsapp.message_trace`
 - `webchat.message_trace`
+- `high_demand.runner_started`
+- `high_demand.kpi_snapshot`
+- `high_demand.mode_activated`
+- `high_demand.mode_deactivated`
+- `prospeccion.sender_high_demand_profile`
 3. Confirmar escritura de histórico:
 - `tail -n 20 /var/www/talia/logs/inbox-threads-metrics.log`
 4. Confirmar acceso owner-only:
 - `/settings/inbox-metrics` carga para owner.
 - Usuarios no-owner reciben `/unauthorized`.
+5. Confirmar endpoint owner-only de modo alta demanda:
+- `GET /crm/ops/high-demand-mode`

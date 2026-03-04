@@ -8,6 +8,7 @@ from typing import Any
 
 from app.core.config import settings
 from app.core.logging import get_logger
+from app.services.high_demand_mode import high_demand_controller
 from app.repositories.crm import CRMRepository, CRMRepositoryError
 
 logger = get_logger("app.services.non_critical_job_gate")
@@ -22,6 +23,15 @@ async def should_defer_non_critical_jobs(*, job_name: str) -> tuple[bool, dict[s
 
     if not bool(getattr(settings, "non_critical_jobs_blast_protection_enabled", True)):
         return False, {"reason": "disabled", "job_name": job_name}
+    if bool(getattr(settings, "high_demand_non_critical_force_defer", True)):
+        mode = await high_demand_controller.current_mode()
+        if bool(mode.get("active")):
+            return True, {
+                "reason": "high_demand_mode",
+                "job_name": job_name,
+                "cached": False,
+                "mode": mode,
+            }
 
     now = monotonic()
     cache_ttl = max(5, int(getattr(settings, "non_critical_jobs_gate_cache_seconds", 20)))
@@ -56,4 +66,3 @@ async def should_defer_non_critical_jobs(*, job_name: str) -> tuple[bool, dict[s
         _LAST_CHECK_AT = now
         _LAST_RESULT = (defer, details)
         return defer, {**details, "job_name": job_name}
-

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import time
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Any, Mapping
@@ -38,6 +39,7 @@ from app.services.catalog_context import build_catalog_context
 from app.services.prospeccion_auto_promoter import auto_promote_prospecto
 from app.services.assistant_reply_guard import evaluate_reply_quality
 from app.services.time_utils import get_current_time_reference
+from app.services.high_demand_mode import high_demand_controller
 
 from . import schemas
 
@@ -759,6 +761,7 @@ async def handle_incoming_message(
     source: str = "webhook",
 ) -> None:
     """Procesa un mensaje entrante desde Twilio y delega la respuesta a OpenAI."""
+    turn_started = time.perf_counter()
     log_event(
         logger,
         "whatsapp.incoming_message_received",
@@ -843,6 +846,7 @@ async def handle_incoming_message(
             "source": source,
         },
     )
+    await high_demand_controller.record_inbound(channel="whatsapp")
 
     if conversation_id:
         try:
@@ -1163,6 +1167,11 @@ async def handle_incoming_message(
             "delivery_status": _trim_text(send_result.status),
             "delivery_error": _trim_text(send_result.error),
         },
+    )
+    await high_demand_controller.record_twilio_attempt(error_code=send_result.error)
+    await high_demand_controller.record_assistant_latency(
+        channel="whatsapp",
+        latency_ms=(time.perf_counter() - turn_started) * 1000,
     )
 
     metadata = {

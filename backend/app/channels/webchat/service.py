@@ -6,6 +6,7 @@ import asyncio
 import io
 import json
 import re
+import time
 import zipfile
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
@@ -72,6 +73,7 @@ from app.services.scoring_contract import (
     normalize_required_fields_for_answers as shared_normalize_required_fields_for_answers,
 )
 from app.services.storage import StorageError
+from app.services.high_demand_mode import high_demand_controller
 from app.logging.catalog_debug import write_catalog_debug_entry
 
 from . import schemas
@@ -2683,6 +2685,7 @@ async def handle_message(
     request: Request | None = None,
 ) -> schemas.MessageResponse:
     """Orquesta la recepción de un mensaje y delega en OpenAI/Supabase."""
+    turn_started = time.perf_counter()
     if payload.author != "user":
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -2809,6 +2812,7 @@ async def handle_message(
         inbound_message_id=inbound_message_id,
         extra={"session_id": payload.session_id},
     )
+    await high_demand_controller.record_inbound(channel="webchat")
     contact: dict[str, Any] | None = await _resolve_contact(str(contact_id))
     resolved_organizacion_id = (
         await resolve_webchat_organizacion(metadata_dict, contact=contact) or organizacion_hint
@@ -2935,6 +2939,10 @@ async def handle_message(
                 "retryable": bool(error_meta.get("retryable")),
             },
         )
+        await high_demand_controller.record_assistant_latency(
+            channel="webchat",
+            latency_ms=(time.perf_counter() - turn_started) * 1000,
+        )
         return schemas.MessageResponse(
             reply=DEFAULT_FALLBACK,
             metadata=metadata,
@@ -3031,6 +3039,10 @@ async def handle_message(
         contact_id=str(contact_id),
         inbound_message_id=inbound_message_id,
         extra={"fallback_used": assistant_reply == DEFAULT_FALLBACK},
+    )
+    await high_demand_controller.record_assistant_latency(
+        channel="webchat",
+        latency_ms=(time.perf_counter() - turn_started) * 1000,
     )
 
     return schemas.MessageResponse(

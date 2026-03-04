@@ -442,6 +442,162 @@ class Settings(BaseSettings):
             "TALIA_NON_CRITICAL_JOBS_GATE_CACHE_SECONDS",
         ),
     )
+    high_demand_mode_enabled: bool = Field(
+        default=True,
+        description="Activa el modo automático de alta demanda.",
+        validation_alias=AliasChoices(
+            "HIGH_DEMAND_MODE_ENABLED",
+            "TALIA_HIGH_DEMAND_MODE_ENABLED",
+        ),
+    )
+    high_demand_runner_interval_seconds: int = Field(
+        default=60,
+        ge=30,
+        le=600,
+        description="Intervalo del runner que evalúa KPIs y estado de alta demanda.",
+        validation_alias=AliasChoices(
+            "HIGH_DEMAND_RUNNER_INTERVAL_SECONDS",
+            "TALIA_HIGH_DEMAND_RUNNER_INTERVAL_SECONDS",
+        ),
+    )
+    high_demand_window_seconds: int = Field(
+        default=300,
+        ge=60,
+        le=3600,
+        description="Ventana de cálculo de KPIs para alta demanda.",
+        validation_alias=AliasChoices(
+            "HIGH_DEMAND_WINDOW_SECONDS",
+            "TALIA_HIGH_DEMAND_WINDOW_SECONDS",
+        ),
+    )
+    high_demand_inbox_p95_alert_ms: int = Field(
+        default=3000,
+        ge=500,
+        le=120000,
+        description="Umbral de alerta para p95 de Inbox threads.",
+        validation_alias=AliasChoices(
+            "HIGH_DEMAND_INBOX_P95_ALERT_MS",
+            "TALIA_HIGH_DEMAND_INBOX_P95_ALERT_MS",
+        ),
+    )
+    high_demand_assistant_p95_alert_ms: int = Field(
+        default=60000,
+        ge=1000,
+        le=300000,
+        description="Umbral de alerta para p95 de latencia de respuesta del asistente.",
+        validation_alias=AliasChoices(
+            "HIGH_DEMAND_ASSISTANT_P95_ALERT_MS",
+            "TALIA_HIGH_DEMAND_ASSISTANT_P95_ALERT_MS",
+        ),
+    )
+    high_demand_twilio_error_rate_alert: float = Field(
+        default=0.12,
+        ge=0.01,
+        le=1.0,
+        description="Umbral de alerta para tasa de error Twilio en ventana.",
+        validation_alias=AliasChoices(
+            "HIGH_DEMAND_TWILIO_ERROR_RATE_ALERT",
+            "TALIA_HIGH_DEMAND_TWILIO_ERROR_RATE_ALERT",
+        ),
+    )
+    high_demand_queue_depth_threshold: int = Field(
+        default=250,
+        ge=10,
+        le=100000,
+        description="Umbral de backlog para activar alta demanda.",
+        validation_alias=AliasChoices(
+            "HIGH_DEMAND_QUEUE_DEPTH_THRESHOLD",
+            "TALIA_HIGH_DEMAND_QUEUE_DEPTH_THRESHOLD",
+        ),
+    )
+    high_demand_queue_depth_recovery_threshold: int = Field(
+        default=120,
+        ge=1,
+        le=100000,
+        description="Backlog de recuperación para desactivar alta demanda.",
+        validation_alias=AliasChoices(
+            "HIGH_DEMAND_QUEUE_DEPTH_RECOVERY_THRESHOLD",
+            "TALIA_HIGH_DEMAND_QUEUE_DEPTH_RECOVERY_THRESHOLD",
+        ),
+    )
+    high_demand_latency_alert_minutes: int = Field(
+        default=5,
+        ge=1,
+        le=60,
+        description="Duración sostenida requerida para alertas de latencia.",
+        validation_alias=AliasChoices(
+            "HIGH_DEMAND_LATENCY_ALERT_MINUTES",
+            "TALIA_HIGH_DEMAND_LATENCY_ALERT_MINUTES",
+        ),
+    )
+    high_demand_twilio_alert_minutes: int = Field(
+        default=10,
+        ge=1,
+        le=60,
+        description="Duración sostenida requerida para alertas de Twilio.",
+        validation_alias=AliasChoices(
+            "HIGH_DEMAND_TWILIO_ALERT_MINUTES",
+            "TALIA_HIGH_DEMAND_TWILIO_ALERT_MINUTES",
+        ),
+    )
+    high_demand_activation_consecutive: int = Field(
+        default=2,
+        ge=1,
+        le=20,
+        description="Corridas consecutivas necesarias para activar por cola alta.",
+        validation_alias=AliasChoices(
+            "HIGH_DEMAND_ACTIVATION_CONSECUTIVE",
+            "TALIA_HIGH_DEMAND_ACTIVATION_CONSECUTIVE",
+        ),
+    )
+    high_demand_recovery_consecutive: int = Field(
+        default=3,
+        ge=1,
+        le=20,
+        description="Corridas consecutivas saludables para desactivar alta demanda.",
+        validation_alias=AliasChoices(
+            "HIGH_DEMAND_RECOVERY_CONSECUTIVE",
+            "TALIA_HIGH_DEMAND_RECOVERY_CONSECUTIVE",
+        ),
+    )
+    high_demand_sender_batch_multiplier: float = Field(
+        default=0.6,
+        ge=0.1,
+        le=1.0,
+        description="Multiplicador de batch del sender durante alta demanda.",
+        validation_alias=AliasChoices(
+            "HIGH_DEMAND_SENDER_BATCH_MULTIPLIER",
+            "TALIA_HIGH_DEMAND_SENDER_BATCH_MULTIPLIER",
+        ),
+    )
+    high_demand_sender_concurrency_multiplier: float = Field(
+        default=0.6,
+        ge=0.1,
+        le=1.0,
+        description="Multiplicador de concurrencia del sender durante alta demanda.",
+        validation_alias=AliasChoices(
+            "HIGH_DEMAND_SENDER_CONCURRENCY_MULTIPLIER",
+            "TALIA_HIGH_DEMAND_SENDER_CONCURRENCY_MULTIPLIER",
+        ),
+    )
+    high_demand_non_critical_force_defer: bool = Field(
+        default=True,
+        description="Si está activo, difiere jobs no críticos cuando el modo alta demanda está activo.",
+        validation_alias=AliasChoices(
+            "HIGH_DEMAND_NON_CRITICAL_FORCE_DEFER",
+            "TALIA_HIGH_DEMAND_NON_CRITICAL_FORCE_DEFER",
+        ),
+    )
+    high_demand_recommended_inbox_poll_seconds: int = Field(
+        default=20,
+        ge=5,
+        le=120,
+        description="Intervalo sugerido de polling de Inbox durante alta demanda.",
+        validation_alias=AliasChoices(
+            "HIGH_DEMAND_RECOMMENDED_INBOX_POLL_SECONDS",
+            "TALIA_HIGH_DEMAND_RECOMMENDED_INBOX_POLL_SECONDS",
+        ),
+    )
     webchat_inactivity_minutes: int | None = Field(
         default=None,
         validation_alias=AliasChoices(
