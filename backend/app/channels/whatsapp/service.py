@@ -36,6 +36,7 @@ from app.services.storage import StorageError
 from app.channels.booking_context import build_booking_context_message
 from app.services.catalog_context import build_catalog_context
 from app.services.prospeccion_auto_promoter import auto_promote_prospecto
+from app.services.assistant_reply_guard import evaluate_reply_quality
 from app.services.time_utils import get_current_time_reference
 
 from . import schemas
@@ -1945,6 +1946,78 @@ async def _generate_assistant_reply(
             )
             final_response_id = result.response_id
             final_conversation_id = result.conversation_id
+
+    quality_ok, quality_reason = evaluate_reply_quality(final_text)
+    if not quality_ok:
+        logger.warning(
+            "whatsapp.reply_quality_low",
+            extra={"conversation_id": conversation_id, "reason": quality_reason},
+        )
+        guard_retry_kwargs: dict[str, Any] = {
+            "input": [
+                {
+                    "role": "developer",
+                    "content": [
+                        {
+                            "type": "input_text",
+                            "text": (
+                                "Regenera SOLO un mensaje final de WhatsApp completo y autocontenido. "
+                                "1-3 frases, máximo 500 caracteres. "
+                                "No termines con puntos suspensivos, comas ni conectores sueltos."
+                            ),
+                        }
+                    ],
+                }
+            ],
+            "store": True,
+            "max_output_tokens": 180,
+            "temperature": 0.2,
+            "metadata": metadata_payload,
+            "tool_choice": "none",
+        }
+        guard_retry_kwargs.update(_build_request_template(include_tools=False))
+        if assistant.is_prompt:
+            guard_retry_kwargs.pop("temperature", None)
+        if final_conversation_id:
+            guard_retry_kwargs["conversation"] = final_conversation_id
+        elif final_response_id:
+            guard_retry_kwargs["previous_response_id"] = final_response_id
+        try:
+            retry_response = await client.responses.create(**guard_retry_kwargs)
+            retry_payload = retry_response.model_dump()
+            retry_text = _extract_text_from_response(retry_payload)
+            retry_ok, retry_reason = evaluate_reply_quality(retry_text)
+            if retry_ok:
+                final_text = retry_text
+                final_response_id = retry_payload.get("id") or final_response_id
+                final_conversation_id = (
+                    (retry_payload.get("conversation") or {}).get("id")
+                    or final_conversation_id
+                )
+                logger.info(
+                    "whatsapp.reply_quality_recovered",
+                    extra={"conversation_id": conversation_id, "previous_reason": quality_reason},
+                )
+            else:
+                final_text = None
+                logger.warning(
+                    "whatsapp.reply_quality_retry_failed",
+                    extra={
+                        "conversation_id": conversation_id,
+                        "previous_reason": quality_reason,
+                        "retry_reason": retry_reason,
+                    },
+                )
+        except Exception as exc:  # pragma: no cover
+            final_text = None
+            logger.warning(
+                "whatsapp.reply_quality_retry_exception",
+                extra={
+                    "conversation_id": conversation_id,
+                    "previous_reason": quality_reason,
+                    "error": str(exc),
+                },
+            )
 
     return AssistantReply(
         text=final_text.strip() if final_text else None,

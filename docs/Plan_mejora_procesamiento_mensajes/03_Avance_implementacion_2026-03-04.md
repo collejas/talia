@@ -8,7 +8,8 @@ Estado del plan documentado en `02_Plan_soluciones_priorizado.md`.
 - Fase 0.2: **Completada**
 - Fase 1.1: **Completada (primera iteración)**
 - Fase 1.2: **Completada (primera iteración)**
-- Fase 2+: **Pendiente**
+- Fase 2.1: **Completada (primera iteración)**
+- Fase 2.2+: **Pendiente**
 
 ## Entregables completados
 
@@ -123,6 +124,46 @@ Estado del plan documentado en `02_Plan_soluciones_priorizado.md`.
 - Menor contención entre envíos masivos de prospección y jobs de seguimiento/rescate.
 - Protección simple y reversible vía configuración (feature toggle).
 
+### Fase 2.1 Guardrails de calidad de respuesta (primera iteración)
+
+1. Evaluador compartido de calidad de respuesta.
+- Se agregó módulo reusable para detectar respuestas incompletas/no publicables.
+- Heurísticas iniciales:
+  - respuesta vacía
+  - frase conocida de fallo ("no pude procesar...")
+  - cierre sospechoso (`...`, `…`, `,`, `:`, `;`, `-`)
+  - conector suelto al final (`y`, `de`, `que`, `para`, etc.)
+  - desbalance de fences/citas/paréntesis
+
+2. Aplicación en canal WhatsApp.
+- Validación del mensaje final antes de devolverlo.
+- Si falla validación:
+  - reintento corto de redacción final (sin tools)
+  - si vuelve a fallar, se fuerza fallback único (sin persistir parcial)
+- Se agregaron logs:
+  - `whatsapp.reply_quality_low`
+  - `whatsapp.reply_quality_recovered`
+  - `whatsapp.reply_quality_retry_failed`
+  - `whatsapp.reply_quality_retry_exception`
+
+3. Aplicación en canal Webchat.
+- Validación al finalizar `run_tool_loop`.
+- Si falla validación:
+  - reintento corto de redacción final (sin tools)
+  - si vuelve a fallar, `assistant_reply = None` para disparar fallback único
+- En handler de entrada:
+  - si no hay respuesta usable, se aplica `DEFAULT_FALLBACK` y se persiste solo esa salida.
+- Logs agregados:
+  - `webchat.reply_quality_low`
+  - `webchat.reply_quality_recovered`
+  - `webchat.reply_quality_retry_failed`
+  - `webchat.reply_quality_retry_exception`
+  - `webchat.reply_fallback_applied`
+
+4. Resultado esperado de primera iteración.
+- Evitar respuestas parciales/truncadas visibles al usuario final.
+- Mantener una sola salida consistente cuando falle calidad (sin mezclar parcial + fallback).
+
 ## Seguridad y acceso
 
 1. Métricas/snapshots de Inbox restringidos a owner.
@@ -130,10 +171,6 @@ Estado del plan documentado en `02_Plan_soluciones_priorizado.md`.
 - El panel de métricas también valida `es_owner` y redirige a `/unauthorized` si no cumple.
 
 ## Estado de pendientes
-
-### Fase 2.1 (pendiente)
-
-- Guardrails de calidad para evitar persistir respuestas truncadas/parciales.
 
 ### Fase 2.2 (pendiente)
 
@@ -155,6 +192,9 @@ Estado del plan documentado en `02_Plan_soluciones_priorizado.md`.
 - `whatsapp.followup.deferred_due_to_blast`
 - `webchat.followup.deferred_due_to_blast`
 - `webchat.session_closed.rescue_deferred_due_to_blast`
+- `whatsapp.reply_quality_low`
+- `webchat.reply_quality_low`
+- `webchat.reply_fallback_applied`
 3. Confirmar escritura de histórico:
 - `tail -n 20 /var/www/talia/logs/inbox-threads-metrics.log`
 4. Confirmar acceso owner-only:

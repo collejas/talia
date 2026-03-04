@@ -62,6 +62,7 @@ from app.services.catalog_fraccionamientos import (
     list_catalog_modelos,
 )
 from app.services.catalog_item_lookup import lookup_catalog_items_sql_first
+from app.services.assistant_reply_guard import evaluate_reply_quality
 from app.services.catalog_locations import (
     LocationResolver,
     extract_development_id,
@@ -2915,6 +2916,13 @@ async def handle_message(
             contact=contact,
         )
 
+    if not assistant_reply:
+        logger.warning(
+            "webchat.reply_fallback_applied",
+            extra={"conversation_id": str(conversation_id), "reason": "empty_or_low_quality"},
+        )
+        assistant_reply = DEFAULT_FALLBACK
+
     if assistant_reply:
         try:
             message_metadata = {
@@ -3448,7 +3456,7 @@ async def _run_assistant_turn(
         "temperature": 0.4,
     }
 
-    def _build_request_template() -> dict[str, Any]:
+    def _build_request_template(*, include_tools: bool = True) -> dict[str, Any]:
         if assistant.is_prompt:
             prompt_payload = _build_prompt_payload(assistant, context)
             return {
@@ -3460,11 +3468,11 @@ async def _run_assistant_turn(
         payload: dict[str, Any] = {"model": assistant_spec.model}
         if assistant_spec.instructions:
             payload["instructions"] = assistant_spec.instructions
-        if assistant_spec.tools:
+        if include_tools and assistant_spec.tools:
             payload["tools"] = assistant_spec.tools
         return payload
 
-    request_kwargs.update(_build_request_template())
+    request_kwargs.update(_build_request_template(include_tools=True))
 
     if sanitized_metadata:
         request_kwargs["metadata"] = sanitized_metadata
@@ -3486,7 +3494,7 @@ async def _run_assistant_turn(
         assistant_spec=assistant_spec,
         context=runtime_context,
         initial_request=request_kwargs,
-        request_template=_build_request_template,
+        request_template=lambda: _build_request_template(include_tools=True),
         execute_tool=lambda name, args, _: _execute_function_call(name, args, context),
         openai_conversation_id=openai_conversation_id,
         previous_response_id=previous_response_id,
@@ -3494,6 +3502,88 @@ async def _run_assistant_turn(
     )
 
     assistant_reply = _extract_text_from_response(result.response)
+    side_effects = dict(result.side_effects or {})
+    quality_ok, quality_reason = evaluate_reply_quality(assistant_reply)
+    if not quality_ok:
+        logger.warning(
+            "webchat.reply_quality_low",
+            extra={"conversation_id": context.conversation_id, "reason": quality_reason},
+        )
+        guard_retry_kwargs: dict[str, Any] = {
+            "input": [
+                {
+                    "role": "developer",
+                    "content": [
+                        {
+                            "type": "input_text",
+                            "text": (
+                                "Regenera SOLO un mensaje final de webchat completo y autocontenido. "
+                                "2-4 frases, máximo 500 caracteres. "
+                                "No termines con puntos suspensivos, comas ni conectores sueltos."
+                            ),
+                        }
+                    ],
+                }
+            ],
+            "store": True,
+            "max_output_tokens": 220,
+            "temperature": 0.2,
+            "tool_choice": "none",
+        }
+        guard_retry_kwargs.update(_build_request_template(include_tools=False))
+        if assistant.is_prompt:
+            guard_retry_kwargs.pop("temperature", None)
+        if sanitized_metadata:
+            guard_retry_kwargs["metadata"] = sanitized_metadata
+        if result.conversation_id:
+            guard_retry_kwargs["conversation"] = result.conversation_id
+        elif result.response_id:
+            guard_retry_kwargs["previous_response_id"] = result.response_id
+        try:
+            retry_response = await client.responses.create(**guard_retry_kwargs)
+            retry_payload = retry_response.model_dump()
+            retry_text = _extract_text_from_response(retry_payload)
+            retry_ok, retry_reason = evaluate_reply_quality(retry_text)
+            if retry_ok:
+                assistant_reply = retry_text
+                side_effects["reply_guard"] = {
+                    "retry_used": True,
+                    "initial_reason": quality_reason,
+                }
+                logger.info(
+                    "webchat.reply_quality_recovered",
+                    extra={"conversation_id": context.conversation_id, "previous_reason": quality_reason},
+                )
+            else:
+                assistant_reply = None
+                side_effects["reply_guard"] = {
+                    "fallback_used": True,
+                    "initial_reason": quality_reason,
+                    "retry_reason": retry_reason,
+                }
+                logger.warning(
+                    "webchat.reply_quality_retry_failed",
+                    extra={
+                        "conversation_id": context.conversation_id,
+                        "previous_reason": quality_reason,
+                        "retry_reason": retry_reason,
+                    },
+                )
+        except Exception as exc:  # pragma: no cover
+            assistant_reply = None
+            side_effects["reply_guard"] = {
+                "fallback_used": True,
+                "initial_reason": quality_reason,
+                "retry_reason": "retry_exception",
+            }
+            logger.warning(
+                "webchat.reply_quality_retry_exception",
+                extra={
+                    "conversation_id": context.conversation_id,
+                    "previous_reason": quality_reason,
+                    "error": str(exc),
+                },
+            )
 
     return (
         assistant_reply,
@@ -3501,7 +3591,7 @@ async def _run_assistant_turn(
         result.tools_called,
         result.tool_call_ids,
         result.conversation_id,
-        result.side_effects,
+        side_effects,
     )
 
 
