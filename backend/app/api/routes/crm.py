@@ -8,11 +8,12 @@ import csv
 import hashlib
 import io
 import json
+import math
 import os
 import re
 import secrets
 import unicodedata
-from collections import Counter, defaultdict
+from collections import Counter, defaultdict, deque
 from datetime import date, datetime, timedelta, timezone
 from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 from enum import Enum
@@ -129,6 +130,15 @@ INBOX_THREADS_CACHE_TTL_SECONDS = 4.0
 INBOX_THREADS_CACHE_MAX_ENTRIES = 256
 _INBOX_THREADS_CACHE: dict[str, tuple[float, list[Any]]] = {}
 _INBOX_THREADS_CACHE_LOCK = asyncio.Lock()
+INBOX_THREADS_METRICS_WINDOW_SECONDS = 900
+INBOX_THREADS_METRICS_MAX_SAMPLES = 5000
+_INBOX_THREADS_METRICS_LOCK = asyncio.Lock()
+_INBOX_THREADS_METRICS_SAMPLES: deque[tuple[float, float]] = deque(
+    maxlen=INBOX_THREADS_METRICS_MAX_SAMPLES
+)
+_INBOX_THREADS_METRICS_CACHE_HITS = 0
+_INBOX_THREADS_METRICS_CACHE_MISSES = 0
+_INBOX_THREADS_METRICS_SLOW_QUERIES = 0
 
 
 def _build_inbox_threads_cache_key(payload: dict[str, Any]) -> str:
@@ -162,6 +172,60 @@ async def _write_inbox_threads_cache(cache_key: str, rows: list[Any]) -> None:
             if not oldest_key:
                 break
             _INBOX_THREADS_CACHE.pop(oldest_key, None)
+
+
+def _percentile(values: list[float], percentile: float) -> float:
+    if not values:
+        return 0.0
+    rank = max(0, min(len(values) - 1, math.ceil((percentile / 100) * len(values)) - 1))
+    return values[rank]
+
+
+async def _record_inbox_threads_metrics(*, duration_ms: float, cache_hit: bool) -> None:
+    now = time.monotonic()
+    async with _INBOX_THREADS_METRICS_LOCK:
+        global _INBOX_THREADS_METRICS_CACHE_HITS, _INBOX_THREADS_METRICS_CACHE_MISSES, _INBOX_THREADS_METRICS_SLOW_QUERIES
+        _INBOX_THREADS_METRICS_SAMPLES.append((now, max(0.0, duration_ms)))
+        if cache_hit:
+            _INBOX_THREADS_METRICS_CACHE_HITS += 1
+        else:
+            _INBOX_THREADS_METRICS_CACHE_MISSES += 1
+        if duration_ms > 3000:
+            _INBOX_THREADS_METRICS_SLOW_QUERIES += 1
+        cutoff = now - INBOX_THREADS_METRICS_WINDOW_SECONDS
+        while _INBOX_THREADS_METRICS_SAMPLES and _INBOX_THREADS_METRICS_SAMPLES[0][0] < cutoff:
+            _INBOX_THREADS_METRICS_SAMPLES.popleft()
+
+
+async def _snapshot_inbox_threads_metrics(*, window_seconds: int) -> dict[str, Any]:
+    now = time.monotonic()
+    cutoff = now - window_seconds
+    async with _INBOX_THREADS_METRICS_LOCK:
+        samples = [duration for ts, duration in _INBOX_THREADS_METRICS_SAMPLES if ts >= cutoff]
+        ordered = sorted(samples)
+        cache_hits = _INBOX_THREADS_METRICS_CACHE_HITS
+        cache_misses = _INBOX_THREADS_METRICS_CACHE_MISSES
+        slow_queries = _INBOX_THREADS_METRICS_SLOW_QUERIES
+
+    total = cache_hits + cache_misses
+    hit_rate = (cache_hits / total) if total else 0.0
+    return {
+        "window_seconds": window_seconds,
+        "sample_count": len(ordered),
+        "latency_ms": {
+            "p50": round(_percentile(ordered, 50), 2),
+            "p90": round(_percentile(ordered, 90), 2),
+            "p95": round(_percentile(ordered, 95), 2),
+            "max": round(ordered[-1], 2) if ordered else 0.0,
+            "avg": round((sum(ordered) / len(ordered)), 2) if ordered else 0.0,
+        },
+        "cache": {
+            "hits": cache_hits,
+            "misses": cache_misses,
+            "hit_rate": round(hit_rate, 4),
+        },
+        "slow_queries_over_3000ms": slow_queries,
+    }
 
 def _write_mapbox_debug_log(tag: str, payload: Any) -> None:
     try:
@@ -10132,6 +10196,7 @@ async def get_inbox_threads(
     offset: Annotated[int, Query(ge=0)] = 0,
     message_limit: Annotated[int, Query(ge=1, le=50)] = 20,
 ) -> list[CRMInboxThread]:
+    request_start = time.perf_counter()
     source_requested = _clean_text(source)
     source_for_repo = None if source_requested == "publicidad_whatsapp" else source
     cache_key = _build_inbox_threads_cache_key(
@@ -10152,9 +10217,12 @@ async def get_inbox_threads(
     )
     cached_threads = await _read_inbox_threads_cache(cache_key)
     if cached_threads is not None:
+        total_duration_ms = (time.perf_counter() - request_start) * 1000
+        await _record_inbox_threads_metrics(duration_ms=total_duration_ms, cache_hit=True)
         logger.info(
             "crm.inbox.threads.cache_hit",
             extra={
+                "duration_ms": round(total_duration_ms, 2),
                 "rows": len(cached_threads),
                 "estado": estado,
                 "source": source_requested,
@@ -10568,6 +10636,8 @@ async def get_inbox_threads(
         result_threads = [CRMInboxThread.model_validate(row) for row in enriched_rows]
 
     await _write_inbox_threads_cache(cache_key, result_threads)
+    total_duration_ms = (time.perf_counter() - request_start) * 1000
+    await _record_inbox_threads_metrics(duration_ms=total_duration_ms, cache_hit=False)
     return result_threads
 
 
@@ -10667,6 +10737,19 @@ async def get_inbox_filter_options(
         logger.info("crm.inbox.filter_options.query", extra=log_payload)
 
     return CRMInboxContextFilters(batches=batches, campanas=campanas)
+
+
+@router.get("/inbox/threads/metrics")
+async def get_inbox_threads_metrics(
+    *,
+    _: str = Depends(require_permission("ver_inbox")),
+    window_seconds: Annotated[int, Query(ge=60, le=3600)] = 300,
+) -> dict[str, Any]:
+    """Métricas in-memory de latencia/cache para Inbox threads."""
+
+    snapshot = await _snapshot_inbox_threads_metrics(window_seconds=window_seconds)
+    logger.info("crm.inbox.threads.metrics", extra=snapshot)
+    return {"ok": True, **snapshot}
 
 
 @router.get("/inbox/messages/{conversacion_id}", response_model=list[CRMInboxMessage])
