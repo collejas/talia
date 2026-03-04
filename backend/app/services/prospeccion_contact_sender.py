@@ -362,7 +362,12 @@ def _render_twilio_variables(definition: Any, context: dict[str, Any]) -> dict[s
         if "{{" in raw_text and "}}" in raw_text:
             text = _render_template_text(raw_text, context).strip()
         else:
-            text = _resolve_twilio_variable_value(raw_text, key=str(key), context=context)
+            text = _resolve_twilio_variable_value(
+                raw_text,
+                key=str(key),
+                context=context,
+                literal_fallback=str(key) == "6",
+            )
         rendered[str(key)] = text
     return rendered or None
 
@@ -391,7 +396,13 @@ def _context_get_first(context: dict[str, Any], *candidates: str) -> str | None:
     return None
 
 
-def _resolve_twilio_variable_value(raw_value: str, *, key: str, context: dict[str, Any]) -> str:
+def _resolve_twilio_variable_value(
+    raw_value: str,
+    *,
+    key: str,
+    context: dict[str, Any],
+    literal_fallback: bool = False,
+) -> str:
     value = _clean_text(raw_value) or ""
     if not value:
         return ""
@@ -427,6 +438,8 @@ def _resolve_twilio_variable_value(raw_value: str, *, key: str, context: dict[st
     if key == "5":
         return _context_get_first(context, "beneficio", "benefit", "propuesta_valor") or "más citas"
 
+    if literal_fallback:
+        return value
     return ""
 
 
@@ -440,6 +453,21 @@ def _build_twilio_numeric_variables_from_body(*, body: str | None, context: dict
     for key in keys:
         rendered[key] = _resolve_twilio_variable_value(key, key=key, context=context)
     return rendered
+
+
+def _compose_twilio_template_variables(
+    *,
+    definition: Any,
+    body: str | None,
+    context: dict[str, Any],
+) -> dict[str, str] | None:
+    explicit_vars = _render_twilio_variables(definition, context)
+    inferred_vars = _build_twilio_numeric_variables_from_body(body=body, context=context)
+    if explicit_vars and inferred_vars:
+        merged = dict(inferred_vars)
+        merged.update(explicit_vars)
+        return merged
+    return explicit_vars or inferred_vars
 
 
 def _build_contact_log_entry(
@@ -741,12 +769,11 @@ async def _run_envio_whatsapp(
     wa_result: TwilioSendResult
     preview_text: str | None = None
     if template_sid:
-        rendered_vars = _render_twilio_variables(variables_def, context)
-        if not rendered_vars:
-            rendered_vars = _build_twilio_numeric_variables_from_body(
-                body=_clean_text(payload.get("body")) or "",
-                context=context,
-            )
+        rendered_vars = _compose_twilio_template_variables(
+            definition=variables_def,
+            body=_clean_text(payload.get("body")) or "",
+            context=context,
+        )
         missing_vars = _find_blank_twilio_variables(rendered_vars)
         if missing_vars:
             return ContactEnvioResult(
