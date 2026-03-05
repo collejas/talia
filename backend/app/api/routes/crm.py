@@ -87,6 +87,7 @@ from app.services.brevo_templates import (
     get_brevo_smtp_template,
     list_brevo_smtp_templates,
 )
+from app.services.brevo_quota import fetch_brevo_daily_quota
 from app.services.catalog_embeddings import CatalogEmbeddingService
 from app.services.catalog_fraccionamientos import (
     list_catalog_fraccionamientos as list_fraccionamientos,
@@ -17729,6 +17730,39 @@ async def contactar_prospectos(
     )
     suppression_map = _build_suppression_channel_map(suppressions)
     prospectos = _attach_suppressions_to_prospectos(prospectos, suppression_map)
+    preview_entries, _preview_suppressed = _build_contact_envios_entries(
+        batch_id="preview",
+        prospectos=prospectos,
+        canales=canales_config,
+        programacion=programacion,
+        separacion_segundos=payload.separacion_segundos,
+    )
+    projected_email_sends = sum(1 for entry in preview_entries if _clean_text(entry.get("canal")) == "correo")
+    if projected_email_sends > 0:
+        effective_timezone, _timezone_source = await _resolve_effective_timezone_name(
+            repo=repo,
+            organizacion_id=organizacion_id,
+            usuario_id=usuario_id,
+        )
+        zoneinfo = ZoneInfo(effective_timezone)
+        local_day = datetime.now(zoneinfo).date()
+        brevo_settings = await tenant_runtime.get_brevo_runtime_settings(organizacion_id=organizacion_id)
+        api_key = _clean_text(brevo_settings.api_key)
+        if api_key:
+            try:
+                quota = await fetch_brevo_daily_quota(
+                    api_key=api_key,
+                    base_url=brevo_settings.base_url,
+                    local_day=local_day,
+                )
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("prospeccion.contactar.brevo_quota_check_failed", extra={"error": str(exc)})
+            else:
+                if quota.remaining is not None and quota.remaining < projected_email_sends:
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"brevo_daily_quota_exceeded:{quota.remaining}:{projected_email_sends}",
+                    )
 
     try:
         batch = await repo.create_contact_batch(
@@ -18053,6 +18087,78 @@ async def obtener_metrics_contacto(
         "canales": transformado,
         "conversion_por_fuente": conversion_por_fuente,
         "brevo_eventos": brevo_eventos,
+    }
+
+
+@router.get("/prospeccion/contacto/brevo-quota")
+async def obtener_brevo_quota_diaria(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    _: str = Depends(require_permission("ejecutar_busquedas")),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    usuario_id: UUID | None = Depends(optional_usuario_id),
+) -> dict[str, Any]:
+    """Devuelve consumo diario de Brevo y cuota estimada disponible."""
+
+    effective_timezone, _timezone_source = await _resolve_effective_timezone_name(
+        repo=repo,
+        organizacion_id=organizacion_id,
+        usuario_id=usuario_id,
+    )
+    zoneinfo = ZoneInfo(effective_timezone)
+    local_day = datetime.now(zoneinfo).date()
+    brevo_settings = await tenant_runtime.get_brevo_runtime_settings(organizacion_id=organizacion_id)
+    api_key = _clean_text(brevo_settings.api_key)
+    if not api_key:
+        return {
+            "ok": True,
+            "configured": False,
+            "available": False,
+            "timezone": effective_timezone,
+            "date_local": local_day.isoformat(),
+            "sent_today": None,
+            "daily_limit": None,
+            "remaining": None,
+            "usage_pct": None,
+            "plan_type": None,
+            "plan_credits": None,
+            "warnings": ["brevo_not_configured"],
+        }
+    try:
+        snapshot = await fetch_brevo_daily_quota(
+            api_key=api_key,
+            base_url=brevo_settings.base_url,
+            local_day=local_day,
+        )
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("prospeccion.brevo_quota_failed", extra={"error": str(exc)})
+        return {
+            "ok": True,
+            "configured": True,
+            "available": False,
+            "timezone": effective_timezone,
+            "date_local": local_day.isoformat(),
+            "sent_today": None,
+            "daily_limit": None,
+            "remaining": None,
+            "usage_pct": None,
+            "plan_type": None,
+            "plan_credits": None,
+            "warnings": ["brevo_quota_unavailable"],
+        }
+    return {
+        "ok": True,
+        "configured": True,
+        "available": True,
+        "timezone": effective_timezone,
+        "date_local": local_day.isoformat(),
+        "sent_today": snapshot.sent_today,
+        "daily_limit": snapshot.daily_limit,
+        "remaining": snapshot.remaining,
+        "usage_pct": snapshot.usage_pct,
+        "plan_type": snapshot.plan_type,
+        "plan_credits": snapshot.plan_credits,
+        "warnings": snapshot.warnings,
     }
 
 

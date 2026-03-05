@@ -505,6 +505,17 @@ async function requestJson<T>(input: string, init?: RequestInit, retryAuth = tru
         "WhatsApp de prospección en frío requiere plantilla aprobada. Configura `whatsapp.templates.sales` o selecciona una plantilla con `twilio_content_sid`."
       )
     }
+    if (detail.startsWith("brevo_daily_quota_exceeded:")) {
+      const parts = detail.split(":")
+      const remaining = Number.parseInt(parts[1] ?? "", 10)
+      const requested = Number.parseInt(parts[2] ?? "", 10)
+      if (Number.isFinite(remaining) && Number.isFinite(requested)) {
+        throw new Error(
+          `No hay cupo suficiente en Brevo para este lote. Restantes hoy: ${remaining}. Intentas enviar: ${requested}.`
+        )
+      }
+      throw new Error("Se alcanzó la cuota diaria de Brevo para correo.")
+    }
     throw new Error(detail)
   }
 
@@ -1209,6 +1220,21 @@ export type ContactoMetrics = {
   }>
 }
 
+export type BrevoQuotaSnapshot = {
+  ok: boolean
+  configured: boolean
+  available: boolean
+  timezone?: string | null
+  date_local?: string | null
+  sent_today: number | null
+  daily_limit: number | null
+  remaining: number | null
+  usage_pct: number | null
+  plan_type?: string | null
+  plan_credits?: number | null
+  warnings?: string[]
+}
+
 export type ProspeccionMetricasCampanaSummary = {
   envios_totales: number
   envios_enviados: number
@@ -1290,6 +1316,10 @@ export type ProspeccionMetricasResponse = {
 
 export async function getContactoMetrics() {
   return requestJson<ContactoMetrics>("/api/prospeccion/contacto/metrics")
+}
+
+export async function getBrevoQuota() {
+  return requestJson<BrevoQuotaSnapshot>("/api/prospeccion/contacto/brevo-quota")
 }
 
 export async function getProspeccionMetricas(params: {

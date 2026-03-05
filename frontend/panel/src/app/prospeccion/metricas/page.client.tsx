@@ -21,9 +21,11 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import {
   getProspeccionMetricas,
+  getBrevoQuota,
   listCrmCampaigns,
   listWhatsAppAtribucionReglas,
   downloadProspeccionMetricasXlsx,
+  type BrevoQuotaSnapshot,
   type CrmCampaign,
   type ProspeccionMetricasResponse,
   type WhatsAppAtribucionRule,
@@ -68,6 +70,8 @@ export default function ProspeccionMetricasPageClient() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [data, setData] = useState<ProspeccionMetricasResponse | null>(null)
+  const [brevoQuota, setBrevoQuota] = useState<BrevoQuotaSnapshot | null>(null)
+  const [brevoQuotaLoading, setBrevoQuotaLoading] = useState(false)
 
   const [campaigns, setCampaigns] = useState<CrmCampaign[]>([])
   const [rules, setRules] = useState<WhatsAppAtribucionRule[]>([])
@@ -129,6 +133,22 @@ export default function ProspeccionMetricasPageClient() {
   useEffect(() => {
     void loadMetrics()
   }, [loadMetrics])
+
+  const loadBrevoQuota = useCallback(async () => {
+    setBrevoQuotaLoading(true)
+    try {
+      const response = await getBrevoQuota()
+      setBrevoQuota(response)
+    } catch {
+      setBrevoQuota(null)
+    } finally {
+      setBrevoQuotaLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    void loadBrevoQuota()
+  }, [loadBrevoQuota])
 
   const summaryCampaign = data?.campanas.summary
   const summaryPhrases = data?.frases_whatsapp.summary
@@ -342,7 +362,13 @@ export default function ProspeccionMetricasPageClient() {
             </Select>
           </div>
           <div className="md:col-span-3 lg:col-span-6">
-            <Button onClick={() => void loadMetrics()} disabled={loading}>
+            <Button
+              onClick={() => {
+                void loadMetrics()
+                void loadBrevoQuota()
+              }}
+              disabled={loading}
+            >
               {loading ? <IconLoader className="mr-2 h-4 w-4 animate-spin" /> : null}
               Actualizar métricas
             </Button>
@@ -363,6 +389,37 @@ export default function ProspeccionMetricasPageClient() {
           </Card>
         ))}
       </div>
+
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm">Brevo hoy</CardTitle>
+        </CardHeader>
+        <CardContent className="text-sm">
+          {brevoQuotaLoading ? (
+            <p className="text-muted-foreground">Consultando cuota diaria...</p>
+          ) : brevoQuota?.configured === false ? (
+            <p className="text-muted-foreground">Brevo no configurado para esta organización.</p>
+          ) : brevoQuota?.available ? (
+            <div className="flex flex-wrap items-center gap-3">
+              <Badge variant="outline">
+                Enviados: {number.format(brevoQuota.sent_today ?? 0)}
+                {brevoQuota.daily_limit !== null ? ` / ${number.format(brevoQuota.daily_limit)}` : ""}
+              </Badge>
+              <Badge variant={brevoQuota.remaining !== null && brevoQuota.remaining <= 0 ? "destructive" : "secondary"}>
+                Restantes: {brevoQuota.remaining ?? "N/D"}
+              </Badge>
+              {brevoQuota.usage_pct !== null ? (
+                <span className="text-muted-foreground">Uso: {brevoQuota.usage_pct}%</span>
+              ) : null}
+              {brevoQuota.date_local ? (
+                <span className="text-muted-foreground">Fecha: {brevoQuota.date_local}</span>
+              ) : null}
+            </div>
+          ) : (
+            <p className="text-muted-foreground">No se pudo consultar la cuota de Brevo.</p>
+          )}
+        </CardContent>
+      </Card>
 
       <div className="flex flex-wrap items-center gap-2">
         <Button variant={activeTab === "campanas" ? "default" : "outline"} onClick={() => setActiveTab("campanas")}>Campañas</Button>

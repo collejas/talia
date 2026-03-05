@@ -64,6 +64,7 @@ import {
   convertirProspectoAContacto,
   type ConvertirProspectoPayload,
   listContactoTemplates,
+  getBrevoQuota,
   listCrmCampaigns,
   listProspectos,
   listProspectosQueryMetadata,
@@ -84,6 +85,7 @@ import {
   type ProspectoContactIndicators,
   type ContactoLog,
   type ContactoTemplate,
+  type BrevoQuotaSnapshot,
   type ProspectosTablePreferences,
   type ProspectosSavedView,
   type ProspectoQueryOption,
@@ -750,6 +752,8 @@ function ProspectosView() {
   }>({ correo: "", whatsapp: "", llamada: "" })
   const [plannerExecuting, setPlannerExecuting] = useState(false)
   const [plannerError, setPlannerError] = useState<string | null>(null)
+  const [plannerBrevoQuota, setPlannerBrevoQuota] = useState<BrevoQuotaSnapshot | null>(null)
+  const [plannerBrevoQuotaLoading, setPlannerBrevoQuotaLoading] = useState(false)
   const [convertDialogOpen, setConvertDialogOpen] = useState(false)
   const [convertProspect, setConvertProspect] = useState<ProspectoItem | null>(null)
   const [convertForm, setConvertForm] = useState<{
@@ -798,6 +802,13 @@ function ProspectosView() {
     () => (selectedPlannerCanal ? plannerTemplates.filter((tpl) => tpl.canal === selectedPlannerCanal) : []),
     [plannerTemplates, selectedPlannerCanal]
   )
+  const plannerBrevoRemaining = plannerBrevoQuota?.remaining ?? null
+  const plannerBrevoQuotaBlocked =
+    selectedPlannerCanal === "correo" &&
+    plannerBrevoQuota?.configured === true &&
+    plannerBrevoQuota?.available === true &&
+    plannerBrevoRemaining !== null &&
+    plannerBrevoRemaining <= 0
   const orderSelectedByOptions = (selection: Set<string>, options: string[]) => {
     const ordered: string[] = []
     const seen = new Set<string>()
@@ -2100,6 +2111,7 @@ function ProspectosView() {
     setPlannerTemplates([])
     setPlannerTemplateSelection({ correo: "", whatsapp: "", llamada: "" })
     setPlannerError(null)
+    setPlannerBrevoQuota(null)
     setPlannerOpen(true)
   }, [])
 
@@ -2134,6 +2146,32 @@ function ProspectosView() {
     if (!plannerOpen) return
     void fetchPlannerCampaignOptions()
   }, [fetchPlannerCampaignOptions, plannerOpen])
+
+  useEffect(() => {
+    if (!plannerOpen) return
+    let cancelled = false
+    const loadBrevoQuota = async () => {
+      setPlannerBrevoQuotaLoading(true)
+      try {
+        const response = await getBrevoQuota()
+        if (!cancelled) {
+          setPlannerBrevoQuota(response)
+        }
+      } catch {
+        if (!cancelled) {
+          setPlannerBrevoQuota(null)
+        }
+      } finally {
+        if (!cancelled) {
+          setPlannerBrevoQuotaLoading(false)
+        }
+      }
+    }
+    void loadBrevoQuota()
+    return () => {
+      cancelled = true
+    }
+  }, [plannerOpen])
 
   const fetchPlannerTemplates = useCallback(async (campanaId: string) => {
     setPlannerTemplatesLoading(true)
@@ -2175,6 +2213,7 @@ function ProspectosView() {
         setPlannerSeparationSeconds("0")
         setPlannerTemplates([])
         setPlannerTemplateSelection({ correo: "", whatsapp: "", llamada: "" })
+        setPlannerBrevoQuota(null)
       }
     },
     []
@@ -2192,6 +2231,10 @@ function ProspectosView() {
     }
     if (!selectedPlannerCanal) {
       setPlannerError("La campaña seleccionada no tiene un canal válido.")
+      return
+    }
+    if (plannerBrevoQuotaBlocked) {
+      setPlannerError("Se alcanzó la cuota diaria de Brevo para correo. Intenta mañana o reduce envíos.")
       return
     }
     const separacion = Number.parseInt(plannerSeparationSeconds || "0", 10)
@@ -2351,6 +2394,7 @@ function ProspectosView() {
     plannerSeparationSeconds,
     selectedCount,
     selectedIds,
+    plannerBrevoQuotaBlocked,
   ])
 
   const openPlannerDatePicker = useCallback(() => {
@@ -3499,6 +3543,34 @@ function ProspectosView() {
                   </div>
                 </div>
               </div>
+              <div className="rounded-lg border bg-background p-4">
+                <p className="text-sm font-semibold">Cuota Brevo (correo)</p>
+                <div className="mt-2">
+                  {plannerBrevoQuotaLoading ? (
+                    <p className="text-xs text-muted-foreground">Consultando cuota...</p>
+                  ) : plannerBrevoQuota?.configured === false ? (
+                    <p className="text-xs text-muted-foreground">Brevo no configurado para esta organización.</p>
+                  ) : plannerBrevoQuota?.available ? (
+                    <div className="space-y-1">
+                      <p className="text-xs text-muted-foreground">
+                        Hoy ({plannerBrevoQuota.date_local}): {plannerBrevoQuota.sent_today ?? 0}
+                        {plannerBrevoQuota.daily_limit !== null ? ` / ${plannerBrevoQuota.daily_limit}` : ""} enviados.
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        Restantes: <span className="font-semibold text-foreground">{plannerBrevoQuota.remaining ?? "N/D"}</span>
+                        {plannerBrevoQuota.usage_pct !== null ? ` · Uso ${plannerBrevoQuota.usage_pct}%` : ""}
+                      </p>
+                      {plannerBrevoQuotaBlocked ? (
+                        <Badge variant="destructive" className="text-[10px]">
+                          Sin cupo para correos hoy
+                        </Badge>
+                      ) : null}
+                    </div>
+                  ) : (
+                    <p className="text-xs text-muted-foreground">No se pudo consultar la cuota en este momento.</p>
+                  )}
+                </div>
+              </div>
               <div className="rounded-lg border bg-muted/20 p-4 text-sm">
                 <p className="font-semibold">4) Ejecutar lote</p>
                 <p className="mt-1 text-muted-foreground">
@@ -3519,7 +3591,10 @@ function ProspectosView() {
             <Button variant="outline" onClick={() => handlePlannerOpenChange(false)}>
               Cancelar
             </Button>
-            <Button onClick={() => void handlePlannerContinue()} disabled={plannerExecuting || plannerCampaignsLoading || !selectedCount}>
+            <Button
+              onClick={() => void handlePlannerContinue()}
+              disabled={plannerExecuting || plannerCampaignsLoading || !selectedCount || plannerBrevoQuotaBlocked}
+            >
               <>
                 {plannerExecuting ? <IconLoader className="mr-2 size-4 animate-spin" /> : <IconTargetArrow className="mr-2 size-4" />}
                 Ejecutar lote
