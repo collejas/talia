@@ -11028,6 +11028,38 @@ class CRMRepository:
             offset += len(data)
         return existing
 
+    async def list_prospectos_by_emails(
+        self,
+        *,
+        usuario_token: str,
+        emails: Sequence[str],
+    ) -> list[dict[str, Any]]:
+        normalized: list[str] = []
+        seen: set[str] = set()
+        for item in emails:
+            value = str(item or "").strip().lower()
+            if not value or value in seen:
+                continue
+            seen.add(value)
+            normalized.append(value)
+        if not normalized:
+            return []
+        params = {
+            "select": "id,email",
+            "email": _postgrest_in_clause(normalized),
+            "limit": str(len(normalized)),
+        }
+        resp = await self._request_with_user(
+            "GET",
+            "/rest/v1/prospeccion_prospectos",
+            token=usuario_token,
+            params=params,
+        )
+        data = resp.json() or []
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"prospectos_by_emails_invalid:{data!r}")
+        return data
+
     async def worker_update_buscador_job(
         self,
         *,
@@ -11074,10 +11106,10 @@ class CRMRepository:
         for start in range(0, len(items), chunk_size):
             chunk = items[start : start + chunk_size]
             # Asegurar job_id/organizacion_id presentes
-        for row in chunk:
-            row.setdefault("job_id", str(job_id))
-            if organizacion_id:
-                row.setdefault("organizacion_id", str(organizacion_id))
+            for row in chunk:
+                row.setdefault("job_id", str(job_id))
+                if organizacion_id:
+                    row.setdefault("organizacion_id", str(organizacion_id))
             await self._request(
                 "POST",
                 "/rest/v1/prospeccion_buscador_resultados",

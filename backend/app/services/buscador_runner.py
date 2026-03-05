@@ -174,17 +174,22 @@ def _build_scraper(
 
 def _normalize_results(raw_results: list[dict[str, Any]]) -> list[dict[str, Any]]:
     normalized: list[dict[str, Any]] = []
-    seen_keys: set[tuple[str, str]] = set()
+    seen_emails: set[str] = set()
+
+    def _normalize_email(value: Any) -> str | None:
+        if not isinstance(value, str):
+            return None
+        trimmed = value.strip().lower()
+        return trimmed or None
 
     for item in raw_results:
         source_url = item.get("source_url")
-        email = item.get("email")
+        email = _normalize_email(item.get("email"))
         if not source_url or not email:
             continue
-        key = (source_url, email)
-        if key in seen_keys:
+        if email in seen_emails:
             continue
-        seen_keys.add(key)
+        seen_emails.add(email)
 
         normalized.append(
             {

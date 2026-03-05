@@ -23245,6 +23245,22 @@ class BuscadorResultItem(BaseModel):
     address: str | None = None
 
 
+def _dedupe_buscador_result_rows(rows: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
+    unique: list[dict[str, Any]] = []
+    seen_emails: set[str] = set()
+    for row in rows:
+        email_value = _normalize_email(row.get("correo") or row.get("email"))
+        if not email_value:
+            continue
+        if email_value in seen_emails:
+            continue
+        seen_emails.add(email_value)
+        item = dict(row)
+        item["correo"] = email_value
+        unique.append(item)
+    return unique
+
+
 class BuscadorRunPayload(BaseModel):
     sitio: Literal["demo", "simple", "domain"] = "domain"
     url: HttpUrl | None = None
@@ -23308,6 +23324,20 @@ class GuardarBuscadorProspectosPayload(BaseModel):
     result_ids: list[UUID] | None = None
     segmento: str | None = None
     save_all: bool = False
+
+    @field_validator("result_ids")
+    @classmethod
+    def _dedupe_result_ids(cls, value: list[UUID] | None) -> list[UUID] | None:
+        if value is None:
+            return None
+        unique: list[UUID] = []
+        seen: set[UUID] = set()
+        for item in value:
+            if item in seen:
+                continue
+            seen.add(item)
+            unique.append(item)
+        return unique
 
 
 @router.post(
@@ -23538,13 +23568,13 @@ async def prospeccion_buscador_job_results(
         )
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
+    deduped_rows = _dedupe_buscador_result_rows(rows)
     stats_value = job_row.get("stats")
     stats = BuscadorStats(**stats_value).model_dump(mode="json") if isinstance(stats_value, dict) else None
-    items = [_buscador_result_row_to_item(row).model_dump(mode="json") for row in rows]
-    total_value = job_row.get("total")
-    if not total_value and isinstance(stats_value, dict):
-        total_value = stats_value.get("emails_total")
-    total = total_value or len(items)
+    items = [_buscador_result_row_to_item(row).model_dump(mode="json") for row in deduped_rows]
+    if stats is not None:
+        stats["emails_total"] = len(items)
+    total = len(items)
     return JSONResponse(
         {
             "items": items,
@@ -23668,6 +23698,46 @@ async def prospeccion_buscador_guardar_prospectos(
     if not prospectos:
         logger.info(
             "buscador.prospectos.no_payload_after_filter",
+            extra={"job_id": str(job_id), "rows_considered": len(rows)},
+        )
+        return {"ok": True, "prospectos": [], "total": 0}
+
+    # Deduplica dentro del lote por correo normalizado.
+    unique_prospectos: list[dict[str, Any]] = []
+    seen_batch_emails: set[str] = set()
+    for item in prospectos:
+        email_value = _normalize_email(item.get("email"))
+        if not email_value:
+            continue
+        if email_value in seen_batch_emails:
+            continue
+        seen_batch_emails.add(email_value)
+        item["email"] = email_value
+        unique_prospectos.append(item)
+    prospectos = unique_prospectos
+
+    if not prospectos:
+        logger.info(
+            "buscador.prospectos.no_payload_after_email_dedupe",
+            extra={"job_id": str(job_id), "rows_considered": len(rows)},
+        )
+        return {"ok": True, "prospectos": [], "total": 0}
+
+    # Evita insertar correos que ya existen en prospectos.
+    existing_rows = await repo.list_prospectos_by_emails(
+        usuario_token=user_token,
+        emails=[str(item.get("email") or "") for item in prospectos],
+    )
+    existing_emails = {
+        value
+        for value in (_normalize_email(row.get("email")) for row in existing_rows)
+        if value
+    }
+    if existing_emails:
+        prospectos = [item for item in prospectos if _normalize_email(item.get("email")) not in existing_emails]
+    if not prospectos:
+        logger.info(
+            "buscador.prospectos.no_payload_after_existing_email_filter",
             extra={"job_id": str(job_id), "rows_considered": len(rows)},
         )
         return {"ok": True, "prospectos": [], "total": 0}
@@ -23834,7 +23904,7 @@ def _buscador_result_to_prospecto(
                 return value.strip()
         return None
 
-    email = pick("correo", "email")
+    email = _normalize_email(pick("correo", "email"))
     display_name = pick("name") or email or row.get("dominio") or pick("url", "source_url")
     if not display_name:
         display_name = "Contacto web"
