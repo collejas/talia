@@ -3820,6 +3820,40 @@ def _convert_date_filter_to_utc_iso(
     return start_utc.isoformat()
 
 
+def _resolve_inbox_date_filter_range(
+    *,
+    date_filter: str | None,
+    timezone_name: str,
+) -> tuple[datetime | None, datetime | None]:
+    normalized = (date_filter or "").strip().lower()
+    if not normalized or normalized == "all":
+        return None, None
+
+    zone = ZoneInfo(timezone_name)
+    now_local = datetime.now(zone)
+
+    if normalized == "today":
+        start_local = now_local.replace(hour=0, minute=0, second=0, microsecond=0)
+        end_local = now_local.replace(hour=23, minute=59, second=59, microsecond=999999)
+        return start_local.astimezone(timezone.utc), end_local.astimezone(timezone.utc)
+
+    if normalized == "yesterday":
+        target = now_local - timedelta(days=1)
+        start_local = target.replace(hour=0, minute=0, second=0, microsecond=0)
+        end_local = target.replace(hour=23, minute=59, second=59, microsecond=999999)
+        return start_local.astimezone(timezone.utc), end_local.astimezone(timezone.utc)
+
+    if normalized == "last_week":
+        start_local = now_local - timedelta(days=7)
+        return start_local.astimezone(timezone.utc), now_local.astimezone(timezone.utc)
+
+    if normalized == "last_month":
+        start_local = now_local - timedelta(days=30)
+        return start_local.astimezone(timezone.utc), now_local.astimezone(timezone.utc)
+
+    raise HTTPException(status_code=400, detail="date_filter_invalid")
+
+
 def _is_date_only_input(value: str | None) -> bool:
     if not value:
         return False
@@ -10661,9 +10695,11 @@ async def get_inbox_threads(
     _: str = Depends(require_permission("ver_inbox")),
     user_token: str = Depends(require_user_token),
     organizacion_id: UUID = Depends(require_organizacion_id),
+    usuario_id: UUID | None = Depends(optional_usuario_id),
     estado: str | None = Query(default=None, max_length=50),
     source: str | None = Query(default=None, max_length=80),
     channel: str | None = Query(default=None, max_length=30),
+    date: str | None = Query(default=None, max_length=20),
     batch_id: UUID | None = Query(default=None),
     campana_id: UUID | None = Query(default=None),
     asignado_id: UUID | None = Query(default=None),
@@ -10674,6 +10710,15 @@ async def get_inbox_threads(
     request_start = time.perf_counter()
     source_requested = _clean_text(source)
     source_for_repo = None if source_requested == "publicidad_whatsapp" else source
+    effective_timezone, timezone_source = await _resolve_effective_timezone_name(
+        repo=repo,
+        organizacion_id=organizacion_id,
+        usuario_id=usuario_id,
+    )
+    date_from, date_to = _resolve_inbox_date_filter_range(
+        date_filter=date,
+        timezone_name=effective_timezone,
+    )
     cache_key = _build_inbox_threads_cache_key(
         {
             "org": str(organizacion_id),
@@ -10682,6 +10727,9 @@ async def get_inbox_threads(
             "source_requested": source_requested or "",
             "source_repo": _clean_text(source_for_repo) or "",
             "channel": _clean_text(channel) or "",
+            "date": (date or "").strip().lower(),
+            "date_from": date_from.isoformat() if date_from else "",
+            "date_to": date_to.isoformat() if date_to else "",
             "batch_id": str(batch_id) if batch_id else "",
             "campana_id": str(campana_id) if campana_id else "",
             "asignado_id": str(asignado_id) if asignado_id else "",
@@ -10702,6 +10750,9 @@ async def get_inbox_threads(
                 "estado": estado,
                 "source": source_requested,
                 "channel": channel,
+                "date": date,
+                "effective_timezone": effective_timezone,
+                "timezone_source": timezone_source,
                 "has_batch": bool(batch_id),
                 "has_campana": bool(campana_id),
                 "limit": limit,
@@ -10719,6 +10770,8 @@ async def get_inbox_threads(
         batch_id=batch_id,
         campana_id=campana_id,
         asignado_id=asignado_id,
+        date_from=date_from,
+        date_to=date_to,
         limit=limit,
         offset=offset,
         message_limit=message_limit,
@@ -10730,6 +10783,9 @@ async def get_inbox_threads(
         "estado": estado,
         "source": source_requested,
         "channel": channel,
+        "date": date,
+        "effective_timezone": effective_timezone,
+        "timezone_source": timezone_source,
         "has_batch": bool(batch_id),
         "has_campana": bool(campana_id),
         "limit": limit,

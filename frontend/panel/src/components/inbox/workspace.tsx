@@ -22,6 +22,7 @@ type InboxWorkspaceProps = {
     estado?: string | null;
     source?: string | null;
     channel?: string | null;
+    date?: string | null;
     batchId?: string | null;
     campanaId?: string | null;
   };
@@ -41,7 +42,7 @@ export function InboxWorkspace({
   const [batchFilterValue, setBatchFilterValue] = React.useState(initialFilters?.batchId ?? "");
   const [campanaFilterValue, setCampanaFilterValue] = React.useState(initialFilters?.campanaId ?? "");
   const [estadoFilterValue, setEstadoFilterValue] = React.useState(initialFilters?.estado ?? "");
-  const [dateFilterValue, setDateFilterValue] = React.useState("");
+  const [dateFilterValue, setDateFilterValue] = React.useState(initialFilters?.date ?? "");
   const [reengageFilter, setReengageFilter] = React.useState("");
   const [copyLinkLabel, setCopyLinkLabel] = React.useState("Copiar enlace");
   const [visibleThreadsCount, setVisibleThreadsCount] = React.useState(threads.length);

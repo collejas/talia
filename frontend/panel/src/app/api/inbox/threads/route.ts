@@ -19,6 +19,7 @@ export async function GET(request: Request) {
   const estado = searchParams.get("estado")?.trim() || "";
   const source = searchParams.get("source")?.trim() || "";
   const channel = searchParams.get("channel")?.trim() || "";
+  const date = searchParams.get("date")?.trim() || "";
   const batchId = searchParams.get("batch_id")?.trim() || "";
   const campanaId = searchParams.get("campana_id")?.trim() || "";
 
@@ -31,6 +32,7 @@ export async function GET(request: Request) {
       ...(estado ? { estado } : {}),
       ...(source ? { source } : {}),
       ...(channel ? { channel } : {}),
+      ...(date ? { date } : {}),
       ...(batchId ? { batch_id: batchId } : {}),
       ...(campanaId ? { campana_id: campanaId } : {}),
     },

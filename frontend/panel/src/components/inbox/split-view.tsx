@@ -1042,6 +1042,9 @@ export function InboxSplitView({
         if (campanaFilter) {
           params.set("campana_id", campanaFilter);
         }
+        if (dateFilter && dateFilter !== "all") {
+          params.set("date", dateFilter);
+        }
         const response = await fetch(`/api/inbox/threads?${params.toString()}`, {
           cache: "no-store",
         });
@@ -1076,7 +1079,7 @@ export function InboxSplitView({
       clearInterval(interval);
       threadsRefreshingRef.current = false;
     };
-  }, [sourceFilter, channelFilter, estadoFilter, batchFilter, campanaFilter, threadsRefreshIntervalMs]);
+  }, [sourceFilter, channelFilter, estadoFilter, batchFilter, campanaFilter, dateFilter, threadsRefreshIntervalMs]);
 
   const handleLoadMoreThreads = React.useCallback(async () => {
     if (loadingMoreThreads) return;
@@ -1107,6 +1110,9 @@ export function InboxSplitView({
       if (campanaFilter) {
         params.set("campana_id", campanaFilter);
       }
+      if (dateFilter && dateFilter !== "all") {
+        params.set("date", dateFilter);
+      }
       const response = await fetch(`/api/inbox/threads?${params.toString()}`, {
         cache: "no-store",
       });
@@ -1134,6 +1140,7 @@ export function InboxSplitView({
     estadoFilter,
     batchFilter,
     campanaFilter,
+    dateFilter,
   ]);
 
   const refreshMessages = React.useCallback(

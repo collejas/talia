@@ -22,6 +22,7 @@ export default async function Page({ searchParams }: InboxPageProps) {
     estado: pickQueryParam(resolvedSearchParams, "estado"),
     source: pickQueryParam(resolvedSearchParams, "source"),
     channel: pickQueryParam(resolvedSearchParams, "channel"),
+    date: pickQueryParam(resolvedSearchParams, "date"),
     batchId: pickQueryParam(resolvedSearchParams, "batchId") ?? pickQueryParam(resolvedSearchParams, "batch_id"),
     campanaId:
       pickQueryParam(resolvedSearchParams, "campanaId") ?? pickQueryParam(resolvedSearchParams, "campana_id"),

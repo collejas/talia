@@ -26,6 +26,7 @@ export type InboxThreadsFilters = {
   estado?: string | null;
   source?: string | null;
   channel?: string | null;
+  date?: string | null;
   batchId?: string | null;
   campanaId?: string | null;
 };
@@ -109,11 +110,13 @@ export async function loadInboxData(filters?: InboxThreadsFilters): Promise<Inbo
   const normalizedEstado = filters?.estado?.trim();
   const normalizedSource = filters?.source?.trim();
   const normalizedChannel = filters?.channel?.trim();
+  const normalizedDate = filters?.date?.trim();
   const normalizedBatchId = filters?.batchId?.trim();
   const normalizedCampanaId = filters?.campanaId?.trim();
   if (normalizedEstado) normalizedFilters.estado = normalizedEstado;
   if (normalizedSource) normalizedFilters.source = normalizedSource;
   if (normalizedChannel) normalizedFilters.channel = normalizedChannel;
+  if (normalizedDate) normalizedFilters.date = normalizedDate;
   if (normalizedBatchId) normalizedFilters.batch_id = normalizedBatchId;
   if (normalizedCampanaId) normalizedFilters.campana_id = normalizedCampanaId;
 

@@ -6328,6 +6328,8 @@ class CRMRepository:
         channel: str | None = None,
         batch_id: UUID | None = None,
         campana_id: UUID | None = None,
+        date_from: datetime | None = None,
+        date_to: datetime | None = None,
     ) -> list[dict[str, Any]]:
         body = {
             "p_estado": estado,
@@ -6346,6 +6348,10 @@ class CRMRepository:
             body["p_batch_id"] = str(batch_id)
         if campana_id:
             body["p_campana_id"] = str(campana_id)
+        if date_from:
+            body["p_from"] = date_from.isoformat()
+        if date_to:
+            body["p_to"] = date_to.isoformat()
         resp = await self._request_with_user(
             "POST",
             "/rest/v1/rpc/panel_inbox_threads",
