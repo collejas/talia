@@ -24,6 +24,7 @@ from urllib.parse import urlparse
 from urllib.error import HTTPError, URLError
 from urllib.request import Request as UrlRequest, urlopen
 import time
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from fastapi import (
     APIRouter,
@@ -3666,7 +3667,9 @@ def _resolve_date_range(
     desde: str | None,
     hasta: str | None,
 ) -> tuple[datetime | None, datetime | None]:
-    now = datetime.now(timezone.utc)
+    report_tz = _get_report_timezone()
+    now_local = datetime.now(report_tz)
+    now_utc = now_local.astimezone(timezone.utc)
     start: datetime | None = None
     end: datetime | None = None
 
@@ -3674,37 +3677,92 @@ def _resolve_date_range(
     if rango_norm:
         if rango_norm in DATE_RANGE_PRESETS:
             if rango_norm == "hoy":
-                start = now.replace(hour=0, minute=0, second=0, microsecond=0)
-                end = now.replace(hour=23, minute=59, second=59, microsecond=999999)
+                start = now_local.replace(hour=0, minute=0, second=0, microsecond=0)
+                end = now_local.replace(hour=23, minute=59, second=59, microsecond=999999)
             elif rango_norm == "ayer":
-                target = now - timedelta(days=1)
+                target = now_local - timedelta(days=1)
                 start = target.replace(hour=0, minute=0, second=0, microsecond=0)
                 end = target.replace(hour=23, minute=59, second=59, microsecond=999999)
             else:
-                end = now
-                start = now - DATE_RANGE_PRESETS[rango_norm]
+                end = now_utc
+                start = now_utc - DATE_RANGE_PRESETS[rango_norm]
         elif rango_norm == "fechas":
-            start = _parse_date_value(desde, field="fecha_desde")
-            end = _parse_date_value(hasta, field="fecha_hasta")
+            start = _coerce_date_range_bound(
+                _parse_date_value(desde, field="fecha_desde"),
+                report_tz=report_tz,
+                is_end=False,
+                date_only=_is_date_only_input(desde),
+            )
+            end = _coerce_date_range_bound(
+                _parse_date_value(hasta, field="fecha_hasta"),
+                report_tz=report_tz,
+                is_end=True,
+                date_only=_is_date_only_input(hasta),
+            )
         else:
             raise HTTPException(status_code=400, detail="rango_invalid")
     else:
-        start = _parse_date_value(desde, field="fecha_desde")
-        end = _parse_date_value(hasta, field="fecha_hasta")
+        start = _coerce_date_range_bound(
+            _parse_date_value(desde, field="fecha_desde"),
+            report_tz=report_tz,
+            is_end=False,
+            date_only=_is_date_only_input(desde),
+        )
+        end = _coerce_date_range_bound(
+            _parse_date_value(hasta, field="fecha_hasta"),
+            report_tz=report_tz,
+            is_end=True,
+            date_only=_is_date_only_input(hasta),
+        )
 
     if start and not end:
-        end = now
-    if start:
+        end = now_utc
+    if start and start.tzinfo is None:
         start = _ensure_utc(start)
-    if end:
+    if end and end.tzinfo is None:
         end = _ensure_utc(end)
-        if end.hour == 0 and end.minute == 0 and end.second == 0 and end.microsecond == 0:
-            end = end + timedelta(days=1) - timedelta(microseconds=1)
 
     if start and end and start > end:
         raise HTTPException(status_code=400, detail="rango_fecha_invalido")
 
     return start, end
+
+
+def _get_report_timezone() -> ZoneInfo:
+    tz_name = (settings.webchat_calendar_timezone or "America/Mexico_City").strip()
+    if not tz_name:
+        tz_name = "America/Mexico_City"
+    try:
+        return ZoneInfo(tz_name)
+    except ZoneInfoNotFoundError:
+        logger.warning("crm.demografia.invalid_timezone_fallback_utc", timezone=tz_name)
+        return ZoneInfo("UTC")
+
+
+def _is_date_only_input(value: str | None) -> bool:
+    if not value:
+        return False
+    return bool(re.fullmatch(r"\d{4}-\d{2}-\d{2}", value.strip()))
+
+
+def _coerce_date_range_bound(
+    dt: datetime | None,
+    *,
+    report_tz: ZoneInfo,
+    is_end: bool,
+    date_only: bool,
+) -> datetime | None:
+    if dt is None:
+        return None
+
+    localized = dt if dt.tzinfo is not None else dt.replace(tzinfo=report_tz)
+    local_dt = localized.astimezone(report_tz)
+    if date_only:
+        if is_end:
+            local_dt = local_dt.replace(hour=23, minute=59, second=59, microsecond=999999)
+        else:
+            local_dt = local_dt.replace(hour=0, minute=0, second=0, microsecond=0)
+    return local_dt.astimezone(timezone.utc)
 
 
 def _format_utc(dt: datetime) -> str:
