@@ -15910,6 +15910,7 @@ async def prospeccion_metricas_dashboard(
         organizacion_id=organizacion_id,
         usuario_id=usuario_id,
     )
+    report_zone = ZoneInfo(effective_timezone)
     date_from_dt, date_to_exclusive = local_date_range_to_utc(
         date_from=params.date_from,
         date_to=params.date_to,
@@ -16034,7 +16035,7 @@ async def prospeccion_metricas_dashboard(
                 continue
             if date_to_dt and event_ts > date_to_dt:
                 continue
-            day_key = event_ts.date().isoformat()
+            day_key = event_ts.astimezone(report_zone).date().isoformat()
             bucket = campaign_timeseries_raw[day_key]
             bucket["envios_totales"] += 1
             estado = (_clean_text(envio.get("estado")) or "").lower()
@@ -16222,7 +16223,7 @@ async def prospeccion_metricas_dashboard(
         event_ts = _parse_datetime(event.get("creado_en"))
         if event_ts is None:
             continue
-        day_key = event_ts.date().isoformat()
+        day_key = event_ts.astimezone(report_zone).date().isoformat()
         bucket = frases_timeseries_raw[day_key]
         bucket["conversaciones_atribuidas"] += 1
         conversation_id_value = _clean_text(event.get("conversacion_id"))
