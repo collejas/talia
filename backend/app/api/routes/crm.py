@@ -23572,9 +23572,10 @@ async def prospeccion_buscador_job_results(
     stats_value = job_row.get("stats")
     stats = BuscadorStats(**stats_value).model_dump(mode="json") if isinstance(stats_value, dict) else None
     items = [_buscador_result_row_to_item(row).model_dump(mode="json") for row in deduped_rows]
-    if stats is not None:
-        stats["emails_total"] = len(items)
-    total = len(items)
+    total_value = job_row.get("total")
+    if not total_value and isinstance(stats_value, dict):
+        total_value = stats_value.get("emails_total")
+    total = total_value or len(items)
     return JSONResponse(
         {
             "items": items,
