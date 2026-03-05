@@ -587,25 +587,6 @@ function BuscadorView() {
     }
   }
 
-  const handleSaveAllProspectos = async () => {
-    if (!jobInfo) return
-    const segmentoValue = segmento.trim() || undefined
-    setSavingProspectos(true)
-    try {
-      const response = await guardarBuscadorProspectos(jobInfo.id, {
-        save_all: true,
-        segmento: segmentoValue,
-      })
-      toast.success(`Se guardaron ${response.total} prospectos.`)
-    } catch (error) {
-      const message =
-        error instanceof Error ? error.message : "No se pudieron guardar los prospectos."
-      toast.error(message)
-    } finally {
-      setSavingProspectos(false)
-    }
-  }
-
   const handleResultsLimitChange = (value: string) => {
     const parsed = Number(value)
     if (!Number.isFinite(parsed) || parsed <= 0) {
@@ -1037,14 +1018,6 @@ function BuscadorView() {
                   />
                 </div>
                 <div className="flex flex-wrap gap-2">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={handleSaveAllProspectos}
-                    disabled={!jobInfo || savingProspectos || totalResultsCount === 0}
-                  >
-                    {savingProspectos ? "Guardando..." : `Guardar todos (${totalResultsCount || results.length})`}
-                  </Button>
                   <Button
                     type="button"
                     onClick={handleSaveProspectos}
