@@ -35,6 +35,7 @@ import {
   listBrevoCatalogTemplates,
   listContactoTemplates,
   listCrmCampaigns,
+  listProspectos,
   updateContactoTemplate,
   updateProspeccionCampana,
   getProspeccionCampanas,
@@ -46,6 +47,7 @@ import {
   type WhatsAppAtribucionRule,
   type ProspeccionCampanaAtribucionItem,
   type ProspeccionCampanaGroup,
+  type ProspectoItem,
 } from "@/lib/prospeccion/prospectos-client"
 
 const canalLabel: Record<string, string> = {
@@ -62,6 +64,18 @@ type LogoAsset = {
 }
 
 const EMAIL_LOGO_IMG_STYLE = "width:83.333%;height:auto;display:block;margin:0 auto;"
+const EMAIL_TEMPLATE_PLACEHOLDER_PATTERN = /{{\s*([\w.-]+)\s*}}/g
+const EMAIL_TEMPLATE_VARIABLES: Array<{ token: string; label: string }> = [
+  { token: "{{nombre}}", label: "Nombre" },
+  { token: "{{empresa}}", label: "Empresa" },
+  { token: "{{email}}", label: "Correo" },
+  { token: "{{telefono}}", label: "Teléfono" },
+  { token: "{{segmento}}", label: "Segmento" },
+  { token: "{{canal_origen}}", label: "Canal origen" },
+  { token: "{{logo_url}}", label: "Logo URL" },
+  { token: "{{tracking_url}}", label: "Tracking URL" },
+  { token: "{{website_url}}", label: "Website URL" },
+]
 
 type HierarchyTemplateNode = {
   key: string
@@ -87,6 +101,8 @@ type BatchDetailState = {
   envios: ContactoEnvio[]
   logs: ContactoLog[]
 }
+
+type CorreoTemplateField = "asunto" | "cuerpoTexto" | "cuerpoHtml"
 
 export function CampanasMetricsClient() {
   const [campanas, setCampanas] = useState<ProspeccionCampanaGroup[]>([])
@@ -129,10 +145,14 @@ export function CampanasMetricsClient() {
   const [logosLoading, setLogosLoading] = useState(false)
   const [logoUploading, setLogoUploading] = useState(false)
   const [selectedLogoUrl, setSelectedLogoUrl] = useState<string>("")
+  const [previewProspecto, setPreviewProspecto] = useState<ProspectoItem | null>(null)
+  const [previewLoading, setPreviewLoading] = useState(false)
+  const [previewError, setPreviewError] = useState<string | null>(null)
   const logoFileInputRef = useRef<HTMLInputElement | null>(null)
+  const correoAsuntoRef = useRef<HTMLInputElement | null>(null)
   const correoTextoRef = useRef<HTMLTextAreaElement | null>(null)
   const correoHtmlRef = useRef<HTMLTextAreaElement | null>(null)
-  const lastFocusedCorreoFieldRef = useRef<"cuerpoTexto" | "cuerpoHtml" | null>(null)
+  const lastFocusedCorreoFieldRef = useRef<CorreoTemplateField | null>(null)
   const [templateForm, setTemplateForm] = useState({
     id: "",
     canal: "correo" as "correo" | "whatsapp" | "llamada",
@@ -495,6 +515,53 @@ export function CampanasMetricsClient() {
     return digits
   }, [])
 
+  const resolvePreviewCanalOrigen = useCallback((prospecto: ProspectoItem | null): string => {
+    if (!prospecto) return ""
+    const metadata = prospecto.metadata && typeof prospecto.metadata === "object" ? prospecto.metadata : null
+    const metadataCanal =
+      metadata && typeof metadata["prospeccion_canal"] === "string" ? String(metadata["prospeccion_canal"]).trim() : ""
+    const raw = metadataCanal || (prospecto.fuente_busqueda || "").trim() || (prospecto.fuente || "").trim()
+    const key = raw.toLowerCase()
+    const labels: Record<string, string> = {
+      google_places: "Google",
+      denue: "Denue",
+      buscador: "Web",
+      manual: "Manual",
+      usuario: "Usuario",
+      correo: "Correo",
+      whatsapp: "WhatsApp",
+      llamada: "Llamada",
+      otro: "Otro",
+    }
+    return labels[key] ?? raw
+  }, [])
+
+  const loadPreviewProspecto = useCallback(async () => {
+    if (previewLoading) return
+    setPreviewLoading(true)
+    setPreviewError(null)
+    try {
+      const response = await listProspectos({
+        limit: 1,
+        offset: 0,
+        order: "creado",
+      })
+      const item = Array.isArray(response?.items) ? response.items[0] : null
+      if (!item) {
+        setPreviewProspecto(null)
+        setPreviewError("No hay prospectos para generar vista previa.")
+        return
+      }
+      setPreviewProspecto(item)
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "No se pudo cargar el prospecto de vista previa."
+      setPreviewError(message)
+      setPreviewProspecto(null)
+    } finally {
+      setPreviewLoading(false)
+    }
+  }, [previewLoading])
+
   useEffect(() => {
     if (!templatesDialogOpen) return
     void (async () => {
@@ -529,6 +596,17 @@ export function CampanasMetricsClient() {
     })()
   }, [normalizeWebBaseUrl, templatesDialogOpen])
 
+  useEffect(() => {
+    if (!templatesDialogOpen) {
+      setPreviewProspecto(null)
+      setPreviewError(null)
+      return
+    }
+    if (templateForm.canal !== "correo") return
+    if (previewProspecto || previewLoading) return
+    void loadPreviewProspecto()
+  }, [loadPreviewProspecto, previewLoading, previewProspecto, templateForm.canal, templatesDialogOpen])
+
   const resetTemplateForm = useCallback(() => {
     setSelectedLogoUrl("")
     setTemplateForm({
@@ -550,11 +628,15 @@ export function CampanasMetricsClient() {
     })
   }, [templatesCampanaCanal])
 
-  const appendTemplateToken = useCallback((field: "cuerpoTexto" | "cuerpoHtml", token: string) => {
-    const fieldRef = field === "cuerpoTexto" ? correoTextoRef.current : correoHtmlRef.current
+  const appendTemplateToken = useCallback((field: CorreoTemplateField, token: string) => {
+    const fieldRef =
+      field === "asunto" ? correoAsuntoRef.current : field === "cuerpoTexto" ? correoTextoRef.current : correoHtmlRef.current
     setTemplateForm((prev) => {
       const current = prev[field] ?? ""
       if (!fieldRef) {
+        if (field === "asunto") {
+          return { ...prev, [field]: `${current}${token}` }
+        }
         const separator = current && !current.endsWith("\n") ? "\n" : ""
         return { ...prev, [field]: `${current}${separator}${token}` }
       }
@@ -569,6 +651,14 @@ export function CampanasMetricsClient() {
       return { ...prev, [field]: nextValue }
     })
   }, [])
+
+  const insertEmailVariable = useCallback(
+    (token: string) => {
+      const targetField = lastFocusedCorreoFieldRef.current ?? "cuerpoTexto"
+      appendTemplateToken(targetField, token)
+    },
+    [appendTemplateToken]
+  )
 
   const wrapTemplateSelection = useCallback(
     (
@@ -714,6 +804,76 @@ export function CampanasMetricsClient() {
       `<a href="${waMeUrl}" target="_blank" rel="noopener noreferrer">Escríbenos por WhatsApp</a>`
     )
   }, [appendTemplateToken, waMeUrl])
+
+  const previewTemplateContext = useMemo(() => {
+    if (!previewProspecto) return null
+    const nombre = (previewProspecto.display_name || "").trim()
+    const segmento = (previewProspecto.segmento || "").trim()
+    const empresa = (templateForm.nombreEmpresa || "").trim() || segmento
+    const email = (previewProspecto.email || "").trim()
+    const telefono = (previewProspecto.phone_e164 || previewProspecto.phone || "").trim()
+    const canalOrigen = resolvePreviewCanalOrigen(previewProspecto)
+    const websiteUrl = normalizeWebBaseUrl(tenantBaseUrl || templateForm.ctaBaseUrl || "https://talia.mx/") || "https://talia.mx/"
+    const kw = (templateForm.slug || segmento || "general").trim().toLowerCase().replace(/[^a-z0-9_-]+/g, "-")
+    let trackingUrl = websiteUrl
+    try {
+      const url = new URL(websiteUrl)
+      url.searchParams.set("utm_source", "prospeccion")
+      url.searchParams.set("utm_medium", "email")
+      url.searchParams.set("utm_campaign", "cold_outreach")
+      url.searchParams.set("utm_content", "image")
+      url.searchParams.set("kw", kw || "general")
+      trackingUrl = url.toString()
+    } catch {
+      trackingUrl = websiteUrl
+    }
+    return {
+      nombre,
+      empresa,
+      email,
+      telefono,
+      segmento,
+      canal_origen: canalOrigen,
+      logo_url: normalizeLogoUrl(selectedLogoUrl),
+      tracking_url: trackingUrl,
+      website_url: websiteUrl,
+    }
+  }, [
+    normalizeLogoUrl,
+    normalizeWebBaseUrl,
+    previewProspecto,
+    resolvePreviewCanalOrigen,
+    selectedLogoUrl,
+    templateForm.ctaBaseUrl,
+    templateForm.nombreEmpresa,
+    templateForm.slug,
+    tenantBaseUrl,
+  ])
+
+  const renderWithPreviewContext = useCallback(
+    (template: string) => {
+      if (!template) return ""
+      if (!previewTemplateContext) return template
+      return template.replace(EMAIL_TEMPLATE_PLACEHOLDER_PATTERN, (_match, key: string) => {
+        const value = previewTemplateContext[key as keyof typeof previewTemplateContext]
+        return value == null ? "" : String(value)
+      })
+    },
+    [previewTemplateContext]
+  )
+
+  const previewSubject = useMemo(
+    () => renderWithPreviewContext((templateForm.asunto || "").trim()),
+    [renderWithPreviewContext, templateForm.asunto]
+  )
+  const previewBodyText = useMemo(
+    () => renderWithPreviewContext(templateForm.cuerpoTexto || ""),
+    [renderWithPreviewContext, templateForm.cuerpoTexto]
+  )
+  const previewBodyHtml = useMemo(
+    () => renderWithPreviewContext(templateForm.cuerpoHtml || ""),
+    [renderWithPreviewContext, templateForm.cuerpoHtml]
+  )
 
   const handleLogoFileChange = useCallback(
     async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -1697,9 +1857,70 @@ export function CampanasMetricsClient() {
                   <div className="space-y-1">
                     <Label>Asunto</Label>
                     <Input
+                      ref={correoAsuntoRef}
                       value={templateForm.asunto}
                       onChange={(event) => setTemplateForm((prev) => ({ ...prev, asunto: event.target.value }))}
+                      onFocus={() => {
+                        lastFocusedCorreoFieldRef.current = "asunto"
+                      }}
                     />
+                  </div>
+                  <div className="space-y-1">
+                    <Label>Variables disponibles</Label>
+                    <div className="flex flex-wrap gap-2">
+                      {EMAIL_TEMPLATE_VARIABLES.map((variable) => (
+                        <Button
+                          key={variable.token}
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => insertEmailVariable(variable.token)}
+                        >
+                          {variable.label}
+                        </Button>
+                      ))}
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Haz clic en una variable para insertarla donde tengas el cursor (Asunto, Texto o HTML).
+                    </p>
+                  </div>
+                  <div className="space-y-2 rounded-md border p-3">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <Label>Vista previa con dato real</Label>
+                      <Button type="button" variant="outline" size="sm" onClick={() => void loadPreviewProspecto()} disabled={previewLoading}>
+                        {previewLoading ? "Cargando..." : "Recargar prospecto"}
+                      </Button>
+                    </div>
+                    {previewProspecto ? (
+                      <p className="text-xs text-muted-foreground">
+                        Prospecto: {(previewProspecto.display_name || "Sin nombre").trim()} · Segmento:{" "}
+                        {(previewProspecto.segmento || "Sin segmento").trim() || "Sin segmento"} · Origen:{" "}
+                        {resolvePreviewCanalOrigen(previewProspecto) || "Sin origen"}
+                      </p>
+                    ) : null}
+                    {previewError ? <p className="text-xs text-destructive">{previewError}</p> : null}
+                    <div className="grid gap-2 md:grid-cols-2">
+                      <div className="space-y-1">
+                        <p className="text-xs font-medium text-muted-foreground">Asunto renderizado</p>
+                        <div className="rounded border bg-muted/30 px-2 py-1 text-sm">{previewSubject || "Sin asunto"}</div>
+                      </div>
+                      <div className="space-y-1">
+                        <p className="text-xs font-medium text-muted-foreground">Texto renderizado</p>
+                        <pre className="max-h-32 overflow-auto whitespace-pre-wrap rounded border bg-muted/30 p-2 text-xs">
+                          {previewBodyText || "Sin contenido"}
+                        </pre>
+                      </div>
+                    </div>
+                    <div className="space-y-1">
+                      <p className="text-xs font-medium text-muted-foreground">HTML renderizado</p>
+                      <div className="max-h-40 overflow-auto rounded border bg-white p-2 text-xs">
+                        {previewBodyHtml ? (
+                          <div dangerouslySetInnerHTML={{ __html: previewBodyHtml }} />
+                        ) : (
+                          <span className="text-muted-foreground">Sin contenido HTML</span>
+                        )}
+                      </div>
+                    </div>
                   </div>
                   <div className="space-y-1">
                     <Label>Cuerpo (texto)</Label>
@@ -1861,7 +2082,7 @@ export function CampanasMetricsClient() {
                       }}
                     />
                     <p className="text-xs text-muted-foreground">
-                      Variables: {"{{nombre}}, {{empresa}}, {{email}}, {{telefono}}, {{segmento}}, {{logo_url}}, {{tracking_url}}, {{website_url}}"}.
+                      Variables: {"{{nombre}}, {{empresa}}, {{email}}, {{telefono}}, {{segmento}}, {{canal_origen}}, {{logo_url}}, {{tracking_url}}, {{website_url}}"}.
                     </p>
                   </div>
                 </>

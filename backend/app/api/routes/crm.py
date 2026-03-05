@@ -5585,6 +5585,33 @@ def _build_contact_envios_entries(
             return dt.replace(tzinfo=UTC)
         return dt.astimezone(UTC)
 
+    def _resolve_prospecto_canal_origen(
+        prospecto_row: dict[str, Any],
+        metadata_row: dict[str, Any],
+    ) -> str | None:
+        source_raw = (
+            _clean_text(prospecto_row.get("canal_origen"))
+            or _clean_text(metadata_row.get("canal_origen"))
+            or _clean_text(metadata_row.get("prospeccion_canal"))
+            or _clean_text(prospecto_row.get("fuente"))
+            or _clean_text(prospecto_row.get("fuente_busqueda"))
+        )
+        if not source_raw:
+            return None
+        key = source_raw.strip().lower()
+        labels = {
+            "google_places": "Google",
+            "denue": "Denue",
+            "buscador": "Web",
+            "manual": "Manual",
+            "usuario": "Usuario",
+            "correo": "Correo",
+            "whatsapp": "WhatsApp",
+            "llamada": "Llamada",
+            "otro": "Otro",
+        }
+        return labels.get(key, source_raw)
+
     for prospecto in prospectos:
         prospecto_id = prospecto.get("id") or prospecto.get("prospecto_id")
         if not prospecto_id:
@@ -5601,6 +5628,7 @@ def _build_contact_envios_entries(
             "llamada_permitida": prospecto.get("llamada_permitida"),
             "carrier_type": prospecto.get("carrier_type"),
             "segmento": prospecto.get("segmento"),
+            "canal_origen": _resolve_prospecto_canal_origen(prospecto, metadata),
             "stage": metadata.get("stage"),
         }
         for canal, canal_payload in canales.items():
