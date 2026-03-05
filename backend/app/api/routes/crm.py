@@ -23232,6 +23232,8 @@ class BuscadorStats(BaseModel):
     unique_source_hosts: int
     top_email_domains: list[BuscadorTopDomain] = Field(default_factory=list)
     top_source_hosts: list[BuscadorTopSource] = Field(default_factory=list)
+    crawl_metrics: dict[str, Any] | None = None
+    checkpoint: dict[str, Any] | None = None
 
 
 class BuscadorResultItem(BaseModel):
@@ -23267,10 +23269,12 @@ class BuscadorRunPayload(BaseModel):
     mode: Literal["generic", "government", "intelligent", "auto", "stealth"] = "generic"
     max_pages: int = Field(default=200, ge=1, le=5000)
     max_depth: int = Field(default=3, ge=1, le=50)
+    max_workers: int = Field(default=3, ge=1, le=5)
     max_runtime: int | None = Field(default=None, ge=10, le=7200)
     max_queue_size: int | None = Field(default=None, ge=10, le=20000)
     max_no_new_emails: int | None = Field(default=None, ge=1, le=1000)
     max_memory_mb: int | None = Field(default=None, ge=64, le=8192)
+    resume_job_id: UUID | None = None
 
     @model_validator(mode="after")
     def validate_url(self) -> BuscadorRunPayload:
@@ -23285,10 +23289,14 @@ class BuscadorJobParamsResponse(BaseModel):
     mode: Literal["generic", "government", "intelligent", "auto", "stealth"]
     max_pages: int
     max_depth: int
+    max_workers: int = 3
     max_runtime: int | None = None
     max_queue_size: int | None = None
     max_no_new_emails: int | None = None
     max_memory_mb: int | None = None
+    seed_urls: list[str] | None = None
+    skip_urls: list[str] | None = None
+    resume_job_id: UUID | None = None
 
 
 class BuscadorJobResponse(BaseModel):
@@ -23354,16 +23362,92 @@ async def prospeccion_buscador_run(
 ) -> BuscadorJobResponse:
     """Agenda la ejecución del Buscador y devuelve el identificador del job."""
 
+    seed_urls: list[str] = []
+    skip_urls: list[str] = []
+    if payload.resume_job_id:
+        try:
+            resume_job = await repo.get_buscador_job(job_id=payload.resume_job_id, usuario_token=user_token)
+        except CRMRepositoryError as exc:
+            raise HTTPException(status_code=502, detail=str(exc)) from exc
+        if not resume_job:
+            raise HTTPException(status_code=404, detail="resume_job_not_found")
+        resume_status = str(resume_job.get("status") or "pending")
+        if resume_status not in {"completed", "paused", "canceled", "failed"}:
+            raise HTTPException(status_code=409, detail="resume_job_not_ready")
+
+        resume_stats = resume_job.get("stats") if isinstance(resume_job.get("stats"), dict) else {}
+        checkpoint = resume_stats.get("checkpoint") if isinstance(resume_stats.get("checkpoint"), dict) else {}
+        visited_urls = checkpoint.get("visited_urls") if isinstance(checkpoint, dict) else None
+        if isinstance(visited_urls, list):
+            for value in visited_urls:
+                if isinstance(value, str) and value.strip():
+                    skip_urls.append(value.strip())
+        pending_queue_urls = checkpoint.get("pending_queue_urls") if isinstance(checkpoint, dict) else None
+        if isinstance(pending_queue_urls, list):
+            for value in pending_queue_urls:
+                if isinstance(value, str) and value.strip():
+                    seed_urls.append(value.strip())
+        queue_sample = checkpoint.get("remaining_queue_sample") if isinstance(checkpoint, dict) else None
+        if isinstance(queue_sample, list):
+            for value in queue_sample:
+                if isinstance(value, str) and value.strip():
+                    seed_urls.append(value.strip())
+
+        offset = 0
+        limit = 1000
+        while len(seed_urls) < 5000:
+            try:
+                chunk = await repo.list_buscador_resultados(
+                    usuario_token=user_token,
+                    job_id=payload.resume_job_id,
+                    limit=limit,
+                    offset=offset,
+                )
+            except CRMRepositoryError as exc:
+                raise HTTPException(status_code=502, detail=str(exc)) from exc
+            if not chunk:
+                break
+            for row in chunk:
+                source_url = _clean_text(row.get("url") or row.get("source_url"))
+                if source_url:
+                    seed_urls.append(source_url)
+            offset += len(chunk)
+            if len(chunk) < limit:
+                break
+
+        # Dedup final de seeds preservando orden.
+        dedup_seed_urls: list[str] = []
+        seen_seed: set[str] = set()
+        for value in seed_urls:
+            if value in seen_seed:
+                continue
+            seen_seed.add(value)
+            dedup_seed_urls.append(value)
+        seed_urls = dedup_seed_urls
+
+        dedup_skip_urls: list[str] = []
+        seen_skip: set[str] = set()
+        for value in skip_urls:
+            if value in seen_skip:
+                continue
+            seen_skip.add(value)
+            dedup_skip_urls.append(value)
+        skip_urls = dedup_skip_urls
+
     params = BuscadorParams(
         sitio=payload.sitio,
         url=str(payload.url) if payload.url else None,
         mode=payload.mode,
         max_pages=payload.max_pages,
         max_depth=payload.max_depth,
+        max_workers=payload.max_workers,
         max_runtime=payload.max_runtime,
         max_queue_size=payload.max_queue_size,
         max_no_new_emails=payload.max_no_new_emails,
         max_memory_mb=payload.max_memory_mb,
+        seed_urls=seed_urls or None,
+        skip_urls=skip_urls or None,
+        resume_job_id=str(payload.resume_job_id) if payload.resume_job_id else None,
     )
 
     job_payload: dict[str, Any] = {
@@ -23801,10 +23885,14 @@ def _params_to_dict(params: BuscadorParams) -> dict[str, Any]:
         "mode": params.mode,
         "max_pages": params.max_pages,
         "max_depth": params.max_depth,
+        "max_workers": params.max_workers,
         "max_runtime": params.max_runtime,
         "max_queue_size": params.max_queue_size,
         "max_no_new_emails": params.max_no_new_emails,
         "max_memory_mb": params.max_memory_mb,
+        "seed_urls": params.seed_urls,
+        "skip_urls": params.skip_urls,
+        "resume_job_id": params.resume_job_id,
     }
 
 
@@ -23819,6 +23907,20 @@ def _parse_datetime(value: Any) -> datetime | None:
             trimmed = trimmed[:-1] + "+00:00"
         try:
             return datetime.fromisoformat(trimmed)
+        except ValueError:
+            return None
+    return None
+
+
+def _parse_uuid(value: Any) -> UUID | None:
+    if isinstance(value, UUID):
+        return value
+    if isinstance(value, str):
+        trimmed = value.strip()
+        if not trimmed:
+            return None
+        try:
+            return UUID(trimmed)
         except ValueError:
             return None
     return None
@@ -23840,10 +23942,14 @@ def _job_row_to_response(row: Mapping[str, Any]) -> BuscadorJobResponse:
         mode=params_dict.get("mode", "generic"),
         max_pages=int(params_dict.get("max_pages") or 0) or 200,
         max_depth=int(params_dict.get("max_depth") or 0) or 3,
+        max_workers=int(params_dict.get("max_workers") or 0) or 3,
         max_runtime=params_dict.get("max_runtime"),
         max_queue_size=params_dict.get("max_queue_size"),
         max_no_new_emails=params_dict.get("max_no_new_emails"),
         max_memory_mb=params_dict.get("max_memory_mb"),
+        seed_urls=params_dict.get("seed_urls") if isinstance(params_dict.get("seed_urls"), list) else None,
+        skip_urls=params_dict.get("skip_urls") if isinstance(params_dict.get("skip_urls"), list) else None,
+        resume_job_id=_parse_uuid(params_dict.get("resume_job_id")),
     )
 
     return BuscadorJobResponse(

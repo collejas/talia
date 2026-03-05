@@ -8,10 +8,12 @@ export type BuscadorRunPayload = {
   mode?: "generic" | "government" | "intelligent" | "auto" | "stealth"
   max_pages?: number
   max_depth?: number
+  max_workers?: number
   max_runtime?: number | null
   max_queue_size?: number | null
   max_no_new_emails?: number | null
   max_memory_mb?: number | null
+  resume_job_id?: string | null
 }
 
 export type BuscadorResult = {
@@ -41,6 +43,8 @@ export type BuscadorStats = {
   unique_source_hosts: number
   top_email_domains: BuscadorTopDomain[]
   top_source_hosts: BuscadorTopSource[]
+  crawl_metrics?: Record<string, unknown> | null
+  checkpoint?: Record<string, unknown> | null
 }
 
 export type BuscadorJobStatus =
@@ -59,10 +63,14 @@ export type BuscadorJobParams = {
   mode: "generic" | "government" | "intelligent" | "auto" | "stealth"
   max_pages: number
   max_depth: number
+  max_workers?: number
   max_runtime?: number | null
   max_queue_size?: number | null
   max_no_new_emails?: number | null
   max_memory_mb?: number | null
+  seed_urls?: string[] | null
+  skip_urls?: string[] | null
+  resume_job_id?: string | null
 }
 
 export type BuscadorJob = {

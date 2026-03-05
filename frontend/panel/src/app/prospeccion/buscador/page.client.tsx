@@ -59,6 +59,7 @@ type FormState = {
   mode: "generic" | "government" | "intelligent" | "auto" | "stealth"
   maxPages: string
   maxDepth: string
+  maxWorkers: string
   maxRuntime: string
   maxQueueSize: string
   maxNoNewEmails: string
@@ -73,6 +74,7 @@ const DEFAULT_FORM_STATE: FormState = {
   mode: "generic",
   maxPages: "200",
   maxDepth: "3",
+  maxWorkers: "3",
   maxRuntime: "",
   maxQueueSize: "",
   maxNoNewEmails: "",
@@ -301,6 +303,7 @@ function BuscadorView() {
       mode: formValues.mode,
       max_pages: optionalNumber(formValues.maxPages) ?? 200,
       max_depth: optionalNumber(formValues.maxDepth) ?? 3,
+      max_workers: optionalNumber(formValues.maxWorkers) ?? 3,
       max_runtime: optionalNumber(formValues.maxRuntime) ?? undefined,
       max_queue_size: optionalNumber(formValues.maxQueueSize) ?? undefined,
       max_no_new_emails: optionalNumber(formValues.maxNoNewEmails) ?? undefined,
@@ -321,6 +324,7 @@ function BuscadorView() {
     mode: params.mode,
     max_pages: params.max_pages,
     max_depth: params.max_depth,
+    max_workers: params.max_workers ?? 3,
     max_runtime: params.max_runtime ?? undefined,
     max_queue_size: params.max_queue_size ?? undefined,
     max_no_new_emails: params.max_no_new_emails ?? undefined,
@@ -522,10 +526,11 @@ function BuscadorView() {
     setLastResultsJobId(null)
     try {
       const payload = buildPayloadFromParams(jobInfo.params)
+      payload.resume_job_id = jobInfo.id
       const newJob = await crearBuscadorJob(payload)
       setJobInfo(newJob)
       setSelectedJobId(newJob.id)
-      toast.success("Se inició una nueva búsqueda con los mismos parámetros.")
+      toast.success("Se inició una nueva búsqueda reanudando el checkpoint anterior.")
       void loadJobs(0)
     } catch (error) {
       const message = error instanceof Error ? error.message : "No se pudo reiniciar la búsqueda."
@@ -733,6 +738,13 @@ function BuscadorView() {
                 onChange={handleInputChange("maxDepth")}
               />
               <NumberField
+                id="maxWorkers"
+                label="Workers concurrentes"
+                placeholder="3"
+                value={formValues.maxWorkers}
+                onChange={handleInputChange("maxWorkers")}
+              />
+              <NumberField
                 id="maxRuntime"
                 label="Tiempo máximo (s)"
                 placeholder="Opcional"
@@ -861,6 +873,22 @@ function BuscadorView() {
               <StatCard label="Dominios únicos" value={stats.unique_email_domains} />
               <StatCard label="Hosts explorados" value={stats.unique_source_hosts} />
             </div>
+            {stats.crawl_metrics ? (
+              <div className="grid gap-4 md:grid-cols-3">
+                <StatCard
+                  label="Páginas visitadas"
+                  value={Number(stats.crawl_metrics.pages_visited ?? 0)}
+                />
+                <StatCard
+                  label="HTTP 403 / 429"
+                  value={`${Number(stats.crawl_metrics.status_403 ?? 0)} / ${Number(stats.crawl_metrics.status_429 ?? 0)}`}
+                />
+                <StatCard
+                  label="Tasa correos/página"
+                  value={Number(stats.crawl_metrics.emails_new_rate ?? 0)}
+                />
+              </div>
+            ) : null}
             <div className="grid gap-6 md:grid-cols-2">
               <SummaryList title="Top dominios de correo" items={domainSummary} />
               <SummaryList title="Top hosts fuente" items={hostSummary} />
@@ -1173,7 +1201,7 @@ function NumberField({
   )
 }
 
-function StatCard({ label, value }: { label: string; value: number }) {
+function StatCard({ label, value }: { label: string; value: number | string }) {
   return (
     <div className="rounded-xl border bg-card p-4">
       <p className="text-xs uppercase text-muted-foreground">{label}</p>

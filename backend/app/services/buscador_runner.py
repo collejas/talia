@@ -46,10 +46,14 @@ class BuscadorParams:
     mode: Literal["generic", "government", "intelligent", "auto", "stealth"] = "generic"
     max_pages: int = 200
     max_depth: int = 3
+    max_workers: int = 3
     max_runtime: int | None = None
     max_queue_size: int | None = None
     max_no_new_emails: int | None = None
     max_memory_mb: int | None = None
+    seed_urls: list[str] | None = None
+    skip_urls: list[str] | None = None
+    resume_job_id: str | None = None
 
     def ensure_valid(self) -> None:
         if self.sitio in {"simple", "domain"} and not self.url:
@@ -96,9 +100,10 @@ def _run_buscador_sync(
             user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
             default_headers=STEALTH_HEADERS,
             use_cloudscraper=True,
+            min_interval_per_host=0.3,
         )
     else:
-        fetcher = HttpFetcher()
+        fetcher = HttpFetcher(min_interval_per_host=0.25)
     email_extractor = EmailExtractor()
     contact_extractor = ContactContextExtractor()
 
@@ -124,6 +129,12 @@ def _run_buscador_sync(
     duration_ms = int((time.perf_counter() - start_time) * 1000)
     normalized = _normalize_results(raw_results)
     stats = _summarize_results(normalized)
+    crawl_metrics = getattr(scraper, "metrics", None)
+    if isinstance(crawl_metrics, dict):
+        stats["crawl_metrics"] = crawl_metrics
+    checkpoint = getattr(scraper, "checkpoint", None)
+    if isinstance(checkpoint, dict):
+        stats["checkpoint"] = checkpoint
 
     stop_reason = getattr(scraper, "stop_reason", None)
     if not stop_reason and control is not None:
@@ -162,10 +173,13 @@ def _build_scraper(
             start_url=params.url or "",
             max_pages=params.max_pages,
             max_depth=params.max_depth,
+            max_workers=max(1, min(int(params.max_workers or 1), 5)),
             max_runtime_sec=params.max_runtime,
             max_queue_size=params.max_queue_size,
             max_no_new_emails=params.max_no_new_emails,
             max_memory_mb=params.max_memory_mb,
+            seed_urls=params.seed_urls or [],
+            skip_urls=params.skip_urls or [],
             stop_callback=stop_callback,
         )
 
