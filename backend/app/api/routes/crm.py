@@ -24,7 +24,7 @@ from urllib.parse import urlparse
 from urllib.error import HTTPError, URLError
 from urllib.request import Request as UrlRequest, urlopen
 import time
-from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+from zoneinfo import ZoneInfo
 
 from fastapi import (
     APIRouter,
@@ -98,6 +98,7 @@ from app.services.metrics import metrics as contact_metrics
 from app.services.prospeccion_whatsapp_atribucion import resolve_first_matching_rule
 from app.services.prospeccion_contact_sender import contact_sender
 from app.services.prospeccion_progress import progress_hub
+from app.services.timezone_resolver import resolve_timezone_zoneinfo
 from app.services.storage import StorageError
 from app.logging.catalog_debug import write_catalog_debug_entry
 from app.data.geo.locations import list_states_with_municipalities
@@ -3729,13 +3730,12 @@ def _resolve_date_range(
 
 
 def _get_report_timezone() -> ZoneInfo:
-    tz_name = (settings.webchat_calendar_timezone or "America/Mexico_City").strip()
-    if not tz_name:
-        tz_name = "America/Mexico_City"
+    tz_name = (settings.webchat_calendar_timezone or "America/Mexico_City").strip() or None
     try:
-        return ZoneInfo(tz_name)
-    except ZoneInfoNotFoundError:
-        logger.warning("crm.demografia.invalid_timezone_fallback_utc", timezone=tz_name)
+        zone, _ = resolve_timezone_zoneinfo(default_timezone=tz_name)
+        return zone
+    except Exception:
+        logger.warning("crm.demografia.invalid_timezone_fallback_utc", timezone=tz_name or "empty")
         return ZoneInfo("UTC")
 
 

@@ -51,6 +51,14 @@ export function UserCreateSection() {
             <Input id="user-new-phone" name="telefono" placeholder="+521234567890" />
           </div>
           <div className="space-y-1">
+            <Label htmlFor="user-new-timezone">Zona horaria</Label>
+            <Input
+              id="user-new-timezone"
+              name="timezone"
+              placeholder="America/Mexico_City"
+            />
+          </div>
+          <div className="space-y-1">
             <Label htmlFor="user-new-estado">Estado</Label>
             <select
               id="user-new-estado"
@@ -92,6 +100,9 @@ export function UserInlineRow({ user, rolesCatalog }: UserInlineRowProps) {
           <div className="flex flex-col gap-1">
             <span className="font-medium">{user.nombre}</span>
             <span className="text-xs text-muted-foreground">{user.correo || "—"}</span>
+            <span className="text-xs text-muted-foreground">
+              TZ: {user.timezone || "Por defecto organización"}
+            </span>
           </div>
         </TableCell>
         <TableCell className="hidden lg:table-cell max-w-[240px] whitespace-normal">
@@ -205,6 +216,15 @@ export function UserInlineRow({ user, rolesCatalog }: UserInlineRowProps) {
                       id={`user-edit-phone-${user.id}`}
                       name="telefono"
                       defaultValue={user.telefono}
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label htmlFor={`user-edit-timezone-${user.id}`}>Zona horaria</Label>
+                    <Input
+                      id={`user-edit-timezone-${user.id}`}
+                      name="timezone"
+                      placeholder="America/Mexico_City"
+                      defaultValue={user.timezone ?? ""}
                     />
                   </div>
                   <div className="space-y-1">

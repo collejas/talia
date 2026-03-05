@@ -94,6 +94,7 @@ type SupabaseUserRow = {
   nombre_completo: string | null
   estado: string | null
   telefono_e164: string | null
+  timezone: string | null
   creado_en: string | null
   ultimo_acceso_en: string | null
 }
@@ -397,7 +398,7 @@ export async function fetchUsersDirectory(limit = LARGE_LIMIT): Promise<HrUsersD
     await Promise.all([
       callSupabaseRest<SupabaseUserRow[]>("/rest/v1/usuarios", {
         searchParams: {
-          select: "id,correo,nombre_completo,estado,telefono_e164,creado_en,ultimo_acceso_en",
+          select: "id,correo,nombre_completo,estado,telefono_e164,timezone,creado_en,ultimo_acceso_en",
           order: "creado_en.desc",
           limit: String(limit),
         },
@@ -528,6 +529,7 @@ export async function fetchUsersDirectory(limit = LARGE_LIMIT): Promise<HrUsersD
       correo: sanitizeText(usuario.correo).toLowerCase(),
       estado: normalizeEstado(usuario.estado),
       telefono: sanitizeText(usuario.telefono_e164) || "—",
+      timezone: sanitizeText(usuario.timezone) || null,
       roleIds,
       roles: roleNames,
       departamento: departamentoNombre,

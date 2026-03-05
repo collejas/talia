@@ -80,6 +80,7 @@ export type HrUserItem = {
   correo: string
   estado: string
   telefono: string
+  timezone: string | null
   roleIds: string[]
   roles: string[]
   departamento: string

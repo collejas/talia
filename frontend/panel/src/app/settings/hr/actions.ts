@@ -377,6 +377,19 @@ function parseTelefonoE164(raw: string | null): string | null {
   return normalized
 }
 
+function parseUserTimezone(raw: string | null): string | null {
+  if (raw === null) return null
+  const trimmed = raw.trim()
+  if (!trimmed.length) return ""
+  try {
+    // Validación IANA sin depender de catálogos locales.
+    new Intl.DateTimeFormat("en-US", { timeZone: trimmed }).format(new Date())
+  } catch {
+    throw new Error("Zona horaria inválida. Usa formato IANA, por ejemplo America/Mexico_City.")
+  }
+  return trimmed
+}
+
 export const createUserAction: CrudActionHandler = async (_, formData) => {
   try {
     await requirePermission("user.manage")
@@ -385,6 +398,8 @@ export const createUserAction: CrudActionHandler = async (_, formData) => {
     const correo = getOptionalText(formData, "correo")
     const nombre = getOptionalText(formData, "nombre_completo")
     const telefono = parseTelefonoE164(getOptionalText(formData, "telefono"))
+    const timezoneInput = getOptionalText(formData, "timezone")
+    const timezoneValue = parseUserTimezone(timezoneInput)
     const estado = getOptionalText(formData, "estado")
 
     let userId = idInput && idInput.length ? idInput : null
@@ -409,6 +424,7 @@ export const createUserAction: CrudActionHandler = async (_, formData) => {
         correo: correo || null,
         nombre_completo: nombre || null,
         telefono_e164: telefono ?? DEFAULT_TELEFONO_E164,
+        timezone: timezoneValue || null,
         estado: estado || "activo",
       },
       searchParams: {
@@ -433,12 +449,17 @@ export const updateUserAction: CrudActionHandler = async (_, formData) => {
     const nombre = getOptionalText(formData, "nombre_completo")
     const telefonoInput = getOptionalText(formData, "telefono")
     const telefono = telefonoInput === null ? null : parseTelefonoE164(telefonoInput)
+    const timezoneInput = getOptionalText(formData, "timezone")
+    const timezoneValue = timezoneInput === null ? null : parseUserTimezone(timezoneInput)
     const estado = getOptionalText(formData, "estado")
     const body: Record<string, unknown> = {}
     if (correo !== null) body.correo = correo || null
     if (nombre !== null) body.nombre_completo = nombre || null
     if (telefonoInput !== null) {
       body.telefono_e164 = telefono ?? DEFAULT_TELEFONO_E164
+    }
+    if (timezoneInput !== null) {
+      body.timezone = timezoneValue || null
     }
     if (estado !== null) {
       if (!estado.length) throw new Error("Estado inválido.")
