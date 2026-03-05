@@ -5331,7 +5331,7 @@ class CRMRepository:
     async def fetch_user_profile(self, usuario_id: UUID) -> dict[str, Any] | None:
         params = {
             "id": f"eq.{usuario_id}",
-            "select": "id,nombre_completo,correo",
+            "select": "id,nombre_completo,correo,timezone",
             "limit": "1",
         }
         resp = await self._request("GET", "/rest/v1/usuarios", params=params)

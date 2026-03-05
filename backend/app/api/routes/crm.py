@@ -98,7 +98,7 @@ from app.services.metrics import metrics as contact_metrics
 from app.services.prospeccion_whatsapp_atribucion import resolve_first_matching_rule
 from app.services.prospeccion_contact_sender import contact_sender
 from app.services.prospeccion_progress import progress_hub
-from app.services.timezone_resolver import resolve_timezone_zoneinfo
+from app.services.timezone_resolver import local_date_range_to_utc, resolve_timezone_zoneinfo
 from app.services.storage import StorageError
 from app.logging.catalog_debug import write_catalog_debug_entry
 from app.data.geo.locations import list_states_with_municipalities
@@ -3737,6 +3737,68 @@ def _get_report_timezone() -> ZoneInfo:
     except Exception:
         logger.warning("crm.demografia.invalid_timezone_fallback_utc", timezone=tz_name or "empty")
         return ZoneInfo("UTC")
+
+
+async def _resolve_effective_timezone_name(
+    *,
+    repo: CRMRepository,
+    organizacion_id: UUID,
+) -> tuple[str, str]:
+    user_timezone: str | None = None
+    organization_timezone: str | None = None
+
+    try:
+        calendar_settings = await tenant_runtime.get_calendar_runtime_settings(
+            organizacion_id=organizacion_id
+        )
+        organization_timezone = (calendar_settings.timezone or "").strip() or None
+    except Exception as exc:  # pragma: no cover - defensivo
+        logger.warning("crm.timezone.organization_lookup_failed", error=str(exc))
+
+    try:
+        context = await repo.get_permission_context()
+        usuario_id = _safe_uuid(context.get("usuario_id")) if isinstance(context, dict) else None
+        if usuario_id:
+            profile = await repo.fetch_user_profile(usuario_id=usuario_id)
+            if isinstance(profile, dict):
+                user_timezone = _clean_text(profile.get("timezone"))
+    except Exception as exc:  # pragma: no cover - defensivo
+        logger.warning("crm.timezone.user_lookup_failed", error=str(exc))
+
+    _, resolved = resolve_timezone_zoneinfo(
+        user_timezone=user_timezone,
+        organization_timezone=organization_timezone,
+        default_timezone=settings.webchat_calendar_timezone or "America/Mexico_City",
+    )
+    return resolved["timezone"], resolved["source"]
+
+
+def _convert_date_filter_to_utc_iso(
+    *,
+    value: str | None,
+    timezone_name: str,
+    is_end: bool,
+) -> str | None:
+    if not value:
+        return None
+    raw = value.strip()
+    if not raw:
+        return None
+    if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", raw):
+        return raw
+    parsed_date = date.fromisoformat(raw)
+    start_utc, end_exclusive_utc = local_date_range_to_utc(
+        date_from=parsed_date if not is_end else None,
+        date_to=parsed_date if is_end else None,
+        timezone_name=timezone_name,
+    )
+    if is_end:
+        if end_exclusive_utc is None:
+            return raw
+        return (end_exclusive_utc - timedelta(microseconds=1)).isoformat()
+    if start_utc is None:
+        return raw
+    return start_utc.isoformat()
 
 
 def _is_date_only_input(value: str | None) -> bool:
@@ -7843,6 +7905,20 @@ async def list_opportunities(
     limit: Annotated[int, Query(ge=1, le=200)] = 50,
     offset: Annotated[int, Query(ge=0)] = 0,
 ) -> CRMOpportunitiesResponse:
+    effective_timezone, _ = await _resolve_effective_timezone_name(
+        repo=repo,
+        organizacion_id=organizacion_id,
+    )
+    creado_desde_utc = _convert_date_filter_to_utc_iso(
+        value=creado_desde,
+        timezone_name=effective_timezone,
+        is_end=False,
+    )
+    creado_hasta_utc = _convert_date_filter_to_utc_iso(
+        value=creado_hasta,
+        timezone_name=effective_timezone,
+        is_end=True,
+    )
     try:
         rows = await repo.list_opportunities(
             organizacion_id=organizacion_id,
@@ -7859,8 +7935,8 @@ async def list_opportunities(
             monto_max=monto_max,
             cierre_desde=cierre_desde,
             cierre_hasta=cierre_hasta,
-            creado_desde=creado_desde,
-            creado_hasta=creado_hasta,
+            creado_desde=creado_desde_utc,
+            creado_hasta=creado_hasta_utc,
             reinicio_min=reinicio_min,
         )
     except CRMRepositoryError as exc:
@@ -15648,16 +15724,17 @@ async def prospeccion_campanas_atribucion(
     params: ProspeccionCampanaAtribucionQuery = Depends(),
 ) -> dict[str, Any]:
     """Resumen persistente de desempeño por campaña/plantilla."""
-
-    date_from_dt = (
-        datetime.combine(params.date_from, datetime.min.time(), tzinfo=timezone.utc)
-        if params.date_from
-        else None
+    effective_timezone, _timezone_source = await _resolve_effective_timezone_name(
+        repo=repo,
+        organizacion_id=organizacion_id,
+    )
+    date_from_dt, date_to_exclusive = local_date_range_to_utc(
+        date_from=params.date_from,
+        date_to=params.date_to,
+        timezone_name=effective_timezone,
     )
     date_to_dt = (
-        datetime.combine(params.date_to, datetime.max.time(), tzinfo=timezone.utc)
-        if params.date_to
-        else None
+        (date_to_exclusive - timedelta(microseconds=1)) if date_to_exclusive is not None else None
     )
     if date_from_dt and date_to_dt and date_from_dt > date_to_dt:
         raise HTTPException(status_code=400, detail="metricas_date_range_invalid")
@@ -15713,16 +15790,17 @@ async def prospeccion_metricas_dashboard(
     params: ProspeccionMetricasQuery = Depends(),
 ) -> dict[str, Any]:
     """Tablero consolidado de métricas: campañas + atribución de frases WhatsApp."""
-
-    date_from_dt = (
-        datetime.combine(params.date_from, datetime.min.time(), tzinfo=timezone.utc)
-        if params.date_from
-        else None
+    effective_timezone, timezone_source = await _resolve_effective_timezone_name(
+        repo=repo,
+        organizacion_id=organizacion_id,
+    )
+    date_from_dt, date_to_exclusive = local_date_range_to_utc(
+        date_from=params.date_from,
+        date_to=params.date_to,
+        timezone_name=effective_timezone,
     )
     date_to_dt = (
-        datetime.combine(params.date_to, datetime.max.time(), tzinfo=timezone.utc)
-        if params.date_to
-        else None
+        (date_to_exclusive - timedelta(microseconds=1)) if date_to_exclusive is not None else None
     )
     if date_from_dt and date_to_dt and date_from_dt > date_to_dt:
         raise HTTPException(status_code=400, detail="metricas_date_range_invalid")
@@ -16055,6 +16133,8 @@ async def prospeccion_metricas_dashboard(
         "filters": {
             "date_from": date_from_dt.isoformat() if date_from_dt else None,
             "date_to": date_to_dt.isoformat() if date_to_dt else None,
+            "effective_timezone": effective_timezone,
+            "timezone_source": timezone_source,
             "campana_id": str(params.campana_id) if params.campana_id else None,
             "canal": params.canal,
             "campana_publicitaria": _clean_text(params.campana_publicitaria),

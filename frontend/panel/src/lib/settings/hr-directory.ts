@@ -394,18 +394,35 @@ export async function fetchPositionsDirectory(): Promise<HrPositionsDirectory> {
 export async function fetchUsersDirectory(limit = LARGE_LIMIT): Promise<HrUsersDirectory> {
   const errors: string[] = []
 
-  const [usuariosRes, empleadosRes, departamentosRes, puestosRes, usuariosRolesRes, rolesRes] =
-    await Promise.all([
-      callSupabaseRest<SupabaseUserRow[]>("/rest/v1/usuarios", {
+  const usuariosResWithTimezone = await callSupabaseRest<SupabaseUserRow[]>("/rest/v1/usuarios", {
+    searchParams: {
+      select: "id,correo,nombre_completo,estado,telefono_e164,timezone,creado_en,ultimo_acceso_en",
+      order: "creado_en.desc",
+      limit: String(limit),
+    },
+    prefer: "count=exact",
+    enforceOrganization: true,
+    forceServiceToken: true,
+  })
+  const timezoneColumnMissing =
+    !usuariosResWithTimezone.ok &&
+    typeof usuariosResWithTimezone.error === "string" &&
+    usuariosResWithTimezone.error.toLowerCase().includes("timezone")
+  const usuariosRes = timezoneColumnMissing
+    ? await callSupabaseRest<SupabaseUserRow[]>("/rest/v1/usuarios", {
         searchParams: {
-          select: "id,correo,nombre_completo,estado,telefono_e164,timezone,creado_en,ultimo_acceso_en",
+          select: "id,correo,nombre_completo,estado,telefono_e164,creado_en,ultimo_acceso_en",
           order: "creado_en.desc",
           limit: String(limit),
         },
         prefer: "count=exact",
         enforceOrganization: true,
         forceServiceToken: true,
-      }),
+      })
+    : usuariosResWithTimezone
+
+  const [empleadosRes, departamentosRes, puestosRes, usuariosRolesRes, rolesRes] =
+    await Promise.all([
       callSupabaseRest<SupabaseSimpleEmployeeRow[]>("/rest/v1/empleados", {
         searchParams: {
           select: "usuario_id,departamento_id,puesto_id",
