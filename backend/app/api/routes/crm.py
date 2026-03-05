@@ -110,6 +110,8 @@ import_debug_logger = get_logger("app.api.crm.import")
 sale_logger = get_logger("app.api.crm.sales")
 tenant_access_logger = get_logger("app.api.crm.tenant_access")
 UTC = timezone.utc
+TIMEZONE_CACHE_TTL_SECONDS = 300
+_USER_TIMEZONE_CACHE: dict[str, tuple[str | None, float]] = {}
 
 MAPBOX_LOG_DIR = Path("/var/www/talia/logs")
 MAPBOX_LOG_FILE = MAPBOX_LOG_DIR / "mapbox-debug.log"
@@ -3743,6 +3745,7 @@ async def _resolve_effective_timezone_name(
     *,
     repo: CRMRepository,
     organizacion_id: UUID,
+    usuario_id: UUID | None = None,
 ) -> tuple[str, str]:
     user_timezone: str | None = None
     organization_timezone: str | None = None
@@ -3755,15 +3758,31 @@ async def _resolve_effective_timezone_name(
     except Exception as exc:  # pragma: no cover - defensivo
         logger.warning("crm.timezone.organization_lookup_failed", error=str(exc))
 
-    try:
-        context = await repo.get_permission_context()
-        usuario_id = _safe_uuid(context.get("usuario_id")) if isinstance(context, dict) else None
-        if usuario_id:
-            profile = await repo.fetch_user_profile(usuario_id=usuario_id)
-            if isinstance(profile, dict):
-                user_timezone = _clean_text(profile.get("timezone"))
-    except Exception as exc:  # pragma: no cover - defensivo
-        logger.warning("crm.timezone.user_lookup_failed", error=str(exc))
+    current_usuario_id = usuario_id
+    if current_usuario_id is None:
+        try:
+            context = await repo.get_permission_context()
+            current_usuario_id = _safe_uuid(context.get("usuario_id")) if isinstance(context, dict) else None
+        except Exception as exc:  # pragma: no cover - defensivo
+            logger.warning("crm.timezone.permission_context_failed", error=str(exc))
+
+    if current_usuario_id:
+        cache_key = str(current_usuario_id)
+        now_monotonic = time.monotonic()
+        cached = _USER_TIMEZONE_CACHE.get(cache_key)
+        if cached and cached[1] > now_monotonic:
+            user_timezone = cached[0]
+        else:
+            try:
+                profile = await repo.fetch_user_profile(usuario_id=current_usuario_id)
+                if isinstance(profile, dict):
+                    user_timezone = _clean_text(profile.get("timezone"))
+            except Exception as exc:  # pragma: no cover - defensivo
+                logger.warning("crm.timezone.user_lookup_failed", error=str(exc))
+            _USER_TIMEZONE_CACHE[cache_key] = (
+                user_timezone,
+                now_monotonic + TIMEZONE_CACHE_TTL_SECONDS,
+            )
 
     _, resolved = resolve_timezone_zoneinfo(
         user_timezone=user_timezone,
@@ -7888,6 +7907,7 @@ async def list_opportunities(
     organizacion_id: UUID = Depends(require_organizacion_id),
     _: str = Depends(require_permission("pipeline.view")),
     user_token: str = Depends(require_user_token),  # noqa: ARG001
+    usuario_id: UUID | None = Depends(optional_usuario_id),
     contacto_id: UUID | None = Query(default=None),
     etapa_id: UUID | None = Query(default=None),
     estado: str | None = Query(default=None),
@@ -7908,6 +7928,7 @@ async def list_opportunities(
     effective_timezone, _ = await _resolve_effective_timezone_name(
         repo=repo,
         organizacion_id=organizacion_id,
+        usuario_id=usuario_id,
     )
     creado_desde_utc = _convert_date_filter_to_utc_iso(
         value=creado_desde,
@@ -15721,12 +15742,14 @@ async def prospeccion_campanas_atribucion(
     _: str = Depends(require_permission("ejecutar_busquedas")),
     user_token: str = Depends(require_user_token),
     organizacion_id: UUID = Depends(require_organizacion_id),
+    usuario_id: UUID | None = Depends(optional_usuario_id),
     params: ProspeccionCampanaAtribucionQuery = Depends(),
 ) -> dict[str, Any]:
     """Resumen persistente de desempeño por campaña/plantilla."""
     effective_timezone, _timezone_source = await _resolve_effective_timezone_name(
         repo=repo,
         organizacion_id=organizacion_id,
+        usuario_id=usuario_id,
     )
     date_from_dt, date_to_exclusive = local_date_range_to_utc(
         date_from=params.date_from,
@@ -15787,12 +15810,14 @@ async def prospeccion_metricas_dashboard(
     _: str = Depends(require_permission("reports.view")),
     user_token: str = Depends(require_user_token),
     organizacion_id: UUID = Depends(require_organizacion_id),
+    usuario_id: UUID | None = Depends(optional_usuario_id),
     params: ProspeccionMetricasQuery = Depends(),
 ) -> dict[str, Any]:
     """Tablero consolidado de métricas: campañas + atribución de frases WhatsApp."""
     effective_timezone, timezone_source = await _resolve_effective_timezone_name(
         repo=repo,
         organizacion_id=organizacion_id,
+        usuario_id=usuario_id,
     )
     date_from_dt, date_to_exclusive = local_date_range_to_utc(
         date_from=params.date_from,
