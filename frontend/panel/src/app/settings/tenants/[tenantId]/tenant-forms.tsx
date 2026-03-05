@@ -686,13 +686,16 @@ export function TenantCalendarSettings({
           </p>
         </div>
         <div className="space-y-2">
-          <Label htmlFor="calendar_timezone">calendar.timezone</Label>
+          <Label htmlFor="calendar_timezone">Zona horaria de la organización</Label>
           <Input
             id="calendar_timezone"
             name="calendar_timezone"
             placeholder="America/Mexico_City"
             defaultValue={initialValues.calendar_timezone ?? ""}
           />
+          <p className="text-xs text-muted-foreground">
+            Formato IANA. Ejemplo: <code>America/Mexico_City</code>. Se usa como default cuando el usuario no define su zona horaria.
+          </p>
         </div>
         <div className="space-y-2">
           <Label htmlFor="calendar_default_days">calendar.default_days</Label>
