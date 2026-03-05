@@ -66,6 +66,16 @@ def _postgrest_ilike_literal(value: str) -> str:
     return f"*{literal}*"
 
 
+def _resolve_timezone_zone(value: str | None) -> ZoneInfo:
+    tz_name = (value or settings.webchat_calendar_timezone or "America/Mexico_City").strip()
+    if not tz_name:
+        tz_name = "America/Mexico_City"
+    try:
+        return ZoneInfo(tz_name)
+    except Exception:
+        return ZoneInfo("UTC")
+
+
 def _make_json_serializable(value: Any) -> Any:
     if isinstance(value, Decimal):
         return float(value)
@@ -7938,6 +7948,7 @@ class CRMRepository:
         actividades: list[str] | None = None,
         campana_id: UUID | None = None,
         con_envio: bool | None = None,
+        timezone_name: str | None = None,
     ) -> tuple[list[dict[str, Any]], int]:
         """Lista prospectos con filtros de búsqueda y totalizador."""
 
@@ -7979,8 +7990,7 @@ class CRMRepository:
         # timezone; we convert those local-day boundaries into UTC instants so filtering by
         # "Hoy" behaves as expected (e.g. America/Mexico_City vs UTC).
         if date_from or date_to:
-            tz_name = settings.webchat_calendar_timezone or "America/Mexico_City"
-            zone = ZoneInfo(tz_name)
+            zone = _resolve_timezone_zone(timezone_name)
             if date_from:
                 start_local = datetime.combine(date_from, datetime.min.time(), tzinfo=zone)
                 start_utc = start_local.astimezone(timezone.utc).isoformat()
@@ -8408,6 +8418,7 @@ class CRMRepository:
         fuente: str | None = None,
         date_from: date | None = None,
         date_to: date | None = None,
+        timezone_name: str | None = None,
     ) -> dict[str, Any]:
         normalized_query_filters: list[str] | None = None
         if query_filters:
@@ -8420,8 +8431,7 @@ class CRMRepository:
             )
             normalized_query_filters = normalized_values or None
 
-        tz_name = settings.webchat_calendar_timezone or "America/Mexico_City"
-        zone = ZoneInfo(tz_name)
+        zone = _resolve_timezone_zone(timezone_name)
         date_from_utc: str | None = None
         date_to_utc: str | None = None
         if date_from:

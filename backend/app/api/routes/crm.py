@@ -3854,6 +3854,15 @@ def _resolve_inbox_date_filter_range(
     raise HTTPException(status_code=400, detail="date_filter_invalid")
 
 
+def _resolve_recent_days_created_from_utc(*, days: int, timezone_name: str) -> datetime:
+    normalized_days = max(1, int(days))
+    zone = ZoneInfo(timezone_name)
+    now_local = datetime.now(zone)
+    start_local_date = now_local.date() - timedelta(days=normalized_days - 1)
+    start_local = datetime.combine(start_local_date, datetime.min.time(), tzinfo=zone)
+    return start_local.astimezone(timezone.utc)
+
+
 def _is_date_only_input(value: str | None) -> bool:
     if not value:
         return False
@@ -14481,6 +14490,8 @@ async def listar_prospectos(
     repo: CRMRepository = Depends(get_repository),
     _: str = Depends(require_permission("ejecutar_busquedas")),
     user_token: str = Depends(require_user_token),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    usuario_id: UUID | None = Depends(optional_usuario_id),
     params: ProspectoListQuery = Depends(),
     metadata_query: Annotated[list[str] | None, Query(alias="metadata_query")] = None,
     actividad: Annotated[list[str] | None, Query(alias="actividad")] = None,
@@ -14488,6 +14499,11 @@ async def listar_prospectos(
     """Devuelve prospectos guardados con paginación y filtros básicos."""
 
     order_value = "display_name.asc.nullslast" if params.order == "nombre" else None
+    effective_timezone, _timezone_source = await _resolve_effective_timezone_name(
+        repo=repo,
+        organizacion_id=organizacion_id,
+        usuario_id=usuario_id,
+    )
     try:
         rows, total = await repo.list_prospectos(
             usuario_token=user_token,
@@ -14513,6 +14529,7 @@ async def listar_prospectos(
             actividades=actividad,
             campana_id=params.campana_id,
             con_envio=params.con_envio,
+            timezone_name=effective_timezone,
         )
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
@@ -14533,6 +14550,7 @@ async def listar_prospectos_query_metadata(
     _: str = Depends(require_permission("ejecutar_busquedas")),
     user_token: str = Depends(require_user_token),
     organizacion_id: UUID = Depends(require_organizacion_id),
+    usuario_id: UUID | None = Depends(optional_usuario_id),
     query: Annotated[list[str] | None, Query(alias="query")] = None,
     fuente: Annotated[Literal["google_places", "denue", "usuario", ""] | None, Query(alias="fuente")] = None,
     date_from: Annotated[date | None, Query(alias="date_from")] = None,
@@ -14550,6 +14568,11 @@ async def listar_prospectos_query_metadata(
     query_signature = hashlib.sha1(
         json.dumps(normalized_query_filters, sort_keys=True, separators=(",", ":")).encode("utf-8")
     ).hexdigest()[:12]
+    effective_timezone, _timezone_source = await _resolve_effective_timezone_name(
+        repo=repo,
+        organizacion_id=organizacion_id,
+        usuario_id=usuario_id,
+    )
     cache_key = _build_prospecto_queries_cache_key(
         {
             "org": str(organizacion_id),
@@ -14557,6 +14580,7 @@ async def listar_prospectos_query_metadata(
             "fuente": fuente or "",
             "date_from": date_from.isoformat() if date_from else "",
             "date_to": date_to.isoformat() if date_to else "",
+            "timezone": effective_timezone,
         }
     )
     cached_payload = await _read_prospecto_queries_cache(cache_key)
@@ -14594,6 +14618,7 @@ async def listar_prospectos_query_metadata(
             fuente=fuente or None,
             date_from=date_from,
             date_to=date_to,
+            timezone_name=effective_timezone,
         )
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
@@ -18823,10 +18848,19 @@ async def pipeline_overview(
     organizacion_id: UUID = Depends(require_organizacion_id),
     _: str = Depends(require_permission("pipeline.view")),
     user_token: str = Depends(require_user_token),  # noqa: ARG001
+    usuario_id: UUID | None = Depends(optional_usuario_id),
     limit: Annotated[int, Query(ge=10, le=500)] = 200,
     days: Annotated[int, Query(ge=7, le=90)] = 30,
 ) -> CRMPipelineOverview:
-    created_from = datetime.now(timezone.utc) - timedelta(days=days)
+    effective_timezone, _timezone_source = await _resolve_effective_timezone_name(
+        repo=repo,
+        organizacion_id=organizacion_id,
+        usuario_id=usuario_id,
+    )
+    created_from = _resolve_recent_days_created_from_utc(
+        days=days,
+        timezone_name=effective_timezone,
+    )
     fetch_limit = max(limit, 500)
     try:
         rows, total_rows = await repo.list_pipeline_opportunities(
@@ -18836,7 +18870,13 @@ async def pipeline_overview(
         )
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
-    overview = _build_pipeline_overview(rows, total_rows, limit, days)
+    overview = _build_pipeline_overview(
+        rows,
+        total_rows,
+        limit,
+        days,
+        timezone_name=effective_timezone,
+    )
     return overview
 
 
@@ -18899,6 +18939,7 @@ async def pipeline_scoring_kpis(
     repo: CRMRepository = Depends(get_repository),
     organizacion_id: UUID = Depends(require_organizacion_id),
     _: str = Depends(require_permission("pipeline.view")),
+    usuario_id: UUID | None = Depends(optional_usuario_id),
     days: Annotated[int, Query(ge=1, le=90)] = 7,
     limit: Annotated[int, Query(ge=100, le=5000)] = 2000,
     asignado_id: UUID | None = Query(default=None),
@@ -18908,7 +18949,15 @@ async def pipeline_scoring_kpis(
     etapa_ids: str | None = Query(default=None),
     tiene_cita: str | None = Query(default=None),
 ) -> CRMPipelineScoringKpis:
-    created_from = datetime.now(timezone.utc) - timedelta(days=days)
+    effective_timezone, _timezone_source = await _resolve_effective_timezone_name(
+        repo=repo,
+        organizacion_id=organizacion_id,
+        usuario_id=usuario_id,
+    )
+    created_from = _resolve_recent_days_created_from_utc(
+        days=days,
+        timezone_name=effective_timezone,
+    )
     # Si no se pasa asignado_id explícitamente, y el usuario es vendedor (no admin),
     # forzamos KPIs a su propio alcance para evitar que vea métricas globales
     # (los KPIs se calculan con service role para telemetría).
@@ -21915,9 +21964,10 @@ def _build_pipeline_overview(
     total_rows: int,
     table_limit: int,
     days_range: int,
+    timezone_name: str | None = None,
 ) -> CRMPipelineOverview:
-    cards = _build_pipeline_cards(rows)
-    chart = _build_pipeline_chart(rows, days_range)
+    cards = _build_pipeline_cards(rows, timezone_name=timezone_name)
+    chart = _build_pipeline_chart(rows, days_range, timezone_name=timezone_name)
     table = _build_pipeline_table(rows, table_limit)
     return CRMPipelineOverview(cards=cards, chart=chart, table=table, total_rows=total_rows)
 
@@ -21987,8 +22037,13 @@ def _catalog_sales_filename(
     return "-".join(parts) + ".csv"
 
 
-def _build_pipeline_cards(rows: list[dict[str, Any]]) -> CRMPipelineCards:
-    now = datetime.now(timezone.utc)
+def _build_pipeline_cards(
+    rows: list[dict[str, Any]],
+    *,
+    timezone_name: str | None = None,
+) -> CRMPipelineCards:
+    zone = ZoneInfo((timezone_name or "UTC").strip() or "UTC")
+    now = datetime.now(zone).astimezone(timezone.utc)
     nuevas_threshold = now - timedelta(days=1)
     abiertas = ganadas = perdidas = nuevas = 0
     monto_total = 0.0
@@ -22076,11 +22131,15 @@ def _extract_closed_date_from_metadata(row: dict[str, Any]) -> datetime | None:
 
 
 def _build_pipeline_chart(
-    rows: list[dict[str, Any]], days_range: int
+    rows: list[dict[str, Any]],
+    days_range: int,
+    *,
+    timezone_name: str | None = None,
 ) -> list[CRMPipelineChartPoint]:
     if days_range < 1:
         days_range = 1
-    today = datetime.now(timezone.utc).date()
+    zone = ZoneInfo((timezone_name or "UTC").strip() or "UTC")
+    today = datetime.now(zone).date()
     start_date = today - timedelta(days=days_range - 1)
     buckets: dict[date, CRMPipelineChartPoint] = {}
     for offset in range(days_range):
@@ -22095,14 +22154,14 @@ def _build_pipeline_chart(
     for row in rows:
         created_at = _parse_datetime(row.get("creado_en"))
         if created_at:
-            bucket = buckets.get(created_at.date())
+            bucket = buckets.get(created_at.astimezone(zone).date())
             if bucket:
                 bucket.nuevos += 1
         estado = (row.get("estado") or "").lower()
         cerrado_at = _parse_datetime(row.get("cerrado_en")) or _extract_closed_date_from_metadata(row)
         if not cerrado_at:
             continue
-        bucket = buckets.get(cerrado_at.date())
+        bucket = buckets.get(cerrado_at.astimezone(zone).date())
         if not bucket:
             continue
         if estado == "ganada":
