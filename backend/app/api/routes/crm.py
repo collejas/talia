@@ -7983,6 +7983,16 @@ async def list_opportunities(
         timezone_name=effective_timezone,
         is_end=True,
     )
+    cierre_desde_utc = _convert_date_filter_to_utc_iso(
+        value=cierre_desde,
+        timezone_name=effective_timezone,
+        is_end=False,
+    )
+    cierre_hasta_utc = _convert_date_filter_to_utc_iso(
+        value=cierre_hasta,
+        timezone_name=effective_timezone,
+        is_end=True,
+    )
     try:
         rows = await repo.list_opportunities(
             organizacion_id=organizacion_id,
@@ -7997,8 +8007,8 @@ async def list_opportunities(
             q=q,
             monto_min=monto_min,
             monto_max=monto_max,
-            cierre_desde=cierre_desde,
-            cierre_hasta=cierre_hasta,
+            cierre_desde=cierre_desde_utc,
+            cierre_hasta=cierre_hasta_utc,
             creado_desde=creado_desde_utc,
             creado_hasta=creado_hasta_utc,
             reinicio_min=reinicio_min,

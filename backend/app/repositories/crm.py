@@ -1058,6 +1058,7 @@ class CRMRepository:
             "offset": str(offset),
             "select": self._PIPELINE_SELECT,
         }
+        and_filters: list[str] = []
         if contacto_id:
             params["contacto_principal_id"] = f"eq.{contacto_id}"
         if etapa_id:
@@ -1077,19 +1078,21 @@ class CRMRepository:
                     f"(titulo.ilike.*{safe}*,metadata->>contacto_nombre.ilike.*{safe}*)"
                 )
         if monto_min is not None:
-            params["monto_estimado"] = f"gte.{monto_min}"
+            and_filters.append(f"monto_estimado.gte.{monto_min}")
         if monto_max is not None:
-            params["monto_estimado"] = f"lte.{monto_max}"
+            and_filters.append(f"monto_estimado.lte.{monto_max}")
         if cierre_desde:
-            params["fecha_cierre_probable"] = f"gte.{cierre_desde}"
+            and_filters.append(f"fecha_cierre_probable.gte.{cierre_desde}")
         if cierre_hasta:
-            params["fecha_cierre_probable"] = f"lte.{cierre_hasta}"
+            and_filters.append(f"fecha_cierre_probable.lte.{cierre_hasta}")
         if creado_desde:
-            params["creado_en"] = f"gte.{creado_desde}"
+            and_filters.append(f"creado_en.gte.{creado_desde}")
         if creado_hasta:
-            params["creado_en"] = f"lte.{creado_hasta}"
+            and_filters.append(f"creado_en.lte.{creado_hasta}")
         if reinicio_min is not None:
             params["metadata->>restart_sequence"] = f"gte.{reinicio_min}"
+        if and_filters:
+            params["and"] = "(" + ",".join(and_filters) + ")"
         resp = await self._request("GET", "/rest/v1/oportunidades", params=params)
         data = resp.json()
         if not isinstance(data, list):
