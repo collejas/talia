@@ -289,3 +289,64 @@ En `organizaciones.config.features`:
 5. Detección inicial de navegador y guardado one-time.
 6. Suite de pruebas y checklist de QA.
 7. Runbook de rollout + rollback por feature flag.
+
+---
+
+## 15) Bitácora de implementación real (Mar 2026)
+
+### 15.1 Cambios implementados (backend)
+- Resolver efectivo usuario -> organización -> default ya aplicado en CRM:
+  - `_resolve_effective_timezone_name(...)` en `backend/app/api/routes/crm.py`.
+  - caché TTL para timezone de usuario en memoria (`TIMEZONE_CACHE_TTL_SECONDS = 300`).
+- Conversión de filtros `YYYY-MM-DD` a UTC aplicada en:
+  - `GET /crm/oportunidades` para `creado_desde/hasta` y `cierre_desde/hasta`.
+  - `GET /crm/prospeccion/prospectos`.
+  - `GET /crm/prospeccion/prospectos/queries`.
+- Presets de inbox (`today/yesterday/last_week/last_month`) aplicados con timezone efectiva en:
+  - `GET /crm/inbox/threads`.
+- `days` basado en día local (no UTC crudo) aplicado en:
+  - `GET /crm/pipeline/overview`.
+  - `GET /crm/pipeline/scoring/kpis`.
+- Demografía/mapa convertida a timezone efectiva en:
+  - `GET /crm/dashboard/kpis`.
+  - `GET /crm/demografia/resumen`.
+  - `GET /crm/demografia/mapa`.
+  - `GET /crm/demografia/resumen-v2`.
+  - `GET /crm/demografia/mapa-v2`.
+- Corrección en métricas de prospección WhatsApp:
+  - se eliminó URL-encoding indebido de timestamps.
+  - se unificó rango con `and=(creado_en.gte...,creado_en.lte...)`.
+
+### 15.2 Cambios implementados (frontend)
+- `settings/variables`:
+  - campo visible y explícito como "Zona horaria de la organización" en pestaña Calendario.
+- Inbox:
+  - filtro fecha ya depende del backend (timezone efectiva), sin filtro duplicado por navegador.
+  - al refrescar con 0 resultados, la lista se limpia correctamente.
+  - warnings de lint corregidos en `split-view.tsx`.
+
+### 15.3 Migraciones / BD
+- Aplicada migración de inbox para filtros de fecha por RPC:
+  - `supabase/migrations/20280425_130000_inbox_threads_date_filters.sql`.
+- Verificación en BD (MCP):
+  - usuario `administracion@geoactiv.mx` con timezone `Pacific/Kiritimati`.
+  - cálculo de ventana "2026-03-05" Kiribati = `2026-03-04 10:00:00+00` a `2026-03-05 09:59:59.999999+00`.
+
+### 15.4 Pruebas agregadas
+- `backend/tests/api/test_crm_timezone_helpers.py`
+  - conversión de día local a UTC (`_convert_date_filter_to_utc_iso`).
+  - rango inbox "today" por timezone efectiva.
+  - rango `fechas` con timezone explícita.
+  - anclaje local de `_resolve_recent_days_created_from_utc`.
+- `backend/tests/repositories/test_crm_timezone_filters.py`
+  - construcción de `and` combinado en `list_opportunities`.
+  - filtros WhatsApp métricas con ISO crudo y sin URL-encoding indebido.
+
+Resultado local:
+- `backend/.venv/bin/pytest -q backend/tests/api/test_crm_timezone_helpers.py backend/tests/repositories/test_crm_timezone_filters.py`
+- `6 passed`.
+
+### 15.5 Estado del plan
+- Implementación funcional: completada para vistas y endpoints priorizados.
+- Riesgo residual principal: regresiones futuras si se agregan nuevos filtros de fecha sin usar resolver común.
+- Recomendación operativa: mantener checklist obligatorio de timezone en PRs que toquen `rango|desde|hasta|date_from|date_to|today|days`.

@@ -124,54 +124,6 @@ const CLIENT_FULL_TIME_FORMAT = new Intl.DateTimeFormat("es-MX", {
   minute: "2-digit",
 });
 
-const MILLISECONDS_IN_A_DAY = 24 * 60 * 60 * 1000;
-
-function parseThreadTimestamp(thread: InboxThread): Date | null {
-  const candidate = thread.previewAt ?? thread.ultimoMensajeEn ?? thread.iniciadoEn;
-  if (!candidate) {
-    return null;
-  }
-  const date = new Date(candidate);
-  return Number.isNaN(date.getTime()) ? null : date;
-}
-
-function isSameDay(candidate: Date, reference: Date): boolean {
-  return (
-    candidate.getFullYear() === reference.getFullYear() &&
-    candidate.getMonth() === reference.getMonth() &&
-    candidate.getDate() === reference.getDate()
-  );
-}
-
-function matchesDateFilter(thread: InboxThread, option: DateFilterOption): boolean {
-  if (option === "all") {
-    return true;
-  }
-  const timestamp = parseThreadTimestamp(thread);
-  if (!timestamp) {
-    return false;
-  }
-  const now = new Date();
-  if (option === "today") {
-    return isSameDay(timestamp, now);
-  }
-  if (option === "yesterday") {
-    const yesterday = new Date(now.getTime() - MILLISECONDS_IN_A_DAY);
-    return isSameDay(timestamp, yesterday);
-  }
-  if (option === "last_week") {
-    const weekAgo = new Date(now);
-    weekAgo.setDate(weekAgo.getDate() - 7);
-    return timestamp >= weekAgo;
-  }
-  if (option === "last_month") {
-    const monthAgo = new Date(now);
-    monthAgo.setDate(monthAgo.getDate() - 30);
-    return timestamp >= monthAgo;
-  }
-  return true;
-}
-
 type ReplyMetadata = {
   manual_mode?: boolean;
   [key: string]: unknown;
@@ -867,7 +819,6 @@ export function InboxSplitView({
         if (!normalizedCampanaFilter) return true;
         return (thread.campanaId ?? "").toLowerCase() === normalizedCampanaFilter;
       })
-      .filter((thread) => matchesDateFilter(thread, dateFilter))
       .filter((thread) => matchesReengageFilter(thread, reengageFilter))
       .filter((thread) => {
         if (!term) return true;
@@ -890,7 +841,6 @@ export function InboxSplitView({
     estadoFilter,
     batchFilter,
     campanaFilter,
-    dateFilter,
     reengageFilter,
   ]);
 
@@ -1056,10 +1006,12 @@ export function InboxSplitView({
         if (typeof data?.total_threads === "number") {
           setTotalThreads(Math.max(0, data.total_threads));
         }
-        if (!incoming.length) {
-          return;
-        }
-        setThreadItems((current) => mergeThreadLists(current, incoming));
+        setThreadItems((current) => {
+          if (!incoming.length) {
+            return [];
+          }
+          return mergeThreadLists(current, incoming);
+        });
       } catch (error) {
         console.error("[inbox] refresh threads failed", error);
       } finally {

@@ -3669,8 +3669,15 @@ def _resolve_date_range(
     rango: str | None,
     desde: str | None,
     hasta: str | None,
+    timezone_name: str | None = None,
 ) -> tuple[datetime | None, datetime | None]:
-    report_tz = _get_report_timezone()
+    if timezone_name:
+        try:
+            report_tz = ZoneInfo(timezone_name)
+        except Exception:
+            report_tz = _get_report_timezone()
+    else:
+        report_tz = _get_report_timezone()
     now_local = datetime.now(report_tz)
     now_utc = now_local.astimezone(timezone.utc)
     start: datetime | None = None
@@ -19499,13 +19506,25 @@ async def register_web_visit(
 async def dashboard_kpis(
     *,
     repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
     _: str = Depends(require_permission("ver_panel")),
     user_token: str = Depends(require_user_token),
+    usuario_id: UUID | None = Depends(optional_usuario_id),
     rango: str | None = Query(default=None),
     desde: str | None = Query(default=None),
     hasta: str | None = Query(default=None),
 ) -> dict[str, Any]:
-    date_from, date_to = _resolve_date_range(rango, desde, hasta)
+    effective_timezone, _timezone_source = await _resolve_effective_timezone_name(
+        repo=repo,
+        organizacion_id=organizacion_id,
+        usuario_id=usuario_id,
+    )
+    date_from, date_to = _resolve_date_range(
+        rango,
+        desde,
+        hasta,
+        timezone_name=effective_timezone,
+    )
     try:
         payload = await repo.visitas_dashboard_kpis(
             usuario_token=user_token,
@@ -19528,9 +19547,11 @@ async def dashboard_kpis(
 @router.get("/demografia/resumen")
 async def demografia_resumen(
     *,
-    organizacion_id: UUID = Depends(require_organizacion_id),  # noqa: ARG001
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
     _: str = Depends(require_permission("reports.view")),
     user_token: str = Depends(require_user_token),
+    usuario_id: UUID | None = Depends(optional_usuario_id),
     nivel: Annotated[str, Query(pattern="^(pais|estado|municipio)$")] = "estado",
     canales: str | None = Query(default=None),
     etapas: str | None = Query(default=None),
@@ -19539,7 +19560,17 @@ async def demografia_resumen(
     hasta: str | None = Query(default=None),
 ) -> dict[str, Any]:
     nivel_normalizado = (nivel or "estado").strip().lower() or "estado"
-    date_from, date_to = _resolve_date_range(rango, desde, hasta)
+    effective_timezone, _timezone_source = await _resolve_effective_timezone_name(
+        repo=repo,
+        organizacion_id=organizacion_id,
+        usuario_id=usuario_id,
+    )
+    date_from, date_to = _resolve_date_range(
+        rango,
+        desde,
+        hasta,
+        timezone_name=effective_timezone,
+    )
     channel_values = _parse_channels_param(canales)
     stage_values = _parse_stages_param(etapas)
 
@@ -19578,9 +19609,11 @@ async def demografia_resumen(
 @router.get("/demografia/mapa")
 async def demografia_mapa(
     *,
-    organizacion_id: UUID = Depends(require_organizacion_id),  # noqa: ARG001
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
     _: str = Depends(require_permission("reports.view")),
     user_token: str = Depends(require_user_token),
+    usuario_id: UUID | None = Depends(optional_usuario_id),
     nivel: Annotated[str, Query(pattern="^(pais|estado|municipio)$")] = "estado",
     estado: str | None = Query(default=None),
     canales: str | None = Query(default=None),
@@ -19596,7 +19629,17 @@ async def demografia_mapa(
             raise HTTPException(status_code=400, detail="estado_required")
         state_code = _ensure_state_code(estado)
 
-    date_from, date_to = _resolve_date_range(rango, desde, hasta)
+    effective_timezone, _timezone_source = await _resolve_effective_timezone_name(
+        repo=repo,
+        organizacion_id=organizacion_id,
+        usuario_id=usuario_id,
+    )
+    date_from, date_to = _resolve_date_range(
+        rango,
+        desde,
+        hasta,
+        timezone_name=effective_timezone,
+    )
     channel_values = _parse_channels_param(canales)
     stage_values = _parse_stages_param(etapas)
 
@@ -19676,9 +19719,11 @@ async def demografia_mapa(
 @router.get("/demografia/resumen-v2")
 async def demografia_resumen_v2(
     *,
-    organizacion_id: UUID = Depends(require_organizacion_id),  # noqa: ARG001
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
     _: str = Depends(require_permission("reports.view")),
     user_token: str = Depends(require_user_token),
+    usuario_id: UUID | None = Depends(optional_usuario_id),
     nivel: Annotated[str, Query(pattern="^(pais|estado|municipio)$")] = "estado",
     estado: str | None = Query(default=None),
     canales: str | None = Query(default=None),
@@ -19698,7 +19743,17 @@ async def demografia_resumen_v2(
             raise HTTPException(status_code=400, detail="estado_required")
         state_code = _ensure_state_code(estado)
 
-    date_from, date_to = _resolve_date_range(rango, desde, hasta)
+    effective_timezone, _timezone_source = await _resolve_effective_timezone_name(
+        repo=repo,
+        organizacion_id=organizacion_id,
+        usuario_id=usuario_id,
+    )
+    date_from, date_to = _resolve_date_range(
+        rango,
+        desde,
+        hasta,
+        timezone_name=effective_timezone,
+    )
     channel_values = _parse_channels_param(canales)
     stage_values = _parse_stages_param(etapas)
 
@@ -19754,9 +19809,11 @@ async def demografia_resumen_v2(
 @router.get("/demografia/mapa-v2")
 async def demografia_mapa_v2(
     *,
-    organizacion_id: UUID = Depends(require_organizacion_id),  # noqa: ARG001
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
     _: str = Depends(require_permission("reports.view")),
     user_token: str = Depends(require_user_token),
+    usuario_id: UUID | None = Depends(optional_usuario_id),
     nivel: Annotated[str, Query(pattern="^(pais|estado|municipio)$")] = "estado",
     estado: str | None = Query(default=None),
     canales: str | None = Query(default=None),
@@ -19776,7 +19833,17 @@ async def demografia_mapa_v2(
             raise HTTPException(status_code=400, detail="estado_required")
         state_code = _ensure_state_code(estado)
 
-    date_from, date_to = _resolve_date_range(rango, desde, hasta)
+    effective_timezone, _timezone_source = await _resolve_effective_timezone_name(
+        repo=repo,
+        organizacion_id=organizacion_id,
+        usuario_id=usuario_id,
+    )
+    date_from, date_to = _resolve_date_range(
+        rango,
+        desde,
+        hasta,
+        timezone_name=effective_timezone,
+    )
     channel_values = _parse_channels_param(canales)
     stage_values = _parse_stages_param(etapas)
 
