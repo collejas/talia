@@ -29,6 +29,7 @@ import {
   deleteProspeccionCampana,
   getProspeccionCampanaAtribucion,
   importBrevoContactoTemplate,
+  listWhatsAppAtribucionReglas,
   listContactoEnvios,
   listContactoLogs,
   listBrevoCatalogTemplates,
@@ -42,6 +43,7 @@ import {
   type ContactoTemplate,
   type ContactoEnvio,
   type ContactoLog,
+  type WhatsAppAtribucionRule,
   type ProspeccionCampanaAtribucionItem,
   type ProspeccionCampanaGroup,
 } from "@/lib/prospeccion/prospectos-client"
@@ -119,7 +121,10 @@ export function CampanasMetricsClient() {
   const [brevoCatalog, setBrevoCatalog] = useState<BrevoCatalogTemplate[]>([])
   const [brevoLoading, setBrevoLoading] = useState(false)
   const [brevoImportingId, setBrevoImportingId] = useState<number | null>(null)
+  const [waRules, setWaRules] = useState<WhatsAppAtribucionRule[]>([])
+  const [waRulesLoading, setWaRulesLoading] = useState(false)
   const [tenantBaseUrl, setTenantBaseUrl] = useState<string>("")
+  const [tenantPhone, setTenantPhone] = useState<string>("")
   const [logos, setLogos] = useState<LogoAsset[]>([])
   const [logosLoading, setLogosLoading] = useState(false)
   const [logoUploading, setLogoUploading] = useState(false)
@@ -142,6 +147,8 @@ export function CampanasMetricsClient() {
     nombreIa: "",
     nombreEmpresa: "",
     ctaBaseUrl: "https://talia.mx/",
+    waRuleId: "",
+    waPhrase: "",
   })
   const [banner, setBanner] = useState<{ type: "success" | "error"; message: string } | null>(null)
 
@@ -481,6 +488,13 @@ export function CampanasMetricsClient() {
     return `https://${raw}`
   }, [])
 
+  const normalizeWaPhone = useCallback((value: string | null | undefined) => {
+    const raw = (value || "").trim()
+    if (!raw) return ""
+    const digits = raw.replace(/\D+/g, "")
+    return digits
+  }, [])
+
   useEffect(() => {
     if (!templatesDialogOpen) return
     void (async () => {
@@ -498,9 +512,17 @@ export function CampanasMetricsClient() {
             ? ((payload as Record<string, unknown>).dominio_principal as string)
             : "",
         )
+        const telefono =
+          typeof (payload as Record<string, unknown>).telefono === "string"
+            ? ((payload as Record<string, unknown>).telefono as string).trim()
+            : ""
         const resolved = sitioWeb || dominio || ""
         setTenantBaseUrl(resolved)
-        setTemplateForm((prev) => ({ ...prev, ctaBaseUrl: resolved }))
+        setTenantPhone(telefono)
+        setTemplateForm((prev) => ({
+          ...prev,
+          ctaBaseUrl: resolved || prev.ctaBaseUrl,
+        }))
       } catch {
         // keep fallback
       }
@@ -523,6 +545,8 @@ export function CampanasMetricsClient() {
       nombreIa: "",
       nombreEmpresa: "",
       ctaBaseUrl: "https://talia.mx/",
+      waRuleId: "",
+      waPhrase: "",
     })
   }, [templatesCampanaCanal])
 
@@ -672,6 +696,25 @@ export function CampanasMetricsClient() {
     }
   }, [templateForm.canal, templateForm.ctaBaseUrl, templateForm.id, templateForm.slug, templatesCampanaId, tenantBaseUrl])
 
+  const waMeUrl = useMemo(() => {
+    const phoneDigits = normalizeWaPhone(tenantPhone)
+    const selectedWaRule = waRules.find((rule) => rule.id === templateForm.waRuleId)
+    const phrase = (templateForm.waPhrase || selectedWaRule?.frase_objetivo || "").trim()
+    if (!phoneDigits || !phrase) return ""
+    return `https://wa.me/${phoneDigits}?text=${encodeURIComponent(phrase)}`
+  }, [normalizeWaPhone, templateForm.waPhrase, templateForm.waRuleId, tenantPhone, waRules])
+
+  const insertCorreoWaMeLink = useCallback(() => {
+    if (!waMeUrl) {
+      setTemplateError("Selecciona una frase de WhatsApp para insertar el enlace.")
+      return
+    }
+    appendTemplateToken(
+      "cuerpoHtml",
+      `<a href="${waMeUrl}" target="_blank" rel="noopener noreferrer">Escríbenos por WhatsApp</a>`
+    )
+  }, [appendTemplateToken, waMeUrl])
+
   const handleLogoFileChange = useCallback(
     async (event: React.ChangeEvent<HTMLInputElement>) => {
       const file = event.target.files?.[0]
@@ -754,6 +797,18 @@ export function CampanasMetricsClient() {
     }
   }, [templatesCampanaCanal])
 
+  const loadWaRules = useCallback(async () => {
+    setWaRulesLoading(true)
+    try {
+      const response = await listWhatsAppAtribucionReglas({ limit: 500, activo: true })
+      setWaRules(Array.isArray(response?.items) ? response.items : [])
+    } catch {
+      setWaRules([])
+    } finally {
+      setWaRulesLoading(false)
+    }
+  }, [])
+
   const handleManageTemplates = useCallback(
     async (campanaId: string, campanaNombre?: string | null) => {
       const campaign = crmCampaigns.find((item) => item.id === campanaId)
@@ -779,8 +834,11 @@ export function CampanasMetricsClient() {
         nombreIa: "",
         nombreEmpresa: "",
         ctaBaseUrl: "https://talia.mx/",
+        waRuleId: "",
+        waPhrase: "",
       })
       setTemplatesDialogOpen(true)
+      await loadWaRules()
       await loadCampaignTemplates(campanaId)
       if (canal === "correo") {
         await loadBrevoCatalog(canal)
@@ -788,7 +846,7 @@ export function CampanasMetricsClient() {
         setBrevoCatalog([])
       }
     },
-    [crmCampaigns, loadBrevoCatalog, loadCampaignTemplates]
+    [crmCampaigns, loadBrevoCatalog, loadCampaignTemplates, loadWaRules]
   )
 
   const handleTemplateEdit = useCallback((template: ContactoTemplate) => {
@@ -818,6 +876,8 @@ export function CampanasMetricsClient() {
         (typeof metadata["empresa"] === "string" ? metadata["empresa"] : ""),
       ctaBaseUrl:
         (typeof metadata["tracking_base_url"] === "string" && metadata["tracking_base_url"].trim()) || "https://talia.mx/",
+      waRuleId: (typeof metadata["wa_rule_id"] === "string" && metadata["wa_rule_id"].trim()) || "",
+      waPhrase: (typeof metadata["wa_me_text"] === "string" && metadata["wa_me_text"].trim()) || "",
     })
   }, [])
 
@@ -847,6 +907,16 @@ export function CampanasMetricsClient() {
     if (templateForm.canal === "correo" && normalizedLogoUrl) {
       metadata["logo_url"] = normalizedLogoUrl
     }
+    const normalizedWaPhone = normalizeWaPhone(tenantPhone)
+    const selectedWaRule = waRules.find((rule) => rule.id === templateForm.waRuleId)
+    const waPhrase = (templateForm.waPhrase || selectedWaRule?.frase_objetivo || "").trim()
+    if (normalizedWaPhone) metadata["wa_me_phone"] = normalizedWaPhone
+    if (waPhrase) metadata["wa_me_text"] = waPhrase
+    if (selectedWaRule?.id) {
+      metadata["wa_rule_id"] = selectedWaRule.id
+      metadata["wa_rule_name"] = selectedWaRule.nombre_regla ?? null
+    }
+    if (waMeUrl) metadata["wa_me_url"] = waMeUrl
     if (templateForm.canal === "whatsapp" && normalizedLogoUrl) {
       metadata["media_url_base"] = normalizedLogoUrl
       if (whatsappMediaUrl) metadata["media_url_tracked"] = whatsappMediaUrl
@@ -902,7 +972,7 @@ export function CampanasMetricsClient() {
     } finally {
       setTemplateSaving(false)
     }
-  }, [loadCampaignTemplates, normalizeLogoUrl, resetTemplateForm, selectedLogoUrl, slugify, templateForm, templatesCampanaCanal, templatesCampanaId, tenantBaseUrl, whatsappCtaUrl, whatsappMediaUrl])
+  }, [loadCampaignTemplates, normalizeLogoUrl, normalizeWaPhone, resetTemplateForm, selectedLogoUrl, slugify, templateForm, templatesCampanaCanal, templatesCampanaId, tenantBaseUrl, tenantPhone, waMeUrl, waRules, whatsappCtaUrl, whatsappMediaUrl])
 
   const handleTemplateDelete = useCallback(
     async (templateId: string) => {
@@ -1564,6 +1634,49 @@ export function CampanasMetricsClient() {
                     </p>
                   </div>
                   <div className="grid gap-3 sm:grid-cols-2">
+                    <div className="space-y-1 sm:col-span-2">
+                      <Label>Frase de WhatsApp para captación</Label>
+                      <Select
+                        value={templateForm.waRuleId || "__none__"}
+                        onValueChange={(value) => {
+                          if (value === "__none__") {
+                            setTemplateForm((prev) => ({ ...prev, waRuleId: "", waPhrase: "" }))
+                            return
+                          }
+                          const selected = waRules.find((rule) => rule.id === value)
+                          setTemplateForm((prev) => ({
+                            ...prev,
+                            waRuleId: value,
+                            waPhrase: selected?.frase_objetivo ?? prev.waPhrase,
+                          }))
+                        }}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder={waRulesLoading ? "Cargando frases..." : "Selecciona una frase"} />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="__none__">Sin frase</SelectItem>
+                          {waRules.map((rule) => (
+                            <SelectItem key={rule.id} value={rule.id}>
+                              {(rule.nombre_regla || "Regla") + " · " + (rule.frase_objetivo || "")}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <p className="text-xs text-muted-foreground">
+                        Selecciona una frase y el enlace de WhatsApp se genera automáticamente al insertar.
+                      </p>
+                      {templateForm.waPhrase ? (
+                        <p className="rounded border bg-muted/30 px-2 py-1 text-xs text-foreground">{templateForm.waPhrase}</p>
+                      ) : null}
+                      {!normalizeWaPhone(tenantPhone) ? (
+                        <p className="text-xs text-amber-700 dark:text-amber-300">
+                          Falta teléfono del tenant para generar el enlace de WhatsApp.
+                        </p>
+                      ) : null}
+                    </div>
+                  </div>
+                  <div className="grid gap-3 sm:grid-cols-2">
                     <div className="space-y-1">
                       <Label>Nombre IA (opcional)</Label>
                       <Input
@@ -1733,6 +1846,9 @@ export function CampanasMetricsClient() {
                       </Button>
                       <Button type="button" variant="outline" size="sm" onClick={() => insertCorreoTrackedLink()}>
                         Insertar enlace web
+                      </Button>
+                      <Button type="button" variant="outline" size="sm" onClick={() => insertCorreoWaMeLink()}>
+                        Insertar enlace WhatsApp
                       </Button>
                     </div>
                     <Textarea
