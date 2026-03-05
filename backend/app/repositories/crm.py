@@ -9728,7 +9728,7 @@ class CRMRepository:
                 "select": "id,conversacion_id,contacto_id,regla_id,canal_publicitario,creado_en",
                 "organizacion_id": f"eq.{organizacion_id}",
                 "contacto_id": f"eq.{contacto_id}",
-                "creado_en": f"gte.{_postgrest_eq_literal(since_iso)}",
+                "creado_en": f"gte.{since_iso}",
                 "order": "creado_en.desc",
                 "limit": "1",
             },
@@ -9820,10 +9820,13 @@ class CRMRepository:
             "order": "creado_en.desc",
             "limit": str(max(1, min(limit, 10000))),
         }
+        and_filters: list[str] = []
         if date_from_iso:
-            params["creado_en"] = f"gte.{_postgrest_eq_literal(date_from_iso)}"
+            and_filters.append(f"creado_en.gte.{date_from_iso}")
         if date_to_iso:
-            params["creado_en"] = f"lte.{_postgrest_eq_literal(date_to_iso)}"
+            and_filters.append(f"creado_en.lte.{date_to_iso}")
+        if and_filters:
+            params["and"] = "(" + ",".join(and_filters) + ")"
         if canal_publicitario:
             literal = _postgrest_eq_literal(canal_publicitario.strip())
             params["canal_publicitario"] = f"eq.{literal}"
