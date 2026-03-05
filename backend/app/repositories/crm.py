@@ -8426,8 +8426,12 @@ class CRMRepository:
             date_to_utc = end_local.astimezone(timezone.utc).isoformat()
 
         # Fast path: usamos RPCs agregados en DB para evitar scans masivos en Python.
+        # Para vista de grupos (sin query_filters) mantenemos el fallback exacto porque
+        # ahí se muestran estado/municipio derivados de metadata avanzada.
         # Si algo falla (migración faltante o error puntual), se usa fallback legacy.
         try:
+            if normalized_query_filters is None:
+                raise CRMRepositoryError("prospecto_queries_resumen_requires_filters")
             query_payload: dict[str, Any] = {
                 "p_query_filters": normalized_query_filters,
                 "p_fuente": fuente or None,

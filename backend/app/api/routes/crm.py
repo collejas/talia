@@ -295,6 +295,11 @@ async def _prospecto_queries_cache_size() -> int:
         return len(_PROSPECTO_QUERIES_CACHE)
 
 
+async def _clear_prospecto_queries_cache() -> None:
+    async with _PROSPECTO_QUERIES_CACHE_LOCK:
+        _PROSPECTO_QUERIES_CACHE.clear()
+
+
 def _percentile(values: list[float], percentile: float) -> float:
     if not values:
         return 0.0
@@ -16956,6 +16961,7 @@ async def guardar_prospectos(
         )
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
+    await _clear_prospecto_queries_cache()
 
     return {
         "ok": True,
@@ -16992,6 +16998,7 @@ async def crear_prospecto_manual(
         )
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
+    await _clear_prospecto_queries_cache()
 
     return {"ok": True, "prospecto": prospecto}
 
@@ -17021,6 +17028,7 @@ async def actualizar_prospecto(
         )
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
+    await _clear_prospecto_queries_cache()
 
     return {"ok": True, "prospecto": updated}
 
@@ -17047,6 +17055,7 @@ async def eliminar_prospecto(
         )
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
+    await _clear_prospecto_queries_cache()
 
     return {"ok": True, "prospecto_id": str(prospecto_id)}
 
@@ -17068,6 +17077,7 @@ async def eliminar_prospectos(
         )
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
+    await _clear_prospecto_queries_cache()
 
     return {"ok": True, "prospecto_ids": [str(value) for value in deleted_ids]}
 
@@ -23176,6 +23186,7 @@ async def prospeccion_buscador_guardar_prospectos(
         created = await repo.bulk_insert_prospectos(usuario_token=user_token, items=prospectos)
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
+    await _clear_prospecto_queries_cache()
     logger.info(
         "buscador.prospectos.save_completed",
         extra={
