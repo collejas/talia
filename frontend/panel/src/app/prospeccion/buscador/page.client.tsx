@@ -134,6 +134,7 @@ function BuscadorView() {
   const [lastResultsJobId, setLastResultsJobId] = useState<string | null>(null)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [segmento, setSegmento] = useState("")
+  const [domainFilter, setDomainFilter] = useState("all")
   const [savingProspectos, setSavingProspectos] = useState(false)
   const [jobs, setJobs] = useState<BuscadorJob[]>([])
   const [jobsLoading, setJobsLoading] = useState(false)
@@ -188,6 +189,37 @@ function BuscadorView() {
       count: item.count,
     }))
   }, [stats])
+
+  const domainOptions = useMemo(() => {
+    const counts = new Map<string, number>()
+    for (const item of results) {
+      const email = item.email?.trim().toLowerCase() ?? ""
+      const atIndex = email.lastIndexOf("@")
+      if (atIndex > 0 && atIndex < email.length - 1) {
+        const emailDomain = email
+          .slice(atIndex + 1)
+          .trim()
+          .replace(/[)>.,;:]+$/g, "")
+          .replace(/^\(+/, "")
+        if (emailDomain) {
+          counts.set(emailDomain, (counts.get(emailDomain) ?? 0) + 1)
+        }
+      }
+    }
+    return Array.from(counts.entries())
+      .sort((a, b) => a[0].localeCompare(b[0]))
+      .map(([domain, count]) => ({ domain, count }))
+  }, [results])
+
+  const filteredResults = useMemo(() => {
+    if (domainFilter === "all") return results
+    return results.filter((item) => {
+      const email = item.email?.trim().toLowerCase() ?? ""
+      const atIndex = email.lastIndexOf("@")
+      if (atIndex <= 0 || atIndex >= email.length - 1) return false
+      return email.slice(atIndex + 1).trim() === domainFilter
+    })
+  }, [results, domainFilter])
 
   const handleInputChange = (key: keyof FormState) => (event: ChangeEvent<HTMLInputElement>) => {
     const value = event.target.value
@@ -425,6 +457,7 @@ function BuscadorView() {
     setLastResultsJobId(null)
     setSelectedIds(new Set())
     setSegmento("")
+    setDomainFilter("all")
     setSelectedJobId(null)
     setResultsLoading(false)
   }
@@ -542,9 +575,9 @@ function BuscadorView() {
   }
 
   const toggleSelectAll = (checked: boolean | "indeterminate") => {
-    if (!results.length) return
+    if (!filteredResults.length) return
     if (checked) {
-      const ids = results
+      const ids = filteredResults
         .map((result) => result.id?.trim())
         .filter((value): value is string => Boolean(value))
       setSelectedIds(new Set(ids))
@@ -604,6 +637,13 @@ function BuscadorView() {
     }
   }
 
+  useEffect(() => {
+    if (domainFilter === "all") return
+    if (!domainOptions.some((item) => item.domain === domainFilter)) {
+      setDomainFilter("all")
+    }
+  }, [domainFilter, domainOptions])
+
   const handleNextPage = () => {
     if (!jobInfo || !hasNextPage) return
     const nextOffset = resultsOffset + resultsLimit
@@ -632,6 +672,7 @@ function BuscadorView() {
     setResults([])
     setResultsTotal(0)
     setResultsOffset(0)
+    setDomainFilter("all")
     setSelectedIds(new Set())
   }
 
@@ -1060,10 +1101,26 @@ function BuscadorView() {
                   {resultsLoading
                     ? "Cargando página de resultados…"
                     : totalResultsCount
-                      ? `Mostrando ${pageStart}-${pageEnd} de ${totalResultsCount} registros.`
-                      : `Mostrando ${results.length} registros.`}
+                      ? `Mostrando ${pageStart}-${pageEnd} de ${totalResultsCount} registros${domainFilter === "all" ? "" : ` · filtrados: ${filteredResults.length}`}.`
+                      : `Mostrando ${filteredResults.length} registros.`}
                 </p>
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end sm:gap-4">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm text-muted-foreground">Dominio de correo</span>
+                    <Select value={domainFilter} onValueChange={setDomainFilter}>
+                      <SelectTrigger className="w-[220px]">
+                        <SelectValue placeholder="Todos los dominios" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">Todos los dominios</SelectItem>
+                        {domainOptions.map((item) => (
+                          <SelectItem key={item.domain} value={item.domain}>
+                            {item.domain} ({item.count})
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
                   <div className="flex items-center gap-2">
                     <span className="text-sm text-muted-foreground">Registros por página</span>
                     <Select value={String(resultsLimit)} onValueChange={handleResultsLimitChange}>
@@ -1108,54 +1165,62 @@ function BuscadorView() {
           ) : (
             <ScrollArea className="h-[420px] rounded-md border">
               <Table>
-                <TableHeader>
+                <TableHeader className="sticky top-0 z-20 bg-background">
                   <TableRow>
-                    <TableHead className="w-10">
+                    <TableHead className="w-10 bg-background">
                       <Checkbox
                         checked={
                           selectedIds.size > 0 &&
                           selectedIds.size ===
-                            results.filter((item) => typeof item.id === "string" && item.id.trim().length).length
+                            filteredResults.filter((item) => typeof item.id === "string" && item.id.trim().length).length
                         }
                         onCheckedChange={toggleSelectAll}
                         aria-label="Seleccionar todos"
                       />
                     </TableHead>
-                    <TableHead>Correo</TableHead>
-                    <TableHead>Nombre</TableHead>
-                    <TableHead>Puesto</TableHead>
-                    <TableHead>Teléfono</TableHead>
-                    <TableHead>Ext.</TableHead>
-                    <TableHead>Dirección</TableHead>
-                    <TableHead>URL origen</TableHead>
+                    <TableHead className="bg-background">Correo</TableHead>
+                    <TableHead className="bg-background">Nombre</TableHead>
+                    <TableHead className="bg-background">Puesto</TableHead>
+                    <TableHead className="bg-background">Teléfono</TableHead>
+                    <TableHead className="bg-background">Ext.</TableHead>
+                    <TableHead className="bg-background">Dirección</TableHead>
+                    <TableHead className="bg-background">URL origen</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {results.map((item, index) => (
-                    <TableRow key={`${item.email}-${index}`}>
-                      <TableCell>
-                        <Checkbox
-                          checked={item.id ? selectedIds.has(item.id) : false}
-                          onCheckedChange={(checked) => toggleSelect(item.id ?? undefined, checked)}
-                          disabled={!item.id}
-                          aria-label="Seleccionar contacto"
-                        />
-                      </TableCell>
-                      <TableCell>
-                        <span className="font-medium">{item.email}</span>
-                      </TableCell>
-                      <TableCell>{item.name || "—"}</TableCell>
-                      <TableCell>{item.position || "—"}</TableCell>
-                      <TableCell>{item.phone || "—"}</TableCell>
-                      <TableCell>{item.extension || "—"}</TableCell>
-                      <TableCell className="max-w-[200px] truncate">{item.address || "—"}</TableCell>
-                      <TableCell className="max-w-[240px] truncate">
-                        <a href={item.source_url} target="_blank" rel="noreferrer" className="text-primary underline">
-                          {item.source_url}
-                        </a>
+                  {filteredResults.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={8} className="text-center text-sm text-muted-foreground">
+                        No hay resultados para el dominio seleccionado.
                       </TableCell>
                     </TableRow>
-                  ))}
+                  ) : (
+                    filteredResults.map((item, index) => (
+                      <TableRow key={`${item.email}-${index}`}>
+                        <TableCell>
+                          <Checkbox
+                            checked={item.id ? selectedIds.has(item.id) : false}
+                            onCheckedChange={(checked) => toggleSelect(item.id ?? undefined, checked)}
+                            disabled={!item.id}
+                            aria-label="Seleccionar contacto"
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <span className="font-medium">{item.email}</span>
+                        </TableCell>
+                        <TableCell>{item.name || "—"}</TableCell>
+                        <TableCell>{item.position || "—"}</TableCell>
+                        <TableCell>{item.phone || "—"}</TableCell>
+                        <TableCell>{item.extension || "—"}</TableCell>
+                        <TableCell className="max-w-[200px] truncate">{item.address || "—"}</TableCell>
+                        <TableCell className="max-w-[240px] truncate">
+                          <a href={item.source_url} target="_blank" rel="noreferrer" className="text-primary underline">
+                            {item.source_url}
+                          </a>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
                 </TableBody>
               </Table>
             </ScrollArea>
