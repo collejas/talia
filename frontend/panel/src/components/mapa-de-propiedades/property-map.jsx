@@ -21,7 +21,8 @@ const STATUS_COLORS = {
   reservado: "#9B59B6",
 };
 
-const DEFAULT_CENTER = [-99.1332, 19.4326];
+const DEFAULT_CENTER_MAPBOX = [-99.1332, 19.4326];
+const DEFAULT_CENTER_LEAFLET = [23.6345, -102.5528];
 const TILE_SOURCE = "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png";
 
 function getFeatureId(feature) {
@@ -382,6 +383,7 @@ function stripZGeometry(geometry) {
 export function PropertyMap() {
   const mapContainerRef = useRef(null);
   const mapInstanceRef = useRef(null);
+  const tileLayerRef = useRef(null);
   const osmbRef = useRef(null);
   const layerRef = useRef(null);
   const leafletDrillControlsRef = useRef(null);
@@ -418,6 +420,7 @@ export function PropertyMap() {
   const [pitch, setPitch] = useState(60);
   const [bearing, setBearing] = useState(0);
   const [mapboxPanelVersion, setMapboxPanelVersion] = useState(0);
+  const [leafletMountVersion, setLeafletMountVersion] = useState(0);
   const [saleLoading, setSaleLoading] = useState(false);
   const [saleError, setSaleError] = useState(null);
   const [saleSuccess, setSaleSuccess] = useState(null);
@@ -1913,8 +1916,8 @@ export function PropertyMap() {
           ? 0.35
           : 0.15
         : hoveredRegionKey === key
-        ? 0.85
-        : 0.6;
+        ? 0.55
+        : 0.3;
       layerInstance.setStyle({
         color: "#0f172a",
         weight: isActive ? 3 : 1,
@@ -2030,6 +2033,33 @@ export function PropertyMap() {
   const closeMapbox = useCallback(() => {
     setMapboxActive(false);
     setMapboxFeature(null);
+    setActiveNode(null);
+    setParentStack([]);
+    setLeafletActiveNode(null);
+    setLeafletParentStack([]);
+    setHoveredRegionKey(null);
+    setActiveMarkerFeature(null);
+    setSelectedCountryKey(null);
+    setSelectedStateKey(null);
+    setSelectedMunicipioKey(null);
+    setSelectedMunicipioGeoKey(null);
+    setMapLevel("pais");
+    // Reinicia Leaflet por completo para evitar estados visuales corruptos tras cerrar Mapbox.
+    if (mapInstanceRef.current) {
+      try {
+        mapInstanceRef.current.remove();
+      } catch {
+        // ignore teardown errors
+      }
+      mapInstanceRef.current = null;
+    }
+    osmbRef.current = null;
+    layerRef.current = null;
+    hierarchyLayerRef.current = null;
+    markersLayerRef.current = null;
+    municipalPolygonLayerRef.current = null;
+    tileLayerRef.current = null;
+    setLeafletMountVersion((v) => v + 1);
   }, []);
 
   const handleRegionHover = useCallback((feature) => {
@@ -2138,16 +2168,27 @@ export function PropertyMap() {
     if (!mapContainerRef.current || mapInstanceRef.current || !leaflet) {
       return;
     }
+    const containerEl = mapContainerRef.current;
+    // Evita errores de reuso del contenedor en remontajes rápidos (React Strict Mode/dev).
+    if (containerEl && containerEl._leaflet_id) {
+      try {
+        delete containerEl._leaflet_id;
+      } catch {
+        containerEl._leaflet_id = undefined;
+      }
+    }
     const map = leaflet.map(mapContainerRef.current, {
-      center: DEFAULT_CENTER,
-      zoom: 16,
+      center: DEFAULT_CENTER_LEAFLET,
+      zoom: 5,
       zoomControl: true,
       preferCanvas: true,
     });
     mapInstanceRef.current = map;
-    leaflet.tileLayer(TILE_SOURCE, {
+    const tileLayer = leaflet.tileLayer(TILE_SOURCE, {
       attribution: "&copy; OpenStreetMap contributors",
-    }).addTo(map);
+    });
+    tileLayer.addTo(map);
+    tileLayerRef.current = tileLayer;
 
     const layer = leaflet.geoJSON([], {
       style: () => ({
@@ -2208,11 +2249,27 @@ export function PropertyMap() {
     municipalPolygonLayer.addTo(map);
 
     return () => {
-      map.remove();
+      if (mapInstanceRef.current === map) {
+        mapInstanceRef.current = null;
+      }
+      try {
+        map.off?.();
+        map.remove();
+      } catch {
+        // ignore cleanup races when container was already reused
+      }
+      if (containerEl && containerEl._leaflet_id) {
+        try {
+          delete containerEl._leaflet_id;
+        } catch {
+          containerEl._leaflet_id = undefined;
+        }
+      }
+      tileLayerRef.current = null;
       layerRef.current?.clearLayers();
       municipalPolygonLayerRef.current?.clearLayers();
     };
-  }, [leaflet, applyLayerStyle]);
+  }, [leaflet, applyLayerStyle, leafletMountVersion]);
 
   useEffect(() => {
     if (!leaflet || !leafletDrillControlsRef.current) {
@@ -2313,7 +2370,7 @@ export function PropertyMap() {
     } catch {
       // ignore invalid bounds
     }
-  }, [filteredDemografiaGeojson, leaflet, mapLevel, selectedMunicipioKey, leafletActiveNode]);
+  }, [filteredDemografiaGeojson, leaflet, mapLevel, selectedMunicipioKey, leafletActiveNode, leafletMountVersion]);
 
   useEffect(() => {
     if (!hierarchyLayerRef.current) {
@@ -2324,7 +2381,7 @@ export function PropertyMap() {
         applyRegionStyleRef.current?.(layer, layer.feature);
       }
     });
-  }, [applyRegionStyleRef, hoveredRegionKey, mapLevel, selectedMunicipioKey, selectedStateKey]);
+  }, [applyRegionStyleRef, hoveredRegionKey, mapLevel, selectedMunicipioKey, selectedStateKey, leafletMountVersion]);
 
   const buildRegionTooltipText = useCallback(
     (key) => {
@@ -2362,6 +2419,7 @@ export function PropertyMap() {
     regionStatusCounts,
     selectedMunicipioKey,
     selectedStateKey,
+    leafletMountVersion,
   ]);
 
   useEffect(() => {
@@ -2432,6 +2490,7 @@ export function PropertyMap() {
     municipioDevelopmentFeatures,
     selectedMunicipioGeoKey,
     leafletActiveNode,
+    leafletMountVersion,
   ]);
 
   useEffect(() => {
@@ -2486,7 +2545,7 @@ export function PropertyMap() {
       const initialBounds = initialFeature
         ? getGeometryBounds(initialFeature.geometry)
         : null;
-      const initialCenter = getFeatureCenter(initialFeature) ?? DEFAULT_CENTER;
+      const initialCenter = getFeatureCenter(initialFeature) ?? DEFAULT_CENTER_MAPBOX;
       const initialZoom = initialBounds ? 18 : 12;
       const map = new mapboxglModule.Map({
         container,
@@ -2823,6 +2882,29 @@ export function PropertyMap() {
   ]);
 
   useEffect(() => {
+    if (mapboxActive) {
+      return;
+    }
+    const map = mapInstanceRef.current;
+    if (!map || typeof map.invalidateSize !== "function") {
+      return;
+    }
+    const runInvalidate = () => {
+      try {
+        map.invalidateSize({ pan: false, debounceMoveend: true });
+      } catch {
+        // ignore leaflet resize errors
+      }
+    };
+    const rafId = window.requestAnimationFrame(runInvalidate);
+    const timeoutId = window.setTimeout(runInvalidate, 220);
+    return () => {
+      window.cancelAnimationFrame(rafId);
+      window.clearTimeout(timeoutId);
+    };
+  }, [mapboxActive]);
+
+  useEffect(() => {
     if (!mapboxActive) {
       return;
     }
@@ -3105,11 +3187,12 @@ export function PropertyMap() {
       leaflet &&
       mapLevel === "pais" &&
       !mapboxActive &&
-      !leafletActiveNode
+      !leafletActiveNode &&
+      !filteredDemografiaGeojson
     ) {
       const bounds = leaflet.geoJSON(payload).getBounds();
       if (bounds.isValid()) {
-        mapInstanceRef.current.fitBounds(bounds, { padding: [40, 40], maxZoom: 19 });
+        mapInstanceRef.current.fitBounds(bounds, { padding: [40, 40], maxZoom: 6 });
       }
     }
   }, [
@@ -3125,6 +3208,7 @@ export function PropertyMap() {
     osmbReady,
     mapLevel,
     municipioDevelopmentFeatures,
+    filteredDemografiaGeojson,
   ]);
 
   const zoomToFeature = useCallback(
@@ -3412,11 +3496,12 @@ export function PropertyMap() {
         </div>
       </aside>
       <section className="relative flex-1 min-w-0">
-        <div className="relative h-[600px] w-full min-h-[600px]">
+        <div className="relative h-[600px] w-full min-h-[600px] overflow-hidden rounded-md">
           <div
+            key={`leaflet-map-${leafletMountVersion}`}
             ref={mapContainerRef}
             className={`absolute inset-0 z-10 rounded-md border border-slate-200 bg-white/10 shadow-sm shadow-slate-900/10 transition-opacity duration-200 ${
-              mapboxActive ? "opacity-0 pointer-events-none" : "opacity-100 pointer-events-auto"
+              mapboxActive ? "pointer-events-none" : "pointer-events-auto"
             }`}
           />
           {!mapboxActive && (leafletActiveNode || leafletParentStack.length > 0) && (
@@ -3482,22 +3567,14 @@ export function PropertyMap() {
               </div>
             </div>
           )}
-          <div
-            ref={mapboxContainerRef}
-            className={`absolute inset-0 z-20 w-full h-full rounded-md transition-opacity duration-200 ${
-              mapboxActive
-                ? "pointer-events-auto opacity-100"
-                : "pointer-events-none opacity-0"
-            }`}
-          />
-          <div
-            className={`absolute inset-0 z-30 transition-opacity duration-200 ${
-              mapboxActive
-                ? "pointer-events-none opacity-100"
-                : "pointer-events-none opacity-0"
-            }`}
-          >
-            <div className="absolute inset-y-4 right-2 z-50 flex w-full max-w-[315px] flex-col overflow-hidden rounded-xl border border-slate-800 bg-gradient-to-b from-slate-950/80 via-slate-950/60 to-slate-950/40 p-0 shadow-xl max-h-[calc(100vh-120px)]">
+          {mapboxActive ? (
+            <>
+              <div
+                ref={mapboxContainerRef}
+                className="absolute inset-0 z-20 h-full w-full rounded-md"
+              />
+              <div className="absolute inset-0 z-30 pointer-events-none">
+                <div className="absolute inset-y-4 right-2 z-50 flex w-full max-w-[315px] flex-col overflow-hidden rounded-xl border border-slate-800 bg-gradient-to-b from-slate-950/80 via-slate-950/60 to-slate-950/40 p-0 shadow-xl max-h-[calc(100vh-120px)]">
               <div className="pointer-events-auto">
                 <div className="sticky top-0 z-10 flex items-center justify-between rounded-t-xl border-b border-slate-800 bg-slate-950/90 px-4 py-3 backdrop-blur">
                   <div>
@@ -3858,8 +3935,10 @@ export function PropertyMap() {
                   )}
                 </div>
               </div>
-            </div>
-          </div>
+                </div>
+              </div>
+            </>
+          ) : null}
           {mapboxActive && (
             <div className="absolute bottom-4 left-4 z-40 pointer-events-auto">
               <div className="w-36 rounded-md border border-slate-800/40 bg-slate-950/45 p-2 text-[0.55rem] text-slate-200 shadow-sm backdrop-blur">
