@@ -61,7 +61,7 @@ export function AppViewLayout({
       {...providerProps}
     >
       <AppSidebar variant={sidebarVariant} />
-      <SidebarInset className="flex flex-1 flex-col">
+      <SidebarInset className="flex flex-1 flex-col md:peer-data-[variant=inset]:mt-0 md:peer-data-[variant=inset]:rounded-t-none">
         {header ?? <SiteHeader title={title} />}
         <div className="flex flex-1 flex-col">
           <div className="@container/main flex flex-1 flex-col gap-2">
