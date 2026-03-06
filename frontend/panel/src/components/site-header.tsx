@@ -51,7 +51,7 @@ export function SiteHeader({ title = "Panel" }: SiteHeaderProps) {
   }, [companyLabel])
 
   return (
-    <header className="sticky top-0 z-[1100] flex h-(--header-height) shrink-0 items-center gap-2 border-b bg-background">
+    <header className="sticky top-0 z-[1100] flex h-(--header-height) shrink-0 items-center gap-2 border-b bg-sidebar">
       <div className="flex w-full items-center gap-3 px-4 lg:px-6">
         <SidebarTrigger className="-ml-1" />
         <Separator orientation="vertical" className="data-[orientation=vertical]:h-4" />
