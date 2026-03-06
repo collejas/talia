@@ -737,7 +737,7 @@ function ProspectosView() {
   const [plannerCampaignId, setPlannerCampaignId] = useState("")
   const [plannerScheduleDate, setPlannerScheduleDate] = useState("")
   const [plannerScheduleTime, setPlannerScheduleTime] = useState("10:00")
-  const [plannerSeparationSeconds, setPlannerSeparationSeconds] = useState("0")
+  const [plannerSeparationSeconds, setPlannerSeparationSeconds] = useState("5")
   const [campaignFilterOptions, setCampaignFilterOptions] = useState<CampaignOption[]>([])
   const [campaignFilterLoading, setCampaignFilterLoading] = useState(false)
   const [plannerCampaignOptions, setPlannerCampaignOptions] = useState<CampaignOption[]>([])
@@ -2107,7 +2107,7 @@ function ProspectosView() {
     setPlannerScheduleDate("")
     setPlannerScheduleTime("10:00")
     setPlannerScheduleMode("ahora")
-    setPlannerSeparationSeconds("0")
+    setPlannerSeparationSeconds("5")
     setPlannerTemplates([])
     setPlannerTemplateSelection({ correo: "", whatsapp: "", llamada: "" })
     setPlannerError(null)
@@ -2210,7 +2210,7 @@ function ProspectosView() {
         setPlannerScheduleDate("")
         setPlannerScheduleTime("10:00")
         setPlannerScheduleMode("ahora")
-        setPlannerSeparationSeconds("0")
+        setPlannerSeparationSeconds("5")
         setPlannerTemplates([])
         setPlannerTemplateSelection({ correo: "", whatsapp: "", llamada: "" })
         setPlannerBrevoQuota(null)
@@ -2237,9 +2237,9 @@ function ProspectosView() {
       setPlannerError("Se alcanzó la cuota diaria de Brevo para correo. Intenta mañana o reduce envíos.")
       return
     }
-    const separacion = Number.parseInt(plannerSeparationSeconds || "0", 10)
-    if (Number.isNaN(separacion) || separacion < 0 || separacion > 3600) {
-      setPlannerError("La separación debe estar entre 0 y 3600 segundos.")
+    const separacion = Number.parseInt(plannerSeparationSeconds || "5", 10)
+    if (Number.isNaN(separacion) || separacion < 5 || separacion > 3600) {
+      setPlannerError("La separación debe estar entre 5 y 3600 segundos.")
       return
     }
     setPlannerExecuting(true)
@@ -3533,18 +3533,27 @@ function ProspectosView() {
                     <Label>Separación entre envíos</Label>
                     <Input
                       type="number"
-                      min={0}
+                      min={5}
                       max={3600}
                       step={1}
                       className="w-32"
                       value={plannerSeparationSeconds}
-                      onChange={(event) => setPlannerSeparationSeconds(event.target.value)}
+                      onChange={(event) => {
+                        const raw = event.target.value
+                        if (!raw.trim()) {
+                          setPlannerSeparationSeconds("5")
+                          return
+                        }
+                        const parsed = Number.parseInt(raw, 10)
+                        if (Number.isNaN(parsed)) return
+                        setPlannerSeparationSeconds(String(Math.max(5, parsed)))
+                      }}
                     />
                   </div>
                 </div>
               </div>
               <div className="rounded-lg border bg-background p-4">
-                <p className="text-sm font-semibold">Cuota Brevo (correo)</p>
+                <p className="text-sm font-semibold">Cuota Correo</p>
                 <div className="mt-2">
                   {plannerBrevoQuotaLoading ? (
                     <p className="text-xs text-muted-foreground">Consultando cuota...</p>
