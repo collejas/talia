@@ -169,6 +169,7 @@ export function CampanasMetricsClient() {
     ctaBaseUrl: "https://talia.mx/",
     waRuleId: "",
     waPhrase: "",
+    waLinkLabel: "",
   })
   const [banner, setBanner] = useState<{ type: "success" | "error"; message: string } | null>(null)
 
@@ -625,6 +626,7 @@ export function CampanasMetricsClient() {
       ctaBaseUrl: "https://talia.mx/",
       waRuleId: "",
       waPhrase: "",
+      waLinkLabel: "",
     })
   }, [templatesCampanaCanal])
 
@@ -794,6 +796,11 @@ export function CampanasMetricsClient() {
     return `https://wa.me/${phoneDigits}?text=${encodeURIComponent(phrase)}`
   }, [normalizeWaPhone, templateForm.waPhrase, templateForm.waRuleId, tenantPhone, waRules])
 
+  const waMeLinkLabel = useMemo(() => {
+    const label = (templateForm.waLinkLabel || "").trim()
+    return label || "Escríbenos por WhatsApp"
+  }, [templateForm.waLinkLabel])
+
   const insertCorreoWaMeLink = useCallback(() => {
     if (!waMeUrl) {
       setTemplateError("Selecciona una frase de WhatsApp para insertar el enlace.")
@@ -801,9 +808,9 @@ export function CampanasMetricsClient() {
     }
     appendTemplateToken(
       "cuerpoHtml",
-      `<a href="${waMeUrl}" target="_blank" rel="noopener noreferrer">Escríbenos por WhatsApp</a>`
+      `<a href="${waMeUrl}" target="_blank" rel="noopener noreferrer">${waMeLinkLabel}</a>`
     )
-  }, [appendTemplateToken, waMeUrl])
+  }, [appendTemplateToken, waMeLinkLabel, waMeUrl])
 
   const previewTemplateContext = useMemo(() => {
     if (!previewProspecto) return null
@@ -996,6 +1003,7 @@ export function CampanasMetricsClient() {
         ctaBaseUrl: "https://talia.mx/",
         waRuleId: "",
         waPhrase: "",
+        waLinkLabel: "",
       })
       setTemplatesDialogOpen(true)
       await loadWaRules()
@@ -1038,6 +1046,7 @@ export function CampanasMetricsClient() {
         (typeof metadata["tracking_base_url"] === "string" && metadata["tracking_base_url"].trim()) || "https://talia.mx/",
       waRuleId: (typeof metadata["wa_rule_id"] === "string" && metadata["wa_rule_id"].trim()) || "",
       waPhrase: (typeof metadata["wa_me_text"] === "string" && metadata["wa_me_text"].trim()) || "",
+      waLinkLabel: (typeof metadata["wa_me_label"] === "string" && metadata["wa_me_label"].trim()) || "",
     })
   }, [])
 
@@ -1072,6 +1081,7 @@ export function CampanasMetricsClient() {
     const waPhrase = (templateForm.waPhrase || selectedWaRule?.frase_objetivo || "").trim()
     if (normalizedWaPhone) metadata["wa_me_phone"] = normalizedWaPhone
     if (waPhrase) metadata["wa_me_text"] = waPhrase
+    if ((templateForm.waLinkLabel || "").trim()) metadata["wa_me_label"] = templateForm.waLinkLabel.trim()
     if (selectedWaRule?.id) {
       metadata["wa_rule_id"] = selectedWaRule.id
       metadata["wa_rule_name"] = selectedWaRule.nombre_regla ?? null
@@ -1829,6 +1839,17 @@ export function CampanasMetricsClient() {
                       {templateForm.waPhrase ? (
                         <p className="rounded border bg-muted/30 px-2 py-1 text-xs text-foreground">{templateForm.waPhrase}</p>
                       ) : null}
+                      <div className="space-y-1">
+                        <Label>Texto del link de WhatsApp</Label>
+                        <Input
+                          value={templateForm.waLinkLabel}
+                          onChange={(event) => setTemplateForm((prev) => ({ ...prev, waLinkLabel: event.target.value }))}
+                          placeholder="Escríbenos por WhatsApp"
+                        />
+                        <p className="text-xs text-muted-foreground">
+                          Se usa como texto visible al insertar el enlace wa.me en el correo.
+                        </p>
+                      </div>
                       {!normalizeWaPhone(tenantPhone) ? (
                         <p className="text-xs text-amber-700 dark:text-amber-300">
                           Falta teléfono del tenant para generar el enlace de WhatsApp.
