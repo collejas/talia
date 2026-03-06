@@ -210,6 +210,17 @@ function arraysEqual(a: string[], b: string[]) {
   return true
 }
 
+function dedupeLocationOptions(options: LocationOption[]): LocationOption[] {
+  const seen = new Set<string>()
+  const unique: LocationOption[] = []
+  for (const option of options) {
+    if (seen.has(option.value)) continue
+    seen.add(option.value)
+    unique.push(option)
+  }
+  return unique
+}
+
 type ProspeccionStage = "discover" | "enrich" | "prepare" | "launch" | "evaluate"
 type ProspeccionCanal = "correo" | "whatsapp" | "llamada" | "otro"
 
@@ -1339,7 +1350,7 @@ function ProspectosView() {
           })
           .filter((item: LocationOption | null): item is LocationOption => Boolean(item))
           .sort((a: LocationOption, b: LocationOption) => a.label.localeCompare(b.label, "es"))
-        setGeoEstadoOptions(options)
+        setGeoEstadoOptions(dedupeLocationOptions(options))
       })
       .catch(() => {
         if (!cancelled) setGeoEstadoOptions([])
@@ -1373,7 +1384,7 @@ function ProspectosView() {
           })
           .filter((item: LocationOption | null): item is LocationOption => Boolean(item))
           .sort((a: LocationOption, b: LocationOption) => a.label.localeCompare(b.label, "es"))
-        setGeoMunicipioOptions(options)
+        setGeoMunicipioOptions(dedupeLocationOptions(options))
       })
       .catch(() => {
         if (!cancelled) setGeoMunicipioOptions([])

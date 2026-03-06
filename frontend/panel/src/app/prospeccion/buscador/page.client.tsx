@@ -84,6 +84,7 @@ const DEFAULT_FORM_STATE: FormState = {
 const DEFAULT_RESULTS_LIMIT = 1000
 const RESULTS_PAGE_SIZES = [200, 500, 1000] as const
 const JOBS_PAGE_SIZE = 28
+const EXCLUDE_DOMAIN_SELECT_PLACEHOLDER = "__exclude_domain_placeholder__"
 
 const STATUS_LABELS: Record<BuscadorJobStatus, string> = {
   pending: "Pendiente",
@@ -135,6 +136,7 @@ function BuscadorView() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [segmento, setSegmento] = useState("")
   const [domainFilter, setDomainFilter] = useState("all")
+  const [excludedDomains, setExcludedDomains] = useState<Set<string>>(new Set())
   const [savingProspectos, setSavingProspectos] = useState(false)
   const [jobs, setJobs] = useState<BuscadorJob[]>([])
   const [jobsLoading, setJobsLoading] = useState(false)
@@ -190,36 +192,48 @@ function BuscadorView() {
     }))
   }, [stats])
 
+  const getEmailDomain = useCallback((email: string | null | undefined): string => {
+    const normalized = (email || "").trim().toLowerCase()
+    const atIndex = normalized.lastIndexOf("@")
+    if (atIndex <= 0 || atIndex >= normalized.length - 1) return ""
+    return normalized
+      .slice(atIndex + 1)
+      .trim()
+      .replace(/[)>.,;:]+$/g, "")
+      .replace(/^\(+/, "")
+  }, [])
+
   const domainOptions = useMemo(() => {
     const counts = new Map<string, number>()
     for (const item of results) {
-      const email = item.email?.trim().toLowerCase() ?? ""
-      const atIndex = email.lastIndexOf("@")
-      if (atIndex > 0 && atIndex < email.length - 1) {
-        const emailDomain = email
-          .slice(atIndex + 1)
-          .trim()
-          .replace(/[)>.,;:]+$/g, "")
-          .replace(/^\(+/, "")
-        if (emailDomain) {
-          counts.set(emailDomain, (counts.get(emailDomain) ?? 0) + 1)
-        }
-      }
+      const emailDomain = getEmailDomain(item.email)
+      if (emailDomain) counts.set(emailDomain, (counts.get(emailDomain) ?? 0) + 1)
     }
     return Array.from(counts.entries())
-      .sort((a, b) => a[0].localeCompare(b[0]))
+      .filter(([, count]) => count > 2)
+      .sort((a, b) => {
+        if (b[1] !== a[1]) return b[1] - a[1]
+        return a[0].localeCompare(b[0])
+      })
       .map(([domain, count]) => ({ domain, count }))
-  }, [results])
+  }, [getEmailDomain, results])
 
   const filteredResults = useMemo(() => {
     if (domainFilter === "all") return results
     return results.filter((item) => {
-      const email = item.email?.trim().toLowerCase() ?? ""
-      const atIndex = email.lastIndexOf("@")
-      if (atIndex <= 0 || atIndex >= email.length - 1) return false
-      return email.slice(atIndex + 1).trim() === domainFilter
+      return getEmailDomain(item.email) === domainFilter
     })
-  }, [results, domainFilter])
+  }, [domainFilter, getEmailDomain, results])
+
+  const excludedDomainList = useMemo(
+    () => Array.from(excludedDomains).sort((a, b) => a.localeCompare(b, "es")),
+    [excludedDomains]
+  )
+
+  const availableDomainsToExclude = useMemo(
+    () => domainOptions.filter((item) => !excludedDomains.has(item.domain)),
+    [domainOptions, excludedDomains]
+  )
 
   const handleInputChange = (key: keyof FormState) => (event: ChangeEvent<HTMLInputElement>) => {
     const value = event.target.value
@@ -371,6 +385,7 @@ function BuscadorView() {
     setResultsTotal(0)
     setResultsOffset(0)
     setSelectedIds(new Set())
+    setExcludedDomains(new Set())
     setStats(null)
     setDurationMs(null)
 
@@ -456,6 +471,7 @@ function BuscadorView() {
     setJobInfo(null)
     setLastResultsJobId(null)
     setSelectedIds(new Set())
+    setExcludedDomains(new Set())
     setSegmento("")
     setDomainFilter("all")
     setSelectedJobId(null)
@@ -477,6 +493,7 @@ function BuscadorView() {
         setStats(job.stats ?? null)
         setDurationMs(job.duration_ms ?? null)
         setSelectedIds(new Set())
+        setExcludedDomains(new Set())
         setResultsLoading(false)
         toast.message("Esta búsqueda aún no termina. Vuelve a intentarlo más tarde.")
         return
@@ -602,11 +619,27 @@ function BuscadorView() {
   const handleSaveProspectos = async () => {
     if (!jobInfo) return
     const segmentoValue = segmento.trim() || undefined
-    const ids = (selectedIds.size ? Array.from(selectedIds) : [])
+    const allIds = (selectedIds.size ? Array.from(selectedIds) : [])
       .map((value) => value.trim())
       .filter((value) => value.length > 0)
-    if (!ids.length) {
+    if (!allIds.length) {
       toast.error("Selecciona al menos un contacto para guardarlo como prospecto.")
+      return
+    }
+
+    const idToDomain = new Map<string, string>()
+    for (const item of results) {
+      if (!item.id) continue
+      idToDomain.set(item.id, getEmailDomain(item.email))
+    }
+    const ids = allIds.filter((id) => {
+      if (!excludedDomains.size) return true
+      const domain = idToDomain.get(id)
+      if (!domain) return true
+      return !excludedDomains.has(domain)
+    })
+    if (!ids.length) {
+      toast.error("Con los dominios excluidos no quedan contactos para guardar.")
       return
     }
     setSavingProspectos(true)
@@ -644,6 +677,15 @@ function BuscadorView() {
     }
   }, [domainFilter, domainOptions])
 
+  useEffect(() => {
+    setExcludedDomains((prev) => {
+      if (!prev.size) return prev
+      const valid = new Set(domainOptions.map((item) => item.domain))
+      const next = new Set(Array.from(prev).filter((domain) => valid.has(domain)))
+      return next.size === prev.size ? prev : next
+    })
+  }, [domainOptions])
+
   const handleNextPage = () => {
     if (!jobInfo || !hasNextPage) return
     const nextOffset = resultsOffset + resultsLimit
@@ -674,6 +716,7 @@ function BuscadorView() {
     setResultsOffset(0)
     setDomainFilter("all")
     setSelectedIds(new Set())
+    setExcludedDomains(new Set())
   }
 
   const handleDownloadJson = () => {
@@ -1108,7 +1151,7 @@ function BuscadorView() {
                   <div className="flex items-center gap-2">
                     <span className="text-sm text-muted-foreground">Dominio de correo</span>
                     <Select value={domainFilter} onValueChange={setDomainFilter}>
-                      <SelectTrigger className="w-[220px]">
+                      <SelectTrigger className="w-[180px]">
                         <SelectValue placeholder="Todos los dominios" />
                       </SelectTrigger>
                       <SelectContent>
@@ -1120,6 +1163,50 @@ function BuscadorView() {
                         ))}
                       </SelectContent>
                     </Select>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm text-muted-foreground">Excluir al guardar</span>
+                    <div className="w-[250px] space-y-2">
+                      <Select
+                        value={EXCLUDE_DOMAIN_SELECT_PLACEHOLDER}
+                        onValueChange={(value) => {
+                          if (value === EXCLUDE_DOMAIN_SELECT_PLACEHOLDER) return
+                          setExcludedDomains((prev) => new Set(prev).add(value))
+                        }}
+                        disabled={!availableDomainsToExclude.length}
+                      >
+                        <SelectTrigger className="w-[180px]">
+                          <SelectValue placeholder="Selecciona dominio para excluir" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {availableDomainsToExclude.map((item) => (
+                            <SelectItem key={`exclude-option-${item.domain}`} value={item.domain}>
+                              {item.domain} ({item.count})
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      {excludedDomainList.length ? (
+                        <div className="flex flex-wrap gap-1">
+                          {excludedDomainList.map((domain) => (
+                            <Badge
+                              key={`excluded-badge-${domain}`}
+                              variant="secondary"
+                              className="cursor-pointer"
+                              onClick={() =>
+                                setExcludedDomains((prev) => {
+                                  const next = new Set(prev)
+                                  next.delete(domain)
+                                  return next
+                                })
+                              }
+                            >
+                              {domain} x
+                            </Badge>
+                          ))}
+                        </div>
+                      ) : null}
+                    </div>
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="text-sm text-muted-foreground">Registros por página</span>
