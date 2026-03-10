@@ -133,7 +133,12 @@ async def fetch_brevo_daily_quota(
     usage_pct: float | None = None
     if daily_limit is not None and sent_today is not None:
         remaining = max(daily_limit - sent_today, 0)
-        usage_pct = round((sent_today / daily_limit * 100), 2) if daily_limit > 0 else 0.0
+        if daily_limit > 0:
+            usage_pct = round((sent_today / daily_limit * 100), 2)
+        else:
+            # Cuando Brevo reporta límite 0, se considera sin cupo y se evita "Uso 0%".
+            usage_pct = 100.0 if sent_today > 0 else 0.0
+            warnings.append("daily_limit_zero")
 
     return BrevoQuotaSnapshot(
         sent_today=sent_today,

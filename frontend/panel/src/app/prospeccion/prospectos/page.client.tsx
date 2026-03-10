@@ -814,6 +814,7 @@ function ProspectosView() {
     [plannerTemplates, selectedPlannerCanal]
   )
   const plannerBrevoRemaining = plannerBrevoQuota?.remaining ?? null
+  const plannerBrevoLimitZero = (plannerBrevoQuota?.daily_limit ?? null) === 0
   const plannerBrevoQuotaBlocked =
     selectedPlannerCanal === "correo" &&
     plannerBrevoQuota?.configured === true &&
@@ -3574,7 +3575,10 @@ function ProspectosView() {
                     <div className="space-y-1">
                       <p className="text-xs text-muted-foreground">
                         Hoy ({plannerBrevoQuota.date_local}): {plannerBrevoQuota.sent_today ?? 0}
-                        {plannerBrevoQuota.daily_limit !== null ? ` / ${plannerBrevoQuota.daily_limit}` : ""} enviados.
+                        {!plannerBrevoLimitZero && plannerBrevoQuota.daily_limit !== null
+                          ? ` / ${plannerBrevoQuota.daily_limit}`
+                          : ""} enviados.
+                        {plannerBrevoLimitZero ? " (Brevo reporta límite diario 0)." : ""}
                       </p>
                       <p className="text-xs text-muted-foreground">
                         Restantes: <span className="font-semibold text-foreground">{plannerBrevoQuota.remaining ?? "N/D"}</span>
