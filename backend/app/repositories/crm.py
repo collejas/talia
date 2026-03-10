@@ -10451,6 +10451,41 @@ class CRMRepository:
             raise CRMRepositoryError(f"worker_get_envio_invalid:{row!r}")
         return row
 
+    async def worker_has_brevo_log_event(
+        self,
+        *,
+        envio_id: UUID,
+        estado: str,
+        message_id: str,
+        event_name: str,
+        event_date: str | None = None,
+    ) -> bool:
+        """Verifica si ya existe un log equivalente de webhook Brevo para deduplicar."""
+
+        trimmed_message_id = message_id.strip()
+        trimmed_event_name = event_name.strip().lower()
+        if not trimmed_message_id or not trimmed_event_name:
+            return False
+        params: dict[str, str] = {
+            "select": "id",
+            "envio_id": f"eq.{envio_id}",
+            "canal": "eq.correo",
+            "estado": f"eq.{_postgrest_eq_literal(estado.strip().lower())}",
+            "detalle->>message_id": f"eq.{_postgrest_eq_literal(trimmed_message_id)}",
+            "detalle->>event": f"eq.{_postgrest_eq_literal(trimmed_event_name)}",
+            "limit": "1",
+        }
+        trimmed_date = event_date.strip() if isinstance(event_date, str) else ""
+        if trimmed_date:
+            params["detalle->>date"] = f"eq.{_postgrest_eq_literal(trimmed_date)}"
+        resp = await self._request(
+            "GET",
+            "/rest/v1/prospeccion_contactos_log",
+            params=params,
+        )
+        data = resp.json() or []
+        return isinstance(data, list) and bool(data)
+
     async def worker_find_prospecto_by_contacto(
         self,
         *,

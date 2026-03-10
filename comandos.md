@@ -160,6 +160,8 @@ psql "postgresql://postgres:DE_se479156376421@db.qnimyamtczbbwmlrlejc.supabase.c
 # Test
 poetry run pytest
 
+poetry run pytest 2>&1 | tee "resultados_pytest_general_$(date +%Y%m%d_%H%M%S).txt"
+
 poetry run ruff check . (backend)
 
 

@@ -19,7 +19,8 @@ logger = get_logger("brevo.webhook")
 BREVO_EVENT_STATE = {
     "request": "enviado",
     "processed": "enviado",
-    "deferred": "pendiente",
+    # Brevo puede reportar "deferred" de forma tardía/repetida; no debe reencolar.
+    "deferred": "enviado",
     "delivered": "entregado",
     "opened": "entregado",
     "unique_opened": "entregado",
@@ -239,6 +240,40 @@ def _map_brevo_event(event_name: str | None) -> str | None:
     if not event_name:
         return None
     return BREVO_EVENT_STATE.get(event_name.strip().lower())
+
+
+def _should_apply_brevo_state(*, current_state: str | None, incoming_state: str) -> bool:
+    current = (current_state or "").strip().lower()
+    incoming = (incoming_state or "").strip().lower()
+    if not incoming:
+        return False
+    if not current:
+        return True
+    if current == incoming:
+        return True
+
+    # Estados terminales no deben degradarse por eventos tardíos.
+    if current in {"entregado", "leido", "fallido", "omitido", "cancelado"}:
+        return False
+
+    if incoming == "pendiente":
+        return current in {"pendiente", "procesando", "error"}
+
+    rank = {
+        "pendiente": 0,
+        "procesando": 1,
+        "enviado": 2,
+        "entregado": 3,
+        "leido": 4,
+    }
+    current_rank = rank.get(current)
+    incoming_rank = rank.get(incoming)
+    if current_rank is not None and incoming_rank is not None:
+        return incoming_rank >= current_rank
+
+    if incoming == "fallido":
+        return current not in {"entregado", "leido", "omitido", "cancelado"}
+    return True
 
 
 async def _ensure_email_inbox_context(
@@ -497,7 +532,8 @@ async def process_brevo_events(
     for event in events:
         if not isinstance(event, dict):
             continue
-        estado = _map_brevo_event(_clean_text(event.get("event")))
+        event_name = _clean_text(event.get("event")) or ""
+        estado = _map_brevo_event(event_name)
         if not estado:
             continue
         message_ids = _extract_message_ids(event)
@@ -521,7 +557,7 @@ async def process_brevo_events(
                 continue
             detalle_actual = envio.get("detalle") if isinstance(envio.get("detalle"), dict) else {}
             brevo_info = {
-                "event": event.get("event"),
+                "event": event_name,
                 "email": event.get("email"),
                 "date": event.get("date"),
                 "reason": event.get("reason") or event.get("description"),
@@ -529,6 +565,40 @@ async def process_brevo_events(
                 "message_id": message_id,
             }
             brevo_info = {k: v for k, v in brevo_info.items() if v}
+
+            duplicate_event = False
+            try:
+                duplicate_event = await repo.worker_has_brevo_log_event(
+                    envio_id=envio_uuid,
+                    estado=estado,
+                    message_id=message_id,
+                    event_name=event_name,
+                    event_date=_clean_text(event.get("date")),
+                )
+            except CRMRepositoryError as exc:
+                log_event(logger, "brevo.webhook_duplicate_lookup_failed", error=str(exc))
+            if duplicate_event:
+                log_event(
+                    logger,
+                    "brevo.webhook_duplicate_ignored",
+                    envio_id=str(envio_uuid),
+                    message_id=message_id,
+                    event=event_name,
+                )
+                continue
+
+            current_state = _clean_text(envio.get("estado"))
+            if not _should_apply_brevo_state(current_state=current_state, incoming_state=estado):
+                log_event(
+                    logger,
+                    "brevo.webhook_state_regression_ignored",
+                    envio_id=str(envio_uuid),
+                    estado_actual=current_state,
+                    estado_evento=estado,
+                    event=event_name,
+                )
+                continue
+
             merged_detalle = {**detalle_actual, "brevo": brevo_info}
             payload = {
                 "estado": estado,
@@ -546,7 +616,6 @@ async def process_brevo_events(
                     envio_id=str(envio_uuid),
                 )
                 continue
-            event_name = _clean_text(event.get("event")) or ""
             if event_name.lower() == "unsubscribe":
                 raw_org = envio.get("organizacion_id")
                 try:
