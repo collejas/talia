@@ -2,7 +2,7 @@
 
 import { type ChangeEvent, type FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { toast } from "sonner"
-import { ChevronLeft, ChevronRight, RefreshCw, Trash2 } from "lucide-react"
+import { ChevronDown, ChevronLeft, ChevronRight, RefreshCw, Trash2 } from "lucide-react"
 
 import { ProspeccionViewLayout } from "@/components/layouts/prospeccion-view-layout"
 import { Button } from "@/components/ui/button"
@@ -97,17 +97,6 @@ const STATUS_LABELS: Record<BuscadorJobStatus, string> = {
   canceled: "Cancelado",
 }
 
-const STATUS_VARIANTS: Record<BuscadorJobStatus, string> = {
-  pending: "bg-amber-100 text-amber-800",
-  running: "bg-blue-100 text-blue-800",
-  pausing: "bg-blue-50 text-blue-800",
-  canceling: "bg-rose-50 text-rose-800",
-  completed: "bg-emerald-100 text-emerald-800",
-  failed: "bg-rose-100 text-rose-800",
-  paused: "bg-amber-50 text-amber-800",
-  canceled: "bg-slate-200 text-slate-800",
-}
-
 const RESULT_READY_STATUSES = new Set<BuscadorJobStatus>(["completed", "paused", "canceled"])
 const PROCESSING_STATUSES = new Set<BuscadorJobStatus>(["pending", "running", "pausing", "canceling"])
 
@@ -144,6 +133,10 @@ function BuscadorView() {
   const [jobsTotal, setJobsTotal] = useState(0)
   const [jobsOffset, setJobsOffset] = useState(0)
   const [selectedJobId, setSelectedJobId] = useState<string | null>(null)
+  const [expandedHistoryJobs, setExpandedHistoryJobs] = useState<Set<string>>(new Set())
+  const [expandedHistoryResultsJobs, setExpandedHistoryResultsJobs] = useState<Set<string>>(new Set())
+  const [historyResultsByJob, setHistoryResultsByJob] = useState<Record<string, BuscadorJobResults>>({})
+  const [historyResultsLoadingJobId, setHistoryResultsLoadingJobId] = useState<string | null>(null)
   const [jobAction, setJobAction] = useState<"pause" | "cancel" | "relaunch" | null>(null)
   const [deletingJobId, setDeletingJobId] = useState<string | null>(null)
   const resultsCardRef = useRef<HTMLDivElement | null>(null)
@@ -268,6 +261,54 @@ function BuscadorView() {
       setJobsLoading(false)
     }
   }, [])
+
+  const toggleHistoryJob = useCallback((jobId: string) => {
+    setExpandedHistoryJobs((prev) => {
+      const next = new Set(prev)
+      if (next.has(jobId)) {
+        next.delete(jobId)
+        setExpandedHistoryResultsJobs((innerPrev) => {
+          const innerNext = new Set(innerPrev)
+          innerNext.delete(jobId)
+          return innerNext
+        })
+      } else {
+        next.add(jobId)
+      }
+      return next
+    })
+  }, [])
+
+  const toggleHistoryResults = useCallback(
+    async (job: BuscadorJob) => {
+      const jobId = job.id
+      let shouldLoad = false
+      setExpandedHistoryResultsJobs((prev) => {
+        const next = new Set(prev)
+        if (next.has(jobId)) {
+          next.delete(jobId)
+        } else {
+          next.add(jobId)
+          shouldLoad = true
+        }
+        return next
+      })
+      if (!shouldLoad) return
+      if (historyResultsByJob[jobId]) return
+      if (!RESULT_READY_STATUSES.has(job.status)) return
+      setHistoryResultsLoadingJobId(jobId)
+      try {
+        const data = await obtenerBuscadorResultados(jobId, { limit: 200, offset: 0 })
+        setHistoryResultsByJob((prev) => ({ ...prev, [jobId]: data }))
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "No se pudo cargar resultados del historial."
+        toast.error(message)
+      } finally {
+        setHistoryResultsLoadingJobId(null)
+      }
+    },
+    [historyResultsByJob]
+  )
 
   useEffect(() => {
     void loadJobs(0)
@@ -1025,69 +1066,114 @@ function BuscadorView() {
           ) : null}
           {jobs.length ? (
             <ScrollArea className="h-[360px] pr-2">
-              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+              <div className="space-y-3">
                 {jobs.map((job) => {
-                  const originLabel =
-                    job.params.url?.length && job.params.sitio !== "demo"
-                      ? job.params.url
-                      : job.params.sitio === "demo"
-                        ? "Demo"
-                      : "Sin URL"
-                  const sitioLabel =
-                    job.params.sitio === "domain"
-                      ? "Dominio completo"
-                      : job.params.sitio === "simple"
-                        ? "Página única"
-                      : "Demo"
+                  const domainInfo = getHistoryDomainGroup(job)
+                  const isStageTwoOpen = expandedHistoryJobs.has(job.id)
+                  const isStageThreeOpen = expandedHistoryResultsJobs.has(job.id)
+                  const crawl = job.stats?.crawl_metrics ?? null
+                  const cachedResults = historyResultsByJob[job.id]
+                  const stageThreeReady = RESULT_READY_STATUSES.has(job.status)
                   return (
-                    <div
-                      key={job.id}
-                      className={cn(
-                        "rounded-lg border p-3 text-sm",
-                        selectedJobId === job.id && "border-primary bg-primary/5",
-                      )}
-                    >
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="space-y-0.5">
-                        <p className="font-medium break-words line-clamp-2">{originLabel}</p>
-                        <p className="text-xs text-muted-foreground">{formatDateTime(job.created_at)}</p>
-                      </div>
-                      <Badge className={cn("capitalize", STATUS_VARIANTS[job.status])}>
-                        {STATUS_LABELS[job.status]}
-                      </Badge>
-                    </div>
-                    <p className="mt-2 text-xs text-muted-foreground">
-                      {sitioLabel} · Modo {job.params.mode}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      {typeof job.total === "number" ? `${job.total} resultados` : "Sin resultados"}{" "}
-                      {job.duration_ms ? `· ${(job.duration_ms / 1000).toFixed(1)} s` : null}
-                    </p>
-                    <div className="mt-3 flex items-center gap-2">
-                      <Button
+                    <div key={job.id} className="rounded-lg border">
+                      <button
                         type="button"
-                        size="sm"
-                        variant={selectedJobId === job.id ? "secondary" : "outline"}
-                        onClick={() => handleSelectJob(job)}
+                        className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left hover:bg-muted/40"
+                        onClick={() => toggleHistoryJob(job.id)}
                       >
-                        Ver
-                      </Button>
-                      <Button
-                        type="button"
-                        size="icon"
-                        variant="ghost"
-                        aria-label="Eliminar búsqueda"
-                        onClick={() => handleDeleteJob(job)}
-                        disabled={deletingJobId === job.id}
-                        className="text-destructive hover:text-destructive"
-                      >
-                        {deletingJobId === job.id ? (
-                          <RefreshCw className="h-4 w-4 animate-spin" />
-                        ) : (
-                          <Trash2 className="h-4 w-4" />
-                        )}
-                      </Button>
-                    </div>
+                        <div className="space-y-1">
+                          <p className="text-sm font-semibold break-all">Dominio: {domainInfo.label}</p>
+                          <p className="text-xs text-muted-foreground">
+                            Estado: {STATUS_LABELS[job.status]} · Resultados encontrados: {job.total ?? 0}
+                          </p>
+                        </div>
+                        <ChevronDown className={cn("h-4 w-4 shrink-0 transition-transform", isStageTwoOpen && "rotate-180")} />
+                      </button>
+                      {isStageTwoOpen ? (
+                        <div className="border-t px-3 py-3">
+                          <button
+                            type="button"
+                            className="flex w-full items-center justify-between gap-3 rounded-sm px-1 py-1 text-left hover:bg-muted/40"
+                            onClick={() => void toggleHistoryResults(job)}
+                          >
+                            <p className="text-sm font-medium">Resumen de la búsqueda</p>
+                            <ChevronDown
+                              className={cn("h-4 w-4 shrink-0 transition-transform", isStageThreeOpen && "rotate-180")}
+                            />
+                          </button>
+                          <div className="mt-2 grid gap-2 text-xs text-muted-foreground sm:grid-cols-2 lg:grid-cols-5">
+                            <p>Dominios únicos: <span className="font-medium text-foreground">{job.stats?.unique_email_domains ?? 0}</span></p>
+                            <p>Hosts explorados: <span className="font-medium text-foreground">{job.stats?.unique_source_hosts ?? 0}</span></p>
+                            <p>Páginas visitadas: <span className="font-medium text-foreground">{Number(crawl?.pages_visited ?? 0)}</span></p>
+                            <p>HTTP 403/429: <span className="font-medium text-foreground">{Number(crawl?.status_403 ?? 0)} / {Number(crawl?.status_429 ?? 0)}</span></p>
+                            <p>Tasa correos/página: <span className="font-medium text-foreground">{Number(crawl?.emails_new_rate ?? 0)}</span></p>
+                          </div>
+                          <div className="mt-3 flex items-center justify-end gap-2">
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant={selectedJobId === job.id ? "secondary" : "outline"}
+                              onClick={() => handleSelectJob(job)}
+                            >
+                              Ver en panel principal
+                            </Button>
+                            <Button
+                              type="button"
+                              size="icon"
+                              variant="ghost"
+                              aria-label="Eliminar búsqueda"
+                              onClick={() => handleDeleteJob(job)}
+                              disabled={deletingJobId === job.id}
+                              className="text-destructive hover:text-destructive"
+                            >
+                              {deletingJobId === job.id ? (
+                                <RefreshCw className="h-4 w-4 animate-spin" />
+                              ) : (
+                                <Trash2 className="h-4 w-4" />
+                              )}
+                            </Button>
+                          </div>
+                          {isStageThreeOpen ? (
+                            <div className="mt-3 rounded-md border">
+                              <p className="border-b px-3 py-2 text-sm font-medium">Resultados</p>
+                              {historyResultsLoadingJobId === job.id ? (
+                                <p className="p-3 text-sm text-muted-foreground">Cargando resultados…</p>
+                              ) : !stageThreeReady ? (
+                                <p className="p-3 text-sm text-muted-foreground">Este job aún no tiene resultados finales.</p>
+                              ) : !cachedResults?.items?.length ? (
+                                <p className="p-3 text-sm text-muted-foreground">No hay resultados disponibles.</p>
+                              ) : (
+                                <ScrollArea className="h-[260px]">
+                                  <Table>
+                                    <TableHeader className="sticky top-0 z-10 bg-background">
+                                      <TableRow>
+                                        <TableHead>Correo</TableHead>
+                                        <TableHead>Nombre</TableHead>
+                                        <TableHead>Puesto</TableHead>
+                                        <TableHead>URL origen</TableHead>
+                                      </TableRow>
+                                    </TableHeader>
+                                    <TableBody>
+                                      {cachedResults.items.map((item, index) => (
+                                        <TableRow key={`${job.id}-${item.email}-${index}`}>
+                                          <TableCell className="font-medium">{item.email}</TableCell>
+                                          <TableCell>{item.name || "—"}</TableCell>
+                                          <TableCell>{item.position || "—"}</TableCell>
+                                          <TableCell className="max-w-[260px] truncate">
+                                            <a href={item.source_url} target="_blank" rel="noreferrer" className="text-primary underline">
+                                              {item.source_url}
+                                            </a>
+                                          </TableCell>
+                                        </TableRow>
+                                      ))}
+                                    </TableBody>
+                                  </Table>
+                                </ScrollArea>
+                              )}
+                            </div>
+                          ) : null}
+                        </div>
+                      ) : null}
                     </div>
                   )
                 })}
@@ -1318,11 +1404,18 @@ function BuscadorView() {
   )
 }
 
-function formatDateTime(value: string | null | undefined): string {
-  if (!value) return "—"
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return "—"
-  return date.toLocaleString("es-MX", { dateStyle: "short", timeStyle: "short" })
+function getHistoryDomainGroup(job: BuscadorJob): { key: string; label: string } {
+  const rawUrl = (job.params.url || "").trim()
+  if (!rawUrl || job.params.sitio === "demo") {
+    return { key: "__sin_dominio__", label: "Sin dominio / demo" }
+  }
+  const normalized = /^https?:\/\//i.test(rawUrl) ? rawUrl : `https://${rawUrl}`
+  try {
+    const host = new URL(normalized).hostname.toLowerCase()
+    return { key: host || "__sin_dominio__", label: host || "Sin dominio" }
+  } catch {
+    return { key: rawUrl.toLowerCase(), label: rawUrl }
+  }
 }
 
 function NumberField({

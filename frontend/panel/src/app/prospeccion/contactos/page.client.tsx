@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import {
+  cancelarContactoEnvio,
   cancelarContactoBatch,
   getContactoBatchResumen,
   getContactoMetrics,
@@ -85,6 +86,7 @@ export default function ContactosPageClient() {
   const [batchSummary, setBatchSummary] = useState<ContactoBatchResumen | null>(null)
   const [summaryError, setSummaryError] = useState<string | null>(null)
   const [retryingEnvioId, setRetryingEnvioId] = useState<string | null>(null)
+  const [cancelingEnvioId, setCancelingEnvioId] = useState<string | null>(null)
   const [cancelLoading, setCancelLoading] = useState(false)
   const [cancelError, setCancelError] = useState<string | null>(null)
   const [queryLabelMap, setQueryLabelMap] = useState<Record<string, string>>({})
@@ -253,6 +255,27 @@ export default function ContactosPageClient() {
       setCancelLoading(false)
     }
   }, [fetchBatchSummary, fetchBatches, fetchEnvios, fetchLogs, selectedBatchId])
+
+  const handleCancelEnvio = useCallback(
+    async (envioId: string) => {
+      if (!selectedBatchId) return
+      setCancelingEnvioId(envioId)
+      setEnvioError(null)
+      try {
+        await cancelarContactoEnvio(envioId)
+        await fetchEnvios(selectedBatchId)
+        await fetchBatchSummary(selectedBatchId)
+        await fetchLogs(selectedBatchId)
+        await fetchMetrics()
+      } catch (err) {
+        const message = err instanceof Error ? err.message : "No se pudo cancelar el envío."
+        setEnvioError(message)
+      } finally {
+        setCancelingEnvioId(null)
+      }
+    },
+    [fetchBatchSummary, fetchEnvios, fetchLogs, fetchMetrics, selectedBatchId]
+  )
 
   useEffect(() => {
     if (!selectedBatchId) {
@@ -597,6 +620,15 @@ export default function ContactosPageClient() {
                               >
                                 <IconRepeat className="mr-1.5 size-4" />
                                 {retryingEnvioId === envio.id ? "Reintentando..." : "Reintentar"}
+                              </Button>
+                            ) : envio.estado === "pendiente" || envio.estado === "procesando" ? (
+                              <Button
+                                variant="destructive"
+                                size="sm"
+                                onClick={() => void handleCancelEnvio(envio.id)}
+                                disabled={cancelingEnvioId === envio.id}
+                              >
+                                {cancelingEnvioId === envio.id ? "Cancelando..." : "Cancelar"}
                               </Button>
                             ) : (
                               <span className="text-xs text-muted-foreground">—</span>

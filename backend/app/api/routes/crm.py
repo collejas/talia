@@ -1858,6 +1858,7 @@ class ProspectoListQuery(BaseModel):
     geo_municipio: str | None = Field(default=None, max_length=120)
     campana_id: UUID | None = Field(default=None)
     con_envio: bool | None = Field(default=None)
+    con_scraper: bool | None = Field(default=None)
 
 
 class ProspectoFiltroPayload(BaseModel):
@@ -1875,6 +1876,7 @@ class ProspectoFiltroPayload(BaseModel):
     llamada_permitida: bool | None = Field(default=None)
     campana_id: UUID | None = Field(default=None)
     con_envio: bool | None = Field(default=None)
+    con_scraper: bool | None = Field(default=None)
 
 
 class ProspeccionCanalConfig(BaseModel):
@@ -5466,6 +5468,7 @@ def _prospecto_filters_to_kwargs(filters: ProspectoFiltroPayload) -> dict[str, A
         "llamada_permitida": filters.llamada_permitida,
         "campana_id": filters.campana_id,
         "con_envio": filters.con_envio,
+        "con_scraper": filters.con_scraper,
     }
 
 
@@ -14575,10 +14578,30 @@ async def listar_prospectos(
             actividades=actividad,
             campana_id=params.campana_id,
             con_envio=params.con_envio,
+            con_scraper=params.con_scraper,
             timezone_name=effective_timezone,
         )
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    if rows:
+        prospecto_ids = [str(row.get("id") or "").strip() for row in rows if str(row.get("id") or "").strip()]
+        scraper_status_map: dict[str, dict[str, Any]] = {}
+        if prospecto_ids:
+            try:
+                scraper_status_map = await repo.list_scraper_status_by_prospectos(
+                    usuario_token=user_token,
+                    prospecto_ids=prospecto_ids,
+                )
+            except CRMRepositoryError as exc:
+                raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+        for row in rows:
+            prospecto_id = str(row.get("id") or "").strip()
+            status_info = scraper_status_map.get(prospecto_id)
+            row["scraper_ejecutado"] = bool(status_info)
+            row["scraper_ultimo_en"] = status_info.get("ultimo_en") if status_info else None
+            row["scraper_ultimo_estado"] = status_info.get("estado") if status_info else None
 
     return {
         "ok": True,
@@ -14827,6 +14850,35 @@ async def listar_prospecto_contact_indicadores(
             extra={"rows": len(cached_rows), "requested_ids": len(normalized_ids)},
         )
         return {"ok": True, "items": cached_rows}
+    def _normalize_total_envios_without_cancelled(raw_rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        normalized: list[dict[str, Any]] = []
+        for row in raw_rows:
+            if not isinstance(row, dict):
+                continue
+            row_copy = dict(row)
+            canales = row_copy.get("canales")
+            if not isinstance(canales, dict):
+                normalized.append(row_copy)
+                continue
+            active_total = 0
+            for canal_data in canales.values():
+                if not isinstance(canal_data, dict):
+                    continue
+                total_raw = canal_data.get("total")
+                cancelados_raw = canal_data.get("cancelados")
+                try:
+                    total_value = int(total_raw or 0)
+                except (TypeError, ValueError):
+                    total_value = 0
+                try:
+                    cancelados_value = int(cancelados_raw or 0)
+                except (TypeError, ValueError):
+                    cancelados_value = 0
+                active_total += max(total_value - cancelados_value, 0)
+            row_copy["total_envios"] = max(active_total, 0)
+            normalized.append(row_copy)
+        return normalized
+
     try:
         rows = await repo.list_prospecto_contact_indicators(
             usuario_token=user_token,
@@ -14834,9 +14886,11 @@ async def listar_prospecto_contact_indicadores(
         )
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
-    serializable_rows = [row for row in rows if isinstance(row, dict)]
+    serializable_rows = _normalize_total_envios_without_cancelled(
+        [row for row in rows if isinstance(row, dict)]
+    )
     await _write_contact_indicators_cache(cache_key, serializable_rows)
-    return {"ok": True, "items": rows}
+    return {"ok": True, "items": serializable_rows}
 
 
 @router.get("/prospeccion/contacto/batches")
@@ -17774,6 +17828,24 @@ async def contactar_prospectos(
         )
         zoneinfo = ZoneInfo(effective_timezone)
         local_day = datetime.now(zoneinfo).date()
+        day_start_utc, day_end_utc_exclusive = local_date_range_to_utc(
+            date_from=local_day,
+            date_to=local_day,
+            timezone_name=effective_timezone,
+        )
+        scheduled_today = 0
+        if day_start_utc and day_end_utc_exclusive:
+            try:
+                scheduled_today = await repo.count_pending_email_envios_for_local_day(
+                    usuario_token=user_token,
+                    start_utc=day_start_utc,
+                    end_utc_exclusive=day_end_utc_exclusive,
+                )
+            except CRMRepositoryError as exc:
+                logger.warning(
+                    "prospeccion.contactar.scheduled_count_failed",
+                    extra={"error": str(exc)},
+                )
         brevo_settings = await tenant_runtime.get_brevo_runtime_settings(organizacion_id=organizacion_id)
         api_key = _clean_text(brevo_settings.api_key)
         if api_key:
@@ -17786,10 +17858,13 @@ async def contactar_prospectos(
             except Exception as exc:  # noqa: BLE001
                 logger.warning("prospeccion.contactar.brevo_quota_check_failed", extra={"error": str(exc)})
             else:
-                if quota.remaining is not None and quota.remaining < projected_email_sends:
+                remaining_for_new = quota.remaining
+                if remaining_for_new is not None:
+                    remaining_for_new = max(remaining_for_new - scheduled_today, 0)
+                if remaining_for_new is not None and remaining_for_new < projected_email_sends:
                     raise HTTPException(
                         status_code=400,
-                        detail=f"brevo_daily_quota_exceeded:{quota.remaining}:{projected_email_sends}",
+                        detail=f"brevo_daily_quota_exceeded:{remaining_for_new}:{projected_email_sends}",
                     )
 
     try:
@@ -17941,6 +18016,66 @@ async def reintentar_contacto_envio(
                 "batch_id": batch_id_value,
                 "envio_id": str(envio_id),
                 "estado": "pendiente",
+            },
+        )
+
+    return {"ok": True, "envio": updated}
+
+
+@router.post("/prospeccion/contacto/envios/{envio_id}/cancelar")
+async def cancelar_contacto_envio(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    _: str = Depends(require_permission("ejecutar_busquedas")),
+    user_token: str = Depends(require_user_token),
+    envio_id: UUID,
+) -> dict[str, Any]:
+    """Cancela manualmente un envío pendiente/procesando."""
+
+    envio = await repo.get_contact_envio(usuario_token=user_token, envio_id=envio_id)
+    if not envio:
+        raise HTTPException(status_code=404, detail="contact_envio_not_found")
+    estado_actual = (_clean_text(envio.get("estado")) or "").lower()
+    if estado_actual not in {"pendiente", "procesando"}:
+        raise HTTPException(status_code=400, detail="contact_envio_not_cancellable")
+
+    motivo = "cancelado_manual"
+    now_iso = datetime.now(timezone.utc).isoformat()
+    payload = {
+        "estado": "cancelado",
+        "error": motivo,
+        "procesado_en": now_iso,
+    }
+    updated = await repo.update_contact_envio(
+        usuario_token=user_token,
+        envio_id=envio_id,
+        payload=payload,
+    )
+
+    log_entry = _build_contact_log_entry(
+        prospecto_id=envio.get("prospecto_id"),
+        canal=_clean_text(envio.get("canal")) or "canal",
+        estado="cancelado",
+        detalle={
+            "action": "manual_cancel",
+            "previous_estado": estado_actual,
+            "reason": motivo,
+        },
+        error=motivo,
+        batch_id=envio.get("batch_id"),
+        envio_id=envio_id,
+    )
+    await repo.insert_prospecto_logs(usuario_token=user_token, entries=[log_entry])
+
+    batch_id_value = envio.get("batch_id")
+    if batch_id_value:
+        await progress_hub.publish(
+            str(batch_id_value),
+            {
+                "type": "envio",
+                "batch_id": batch_id_value,
+                "envio_id": str(envio_id),
+                "estado": "cancelado",
             },
         )
 
@@ -18123,6 +18258,7 @@ async def obtener_brevo_quota_diaria(
     *,
     repo: CRMRepository = Depends(get_repository),
     _: str = Depends(require_permission("ejecutar_busquedas")),
+    user_token: str = Depends(require_user_token),
     organizacion_id: UUID = Depends(require_organizacion_id),
     usuario_id: UUID | None = Depends(optional_usuario_id),
 ) -> dict[str, Any]:
@@ -18135,6 +18271,24 @@ async def obtener_brevo_quota_diaria(
     )
     zoneinfo = ZoneInfo(effective_timezone)
     local_day = datetime.now(zoneinfo).date()
+    day_start_utc, day_end_utc_exclusive = local_date_range_to_utc(
+        date_from=local_day,
+        date_to=local_day,
+        timezone_name=effective_timezone,
+    )
+    scheduled_today = 0
+    if day_start_utc and day_end_utc_exclusive:
+        try:
+            scheduled_today = await repo.count_pending_email_envios_for_local_day(
+                usuario_token=user_token,
+                start_utc=day_start_utc,
+                end_utc_exclusive=day_end_utc_exclusive,
+            )
+        except CRMRepositoryError as exc:
+            logger.warning(
+                "prospeccion.brevo_quota_scheduled_count_failed",
+                extra={"error": str(exc)},
+            )
     brevo_settings = await tenant_runtime.get_brevo_runtime_settings(organizacion_id=organizacion_id)
     api_key = _clean_text(brevo_settings.api_key)
     if not api_key:
@@ -18145,8 +18299,11 @@ async def obtener_brevo_quota_diaria(
             "timezone": effective_timezone,
             "date_local": local_day.isoformat(),
             "sent_today": None,
+            "scheduled_today": scheduled_today,
+            "projected_today": None,
             "daily_limit": None,
             "remaining": None,
+            "remaining_after_scheduled": None,
             "usage_pct": None,
             "plan_type": None,
             "plan_credits": None,
@@ -18167,13 +18324,22 @@ async def obtener_brevo_quota_diaria(
             "timezone": effective_timezone,
             "date_local": local_day.isoformat(),
             "sent_today": None,
+            "scheduled_today": scheduled_today,
+            "projected_today": None,
             "daily_limit": None,
             "remaining": None,
+            "remaining_after_scheduled": None,
             "usage_pct": None,
             "plan_type": None,
             "plan_credits": None,
             "warnings": ["brevo_quota_unavailable"],
         }
+    projected_today: int | None = None
+    remaining_after_scheduled: int | None = None
+    if snapshot.sent_today is not None:
+        projected_today = snapshot.sent_today + scheduled_today
+    if snapshot.remaining is not None:
+        remaining_after_scheduled = max(snapshot.remaining - scheduled_today, 0)
     return {
         "ok": True,
         "configured": True,
@@ -18181,8 +18347,11 @@ async def obtener_brevo_quota_diaria(
         "timezone": effective_timezone,
         "date_local": local_day.isoformat(),
         "sent_today": snapshot.sent_today,
+        "scheduled_today": scheduled_today,
+        "projected_today": projected_today,
         "daily_limit": snapshot.daily_limit,
         "remaining": snapshot.remaining,
+        "remaining_after_scheduled": remaining_after_scheduled,
         "usage_pct": snapshot.usage_pct,
         "plan_type": snapshot.plan_type,
         "plan_credits": snapshot.plan_credits,

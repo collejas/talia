@@ -24,6 +24,9 @@ export type ProspectoItem = {
   rating?: number | null
   distancia_m?: number | null
   creado_en?: string | null
+  scraper_ejecutado?: boolean | null
+  scraper_ultimo_en?: string | null
+  scraper_ultimo_estado?: string | null
   metadata?: Record<string, unknown> | null
 }
 
@@ -548,6 +551,7 @@ export async function listProspectos(params: {
   geoMunicipio?: string
   campanaId?: string
   conEnvio?: boolean
+  conScraper?: boolean
 } = {}): Promise<ProspectosResponse> {
   const url = buildClientUrl("/api/prospeccion/prospectos")
   if (typeof params.limit === "number") url.searchParams.set("limit", String(params.limit))
@@ -591,6 +595,9 @@ export async function listProspectos(params: {
   }
   if (typeof params.conEnvio === "boolean") {
     url.searchParams.set("con_envio", params.conEnvio ? "true" : "false")
+  }
+  if (typeof params.conScraper === "boolean") {
+    url.searchParams.set("con_scraper", params.conScraper ? "true" : "false")
   }
   if (params.metadataQueries?.length) {
     for (const value of params.metadataQueries) {
@@ -1185,6 +1192,15 @@ export async function reintentarContactoEnvio(envioId: string) {
   )
 }
 
+export async function cancelarContactoEnvio(envioId: string) {
+  return requestJson<{ ok: boolean; envio: ContactoEnvio }>(
+    `/api/prospeccion/contacto/envios/${envioId}/cancelar`,
+    {
+      method: "POST",
+    }
+  )
+}
+
 export async function cancelarContactoBatch(batchId: string) {
   return requestJson<{ ok: boolean; batch: ContactoBatch; envios_cancelados: number }>(
     `/api/prospeccion/contacto/batches/${batchId}/cancelar`,
@@ -1227,8 +1243,11 @@ export type BrevoQuotaSnapshot = {
   timezone?: string | null
   date_local?: string | null
   sent_today: number | null
+  scheduled_today?: number | null
+  projected_today?: number | null
   daily_limit: number | null
   remaining: number | null
+  remaining_after_scheduled?: number | null
   usage_pct: number | null
   plan_type?: string | null
   plan_credits?: number | null

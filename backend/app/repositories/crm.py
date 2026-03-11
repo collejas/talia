@@ -7951,6 +7951,7 @@ class CRMRepository:
         actividades: list[str] | None = None,
         campana_id: UUID | None = None,
         con_envio: bool | None = None,
+        con_scraper: bool | None = None,
         timezone_name: str | None = None,
     ) -> tuple[list[dict[str, Any]], int]:
         """Lista prospectos con filtros de búsqueda y totalizador."""
@@ -8057,6 +8058,9 @@ class CRMRepository:
         if and_filters:
             params["and"] = "(" + ",".join(and_filters) + ")"
 
+        include_ids: set[str] | None = None
+        exclude_ids: set[str] = set()
+
         envio_prospecto_ids: set[str] | None = None
         if campana_id is not None or con_envio is not None:
             envio_prospecto_ids = await self._list_prospecto_ids_with_contact_envios(
@@ -8069,30 +8073,53 @@ class CRMRepository:
         if campana_id is not None or con_envio is True:
             if not envio_prospecto_ids:
                 return [], 0
-            # Avoid extremely long URLs with id=in(...) when envío IDs are large.
-            # Use a backend scan mode in that case (it also preserves other filters).
-            if len(envio_prospecto_ids) > 400:
+            include_ids = set(envio_prospecto_ids)
+        elif con_envio is False:
+            if envio_prospecto_ids:
+                exclude_ids.update(envio_prospecto_ids)
+
+        if con_scraper is not None:
+            scraper_prospecto_ids = await self._list_prospecto_ids_with_scraper_jobs(
+                usuario_token=usuario_token,
+            )
+            if con_scraper:
+                if not scraper_prospecto_ids:
+                    return [], 0
+                if include_ids is None:
+                    include_ids = set(scraper_prospecto_ids)
+                else:
+                    include_ids &= scraper_prospecto_ids
+            elif scraper_prospecto_ids:
+                exclude_ids.update(scraper_prospecto_ids)
+
+        if include_ids is not None:
+            if exclude_ids:
+                include_ids -= exclude_ids
+            if not include_ids:
+                return [], 0
+            # Avoid extremely long URLs with id=in(...) when ID set is large.
+            # Use backend scan mode to keep all other filters intact.
+            if len(include_ids) > 400:
                 return await self._list_prospectos_matching_ids(
                     usuario_token=usuario_token,
                     params=params,
-                    included_ids=envio_prospecto_ids,
+                    included_ids=include_ids,
                     limit=limit,
                     offset=offset,
                     geo_estado=geo_estado,
                     geo_municipio=geo_municipio,
                 )
-            params["id"] = _postgrest_in_clause(sorted(envio_prospecto_ids))
-        elif con_envio is False:
-            if envio_prospecto_ids:
-                return await self._list_prospectos_excluding_ids(
-                    usuario_token=usuario_token,
-                    params=params,
-                    excluded_ids=envio_prospecto_ids,
-                    limit=limit,
-                    offset=offset,
-                    geo_estado=geo_estado,
-                    geo_municipio=geo_municipio,
-                )
+            params["id"] = _postgrest_in_clause(sorted(include_ids))
+        elif exclude_ids:
+            return await self._list_prospectos_excluding_ids(
+                usuario_token=usuario_token,
+                params=params,
+                excluded_ids=exclude_ids,
+                limit=limit,
+                offset=offset,
+                geo_estado=geo_estado,
+                geo_municipio=geo_municipio,
+            )
 
         if geo_estado or geo_municipio:
             return await self._list_prospectos_with_geo_scan(
@@ -8389,6 +8416,7 @@ class CRMRepository:
                     "limit": str(page_size),
                     "offset": str(offset),
                     "order": "creado_en.desc",
+                    "estado": "neq.cancelado",
                 }
                 if batch_chunk:
                     params["batch_id"] = _postgrest_in_clause(batch_chunk)
@@ -8411,6 +8439,50 @@ class CRMRepository:
                         continue
                     ids.add(str(prospecto_id))
                 offset += len(data)
+        return ids
+
+    async def _list_prospecto_ids_with_scraper_jobs(
+        self,
+        *,
+        usuario_token: str,
+    ) -> set[str]:
+        ids: set[str] = set()
+        page_size = 5000
+        max_scan = 50000
+        offset = 0
+
+        while offset < max_scan:
+            params = {
+                "select": "metadata",
+                "metadata->>prospecto_id": "not.is.null",
+                "order": "created_at.desc",
+                "limit": str(page_size),
+                "offset": str(offset),
+            }
+            resp = await self._request_with_user(
+                "GET",
+                "/rest/v1/prospeccion_buscador_jobs",
+                token=usuario_token,
+                params=params,
+            )
+            data = resp.json() or []
+            if not isinstance(data, list):
+                raise CRMRepositoryError(f"scraper_job_ids_invalid:{data!r}")
+            if not data:
+                break
+            for row in data:
+                if not isinstance(row, dict):
+                    continue
+                metadata = row.get("metadata")
+                if not isinstance(metadata, dict):
+                    continue
+                prospecto_id = metadata.get("prospecto_id")
+                if prospecto_id is None:
+                    continue
+                value = str(prospecto_id).strip()
+                if value:
+                    ids.add(value)
+            offset += len(data)
         return ids
 
     async def list_prospecto_query_metadata(
@@ -8953,6 +9025,94 @@ class CRMRepository:
         if not isinstance(data, list):
             raise CRMRepositoryError(f"scraper_pending_invalid:{data!r}")
         return data
+
+    async def list_scraper_status_by_prospectos(
+        self,
+        *,
+        usuario_token: str,
+        prospecto_ids: Sequence[str | UUID],
+    ) -> dict[str, dict[str, Any]]:
+        """Resume el último job de scraper encontrado por prospecto."""
+
+        normalized_ids: list[str] = []
+        seen_ids: set[str] = set()
+        for value in prospecto_ids:
+            candidate = str(value or "").strip()
+            if not candidate or candidate in seen_ids:
+                continue
+            seen_ids.add(candidate)
+            normalized_ids.append(candidate)
+        if not normalized_ids:
+            return {}
+
+        def _parse_dt(value: Any) -> datetime | None:
+            if isinstance(value, datetime):
+                return value
+            if isinstance(value, str):
+                trimmed = value.strip()
+                if not trimmed:
+                    return None
+                if trimmed.endswith("Z"):
+                    trimmed = trimmed[:-1] + "+00:00"
+                try:
+                    return datetime.fromisoformat(trimmed)
+                except ValueError:
+                    return None
+            return None
+
+        latest_by_prospecto: dict[str, dict[str, Any]] = {}
+        chunk_size = 100
+        page_size = 500
+
+        for start in range(0, len(normalized_ids), chunk_size):
+            chunk_ids = normalized_ids[start : start + chunk_size]
+            offset = 0
+            while True:
+                params = {
+                    "select": "metadata,status,created_at",
+                    "metadata->>prospecto_id": _postgrest_in_clause(chunk_ids),
+                    "order": "created_at.desc",
+                    "limit": str(page_size),
+                    "offset": str(offset),
+                }
+                resp = await self._request_with_user(
+                    "GET",
+                    "/rest/v1/prospeccion_buscador_jobs",
+                    token=usuario_token,
+                    params=params,
+                )
+                data = resp.json() or []
+                if not isinstance(data, list):
+                    raise CRMRepositoryError(f"scraper_status_invalid:{data!r}")
+                if not data:
+                    break
+
+                for row in data:
+                    if not isinstance(row, dict):
+                        continue
+                    metadata = row.get("metadata")
+                    if not isinstance(metadata, dict):
+                        continue
+                    prospecto_id = str(metadata.get("prospecto_id") or "").strip()
+                    if not prospecto_id:
+                        continue
+                    created_at = row.get("created_at")
+                    created_dt = _parse_dt(created_at)
+                    previous = latest_by_prospecto.get(prospecto_id)
+                    if previous:
+                        prev_dt = _parse_dt(previous.get("ultimo_en"))
+                        if prev_dt and created_dt and created_dt <= prev_dt:
+                            continue
+                    latest_by_prospecto[prospecto_id] = {
+                        "estado": str(row.get("status") or "pending"),
+                        "ultimo_en": created_at,
+                    }
+
+                if len(data) < page_size:
+                    break
+                offset += len(data)
+
+        return latest_by_prospecto
 
     async def update_prospecto(
         self,
@@ -11471,6 +11631,34 @@ class CRMRepository:
         resp = await self._request(
             "GET",
             "/rest/v1/prospeccion_contacto_envio",
+            params=params,
+            prefer="count=exact",
+        )
+        return self._extract_total_count(resp.headers.get("content-range")) or 0
+
+    async def count_pending_email_envios_for_local_day(
+        self,
+        *,
+        usuario_token: str,
+        start_utc: datetime,
+        end_utc_exclusive: datetime,
+    ) -> int:
+        """Cuenta envíos de correo pendientes/procesando programados para un día local."""
+
+        params: dict[str, str] = {
+            "select": "id",
+            "limit": "1",
+            "canal": "eq.correo",
+            "estado": "in.(pendiente,procesando)",
+            "and": (
+                f"(programado_en.gte.{start_utc.isoformat()},"
+                f"programado_en.lt.{end_utc_exclusive.isoformat()})"
+            ),
+        }
+        resp = await self._request_with_user(
+            "GET",
+            "/rest/v1/prospeccion_contacto_envio",
+            token=usuario_token,
             params=params,
             prefer="count=exact",
         )

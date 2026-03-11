@@ -100,6 +100,7 @@ import {
 type FuenteFilter = "" | "google_places" | "denue" | "usuario"
 type LookupFilter = "" | "pendiente" | "verificado" | "sin_numero" | "error"
 type ConEnvioFilter = "" | "si" | "no"
+type ConScraperFilter = "" | "si" | "no"
 type OrderOption = "creado" | "nombre"
 type ProspectosSortKey =
   | "prospecto"
@@ -123,6 +124,7 @@ type Filters = {
   lookupStatus: LookupFilter
   campanaId: string
   conEnvio: ConEnvioFilter
+  conScraper: ConScraperFilter
   segmento: string
   geoEstado: string
   geoMunicipio: string
@@ -167,6 +169,7 @@ const initialFilters: Filters = {
   lookupStatus: "",
   campanaId: "",
   conEnvio: "",
+  conScraper: "",
   segmento: "",
   geoEstado: "",
   geoMunicipio: "",
@@ -264,6 +267,17 @@ const LOOKUP_STATUS_VARIANTS: Record<string, "default" | "secondary" | "destruct
   verificado: "default",
   sin_numero: "outline",
   error: "destructive",
+}
+
+const SCRAPER_STATUS_LABELS: Record<string, string> = {
+  pending: "Pendiente",
+  running: "En proceso",
+  pausing: "Pausando",
+  canceling: "Cancelando",
+  paused: "Pausado",
+  canceled: "Cancelado",
+  completed: "Completado",
+  failed: "Error",
 }
 
 type ContactPresenceFilter =
@@ -526,6 +540,10 @@ function normalizeSavedViewState(raw: unknown): ProspectosSavedViewState | null 
     conEnvio:
       filtersObj["conEnvio"] === "si" || filtersObj["conEnvio"] === "no"
         ? filtersObj["conEnvio"]
+        : "",
+    conScraper:
+      filtersObj["conScraper"] === "si" || filtersObj["conScraper"] === "no"
+        ? filtersObj["conScraper"]
         : "",
     segmento: typeof filtersObj["segmento"] === "string" ? filtersObj["segmento"] : "",
     geoEstado: typeof filtersObj["geoEstado"] === "string" ? filtersObj["geoEstado"] : "",
@@ -813,7 +831,8 @@ function ProspectosView() {
     () => (selectedPlannerCanal ? plannerTemplates.filter((tpl) => tpl.canal === selectedPlannerCanal) : []),
     [plannerTemplates, selectedPlannerCanal]
   )
-  const plannerBrevoRemaining = plannerBrevoQuota?.remaining ?? null
+  const plannerBrevoRemaining =
+    plannerBrevoQuota?.remaining_after_scheduled ?? plannerBrevoQuota?.remaining ?? null
   const plannerBrevoLimitZero = (plannerBrevoQuota?.daily_limit ?? null) === 0
   const plannerBrevoQuotaBlocked =
     selectedPlannerCanal === "correo" &&
@@ -1182,6 +1201,9 @@ function ProspectosView() {
     if (filters.conEnvio) {
       chips.push(`Con envío: ${filters.conEnvio === "si" ? "Sí" : "No"}`)
     }
+    if (filters.conScraper) {
+      chips.push(`Con scraper: ${filters.conScraper === "si" ? "Sí" : "No"}`)
+    }
     if (filters.carrierType) {
       const label = carrierLabel(filters.carrierType)
       chips.push(`Línea: ${label || filters.carrierType}`)
@@ -1235,6 +1257,8 @@ function ProspectosView() {
           campanaId: filters.campanaId || undefined,
           conEnvio:
             filters.conEnvio === "si" ? true : filters.conEnvio === "no" ? false : undefined,
+          conScraper:
+            filters.conScraper === "si" ? true : filters.conScraper === "no" ? false : undefined,
           segmento: filters.segmento || undefined,
           geoEstado: filters.geoEstado || undefined,
           geoMunicipio: filters.geoMunicipio || undefined,
@@ -1302,6 +1326,8 @@ function ProspectosView() {
           campanaId: filters.campanaId || undefined,
           conEnvio:
             filters.conEnvio === "si" ? true : filters.conEnvio === "no" ? false : undefined,
+          conScraper:
+            filters.conScraper === "si" ? true : filters.conScraper === "no" ? false : undefined,
           segmento: filters.segmento || undefined,
           geoEstado: filters.geoEstado || undefined,
           geoMunicipio: filters.geoMunicipio || undefined,
@@ -3102,6 +3128,27 @@ function ProspectosView() {
               </Select>
             </div>
             <div className="space-y-1">
+              <Label>Con scraper</Label>
+              <Select
+                value={filters.conScraper || "all"}
+                onValueChange={(value) =>
+                  setFilters((prev) => ({
+                    ...prev,
+                    conScraper: value === "all" ? "" : (value as ConScraperFilter),
+                  }))
+                }
+              >
+                <SelectTrigger className="w-[140px]">
+                  <SelectValue placeholder="Todos" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos</SelectItem>
+                  <SelectItem value="si">Sí</SelectItem>
+                  <SelectItem value="no">No</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1">
               <Label>Tipo de línea</Label>
               <Select
                 value={filters.carrierType || "all"}
@@ -3576,14 +3623,27 @@ function ProspectosView() {
                   ) : plannerBrevoQuota?.available ? (
                     <div className="space-y-1">
                       <p className="text-xs text-muted-foreground">
-                        Hoy ({plannerBrevoQuota.date_local}): {plannerBrevoQuota.sent_today ?? 0}
+                        Hoy ({plannerBrevoQuota.date_local}): enviados {plannerBrevoQuota.sent_today ?? 0}
+                        {plannerBrevoQuota.scheduled_today ? ` + programados ${plannerBrevoQuota.scheduled_today}` : ""}
+                        {plannerBrevoQuota.projected_today !== null && plannerBrevoQuota.projected_today !== undefined
+                          ? ` = ${plannerBrevoQuota.projected_today}`
+                          : ""}
                         {!plannerBrevoLimitZero && plannerBrevoQuota.daily_limit !== null
                           ? ` / ${plannerBrevoQuota.daily_limit}`
                           : ""} enviados.
                         {plannerBrevoLimitZero ? " (Brevo reporta límite diario 0)." : ""}
                       </p>
                       <p className="text-xs text-muted-foreground">
-                        Restantes: <span className="font-semibold text-foreground">{plannerBrevoQuota.remaining ?? "N/D"}</span>
+                        Restantes disponibles:
+                        {" "}
+                        <span className="font-semibold text-foreground">{plannerBrevoRemaining ?? "N/D"}</span>
+                        {plannerBrevoQuota.remaining_after_scheduled !== null &&
+                        plannerBrevoQuota.remaining_after_scheduled !== undefined &&
+                        plannerBrevoQuota.remaining !== null &&
+                        plannerBrevoQuota.remaining !== undefined &&
+                        plannerBrevoQuota.remaining_after_scheduled !== plannerBrevoQuota.remaining
+                          ? ` (base Brevo ${plannerBrevoQuota.remaining})`
+                          : ""}
                         {plannerBrevoQuota.usage_pct !== null ? ` · Uso ${plannerBrevoQuota.usage_pct}%` : ""}
                       </p>
                       {plannerBrevoQuotaBlocked ? (
@@ -3937,10 +3997,27 @@ function ProspectosView() {
                                           {prospecto.segmento}
                                         </Badge>
                                       ) : null}
+                                      {prospecto.scraper_ejecutado ? (
+                                        <Badge variant="secondary" className="text-[10px]">
+                                          Scraper: {formatScraperStatus(prospecto.scraper_ultimo_estado)}
+                                        </Badge>
+                                      ) : (
+                                        <Badge variant="outline" className="text-[10px] text-muted-foreground">
+                                          Sin scraper
+                                        </Badge>
+                                      )}
                                     </div>
                                     {prospecto.address ? (
                                       <p className="mt-1 max-w-[220px] truncate text-xs text-muted-foreground" title={prospecto.address}>
                                         {prospecto.address}
+                                      </p>
+                                    ) : null}
+                                    {prospecto.scraper_ejecutado && prospecto.scraper_ultimo_en ? (
+                                      <p
+                                        className="mt-1 max-w-[220px] truncate text-xs text-muted-foreground"
+                                        title={`Último scraper: ${formatDate(prospecto.scraper_ultimo_en)}`}
+                                      >
+                                        Último scraper: {formatDate(prospecto.scraper_ultimo_en)}
                                       </p>
                                     ) : null}
                                     {notas ? (
@@ -4577,6 +4654,12 @@ function formatDate(value?: string | null) {
   const date = new Date(value)
   if (Number.isNaN(date.getTime())) return value
   return DATE_TIME_FORMATTER.format(date)
+}
+
+function formatScraperStatus(value?: string | null) {
+  const normalized = (value || "").toLowerCase()
+  if (!normalized) return "Lanzado"
+  return SCRAPER_STATUS_LABELS[normalized] ?? value ?? "Lanzado"
 }
 
 function formatContactLogDetail(entry: ContactoLog) {
