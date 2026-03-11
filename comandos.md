@@ -88,6 +88,8 @@ npm run build
 sudo systemctl restart talia-api.service
 sudo systemctl restart talia-panel.service
 
+codex resume 019cd80a-079c-76c3-9b2f-9f09de80f5d0
+
 codex resume 019cbe8f-1eb4-7de1-8ea0-e951f6ab1dda
 codex resume 019cba7e-7b41-7123-a176-e940ff165a66
 

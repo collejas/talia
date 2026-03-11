@@ -1717,7 +1717,9 @@ function ProspectosView() {
     try {
       const response = await ejecutarChecklistScraper({
         limit,
-        mode: "auto",
+        mode: "stealth",
+        maxPages: 1000,
+        maxDepth: 20,
         prospectoIds: cappedIds,
       })
       if (!response.programados) {

@@ -737,7 +737,7 @@ export async function ejecutarChecklistLookup(payload: {
 
 export async function ejecutarChecklistScraper(payload: {
   limit?: number
-  mode?: "generic" | "government" | "intelligent" | "auto"
+  mode?: "generic" | "government" | "intelligent" | "auto" | "stealth"
   maxPages?: number
   maxDepth?: number
   maxRuntime?: number

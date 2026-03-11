@@ -1809,7 +1809,7 @@ class ProspectoChecklistScraperPayload(BaseModel):
     limit: int = Field(default=3, ge=1, le=20, description="Número de jobs a disparar.")
     mode: Literal["generic", "government", "intelligent", "auto", "stealth"] = Field(default="auto")
     max_pages: int = Field(default=150, ge=10, le=2000)
-    max_depth: int = Field(default=3, ge=1, le=10)
+    max_depth: int = Field(default=3, ge=1, le=20)
     max_runtime: int | None = Field(default=900, ge=60, le=3600)
     prospecto_ids: list[UUID] | None = Field(
         default=None,
