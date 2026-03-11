@@ -1,6 +1,6 @@
 "use client"
 
-import { type ChangeEvent, type FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { type ChangeEvent, type FormEvent, useCallback, useEffect, useMemo, useState } from "react"
 import { toast } from "sonner"
 import { ChevronDown, ChevronLeft, ChevronRight, RefreshCw, Trash2 } from "lucide-react"
 
@@ -36,21 +36,17 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import {
-  cancelarBuscadorJob,
   crearBuscadorJob,
   eliminarBuscadorJob,
   guardarBuscadorProspectos,
   obtenerBuscadorJob,
   obtenerBuscadorResultados,
   listarBuscadorJobs,
-  pausarBuscadorJob,
   type BuscadorJob,
-  type BuscadorJobParams,
   type BuscadorJobResults,
   type BuscadorJobStatus,
   type BuscadorResult,
   type BuscadorRunPayload,
-  type BuscadorStats,
 } from "@/lib/prospeccion/buscador-client"
 
 type FormState = {
@@ -65,8 +61,6 @@ type FormState = {
   maxNoNewEmails: string
   maxMemoryMb: string
 }
-
-type SummaryEntry = { label: string; count: number }
 
 const DEFAULT_FORM_STATE: FormState = {
   sitio: "domain",
@@ -98,7 +92,6 @@ const STATUS_LABELS: Record<BuscadorJobStatus, string> = {
 }
 
 const RESULT_READY_STATUSES = new Set<BuscadorJobStatus>(["completed", "paused", "canceled"])
-const PROCESSING_STATUSES = new Set<BuscadorJobStatus>(["pending", "running", "pausing", "canceling"])
 
 export default function BuscadorClientPage() {
   return (
@@ -116,8 +109,6 @@ function BuscadorView() {
   const [resultsLimit, setResultsLimit] = useState(DEFAULT_RESULTS_LIMIT)
   const [resultsOffset, setResultsOffset] = useState(0)
   const [resultsLoading, setResultsLoading] = useState(false)
-  const [stats, setStats] = useState<BuscadorStats | null>(null)
-  const [durationMs, setDurationMs] = useState<number | null>(null)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [jobInfo, setJobInfo] = useState<BuscadorJob | null>(null)
   const [isPolling, setIsPolling] = useState(false)
@@ -135,11 +126,7 @@ function BuscadorView() {
   const [selectedJobId, setSelectedJobId] = useState<string | null>(null)
   const [expandedHistoryJobs, setExpandedHistoryJobs] = useState<Set<string>>(new Set())
   const [expandedHistoryResultsJobs, setExpandedHistoryResultsJobs] = useState<Set<string>>(new Set())
-  const [historyResultsByJob, setHistoryResultsByJob] = useState<Record<string, BuscadorJobResults>>({})
-  const [historyResultsLoadingJobId, setHistoryResultsLoadingJobId] = useState<string | null>(null)
-  const [jobAction, setJobAction] = useState<"pause" | "cancel" | "relaunch" | null>(null)
   const [deletingJobId, setDeletingJobId] = useState<string | null>(null)
-  const resultsCardRef = useRef<HTMLDivElement | null>(null)
 
   const canDownload = results.length > 0
   const totalResultsCount = resultsTotal || jobInfo?.total || 0
@@ -147,43 +134,16 @@ function BuscadorView() {
   const pageEnd = resultsOffset + results.length
   const hasPreviousPage = resultsOffset > 0
   const hasNextPage = totalResultsCount ? pageEnd < totalResultsCount : results.length === resultsLimit
-  const canPauseJob = jobInfo?.status === "running"
-  const canCancelJob = jobInfo ? ["pending", "running", "pausing"].includes(jobInfo.status) : false
-  const canRelaunchJob = jobInfo ? RESULT_READY_STATUSES.has(jobInfo.status) || jobInfo.status === "failed" : false
-  const processingSelectedJob = jobInfo ? PROCESSING_STATUSES.has(jobInfo.status) : false
   const jobsPageStart = jobs.length ? jobsOffset + 1 : 0
   const jobsPageEnd = jobsOffset + jobs.length
   const jobsHasPreviousPage = jobsOffset > 0
   const jobsHasNextPage = jobsOffset + jobs.length < jobsTotal
-  const resultsDescription = totalResultsCount
-    ? `Mostrando ${results.length ? `${pageStart}-${pageEnd}` : 0} de ${totalResultsCount} registros.`
-    : results.length
-      ? `Mostrando ${results.length} registros.`
-      : processingSelectedJob
-        ? "Esta búsqueda aún no finaliza. Mostraremos los resultados en cuanto estén listos."
-        : "Selecciona una búsqueda reciente o ejecuta el buscador para ver los resultados aquí."
   const jobsRangeDescription =
     jobsTotal > 0
       ? `Mostrando ${jobsPageStart}-${jobsPageEnd} de ${jobsTotal}`
       : jobsLoading
         ? "Cargando historial…"
         : "Sin ejecuciones registradas."
-
-  const domainSummary = useMemo<SummaryEntry[] | null>(() => {
-    if (!stats?.top_email_domains?.length) return null
-    return stats.top_email_domains.map((item) => ({
-      label: item.domain,
-      count: item.count,
-    }))
-  }, [stats])
-
-  const hostSummary = useMemo<SummaryEntry[] | null>(() => {
-    if (!stats?.top_source_hosts?.length) return null
-    return stats.top_source_hosts.map((item) => ({
-      label: item.host,
-      count: item.count,
-    }))
-  }, [stats])
 
   const getEmailDomain = useCallback((email: string | null | undefined): string => {
     const normalized = (email || "").trim().toLowerCase()
@@ -279,36 +239,18 @@ function BuscadorView() {
     })
   }, [])
 
-  const toggleHistoryResults = useCallback(
-    async (job: BuscadorJob) => {
-      const jobId = job.id
-      let shouldLoad = false
-      setExpandedHistoryResultsJobs((prev) => {
-        const next = new Set(prev)
-        if (next.has(jobId)) {
-          next.delete(jobId)
-        } else {
-          next.add(jobId)
-          shouldLoad = true
-        }
-        return next
-      })
-      if (!shouldLoad) return
-      if (historyResultsByJob[jobId]) return
-      if (!RESULT_READY_STATUSES.has(job.status)) return
-      setHistoryResultsLoadingJobId(jobId)
-      try {
-        const data = await obtenerBuscadorResultados(jobId, { limit: 200, offset: 0 })
-        setHistoryResultsByJob((prev) => ({ ...prev, [jobId]: data }))
-      } catch (error) {
-        const message = error instanceof Error ? error.message : "No se pudo cargar resultados del historial."
-        toast.error(message)
-      } finally {
-        setHistoryResultsLoadingJobId(null)
+  const toggleHistoryResults = useCallback((job: BuscadorJob) => {
+    const jobId = job.id
+    setExpandedHistoryResultsJobs((prev) => {
+      const next = new Set(prev)
+      if (next.has(jobId)) {
+        next.delete(jobId)
+      } else {
+        next.add(jobId)
       }
-    },
-    [historyResultsByJob]
-  )
+      return next
+    })
+  }, [])
 
   useEffect(() => {
     void loadJobs(0)
@@ -324,8 +266,6 @@ function BuscadorView() {
       const resetSelection = options?.resetSelection ?? true
       setSelectedJobId(job.id)
       setResults(data.items)
-      setStats(data.stats ?? job.stats ?? null)
-      setDurationMs(job.duration_ms ?? null)
       setResultsTotal(data.total ?? job.total ?? data.items.length)
       if (resetSelection) {
         const ids = data.items
@@ -405,19 +345,6 @@ function BuscadorView() {
     return payload
   }
 
-  const buildPayloadFromParams = (params: BuscadorJobParams): BuscadorRunPayload => ({
-    sitio: params.sitio,
-    url: params.url || undefined,
-    mode: params.mode,
-    max_pages: params.max_pages,
-    max_depth: params.max_depth,
-    max_workers: params.max_workers ?? 3,
-    max_runtime: params.max_runtime ?? undefined,
-    max_queue_size: params.max_queue_size ?? undefined,
-    max_no_new_emails: params.max_no_new_emails ?? undefined,
-    max_memory_mb: params.max_memory_mb ?? undefined,
-  })
-
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     setIsRunning(true)
@@ -427,8 +354,6 @@ function BuscadorView() {
     setResultsOffset(0)
     setSelectedIds(new Set())
     setExcludedDomains(new Set())
-    setStats(null)
-    setDurationMs(null)
 
     try {
       const payload = buildPayload()
@@ -506,8 +431,6 @@ function BuscadorView() {
     setResultsTotal(0)
     setResultsLimit(DEFAULT_RESULTS_LIMIT)
     setResultsOffset(0)
-    setStats(null)
-    setDurationMs(null)
     setErrorMessage(null)
     setJobInfo(null)
     setLastResultsJobId(null)
@@ -525,14 +448,9 @@ function BuscadorView() {
       setSelectedJobId(job.id)
       setErrorMessage(null)
       setResultsOffset(0)
-      if (resultsCardRef.current) {
-        resultsCardRef.current.scrollIntoView({ behavior: "smooth", block: "start" })
-      }
       if (!RESULT_READY_STATUSES.has(job.status)) {
         setResults([])
         setResultsTotal(job.total ?? 0)
-        setStats(job.stats ?? null)
-        setDurationMs(job.duration_ms ?? null)
         setSelectedIds(new Set())
         setExcludedDomains(new Set())
         setResultsLoading(false)
@@ -553,8 +471,6 @@ function BuscadorView() {
       if (selectedJobId === job.id) {
         handleClearResults()
         setJobInfo(null)
-        setStats(null)
-        setDurationMs(null)
         setSelectedJobId(null)
         setSegmento("")
         setLastResultsJobId(null)
@@ -568,67 +484,6 @@ function BuscadorView() {
       toast.error(message)
     } finally {
       setDeletingJobId(null)
-    }
-  }
-
-  const handlePauseJob = async () => {
-    if (!jobInfo || jobAction === "pause") return
-    setJobAction("pause")
-    try {
-      const updated = await pausarBuscadorJob(jobInfo.id)
-      setJobInfo(updated)
-      toast.success("Búsqueda pausada. Puedes reanudarla más tarde.")
-      void loadJobs(jobsOffset)
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "No se pudo pausar el job."
-      toast.error(message)
-    } finally {
-      setJobAction(null)
-    }
-  }
-
-  const handleCancelJob = async () => {
-    if (!jobInfo || jobAction === "cancel") return
-    setJobAction("cancel")
-    try {
-      const updated = await cancelarBuscadorJob(jobInfo.id)
-      setJobInfo(updated)
-      toast.success("Búsqueda cancelada.")
-      void loadJobs(jobsOffset)
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "No se pudo cancelar el job."
-      toast.error(message)
-    } finally {
-      setJobAction(null)
-    }
-  }
-
-  const handleRelaunchJob = async () => {
-    if (!jobInfo || jobAction === "relaunch") return
-    setJobAction("relaunch")
-    setErrorMessage(null)
-    setResults([])
-    setResultsTotal(0)
-    setResultsOffset(0)
-    setStats(null)
-    setDurationMs(null)
-    setSelectedIds(new Set())
-    setSegmento("")
-    setLastResultsJobId(null)
-    try {
-      const payload = buildPayloadFromParams(jobInfo.params)
-      payload.resume_job_id = jobInfo.id
-      const newJob = await crearBuscadorJob(payload)
-      setJobInfo(newJob)
-      setSelectedJobId(newJob.id)
-      toast.success("Se inició una nueva búsqueda reanudando el checkpoint anterior.")
-      void loadJobs(0)
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "No se pudo reiniciar la búsqueda."
-      setErrorMessage(message)
-      toast.error(message)
-    } finally {
-      setJobAction(null)
     }
   }
 
@@ -917,111 +772,6 @@ function BuscadorView() {
         </CardContent>
       </Card>
 
-      {jobInfo && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Estado del job</CardTitle>
-            <CardDescription>ID: {jobInfo.id}</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-2">
-            <p className="text-sm">
-              Estado actual:{" "}
-              <span className="font-medium capitalize">{STATUS_LABELS[jobInfo.status]}</span>
-              {PROCESSING_STATUSES.has(jobInfo.status) ? " (procesando)" : null}
-            </p>
-            {jobInfo.status === "failed" && jobInfo.error && (
-              <p className="text-sm text-destructive">Error: {jobInfo.error}</p>
-            )}
-            {jobInfo.started_at && (
-              <p className="text-xs text-muted-foreground">
-                Inicio: {new Date(jobInfo.started_at).toLocaleString()}
-                {jobInfo.finished_at ? ` · Fin: ${new Date(jobInfo.finished_at).toLocaleString()}` : ""}
-              </p>
-            )}
-            {isPolling && (
-              <p className="text-xs text-muted-foreground">Consultando estado…</p>
-            )}
-            {(canPauseJob || canCancelJob || canRelaunchJob) && (
-              <div className="flex flex-wrap gap-2 pt-2">
-                {canPauseJob && (
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="secondary"
-                    onClick={handlePauseJob}
-                    disabled={jobAction === "pause"}
-                  >
-                    {jobAction === "pause" ? "Pausando…" : "Pausar"}
-                  </Button>
-                )}
-                {canCancelJob && (
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="destructive"
-                    onClick={handleCancelJob}
-                    disabled={jobAction === "cancel"}
-                  >
-                    {jobAction === "cancel" ? "Cancelando…" : "Cancelar"}
-                  </Button>
-                )}
-                {canRelaunchJob && (
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    onClick={handleRelaunchJob}
-                    disabled={jobAction === "relaunch"}
-                  >
-                    {jobAction === "relaunch" ? "Reiniciando…" : "Reiniciar búsqueda"}
-                  </Button>
-                )}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      )}
-
-      {stats && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Resumen de la búsqueda</CardTitle>
-            <CardDescription>
-              {durationMs !== null
-                ? `Duración aproximada: ${(durationMs / 1000).toFixed(1)} s`
-                : "Resultados listos."}
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid gap-4 md:grid-cols-3">
-              <StatCard label="Correos detectados" value={stats.emails_total} />
-              <StatCard label="Dominios únicos" value={stats.unique_email_domains} />
-              <StatCard label="Hosts explorados" value={stats.unique_source_hosts} />
-            </div>
-            {stats.crawl_metrics ? (
-              <div className="grid gap-4 md:grid-cols-3">
-                <StatCard
-                  label="Páginas visitadas"
-                  value={Number(stats.crawl_metrics.pages_visited ?? 0)}
-                />
-                <StatCard
-                  label="HTTP 403 / 429"
-                  value={`${Number(stats.crawl_metrics.status_403 ?? 0)} / ${Number(stats.crawl_metrics.status_429 ?? 0)}`}
-                />
-                <StatCard
-                  label="Tasa correos/página"
-                  value={Number(stats.crawl_metrics.emails_new_rate ?? 0)}
-                />
-              </div>
-            ) : null}
-            <div className="grid gap-6 md:grid-cols-2">
-              <SummaryList title="Top dominios de correo" items={domainSummary} />
-              <SummaryList title="Top hosts fuente" items={hostSummary} />
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
       <Card>
         <CardHeader className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
           <div>
@@ -1072,8 +822,8 @@ function BuscadorView() {
                   const isStageTwoOpen = expandedHistoryJobs.has(job.id)
                   const isStageThreeOpen = expandedHistoryResultsJobs.has(job.id)
                   const crawl = job.stats?.crawl_metrics ?? null
-                  const cachedResults = historyResultsByJob[job.id]
                   const stageThreeReady = RESULT_READY_STATUSES.has(job.status)
+                  const isSelectedJob = selectedJobId === job.id
                   return (
                     <div key={job.id} className="rounded-lg border">
                       <button
@@ -1111,14 +861,6 @@ function BuscadorView() {
                           <div className="mt-3 flex items-center justify-end gap-2">
                             <Button
                               type="button"
-                              size="sm"
-                              variant={selectedJobId === job.id ? "secondary" : "outline"}
-                              onClick={() => handleSelectJob(job)}
-                            >
-                              Ver en panel principal
-                            </Button>
-                            <Button
-                              type="button"
                               size="icon"
                               variant="ghost"
                               aria-label="Eliminar búsqueda"
@@ -1136,39 +878,203 @@ function BuscadorView() {
                           {isStageThreeOpen ? (
                             <div className="mt-3 rounded-md border">
                               <p className="border-b px-3 py-2 text-sm font-medium">Resultados</p>
-                              {historyResultsLoadingJobId === job.id ? (
-                                <p className="p-3 text-sm text-muted-foreground">Cargando resultados…</p>
-                              ) : !stageThreeReady ? (
+                              {!stageThreeReady ? (
                                 <p className="p-3 text-sm text-muted-foreground">Este job aún no tiene resultados finales.</p>
-                              ) : !cachedResults?.items?.length ? (
-                                <p className="p-3 text-sm text-muted-foreground">No hay resultados disponibles.</p>
+                              ) : !isSelectedJob ? (
+                                <div className="p-3">
+                                  <Button type="button" size="sm" onClick={() => handleSelectJob(job)}>
+                                    Cargar resultados de este job
+                                  </Button>
+                                </div>
                               ) : (
-                                <ScrollArea className="h-[260px]">
-                                  <Table>
-                                    <TableHeader className="sticky top-0 z-10 bg-background">
-                                      <TableRow>
-                                        <TableHead>Correo</TableHead>
-                                        <TableHead>Nombre</TableHead>
-                                        <TableHead>Puesto</TableHead>
-                                        <TableHead>URL origen</TableHead>
-                                      </TableRow>
-                                    </TableHeader>
-                                    <TableBody>
-                                      {cachedResults.items.map((item, index) => (
-                                        <TableRow key={`${job.id}-${item.email}-${index}`}>
-                                          <TableCell className="font-medium">{item.email}</TableCell>
-                                          <TableCell>{item.name || "—"}</TableCell>
-                                          <TableCell>{item.position || "—"}</TableCell>
-                                          <TableCell className="max-w-[260px] truncate">
-                                            <a href={item.source_url} target="_blank" rel="noreferrer" className="text-primary underline">
-                                              {item.source_url}
-                                            </a>
-                                          </TableCell>
-                                        </TableRow>
-                                      ))}
-                                    </TableBody>
-                                  </Table>
-                                </ScrollArea>
+                                <div className="space-y-4 p-3">
+                                  <div className="flex flex-wrap gap-2">
+                                    <Button variant="secondary" size="sm" onClick={handleDownloadJson} disabled={!canDownload}>
+                                      Descargar JSON
+                                    </Button>
+                                    <Button variant="outline" size="sm" onClick={handleClearResults} disabled={!canDownload}>
+                                      Limpiar tabla
+                                    </Button>
+                                    <Button
+                                      type="button"
+                                      onClick={handleSaveProspectos}
+                                      disabled={!jobInfo || savingProspectos || selectedIds.size === 0}
+                                    >
+                                      {savingProspectos ? "Guardando..." : "Guardar como prospectos"}
+                                    </Button>
+                                  </div>
+                                  <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                                    <p className="text-sm text-muted-foreground">
+                                      {resultsLoading
+                                        ? "Cargando página de resultados…"
+                                        : totalResultsCount
+                                          ? `Mostrando ${pageStart}-${pageEnd} de ${totalResultsCount} registros${domainFilter === "all" ? "" : ` · filtrados: ${filteredResults.length}`}.`
+                                          : `Mostrando ${filteredResults.length} registros.`}
+                                    </p>
+                                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end sm:gap-4">
+                                      <div className="flex items-center gap-2">
+                                        <span className="text-sm text-muted-foreground">Dominio de correo</span>
+                                        <Select value={domainFilter} onValueChange={setDomainFilter}>
+                                          <SelectTrigger className="w-[180px]">
+                                            <SelectValue placeholder="Todos los dominios" />
+                                          </SelectTrigger>
+                                          <SelectContent>
+                                            <SelectItem value="all">Todos los dominios</SelectItem>
+                                            {domainOptions.map((item) => (
+                                              <SelectItem key={item.domain} value={item.domain}>
+                                                {item.domain} ({item.count})
+                                              </SelectItem>
+                                            ))}
+                                          </SelectContent>
+                                        </Select>
+                                      </div>
+                                      <div className="flex items-center gap-2">
+                                        <span className="text-sm text-muted-foreground">Excluir al guardar</span>
+                                        <div className="w-[250px] space-y-2">
+                                          <Select
+                                            value={EXCLUDE_DOMAIN_SELECT_PLACEHOLDER}
+                                            onValueChange={(value) => {
+                                              if (value === EXCLUDE_DOMAIN_SELECT_PLACEHOLDER) return
+                                              setExcludedDomains((prev) => new Set(prev).add(value))
+                                            }}
+                                            disabled={!availableDomainsToExclude.length}
+                                          >
+                                            <SelectTrigger className="w-[180px]">
+                                              <SelectValue placeholder="Selecciona dominio para excluir" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                              {availableDomainsToExclude.map((item) => (
+                                                <SelectItem key={`exclude-option-${item.domain}`} value={item.domain}>
+                                                  {item.domain} ({item.count})
+                                                </SelectItem>
+                                              ))}
+                                            </SelectContent>
+                                          </Select>
+                                          {excludedDomainList.length ? (
+                                            <div className="flex flex-wrap gap-1">
+                                              {excludedDomainList.map((domain) => (
+                                                <Badge
+                                                  key={`excluded-badge-${domain}`}
+                                                  variant="secondary"
+                                                  className="cursor-pointer"
+                                                  onClick={() =>
+                                                    setExcludedDomains((prev) => {
+                                                      const next = new Set(prev)
+                                                      next.delete(domain)
+                                                      return next
+                                                    })
+                                                  }
+                                                >
+                                                  {domain} x
+                                                </Badge>
+                                              ))}
+                                            </div>
+                                          ) : null}
+                                        </div>
+                                      </div>
+                                      <div className="flex items-center gap-2">
+                                        <span className="text-sm text-muted-foreground">Registros por página</span>
+                                        <Select value={String(resultsLimit)} onValueChange={handleResultsLimitChange}>
+                                          <SelectTrigger className="w-[120px]">
+                                            <SelectValue placeholder="Límite" />
+                                          </SelectTrigger>
+                                          <SelectContent>
+                                            {RESULTS_PAGE_SIZES.map((size) => (
+                                              <SelectItem key={size} value={String(size)}>
+                                                {size}
+                                              </SelectItem>
+                                            ))}
+                                          </SelectContent>
+                                        </Select>
+                                      </div>
+                                      <div className="flex items-center gap-2">
+                                        <Button
+                                          type="button"
+                                          variant="outline"
+                                          size="sm"
+                                          onClick={handlePreviousPage}
+                                          disabled={!hasPreviousPage || resultsLoading}
+                                        >
+                                          Anterior
+                                        </Button>
+                                        <Button
+                                          type="button"
+                                          variant="outline"
+                                          size="sm"
+                                          onClick={handleNextPage}
+                                          disabled={!hasNextPage || resultsLoading}
+                                        >
+                                          Siguiente
+                                        </Button>
+                                      </div>
+                                    </div>
+                                  </div>
+                                  {results.length === 0 ? (
+                                    <p className="text-sm text-muted-foreground">No hay resultados todavía.</p>
+                                  ) : (
+                                    <ScrollArea className="h-[420px] rounded-md border">
+                                      <Table>
+                                        <TableHeader className="sticky top-0 z-20 bg-background">
+                                          <TableRow>
+                                            <TableHead className="w-10 bg-background">
+                                              <Checkbox
+                                                checked={
+                                                  selectedIds.size > 0 &&
+                                                  selectedIds.size ===
+                                                    filteredResults.filter((item) => typeof item.id === "string" && item.id.trim().length).length
+                                                }
+                                                onCheckedChange={toggleSelectAll}
+                                                aria-label="Seleccionar todos"
+                                              />
+                                            </TableHead>
+                                            <TableHead className="bg-background">Correo</TableHead>
+                                            <TableHead className="bg-background">Nombre</TableHead>
+                                            <TableHead className="bg-background">Puesto</TableHead>
+                                            <TableHead className="bg-background">Teléfono</TableHead>
+                                            <TableHead className="bg-background">Ext.</TableHead>
+                                            <TableHead className="bg-background">Dirección</TableHead>
+                                            <TableHead className="bg-background">URL origen</TableHead>
+                                          </TableRow>
+                                        </TableHeader>
+                                        <TableBody>
+                                          {filteredResults.length === 0 ? (
+                                            <TableRow>
+                                              <TableCell colSpan={8} className="text-center text-sm text-muted-foreground">
+                                                No hay resultados para el dominio seleccionado.
+                                              </TableCell>
+                                            </TableRow>
+                                          ) : (
+                                            filteredResults.map((item, index) => (
+                                              <TableRow key={`${item.email}-${index}`}>
+                                                <TableCell>
+                                                  <Checkbox
+                                                    checked={item.id ? selectedIds.has(item.id) : false}
+                                                    onCheckedChange={(checked) => toggleSelect(item.id ?? undefined, checked)}
+                                                    disabled={!item.id}
+                                                    aria-label="Seleccionar contacto"
+                                                  />
+                                                </TableCell>
+                                                <TableCell>
+                                                  <span className="font-medium">{item.email}</span>
+                                                </TableCell>
+                                                <TableCell>{item.name || "—"}</TableCell>
+                                                <TableCell>{item.position || "—"}</TableCell>
+                                                <TableCell>{item.phone || "—"}</TableCell>
+                                                <TableCell>{item.extension || "—"}</TableCell>
+                                                <TableCell className="max-w-[200px] truncate">{item.address || "—"}</TableCell>
+                                                <TableCell className="max-w-[240px] truncate">
+                                                  <a href={item.source_url} target="_blank" rel="noreferrer" className="text-primary underline">
+                                                    {item.source_url}
+                                                  </a>
+                                                </TableCell>
+                                              </TableRow>
+                                            ))
+                                          )}
+                                        </TableBody>
+                                      </Table>
+                                    </ScrollArea>
+                                  )}
+                                </div>
                               )}
                             </div>
                           ) : null}
@@ -1187,219 +1093,6 @@ function BuscadorView() {
         </CardContent>
       </Card>
 
-      <Card ref={resultsCardRef}>
-        <CardHeader className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-          <div>
-            <CardTitle>Resultados</CardTitle>
-            <CardDescription>{resultsDescription}</CardDescription>
-          </div>
-          <div className="flex gap-2">
-            <Button variant="secondary" size="sm" onClick={handleDownloadJson} disabled={!canDownload}>
-              Descargar JSON
-            </Button>
-            <Button variant="outline" size="sm" onClick={handleClearResults} disabled={!canDownload}>
-              Limpiar tabla
-            </Button>
-          </div>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {results.length > 0 && (
-            <div className="space-y-4">
-              <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
-                <div className="w-full md:w-1/2">
-                  <Label htmlFor="segmento">Segmento (opcional)</Label>
-                  <Input
-                    id="segmento"
-                    placeholder="Ej. inbound, scraping mayo"
-                    value={segmento}
-                    onChange={(event) => setSegmento(event.target.value)}
-                  />
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  <Button
-                    type="button"
-                    onClick={handleSaveProspectos}
-                    disabled={!jobInfo || savingProspectos || selectedIds.size === 0}
-                  >
-                    {savingProspectos ? "Guardando..." : "Guardar como prospectos"}
-                  </Button>
-                </div>
-              </div>
-              <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-                <p className="text-sm text-muted-foreground">
-                  {resultsLoading
-                    ? "Cargando página de resultados…"
-                    : totalResultsCount
-                      ? `Mostrando ${pageStart}-${pageEnd} de ${totalResultsCount} registros${domainFilter === "all" ? "" : ` · filtrados: ${filteredResults.length}`}.`
-                      : `Mostrando ${filteredResults.length} registros.`}
-                </p>
-                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end sm:gap-4">
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm text-muted-foreground">Dominio de correo</span>
-                    <Select value={domainFilter} onValueChange={setDomainFilter}>
-                      <SelectTrigger className="w-[180px]">
-                        <SelectValue placeholder="Todos los dominios" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">Todos los dominios</SelectItem>
-                        {domainOptions.map((item) => (
-                          <SelectItem key={item.domain} value={item.domain}>
-                            {item.domain} ({item.count})
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm text-muted-foreground">Excluir al guardar</span>
-                    <div className="w-[250px] space-y-2">
-                      <Select
-                        value={EXCLUDE_DOMAIN_SELECT_PLACEHOLDER}
-                        onValueChange={(value) => {
-                          if (value === EXCLUDE_DOMAIN_SELECT_PLACEHOLDER) return
-                          setExcludedDomains((prev) => new Set(prev).add(value))
-                        }}
-                        disabled={!availableDomainsToExclude.length}
-                      >
-                        <SelectTrigger className="w-[180px]">
-                          <SelectValue placeholder="Selecciona dominio para excluir" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {availableDomainsToExclude.map((item) => (
-                            <SelectItem key={`exclude-option-${item.domain}`} value={item.domain}>
-                              {item.domain} ({item.count})
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      {excludedDomainList.length ? (
-                        <div className="flex flex-wrap gap-1">
-                          {excludedDomainList.map((domain) => (
-                            <Badge
-                              key={`excluded-badge-${domain}`}
-                              variant="secondary"
-                              className="cursor-pointer"
-                              onClick={() =>
-                                setExcludedDomains((prev) => {
-                                  const next = new Set(prev)
-                                  next.delete(domain)
-                                  return next
-                                })
-                              }
-                            >
-                              {domain} x
-                            </Badge>
-                          ))}
-                        </div>
-                      ) : null}
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm text-muted-foreground">Registros por página</span>
-                    <Select value={String(resultsLimit)} onValueChange={handleResultsLimitChange}>
-                      <SelectTrigger className="w-[120px]">
-                        <SelectValue placeholder="Límite" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {RESULTS_PAGE_SIZES.map((size) => (
-                          <SelectItem key={size} value={String(size)}>
-                            {size}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={handlePreviousPage}
-                      disabled={!hasPreviousPage || resultsLoading}
-                    >
-                      Anterior
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={handleNextPage}
-                      disabled={!hasNextPage || resultsLoading}
-                    >
-                      Siguiente
-                    </Button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-          {results.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No hay resultados todavía.</p>
-          ) : (
-            <ScrollArea className="h-[420px] rounded-md border">
-              <Table>
-                <TableHeader className="sticky top-0 z-20 bg-background">
-                  <TableRow>
-                    <TableHead className="w-10 bg-background">
-                      <Checkbox
-                        checked={
-                          selectedIds.size > 0 &&
-                          selectedIds.size ===
-                            filteredResults.filter((item) => typeof item.id === "string" && item.id.trim().length).length
-                        }
-                        onCheckedChange={toggleSelectAll}
-                        aria-label="Seleccionar todos"
-                      />
-                    </TableHead>
-                    <TableHead className="bg-background">Correo</TableHead>
-                    <TableHead className="bg-background">Nombre</TableHead>
-                    <TableHead className="bg-background">Puesto</TableHead>
-                    <TableHead className="bg-background">Teléfono</TableHead>
-                    <TableHead className="bg-background">Ext.</TableHead>
-                    <TableHead className="bg-background">Dirección</TableHead>
-                    <TableHead className="bg-background">URL origen</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredResults.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={8} className="text-center text-sm text-muted-foreground">
-                        No hay resultados para el dominio seleccionado.
-                      </TableCell>
-                    </TableRow>
-                  ) : (
-                    filteredResults.map((item, index) => (
-                      <TableRow key={`${item.email}-${index}`}>
-                        <TableCell>
-                          <Checkbox
-                            checked={item.id ? selectedIds.has(item.id) : false}
-                            onCheckedChange={(checked) => toggleSelect(item.id ?? undefined, checked)}
-                            disabled={!item.id}
-                            aria-label="Seleccionar contacto"
-                          />
-                        </TableCell>
-                        <TableCell>
-                          <span className="font-medium">{item.email}</span>
-                        </TableCell>
-                        <TableCell>{item.name || "—"}</TableCell>
-                        <TableCell>{item.position || "—"}</TableCell>
-                        <TableCell>{item.phone || "—"}</TableCell>
-                        <TableCell>{item.extension || "—"}</TableCell>
-                        <TableCell className="max-w-[200px] truncate">{item.address || "—"}</TableCell>
-                        <TableCell className="max-w-[240px] truncate">
-                          <a href={item.source_url} target="_blank" rel="noreferrer" className="text-primary underline">
-                            {item.source_url}
-                          </a>
-                        </TableCell>
-                      </TableRow>
-                    ))
-                  )}
-                </TableBody>
-              </Table>
-            </ScrollArea>
-          )}
-        </CardContent>
-      </Card>
     </div>
   )
 }
@@ -1442,40 +1135,6 @@ function NumberField({
         value={value}
         onChange={onChange}
       />
-    </div>
-  )
-}
-
-function StatCard({ label, value }: { label: string; value: number | string }) {
-  return (
-    <div className="rounded-xl border bg-card p-4">
-      <p className="text-xs uppercase text-muted-foreground">{label}</p>
-      <p className="text-2xl font-semibold">{value}</p>
-    </div>
-  )
-}
-
-function SummaryList({ title, items }: { title: string; items: SummaryEntry[] | null }) {
-  if (!items || items.length === 0) {
-    return (
-      <div>
-        <p className="text-sm font-medium">{title}</p>
-        <p className="text-sm text-muted-foreground">Sin datos suficientes.</p>
-      </div>
-    )
-  }
-
-  return (
-    <div>
-      <p className="text-sm font-medium">{title}</p>
-      <ul className="mt-2 space-y-1 text-sm">
-        {items.map((item) => (
-          <li key={`${item.label}-${item.count}`} className="flex items-center justify-between">
-            <span className="truncate pr-2">{item.label}</span>
-            <span className="font-mono text-muted-foreground">× {item.count}</span>
-          </li>
-        ))}
-      </ul>
     </div>
   )
 }
