@@ -769,7 +769,7 @@ export function CampanasMetricsClient() {
   }, [normalizeLogoUrl, selectedLogoUrl, templateForm.canal, templateForm.id, templateForm.slug, templatesCampanaId])
 
   const whatsappCtaUrl = useMemo(() => {
-    const base = (tenantBaseUrl || templateForm.ctaBaseUrl || "").trim()
+    const base = (templateForm.ctaBaseUrl || tenantBaseUrl || "").trim()
     if (!base) return ""
     try {
       const url = new URL(base)
@@ -820,7 +820,8 @@ export function CampanasMetricsClient() {
     const email = (previewProspecto.email || "").trim()
     const telefono = (previewProspecto.phone_e164 || previewProspecto.phone || "").trim()
     const canalOrigen = resolvePreviewCanalOrigen(previewProspecto)
-    const websiteUrl = normalizeWebBaseUrl(tenantBaseUrl || templateForm.ctaBaseUrl || "https://talia.mx/") || "https://talia.mx/"
+    const websiteUrl =
+      normalizeWebBaseUrl(templateForm.ctaBaseUrl || tenantBaseUrl || "https://talia.mx/") || "https://talia.mx/"
     const kw = (templateForm.slug || segmento || "general").trim().toLowerCase().replace(/[^a-z0-9_-]+/g, "-")
     let trackingUrl = websiteUrl
     try {
@@ -1092,7 +1093,7 @@ export function CampanasMetricsClient() {
       if (whatsappMediaUrl) metadata["media_url_tracked"] = whatsappMediaUrl
     }
     if (templateForm.canal === "correo" || templateForm.canal === "whatsapp") {
-      metadata["tracking_base_url"] = (tenantBaseUrl || templateForm.ctaBaseUrl || "").trim() || null
+      metadata["tracking_base_url"] = (templateForm.ctaBaseUrl || tenantBaseUrl || "").trim() || null
     }
     if (templateForm.canal === "whatsapp") {
       if (whatsappCtaUrl) metadata["cta_url_tracked"] = whatsappCtaUrl
