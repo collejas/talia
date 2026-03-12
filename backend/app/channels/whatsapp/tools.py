@@ -991,64 +991,6 @@ async def _refresh_opportunity_context_from_contact(
             },
         )
 
-    org_uuid_text = webchat_service._resolve_org_uuid(webchat_service._extract_contact_org(contact))
-    if not org_uuid_text:
-        return
-    try:
-        repo = CRMRepository()
-        opportunity_row = await repo.get_pipeline_opportunity(
-            organizacion_id=UUID(org_uuid_text),
-            oportunidad_id=UUID(str(opportunity_id)),
-        )
-    except (CRMRepositoryError, ValueError) as exc:
-        logger.warning(
-            "whatsapp.contact_context.fetch_opportunity_failed",
-            extra={
-                "conversation_id": context.conversation_id,
-                "contact_id": context.contact_id,
-                "reason": reason,
-                "error": str(exc),
-            },
-        )
-        return
-    if not isinstance(opportunity_row, dict):
-        return
-
-    current_title = str(opportunity_row.get("titulo") or "").strip()
-    current_description = str(opportunity_row.get("descripcion") or "").strip()
-    label = company_name or full_name
-    looks_generic = (
-        not current_title
-        or current_title.lower().startswith("conversación ")
-        or current_title.lower().startswith("conversacion ")
-        or (full_name and current_title.casefold() == full_name.casefold())
-    )
-    if not label and not summary:
-        return
-    patch_opp: dict[str, Any] = {}
-    if looks_generic and label:
-        patch_opp["titulo"] = f"Lead WhatsApp - {label}"[:120]
-    if not current_description and summary:
-        patch_opp["descripcion"] = summary[:1000]
-    if not patch_opp:
-        return
-    try:
-        await repo.update_opportunity(
-            organizacion_id=UUID(org_uuid_text),
-            oportunidad_id=UUID(str(opportunity_id)),
-            payload=patch_opp,
-        )
-    except (CRMRepositoryError, ValueError) as exc:
-        logger.warning(
-            "whatsapp.contact_context.opportunity_patch_failed",
-            extra={
-                "conversation_id": context.conversation_id,
-                "contact_id": context.contact_id,
-                "reason": reason,
-                "error": str(exc),
-            },
-        )
-
 
 async def _resolve_org_for_catalog(
     context: ToolRuntimeContext,
