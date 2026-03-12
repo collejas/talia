@@ -491,7 +491,7 @@ export default function ContactosPageClient() {
       </Card>
       <Card>
         <CardHeader>
-          <CardTitle className="text-base font-semibold">Eventos Brevo</CardTitle>
+          <CardTitle className="text-base font-semibold">Eventos Correo</CardTitle>
         </CardHeader>
         <CardContent>
           {brevoEntries.length ? (
@@ -507,7 +507,7 @@ export default function ContactosPageClient() {
               ))}
             </div>
           ) : (
-            <p className="text-sm text-muted-foreground">Aún no hay eventos Brevo registrados.</p>
+            <p className="text-sm text-muted-foreground">Aún no hay eventos Correo registrados.</p>
           )}
         </CardContent>
       </Card>

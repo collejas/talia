@@ -77,7 +77,8 @@ const DEFAULT_FORM_STATE: FormState = {
 
 const DEFAULT_RESULTS_LIMIT = 1000
 const RESULTS_PAGE_SIZES = [200, 500, 1000] as const
-const JOBS_PAGE_SIZE = 28
+const DEFAULT_JOBS_PAGE_SIZE = 28
+const JOBS_PAGE_SIZE_OPTIONS = [10, 20, 30, 40, 50] as const
 const EXCLUDE_DOMAIN_SELECT_PLACEHOLDER = "__exclude_domain_placeholder__"
 
 const STATUS_LABELS: Record<BuscadorJobStatus, string> = {
@@ -123,6 +124,7 @@ function BuscadorView() {
   const [jobsError, setJobsError] = useState<string | null>(null)
   const [jobsTotal, setJobsTotal] = useState(0)
   const [jobsOffset, setJobsOffset] = useState(0)
+  const [jobsPageSize, setJobsPageSize] = useState(DEFAULT_JOBS_PAGE_SIZE)
   const [selectedJobId, setSelectedJobId] = useState<string | null>(null)
   const [expandedHistoryJobs, setExpandedHistoryJobs] = useState<Set<string>>(new Set())
   const [expandedHistoryResultsJobs, setExpandedHistoryResultsJobs] = useState<Set<string>>(new Set())
@@ -136,6 +138,8 @@ function BuscadorView() {
   const hasNextPage = totalResultsCount ? pageEnd < totalResultsCount : results.length === resultsLimit
   const jobsPageStart = jobs.length ? jobsOffset + 1 : 0
   const jobsPageEnd = jobsOffset + jobs.length
+  const jobsTotalPages = Math.max(1, Math.ceil(jobsTotal / jobsPageSize))
+  const jobsCurrentPage = Math.floor(jobsOffset / jobsPageSize) + 1
   const jobsHasPreviousPage = jobsOffset > 0
   const jobsHasNextPage = jobsOffset + jobs.length < jobsTotal
   const jobsRangeDescription =
@@ -204,12 +208,13 @@ function BuscadorView() {
     return Number.isFinite(num) ? num : undefined
   }
 
-  const loadJobs = useCallback(async (offsetValue = 0) => {
+  const loadJobs = useCallback(async (offsetValue = 0, limitValue = jobsPageSize) => {
     const safeOffset = Math.max(0, offsetValue)
+    const safeLimit = Math.max(1, Math.min(limitValue, 50))
     setJobsLoading(true)
     setJobsError(null)
     try {
-      const listado = await listarBuscadorJobs(JOBS_PAGE_SIZE, safeOffset)
+      const listado = await listarBuscadorJobs(safeLimit, safeOffset)
       setJobs(listado.items)
       setJobsTotal(listado.total ?? listado.items.length)
       setJobsOffset(listado.offset ?? safeOffset)
@@ -220,7 +225,7 @@ function BuscadorView() {
     } finally {
       setJobsLoading(false)
     }
-  }, [])
+  }, [jobsPageSize])
 
   const toggleHistoryJob = useCallback((jobId: string) => {
     setExpandedHistoryJobs((prev) => {
@@ -477,7 +482,7 @@ function BuscadorView() {
         setErrorMessage(null)
       }
       const nextOffset =
-        jobsOffset > 0 && jobs.length <= 1 ? Math.max(0, jobsOffset - JOBS_PAGE_SIZE) : jobsOffset
+        jobsOffset > 0 && jobs.length <= 1 ? Math.max(0, jobsOffset - jobsPageSize) : jobsOffset
       void loadJobs(nextOffset)
     } catch (error) {
       const message = error instanceof Error ? error.message : "No se pudo eliminar la búsqueda."
@@ -596,14 +601,31 @@ function BuscadorView() {
 
   const handleJobsNextPage = () => {
     if (jobsLoading || !jobsHasNextPage) return
-    const nextOffset = jobsOffset + JOBS_PAGE_SIZE
+    const nextOffset = jobsOffset + jobsPageSize
     void loadJobs(nextOffset)
   }
 
   const handleJobsPreviousPage = () => {
     if (jobsLoading || !jobsHasPreviousPage) return
-    const prevOffset = Math.max(0, jobsOffset - JOBS_PAGE_SIZE)
+    const prevOffset = Math.max(0, jobsOffset - jobsPageSize)
     void loadJobs(prevOffset)
+  }
+
+  const handleJobsPageChange = (value: string) => {
+    const page = Number(value)
+    if (!Number.isFinite(page) || page < 1) return
+    const safePage = Math.min(page, jobsTotalPages)
+    const nextOffset = (safePage - 1) * jobsPageSize
+    void loadJobs(nextOffset)
+  }
+
+  const handleJobsPageSizeChange = (value: string) => {
+    const parsed = Number(value)
+    if (!Number.isFinite(parsed) || parsed < 1) return
+    const safeSize = Math.min(parsed, 50)
+    setJobsPageSize(safeSize)
+    setJobsOffset(0)
+    void loadJobs(0, safeSize)
   }
 
   const handleClearResults = () => {
@@ -784,6 +806,36 @@ function BuscadorView() {
               <Button variant="outline" size="sm" onClick={() => void loadJobs(jobsOffset)} disabled={jobsLoading}>
                 {jobsLoading ? "Actualizando..." : "Actualizar"}
               </Button>
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-muted-foreground sm:text-sm">Página</span>
+                <Select value={String(jobsCurrentPage)} onValueChange={handleJobsPageChange}>
+                  <SelectTrigger className="w-[90px]">
+                    <SelectValue placeholder="Página" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {Array.from({ length: jobsTotalPages }, (_, index) => index + 1).map((page) => (
+                      <SelectItem key={`jobs-page-${page}`} value={String(page)}>
+                        {page}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-muted-foreground sm:text-sm">Por página</span>
+                <Select value={String(jobsPageSize)} onValueChange={handleJobsPageSizeChange}>
+                  <SelectTrigger className="w-[95px]">
+                    <SelectValue placeholder="Límite" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {JOBS_PAGE_SIZE_OPTIONS.map((size) => (
+                      <SelectItem key={`jobs-size-${size}`} value={String(size)}>
+                        {size}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
               <div className="flex items-center gap-1">
                 <Button
                   type="button"
@@ -833,8 +885,25 @@ function BuscadorView() {
                       >
                         <div className="space-y-1">
                           <p className="text-sm font-semibold break-all">Dominio: {domainInfo.label}</p>
-                          <p className="text-xs text-muted-foreground">
-                            Estado: {STATUS_LABELS[job.status]} · Resultados encontrados: {job.total ?? 0}
+                          <p className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                            <span>Estado:</span>
+                            <span
+                              className={cn(
+                                "rounded-md border px-1.5 py-0.5 text-[11px] font-medium",
+                                getStatusPillClasses(job.status)
+                              )}
+                            >
+                              {STATUS_LABELS[job.status]}
+                            </span>
+                            <span>Resultados encontrados:</span>
+                            <span
+                              className={cn(
+                                "rounded-md border px-1.5 py-0.5 text-[11px] font-semibold",
+                                getResultsCountPillClasses(job.total ?? 0)
+                              )}
+                            >
+                              {job.total ?? 0}
+                            </span>
                           </p>
                         </div>
                         <ChevronDown className={cn("h-4 w-4 shrink-0 transition-transform", isStageTwoOpen && "rotate-180")} />
@@ -1109,6 +1178,38 @@ function getHistoryDomainGroup(job: BuscadorJob): { key: string; label: string }
   } catch {
     return { key: rawUrl.toLowerCase(), label: rawUrl }
   }
+}
+
+function getStatusPillClasses(status: BuscadorJobStatus): string {
+  switch (status) {
+    case "completed":
+      return "border-emerald-300 bg-emerald-100 text-emerald-800"
+    case "running":
+      return "border-sky-300 bg-sky-100 text-sky-800"
+    case "pending":
+    case "pausing":
+    case "canceling":
+      return "border-amber-300 bg-amber-100 text-amber-800"
+    case "paused":
+      return "border-slate-300 bg-slate-100 text-slate-800"
+    case "failed":
+      return "border-red-300 bg-red-100 text-red-800"
+    case "canceled":
+      return "border-zinc-300 bg-zinc-100 text-zinc-800"
+    default:
+      return "border-slate-300 bg-slate-100 text-slate-800"
+  }
+}
+
+function getResultsCountPillClasses(total: number): string {
+  const safe = Number.isFinite(total) ? Math.max(0, total) : 0
+  const scaled = Math.min(safe, 50)
+
+  if (scaled === 0) return "border-zinc-300 bg-zinc-100 text-zinc-800"
+  if (scaled <= 10) return "border-red-300 bg-red-100 text-red-800"
+  if (scaled <= 20) return "border-orange-300 bg-orange-100 text-orange-800"
+  if (scaled <= 35) return "border-amber-300 bg-amber-100 text-amber-800"
+  return "border-emerald-300 bg-emerald-100 text-emerald-800"
 }
 
 function NumberField({
