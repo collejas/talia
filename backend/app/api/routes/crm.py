@@ -156,6 +156,10 @@ _INBOX_THREADS_WHATSAPP_HINT_CACHE: dict[
     str, tuple[float, tuple[str | None, str | None, str | None, str | None, str | None]]
 ] = {}
 _INBOX_THREADS_WHATSAPP_HINT_CACHE_LOCK = asyncio.Lock()
+_UUID_TEXT_RE = re.compile(
+    r"^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
+    re.IGNORECASE,
+)
 CONTACT_INDICATORS_CACHE_TTL_SECONDS = 20.0
 CONTACT_INDICATORS_CACHE_MAX_ENTRIES = 1024
 _CONTACT_INDICATORS_CACHE: dict[str, tuple[float, list[dict[str, Any]]]] = {}
@@ -5228,6 +5232,7 @@ def _resolve_contact_channels(
         for canal_config in payload.canales:
             canal = canal_config.canal
             entry: dict[str, Any] = {}
+            template_name_value: str | None = None
             if canal_config.template_id:
                 template_key = str(canal_config.template_id)
                 entry["template_id"] = template_key
@@ -5240,13 +5245,29 @@ def _resolve_contact_channels(
                 template_meta = template_row.get("metadata")
                 if isinstance(template_meta, dict):
                     entry_metadata.update(template_meta)
+                template_name_value = _clean_text(template_row.get("nombre"))
                 slug_value = _clean_text(template_row.get("slug"))
                 if slug_value:
                     entry_metadata.setdefault("template_slug", slug_value)
+                    entry_metadata.setdefault("template_slug_snapshot", slug_value)
+                    entry.setdefault("template_slug", slug_value)
+                if template_name_value:
+                    entry_metadata.setdefault("template_nombre", template_name_value)
+                    entry_metadata.setdefault("template_name", template_name_value)
+                    entry_metadata.setdefault("template_label", template_name_value)
+                    entry_metadata.setdefault("template_nombre_snapshot", template_name_value)
+                    entry_metadata.setdefault("template_name_snapshot", template_name_value)
+                    entry_metadata.setdefault("template_label_snapshot", template_name_value)
+                    entry.setdefault("template_label", template_name_value)
             if canal_config.template_id:
-                entry_metadata.setdefault("template_id", str(canal_config.template_id))
+                template_id_value = str(canal_config.template_id)
+                entry_metadata.setdefault("template_id", template_id_value)
+                entry_metadata.setdefault("template_id_snapshot", template_id_value)
             if canal_config.metadata:
                 entry_metadata.update(canal_config.metadata)
+            sid_value = _clean_text(entry_metadata.get("twilio_content_sid") or entry_metadata.get("template_sid"))
+            if sid_value:
+                entry_metadata.setdefault("template_sid_snapshot", sid_value)
             if entry_metadata:
                 entry["metadata"] = entry_metadata
 
@@ -7034,6 +7055,18 @@ class CRMInboxContextFilters(BaseModel):
     campanas: list[CRMInboxContextOption] = Field(default_factory=list)
 
 
+def _looks_like_template_identifier(value: str | None) -> bool:
+    text = _clean_text(value)
+    if not text:
+        return False
+    if _UUID_TEXT_RE.match(text):
+        return True
+    lowered = text.lower()
+    if lowered.startswith("hx") and len(lowered) >= 12:
+        return True
+    return False
+
+
 def _extract_thread_prospeccion_hints(
     row: dict[str, Any],
 ) -> tuple[str | None, str | None, str | None, str | None, str | None]:
@@ -7065,16 +7098,22 @@ def _extract_thread_prospeccion_hints(
             or metadata.get("template_id")
             or datos.get("template_uuid")
             or metadata.get("template_uuid")
+            or datos.get("template_id_snapshot")
+            or metadata.get("template_id_snapshot")
         )
         candidate_slug = _clean_text(
             datos.get("template_slug")
             or metadata.get("template_slug")
+            or datos.get("template_slug_snapshot")
+            or metadata.get("template_slug_snapshot")
             or datos.get("kw")
             or metadata.get("kw")
             or datos.get("twilio_content_sid")
             or metadata.get("twilio_content_sid")
             or datos.get("template_sid")
             or metadata.get("template_sid")
+            or datos.get("template_sid_snapshot")
+            or metadata.get("template_sid_snapshot")
         )
         candidate_label = _clean_text(
             datos.get("template_nombre")
@@ -7083,6 +7122,12 @@ def _extract_thread_prospeccion_hints(
             or metadata.get("template_name")
             or datos.get("template_label")
             or metadata.get("template_label")
+            or datos.get("template_nombre_snapshot")
+            or metadata.get("template_nombre_snapshot")
+            or datos.get("template_name_snapshot")
+            or metadata.get("template_name_snapshot")
+            or datos.get("template_label_snapshot")
+            or metadata.get("template_label_snapshot")
         )
         if candidate_batch and not batch_id:
             batch_id = candidate_batch
@@ -7119,18 +7164,25 @@ def _extract_envio_prospeccion_hints(
     template_id = _clean_text(
         payload.get("template_id")
         or payload_meta.get("template_id")
+        or payload_meta.get("template_id_snapshot")
     )
     template_slug = _clean_text(
         payload.get("template_slug")
         or payload_meta.get("template_slug")
+        or payload_meta.get("template_slug_snapshot")
         or payload_meta.get("kw")
         or payload_meta.get("twilio_content_sid")
         or detalle.get("template_sid")
+        or payload_meta.get("template_sid_snapshot")
     )
     template_label = _clean_text(
-        payload_meta.get("template_nombre")
-        or payload_meta.get("template_name")
+        payload.get("template_label")
         or payload_meta.get("template_label")
+        or payload_meta.get("template_nombre")
+        or payload_meta.get("template_name")
+        or payload_meta.get("template_nombre_snapshot")
+        or payload_meta.get("template_name_snapshot")
+        or payload_meta.get("template_label_snapshot")
     )
     return (
         batch_id,
@@ -11059,6 +11111,7 @@ async def get_inbox_threads(
 
     template_label_by_id: dict[str, str] = {}
     template_label_by_slug: dict[str, str] = {}
+    template_label_by_external_key: dict[str, str] = {}
     if template_ids or template_slugs:
         try:
             template_rows = await repo.list_contact_templates(usuario_token=user_token)
@@ -11077,6 +11130,15 @@ async def get_inbox_threads(
                 template_label_by_id[template_id_value] = template_label
             if template_slug_value:
                 template_label_by_slug[template_slug_value.lower()] = template_label
+            external_keys = (
+                _clean_text(metadata.get("twilio_content_sid")),
+                _clean_text(metadata.get("template_sid")),
+                _clean_text(metadata.get("brevo_template_id")),
+                _clean_text(metadata.get("external_template_id")),
+            )
+            for external_key in external_keys:
+                if external_key:
+                    template_label_by_external_key[external_key.lower()] = template_label
 
     conversation_ids = [
         _clean_text(row.get("conversacion_id"))
@@ -11175,11 +11237,17 @@ async def get_inbox_threads(
         batch_template_id, batch_template_slug, batch_template_name = batch_template_hint
         resolved_template_id = template_id_hint or batch_template_id
         resolved_template_slug = template_slug_hint or batch_template_slug
+        resolved_external_key = resolved_template_slug.lower() if resolved_template_slug else None
         template_label = (
             (template_label_by_id.get(resolved_template_id) if resolved_template_id else None)
             or (
                 template_label_by_slug.get(resolved_template_slug)
                 if resolved_template_slug
+                else None
+            )
+            or (
+                template_label_by_external_key.get(resolved_external_key)
+                if resolved_external_key
                 else None
             )
             or template_label_hint
@@ -11204,9 +11272,12 @@ async def get_inbox_threads(
         if template_label:
             row_payload["template_label"] = template_label
         elif resolved_template_slug:
-            row_payload["template_label"] = f"Plantilla {resolved_template_slug}"
+            if _looks_like_template_identifier(resolved_template_slug):
+                row_payload["template_label"] = "Plantilla histórica"
+            else:
+                row_payload["template_label"] = f"Plantilla {resolved_template_slug}"
         elif resolved_template_id:
-            row_payload["template_label"] = f"Plantilla {resolved_template_id[:8]}"
+            row_payload["template_label"] = "Plantilla histórica"
         current_source = _clean_text(row_payload.get("source"))
         conversation_attribution = (
             wa_atribucion_by_conversation.get(conversacion_value or "")
