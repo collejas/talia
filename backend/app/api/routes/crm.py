@@ -15943,15 +15943,26 @@ async def prospeccion_campanas_atribucion(
     if date_from_dt and date_to_dt and date_from_dt > date_to_dt:
         raise HTTPException(status_code=400, detail="metricas_date_range_invalid")
 
+    rows: list[dict[str, Any]] = []
     try:
-        rows = await repo.get_prospeccion_campana_template_atribucion_rango(
-            usuario_token=user_token,
-            organizacion_id=organizacion_id,
-            campana_id=params.campana_id,
-            date_from_iso=date_from_dt.isoformat() if date_from_dt else None,
-            date_to_iso=date_to_dt.isoformat() if date_to_dt else None,
-            limit=params.limit,
-        )
+        page_size = max(1, min(params.limit, 1000))
+        page_offset = 0
+        while True:
+            page_rows = await repo.get_prospeccion_campana_template_atribucion_rango(
+                usuario_token=user_token,
+                organizacion_id=organizacion_id,
+                campana_id=params.campana_id,
+                date_from_iso=date_from_dt.isoformat() if date_from_dt else None,
+                date_to_iso=date_to_dt.isoformat() if date_to_dt else None,
+                limit=page_size,
+                offset=page_offset,
+            )
+            if not page_rows:
+                break
+            rows.extend(page_rows)
+            if len(page_rows) < page_size:
+                break
+            page_offset += len(page_rows)
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
@@ -16012,15 +16023,26 @@ async def prospeccion_metricas_dashboard(
     if date_from_dt and date_to_dt and date_from_dt > date_to_dt:
         raise HTTPException(status_code=400, detail="metricas_date_range_invalid")
 
+    campaign_rows: list[dict[str, Any]] = []
     try:
-        campaign_rows = await repo.get_prospeccion_campana_template_atribucion_rango(
-            usuario_token=user_token,
-            organizacion_id=organizacion_id,
-            campana_id=params.campana_id,
-            date_from_iso=date_from_dt.isoformat() if date_from_dt else None,
-            date_to_iso=date_to_dt.isoformat() if date_to_dt else None,
-            limit=min(params.limit, 2000),
-        )
+        campaign_page_size = max(1, min(params.limit, 1000))
+        campaign_offset = 0
+        while True:
+            page_rows = await repo.get_prospeccion_campana_template_atribucion_rango(
+                usuario_token=user_token,
+                organizacion_id=organizacion_id,
+                campana_id=params.campana_id,
+                date_from_iso=date_from_dt.isoformat() if date_from_dt else None,
+                date_to_iso=date_to_dt.isoformat() if date_to_dt else None,
+                limit=campaign_page_size,
+                offset=campaign_offset,
+            )
+            if not page_rows:
+                break
+            campaign_rows.extend(page_rows)
+            if len(page_rows) < campaign_page_size:
+                break
+            campaign_offset += len(page_rows)
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
@@ -16080,14 +16102,24 @@ async def prospeccion_metricas_dashboard(
             "envios_respondidos": 0,
         }
     )
+    batches_rows: list[dict[str, Any]] = []
     try:
-        batches_rows, _ = await repo.list_contact_batches(
-            usuario_token=user_token,
-            limit=1000,
-            offset=0,
-            campana_id=params.campana_id,
-            order="creado_en.asc",
-        )
+        batch_page_size = 500
+        batch_offset = 0
+        while True:
+            batch_page, batch_total = await repo.list_contact_batches(
+                usuario_token=user_token,
+                limit=batch_page_size,
+                offset=batch_offset,
+                campana_id=params.campana_id,
+                order="creado_en.asc",
+            )
+            if not batch_page:
+                break
+            batches_rows.extend(batch_page)
+            batch_offset += len(batch_page)
+            if len(batch_page) < batch_page_size or batch_offset >= batch_total:
+                break
     except CRMRepositoryError as exc:
         logger.warning("prospeccion.metricas.batches_fetch_failed", extra={"error": str(exc)})
         batches_rows = []
@@ -16101,16 +16133,49 @@ async def prospeccion_metricas_dashboard(
         except (TypeError, ValueError):
             continue
     if batch_ids_for_series:
+        envios_rows: list[dict[str, Any]] = []
         try:
-            envios_rows = await repo.list_contact_envios_for_batches(
-                usuario_token=user_token,
-                batch_ids=batch_ids_for_series,
-                canal=None if params.canal == "todos" else params.canal,
-                limit=20000,
-            )
+            batch_chunk_size = 200
+            # PostgREST suele limitar páginas efectivas a ~1000 filas por request.
+            # Usar un page size mayor provoca cortes silenciosos al evaluar "len < page_size".
+            envios_page_size = 1000
+            for idx in range(0, len(batch_ids_for_series), batch_chunk_size):
+                batch_chunk = batch_ids_for_series[idx : idx + batch_chunk_size]
+                page_offset = 0
+                while True:
+                    chunk_rows = await repo.list_contact_envios_for_batches(
+                        usuario_token=user_token,
+                        batch_ids=batch_chunk,
+                        canal=None if params.canal == "todos" else params.canal,
+                        limit=envios_page_size,
+                        offset=page_offset,
+                    )
+                    if not chunk_rows:
+                        break
+                    envios_rows.extend(chunk_rows)
+                    if len(chunk_rows) < envios_page_size:
+                        break
+                    page_offset += len(chunk_rows)
+                if page_offset > 0:
+                    logger.info(
+                        "prospeccion.metricas.envios_series_chunk_paginated",
+                        extra={
+                            "chunk_index": int(idx / batch_chunk_size),
+                            "chunk_batch_count": len(batch_chunk),
+                            "pages_fetched": int(page_offset / envios_page_size) + 1,
+                        },
+                    )
         except CRMRepositoryError as exc:
             logger.warning("prospeccion.metricas.envios_series_fetch_failed", extra={"error": str(exc)})
             envios_rows = []
+        # Deduplicación defensiva por id en caso de solapes inesperados.
+        unique_envios: dict[str, dict[str, Any]] = {}
+        for row in envios_rows:
+            envio_id_raw = row.get("id")
+            if envio_id_raw is None:
+                continue
+            unique_envios[str(envio_id_raw)] = row
+        envios_rows = list(unique_envios.values())
         sent_states = {"enviado", "entregado", "leido", "completado", "respondido"}
         delivered_states = {"entregado", "leido", "completado", "respondido"}
         for envio in envios_rows:
@@ -16140,15 +16205,26 @@ async def prospeccion_metricas_dashboard(
         for day, metrics in sorted(campaign_timeseries_raw.items(), key=lambda item: item[0])
     ]
 
+    frase_events: list[dict[str, Any]] = []
     try:
-        frase_events = await repo.list_whatsapp_atribucion_eventos_for_metrics(
-            usuario_token=user_token,
-            limit=params.limit,
-            date_from_iso=date_from_dt.isoformat() if date_from_dt else None,
-            date_to_iso=date_to_dt.isoformat() if date_to_dt else None,
-            campana_publicitaria=_clean_text(params.campana_publicitaria),
-            regla_id=params.regla_id,
-        )
+        frase_page_size = max(1, min(params.limit, 1000))
+        frase_offset = 0
+        while True:
+            page_rows = await repo.list_whatsapp_atribucion_eventos_for_metrics(
+                usuario_token=user_token,
+                limit=frase_page_size,
+                offset=frase_offset,
+                date_from_iso=date_from_dt.isoformat() if date_from_dt else None,
+                date_to_iso=date_to_dt.isoformat() if date_to_dt else None,
+                campana_publicitaria=_clean_text(params.campana_publicitaria),
+                regla_id=params.regla_id,
+            )
+            if not page_rows:
+                break
+            frase_events.extend(page_rows)
+            if len(page_rows) < frase_page_size:
+                break
+            frase_offset += len(page_rows)
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
@@ -16174,10 +16250,23 @@ async def prospeccion_metricas_dashboard(
         if _clean_text(row.get("conversacion_id"))
     }
     try:
-        opportunities = await repo.list_opportunities_by_conversation_ids(
-            organizacion_id=organizacion_id,
-            conversation_ids=[value for value in conversation_ids if value],
-        )
+        opportunities: list[dict[str, Any]] = []
+        opportunity_page_size = 1000
+        opportunity_offset = 0
+        conversation_id_list = [value for value in conversation_ids if value]
+        while True:
+            page_rows = await repo.list_opportunities_by_conversation_ids(
+                organizacion_id=organizacion_id,
+                conversation_ids=conversation_id_list,
+                limit=opportunity_page_size,
+                offset=opportunity_offset,
+            )
+            if not page_rows:
+                break
+            opportunities.extend(page_rows)
+            if len(page_rows) < opportunity_page_size:
+                break
+            opportunity_offset += len(page_rows)
     except CRMRepositoryError as exc:
         logger.warning("prospeccion.metricas.opportunities_by_conversation_failed", extra={"error": str(exc)})
         opportunities = []

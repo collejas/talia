@@ -9571,6 +9571,7 @@ class CRMRepository:
         batch_ids: Sequence[UUID],
         canal: str | None = None,
         limit: int = 10000,
+        offset: int = 0,
     ) -> list[dict[str, Any]]:
         """Lista envíos para un conjunto de lotes en una sola consulta."""
 
@@ -9581,6 +9582,7 @@ class CRMRepository:
             "batch_id": _postgrest_in_clause([str(value) for value in batch_ids]),
             "order": "creado_en.asc",
             "limit": str(max(1, min(limit, 20000))),
+            "offset": str(max(0, int(offset))),
         }
         if canal:
             params["canal"] = f"eq.{canal.strip().lower()}"
@@ -9964,6 +9966,7 @@ class CRMRepository:
         *,
         usuario_token: str,
         limit: int = 5000,
+        offset: int = 0,
         date_from_iso: str | None = None,
         date_to_iso: str | None = None,
         canal_publicitario: str | None = None,
@@ -9979,6 +9982,7 @@ class CRMRepository:
             ),
             "order": "creado_en.desc",
             "limit": str(max(1, min(limit, 10000))),
+            "offset": str(max(0, int(offset))),
         }
         and_filters: list[str] = []
         if date_from_iso:
@@ -10012,6 +10016,8 @@ class CRMRepository:
         *,
         organizacion_id: UUID,
         conversation_ids: Sequence[str],
+        limit: int | None = None,
+        offset: int = 0,
     ) -> list[dict[str, Any]]:
         """Obtiene oportunidades ligadas por metadata a conversation_id/conversacion_id."""
 
@@ -10020,13 +10026,19 @@ class CRMRepository:
         safe_ids = [value.strip() for value in conversation_ids if isinstance(value, str) and value.strip()]
         if not safe_ids:
             return []
+        effective_limit = (
+            max(1, min(int(limit), 5000))
+            if isinstance(limit, int)
+            else min(max(len(safe_ids) * 5, 200), 5000)
+        )
         in_clause = _postgrest_in_clause(safe_ids)
         params = {
             "select": "id,monto_estimado,metadata,creado_en",
             "organizacion_id": f"eq.{organizacion_id}",
             "or": f"(metadata->>conversation_id.{in_clause},metadata->>conversacion_id.{in_clause})",
             "order": "creado_en.desc",
-            "limit": str(min(max(len(safe_ids) * 5, 200), 5000)),
+            "limit": str(effective_limit),
+            "offset": str(max(0, int(offset))),
         }
         resp = await self._request_service_role(
             "GET",
@@ -10422,10 +10434,12 @@ class CRMRepository:
         date_from_iso: str | None = None,
         date_to_iso: str | None = None,
         limit: int = 200,
+        offset: int = 0,
     ) -> list[dict[str, Any]]:
         """Resumen de atribución por campaña/plantilla con filtro por rango y SID."""
 
         payload: dict[str, Any] = {"p_limit": max(1, min(limit, 1000))}
+        payload["p_offset"] = max(0, int(offset))
         if campana_id is not None:
             payload["p_campana_id"] = str(campana_id)
         if date_from_iso:
