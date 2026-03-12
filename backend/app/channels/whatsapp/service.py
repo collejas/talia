@@ -1788,6 +1788,25 @@ async def _generate_assistant_reply(
             ],
         },
     )
+    initial_input.insert(
+        3,
+        {
+            "role": "developer",
+            "content": [
+                {
+                    "type": "input_text",
+                    "text": (
+                        "Regla de ubicación comercial: la ubicación del Contexto CRM (incluida LADA) "
+                        "es solo referencia técnica y no define la zona de búsqueda del prospecto. "
+                        "Nunca preguntes si busca en la zona inferida por su teléfono. "
+                        "Si el prospecto menciona una zona/fraccionamiento sin coincidencias claras, "
+                        "ejecuta list_catalog_fraccionamientos para obtener inventario real y responde "
+                        "con zonas/fraccionamientos disponibles antes de hacer una sola pregunta de avance."
+                    ),
+                }
+            ],
+        },
+    )
     if booking_context:
         initial_input.insert(
             3,

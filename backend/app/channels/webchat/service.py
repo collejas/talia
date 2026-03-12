@@ -3450,6 +3450,24 @@ async def _run_assistant_turn(
             ],
         }
     )
+    base_input.append(
+        {
+            "role": "developer",
+            "content": [
+                {
+                    "type": "input_text",
+                    "text": (
+                        "Regla de ubicación comercial: la ubicación del Contexto CRM (incluida LADA) "
+                        "es solo referencia técnica y no define la zona de búsqueda del visitante. "
+                        "Nunca preguntes si busca en la zona inferida por su teléfono. "
+                        "Si el visitante menciona una zona/fraccionamiento sin coincidencias claras, "
+                        "ejecuta list_catalog_fraccionamientos para obtener inventario real y responde "
+                        "con zonas/fraccionamientos disponibles antes de hacer una sola pregunta de avance."
+                    ),
+                }
+            ],
+        }
+    )
     if not has_attachments:
         base_input.append(
             {
