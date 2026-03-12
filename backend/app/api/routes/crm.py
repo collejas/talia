@@ -17819,52 +17819,59 @@ async def contactar_prospectos(
         programacion=programacion,
         separacion_segundos=payload.separacion_segundos,
     )
-    projected_email_sends = sum(1 for entry in preview_entries if _clean_text(entry.get("canal")) == "correo")
-    if projected_email_sends > 0:
-        effective_timezone, _timezone_source = await _resolve_effective_timezone_name(
-            repo=repo,
-            organizacion_id=organizacion_id,
-            usuario_id=usuario_id,
-        )
-        zoneinfo = ZoneInfo(effective_timezone)
-        local_day = datetime.now(zoneinfo).date()
-        day_start_utc, day_end_utc_exclusive = local_date_range_to_utc(
-            date_from=local_day,
-            date_to=local_day,
-            timezone_name=effective_timezone,
-        )
-        scheduled_today = 0
-        if day_start_utc and day_end_utc_exclusive:
-            try:
-                scheduled_today = await repo.count_pending_email_envios_for_local_day(
-                    usuario_token=user_token,
-                    start_utc=day_start_utc,
-                    end_utc_exclusive=day_end_utc_exclusive,
-                )
-            except CRMRepositoryError as exc:
-                logger.warning(
-                    "prospeccion.contactar.scheduled_count_failed",
-                    extra={"error": str(exc)},
-                )
+    projected_email_by_utc_day: dict[date, int] = {}
+    for entry in preview_entries:
+        if _clean_text(entry.get("canal")) != "correo":
+            continue
+        programmed = _parse_iso_datetime(entry.get("programado_en"))
+        if programmed is None:
+            programmed = datetime.now(timezone.utc)
+        if programmed.tzinfo is None:
+            programmed = programmed.replace(tzinfo=timezone.utc)
+        quota_day_utc = programmed.astimezone(timezone.utc).date()
+        projected_email_by_utc_day[quota_day_utc] = projected_email_by_utc_day.get(quota_day_utc, 0) + 1
+
+    if projected_email_by_utc_day:
         brevo_settings = await tenant_runtime.get_brevo_runtime_settings(organizacion_id=organizacion_id)
         api_key = _clean_text(brevo_settings.api_key)
         if api_key:
-            try:
-                quota = await fetch_brevo_daily_quota(
-                    api_key=api_key,
-                    base_url=brevo_settings.base_url,
-                    local_day=local_day,
-                )
-            except Exception as exc:  # noqa: BLE001
-                logger.warning("prospeccion.contactar.brevo_quota_check_failed", extra={"error": str(exc)})
-            else:
+            for quota_day_utc, projected_email_sends in sorted(projected_email_by_utc_day.items()):
+                day_start_utc = datetime.combine(quota_day_utc, datetime.min.time(), tzinfo=timezone.utc)
+                day_end_utc_exclusive = day_start_utc + timedelta(days=1)
+                scheduled_for_day = 0
+                try:
+                    scheduled_for_day = await repo.count_pending_email_envios_for_local_day(
+                        usuario_token=user_token,
+                        start_utc=day_start_utc,
+                        end_utc_exclusive=day_end_utc_exclusive,
+                    )
+                except CRMRepositoryError as exc:
+                    logger.warning(
+                        "prospeccion.contactar.scheduled_count_failed",
+                        extra={"error": str(exc), "quota_day_utc": quota_day_utc.isoformat()},
+                    )
+                try:
+                    quota = await fetch_brevo_daily_quota(
+                        api_key=api_key,
+                        base_url=brevo_settings.base_url,
+                        local_day=quota_day_utc,
+                    )
+                except Exception as exc:  # noqa: BLE001
+                    logger.warning(
+                        "prospeccion.contactar.brevo_quota_check_failed",
+                        extra={"error": str(exc), "quota_day_utc": quota_day_utc.isoformat()},
+                    )
+                    continue
                 remaining_for_new = quota.remaining
                 if remaining_for_new is not None:
-                    remaining_for_new = max(remaining_for_new - scheduled_today, 0)
+                    remaining_for_new = max(remaining_for_new - scheduled_for_day, 0)
                 if remaining_for_new is not None and remaining_for_new < projected_email_sends:
                     raise HTTPException(
                         status_code=400,
-                        detail=f"brevo_daily_quota_exceeded:{remaining_for_new}:{projected_email_sends}",
+                        detail=(
+                            "brevo_daily_quota_exceeded:"
+                            f"{remaining_for_new}:{projected_email_sends}:{quota_day_utc.isoformat()}"
+                        ),
                     )
 
     try:

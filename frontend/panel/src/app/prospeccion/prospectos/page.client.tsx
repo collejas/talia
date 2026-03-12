@@ -775,10 +775,10 @@ function ProspectosView() {
   const [plannerTemplates, setPlannerTemplates] = useState<ContactoTemplate[]>([])
   const [plannerTemplatesLoading, setPlannerTemplatesLoading] = useState(false)
   const [plannerTemplateSelection, setPlannerTemplateSelection] = useState<{
-    correo: string
-    whatsapp: string
-    llamada: string
-  }>({ correo: "", whatsapp: "", llamada: "" })
+    correo: string[]
+    whatsapp: string[]
+    llamada: string[]
+  }>({ correo: [], whatsapp: [], llamada: [] })
   const [plannerExecuting, setPlannerExecuting] = useState(false)
   const [plannerError, setPlannerError] = useState<string | null>(null)
   const [plannerBrevoQuota, setPlannerBrevoQuota] = useState<BrevoQuotaSnapshot | null>(null)
@@ -831,6 +831,11 @@ function ProspectosView() {
     () => (selectedPlannerCanal ? plannerTemplates.filter((tpl) => tpl.canal === selectedPlannerCanal) : []),
     [plannerTemplates, selectedPlannerCanal]
   )
+  const selectedPlannerTemplateIds = useMemo(
+    () => (selectedPlannerCanal ? plannerTemplateSelection[selectedPlannerCanal] ?? [] : []),
+    [plannerTemplateSelection, selectedPlannerCanal]
+  )
+  const selectedPlannerTemplateAll = selectedPlannerTemplateIds.includes(PLANNER_ALL_TEMPLATES_VALUE)
   const plannerBrevoRemaining =
     plannerBrevoQuota?.remaining_after_scheduled ?? plannerBrevoQuota?.remaining ?? null
   const plannerBrevoLimitZero = (plannerBrevoQuota?.daily_limit ?? null) === 0
@@ -2149,7 +2154,7 @@ function ProspectosView() {
     setPlannerScheduleMode("ahora")
     setPlannerSeparationSeconds("5")
     setPlannerTemplates([])
-    setPlannerTemplateSelection({ correo: "", whatsapp: "", llamada: "" })
+    setPlannerTemplateSelection({ correo: [], whatsapp: [], llamada: [] })
     setPlannerError(null)
     setPlannerBrevoQuota(null)
     setPlannerOpen(true)
@@ -2220,15 +2225,15 @@ function ProspectosView() {
       const items = (response.items ?? []) as ContactoTemplate[]
       setPlannerTemplates(items)
       const byCanal = (canal: "correo" | "whatsapp" | "llamada") =>
-        items.find((item) => item.canal === canal)?.id ?? ""
+        items.filter((item) => item.canal === canal).map((item) => item.id)
       setPlannerTemplateSelection({
-        correo: byCanal("correo"),
-        whatsapp: byCanal("whatsapp"),
-        llamada: byCanal("llamada"),
+        correo: byCanal("correo").slice(0, 1),
+        whatsapp: byCanal("whatsapp").slice(0, 1),
+        llamada: byCanal("llamada").slice(0, 1),
       })
     } catch (err) {
       setPlannerTemplates([])
-      setPlannerTemplateSelection({ correo: "", whatsapp: "", llamada: "" })
+      setPlannerTemplateSelection({ correo: [], whatsapp: [], llamada: [] })
       const message = err instanceof Error ? err.message : "No se pudieron cargar las plantillas de la campaña."
       setPlannerError(message)
     } finally {
@@ -2252,7 +2257,7 @@ function ProspectosView() {
         setPlannerScheduleMode("ahora")
         setPlannerSeparationSeconds("5")
         setPlannerTemplates([])
-        setPlannerTemplateSelection({ correo: "", whatsapp: "", llamada: "" })
+        setPlannerTemplateSelection({ correo: [], whatsapp: [], llamada: [] })
         setPlannerBrevoQuota(null)
       }
     },
@@ -2321,18 +2326,21 @@ function ProspectosView() {
       }
 
       const canal = selectedPlannerCanal
-      const selectedTemplateId = plannerTemplateSelection[canal]
-      if (!selectedTemplateId) {
+      const selectedTemplateIds = plannerTemplateSelection[canal] ?? []
+      if (!selectedTemplateIds.length) {
         setPlannerError("Selecciona una plantilla para el canal de la campaña.")
         return
       }
       const nameMap = new Map(items.map((item) => [item.id, item.display_name]))
-      if (selectedTemplateId === PLANNER_ALL_TEMPLATES_VALUE) {
-        const canalTemplates = templates.filter((item) => item.canal === canal)
-        if (!canalTemplates.length) {
-          setPlannerError("No hay plantillas disponibles para repartir el envío.")
-          return
-        }
+      const canalTemplates = selectedTemplateIds.includes(PLANNER_ALL_TEMPLATES_VALUE)
+        ? templates.filter((item) => item.canal === canal)
+        : templates.filter((item) => item.canal === canal && selectedTemplateIds.includes(item.id))
+      if (!canalTemplates.length) {
+        setPlannerError("Selecciona una plantilla válida para continuar.")
+        return
+      }
+
+      if (canalTemplates.length > 1) {
         const prospectosPorTemplate = canalTemplates.map(() => [] as string[])
         selectedIds.forEach((prospectoId, index) => {
           prospectosPorTemplate[index % canalTemplates.length].push(prospectoId)
@@ -2377,11 +2385,7 @@ function ProspectosView() {
           message: `Se crearon ${createdBatchIds.length} lotes con ${aggregatedResults.length} envíos repartidos entre ${canalTemplates.length} plantillas.`,
         })
       } else {
-        const template = templates.find((item) => item.id === selectedTemplateId && item.canal === canal)
-        if (!template) {
-          setPlannerError("Selecciona una plantilla válida para continuar.")
-          return
-        }
+        const template = canalTemplates[0]
         const response = await contactarProspectos({
           prospecto_ids: selectedIds,
           campana_id: plannerCampaignId,
@@ -3491,45 +3495,71 @@ function ProspectosView() {
                 <div className="mt-2 grid gap-3 md:grid-cols-1">
                   <div className="space-y-1">
                     <Label>{selectedPlannerCanal ? plannerCanalLabel[selectedPlannerCanal] : "Canal"}</Label>
-                    <Select
-                      value={selectedPlannerCanal ? plannerTemplateSelection[selectedPlannerCanal] : ""}
-                      onValueChange={(value) => {
-                        if (!selectedPlannerCanal) return
-                        setPlannerTemplateSelection((prev) => ({
-                          ...prev,
-                          [selectedPlannerCanal]: value,
-                        }))
-                      }}
-                      disabled={plannerTemplatesLoading || !plannerCampaignId || !selectedPlannerCanal}
-                    >
-                      <SelectTrigger>
-                        <SelectValue
-                          placeholder={
-                            plannerTemplatesLoading
-                              ? "Cargando..."
-                              : selectedPlannerCanal
-                                ? `Sin plantilla ${plannerCanalLabel[selectedPlannerCanal]}`
-                                : "Selecciona una campaña"
-                          }
-                        />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {selectedPlannerTemplatesByCanal.length > 1 ? (
-                          <SelectItem value={PLANNER_ALL_TEMPLATES_VALUE}>Todas las plantillas (repartir)</SelectItem>
-                        ) : null}
-                        {selectedPlannerTemplatesByCanal.map((tpl) => (
-                          <SelectItem key={tpl.id} value={tpl.id}>
-                            {tpl.nombre}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    {selectedPlannerCanal &&
-                    plannerTemplateSelection[selectedPlannerCanal] === PLANNER_ALL_TEMPLATES_VALUE &&
-                    selectedPlannerTemplatesByCanal.length ? (
+                    <div className="rounded-md border bg-background p-2">
+                      {plannerTemplatesLoading ? (
+                        <p className="text-xs text-muted-foreground">Cargando plantillas...</p>
+                      ) : !selectedPlannerCanal ? (
+                        <p className="text-xs text-muted-foreground">Selecciona una campaña para ver plantillas.</p>
+                      ) : !selectedPlannerTemplatesByCanal.length ? (
+                        <p className="text-xs text-muted-foreground">
+                          No hay plantillas para {plannerCanalLabel[selectedPlannerCanal]}.
+                        </p>
+                      ) : (
+                        <div className="space-y-2">
+                          {selectedPlannerTemplatesByCanal.length > 1 ? (
+                            <label className="flex cursor-pointer items-center gap-2 text-sm">
+                              <Checkbox
+                                checked={selectedPlannerTemplateAll}
+                                onCheckedChange={(checked) => {
+                                  if (!selectedPlannerCanal) return
+                                  setPlannerTemplateSelection((prev) => ({
+                                    ...prev,
+                                    [selectedPlannerCanal]: checked ? [PLANNER_ALL_TEMPLATES_VALUE] : [],
+                                  }))
+                                }}
+                              />
+                              <span>Todas las plantillas (repartir)</span>
+                            </label>
+                          ) : null}
+                          {selectedPlannerTemplatesByCanal.map((tpl) => {
+                            const checked = selectedPlannerTemplateAll || selectedPlannerTemplateIds.includes(tpl.id)
+                            return (
+                              <label key={tpl.id} className="flex cursor-pointer items-center gap-2 text-sm">
+                                <Checkbox
+                                  checked={checked}
+                                  onCheckedChange={(nextChecked) => {
+                                    if (!selectedPlannerCanal) return
+                                    setPlannerTemplateSelection((prev) => {
+                                      const current = new Set(
+                                        (prev[selectedPlannerCanal] ?? []).filter(
+                                          (value) => value !== PLANNER_ALL_TEMPLATES_VALUE
+                                        )
+                                      )
+                                      if (nextChecked) current.add(tpl.id)
+                                      else current.delete(tpl.id)
+                                      return {
+                                        ...prev,
+                                        [selectedPlannerCanal]: Array.from(current),
+                                      }
+                                    })
+                                  }}
+                                />
+                                <span>{tpl.nombre}</span>
+                              </label>
+                            )
+                          })}
+                        </div>
+                      )}
+                    </div>
+                    {selectedPlannerCanal && selectedPlannerTemplateAll && selectedPlannerTemplatesByCanal.length ? (
                       <p className="text-xs text-muted-foreground">
                         Se crearán hasta {Math.min(selectedCount, selectedPlannerTemplatesByCanal.length)} lotes: uno por
                         plantilla, repartiendo prospectos sin repetir.
+                      </p>
+                    ) : selectedPlannerCanal && selectedPlannerTemplateIds.length > 1 ? (
+                      <p className="text-xs text-muted-foreground">
+                        Se crearán hasta {Math.min(selectedCount, selectedPlannerTemplateIds.length)} lotes repartiendo
+                        prospectos entre las plantillas seleccionadas.
                       </p>
                     ) : null}
                   </div>

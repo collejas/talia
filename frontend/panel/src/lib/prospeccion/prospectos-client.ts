@@ -512,9 +512,11 @@ async function requestJson<T>(input: string, init?: RequestInit, retryAuth = tru
       const parts = detail.split(":")
       const remaining = Number.parseInt(parts[1] ?? "", 10)
       const requested = Number.parseInt(parts[2] ?? "", 10)
+      const quotaDay = parts[3] ?? ""
       if (Number.isFinite(remaining) && Number.isFinite(requested)) {
+        const dayLabel = quotaDay ? ` (día Brevo UTC ${quotaDay})` : ""
         throw new Error(
-          `No hay cupo suficiente en Brevo para este lote. Restantes hoy: ${remaining}. Intentas enviar: ${requested}.`
+          `No hay cupo suficiente en Brevo para este lote${dayLabel}. Restantes: ${remaining}. Intentas enviar: ${requested}.`
         )
       }
       throw new Error("Se alcanzó la cuota diaria de Brevo para correo.")
