@@ -43,12 +43,12 @@ def _as_int(value: Any) -> int | None:
     return number if number >= 0 else None
 
 
-def _extract_daily_limit(account_payload: Any) -> tuple[int | None, str | None, int | None]:
+def _extract_plan_info(account_payload: Any) -> tuple[str | None, int | None]:
     if not isinstance(account_payload, dict):
-        return None, None, None
+        return None, None
     plans = account_payload.get("plan")
     if not isinstance(plans, list):
-        return None, None, None
+        return None, None
     for row in plans:
         if not isinstance(row, dict):
             continue
@@ -56,9 +56,8 @@ def _extract_daily_limit(account_payload: Any) -> tuple[int | None, str | None, 
         credits = _as_int(row.get("credits"))
         if credits is None:
             continue
-        # En Brevo Free suele representar el tope diario (300).
         if plan_type == "free":
-            return credits, plan_type, credits
+            return plan_type, credits
     # Si no hay plan free, exponemos créditos pero sin asumir que sean diarios.
     for row in plans:
         if not isinstance(row, dict):
@@ -67,8 +66,8 @@ def _extract_daily_limit(account_payload: Any) -> tuple[int | None, str | None, 
         if credits is None:
             continue
         plan_type = _clean_text(row.get("type"))
-        return None, plan_type.lower() if plan_type else None, credits
-    return None, None, None
+        return plan_type.lower() if plan_type else None, credits
+    return None, None
 
 
 def _extract_sent_today(report_payload: Any) -> int | None:
@@ -128,17 +127,20 @@ async def fetch_brevo_daily_quota(
             raise RuntimeError("brevo_quota_unreachable")
 
     sent_today = _extract_sent_today(report_payload)
-    daily_limit, plan_type, plan_credits = _extract_daily_limit(account_payload)
+    plan_type, plan_credits = _extract_plan_info(account_payload)
+    daily_limit: int | None = 300 if plan_type == "free" else None
     remaining: int | None = None
     usage_pct: float | None = None
-    if daily_limit is not None and sent_today is not None:
+    # En plan Free, Brevo /account.plan[].credits representa restantes del día.
+    if plan_type == "free" and plan_credits is not None:
+        remaining = plan_credits
+    if daily_limit is not None and remaining is not None:
+        sent_today = max(daily_limit - remaining, 0)
+    elif daily_limit is not None and sent_today is not None:
         remaining = max(daily_limit - sent_today, 0)
-        if daily_limit > 0:
-            usage_pct = round((sent_today / daily_limit * 100), 2)
-        else:
-            # Cuando Brevo reporta límite 0, se considera sin cupo y se evita "Uso 0%".
-            usage_pct = 100.0 if sent_today > 0 else 0.0
-            warnings.append("daily_limit_zero")
+    if daily_limit is not None and remaining is not None:
+        used_today = max(daily_limit - remaining, 0)
+        usage_pct = round((used_today / daily_limit * 100), 2) if daily_limit > 0 else None
 
     return BrevoQuotaSnapshot(
         sent_today=sent_today,
