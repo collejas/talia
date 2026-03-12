@@ -600,6 +600,11 @@ async def process_brevo_events(
                 continue
 
             merged_detalle = {**detalle_actual, "brevo": brevo_info}
+            if estado != "fallido":
+                reason_value = _clean_text(merged_detalle.get("reason"))
+                if reason_value in {"per_minute_limit", "cooldown"}:
+                    merged_detalle.pop("reason", None)
+                    merged_detalle.pop("throttle_scope", None)
             payload = {
                 "estado": estado,
                 "detalle": merged_detalle,

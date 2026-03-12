@@ -904,9 +904,9 @@ class ProspeccionContactSender:
         self._task: asyncio.Task[None] | None = None
         self._enabled = True
         self._throttle_lock = asyncio.Lock()
-        self._send_events: dict[tuple[str, str], deque[float]] = {}
-        self._error_events: dict[tuple[str, str], deque[float]] = {}
-        self._cooldown_until: dict[tuple[str, str], float] = {}
+        self._send_events: dict[tuple[str, str, str], deque[float]] = {}
+        self._error_events: dict[tuple[str, str, str], deque[float]] = {}
+        self._cooldown_until: dict[tuple[str, str, str], float] = {}
 
     async def start(self) -> None:
         if self._task and not self._task.done():
@@ -1057,44 +1057,48 @@ class ProspeccionContactSender:
             },
         )
 
+        throttle_key: tuple[str, str, str] | None = None
         if canal in {"correo", "whatsapp", "llamada"}:
-            throttle_key = self._throttle_key(
+            throttle_key = self._throttle_key_for_envio(
                 organizacion_id=org_uuid,
                 canal=canal,
+                detalle=detalle,
             )
-            allowed, reason = await self._acquire_send_slot(throttle_key)
-            if not allowed:
-                defer_until = (
-                    datetime.now(timezone.utc) + timedelta(seconds=self._rate_limit_defer_seconds)
-                ).isoformat()
-                current_detalle = envio.get("detalle") if isinstance(envio.get("detalle"), dict) else {}
-                throttled_detalle = _merge_detalle(
-                    current_detalle,
-                    {
-                        "reason": reason,
-                        "throttle_scope": f"{throttle_key[0]}:{throttle_key[1]}",
-                    },
-                )
-                await repo.worker_complete_envio(
-                    envio_id=envio_id,
-                    payload={
-                        "estado": "pendiente",
-                        "programado_en": defer_until,
-                        "error": "rate_limited",
-                        "detalle": throttled_detalle,
-                        "procesado_en": datetime.now(timezone.utc).isoformat(),
-                    },
-                )
-                log_event(
-                    logger,
-                    "prospeccion.sender_rate_limited",
-                    envio_id=str(envio_id),
-                    canal=canal,
-                    organizacion_id=str(org_uuid) if org_uuid else None,
-                    reason=reason,
-                    defer_seconds=self._rate_limit_defer_seconds,
-                )
-                return
+            if throttle_key is not None:
+                allowed, reason = await self._acquire_send_slot(throttle_key)
+                if not allowed:
+                    defer_until = (
+                        datetime.now(timezone.utc) + timedelta(seconds=self._rate_limit_defer_seconds)
+                    ).isoformat()
+                    current_detalle = envio.get("detalle") if isinstance(envio.get("detalle"), dict) else {}
+                    throttled_detalle = _merge_detalle(
+                        current_detalle,
+                        {
+                            "reason": reason,
+                            "throttle_scope": f"{throttle_key[0]}:{throttle_key[1]}:{throttle_key[2]}",
+                        },
+                    )
+                    await repo.worker_complete_envio(
+                        envio_id=envio_id,
+                        payload={
+                            "estado": "pendiente",
+                            "programado_en": defer_until,
+                            "error": "rate_limited",
+                            "detalle": throttled_detalle,
+                            "procesado_en": datetime.now(timezone.utc).isoformat(),
+                        },
+                    )
+                    log_event(
+                        logger,
+                        "prospeccion.sender_rate_limited",
+                        envio_id=str(envio_id),
+                        canal=canal,
+                        organizacion_id=str(org_uuid) if org_uuid else None,
+                        recipient_scope=throttle_key[2],
+                        reason=reason,
+                        defer_seconds=self._rate_limit_defer_seconds,
+                    )
+                    return
 
         if org_uuid and canal in {"correo", "whatsapp", "llamada"}:
             suppression = await repo.worker_find_active_contact_suppression(
@@ -1161,8 +1165,7 @@ class ProspeccionContactSender:
             extra_backoff_seconds=self._extra_backoff_seconds(result),
         )
         await repo.worker_complete_envio(envio_id=envio_id, payload=update_payload)
-        if canal in {"correo", "whatsapp", "llamada"}:
-            throttle_key = self._throttle_key(organizacion_id=org_uuid, canal=canal)
+        if canal in {"correo", "whatsapp", "llamada"} and throttle_key is not None:
             await self._register_backpressure_signal(throttle_key, result)
 
         await _broadcast_batch_event(
@@ -1232,6 +1235,13 @@ class ProspeccionContactSender:
         now_iso = datetime.now(timezone.utc).isoformat()
         current_detalle = envio.get("detalle") if isinstance(envio.get("detalle"), dict) else {}
         merged_detalle = _merge_detalle(current_detalle, result.detalle)
+        terminal_ok_states = {"enviado", "entregado", "leido", "completado", "respondido"}
+        if result.estado in terminal_ok_states:
+            # Limpia marcas transitorias de rate limit cuando el envío ya avanzó correctamente.
+            reason = _clean_text(merged_detalle.get("reason"))
+            if reason in {"per_minute_limit", "cooldown"}:
+                merged_detalle.pop("reason", None)
+                merged_detalle.pop("throttle_scope", None)
 
         payload: dict[str, Any] = {
             "estado": result.estado,
@@ -1258,12 +1268,34 @@ class ProspeccionContactSender:
         return self._retry_backoff[index]
 
     @staticmethod
-    def _throttle_key(*, organizacion_id: UUID | None, canal: str) -> tuple[str, str]:
+    def _normalize_recipient_scope(canal: str, detalle: dict[str, Any]) -> str | None:
+        canal_key = (canal or "").strip().lower()
+        if canal_key == "correo":
+            email = _clean_text(detalle.get("email"))
+            return email.lower() if email else None
+        if canal_key in {"whatsapp", "llamada"}:
+            phone_raw = _clean_text(detalle.get("phone"))
+            if not phone_raw:
+                return None
+            digits = "".join(ch for ch in phone_raw if ch.isdigit())
+            return digits or phone_raw
+        return None
+
+    def _throttle_key_for_envio(
+        self,
+        *,
+        organizacion_id: UUID | None,
+        canal: str,
+        detalle: dict[str, Any],
+    ) -> tuple[str, str, str] | None:
+        recipient_key = self._normalize_recipient_scope(canal, detalle)
+        if not recipient_key:
+            return None
         org_key = str(organizacion_id) if organizacion_id else "global"
         channel_key = (canal or "desconocido").strip().lower() or "desconocido"
-        return org_key, channel_key
+        return org_key, channel_key, recipient_key
 
-    async def _acquire_send_slot(self, key: tuple[str, str]) -> tuple[bool, str]:
+    async def _acquire_send_slot(self, key: tuple[str, str, str]) -> tuple[bool, str]:
         now = asyncio.get_running_loop().time()
         async with self._throttle_lock:
             cooldown_until = self._cooldown_until.get(key, 0.0)
@@ -1281,7 +1313,7 @@ class ProspeccionContactSender:
 
     async def _register_backpressure_signal(
         self,
-        key: tuple[str, str],
+        key: tuple[str, str, str],
         result: ContactEnvioResult,
     ) -> None:
         error_signature = self._extract_error_signature(result)
@@ -1304,6 +1336,7 @@ class ProspeccionContactSender:
             "prospeccion.sender_backpressure_activated",
             organizacion_scope=key[0],
             canal=key[1],
+            recipient_scope=key[2],
             error_signature=error_signature,
             cooldown_seconds=self._backpressure_cooldown_seconds,
             threshold=self._error_threshold,

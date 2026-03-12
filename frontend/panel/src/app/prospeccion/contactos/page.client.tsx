@@ -603,9 +603,7 @@ export default function ContactosPageClient() {
                             <Badge variant={envioEstadoVariant[envio.estado] ?? "default"}>{envio.estado}</Badge>
                           </TableCell>
                           <TableCell className="text-sm text-muted-foreground">
-                            {envio.detalle && typeof envio.detalle.reason === "string"
-                              ? (envio.detalle.reason as string)
-                              : ""}
+                            {getEnvioDetailReason(envio)}
                           </TableCell>
                           <TableCell className="text-right text-xs text-muted-foreground">
                             {formatDate(envio.procesado_en || envio.programado_en)}
@@ -752,6 +750,19 @@ function prospectoLabel(envio: ContactoEnvio): string {
   const email = detalle && typeof detalle["email"] === "string" ? detalle["email"] : null
   if (email) return email
   return "Prospecto sin nombre"
+}
+
+function getEnvioDetailReason(envio: ContactoEnvio): string {
+  const reason =
+    envio.detalle && typeof envio.detalle["reason"] === "string"
+      ? String(envio.detalle["reason"])
+      : ""
+  if (!reason) return ""
+  const estado = String(envio.estado || "").toLowerCase()
+  if (["enviado", "entregado", "leido", "completado", "respondido"].includes(estado)) {
+    return ""
+  }
+  return reason
 }
 
 function formatPercent(value: number): string {
