@@ -3623,7 +3623,8 @@ function ProspectosView() {
                   ) : plannerBrevoQuota?.available ? (
                     <div className="space-y-1">
                       <p className="text-xs text-muted-foreground">
-                        Hoy ({plannerBrevoQuota.date_local}): enviados {plannerBrevoQuota.sent_today ?? 0}
+                        Corte Brevo UTC ({plannerBrevoQuota.date_brevo_utc ?? plannerBrevoQuota.date_local ?? "N/D"}): enviados{" "}
+                        {plannerBrevoQuota.sent_today ?? 0}
                         {plannerBrevoQuota.scheduled_today ? ` + programados ${plannerBrevoQuota.scheduled_today}` : ""}
                         {plannerBrevoQuota.projected_today !== null && plannerBrevoQuota.projected_today !== undefined
                           ? ` = ${plannerBrevoQuota.projected_today}`

@@ -1242,6 +1242,7 @@ export type BrevoQuotaSnapshot = {
   available: boolean
   timezone?: string | null
   date_local?: string | null
+  date_brevo_utc?: string | null
   sent_today: number | null
   scheduled_today?: number | null
   projected_today?: number | null

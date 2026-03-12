@@ -18271,24 +18271,22 @@ async def obtener_brevo_quota_diaria(
     )
     zoneinfo = ZoneInfo(effective_timezone)
     local_day = datetime.now(zoneinfo).date()
-    day_start_utc, day_end_utc_exclusive = local_date_range_to_utc(
-        date_from=local_day,
-        date_to=local_day,
-        timezone_name=effective_timezone,
-    )
+    # Brevo aggregatedReport opera por día UTC; usamos el mismo corte para evitar desalineación.
+    brevo_day_utc = datetime.now(timezone.utc).date()
+    day_start_utc = datetime.combine(brevo_day_utc, datetime.min.time(), tzinfo=timezone.utc)
+    day_end_utc_exclusive = day_start_utc + timedelta(days=1)
     scheduled_today = 0
-    if day_start_utc and day_end_utc_exclusive:
-        try:
-            scheduled_today = await repo.count_pending_email_envios_for_local_day(
-                usuario_token=user_token,
-                start_utc=day_start_utc,
-                end_utc_exclusive=day_end_utc_exclusive,
-            )
-        except CRMRepositoryError as exc:
-            logger.warning(
-                "prospeccion.brevo_quota_scheduled_count_failed",
-                extra={"error": str(exc)},
-            )
+    try:
+        scheduled_today = await repo.count_pending_email_envios_for_local_day(
+            usuario_token=user_token,
+            start_utc=day_start_utc,
+            end_utc_exclusive=day_end_utc_exclusive,
+        )
+    except CRMRepositoryError as exc:
+        logger.warning(
+            "prospeccion.brevo_quota_scheduled_count_failed",
+            extra={"error": str(exc)},
+        )
     brevo_settings = await tenant_runtime.get_brevo_runtime_settings(organizacion_id=organizacion_id)
     api_key = _clean_text(brevo_settings.api_key)
     if not api_key:
@@ -18298,6 +18296,7 @@ async def obtener_brevo_quota_diaria(
             "available": False,
             "timezone": effective_timezone,
             "date_local": local_day.isoformat(),
+            "date_brevo_utc": brevo_day_utc.isoformat(),
             "sent_today": None,
             "scheduled_today": scheduled_today,
             "projected_today": None,
@@ -18313,7 +18312,7 @@ async def obtener_brevo_quota_diaria(
         snapshot = await fetch_brevo_daily_quota(
             api_key=api_key,
             base_url=brevo_settings.base_url,
-            local_day=local_day,
+            local_day=brevo_day_utc,
         )
     except Exception as exc:  # noqa: BLE001
         logger.warning("prospeccion.brevo_quota_failed", extra={"error": str(exc)})
@@ -18323,6 +18322,7 @@ async def obtener_brevo_quota_diaria(
             "available": False,
             "timezone": effective_timezone,
             "date_local": local_day.isoformat(),
+            "date_brevo_utc": brevo_day_utc.isoformat(),
             "sent_today": None,
             "scheduled_today": scheduled_today,
             "projected_today": None,
@@ -18346,6 +18346,7 @@ async def obtener_brevo_quota_diaria(
         "available": True,
         "timezone": effective_timezone,
         "date_local": local_day.isoformat(),
+        "date_brevo_utc": brevo_day_utc.isoformat(),
         "sent_today": snapshot.sent_today,
         "scheduled_today": scheduled_today,
         "projected_today": projected_today,
