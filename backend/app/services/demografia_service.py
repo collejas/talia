@@ -480,14 +480,16 @@ def build_map_dataset(
             )
             if bucket and bucket in state_totals:
                 state_totals[bucket] += total
-        canal = str(raw.get("canal") or "").strip().lower() or "desconocido"
-        channel_totals = fallback_channel_totals.setdefault(state_key, {})
-        channel_totals[canal] = channel_totals.get(canal, 0) + total
+            canal = str(raw.get("canal") or "").strip().lower() or "desconocido"
+            channel_totals = fallback_channel_totals.setdefault(state_key, {})
+            channel_totals[canal] = channel_totals.get(canal, 0) + total
 
     combined: dict[str, dict[str, Any]] = {}
 
-    def _should_include(key: str) -> bool:
+    def _should_include(key: str, *, allow_unknown: bool = False) -> bool:
         if nivel != "municipio" or not state_filter:
+            return True
+        if allow_unknown and key == "UNK":
             return True
         return key.startswith(state_filter)
 
@@ -589,7 +591,7 @@ def build_map_dataset(
         if not isinstance(row, dict):
             continue
         key = str(row.get("key") or "UNK")
-        if not _should_include(key):
+        if not _should_include(key, allow_unknown=True):
             continue
         entry = _ensure_entry(key, str(row.get("name") or "Desconocido"))
         total_visitas = _to_number(row.get("total"))

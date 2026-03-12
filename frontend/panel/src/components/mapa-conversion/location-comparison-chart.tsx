@@ -189,7 +189,7 @@ export function LocationComparisonChart({
     if (manualSelectedKey && data.some((entry) => entry.key === manualSelectedKey)) {
       return manualSelectedKey;
     }
-    if (nivel === "pais") {
+    if (nivel === "pais" || nivel === "municipio") {
       return null;
     }
     return data.find((entry) => entry.has_data)?.key ?? data[0]?.key ?? null;
@@ -264,6 +264,13 @@ export function LocationComparisonChart({
   const selectedEntry = selectedKey ? datasetMap.get(selectedKey) ?? null : null;
   const hoveredEntry = hoveredKey ? datasetMap.get(hoveredKey) ?? null : null;
   const activeEntry = hoveredEntry ?? selectedEntry ?? null;
+  const unknownEntry = useMemo(
+    () => data.find((entry) => (entry.key || "").toString().toUpperCase() === "UNK") ?? null,
+    [data],
+  );
+  const unknownVisitsTotal = unknownEntry
+    ? resolveFilteredEntryTotal(unknownEntry, activeChannelSet, allowLeadFallback)
+    : 0;
 
   const stageKeys = useMemo(
     () => (stageKeysProp && stageKeysProp.length ? stageKeysProp : MAPA_STAGE_KEYS),
@@ -594,6 +601,11 @@ export function LocationComparisonChart({
           <span className="text-xs text-muted-foreground">
             {metrics.subtitle ?? `${formatNumber(metrics.totalVisitas)} visitas totales`}
           </span>
+          {nivel === "municipio" && unknownVisitsTotal > 0 ? (
+            <span className="text-xs text-muted-foreground">
+              Incluye {formatNumber(unknownVisitsTotal)} visitas sin municipio mapeable.
+            </span>
+          ) : null}
         </div>
         <div className="flex flex-1 flex-col gap-3 overflow-y-auto pr-1">
           <MetricSection
@@ -878,6 +890,11 @@ function resolveFilteredConversation(
   allowedChannels?: Set<ChannelKey>,
   allowLeadFallback: boolean = true,
 ) {
+  const webchatIncluded =
+    !allowedChannels || !allowedChannels.size || allowedChannels.has("webchat");
+  if (!webchatIncluded) {
+    return { con_conversacion: 0, sin_conversacion: 0 };
+  }
   const base =
     entry.conversacion_totales ??
     {
@@ -890,15 +907,8 @@ function resolveFilteredConversation(
       sin_conversacion: base.sin_conversacion ?? 0,
     };
   }
-  const visitantesPorCanal = entry.visitantes_totales_por_canal || {};
-  let con = 0;
-  for (const channel of allowedChannels) {
-    const value = visitantesPorCanal[channel];
-    if (typeof value === "number" && Number.isFinite(value)) {
-      con += value;
-    }
-  }
-  const total = resolveFilteredEntryTotal(entry, allowedChannels, allowLeadFallback);
-  const sin = Math.max(0, total - con);
+  const webchatTotal = resolveChannelTotal(entry, "webchat", allowedChannels, allowLeadFallback);
+  const con = Math.min(base.con_conversacion ?? 0, webchatTotal);
+  const sin = Math.max(0, webchatTotal - con);
   return { con_conversacion: con, sin_conversacion: sin };
 }

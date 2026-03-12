@@ -135,6 +135,19 @@ def _clean_city_name(name: str | None) -> str | None:
     return lowered.strip() or name
 
 
+# Alias de localidad/ciudad hacia municipio INEGI por estado.
+# Se usa cuando el proveedor de geo regresa nombres de ciudad que no coinciden
+# con `nom_mun` del catálogo de municipios (ej. "La Cañada" en Querétaro).
+_MUNICIPALITY_CITY_ALIASES: dict[str, dict[str, str]] = {
+    # Querétaro
+    # "La Cañada" (cabecera/localidad) pertenece a El Marqués (cve_mun 011).
+    "22": {
+        "lacanada": "011",
+        "lacanadaqueretaro": "011",
+    },
+}
+
+
 @lru_cache(maxsize=None)
 def load_states_geojson() -> dict[str, Any]:
     """GeoJSON compacto de estados."""
@@ -324,6 +337,14 @@ def _location_from_metadata(
             muni_mapping = _municipality_name_index(estado)
             muni_key = _normalize_key(city_clean)
             result = muni_mapping.get(muni_key)
+            if not result:
+                state_aliases = _MUNICIPALITY_CITY_ALIASES.get(str(estado).zfill(2), {})
+                alias_code = state_aliases.get(muni_key)
+                if alias_code:
+                    for _, candidate in muni_mapping.items():
+                        if candidate[0] == str(alias_code).zfill(3):
+                            result = candidate
+                            break
             if result:
                 municipio, municipio_nombre = result
     return estado, estado_nombre, municipio, municipio_nombre
