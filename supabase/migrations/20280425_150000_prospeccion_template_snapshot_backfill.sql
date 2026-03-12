@@ -170,17 +170,17 @@ where r.id = e.id
   );
 
 -- Fallback para historicos sin match (template eliminado o no localizable):
--- evita mostrar IDs/SIDs crudos en Inbox.
+-- evita mostrar IDs/SIDs crudos en Inbox con una etiqueta neutra.
 update public.prospeccion_contacto_envio e
 set payload = jsonb_set(
     e.payload,
     '{metadata}',
     coalesce(e.payload -> 'metadata', '{}'::jsonb)
     || jsonb_build_object(
-        'template_label', coalesce(nullif(e.payload -> 'metadata' ->> 'template_label', ''), 'Plantilla historica'),
-        'template_label_snapshot', coalesce(nullif(e.payload -> 'metadata' ->> 'template_label_snapshot', ''), 'Plantilla historica'),
-        'template_nombre_snapshot', coalesce(nullif(e.payload -> 'metadata' ->> 'template_nombre_snapshot', ''), 'Plantilla historica'),
-        'template_name_snapshot', coalesce(nullif(e.payload -> 'metadata' ->> 'template_name_snapshot', ''), 'Plantilla historica')
+        'template_label', coalesce(nullif(e.payload -> 'metadata' ->> 'template_label', ''), 'Plantilla WhatsApp'),
+        'template_label_snapshot', coalesce(nullif(e.payload -> 'metadata' ->> 'template_label_snapshot', ''), 'Plantilla WhatsApp'),
+        'template_nombre_snapshot', coalesce(nullif(e.payload -> 'metadata' ->> 'template_nombre_snapshot', ''), 'Plantilla WhatsApp'),
+        'template_name_snapshot', coalesce(nullif(e.payload -> 'metadata' ->> 'template_name_snapshot', ''), 'Plantilla WhatsApp')
     ),
     true
 )

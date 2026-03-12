@@ -7067,6 +7067,68 @@ def _looks_like_template_identifier(value: str | None) -> bool:
     return False
 
 
+def _is_generic_historic_template_label(value: str | None) -> bool:
+    text = (_clean_text(value) or "").strip().lower()
+    return text in {"plantilla historica", "plantilla histórica"}
+
+
+def _whatsapp_phone_lookup_candidates(phone_value: str | None) -> list[str]:
+    normalized = _clean_text(phone_value)
+    if not normalized:
+        return []
+    normalized = normalized.replace("whatsapp:", "").strip()
+    candidates: list[str] = []
+
+    def _push(value: str | None) -> None:
+        text = _clean_text(value)
+        if not text:
+            return
+        if text not in candidates:
+            candidates.append(text)
+
+    _push(normalized)
+    if normalized.startswith("+521") and len(normalized) > 4:
+        _push("+52" + normalized[4:])
+    if normalized.startswith("+52") and not normalized.startswith("+521") and len(normalized) > 3:
+        _push("+521" + normalized[3:])
+    return candidates
+
+
+def _collect_thread_template_external_keys(row: dict[str, Any]) -> list[str]:
+    keys: list[str] = []
+
+    def _push(value: Any) -> None:
+        text = _clean_text(value)
+        if not text:
+            return
+        lowered = text.lower()
+        if lowered not in keys:
+            keys.append(lowered)
+
+    _push(row.get("template_slug"))
+    _push(row.get("template_sid"))
+    _push(row.get("twilio_content_sid"))
+
+    messages = row.get("messages")
+    if isinstance(messages, list):
+        for message in reversed(messages):
+            if not isinstance(message, dict):
+                continue
+            datos = message.get("datos")
+            if not isinstance(datos, dict):
+                continue
+            metadata = datos.get("metadata") if isinstance(datos.get("metadata"), dict) else {}
+            _push(datos.get("twilio_content_sid"))
+            _push(metadata.get("twilio_content_sid"))
+            _push(datos.get("template_sid"))
+            _push(metadata.get("template_sid"))
+            _push(datos.get("template_sid_snapshot"))
+            _push(metadata.get("template_sid_snapshot"))
+            _push(datos.get("external_template_id"))
+            _push(metadata.get("external_template_id"))
+    return keys
+
+
 def _extract_thread_prospeccion_hints(
     row: dict[str, Any],
 ) -> tuple[str | None, str | None, str | None, str | None, str | None]:
@@ -10961,7 +11023,9 @@ async def get_inbox_threads(
     phones_needing_fallback: set[str] = set()
     for conversacion_id, hints in list(thread_prospeccion_hints.items()):
         batch_hint, campana_hint, template_id_hint, template_slug_hint, _template_label_hint = hints
-        if batch_hint or campana_hint or template_id_hint or template_slug_hint:
+        # Aunque exista template_id, seguimos buscando fallback por telefono cuando
+        # no hay slug/campana/lote; el id puede ser historico y no resoluble.
+        if batch_hint or campana_hint or template_slug_hint:
             continue
         if thread_channel_map.get(conversacion_id) != "whatsapp":
             continue
@@ -10984,14 +11048,25 @@ async def get_inbox_threads(
             phone_value: str,
         ) -> tuple[str, tuple[str | None, str | None, str | None, str | None, str | None]]:
             async with semaphore:
-                try:
-                    linked_envio = await repo.worker_get_latest_envio_by_phone(
-                        phone_e164=phone_value,
-                        canal="whatsapp",
-                    )
-                except CRMRepositoryError:
-                    linked_envio = None
-                hint = _extract_envio_prospeccion_hints(linked_envio)
+                hint: tuple[str | None, str | None, str | None, str | None, str | None] = (
+                    None,
+                    None,
+                    None,
+                    None,
+                    None,
+                )
+                for lookup_phone in _whatsapp_phone_lookup_candidates(phone_value):
+                    try:
+                        linked_envio = await repo.worker_get_latest_envio_by_phone(
+                            phone_e164=lookup_phone,
+                            canal="whatsapp",
+                        )
+                    except CRMRepositoryError:
+                        linked_envio = None
+                    candidate_hint = _extract_envio_prospeccion_hints(linked_envio)
+                    if any(candidate_hint[:4]) or candidate_hint[4]:
+                        hint = candidate_hint
+                        break
                 await _write_whatsapp_envio_hint_cache(phone_value, hint)
                 return phone_value, hint
 
@@ -11007,7 +11082,7 @@ async def get_inbox_threads(
 
     for conversacion_id, hints in list(thread_prospeccion_hints.items()):
         batch_hint, campana_hint, template_id_hint, template_slug_hint, template_label_hint = hints
-        if batch_hint or campana_hint or template_id_hint or template_slug_hint:
+        if batch_hint or campana_hint or template_slug_hint:
             continue
         if thread_channel_map.get(conversacion_id) != "whatsapp":
             continue
@@ -11072,6 +11147,30 @@ async def get_inbox_threads(
             batch_template_name = _clean_text(
                 metadata.get("template_nombre") or metadata.get("template_name")
             )
+            canales_config_meta = _ensure_dict(metadata.get("canales_config"), default={})
+            for channel_key in ("whatsapp", "correo"):
+                channel_cfg = _ensure_dict(canales_config_meta.get(channel_key), default={})
+                channel_meta = _ensure_dict(channel_cfg.get("metadata"), default={})
+                if not batch_template_id:
+                    batch_template_id = _clean_text(
+                        channel_meta.get("template_id") or channel_cfg.get("template_id")
+                    )
+                if not batch_template_slug:
+                    batch_template_slug = _clean_text(
+                        channel_meta.get("template_slug")
+                        or channel_meta.get("kw")
+                        or channel_cfg.get("template_slug")
+                        or channel_cfg.get("kw")
+                    )
+                if not batch_template_name:
+                    batch_template_name = _clean_text(
+                        channel_meta.get("template_label")
+                        or channel_meta.get("template_nombre")
+                        or channel_meta.get("template_name")
+                        or channel_cfg.get("template_label")
+                    )
+                if batch_template_id and batch_template_slug and batch_template_name:
+                    break
             if batch_template_id:
                 template_ids.add(batch_template_id)
             if batch_template_slug:
@@ -11212,6 +11311,10 @@ async def get_inbox_threads(
     enriched_rows: list[dict[str, Any]] = []
     for row in rows:
         row_payload = dict(row)
+        existing_row_template_label = _clean_text(row_payload.get("template_label"))
+        if _is_generic_historic_template_label(existing_row_template_label):
+            existing_row_template_label = None
+            row_payload.pop("template_label", None)
         batch_value = _clean_text(row_payload.get("batch_id"))
         campana_value = _clean_text(row_payload.get("campana_id"))
         conversacion_value = _clean_text(row_payload.get("conversacion_id"))
@@ -11237,7 +11340,23 @@ async def get_inbox_threads(
         batch_template_id, batch_template_slug, batch_template_name = batch_template_hint
         resolved_template_id = template_id_hint or batch_template_id
         resolved_template_slug = template_slug_hint or batch_template_slug
-        resolved_external_key = resolved_template_slug.lower() if resolved_template_slug else None
+        resolved_external_candidates: list[str] = []
+        if resolved_template_slug:
+            resolved_external_candidates.append(resolved_template_slug.lower())
+        for key in _collect_thread_template_external_keys(row_payload):
+            if key not in resolved_external_candidates:
+                resolved_external_candidates.append(key)
+        resolved_external_label = next(
+            (
+                template_label_by_external_key.get(candidate)
+                for candidate in resolved_external_candidates
+                if template_label_by_external_key.get(candidate)
+            ),
+            None,
+        )
+        normalized_template_label_hint = (
+            None if _is_generic_historic_template_label(template_label_hint) else template_label_hint
+        )
         template_label = (
             (template_label_by_id.get(resolved_template_id) if resolved_template_id else None)
             or (
@@ -11245,13 +11364,10 @@ async def get_inbox_threads(
                 if resolved_template_slug
                 else None
             )
-            or (
-                template_label_by_external_key.get(resolved_external_key)
-                if resolved_external_key
-                else None
-            )
-            or template_label_hint
+            or resolved_external_label
+            or normalized_template_label_hint
             or batch_template_name
+            or existing_row_template_label
         )
 
         if batch_value:
@@ -11273,11 +11389,13 @@ async def get_inbox_threads(
             row_payload["template_label"] = template_label
         elif resolved_template_slug:
             if _looks_like_template_identifier(resolved_template_slug):
-                row_payload["template_label"] = "Plantilla histórica"
+                row_payload["template_label"] = "Plantilla WhatsApp"
             else:
                 row_payload["template_label"] = f"Plantilla {resolved_template_slug}"
         elif resolved_template_id:
-            row_payload["template_label"] = "Plantilla histórica"
+            row_payload["template_label"] = "Plantilla WhatsApp"
+        elif any(_looks_like_template_identifier(value) for value in resolved_external_candidates):
+            row_payload["template_label"] = "Plantilla WhatsApp"
         current_source = _clean_text(row_payload.get("source"))
         conversation_attribution = (
             wa_atribucion_by_conversation.get(conversacion_value or "")
