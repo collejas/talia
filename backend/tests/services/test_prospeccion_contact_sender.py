@@ -85,7 +85,7 @@ def test_build_booking_url_uses_demo_default_and_tracking_params() -> None:
     query = parse_qs(parsed.query)
     assert parsed.scheme == "https"
     assert parsed.netloc == "talia.mx"
-    assert parsed.path == "/demo"
+    assert parsed.path == "/demo.html"
     assert query.get("utm_source") == ["prospeccion"]
     assert query.get("utm_medium") == ["email"]
     assert query.get("cid") == ["11111111-1111-1111-1111-111111111111"]
@@ -116,3 +116,20 @@ def test_build_booking_url_respects_booking_base_and_existing_query() -> None:
     assert query.get("utm_medium") == ["custom"]
     assert query.get("utm_source") == ["prospeccion"]
     assert query.get("utm_campaign") == ["cold_outreach"]
+
+
+def test_build_booking_url_includes_tenant_context_when_available() -> None:
+    payload = {
+        "metadata": {
+            "tenant_alias": "geoactiv",
+            "organizacion_id": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+        }
+    }
+    booking_url = _build_booking_url(
+        context={},
+        payload=payload,
+        tracking_url="https://talia.mx/?utm_source=prospeccion",
+    )
+    query = parse_qs(urlparse(booking_url).query)
+    assert query.get("ta") == ["geoactiv"]
+    assert query.get("oid") == ["aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"]

@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Agenda demo | Tal-IA</title>
+  <script src="https://cdn.tailwindcss.com?plugins=forms"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <style>
+    body { font-family: 'Inter', sans-serif; }
+  </style>
+</head>
+<body class="min-h-screen bg-slate-950 text-slate-100">
+  <main class="mx-auto max-w-5xl px-4 py-10 md:py-16">
+    <header class="mb-8 md:mb-10">
+      <p class="text-xs uppercase tracking-[0.2em] text-cyan-300/90">Tal-IA</p>
+      <h1 class="mt-3 text-3xl md:text-5xl font-extrabold leading-tight">Agenda tu demo en 7 minutos</h1>
+      <p class="mt-3 text-slate-300 max-w-2xl">Selecciona un horario disponible y confirma tu cita. Recibirás seguimiento del equipo comercial.</p>
+    </header>
+
+    <section class="grid gap-6 md:grid-cols-[1.2fr_1fr]">
+      <article class="rounded-2xl border border-slate-800 bg-slate-900/80 p-5 md:p-6">
+        <div class="flex items-center justify-between gap-3">
+          <h2 class="text-lg md:text-xl font-semibold">Horarios disponibles</h2>
+          <span id="status-badge" class="text-xs px-2 py-1 rounded bg-slate-800 text-slate-300">Cargando...</span>
+        </div>
+        <p id="slot-window" class="mt-2 text-sm text-slate-400"></p>
+        <div id="slots" class="mt-5 grid gap-3 md:grid-cols-2"></div>
+        <p id="slots-empty" class="mt-4 hidden rounded-lg border border-amber-600/40 bg-amber-500/10 p-3 text-sm text-amber-200">
+          No encontramos horarios en este momento. Intenta nuevamente en unos minutos.
+        </p>
+      </article>
+
+      <article class="rounded-2xl border border-slate-800 bg-slate-900/80 p-5 md:p-6">
+        <h2 class="text-lg md:text-xl font-semibold">Confirma tu cita</h2>
+        <form id="booking-form" class="mt-4 space-y-3">
+          <div>
+            <label class="mb-1 block text-sm text-slate-300" for="name">Nombre</label>
+            <input id="name" class="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm" placeholder="Ej. Luis Esquer" />
+          </div>
+          <div>
+            <label class="mb-1 block text-sm text-slate-300" for="email">Correo</label>
+            <input id="email" type="email" class="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm" placeholder="correo@empresa.com" />
+          </div>
+          <div>
+            <label class="mb-1 block text-sm text-slate-300" for="phone">Teléfono</label>
+            <input id="phone" class="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm" placeholder="+5215512345678" />
+          </div>
+          <div>
+            <label class="mb-1 block text-sm text-slate-300" for="company">Empresa</label>
+            <input id="company" class="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm" placeholder="Geoactiv" />
+          </div>
+          <div>
+            <label class="mb-1 block text-sm text-slate-300" for="notes">Notas (opcional)</label>
+            <textarea id="notes" rows="3" class="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm" placeholder="Contexto rápido para la demo"></textarea>
+          </div>
+          <div class="rounded-lg border border-cyan-700/40 bg-cyan-500/10 p-3 text-sm">
+            <p class="text-cyan-200">Horario seleccionado:</p>
+            <p id="selected-slot" class="mt-1 font-semibold text-cyan-100">Ninguno</p>
+          </div>
+          <button id="confirm-btn" type="submit" class="w-full rounded-xl bg-cyan-500 px-4 py-3 text-sm font-bold text-slate-950 hover:bg-cyan-400 disabled:cursor-not-allowed disabled:opacity-50" disabled>
+            Confirmar cita
+          </button>
+        </form>
+        <p id="form-error" class="mt-3 hidden rounded-lg border border-rose-700/40 bg-rose-500/10 p-3 text-sm text-rose-200"></p>
+        <p id="form-success" class="mt-3 hidden rounded-lg border border-emerald-700/40 bg-emerald-500/10 p-3 text-sm text-emerald-200"></p>
+      </article>
+    </section>
+  </main>
+
+  <script>
+    const apiBase = '/api/crm';
+    const slotsEl = document.getElementById('slots');
+    const slotsEmptyEl = document.getElementById('slots-empty');
+    const statusBadgeEl = document.getElementById('status-badge');
+    const slotWindowEl = document.getElementById('slot-window');
+    const selectedSlotEl = document.getElementById('selected-slot');
+    const confirmBtnEl = document.getElementById('confirm-btn');
+    const formEl = document.getElementById('booking-form');
+    const formErrorEl = document.getElementById('form-error');
+    const formSuccessEl = document.getElementById('form-success');
+
+    const query = new URLSearchParams(window.location.search);
+    const bookingSessionStorageKey = 'talia-booking-session';
+
+    const state = {
+      slots: [],
+      selectedStartAt: null,
+      selectedLabel: null,
+      timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'America/Mexico_City',
+      bookingSessionId: query.get('bsid') || localStorage.getItem(bookingSessionStorageKey) || (window.crypto?.randomUUID ? window.crypto.randomUUID() : `bs-${Date.now()}-${Math.random().toString(16).slice(2)}`),
+    };
+
+    localStorage.setItem(bookingSessionStorageKey, state.bookingSessionId);
+
+    function basePayload() {
+      return {
+        booking_session_id: state.bookingSessionId,
+        tenant_alias: query.get('ta') || query.get('tenant_alias') || undefined,
+        organizacion_id: query.get('oid') || query.get('organizacion_id') || undefined,
+        landing_url: window.location.href,
+        referrer: document.referrer || undefined,
+        user_agent: navigator.userAgent || undefined,
+        timezone: state.timezone,
+        source: query.get('source') || 'public_demo',
+        utm_source: query.get('utm_source') || undefined,
+        utm_medium: query.get('utm_medium') || undefined,
+        utm_campaign: query.get('utm_campaign') || undefined,
+        utm_term: query.get('utm_term') || undefined,
+        utm_content: query.get('utm_content') || undefined,
+        cid: query.get('cid') || undefined,
+        tid: query.get('tid') || undefined,
+        eid: query.get('eid') || undefined,
+        metadata: {
+          query: Object.fromEntries(query.entries()),
+          tenant_alias: query.get('ta') || query.get('tenant_alias') || undefined,
+          organizacion_id: query.get('oid') || query.get('organizacion_id') || undefined,
+        },
+      };
+    }
+
+    function setLoading(isLoading) {
+      statusBadgeEl.textContent = isLoading ? 'Cargando...' : 'Listo';
+      statusBadgeEl.className = isLoading
+        ? 'text-xs px-2 py-1 rounded bg-slate-800 text-slate-300'
+        : 'text-xs px-2 py-1 rounded bg-emerald-500/20 text-emerald-200';
+    }
+
+    function setError(message) {
+      formSuccessEl.classList.add('hidden');
+      formErrorEl.textContent = message;
+      formErrorEl.classList.remove('hidden');
+    }
+
+    function clearError() {
+      formErrorEl.classList.add('hidden');
+      formErrorEl.textContent = '';
+    }
+
+    function setSuccess(message) {
+      clearError();
+      formSuccessEl.textContent = message;
+      formSuccessEl.classList.remove('hidden');
+    }
+
+    function formatSlotLabel(slot) {
+      const start = new Date(slot.start_at);
+      return new Intl.DateTimeFormat('es-MX', {
+        weekday: 'short',
+        day: '2-digit',
+        month: 'short',
+        hour: '2-digit',
+        minute: '2-digit',
+        timeZone: slot.timezone || state.timezone,
+      }).format(start);
+    }
+
+    function renderSlots() {
+      slotsEl.innerHTML = '';
+      const available = state.slots.filter((slot) => slot.is_available);
+      slotsEmptyEl.classList.toggle('hidden', available.length > 0);
+      if (!available.length) {
+        confirmBtnEl.disabled = true;
+        return;
+      }
+      available.slice(0, 20).forEach((slot) => {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'text-left rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm hover:border-cyan-400 hover:bg-slate-900';
+        const label = formatSlotLabel(slot);
+        button.textContent = label;
+        button.addEventListener('click', () => {
+          state.selectedStartAt = slot.start_at;
+          state.selectedLabel = label;
+          selectedSlotEl.textContent = label;
+          confirmBtnEl.disabled = false;
+          Array.from(slotsEl.children).forEach((child) => child.classList.remove('border-cyan-400', 'bg-cyan-500/10'));
+          button.classList.add('border-cyan-400', 'bg-cyan-500/10');
+        });
+        slotsEl.appendChild(button);
+      });
+    }
+
+    async function loadAvailability() {
+      setLoading(true);
+      clearError();
+      try {
+        const response = await fetch(`${apiBase}/web/booking/availability`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(basePayload()),
+          cache: 'no-store',
+        });
+        const data = await response.json();
+        if (!response.ok || !data?.ok) {
+          throw new Error(data?.detail || 'No se pudo cargar disponibilidad');
+        }
+        state.slots = Array.isArray(data.availability?.slots) ? data.availability.slots : [];
+        state.timezone = data.availability?.timezone || state.timezone;
+        const start = data.availability?.window_start ? new Date(data.availability.window_start) : null;
+        const end = data.availability?.window_end ? new Date(data.availability.window_end) : null;
+        slotWindowEl.textContent = start && end
+          ? `${start.toLocaleDateString('es-MX')} - ${end.toLocaleDateString('es-MX')} (${state.timezone})`
+          : `Zona horaria: ${state.timezone}`;
+        renderSlots();
+      } catch (error) {
+        setError(error?.message || 'Error al consultar horarios');
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    formEl.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      clearError();
+      if (!state.selectedStartAt) {
+        setError('Selecciona un horario antes de confirmar.');
+        return;
+      }
+
+      const attendeeName = document.getElementById('name').value.trim();
+      const attendeeEmail = document.getElementById('email').value.trim();
+      const attendeePhone = document.getElementById('phone').value.trim();
+      const attendeeCompany = document.getElementById('company').value.trim();
+      const notes = document.getElementById('notes').value.trim();
+
+      if (!attendeeName && !attendeeEmail && !attendeePhone) {
+        setError('Comparte al menos nombre, correo o teléfono para confirmar la cita.');
+        return;
+      }
+
+      confirmBtnEl.disabled = true;
+      confirmBtnEl.textContent = 'Confirmando...';
+      try {
+        const response = await fetch(`${apiBase}/web/booking/book`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            ...basePayload(),
+            start_at: state.selectedStartAt,
+            notes: notes || undefined,
+            attendee_name: attendeeName || undefined,
+            attendee_email: attendeeEmail || undefined,
+            attendee_phone: attendeePhone || undefined,
+            attendee_company: attendeeCompany || undefined,
+          }),
+          cache: 'no-store',
+        });
+        const data = await response.json();
+        if (!response.ok || !data?.ok) {
+          throw new Error(data?.detail || 'No se pudo confirmar la cita');
+        }
+        setSuccess(`Cita confirmada: ${state.selectedLabel}. En breve te contactamos.`);
+      } catch (error) {
+        setError(error?.message || 'No se pudo confirmar la cita');
+        confirmBtnEl.disabled = false;
+      } finally {
+        confirmBtnEl.textContent = 'Confirmar cita';
+      }
+    });
+
+    void loadAvailability();
+  </script>
+</body>
+</html>

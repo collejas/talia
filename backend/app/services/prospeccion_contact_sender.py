@@ -270,7 +270,7 @@ def _build_booking_url(
         or _clean_text(metadata.get("booking_url"))
         or _clean_text(metadata.get("agenda_url"))
         or _clean_text(metadata.get("demo_url"))
-        or "https://talia.mx/demo"
+        or "https://talia.mx/demo.html"
     )
     parsed_booking = urlparse(booking_base)
     booking_query = dict(parse_qsl(parsed_booking.query, keep_blank_values=True))
@@ -286,6 +286,12 @@ def _build_booking_url(
     for key, value in tracking_params.items():
         if key not in booking_query and value:
             booking_query[key] = value
+    tenant_alias = _clean_text(metadata.get("tenant_alias") or context.get("tenant_alias"))
+    organizacion_id = _clean_text(metadata.get("organizacion_id") or context.get("organizacion_id"))
+    if tenant_alias and "tenant_alias" not in booking_query and "ta" not in booking_query:
+        booking_query["ta"] = tenant_alias
+    if organizacion_id and "organizacion_id" not in booking_query and "oid" not in booking_query:
+        booking_query["oid"] = organizacion_id
     booking_query.setdefault("utm_content", "booking_link")
     booking_query.setdefault("intent", "demo_booking")
 
@@ -293,7 +299,7 @@ def _build_booking_url(
         (
             parsed_booking.scheme or "https",
             parsed_booking.netloc or "talia.mx",
-            parsed_booking.path or "/demo",
+            parsed_booking.path or "/demo.html",
             "",
             urlencode(booking_query, doseq=True),
             "",

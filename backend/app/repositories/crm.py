@@ -4495,6 +4495,32 @@ class CRMRepository:
                     return value.strip()
         return None
 
+    async def upsert_web_booking_session(
+        self,
+        *,
+        booking_session_id: str,
+        payload: dict[str, Any],
+    ) -> dict[str, Any] | None:
+        session_key = booking_session_id.strip()
+        if not session_key:
+            raise CRMRepositoryError("booking_session_id_required")
+        body = {"booking_session_id": session_key, **payload}
+        resp = await self._request(
+            "POST",
+            "/rest/v1/web_booking_sessions",
+            params={"on_conflict": "organizacion_id,booking_session_id"},
+            json=body,
+            prefer="resolution=merge-duplicates,return=representation",
+        )
+        data = resp.json() or []
+        if isinstance(data, list) and data:
+            row = data[0]
+        elif isinstance(data, dict):
+            row = data
+        else:
+            row = None
+        return row if isinstance(row, dict) else None
+
     async def update_conversation(
         self, *, conversation_id: str, patch: dict[str, Any]
     ) -> dict[str, Any]:

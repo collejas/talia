@@ -2606,6 +2606,79 @@ class WebVisitPayload(BaseModel):
         return str(value).strip()
 
 
+class PublicWebBookingAvailabilityPayload(BaseModel):
+    """Payload público para consultar disponibilidad de agenda y registrar apertura."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    booking_session_id: str = Field(..., min_length=4, max_length=255)
+    tenant_alias: str | None = Field(default=None, max_length=120)
+    organizacion_id: UUID | None = None
+    timezone: str | None = Field(default=None, max_length=64)
+    start_date: date | None = None
+    window_days: int = Field(default=14, ge=1, le=45)
+    source: str | None = Field(default="public_demo", max_length=80)
+    landing_url: str | None = Field(default=None, max_length=2048)
+    referrer: str | None = Field(default=None, max_length=2048)
+    user_agent: str | None = Field(default=None, max_length=1024)
+    country_code: str | None = Field(default=None, max_length=8)
+    country_name: str | None = Field(default=None, max_length=120)
+    cve_ent: str | None = Field(default=None, max_length=8)
+    nom_ent: str | None = Field(default=None, max_length=120)
+    cve_mun: str | None = Field(default=None, max_length=8)
+    nom_mun: str | None = Field(default=None, max_length=120)
+    cvegeo: str | None = Field(default=None, max_length=12)
+    utm_source: str | None = Field(default=None, max_length=120)
+    utm_medium: str | None = Field(default=None, max_length=120)
+    utm_campaign: str | None = Field(default=None, max_length=160)
+    utm_term: str | None = Field(default=None, max_length=160)
+    utm_content: str | None = Field(default=None, max_length=160)
+    cid: UUID | None = None
+    tid: UUID | None = None
+    eid: UUID | None = None
+    contacto_id: UUID | None = None
+    metadata: dict[str, Any] | None = Field(default=None)
+
+    @field_validator(
+        "booking_session_id",
+        "tenant_alias",
+        "timezone",
+        "source",
+        "landing_url",
+        "referrer",
+        "user_agent",
+        "country_code",
+        "country_name",
+        "cve_ent",
+        "nom_ent",
+        "cve_mun",
+        "nom_mun",
+        "cvegeo",
+        "utm_source",
+        "utm_medium",
+        "utm_campaign",
+        "utm_term",
+        "utm_content",
+        mode="before",
+    )
+    @classmethod
+    def _strip_text(cls, value: Any) -> Any:
+        if value is None:
+            return None
+        return str(value).strip()
+
+
+class PublicWebBookingCreatePayload(PublicWebBookingAvailabilityPayload):
+    """Payload público para confirmar una cita desde agenda web."""
+
+    start_at: str = Field(..., description="Fecha/hora en ISO 8601 con zona horaria.")
+    notes: str | None = Field(default=None, max_length=2000)
+    attendee_name: str | None = Field(default=None, max_length=160)
+    attendee_email: str | None = Field(default=None, max_length=255)
+    attendee_phone: str | None = Field(default=None, max_length=64)
+    attendee_company: str | None = Field(default=None, max_length=160)
+    conversation_id: UUID | None = None
+
 class ManualOverridePayload(BaseModel):
     """Payload para activar/desactivar modo manual."""
 
@@ -3523,6 +3596,48 @@ def _classify_source_class(
     if any(token in ref for token in ("facebook.", "instagram.", "twitter.", "t.co", "linkedin.")):
         return "organic_social"
     return "referral"
+
+
+def _request_tenant_alias(request: Request) -> str | None:
+    header_alias = request.headers.get("x-tenant-alias")
+    if not header_alias:
+        return None
+    trimmed = header_alias.strip().lower()
+    return trimmed or None
+
+
+async def _resolve_public_booking_organizacion_id(
+    *,
+    tenant_alias: str | None,
+    explicit_organizacion_id: UUID | None,
+    metadata: dict[str, Any] | None,
+    request: Request,
+) -> str:
+    alias_value = (tenant_alias or "").strip().lower() or None
+    if not alias_value and isinstance(metadata, dict):
+        meta_alias = metadata.get("tenant_alias")
+        if isinstance(meta_alias, str) and meta_alias.strip():
+            alias_value = meta_alias.strip().lower()
+    if not alias_value:
+        alias_value = _request_tenant_alias(request)
+
+    if alias_value:
+        resolved = await resolve_organizacion_id(canal="webchat", clave=alias_value)
+        if resolved:
+            return resolved
+
+    if explicit_organizacion_id:
+        return str(explicit_organizacion_id)
+
+    if isinstance(metadata, dict):
+        candidate = metadata.get("organizacion_id")
+        if isinstance(candidate, str) and candidate.strip():
+            try:
+                return str(UUID(candidate.strip()))
+            except ValueError:
+                pass
+
+    raise HTTPException(status_code=400, detail="tenant_alias_or_organizacion_id_required")
 
 
 def _build_portal_link(token: str) -> str:
@@ -20257,6 +20372,271 @@ async def register_web_visit(
         raise HTTPException(status_code=502, detail="web_visit_register_failed") from exc
 
     return Response(status_code=204)
+
+
+@router.post(
+    "/web/booking/availability",
+    summary="Consulta disponibilidad pública para agenda y registra apertura",
+)
+async def public_web_booking_availability(
+    payload: PublicWebBookingAvailabilityPayload,
+    request: Request,
+) -> dict[str, Any]:
+    metadata = dict(payload.metadata or {})
+    organizacion_id = await _resolve_public_booking_organizacion_id(
+        tenant_alias=payload.tenant_alias,
+        explicit_organizacion_id=payload.organizacion_id,
+        metadata=metadata,
+        request=request,
+    )
+    organizacion_uuid = UUID(organizacion_id)
+
+    calendar_settings = await tenant_runtime.get_calendar_runtime_settings(
+        organizacion_id=organizacion_uuid
+    )
+    resource_id = (calendar_settings.resource_id or "").strip()
+    if not resource_id:
+        raise HTTPException(status_code=400, detail="calendar_resource_missing")
+
+    timezone_hint = (
+        (payload.timezone or "").strip()
+        or (calendar_settings.timezone or "").strip()
+        or settings.webchat_calendar_timezone
+        or "America/Mexico_City"
+    )
+    start_day = payload.start_date or datetime.now(timezone.utc).date()
+    max_days = max(1, min(int(payload.window_days or 14), 45))
+    end_day = start_day + timedelta(days=max_days)
+
+    try:
+        availability = await calendar_service.list_slots(
+            resource_id=resource_id,
+            start_date=start_day,
+            end_date=end_day,
+            timezone_hint=timezone_hint,
+            max_days=max_days,
+            fallback_hold_minutes=calendar_settings.hold_minutes,
+        )
+    except CalendarError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    referrer = (payload.referrer or "").strip() or None
+    landing_url = (payload.landing_url or "").strip() or None
+    metadata.setdefault("tenant_alias", (payload.tenant_alias or "").strip().lower() or None)
+    metadata.setdefault("request_path", request.url.path)
+    metadata.setdefault("request_headers", {"accept_language": request.headers.get("accept-language")})
+
+    repo = CRMRepository()
+    try:
+        await repo.upsert_web_booking_session(
+            booking_session_id=(payload.booking_session_id or "").strip(),
+            payload={
+                "organizacion_id": organizacion_id,
+                "contacto_id": str(payload.contacto_id) if payload.contacto_id else None,
+                "campana_id": str(payload.cid) if payload.cid else None,
+                "template_id": str(payload.tid) if payload.tid else None,
+                "envio_id": str(payload.eid) if payload.eid else None,
+                "source": (payload.source or "").strip().lower() or "public_demo",
+                "landing_url": landing_url,
+                "referrer": referrer,
+                "ip": _request_ip(request),
+                "user_agent": (payload.user_agent or request.headers.get("user-agent") or "").strip() or None,
+                "accept_language": (request.headers.get("accept-language") or "").strip() or None,
+                "country_code": payload.country_code,
+                "country_name": payload.country_name,
+                "cve_ent": payload.cve_ent,
+                "nom_ent": payload.nom_ent,
+                "cve_mun": payload.cve_mun,
+                "nom_mun": payload.nom_mun,
+                "cvegeo": payload.cvegeo,
+                "utm_source": payload.utm_source,
+                "utm_medium": payload.utm_medium,
+                "utm_campaign": payload.utm_campaign,
+                "utm_term": payload.utm_term,
+                "utm_content": payload.utm_content,
+                "opened_at": datetime.now(timezone.utc).isoformat(),
+                "metadata": metadata,
+            },
+        )
+    except CRMRepositoryError as exc:
+        logger.exception(
+            "crm.web.booking.availability_session_upsert_failed",
+            extra={"booking_session_id": payload.booking_session_id, "error": str(exc)},
+        )
+
+    return {
+        "ok": True,
+        "availability": availability,
+        "context": {
+            "organizacion_id": organizacion_id,
+            "resource_id": resource_id,
+            "timezone": timezone_hint,
+        },
+    }
+
+
+@router.post(
+    "/web/booking/book",
+    summary="Confirma una cita pública en agenda",
+)
+async def public_web_booking_create(
+    payload: PublicWebBookingCreatePayload,
+    request: Request,
+) -> dict[str, Any]:
+    metadata = dict(payload.metadata or {})
+    organizacion_id = await _resolve_public_booking_organizacion_id(
+        tenant_alias=payload.tenant_alias,
+        explicit_organizacion_id=payload.organizacion_id,
+        metadata=metadata,
+        request=request,
+    )
+    organizacion_uuid = UUID(organizacion_id)
+    start_at = _parse_datetime_input(payload.start_at, field="start_at")
+
+    calendar_settings = await tenant_runtime.get_calendar_runtime_settings(
+        organizacion_id=organizacion_uuid
+    )
+    resource_id = (calendar_settings.resource_id or "").strip()
+    if not resource_id:
+        raise HTTPException(status_code=400, detail="calendar_resource_missing")
+
+    repo = CRMRepository()
+    contact_uuid = payload.contacto_id
+    if contact_uuid:
+        existing_contact = await repo.get_contact_by_id(contact_id=str(contact_uuid))
+        if not existing_contact:
+            raise HTTPException(status_code=404, detail="contacto_not_found")
+        contact_org = _safe_uuid(existing_contact.get("organizacion_id"))
+        if contact_org and contact_org != organizacion_uuid:
+            raise HTTPException(status_code=400, detail="contacto_org_mismatch")
+    else:
+        attendee_name = (payload.attendee_name or "").strip()
+        attendee_email = (payload.attendee_email or "").strip() or None
+        attendee_phone = (payload.attendee_phone or "").strip() or None
+        attendee_company = (payload.attendee_company or "").strip() or None
+        if not attendee_name and not attendee_email and not attendee_phone:
+            raise HTTPException(status_code=400, detail="attendee_identity_required")
+        contact_row = await repo.create_contact(
+            organizacion_id=organizacion_uuid,
+            payload={
+                "nombre_completo": attendee_name or "Lead agenda web",
+                "correo": attendee_email,
+                "telefono_e164": attendee_phone,
+                "company_name": attendee_company,
+                "origen": "agenda_publica",
+                "estado": "lead",
+                "contacto_datos": {
+                    "booking_session_id": payload.booking_session_id,
+                    "source": payload.source or "public_demo",
+                    "utm_source": payload.utm_source,
+                    "utm_medium": payload.utm_medium,
+                    "utm_campaign": payload.utm_campaign,
+                    "cid": str(payload.cid) if payload.cid else None,
+                    "tid": str(payload.tid) if payload.tid else None,
+                    "eid": str(payload.eid) if payload.eid else None,
+                },
+            },
+        )
+        contact_uuid = _safe_uuid(str(contact_row.get("id")))
+        if not contact_uuid:
+            raise HTTPException(status_code=502, detail="contact_create_failed")
+
+    conversation_uuid = payload.conversation_id
+    if conversation_uuid is None:
+        latest = await repo.get_latest_conversation_for_contact(
+            contacto_id=contact_uuid,
+            canal="webchat",
+        )
+        if latest and latest.get("id"):
+            conversation_uuid = _safe_uuid(str(latest.get("id")))
+    if conversation_uuid is None:
+        created_conversation = await repo.create_conversation(
+            contacto_id=contact_uuid,
+            canal="webchat",
+            estado="abierta",
+        )
+        conversation_uuid = _safe_uuid(str(created_conversation.get("id")))
+    if conversation_uuid is None:
+        raise HTTPException(status_code=502, detail="conversation_create_failed")
+
+    try:
+        hold = await calendar_service.hold_slot(
+            resource_id=resource_id,
+            slot_start=start_at,
+            conversation_id=str(conversation_uuid),
+            contact_id=str(contact_uuid),
+            hold_minutes=max(1, int(calendar_settings.hold_minutes or 10)),
+            metadata={
+                "source": (payload.source or "").strip().lower() or "public_demo",
+                "booking_session_id": payload.booking_session_id,
+                "tenant_alias": (payload.tenant_alias or "").strip().lower() or None,
+                "organizacion_id": organizacion_id,
+                "cid": str(payload.cid) if payload.cid else None,
+                "tid": str(payload.tid) if payload.tid else None,
+                "eid": str(payload.eid) if payload.eid else None,
+            },
+        )
+        booking = await calendar_service.confirm_slot(
+            hold_id=str(hold.get("hold_id")),
+            notes=(payload.notes or "").strip() or None,
+            metadata={
+                "source": (payload.source or "").strip().lower() or "public_demo",
+                "booking_session_id": payload.booking_session_id,
+                "organizacion_id": organizacion_id,
+                "conversation_id": str(conversation_uuid),
+                "contact_id": str(contact_uuid),
+                "cid": str(payload.cid) if payload.cid else None,
+                "tid": str(payload.tid) if payload.tid else None,
+                "eid": str(payload.eid) if payload.eid else None,
+            },
+        )
+    except CalendarError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    try:
+        await repo.upsert_web_booking_session(
+            booking_session_id=(payload.booking_session_id or "").strip(),
+            payload={
+                "organizacion_id": organizacion_id,
+                "contacto_id": str(contact_uuid),
+                "campana_id": str(payload.cid) if payload.cid else None,
+                "template_id": str(payload.tid) if payload.tid else None,
+                "envio_id": str(payload.eid) if payload.eid else None,
+                "calendar_booking_id": booking.get("booking_id"),
+                "source": (payload.source or "").strip().lower() or "public_demo",
+                "landing_url": (payload.landing_url or "").strip() or None,
+                "referrer": (payload.referrer or "").strip() or None,
+                "ip": _request_ip(request),
+                "user_agent": (payload.user_agent or request.headers.get("user-agent") or "").strip() or None,
+                "accept_language": (request.headers.get("accept-language") or "").strip() or None,
+                "country_code": payload.country_code,
+                "country_name": payload.country_name,
+                "cve_ent": payload.cve_ent,
+                "nom_ent": payload.nom_ent,
+                "cve_mun": payload.cve_mun,
+                "nom_mun": payload.nom_mun,
+                "cvegeo": payload.cvegeo,
+                "utm_source": payload.utm_source,
+                "utm_medium": payload.utm_medium,
+                "utm_campaign": payload.utm_campaign,
+                "utm_term": payload.utm_term,
+                "utm_content": payload.utm_content,
+                "booked_at": datetime.now(timezone.utc).isoformat(),
+                "metadata": metadata,
+            },
+        )
+    except CRMRepositoryError as exc:
+        logger.exception(
+            "crm.web.booking.book_session_upsert_failed",
+            extra={"booking_session_id": payload.booking_session_id, "error": str(exc)},
+        )
+
+    return {
+        "ok": True,
+        "booking": booking,
+        "contacto_id": str(contact_uuid),
+        "conversation_id": str(conversation_uuid),
+    }
 
 
 @router.get("/dashboard/kpis")
