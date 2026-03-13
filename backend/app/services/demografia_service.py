@@ -337,10 +337,12 @@ async def fetch_visitantes_resumen_v2(
     if utm_campaign:
         payload["p_utm_campaign"] = utm_campaign
 
-    rows = await _call_rpc("panel_visitantes_geo_resumen_v3", payload, jwt=jwt)
+    # v3 agrega fallback de webchat cuando falta trafico web; para mapa de conversion
+    # mantenemos separacion estricta entre landing (web_sessions) y webchat.
+    rows = await _call_rpc("panel_visitantes_geo_resumen_v2", payload, jwt=jwt)
     if not isinstance(rows, list):
         raise DemografiaServiceError(
-            f"Respuesta inesperada de panel_visitantes_geo_resumen_v3: {rows!r}"
+            f"Respuesta inesperada de panel_visitantes_geo_resumen_v2: {rows!r}"
         )
 
     items: list[dict[str, Any]] = []
