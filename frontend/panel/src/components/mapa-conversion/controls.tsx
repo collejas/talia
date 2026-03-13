@@ -352,89 +352,109 @@ export function DemografiaControls({
           </div>
         </div>
 
-        <Select
-          value={sourceClass ?? "all"}
-          onValueChange={(value) => {
-            updateParams({ source_class: value === "all" ? null : value });
-          }}
-        >
-          <SelectTrigger className="w-[220px]">
-            <SelectValue placeholder="Origen de visita" />
-          </SelectTrigger>
-          <SelectContent className="z-50">
-            {SOURCE_CLASS_OPTIONS.map((option) => (
-              <SelectItem key={option.value} value={option.value}>
-                {option.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <div className="space-y-1">
+          <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+            Origen de visita
+          </p>
+          <Select
+            value={sourceClass ?? "all"}
+            onValueChange={(value) => {
+              updateParams({ source_class: value === "all" ? null : value });
+            }}
+          >
+            <SelectTrigger className="w-[220px]">
+              <SelectValue placeholder="Origen de visita" />
+            </SelectTrigger>
+            <SelectContent className="z-50">
+              {SOURCE_CLASS_OPTIONS.map((option) => (
+                <SelectItem key={option.value} value={option.value}>
+                  {option.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
 
-        <Select
-          value={utmSource ?? "all"}
-          onValueChange={(value) => {
-            updateParams({ utm_source: value === "all" ? null : value });
-          }}
-        >
-          <SelectTrigger className="w-[200px]">
-            <SelectValue placeholder="Origen de campaña" />
-          </SelectTrigger>
-          <SelectContent className="z-50">
-            <SelectItem value="all">Todos</SelectItem>
-            {utmSource && !utmSourceOptions.includes(utmSource) ? (
-              <SelectItem value={utmSource}>{utmSource}</SelectItem>
-            ) : null}
-            {utmSourceOptions.map((option) => (
-              <SelectItem key={`utm-source-${option}`} value={option}>
-                {option}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <div className="space-y-1">
+          <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+            Origen de campana (utm_source)
+          </p>
+          <Select
+            value={utmSource ?? "all"}
+            onValueChange={(value) => {
+              updateParams({ utm_source: value === "all" ? null : value });
+            }}
+          >
+            <SelectTrigger className="w-[220px]">
+              <SelectValue placeholder="Origen de campaña" />
+            </SelectTrigger>
+            <SelectContent className="z-50">
+              <SelectItem value="all">Todos</SelectItem>
+              {utmSource && !utmSourceOptions.includes(utmSource) ? (
+                <SelectItem value={utmSource}>{utmSource}</SelectItem>
+              ) : null}
+              {utmSourceOptions.map((option) => (
+                <SelectItem key={`utm-source-${option}`} value={option}>
+                  {option}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
 
-        <Select
-          value={utmMedium ?? "all"}
-          onValueChange={(value) => {
-            updateParams({ utm_medium: value === "all" ? null : value });
-          }}
-        >
-          <SelectTrigger className="w-[200px]">
-            <SelectValue placeholder="Tipo de medio" />
-          </SelectTrigger>
-          <SelectContent className="z-50">
-            <SelectItem value="all">Todos</SelectItem>
-            {utmMedium && !utmMediumOptions.includes(utmMedium) ? (
-              <SelectItem value={utmMedium}>{utmMedium}</SelectItem>
-            ) : null}
-            {utmMediumOptions.map((option) => (
-              <SelectItem key={`utm-medium-${option}`} value={option}>
-                {option}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <div className="space-y-1">
+          <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+            Tipo de medio (utm_medium)
+          </p>
+          <Select
+            value={utmMedium ?? "all"}
+            onValueChange={(value) => {
+              updateParams({ utm_medium: value === "all" ? null : value });
+            }}
+          >
+            <SelectTrigger className="w-[220px]">
+              <SelectValue placeholder="Tipo de medio" />
+            </SelectTrigger>
+            <SelectContent className="z-50">
+              <SelectItem value="all">Todos</SelectItem>
+              {utmMedium && !utmMediumOptions.includes(utmMedium) ? (
+                <SelectItem value={utmMedium}>{utmMedium}</SelectItem>
+              ) : null}
+              {utmMediumOptions.map((option) => (
+                <SelectItem key={`utm-medium-${option}`} value={option}>
+                  {option}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
 
-        <Select
-          value={utmCampaign ?? "all"}
-          onValueChange={(value) => {
-            updateParams({ utm_campaign: value === "all" ? null : value });
-          }}
-        >
-          <SelectTrigger className="w-[220px]">
-            <SelectValue placeholder="Nombre de campaña" />
-          </SelectTrigger>
-          <SelectContent className="z-50">
-            <SelectItem value="all">Todos</SelectItem>
-            {utmCampaign && !utmCampaignOptions.includes(utmCampaign) ? (
-              <SelectItem value={utmCampaign}>{utmCampaign}</SelectItem>
-            ) : null}
-            {utmCampaignOptions.map((option) => (
-              <SelectItem key={`utm-campaign-${option}`} value={option}>
-                {option}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <div className="space-y-1">
+          <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+            Nombre de campana (utm_campaign)
+          </p>
+          <Select
+            value={utmCampaign ?? "all"}
+            onValueChange={(value) => {
+              updateParams({ utm_campaign: value === "all" ? null : value });
+            }}
+          >
+            <SelectTrigger className="w-[220px]">
+              <SelectValue placeholder="Nombre de campaña" />
+            </SelectTrigger>
+            <SelectContent className="z-50">
+              <SelectItem value="all">Todos</SelectItem>
+              {utmCampaign && !utmCampaignOptions.includes(utmCampaign) ? (
+                <SelectItem value={utmCampaign}>{utmCampaign}</SelectItem>
+              ) : null}
+              {utmCampaignOptions.map((option) => (
+                <SelectItem key={`utm-campaign-${option}`} value={option}>
+                  {option}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
 
         <Button type="button" size="sm" variant="ghost" onClick={clearAttributionFilters}>
           Limpiar atribución
