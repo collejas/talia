@@ -91,6 +91,9 @@ export type DemografiaSummaryResponse = {
   canales: string[] | null;
   etapas: string[] | null;
   range: Record<string, unknown>;
+  attribution_catalog?: {
+    utm_campaign_labels?: Record<string, string>;
+  };
   leads: {
     rows: DemografiaLeadsRow[];
     captado_orden: number;

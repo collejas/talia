@@ -57,7 +57,7 @@ type DemografiaControlsProps = {
   utmCampaign: string | null;
   utmSourceOptions: string[];
   utmMediumOptions: string[];
-  utmCampaignOptions: string[];
+  utmCampaignOptions: Array<{ value: string; label: string }>;
   rango: string | null;
   desde: string | null;
   hasta: string | null;
@@ -444,12 +444,12 @@ export function DemografiaControls({
             </SelectTrigger>
             <SelectContent className="z-50">
               <SelectItem value="all">Todos</SelectItem>
-              {utmCampaign && !utmCampaignOptions.includes(utmCampaign) ? (
+              {utmCampaign && !utmCampaignOptions.some((option) => option.value === utmCampaign) ? (
                 <SelectItem value={utmCampaign}>{utmCampaign}</SelectItem>
               ) : null}
               {utmCampaignOptions.map((option) => (
-                <SelectItem key={`utm-campaign-${option}`} value={option}>
-                  {option}
+                <SelectItem key={`utm-campaign-${option.value}`} value={option.value}>
+                  {option.label}
                 </SelectItem>
               ))}
             </SelectContent>

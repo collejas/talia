@@ -20539,6 +20539,62 @@ async def demografia_resumen_v2(
             utm_campaign=utm_campaign_value,
             jwt=user_token,
         )
+
+        utm_campaign_values: list[str] = []
+        campaign_seen: set[str] = set()
+        visitantes_items = (
+            visitantes_payload.get("items")
+            if isinstance(visitantes_payload, dict)
+            else None
+        )
+        if isinstance(visitantes_items, list):
+            for item in visitantes_items:
+                if not isinstance(item, dict):
+                    continue
+                utm_top = item.get("utm_top")
+                if not isinstance(utm_top, list):
+                    continue
+                for utm_row in utm_top:
+                    if not isinstance(utm_row, dict):
+                        continue
+                    campaign_key = str(utm_row.get("utm_campaign") or "").strip().lower()
+                    if not campaign_key or campaign_key == "(none)" or campaign_key in campaign_seen:
+                        continue
+                    campaign_seen.add(campaign_key)
+                    utm_campaign_values.append(campaign_key)
+
+        utm_campaign_labels: dict[str, str] = {}
+        if utm_campaign_values:
+            campaign_rows = await repo.list_campaigns(organizacion_id=organizacion_id)
+            campaign_name_by_id: dict[str, str] = {}
+            for campaign_row in campaign_rows:
+                if not isinstance(campaign_row, dict):
+                    continue
+                campaign_id = str(campaign_row.get("id") or "").strip()
+                campaign_name = str(campaign_row.get("nombre") or "").strip()
+                if campaign_id and campaign_name:
+                    campaign_name_by_id[campaign_id] = campaign_name
+
+            link_rows = await repo.list_web_sessions_campaign_links(
+                organizacion_id=organizacion_id,
+                utm_campaigns=utm_campaign_values,
+                date_from=date_from,
+                date_to=date_to,
+                state_code=state_code,
+                source_class=source_class_value,
+                utm_source=utm_source_value,
+                utm_medium=utm_medium_value,
+            )
+            for link_row in link_rows:
+                if not isinstance(link_row, dict):
+                    continue
+                campaign_key = str(link_row.get("utm_campaign") or "").strip().lower()
+                cid_value = str(link_row.get("cid") or "").strip()
+                if not campaign_key or not cid_value or campaign_key in utm_campaign_labels:
+                    continue
+                campaign_name = campaign_name_by_id.get(cid_value)
+                if campaign_name:
+                    utm_campaign_labels[campaign_key] = campaign_name
     except DemografiaServiceError as exc:
         logger.exception("crm.demografia.resumen_v2_failed")
         raise HTTPException(
@@ -20557,6 +20613,9 @@ async def demografia_resumen_v2(
             "utm_source": utm_source_value,
             "utm_medium": utm_medium_value,
             "utm_campaign": utm_campaign_value,
+        },
+        "attribution_catalog": {
+            "utm_campaign_labels": utm_campaign_labels,
         },
         "leads": leads_payload,
         "visitantes": visitantes_payload,

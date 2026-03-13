@@ -376,8 +376,14 @@ export default async function Page({
     const sourceSet = new Set<string>();
     const mediumSet = new Set<string>();
     const campaignSet = new Set<string>();
+    const campaignLabelMap =
+      demografiaResponse?.summary.attribution_catalog?.utm_campaign_labels ?? {};
     if (!demografiaResponse) {
-      return { sources: [] as string[], media: [] as string[], campaigns: [] as string[] };
+      return {
+        sources: [] as string[],
+        media: [] as string[],
+        campaigns: [] as Array<{ value: string; label: string }>,
+      };
     }
     const pushValue = (set: Set<string>, value: string | null | undefined) => {
       if (!value) return;
@@ -402,7 +408,12 @@ export default async function Page({
     return {
       sources: Array.from(sourceSet).sort(),
       media: Array.from(mediumSet).sort(),
-      campaigns: Array.from(campaignSet).sort(),
+      campaigns: Array.from(campaignSet)
+        .sort()
+        .map((value) => ({
+          value,
+          label: campaignLabelMap[value] || value,
+        })),
     };
   })();
   const nivelLabel = nivel.charAt(0).toUpperCase() + nivel.slice(1);

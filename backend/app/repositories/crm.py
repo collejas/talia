@@ -1910,6 +1910,53 @@ class CRMRepository:
             raise CRMRepositoryError(f"Respuesta inesperada al listar campañas: {data!r}")
         return data
 
+    async def list_web_sessions_campaign_links(
+        self,
+        *,
+        organizacion_id: UUID,
+        utm_campaigns: Sequence[str],
+        date_from: datetime | None = None,
+        date_to: datetime | None = None,
+        state_code: str | None = None,
+        source_class: str | None = None,
+        utm_source: str | None = None,
+        utm_medium: str | None = None,
+        limit: int = 2000,
+    ) -> list[dict[str, Any]]:
+        campaign_values = [str(value or "").strip().lower() for value in utm_campaigns]
+        campaign_values = [value for value in campaign_values if value]
+        if not campaign_values:
+            return []
+
+        params: dict[str, str] = {
+            "organizacion_id": f"eq.{organizacion_id}",
+            "select": "utm_campaign,cid,actualizado_en,last_seen_at",
+            "order": "actualizado_en.desc,last_seen_at.desc",
+            "limit": str(max(1, min(limit, 5000))),
+            "cid": "not.is.null",
+            "utm_campaign": _postgrest_in_clause(campaign_values),
+        }
+        if date_from:
+            params["last_seen_at"] = f"gte.{date_from.isoformat()}"
+        if date_to:
+            params["first_seen_at"] = f"lte.{date_to.isoformat()}"
+        if state_code:
+            params["cve_ent"] = f"eq.{state_code}"
+        if source_class:
+            params["source_class"] = f"eq.{source_class}"
+        if utm_source:
+            params["utm_source"] = f"eq.{utm_source}"
+        if utm_medium:
+            params["utm_medium"] = f"eq.{utm_medium}"
+
+        resp = await self._request("GET", "/rest/v1/web_sessions", params=params)
+        data = resp.json() or []
+        if not isinstance(data, list):
+            raise CRMRepositoryError(
+                f"Respuesta inesperada al listar links utm_campaign/cid: {data!r}"
+            )
+        return [row for row in data if isinstance(row, dict)]
+
     async def create_campaign(
         self,
         *,
