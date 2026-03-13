@@ -2616,7 +2616,7 @@ class PublicWebBookingAvailabilityPayload(BaseModel):
     organizacion_id: UUID | None = None
     timezone: str | None = Field(default=None, max_length=64)
     start_date: date | None = None
-    window_days: int = Field(default=14, ge=1, le=45)
+    window_days: int = Field(default=14, ge=1, le=60)
     source: str | None = Field(default="public_demo", max_length=80)
     landing_url: str | None = Field(default=None, max_length=2048)
     referrer: str | None = Field(default=None, max_length=2048)
@@ -20407,7 +20407,7 @@ async def public_web_booking_availability(
         or "America/Mexico_City"
     )
     start_day = payload.start_date or datetime.now(timezone.utc).date()
-    max_days = max(1, min(int(payload.window_days or 14), 45))
+    max_days = max(1, min(int(payload.window_days or 14), 60))
     end_day = start_day + timedelta(days=max_days)
 
     try:
