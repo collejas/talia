@@ -82,6 +82,12 @@ def _prepare_followup_scope(
     elif "state" not in followup:
         followup["state"] = state
         changed = True
+    else:
+        # state es una copia aislada; re-enlazar evita perder cambios posteriores.
+        previous_state = followup.get("state")
+        followup["state"] = state
+        if previous_state != state:
+            changed = True
     return followup, state, changed
 
 

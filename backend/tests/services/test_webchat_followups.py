@@ -15,7 +15,14 @@ class DummyRepo:
         self.requested_cutoff: datetime | None = None
         self.opportunity_response: dict[str, Any] | None = None
 
-    async def list_webchat_conversations_for_followup(self, *, inactive_since, limit):
+    async def list_webchat_conversations_for_followup(
+        self,
+        *,
+        inactive_since,
+        limit,
+        cursor_last_out=None,
+        cursor_last_id=None,
+    ):
         self.requested_cutoff = inactive_since
         self.requested_limit = limit
         return self.conversations
@@ -347,3 +354,50 @@ async def test_ensure_contact_ready_for_assignment(monkeypatch: pytest.MonkeyPat
     )
     assert not_ready is False
     assert len(refresh_calls) == prev_len
+
+
+@pytest.mark.asyncio
+async def test_record_reengage_attempt_increments_existing_state(monkeypatch: pytest.MonkeyPatch) -> None:
+    contact_store = {
+        "id": "contact-1",
+        "organizacion_id": "org-1",
+        "contacto_datos": {
+            "webchat_followup": {
+                "current_conversation_id": "conv-1",
+                "state": {
+                    "last_session_id": "session-1",
+                    "reengage": {"attempts": 1, "sent_at": "2026-03-13T03:00:00+00:00"},
+                },
+            }
+        },
+    }
+
+    async def fake_fetch_contact(contact_id: str):
+        assert contact_id == "contact-1"
+        return {
+            "id": contact_store["id"],
+            "organizacion_id": contact_store["organizacion_id"],
+            "contacto_datos": dict(contact_store["contacto_datos"]),
+        }
+
+    async def fake_update_contact(contact_id: str, patch: dict[str, Any]):
+        assert contact_id == "contact-1"
+        contact_store["contacto_datos"] = dict(patch.get("contacto_datos") or {})
+        return {
+            "id": contact_store["id"],
+            "organizacion_id": contact_store["organizacion_id"],
+            "contacto_datos": dict(contact_store["contacto_datos"]),
+        }
+
+    monkeypatch.setattr(webchat_followups.storage, "fetch_contact", fake_fetch_contact)
+    monkeypatch.setattr(webchat_followups.storage, "update_contact", fake_update_contact)
+
+    await webchat_followups.record_reengage_attempt(
+        conversation_id="conv-1",
+        contact_id="contact-1",
+        sent_at=datetime(2026, 3, 13, 3, 30, tzinfo=timezone.utc),
+        message="reengage",
+    )
+
+    state = contact_store["contacto_datos"]["webchat_followup"]["state"]
+    assert state["reengage"]["attempts"] == 2
