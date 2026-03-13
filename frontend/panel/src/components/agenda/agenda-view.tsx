@@ -12,6 +12,7 @@ import { cn } from "@/lib/utils"
 import { AgendaCalendar } from "@/components/agenda/agenda-calendar"
 import { AgendaTable } from "@/components/agenda/agenda-table"
 import { AgendaEventDrawer } from "@/components/agenda/agenda-event-drawer"
+import { AgendaAvailabilityQuickModal } from "@/components/agenda/agenda-availability-quick-modal"
 import {
   Sheet,
   SheetContent,
@@ -93,13 +94,16 @@ export function AgendaView({ items }: AgendaViewProps) {
             Cambia entre el calendario semanal y la lista detallada.
           </p>
         </div>
-        <div className="inline-flex items-center gap-2 rounded-full border border-border/60 bg-background p-1">
-          <ToggleButton active={mode === "calendar"} onClick={() => setMode("calendar")}>
-            Calendario
-          </ToggleButton>
-          <ToggleButton active={mode === "table"} onClick={() => setMode("table")}>
-            Lista
-          </ToggleButton>
+        <div className="flex flex-wrap items-center gap-2">
+          <AgendaAvailabilityQuickModal />
+          <div className="inline-flex items-center gap-2 rounded-full border border-border/60 bg-background p-1">
+            <ToggleButton active={mode === "calendar"} onClick={() => setMode("calendar")}>
+              Calendario
+            </ToggleButton>
+            <ToggleButton active={mode === "table"} onClick={() => setMode("table")}>
+              Lista
+            </ToggleButton>
+          </div>
         </div>
       </div>
       {mode === "calendar" ? (

@@ -1684,6 +1684,40 @@ class AgendaBookingCreatePayload(BaseModel):
     )
 
 
+class AgendaResourceUpdatePayload(BaseModel):
+    """Payload para actualizar parámetros del recurso de agenda."""
+
+    timezone: str | None = Field(default=None, max_length=64)
+    slot_minutes: int | None = Field(default=None, ge=5, le=240)
+    buffer_minutes: int | None = Field(default=None, ge=0, le=180)
+    capacity_per_slot: int | None = Field(default=None, ge=1, le=200)
+    max_days_visible: int | None = Field(default=None, ge=1, le=60)
+    is_active: bool | None = None
+
+
+class AgendaExceptionCreatePayload(BaseModel):
+    """Payload para crear excepciones de disponibilidad."""
+
+    resource_id: UUID
+    kind: str = Field(..., description="block | extra")
+    start_at: str = Field(..., description="Fecha/hora ISO 8601 con zona horaria.")
+    end_at: str = Field(..., description="Fecha/hora ISO 8601 con zona horaria.")
+    capacity: int | None = Field(default=None, ge=0, le=200)
+    reason: str | None = Field(default=None, max_length=500)
+    metadata: dict[str, Any] | None = Field(default=None)
+
+
+class AgendaExceptionUpdatePayload(BaseModel):
+    """Payload para editar excepciones de disponibilidad."""
+
+    kind: str | None = Field(default=None, description="block | extra")
+    start_at: str | None = Field(default=None, description="Fecha/hora ISO 8601 con zona horaria.")
+    end_at: str | None = Field(default=None, description="Fecha/hora ISO 8601 con zona horaria.")
+    capacity: int | None = Field(default=None, ge=0, le=200)
+    reason: str | None = Field(default=None, max_length=500)
+    metadata: dict[str, Any] | None = Field(default=None)
+
+
 class DeleteResultadosPayload(BaseModel):
     """IDs de resultados a eliminar."""
 
@@ -6423,6 +6457,48 @@ def _map_agenda_row(row: dict[str, Any]) -> dict[str, Any]:
         "contacto": contacto_payload,
         "asignado": asignado_payload,
         "propietario": propietario_payload,
+        "created_at": row.get("created_at"),
+        "updated_at": row.get("updated_at"),
+    }
+
+
+def _normalize_calendar_exception_kind(value: str | None) -> str:
+    normalized = (value or "").strip().lower()
+    if normalized not in {"block", "extra"}:
+        raise HTTPException(status_code=400, detail="kind_invalid")
+    return normalized
+
+
+def _map_calendar_resource_row(row: dict[str, Any]) -> dict[str, Any]:
+    metadata = _coerce_metadata(row.get("metadata"))
+    return {
+        "id": row.get("id"),
+        "name": row.get("name"),
+        "slug": row.get("slug"),
+        "timezone": row.get("timezone"),
+        "slot_minutes": row.get("slot_minutes"),
+        "buffer_minutes": row.get("buffer_minutes"),
+        "capacity_per_slot": row.get("capacity_per_slot"),
+        "max_holds_per_slot": row.get("max_holds_per_slot"),
+        "max_days_visible": row.get("max_days_visible"),
+        "is_active": bool(row.get("is_active")),
+        "metadata": metadata if isinstance(metadata, dict) else {},
+        "created_at": row.get("created_at"),
+        "updated_at": row.get("updated_at"),
+    }
+
+
+def _map_calendar_exception_row(row: dict[str, Any]) -> dict[str, Any]:
+    metadata = _coerce_metadata(row.get("metadata"))
+    return {
+        "id": row.get("id"),
+        "resource_id": row.get("resource_id"),
+        "kind": row.get("kind"),
+        "start_at": row.get("start_at"),
+        "end_at": row.get("end_at"),
+        "capacity": row.get("capacity"),
+        "reason": row.get("reason"),
+        "metadata": metadata if isinstance(metadata, dict) else {},
         "created_at": row.get("created_at"),
         "updated_at": row.get("updated_at"),
     }
@@ -12893,6 +12969,239 @@ async def get_agenda_availability(
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
     return {"ok": True, "availability": payload}
+
+
+@router.get("/agenda/disponibilidad/resources")
+async def list_agenda_disponibilidad_resources(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("agenda.view")),
+    user_token: str = Depends(require_user_token),
+    include_inactive: bool = Query(default=False),
+) -> dict[str, Any]:
+    try:
+        rows = await repo.list_calendar_resources(
+            usuario_token=user_token,
+            organizacion_id=organizacion_id,
+            include_inactive=include_inactive,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    return {
+        "ok": True,
+        "items": [_map_calendar_resource_row(row) for row in rows],
+        "default_resource_id": settings.webchat_calendar_resource_id,
+    }
+
+
+@router.patch("/agenda/disponibilidad/resources/{resource_id}")
+async def update_agenda_disponibilidad_resource(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("agenda.view")),
+    user_token: str = Depends(require_user_token),
+    resource_id: UUID,
+    payload: AgendaResourceUpdatePayload,
+) -> dict[str, Any]:
+    changes: dict[str, Any] = {}
+    if payload.timezone is not None:
+        timezone_value = payload.timezone.strip()
+        if not timezone_value:
+            raise HTTPException(status_code=400, detail="timezone_invalid")
+        changes["timezone"] = timezone_value
+    if payload.slot_minutes is not None:
+        changes["slot_minutes"] = payload.slot_minutes
+    if payload.buffer_minutes is not None:
+        changes["buffer_minutes"] = payload.buffer_minutes
+    if payload.capacity_per_slot is not None:
+        changes["capacity_per_slot"] = payload.capacity_per_slot
+    if payload.max_days_visible is not None:
+        changes["max_days_visible"] = payload.max_days_visible
+    if payload.is_active is not None:
+        changes["is_active"] = payload.is_active
+
+    if not changes:
+        raise HTTPException(status_code=400, detail="payload_required")
+
+    try:
+        updated = await repo.update_calendar_resource(
+            usuario_token=user_token,
+            organizacion_id=organizacion_id,
+            resource_id=resource_id,
+            payload=changes,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    if updated is None:
+        raise HTTPException(status_code=404, detail="resource_not_found")
+
+    return {"ok": True, "resource": _map_calendar_resource_row(updated)}
+
+
+@router.get("/agenda/disponibilidad/exceptions")
+async def list_agenda_disponibilidad_exceptions(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("agenda.view")),
+    user_token: str = Depends(require_user_token),
+    resource_id: UUID | None = Query(default=None),
+    kind: str | None = Query(default=None),
+    fecha_desde: str | None = Query(default=None, alias="from"),
+    fecha_hasta: str | None = Query(default=None, alias="to"),
+    limit: Annotated[int, Query(ge=1, le=500)] = 200,
+) -> dict[str, Any]:
+    start_dt: datetime | None = None
+    end_dt: datetime | None = None
+    if fecha_desde:
+        parsed_start = _parse_date_value(fecha_desde, field="from")
+        if parsed_start is None:
+            raise HTTPException(status_code=400, detail="from_invalid")
+        if _is_date_only_input(fecha_desde):
+            start_dt = parsed_start.replace(hour=0, minute=0, second=0, microsecond=0, tzinfo=timezone.utc)
+        else:
+            start_dt = _ensure_utc(parsed_start if parsed_start.tzinfo else parsed_start.replace(tzinfo=timezone.utc))
+    if fecha_hasta:
+        parsed_end = _parse_date_value(fecha_hasta, field="to")
+        if parsed_end is None:
+            raise HTTPException(status_code=400, detail="to_invalid")
+        if _is_date_only_input(fecha_hasta):
+            end_dt = parsed_end.replace(hour=0, minute=0, second=0, microsecond=0, tzinfo=timezone.utc) + timedelta(days=1)
+        else:
+            end_dt = _ensure_utc(parsed_end if parsed_end.tzinfo else parsed_end.replace(tzinfo=timezone.utc))
+    if start_dt and end_dt and end_dt <= start_dt:
+        raise HTTPException(status_code=400, detail="range_invalid")
+
+    normalized_kind = _normalize_calendar_exception_kind(kind) if kind else None
+    try:
+        rows = await repo.list_calendar_exceptions(
+            usuario_token=user_token,
+            organizacion_id=organizacion_id,
+            resource_id=resource_id,
+            kind=normalized_kind,
+            start_at=start_dt,
+            end_at=end_dt,
+            limit=limit,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    return {"ok": True, "items": [_map_calendar_exception_row(row) for row in rows]}
+
+
+@router.post("/agenda/disponibilidad/exceptions")
+async def create_agenda_disponibilidad_exception(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("agenda.view")),
+    user_token: str = Depends(require_user_token),
+    payload: AgendaExceptionCreatePayload,
+) -> dict[str, Any]:
+    normalized_kind = _normalize_calendar_exception_kind(payload.kind)
+    start_dt = _ensure_utc(_parse_datetime_input(payload.start_at, field="start_at"))
+    end_dt = _ensure_utc(_parse_datetime_input(payload.end_at, field="end_at"))
+    if end_dt <= start_dt:
+        raise HTTPException(status_code=400, detail="range_invalid")
+
+    body: dict[str, Any] = {
+        "organizacion_id": str(organizacion_id),
+        "resource_id": str(payload.resource_id),
+        "kind": normalized_kind,
+        "start_at": start_dt.isoformat(),
+        "end_at": end_dt.isoformat(),
+        "reason": payload.reason.strip() if isinstance(payload.reason, str) and payload.reason.strip() else None,
+        "metadata": payload.metadata if isinstance(payload.metadata, dict) else {},
+    }
+    if payload.capacity is not None:
+        body["capacity"] = payload.capacity
+
+    try:
+        created = await repo.create_calendar_exception(
+            usuario_token=user_token,
+            payload=body,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    return {"ok": True, "exception": _map_calendar_exception_row(created)}
+
+
+@router.patch("/agenda/disponibilidad/exceptions/{exception_id}")
+async def update_agenda_disponibilidad_exception(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("agenda.view")),
+    user_token: str = Depends(require_user_token),
+    exception_id: UUID,
+    payload: AgendaExceptionUpdatePayload,
+) -> dict[str, Any]:
+    changes: dict[str, Any] = {}
+    start_dt: datetime | None = None
+    end_dt: datetime | None = None
+    if payload.kind is not None:
+        changes["kind"] = _normalize_calendar_exception_kind(payload.kind)
+    if payload.start_at is not None:
+        start_dt = _ensure_utc(_parse_datetime_input(payload.start_at, field="start_at"))
+        changes["start_at"] = start_dt.isoformat()
+    if payload.end_at is not None:
+        end_dt = _ensure_utc(_parse_datetime_input(payload.end_at, field="end_at"))
+        changes["end_at"] = end_dt.isoformat()
+    if start_dt and end_dt and end_dt <= start_dt:
+        raise HTTPException(status_code=400, detail="range_invalid")
+    if payload.capacity is not None:
+        changes["capacity"] = payload.capacity
+    if payload.reason is not None:
+        reason = payload.reason.strip()
+        changes["reason"] = reason or None
+    if payload.metadata is not None:
+        changes["metadata"] = payload.metadata
+
+    if not changes:
+        raise HTTPException(status_code=400, detail="payload_required")
+
+    try:
+        updated = await repo.update_calendar_exception(
+            usuario_token=user_token,
+            organizacion_id=organizacion_id,
+            exception_id=exception_id,
+            payload=changes,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    if updated is None:
+        raise HTTPException(status_code=404, detail="exception_not_found")
+
+    return {"ok": True, "exception": _map_calendar_exception_row(updated)}
+
+
+@router.delete("/agenda/disponibilidad/exceptions/{exception_id}")
+async def delete_agenda_disponibilidad_exception(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("agenda.view")),
+    user_token: str = Depends(require_user_token),
+    exception_id: UUID,
+) -> dict[str, Any]:
+    try:
+        deleted = await repo.delete_calendar_exception(
+            usuario_token=user_token,
+            organizacion_id=organizacion_id,
+            exception_id=exception_id,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    if not deleted:
+        raise HTTPException(status_code=404, detail="exception_not_found")
+    return {"ok": True}
 
 
 @router.post("/agenda/bookings/{booking_id}/reschedule")

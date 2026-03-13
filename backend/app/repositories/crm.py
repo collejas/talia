@@ -11715,6 +11715,181 @@ class CRMRepository:
             )
         return row
 
+    async def list_calendar_resources(
+        self,
+        *,
+        usuario_token: str,
+        organizacion_id: UUID,
+        include_inactive: bool = False,
+    ) -> list[dict[str, Any]]:
+        params: dict[str, str] = {
+            "select": (
+                "id,name,slug,timezone,slot_minutes,buffer_minutes,capacity_per_slot,"
+                "max_holds_per_slot,max_days_visible,is_active,metadata,created_at,updated_at"
+            ),
+            "organizacion_id": f"eq.{organizacion_id}",
+            "order": "name.asc",
+        }
+        if not include_inactive:
+            params["is_active"] = "eq.true"
+        resp = await self._request_with_user(
+            "GET",
+            "/rest/v1/calendar_resources",
+            token=usuario_token,
+            params=params,
+        )
+        data = resp.json() or []
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"Respuesta inválida al listar calendar_resources: {data!r}")
+        return [row for row in data if isinstance(row, dict)]
+
+    async def update_calendar_resource(
+        self,
+        *,
+        usuario_token: str,
+        organizacion_id: UUID,
+        resource_id: UUID,
+        payload: dict[str, Any],
+    ) -> dict[str, Any] | None:
+        if not payload:
+            raise CRMRepositoryError("resource_payload_required")
+        params = {
+            "id": f"eq.{resource_id}",
+            "organizacion_id": f"eq.{organizacion_id}",
+        }
+        resp = await self._request_with_user(
+            "PATCH",
+            "/rest/v1/calendar_resources",
+            token=usuario_token,
+            params=params,
+            json=payload,
+            prefer="return=representation",
+        )
+        data = resp.json() or []
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"Respuesta inválida al actualizar calendar_resources: {data!r}")
+        if not data:
+            return None
+        row = data[0]
+        if not isinstance(row, dict):
+            raise CRMRepositoryError(f"Respuesta inválida al actualizar calendar_resources: {row!r}")
+        return row
+
+    async def list_calendar_exceptions(
+        self,
+        *,
+        usuario_token: str,
+        organizacion_id: UUID,
+        resource_id: UUID | None = None,
+        kind: str | None = None,
+        start_at: datetime | None = None,
+        end_at: datetime | None = None,
+        limit: int = 200,
+    ) -> list[dict[str, Any]]:
+        params: dict[str, str] = {
+            "select": "id,resource_id,kind,start_at,end_at,capacity,reason,metadata,created_at,updated_at",
+            "organizacion_id": f"eq.{organizacion_id}",
+            "order": "start_at.asc",
+            "limit": str(max(1, min(limit, 500))),
+        }
+        if resource_id is not None:
+            params["resource_id"] = f"eq.{resource_id}"
+        if kind:
+            params["kind"] = f"eq.{kind}"
+        if start_at is not None and end_at is not None:
+            params["and"] = f"(start_at.lt.{end_at.isoformat()},end_at.gt.{start_at.isoformat()})"
+        elif start_at is not None:
+            params["end_at"] = f"gt.{start_at.isoformat()}"
+        elif end_at is not None:
+            params["start_at"] = f"lt.{end_at.isoformat()}"
+
+        resp = await self._request_with_user(
+            "GET",
+            "/rest/v1/calendar_exceptions",
+            token=usuario_token,
+            params=params,
+        )
+        data = resp.json() or []
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"Respuesta inválida al listar calendar_exceptions: {data!r}")
+        return [row for row in data if isinstance(row, dict)]
+
+    async def create_calendar_exception(
+        self,
+        *,
+        usuario_token: str,
+        payload: dict[str, Any],
+    ) -> dict[str, Any]:
+        resp = await self._request_with_user(
+            "POST",
+            "/rest/v1/calendar_exceptions",
+            token=usuario_token,
+            json=payload,
+            prefer="return=representation",
+        )
+        data = resp.json() or []
+        if not isinstance(data, list) or not data:
+            raise CRMRepositoryError("Supabase no devolvió la excepción creada")
+        row = data[0]
+        if not isinstance(row, dict):
+            raise CRMRepositoryError(f"Respuesta inválida al crear calendar_exceptions: {row!r}")
+        return row
+
+    async def update_calendar_exception(
+        self,
+        *,
+        usuario_token: str,
+        organizacion_id: UUID,
+        exception_id: UUID,
+        payload: dict[str, Any],
+    ) -> dict[str, Any] | None:
+        if not payload:
+            raise CRMRepositoryError("exception_payload_required")
+        params = {
+            "id": f"eq.{exception_id}",
+            "organizacion_id": f"eq.{organizacion_id}",
+        }
+        resp = await self._request_with_user(
+            "PATCH",
+            "/rest/v1/calendar_exceptions",
+            token=usuario_token,
+            params=params,
+            json=payload,
+            prefer="return=representation",
+        )
+        data = resp.json() or []
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"Respuesta inválida al actualizar calendar_exceptions: {data!r}")
+        if not data:
+            return None
+        row = data[0]
+        if not isinstance(row, dict):
+            raise CRMRepositoryError(f"Respuesta inválida al actualizar calendar_exceptions: {row!r}")
+        return row
+
+    async def delete_calendar_exception(
+        self,
+        *,
+        usuario_token: str,
+        organizacion_id: UUID,
+        exception_id: UUID,
+    ) -> bool:
+        params = {
+            "id": f"eq.{exception_id}",
+            "organizacion_id": f"eq.{organizacion_id}",
+        }
+        resp = await self._request_with_user(
+            "DELETE",
+            "/rest/v1/calendar_exceptions",
+            token=usuario_token,
+            params=params,
+            prefer="return=representation",
+        )
+        data = resp.json() or []
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"Respuesta inválida al eliminar calendar_exceptions: {data!r}")
+        return bool(data)
+
     async def get_organizacion_config(self, *, organizacion_id: UUID) -> dict[str, Any] | None:
         params = {
             "select": "id,config",
