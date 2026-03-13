@@ -21366,6 +21366,28 @@ async def public_web_booking_create(
             extra={"booking_session_id": payload.booking_session_id, "error": str(exc)},
         )
 
+    try:
+        booking_response = webchat_service._build_booking_response(booking)
+        await webchat_service._send_booking_confirmation_email(
+            booking=booking_response,
+            contact_id=str(contact_uuid),
+            conversation_id=str(conversation_uuid),
+            tarjeta_id=None,
+        )
+        if isinstance(booking_response.metadata, dict):
+            booking["metadata"] = booking_response.metadata
+    except Exception as exc:  # pragma: no cover - defensivo
+        logger.exception(
+            "crm.web.booking.confirmation_email_failed",
+            extra={
+                "booking_id": booking.get("booking_id"),
+                "booking_session_id": payload.booking_session_id,
+                "contacto_id": str(contact_uuid),
+                "conversation_id": str(conversation_uuid),
+                "error": str(exc),
+            },
+        )
+
     return {
         "ok": True,
         "booking": booking,
