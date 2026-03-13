@@ -342,24 +342,32 @@ export default async function Page({
       : { name: "", total: 0 };
   const topSource = (() => {
     if (!demografiaResponse) return { source: "", total: 0 };
-    const totals = new Map<string, number>();
-    const summaryItems = demografiaResponse.summary.visitantes.items ?? [];
-    for (const item of summaryItems) {
-      const sources = item.fuentes_top ?? [];
-      for (const source of sources) {
-        const key = (source.source || "").trim().toLowerCase();
-        if (!key) continue;
-        totals.set(key, (totals.get(key) ?? 0) + (source.total ?? 0));
+    const totalsFrom = (
+      sourcesByLocation: Array<{ fuentes_top?: Array<{ source?: string | null; total?: number | null }> }>,
+    ): Map<string, number> => {
+      const totals = new Map<string, number>();
+      for (const bucket of sourcesByLocation) {
+        const sources = bucket.fuentes_top ?? [];
+        for (const source of sources) {
+          const key = (source.source || "").trim().toLowerCase();
+          if (!key) continue;
+          totals.set(key, (totals.get(key) ?? 0) + (source.total ?? 0));
+        }
       }
+      return totals;
+    };
+
+    // Evita duplicar conteo: resumen y mapa representan el mismo universo de sesiones.
+    // Preferimos resumen y usamos mapa solo como fallback si resumen viene vacío.
+    let totals = totalsFrom(demografiaResponse.summary.visitantes.items ?? []);
+    if (!totals.size) {
+      totals = totalsFrom(
+        demografiaResponse.map.dataset.map((entry) => ({
+          fuentes_top: entry.traffic_web?.fuentes_top ?? [],
+        })),
+      );
     }
-    for (const entry of demografiaResponse.map.dataset) {
-      const sources = entry.traffic_web?.fuentes_top ?? [];
-      for (const source of sources) {
-        const key = (source.source || "").trim().toLowerCase();
-        if (!key) continue;
-        totals.set(key, (totals.get(key) ?? 0) + (source.total ?? 0));
-      }
-    }
+
     const first = Array.from(totals.entries()).sort((a, b) => b[1] - a[1])[0];
     if (!first) return { source: "", total: 0 };
     return { source: first[0], total: first[1] };
