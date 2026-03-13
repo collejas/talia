@@ -7,7 +7,7 @@ import smtplib
 import ssl
 from email.message import EmailMessage
 from email.utils import formataddr, make_msgid
-from typing import Iterable, Sequence
+from typing import Iterable, Literal, Sequence
 
 import httpx
 
@@ -16,6 +16,7 @@ from app.core.logging import get_logger
 from app.services.tenant_runtime import BrevoRuntimeSettings, MailRuntimeSettings
 
 logger = get_logger("app.services.email")
+EmailProviderPreference = Literal["auto", "smtp", "brevo"]
 
 
 class EmailSendError(RuntimeError):
@@ -66,6 +67,8 @@ def send_email(
     headers: dict[str, str] | None = None,
     mail_settings: MailRuntimeSettings | None = None,
     brevo_settings: BrevoRuntimeSettings | None = None,
+    provider_preference: EmailProviderPreference = "auto",
+    flow: str | None = None,
 ) -> str:
     """Envía un correo y devuelve el Message-ID utilizado."""
 
@@ -75,9 +78,40 @@ def send_email(
 
     mail_config = _resolve_mail_settings(mail_settings)
     brevo_settings_resolved = _resolve_brevo_settings(brevo_settings)
+    provider = str(provider_preference or "auto").strip().lower()
+    if provider not in {"auto", "smtp", "brevo"}:
+        raise EmailSendError("provider_preference inválido. Usa: auto, smtp o brevo.")
 
     message_id = make_msgid()
-    if brevo_settings_resolved.api_key:
+    selected_provider = "smtp"
+    if provider == "brevo":
+        if not (brevo_settings_resolved.api_key or "").strip():
+            raise EmailSendError("Configuración Brevo incompleta: falta API Key.")
+        selected_provider = "brevo"
+        result = _send_email_brevo(
+            message_id=message_id,
+            subject=subject,
+            body_text=body_text,
+            body_html=body_html,
+            recipients=to_recipients,
+            attachments=attachments or (),
+            headers=headers or {},
+            mail_settings=mail_config,
+            brevo_settings=brevo_settings_resolved,
+        )
+    elif provider == "smtp":
+        result = _send_email_smtp(
+            message_id=message_id,
+            subject=subject,
+            body_text=body_text,
+            body_html=body_html,
+            recipients=to_recipients,
+            attachments=attachments or (),
+            headers=headers or {},
+            mail_settings=mail_config,
+        )
+    elif brevo_settings_resolved.api_key:
+        selected_provider = "brevo"
         result = _send_email_brevo(
             message_id=message_id,
             subject=subject,
@@ -106,6 +140,9 @@ def send_email(
         extra={
             "subject": subject,
             "recipients": to_recipients,
+            "provider": selected_provider,
+            "provider_preference": provider,
+            "flow": flow,
         },
     )
     return result
