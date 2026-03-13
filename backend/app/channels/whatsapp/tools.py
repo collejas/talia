@@ -1553,7 +1553,6 @@ async def _handle_information_email(
 
     mail_org_uuid = _contact_org_uuid(contact)
     mail_settings = await tenant_runtime.get_mail_runtime_settings(organizacion_id=mail_org_uuid)
-    brevo_settings = await tenant_runtime.get_brevo_runtime_settings(organizacion_id=mail_org_uuid)
 
     template = _clone_template()
     include_summary = bool(template.get("use_summary", True))
@@ -1603,7 +1602,8 @@ async def _handle_information_email(
             body_html=None,
             attachments=None,
             mail_settings=mail_settings,
-            brevo_settings=brevo_settings,
+            provider_preference="smtp",
+            flow="whatsapp_information_email",
         )
     except EmailSendError as exc:
         logger.error(

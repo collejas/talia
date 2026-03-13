@@ -789,6 +789,8 @@ async def _run_envio_correo(
             headers=headers,
             mail_settings=mail_settings,
             brevo_settings=brevo_settings,
+            provider_preference="brevo",
+            flow="prospeccion_contacto",
         )
     except EmailSendError as exc:
         return ContactEnvioResult(
