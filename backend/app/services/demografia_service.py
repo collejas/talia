@@ -319,6 +319,7 @@ async def fetch_visitantes_resumen_v2(
     utm_source: str | None = None,
     utm_medium: str | None = None,
     utm_campaign: str | None = None,
+    template_id: str | None = None,
     jwt: str | None = None,
 ) -> dict[str, Any]:
     payload: dict[str, Any] = {"p_nivel": nivel}
@@ -336,6 +337,8 @@ async def fetch_visitantes_resumen_v2(
         payload["p_utm_medium"] = utm_medium
     if utm_campaign:
         payload["p_utm_campaign"] = utm_campaign
+    if template_id:
+        payload["p_tid"] = template_id
 
     # v3 agrega fallback de webchat cuando falta trafico web; para mapa de conversion
     # mantenemos separacion estricta entre landing (web_sessions) y webchat.

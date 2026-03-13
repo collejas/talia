@@ -93,6 +93,11 @@ export type DemografiaSummaryResponse = {
   range: Record<string, unknown>;
   attribution_catalog?: {
     utm_campaign_labels?: Record<string, string>;
+    template_options?: Array<{
+      value: string;
+      label: string;
+      total?: number;
+    }>;
   };
   leads: {
     rows: DemografiaLeadsRow[];
@@ -194,6 +199,7 @@ export async function loadDemografiaData(
     utmSource?: string | null;
     utmMedium?: string | null;
     utmCampaign?: string | null;
+    templateId?: string | null;
     rango?: string | null;
     desde?: string | null;
     hasta?: string | null;
@@ -231,6 +237,10 @@ export async function loadDemografiaData(
   if (options.utmCampaign) {
     resumenParams.utm_campaign = options.utmCampaign;
     mapaParams.utm_campaign = options.utmCampaign;
+  }
+  if (options.templateId) {
+    resumenParams.template_id = options.templateId;
+    mapaParams.template_id = options.templateId;
   }
   if (options.rango) {
     resumenParams.rango = options.rango;

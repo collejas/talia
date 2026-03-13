@@ -241,11 +241,13 @@ export default async function Page({
   const utmSourceParam = typeof params.utm_source === "string" ? params.utm_source.trim().toLowerCase() : "";
   const utmMediumParam = typeof params.utm_medium === "string" ? params.utm_medium.trim().toLowerCase() : "";
   const utmCampaignParam = typeof params.utm_campaign === "string" ? params.utm_campaign.trim().toLowerCase() : "";
+  const templateIdParam = typeof params.template_id === "string" ? params.template_id.trim() : "";
   const utmSource = utmSourceParam.length ? utmSourceParam : null;
   const utmMedium = utmMediumParam.length ? utmMediumParam : null;
   const utmCampaign = utmCampaignParam.length ? utmCampaignParam : null;
+  const templateId = templateIdParam.length ? templateIdParam : null;
   const attributionFilterActive = Boolean(
-    sourceClass || utmSource || utmMedium || utmCampaign,
+    sourceClass || utmSource || utmMedium || utmCampaign || templateId,
   );
   const rangoParam = typeof params.rango === "string" ? params.rango.trim().toLowerCase() : "";
   const rango = rangoParam.length ? rangoParam : "mes";
@@ -267,6 +269,7 @@ export default async function Page({
       utmSource,
       utmMedium,
       utmCampaign,
+      templateId,
       rango,
       desde,
       hasta,
@@ -378,11 +381,14 @@ export default async function Page({
     const campaignSet = new Set<string>();
     const campaignLabelMap =
       demografiaResponse?.summary.attribution_catalog?.utm_campaign_labels ?? {};
+    const templateOptionsRaw =
+      demografiaResponse?.summary.attribution_catalog?.template_options ?? [];
     if (!demografiaResponse) {
       return {
         sources: [] as string[],
         media: [] as string[],
         campaigns: [] as Array<{ value: string; label: string }>,
+        templates: [] as Array<{ value: string; label: string }>,
       };
     }
     const pushValue = (set: Set<string>, value: string | null | undefined) => {
@@ -414,6 +420,12 @@ export default async function Page({
           value,
           label: campaignLabelMap[value] || value,
         })),
+      templates: templateOptionsRaw
+        .map((item) => ({
+          value: String(item.value || "").trim(),
+          label: String(item.label || item.value || "").trim(),
+        }))
+        .filter((item) => item.value.length > 0),
     };
   })();
   const nivelLabel = nivel.charAt(0).toUpperCase() + nivel.slice(1);
@@ -474,9 +486,11 @@ export default async function Page({
                 utmSource={utmSource}
                 utmMedium={utmMedium}
                 utmCampaign={utmCampaign}
+                templateId={templateId}
                 utmSourceOptions={utmOptions.sources}
                 utmMediumOptions={utmOptions.media}
                 utmCampaignOptions={utmOptions.campaigns}
+                templateOptions={utmOptions.templates}
                 rango={rango}
                 desde={desde}
                 hasta={hasta}

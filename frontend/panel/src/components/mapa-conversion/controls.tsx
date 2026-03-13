@@ -55,9 +55,11 @@ type DemografiaControlsProps = {
   utmSource: string | null;
   utmMedium: string | null;
   utmCampaign: string | null;
+  templateId: string | null;
   utmSourceOptions: string[];
   utmMediumOptions: string[];
   utmCampaignOptions: Array<{ value: string; label: string }>;
+  templateOptions: Array<{ value: string; label: string }>;
   rango: string | null;
   desde: string | null;
   hasta: string | null;
@@ -72,9 +74,11 @@ export function DemografiaControls({
   utmSource,
   utmMedium,
   utmCampaign,
+  templateId,
   utmSourceOptions,
   utmMediumOptions,
   utmCampaignOptions,
+  templateOptions,
   rango,
   desde,
   hasta,
@@ -199,6 +203,7 @@ export function DemografiaControls({
       utm_source: null,
       utm_medium: null,
       utm_campaign: null,
+      template_id: null,
     });
   }
 
@@ -449,6 +454,33 @@ export function DemografiaControls({
               ) : null}
               {utmCampaignOptions.map((option) => (
                 <SelectItem key={`utm-campaign-${option.value}`} value={option.value}>
+                  {option.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="space-y-1">
+          <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+            Plantilla captada
+          </p>
+          <Select
+            value={templateId ?? "all"}
+            onValueChange={(value) => {
+              updateParams({ template_id: value === "all" ? null : value });
+            }}
+          >
+            <SelectTrigger className="w-[240px]">
+              <SelectValue placeholder="Plantilla" />
+            </SelectTrigger>
+            <SelectContent className="z-50">
+              <SelectItem value="all">Todas</SelectItem>
+              {templateId && !templateOptions.some((option) => option.value === templateId) ? (
+                <SelectItem value={templateId}>{templateId}</SelectItem>
+              ) : null}
+              {templateOptions.map((option) => (
+                <SelectItem key={`template-${option.value}`} value={option.value}>
                   {option.label}
                 </SelectItem>
               ))}

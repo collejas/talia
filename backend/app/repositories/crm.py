@@ -1957,6 +1957,75 @@ class CRMRepository:
             )
         return [row for row in data if isinstance(row, dict)]
 
+    async def list_web_sessions_template_links(
+        self,
+        *,
+        organizacion_id: UUID,
+        date_from: datetime | None = None,
+        date_to: datetime | None = None,
+        state_code: str | None = None,
+        source_class: str | None = None,
+        utm_source: str | None = None,
+        utm_medium: str | None = None,
+        utm_campaign: str | None = None,
+        template_id: UUID | None = None,
+        limit: int = 5000,
+    ) -> list[dict[str, Any]]:
+        params: dict[str, str] = {
+            "organizacion_id": f"eq.{organizacion_id}",
+            "select": "tid,last_seen_at,actualizado_en",
+            "order": "actualizado_en.desc,last_seen_at.desc",
+            "limit": str(max(1, min(limit, 10000))),
+            "tid": "not.is.null",
+        }
+        if date_from:
+            params["last_seen_at"] = f"gte.{date_from.isoformat()}"
+        if date_to:
+            params["first_seen_at"] = f"lte.{date_to.isoformat()}"
+        if state_code:
+            params["cve_ent"] = f"eq.{state_code}"
+        if source_class:
+            params["source_class"] = f"eq.{source_class}"
+        if utm_source:
+            params["utm_source"] = f"eq.{utm_source}"
+        if utm_medium:
+            params["utm_medium"] = f"eq.{utm_medium}"
+        if utm_campaign:
+            params["utm_campaign"] = f"eq.{utm_campaign}"
+        if template_id:
+            params["tid"] = f"eq.{template_id}"
+
+        resp = await self._request("GET", "/rest/v1/web_sessions", params=params)
+        data = resp.json() or []
+        if not isinstance(data, list):
+            raise CRMRepositoryError(
+                f"Respuesta inesperada al listar links tid: {data!r}"
+            )
+        return [row for row in data if isinstance(row, dict)]
+
+    async def list_contact_templates_by_ids(
+        self,
+        *,
+        organizacion_id: UUID,
+        template_ids: Sequence[str],
+    ) -> list[dict[str, Any]]:
+        values = [str(value or "").strip() for value in template_ids]
+        values = [value for value in values if value]
+        if not values:
+            return []
+        params = {
+            "organizacion_id": f"eq.{organizacion_id}",
+            "id": _postgrest_in_clause(values),
+            "select": "id,nombre,slug,canal,activo,metadata",
+        }
+        resp = await self._request("GET", "/rest/v1/prospeccion_contacto_templates", params=params)
+        data = resp.json() or []
+        if not isinstance(data, list):
+            raise CRMRepositoryError(
+                f"Respuesta inesperada al listar plantillas por id: {data!r}"
+            )
+        return [row for row in data if isinstance(row, dict)]
+
     async def create_campaign(
         self,
         *,

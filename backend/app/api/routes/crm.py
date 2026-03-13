@@ -20489,6 +20489,7 @@ async def demografia_resumen_v2(
     utm_source: str | None = Query(default=None),
     utm_medium: str | None = Query(default=None),
     utm_campaign: str | None = Query(default=None),
+    template_id: str | None = Query(default=None),
     rango: str | None = Query(default=None),
     desde: str | None = Query(default=None),
     hasta: str | None = Query(default=None),
@@ -20518,6 +20519,13 @@ async def demografia_resumen_v2(
     utm_source_value = (utm_source or "").strip().lower() or None
     utm_medium_value = (utm_medium or "").strip().lower() or None
     utm_campaign_value = (utm_campaign or "").strip().lower() or None
+    template_id_raw = (template_id or "").strip() or None
+    template_uuid_value: UUID | None = None
+    if template_id_raw:
+        try:
+            template_uuid_value = UUID(template_id_raw)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail="template_id_invalid") from exc
 
     try:
         leads_payload = await demografia_service.fetch_leads_resumen(
@@ -20537,6 +20545,7 @@ async def demografia_resumen_v2(
             utm_source=utm_source_value,
             utm_medium=utm_medium_value,
             utm_campaign=utm_campaign_value,
+            template_id=str(template_uuid_value) if template_uuid_value else None,
             jwt=user_token,
         )
 
@@ -20595,11 +20604,62 @@ async def demografia_resumen_v2(
                 campaign_name = campaign_name_by_id.get(cid_value)
                 if campaign_name:
                     utm_campaign_labels[campaign_key] = campaign_name
+
+        template_options: list[dict[str, Any]] = []
+        template_rows = await repo.list_web_sessions_template_links(
+            organizacion_id=organizacion_id,
+            date_from=date_from,
+            date_to=date_to,
+            state_code=state_code,
+            source_class=source_class_value,
+            utm_source=utm_source_value,
+            utm_medium=utm_medium_value,
+            utm_campaign=utm_campaign_value,
+            template_id=None,
+        )
+        template_totals: dict[str, int] = {}
+        for row in template_rows:
+            if not isinstance(row, dict):
+                continue
+            tid_value = str(row.get("tid") or "").strip()
+            if not tid_value:
+                continue
+            template_totals[tid_value] = template_totals.get(tid_value, 0) + 1
+
+        template_labels: dict[str, str] = {}
+        if template_totals:
+            templates = await repo.list_contact_templates_by_ids(
+                organizacion_id=organizacion_id,
+                template_ids=list(template_totals.keys()),
+            )
+            for template in templates:
+                template_id_value = str(template.get("id") or "").strip()
+                if not template_id_value:
+                    continue
+                template_name = str(template.get("nombre") or "").strip()
+                template_slug = str(template.get("slug") or "").strip()
+                label = template_name or template_slug or template_id_value[:8]
+                template_labels[template_id_value] = label
+
+        template_options = sorted(
+            [
+                {
+                    "value": tid_value,
+                    "label": template_labels.get(tid_value, f"Plantilla {tid_value[:8]}"),
+                    "total": total,
+                }
+                for tid_value, total in template_totals.items()
+            ],
+            key=lambda item: (-int(item.get("total") or 0), str(item.get("label") or "")),
+        )
     except DemografiaServiceError as exc:
         logger.exception("crm.demografia.resumen_v2_failed")
         raise HTTPException(
             status_code=502, detail=str(exc) or "Error consultando demografía v2"
         ) from exc
+    except CRMRepositoryError as exc:
+        logger.exception("crm.demografia.resumen_v2_catalog_failed")
+        raise HTTPException(status_code=502, detail=str(exc) or "Error de catálogo de atribución") from exc
 
     return {
         "ok": True,
@@ -20613,9 +20673,11 @@ async def demografia_resumen_v2(
             "utm_source": utm_source_value,
             "utm_medium": utm_medium_value,
             "utm_campaign": utm_campaign_value,
+            "template_id": str(template_uuid_value) if template_uuid_value else None,
         },
         "attribution_catalog": {
             "utm_campaign_labels": utm_campaign_labels,
+            "template_options": template_options,
         },
         "leads": leads_payload,
         "visitantes": visitantes_payload,
@@ -20638,6 +20700,7 @@ async def demografia_mapa_v2(
     utm_source: str | None = Query(default=None),
     utm_medium: str | None = Query(default=None),
     utm_campaign: str | None = Query(default=None),
+    template_id: str | None = Query(default=None),
     rango: str | None = Query(default=None),
     desde: str | None = Query(default=None),
     hasta: str | None = Query(default=None),
@@ -20667,6 +20730,13 @@ async def demografia_mapa_v2(
     utm_source_value = (utm_source or "").strip().lower() or None
     utm_medium_value = (utm_medium or "").strip().lower() or None
     utm_campaign_value = (utm_campaign or "").strip().lower() or None
+    template_id_raw = (template_id or "").strip() or None
+    template_uuid_value: UUID | None = None
+    if template_id_raw:
+        try:
+            template_uuid_value = UUID(template_id_raw)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail="template_id_invalid") from exc
 
     try:
         leads_payload = await demografia_service.fetch_leads_resumen(
@@ -20696,6 +20766,7 @@ async def demografia_mapa_v2(
             utm_source=utm_source_value,
             utm_medium=utm_medium_value,
             utm_campaign=utm_campaign_value,
+            template_id=str(template_uuid_value) if template_uuid_value else None,
             jwt=user_token,
         )
         dataset = demografia_service.build_map_dataset(
