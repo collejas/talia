@@ -484,6 +484,7 @@ function scheduleHiddenTimeout() {
     state.hiddenTimeoutHandle = null;
     try {
       sendSessionClosure({ allowBeacon: false });
+      clearPersistedSession();
     } finally {
       try {
         window.location.reload();
@@ -497,6 +498,19 @@ function clearHiddenTimeout() {
     window.clearTimeout(state.hiddenTimeoutHandle);
     state.hiddenTimeoutHandle = null;
   }
+}
+
+function clearPersistedSession() {
+  try {
+    localStorage.removeItem(config.storageSessionKey);
+  } catch (error) {
+    console.warn('[chat] No se pudo limpiar session_id al expirar inactividad oculta.', error);
+  }
+  state.sessionId = null;
+  state.conversationId = null;
+  state.openaiConversationId = null;
+  state.lastAssistantResponseId = null;
+  state.visitRegistered = false;
 }
 
 function getScrollContainer() {
