@@ -3637,7 +3637,9 @@ async def _resolve_public_booking_organizacion_id(
             except ValueError:
                 pass
 
-    raise HTTPException(status_code=400, detail="tenant_alias_or_organizacion_id_required")
+    # Fallback operativo: usar tenant maestro cuando el enlace legacy no trae ta/oid.
+    # Esto evita romper links ya enviados y replica el comportamiento de /crm/web/visit.
+    return str(tenant_runtime.MASTER_ORGANIZACION_ID)
 
 
 def _build_portal_link(token: str) -> str:
