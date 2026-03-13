@@ -21341,6 +21341,7 @@ async def public_web_booking_create(
 
     repo = CRMRepository()
     contact_uuid = payload.contacto_id
+    contact_data: dict[str, Any] | None = None
     if contact_uuid:
         existing_contact = await repo.get_contact_by_id(contact_id=str(contact_uuid))
         if not existing_contact:
@@ -21348,6 +21349,7 @@ async def public_web_booking_create(
         contact_org = _safe_uuid(existing_contact.get("organizacion_id"))
         if contact_org and contact_org != organizacion_uuid:
             raise HTTPException(status_code=400, detail="contacto_org_mismatch")
+        contact_data = existing_contact
     else:
         attendee_name = (payload.attendee_name or "").strip()
         attendee_email = (payload.attendee_email or "").strip() or None
@@ -21379,31 +21381,84 @@ async def public_web_booking_create(
         contact_uuid = _safe_uuid(str(contact_row.get("id")))
         if not contact_uuid:
             raise HTTPException(status_code=502, detail="contact_create_failed")
+        contact_data = contact_row
 
-    conversation_uuid = payload.conversation_id
-    if conversation_uuid is None:
-        latest = await repo.get_latest_conversation_for_contact(
-            contacto_id=contact_uuid,
-            canal="webchat",
+    try:
+        stage_payload = await repo.get_stage_by_code(
+            organizacion_id=organizacion_uuid,
+            codigo="demo",
         )
-        if latest and latest.get("id"):
-            conversation_uuid = _safe_uuid(str(latest.get("id")))
-    if conversation_uuid is None:
-        created_conversation = await repo.create_conversation(
-            contacto_id=contact_uuid,
-            canal="webchat",
-            estado="abierta",
+        if stage_payload and stage_payload.get("id"):
+            stage_id = _safe_uuid(stage_payload.get("id"))
+        else:
+            stage_id = await repo.get_default_stage_id(organizacion_id=organizacion_uuid)
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=f"opportunity_stage_lookup_failed:{exc}") from exc
+    if stage_id is None:
+        raise HTTPException(status_code=502, detail="demo_stage_missing")
+
+    display_name = (
+        _clean_text((contact_data or {}).get("nombre_completo"))
+        or _clean_text((contact_data or {}).get("company_name"))
+        or _clean_text((contact_data or {}).get("correo"))
+        or _clean_text((contact_data or {}).get("telefono_e164"))
+        or "Cliente"
+    )
+    opportunity_title = f"Demo agendada por cliente - {display_name}"
+    opportunity_metadata: dict[str, Any] = {
+        "source": (payload.source or "").strip().lower() or "public_demo",
+        "booking_session_id": payload.booking_session_id,
+        "utm_source": payload.utm_source,
+        "utm_medium": payload.utm_medium,
+        "utm_campaign": payload.utm_campaign,
+        "cid": str(payload.cid) if payload.cid else None,
+        "tid": str(payload.tid) if payload.tid else None,
+        "eid": str(payload.eid) if payload.eid else None,
+        "prefill_origin": "public_demo",
+    }
+    opportunity_metadata = {k: v for k, v in opportunity_metadata.items() if v is not None}
+    try:
+        opportunity_row = await repo.create_opportunity(
+            organizacion_id=organizacion_uuid,
+            payload={
+                "contacto_principal_id": str(contact_uuid),
+                "etapa_id": str(stage_id),
+                "titulo": opportunity_title,
+                "descripcion": "Demo agendada desde página pública.",
+                "moneda": "MXN",
+                "estado": "abierta",
+                "metadata": opportunity_metadata,
+            },
         )
-        conversation_uuid = _safe_uuid(str(created_conversation.get("id")))
-    if conversation_uuid is None:
-        raise HTTPException(status_code=502, detail="conversation_create_failed")
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=f"opportunity_create_failed:{exc}") from exc
+    opportunity_uuid = _safe_uuid(opportunity_row.get("id"))
+    if opportunity_uuid is None:
+        raise HTTPException(status_code=502, detail="opportunity_create_failed")
+    try:
+        await repo.append_stage_history(
+            organizacion_id=organizacion_uuid,
+            payload={
+                "oportunidad_id": str(opportunity_uuid),
+                "etapa_destino_id": str(stage_id),
+                "fuente": "public_demo_booking",
+            },
+        )
+    except CRMRepositoryError as exc:
+        logger.warning(
+            "crm.web.booking.stage_history_failed",
+            extra={"opportunity_id": str(opportunity_uuid), "error": str(exc)},
+        )
+
+    booking_context_id = str(uuid4())
 
     try:
         hold = await calendar_service.hold_slot(
             resource_id=resource_id,
             slot_start=start_at,
-            conversation_id=str(conversation_uuid),
+            conversation_id=booking_context_id,
             contact_id=str(contact_uuid),
+            tarjeta_id=str(opportunity_uuid),
             hold_minutes=max(1, int(calendar_settings.hold_minutes or 10)),
             metadata={
                 "source": (payload.source or "").strip().lower() or "public_demo",
@@ -21422,8 +21477,9 @@ async def public_web_booking_create(
                 "source": (payload.source or "").strip().lower() or "public_demo",
                 "booking_session_id": payload.booking_session_id,
                 "organizacion_id": organizacion_id,
-                "conversation_id": str(conversation_uuid),
+                "conversation_id": booking_context_id,
                 "contact_id": str(contact_uuid),
+                "tarjeta_id": str(opportunity_uuid),
                 "cid": str(payload.cid) if payload.cid else None,
                 "tid": str(payload.tid) if payload.tid else None,
                 "eid": str(payload.eid) if payload.eid else None,
@@ -21472,11 +21528,17 @@ async def public_web_booking_create(
 
     try:
         booking_response = webchat_service._build_booking_response(booking)
+        await webchat_service._sync_booking_with_opportunity(
+            booking=booking_response,
+            tarjeta_id=str(opportunity_uuid),
+            contact=contact_data,
+            channel="web",
+        )
         await webchat_service._send_booking_confirmation_email(
             booking=booking_response,
             contact_id=str(contact_uuid),
-            conversation_id=str(conversation_uuid),
-            tarjeta_id=None,
+            conversation_id=booking_context_id,
+            tarjeta_id=str(opportunity_uuid),
         )
         if isinstance(booking_response.metadata, dict):
             booking["metadata"] = booking_response.metadata
@@ -21487,7 +21549,7 @@ async def public_web_booking_create(
                 "booking_id": booking.get("booking_id"),
                 "booking_session_id": payload.booking_session_id,
                 "contacto_id": str(contact_uuid),
-                "conversation_id": str(conversation_uuid),
+                "conversation_id": booking_context_id,
                 "error": str(exc),
             },
         )
@@ -21496,7 +21558,8 @@ async def public_web_booking_create(
         "ok": True,
         "booking": booking,
         "contacto_id": str(contact_uuid),
-        "conversation_id": str(conversation_uuid),
+        "opportunity_id": str(opportunity_uuid),
+        "conversation_id": None,
     }
 
 

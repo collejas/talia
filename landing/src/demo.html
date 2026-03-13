@@ -57,19 +57,19 @@
         <form id="booking-form" class="mt-4 space-y-3">
           <div>
             <label class="mb-1 block text-sm text-slate-300" for="name">Nombre</label>
-            <input id="name" class="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm" placeholder="Ej. Luis Esquer" />
+            <input id="name" required class="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm" placeholder="Ej. Luis Esquer" />
           </div>
           <div>
             <label class="mb-1 block text-sm text-slate-300" for="email">Correo</label>
-            <input id="email" type="email" class="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm" placeholder="correo@empresa.com" />
+            <input id="email" type="email" required class="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm" placeholder="correo@empresa.com" />
           </div>
           <div>
             <label class="mb-1 block text-sm text-slate-300" for="phone">Teléfono</label>
-            <input id="phone" class="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm" placeholder="+5215512345678" />
+            <input id="phone" required class="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm" placeholder="+5215512345678" />
           </div>
           <div>
             <label class="mb-1 block text-sm text-slate-300" for="company">Empresa</label>
-            <input id="company" class="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm" placeholder="Geoactiv" />
+            <input id="company" required class="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm" placeholder="Geoactiv" />
           </div>
           <div>
             <label class="mb-1 block text-sm text-slate-300" for="notes">Notas (opcional)</label>
@@ -446,8 +446,16 @@
       const attendeeCompany = document.getElementById('company').value.trim();
       const notes = document.getElementById('notes').value.trim();
 
-      if (!attendeeName && !attendeeEmail && !attendeePhone) {
-        setError('Comparte al menos nombre, correo o teléfono para confirmar la cita.');
+      const missingFields = [];
+      if (!attendeeName) missingFields.push('Nombre');
+      if (!attendeeEmail) missingFields.push('Correo');
+      if (!attendeePhone) missingFields.push('Teléfono');
+      if (!attendeeCompany) missingFields.push('Empresa');
+      if (missingFields.length > 0) {
+        const message = missingFields.length === 1
+          ? `Falta completar el campo: ${missingFields[0]}.`
+          : `Faltan completar los campos: ${missingFields.join(', ')}.`;
+        setError(message);
         return;
       }
 
