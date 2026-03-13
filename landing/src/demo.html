@@ -101,6 +101,7 @@
     const confirmBtnEl = document.getElementById('confirm-btn');
     const formEl = document.getElementById('booking-form');
     const emailInputEl = document.getElementById('email');
+    const companyInputEl = document.getElementById('company');
     const formErrorEl = document.getElementById('form-error');
     const formSuccessEl = document.getElementById('form-success');
     const prevMonthBtn = document.getElementById('month-prev');
@@ -380,6 +381,10 @@
         const suggestedEmail = typeof data?.prefill?.email === 'string' ? data.prefill.email.trim() : '';
         if (suggestedEmail && emailInputEl && !emailInputEl.value.trim()) {
           emailInputEl.value = suggestedEmail;
+        }
+        const suggestedCompany = typeof data?.prefill?.company === 'string' ? data.prefill.company.trim() : '';
+        if (suggestedCompany && companyInputEl && !companyInputEl.value.trim()) {
+          companyInputEl.value = suggestedCompany;
         }
 
         const available = processSlots(state.slots);

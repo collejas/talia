@@ -21148,47 +21148,25 @@ async def public_web_booking_prefill(
         request=request,
     )
 
-    suggested_email: str | None = None
-    if payload.eid is not None:
-        repo = CRMRepository()
-        try:
-            envio_row = await repo.worker_get_envio_by_id(envio_id=payload.eid)
-        except CRMRepositoryError as exc:
-            logger.exception(
-                "crm.web.booking.prefill_lookup_failed",
-                extra={"eid": str(payload.eid), "error": str(exc)},
-            )
-            envio_row = None
-
-        if isinstance(envio_row, dict):
-            envio_org = _clean_text(envio_row.get("organizacion_id"))
-            if envio_org and envio_org == organizacion_id:
-                detalle = envio_row.get("detalle")
-                if isinstance(detalle, str):
-                    try:
-                        detalle = json.loads(detalle)
-                    except json.JSONDecodeError:
-                        detalle = {}
-                if isinstance(detalle, dict):
-                    suggested_email = _normalize_email(
-                        detalle.get("email") or detalle.get("correo") or detalle.get("mail")
-                    )
+    prefill = await _resolve_booking_prefill_data(
+        organizacion_id=organizacion_id,
+        envio_id=payload.eid,
+    )
 
     return {
         "ok": True,
-        "prefill": {
-            "email": suggested_email,
-        },
+        "prefill": prefill,
     }
 
 
-async def _resolve_booking_prefill_email(
+async def _resolve_booking_prefill_data(
     *,
     organizacion_id: str,
     envio_id: UUID | None,
-) -> str | None:
+) -> dict[str, str | None]:
+    empty = {"email": None, "company": None}
     if envio_id is None:
-        return None
+        return empty
     repo = CRMRepository()
     try:
         envio_row = await repo.worker_get_envio_by_id(envio_id=envio_id)
@@ -21197,14 +21175,14 @@ async def _resolve_booking_prefill_email(
             "crm.web.booking.prefill_lookup_failed",
             extra={"eid": str(envio_id), "error": str(exc)},
         )
-        return None
+        return empty
 
     if not isinstance(envio_row, dict):
-        return None
+        return empty
 
     envio_org = _clean_text(envio_row.get("organizacion_id"))
     if not envio_org or envio_org != organizacion_id:
-        return None
+        return empty
 
     detalle = envio_row.get("detalle")
     if isinstance(detalle, str):
@@ -21213,9 +21191,20 @@ async def _resolve_booking_prefill_email(
         except json.JSONDecodeError:
             detalle = {}
     if not isinstance(detalle, dict):
-        return None
+        return empty
 
-    return _normalize_email(detalle.get("email") or detalle.get("correo") or detalle.get("mail"))
+    suggested_email = _normalize_email(detalle.get("email") or detalle.get("correo") or detalle.get("mail"))
+    suggested_company = _clean_text(
+        detalle.get("company_name")
+        or detalle.get("empresa")
+        or detalle.get("company")
+        or detalle.get("razon_social")
+        or detalle.get("nombre_empresa")
+        or detalle.get("display_name")
+        or detalle.get("nombre")
+        or detalle.get("full_name")
+    )
+    return {"email": suggested_email, "company": suggested_company}
 
 
 @router.post(
@@ -21308,7 +21297,7 @@ async def public_web_booking_availability(
             extra={"booking_session_id": payload.booking_session_id, "error": str(exc)},
         )
 
-    suggested_email = await _resolve_booking_prefill_email(
+    prefill = await _resolve_booking_prefill_data(
         organizacion_id=organizacion_id,
         envio_id=payload.eid,
     )
@@ -21316,7 +21305,7 @@ async def public_web_booking_availability(
     return {
         "ok": True,
         "availability": availability,
-        "prefill": {"email": suggested_email},
+        "prefill": prefill,
         "context": {
             "organizacion_id": organizacion_id,
             "resource_id": resource_id,
