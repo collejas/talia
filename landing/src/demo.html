@@ -218,6 +218,7 @@
         weekday: 'long',
         day: '2-digit',
         month: 'long',
+        timeZone: 'UTC',
       }).format(new Date(Date.UTC(year, month - 1, day)));
     }
 
@@ -461,7 +462,8 @@
         if (!response.ok || !data?.ok) {
           throw new Error(data?.detail || 'No se pudo confirmar la cita');
         }
-        setSuccess(`Cita confirmada: ${state.selectedLabel}. En breve te contactamos.`);
+        setSuccess(`Cita confirmada: ${state.selectedLabel}. Te enviamos la confirmación a tu correo.`);
+        formEl.reset();
       } catch (error) {
         setError(error?.message || 'No se pudo confirmar la cita');
         confirmBtnEl.disabled = false;
