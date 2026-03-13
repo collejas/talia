@@ -51,6 +51,19 @@ type PreviewSlot = {
   holds: number
 }
 
+type PatternItem = {
+  id: string
+  resource_id: string
+  weekday: number
+  start_time: string
+  end_time: string
+  start_date: string | null
+  end_date: string | null
+  capacity: number
+  priority: number
+  is_active: boolean
+}
+
 type ExceptionForm = {
   id: string | null
   kind: "block" | "extra"
@@ -58,6 +71,18 @@ type ExceptionForm = {
   endAt: string
   capacity: string
   reason: string
+}
+
+type PatternForm = {
+  id: string | null
+  weekday: string
+  start_time: string
+  end_time: string
+  start_date: string
+  end_date: string
+  capacity: string
+  priority: string
+  is_active: boolean
 }
 
 const EMPTY_FORM: ExceptionForm = {
@@ -68,6 +93,28 @@ const EMPTY_FORM: ExceptionForm = {
   capacity: "",
   reason: "",
 }
+
+const EMPTY_PATTERN_FORM: PatternForm = {
+  id: null,
+  weekday: "0",
+  start_time: "09:00",
+  end_time: "18:00",
+  start_date: "",
+  end_date: "",
+  capacity: "1",
+  priority: "0",
+  is_active: true,
+}
+
+const WEEKDAY_OPTIONS = [
+  { value: "0", label: "Lunes" },
+  { value: "1", label: "Martes" },
+  { value: "2", label: "Miércoles" },
+  { value: "3", label: "Jueves" },
+  { value: "4", label: "Viernes" },
+  { value: "5", label: "Sábado" },
+  { value: "6", label: "Domingo" },
+] as const
 
 export function AgendaAvailabilityManager() {
   const { context: permissionContext } = usePermissions()
@@ -82,6 +129,9 @@ export function AgendaAvailabilityManager() {
   const [resourceId, setResourceId] = React.useState("")
   const [form, setForm] = React.useState<ExceptionForm>(EMPTY_FORM)
   const [exceptions, setExceptions] = React.useState<ExceptionItem[]>([])
+  const [patterns, setPatterns] = React.useState<PatternItem[]>([])
+  const [patternForm, setPatternForm] = React.useState<PatternForm>(EMPTY_PATTERN_FORM)
+  const [savingPattern, setSavingPattern] = React.useState(false)
   const [previewSlots, setPreviewSlots] = React.useState<PreviewSlot[]>([])
   const [previewLoading, setPreviewLoading] = React.useState(false)
   const [kindFilter, setKindFilter] = React.useState<"all" | "block" | "extra">("all")
@@ -165,6 +215,27 @@ export function AgendaAvailabilityManager() {
     const data = (await response.json()) as { items?: ExceptionItem[] }
     setExceptions(data.items ?? [])
   }, [resourceId, fromDate, toDate, kindFilter])
+
+  const loadPatterns = React.useCallback(async () => {
+    if (!resourceId) {
+      setPatterns([])
+      return
+    }
+    const params = new URLSearchParams({
+      resource_id: resourceId,
+      include_inactive: "true",
+      limit: "500",
+    })
+    const response = await fetch(`/api/agenda/disponibilidad/patterns?${params.toString()}`, {
+      method: "GET",
+      cache: "no-store",
+    })
+    if (!response.ok) {
+      throw new Error(await parseApiError(response))
+    }
+    const data = (await response.json()) as { items?: PatternItem[] }
+    setPatterns(data.items ?? [])
+  }, [resourceId])
 
   const loadPreview = React.useCallback(async () => {
     if (!resourceId) {
@@ -263,6 +334,23 @@ export function AgendaAvailabilityManager() {
 
   React.useEffect(() => {
     let cancelled = false
+    async function refreshPatterns() {
+      try {
+        await loadPatterns()
+      } catch (error) {
+        if (cancelled) return
+        const message = error instanceof Error ? error.message : "No se pudieron cargar patrones"
+        toast.error(message)
+      }
+    }
+    refreshPatterns()
+    return () => {
+      cancelled = true
+    }
+  }, [loadPatterns])
+
+  React.useEffect(() => {
+    let cancelled = false
     async function refreshPreview() {
       if (cancelled) return
       await loadPreview()
@@ -275,6 +363,10 @@ export function AgendaAvailabilityManager() {
 
   function resetForm() {
     setForm(EMPTY_FORM)
+  }
+
+  function resetPatternForm() {
+    setPatternForm(EMPTY_PATTERN_FORM)
   }
 
   async function saveResource() {
@@ -446,6 +538,114 @@ export function AgendaAvailabilityManager() {
       capacity: item.capacity != null ? String(item.capacity) : "",
       reason: item.reason ?? "",
     })
+  }
+
+  function startEditPattern(item: PatternItem) {
+    setPatternForm({
+      id: item.id,
+      weekday: String(item.weekday),
+      start_time: item.start_time.slice(0, 5),
+      end_time: item.end_time.slice(0, 5),
+      start_date: item.start_date ?? "",
+      end_date: item.end_date ?? "",
+      capacity: String(item.capacity),
+      priority: String(item.priority),
+      is_active: Boolean(item.is_active),
+    })
+  }
+
+  async function savePattern() {
+    if (!resourceId) return
+    const weekday = Number(patternForm.weekday)
+    const capacity = Number(patternForm.capacity)
+    const priority = Number(patternForm.priority)
+    if (!Number.isFinite(weekday) || weekday < 0 || weekday > 6) {
+      toast.error("weekday inválido.")
+      return
+    }
+    if (!patternForm.start_time || !patternForm.end_time) {
+      toast.error("Horario de inicio y fin es obligatorio.")
+      return
+    }
+    if (patternForm.end_time <= patternForm.start_time) {
+      toast.error("Hora fin debe ser mayor a hora inicio.")
+      return
+    }
+    if (!Number.isFinite(capacity) || capacity < 1 || capacity > 200) {
+      toast.error("Capacidad inválida.")
+      return
+    }
+    if (!Number.isFinite(priority) || priority < -100 || priority > 100) {
+      toast.error("Priority inválido.")
+      return
+    }
+
+    const payload: Record<string, unknown> = {
+      weekday,
+      start_time: patternForm.start_time,
+      end_time: patternForm.end_time,
+      start_date: patternForm.start_date || null,
+      end_date: patternForm.end_date || null,
+      capacity,
+      priority,
+      is_active: patternForm.is_active,
+    }
+
+    try {
+      setSavingPattern(true)
+      if (patternForm.id) {
+        const response = await fetch(`/api/agenda/disponibilidad/patterns/${patternForm.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        })
+        if (!response.ok) {
+          throw new Error(await parseApiError(response))
+        }
+        toast.success("Patrón actualizado.")
+      } else {
+        const response = await fetch("/api/agenda/disponibilidad/patterns", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            ...payload,
+            resource_id: resourceId,
+          }),
+        })
+        if (!response.ok) {
+          throw new Error(await parseApiError(response))
+        }
+        toast.success("Patrón creado.")
+      }
+      resetPatternForm()
+      await loadPatterns()
+      await loadPreview()
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "No se pudo guardar el patrón"
+      toast.error(message)
+    } finally {
+      setSavingPattern(false)
+    }
+  }
+
+  async function deletePattern(patternId: string) {
+    try {
+      const response = await fetch(`/api/agenda/disponibilidad/patterns/${patternId}`, {
+        method: "DELETE",
+      })
+      if (!response.ok) {
+        throw new Error(await parseApiError(response))
+      }
+      if (patternForm.id === patternId) {
+        resetPatternForm()
+      }
+      toast.success("Patrón eliminado.")
+      await loadPatterns()
+      await loadPreview()
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "No se pudo eliminar el patrón"
+      toast.error(message)
+    }
   }
 
   return (
@@ -699,6 +899,170 @@ export function AgendaAvailabilityManager() {
         </Card>
       </div>
 
+      <div className="grid gap-4 xl:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <CardTitle>{patternForm.id ? "Editar patrón semanal" : "Crear patrón semanal"}</CardTitle>
+            <CardDescription>Define disponibilidad recurrente por día de semana.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label>Día</Label>
+                <Select
+                  value={patternForm.weekday}
+                  onValueChange={(value) =>
+                    setPatternForm((current) => ({ ...current, weekday: value }))
+                  }
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {WEEKDAY_OPTIONS.map((day) => (
+                      <SelectItem key={day.value} value={day.value}>
+                        {day.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Capacidad</Label>
+                <Input
+                  type="number"
+                  min={1}
+                  max={200}
+                  value={patternForm.capacity}
+                  onChange={(event) =>
+                    setPatternForm((current) => ({ ...current, capacity: event.target.value }))
+                  }
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label>Hora inicio</Label>
+                <Input
+                  type="time"
+                  value={patternForm.start_time}
+                  onChange={(event) =>
+                    setPatternForm((current) => ({ ...current, start_time: event.target.value }))
+                  }
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Hora fin</Label>
+                <Input
+                  type="time"
+                  value={patternForm.end_time}
+                  onChange={(event) =>
+                    setPatternForm((current) => ({ ...current, end_time: event.target.value }))
+                  }
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label>Vigencia inicio (opcional)</Label>
+                <Input
+                  type="date"
+                  value={patternForm.start_date}
+                  onChange={(event) =>
+                    setPatternForm((current) => ({ ...current, start_date: event.target.value }))
+                  }
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Vigencia fin (opcional)</Label>
+                <Input
+                  type="date"
+                  value={patternForm.end_date}
+                  onChange={(event) =>
+                    setPatternForm((current) => ({ ...current, end_date: event.target.value }))
+                  }
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label>Priority</Label>
+                <Input
+                  type="number"
+                  min={-100}
+                  max={100}
+                  value={patternForm.priority}
+                  onChange={(event) =>
+                    setPatternForm((current) => ({ ...current, priority: event.target.value }))
+                  }
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Estatus</Label>
+                <Select
+                  value={patternForm.is_active ? "active" : "inactive"}
+                  onValueChange={(value) =>
+                    setPatternForm((current) => ({ ...current, is_active: value === "active" }))
+                  }
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="active">Activo</SelectItem>
+                    <SelectItem value="inactive">Inactivo</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <Button type="button" onClick={savePattern} disabled={!canManage || savingPattern || !resourceId}>
+                {savingPattern ? "Guardando..." : patternForm.id ? "Guardar cambios" : "Crear patrón"}
+              </Button>
+              <Button type="button" variant="ghost" onClick={resetPatternForm}>
+                Limpiar
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Patrones ({patterns.length})</CardTitle>
+            <CardDescription>Disponibilidad recurrente configurada para el recurso.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {!patterns.length ? (
+              <p className="text-sm text-muted-foreground">No hay patrones configurados.</p>
+            ) : (
+              <div className="max-h-[26rem] space-y-2 overflow-auto pr-1">
+                {patterns.map((item) => (
+                  <div key={item.id} className="rounded-md border border-border/70 p-3">
+                    <p className="text-sm font-medium">
+                      {weekdayLabel(item.weekday)} · {item.start_time.slice(0, 5)}-{item.end_time.slice(0, 5)}
+                    </p>
+                    <p className="text-muted-foreground text-xs">
+                      Capacidad {item.capacity} · Priority {item.priority} · {item.is_active ? "Activo" : "Inactivo"}
+                    </p>
+                    <p className="text-muted-foreground mt-1 text-xs">
+                      Vigencia: {item.start_date || "sin inicio"} a {item.end_date || "sin fin"}
+                    </p>
+                    <div className="mt-2 flex gap-2">
+                      <Button type="button" size="sm" variant="outline" onClick={() => startEditPattern(item)} disabled={!canManage}>
+                        Editar
+                      </Button>
+                      <Button type="button" size="sm" variant="destructive" onClick={() => deletePattern(item.id)} disabled={!canManage}>
+                        Eliminar
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
       <Card>
         <CardHeader>
           <CardTitle>Preview de slots ({previewSlots.length})</CardTitle>
@@ -772,6 +1136,10 @@ function formatRange(startAt: string, endAt: string): string {
   } catch {
     return `${startAt} - ${endAt}`
   }
+}
+
+function weekdayLabel(weekday: number): string {
+  return WEEKDAY_OPTIONS.find((day) => Number(day.value) === weekday)?.label ?? `Día ${weekday}`
 }
 
 async function parseApiError(response: Response): Promise<string> {

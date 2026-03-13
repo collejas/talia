@@ -11922,6 +11922,164 @@ class CRMRepository:
             raise CRMRepositoryError(f"Respuesta inválida al eliminar calendar_exceptions: {data!r}")
         return bool(data)
 
+    async def list_calendar_patterns(
+        self,
+        *,
+        usuario_token: str,
+        organizacion_id: UUID,
+        resource_id: UUID | None = None,
+        weekday: int | None = None,
+        include_inactive: bool = True,
+        limit: int = 500,
+    ) -> list[dict[str, Any]]:
+        params: dict[str, str] = {
+            "select": (
+                "id,resource_id,weekday,start_time,end_time,start_date,end_date,capacity,"
+                "priority,is_active,metadata,created_at,updated_at"
+            ),
+            "organizacion_id": f"eq.{organizacion_id}",
+            "order": "weekday.asc,start_time.asc,priority.desc",
+            "limit": str(max(1, min(limit, 1000))),
+        }
+        if resource_id is not None:
+            params["resource_id"] = f"eq.{resource_id}"
+        if weekday is not None:
+            params["weekday"] = f"eq.{weekday}"
+        if not include_inactive:
+            params["is_active"] = "eq.true"
+        resp = await self._request_with_user(
+            "GET",
+            "/rest/v1/calendar_availability_patterns",
+            token=usuario_token,
+            params=params,
+        )
+        data = resp.json() or []
+        if not isinstance(data, list):
+            raise CRMRepositoryError(
+                f"Respuesta inválida al listar calendar_availability_patterns: {data!r}"
+            )
+        return [row for row in data if isinstance(row, dict)]
+
+    async def get_calendar_pattern(
+        self,
+        *,
+        usuario_token: str,
+        organizacion_id: UUID,
+        pattern_id: UUID,
+    ) -> dict[str, Any] | None:
+        params = {
+            "select": (
+                "id,resource_id,weekday,start_time,end_time,start_date,end_date,capacity,"
+                "priority,is_active,metadata,created_at,updated_at"
+            ),
+            "organizacion_id": f"eq.{organizacion_id}",
+            "id": f"eq.{pattern_id}",
+            "limit": "1",
+        }
+        resp = await self._request_with_user(
+            "GET",
+            "/rest/v1/calendar_availability_patterns",
+            token=usuario_token,
+            params=params,
+        )
+        data = resp.json() or []
+        if not isinstance(data, list):
+            raise CRMRepositoryError(
+                f"Respuesta inválida al obtener calendar_availability_patterns: {data!r}"
+            )
+        if not data:
+            return None
+        row = data[0]
+        if not isinstance(row, dict):
+            raise CRMRepositoryError(
+                f"Respuesta inválida al obtener calendar_availability_patterns: {row!r}"
+            )
+        return row
+
+    async def create_calendar_pattern(
+        self,
+        *,
+        usuario_token: str,
+        payload: dict[str, Any],
+    ) -> dict[str, Any]:
+        resp = await self._request_with_user(
+            "POST",
+            "/rest/v1/calendar_availability_patterns",
+            token=usuario_token,
+            json=payload,
+            prefer="return=representation",
+        )
+        data = resp.json() or []
+        if not isinstance(data, list) or not data:
+            raise CRMRepositoryError("Supabase no devolvió el patrón creado")
+        row = data[0]
+        if not isinstance(row, dict):
+            raise CRMRepositoryError(
+                f"Respuesta inválida al crear calendar_availability_patterns: {row!r}"
+            )
+        return row
+
+    async def update_calendar_pattern(
+        self,
+        *,
+        usuario_token: str,
+        organizacion_id: UUID,
+        pattern_id: UUID,
+        payload: dict[str, Any],
+    ) -> dict[str, Any] | None:
+        if not payload:
+            raise CRMRepositoryError("pattern_payload_required")
+        params = {
+            "id": f"eq.{pattern_id}",
+            "organizacion_id": f"eq.{organizacion_id}",
+        }
+        resp = await self._request_with_user(
+            "PATCH",
+            "/rest/v1/calendar_availability_patterns",
+            token=usuario_token,
+            params=params,
+            json=payload,
+            prefer="return=representation",
+        )
+        data = resp.json() or []
+        if not isinstance(data, list):
+            raise CRMRepositoryError(
+                f"Respuesta inválida al actualizar calendar_availability_patterns: {data!r}"
+            )
+        if not data:
+            return None
+        row = data[0]
+        if not isinstance(row, dict):
+            raise CRMRepositoryError(
+                f"Respuesta inválida al actualizar calendar_availability_patterns: {row!r}"
+            )
+        return row
+
+    async def delete_calendar_pattern(
+        self,
+        *,
+        usuario_token: str,
+        organizacion_id: UUID,
+        pattern_id: UUID,
+    ) -> bool:
+        params = {
+            "id": f"eq.{pattern_id}",
+            "organizacion_id": f"eq.{organizacion_id}",
+        }
+        resp = await self._request_with_user(
+            "DELETE",
+            "/rest/v1/calendar_availability_patterns",
+            token=usuario_token,
+            params=params,
+            prefer="return=representation",
+        )
+        data = resp.json() or []
+        if not isinstance(data, list):
+            raise CRMRepositoryError(
+                f"Respuesta inválida al eliminar calendar_availability_patterns: {data!r}"
+            )
+        return bool(data)
+
     async def get_organizacion_config(self, *, organizacion_id: UUID) -> dict[str, Any] | None:
         params = {
             "select": "id,config",

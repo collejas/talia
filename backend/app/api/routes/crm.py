@@ -14,7 +14,7 @@ import re
 import secrets
 import unicodedata
 from collections import Counter, defaultdict, deque
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, time as dt_time, timedelta, timezone
 from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 from enum import Enum
 from pathlib import Path
@@ -1715,6 +1715,35 @@ class AgendaExceptionUpdatePayload(BaseModel):
     end_at: str | None = Field(default=None, description="Fecha/hora ISO 8601 con zona horaria.")
     capacity: int | None = Field(default=None, ge=0, le=200)
     reason: str | None = Field(default=None, max_length=500)
+    metadata: dict[str, Any] | None = Field(default=None)
+
+
+class AgendaPatternCreatePayload(BaseModel):
+    """Payload para crear patrones semanales de disponibilidad."""
+
+    resource_id: UUID
+    weekday: int = Field(..., ge=0, le=6, description="Día de semana 0=lunes ... 6=domingo.")
+    start_time: str = Field(..., description="Hora inicio HH:MM o HH:MM:SS.")
+    end_time: str = Field(..., description="Hora fin HH:MM o HH:MM:SS.")
+    start_date: str | None = Field(default=None, description="Fecha inicio opcional YYYY-MM-DD.")
+    end_date: str | None = Field(default=None, description="Fecha fin opcional YYYY-MM-DD.")
+    capacity: int = Field(default=1, ge=1, le=200)
+    priority: int = Field(default=0, ge=-100, le=100)
+    is_active: bool = True
+    metadata: dict[str, Any] | None = Field(default=None)
+
+
+class AgendaPatternUpdatePayload(BaseModel):
+    """Payload para editar patrones semanales de disponibilidad."""
+
+    weekday: int | None = Field(default=None, ge=0, le=6)
+    start_time: str | None = Field(default=None, description="Hora inicio HH:MM o HH:MM:SS.")
+    end_time: str | None = Field(default=None, description="Hora fin HH:MM o HH:MM:SS.")
+    start_date: str | None = Field(default=None, description="Fecha inicio opcional YYYY-MM-DD.")
+    end_date: str | None = Field(default=None, description="Fecha fin opcional YYYY-MM-DD.")
+    capacity: int | None = Field(default=None, ge=1, le=200)
+    priority: int | None = Field(default=None, ge=-100, le=100)
+    is_active: bool | None = None
     metadata: dict[str, Any] | None = Field(default=None)
 
 
@@ -6502,6 +6531,100 @@ def _map_calendar_exception_row(row: dict[str, Any]) -> dict[str, Any]:
         "created_at": row.get("created_at"),
         "updated_at": row.get("updated_at"),
     }
+
+
+def _parse_time_input(value: str | None, *, field: str) -> dt_time:
+    if not value:
+        raise HTTPException(status_code=400, detail=f"{field}_required")
+    cleaned = str(value).strip()
+    if not cleaned:
+        raise HTTPException(status_code=400, detail=f"{field}_required")
+    for fmt in ("%H:%M:%S", "%H:%M"):
+        try:
+            return datetime.strptime(cleaned, fmt).time()
+        except ValueError:
+            continue
+    raise HTTPException(status_code=400, detail=f"{field}_invalid")
+
+
+def _parse_optional_date_input(value: str | None, *, field: str) -> date | None:
+    if value is None:
+        return None
+    trimmed = value.strip()
+    if not trimmed:
+        return None
+    try:
+        return datetime.strptime(trimmed, "%Y-%m-%d").date()
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=f"{field}_invalid") from exc
+
+
+def _map_calendar_pattern_row(row: dict[str, Any]) -> dict[str, Any]:
+    metadata = _coerce_metadata(row.get("metadata"))
+    return {
+        "id": row.get("id"),
+        "resource_id": row.get("resource_id"),
+        "weekday": row.get("weekday"),
+        "start_time": row.get("start_time"),
+        "end_time": row.get("end_time"),
+        "start_date": row.get("start_date"),
+        "end_date": row.get("end_date"),
+        "capacity": row.get("capacity"),
+        "priority": row.get("priority"),
+        "is_active": bool(row.get("is_active")),
+        "metadata": metadata if isinstance(metadata, dict) else {},
+        "created_at": row.get("created_at"),
+        "updated_at": row.get("updated_at"),
+    }
+
+
+def _ranges_overlap(a_start: date | None, a_end: date | None, b_start: date | None, b_end: date | None) -> bool:
+    left_start = a_start or date.min
+    left_end = a_end or date.max
+    right_start = b_start or date.min
+    right_end = b_end or date.max
+    return left_start <= right_end and right_start <= left_end
+
+
+async def _ensure_no_calendar_pattern_overlap(
+    *,
+    repo: CRMRepository,
+    user_token: str,
+    organizacion_id: UUID,
+    resource_id: UUID,
+    weekday: int,
+    start_time: dt_time,
+    end_time: dt_time,
+    start_date: date | None,
+    end_date: date | None,
+    exclude_pattern_id: UUID | None = None,
+) -> None:
+    candidates = await repo.list_calendar_patterns(
+        usuario_token=user_token,
+        organizacion_id=organizacion_id,
+        resource_id=resource_id,
+        weekday=weekday,
+        include_inactive=True,
+        limit=500,
+    )
+    for row in candidates:
+        row_id = row.get("id")
+        if exclude_pattern_id is not None and str(row_id) == str(exclude_pattern_id):
+            continue
+        try:
+            row_start = _parse_time_input(str(row.get("start_time") or ""), field="start_time")
+            row_end = _parse_time_input(str(row.get("end_time") or ""), field="end_time")
+        except HTTPException:
+            continue
+        if row_end <= row_start:
+            continue
+        overlap_time = start_time < row_end and row_start < end_time
+        if not overlap_time:
+            continue
+        row_start_date = _parse_optional_date_input(str(row.get("start_date")) if row.get("start_date") else None, field="start_date")
+        row_end_date = _parse_optional_date_input(str(row.get("end_date")) if row.get("end_date") else None, field="end_date")
+        if _ranges_overlap(start_date, end_date, row_start_date, row_end_date):
+            raise HTTPException(status_code=409, detail="pattern_overlap_conflict")
 
 
 async def _ensure_no_calendar_exception_overlap(
@@ -13262,6 +13385,205 @@ async def delete_agenda_disponibilidad_exception(
 
     if not deleted:
         raise HTTPException(status_code=404, detail="exception_not_found")
+    return {"ok": True}
+
+
+@router.get("/agenda/disponibilidad/patterns")
+async def list_agenda_disponibilidad_patterns(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("agenda.view")),
+    user_token: str = Depends(require_user_token),
+    resource_id: UUID | None = Query(default=None),
+    weekday: Annotated[int | None, Query(ge=0, le=6)] = None,
+    include_inactive: bool = Query(default=True),
+    limit: Annotated[int, Query(ge=1, le=1000)] = 500,
+) -> dict[str, Any]:
+    try:
+        rows = await repo.list_calendar_patterns(
+            usuario_token=user_token,
+            organizacion_id=organizacion_id,
+            resource_id=resource_id,
+            weekday=weekday,
+            include_inactive=include_inactive,
+            limit=limit,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return {"ok": True, "items": [_map_calendar_pattern_row(row) for row in rows]}
+
+
+@router.post("/agenda/disponibilidad/patterns")
+async def create_agenda_disponibilidad_pattern(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("agenda.manage")),
+    user_token: str = Depends(require_user_token),
+    payload: AgendaPatternCreatePayload,
+) -> dict[str, Any]:
+    start_time = _parse_time_input(payload.start_time, field="start_time")
+    end_time = _parse_time_input(payload.end_time, field="end_time")
+    if end_time <= start_time:
+        raise HTTPException(status_code=400, detail="time_range_invalid")
+    start_date = _parse_optional_date_input(payload.start_date, field="start_date")
+    end_date = _parse_optional_date_input(payload.end_date, field="end_date")
+    if start_date and end_date and end_date < start_date:
+        raise HTTPException(status_code=400, detail="date_range_invalid")
+
+    await _ensure_no_calendar_pattern_overlap(
+        repo=repo,
+        user_token=user_token,
+        organizacion_id=organizacion_id,
+        resource_id=payload.resource_id,
+        weekday=payload.weekday,
+        start_time=start_time,
+        end_time=end_time,
+        start_date=start_date,
+        end_date=end_date,
+    )
+
+    body: dict[str, Any] = {
+        "organizacion_id": str(organizacion_id),
+        "resource_id": str(payload.resource_id),
+        "weekday": payload.weekday,
+        "start_time": start_time.strftime("%H:%M:%S"),
+        "end_time": end_time.strftime("%H:%M:%S"),
+        "start_date": start_date.isoformat() if start_date else None,
+        "end_date": end_date.isoformat() if end_date else None,
+        "capacity": payload.capacity,
+        "priority": payload.priority,
+        "is_active": payload.is_active,
+        "metadata": payload.metadata if isinstance(payload.metadata, dict) else {},
+    }
+    try:
+        created = await repo.create_calendar_pattern(
+            usuario_token=user_token,
+            payload=body,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return {"ok": True, "pattern": _map_calendar_pattern_row(created)}
+
+
+@router.patch("/agenda/disponibilidad/patterns/{pattern_id}")
+async def update_agenda_disponibilidad_pattern(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("agenda.manage")),
+    user_token: str = Depends(require_user_token),
+    pattern_id: UUID,
+    payload: AgendaPatternUpdatePayload,
+) -> dict[str, Any]:
+    try:
+        existing = await repo.get_calendar_pattern(
+            usuario_token=user_token,
+            organizacion_id=organizacion_id,
+            pattern_id=pattern_id,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    if existing is None:
+        raise HTTPException(status_code=404, detail="pattern_not_found")
+
+    try:
+        resource_id = UUID(str(existing.get("resource_id")))
+    except (TypeError, ValueError) as exc:
+        raise HTTPException(status_code=400, detail="resource_id_invalid") from exc
+
+    weekday_value = int(existing.get("weekday") or 0)
+    start_time_value = _parse_time_input(str(existing.get("start_time") or ""), field="start_time")
+    end_time_value = _parse_time_input(str(existing.get("end_time") or ""), field="end_time")
+    start_date_value = _parse_optional_date_input(
+        str(existing.get("start_date")) if existing.get("start_date") else None,
+        field="start_date",
+    )
+    end_date_value = _parse_optional_date_input(
+        str(existing.get("end_date")) if existing.get("end_date") else None,
+        field="end_date",
+    )
+
+    changes: dict[str, Any] = {}
+    if payload.weekday is not None:
+        weekday_value = payload.weekday
+        changes["weekday"] = payload.weekday
+    if payload.start_time is not None:
+        start_time_value = _parse_time_input(payload.start_time, field="start_time")
+        changes["start_time"] = start_time_value.strftime("%H:%M:%S")
+    if payload.end_time is not None:
+        end_time_value = _parse_time_input(payload.end_time, field="end_time")
+        changes["end_time"] = end_time_value.strftime("%H:%M:%S")
+    if end_time_value <= start_time_value:
+        raise HTTPException(status_code=400, detail="time_range_invalid")
+
+    if payload.start_date is not None:
+        start_date_value = _parse_optional_date_input(payload.start_date, field="start_date")
+        changes["start_date"] = start_date_value.isoformat() if start_date_value else None
+    if payload.end_date is not None:
+        end_date_value = _parse_optional_date_input(payload.end_date, field="end_date")
+        changes["end_date"] = end_date_value.isoformat() if end_date_value else None
+    if start_date_value and end_date_value and end_date_value < start_date_value:
+        raise HTTPException(status_code=400, detail="date_range_invalid")
+
+    await _ensure_no_calendar_pattern_overlap(
+        repo=repo,
+        user_token=user_token,
+        organizacion_id=organizacion_id,
+        resource_id=resource_id,
+        weekday=weekday_value,
+        start_time=start_time_value,
+        end_time=end_time_value,
+        start_date=start_date_value,
+        end_date=end_date_value,
+        exclude_pattern_id=pattern_id,
+    )
+
+    if payload.capacity is not None:
+        changes["capacity"] = payload.capacity
+    if payload.priority is not None:
+        changes["priority"] = payload.priority
+    if payload.is_active is not None:
+        changes["is_active"] = payload.is_active
+    if payload.metadata is not None:
+        changes["metadata"] = payload.metadata
+    if not changes:
+        raise HTTPException(status_code=400, detail="payload_required")
+
+    try:
+        updated = await repo.update_calendar_pattern(
+            usuario_token=user_token,
+            organizacion_id=organizacion_id,
+            pattern_id=pattern_id,
+            payload=changes,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    if updated is None:
+        raise HTTPException(status_code=404, detail="pattern_not_found")
+    return {"ok": True, "pattern": _map_calendar_pattern_row(updated)}
+
+
+@router.delete("/agenda/disponibilidad/patterns/{pattern_id}")
+async def delete_agenda_disponibilidad_pattern(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("agenda.manage")),
+    user_token: str = Depends(require_user_token),
+    pattern_id: UUID,
+) -> dict[str, Any]:
+    try:
+        deleted = await repo.delete_calendar_pattern(
+            usuario_token=user_token,
+            organizacion_id=organizacion_id,
+            pattern_id=pattern_id,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    if not deleted:
+        raise HTTPException(status_code=404, detail="pattern_not_found")
     return {"ok": True}
 
 
