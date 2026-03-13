@@ -6504,6 +6504,29 @@ def _map_calendar_exception_row(row: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+async def _ensure_no_calendar_exception_overlap(
+    *,
+    repo: CRMRepository,
+    user_token: str,
+    organizacion_id: UUID,
+    resource_id: UUID,
+    start_at: datetime,
+    end_at: datetime,
+    exclude_exception_id: UUID | None = None,
+) -> None:
+    overlaps = await repo.list_calendar_exceptions(
+        usuario_token=user_token,
+        organizacion_id=organizacion_id,
+        resource_id=resource_id,
+        start_at=start_at,
+        end_at=end_at,
+        exclude_exception_id=exclude_exception_id,
+        limit=1,
+    )
+    if overlaps:
+        raise HTTPException(status_code=409, detail="overlap_conflict")
+
+
 def _map_visit_detail_row(row: dict[str, Any]) -> dict[str, Any]:
     mapped = dict(row)
     metadata = _coerce_metadata(mapped.get("metadata"))
@@ -13001,7 +13024,7 @@ async def update_agenda_disponibilidad_resource(
     *,
     repo: CRMRepository = Depends(get_repository),
     organizacion_id: UUID = Depends(require_organizacion_id),
-    _: str = Depends(require_permission("agenda.view")),
+    _: str = Depends(require_permission("agenda.manage")),
     user_token: str = Depends(require_user_token),
     resource_id: UUID,
     payload: AgendaResourceUpdatePayload,
@@ -13098,7 +13121,7 @@ async def create_agenda_disponibilidad_exception(
     *,
     repo: CRMRepository = Depends(get_repository),
     organizacion_id: UUID = Depends(require_organizacion_id),
-    _: str = Depends(require_permission("agenda.view")),
+    _: str = Depends(require_permission("agenda.manage")),
     user_token: str = Depends(require_user_token),
     payload: AgendaExceptionCreatePayload,
 ) -> dict[str, Any]:
@@ -13107,6 +13130,15 @@ async def create_agenda_disponibilidad_exception(
     end_dt = _ensure_utc(_parse_datetime_input(payload.end_at, field="end_at"))
     if end_dt <= start_dt:
         raise HTTPException(status_code=400, detail="range_invalid")
+
+    await _ensure_no_calendar_exception_overlap(
+        repo=repo,
+        user_token=user_token,
+        organizacion_id=organizacion_id,
+        resource_id=payload.resource_id,
+        start_at=start_dt,
+        end_at=end_dt,
+    )
 
     body: dict[str, Any] = {
         "organizacion_id": str(organizacion_id),
@@ -13136,14 +13168,31 @@ async def update_agenda_disponibilidad_exception(
     *,
     repo: CRMRepository = Depends(get_repository),
     organizacion_id: UUID = Depends(require_organizacion_id),
-    _: str = Depends(require_permission("agenda.view")),
+    _: str = Depends(require_permission("agenda.manage")),
     user_token: str = Depends(require_user_token),
     exception_id: UUID,
     payload: AgendaExceptionUpdatePayload,
 ) -> dict[str, Any]:
+    try:
+        existing = await repo.get_calendar_exception(
+            usuario_token=user_token,
+            organizacion_id=organizacion_id,
+            exception_id=exception_id,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    if existing is None:
+        raise HTTPException(status_code=404, detail="exception_not_found")
+
     changes: dict[str, Any] = {}
-    start_dt: datetime | None = None
-    end_dt: datetime | None = None
+    start_dt = _parse_iso_datetime(existing.get("start_at"))
+    end_dt = _parse_iso_datetime(existing.get("end_at"))
+    resource_uuid: UUID
+    try:
+        resource_uuid = UUID(str(existing.get("resource_id")))
+    except (TypeError, ValueError) as exc:
+        raise HTTPException(status_code=400, detail="resource_id_invalid") from exc
+
     if payload.kind is not None:
         changes["kind"] = _normalize_calendar_exception_kind(payload.kind)
     if payload.start_at is not None:
@@ -13152,8 +13201,20 @@ async def update_agenda_disponibilidad_exception(
     if payload.end_at is not None:
         end_dt = _ensure_utc(_parse_datetime_input(payload.end_at, field="end_at"))
         changes["end_at"] = end_dt.isoformat()
-    if start_dt and end_dt and end_dt <= start_dt:
+    if start_dt is None or end_dt is None:
         raise HTTPException(status_code=400, detail="range_invalid")
+    if end_dt <= start_dt:
+        raise HTTPException(status_code=400, detail="range_invalid")
+
+    await _ensure_no_calendar_exception_overlap(
+        repo=repo,
+        user_token=user_token,
+        organizacion_id=organizacion_id,
+        resource_id=resource_uuid,
+        start_at=start_dt,
+        end_at=end_dt,
+        exclude_exception_id=exception_id,
+    )
     if payload.capacity is not None:
         changes["capacity"] = payload.capacity
     if payload.reason is not None:
@@ -13186,7 +13247,7 @@ async def delete_agenda_disponibilidad_exception(
     *,
     repo: CRMRepository = Depends(get_repository),
     organizacion_id: UUID = Depends(require_organizacion_id),
-    _: str = Depends(require_permission("agenda.view")),
+    _: str = Depends(require_permission("agenda.manage")),
     user_token: str = Depends(require_user_token),
     exception_id: UUID,
 ) -> dict[str, Any]:

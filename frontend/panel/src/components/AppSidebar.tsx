@@ -83,7 +83,7 @@ const NAVIGATION: {
     { title: "Embudo", url: "/embudo", icon: IconListDetails, permission: "pipeline.view" },
     { title: "Inbox", url: "/inbox", icon: IconInbox, permission: "ver_inbox" },
     { title: "Agenda", url: "/agenda", icon: IconCalendar, permission: "agenda.view" },
-    { title: "Disponibilidad agenda", url: "/agenda/disponibilidad", icon: IconCalendar, permission: "agenda.view" },
+    { title: "Disponibilidad agenda", url: "/agenda/disponibilidad", icon: IconCalendar, permission: "agenda.manage" },
     { title: "Mapa de Conversion", url: "/mapa-de-conversion", icon: IconMap, permission: "reports.view" },
     { title: "Propiedades 3D", url: "/propiedades", icon: IconBuilding, permission: "propiedades.view" },
     { title: "Oportunidades", url: "/oportunidades", icon: IconLayoutKanban, permission: "pipeline.view" },

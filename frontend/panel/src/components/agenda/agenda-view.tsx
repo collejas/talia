@@ -9,6 +9,7 @@ import type {
 } from "@/lib/agenda/data"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
+import { usePermissions } from "@/hooks/use-permissions"
 import { AgendaCalendar } from "@/components/agenda/agenda-calendar"
 import { AgendaTable } from "@/components/agenda/agenda-table"
 import { AgendaEventDrawer } from "@/components/agenda/agenda-event-drawer"
@@ -29,6 +30,11 @@ type AgendaViewProps = {
 }
 
 export function AgendaView({ items }: AgendaViewProps) {
+  const { context: permissionContext } = usePermissions()
+  const canManageAvailability =
+    permissionContext.es_admin ||
+    permissionContext.es_owner ||
+    permissionContext.permisos.includes("agenda.manage")
   const [mode, setMode] = React.useState<"calendar" | "table">("calendar")
   const [selectedItem, setSelectedItem] = React.useState<AgendaItem | null>(null)
   const [rescheduleTarget, setRescheduleTarget] = React.useState<AgendaItem | null>(null)
@@ -95,7 +101,7 @@ export function AgendaView({ items }: AgendaViewProps) {
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <AgendaAvailabilityQuickModal />
+          {canManageAvailability ? <AgendaAvailabilityQuickModal /> : null}
           <div className="inline-flex items-center gap-2 rounded-full border border-border/60 bg-background p-1">
             <ToggleButton active={mode === "calendar"} onClick={() => setMode("calendar")}>
               Calendario

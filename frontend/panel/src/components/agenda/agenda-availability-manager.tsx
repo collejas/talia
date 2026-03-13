@@ -16,6 +16,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
+import { usePermissions } from "@/hooks/use-permissions"
 
 const DEFAULT_RANGE_DAYS = 60
 
@@ -40,6 +41,16 @@ type ExceptionItem = {
   reason: string | null
 }
 
+type PreviewSlot = {
+  slot_id: string
+  local_date: string
+  local_time: string
+  is_available: boolean
+  capacity: number
+  booked: number
+  holds: number
+}
+
 type ExceptionForm = {
   id: string | null
   kind: "block" | "extra"
@@ -59,6 +70,11 @@ const EMPTY_FORM: ExceptionForm = {
 }
 
 export function AgendaAvailabilityManager() {
+  const { context: permissionContext } = usePermissions()
+  const canManage =
+    permissionContext.es_admin ||
+    permissionContext.es_owner ||
+    permissionContext.permisos.includes("agenda.manage")
   const [loading, setLoading] = React.useState(true)
   const [savingResource, setSavingResource] = React.useState(false)
   const [savingException, setSavingException] = React.useState(false)
@@ -66,6 +82,8 @@ export function AgendaAvailabilityManager() {
   const [resourceId, setResourceId] = React.useState("")
   const [form, setForm] = React.useState<ExceptionForm>(EMPTY_FORM)
   const [exceptions, setExceptions] = React.useState<ExceptionItem[]>([])
+  const [previewSlots, setPreviewSlots] = React.useState<PreviewSlot[]>([])
+  const [previewLoading, setPreviewLoading] = React.useState(false)
   const [kindFilter, setKindFilter] = React.useState<"all" | "block" | "extra">("all")
   const [fromDate, setFromDate] = React.useState(defaultFromDate())
   const [toDate, setToDate] = React.useState(defaultToDate())
@@ -81,6 +99,15 @@ export function AgendaAvailabilityManager() {
     () => resources.find((item) => item.id === resourceId) ?? null,
     [resources, resourceId],
   )
+  const previewByDate = React.useMemo(() => {
+    const grouped = new Map<string, PreviewSlot[]>()
+    for (const slot of previewSlots) {
+      const current = grouped.get(slot.local_date) ?? []
+      current.push(slot)
+      grouped.set(slot.local_date, current)
+    }
+    return Array.from(grouped.entries())
+  }, [previewSlots])
 
   const loadResources = React.useCallback(async () => {
     const response = await fetch("/api/agenda/disponibilidad/resources", {
@@ -139,6 +166,44 @@ export function AgendaAvailabilityManager() {
     setExceptions(data.items ?? [])
   }, [resourceId, fromDate, toDate, kindFilter])
 
+  const loadPreview = React.useCallback(async () => {
+    if (!resourceId) {
+      setPreviewSlots([])
+      return
+    }
+    const params = new URLSearchParams({
+      resource_id: resourceId,
+      from: fromDate,
+      to: toDate,
+      max_days: "60",
+    })
+    if (selectedResource?.timezone) {
+      params.set("timezone", selectedResource.timezone)
+    }
+    setPreviewLoading(true)
+    try {
+      const response = await fetch(`/api/agenda/availability?${params.toString()}`, {
+        method: "GET",
+        cache: "no-store",
+      })
+      if (!response.ok) {
+        throw new Error(await parseApiError(response))
+      }
+      const data = (await response.json()) as {
+        availability?: {
+          slots?: PreviewSlot[]
+        }
+      }
+      const slots = (data.availability?.slots ?? []).filter((slot) => slot.is_available)
+      setPreviewSlots(slots)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "No se pudo cargar preview de slots"
+      toast.error(message)
+    } finally {
+      setPreviewLoading(false)
+    }
+  }, [resourceId, fromDate, toDate, selectedResource?.timezone])
+
   React.useEffect(() => {
     let cancelled = false
     async function bootstrap() {
@@ -195,6 +260,18 @@ export function AgendaAvailabilityManager() {
       cancelled = true
     }
   }, [loadExceptions])
+
+  React.useEffect(() => {
+    let cancelled = false
+    async function refreshPreview() {
+      if (cancelled) return
+      await loadPreview()
+    }
+    refreshPreview()
+    return () => {
+      cancelled = true
+    }
+  }, [loadPreview])
 
   function resetForm() {
     setForm(EMPTY_FORM)
@@ -373,6 +450,15 @@ export function AgendaAvailabilityManager() {
 
   return (
     <div className="space-y-4">
+      {!canManage ? (
+        <Card>
+          <CardContent className="pt-6">
+            <p className="text-sm text-muted-foreground">
+              Tienes acceso de lectura. Para crear/editar/eliminar disponibilidad se requiere `agenda.manage`.
+            </p>
+          </CardContent>
+        </Card>
+      ) : null}
       <div className="grid gap-4 xl:grid-cols-3">
         <Card className="xl:col-span-2">
           <CardHeader>
@@ -458,7 +544,7 @@ export function AgendaAvailabilityManager() {
             </div>
 
             <div>
-              <Button type="button" onClick={saveResource} disabled={savingResource || !resourceId}>
+              <Button type="button" onClick={saveResource} disabled={!canManage || savingResource || !resourceId}>
                 {savingResource ? "Guardando..." : "Guardar configuración"}
               </Button>
             </div>
@@ -567,7 +653,7 @@ export function AgendaAvailabilityManager() {
             </div>
 
             <div className="flex gap-2">
-              <Button type="button" onClick={saveException} disabled={savingException || !resourceId}>
+              <Button type="button" onClick={saveException} disabled={!canManage || savingException || !resourceId}>
                 {savingException ? "Guardando..." : form.id ? "Guardar cambios" : "Crear excepción"}
               </Button>
               <Button type="button" variant="ghost" onClick={resetForm}>
@@ -598,10 +684,10 @@ export function AgendaAvailabilityManager() {
                       {item.capacity != null ? ` · Capacidad ${item.capacity}` : ""}
                     </p>
                     <div className="mt-2 flex gap-2">
-                      <Button type="button" size="sm" variant="outline" onClick={() => startEdit(item)}>
+                      <Button type="button" size="sm" variant="outline" onClick={() => startEdit(item)} disabled={!canManage}>
                         Editar
                       </Button>
-                      <Button type="button" size="sm" variant="destructive" onClick={() => deleteException(item.id)}>
+                      <Button type="button" size="sm" variant="destructive" onClick={() => deleteException(item.id)} disabled={!canManage}>
                         Eliminar
                       </Button>
                     </div>
@@ -612,6 +698,43 @@ export function AgendaAvailabilityManager() {
           </CardContent>
         </Card>
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Preview de slots ({previewSlots.length})</CardTitle>
+          <CardDescription>
+            Slots disponibles reales según recurso + excepciones en el rango filtrado.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div>
+            <Button type="button" variant="outline" onClick={loadPreview} disabled={previewLoading || !resourceId}>
+              {previewLoading ? "Actualizando..." : "Actualizar preview"}
+            </Button>
+          </div>
+          {!previewByDate.length ? (
+            <p className="text-sm text-muted-foreground">No hay slots disponibles en este rango.</p>
+          ) : (
+            <div className="max-h-[26rem] space-y-3 overflow-auto pr-1">
+              {previewByDate.map(([date, slots]) => (
+                <div key={date} className="rounded-md border border-border/70 p-3">
+                  <p className="text-sm font-medium">{date}</p>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {slots.map((slot) => (
+                      <span
+                        key={slot.slot_id}
+                        className="inline-flex items-center rounded-md border border-border/60 px-2 py-1 text-xs"
+                      >
+                        {slot.local_time}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   )
 }

@@ -11784,6 +11784,7 @@ class CRMRepository:
         kind: str | None = None,
         start_at: datetime | None = None,
         end_at: datetime | None = None,
+        exclude_exception_id: UUID | None = None,
         limit: int = 200,
     ) -> list[dict[str, Any]]:
         params: dict[str, str] = {
@@ -11796,6 +11797,8 @@ class CRMRepository:
             params["resource_id"] = f"eq.{resource_id}"
         if kind:
             params["kind"] = f"eq.{kind}"
+        if exclude_exception_id is not None:
+            params["id"] = f"neq.{exclude_exception_id}"
         if start_at is not None and end_at is not None:
             params["and"] = f"(start_at.lt.{end_at.isoformat()},end_at.gt.{start_at.isoformat()})"
         elif start_at is not None:
@@ -11813,6 +11816,35 @@ class CRMRepository:
         if not isinstance(data, list):
             raise CRMRepositoryError(f"Respuesta inválida al listar calendar_exceptions: {data!r}")
         return [row for row in data if isinstance(row, dict)]
+
+    async def get_calendar_exception(
+        self,
+        *,
+        usuario_token: str,
+        organizacion_id: UUID,
+        exception_id: UUID,
+    ) -> dict[str, Any] | None:
+        params = {
+            "select": "id,resource_id,kind,start_at,end_at,capacity,reason,metadata,created_at,updated_at",
+            "organizacion_id": f"eq.{organizacion_id}",
+            "id": f"eq.{exception_id}",
+            "limit": "1",
+        }
+        resp = await self._request_with_user(
+            "GET",
+            "/rest/v1/calendar_exceptions",
+            token=usuario_token,
+            params=params,
+        )
+        data = resp.json() or []
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"Respuesta inválida al obtener calendar_exception: {data!r}")
+        if not data:
+            return None
+        row = data[0]
+        if not isinstance(row, dict):
+            raise CRMRepositoryError(f"Respuesta inválida al obtener calendar_exception: {row!r}")
+        return row
 
     async def create_calendar_exception(
         self,
