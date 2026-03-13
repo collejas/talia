@@ -698,14 +698,6 @@ async def _send_booking_confirmation_email(
             "Tal-IA · Geoactiv",
         ]
     )
-    if calendar_provider_settings.full_calendar_url:
-        body_lines.extend(
-            [
-                "",
-                "Puedes revisar la disponibilidad desde:",
-                calendar_provider_settings.full_calendar_url,
-            ]
-        )
     subject = "Tal-IA · Demo confirmada"
     attachments = [
         _build_demo_ics_attachment(
