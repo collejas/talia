@@ -3486,6 +3486,45 @@ def _infer_device_type(user_agent: str | None) -> str | None:
     return "desktop"
 
 
+def _is_same_site_referrer(*, referrer: str | None, landing_url: str | None) -> bool:
+    if not referrer or not landing_url:
+        return False
+    try:
+        ref_host = (urlparse(referrer).hostname or "").strip().lower()
+        land_host = (urlparse(landing_url).hostname or "").strip().lower()
+    except Exception:
+        return False
+    if not ref_host or not land_host:
+        return False
+    return ref_host == land_host or ref_host.endswith(f".{land_host}") or land_host.endswith(f".{ref_host}")
+
+
+def _classify_source_class(
+    *,
+    source_class: str | None,
+    referrer: str | None,
+    landing_url: str | None,
+    utm_source: str | None,
+    utm_medium: str | None,
+    utm_campaign: str | None,
+) -> str | None:
+    explicit = (source_class or "").strip().lower()
+    if explicit:
+        return explicit
+    if (utm_source or "").strip() or (utm_medium or "").strip() or (utm_campaign or "").strip():
+        return "campaign"
+    if _is_same_site_referrer(referrer=referrer, landing_url=landing_url):
+        return "direct"
+    ref = (referrer or "").strip().lower()
+    if not ref:
+        return "direct"
+    if "google." in ref:
+        return "organic_search"
+    if any(token in ref for token in ("facebook.", "instagram.", "twitter.", "t.co", "linkedin.")):
+        return "organic_social"
+    return "referral"
+
+
 def _build_portal_link(token: str) -> str:
     base = settings.cliente_portal_base_url
     if not base:
@@ -20042,10 +20081,19 @@ async def register_web_visit(
         organizacion_id = str(tenant_runtime.MASTER_ORGANIZACION_ID)
 
     user_agent = (payload.user_agent or request.headers.get("user-agent") or "").strip() or None
-    referrer = (payload.referrer or request.headers.get("referer") or "").strip() or None
+    # Para atribucion web usamos referrer first-party enviado por frontend (document.referrer).
+    # El Referer del request HTTP suele apuntar a talia.mx y distorsiona "entrada directa".
+    referrer = (payload.referrer or "").strip() or None
     landing_url = (payload.landing_url or payload.location_href or "").strip() or None
     device_type = (payload.device_type or _infer_device_type(user_agent) or "").strip() or None
-    source_class = (payload.source_class or "").strip().lower() or None
+    source_class = _classify_source_class(
+        source_class=payload.source_class,
+        referrer=referrer,
+        landing_url=landing_url,
+        utm_source=payload.utm_source,
+        utm_medium=payload.utm_medium,
+        utm_campaign=payload.utm_campaign,
+    )
     ip_value = _request_ip(request)
     cf_country = (request.headers.get("cf-ipcountry") or "").strip().upper() or None
     referrer_host: str | None = None
