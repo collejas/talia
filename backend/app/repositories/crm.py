@@ -10767,6 +10767,30 @@ class CRMRepository:
             raise CRMRepositoryError(f"worker_get_envio_invalid:{row!r}")
         return row
 
+    async def worker_get_envio_by_id(
+        self,
+        *,
+        envio_id: UUID,
+    ) -> dict[str, Any] | None:
+        """Obtiene un envío por id usando service role."""
+
+        resp = await self._request(
+            "GET",
+            "/rest/v1/prospeccion_contacto_envio",
+            params={
+                "id": f"eq.{envio_id}",
+                "select": "id,organizacion_id,detalle",
+                "limit": "1",
+            },
+        )
+        data = resp.json() or []
+        if not isinstance(data, list) or not data:
+            return None
+        row = data[0]
+        if not isinstance(row, dict):
+            raise CRMRepositoryError(f"worker_get_envio_by_id_invalid:{row!r}")
+        return row
+
     async def worker_has_brevo_log_event(
         self,
         *,

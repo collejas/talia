@@ -2742,6 +2742,29 @@ class PublicWebBookingCreatePayload(PublicWebBookingAvailabilityPayload):
     attendee_company: str | None = Field(default=None, max_length=160)
     conversation_id: UUID | None = None
 
+
+class PublicWebBookingPrefillPayload(BaseModel):
+    """Payload público para precargar campos en la agenda web."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    booking_session_id: str = Field(..., min_length=4, max_length=255)
+    tenant_alias: str | None = Field(default=None, max_length=120)
+    organizacion_id: UUID | None = None
+    eid: UUID | None = None
+    metadata: dict[str, Any] | None = Field(default=None)
+
+    @field_validator(
+        "booking_session_id",
+        "tenant_alias",
+        mode="before",
+    )
+    @classmethod
+    def _strip_text(cls, value: Any) -> Any:
+        if value is None:
+            return None
+        return str(value).strip()
+
 class ManualOverridePayload(BaseModel):
     """Payload para activar/desactivar modo manual."""
 
@@ -21110,6 +21133,92 @@ async def register_web_visit(
 
 
 @router.post(
+    "/web/booking/prefill",
+    summary="Obtiene datos sugeridos para precargar agenda pública",
+)
+async def public_web_booking_prefill(
+    payload: PublicWebBookingPrefillPayload,
+    request: Request,
+) -> dict[str, Any]:
+    metadata = dict(payload.metadata or {})
+    organizacion_id = await _resolve_public_booking_organizacion_id(
+        tenant_alias=payload.tenant_alias,
+        explicit_organizacion_id=payload.organizacion_id,
+        metadata=metadata,
+        request=request,
+    )
+
+    suggested_email: str | None = None
+    if payload.eid is not None:
+        repo = CRMRepository()
+        try:
+            envio_row = await repo.worker_get_envio_by_id(envio_id=payload.eid)
+        except CRMRepositoryError as exc:
+            logger.exception(
+                "crm.web.booking.prefill_lookup_failed",
+                extra={"eid": str(payload.eid), "error": str(exc)},
+            )
+            envio_row = None
+
+        if isinstance(envio_row, dict):
+            envio_org = _clean_text(envio_row.get("organizacion_id"))
+            if envio_org and envio_org == organizacion_id:
+                detalle = envio_row.get("detalle")
+                if isinstance(detalle, str):
+                    try:
+                        detalle = json.loads(detalle)
+                    except json.JSONDecodeError:
+                        detalle = {}
+                if isinstance(detalle, dict):
+                    suggested_email = _normalize_email(
+                        detalle.get("email") or detalle.get("correo") or detalle.get("mail")
+                    )
+
+    return {
+        "ok": True,
+        "prefill": {
+            "email": suggested_email,
+        },
+    }
+
+
+async def _resolve_booking_prefill_email(
+    *,
+    organizacion_id: str,
+    envio_id: UUID | None,
+) -> str | None:
+    if envio_id is None:
+        return None
+    repo = CRMRepository()
+    try:
+        envio_row = await repo.worker_get_envio_by_id(envio_id=envio_id)
+    except CRMRepositoryError as exc:
+        logger.exception(
+            "crm.web.booking.prefill_lookup_failed",
+            extra={"eid": str(envio_id), "error": str(exc)},
+        )
+        return None
+
+    if not isinstance(envio_row, dict):
+        return None
+
+    envio_org = _clean_text(envio_row.get("organizacion_id"))
+    if not envio_org or envio_org != organizacion_id:
+        return None
+
+    detalle = envio_row.get("detalle")
+    if isinstance(detalle, str):
+        try:
+            detalle = json.loads(detalle)
+        except json.JSONDecodeError:
+            detalle = {}
+    if not isinstance(detalle, dict):
+        return None
+
+    return _normalize_email(detalle.get("email") or detalle.get("correo") or detalle.get("mail"))
+
+
+@router.post(
     "/web/booking/availability",
     summary="Consulta disponibilidad pública para agenda y registra apertura",
 )
@@ -21199,9 +21308,15 @@ async def public_web_booking_availability(
             extra={"booking_session_id": payload.booking_session_id, "error": str(exc)},
         )
 
+    suggested_email = await _resolve_booking_prefill_email(
+        organizacion_id=organizacion_id,
+        envio_id=payload.eid,
+    )
+
     return {
         "ok": True,
         "availability": availability,
+        "prefill": {"email": suggested_email},
         "context": {
             "organizacion_id": organizacion_id,
             "resource_id": resource_id,

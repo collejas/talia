@@ -100,6 +100,7 @@
     const selectedSlotEl = document.getElementById('selected-slot');
     const confirmBtnEl = document.getElementById('confirm-btn');
     const formEl = document.getElementById('booking-form');
+    const emailInputEl = document.getElementById('email');
     const formErrorEl = document.getElementById('form-error');
     const formSuccessEl = document.getElementById('form-success');
     const prevMonthBtn = document.getElementById('month-prev');
@@ -376,6 +377,10 @@
 
         state.slots = Array.isArray(data.availability?.slots) ? data.availability.slots : [];
         state.timezone = data.availability?.timezone || state.timezone;
+        const suggestedEmail = typeof data?.prefill?.email === 'string' ? data.prefill.email.trim() : '';
+        if (suggestedEmail && emailInputEl && !emailInputEl.value.trim()) {
+          emailInputEl.value = suggestedEmail;
+        }
 
         const available = processSlots(state.slots);
         slotsEmptyEl.classList.toggle('hidden', available.length > 0);
