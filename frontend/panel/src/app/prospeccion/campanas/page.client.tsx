@@ -75,6 +75,8 @@ const EMAIL_TEMPLATE_VARIABLES: Array<{ token: string; label: string }> = [
   { token: "{{logo_url}}", label: "Logo URL" },
   { token: "{{tracking_url}}", label: "Tracking URL" },
   { token: "{{website_url}}", label: "Website URL" },
+  { token: "{{booking_url}}", label: "Booking URL" },
+  { token: "{{booking_link_text}}", label: "Texto link agenda" },
 ]
 
 type HierarchyTemplateNode = {
@@ -167,6 +169,7 @@ export function CampanasMetricsClient() {
     nombreIa: "",
     nombreEmpresa: "",
     ctaBaseUrl: "https://talia.mx/",
+    bookingLinkLabel: "",
     waRuleId: "",
     waPhrase: "",
     waLinkLabel: "",
@@ -624,6 +627,7 @@ export function CampanasMetricsClient() {
       nombreIa: "",
       nombreEmpresa: "",
       ctaBaseUrl: "https://talia.mx/",
+      bookingLinkLabel: "",
       waRuleId: "",
       waPhrase: "",
       waLinkLabel: "",
@@ -716,6 +720,18 @@ export function CampanasMetricsClient() {
       '<a href="{{tracking_url}}" target="_blank" rel="noopener noreferrer">Visitar Sitio {{website_url}}</a>'
     appendTemplateToken("cuerpoHtml", htmlToken)
   }, [appendTemplateToken])
+
+  const bookingLinkLabel = useMemo(() => {
+    const label = (templateForm.bookingLinkLabel || "").trim()
+    return label || "Agenda tu demo"
+  }, [templateForm.bookingLinkLabel])
+
+  const insertCorreoBookingLink = useCallback(() => {
+    appendTemplateToken(
+      "cuerpoHtml",
+      `<a href="{{booking_url}}" target="_blank" rel="noopener noreferrer">${bookingLinkLabel}</a>`
+    )
+  }, [appendTemplateToken, bookingLinkLabel])
 
   const loadLogos = useCallback(async () => {
     if (logosLoading) return
@@ -824,6 +840,7 @@ export function CampanasMetricsClient() {
       normalizeWebBaseUrl(templateForm.ctaBaseUrl || tenantBaseUrl || "https://talia.mx/") || "https://talia.mx/"
     const kw = (templateForm.slug || segmento || "general").trim().toLowerCase().replace(/[^a-z0-9_-]+/g, "-")
     let trackingUrl = websiteUrl
+    let bookingUrl = websiteUrl
     try {
       const url = new URL(websiteUrl)
       url.searchParams.set("utm_source", "prospeccion")
@@ -835,6 +852,18 @@ export function CampanasMetricsClient() {
     } catch {
       trackingUrl = websiteUrl
     }
+    try {
+      const bookingBase = new URL(websiteUrl)
+      bookingBase.pathname = "/demo.html"
+      bookingBase.searchParams.set("utm_source", "prospeccion")
+      bookingBase.searchParams.set("utm_medium", "email")
+      bookingBase.searchParams.set("utm_campaign", "cold_outreach")
+      bookingBase.searchParams.set("utm_content", "booking_link")
+      bookingBase.searchParams.set("intent", "demo_booking")
+      bookingUrl = bookingBase.toString()
+    } catch {
+      bookingUrl = websiteUrl
+    }
     return {
       nombre,
       empresa,
@@ -845,8 +874,11 @@ export function CampanasMetricsClient() {
       logo_url: normalizeLogoUrl(selectedLogoUrl),
       tracking_url: trackingUrl,
       website_url: websiteUrl,
+      booking_url: bookingUrl,
+      booking_link_text: bookingLinkLabel,
     }
   }, [
+    bookingLinkLabel,
     normalizeLogoUrl,
     normalizeWebBaseUrl,
     previewProspecto,
@@ -1002,6 +1034,7 @@ export function CampanasMetricsClient() {
         nombreIa: "",
         nombreEmpresa: "",
         ctaBaseUrl: "https://talia.mx/",
+        bookingLinkLabel: "",
         waRuleId: "",
         waPhrase: "",
         waLinkLabel: "",
@@ -1045,6 +1078,10 @@ export function CampanasMetricsClient() {
         (typeof metadata["empresa"] === "string" ? metadata["empresa"] : ""),
       ctaBaseUrl:
         (typeof metadata["tracking_base_url"] === "string" && metadata["tracking_base_url"].trim()) || "https://talia.mx/",
+      bookingLinkLabel:
+        (typeof metadata["booking_link_text"] === "string" && metadata["booking_link_text"].trim()) ||
+        (typeof metadata["booking_link_label"] === "string" && metadata["booking_link_label"].trim()) ||
+        "",
       waRuleId: (typeof metadata["wa_rule_id"] === "string" && metadata["wa_rule_id"].trim()) || "",
       waPhrase: (typeof metadata["wa_me_text"] === "string" && metadata["wa_me_text"].trim()) || "",
       waLinkLabel: (typeof metadata["wa_me_label"] === "string" && metadata["wa_me_label"].trim()) || "",
@@ -1094,6 +1131,9 @@ export function CampanasMetricsClient() {
     }
     if (templateForm.canal === "correo" || templateForm.canal === "whatsapp") {
       metadata["tracking_base_url"] = (templateForm.ctaBaseUrl || tenantBaseUrl || "").trim() || null
+    }
+    if ((templateForm.bookingLinkLabel || "").trim()) {
+      metadata["booking_link_text"] = templateForm.bookingLinkLabel.trim()
     }
     if (templateForm.canal === "whatsapp") {
       if (whatsappCtaUrl) metadata["cta_url_tracked"] = whatsappCtaUrl
@@ -1804,6 +1844,17 @@ export function CampanasMetricsClient() {
                       Se usa para redireccionar clics del correo con seguimiento en segundo plano.
                     </p>
                   </div>
+                  <div className="space-y-1">
+                    <Label>Texto del link de agenda</Label>
+                    <Input
+                      value={templateForm.bookingLinkLabel}
+                      onChange={(event) => setTemplateForm((prev) => ({ ...prev, bookingLinkLabel: event.target.value }))}
+                      placeholder="Agenda tu demo"
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Texto visible para el botón/enlace al calendario al insertar en HTML.
+                    </p>
+                  </div>
                   <div className="grid gap-3 sm:grid-cols-2">
                     <div className="space-y-1 sm:col-span-2">
                       <Label>Frase de WhatsApp para captación</Label>
@@ -1979,6 +2030,19 @@ export function CampanasMetricsClient() {
                       >
                         CTA rápida
                       </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() =>
+                          appendTemplateToken(
+                            "cuerpoTexto",
+                            "\n{{booking_link_text}}: {{booking_url}}\n"
+                          )
+                        }
+                      >
+                        Insertar enlace agenda
+                      </Button>
                     </div>
                     <Textarea
                       ref={correoTextoRef}
@@ -2090,6 +2154,9 @@ export function CampanasMetricsClient() {
                       <Button type="button" variant="outline" size="sm" onClick={() => insertCorreoTrackedLink()}>
                         Insertar enlace web
                       </Button>
+                      <Button type="button" variant="outline" size="sm" onClick={() => insertCorreoBookingLink()}>
+                        Insertar enlace agenda
+                      </Button>
                       <Button type="button" variant="outline" size="sm" onClick={() => insertCorreoWaMeLink()}>
                         Insertar enlace WhatsApp
                       </Button>
@@ -2104,7 +2171,7 @@ export function CampanasMetricsClient() {
                       }}
                     />
                     <p className="text-xs text-muted-foreground">
-                      Variables: {"{{nombre}}, {{empresa}}, {{email}}, {{telefono}}, {{segmento}}, {{canal_origen}}, {{logo_url}}, {{tracking_url}}, {{website_url}}"}.
+                      Variables: {"{{nombre}}, {{empresa}}, {{email}}, {{telefono}}, {{segmento}}, {{canal_origen}}, {{logo_url}}, {{tracking_url}}, {{website_url}}, {{booking_url}}, {{booking_link_text}}"}.
                     </p>
                   </div>
                 </>
