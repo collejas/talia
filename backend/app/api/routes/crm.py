@@ -64,6 +64,7 @@ from app.services import (
     EmailSendError,
     TwilioLookupError,
     demografia_service,
+    geolocation,
     leads_geo,
     lookup_phone_number,
     lookup_phone_number_free,
@@ -3462,6 +3463,12 @@ def _request_ip(request: Request | None) -> str | None:
     forwarded = request.headers.get("x-forwarded-for") if request.headers else None
     if forwarded:
         return forwarded.split(",")[0].strip()
+    real_ip = request.headers.get("x-real-ip") if request.headers else None
+    if real_ip and real_ip.strip():
+        return real_ip.strip()
+    cf_ip = request.headers.get("cf-connecting-ip") if request.headers else None
+    if cf_ip and cf_ip.strip():
+        return cf_ip.strip()
     client = request.client
     return client.host if client else None
 
@@ -20040,27 +20047,140 @@ async def register_web_visit(
     device_type = (payload.device_type or _infer_device_type(user_agent) or "").strip() or None
     source_class = (payload.source_class or "").strip().lower() or None
     ip_value = _request_ip(request)
+    cf_country = (request.headers.get("cf-ipcountry") or "").strip().upper() or None
     referrer_host: str | None = None
     if referrer:
         parsed_ref = urlparse(referrer)
         referrer_host = (parsed_ref.hostname or "").strip().lower() or None
 
+    client_context = raw_metadata.get("client") if isinstance(raw_metadata.get("client"), dict) else {}
+    client_geo = client_context.get("geo") if isinstance(client_context.get("geo"), dict) else {}
+
+    geo_ip_data: dict[str, Any] | None = None
+    if ip_value:
+        try:
+            geo_ip_data = await geolocation.lookup_ip(ip_value)
+        except Exception:
+            logger.exception(
+                "crm.web.visit_geo_lookup_failed",
+                extra={"session_id": session_id, "ip": ip_value},
+            )
+            geo_ip_data = None
+
+    geo_source: dict[str, Any] = {}
+    if isinstance(geo_ip_data, dict):
+        country_ip = geo_ip_data.get("country")
+        if country_ip:
+            geo_source["country"] = str(country_ip).upper()
+        region_ip = geo_ip_data.get("region")
+        if region_ip:
+            geo_source["region"] = region_ip
+            geo_source.setdefault("state", region_ip)
+        city_ip = geo_ip_data.get("city")
+        if city_ip:
+            geo_source["city"] = city_ip
+    if isinstance(client_geo, dict):
+        country_client = client_geo.get("country_code") or client_geo.get("country")
+        if country_client:
+            geo_source["country"] = str(country_client).upper()
+        for key in ("region", "state", "nom_ent", "city", "nom_mun"):
+            value = client_geo.get(key)
+            if value:
+                geo_source[key] = value
+
+    estado_clave: str | None
+    estado_nombre: str | None
+    municipio_clave: str | None
+    municipio_nombre: str | None
+    cvegeo_resolved: str | None
+    estado_clave, estado_nombre, municipio_clave, municipio_nombre, cvegeo_resolved = (
+        leads_geo.location_from_geo_metadata(geo_source or None)
+    )
+
+    country_code = payload.country_code or (
+        str((geo_ip_data or {}).get("country_code") or (geo_ip_data or {}).get("country")).upper()
+        if isinstance((geo_ip_data or {}).get("country_code") or (geo_ip_data or {}).get("country"), str)
+        else (
+            str(client_geo.get("country_code") or client_geo.get("country")).upper()
+            if isinstance(client_geo, dict)
+            and isinstance(client_geo.get("country_code") or client_geo.get("country"), str)
+            else None
+        )
+    )
+    if not country_code and cf_country and cf_country not in {"XX", "ZZ", "T1"}:
+        country_code = cf_country
+    country_name = payload.country_name or (
+        str((geo_ip_data or {}).get("country_name"))
+        if isinstance((geo_ip_data or {}).get("country_name"), str)
+        else (
+            str(client_geo.get("country_name"))
+            if isinstance(client_geo, dict) and isinstance(client_geo.get("country_name"), str)
+            else None
+        )
+    )
+    cve_ent = payload.cve_ent or estado_clave
+    nom_ent = payload.nom_ent or estado_nombre
+    cve_mun = payload.cve_mun or municipio_clave
+    nom_mun = payload.nom_mun or municipio_nombre
+    cvegeo = payload.cvegeo or cvegeo_resolved
+
     metadata.setdefault("tenant_alias", tenant_alias or None)
     metadata.setdefault("request_ip", ip_value)
+    metadata.setdefault(
+        "request_headers",
+        {
+            "x_forwarded_for": request.headers.get("x-forwarded-for"),
+            "x_real_ip": request.headers.get("x-real-ip"),
+            "cf_connecting_ip": request.headers.get("cf-connecting-ip"),
+            "cf_ipcountry": cf_country,
+            "referer": request.headers.get("referer"),
+            "origin": request.headers.get("origin"),
+            "accept_language": request.headers.get("accept-language"),
+            "sec_ch_ua": request.headers.get("sec-ch-ua"),
+            "sec_ch_ua_mobile": request.headers.get("sec-ch-ua-mobile"),
+            "sec_ch_ua_platform": request.headers.get("sec-ch-ua-platform"),
+        },
+    )
     metadata.setdefault("referrer_host", referrer_host)
     metadata.setdefault("path", request.url.path if request else None)
+    visitor_seed = "|".join(
+        [
+            (ip_value or "").strip(),
+            (user_agent or "").strip(),
+            (tenant_alias or "").strip(),
+            (payload.session_id or "").strip(),
+        ]
+    )
+    if visitor_seed.strip():
+        metadata.setdefault("visitor_hash", hashlib.sha256(visitor_seed.encode("utf-8")).hexdigest())
+    if geo_ip_data:
+        metadata.setdefault("ip_lookup", geo_ip_data)
+    if client_geo:
+        metadata.setdefault("client_geo", client_geo)
+    metadata.setdefault(
+        "resolved_location",
+        {
+            "country_code": country_code,
+            "country_name": country_name,
+            "cve_ent": cve_ent,
+            "nom_ent": nom_ent,
+            "cve_mun": cve_mun,
+            "nom_mun": nom_mun,
+            "cvegeo": cvegeo,
+        },
+    )
 
     rpc_payload: dict[str, Any] = {
         "p_ip": ip_value,
         "p_user_agent": user_agent,
         "p_device_type": device_type,
-        "p_country_code": payload.country_code or None,
-        "p_country_name": payload.country_name or None,
-        "p_cve_ent": payload.cve_ent or None,
-        "p_nom_ent": payload.nom_ent or None,
-        "p_cve_mun": payload.cve_mun or None,
-        "p_nom_mun": payload.nom_mun or None,
-        "p_cvegeo": payload.cvegeo or None,
+        "p_country_code": country_code or None,
+        "p_country_name": country_name or None,
+        "p_cve_ent": cve_ent or None,
+        "p_nom_ent": nom_ent or None,
+        "p_cve_mun": cve_mun or None,
+        "p_nom_mun": nom_mun or None,
+        "p_cvegeo": cvegeo or None,
         "p_landing_url": landing_url,
         "p_referrer": referrer,
         "p_utm_source": payload.utm_source or None,

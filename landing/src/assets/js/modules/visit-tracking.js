@@ -3,6 +3,7 @@ const defaultConfig = {
   endpointPath: '/web/visit',
   storageSessionKey: 'talia-web-session',
   linkedSessionStorageKey: 'talia-webchat-session',
+  browserGeoStorageKey: 'talia-browser-geo-v1',
   tenantAlias: null,
 };
 
@@ -11,6 +12,22 @@ let sessionId = null;
 let lastTrackedHref = null;
 let historyListenersBound = false;
 let pendingNavigationTimer = null;
+let browserGeoPromise = null;
+
+const GEO_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
+const TRACKED_QUERY_KEYS = [
+  'utm_source',
+  'utm_medium',
+  'utm_campaign',
+  'utm_term',
+  'utm_content',
+  'gclid',
+  'fbclid',
+  'msclkid',
+  'ttclid',
+  'twclid',
+  'li_fat_id',
+];
 
 function generateSessionId() {
   if (window.crypto?.randomUUID) {
@@ -42,6 +59,24 @@ function writeStorageValue(key, value) {
   }
 }
 
+function readStorageJson(key) {
+  const raw = readStorageValue(key);
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === 'object' ? parsed : null;
+  } catch (_error) {
+    return null;
+  }
+}
+
+function writeStorageJson(key, payload) {
+  if (!key || !payload || typeof payload !== 'object') return;
+  try {
+    localStorage.setItem(key, JSON.stringify(payload));
+  } catch (_error) {}
+}
+
 function ensureSessionId() {
   if (sessionId) return sessionId;
   const linkedStored = readStorageValue(config.linkedSessionStorageKey);
@@ -60,10 +95,32 @@ function detectDeviceType(userAgent, screenInfo) {
   return 'desktop';
 }
 
+function hashString(value) {
+  const text = String(value || '');
+  let hash = 5381;
+  for (let i = 0; i < text.length; i += 1) {
+    hash = (hash * 33) ^ text.charCodeAt(i);
+  }
+  return (hash >>> 0).toString(16);
+}
+
+function getQueryMap(locationUrl) {
+  const query = {};
+  TRACKED_QUERY_KEYS.forEach((key) => {
+    const value = locationUrl.searchParams.get(key);
+    if (typeof value === 'string' && value.trim()) {
+      query[key] = value.trim();
+    }
+  });
+  return query;
+}
+
 function collectClientContext() {
   const nav = window.navigator;
   const scr = window.screen;
+  const connection = nav?.connection || nav?.mozConnection || nav?.webkitConnection;
   const userAgent = nav?.userAgent || '';
+  const locationUrl = new URL(window.location.href);
   const screenInfo = scr
     ? {
         width: scr.width,
@@ -78,32 +135,89 @@ function collectClientContext() {
     typeof Intl !== 'undefined' && Intl.DateTimeFormat
       ? Intl.DateTimeFormat().resolvedOptions().timeZone
       : undefined;
+  const viewport =
+    typeof window !== 'undefined'
+      ? {
+          width: window.innerWidth,
+          height: window.innerHeight,
+        }
+      : undefined;
+  const query = getQueryMap(locationUrl);
+  const fingerprintSeed = [
+    userAgent,
+    nav?.language || '',
+    nav?.platform || '',
+    timezone || '',
+    String(screenInfo?.width || ''),
+    String(screenInfo?.height || ''),
+    String(screenInfo?.pixelRatio || ''),
+  ].join('|');
   return {
     user_agent: userAgent,
     language: nav?.language,
     languages: Array.isArray(nav?.languages) ? nav.languages : undefined,
     platform: nav?.platform,
+    cookie_enabled: nav?.cookieEnabled,
+    do_not_track: nav?.doNotTrack,
+    hardware_concurrency: nav?.hardwareConcurrency,
+    device_memory: nav?.deviceMemory,
     timezone,
     screen: screenInfo,
+    viewport,
+    connection: connection
+      ? {
+          effective_type: connection.effectiveType,
+          downlink: connection.downlink,
+          rtt: connection.rtt,
+          save_data: connection.saveData,
+        }
+      : undefined,
     device_type: detectDeviceType(userAgent, screenInfo),
     location_href: window.location.href,
+    location_pathname: locationUrl.pathname,
+    location_search: locationUrl.search || undefined,
+    location_hash: locationUrl.hash || undefined,
+    document_title: document.title || undefined,
+    visibility_state: document.visibilityState || undefined,
+    history_length: typeof window.history?.length === 'number' ? window.history.length : undefined,
     referrer: document.referrer || undefined,
+    query,
+    visitor_fingerprint: `fp_${hashString(fingerprintSeed)}`,
   };
 }
 
-function buildPayload(reason) {
+function buildPayload(reason, browserGeo = null) {
   const context = collectClientContext();
-  const locationUrl = new URL(window.location.href);
-  const utmSource = locationUrl.searchParams.get('utm_source');
-  const utmMedium = locationUrl.searchParams.get('utm_medium');
-  const utmCampaign = locationUrl.searchParams.get('utm_campaign');
-  const utmTerm = locationUrl.searchParams.get('utm_term');
-  const utmContent = locationUrl.searchParams.get('utm_content');
+  const query = context.query || {};
+  const utmSource = query.utm_source || null;
+  const utmMedium = query.utm_medium || null;
+  const utmCampaign = query.utm_campaign || null;
+  const utmTerm = query.utm_term || null;
+  const utmContent = query.utm_content || null;
+  const clientPayload = { ...context };
+  if (browserGeo && browserGeo.latitude && browserGeo.longitude) {
+    clientPayload.geo = {
+      latitude: browserGeo.latitude,
+      longitude: browserGeo.longitude,
+      accuracy_m: browserGeo.accuracy_m ?? undefined,
+      captured_at: browserGeo.captured_at || undefined,
+      permission_state: browserGeo.permission_state || undefined,
+      source: 'browser_geolocation',
+    };
+  }
 
   const metadata = {
-    client: context,
+    client: clientPayload,
     reason,
     tenant_alias: config.tenantAlias || undefined,
+    query_ids: {
+      gclid: query.gclid || undefined,
+      fbclid: query.fbclid || undefined,
+      msclkid: query.msclkid || undefined,
+      ttclid: query.ttclid || undefined,
+      twclid: query.twclid || undefined,
+      li_fat_id: query.li_fat_id || undefined,
+    },
   };
 
   return {
@@ -123,13 +237,13 @@ function buildPayload(reason) {
   };
 }
 
-async function sendVisit(reason) {
+async function sendVisit(reason, { force = false, browserGeo = null } = {}) {
   const currentHref = window.location.href;
-  if (lastTrackedHref === currentHref && reason !== 'page_load') {
+  if (!force && lastTrackedHref === currentHref && reason !== 'page_load') {
     return;
   }
 
-  const payload = buildPayload(reason);
+  const payload = buildPayload(reason, browserGeo);
   try {
     const response = await fetch(`${config.apiBaseUrl}${config.endpointPath}`, {
       method: 'POST',
@@ -144,6 +258,59 @@ async function sendVisit(reason) {
   } catch (error) {
     console.warn('[visit-tracking] No se pudo registrar visita web.', error);
   }
+}
+
+async function resolveBrowserGeo() {
+  if (browserGeoPromise) return browserGeoPromise;
+  browserGeoPromise = (async () => {
+    const cached = readStorageJson(config.browserGeoStorageKey);
+    if (cached && typeof cached.timestamp_ms === 'number') {
+      if (Date.now() - cached.timestamp_ms <= GEO_CACHE_TTL_MS) {
+        return cached;
+      }
+    }
+
+    if (!navigator.geolocation) {
+      return null;
+    }
+
+    let permissionState = 'unknown';
+    try {
+      if (navigator.permissions?.query) {
+        const permission = await navigator.permissions.query({ name: 'geolocation' });
+        permissionState = permission?.state || permissionState;
+        if (permissionState === 'denied') {
+          return null;
+        }
+      }
+    } catch (_error) {}
+
+    const position = await new Promise((resolve) => {
+      navigator.geolocation.getCurrentPosition(
+        (value) => resolve(value),
+        () => resolve(null),
+        {
+          enableHighAccuracy: false,
+          timeout: 3500,
+          maximumAge: 10 * 60 * 1000,
+        },
+      );
+    });
+    if (!position || !position.coords) {
+      return null;
+    }
+    const geo = {
+      latitude: Number(position.coords.latitude),
+      longitude: Number(position.coords.longitude),
+      accuracy_m: Number(position.coords.accuracy || 0) || undefined,
+      permission_state: permissionState,
+      captured_at: new Date().toISOString(),
+      timestamp_ms: Date.now(),
+    };
+    writeStorageJson(config.browserGeoStorageKey, geo);
+    return geo;
+  })();
+  return browserGeoPromise;
 }
 
 function queueNavigationVisit(reason) {
@@ -182,5 +349,8 @@ export function initialiseVisitTracking(options = {}) {
   ensureSessionId();
   bindHistoryListeners();
   void sendVisit('page_load');
+  void resolveBrowserGeo().then((geo) => {
+    if (!geo) return;
+    void sendVisit('geo_update', { force: true, browserGeo: geo });
+  });
 }
-

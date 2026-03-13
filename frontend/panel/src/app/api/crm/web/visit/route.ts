@@ -3,7 +3,12 @@ import { NextResponse } from "next/server"
 import { getPanelApiBaseUrl } from "@/lib/api/panel"
 
 function buildTargetUrl(request: Request): URL {
-  const backendBase = getPanelApiBaseUrl()
+  let backendBase: string
+  try {
+    backendBase = getPanelApiBaseUrl()
+  } catch {
+    backendBase = process.env.PANEL_API_FALLBACK_URL?.trim() || "http://127.0.0.1:8004"
+  }
   const target = new URL(`${backendBase}/crm/web/visit`)
   const source = new URL(request.url)
   source.searchParams.forEach((value, key) => {

@@ -55,6 +55,8 @@ const state = {
   attachmentError: null,
 };
 
+const BROWSER_GEO_STORAGE_KEY = 'talia-browser-geo-v1';
+
 function capitalize(text) {
   if (!text) return '';
   const value = String(text).trim();
@@ -1379,6 +1381,42 @@ function detectDeviceType(userAgent, screenInfo) {
   return 'desktop';
 }
 
+function readBrowserGeoSnapshot() {
+  try {
+    const raw = localStorage.getItem(BROWSER_GEO_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object') return null;
+    const lat = Number(parsed.latitude);
+    const lng = Number(parsed.longitude);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+    return {
+      latitude: lat,
+      longitude: lng,
+      accuracy_m: Number(parsed.accuracy_m || 0) || undefined,
+      captured_at: typeof parsed.captured_at === 'string' ? parsed.captured_at : undefined,
+      permission_state: typeof parsed.permission_state === 'string' ? parsed.permission_state : undefined,
+      source: 'browser_geolocation',
+    };
+  } catch (_error) {
+    return null;
+  }
+}
+
+function collectQueryIdentifiers() {
+  if (typeof window === 'undefined') return {};
+  const locationUrl = new URL(window.location.href);
+  const keys = ['gclid', 'fbclid', 'msclkid', 'ttclid', 'twclid', 'li_fat_id'];
+  const result = {};
+  keys.forEach((key) => {
+    const value = locationUrl.searchParams.get(key);
+    if (typeof value === 'string' && value.trim()) {
+      result[key] = value.trim();
+    }
+  });
+  return result;
+}
+
 function collectClientMetadata() {
   const nav = typeof window !== 'undefined' ? window.navigator : undefined;
   const scr = typeof window !== 'undefined' ? window.screen : undefined;
@@ -1398,6 +1436,8 @@ function collectClientMetadata() {
       ? Intl.DateTimeFormat().resolvedOptions().timeZone
       : undefined;
 
+  const browserGeo = readBrowserGeoSnapshot();
+  const queryIds = collectQueryIdentifiers();
   return {
     user_agent: ua,
     platform: nav?.platform,
@@ -1414,6 +1454,8 @@ function collectClientMetadata() {
     referrer: typeof document !== 'undefined' ? document.referrer || undefined : undefined,
     location_href: typeof window !== 'undefined' ? window.location.href : undefined,
     device_type: detectDeviceType(ua, screenInfo),
+    geo: browserGeo || undefined,
+    query_ids: Object.keys(queryIds).length ? queryIds : undefined,
   };
 }
 

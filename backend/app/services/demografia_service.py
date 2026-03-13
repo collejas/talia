@@ -381,7 +381,7 @@ async def fetch_visitantes_resumen_v2(
             "level": str(row.get("location_level") or nivel),
             "key": str(row.get("location_key") or "UNK"),
             "name": str(row.get("location_name") or "Desconocido"),
-            "total": _to_number(row.get("total_visitas")),
+            "total": sesiones_web_total,
             "con_chat": _to_number(row.get("visitas_con_chat")),
             "sin_chat": _to_number(row.get("visitas_sin_chat")),
             "webchat_total": _to_number(row.get("webchat_total")),
@@ -401,7 +401,7 @@ async def fetch_visitantes_resumen_v2(
         }
         items.append(item)
 
-        totals["total"] += item["total"]
+        totals["total"] += sesiones_web_total
         totals["con_chat"] += item["con_chat"]
         totals["sin_chat"] += item["sin_chat"]
         totals["webchat_con_chat"] += item["webchat_con_chat"]
@@ -596,6 +596,7 @@ def build_map_dataset(
         if not _should_include(key, allow_unknown=True):
             continue
         entry = _ensure_entry(key, str(row.get("name") or "Desconocido"))
+        # "total" llega desde fetch_visitantes_resumen_v2 como visitas al sitio (web_sessions).
         total_visitas = _to_number(row.get("total"))
         webchat_total = _to_number(row.get("webchat_total"))
         whatsapp_total = _to_number(row.get("whatsapp_total"))
@@ -608,6 +609,8 @@ def build_map_dataset(
             entry["has_data"] = True
 
         visitantes_channels = entry["visitantes_totales_por_canal"]
+        if total_visitas > 0:
+            visitantes_channels["web"] = visitantes_channels.get("web", 0) + total_visitas
         if webchat_total > 0:
             visitantes_channels["webchat"] = visitantes_channels.get("webchat", 0) + webchat_total
         if whatsapp_total > 0:
@@ -657,12 +660,7 @@ def build_map_dataset(
             "con_conversacion": entry["visitantes_con_chat"],
             "sin_conversacion": entry["visitantes_sin_chat"],
         }
-        entry["total_visitas"] = sum(visitantes_channels.values())
-        if entry["total_visitas"] <= 0 and entry["visitantes_total"] > 0:
-            entry["total_visitas"] = entry["visitantes_total"]
-            entry["totales_por_canal"]["webchat"] = (
-                entry["totales_por_canal"].get("webchat", 0) + entry["visitantes_total"]
-            )
+        entry["total_visitas"] = visitantes_channels.get("web", 0)
         entry["has_data"] = (
             entry["has_data"] or entry["total_visitas"] > 0 or entry["leads_total"] > 0
         )

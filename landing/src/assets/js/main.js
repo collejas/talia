@@ -1,8 +1,8 @@
 import { initialiseTheme } from './modules/theme.js';
-import { initialiseChat } from './modules/chat.js';
+import { initialiseChat } from './modules/chat.js?v=20260313c';
 import { initialiseMobileNav } from './modules/mobile-nav.js';
 import { initialiseLayoutObservers } from './modules/layout.js';
-import { initialiseVisitTracking } from './modules/visit-tracking.js';
+import { initialiseVisitTracking } from './modules/visit-tracking.js?v=20260313c';
 
 initialiseTheme();
 initialiseMobileNav();
