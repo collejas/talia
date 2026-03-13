@@ -769,6 +769,14 @@ class Settings(BaseSettings):
             "TALIA_CALENDARIO_FULL_CONTACT_LIST_URL",
         ),
     )
+    zoom_api_base_url: str = Field(
+        default="https://api.zoom.us",
+        description="URL base para API de Zoom.",
+        validation_alias=AliasChoices(
+            "ZOOM_API_BASE_URL",
+            "TALIA_ZOOM_API_BASE_URL",
+        ),
+    )
     webchat_reengage_minutes: int = Field(
         default=30,
         description="Minutos sin respuesta en webchat antes de que el bot intente reenganchar.",

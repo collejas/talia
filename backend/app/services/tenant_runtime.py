@@ -396,6 +396,19 @@ async def get_calendar_provider_settings(
 
 
 @dataclass(slots=True)
+class ZoomRuntimeSettings:
+    enabled: bool
+    provider: str | None
+    host_email: str | None
+    default_duration_minutes: int
+    auto_create_meeting: bool
+    account_id: str | None
+    client_id: str | None
+    client_secret: str | None
+    api_base_url: str
+
+
+@dataclass(slots=True)
 class MailRuntimeSettings:
     username: str | None
     password: str | None
@@ -434,6 +447,66 @@ def _coerce_bool(value: Any, default: bool) -> bool:
         if lowered in {"0", "false", "f", "no", "n"}:
             return False
     return default
+
+
+async def get_zoom_runtime_settings(
+    *,
+    organizacion_id: UUID | None = None,
+) -> ZoomRuntimeSettings:
+    settings_payload = ZoomRuntimeSettings(
+        enabled=False,
+        provider="zoom",
+        host_email=None,
+        default_duration_minutes=30,
+        auto_create_meeting=True,
+        account_id=None,
+        client_id=None,
+        client_secret=None,
+        api_base_url=settings.zoom_api_base_url,
+    )
+    if organizacion_id is None:
+        return settings_payload
+
+    config = await get_org_config(organizacion_id=organizacion_id)
+    zoom_cfg = _as_dict(config.get("zoom")) or {}
+    provider_value = _coerce_str(zoom_cfg.get("provider"))
+    if provider_value is not None:
+        settings_payload.provider = provider_value
+    enabled_value = zoom_cfg.get("enabled")
+    if enabled_value is not None:
+        settings_payload.enabled = _coerce_bool(enabled_value, settings_payload.enabled)
+    host_email_value = _coerce_str(zoom_cfg.get("host_email"))
+    if host_email_value is not None:
+        settings_payload.host_email = host_email_value
+    duration_value = _coerce_int_or_none(zoom_cfg.get("default_duration_minutes"))
+    if duration_value is not None and duration_value > 0:
+        settings_payload.default_duration_minutes = min(duration_value, 240)
+    auto_create_value = zoom_cfg.get("auto_create_meeting")
+    if auto_create_value is not None:
+        settings_payload.auto_create_meeting = _coerce_bool(
+            auto_create_value, settings_payload.auto_create_meeting
+        )
+    api_base_value = _coerce_str(zoom_cfg.get("api_base_url"))
+    if api_base_value is not None:
+        settings_payload.api_base_url = api_base_value
+
+    account_id_secret = await get_secret_plaintext(
+        organizacion_id=organizacion_id, clave="zoom.account_id"
+    )
+    if account_id_secret:
+        settings_payload.account_id = account_id_secret
+    client_id_secret = await get_secret_plaintext(
+        organizacion_id=organizacion_id, clave="zoom.client_id"
+    )
+    if client_id_secret:
+        settings_payload.client_id = client_id_secret
+    client_secret_secret = await get_secret_plaintext(
+        organizacion_id=organizacion_id, clave="zoom.client_secret"
+    )
+    if client_secret_secret:
+        settings_payload.client_secret = client_secret_secret
+
+    return settings_payload
 
 
 async def get_mail_runtime_settings(
