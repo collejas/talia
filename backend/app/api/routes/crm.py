@@ -1722,7 +1722,7 @@ class AgendaPatternCreatePayload(BaseModel):
     """Payload para crear patrones semanales de disponibilidad."""
 
     resource_id: UUID
-    weekday: int = Field(..., ge=0, le=6, description="Día de semana 0=lunes ... 6=domingo.")
+    weekday: int = Field(..., ge=0, le=6, description="Día de semana PostgreSQL DOW: 0=domingo ... 6=sábado.")
     start_time: str = Field(..., description="Hora inicio HH:MM o HH:MM:SS.")
     end_time: str = Field(..., description="Hora fin HH:MM o HH:MM:SS.")
     start_date: str | None = Field(default=None, description="Fecha inicio opcional YYYY-MM-DD.")
