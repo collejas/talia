@@ -10,6 +10,16 @@ Resultado esperado:
 - Menor dependencia técnica para operar demos, horarios y bloqueos.
 - Consistencia entre lo que se configura y lo que ve el cliente en `demo.html`.
 
+## Estado actual (2026-03-13)
+Completado:
+- Fase 1 operativa completa.
+- Fase 2 funcional completa (patterns + preview semanal + copiado masivo).
+- Permisos alineados con `agenda.view` (lectura) y `agenda.manage` (mutación).
+
+Pendiente:
+- Fase 3 (auditoría, plantillas de temporada, validaciones avanzadas).
+- Hardening final (E2E y monitoreo).
+
 ## 2) Recomendación de UX
 ## 2.1 En `agenda/`
 Agregar botón: `Configurar disponibilidad`.
@@ -92,6 +102,11 @@ Endpoints fase 2:
 9. `PATCH /patterns/{pattern_id}`
 10. `DELETE /patterns/{pattern_id}`
 
+Implementado adicional:
+- Validación de solapes en excepciones: `overlap_conflict`.
+- Validación de solapes en patrones: `pattern_overlap_conflict`.
+- Corrección de convención de días de semana según Postgres DOW (`0=domingo ... 6=sábado`).
+
 Reglas técnicas:
 - Scope obligatorio por `organizacion_id`.
 - Validar solapes y rangos inválidos.
@@ -115,6 +130,12 @@ Secciones:
 - Tarjeta de configuración del recurso.
 - Panel de preview.
 
+Implementado adicional:
+- Sección de `Patrones semanales` con CRUD.
+- Herramienta `Copiar patrón a múltiples días`.
+- Preview semanal (7 días) + preview detallado por fecha.
+- Protección UI por permisos (`agenda.manage`).
+
 ## 7) Seguridad y permisos
 Permisos sugeridos:
 - `agenda.view` para lectura.
@@ -130,16 +151,19 @@ Política:
 - CRUD de excepciones.
 - Ajuste de `max_days_visible`.
 - Pruebas básicas end-to-end con `demo.html`.
+Estado: ✅ Completada.
 
 ## Fase 2 (completa)
 - CRUD de patrones semanales.
 - Preview más detallado por semana.
 - Mejoras de UX (copiar horario, duplicar regla).
+Estado: ✅ Completada (incluye copiado masivo de patrón a múltiples días).
 
 ## Fase 3 (operación avanzada)
 - Auditoría de cambios de disponibilidad.
 - Plantillas de disponibilidad por temporada.
 - Validaciones anti-conflicto más estrictas.
+Estado: ⏳ Pendiente.
 
 ## 9) Criterios de aceptación
 1. Desde `agenda/` se puede crear un bloqueo y se refleja en disponibilidad pública.
@@ -164,6 +188,22 @@ Política:
 3. Vista dedicada `agenda/disponibilidad` (excepciones + recurso).
 4. Integración con preview.
 5. Fase 2 con patterns.
+
+## 11.1 Entregables ya implementados
+1. Backend:
+- CRUD `resources`, `exceptions`, `patterns`.
+- Validaciones de rango y solape.
+- Control de permisos en mutaciones con `agenda.manage`.
+
+2. Frontend:
+- Botón `Configurar disponibilidad` en `agenda/`.
+- Vista `agenda/disponibilidad` con CRUD de excepciones y patrones.
+- Copiado de patrón a días múltiples.
+- Preview semanal y detalle por fecha.
+
+3. Seguridad:
+- `agenda.manage` materializado y asignado en roles.
+- Sidebar y acciones UI respetan permisos.
 
 ## 12) Definición de éxito
 El equipo comercial/operativo puede ajustar disponibilidad sin soporte técnico y ver el efecto inmediato en la agenda pública de clientes.
