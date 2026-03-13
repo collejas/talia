@@ -96,7 +96,6 @@ function resolveChannelTotal(
   entry: DemografiaMapResponse["dataset"][number],
   channel: ChannelKey,
   allowedChannels?: Set<ChannelKey>,
-  allowLeadFallback: boolean = true,
 ): number {
   if (allowedChannels && allowedChannels.size && !allowedChannels.has(channel)) {
     return 0;
@@ -109,13 +108,8 @@ function resolveChannelTotal(
   if (typeof totales === "number" && Number.isFinite(totales)) {
     return totales;
   }
-  if (!allowLeadFallback) {
-    return 0;
-  }
-  const leads = entry.leads_totales_por_canal?.[channel];
-  if (typeof leads === "number" && Number.isFinite(leads)) {
-    return leads;
-  }
+  // En mapa de conversion, los canales deben reflejar solo metricas de visitantes/
+  // conversaciones (webchat, whatsapp, voz), no fallback de leads historicos.
   return 0;
 }
 
@@ -129,7 +123,7 @@ function resolveFilteredEntryTotal(
   }
   let total = 0;
   for (const channel of allowedChannels) {
-    total += resolveChannelTotal(entry, channel, undefined, allowLeadFallback);
+    total += resolveChannelTotal(entry, channel, undefined);
   }
   return total;
 }
@@ -319,14 +313,14 @@ export function LocationComparisonChart({
 
     for (const entry of data) {
       const conversation = showConversationMetrics
-        ? resolveFilteredConversation(entry, activeChannelSet, allowLeadFallback)
+        ? resolveFilteredConversation(entry, activeChannelSet)
         : { con_conversacion: 0, sin_conversacion: 0 };
       summary.totalVisitas += resolveFilteredEntryTotal(entry, activeChannelSet, allowLeadFallback);
       summary.conversation.con_conversacion += conversation.con_conversacion ?? 0;
       summary.conversation.sin_conversacion += conversation.sin_conversacion ?? 0;
-      summary.channels.webchat += resolveChannelTotal(entry, "webchat", activeChannelSet, allowLeadFallback);
-      summary.channels.whatsapp += resolveChannelTotal(entry, "whatsapp", activeChannelSet, allowLeadFallback);
-      summary.channels.voz += resolveChannelTotal(entry, "voz", activeChannelSet, allowLeadFallback);
+      summary.channels.webchat += resolveChannelTotal(entry, "webchat", activeChannelSet);
+      summary.channels.whatsapp += resolveChannelTotal(entry, "whatsapp", activeChannelSet);
+      summary.channels.voz += resolveChannelTotal(entry, "voz", activeChannelSet);
     }
 
     summary.stages =
@@ -348,7 +342,7 @@ export function LocationComparisonChart({
     if (!activeEntry) return null;
 
     const conversation = showConversationMetrics
-      ? resolveFilteredConversation(activeEntry, activeChannelSet, allowLeadFallback)
+      ? resolveFilteredConversation(activeEntry, activeChannelSet)
       : { con_conversacion: 0, sin_conversacion: 0 };
 
     const stageTotals = createEmptyStageTotals(stageKeys);
@@ -369,9 +363,9 @@ export function LocationComparisonChart({
         sin_conversacion: conversation.sin_conversacion ?? 0,
       },
       channels: {
-        webchat: resolveChannelTotal(activeEntry, "webchat", activeChannelSet, allowLeadFallback),
-        whatsapp: resolveChannelTotal(activeEntry, "whatsapp", activeChannelSet, allowLeadFallback),
-        voz: resolveChannelTotal(activeEntry, "voz", activeChannelSet, allowLeadFallback),
+        webchat: resolveChannelTotal(activeEntry, "webchat", activeChannelSet),
+        whatsapp: resolveChannelTotal(activeEntry, "whatsapp", activeChannelSet),
+        voz: resolveChannelTotal(activeEntry, "voz", activeChannelSet),
       },
       stages: stageTotals,
     };
@@ -498,7 +492,7 @@ export function LocationComparisonChart({
 
       if (typeof tooltipLayer.bindTooltip !== "function") return;
 
-      const conversation = resolveFilteredConversation(entry, activeChannelSet, allowLeadFallback);
+      const conversation = resolveFilteredConversation(entry, activeChannelSet);
       const rows: MapTooltipRow[] = [
         {
           key: "total",
@@ -508,7 +502,7 @@ export function LocationComparisonChart({
         },
       ];
       for (const channel of displayedChannelKeys) {
-        const total = resolveChannelTotal(entry, channel, activeChannelSet, allowLeadFallback);
+        const total = resolveChannelTotal(entry, channel, activeChannelSet);
         rows.push({
           key: `channel-${channel}`,
           label: `Total ${CHANNEL_LABELS[channel]}`,
@@ -888,7 +882,6 @@ type LeafletMapType = {
 function resolveFilteredConversation(
   entry: DemografiaMapResponse["dataset"][number],
   allowedChannels?: Set<ChannelKey>,
-  allowLeadFallback: boolean = true,
 ) {
   const webchatIncluded =
     !allowedChannels || !allowedChannels.size || allowedChannels.has("webchat");
@@ -907,7 +900,7 @@ function resolveFilteredConversation(
       sin_conversacion: base.sin_conversacion ?? 0,
     };
   }
-  const webchatTotal = resolveChannelTotal(entry, "webchat", allowedChannels, allowLeadFallback);
+  const webchatTotal = resolveChannelTotal(entry, "webchat", allowedChannels);
   const con = Math.min(base.con_conversacion ?? 0, webchatTotal);
   const sin = Math.max(0, webchatTotal - con);
   return { con_conversacion: con, sin_conversacion: sin };

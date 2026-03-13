@@ -383,7 +383,6 @@ export function initialiseChat(options = {}) {
     config.persistSession,
   );
   state.visitRegistered = false;
-  void ensureVisitRegistered();
 
   elements.chatForm.addEventListener('submit', handleSubmit);
   elements.chatInput.addEventListener('input', updateComposerState);
@@ -455,7 +454,6 @@ function handleVisibilityChange() {
 
 function sendSessionClosure({ allowBeacon = false } = {}) {
   if (!state.sessionId) return false;
-  void ensureVisitRegistered(true);
   const url = `${config.apiBaseUrl}/close`;
   const clientMeta = collectClientMetadata();
   const payload = { session_id: state.sessionId };
@@ -904,7 +902,6 @@ async function handleAttachmentFileChange(event) {
 async function uploadSelectedFiles(fileList) {
   if (!fileList || fileList.length === 0) return;
 
-  await ensureVisitRegistered();
   state.uploadingAttachments = true;
   state.attachmentError = null;
   renderPendingAttachments();
@@ -1458,7 +1455,7 @@ async function sendToAssistant(message, clientMessageId, attachments = []) {
   const RETRY_DELAYS_MS = [1000, 2000];
 
   async function doFetch() {
-    void ensureVisitRegistered();
+    await ensureVisitRegistered();
     const clientMeta = collectClientMetadata();
     const payload = {
       session_id: state.sessionId,

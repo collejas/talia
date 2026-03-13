@@ -2671,12 +2671,16 @@ async def register_visit(
     metadata: dict[str, Any] | None,
     request: Request | None,
 ) -> str | None:
-    """Endpoint público para registrar la visita aunque no haya mensajes."""
-    return await _register_webchat_visit(
-        session_id,
-        request=request,
-        metadata=metadata,
+    """Compat endpoint.
+
+    La métrica de webchat se contabiliza únicamente cuando el visitante
+    interactúa (envía mensaje). Por eso /visit ya no persiste registros.
+    """
+    logger.info(
+        "webchat.visit_ignored_no_interaction",
+        extra={"session_id": session_id},
     )
+    return None
 
 
 async def handle_message(
@@ -3334,17 +3338,8 @@ async def close_session(
             extra={"session_id": session_id},
         )
 
-    try:
-        await _register_webchat_visit(
-            session_id,
-            request=request,
-            metadata=metadata,
-        )
-    except Exception:  # pragma: no cover - best effort
-        logger.exception(
-            "webchat.visit_capture_failed",
-            extra={"session_id": session_id},
-        )
+    # No registrar visita en /close: cerrar el widget sin enviar mensaje
+    # no debe contabilizarse como visita de webchat.
 
 
 async def _run_assistant_turn(
