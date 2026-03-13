@@ -170,6 +170,29 @@ export function AgendaAvailabilityManager() {
     }
     return Array.from(grouped.entries())
   }, [previewSlots])
+  const weeklyPreviewDays = React.useMemo(() => {
+    const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(fromDate)
+    if (!match) return []
+    const year = Number(match[1])
+    const month = Number(match[2])
+    const day = Number(match[3])
+    if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(day)) return []
+    const startUtc = new Date(Date.UTC(year, month - 1, day))
+    if (Number.isNaN(startUtc.getTime())) return []
+    const days: Array<{ key: string; label: string; slots: PreviewSlot[] }> = []
+    for (let i = 0; i < 7; i += 1) {
+      const dayUtc = new Date(startUtc)
+      dayUtc.setUTCDate(startUtc.getUTCDate() + i)
+      const key = dayUtc.toISOString().slice(0, 10)
+      const dow = dayUtc.getUTCDay()
+      const label = `${weekdayLabel(dow)} ${key.slice(8, 10)}/${key.slice(5, 7)}`
+      const slotsForDay = previewSlots
+        .filter((slot) => slot.local_date === key)
+        .sort((a, b) => a.local_time.localeCompare(b.local_time))
+      days.push({ key, label, slots: slotsForDay })
+    }
+    return days
+  }, [fromDate, previewSlots])
 
   const loadResources = React.useCallback(async () => {
     const response = await fetch("/api/agenda/disponibilidad/resources", {
@@ -1231,22 +1254,53 @@ export function AgendaAvailabilityManager() {
           {!previewByDate.length ? (
             <p className="text-sm text-muted-foreground">No hay slots disponibles en este rango.</p>
           ) : (
-            <div className="max-h-[26rem] space-y-3 overflow-auto pr-1">
-              {previewByDate.map(([date, slots]) => (
-                <div key={date} className="rounded-md border border-border/70 p-3">
-                  <p className="text-sm font-medium">{date}</p>
-                  <div className="mt-2 flex flex-wrap gap-2">
-                    {slots.map((slot) => (
-                      <span
-                        key={slot.slot_id}
-                        className="inline-flex items-center rounded-md border border-border/60 px-2 py-1 text-xs"
-                      >
-                        {slot.local_time}
-                      </span>
-                    ))}
-                  </div>
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <p className="text-xs font-medium text-muted-foreground">Vista semanal (7 días desde “Desde”)</p>
+                <div className="grid gap-2 md:grid-cols-7">
+                  {weeklyPreviewDays.map((day) => (
+                    <div key={day.key} className="min-h-[120px] rounded-md border border-border/70 p-2">
+                      <p className="text-xs font-medium">{day.label}</p>
+                      {!day.slots.length ? (
+                        <p className="mt-2 text-[11px] text-muted-foreground">Sin horarios</p>
+                      ) : (
+                        <div className="mt-2 flex flex-wrap gap-1">
+                          {day.slots.slice(0, 8).map((slot) => (
+                            <span
+                              key={slot.slot_id}
+                              className="inline-flex items-center rounded border border-border/60 px-1.5 py-0.5 text-[11px]"
+                            >
+                              {slot.local_time}
+                            </span>
+                          ))}
+                          {day.slots.length > 8 ? (
+                            <span className="text-[11px] text-muted-foreground">
+                              +{day.slots.length - 8} más
+                            </span>
+                          ) : null}
+                        </div>
+                      )}
+                    </div>
+                  ))}
                 </div>
-              ))}
+              </div>
+              <div className="max-h-[26rem] space-y-3 overflow-auto pr-1">
+                {previewByDate.map(([date, slots]) => (
+                  <div key={date} className="rounded-md border border-border/70 p-3">
+                    <p className="text-sm font-medium">{date}</p>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {slots.map((slot) => (
+                        <span
+                          key={slot.slot_id}
+                          className="inline-flex items-center rounded-md border border-border/60 px-2 py-1 text-xs"
+                        >
+                          {slot.local_time}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
         </CardContent>
