@@ -85,6 +85,11 @@ type PatternForm = {
   is_active: boolean
 }
 
+type PatternCopyForm = {
+  sourcePatternId: string
+  targetWeekdays: string[]
+}
+
 const EMPTY_FORM: ExceptionForm = {
   id: null,
   kind: "block",
@@ -104,6 +109,11 @@ const EMPTY_PATTERN_FORM: PatternForm = {
   capacity: "1",
   priority: "0",
   is_active: true,
+}
+
+const EMPTY_PATTERN_COPY_FORM: PatternCopyForm = {
+  sourcePatternId: "",
+  targetWeekdays: [],
 }
 
 const WEEKDAY_OPTIONS = [
@@ -132,6 +142,8 @@ export function AgendaAvailabilityManager() {
   const [patterns, setPatterns] = React.useState<PatternItem[]>([])
   const [patternForm, setPatternForm] = React.useState<PatternForm>(EMPTY_PATTERN_FORM)
   const [savingPattern, setSavingPattern] = React.useState(false)
+  const [copyingPattern, setCopyingPattern] = React.useState(false)
+  const [patternCopyForm, setPatternCopyForm] = React.useState<PatternCopyForm>(EMPTY_PATTERN_COPY_FORM)
   const [previewSlots, setPreviewSlots] = React.useState<PreviewSlot[]>([])
   const [previewLoading, setPreviewLoading] = React.useState(false)
   const [kindFilter, setKindFilter] = React.useState<"all" | "block" | "extra">("all")
@@ -348,6 +360,21 @@ export function AgendaAvailabilityManager() {
       cancelled = true
     }
   }, [loadPatterns])
+
+  React.useEffect(() => {
+    if (!patterns.length) {
+      setPatternCopyForm(EMPTY_PATTERN_COPY_FORM)
+      return
+    }
+    setPatternCopyForm((current) => {
+      const sourceExists = patterns.some((item) => item.id === current.sourcePatternId)
+      if (sourceExists) return current
+      return {
+        sourcePatternId: patterns[0]?.id ?? "",
+        targetWeekdays: [],
+      }
+    })
+  }, [patterns])
 
   React.useEffect(() => {
     let cancelled = false
@@ -645,6 +672,75 @@ export function AgendaAvailabilityManager() {
     } catch (error) {
       const message = error instanceof Error ? error.message : "No se pudo eliminar el patrón"
       toast.error(message)
+    }
+  }
+
+  async function copyPatternToWeekdays() {
+    if (!resourceId) return
+    const source = patterns.find((item) => item.id === patternCopyForm.sourcePatternId)
+    if (!source) {
+      toast.error("Selecciona un patrón origen válido.")
+      return
+    }
+    const uniqueTargets = Array.from(new Set(patternCopyForm.targetWeekdays))
+      .map((value) => Number(value))
+      .filter((value) => Number.isFinite(value) && value >= 0 && value <= 6 && value !== source.weekday)
+    if (!uniqueTargets.length) {
+      toast.error("Selecciona al menos un día destino distinto al origen.")
+      return
+    }
+
+    const basePayload = {
+      resource_id: resourceId,
+      start_time: source.start_time.slice(0, 5),
+      end_time: source.end_time.slice(0, 5),
+      start_date: source.start_date,
+      end_date: source.end_date,
+      capacity: source.capacity,
+      priority: source.priority,
+      is_active: source.is_active,
+    }
+
+    setCopyingPattern(true)
+    try {
+      const outcomes = await Promise.all(
+        uniqueTargets.map(async (weekday) => {
+          const response = await fetch("/api/agenda/disponibilidad/patterns", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              ...basePayload,
+              weekday,
+            }),
+          })
+          if (response.ok) {
+            return { weekday, ok: true as const, error: "" }
+          }
+          const errorMessage = await parseApiError(response)
+          return { weekday, ok: false as const, error: errorMessage }
+        }),
+      )
+
+      const successCount = outcomes.filter((item) => item.ok).length
+      const conflictCount = outcomes.filter(
+        (item) => !item.ok && item.error.includes("pattern_overlap_conflict"),
+      ).length
+      const failed = outcomes.filter((item) => !item.ok && !item.error.includes("pattern_overlap_conflict"))
+
+      if (successCount > 0) {
+        toast.success(`Se copiaron ${successCount} patrón(es).`)
+      }
+      if (conflictCount > 0) {
+        toast.warning(`${conflictCount} día(s) omitidos por solape existente.`)
+      }
+      if (failed.length > 0) {
+        toast.error(`Fallaron ${failed.length} copia(s).`)
+      }
+
+      await loadPatterns()
+      await loadPreview()
+    } finally {
+      setCopyingPattern(false)
     }
   }
 
@@ -1032,6 +1128,62 @@ export function AgendaAvailabilityManager() {
             <CardDescription>Disponibilidad recurrente configurada para el recurso.</CardDescription>
           </CardHeader>
           <CardContent>
+            {patterns.length > 0 ? (
+              <div className="mb-4 space-y-3 rounded-md border border-border/70 p-3">
+                <p className="text-sm font-medium">Copiar patrón a múltiples días</p>
+                <div className="space-y-2">
+                  <Label>Patrón origen</Label>
+                  <Select
+                    value={patternCopyForm.sourcePatternId}
+                    onValueChange={(value) =>
+                      setPatternCopyForm((current) => ({ ...current, sourcePatternId: value }))
+                    }
+                  >
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Selecciona patrón origen" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {patterns.map((item) => (
+                        <SelectItem key={item.id} value={item.id}>
+                          {weekdayLabel(item.weekday)} · {item.start_time.slice(0, 5)}-{item.end_time.slice(0, 5)}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Días destino</Label>
+                  <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
+                    {WEEKDAY_OPTIONS.map((day) => {
+                      const checked = patternCopyForm.targetWeekdays.includes(day.value)
+                      return (
+                        <label
+                          key={day.value}
+                          className="flex items-center gap-2 rounded-md border border-border/70 px-2 py-1 text-xs"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={(event) =>
+                              setPatternCopyForm((current) => {
+                                const next = new Set(current.targetWeekdays)
+                                if (event.target.checked) next.add(day.value)
+                                else next.delete(day.value)
+                                return { ...current, targetWeekdays: Array.from(next) }
+                              })
+                            }
+                          />
+                          <span>{day.label}</span>
+                        </label>
+                      )
+                    })}
+                  </div>
+                </div>
+                <Button type="button" variant="outline" onClick={copyPatternToWeekdays} disabled={!canManage || copyingPattern}>
+                  {copyingPattern ? "Copiando..." : "Copiar a días seleccionados"}
+                </Button>
+              </div>
+            ) : null}
             {!patterns.length ? (
               <p className="text-sm text-muted-foreground">No hay patrones configurados.</p>
             ) : (
