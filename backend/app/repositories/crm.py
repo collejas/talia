@@ -11743,6 +11743,38 @@ class CRMRepository:
             raise CRMRepositoryError(f"Respuesta inválida al listar calendar_resources: {data!r}")
         return [row for row in data if isinstance(row, dict)]
 
+    async def get_calendar_resource(
+        self,
+        *,
+        usuario_token: str,
+        organizacion_id: UUID,
+        resource_id: UUID,
+    ) -> dict[str, Any] | None:
+        params = {
+            "select": (
+                "id,name,slug,timezone,slot_minutes,buffer_minutes,capacity_per_slot,"
+                "max_holds_per_slot,max_days_visible,is_active,metadata,created_at,updated_at"
+            ),
+            "id": f"eq.{resource_id}",
+            "organizacion_id": f"eq.{organizacion_id}",
+            "limit": "1",
+        }
+        resp = await self._request_with_user(
+            "GET",
+            "/rest/v1/calendar_resources",
+            token=usuario_token,
+            params=params,
+        )
+        data = resp.json() or []
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"Respuesta inválida al obtener calendar_resources: {data!r}")
+        if not data:
+            return None
+        row = data[0]
+        if not isinstance(row, dict):
+            raise CRMRepositoryError(f"Respuesta inválida al obtener calendar_resources: {row!r}")
+        return row
+
     async def update_calendar_resource(
         self,
         *,

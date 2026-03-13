@@ -6627,12 +6627,32 @@ async def _ensure_no_calendar_pattern_overlap(
             raise HTTPException(status_code=409, detail="pattern_overlap_conflict")
 
 
+async def _ensure_calendar_resource_scope(
+    *,
+    repo: CRMRepository,
+    user_token: str,
+    organizacion_id: UUID,
+    resource_id: UUID,
+) -> None:
+    try:
+        resource = await repo.get_calendar_resource(
+            usuario_token=user_token,
+            organizacion_id=organizacion_id,
+            resource_id=resource_id,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    if resource is None:
+        raise HTTPException(status_code=404, detail="resource_not_found")
+
+
 async def _ensure_no_calendar_exception_overlap(
     *,
     repo: CRMRepository,
     user_token: str,
     organizacion_id: UUID,
     resource_id: UUID,
+    kind: str,
     start_at: datetime,
     end_at: datetime,
     exclude_exception_id: UUID | None = None,
@@ -6644,10 +6664,15 @@ async def _ensure_no_calendar_exception_overlap(
         start_at=start_at,
         end_at=end_at,
         exclude_exception_id=exclude_exception_id,
-        limit=1,
+        limit=10,
     )
-    if overlaps:
-        raise HTTPException(status_code=409, detail="overlap_conflict")
+    if not overlaps:
+        return
+    for row in overlaps:
+        existing_kind = str(row.get("kind") or "").strip().lower()
+        if existing_kind == kind:
+            raise HTTPException(status_code=409, detail="overlap_conflict_same_kind")
+        raise HTTPException(status_code=409, detail="overlap_conflict_cross_kind")
 
 
 def _map_visit_detail_row(row: dict[str, Any]) -> dict[str, Any]:
@@ -13254,11 +13279,19 @@ async def create_agenda_disponibilidad_exception(
     if end_dt <= start_dt:
         raise HTTPException(status_code=400, detail="range_invalid")
 
+    await _ensure_calendar_resource_scope(
+        repo=repo,
+        user_token=user_token,
+        organizacion_id=organizacion_id,
+        resource_id=payload.resource_id,
+    )
+
     await _ensure_no_calendar_exception_overlap(
         repo=repo,
         user_token=user_token,
         organizacion_id=organizacion_id,
         resource_id=payload.resource_id,
+        kind=normalized_kind,
         start_at=start_dt,
         end_at=end_dt,
     )
@@ -13334,6 +13367,7 @@ async def update_agenda_disponibilidad_exception(
         user_token=user_token,
         organizacion_id=organizacion_id,
         resource_id=resource_uuid,
+        kind=str(changes.get("kind") or existing.get("kind") or "").strip().lower(),
         start_at=start_dt,
         end_at=end_dt,
         exclude_exception_id=exception_id,
@@ -13431,6 +13465,13 @@ async def create_agenda_disponibilidad_pattern(
     end_date = _parse_optional_date_input(payload.end_date, field="end_date")
     if start_date and end_date and end_date < start_date:
         raise HTTPException(status_code=400, detail="date_range_invalid")
+
+    await _ensure_calendar_resource_scope(
+        repo=repo,
+        user_token=user_token,
+        organizacion_id=organizacion_id,
+        resource_id=payload.resource_id,
+    )
 
     await _ensure_no_calendar_pattern_overlap(
         repo=repo,

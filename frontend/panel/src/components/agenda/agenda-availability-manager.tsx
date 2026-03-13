@@ -90,6 +90,14 @@ type PatternCopyForm = {
   targetWeekdays: string[]
 }
 
+type SeasonTemplateKey = "normal" | "vacaciones" | "festivo"
+
+type SeasonTemplateForm = {
+  template: SeasonTemplateKey
+  start_date: string
+  end_date: string
+}
+
 const EMPTY_FORM: ExceptionForm = {
   id: null,
   kind: "block",
@@ -114,6 +122,12 @@ const EMPTY_PATTERN_FORM: PatternForm = {
 const EMPTY_PATTERN_COPY_FORM: PatternCopyForm = {
   sourcePatternId: "",
   targetWeekdays: [],
+}
+
+const EMPTY_SEASON_TEMPLATE_FORM: SeasonTemplateForm = {
+  template: "normal",
+  start_date: defaultFromDate(),
+  end_date: defaultFromDate(),
 }
 
 const WEEKDAY_OPTIONS = [
@@ -144,6 +158,8 @@ export function AgendaAvailabilityManager() {
   const [savingPattern, setSavingPattern] = React.useState(false)
   const [copyingPattern, setCopyingPattern] = React.useState(false)
   const [patternCopyForm, setPatternCopyForm] = React.useState<PatternCopyForm>(EMPTY_PATTERN_COPY_FORM)
+  const [applyingTemplate, setApplyingTemplate] = React.useState(false)
+  const [seasonTemplateForm, setSeasonTemplateForm] = React.useState<SeasonTemplateForm>(EMPTY_SEASON_TEMPLATE_FORM)
   const [previewSlots, setPreviewSlots] = React.useState<PreviewSlot[]>([])
   const [previewLoading, setPreviewLoading] = React.useState(false)
   const [kindFilter, setKindFilter] = React.useState<"all" | "block" | "extra">("all")
@@ -767,6 +783,95 @@ export function AgendaAvailabilityManager() {
     }
   }
 
+  async function applySeasonTemplate() {
+    if (!resourceId) return
+    const startDate = seasonTemplateForm.start_date
+    const endDate = seasonTemplateForm.end_date || seasonTemplateForm.start_date
+    if (!startDate) {
+      toast.error("Selecciona fecha de inicio para la plantilla.")
+      return
+    }
+    if (endDate < startDate) {
+      toast.error("La fecha fin no puede ser menor a la fecha inicio.")
+      return
+    }
+
+    setApplyingTemplate(true)
+    try {
+      if (seasonTemplateForm.template === "normal") {
+        const defaults = [
+          { weekday: 1, start_time: "09:00", end_time: "18:00" },
+          { weekday: 2, start_time: "09:00", end_time: "18:00" },
+          { weekday: 3, start_time: "09:00", end_time: "18:00" },
+          { weekday: 4, start_time: "09:00", end_time: "18:00" },
+          { weekday: 5, start_time: "09:00", end_time: "18:00" },
+          { weekday: 6, start_time: "09:00", end_time: "13:00" },
+        ]
+        // Reemplaza patrones actuales por plantilla estándar.
+        await Promise.all(
+          patterns.map((item) =>
+            fetch(`/api/agenda/disponibilidad/patterns/${item.id}`, {
+              method: "DELETE",
+            }),
+          ),
+        )
+        await Promise.all(
+          defaults.map((pattern) =>
+            fetch("/api/agenda/disponibilidad/patterns", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                resource_id: resourceId,
+                weekday: pattern.weekday,
+                start_time: pattern.start_time,
+                end_time: pattern.end_time,
+                capacity: 1,
+                priority: 0,
+                is_active: true,
+              }),
+            }),
+          ),
+        )
+        toast.success("Plantilla 'Horario normal' aplicada.")
+      } else {
+        const startIso = `${startDate}T00:00:00.000Z`
+        const endBase = seasonTemplateForm.template === "festivo" ? startDate : endDate
+        const endPlusOne = new Date(`${endBase}T00:00:00.000Z`)
+        endPlusOne.setUTCDate(endPlusOne.getUTCDate() + 1)
+        const endIso = endPlusOne.toISOString()
+        const reason =
+          seasonTemplateForm.template === "festivo"
+            ? "Festivo (plantilla)"
+            : "Vacaciones (plantilla)"
+        const response = await fetch("/api/agenda/disponibilidad/exceptions", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            resource_id: resourceId,
+            kind: "block",
+            start_at: startIso,
+            end_at: endIso,
+            reason,
+            capacity: 0,
+          }),
+        })
+        if (!response.ok) {
+          throw new Error(await parseApiError(response))
+        }
+        toast.success(`Plantilla '${seasonTemplateForm.template}' aplicada.`)
+      }
+
+      await loadPatterns()
+      await loadExceptions()
+      await loadPreview()
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "No se pudo aplicar la plantilla"
+      toast.error(message)
+    } finally {
+      setApplyingTemplate(false)
+    }
+  }
+
   return (
     <div className="space-y-4">
       {!canManage ? (
@@ -903,6 +1008,65 @@ export function AgendaAvailabilityManager() {
           </CardContent>
         </Card>
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Plantillas de temporada</CardTitle>
+          <CardDescription>Aplica configuraciones rápidas: normal, vacaciones y festivos.</CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-3 md:grid-cols-4">
+          <div className="space-y-2">
+            <Label>Plantilla</Label>
+            <Select
+              value={seasonTemplateForm.template}
+              onValueChange={(value) =>
+                setSeasonTemplateForm((current) => ({ ...current, template: value as SeasonTemplateKey }))
+              }
+            >
+              <SelectTrigger className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="normal">Horario normal</SelectItem>
+                <SelectItem value="vacaciones">Vacaciones</SelectItem>
+                <SelectItem value="festivo">Festivo</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-2">
+            <Label>Fecha inicio</Label>
+            <Input
+              type="date"
+              value={seasonTemplateForm.start_date}
+              onChange={(event) =>
+                setSeasonTemplateForm((current) => ({ ...current, start_date: event.target.value }))
+              }
+            />
+          </div>
+          <div className="space-y-2">
+            <Label>Fecha fin</Label>
+            <Input
+              type="date"
+              value={seasonTemplateForm.end_date}
+              onChange={(event) =>
+                setSeasonTemplateForm((current) => ({ ...current, end_date: event.target.value }))
+              }
+              disabled={seasonTemplateForm.template === "festivo"}
+            />
+          </div>
+          <div className="flex items-end">
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full"
+              onClick={applySeasonTemplate}
+              disabled={!canManage || applyingTemplate || !resourceId}
+            >
+              {applyingTemplate ? "Aplicando..." : "Aplicar plantilla"}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
 
       <div className="grid gap-4 xl:grid-cols-2">
         <Card>
