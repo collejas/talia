@@ -1,6 +1,7 @@
 'use client'
 
 import * as React from "react"
+import Link from "next/link"
 
 import { toast } from "sonner"
 
@@ -538,6 +539,9 @@ export function AgendaAvailabilityQuickModal() {
         </section>
 
         <DialogFooter>
+          <Button type="button" variant="outline" asChild>
+            <Link href="/agenda/disponibilidad">Abrir administrador avanzado</Link>
+          </Button>
           <Button type="button" variant="ghost" onClick={() => setOpen(false)}>
             Cerrar
           </Button>
