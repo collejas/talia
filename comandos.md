@@ -88,16 +88,9 @@ npm run build
 sudo systemctl restart talia-api.service
 sudo systemctl restart talia-panel.service
 
-codex resume 019cd80a-079c-76c3-9b2f-9f09de80f5d0
+codex resume 019ce43a-a89f-7103-8422-0d18078b12d2
 
-codex resume 019cbe8f-1eb4-7de1-8ea0-e951f6ab1dda
-codex resume 019cba7e-7b41-7123-a176-e940ff165a66
-
-codex resume 019cbb13-4fbd-76f3-9467-0b22087046f7
- - GET /crm/demografia/resumen: no encontré uso directo en frontend actual.
-  - GET /crm/dashboard/kpis: no encontré uso directo en frontend actual.
-
-sudo rsync -a landing/src/ /var/www/talia-landing/ que mas nos faltaria par ala idea
+sudo rsync -a landing/src/ /var/www/talia-landing/ 
 
 # Gilberto Nunez director comercial comebi cel personal +5215530862988   cel trabajo +5214441692305
 

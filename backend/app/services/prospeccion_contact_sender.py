@@ -256,6 +256,51 @@ def _resolve_tracking_base_url(payload: dict[str, Any]) -> str:
     return urlunparse((parsed.scheme or "https", parsed.netloc or "talia.mx", parsed.path or "/", "", "", ""))
 
 
+def _build_booking_url(
+    *,
+    context: dict[str, Any],
+    payload: dict[str, Any],
+    tracking_url: str | None = None,
+    envio_id: Any | None = None,
+    prospecto_id: Any | None = None,
+) -> str:
+    metadata = payload.get("metadata") if isinstance(payload.get("metadata"), dict) else {}
+    booking_base = (
+        _clean_text(metadata.get("booking_base_url"))
+        or _clean_text(metadata.get("booking_url"))
+        or _clean_text(metadata.get("agenda_url"))
+        or _clean_text(metadata.get("demo_url"))
+        or "https://talia.mx/demo"
+    )
+    parsed_booking = urlparse(booking_base)
+    booking_query = dict(parse_qsl(parsed_booking.query, keep_blank_values=True))
+
+    effective_tracking_url = tracking_url or _build_email_tracking_url(
+        context=context,
+        payload=payload,
+        envio_id=envio_id,
+        prospecto_id=prospecto_id,
+    )
+    parsed_tracking = urlparse(effective_tracking_url)
+    tracking_params = dict(parse_qsl(parsed_tracking.query, keep_blank_values=True))
+    for key, value in tracking_params.items():
+        if key not in booking_query and value:
+            booking_query[key] = value
+    booking_query.setdefault("utm_content", "booking_link")
+    booking_query.setdefault("intent", "demo_booking")
+
+    return urlunparse(
+        (
+            parsed_booking.scheme or "https",
+            parsed_booking.netloc or "talia.mx",
+            parsed_booking.path or "/demo",
+            "",
+            urlencode(booking_query, doseq=True),
+            "",
+        )
+    )
+
+
 def _wrap_images_with_tracking_link(body_html: str, tracking_url: str) -> str:
     if not body_html:
         return body_html
@@ -674,8 +719,16 @@ async def _run_envio_correo(
         envio_id=envio.get("id"),
         prospecto_id=envio.get("prospecto_id"),
     )
+    booking_url = _build_booking_url(
+        context=context,
+        payload=payload,
+        tracking_url=tracking_url,
+        envio_id=envio.get("id"),
+        prospecto_id=envio.get("prospecto_id"),
+    )
     context["tracking_url"] = tracking_url
     context["website_url"] = _resolve_tracking_base_url(payload)
+    context["booking_url"] = booking_url
     subject = _render_template_text(subject_template, context).strip()
     body = _render_template_text(str(body_template), context).strip()
     body_html = None
@@ -743,6 +796,7 @@ async def _run_envio_correo(
         detalle={
             "email": email_value,
             "tracking_url": tracking_url,
+            "booking_url": booking_url,
         },
         mensaje_id=message_id,
     )

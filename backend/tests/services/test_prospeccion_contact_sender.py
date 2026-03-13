@@ -1,9 +1,11 @@
 from app.services.prospeccion_contact_sender import (
+    _build_booking_url,
     _build_twilio_numeric_variables_from_body,
     _compose_twilio_template_variables,
     _find_blank_twilio_variables,
     _render_twilio_variables,
 )
+from urllib.parse import parse_qs, urlparse
 
 
 def test_render_twilio_variables_keeps_literal_text_for_variable_6() -> None:
@@ -63,3 +65,54 @@ def test_compose_twilio_variables_explicit_overrides_inferred_value() -> None:
     )
 
     assert rendered == {"1": "Tal-IA"}
+
+
+def test_build_booking_url_uses_demo_default_and_tracking_params() -> None:
+    payload = {
+        "metadata": {
+            "campana_id": "11111111-1111-1111-1111-111111111111",
+            "template_id": "22222222-2222-2222-2222-222222222222",
+        }
+    }
+    booking_url = _build_booking_url(
+        context={"segmento": "inmobiliario"},
+        payload=payload,
+        envio_id="33333333-3333-3333-3333-333333333333",
+        prospecto_id="44444444-4444-4444-4444-444444444444",
+    )
+
+    parsed = urlparse(booking_url)
+    query = parse_qs(parsed.query)
+    assert parsed.scheme == "https"
+    assert parsed.netloc == "talia.mx"
+    assert parsed.path == "/demo"
+    assert query.get("utm_source") == ["prospeccion"]
+    assert query.get("utm_medium") == ["email"]
+    assert query.get("cid") == ["11111111-1111-1111-1111-111111111111"]
+    assert query.get("tid") == ["22222222-2222-2222-2222-222222222222"]
+    assert query.get("eid") == ["33333333-3333-3333-3333-333333333333"]
+    assert query.get("pid") == ["44444444-4444-4444-4444-444444444444"]
+    assert query.get("intent") == ["demo_booking"]
+
+
+def test_build_booking_url_respects_booking_base_and_existing_query() -> None:
+    payload = {
+        "metadata": {
+            "booking_base_url": "https://agenda.talia.mx/reservar?source=mail&utm_medium=custom",
+            "campana_id": "11111111-1111-1111-1111-111111111111",
+        }
+    }
+    booking_url = _build_booking_url(
+        context={"segmento": "retail"},
+        payload=payload,
+        tracking_url="https://talia.mx/?utm_source=prospeccion&utm_medium=email&utm_campaign=cold_outreach&eid=555",
+    )
+
+    parsed = urlparse(booking_url)
+    query = parse_qs(parsed.query)
+    assert parsed.netloc == "agenda.talia.mx"
+    assert parsed.path == "/reservar"
+    assert query.get("source") == ["mail"]
+    assert query.get("utm_medium") == ["custom"]
+    assert query.get("utm_source") == ["prospeccion"]
+    assert query.get("utm_campaign") == ["cold_outreach"]

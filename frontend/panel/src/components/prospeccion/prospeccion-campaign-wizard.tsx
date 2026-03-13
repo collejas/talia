@@ -47,7 +47,17 @@ const STAGES = [
 ]
 
 const EMAIL_LOGO_IMG_STYLE = "display:block;max-width:83.333%;height:auto;margin:12px 0;"
-const MAIL_VARIABLE_TOKENS = ["{{nombre}}", "{{empresa}}", "{{email}}", "{{telefono}}", "{{segmento}}", "{{logo_url}}"]
+const MAIL_VARIABLE_TOKENS = [
+  "{{nombre}}",
+  "{{empresa}}",
+  "{{email}}",
+  "{{telefono}}",
+  "{{segmento}}",
+  "{{logo_url}}",
+  "{{tracking_url}}",
+  "{{website_url}}",
+  "{{booking_url}}",
+]
 const LOGO_PLACEHOLDER_REGEX = /{{\s*logo_url\s*}}/i
 
 type LogoAsset = {
@@ -947,7 +957,7 @@ export function ProspeccionCampaignWizard({
                         ) : null}
                       </div>
                       <p className="text-xs text-muted-foreground">
-                        Usa URL pública para imágenes. Variables soportadas: {"{{nombre}}, {{empresa}}, {{email}}, {{telefono}}, {{segmento}}, {{logo_url}}"}.
+                        Usa URL pública para imágenes. Variables soportadas: {"{{nombre}}, {{empresa}}, {{email}}, {{telefono}}, {{segmento}}, {{logo_url}}, {{tracking_url}}, {{website_url}}, {{booking_url}}"}.
                       </p>
                     </div>
                   </>
