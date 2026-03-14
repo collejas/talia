@@ -36,6 +36,7 @@ type FilterState = {
   estado: string
   provider: string
   assigned: string
+  zoom: string
 }
 
 const ESTADO_OPTIONS = [
@@ -57,6 +58,7 @@ export function AgendaTable({ items }: AgendaTableProps) {
     estado: "todos",
     provider: "todos",
     assigned: "todos",
+    zoom: "todos",
   })
 
   const assignedOptions = React.useMemo(() => {
@@ -88,12 +90,23 @@ export function AgendaTable({ items }: AgendaTableProps) {
       ) {
         return false
       }
+      const zoom = extractZoomObservability(item.metadata)
+      const hasZoomLink = Boolean(item.meetingUrl || item.externalJoinUrl)
+      const hasZoomError = Boolean(zoom?.error) || [
+        "failed",
+        "update_failed",
+        "cancel_failed",
+        "missing_credentials",
+      ].includes(zoom?.status ?? "")
+      if (filters.zoom === "con_link" && !hasZoomLink) return false
+      if (filters.zoom === "sin_link" && hasZoomLink) return false
+      if (filters.zoom === "con_error" && !hasZoomError) return false
       return true
     })
   }, [items, filters])
 
   const handleReset = React.useCallback(() => {
-    setFilters({ estado: "todos", provider: "todos", assigned: "todos" })
+    setFilters({ estado: "todos", provider: "todos", assigned: "todos", zoom: "todos" })
   }, [])
 
   if (!items.length) {
@@ -165,6 +178,20 @@ export function AgendaTable({ items }: AgendaTableProps) {
               ))}
             </SelectContent>
           </Select>
+          <Select
+            value={filters.zoom}
+            onValueChange={(value) => setFilters((prev) => ({ ...prev, zoom: value }))}
+          >
+            <SelectTrigger className="w-[220px]">
+              <SelectValue placeholder="Zoom" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="todos">Zoom: Todos</SelectItem>
+              <SelectItem value="con_link">Zoom: Con enlace</SelectItem>
+              <SelectItem value="sin_link">Zoom: Sin enlace</SelectItem>
+              <SelectItem value="con_error">Zoom: Con error</SelectItem>
+            </SelectContent>
+          </Select>
           <Button variant="ghost" size="sm" onClick={handleReset}>
             Limpiar filtros
           </Button>
@@ -178,6 +205,7 @@ export function AgendaTable({ items }: AgendaTableProps) {
               <TableHead>Canal</TableHead>
               <TableHead>Asignado</TableHead>
               <TableHead>Notas</TableHead>
+              <TableHead>Zoom</TableHead>
               <TableHead>Reunión</TableHead>
             </TableRow>
           </TableHeader>
@@ -263,6 +291,18 @@ export function AgendaTable({ items }: AgendaTableProps) {
                       <p className="text-xs text-destructive">
                         Zoom error: {zoom.error}
                       </p>
+                    ) : null}
+                  </TableCell>
+                  <TableCell className="space-y-1">
+                    {zoom ? (
+                      <span className="text-xs">
+                        Estado: <strong>{zoom.label}</strong>
+                      </span>
+                    ) : (
+                      <span className="text-muted-foreground text-xs">Sin estado</span>
+                    )}
+                    {zoom?.error ? (
+                      <p className="text-xs text-destructive">{zoom.error}</p>
                     ) : null}
                   </TableCell>
                   <TableCell>
@@ -393,7 +433,7 @@ function formatCanal(canal: string | null | undefined): string | null {
 
 function extractZoomObservability(
   metadata: Record<string, unknown> | null | undefined,
-): { label: string; error: string | null } | null {
+): { status: string; label: string; error: string | null } | null {
   if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) return null
   const statusRaw = metadata.zoom_status
   const status = typeof statusRaw === "string" ? statusRaw.trim().toLowerCase() : ""
@@ -420,6 +460,7 @@ function extractZoomObservability(
   }
 
   return {
+    status,
     label: labels[status] ?? status,
     error,
   }
