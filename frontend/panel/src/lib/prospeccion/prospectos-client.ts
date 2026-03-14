@@ -551,6 +551,8 @@ export async function listProspectos(params: {
   dateTo?: string
   geoEstado?: string
   geoMunicipio?: string
+  minRating?: number
+  estratoGroup?: "micro" | "pequena" | "mediana" | "grande"
   campanaId?: string
   conEnvio?: boolean
   conScraper?: boolean
@@ -591,6 +593,12 @@ export async function listProspectos(params: {
   }
   if (params.geoMunicipio?.trim().length) {
     url.searchParams.set("geo_municipio", params.geoMunicipio.trim())
+  }
+  if (typeof params.minRating === "number") {
+    url.searchParams.set("min_rating", String(params.minRating))
+  }
+  if (params.estratoGroup) {
+    url.searchParams.set("estrato_group", params.estratoGroup)
   }
   if (params.campanaId?.trim().length) {
     url.searchParams.set("campana_id", params.campanaId.trim())

@@ -101,6 +101,8 @@ type FuenteFilter = "" | "google_places" | "denue" | "usuario"
 type LookupFilter = "" | "pendiente" | "verificado" | "sin_numero" | "error"
 type ConEnvioFilter = "" | "si" | "no"
 type ConScraperFilter = "" | "si" | "no"
+type MinRatingFilter = "" | "3" | "4" | "4.5"
+type EstratoGroupFilter = "" | "micro" | "pequena" | "mediana" | "grande"
 type OrderOption = "creado" | "nombre"
 type ProspectosSortKey =
   | "prospecto"
@@ -128,6 +130,8 @@ type Filters = {
   segmento: string
   geoEstado: string
   geoMunicipio: string
+  minRating: MinRatingFilter
+  estratoGroup: EstratoGroupFilter
   order: OrderOption
   carrierType: "" | "mobile" | "landline" | "voip"
   contactFilters: ContactPresenceFilter[]
@@ -173,6 +177,8 @@ const initialFilters: Filters = {
   segmento: "",
   geoEstado: "",
   geoMunicipio: "",
+  minRating: "",
+  estratoGroup: "",
   order: "creado",
   carrierType: "",
   contactFilters: [],
@@ -260,6 +266,21 @@ const LOOKUP_STATUS_LABELS: Record<string, string> = {
   verificado: "Verificado",
   sin_numero: "Sin número",
   error: "Error",
+}
+
+const RATING_FILTER_LABELS: Record<MinRatingFilter, string> = {
+  "": "Todos",
+  "3": "3+",
+  "4": "4+",
+  "4.5": "4.5+",
+}
+
+const ESTRATO_GROUP_LABELS: Record<EstratoGroupFilter, string> = {
+  "": "Todos los tamaños",
+  micro: "Micro (0-10)",
+  pequena: "Pequeña (11-50)",
+  mediana: "Mediana (51-250)",
+  grande: "Grande (250+)",
 }
 
 const LOOKUP_STATUS_VARIANTS: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
@@ -548,6 +569,17 @@ function normalizeSavedViewState(raw: unknown): ProspectosSavedViewState | null 
     segmento: typeof filtersObj["segmento"] === "string" ? filtersObj["segmento"] : "",
     geoEstado: typeof filtersObj["geoEstado"] === "string" ? filtersObj["geoEstado"] : "",
     geoMunicipio: typeof filtersObj["geoMunicipio"] === "string" ? filtersObj["geoMunicipio"] : "",
+    minRating:
+      filtersObj["minRating"] === "3" || filtersObj["minRating"] === "4" || filtersObj["minRating"] === "4.5"
+        ? filtersObj["minRating"]
+        : "",
+    estratoGroup:
+      filtersObj["estratoGroup"] === "micro" ||
+      filtersObj["estratoGroup"] === "pequena" ||
+      filtersObj["estratoGroup"] === "mediana" ||
+      filtersObj["estratoGroup"] === "grande"
+        ? filtersObj["estratoGroup"]
+        : "",
     order: filtersObj["order"] === "nombre" ? "nombre" : "creado",
     carrierType:
       filtersObj["carrierType"] === "mobile" || filtersObj["carrierType"] === "landline" || filtersObj["carrierType"] === "voip"
@@ -1197,6 +1229,12 @@ function ProspectosView() {
     if (filters.geoMunicipio.trim()) {
       chips.push(`Municipio: ${geoMunicipioLabelMap.get(filters.geoMunicipio.trim()) ?? filters.geoMunicipio.trim()}`)
     }
+    if (filters.minRating) {
+      chips.push(`Rating: ${RATING_FILTER_LABELS[filters.minRating]}`)
+    }
+    if (filters.estratoGroup) {
+      chips.push(`Tamaño: ${ESTRATO_GROUP_LABELS[filters.estratoGroup]}`)
+    }
     if (filters.lookupStatus) {
       chips.push(`Verificación: ${LOOKUP_STATUS_LABELS[filters.lookupStatus] ?? filters.lookupStatus}`)
     }
@@ -1267,6 +1305,8 @@ function ProspectosView() {
           segmento: filters.segmento || undefined,
           geoEstado: filters.geoEstado || undefined,
           geoMunicipio: filters.geoMunicipio || undefined,
+          minRating: filters.minRating ? Number(filters.minRating) : undefined,
+          estratoGroup: filters.estratoGroup || undefined,
           carrierType: filters.carrierType || undefined,
           order: filters.order,
           phonePresent,
@@ -1336,6 +1376,8 @@ function ProspectosView() {
           segmento: filters.segmento || undefined,
           geoEstado: filters.geoEstado || undefined,
           geoMunicipio: filters.geoMunicipio || undefined,
+          minRating: filters.minRating ? Number(filters.minRating) : undefined,
+          estratoGroup: filters.estratoGroup || undefined,
           carrierType: filters.carrierType || undefined,
           order: filters.order,
           phonePresent,
@@ -3171,6 +3213,51 @@ function ProspectosView() {
                   <SelectItem value="mobile">Móvil</SelectItem>
                   <SelectItem value="landline">Línea fija</SelectItem>
                   <SelectItem value="voip">VoIP</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1">
+              <Label>Rating</Label>
+              <Select
+                value={filters.minRating || "all"}
+                onValueChange={(value) =>
+                  setFilters((prev) => ({
+                    ...prev,
+                    minRating: value === "all" ? "" : (value as MinRatingFilter),
+                  }))
+                }
+              >
+                <SelectTrigger className="w-[130px]">
+                  <SelectValue placeholder="Todos" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos</SelectItem>
+                  <SelectItem value="3">3+</SelectItem>
+                  <SelectItem value="4">4+</SelectItem>
+                  <SelectItem value="4.5">4.5+</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1">
+              <Label>Tamaño</Label>
+              <Select
+                value={filters.estratoGroup || "all"}
+                onValueChange={(value) =>
+                  setFilters((prev) => ({
+                    ...prev,
+                    estratoGroup: value === "all" ? "" : (value as EstratoGroupFilter),
+                  }))
+                }
+              >
+                <SelectTrigger className="w-[180px]">
+                  <SelectValue placeholder="Todos los tamaños" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos los tamaños</SelectItem>
+                  <SelectItem value="micro">Micro (0-10)</SelectItem>
+                  <SelectItem value="pequena">Pequeña (11-50)</SelectItem>
+                  <SelectItem value="mediana">Mediana (51-250)</SelectItem>
+                  <SelectItem value="grande">Grande (250+)</SelectItem>
                 </SelectContent>
               </Select>
             </div>

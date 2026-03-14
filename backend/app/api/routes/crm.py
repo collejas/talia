@@ -1924,6 +1924,8 @@ class ProspectoListQuery(BaseModel):
     date_to: date | None = Field(default=None)
     geo_estado: str | None = Field(default=None, max_length=120)
     geo_municipio: str | None = Field(default=None, max_length=120)
+    min_rating: float | None = Field(default=None, ge=0, le=5)
+    estrato_group: str | None = Field(default=None, max_length=40)
     campana_id: UUID | None = Field(default=None)
     con_envio: bool | None = Field(default=None)
     con_scraper: bool | None = Field(default=None)
@@ -15781,6 +15783,8 @@ async def listar_prospectos(
             date_to=params.date_to,
             geo_estado=params.geo_estado,
             geo_municipio=params.geo_municipio,
+            min_rating=params.min_rating,
+            estrato_group=params.estrato_group,
             metadata_queries=metadata_query,
             actividades=actividad,
             campana_id=params.campana_id,

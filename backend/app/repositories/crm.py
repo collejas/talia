@@ -8089,6 +8089,8 @@ class CRMRepository:
         date_to: date | None = None,
         geo_estado: str | None = None,
         geo_municipio: str | None = None,
+        min_rating: float | None = None,
+        estrato_group: str | None = None,
         metadata_queries: list[str] | None = None,
         actividades: list[str] | None = None,
         campana_id: UUID | None = None,
@@ -8145,6 +8147,33 @@ class CRMRepository:
                 end_local = datetime.combine(date_to + timedelta(days=1), datetime.min.time(), tzinfo=zone)
                 end_utc = end_local.astimezone(timezone.utc).isoformat()
                 and_filters.append(f"creado_en.lt.{end_utc}")
+
+        if min_rating is not None:
+            params["rating"] = f"gte.{min_rating}"
+
+        if estrato_group:
+            normalized_estrato_group = str(estrato_group).strip().lower()
+            if normalized_estrato_group:
+                estrato_pattern: str
+                if normalized_estrato_group == "micro":
+                    estrato_pattern = "*micro*"
+                elif normalized_estrato_group == "pequena":
+                    estrato_pattern = "*peque*"
+                elif normalized_estrato_group == "mediana":
+                    estrato_pattern = "*mediana*"
+                elif normalized_estrato_group == "grande":
+                    estrato_pattern = "*grande*"
+                else:
+                    sanitized = normalized_estrato_group
+                    for char in "(),*":
+                        sanitized = sanitized.replace(char, " ")
+                    sanitized = " ".join(sanitized.split())
+                    if sanitized:
+                        estrato_pattern = f"*{sanitized}*"
+                    else:
+                        estrato_pattern = ""
+                if estrato_pattern:
+                    and_filters.append(f"estrato.ilike.{estrato_pattern}")
 
         if search:
             sanitized = search.strip()
