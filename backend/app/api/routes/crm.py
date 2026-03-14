@@ -8776,7 +8776,7 @@ async def list_sale_ready_opportunities(
     _: str = Depends(require_permission("pipeline.view")),
     user_token: str = Depends(require_user_token),  # noqa: ARG001
     limit: Annotated[int, Query(ge=1, le=200)] = 100,
-    contacto_captura_estado: str | None = Query(default="completo"),
+    contacto_captura_estado: str | None = Query(default=None),
 ) -> list[CRMSaleReadyOpportunity]:
     try:
         rows = await repo.list_sale_ready_opportunities(

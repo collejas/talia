@@ -3858,7 +3858,7 @@ export function PropertyMap() {
                                 <div className="space-y-3">
                                   <div className="flex items-center justify-between">
                                     <p className="text-sm font-semibold tracking-[0.2em] uppercase text-slate-300">
-                                      Oportunidades con contacto completo
+                                      Oportunidades disponibles
                                     </p>
                                     {opportunitiesLoading && (
                                       <span className="text-[0.65rem] text-slate-400">Cargando...</span>
