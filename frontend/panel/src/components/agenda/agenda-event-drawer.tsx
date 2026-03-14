@@ -31,6 +31,7 @@ export function AgendaEventDrawer({
   const timezone = item?.timezone || "UTC"
   const estadoNormalized = item?.estado?.toLowerCase() ?? ""
   const isCancelled = estadoNormalized === "cancelada"
+  const zoom = extractZoomObservability(item?.metadata)
 
   return (
     <Drawer open={open} onOpenChange={onOpenChange} direction="right">
@@ -48,6 +49,15 @@ export function AgendaEventDrawer({
         </DrawerHeader>
         <div className="space-y-4 px-4 pb-6">
           <InfoGrid item={item} timezone={timezone} />
+          {zoom ? (
+            <section className="rounded-lg border border-border/70 bg-muted/30 p-3 text-sm">
+              <p className="text-muted-foreground text-xs uppercase tracking-wide">Zoom</p>
+              <p className="leading-relaxed">
+                Estado: <strong>{zoom.label}</strong>
+              </p>
+              {zoom.error ? <p className="text-xs text-destructive">Error: {zoom.error}</p> : null}
+            </section>
+          ) : null}
           {item?.notes ? (
             <section className="rounded-lg border border-border/70 bg-muted/30 p-3 text-sm">
               <p className="text-muted-foreground text-xs uppercase tracking-wide">Notas</p>
@@ -135,4 +145,38 @@ function resolveEstadoVariant(
   if (normalized === "confirmada") return "default"
   if (normalized === "reprogramada" || normalized === "pendiente") return "secondary"
   return "outline"
+}
+
+function extractZoomObservability(
+  metadata: Record<string, unknown> | null | undefined,
+): { label: string; error: string | null } | null {
+  if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) return null
+  const statusRaw = metadata.zoom_status
+  const status = typeof statusRaw === "string" ? statusRaw.trim().toLowerCase() : ""
+  if (!status) return null
+
+  const labels: Record<string, string> = {
+    created: "creada",
+    updated: "actualizada",
+    cancelled: "cancelada",
+    failed: "error al crear",
+    update_failed: "error al actualizar",
+    cancel_failed: "error al cancelar",
+    missing_credentials: "sin credenciales",
+  }
+
+  const errorKeys = ["zoom_error", "zoom_update_error", "zoom_cancel_error"]
+  let error: string | null = null
+  for (const key of errorKeys) {
+    const value = metadata[key]
+    if (typeof value === "string" && value.trim()) {
+      error = value.trim()
+      break
+    }
+  }
+
+  return {
+    label: labels[status] ?? status,
+    error,
+  }
 }

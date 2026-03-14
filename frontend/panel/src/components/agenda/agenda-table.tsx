@@ -189,6 +189,7 @@ export function AgendaTable({ items }: AgendaTableProps) {
               const providerLabel = formatProvider(item.provider)
               const canal = formatCanal(item.canal)
               const meetingHref = item.meetingUrl || item.externalJoinUrl || null
+              const zoom = extractZoomObservability(item.metadata)
 
               return (
                 <TableRow key={item.id} className="align-top">
@@ -226,6 +227,11 @@ export function AgendaTable({ items }: AgendaTableProps) {
                         Programada por {String(item.metadata.source).toLowerCase()}
                       </div>
                     ) : null}
+                    {zoom ? (
+                      <div className="text-muted-foreground text-xs">
+                        Zoom: {zoom.label}
+                      </div>
+                    ) : null}
                   </TableCell>
                   <TableCell className="space-y-1">
                     <div className="font-medium">
@@ -251,6 +257,11 @@ export function AgendaTable({ items }: AgendaTableProps) {
                     {item.metadata?.cancel_reason ? (
                       <p className="text-xs text-destructive">
                         Motivo cancelación: {String(item.metadata.cancel_reason)}
+                      </p>
+                    ) : null}
+                    {zoom?.error ? (
+                      <p className="text-xs text-destructive">
+                        Zoom error: {zoom.error}
                       </p>
                     ) : null}
                   </TableCell>
@@ -377,5 +388,39 @@ function formatCanal(canal: string | null | undefined): string | null {
       return "Instagram"
     default:
       return capitalizeSpanish(normalized)
+  }
+}
+
+function extractZoomObservability(
+  metadata: Record<string, unknown> | null | undefined,
+): { label: string; error: string | null } | null {
+  if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) return null
+  const statusRaw = metadata.zoom_status
+  const status = typeof statusRaw === "string" ? statusRaw.trim().toLowerCase() : ""
+  if (!status) return null
+
+  const labels: Record<string, string> = {
+    created: "creada",
+    updated: "actualizada",
+    cancelled: "cancelada",
+    failed: "error al crear",
+    update_failed: "error al actualizar",
+    cancel_failed: "error al cancelar",
+    missing_credentials: "sin credenciales",
+  }
+  const errorKeys = ["zoom_error", "zoom_update_error", "zoom_cancel_error"]
+
+  let error: string | null = null
+  for (const key of errorKeys) {
+    const value = metadata[key]
+    if (typeof value === "string" && value.trim()) {
+      error = value.trim()
+      break
+    }
+  }
+
+  return {
+    label: labels[status] ?? status,
+    error,
   }
 }
