@@ -13130,6 +13130,15 @@ async def create_agenda_booking(
             raise HTTPException(status_code=400, detail="calendar_resource_missing")
 
         booking_context_id = str(uuid4())
+        zoom_meeting_url, zoom_external_join_url, zoom_metadata = (
+            await webchat_service.create_zoom_meeting_for_booking_if_enabled(
+                organizacion_id=org_uuid,
+                start_at=start_dt,
+                timezone_name=calendar_settings.timezone,
+                topic=f"Demo Tal-IA - {str(contact_data.get('nombre_completo') or contact_id).strip()}",
+                agenda=payload.notes,
+            )
+        )
         hold_metadata: dict[str, Any] = {
             "source": "panel_agenda",
             "session_id": payload.session_id,
@@ -13139,6 +13148,8 @@ async def create_agenda_booking(
             "canal": (payload.canal or "manual"),
             "organizacion_id": str(org_uuid),
         }
+        if zoom_metadata:
+            hold_metadata.update(zoom_metadata)
         booking_metadata: dict[str, Any] = {
             "source": "panel_agenda",
             "session_id": payload.session_id,
@@ -13148,6 +13159,8 @@ async def create_agenda_booking(
             "canal": (payload.canal or "manual"),
             "organizacion_id": str(org_uuid),
         }
+        if zoom_metadata:
+            booking_metadata.update(zoom_metadata)
         try:
             hold = await calendar_service.hold_slot(
                 resource_id=resource_id,
@@ -13162,6 +13175,8 @@ async def create_agenda_booking(
                 hold_id=str(hold.get("hold_id")),
                 notes=payload.notes,
                 metadata=booking_metadata,
+                meeting_url=zoom_meeting_url,
+                external_join_url=zoom_external_join_url,
             )
         except CalendarError as exc:
             raise HTTPException(status_code=502, detail=str(exc)) from exc
@@ -21535,8 +21550,28 @@ async def public_web_booking_create(
         )
 
     booking_context_id = str(uuid4())
+    zoom_meeting_url, zoom_external_join_url, zoom_metadata = (
+        await webchat_service.create_zoom_meeting_for_booking_if_enabled(
+            organizacion_id=organizacion_uuid,
+            start_at=start_at,
+            timezone_name=calendar_settings.timezone,
+            topic=f"Demo Tal-IA - {display_name}",
+            agenda=payload.notes,
+        )
+    )
 
     try:
+        hold_metadata: dict[str, Any] = {
+            "source": (payload.source or "").strip().lower() or "public_demo",
+            "booking_session_id": payload.booking_session_id,
+            "tenant_alias": (payload.tenant_alias or "").strip().lower() or None,
+            "organizacion_id": organizacion_id,
+            "cid": str(payload.cid) if payload.cid else None,
+            "tid": str(payload.tid) if payload.tid else None,
+            "eid": str(payload.eid) if payload.eid else None,
+        }
+        if zoom_metadata:
+            hold_metadata.update(zoom_metadata)
         hold = await calendar_service.hold_slot(
             resource_id=resource_id,
             slot_start=start_at,
@@ -21544,30 +21579,27 @@ async def public_web_booking_create(
             contact_id=str(contact_uuid),
             tarjeta_id=str(opportunity_uuid),
             hold_minutes=max(1, int(calendar_settings.hold_minutes or 10)),
-            metadata={
-                "source": (payload.source or "").strip().lower() or "public_demo",
-                "booking_session_id": payload.booking_session_id,
-                "tenant_alias": (payload.tenant_alias or "").strip().lower() or None,
-                "organizacion_id": organizacion_id,
-                "cid": str(payload.cid) if payload.cid else None,
-                "tid": str(payload.tid) if payload.tid else None,
-                "eid": str(payload.eid) if payload.eid else None,
-            },
+            metadata=hold_metadata,
         )
+        booking_metadata: dict[str, Any] = {
+            "source": (payload.source or "").strip().lower() or "public_demo",
+            "booking_session_id": payload.booking_session_id,
+            "organizacion_id": organizacion_id,
+            "conversation_id": booking_context_id,
+            "contact_id": str(contact_uuid),
+            "tarjeta_id": str(opportunity_uuid),
+            "cid": str(payload.cid) if payload.cid else None,
+            "tid": str(payload.tid) if payload.tid else None,
+            "eid": str(payload.eid) if payload.eid else None,
+        }
+        if zoom_metadata:
+            booking_metadata.update(zoom_metadata)
         booking = await calendar_service.confirm_slot(
             hold_id=str(hold.get("hold_id")),
             notes=(payload.notes or "").strip() or None,
-            metadata={
-                "source": (payload.source or "").strip().lower() or "public_demo",
-                "booking_session_id": payload.booking_session_id,
-                "organizacion_id": organizacion_id,
-                "conversation_id": booking_context_id,
-                "contact_id": str(contact_uuid),
-                "tarjeta_id": str(opportunity_uuid),
-                "cid": str(payload.cid) if payload.cid else None,
-                "tid": str(payload.tid) if payload.tid else None,
-                "eid": str(payload.eid) if payload.eid else None,
-            },
+            metadata=booking_metadata,
+            meeting_url=zoom_meeting_url,
+            external_join_url=zoom_external_join_url,
         )
     except CalendarError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc

@@ -370,6 +370,13 @@ export async function updateCalendarSettingsAction(_: CrudActionState, formData:
     const calendarFullContactListUrl = getText(formData, "calendar_full_contact_list_url")
     const calendarUsername = getText(formData, "calendar_username")
     const calendarPassword = getText(formData, "calendar_password")
+    const zoomEnabled = formData.has("zoom_enabled")
+    const zoomAutoCreateMeeting = formData.has("zoom_auto_create_meeting")
+    const zoomHostEmail = getText(formData, "zoom_host_email")
+    const zoomDefaultDurationMinutesRaw = getText(formData, "zoom_default_duration_minutes")
+    const zoomAccountId = getText(formData, "zoom_account_id")
+    const zoomClientId = getText(formData, "zoom_client_id")
+    const zoomClientSecret = getText(formData, "zoom_client_secret")
 
     const calendarPatch: Record<string, unknown> = {}
     if (calendarResourceId) calendarPatch.resource_id = calendarResourceId
@@ -386,9 +393,20 @@ export async function updateCalendarSettingsAction(_: CrudActionState, formData:
     if (calendarServerPort !== undefined) calendarConfigPatch.server_port = calendarServerPort
     if (calendarFullCalendarUrl) calendarConfigPatch.full_calendar_url = calendarFullCalendarUrl
     if (calendarFullContactListUrl) calendarConfigPatch.full_contact_list_url = calendarFullContactListUrl
+    const zoomConfigPatch: Record<string, unknown> = {
+      enabled: zoomEnabled,
+      auto_create_meeting: zoomAutoCreateMeeting,
+      provider: "zoom",
+    }
+    if (zoomHostEmail) zoomConfigPatch.host_email = zoomHostEmail
+    const zoomDefaultDurationMinutes = parseNumber(zoomDefaultDurationMinutesRaw)
+    if (zoomDefaultDurationMinutes !== undefined) {
+      zoomConfigPatch.default_duration_minutes = zoomDefaultDurationMinutes
+    }
 
     const hasCalendarConfig = Object.keys(calendarPatch).length || Object.keys(calendarConfigPatch).length
-    if (!hasCalendarConfig && !calendarUsername && !calendarPassword) {
+    const hasZoomSecrets = Boolean(zoomAccountId || zoomClientId || zoomClientSecret)
+    if (!hasCalendarConfig && !calendarUsername && !calendarPassword && !hasZoomSecrets) {
       throw new Error("Debes completar al menos un campo del calendario.")
     }
 
@@ -408,6 +426,7 @@ export async function updateCalendarSettingsAction(_: CrudActionState, formData:
     if (Object.keys(calendarConfigPatch).length) {
       patch.calendar = calendarConfigPatch
     }
+    patch.zoom = zoomConfigPatch
 
     const merged = mergeDeep({ ...currentConfig }, patch)
 
@@ -424,6 +443,15 @@ export async function updateCalendarSettingsAction(_: CrudActionState, formData:
     }
     if (calendarPassword) {
       await upsertTenantSecret(tenantId, "calendar.password", calendarPassword, "B")
+    }
+    if (zoomAccountId) {
+      await upsertTenantSecret(tenantId, "zoom.account_id", zoomAccountId, "A")
+    }
+    if (zoomClientId) {
+      await upsertTenantSecret(tenantId, "zoom.client_id", zoomClientId, "A")
+    }
+    if (zoomClientSecret) {
+      await upsertTenantSecret(tenantId, "zoom.client_secret", zoomClientSecret, "B")
     }
 
     revalidatePath(`/settings/tenants/${tenantId}`)

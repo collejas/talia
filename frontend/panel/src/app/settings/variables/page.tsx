@@ -152,6 +152,7 @@ export default async function SettingsVariablesPage() {
   const webchatFeature = features ? getNestedRecord(features, "webchat") : null
   const webchatEnabled = webchatFeature ? Boolean(getNestedBoolean(webchatFeature, "enabled")) : false
   const calendarConfig = getNestedRecord(config, "calendar") ?? {}
+  const zoomConfig = getNestedRecord(config, "zoom") ?? {}
   const calendarInitialValues = {
     calendar_resource_id: getNestedString(webchatCalendar, "resource_id") ?? "",
     calendar_timezone: getNestedString(webchatCalendar, "timezone") ?? "",
@@ -163,6 +164,10 @@ export default async function SettingsVariablesPage() {
     calendar_server_port: getNestedNumber(calendarConfig, "server_port"),
     calendar_full_calendar_url: getNestedString(calendarConfig, "full_calendar_url") ?? "",
     calendar_full_contact_list_url: getNestedString(calendarConfig, "full_contact_list_url") ?? "",
+    zoom_enabled: getNestedBoolean(zoomConfig, "enabled") ?? false,
+    zoom_host_email: getNestedString(zoomConfig, "host_email") ?? "",
+    zoom_default_duration_minutes: getNestedNumber(zoomConfig, "default_duration_minutes"),
+    zoom_auto_create_meeting: getNestedBoolean(zoomConfig, "auto_create_meeting") ?? true,
   }
   const mailConfig = getNestedRecord(config, "mail") ?? {}
   const brevoConfig = getNestedRecord(config, "brevo") ?? {}

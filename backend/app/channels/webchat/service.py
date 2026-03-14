@@ -74,6 +74,7 @@ from app.services.scoring_contract import (
 )
 from app.services.storage import StorageError
 from app.services.high_demand_mode import high_demand_controller
+from app.services.zoom import ZoomClient, ZoomError
 from app.logging.catalog_debug import write_catalog_debug_entry
 
 from . import schemas
@@ -383,6 +384,62 @@ def _build_slot_identifier(resource_id: str, slot_start: datetime) -> str:
     return f"{resource_id}:{slot_start.isoformat()}"
 
 
+async def create_zoom_meeting_for_booking_if_enabled(
+    *,
+    organizacion_id: UUID | None,
+    start_at: datetime,
+    timezone_name: str,
+    topic: str,
+    agenda: str | None = None,
+    duration_minutes: int | None = None,
+    host_email: str | None = None,
+) -> tuple[str | None, str | None, dict[str, Any]]:
+    if organizacion_id is None:
+        return None, None, {}
+    runtime = await tenant_runtime.get_zoom_runtime_settings(organizacion_id=organizacion_id)
+    provider = (runtime.provider or "").strip().lower()
+    if not runtime.enabled or provider != "zoom" or not runtime.auto_create_meeting:
+        return None, None, {}
+    if not runtime.account_id or not runtime.client_id or not runtime.client_secret:
+        logger.warning(
+            "zoom.create.skipped_missing_credentials",
+            extra={"organizacion_id": str(organizacion_id)},
+        )
+        return None, None, {"zoom_status": "missing_credentials"}
+
+    duration = duration_minutes if isinstance(duration_minutes, int) and duration_minutes > 0 else runtime.default_duration_minutes
+    client = ZoomClient(runtime=runtime)
+    try:
+        meeting = await client.create_meeting(
+            start_at=start_at,
+            duration_minutes=duration,
+            timezone_name=timezone_name,
+            topic=topic,
+            agenda=agenda,
+            host_email=host_email,
+        )
+    except ZoomError as exc:
+        logger.warning(
+            "zoom.create.failed",
+            extra={"organizacion_id": str(organizacion_id), "error": str(exc)},
+        )
+        return None, None, {"zoom_status": "failed", "zoom_error": str(exc)}
+
+    metadata = {
+        "zoom_status": "created",
+        "zoom_meeting_id": meeting.meeting_id,
+        "zoom_join_url": meeting.join_url,
+        "meeting_url": meeting.join_url,
+        "external_join_url": meeting.join_url,
+        "zoom_duration_minutes": duration,
+    }
+    if meeting.start_url:
+        metadata["zoom_start_url"] = meeting.start_url
+    if meeting.password:
+        metadata["zoom_password"] = meeting.password
+    return meeting.join_url, meeting.join_url, metadata
+
+
 async def _resolve_conversation_metadata(conversation_id: str) -> dict[str, Any]:
     if not conversation_id:
         raise ValueError("conversation_id es requerido para esta operación.")
@@ -450,6 +507,17 @@ def _build_booking_response(data: dict[str, Any]) -> schemas.CalendarBookingResp
 
 
 def _build_booking_response_from_db_row(row: dict[str, Any]) -> schemas.CalendarBookingResponse:
+    metadata = row.get("metadata") if isinstance(row.get("metadata"), dict) else {}
+    if isinstance(metadata, dict):
+        metadata = dict(metadata)
+    else:
+        metadata = {}
+    meeting_url_value = row.get("meeting_url")
+    if isinstance(meeting_url_value, str) and meeting_url_value.strip():
+        metadata.setdefault("meeting_url", meeting_url_value.strip())
+    external_join_value = row.get("external_join_url")
+    if isinstance(external_join_value, str) and external_join_value.strip():
+        metadata.setdefault("external_join_url", external_join_value.strip())
     payload = {
         "booking_id": row.get("id"),
         "resource_id": row.get("resource_id"),
@@ -458,7 +526,7 @@ def _build_booking_response_from_db_row(row: dict[str, Any]) -> schemas.Calendar
         "timezone": row.get("timezone"),
         "hold_id": row.get("hold_id"),
         "notes": row.get("notes"),
-        "metadata": row.get("metadata") if isinstance(row.get("metadata"), dict) else None,
+        "metadata": metadata or None,
         "tarjeta_id": row.get("tarjeta_id"),
         "status": row.get("status"),
     }
@@ -688,6 +756,15 @@ async def _send_booking_confirmation_email(
         f"El espacio queda reservado aproximadamente hasta las {end_label} ({tz_label}).",
         "Te enviaré un recordatorio antes del horario confirmado. Si necesitas moverla o cancelarla, responde este correo o escríbeme por el chat.",
     ]
+    meeting_link = None
+    if isinstance(metadata, dict):
+        for key in ("meeting_url", "zoom_join_url", "external_join_url"):
+            value = metadata.get(key)
+            if isinstance(value, str) and value.strip():
+                meeting_link = value.strip()
+                break
+    if meeting_link:
+        body_lines.extend(["", f"Únete a la demo aquí: {meeting_link}"])
     if booking.notes:
         body_lines.extend(["", f"Notas registradas: {booking.notes.strip()}"])
     body_lines.extend(
@@ -1130,6 +1207,18 @@ async def schedule_calendar_booking(
         raise ValueError("No se configuró el calendario de demos para el webchat.")
     hold_minutes = max(1, calendar_settings.hold_minutes)
     slot_identifier = slot_id or _build_slot_identifier(resource_id, start_at)
+    contact_name = (
+        str(contact.get("nombre_completo") or "").strip()
+        if isinstance(contact, dict)
+        else ""
+    )
+    zoom_meeting_url, zoom_external_join_url, zoom_metadata = await create_zoom_meeting_for_booking_if_enabled(
+        organizacion_id=UUID(str(organizacion_id)) if organizacion_id else None,
+        start_at=start_at,
+        timezone_name=calendar_settings.timezone,
+        topic=f"Demo Tal-IA - {contact_name or contact_id}",
+        agenda=notes,
+    )
 
     try:
         hold_metadata: dict[str, Any] = {
@@ -1140,6 +1229,8 @@ async def schedule_calendar_booking(
             "tarjeta_id": tarjeta_id,
             "oportunidad_id": tarjeta_id,
         }
+        if zoom_metadata:
+            hold_metadata.update(zoom_metadata)
         if organizacion_id:
             hold_metadata["organizacion_id"] = organizacion_id
         hold = await calendar_service.hold_slot(
@@ -1158,12 +1249,16 @@ async def schedule_calendar_booking(
             "tarjeta_id": tarjeta_id,
             "channel": channel_value,
         }
+        if zoom_metadata:
+            booking_metadata.update(zoom_metadata)
         if organizacion_id:
             booking_metadata["organizacion_id"] = organizacion_id
         booking = await calendar_service.confirm_slot(
             hold_id=hold.get("hold_id"),
             notes=notes,
             metadata=booking_metadata,
+            meeting_url=zoom_meeting_url,
+            external_join_url=zoom_external_join_url,
         )
     except CalendarError as exc:
         raise ValueError(str(exc)) from exc
@@ -1223,6 +1318,57 @@ async def reschedule_calendar_booking(
     except CalendarError as exc:
         raise ValueError(str(exc)) from exc
     booking_response = _build_booking_response(booking)
+    metadata = booking_response.metadata if isinstance(booking_response.metadata, dict) else {}
+    zoom_meeting_id = None
+    if isinstance(metadata, dict):
+        candidate = metadata.get("zoom_meeting_id")
+        if isinstance(candidate, str) and candidate.strip():
+            zoom_meeting_id = candidate.strip()
+    if zoom_meeting_id:
+        org_uuid_value = _resolve_org_uuid(conversation_meta.get("organizacion_id"))
+        if org_uuid_value:
+            try:
+                zoom_runtime = await tenant_runtime.get_zoom_runtime_settings(
+                    organizacion_id=UUID(org_uuid_value)
+                )
+                if zoom_runtime.enabled and (zoom_runtime.provider or "").strip().lower() == "zoom":
+                    zoom_client = ZoomClient(runtime=zoom_runtime)
+                    duration_from_meta = metadata.get("zoom_duration_minutes") if isinstance(metadata, dict) else None
+                    duration_minutes = (
+                        int(duration_from_meta)
+                        if isinstance(duration_from_meta, (int, str)) and str(duration_from_meta).strip().isdigit()
+                        else zoom_runtime.default_duration_minutes
+                    )
+                    await zoom_client.update_meeting(
+                        meeting_id=zoom_meeting_id,
+                        start_at=start_at,
+                        duration_minutes=duration_minutes,
+                        timezone_name=booking_response.timezone or settings.webchat_calendar_timezone,
+                        topic="Demo Tal-IA",
+                        agenda=notes,
+                    )
+                    await _patch_booking_metadata(
+                        booking_response,
+                        {
+                            "zoom_status": "updated",
+                            "zoom_updated_at": datetime.now(timezone.utc).isoformat(),
+                        },
+                        event="calendar.zoom_metadata_update_failed",
+                    )
+            except (ZoomError, ValueError) as exc:
+                await _patch_booking_metadata(
+                    booking_response,
+                    {
+                        "zoom_status": "update_failed",
+                        "zoom_update_error": str(exc),
+                        "zoom_updated_at": datetime.now(timezone.utc).isoformat(),
+                    },
+                    event="calendar.zoom_metadata_update_failed",
+                )
+                logger.warning(
+                    "zoom.update.failed",
+                    extra={"meeting_id": zoom_meeting_id, "booking_id": booking_response.booking_id, "error": str(exc)},
+                )
     contact = await _resolve_contact(contact_id)
     await _sync_booking_with_opportunity(
         booking=booking_response,
@@ -1257,6 +1403,44 @@ async def cancel_calendar_booking(
     except CalendarError as exc:
         raise ValueError(str(exc)) from exc
     booking_response = _build_booking_response(booking)
+    metadata = booking_response.metadata if isinstance(booking_response.metadata, dict) else {}
+    zoom_meeting_id = None
+    if isinstance(metadata, dict):
+        candidate = metadata.get("zoom_meeting_id")
+        if isinstance(candidate, str) and candidate.strip():
+            zoom_meeting_id = candidate.strip()
+    if zoom_meeting_id:
+        org_uuid_value = _resolve_org_uuid(conversation_meta.get("organizacion_id"))
+        if org_uuid_value:
+            try:
+                zoom_runtime = await tenant_runtime.get_zoom_runtime_settings(
+                    organizacion_id=UUID(org_uuid_value)
+                )
+                if zoom_runtime.enabled and (zoom_runtime.provider or "").strip().lower() == "zoom":
+                    zoom_client = ZoomClient(runtime=zoom_runtime)
+                    await zoom_client.cancel_meeting(meeting_id=zoom_meeting_id)
+                    await _patch_booking_metadata(
+                        booking_response,
+                        {
+                            "zoom_status": "cancelled",
+                            "zoom_cancelled_at": datetime.now(timezone.utc).isoformat(),
+                        },
+                        event="calendar.zoom_metadata_update_failed",
+                    )
+            except ZoomError as exc:
+                await _patch_booking_metadata(
+                    booking_response,
+                    {
+                        "zoom_status": "cancel_failed",
+                        "zoom_cancel_error": str(exc),
+                        "zoom_cancelled_at": datetime.now(timezone.utc).isoformat(),
+                    },
+                    event="calendar.zoom_metadata_update_failed",
+                )
+                logger.warning(
+                    "zoom.cancel.failed",
+                    extra={"meeting_id": zoom_meeting_id, "booking_id": booking_response.booking_id, "error": str(exc)},
+                )
     await _send_booking_cancellation_email(
         booking=booking_response,
         contact_id=contact_id,
@@ -4221,6 +4405,14 @@ async def _execute_function_call(
         hold_minutes = max(1, calendar_settings.hold_minutes)
         slot_identifier = slot_id or _build_slot_identifier(resource_id, slot_datetime)
         notes = (arguments.get("notes") or "").strip() or None
+        contact_name = str((contact or {}).get("nombre_completo") or "").strip()
+        zoom_meeting_url, zoom_external_join_url, zoom_metadata = await create_zoom_meeting_for_booking_if_enabled(
+            organizacion_id=UUID(str(organizacion_hint)) if organizacion_hint else None,
+            start_at=slot_datetime,
+            timezone_name=calendar_settings.timezone,
+            topic=f"Demo Tal-IA - {contact_name or context.contact_id}",
+            agenda=notes,
+        )
 
         hold_metadata = {
             "slot_id": slot_identifier,
@@ -4229,6 +4421,8 @@ async def _execute_function_call(
             "tarjeta_id": tarjeta_id,
             "oportunidad_id": tarjeta_id,
         }
+        if zoom_metadata:
+            hold_metadata.update(zoom_metadata)
         if organizacion_hint:
             hold_metadata["organizacion_id"] = organizacion_hint
 
@@ -4238,6 +4432,8 @@ async def _execute_function_call(
             "session_id": context.session_id,
             "tarjeta_id": tarjeta_id,
         }
+        if zoom_metadata:
+            confirm_metadata.update(zoom_metadata)
         if organizacion_hint:
             confirm_metadata["organizacion_id"] = organizacion_hint
 
@@ -4255,6 +4451,8 @@ async def _execute_function_call(
                 hold_id=hold.get("hold_id"),
                 notes=notes,
                 metadata=confirm_metadata,
+                meeting_url=zoom_meeting_url,
+                external_join_url=zoom_external_join_url,
             )
         except CalendarError as exc:
             raise ValueError(str(exc)) from exc

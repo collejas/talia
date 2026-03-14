@@ -368,6 +368,10 @@ type CalendarInitialValues = {
   calendar_server_port?: number
   calendar_full_calendar_url?: string
   calendar_full_contact_list_url?: string
+  zoom_enabled?: boolean
+  zoom_host_email?: string
+  zoom_default_duration_minutes?: number
+  zoom_auto_create_meeting?: boolean
 }
 
 type MailInitialValues = {
@@ -773,6 +777,91 @@ export function TenantCalendarSettings({
             name="calendar_full_contact_list_url"
             placeholder="https://mail.talia.mx:2080/contacts/"
             defaultValue={initialValues.calendar_full_contact_list_url ?? ""}
+          />
+        </div>
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-2">
+        <div className="space-y-2">
+          <Label className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              name="zoom_enabled"
+              defaultChecked={Boolean(initialValues.zoom_enabled)}
+            />
+            zoom.enabled
+          </Label>
+          <p className="text-xs text-muted-foreground">
+            Si está activo, al confirmar una cita se intentará crear reunión en Zoom.
+          </p>
+        </div>
+        <div className="space-y-2">
+          <Label className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              name="zoom_auto_create_meeting"
+              defaultChecked={initialValues.zoom_auto_create_meeting ?? true}
+            />
+            zoom.auto_create_meeting
+          </Label>
+          <p className="text-xs text-muted-foreground">
+            Permite desactivar creación automática de links Zoom sin deshabilitar la configuración.
+          </p>
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="zoom_host_email">zoom.host_email</Label>
+          <Input
+            id="zoom_host_email"
+            name="zoom_host_email"
+            placeholder="usuario@tu-dominio.com"
+            defaultValue={initialValues.zoom_host_email ?? ""}
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="zoom_default_duration_minutes">zoom.default_duration_minutes</Label>
+          <Input
+            id="zoom_default_duration_minutes"
+            name="zoom_default_duration_minutes"
+            type="number"
+            min={1}
+            max={240}
+            defaultValue={initialValues.zoom_default_duration_minutes ?? ""}
+          />
+        </div>
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-2">
+        <div className="space-y-2 md:col-span-2">
+          <p className="text-xs text-muted-foreground">
+            Secretos Zoom: <code>zoom.account_id</code> y <code>zoom.client_id</code> (tier A), <code>zoom.client_secret</code> (tier B).
+          </p>
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="zoom_account_id">zoom.account_id</Label>
+          <Input
+            id="zoom_account_id"
+            name="zoom_account_id"
+            placeholder="Pega para guardar/rotar"
+            defaultValue=""
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="zoom_client_id">zoom.client_id</Label>
+          <Input
+            id="zoom_client_id"
+            name="zoom_client_id"
+            placeholder="Pega para guardar/rotar"
+            defaultValue=""
+          />
+        </div>
+        <div className="space-y-2 md:col-span-2">
+          <Label htmlFor="zoom_client_secret">zoom.client_secret</Label>
+          <Input
+            id="zoom_client_secret"
+            name="zoom_client_secret"
+            type="password"
+            placeholder="Pega para guardar/rotar"
+            defaultValue=""
           />
         </div>
       </div>
