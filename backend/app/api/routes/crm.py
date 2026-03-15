@@ -19778,6 +19778,165 @@ async def get_visits_detail(
     return [_map_visit_detail_row(row) if isinstance(row, dict) else row for row in rows]
 
 
+@router.get("/visitas/web-sessions")
+async def get_visits_web_sessions(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("reports.view")),
+    usuario_id: UUID | None = Depends(optional_usuario_id),
+    limit: Annotated[int, Query(ge=1, le=5000)] = 1000,
+    offset: Annotated[int, Query(ge=0)] = 0,
+    source_class: str | None = Query(default=None),
+    utm_source: str | None = Query(default=None),
+    utm_medium: str | None = Query(default=None),
+    utm_campaign: str | None = Query(default=None),
+    template_id: str | None = Query(default=None),
+    rango: str | None = Query(default=None),
+    desde: str | None = Query(default=None),
+    hasta: str | None = Query(default=None),
+) -> list[dict[str, Any]]:
+    source_class_value = (source_class or "").strip().lower() or None
+    utm_source_value = (utm_source or "").strip().lower() or None
+    utm_medium_value = (utm_medium or "").strip().lower() or None
+    utm_campaign_value = (utm_campaign or "").strip().lower() or None
+    template_uuid_value: UUID | None = None
+    template_id_raw = (template_id or "").strip() or None
+    if template_id_raw:
+        try:
+            template_uuid_value = UUID(template_id_raw)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail="template_id_invalid") from exc
+
+    effective_timezone, _timezone_source = await _resolve_effective_timezone_name(
+        repo=repo,
+        organizacion_id=organizacion_id,
+        usuario_id=usuario_id,
+    )
+    date_from, date_to = _resolve_date_range(
+        rango,
+        desde,
+        hasta,
+        timezone_name=effective_timezone,
+    )
+
+    try:
+        rows = await repo.list_web_sessions_attribution_detail(
+            organizacion_id=organizacion_id,
+            date_from=date_from,
+            date_to=date_to,
+            source_class=source_class_value,
+            utm_source=utm_source_value,
+            utm_medium=utm_medium_value,
+            utm_campaign=utm_campaign_value,
+            template_id=template_uuid_value,
+            limit=limit,
+            offset=offset,
+        )
+        contact_ids: list[UUID] = []
+        seen_contacts: set[str] = set()
+        template_ids: list[str] = []
+        seen_templates: set[str] = set()
+        for row in rows:
+            contact_id_raw = str(row.get("contacto_id") or "").strip()
+            if contact_id_raw and contact_id_raw not in seen_contacts:
+                parsed_contact = _safe_uuid(contact_id_raw)
+                if parsed_contact:
+                    seen_contacts.add(contact_id_raw)
+                    contact_ids.append(parsed_contact)
+            template_id_value = str(row.get("tid") or "").strip()
+            if template_id_value and template_id_value not in seen_templates:
+                seen_templates.add(template_id_value)
+                template_ids.append(template_id_value)
+
+        contacts_map: dict[str, dict[str, Any]] = {}
+        if contact_ids:
+            contacts = await repo.get_contacts_by_ids(
+                organizacion_id=organizacion_id,
+                contacto_ids=contact_ids,
+            )
+            contacts_map = {
+                str(item.get("id")): item
+                for item in contacts
+                if isinstance(item, dict) and item.get("id")
+            }
+
+        templates_map: dict[str, dict[str, Any]] = {}
+        if template_ids:
+            templates = await repo.list_contact_templates_by_ids(
+                organizacion_id=organizacion_id,
+                template_ids=template_ids,
+            )
+            templates_map = {
+                str(item.get("id")): item
+                for item in templates
+                if isinstance(item, dict) and item.get("id")
+            }
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    items: list[dict[str, Any]] = []
+    for row in rows:
+        contact_id_value = str(row.get("contacto_id") or "").strip() or None
+        template_id_value = str(row.get("tid") or "").strip() or None
+        contact_row = contacts_map.get(contact_id_value) if contact_id_value else None
+        template_row = templates_map.get(template_id_value) if template_id_value else None
+        template_slug = (
+            str(template_row.get("slug") or "").strip() if isinstance(template_row, dict) else ""
+        ) or None
+        template_name = (
+            str(template_row.get("nombre") or "").strip() if isinstance(template_row, dict) else ""
+        ) or None
+
+        items.append(
+            {
+                "session_id": row.get("session_id"),
+                "contacto_id": contact_id_value,
+                "contacto_nombre": (
+                    str(contact_row.get("nombre_completo") or "").strip()
+                    if isinstance(contact_row, dict)
+                    else None
+                )
+                or None,
+                "contacto_telefono": (
+                    str(contact_row.get("telefono_e164") or "").strip()
+                    if isinstance(contact_row, dict)
+                    else None
+                )
+                or None,
+                "contacto_correo": (
+                    str(contact_row.get("correo") or "").strip()
+                    if isinstance(contact_row, dict)
+                    else None
+                )
+                or None,
+                "first_seen_at": row.get("first_seen_at"),
+                "last_seen_at": row.get("last_seen_at"),
+                "visit_count": row.get("visit_count"),
+                "ip": row.get("ip"),
+                "device_type": row.get("device_type"),
+                "country_code": row.get("country_code"),
+                "country_name": row.get("country_name"),
+                "cve_ent": row.get("cve_ent"),
+                "nom_ent": row.get("nom_ent"),
+                "cve_mun": row.get("cve_mun"),
+                "nom_mun": row.get("nom_mun"),
+                "cvegeo": row.get("cvegeo"),
+                "referrer": row.get("referrer"),
+                "landing_url": row.get("landing_url"),
+                "utm_source": row.get("utm_source"),
+                "utm_medium": row.get("utm_medium"),
+                "utm_campaign": row.get("utm_campaign"),
+                "source_class": row.get("source_class"),
+                "template_id": template_id_value,
+                "template_slug": template_slug,
+                "template_nombre": template_name,
+                "metadata": row.get("metadata"),
+            }
+        )
+    return items
+
+
 @router.get("/visitas/whatsapp/total")
 async def get_visits_whatsapp_total(
     *,

@@ -88,7 +88,7 @@ npm run build
 sudo systemctl restart talia-api.service
 sudo systemctl restart talia-panel.service
 
-codex resume 019ce43a-a89f-7103-8422-0d18078b12d2
+codex resume 019ced77-b0b4-70f2-8c03-3ba8c5813241
 
 sudo rsync -a landing/src/ /var/www/talia-landing/ 
 

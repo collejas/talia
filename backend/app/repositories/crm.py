@@ -1957,6 +1957,57 @@ class CRMRepository:
             )
         return [row for row in data if isinstance(row, dict)]
 
+    async def list_web_sessions_attribution_detail(
+        self,
+        *,
+        organizacion_id: UUID,
+        date_from: datetime | None = None,
+        date_to: datetime | None = None,
+        state_code: str | None = None,
+        source_class: str | None = None,
+        utm_source: str | None = None,
+        utm_medium: str | None = None,
+        utm_campaign: str | None = None,
+        template_id: UUID | None = None,
+        limit: int = 1000,
+        offset: int = 0,
+    ) -> list[dict[str, Any]]:
+        params: dict[str, str] = {
+            "organizacion_id": f"eq.{organizacion_id}",
+            "select": (
+                "session_id,contacto_id,first_seen_at,last_seen_at,visit_count,ip,"
+                "device_type,country_code,country_name,cve_ent,nom_ent,cve_mun,nom_mun,cvegeo,"
+                "referrer,landing_url,utm_source,utm_medium,utm_campaign,tid,source_class,metadata"
+            ),
+            "order": "last_seen_at.desc,first_seen_at.desc",
+            "limit": str(max(1, min(limit, 5000))),
+            "offset": str(max(0, int(offset))),
+        }
+        if date_from:
+            params["last_seen_at"] = f"gte.{date_from.isoformat()}"
+        if date_to:
+            params["first_seen_at"] = f"lte.{date_to.isoformat()}"
+        if state_code:
+            params["cve_ent"] = f"eq.{state_code}"
+        if source_class:
+            params["source_class"] = f"eq.{source_class}"
+        if utm_source:
+            params["utm_source"] = f"eq.{utm_source}"
+        if utm_medium:
+            params["utm_medium"] = f"eq.{utm_medium}"
+        if utm_campaign:
+            params["utm_campaign"] = f"eq.{utm_campaign}"
+        if template_id:
+            params["tid"] = f"eq.{template_id}"
+
+        resp = await self._request("GET", "/rest/v1/web_sessions", params=params)
+        data = resp.json() or []
+        if not isinstance(data, list):
+            raise CRMRepositoryError(
+                f"Respuesta inesperada al listar detalle de web_sessions: {data!r}"
+            )
+        return [row for row in data if isinstance(row, dict)]
+
     async def list_web_sessions_template_links(
         self,
         *,
@@ -5274,7 +5325,7 @@ class CRMRepository:
         params = {
             "organizacion_id": f"eq.{organizacion_id}",
             "id": f"in.({','.join(unique_ids)})",
-            "select": "id,nombre_completo,telefono_e164,contacto_datos",
+            "select": "id,nombre_completo,correo,telefono_e164,contacto_datos",
             "limit": str(min(1000, len(unique_ids))),
         }
         resp = await self._request("GET", "/rest/v1/contactos", params=params)

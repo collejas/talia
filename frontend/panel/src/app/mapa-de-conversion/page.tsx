@@ -283,7 +283,16 @@ export default async function Page({
   }
 
   try {
-    visitsPayload = await loadVisitsData();
+    visitsPayload = await loadVisitsData({
+      sourceClass,
+      utmSource,
+      utmMedium,
+      utmCampaign,
+      templateId,
+      rango,
+      desde,
+      hasta,
+    });
   } catch (error) {
     errores.push(
       error instanceof Error
