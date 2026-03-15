@@ -3889,7 +3889,7 @@ export function PropertyMap() {
                                         );
                                         return (
                                           <option key={opportunity.id} value={opportunity.id}>
-                                            {opportunity.titulo ?? `Oportunidad ${opportunity.id}`} · {contactLabel}
+                                            {contactLabel} · {opportunity.titulo ?? `Oportunidad ${opportunity.id}`}
                                             {descriptionLabel ? ` · ${descriptionLabel}` : ""}
                                           </option>
                                         );
