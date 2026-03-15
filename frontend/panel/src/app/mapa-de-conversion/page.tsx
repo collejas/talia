@@ -284,6 +284,8 @@ export default async function Page({
 
   try {
     visitsPayload = await loadVisitsData({
+      canales: canalesSelected,
+      estado: normalizedEstado,
       sourceClass,
       utmSource,
       utmMedium,

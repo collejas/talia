@@ -159,6 +159,8 @@ export type VisitsPayload = {
 };
 
 type VisitsFilters = {
+  canales?: string[] | null;
+  estado?: string | null;
   sourceClass?: string | null;
   utmSource?: string | null;
   utmMedium?: string | null;
@@ -177,6 +179,7 @@ export async function loadVisitsData(filters: VisitsFilters = {}): Promise<Visit
       searchParams: {
         limit: 5000,
         offset: 0,
+        estado: filters.estado || undefined,
         source_class: filters.sourceClass || undefined,
         utm_source: filters.utmSource || undefined,
         utm_medium: filters.utmMedium || undefined,
@@ -187,8 +190,23 @@ export async function loadVisitsData(filters: VisitsFilters = {}): Promise<Visit
         hasta: filters.hasta || undefined,
       },
     }),
-    callCrmApi<VisitantesCounterResponse>("/crm/visitas/whatsapp/total", { withUserToken: true }),
-    callCrmApi<WhatsappConversationRow[]>("/crm/visitas/whatsapp/conversaciones", { withUserToken: true }),
+    callCrmApi<VisitantesCounterResponse>("/crm/visitas/whatsapp/total", {
+      withUserToken: true,
+      searchParams: {
+        rango: filters.rango || undefined,
+        desde: filters.desde || undefined,
+        hasta: filters.hasta || undefined,
+      },
+    }),
+    callCrmApi<WhatsappConversationRow[]>("/crm/visitas/whatsapp/conversaciones", {
+      withUserToken: true,
+      searchParams: {
+        rango: filters.rango || undefined,
+        desde: filters.desde || undefined,
+        hasta: filters.hasta || undefined,
+        limit: 500,
+      },
+    }),
     callCrmApi<{ items?: ContactoTemplateRow[] }>("/crm/prospeccion/contacto/templates", { withUserToken: true }),
   ]);
 
@@ -262,7 +280,15 @@ export async function loadVisitsData(filters: VisitsFilters = {}): Promise<Visit
       total_no_chat_rows: null,
     })) ?? [];
   const whatsappDetail = whatsappDetailResult.ok ? mapWhatsappRows(whatsappDetailResult.data) : [];
-  const mergedDetalleBase: VisitDetailRaw[] = [...normalizedWebchat, ...whatsappDetail];
+  const selectedCanales = new Set(
+    (filters.canales ?? []).map((value) => (value || "").trim().toLowerCase()).filter(Boolean),
+  );
+  const includeAllCanales = selectedCanales.size === 0;
+  const mergedDetalleBase: VisitDetailRaw[] = [...normalizedWebchat, ...whatsappDetail].filter((row) => {
+    if (includeAllCanales) return true;
+    const canal = (row.canal || "").trim().toLowerCase();
+    return selectedCanales.has(canal);
+  });
   const templateNameById = new Map<string, string>();
   const templateNameBySlug = new Map<string, string>();
   if (templatesResult.ok) {

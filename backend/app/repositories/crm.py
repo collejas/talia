@@ -6957,6 +6957,8 @@ class CRMRepository:
         *,
         usuario_token: str,
         limit: int = 200,
+        date_from: datetime | None = None,
+        date_to: datetime | None = None,
     ) -> list[dict[str, Any]]:
         params = {
             "select": (
@@ -6967,6 +6969,15 @@ class CRMRepository:
             "order": "iniciada_en.desc",
             "limit": str(max(1, min(limit, 500))),
         }
+        if date_from and date_to:
+            params["and"] = (
+                f"(iniciada_en.gte.{date_from.isoformat()},"
+                f"iniciada_en.lte.{date_to.isoformat()})"
+            )
+        elif date_from:
+            params["iniciada_en"] = f"gte.{date_from.isoformat()}"
+        elif date_to:
+            params["iniciada_en"] = f"lte.{date_to.isoformat()}"
         resp = await self._request_with_user(
             "GET",
             "/rest/v1/conversaciones",

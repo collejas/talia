@@ -19788,6 +19788,7 @@ async def get_visits_web_sessions(
     limit: Annotated[int, Query(ge=1, le=5000)] = 1000,
     offset: Annotated[int, Query(ge=0)] = 0,
     source_class: str | None = Query(default=None),
+    estado: str | None = Query(default=None),
     utm_source: str | None = Query(default=None),
     utm_medium: str | None = Query(default=None),
     utm_campaign: str | None = Query(default=None),
@@ -19797,6 +19798,7 @@ async def get_visits_web_sessions(
     hasta: str | None = Query(default=None),
 ) -> list[dict[str, Any]]:
     source_class_value = (source_class or "").strip().lower() or None
+    state_code = _ensure_state_code(estado) if estado else None
     utm_source_value = (utm_source or "").strip().lower() or None
     utm_medium_value = (utm_medium or "").strip().lower() or None
     utm_campaign_value = (utm_campaign or "").strip().lower() or None
@@ -19825,6 +19827,7 @@ async def get_visits_web_sessions(
             organizacion_id=organizacion_id,
             date_from=date_from,
             date_to=date_to,
+            state_code=state_code,
             source_class=source_class_value,
             utm_source=utm_source_value,
             utm_medium=utm_medium_value,
@@ -19941,11 +19944,31 @@ async def get_visits_web_sessions(
 async def get_visits_whatsapp_total(
     *,
     repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
     _: str = Depends(require_permission("reports.view")),
     user_token: str = Depends(require_user_token),
+    usuario_id: UUID | None = Depends(optional_usuario_id),
+    rango: str | None = Query(default=None),
+    desde: str | None = Query(default=None),
+    hasta: str | None = Query(default=None),
 ) -> dict[str, int]:
+    effective_timezone, _timezone_source = await _resolve_effective_timezone_name(
+        repo=repo,
+        organizacion_id=organizacion_id,
+        usuario_id=usuario_id,
+    )
+    date_from, date_to = _resolve_date_range(
+        rango,
+        desde,
+        hasta,
+        timezone_name=effective_timezone,
+    )
     try:
-        total = await repo.visitas_whatsapp_total(usuario_token=user_token)
+        total = await repo.visitas_whatsapp_total(
+            usuario_token=user_token,
+            date_from=date_from,
+            date_to=date_to,
+        )
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     return {"total": total}
@@ -19955,14 +19978,32 @@ async def get_visits_whatsapp_total(
 async def get_visits_whatsapp_conversations(
     *,
     repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
     _: str = Depends(require_permission("reports.view")),
     user_token: str = Depends(require_user_token),
+    usuario_id: UUID | None = Depends(optional_usuario_id),
     limit: Annotated[int, Query(ge=1, le=500)] = 200,
+    rango: str | None = Query(default=None),
+    desde: str | None = Query(default=None),
+    hasta: str | None = Query(default=None),
 ) -> list[dict[str, Any]]:
+    effective_timezone, _timezone_source = await _resolve_effective_timezone_name(
+        repo=repo,
+        organizacion_id=organizacion_id,
+        usuario_id=usuario_id,
+    )
+    date_from, date_to = _resolve_date_range(
+        rango,
+        desde,
+        hasta,
+        timezone_name=effective_timezone,
+    )
     try:
         rows = await repo.visitas_whatsapp_conversaciones(
             usuario_token=user_token,
             limit=limit,
+            date_from=date_from,
+            date_to=date_to,
         )
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
