@@ -702,17 +702,37 @@ export function CampanasMetricsClient() {
       const normalized = normalizeLogoUrl(logoUrl)
       if (!normalized) return
       setSelectedLogoUrl(normalized)
+      let resolvedLogoUrl = normalized
+      try {
+        const url = new URL(normalized)
+        url.searchParams.set("utm_source", "prospeccion")
+        url.searchParams.set("utm_medium", "email_image")
+        if (templatesCampanaId) url.searchParams.set("utm_campaign", templatesCampanaId)
+        if (templateForm.slug.trim()) url.searchParams.set("template_slug", templateForm.slug.trim())
+        if (templateForm.id) url.searchParams.set("template_id", templateForm.id)
+        url.searchParams.set("utm_content", "inline_image")
+        resolvedLogoUrl = url.toString()
+      } catch {
+        resolvedLogoUrl = normalized
+      }
       const textFocused = lastFocusedCorreoFieldRef.current === "cuerpoTexto"
       const htmlFocused = lastFocusedCorreoFieldRef.current === "cuerpoHtml"
       const hasHtmlContent = Boolean((templateForm.cuerpoHtml ?? "").trim())
       if (textFocused) {
-        appendTemplateToken("cuerpoTexto", "{{logo_url}}")
+        appendTemplateToken("cuerpoTexto", resolvedLogoUrl)
       }
       if (htmlFocused || hasHtmlContent) {
-        appendTemplateToken("cuerpoHtml", `<img src="{{logo_url}}" alt="Logo" style="${EMAIL_LOGO_IMG_STYLE}" />`)
+        appendTemplateToken("cuerpoHtml", `<img src="${resolvedLogoUrl}" alt="Logo" style="${EMAIL_LOGO_IMG_STYLE}" />`)
       }
     },
-    [appendTemplateToken, normalizeLogoUrl, templateForm.cuerpoHtml]
+    [
+      appendTemplateToken,
+      normalizeLogoUrl,
+      templateForm.cuerpoHtml,
+      templateForm.id,
+      templateForm.slug,
+      templatesCampanaId,
+    ]
   )
 
   const insertCorreoTrackedLink = useCallback(() => {
