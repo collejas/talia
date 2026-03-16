@@ -1,6 +1,7 @@
 'use client'
 
 import * as React from "react"
+import { useRouter } from "next/navigation"
 
 import type {
   AgendaActionResponse,
@@ -14,6 +15,7 @@ import { AgendaCalendar } from "@/components/agenda/agenda-calendar"
 import { AgendaTable } from "@/components/agenda/agenda-table"
 import { AgendaEventDrawer } from "@/components/agenda/agenda-event-drawer"
 import { AgendaAvailabilityQuickModal } from "@/components/agenda/agenda-availability-quick-modal"
+import { AgendaCreateBookingSheet } from "@/components/agenda/agenda-create-booking-sheet"
 import {
   Sheet,
   SheetContent,
@@ -30,6 +32,7 @@ type AgendaViewProps = {
 }
 
 export function AgendaView({ items }: AgendaViewProps) {
+  const router = useRouter()
   const { context: permissionContext } = usePermissions()
   const canManageAvailability =
     permissionContext.es_admin ||
@@ -39,6 +42,7 @@ export function AgendaView({ items }: AgendaViewProps) {
   const [selectedItem, setSelectedItem] = React.useState<AgendaItem | null>(null)
   const [rescheduleTarget, setRescheduleTarget] = React.useState<AgendaItem | null>(null)
   const [cancelTarget, setCancelTarget] = React.useState<AgendaItem | null>(null)
+  const [createOpen, setCreateOpen] = React.useState(false)
   const [agendaItems, setAgendaItems] = React.useState<AgendaItem[]>(items)
 
   React.useEffect(() => {
@@ -101,6 +105,9 @@ export function AgendaView({ items }: AgendaViewProps) {
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          <Button type="button" onClick={() => setCreateOpen(true)}>
+            Nueva cita
+          </Button>
           {canManageAvailability ? <AgendaAvailabilityQuickModal /> : null}
           <div className="inline-flex items-center gap-2 rounded-full border border-border/60 bg-background p-1">
             <ToggleButton active={mode === "calendar"} onClick={() => setMode("calendar")}>
@@ -139,6 +146,11 @@ export function AgendaView({ items }: AgendaViewProps) {
         target={cancelTarget}
         onClose={() => setCancelTarget(null)}
         onUpdated={(booking, previous) => handleBookingUpdate(booking, previous)}
+      />
+      <AgendaCreateBookingSheet
+        open={createOpen}
+        onClose={() => setCreateOpen(false)}
+        onCreated={() => router.refresh()}
       />
     </div>
   )
