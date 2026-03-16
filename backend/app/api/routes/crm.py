@@ -8992,6 +8992,30 @@ async def pipeline_delete_opportunity(
     oportunidad_id: UUID,
 ) -> Response:
     try:
+        bookings = await repo.list_calendar_bookings_by_opportunity(
+            organizacion_id=organizacion_id,
+            oportunidad_id=oportunidad_id,
+            include_cancelled=False,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    for booking in bookings:
+        booking_id = booking.get("id")
+        if not booking_id:
+            continue
+        try:
+            await calendar_service.cancel_booking(
+                booking_id=str(booking_id),
+                reason="opportunity_deleted",
+            )
+        except CalendarError as exc:
+            raise HTTPException(
+                status_code=502,
+                detail=f"booking_cancel_failed:{booking_id}:{exc}",
+            ) from exc
+
+    try:
         await repo.delete_opportunity(
             organizacion_id=organizacion_id,
             oportunidad_id=oportunidad_id,
@@ -13810,17 +13834,24 @@ async def cancel_agenda_booking(
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
     conversation_id = booking_row.get("conversacion_id")
-    if not conversation_id:
-        raise HTTPException(status_code=400, detail="booking_without_conversation")
-
-    try:
-        booking = await webchat_service.cancel_calendar_booking(
-            conversation_id=str(conversation_id),
-            booking_id=str(booking_id),
-            reason=payload.reason,
-        )
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    if conversation_id:
+        try:
+            booking = await webchat_service.cancel_calendar_booking(
+                conversation_id=str(conversation_id),
+                booking_id=str(booking_id),
+                reason=payload.reason,
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+    else:
+        try:
+            booking_raw = await calendar_service.cancel_booking(
+                booking_id=str(booking_id),
+                reason=payload.reason,
+            )
+        except CalendarError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        booking = webchat_service._build_booking_response(booking_raw)
 
     return {"ok": True, "booking": booking}
 

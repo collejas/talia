@@ -2,7 +2,8 @@ import { NextResponse } from "next/server"
 
 import type { NextRequest } from "next/server"
 
-import { AgendaActionResponse, callPanelAgendaEndpoint } from "@/lib/agenda/data"
+import { callCrmApi } from "@/lib/api/crm"
+import { AgendaActionResponse } from "@/lib/agenda/data"
 
 export async function POST(request: NextRequest, context: { params: Promise<{ bookingId: string }> }) {
   const params = await context.params
@@ -18,19 +19,19 @@ export async function POST(request: NextRequest, context: { params: Promise<{ bo
     return NextResponse.json({ error: "invalid_body" }, { status: 400 })
   }
 
-  try {
-    const data = await callPanelAgendaEndpoint<AgendaActionResponse>(
-      `/agenda/bookings/${bookingId}/cancel`,
-      {},
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ reason: payload.reason }),
-      },
+  const response = await callCrmApi<AgendaActionResponse>(`/crm/agenda/bookings/${bookingId}/cancel`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: { reason: payload.reason },
+    withUserToken: true,
+  })
+
+  if (!response.ok) {
+    return NextResponse.json(
+      { error: response.error || "cancel_failed" },
+      { status: response.status ?? 502 },
     )
-    return NextResponse.json(data)
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "cancel_failed"
-    return NextResponse.json({ error: message }, { status: 502 })
   }
+
+  return NextResponse.json(response.data)
 }

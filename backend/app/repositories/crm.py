@@ -7167,6 +7167,30 @@ class CRMRepository:
             return None
         return row
 
+    async def list_calendar_bookings_by_opportunity(
+        self,
+        *,
+        organizacion_id: UUID,
+        oportunidad_id: UUID,
+        include_cancelled: bool = False,
+    ) -> list[dict[str, Any]]:
+        params: dict[str, str] = {
+            "organizacion_id": f"eq.{organizacion_id}",
+            "tarjeta_id": f"eq.{oportunidad_id}",
+            "select": "id,conversacion_id,status,start_at,end_at,metadata",
+            "order": "start_at.desc",
+            "limit": "200",
+        }
+        if not include_cancelled:
+            params["status"] = "neq.cancelled"
+        resp = await self._request("GET", "/rest/v1/calendar_bookings", params=params)
+        data = resp.json() or []
+        if not isinstance(data, list):
+            raise CRMRepositoryError(
+                f"Respuesta inesperada al listar citas por oportunidad: {data!r}"
+            )
+        return [row for row in data if isinstance(row, dict)]
+
     async def update_calendar_booking_metadata(
         self,
         *,

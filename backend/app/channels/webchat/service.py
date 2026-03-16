@@ -1392,7 +1392,23 @@ async def cancel_calendar_booking(
     booking_id: str,
     reason: str | None = None,
 ) -> schemas.CalendarBookingResponse:
-    conversation_meta = await _resolve_conversation_metadata(conversation_id)
+    conversation_meta: dict[str, Any] | None = None
+    try:
+        conversation_meta = await _resolve_conversation_metadata(conversation_id)
+    except ValueError as exc:
+        # La cita puede existir aunque la conversación/contacto ya no estén disponibles.
+        # En ese caso cancelamos la cita igualmente y omitimos side-effects dependientes
+        # del contexto de conversación (correo de cancelación / zoom por tenant).
+        logger.warning(
+            "calendar.cancel_missing_conversation_context",
+            extra={
+                "conversation_id": conversation_id,
+                "booking_id": booking_id,
+                "error": str(exc),
+            },
+        )
+        conversation_meta = None
+
     contact_raw = conversation_meta.get("contact_id") if conversation_meta else None
     contact_id = str(contact_raw) if contact_raw else None
     try:
