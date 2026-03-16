@@ -1,0 +1,64 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="675" viewBox="0 0 1200 675" role="img" aria-label="Listado de prospectos en CRM">
+  <defs>
+    <linearGradient id="bg" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0%" stop-color="#eef2ff"/>
+      <stop offset="100%" stop-color="#e2e8f0"/>
+    </linearGradient>
+    <linearGradient id="card" x1="0" x2="0" y1="0" y2="1">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="100%" stop-color="#f8fafc"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="1200" height="675" fill="url(#bg)"/>
+
+  <rect x="130" y="90" width="940" height="495" rx="22" fill="url(#card)" stroke="#cbd5e1"/>
+  <rect x="130" y="90" width="940" height="70" rx="22" fill="#7f13ec"/>
+  <text x="170" y="135" fill="#ffffff" font-family="Inter, Arial, sans-serif" font-size="26" font-weight="700">Listado de Prospectos</text>
+
+  <rect x="170" y="190" width="860" height="42" rx="10" fill="#f1f5f9"/>
+  <text x="190" y="218" fill="#64748b" font-family="Inter, Arial, sans-serif" font-size="18">Buscar por nombre, teléfono, ciudad o etapa...</text>
+
+  <g font-family="Inter, Arial, sans-serif" font-size="17" fill="#334155">
+    <text x="180" y="275" font-weight="700">Nombre</text>
+    <text x="430" y="275" font-weight="700">Canal</text>
+    <text x="610" y="275" font-weight="700">Estado</text>
+    <text x="790" y="275" font-weight="700">Último contacto</text>
+    <text x="980" y="275" font-weight="700">Score</text>
+  </g>
+
+  <g stroke="#e2e8f0">
+    <line x1="170" y1="290" x2="1030" y2="290"/>
+    <line x1="170" y1="352" x2="1030" y2="352"/>
+    <line x1="170" y1="414" x2="1030" y2="414"/>
+    <line x1="170" y1="476" x2="1030" y2="476"/>
+  </g>
+
+  <g font-family="Inter, Arial, sans-serif" font-size="16" fill="#0f172a">
+    <text x="180" y="330">Ana Torres</text>
+    <text x="430" y="330">WhatsApp</text>
+    <text x="790" y="330">Hace 12 min</text>
+    <text x="980" y="330">91</text>
+
+    <text x="180" y="392">Carlos Ríos</text>
+    <text x="430" y="392">Webchat</text>
+    <text x="790" y="392">Hace 1 h</text>
+    <text x="980" y="392">84</text>
+
+    <text x="180" y="454">Mariana López</text>
+    <text x="430" y="454">Facebook</text>
+    <text x="790" y="454">Ayer</text>
+    <text x="980" y="454">73</text>
+  </g>
+
+  <g font-family="Inter, Arial, sans-serif" font-size="14" font-weight="700">
+    <rect x="600" y="309" width="120" height="30" rx="15" fill="#dcfce7"/>
+    <text x="626" y="329" fill="#166534">Calificado</text>
+
+    <rect x="600" y="371" width="120" height="30" rx="15" fill="#fef9c3"/>
+    <text x="624" y="391" fill="#854d0e">En seguimiento</text>
+
+    <rect x="600" y="433" width="120" height="30" rx="15" fill="#dbeafe"/>
+    <text x="630" y="453" fill="#1e40af">Nuevo</text>
+  </g>
+</svg>

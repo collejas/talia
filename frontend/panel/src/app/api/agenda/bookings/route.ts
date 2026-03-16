@@ -7,6 +7,7 @@ import type { AgendaActionResponse } from "@/lib/agenda/data"
 
 type BookingCreatePayload = {
   contacto_id?: string
+  oportunidad_id?: string
   start_at?: string
   notes?: string
   canal?: string
@@ -22,6 +23,7 @@ export async function POST(request: NextRequest) {
 
   const contactoId = payload.contacto_id?.trim()
   const startAt = payload.start_at?.trim()
+  const oportunidadId = payload.oportunidad_id?.trim()
 
   if (!contactoId) {
     return NextResponse.json({ error: "contacto_id_required" }, { status: 400 })
@@ -34,6 +36,7 @@ export async function POST(request: NextRequest) {
     method: "POST",
     body: {
       contacto_id: contactoId,
+      oportunidad_id: oportunidadId || undefined,
       start_at: startAt,
       notes: payload.notes?.trim() || undefined,
       canal: payload.canal?.trim() || "manual",
@@ -50,4 +53,3 @@ export async function POST(request: NextRequest) {
 
   return NextResponse.json(response.data)
 }
-

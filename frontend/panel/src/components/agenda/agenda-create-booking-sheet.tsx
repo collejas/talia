@@ -8,6 +8,13 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
+import {
   Sheet,
   SheetContent,
   SheetDescription,
@@ -24,6 +31,14 @@ type ContactSearchItem = {
   telefono: string | null
   empresa: string | null
 }
+
+type OpportunityItem = {
+  id: string
+  titulo: string
+  estado: string
+}
+
+type OpportunityMode = "none" | "existing" | "create"
 
 type AgendaCreateBookingSheetProps = {
   open: boolean
@@ -61,6 +76,11 @@ export function AgendaCreateBookingSheet({ open, onClose, onCreated }: AgendaCre
     correo: "",
     company_name: "",
   })
+  const [opportunitiesLoading, setOpportunitiesLoading] = React.useState(false)
+  const [openOpportunities, setOpenOpportunities] = React.useState<OpportunityItem[]>([])
+  const [opportunityMode, setOpportunityMode] = React.useState<OpportunityMode>("none")
+  const [selectedOpportunityId, setSelectedOpportunityId] = React.useState<string>("")
+  const [newOpportunityTitle, setNewOpportunityTitle] = React.useState("")
 
   React.useEffect(() => {
     if (!open) {
@@ -76,6 +96,10 @@ export function AgendaCreateBookingSheet({ open, onClose, onCreated }: AgendaCre
         correo: "",
         company_name: "",
       })
+      setOpenOpportunities([])
+      setOpportunityMode("none")
+      setSelectedOpportunityId("")
+      setNewOpportunityTitle("")
       return
     }
   }, [open])
@@ -118,6 +142,59 @@ export function AgendaCreateBookingSheet({ open, onClose, onCreated }: AgendaCre
       clearTimeout(timeout)
     }
   }, [search, open])
+
+  React.useEffect(() => {
+    const currentContact = selectedContact
+    if (!open || !currentContact?.id) {
+      setOpenOpportunities([])
+      setOpportunityMode("none")
+      setSelectedOpportunityId("")
+      return
+    }
+    const contactId = currentContact.id
+    const contactName = currentContact.nombre?.trim() || "Oportunidad desde agenda"
+
+    let cancelled = false
+    async function loadOpportunities() {
+      try {
+        setOpportunitiesLoading(true)
+        const params = new URLSearchParams({ contacto_id: contactId })
+        const response = await fetch(`/api/agenda/opportunities?${params.toString()}`, {
+          method: "GET",
+          cache: "no-store",
+        })
+        const data = (await response.json()) as {
+          items?: Array<{ id: string; titulo: string; estado: string }>
+          error?: string
+        }
+        if (!response.ok) {
+          throw new Error(data.error || "No se pudieron consultar oportunidades.")
+        }
+        if (cancelled) return
+        const opportunities = Array.isArray(data.items) ? data.items : []
+        setOpenOpportunities(opportunities)
+        if (opportunities.length > 0) {
+          setOpportunityMode("existing")
+          setSelectedOpportunityId(opportunities[0].id)
+        } else {
+          setOpportunityMode("create")
+          setNewOpportunityTitle(`Seguimiento ${contactName}`)
+        }
+      } catch (error) {
+        if (cancelled) return
+        setOpenOpportunities([])
+        setOpportunityMode("none")
+        setSelectedOpportunityId("")
+        toast.error(error instanceof Error ? error.message : "No se pudieron consultar oportunidades.")
+      } finally {
+        if (!cancelled) setOpportunitiesLoading(false)
+      }
+    }
+    loadOpportunities()
+    return () => {
+      cancelled = true
+    }
+  }, [selectedContact, open])
 
   async function handleCreateContact() {
     if (!newContact.nombre_completo.trim()) {
@@ -168,6 +245,33 @@ export function AgendaCreateBookingSheet({ open, onClose, onCreated }: AgendaCre
     }
   }
 
+  async function resolveOpportunityId(contactId: string): Promise<string | null> {
+    if (opportunityMode === "none") return null
+    if (opportunityMode === "existing") {
+      if (!selectedOpportunityId) {
+        throw new Error("Selecciona una oportunidad para vincular.")
+      }
+      return selectedOpportunityId
+    }
+    const title = newOpportunityTitle.trim()
+    if (!title.length) {
+      throw new Error("Ingresa el título de la oportunidad.")
+    }
+    const response = await fetch("/api/agenda/opportunities", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        contacto_id: contactId,
+        titulo: title,
+      }),
+    })
+    const data = (await response.json()) as { id?: string; error?: string }
+    if (!response.ok || !data?.id) {
+      throw new Error(data.error || "No se pudo crear la oportunidad.")
+    }
+    return data.id
+  }
+
   async function handleCreateBooking() {
     if (!selectedContact?.id) {
       toast.error("Selecciona un contacto para agendar la cita.")
@@ -186,11 +290,13 @@ export function AgendaCreateBookingSheet({ open, onClose, onCreated }: AgendaCre
 
     try {
       setSubmitting(true)
+      const oportunidadId = await resolveOpportunityId(selectedContact.id)
       const response = await fetch("/api/agenda/bookings", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           contacto_id: selectedContact.id,
+          oportunidad_id: oportunidadId || undefined,
           start_at: startAtIso,
           notes: notes.trim() || undefined,
           canal: "manual",
@@ -320,6 +426,63 @@ export function AgendaCreateBookingSheet({ open, onClose, onCreated }: AgendaCre
               <p className="font-medium">Contacto seleccionado</p>
               <p>{selectedContact.nombre || "Sin nombre"}</p>
               <p className="text-xs text-muted-foreground">{formatContactSubtitle(selectedContact)}</p>
+            </div>
+          ) : null}
+
+          {selectedContact ? (
+            <div className="space-y-2 rounded-md border p-3">
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-sm font-medium">Oportunidad</p>
+                {opportunitiesLoading ? (
+                  <span className="text-xs text-muted-foreground">Cargando...</span>
+                ) : null}
+              </div>
+              <Select
+                value={opportunityMode}
+                onValueChange={(value) => setOpportunityMode(value as OpportunityMode)}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecciona opción" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Sin oportunidad</SelectItem>
+                  <SelectItem value="existing" disabled={!openOpportunities.length}>
+                    Vincular oportunidad existente
+                  </SelectItem>
+                  <SelectItem value="create">Crear nueva oportunidad</SelectItem>
+                </SelectContent>
+              </Select>
+
+              {opportunityMode === "existing" ? (
+                openOpportunities.length ? (
+                  <Select value={selectedOpportunityId} onValueChange={setSelectedOpportunityId}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecciona oportunidad" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {openOpportunities.map((item) => (
+                        <SelectItem key={item.id} value={item.id}>
+                          {item.titulo || "Sin título"}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <p className="text-xs text-muted-foreground">No hay oportunidades abiertas para este contacto.</p>
+                )
+              ) : null}
+
+              {opportunityMode === "create" ? (
+                <div className="space-y-2">
+                  <Label htmlFor="new-opportunity-title">Título de oportunidad</Label>
+                  <Input
+                    id="new-opportunity-title"
+                    value={newOpportunityTitle}
+                    onChange={(event) => setNewOpportunityTitle(event.target.value)}
+                    placeholder="Interesado en Tal-IA"
+                  />
+                </div>
+              ) : null}
             </div>
           ) : null}
 
