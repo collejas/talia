@@ -19836,11 +19836,17 @@ async def get_visits_web_sessions(
             limit=limit,
             offset=offset,
         )
+        envio_ids: list[str] = []
+        seen_envios: set[str] = set()
         contact_ids: list[UUID] = []
         seen_contacts: set[str] = set()
         template_ids: list[str] = []
         seen_templates: set[str] = set()
         for row in rows:
+            envio_id_value = str(row.get("eid") or "").strip()
+            if envio_id_value and envio_id_value not in seen_envios:
+                seen_envios.add(envio_id_value)
+                envio_ids.append(envio_id_value)
             contact_id_raw = str(row.get("contacto_id") or "").strip()
             if contact_id_raw and contact_id_raw not in seen_contacts:
                 parsed_contact = _safe_uuid(contact_id_raw)
@@ -19849,8 +19855,20 @@ async def get_visits_web_sessions(
                     contact_ids.append(parsed_contact)
             template_id_value = str(row.get("tid") or "").strip()
             if template_id_value and template_id_value not in seen_templates:
-                seen_templates.add(template_id_value)
-                template_ids.append(template_id_value)
+                    seen_templates.add(template_id_value)
+                    template_ids.append(template_id_value)
+
+        envios_map: dict[str, dict[str, Any]] = {}
+        if envio_ids:
+            envios = await repo.list_contact_envios_by_ids(
+                organizacion_id=organizacion_id,
+                envio_ids=envio_ids,
+            )
+            envios_map = {
+                str(item.get("id")): item
+                for item in envios
+                if isinstance(item, dict) and item.get("id")
+            }
 
         contacts_map: dict[str, dict[str, Any]] = {}
         if contact_ids:
@@ -19880,6 +19898,31 @@ async def get_visits_web_sessions(
 
     items: list[dict[str, Any]] = []
     for row in rows:
+        def _pick_envio_email(envio_row: dict[str, Any] | None) -> str | None:
+            if not isinstance(envio_row, dict):
+                return None
+            detalle = _ensure_dict(envio_row.get("detalle"), default={})
+            payload = _ensure_dict(envio_row.get("payload"), default={})
+            brevo = _ensure_dict(detalle.get("brevo"), default={})
+            candidates = (
+                detalle.get("email"),
+                detalle.get("correo"),
+                brevo.get("email"),
+                payload.get("email"),
+                payload.get("correo"),
+                payload.get("to"),
+                payload.get("recipient"),
+                payload.get("destinatario"),
+            )
+            for candidate in candidates:
+                value = _clean_text(candidate)
+                if value:
+                    return value
+            return None
+
+        envio_id_value = str(row.get("eid") or "").strip() or None
+        envio_row = envios_map.get(envio_id_value) if envio_id_value else None
+        correo_envio = _pick_envio_email(envio_row)
         contact_id_value = str(row.get("contacto_id") or "").strip() or None
         template_id_value = str(row.get("tid") or "").strip() or None
         contact_row = contacts_map.get(contact_id_value) if contact_id_value else None
@@ -19908,11 +19951,13 @@ async def get_visits_web_sessions(
                 )
                 or None,
                 "contacto_correo": (
-                    str(contact_row.get("correo") or "").strip()
+                    correo_envio
+                    or str(contact_row.get("correo") or "").strip()
                     if isinstance(contact_row, dict)
-                    else None
+                    else correo_envio
                 )
                 or None,
+                "correo_envio": correo_envio,
                 "first_seen_at": row.get("first_seen_at"),
                 "last_seen_at": row.get("last_seen_at"),
                 "visit_count": row.get("visit_count"),
@@ -19931,6 +19976,7 @@ async def get_visits_web_sessions(
                 "utm_medium": row.get("utm_medium"),
                 "utm_campaign": row.get("utm_campaign"),
                 "source_class": row.get("source_class"),
+                "eid": envio_id_value,
                 "template_id": template_id_value,
                 "template_slug": template_slug,
                 "template_nombre": template_name,

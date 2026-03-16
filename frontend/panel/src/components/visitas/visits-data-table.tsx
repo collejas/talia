@@ -112,6 +112,7 @@ const VISIT_FIELDS: VisitField[] = [
   { id: "primer_mensaje_en", key: "primer_mensaje_en", label: "Primer mensaje", type: "datetime" },
   { id: "ultimo_mensaje_conversacion", key: "ultimo_mensaje_conversacion", label: "Último mensaje", type: "datetime" },
   { id: "contacto_id", key: "contacto_id", label: "Contacto ID", type: "code" },
+  { id: "correo_envio", key: "correo_envio", label: "Correo prospección", type: "string", defaultVisible: true },
   { id: "contacto_telefono", key: "contacto_telefono", label: "Contacto teléfono", type: "string" },
   { id: "contacto_empresa", key: "contacto_empresa", label: "Empresa", type: "string" },
   { id: "contacto_estado", key: "contacto_estado", label: "Estado contacto", type: "string" },

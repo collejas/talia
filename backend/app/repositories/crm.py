@@ -1977,7 +1977,7 @@ class CRMRepository:
             "select": (
                 "session_id,contacto_id,first_seen_at,last_seen_at,visit_count,ip,"
                 "device_type,country_code,country_name,cve_ent,nom_ent,cve_mun,nom_mun,cvegeo,"
-                "referrer,landing_url,utm_source,utm_medium,utm_campaign,tid,source_class,metadata"
+                "referrer,landing_url,utm_source,utm_medium,utm_campaign,eid,tid,source_class,metadata"
             ),
             "order": "last_seen_at.desc,first_seen_at.desc",
             "limit": str(max(1, min(limit, 5000))),
@@ -2005,6 +2005,30 @@ class CRMRepository:
         if not isinstance(data, list):
             raise CRMRepositoryError(
                 f"Respuesta inesperada al listar detalle de web_sessions: {data!r}"
+            )
+        return [row for row in data if isinstance(row, dict)]
+
+    async def list_contact_envios_by_ids(
+        self,
+        *,
+        organizacion_id: UUID,
+        envio_ids: Sequence[str],
+    ) -> list[dict[str, Any]]:
+        values = [str(value or "").strip() for value in envio_ids]
+        values = [value for value in values if value]
+        if not values:
+            return []
+        params = {
+            "organizacion_id": f"eq.{organizacion_id}",
+            "id": _postgrest_in_clause(values),
+            "select": "id,canal,payload,detalle,estado,creado_en",
+            "limit": str(min(1000, max(1, len(values)))),
+        }
+        resp = await self._request("GET", "/rest/v1/prospeccion_contacto_envio", params=params)
+        data = resp.json() or []
+        if not isinstance(data, list):
+            raise CRMRepositoryError(
+                f"Respuesta inesperada al listar envios por id: {data!r}"
             )
         return [row for row in data if isinstance(row, dict)]
 

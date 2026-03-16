@@ -36,10 +36,12 @@ type ContactoTemplateRow = {
 
 type WebSessionAttributionRow = {
   session_id?: string | null;
+  eid?: string | null;
   contacto_id?: string | null;
   contacto_nombre?: string | null;
   contacto_telefono?: string | null;
   contacto_correo?: string | null;
+  correo_envio?: string | null;
   first_seen_at?: string | null;
   last_seen_at?: string | null;
   visit_count?: number | null;
@@ -66,6 +68,7 @@ type WebSessionAttributionRow = {
 
 export type VisitDetailRaw = {
   session_id: string | null;
+  eid?: string | null;
   oportunidad_id: string | null;
   canal?: string | null;
   ip: string | null;
@@ -85,6 +88,7 @@ export type VisitDetailRaw = {
   contacto_id: string | null;
   contacto_nombre: string | null;
   contacto_correo: string | null;
+  correo_envio?: string | null;
   contacto_telefono: string | null;
   contacto_empresa: string | null;
   contacto_estado: string | null;
@@ -221,6 +225,7 @@ export async function loadVisitsData(filters: VisitsFilters = {}): Promise<Visit
   const normalizedWebchat: VisitDetailRaw[] =
     detalleWebchat?.map((row) => ({
       session_id: row.session_id ?? null,
+      eid: row.eid ?? null,
       oportunidad_id: null,
       canal: "webchat",
       ip: row.ip ?? null,
@@ -239,7 +244,8 @@ export async function loadVisitsData(filters: VisitsFilters = {}): Promise<Visit
       ultimo_mensaje_conversacion: null,
       contacto_id: row.contacto_id ?? null,
       contacto_nombre: row.contacto_nombre ?? null,
-      contacto_correo: row.contacto_correo ?? null,
+      contacto_correo: row.correo_envio ?? row.contacto_correo ?? null,
+      correo_envio: row.correo_envio ?? null,
       contacto_telefono: row.contacto_telefono ?? null,
       contacto_empresa: null,
       contacto_estado: null,
