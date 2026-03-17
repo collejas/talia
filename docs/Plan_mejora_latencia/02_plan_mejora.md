@@ -33,6 +33,13 @@ Estado general: **Fase 1 implementada parcialmente (backend inbox)**.
   - Log de cache hit agregado:
     - `crm.inbox.filter_options.cache_hit`
 
+- Catálogos de inbox (backend)
+  - Cache adicional para catálogos repetitivos (TTL `60s`):
+    - campañas
+    - templates de contacto
+    - reglas de atribución WhatsApp
+  - Objetivo: reducir round-trips repetidos a Supabase por polling.
+
 ### Verificación técnica
 
 - Validación sintáctica ejecutada:

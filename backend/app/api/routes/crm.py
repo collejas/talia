@@ -145,6 +145,10 @@ INBOX_FILTER_OPTIONS_CACHE_TTL_SECONDS = 45.0
 INBOX_FILTER_OPTIONS_CACHE_MAX_ENTRIES = 256
 _INBOX_FILTER_OPTIONS_CACHE: dict[str, tuple[float, CRMInboxContextFilters]] = {}
 _INBOX_FILTER_OPTIONS_CACHE_LOCK = asyncio.Lock()
+INBOX_CATALOG_CACHE_TTL_SECONDS = 60.0
+INBOX_CATALOG_CACHE_MAX_ENTRIES = 512
+_INBOX_CATALOG_CACHE: dict[str, tuple[float, list[dict[str, Any]]]] = {}
+_INBOX_CATALOG_CACHE_LOCK = asyncio.Lock()
 INBOX_THREADS_METRICS_WINDOW_SECONDS = 900
 INBOX_THREADS_METRICS_MAX_SAMPLES = 5000
 INBOX_THREADS_STAGE_METRICS_MAX_SAMPLES = 5000
@@ -248,6 +252,39 @@ async def _write_inbox_filter_options_cache(
             if not oldest_key:
                 break
             _INBOX_FILTER_OPTIONS_CACHE.pop(oldest_key, None)
+
+
+def _build_inbox_catalog_cache_key(payload: dict[str, Any]) -> str:
+    raw = json.dumps(payload, sort_keys=True, default=str, separators=(",", ":"))
+    return hashlib.sha1(raw.encode("utf-8")).hexdigest()
+
+
+async def _read_inbox_catalog_cache(cache_key: str) -> list[dict[str, Any]] | None:
+    now = time.monotonic()
+    async with _INBOX_CATALOG_CACHE_LOCK:
+        entry = _INBOX_CATALOG_CACHE.get(cache_key)
+        if not entry:
+            return None
+        expires_at, cached_value = entry
+        if expires_at <= now:
+            _INBOX_CATALOG_CACHE.pop(cache_key, None)
+            return None
+        return [dict(row) for row in cached_value]
+
+
+async def _write_inbox_catalog_cache(cache_key: str, rows: list[dict[str, Any]]) -> None:
+    now = time.monotonic()
+    expires_at = now + INBOX_CATALOG_CACHE_TTL_SECONDS
+    async with _INBOX_CATALOG_CACHE_LOCK:
+        expired = [key for key, (ttl, _) in _INBOX_CATALOG_CACHE.items() if ttl <= now]
+        for key in expired:
+            _INBOX_CATALOG_CACHE.pop(key, None)
+        _INBOX_CATALOG_CACHE[cache_key] = (expires_at, [dict(row) for row in rows if isinstance(row, dict)])
+        while len(_INBOX_CATALOG_CACHE) > INBOX_CATALOG_CACHE_MAX_ENTRIES:
+            oldest_key = next(iter(_INBOX_CATALOG_CACHE), None)
+            if not oldest_key:
+                break
+            _INBOX_CATALOG_CACHE.pop(oldest_key, None)
 
 
 async def _read_whatsapp_envio_hint_cache(
@@ -11764,10 +11801,20 @@ async def get_inbox_threads(
     campana_label_map: dict[str, str] = {}
     campaign_catalog_start = time.perf_counter()
     if campana_ids:
-        try:
-            campaign_rows = await repo.list_campaigns(organizacion_id=organizacion_id)
-        except CRMRepositoryError:
-            campaign_rows = []
+        campaign_cache_key = _build_inbox_catalog_cache_key(
+            {
+                "type": "campaigns",
+                "org": str(organizacion_id),
+            }
+        )
+        campaign_rows = await _read_inbox_catalog_cache(campaign_cache_key)
+        if campaign_rows is None:
+            try:
+                campaign_rows = await repo.list_campaigns(organizacion_id=organizacion_id)
+            except CRMRepositoryError:
+                campaign_rows = []
+            else:
+                await _write_inbox_catalog_cache(campaign_cache_key, campaign_rows)
         for campaign in campaign_rows:
             campaign_id_value = _clean_text(campaign.get("id"))
             if not campaign_id_value or campaign_id_value not in campana_ids:
@@ -11784,10 +11831,20 @@ async def get_inbox_threads(
     template_label_by_external_key: dict[str, str] = {}
     template_catalog_start = time.perf_counter()
     if template_ids or template_slugs:
-        try:
-            template_rows = await repo.list_contact_templates(usuario_token=user_token)
-        except CRMRepositoryError:
-            template_rows = []
+        template_cache_key = _build_inbox_catalog_cache_key(
+            {
+                "type": "contact_templates",
+                "org": str(organizacion_id),
+            }
+        )
+        template_rows = await _read_inbox_catalog_cache(template_cache_key)
+        if template_rows is None:
+            try:
+                template_rows = await repo.list_contact_templates(usuario_token=user_token)
+            except CRMRepositoryError:
+                template_rows = []
+            else:
+                await _write_inbox_catalog_cache(template_cache_key, template_rows)
         for template in template_rows:
             template_id_value = _clean_text(template.get("id"))
             metadata = template.get("metadata") if isinstance(template.get("metadata"), dict) else {}
@@ -11842,15 +11899,27 @@ async def get_inbox_threads(
     wa_rule_label_map: dict[str, str] = {}
     wa_rule_channel_map: dict[str, str] = {}
     if wa_rule_ids:
-        try:
-            wa_rules_rows, _ = await repo.list_whatsapp_atribucion_reglas(
-                usuario_token=user_token,
-                limit=500,
-                offset=0,
-                include_historial=True,
-            )
-        except CRMRepositoryError:
-            wa_rules_rows = []
+        wa_rules_cache_key = _build_inbox_catalog_cache_key(
+            {
+                "type": "wa_atribucion_rules",
+                "org": str(organizacion_id),
+                "include_historial": True,
+                "limit": 500,
+            }
+        )
+        wa_rules_rows = await _read_inbox_catalog_cache(wa_rules_cache_key)
+        if wa_rules_rows is None:
+            try:
+                wa_rules_rows, _ = await repo.list_whatsapp_atribucion_reglas(
+                    usuario_token=user_token,
+                    limit=500,
+                    offset=0,
+                    include_historial=True,
+                )
+            except CRMRepositoryError:
+                wa_rules_rows = []
+            else:
+                await _write_inbox_catalog_cache(wa_rules_cache_key, wa_rules_rows)
         for rule_row in wa_rules_rows:
             rule_id_value = _clean_text(rule_row.get("id"))
             if not rule_id_value or rule_id_value not in wa_rule_ids:
@@ -12145,10 +12214,20 @@ async def get_inbox_filter_options(
 
     campana_label_map: dict[str, str] = {}
     if campana_ids:
-        try:
-            campaign_rows = await repo.list_campaigns(organizacion_id=organizacion_id)
-        except CRMRepositoryError:
-            campaign_rows = []
+        campaign_cache_key = _build_inbox_catalog_cache_key(
+            {
+                "type": "campaigns",
+                "org": str(organizacion_id),
+            }
+        )
+        campaign_rows = await _read_inbox_catalog_cache(campaign_cache_key)
+        if campaign_rows is None:
+            try:
+                campaign_rows = await repo.list_campaigns(organizacion_id=organizacion_id)
+            except CRMRepositoryError:
+                campaign_rows = []
+            else:
+                await _write_inbox_catalog_cache(campaign_cache_key, campaign_rows)
         for campaign in campaign_rows:
             campaign_id_value = _clean_text(campaign.get("id"))
             if not campaign_id_value or campaign_id_value not in campana_ids:
