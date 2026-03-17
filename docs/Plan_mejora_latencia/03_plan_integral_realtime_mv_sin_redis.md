@@ -245,3 +245,13 @@ Se considera completado cuando por 7 días consecutivos:
     - Validaciones:
       - `python3 -m py_compile backend/app/api/routes/crm.py` ✅
       - `npx eslint src/lib/prospeccion/prospectos-client.ts src/app/prospeccion/prospectos/page.client.tsx src/components/inbox/split-view.tsx` ✅
+  - Fase 2 iniciada (materialized views para prospección):
+    - Migración nueva: `20280426_120000_prospeccion_query_daily_mv.sql`
+      - crea `public.prospeccion_query_daily_mv` (agregado diario por tenant/query/fuente/actividad/segmento),
+      - reemplaza RPCs `prospeccion_queries_resumen` y `prospeccion_activities_resumen` para leer desde MV,
+      - agrega RPC `prospeccion_segmentos_resumen`,
+      - agrega función `prospeccion_query_daily_mv_refresh()`.
+    - Backend repo (`list_prospecto_query_metadata`) actualizado para usar RPC rápida también sin `query_filters` (antes caía a scan pesado), con fallback legacy si falla.
+    - Validaciones:
+      - `python3 -m py_compile backend/app/repositories/crm.py backend/app/api/routes/crm.py` ✅
+      - `npx eslint src/lib/prospeccion/prospectos-client.ts src/app/prospeccion/prospectos/page.client.tsx src/components/inbox/split-view.tsx` ✅

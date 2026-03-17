@@ -78,3 +78,15 @@ Iniciar Fase 1 con prioridad alta en:
 1. Control de concurrencia y reducción de ráfagas frontend/backend en inbox.
 2. Eliminación de consultas repetitivas y fan-out en prospección (`queries` y enriquecimientos por lote).
 3. Preparación del BFF para inbox/prospección como siguiente hito estructural.
+
+## Avance posterior (2026-03-17)
+
+- Se implementó y aplicó en DB la migración:
+  - `supabase/migrations/20280426_120000_prospeccion_query_daily_mv.sql`
+- Resultado:
+  - `public.prospeccion_query_daily_mv` creada y poblada.
+  - RPCs de resumen (`prospeccion_queries_resumen`, `prospeccion_activities_resumen`) reemplazadas para leer desde MV.
+  - RPC adicional `prospeccion_segmentos_resumen` creada.
+- Verificación post-migración:
+  - MV con datos: `mv_rows=256`, rango `2026-02-27` a `2026-03-17`.
+  - Funciones presentes en catálogo de DB.

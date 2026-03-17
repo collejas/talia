@@ -9149,12 +9149,8 @@ class CRMRepository:
             date_to_utc = end_local.astimezone(timezone.utc).isoformat()
 
         # Fast path: usamos RPCs agregados en DB para evitar scans masivos en Python.
-        # Para vista de grupos (sin query_filters) mantenemos el fallback exacto porque
-        # ahí se muestran estado/municipio derivados de metadata avanzada.
         # Si algo falla (migración faltante o error puntual), se usa fallback legacy.
         try:
-            if normalized_query_filters is None:
-                raise CRMRepositoryError("prospecto_queries_resumen_requires_filters")
             query_payload: dict[str, Any] = {
                 "p_query_filters": normalized_query_filters,
                 "p_fuente": fuente or None,
@@ -9180,6 +9176,15 @@ class CRMRepository:
             activities_data = activities_resp.json() or []
             if not isinstance(activities_data, list):
                 raise CRMRepositoryError(f"prospecto_activities_resumen_invalid:{activities_data!r}")
+            segmentos_resp = await self._request_with_user(
+                "POST",
+                "/rest/v1/rpc/prospeccion_segmentos_resumen",
+                token=usuario_token,
+                json=query_payload,
+            )
+            segmentos_data = segmentos_resp.json() or []
+            if not isinstance(segmentos_data, list):
+                raise CRMRepositoryError(f"prospecto_segmentos_resumen_invalid:{segmentos_data!r}")
 
             queries: list[dict[str, Any]] = []
             for row in queries_data:
@@ -9216,6 +9221,20 @@ class CRMRepository:
                     if isinstance(row, dict) and str(row.get("activity") or "").strip()
                 }
             )
+            segmentos = sorted(
+                {
+                    str(
+                        row.get("segmento")
+                        if isinstance(row, dict)
+                        else row
+                    ).strip()
+                    for row in segmentos_data
+                    if (
+                        (isinstance(row, dict) and str(row.get("segmento") or "").strip())
+                        or (isinstance(row, str) and row.strip())
+                    )
+                }
+            )
             if normalized_query_filters is not None:
                 queries = [
                     {
@@ -9243,7 +9262,7 @@ class CRMRepository:
             return {
                 "queries": queries,
                 "activities": activities,
-                "segmentos": [],
+                "segmentos": segmentos,
             }
         except CRMRepositoryError:
             pass
