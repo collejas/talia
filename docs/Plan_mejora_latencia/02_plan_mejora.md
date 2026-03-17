@@ -88,6 +88,9 @@ Estado general: **Fase 1 implementada + Fase 2 iniciada (prospección)**.
   - Fallback de totalizador optimizado:
     - si falta `content-range`, primero intenta `count=exact` ligero (`HEAD`/`GET` con `limit=1`)
     - solo si falla, mantiene escaneo paginado como último recurso.
+  - Include/exclude por IDs optimizado:
+    - `include_ids > 400`: ahora consulta por chunks de IDs (`id in (...)`) y ordena en backend, evitando scan completo de tabla.
+    - `exclude_ids` pequeño: usa `id=not.in(...)` directo con `count=exact`, evitando scan backend.
 
 - Impacto esperado
   - Menos loops paginados backend sobre `prospeccion_prospectos`.

@@ -399,6 +399,25 @@ def _build_geo_postgrest_filters(
     return filters
 
 
+def _sort_prospect_rows(rows: list[dict[str, Any]], *, order: str | None = None) -> list[dict[str, Any]]:
+    """Sort prospect rows consistently when results are assembled in backend chunks."""
+
+    normalized_order = str(order or "").strip().lower()
+    if normalized_order.startswith("display_name.asc"):
+        return sorted(
+            rows,
+            key=lambda row: (
+                not str(row.get("display_name") or "").strip(),
+                str(row.get("display_name") or "").casefold(),
+            ),
+        )
+    return sorted(
+        rows,
+        key=lambda row: str(row.get("creado_en") or ""),
+        reverse=True,
+    )
+
+
 def _coerce_positive_int(value: Any, default: int = 1) -> int:
     try:
         number = int(value)
@@ -8642,6 +8661,26 @@ class CRMRepository:
 
         if limit <= 0:
             return [], 0
+        if not geo_estado and not geo_municipio and len(excluded_ids) <= 120:
+            optimized_params = dict(params)
+            optimized_params["id"] = f"not.{_postgrest_in_clause(sorted(excluded_ids))}"
+            optimized_params["limit"] = str(limit)
+            optimized_params["offset"] = str(offset)
+            resp = await self._request_with_user(
+                "GET",
+                "/rest/v1/prospeccion_prospectos",
+                token=usuario_token,
+                params=optimized_params,
+                prefer="count=exact",
+            )
+            data = resp.json() or []
+            if not isinstance(data, list):
+                raise CRMRepositoryError(f"Respuesta inesperada al listar prospectos (exclude direct): {data!r}")
+            total = self._extract_total_count(resp.headers.get("content-range"))
+            if total is None:
+                total = len(data)
+            return data, total
+
         filtered_rows: list[dict[str, Any]] = []
         filtered_total = 0
         scan_offset = 0
@@ -8703,34 +8742,35 @@ class CRMRepository:
         if not included_ids:
             return [], 0
 
-        filtered_rows: list[dict[str, Any]] = []
-        filtered_total = 0
-        scan_offset = 0
-        page_size = max(500, min(1000, limit * 2))
-        max_scan_rows = 200_000
+        base_params = dict(params)
+        base_params.pop("id", None)
+        base_params.pop("limit", None)
+        base_params.pop("offset", None)
+        chunk_size = 120
+        rows_by_id: dict[str, dict[str, Any]] = {}
+        sorted_ids = sorted(included_ids)
 
-        while scan_offset < max_scan_rows:
-            scan_params = dict(params)
-            scan_params["limit"] = str(page_size)
-            scan_params["offset"] = str(scan_offset)
+        for start in range(0, len(sorted_ids), chunk_size):
+            chunk = sorted_ids[start : start + chunk_size]
+            scan_params = dict(base_params)
+            scan_params["id"] = _postgrest_in_clause(chunk)
+            scan_params["limit"] = str(len(chunk))
+            scan_params["offset"] = "0"
             resp = await self._request_with_user(
                 "GET",
                 "/rest/v1/prospeccion_prospectos",
                 token=usuario_token,
                 params=scan_params,
-                prefer="count=exact",
             )
             data = resp.json() or []
             if not isinstance(data, list):
-                raise CRMRepositoryError(f"Respuesta inesperada al listar prospectos (scan include): {data!r}")
-            if not data:
-                break
+                raise CRMRepositoryError(f"Respuesta inesperada al listar prospectos (chunk include): {data!r}")
 
             for row in data:
                 if not isinstance(row, dict):
                     continue
                 row_id = row.get("id")
-                if row_id is None or str(row_id) not in included_ids:
+                if row_id is None:
                     continue
                 if not _row_matches_geo_filters(
                     row,
@@ -8738,13 +8778,14 @@ class CRMRepository:
                     geo_municipio=geo_municipio,
                 ):
                     continue
-                if filtered_total >= offset and len(filtered_rows) < limit:
-                    filtered_rows.append(row)
-                filtered_total += 1
+                rows_by_id[str(row_id)] = row
 
-            scan_offset += len(data)
-
-        return filtered_rows, filtered_total
+        ordered_rows = _sort_prospect_rows(
+            list(rows_by_id.values()),
+            order=params.get("order"),
+        )
+        total = len(ordered_rows)
+        return ordered_rows[offset : offset + limit], total
 
     async def _list_prospectos_with_geo_scan(
         self,
