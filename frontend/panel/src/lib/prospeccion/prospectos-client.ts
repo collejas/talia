@@ -641,12 +641,43 @@ export type ProspectoQueryOption = {
   municipio?: string | null
 }
 
+type ProspectosQueryMetadataResult = {
+  queries: ProspectoQueryOption[]
+  activities: string[]
+  segmentos: string[]
+}
+
+const prospectosQueryMetadataInflight = new Map<string, Promise<ProspectosQueryMetadataResult>>()
+
+function buildProspectosQueryMetadataInflightKey(params?: {
+  queries?: string[]
+  fuente?: "google_places" | "denue" | "usuario"
+  dateFrom?: string
+  dateTo?: string
+}): string {
+  const normalizedQueries = Array.from(
+    new Set((params?.queries ?? []).map((value) => value?.trim()).filter((value): value is string => Boolean(value)))
+  ).sort()
+  return JSON.stringify({
+    queries: normalizedQueries,
+    fuente: params?.fuente ?? "",
+    dateFrom: params?.dateFrom ?? "",
+    dateTo: params?.dateTo ?? "",
+  })
+}
+
 export async function listProspectosQueryMetadata(params?: {
   queries?: string[]
   fuente?: "google_places" | "denue" | "usuario"
   dateFrom?: string
   dateTo?: string
-}): Promise<{ queries: ProspectoQueryOption[]; activities: string[]; segmentos: string[] }> {
+}): Promise<ProspectosQueryMetadataResult> {
+  const inflightKey = buildProspectosQueryMetadataInflightKey(params)
+  const existingRequest = prospectosQueryMetadataInflight.get(inflightKey)
+  if (existingRequest) {
+    return existingRequest
+  }
+  const requestPromise = (async (): Promise<ProspectosQueryMetadataResult> => {
   const url = buildClientUrl("/api/prospeccion/prospectos/queries")
   if (params?.queries?.length) {
     for (const query of params.queries) {
@@ -699,6 +730,13 @@ export async function listProspectosQueryMetadata(params?: {
     queries: normalizedQueries,
     activities: response.activities ?? [],
     segmentos: response.segmentos ?? [],
+  }
+  })()
+  prospectosQueryMetadataInflight.set(inflightKey, requestPromise)
+  try {
+    return await requestPromise
+  } finally {
+    prospectosQueryMetadataInflight.delete(inflightKey)
   }
 }
 

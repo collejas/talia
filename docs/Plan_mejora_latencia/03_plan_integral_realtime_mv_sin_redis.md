@@ -234,3 +234,14 @@ Se considera completado cuando por 7 días consecutivos:
   - Fase 0 iniciada y baseline inicial documentado en `04_ejecucion_fase0_baseline.md`.
   - Confirmada persistencia de picos en `prospeccion/prospectos` y `prospeccion/prospectos/queries`.
   - Confirmada recurrencia de activaciones `high_demand_mode` por `inbox_p95_high`.
+  - Fase 1 iniciada (control de concurrencia inbox frontend):
+    - `mergeThreadLists` ahora preserva campos enriquecidos (`sourceDetail`, labels de campaña/template/lote) para evitar que el polling base sobrescriba datos y re-dispare hidratación innecesaria.
+    - Se agregó cooldown por hilo (`THREAD_ENRICHMENT_COOLDOWN_MS=30000`) para limitar llamadas repetitivas `enrich=true` en el hilo seleccionado.
+    - Validación: `npx eslint src/components/inbox/split-view.tsx` ✅
+  - Fase 1 extendida (control de concurrencia en `prospeccion/prospectos/queries`):
+    - Backend: single-flight por `cache_key` en `/crm/prospeccion/prospectos/queries` para que requests concurrentes idénticas esperen el mismo cálculo en lugar de ejecutar múltiples `cache_miss`.
+    - Frontend: deduplicación in-flight en `listProspectosQueryMetadata` para evitar doble fetch simultáneo con el mismo scope desde la misma sesión.
+    - Frontend (prospección): cuando `queryFilters` está vacío, se evita el refetch redundante de actividades y se reutiliza baseline cargado en `loadQueryOptions`.
+    - Validaciones:
+      - `python3 -m py_compile backend/app/api/routes/crm.py` ✅
+      - `npx eslint src/lib/prospeccion/prospectos-client.ts src/app/prospeccion/prospectos/page.client.tsx src/components/inbox/split-view.tsx` ✅

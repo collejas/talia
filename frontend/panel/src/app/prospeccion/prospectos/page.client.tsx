@@ -840,6 +840,7 @@ function ProspectosView() {
   const queryFiltersInitialEffect = useRef(true)
   const lastQueryScopeRef = useRef("")
   const lastActivitiesScopeRef = useRef("")
+  const baseActivityOptionsRef = useRef<string[]>([])
   const plannerDateInputRef = useRef<HTMLInputElement | null>(null)
   const tablePrefsSaveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const tablePrefsLastSavedRef = useRef<string>("")
@@ -1483,6 +1484,7 @@ function ProspectosView() {
       const activities = response.activities ?? []
       const segmentos = response.segmentos ?? []
       setQueryOptions(queries)
+      baseActivityOptionsRef.current = activities
       setActivityOptions(activities)
       setSegmentoOptions(segmentos)
       const queryValues = new Set(queries.map((item) => item.value))
@@ -1610,6 +1612,22 @@ function ProspectosView() {
       return
     }
     const selectedQueries = effectiveMetadataQueries ?? []
+    if (!selectedQueries.length) {
+      const baselineActivities = baseActivityOptionsRef.current
+      setActivityOptions(baselineActivities)
+      setFilters((prev) => {
+        const nextActividadFilters = prev.actividadFilters.filter((value) => baselineActivities.includes(value))
+        if (arraysEqual(nextActividadFilters, prev.actividadFilters)) {
+          return prev
+        }
+        return {
+          ...prev,
+          actividadFilters: nextActividadFilters,
+        }
+      })
+      lastActivitiesScopeRef.current = ""
+      return
+    }
     const { from: dateFrom, to: dateTo } = getDateRangeFromFilters(
       filters.dateOption,
       filters.customDateFrom,

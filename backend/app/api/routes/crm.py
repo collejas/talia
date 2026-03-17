@@ -186,6 +186,8 @@ PROSPECTO_QUERIES_CACHE_TTL_SECONDS = 600.0
 PROSPECTO_QUERIES_CACHE_MAX_ENTRIES = 512
 _PROSPECTO_QUERIES_CACHE: dict[str, tuple[float, dict[str, Any]]] = {}
 _PROSPECTO_QUERIES_CACHE_LOCK = asyncio.Lock()
+_PROSPECTO_QUERIES_INFLIGHT_LOCK = asyncio.Lock()
+_PROSPECTO_QUERIES_INFLIGHT: dict[str, asyncio.Future[dict[str, Any]]] = {}
 
 
 def _build_inbox_threads_cache_key(payload: dict[str, Any]) -> str:
@@ -401,6 +403,29 @@ async def _prospecto_queries_cache_size() -> int:
 async def _clear_prospecto_queries_cache() -> None:
     async with _PROSPECTO_QUERIES_CACHE_LOCK:
         _PROSPECTO_QUERIES_CACHE.clear()
+
+
+async def _get_prospecto_queries_inflight_future(
+    cache_key: str,
+) -> tuple[asyncio.Future[dict[str, Any]], bool]:
+    async with _PROSPECTO_QUERIES_INFLIGHT_LOCK:
+        existing = _PROSPECTO_QUERIES_INFLIGHT.get(cache_key)
+        if existing is not None:
+            return existing, False
+        loop = asyncio.get_running_loop()
+        created: asyncio.Future[dict[str, Any]] = loop.create_future()
+        _PROSPECTO_QUERIES_INFLIGHT[cache_key] = created
+        return created, True
+
+
+async def _release_prospecto_queries_inflight_future(
+    cache_key: str,
+    future: asyncio.Future[dict[str, Any]],
+) -> None:
+    async with _PROSPECTO_QUERIES_INFLIGHT_LOCK:
+        current = _PROSPECTO_QUERIES_INFLIGHT.get(cache_key)
+        if current is future:
+            _PROSPECTO_QUERIES_INFLIGHT.pop(cache_key, None)
 
 
 def _percentile(values: list[float], percentile: float) -> float:
@@ -16338,6 +16363,31 @@ async def listar_prospectos_query_metadata(
             },
         )
         return cached_payload
+    inflight_future, is_inflight_leader = await _get_prospecto_queries_inflight_future(cache_key)
+    if not is_inflight_leader:
+        try:
+            payload = await inflight_future
+            cache_hit = True
+            logger.info(
+                "crm.prospectos.queries.singleflight_wait_hit",
+                extra={
+                    "cache_key": cache_key[:12],
+                    "query_signature": query_signature,
+                    "query_filters": len(normalized_query_filters),
+                    "fuente": fuente or "",
+                    "has_date_from": bool(date_from),
+                    "has_date_to": bool(date_to),
+                },
+            )
+            return payload
+        except Exception:
+            logger.exception(
+                "crm.prospectos.queries.singleflight_wait_failed",
+                extra={
+                    "cache_key": cache_key[:12],
+                    "query_signature": query_signature,
+                },
+            )
     try:
         logger.info(
             "crm.prospectos.queries.cache_miss",
@@ -16380,11 +16430,18 @@ async def listar_prospectos_query_metadata(
                 "segmentos_rows": len(payload.get("segmentos", [])),
             },
         )
+        if not inflight_future.done():
+            inflight_future.set_result(payload)
         return payload
     except Exception:
         request_failed = True
+        if not inflight_future.done():
+            inflight_future.set_exception(RuntimeError("prospecto_queries_resolution_failed"))
+            _ = inflight_future.exception()
         raise
     finally:
+        if is_inflight_leader:
+            await _release_prospecto_queries_inflight_future(cache_key, inflight_future)
         duration_ms = (time.perf_counter() - request_started) * 1000
         await _record_prospectos_process_metrics(
             endpoint="prospeccion.prospectos.queries",

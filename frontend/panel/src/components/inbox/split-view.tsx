@@ -32,6 +32,7 @@ const THREADS_REFRESH_INTERVAL_MS = 12000;
 const RUNTIME_PROFILE_REFRESH_INTERVAL_MS = 60000;
 const MESSAGES_REFRESH_INTERVAL_MS = 1500;
 const THREADS_PAGE_SIZE = 100;
+const THREAD_ENRICHMENT_COOLDOWN_MS = 30000;
 
 const CHANNEL_BADGE_STYLES: Record<string, string> = {
   whatsapp: "bg-emerald-500/10 text-emerald-700 border-emerald-500/40",
@@ -635,6 +636,7 @@ export function InboxSplitView({
   const [isHydrated, setIsHydrated] = React.useState(false);
   const threadsRefreshingRef = React.useRef(false);
   const threadEnrichmentRef = React.useRef(false);
+  const threadEnrichmentLastAttemptRef = React.useRef<Map<string, number>>(new Map());
   const messagesRefreshingRef = React.useRef<string | null>(null);
   const messagesContainerRef = React.useRef<HTMLDivElement | null>(null);
   const messagesPollingTimeoutRef = React.useRef<number | null>(null);
@@ -1113,9 +1115,21 @@ export function InboxSplitView({
       selectedIndex >= 0
         ? Math.floor(selectedIndex / THREADS_PAGE_SIZE) * THREADS_PAGE_SIZE
         : 0;
+    const now = Date.now();
+    const lastAttemptAt = threadEnrichmentLastAttemptRef.current.get(selected.id) ?? 0;
+    if (now - lastAttemptAt < THREAD_ENRICHMENT_COOLDOWN_MS) {
+      return undefined;
+    }
 
     async function hydrateSelectedThread() {
       threadEnrichmentRef.current = true;
+      threadEnrichmentLastAttemptRef.current.set(selected.id, Date.now());
+      if (threadEnrichmentLastAttemptRef.current.size > 512) {
+        const oldestKey = threadEnrichmentLastAttemptRef.current.keys().next().value;
+        if (typeof oldestKey === "string") {
+          threadEnrichmentLastAttemptRef.current.delete(oldestKey);
+        }
+      }
       try {
         const params = buildThreadsParams({ offset: pageOffset, enrich: true });
         const response = await fetch(`/api/inbox/threads?${params.toString()}`, {
@@ -2152,6 +2166,15 @@ function mergeThreadLists(current: InboxThread[], incoming: InboxThread[]): Inbo
     return current;
   }
   const currentMap = new Map(current.map((item) => [item.id, item]));
+  const preferIncomingString = (incomingValue: string | null, currentValue: string | null): string | null => {
+    if (typeof incomingValue === "string" && incomingValue.trim().length) {
+      return incomingValue;
+    }
+    if (typeof currentValue === "string" && currentValue.trim().length) {
+      return currentValue;
+    }
+    return incomingValue ?? currentValue ?? null;
+  };
   const merged: InboxThread[] = incoming.map((thread) => {
     const existing = currentMap.get(thread.id);
     if (!existing) {
@@ -2159,8 +2182,18 @@ function mergeThreadLists(current: InboxThread[], incoming: InboxThread[]): Inbo
     }
     const messages = thread.messages.length ? thread.messages : existing.messages;
     const lastMessage = messages.length ? messages[messages.length - 1]! : null;
+    const incomingSourceDetail =
+      thread.sourceDetail && Object.keys(thread.sourceDetail).length > 0 ? thread.sourceDetail : null;
+    const resolvedSourceDetail =
+      incomingSourceDetail ??
+      (existing.sourceDetail && Object.keys(existing.sourceDetail).length > 0 ? existing.sourceDetail : null);
     return {
       ...thread,
+      sourceDetail: resolvedSourceDetail,
+      batchLabel: preferIncomingString(thread.batchLabel, existing.batchLabel),
+      campanaLabel: preferIncomingString(thread.campanaLabel, existing.campanaLabel),
+      templateLabel: preferIncomingString(thread.templateLabel, existing.templateLabel),
+      templateSlug: preferIncomingString(thread.templateSlug, existing.templateSlug),
       messages,
       preview: thread.preview ?? lastMessage?.body?.[0] ?? existing.preview,
       previewAt: thread.previewAt ?? lastMessage?.timestamp ?? existing.previewAt,
