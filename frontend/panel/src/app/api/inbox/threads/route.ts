@@ -11,11 +11,21 @@ function parseNumber(value: string | null, fallback: number, options: { min: num
   return Math.min(options.max, Math.max(options.min, numeric));
 }
 
+function parseBoolean(value: string | null, fallback: boolean): boolean {
+  if (value == null) return fallback;
+  const normalized = value.trim().toLowerCase();
+  if (!normalized) return fallback;
+  if (["1", "true", "yes", "on"].includes(normalized)) return true;
+  if (["0", "false", "no", "off"].includes(normalized)) return false;
+  return fallback;
+}
+
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const limit = parseNumber(searchParams.get("limit"), 25, { min: 1, max: 100 });
   const offset = parseNumber(searchParams.get("offset"), 0, { min: 0, max: 10_000 });
   const messageLimit = parseNumber(searchParams.get("message_limit"), 20, { min: 1, max: 100 });
+  const enrich = parseBoolean(searchParams.get("enrich"), true);
   const estado = searchParams.get("estado")?.trim() || "";
   const source = searchParams.get("source")?.trim() || "";
   const channel = searchParams.get("channel")?.trim() || "";
@@ -29,6 +39,7 @@ export async function GET(request: Request) {
       limit: String(limit),
       offset: String(offset),
       message_limit: String(messageLimit),
+      enrich: String(enrich),
       ...(estado ? { estado } : {}),
       ...(source ? { source } : {}),
       ...(channel ? { channel } : {}),

@@ -46,6 +46,10 @@ Estado general: **Fase 1 implementada parcialmente (backend inbox)**.
   - Restricción actual: para `source=publicidad_whatsapp` se requiere `enrich=true`.
   - Log nuevo para este modo:
     - `crm.inbox.threads.base_only`
+  - Frontend inbox actualizado para polling/load-more en modo base:
+    - `GET /api/inbox/threads?...&enrich=false`
+  - Frontend agrega hidratación bajo demanda para hilo seleccionado:
+    - solicita página puntual con `enrich=true` y fusiona datos enriquecidos.
 
 ### Verificación técnica
 

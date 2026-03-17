@@ -634,6 +634,7 @@ export function InboxSplitView({
   const [autoScrollLocked, setAutoScrollLocked] = React.useState(false);
   const [isHydrated, setIsHydrated] = React.useState(false);
   const threadsRefreshingRef = React.useRef(false);
+  const threadEnrichmentRef = React.useRef(false);
   const messagesRefreshingRef = React.useRef<string | null>(null);
   const messagesContainerRef = React.useRef<HTMLDivElement | null>(null);
   const messagesPollingTimeoutRef = React.useRef<number | null>(null);
@@ -960,6 +961,63 @@ export function InboxSplitView({
     };
   }, []);
 
+  const buildThreadsParams = React.useCallback(
+    ({ offset, enrich }: { offset: number; enrich: boolean }) => {
+      const params = new URLSearchParams({
+        limit: String(THREADS_PAGE_SIZE),
+        offset: String(Math.max(0, offset)),
+        message_limit: "20",
+        enrich: enrich ? "true" : "false",
+      });
+      const normalizedSource = sourceFilter ? sourceFilter.toLowerCase() : "";
+      if (normalizedSource && normalizedSource !== "all" && normalizedSource !== "correo_general") {
+        params.set("source", normalizedSource);
+      }
+      if (normalizedSource === "correo_general") {
+        params.set("channel", "correo");
+      }
+      if (channelFilter && channelFilter !== "all") {
+        params.set("channel", channelFilter);
+      }
+      if (estadoFilter) {
+        params.set("estado", estadoFilter);
+      }
+      if (batchFilter) {
+        params.set("batch_id", batchFilter);
+      }
+      if (campanaFilter) {
+        params.set("campana_id", campanaFilter);
+      }
+      if (dateFilter && dateFilter !== "all") {
+        params.set("date", dateFilter);
+      }
+      return params;
+    },
+    [sourceFilter, channelFilter, estadoFilter, batchFilter, campanaFilter, dateFilter],
+  );
+
+  const needsThreadEnrichment = React.useCallback((thread: InboxThread | null | undefined): boolean => {
+    if (!thread) return false;
+    const normalizedSource = (thread.source ?? "").toLowerCase();
+    if (normalizedSource === "publicidad_whatsapp") {
+      const detail =
+        thread.sourceDetail && typeof thread.sourceDetail === "object" && !Array.isArray(thread.sourceDetail)
+          ? (thread.sourceDetail as Record<string, unknown>)
+          : {};
+      const reglaNombre =
+        typeof detail.regla_nombre === "string" ? detail.regla_nombre.trim() : "";
+      const canalPublicitario =
+        typeof detail.canal_publicitario === "string" ? detail.canal_publicitario.trim() : "";
+      const campanaPublicitaria =
+        typeof detail.campana_publicitaria === "string" ? detail.campana_publicitaria.trim() : "";
+      return !(reglaNombre || canalPublicitario || campanaPublicitaria);
+    }
+    if (isProspeccionSource(normalizedSource)) {
+      return !(thread.templateLabel || thread.batchLabel || thread.campanaLabel);
+    }
+    return false;
+  }, []);
+
   React.useEffect(() => {
     let cancelled = false;
 
@@ -968,33 +1026,7 @@ export function InboxSplitView({
       if (threadsRefreshingRef.current) return;
       threadsRefreshingRef.current = true;
       try {
-        const params = new URLSearchParams({
-          limit: String(THREADS_PAGE_SIZE),
-          offset: "0",
-          message_limit: "20",
-        });
-        const normalizedSource = sourceFilter ? sourceFilter.toLowerCase() : "";
-        if (normalizedSource && normalizedSource !== "all" && normalizedSource !== "correo_general") {
-          params.set("source", normalizedSource);
-        }
-        if (normalizedSource === "correo_general") {
-          params.set("channel", "correo");
-        }
-        if (channelFilter && channelFilter !== "all") {
-          params.set("channel", channelFilter);
-        }
-        if (estadoFilter) {
-          params.set("estado", estadoFilter);
-        }
-        if (batchFilter) {
-          params.set("batch_id", batchFilter);
-        }
-        if (campanaFilter) {
-          params.set("campana_id", campanaFilter);
-        }
-        if (dateFilter && dateFilter !== "all") {
-          params.set("date", dateFilter);
-        }
+        const params = buildThreadsParams({ offset: 0, enrich: false });
         const response = await fetch(`/api/inbox/threads?${params.toString()}`, {
           cache: "no-store",
         });
@@ -1031,40 +1063,17 @@ export function InboxSplitView({
       clearInterval(interval);
       threadsRefreshingRef.current = false;
     };
-  }, [sourceFilter, channelFilter, estadoFilter, batchFilter, campanaFilter, dateFilter, threadsRefreshIntervalMs]);
+  }, [buildThreadsParams, threadsRefreshIntervalMs]);
 
   const handleLoadMoreThreads = React.useCallback(async () => {
     if (loadingMoreThreads) return;
     if (threadItems.length >= totalThreads) return;
     setLoadingMoreThreads(true);
     try {
-      const params = new URLSearchParams({
-        limit: String(THREADS_PAGE_SIZE),
-        offset: String(Math.max(0, threadItems.length)),
-        message_limit: "20",
+      const params = buildThreadsParams({
+        offset: Math.max(0, threadItems.length),
+        enrich: false,
       });
-      const normalizedSource = sourceFilter ? sourceFilter.toLowerCase() : "";
-      if (normalizedSource && normalizedSource !== "all" && normalizedSource !== "correo_general") {
-        params.set("source", normalizedSource);
-      }
-      if (normalizedSource === "correo_general") {
-        params.set("channel", "correo");
-      }
-      if (channelFilter && channelFilter !== "all") {
-        params.set("channel", channelFilter);
-      }
-      if (estadoFilter) {
-        params.set("estado", estadoFilter);
-      }
-      if (batchFilter) {
-        params.set("batch_id", batchFilter);
-      }
-      if (campanaFilter) {
-        params.set("campana_id", campanaFilter);
-      }
-      if (dateFilter && dateFilter !== "all") {
-        params.set("date", dateFilter);
-      }
       const response = await fetch(`/api/inbox/threads?${params.toString()}`, {
         cache: "no-store",
       });
@@ -1087,13 +1096,52 @@ export function InboxSplitView({
     loadingMoreThreads,
     threadItems.length,
     totalThreads,
-    sourceFilter,
-    channelFilter,
-    estadoFilter,
-    batchFilter,
-    campanaFilter,
-    dateFilter,
+    buildThreadsParams,
   ]);
+
+  React.useEffect(() => {
+    let cancelled = false;
+    const selected = selectedThread;
+    if (!selected || !needsThreadEnrichment(selected)) {
+      return undefined;
+    }
+    if (threadEnrichmentRef.current) {
+      return undefined;
+    }
+    const selectedIndex = threadItems.findIndex((thread) => thread.id === selected.id);
+    const pageOffset =
+      selectedIndex >= 0
+        ? Math.floor(selectedIndex / THREADS_PAGE_SIZE) * THREADS_PAGE_SIZE
+        : 0;
+
+    async function hydrateSelectedThread() {
+      threadEnrichmentRef.current = true;
+      try {
+        const params = buildThreadsParams({ offset: pageOffset, enrich: true });
+        const response = await fetch(`/api/inbox/threads?${params.toString()}`, {
+          cache: "no-store",
+        });
+        if (!response.ok) {
+          return;
+        }
+        const data = (await response.json()) as { threads?: InboxThread[] };
+        const incoming = Array.isArray(data?.threads) ? (data.threads as InboxThread[]) : [];
+        if (!incoming.length || cancelled) {
+          return;
+        }
+        setThreadItems((current) => mergeThreadLists(current, incoming));
+      } catch (error) {
+        console.error("[inbox] selected thread enrichment failed", error);
+      } finally {
+        threadEnrichmentRef.current = false;
+      }
+    }
+
+    hydrateSelectedThread();
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedThread, threadItems, needsThreadEnrichment, buildThreadsParams]);
 
   const refreshMessages = React.useCallback(
     async (conversationId: string, options: { force?: boolean } = {}) => {
