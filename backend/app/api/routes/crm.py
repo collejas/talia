@@ -11958,8 +11958,11 @@ async def get_inbox_threads(
             else:
                 unresolved_phones.append(phone_value)
 
-        # Fallback defensivo: para casos no resueltos por el lookup batch.
-        if unresolved_phones:
+        allow_individual_hint_fallback = bool(
+            getattr(settings, "inbox_whatsapp_hint_enable_individual_fallback", False)
+        )
+        # Fallback individual opcional: puede ser costoso en requests interactivos.
+        if unresolved_phones and allow_individual_hint_fallback:
             semaphore = asyncio.Semaphore(INBOX_THREADS_WHATSAPP_HINT_LOOKUP_CONCURRENCY)
 
             async def _lookup_hint_by_phone_fallback(
@@ -11997,6 +12000,8 @@ async def get_inbox_threads(
                     continue
                 phone_value, hint = result
                 whatsapp_phone_cache[phone_value] = hint
+        elif unresolved_phones:
+            stage_timings["whatsapp_hint_individual_fallback_skipped"] = float(len(unresolved_phones))
     stage_timings["whatsapp_hint_lookup_ms"] = round(
         (time.perf_counter() - fallback_lookup_start) * 1000, 2
     )

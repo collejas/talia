@@ -609,6 +609,17 @@ class Settings(BaseSettings):
             "TALIA_HIGH_DEMAND_INBOX_ENRICHMENTS_FORCE_DEFER",
         ),
     )
+    inbox_whatsapp_hint_enable_individual_fallback: bool = Field(
+        default=False,
+        description=(
+            "Si está activo, permite fallback individual por teléfono en Inbox cuando "
+            "el lookup batch de hints de WhatsApp no resuelve un registro."
+        ),
+        validation_alias=AliasChoices(
+            "INBOX_WHATSAPP_HINT_ENABLE_INDIVIDUAL_FALLBACK",
+            "TALIA_INBOX_WHATSAPP_HINT_ENABLE_INDIVIDUAL_FALLBACK",
+        ),
+    )
     inbox_threads_default_poll_seconds: int = Field(
         default=12,
         ge=5,
