@@ -453,6 +453,7 @@ const PROSPECTOS_TABLE_PREFS_KEY = "prospeccion_prospectos_table_prefs_v1"
 const PROSPECTOS_DEFAULT_LIMIT = 200
 const PROSPECTOS_METADATA_DEBOUNCE_MS = 350
 const PROSPECTOS_INDICATORS_MAX_IDS = 120
+const PROSPECTOS_STREAM_REFRESH_DEBOUNCE_MS = 500
 const DEFAULT_TABLE_COLUMN_ORDER: ProspectTableColumnId[] = [
   "prospecto",
   "correo",
@@ -845,6 +846,9 @@ function ProspectosView() {
   const plannerDateInputRef = useRef<HTMLInputElement | null>(null)
   const tablePrefsSaveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const tablePrefsLastSavedRef = useRef<string>("")
+  const prospectosStreamRef = useRef<EventSource | null>(null)
+  const prospectosStreamRefreshTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const prospectosStreamRefreshInFlightRef = useRef(false)
 
   const currentIds = useMemo(() => items.map((item) => item.id).filter(Boolean) as string[], [items])
   const geoEstadoLabelMap = useMemo(
@@ -1779,6 +1783,64 @@ function ProspectosView() {
   useEffect(() => {
     void fetchRecentBatches()
   }, [fetchRecentBatches])
+
+  useEffect(() => {
+    if (typeof window === "undefined") return undefined
+    let closed = false
+    const stream = new EventSource("/api/prospeccion/prospectos/stream")
+    prospectosStreamRef.current = stream
+
+    const runRefresh = async () => {
+      if (closed) return
+      if (prospectosStreamRefreshInFlightRef.current) return
+      prospectosStreamRefreshInFlightRef.current = true
+      try {
+        await Promise.all([
+          fetchProspectos(0),
+          refreshChecklist(),
+          fetchStageSummary(),
+        ])
+      } finally {
+        prospectosStreamRefreshInFlightRef.current = false
+      }
+    }
+
+    const scheduleRefresh = () => {
+      if (closed) return
+      if (prospectosStreamRefreshTimeoutRef.current) {
+        clearTimeout(prospectosStreamRefreshTimeoutRef.current)
+      }
+      prospectosStreamRefreshTimeoutRef.current = setTimeout(() => {
+        prospectosStreamRefreshTimeoutRef.current = null
+        void runRefresh()
+      }, PROSPECTOS_STREAM_REFRESH_DEBOUNCE_MS)
+    }
+
+    stream.onmessage = (event) => {
+      try {
+        const payload = JSON.parse(event.data) as { type?: string }
+        const eventType = (payload?.type ?? "").toLowerCase()
+        if (!eventType || eventType === "ping" || eventType === "connected") {
+          return
+        }
+      } catch {
+        // si falla parseo, forzamos refresh para no perder invalidaciones
+      }
+      scheduleRefresh()
+    }
+
+    return () => {
+      closed = true
+      if (prospectosStreamRefreshTimeoutRef.current) {
+        clearTimeout(prospectosStreamRefreshTimeoutRef.current)
+        prospectosStreamRefreshTimeoutRef.current = null
+      }
+      stream.close()
+      if (prospectosStreamRef.current === stream) {
+        prospectosStreamRef.current = null
+      }
+    }
+  }, [fetchProspectos, fetchStageSummary, refreshChecklist])
 
   useEffect(() => {
     if (!formDialogOpen) {

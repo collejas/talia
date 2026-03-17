@@ -32,6 +32,7 @@ const THREADS_REFRESH_INTERVAL_MS = 12000;
 const MESSAGES_REFRESH_INTERVAL_MS = 1500;
 const THREADS_PAGE_SIZE = 100;
 const THREAD_ENRICHMENT_COOLDOWN_MS = 30000;
+const INBOX_STREAM_REFRESH_DEBOUNCE_MS = 400;
 
 const CHANNEL_BADGE_STYLES: Record<string, string> = {
   whatsapp: "bg-emerald-500/10 text-emerald-700 border-emerald-500/40",
@@ -641,6 +642,9 @@ export function InboxSplitView({
   const messagesPollingTimeoutRef = React.useRef<number | null>(null);
   const lastMessagesFingerprintRef = React.useRef<string>("");
   const previousSelectedIdRef = React.useRef<string | null>(null);
+  const inboxStreamRef = React.useRef<EventSource | null>(null);
+  const inboxStreamConnectedRef = React.useRef(false);
+  const inboxStreamRefreshTimeoutRef = React.useRef<number | null>(null);
   const { user: currentUser } = useCurrentUser();
   const batchLabelMap = React.useMemo(
     () => new Map((batchOptions ?? []).map((item) => [item.value, item.label])),
@@ -982,65 +986,115 @@ export function InboxSplitView({
     return false;
   }, []);
 
+  const refreshThreads = React.useCallback(async () => {
+    if (typeof document !== "undefined" && document.hidden) return;
+    if (threadsRefreshingRef.current) return;
+    threadsRefreshingRef.current = true;
+    try {
+      const params = buildThreadsParams({ offset: 0, enrich: false });
+      params.set("include_summary", "false");
+      params.set("include_filter_options", "false");
+      const response = await fetch(`/api/inbox/bootstrap?${params.toString()}`, {
+        cache: "no-store",
+      });
+      if (!response.ok) {
+        return;
+      }
+      const data = (await response.json()) as {
+        threads?: InboxThread[];
+        total_threads?: number;
+        runtime_profile?: { recommended_threads_poll_seconds?: number };
+      };
+      const incoming = Array.isArray(data?.threads) ? (data.threads as InboxThread[]) : [];
+      if (typeof data?.total_threads === "number") {
+        setTotalThreads(Math.max(0, data.total_threads));
+      }
+      const recommendedSeconds = Number(data?.runtime_profile?.recommended_threads_poll_seconds);
+      if (Number.isFinite(recommendedSeconds) && recommendedSeconds > 0) {
+        const nextIntervalMs = Math.max(5000, Math.trunc(recommendedSeconds * 1000));
+        setThreadsRefreshIntervalMs((current) =>
+          current === nextIntervalMs ? current : nextIntervalMs,
+        );
+      }
+      setThreadItems((current) => {
+        if (!incoming.length) {
+          return [];
+        }
+        return mergeThreadLists(current, incoming);
+      });
+    } catch (error) {
+      console.error("[inbox] refresh threads failed", error);
+    } finally {
+      threadsRefreshingRef.current = false;
+    }
+  }, [buildThreadsParams]);
+
   React.useEffect(() => {
     let cancelled = false;
-
-    async function refreshThreads() {
-      if (typeof document !== "undefined" && document.hidden) return;
-      if (threadsRefreshingRef.current) return;
-      threadsRefreshingRef.current = true;
-      try {
-        const params = buildThreadsParams({ offset: 0, enrich: false });
-        params.set("include_summary", "false");
-        params.set("include_filter_options", "false");
-        const response = await fetch(`/api/inbox/bootstrap?${params.toString()}`, {
-          cache: "no-store",
-        });
-        if (!response.ok) {
-          return;
-        }
-        const data = (await response.json()) as {
-          threads?: InboxThread[];
-          total_threads?: number;
-          runtime_profile?: { recommended_threads_poll_seconds?: number };
-        };
-        const incoming = Array.isArray(data?.threads) ? (data.threads as InboxThread[]) : [];
-        if (typeof data?.total_threads === "number") {
-          setTotalThreads(Math.max(0, data.total_threads));
-        }
-        const recommendedSeconds = Number(data?.runtime_profile?.recommended_threads_poll_seconds);
-        if (Number.isFinite(recommendedSeconds) && recommendedSeconds > 0) {
-          const nextIntervalMs = Math.max(5000, Math.trunc(recommendedSeconds * 1000));
-          setThreadsRefreshIntervalMs((current) =>
-            current === nextIntervalMs ? current : nextIntervalMs,
-          );
-        }
-        setThreadItems((current) => {
-          if (!incoming.length) {
-            return [];
-          }
-          return mergeThreadLists(current, incoming);
-        });
-      } catch (error) {
-        console.error("[inbox] refresh threads failed", error);
-      } finally {
-        threadsRefreshingRef.current = false;
-      }
-    }
-
-    refreshThreads();
+    void refreshThreads();
     const interval = setInterval(() => {
-      if (!cancelled) {
-        refreshThreads();
+      if (cancelled || inboxStreamConnectedRef.current) {
+        return;
       }
+      void refreshThreads();
     }, threadsRefreshIntervalMs);
-
     return () => {
       cancelled = true;
       clearInterval(interval);
       threadsRefreshingRef.current = false;
     };
-  }, [buildThreadsParams, threadsRefreshIntervalMs]);
+  }, [refreshThreads, threadsRefreshIntervalMs]);
+
+  React.useEffect(() => {
+    if (typeof window === "undefined") {
+      return undefined;
+    }
+    let closed = false;
+    const stream = new EventSource("/api/inbox/stream");
+    inboxStreamRef.current = stream;
+    const scheduleRefresh = () => {
+      if (closed) return;
+      if (inboxStreamRefreshTimeoutRef.current !== null) {
+        window.clearTimeout(inboxStreamRefreshTimeoutRef.current);
+      }
+      inboxStreamRefreshTimeoutRef.current = window.setTimeout(() => {
+        inboxStreamRefreshTimeoutRef.current = null;
+        void refreshThreads();
+      }, INBOX_STREAM_REFRESH_DEBOUNCE_MS);
+    };
+
+    stream.onopen = () => {
+      inboxStreamConnectedRef.current = true;
+    };
+    stream.onerror = () => {
+      inboxStreamConnectedRef.current = false;
+    };
+    stream.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data) as { type?: string };
+        const eventType = (data?.type ?? "").toLowerCase();
+        if (!eventType || eventType === "ping" || eventType === "connected") {
+          return;
+        }
+      } catch {
+        // si no parsea, de todos modos refresca para no perder invalidaciones
+      }
+      scheduleRefresh();
+    };
+
+    return () => {
+      closed = true;
+      inboxStreamConnectedRef.current = false;
+      if (inboxStreamRefreshTimeoutRef.current !== null) {
+        window.clearTimeout(inboxStreamRefreshTimeoutRef.current);
+        inboxStreamRefreshTimeoutRef.current = null;
+      }
+      stream.close();
+      if (inboxStreamRef.current === stream) {
+        inboxStreamRef.current = null;
+      }
+    };
+  }, [refreshThreads]);
 
   const handleLoadMoreThreads = React.useCallback(async () => {
     if (loadingMoreThreads) return;

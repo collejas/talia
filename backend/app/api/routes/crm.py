@@ -100,6 +100,11 @@ from app.services.metrics import metrics as contact_metrics
 from app.services.prospeccion_whatsapp_atribucion import resolve_first_matching_rule
 from app.services.prospeccion_contact_sender import contact_sender
 from app.services.prospeccion_progress import progress_hub
+from app.services.ui_realtime_hub import (
+    inbox_topic_for_org,
+    prospectos_topic_for_org,
+    ui_realtime_hub,
+)
 from app.services.timezone_resolver import local_date_range_to_utc, resolve_timezone_zoneinfo
 from app.services.storage import StorageError
 from app.logging.catalog_debug import write_catalog_debug_entry
@@ -6306,6 +6311,46 @@ async def _list_batch_envios_all(
 
 def _sse_payload(data: dict[str, Any]) -> str:
     return f"data: {json.dumps(data)}\n\n"
+
+
+async def _publish_inbox_ui_event(
+    *,
+    organizacion_id: UUID,
+    event_type: str,
+    payload: dict[str, Any] | None = None,
+) -> None:
+    event_payload = {
+        "type": event_type,
+        "scope": "inbox",
+        "organizacion_id": str(organizacion_id),
+        "at": datetime.now(timezone.utc).isoformat(),
+    }
+    if isinstance(payload, dict) and payload:
+        event_payload["payload"] = payload
+    await ui_realtime_hub.publish(
+        inbox_topic_for_org(organizacion_id=str(organizacion_id)),
+        event_payload,
+    )
+
+
+async def _publish_prospectos_ui_event(
+    *,
+    organizacion_id: UUID,
+    event_type: str,
+    payload: dict[str, Any] | None = None,
+) -> None:
+    event_payload = {
+        "type": event_type,
+        "scope": "prospeccion_prospectos",
+        "organizacion_id": str(organizacion_id),
+        "at": datetime.now(timezone.utc).isoformat(),
+    }
+    if isinstance(payload, dict) and payload:
+        event_payload["payload"] = payload
+    await ui_realtime_hub.publish(
+        prospectos_topic_for_org(organizacion_id=str(organizacion_id)),
+        event_payload,
+    )
 
 
 def _build_contact_log_entry(
@@ -12646,6 +12691,45 @@ async def get_inbox_runtime_profile(
     }
 
 
+@router.get("/inbox/stream")
+async def stream_inbox_updates(
+    *,
+    _: str = Depends(require_permission("ver_inbox")),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+) -> StreamingResponse:
+    """Stream SSE para invalidaciones incrementales de Inbox."""
+
+    topic = inbox_topic_for_org(organizacion_id=str(organizacion_id))
+    queue = await ui_realtime_hub.subscribe(topic)
+
+    async def event_generator() -> Any:
+        try:
+            yield _sse_payload(
+                {
+                    "type": "connected",
+                    "scope": "inbox",
+                    "organizacion_id": str(organizacion_id),
+                    "at": datetime.now(timezone.utc).isoformat(),
+                }
+            )
+            while True:
+                try:
+                    event = await asyncio.wait_for(queue.get(), timeout=25)
+                except asyncio.TimeoutError:
+                    yield _sse_payload({"type": "ping", "scope": "inbox"})
+                    continue
+                yield _sse_payload(event)
+        finally:
+            await ui_realtime_hub.unsubscribe(topic, queue)
+
+    headers = {
+        "Cache-Control": "no-cache",
+        "Content-Type": "text/event-stream",
+        "Connection": "keep-alive",
+    }
+    return StreamingResponse(event_generator(), media_type="text/event-stream", headers=headers)
+
+
 @router.get("/inbox/bootstrap")
 async def get_inbox_bootstrap(
     *,
@@ -16800,6 +16884,45 @@ async def listar_prospectos_bootstrap(
     }
 
 
+@router.get("/prospeccion/prospectos/stream")
+async def stream_prospectos_updates(
+    *,
+    _: str = Depends(require_permission("ejecutar_busquedas")),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+) -> StreamingResponse:
+    """Stream SSE para invalidaciones incrementales de vista Prospectos."""
+
+    topic = prospectos_topic_for_org(organizacion_id=str(organizacion_id))
+    queue = await ui_realtime_hub.subscribe(topic)
+
+    async def event_generator() -> Any:
+        try:
+            yield _sse_payload(
+                {
+                    "type": "connected",
+                    "scope": "prospeccion_prospectos",
+                    "organizacion_id": str(organizacion_id),
+                    "at": datetime.now(timezone.utc).isoformat(),
+                }
+            )
+            while True:
+                try:
+                    event = await asyncio.wait_for(queue.get(), timeout=25)
+                except asyncio.TimeoutError:
+                    yield _sse_payload({"type": "ping", "scope": "prospeccion_prospectos"})
+                    continue
+                yield _sse_payload(event)
+        finally:
+            await ui_realtime_hub.unsubscribe(topic, queue)
+
+    headers = {
+        "Cache-Control": "no-cache",
+        "Content-Type": "text/event-stream",
+        "Connection": "keep-alive",
+    }
+    return StreamingResponse(event_generator(), media_type="text/event-stream", headers=headers)
+
+
 @router.get("/prospeccion/prospectos/preferences")
 async def obtener_preferencias_tabla_prospectos(
     *,
@@ -19446,6 +19569,15 @@ async def convertir_prospecto_contacto(
     response: dict[str, Any] = {"ok": True, "prospecto": updated, "contacto": contacto}
     if oportunidad:
         response["oportunidad"] = oportunidad
+    await _publish_prospectos_ui_event(
+        organizacion_id=organizacion_id,
+        event_type="prospecto_converted",
+        payload={
+            "prospecto_id": str(prospecto_id),
+            "contacto_id": str(contacto_id) if contacto_id else None,
+            "oportunidad_id": str(oportunidad_id) if oportunidad_id else None,
+        },
+    )
     return response
 
 
@@ -19455,6 +19587,7 @@ async def guardar_prospectos(
     repo: CRMRepository = Depends(get_repository),
     _: str = Depends(require_permission("ejecutar_busquedas")),
     user_token: str = Depends(require_user_token),
+    organizacion_id: UUID = Depends(require_organizacion_id),
     payload: ProspectoSeleccionPayload,
 ) -> dict[str, Any]:
     """Persiste IDs seleccionados de búsquedas en la tabla de prospectos."""
@@ -19486,6 +19619,14 @@ async def guardar_prospectos(
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     await _clear_prospecto_queries_cache()
+    await _publish_prospectos_ui_event(
+        organizacion_id=organizacion_id,
+        event_type="prospectos_saved",
+        payload={
+            "total": len(prospectos),
+            "fuente": payload.fuente,
+        },
+    )
 
     return {
         "ok": True,
@@ -19502,6 +19643,7 @@ async def crear_prospecto_manual(
     repo: CRMRepository = Depends(get_repository),
     _: str = Depends(require_permission("ejecutar_busquedas")),
     user_token: str = Depends(require_user_token),
+    organizacion_id: UUID = Depends(require_organizacion_id),
     payload: ProspectoManualPayload,
 ) -> dict[str, Any]:
     """Crea un prospecto manual etiquetado como fuente usuario."""
@@ -19523,6 +19665,11 @@ async def crear_prospecto_manual(
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     await _clear_prospecto_queries_cache()
+    await _publish_prospectos_ui_event(
+        organizacion_id=organizacion_id,
+        event_type="prospecto_created",
+        payload={"prospecto_id": str(prospecto.get("id") or "")},
+    )
 
     return {"ok": True, "prospecto": prospecto}
 
@@ -19533,6 +19680,7 @@ async def actualizar_prospecto(
     repo: CRMRepository = Depends(get_repository),
     _: str = Depends(require_permission("ejecutar_busquedas")),
     user_token: str = Depends(require_user_token),
+    organizacion_id: UUID = Depends(require_organizacion_id),
     prospecto_id: UUID,
     payload: ProspectoUpdatePayload,
 ) -> dict[str, Any]:
@@ -19553,6 +19701,11 @@ async def actualizar_prospecto(
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     await _clear_prospecto_queries_cache()
+    await _publish_prospectos_ui_event(
+        organizacion_id=organizacion_id,
+        event_type="prospecto_updated",
+        payload={"prospecto_id": str(prospecto_id)},
+    )
 
     return {"ok": True, "prospecto": updated}
 
@@ -19563,6 +19716,7 @@ async def eliminar_prospecto(
     repo: CRMRepository = Depends(get_repository),
     _: str = Depends(require_permission("ejecutar_busquedas")),
     user_token: str = Depends(require_user_token),
+    organizacion_id: UUID = Depends(require_organizacion_id),
     prospecto_id: UUID,
 ) -> dict[str, Any]:
     """Elimina un prospecto manual o importado y registra auditoría vía trigger."""
@@ -19580,6 +19734,11 @@ async def eliminar_prospecto(
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     await _clear_prospecto_queries_cache()
+    await _publish_prospectos_ui_event(
+        organizacion_id=organizacion_id,
+        event_type="prospecto_deleted",
+        payload={"prospecto_id": str(prospecto_id)},
+    )
 
     return {"ok": True, "prospecto_id": str(prospecto_id)}
 
@@ -19590,6 +19749,7 @@ async def eliminar_prospectos(
     repo: CRMRepository = Depends(get_repository),
     _: str = Depends(require_permission("ejecutar_busquedas")),
     user_token: str = Depends(require_user_token),
+    organizacion_id: UUID = Depends(require_organizacion_id),
     payload: ProspectoDeletePayload,
 ) -> dict[str, Any]:
     """Elimina prospectos en bloque y registra auditoría vía trigger."""
@@ -19602,6 +19762,11 @@ async def eliminar_prospectos(
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     await _clear_prospecto_queries_cache()
+    await _publish_prospectos_ui_event(
+        organizacion_id=organizacion_id,
+        event_type="prospectos_deleted",
+        payload={"total": len(deleted_ids)},
+    )
 
     return {"ok": True, "prospecto_ids": [str(value) for value in deleted_ids]}
 
@@ -19612,6 +19777,7 @@ async def verificar_prospectos(
     repo: CRMRepository = Depends(get_repository),
     _: str = Depends(require_permission("ejecutar_busquedas")),
     user_token: str = Depends(require_user_token),
+    organizacion_id: UUID = Depends(require_organizacion_id),
     payload: ProspectoLookupPayload,
 ) -> dict[str, Any]:
     """Verifica los teléfonos de prospectos con proveedor configurable."""
@@ -19676,6 +19842,11 @@ async def verificar_prospectos(
         )
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
+    await _publish_prospectos_ui_event(
+        organizacion_id=organizacion_id,
+        event_type="prospectos_lookup_updated",
+        payload={"procesados": len(processed)},
+    )
 
     return {"ok": True, "procesados": len(processed), "detalles": processed}
 
@@ -19686,6 +19857,7 @@ async def prospeccion_checklist_lookup(
     repo: CRMRepository = Depends(get_repository),
     _: str = Depends(require_permission("ejecutar_busquedas")),
     user_token: str = Depends(require_user_token),
+    organizacion_id: UUID = Depends(require_organizacion_id),
     payload: ProspectoChecklistLookupPayload,
 ) -> dict[str, Any]:
     """Acción automática: ejecuta verificación telefónica sobre pendientes del checklist."""
@@ -19751,6 +19923,11 @@ async def prospeccion_checklist_lookup(
         )
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
+    await _publish_prospectos_ui_event(
+        organizacion_id=organizacion_id,
+        event_type="prospectos_checklist_lookup_updated",
+        payload={"procesados": len(processed)},
+    )
 
     return {
         "ok": True,
@@ -19767,6 +19944,7 @@ async def prospeccion_checklist_scraper(
     _: str = Depends(require_permission("ejecutar_busquedas")),
     user_token: str = Depends(require_user_token),
     usuario_id: UUID | None = Depends(optional_usuario_id),
+    organizacion_id: UUID = Depends(require_organizacion_id),
     payload: ProspectoChecklistScraperPayload,
 ) -> dict[str, Any]:
     """Dispara jobs del buscador web para prospectos sin correo pero con sitio web."""
@@ -19837,6 +20015,12 @@ async def prospeccion_checklist_scraper(
 
         BUSCADOR_JOB_MANAGER.schedule_job(repo=repo, job_row=job_row, params=params)
         jobs.append(_job_row_to_response(job_row))
+
+    await _publish_prospectos_ui_event(
+        organizacion_id=organizacion_id,
+        event_type="prospectos_checklist_scraper_scheduled",
+        payload={"programados": len(jobs)},
+    )
 
     return {"ok": True, "jobs": jobs, "programados": len(jobs)}
 
@@ -20107,6 +20291,15 @@ async def contactar_prospectos(
 
     resumen = _build_contact_resumen(envios)
     contact_sender.notify_new_envios()
+    await _publish_prospectos_ui_event(
+        organizacion_id=organizacion_id,
+        event_type="prospectos_contact_batch_created",
+        payload={
+            "batch_id": str(batch_id),
+            "envios": len(envios),
+            "prospectos": total_prospectos,
+        },
+    )
 
     response: dict[str, Any] = {"ok": True, "batch_id": str(batch_id), "contactos": resumen}
     if omitidos:

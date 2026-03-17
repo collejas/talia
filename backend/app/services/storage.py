@@ -21,6 +21,7 @@ from app.services.scoring_contract import (
 )
 from app.services.phone_utils import normalize_phone
 from app.services import tenant_runtime
+from app.services.ui_realtime_hub import inbox_topic_for_org, ui_realtime_hub
 
 logger = get_logger(__name__)
 
@@ -29,6 +30,29 @@ DEFAULT_CALENDAR_SETTINGS_SLUG = "default"
 
 class StorageError(RuntimeError):
     """Errores de persistencia para servicios externos."""
+
+
+async def _publish_inbox_realtime_event(
+    *,
+    organizacion_id: str | None,
+    event_type: str,
+    payload: dict[str, Any] | None = None,
+) -> None:
+    org_value = str(organizacion_id or "").strip()
+    if not org_value:
+        return
+    message = {
+        "type": event_type,
+        "scope": "inbox",
+        "organizacion_id": org_value,
+        "at": datetime.now(timezone.utc).isoformat(),
+    }
+    if isinstance(payload, dict) and payload:
+        message["payload"] = payload
+    await ui_realtime_hub.publish(
+        inbox_topic_for_org(organizacion_id=org_value),
+        message,
+    )
 
 
 def _ensure_dict(value: Any) -> dict[str, Any]:
@@ -1060,6 +1084,24 @@ async def register_webchat_message(
                 "storage.webchat_channel_patch_failed",
                 extra={"conversation_id": conversation_id, "error": str(exc)},
             )
+    try:
+        await _publish_inbox_realtime_event(
+            organizacion_id=str(
+                result.get("organizacion_id")
+                or organizacion_id
+                or (metadata or {}).get("resolved_organizacion_id")
+                or ""
+            ),
+            event_type="inbox_message_created",
+            payload={
+                "channel": "webchat",
+                "conversation_id": str(result.get("conversation_id") or ""),
+                "contact_id": str(result.get("contact_id") or ""),
+                "author": str(author or ""),
+            },
+        )
+    except Exception:
+        pass
     return result
 
 
@@ -1198,6 +1240,24 @@ async def register_whatsapp_message(
                 "storage.whatsapp_profile_name_normalization_failed",
                 extra={"contact_id": contact_id_value, "error": str(exc)},
             )
+    try:
+        await _publish_inbox_realtime_event(
+            organizacion_id=str(
+                result.get("organizacion_id")
+                or organizacion_id
+                or metadata_payload.get("resolved_organizacion_id")
+                or ""
+            ),
+            event_type="inbox_message_created",
+            payload={
+                "channel": "whatsapp",
+                "conversation_id": str(result.get("conversation_id") or ""),
+                "contact_id": str(result.get("contact_id") or ""),
+                "direction": str(direction),
+            },
+        )
+    except Exception:
+        pass
     return result
 
 
@@ -1246,6 +1306,24 @@ async def register_messenger_message(
                 "storage.messenger_channel_patch_failed",
                 extra={"conversation_id": conversation_id, "error": str(exc)},
             )
+    try:
+        await _publish_inbox_realtime_event(
+            organizacion_id=str(
+                result.get("organizacion_id")
+                or organizacion_id
+                or metadata_payload.get("resolved_organizacion_id")
+                or ""
+            ),
+            event_type="inbox_message_created",
+            payload={
+                "channel": "messenger",
+                "conversation_id": str(result.get("conversation_id") or ""),
+                "contact_id": str(result.get("contact_id") or ""),
+                "direction": str(direction),
+            },
+        )
+    except Exception:
+        pass
     return result
 
 
