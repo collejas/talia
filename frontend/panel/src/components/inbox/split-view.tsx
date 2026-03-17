@@ -29,7 +29,8 @@ import type { DateFilterOption } from "@/components/inbox/toolbar";
 import { matchesReengageFilter } from "@/lib/inbox/reengage-filter";
 
 const THREADS_REFRESH_INTERVAL_MS = 12000;
-const MESSAGES_REFRESH_INTERVAL_MS = 1500;
+const MESSAGES_POLL_INITIAL_MS = 3500;
+const MESSAGES_POLL_MAX_MS = 15000;
 const THREADS_PAGE_SIZE = 100;
 const INBOX_STREAM_REFRESH_DEBOUNCE_MS = 400;
 
@@ -616,7 +617,7 @@ export function InboxSplitView({
     THREADS_REFRESH_INTERVAL_MS,
   );
   const [loadingMoreThreads, setLoadingMoreThreads] = React.useState(false);
-  const [selectedId, setSelectedId] = React.useState<string | null>(threads[0]?.id ?? null);
+  const [selectedId, setSelectedId] = React.useState<string | null>(null);
   const [searchTerm] = React.useState("");
   const [sending, setSending] = React.useState(false);
   const [sendError, setSendError] = React.useState<string | null>(null);
@@ -627,7 +628,7 @@ export function InboxSplitView({
   const [promoteDialogOpen, setPromoteDialogOpen] = React.useState(false);
   const [promoteForm, setPromoteForm] = React.useState<InboxPromoteFormState | null>(null);
   const [promoteFormError, setPromoteFormError] = React.useState<string | null>(null);
-  const [currentMessages, setCurrentMessages] = React.useState<InboxMessage[]>(threads[0]?.messages ?? []);
+  const [currentMessages, setCurrentMessages] = React.useState<InboxMessage[]>([]);
   const [pendingAttachments, setPendingAttachments] = React.useState<PendingAttachment[]>([]);
   const [uploadingAttachments, setUploadingAttachments] = React.useState(false);
   const [attachmentError, setAttachmentError] = React.useState<string | null>(null);
@@ -640,6 +641,7 @@ export function InboxSplitView({
   const messagesRefreshingRef = React.useRef<string | null>(null);
   const messagesContainerRef = React.useRef<HTMLDivElement | null>(null);
   const messagesPollingTimeoutRef = React.useRef<number | null>(null);
+  const messagesPollingDelayRef = React.useRef<number>(MESSAGES_POLL_INITIAL_MS);
   const lastMessagesFingerprintRef = React.useRef<string>("");
   const previousSelectedIdRef = React.useRef<string | null>(null);
   const inboxStreamRef = React.useRef<EventSource | null>(null);
@@ -958,6 +960,39 @@ export function InboxSplitView({
     [sourceFilter, channelFilter, estadoFilter, batchFilter, campanaFilter, dateFilter],
   );
 
+  const buildThreadDetailParams = React.useCallback(
+    ({ threadOffset }: { threadOffset: number }) => {
+      const params = new URLSearchParams({
+        message_limit: "20",
+        thread_offset: String(Math.max(0, threadOffset)),
+      });
+      const normalizedSource = sourceFilter ? sourceFilter.toLowerCase() : "";
+      if (normalizedSource && normalizedSource !== "all" && normalizedSource !== "correo_general") {
+        params.set("source", normalizedSource);
+      }
+      if (normalizedSource === "correo_general") {
+        params.set("channel", "correo");
+      }
+      if (channelFilter && channelFilter !== "all") {
+        params.set("channel", channelFilter);
+      }
+      if (estadoFilter) {
+        params.set("estado", estadoFilter);
+      }
+      if (batchFilter) {
+        params.set("batch_id", batchFilter);
+      }
+      if (campanaFilter) {
+        params.set("campana_id", campanaFilter);
+      }
+      if (dateFilter && dateFilter !== "all") {
+        params.set("date", dateFilter);
+      }
+      return params;
+    },
+    [sourceFilter, channelFilter, estadoFilter, batchFilter, campanaFilter, dateFilter],
+  );
+
   const needsThreadEnrichment = React.useCallback((thread: InboxThread | null | undefined): boolean => {
     if (!thread) return false;
     const normalizedSource = (thread.source ?? "").toLowerCase();
@@ -1145,27 +1180,24 @@ export function InboxSplitView({
       return undefined;
     }
     const selectedIndex = threadItems.findIndex((thread) => thread.id === targetThreadId);
-    const pageOffset =
-      selectedIndex >= 0
-        ? Math.floor(selectedIndex / THREADS_PAGE_SIZE) * THREADS_PAGE_SIZE
-        : 0;
+    const threadOffset = selectedIndex >= 0 ? selectedIndex : 0;
 
     async function hydrateSelectedThread() {
       threadEnrichmentRef.current = true;
       try {
-        const params = buildThreadsParams({ offset: pageOffset, enrich: true });
-        const response = await fetch(`/api/inbox/threads?${params.toString()}`, {
+        const params = buildThreadDetailParams({ threadOffset });
+        const response = await fetch(`/api/inbox/${targetThreadId}/detail?${params.toString()}`, {
           cache: "no-store",
         });
         if (!response.ok) {
           return;
         }
-        const data = (await response.json()) as { threads?: InboxThread[] };
-        const incoming = Array.isArray(data?.threads) ? (data.threads as InboxThread[]) : [];
-        if (!incoming.length || cancelled) {
+        const data = (await response.json()) as { thread?: InboxThread | null };
+        const detailThread = data?.thread ?? null;
+        if (!detailThread || cancelled) {
           return;
         }
-        setThreadItems((current) => mergeThreadLists(current, incoming));
+        setThreadItems((current) => mergeThreadLists(current, [detailThread]));
         threadEnrichedOnceRef.current.add(targetThreadId);
         if (threadEnrichedOnceRef.current.size > 512) {
           const oldestKey = threadEnrichedOnceRef.current.values().next().value;
@@ -1184,7 +1216,7 @@ export function InboxSplitView({
     return () => {
       cancelled = true;
     };
-  }, [selectedThread?.id, threadItems, needsThreadEnrichment, buildThreadsParams]);
+  }, [selectedThread?.id, threadItems, needsThreadEnrichment, buildThreadDetailParams]);
 
   const handleSelectThread = React.useCallback((threadId: string) => {
     hasExplicitThreadSelectionRef.current = true;
@@ -1203,18 +1235,34 @@ export function InboxSplitView({
 
       messagesRefreshingRef.current = conversationId;
       try {
+        if (typeof document !== "undefined" && document.hidden) {
+          messagesPollingDelayRef.current = Math.min(
+            MESSAGES_POLL_MAX_MS,
+            Math.trunc(messagesPollingDelayRef.current * 1.5),
+          );
+          return;
+        }
         const response = await fetch(`/api/inbox/${conversationId}/messages?limit=100`, {
           cache: "no-store",
         });
         if (!response.ok) {
+          messagesPollingDelayRef.current = Math.min(
+            MESSAGES_POLL_MAX_MS,
+            Math.trunc(messagesPollingDelayRef.current * 1.5),
+          );
           return;
         }
         const payload = (await response.json()) as { messages?: InboxMessage[] };
         const messages = Array.isArray(payload?.messages) ? (payload.messages as InboxMessage[]) : [];
         const fingerprint = fingerprintMessages(messages);
         if (!options.force && fingerprint === lastMessagesFingerprintRef.current) {
+          messagesPollingDelayRef.current = Math.min(
+            MESSAGES_POLL_MAX_MS,
+            Math.trunc(messagesPollingDelayRef.current * 1.35),
+          );
           return;
         }
+        messagesPollingDelayRef.current = MESSAGES_POLL_INITIAL_MS;
         lastMessagesFingerprintRef.current = fingerprint;
         setCurrentMessages(messages);
         setThreadItems((current) =>
@@ -1346,15 +1394,20 @@ export function InboxSplitView({
       if (cancelled || typeof window === "undefined") {
         return;
       }
+      const nextDelayMs = Math.max(
+        MESSAGES_POLL_INITIAL_MS,
+        Math.min(MESSAGES_POLL_MAX_MS, messagesPollingDelayRef.current),
+      );
       messagesPollingTimeoutRef.current = window.setTimeout(() => {
         void refreshMessages(selectedConversationId, { force: false }).finally(() => {
           if (!cancelled) {
             scheduleNext();
           }
         });
-      }, MESSAGES_REFRESH_INTERVAL_MS);
+      }, nextDelayMs);
     };
 
+    messagesPollingDelayRef.current = MESSAGES_POLL_INITIAL_MS;
     void refreshMessages(selectedConversationId, { force: true }).finally(() => {
       if (!cancelled) {
         scheduleNext();

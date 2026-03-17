@@ -12865,6 +12865,51 @@ async def get_inbox_bootstrap(
     }
 
 
+@router.get("/inbox/conversations/{conversacion_id}/detail", response_model=CRMInboxThread)
+async def get_inbox_conversation_detail(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    _: str = Depends(require_permission("ver_inbox")),
+    user_token: str = Depends(require_user_token),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    usuario_id: UUID | None = Depends(optional_usuario_id),
+    conversacion_id: UUID,
+    estado: str | None = Query(default=None, max_length=50),
+    source: str | None = Query(default=None, max_length=80),
+    channel: str | None = Query(default=None, max_length=30),
+    date: str | None = Query(default=None, max_length=20),
+    batch_id: UUID | None = Query(default=None),
+    campana_id: UUID | None = Query(default=None),
+    asignado_id: UUID | None = Query(default=None),
+    thread_offset: Annotated[int, Query(ge=0)] = 0,
+    message_limit: Annotated[int, Query(ge=1, le=50)] = 20,
+) -> CRMInboxThread:
+    threads = await get_inbox_threads(
+        repo=repo,
+        _="",
+        user_token=user_token,
+        organizacion_id=organizacion_id,
+        usuario_id=usuario_id,
+        estado=estado,
+        source=source,
+        channel=channel,
+        date=date,
+        batch_id=batch_id,
+        campana_id=campana_id,
+        asignado_id=asignado_id,
+        limit=1,
+        offset=thread_offset,
+        message_limit=message_limit,
+        enrich=True,
+    )
+    if not threads:
+        raise HTTPException(status_code=404, detail="inbox_thread_detail_not_found")
+    thread = threads[0]
+    if thread.conversacion_id != conversacion_id:
+        raise HTTPException(status_code=404, detail="inbox_thread_detail_not_found")
+    return thread
+
+
 @router.get("/inbox/messages/{conversacion_id}", response_model=list[CRMInboxMessage])
 async def get_inbox_messages(
     *,
