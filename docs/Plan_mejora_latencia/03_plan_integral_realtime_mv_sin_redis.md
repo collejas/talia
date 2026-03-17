@@ -302,3 +302,20 @@ Se considera completado cuando por 7 días consecutivos:
       - lookup batch por teléfonos (`worker_get_latest_envios_by_phones`) para resolver hints en una sola pasada,
       - fallback individual sólo para teléfonos no resueltos por batch.
     - Validación: `python3 -m py_compile backend/app/repositories/crm.py backend/app/api/routes/crm.py` ✅
+  - Fase 2/3 continuada (SQL tuning + mapa):
+    - Migración nueva: `20260317_223000_inbox_lookup_mapa_indexes.sql`
+      - RPC nueva `prospeccion_latest_envios_by_phones(text[], text)` para resolver último envío por teléfono en 1 llamada SQL por chunk.
+      - Índices nuevos:
+        - `idx_prospeccion_contacto_envio_phone_canal_procesado`
+        - `idx_mensajes_org_session_id_creado`
+        - `idx_mensajes_session_id_creado`
+        - `idx_webchat_visitantes_org_ultimo_evento`
+        - `idx_conversaciones_org_canal_ultimo`
+    - Backend repo:
+      - `worker_get_latest_envios_by_phones` ahora usa RPC batch como ruta primaria y conserva fallback legacy.
+      - corregido `select` legacy removiendo `campana_id` (columna inexistente en `prospeccion_contacto_envio`), evitando fallas silenciosas del lookup batch.
+    - Validación post-migración (`EXPLAIN ANALYZE`):
+      - `prospeccion_latest_envios_by_phones(...)` ~6.2 ms.
+      - agregado de mensajes por `session_id`: usa índice `idx_mensajes_org_session_id_creado`.
+      - `panel_visitantes_geo_resumen_v2(...)`: ~112.9 ms -> ~46.3 ms.
+      - `panel_webchat_visitas_detalle(...)`: ~50.0 ms -> ~22.6 ms.

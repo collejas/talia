@@ -11513,6 +11513,53 @@ class CRMRepository:
         if not normalized_phones:
             return {}
 
+        # Ruta principal: resolver en SQL (1 RPC por chunk) y evitar escaneo paginado
+        # de PostgREST para cada bloque de telefonos.
+        resolved: dict[str, dict[str, Any]] = {}
+        rpc_chunk_size = 400
+        rpc_canal = canal.strip().lower() if isinstance(canal, str) and canal.strip() else None
+
+        try:
+            for start in range(0, len(normalized_phones), rpc_chunk_size):
+                chunk = normalized_phones[start : start + rpc_chunk_size]
+                data = await self._rpc(
+                    "prospeccion_latest_envios_by_phones",
+                    {
+                        "p_phone_values": chunk,
+                        "p_canal": rpc_canal,
+                    },
+                )
+                if not isinstance(data, list):
+                    raise CRMRepositoryError(
+                        f"worker_get_latest_envios_by_phones_rpc_invalid:{data!r}"
+                    )
+                for row in data:
+                    if not isinstance(row, dict):
+                        continue
+                    phone = str(row.get("phone") or "").strip()
+                    if not phone:
+                        detalle = row.get("detalle") if isinstance(row.get("detalle"), dict) else {}
+                        phone = str(detalle.get("phone") or "").strip()
+                    if not phone:
+                        continue
+                    resolved[phone] = row
+            return resolved
+        except CRMRepositoryError:
+            # Fallback defensivo legacy para mantener compatibilidad si la RPC no existe
+            # o falla temporalmente.
+            pass
+
+        return await self._worker_get_latest_envios_by_phones_legacy(
+            normalized_phones=normalized_phones,
+            canal=canal,
+        )
+
+    async def _worker_get_latest_envios_by_phones_legacy(
+        self,
+        *,
+        normalized_phones: list[str],
+        canal: str | None = None,
+    ) -> dict[str, dict[str, Any]]:
         resolved: dict[str, dict[str, Any]] = {}
         chunk_size = 100
         max_scan_rows = 5000
@@ -11525,7 +11572,7 @@ class CRMRepository:
 
             while unresolved_chunk and offset < max_scan_rows:
                 params: dict[str, str] = {
-                    "select": "id,batch_id,campana_id,payload,detalle,procesado_en,creado_en,canal",
+                    "select": "id,batch_id,payload,detalle,procesado_en,creado_en,canal",
                     "detalle->>phone": _postgrest_in_clause(chunk),
                     "order": "procesado_en.desc.nullslast,creado_en.desc",
                     "limit": str(page_size),
