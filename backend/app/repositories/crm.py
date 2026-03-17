@@ -301,6 +301,104 @@ def _row_matches_geo_filters(
     return True
 
 
+def _build_geo_postgrest_filters(
+    *,
+    geo_estado: str | None = None,
+    geo_municipio: str | None = None,
+) -> list[str]:
+    """Build PostgREST-compatible geo filters to avoid backend full scans."""
+
+    filters: list[str] = []
+    state_code: str | None = None
+
+    if geo_estado:
+        raw_state = str(geo_estado).strip()
+        state_digits = _digits_only(raw_state)
+        if state_digits:
+            state_code = state_digits[-2:].zfill(2)
+
+        state_name_candidates: list[str] = []
+        if state_code:
+            state_name_candidates.extend(_search_variants(get_state_name(state_code)))
+        state_name_candidates.extend(_search_variants(raw_state))
+
+        state_conditions: list[str] = []
+        if state_code:
+            state_code_literal = _postgrest_eq_literal(state_code)
+            for key in (
+                "metadata->>estado_cve",
+                "metadata->>cve_ent",
+                "metadata->ubicacion->>estado_cve",
+                "metadata->busqueda_meta->ubicacion->>estado_cve",
+            ):
+                state_conditions.append(f"{key}.eq.{state_code_literal}")
+
+        seen_state_names: set[str] = set()
+        for candidate in state_name_candidates:
+            normalized = candidate.strip().casefold()
+            if not normalized or normalized in seen_state_names:
+                continue
+            seen_state_names.add(normalized)
+            literal = _postgrest_ilike_literal(candidate)
+            for key in (
+                "metadata->>estado",
+                "metadata->>estado_nombre",
+                "metadata->>nom_ent",
+                "metadata->ubicacion->>estado",
+                "metadata->busqueda_meta->ubicacion->>estado",
+                "address",
+            ):
+                state_conditions.append(f"{key}.ilike.{literal}")
+
+        if state_conditions:
+            filters.append(f"or({','.join(state_conditions)})")
+
+    if geo_municipio:
+        raw_municipality = str(geo_municipio).strip()
+        municipality_digits = _digits_only(raw_municipality)
+        municipality_code = municipality_digits[-3:].zfill(3) if municipality_digits else None
+
+        municipality_name_candidates: list[str] = []
+        if municipality_code:
+            municipality_name_candidates.extend(
+                _search_variants(get_municipality_name(state_code, municipality_code))
+            )
+        municipality_name_candidates.extend(_search_variants(raw_municipality))
+
+        municipality_conditions: list[str] = []
+        if municipality_code:
+            municipality_code_literal = _postgrest_eq_literal(municipality_code)
+            for key in (
+                "metadata->>municipio_cve",
+                "metadata->>cve_mun",
+                "metadata->ubicacion->>municipio_cve",
+                "metadata->busqueda_meta->ubicacion->>municipio_cve",
+            ):
+                municipality_conditions.append(f"{key}.eq.{municipality_code_literal}")
+
+        seen_municipality_names: set[str] = set()
+        for candidate in municipality_name_candidates:
+            normalized = candidate.strip().casefold()
+            if not normalized or normalized in seen_municipality_names:
+                continue
+            seen_municipality_names.add(normalized)
+            literal = _postgrest_ilike_literal(candidate)
+            for key in (
+                "metadata->>municipio",
+                "metadata->>municipio_nombre",
+                "metadata->>nom_mun",
+                "metadata->ubicacion->>municipio",
+                "metadata->busqueda_meta->ubicacion->>municipio",
+                "address",
+            ):
+                municipality_conditions.append(f"{key}.ilike.{literal}")
+
+        if municipality_conditions:
+            filters.append(f"or({','.join(municipality_conditions)})")
+
+    return filters
+
+
 def _coerce_positive_int(value: Any, default: int = 1) -> int:
     try:
         number = int(value)
@@ -8336,6 +8434,14 @@ class CRMRepository:
             if unique_activities:
                 params["actividad"] = _postgrest_in_clause(unique_activities)
 
+        geo_filters = _build_geo_postgrest_filters(
+            geo_estado=geo_estado,
+            geo_municipio=geo_municipio,
+        )
+        geo_filters_pushed = bool(geo_filters)
+        if geo_filters:
+            and_filters.extend(geo_filters)
+
         if and_filters:
             params["and"] = "(" + ",".join(and_filters) + ")"
 
@@ -8387,8 +8493,8 @@ class CRMRepository:
                     included_ids=include_ids,
                     limit=limit,
                     offset=offset,
-                    geo_estado=geo_estado,
-                    geo_municipio=geo_municipio,
+                    geo_estado=None if geo_filters_pushed else geo_estado,
+                    geo_municipio=None if geo_filters_pushed else geo_municipio,
                 )
             params["id"] = _postgrest_in_clause(sorted(include_ids))
         elif exclude_ids:
@@ -8398,11 +8504,11 @@ class CRMRepository:
                 excluded_ids=exclude_ids,
                 limit=limit,
                 offset=offset,
-                geo_estado=geo_estado,
-                geo_municipio=geo_municipio,
+                geo_estado=None if geo_filters_pushed else geo_estado,
+                geo_municipio=None if geo_filters_pushed else geo_municipio,
             )
 
-        if geo_estado or geo_municipio:
+        if (geo_estado or geo_municipio) and not geo_filters_pushed:
             return await self._list_prospectos_with_geo_scan(
                 usuario_token=usuario_token,
                 params=params,
@@ -8428,13 +8534,65 @@ class CRMRepository:
         else:
             total = len(data)
             # Fallback: algunos entornos no regresan content-range total con filtros complejos.
-            # Si la página viene llena, recalculamos el total real por escaneo paginado.
+            # Si la página viene llena, primero intentamos count exacto ligero (HEAD/GET limit=1)
+            # y solo al final caemos a escaneo paginado.
             if len(data) >= limit:
-                total = await self._count_prospectos_scan(
+                exact_total = await self._count_prospectos_exact(
                     usuario_token=usuario_token,
                     params=params,
                 )
+                if exact_total is not None:
+                    total = exact_total
+                else:
+                    total = await self._count_prospectos_scan(
+                        usuario_token=usuario_token,
+                        params=params,
+                    )
         return data, total
+
+    async def _count_prospectos_exact(
+        self,
+        *,
+        usuario_token: str,
+        params: dict[str, str],
+    ) -> int | None:
+        """Try exact count via PostgREST headers without scanning all rows."""
+
+        count_params = dict(params)
+        count_params["select"] = "id"
+        count_params["limit"] = "1"
+        count_params["offset"] = "0"
+        count_params.pop("order", None)
+
+        try:
+            head_resp = await self._request_with_user(
+                "HEAD",
+                "/rest/v1/prospeccion_prospectos",
+                token=usuario_token,
+                params=count_params,
+                prefer="count=exact",
+            )
+            total = self._extract_total_count(head_resp.headers.get("content-range"))
+            if total is not None:
+                return total
+        except CRMRepositoryError:
+            pass
+
+        try:
+            get_resp = await self._request_with_user(
+                "GET",
+                "/rest/v1/prospeccion_prospectos",
+                token=usuario_token,
+                params=count_params,
+                prefer="count=exact",
+            )
+            total = self._extract_total_count(get_resp.headers.get("content-range"))
+            if total is not None:
+                return total
+        except CRMRepositoryError:
+            return None
+
+        return None
 
     async def _count_prospectos_scan(
         self,

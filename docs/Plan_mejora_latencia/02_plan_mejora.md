@@ -76,6 +76,23 @@ Estado general: **Fase 1 implementada + Fase 2 iniciada (prospección)**.
   - Página de prospectos envía `includeScraperStatus: false` en carga inicial y paginación incremental.
   - Objetivo: recortar latencia de la lista principal y carga de CPU/DB en picos.
 
+### Avance adicional (2026-03-17) - Fase 2.2 Prospección
+
+- Repositorio `list_prospectos` (backend)
+  - Se implementó pushdown de filtros geo (`geo_estado`, `geo_municipio`) a PostgREST:
+    - condiciones por códigos (`estado_cve`, `cve_ent`, `municipio_cve`, `cve_mun`)
+    - condiciones por nombre sobre metadata y `address` con `ilike`
+  - El flujo evita entrar al `geo scan` Python en el caso normal.
+  - En ramas de include/exclude por IDs, cuando geo ya fue empujado a SQL se desactiva doble filtrado en Python.
+  - El fallback `geo scan` se conserva solo si no se logra construir filtros geo SQL.
+  - Fallback de totalizador optimizado:
+    - si falta `content-range`, primero intenta `count=exact` ligero (`HEAD`/`GET` con `limit=1`)
+    - solo si falla, mantiene escaneo paginado como último recurso.
+
+- Impacto esperado
+  - Menos loops paginados backend sobre `prospeccion_prospectos`.
+  - Menor CPU en app y menor presión general en picos de tráfico.
+
 ### Pendiente para cerrar Fase 1 al 100%
 
 - Medir 24h de resultados post-cambio y comparar:
