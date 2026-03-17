@@ -102,6 +102,14 @@ sudo cat /proc/$(pgrep -f "next start")/environ | tr '\0' '\n' | grep -E 'SUPABA
     '+5214441302811',
     '00000000-0000-0000-0000-000000000001'::uuid
   );
+
+  delete from public.oportunidades
+  where organizacion_id = '00000000-0000-0000-0000-000000000001'::uuid
+    and metadata->>'seed_batch' = 'seed_oportunidades_prueba_20260316_v2';
+
+  delete from public.contactos
+  where organizacion_id = '00000000-0000-0000-0000-000000000001'::uuid
+    and contacto_datos->>'seed_batch' = 'seed_oportunidades_prueba_20260316_v2';
   
 # GENERAR CONTRASENAS:
 python3 - <<'PY'
