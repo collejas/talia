@@ -40,6 +40,13 @@ Estado general: **Fase 1 implementada parcialmente (backend inbox)**.
     - reglas de atribución WhatsApp
   - Objetivo: reducir round-trips repetidos a Supabase por polling.
 
+- `inbox/threads` modo base rápido
+  - Se agregó query param `enrich` (default `true`).
+  - Con `enrich=false`, el endpoint omite enriquecimiento pesado y responde lista base más rápida.
+  - Restricción actual: para `source=publicidad_whatsapp` se requiere `enrich=true`.
+  - Log nuevo para este modo:
+    - `crm.inbox.threads.base_only`
+
 ### Verificación técnica
 
 - Validación sintáctica ejecutada:

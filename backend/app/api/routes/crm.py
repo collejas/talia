@@ -11467,6 +11467,7 @@ async def get_inbox_threads(
     limit: Annotated[int, Query(ge=1, le=200)] = 25,
     offset: Annotated[int, Query(ge=0)] = 0,
     message_limit: Annotated[int, Query(ge=1, le=50)] = 20,
+    enrich: bool = Query(default=True),
 ) -> list[CRMInboxThread]:
     request_start = time.perf_counter()
     stage_timings: dict[str, float] = {}
@@ -11498,6 +11499,7 @@ async def get_inbox_threads(
             "limit": limit,
             "offset": offset,
             "message_limit": message_limit,
+            "enrich": enrich,
         }
     )
     cache_lookup_start = time.perf_counter()
@@ -11523,6 +11525,7 @@ async def get_inbox_threads(
                 "has_campana": bool(campana_id),
                 "limit": limit,
                 "offset": offset,
+                "enrich": enrich,
                 "stages": stage_timings,
             },
         )
@@ -11558,11 +11561,43 @@ async def get_inbox_threads(
         "has_campana": bool(campana_id),
         "limit": limit,
         "offset": offset,
+        "enrich": enrich,
     }
     if duration_ms >= 700:
         logger.warning("crm.inbox.threads.slow_query", extra=log_payload)
     else:
         logger.info("crm.inbox.threads.query", extra=log_payload)
+
+    if source_requested == "publicidad_whatsapp" and not enrich:
+        raise HTTPException(
+            status_code=400,
+            detail="inbox_threads_enrich_required_for_publicidad_whatsapp",
+        )
+
+    if not enrich:
+        validate_start = time.perf_counter()
+        result_threads = [CRMInboxThread.model_validate(row) for row in rows]
+        stage_timings["model_validate_ms"] = round((time.perf_counter() - validate_start) * 1000, 2)
+        stage_timings["enrich_skipped"] = 1.0
+        cache_write_start = time.perf_counter()
+        await _write_inbox_threads_cache(cache_key, result_threads)
+        stage_timings["cache_write_ms"] = round((time.perf_counter() - cache_write_start) * 1000, 2)
+        total_duration_ms = (time.perf_counter() - request_start) * 1000
+        stage_timings["total_ms"] = round(total_duration_ms, 2)
+        await _record_inbox_threads_metrics(duration_ms=total_duration_ms, cache_hit=False)
+        await _record_inbox_threads_stage_metrics(stage_timings=stage_timings)
+        logger.info(
+            "crm.inbox.threads.base_only",
+            extra={
+                "rows": len(rows),
+                "result_rows": len(result_threads),
+                "source": source_requested,
+                "limit": limit,
+                "offset": offset,
+                "stages": stage_timings,
+            },
+        )
+        return result_threads
     batch_ids: set[str] = set()
     campana_ids: set[str] = set()
     template_ids: set[str] = set()
@@ -12125,6 +12160,7 @@ async def get_inbox_threads(
             "template_hints": len(template_ids) + len(template_slugs),
             "conversation_ids": len(conversation_ids),
             "missing_contact_names": len(missing_contact_name_ids),
+            "enrich": enrich,
             "stages": stage_timings,
         },
     )
