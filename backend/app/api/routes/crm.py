@@ -11926,15 +11926,33 @@ async def get_inbox_threads(
     batch_template_hint_map: dict[str, tuple[str | None, str | None, str | None]] = {}
     batch_catalog_start = time.perf_counter()
     if batch_ids:
-        try:
-            batch_rows, _ = await repo.list_contact_batches(
-                usuario_token=user_token,
-                limit=max(300, min(1000, len(batch_ids) * 3)),
-                offset=0,
-                order="campana_id.asc,creado_en.asc,id.asc",
-            )
-        except CRMRepositoryError:
-            batch_rows = []
+        batch_catalog_cache_key = _build_inbox_catalog_cache_key(
+            {
+                "type": "contact_batches",
+                "org": str(organizacion_id),
+                "ids": sorted(batch_ids),
+            }
+        )
+        batch_rows = await _read_inbox_catalog_cache(batch_catalog_cache_key)
+        if batch_rows is None:
+            try:
+                batch_rows = await repo.list_contact_batches_by_ids(
+                    usuario_token=user_token,
+                    batch_ids=batch_ids,
+                )
+            except CRMRepositoryError:
+                # Fallback defensivo por compatibilidad.
+                try:
+                    batch_rows, _ = await repo.list_contact_batches(
+                        usuario_token=user_token,
+                        limit=max(300, min(1000, len(batch_ids) * 3)),
+                        offset=0,
+                        order="campana_id.asc,creado_en.asc,id.asc",
+                    )
+                except CRMRepositoryError:
+                    batch_rows = []
+            else:
+                await _write_inbox_catalog_cache(batch_catalog_cache_key, batch_rows)
         batches_by_campaign: dict[str, list[tuple[str, datetime | None]]] = {}
         for batch in batch_rows:
             batch_id_value = _clean_text(batch.get("id"))

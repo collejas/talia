@@ -272,3 +272,8 @@ Se considera completado cuando por 7 días consecutivos:
       - Se integró `InboxSnapshotRefreshRunner` en backend (intervalo 3 min).
       - Runner conectado en `app_lifespan` (startup/shutdown) para ejecutar `inbox_conversation_snapshot_mv_refresh()` periódicamente.
       - Validación: `python3 -m py_compile backend/app/repositories/crm.py backend/app/api/routes/crm.py backend/app/main.py` ✅
+  - Inbox enrich (optimización adicional):
+    - `batch_catalog_ms` optimizado:
+      - consulta de lotes por IDs exactos (`list_contact_batches_by_ids`) en lugar de listar catálogos amplios,
+      - cache de catálogo de lotes por combinación de `batch_ids` en `get_inbox_threads`.
+    - Validación: `python3 -m py_compile backend/app/repositories/crm.py backend/app/api/routes/crm.py` ✅

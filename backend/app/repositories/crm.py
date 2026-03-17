@@ -9943,6 +9943,39 @@ class CRMRepository:
         total = self._extract_total_count(resp.headers.get("content-range")) or len(data)
         return data, total
 
+    async def list_contact_batches_by_ids(
+        self,
+        *,
+        usuario_token: str,
+        batch_ids: set[str],
+    ) -> list[dict[str, Any]]:
+        """Obtiene lotes por IDs exactos en chunks para evitar scans amplios."""
+
+        if not batch_ids:
+            return []
+        rows: list[dict[str, Any]] = []
+        chunk_size = 100
+        sorted_ids = sorted({value for value in batch_ids if value})
+        for start in range(0, len(sorted_ids), chunk_size):
+            chunk = sorted_ids[start : start + chunk_size]
+            params: dict[str, str] = {
+                "select": "*",
+                "id": _postgrest_in_clause(chunk),
+                "limit": str(len(chunk)),
+                "offset": "0",
+            }
+            resp = await self._request_with_user(
+                "GET",
+                "/rest/v1/prospeccion_contacto_batch",
+                token=usuario_token,
+                params=params,
+            )
+            data = resp.json() or []
+            if not isinstance(data, list):
+                raise CRMRepositoryError(f"contact_batch_list_by_ids_invalid:{data!r}")
+            rows.extend(item for item in data if isinstance(item, dict))
+        return rows
+
     async def insert_contact_envios(
         self,
         *,
