@@ -137,10 +137,14 @@ SALE_TARGET_STAGE_CODES = (
     "demo",
 )
 WINNING_STAGE_CODES = ("general_cerrado_ganado", "cerrado_ganado")
-INBOX_THREADS_CACHE_TTL_SECONDS = 4.0
+INBOX_THREADS_CACHE_TTL_SECONDS = 20.0
 INBOX_THREADS_CACHE_MAX_ENTRIES = 256
 _INBOX_THREADS_CACHE: dict[str, tuple[float, list[Any]]] = {}
 _INBOX_THREADS_CACHE_LOCK = asyncio.Lock()
+INBOX_FILTER_OPTIONS_CACHE_TTL_SECONDS = 45.0
+INBOX_FILTER_OPTIONS_CACHE_MAX_ENTRIES = 256
+_INBOX_FILTER_OPTIONS_CACHE: dict[str, tuple[float, CRMInboxContextFilters]] = {}
+_INBOX_FILTER_OPTIONS_CACHE_LOCK = asyncio.Lock()
 INBOX_THREADS_METRICS_WINDOW_SECONDS = 900
 INBOX_THREADS_METRICS_MAX_SAMPLES = 5000
 _INBOX_THREADS_METRICS_LOCK = asyncio.Lock()
@@ -197,6 +201,49 @@ async def _write_inbox_threads_cache(cache_key: str, rows: list[Any]) -> None:
         for key in expired:
             _INBOX_THREADS_CACHE.pop(key, None)
         _INBOX_THREADS_CACHE[cache_key] = (expires_at, list(rows))
+        while len(_INBOX_THREADS_CACHE) > INBOX_THREADS_CACHE_MAX_ENTRIES:
+            oldest_key = next(iter(_INBOX_THREADS_CACHE), None)
+            if not oldest_key:
+                break
+            _INBOX_THREADS_CACHE.pop(oldest_key, None)
+
+
+def _build_inbox_filter_options_cache_key(payload: dict[str, Any]) -> str:
+    raw = json.dumps(payload, sort_keys=True, default=str, separators=(",", ":"))
+    return hashlib.sha1(raw.encode("utf-8")).hexdigest()
+
+
+async def _read_inbox_filter_options_cache(
+    cache_key: str,
+) -> CRMInboxContextFilters | None:
+    now = time.monotonic()
+    async with _INBOX_FILTER_OPTIONS_CACHE_LOCK:
+        entry = _INBOX_FILTER_OPTIONS_CACHE.get(cache_key)
+        if not entry:
+            return None
+        expires_at, cached_value = entry
+        if expires_at <= now:
+            _INBOX_FILTER_OPTIONS_CACHE.pop(cache_key, None)
+            return None
+        return cached_value.model_copy(deep=True)
+
+
+async def _write_inbox_filter_options_cache(
+    cache_key: str,
+    payload: CRMInboxContextFilters,
+) -> None:
+    now = time.monotonic()
+    expires_at = now + INBOX_FILTER_OPTIONS_CACHE_TTL_SECONDS
+    async with _INBOX_FILTER_OPTIONS_CACHE_LOCK:
+        expired = [key for key, (ttl, _) in _INBOX_FILTER_OPTIONS_CACHE.items() if ttl <= now]
+        for key in expired:
+            _INBOX_FILTER_OPTIONS_CACHE.pop(key, None)
+        _INBOX_FILTER_OPTIONS_CACHE[cache_key] = (expires_at, payload.model_copy(deep=True))
+        while len(_INBOX_FILTER_OPTIONS_CACHE) > INBOX_FILTER_OPTIONS_CACHE_MAX_ENTRIES:
+            oldest_key = next(iter(_INBOX_FILTER_OPTIONS_CACHE), None)
+            if not oldest_key:
+                break
+            _INBOX_FILTER_OPTIONS_CACHE.pop(oldest_key, None)
 
 
 async def _read_whatsapp_envio_hint_cache(
@@ -11339,6 +11386,7 @@ async def get_inbox_threads(
     message_limit: Annotated[int, Query(ge=1, le=50)] = 20,
 ) -> list[CRMInboxThread]:
     request_start = time.perf_counter()
+    stage_timings: dict[str, float] = {}
     source_requested = _clean_text(source)
     source_for_repo = None if source_requested == "publicidad_whatsapp" else source
     effective_timezone, timezone_source = await _resolve_effective_timezone_name(
@@ -11369,9 +11417,12 @@ async def get_inbox_threads(
             "message_limit": message_limit,
         }
     )
+    cache_lookup_start = time.perf_counter()
     cached_threads = await _read_inbox_threads_cache(cache_key)
+    stage_timings["cache_lookup_ms"] = round((time.perf_counter() - cache_lookup_start) * 1000, 2)
     if cached_threads is not None:
         total_duration_ms = (time.perf_counter() - request_start) * 1000
+        stage_timings["total_ms"] = round(total_duration_ms, 2)
         await _record_inbox_threads_metrics(duration_ms=total_duration_ms, cache_hit=True)
         logger.info(
             "crm.inbox.threads.cache_hit",
@@ -11388,6 +11439,7 @@ async def get_inbox_threads(
                 "has_campana": bool(campana_id),
                 "limit": limit,
                 "offset": offset,
+                "stages": stage_timings,
             },
         )
         return [thread for thread in cached_threads if isinstance(thread, CRMInboxThread)]
@@ -11408,6 +11460,7 @@ async def get_inbox_threads(
         message_limit=message_limit,
     )
     duration_ms = (time.perf_counter() - start) * 1000
+    stage_timings["rpc_threads_ms"] = round(duration_ms, 2)
     log_payload = {
         "duration_ms": round(duration_ms, 2),
         "rows": len(rows),
@@ -11437,6 +11490,7 @@ async def get_inbox_threads(
     thread_phone_map: dict[str, str | None] = {}
     missing_contact_name_ids: set[UUID] = set()
 
+    thread_scan_start = time.perf_counter()
     for row in rows:
         conversacion_id = _clean_text(row.get("conversacion_id"))
         if not conversacion_id:
@@ -11475,6 +11529,7 @@ async def get_inbox_threads(
             template_ids.add(template_id_hint)
         if template_slug_hint:
             template_slugs.add(template_slug_hint)
+    stage_timings["thread_scan_ms"] = round((time.perf_counter() - thread_scan_start) * 1000, 2)
 
     # Fallback: cuando la conversación de WhatsApp no trae metadata prospección
     # en mensajes, intentamos enlazar con el envío más reciente por teléfono.
@@ -11500,6 +11555,7 @@ async def get_inbox_threads(
         else:
             phones_to_lookup.append(phone_value)
 
+    fallback_lookup_start = time.perf_counter()
     if phones_to_lookup:
         semaphore = asyncio.Semaphore(INBOX_THREADS_WHATSAPP_HINT_LOOKUP_CONCURRENCY)
 
@@ -11538,6 +11594,9 @@ async def get_inbox_threads(
                 continue
             phone_value, hint = result
             whatsapp_phone_cache[phone_value] = hint
+    stage_timings["whatsapp_hint_lookup_ms"] = round(
+        (time.perf_counter() - fallback_lookup_start) * 1000, 2
+    )
 
     for conversacion_id, hints in list(thread_prospeccion_hints.items()):
         batch_hint, campana_hint, template_id_hint, template_slug_hint, template_label_hint = hints
@@ -11569,6 +11628,7 @@ async def get_inbox_threads(
     batch_label_map: dict[str, str] = {}
     batch_number_map: dict[str, int] = {}
     batch_template_hint_map: dict[str, tuple[str | None, str | None, str | None]] = {}
+    batch_catalog_start = time.perf_counter()
     if batch_ids:
         try:
             batch_rows, _ = await repo.list_contact_batches(
@@ -11652,8 +11712,10 @@ async def get_inbox_threads(
             )
             for index, (batch_id_value, _) in enumerate(sorted_batches, start=1):
                 batch_number_map[batch_id_value] = index
+    stage_timings["batch_catalog_ms"] = round((time.perf_counter() - batch_catalog_start) * 1000, 2)
 
     campana_label_map: dict[str, str] = {}
+    campaign_catalog_start = time.perf_counter()
     if campana_ids:
         try:
             campaign_rows = await repo.list_campaigns(organizacion_id=organizacion_id)
@@ -11666,10 +11728,14 @@ async def get_inbox_threads(
             name = _clean_text(campaign.get("nombre"))
             if name:
                 campana_label_map[campaign_id_value] = name
+    stage_timings["campaign_catalog_ms"] = round(
+        (time.perf_counter() - campaign_catalog_start) * 1000, 2
+    )
 
     template_label_by_id: dict[str, str] = {}
     template_label_by_slug: dict[str, str] = {}
     template_label_by_external_key: dict[str, str] = {}
+    template_catalog_start = time.perf_counter()
     if template_ids or template_slugs:
         try:
             template_rows = await repo.list_contact_templates(usuario_token=user_token)
@@ -11697,6 +11763,9 @@ async def get_inbox_threads(
             for external_key in external_keys:
                 if external_key:
                     template_label_by_external_key[external_key.lower()] = template_label
+    stage_timings["template_catalog_ms"] = round(
+        (time.perf_counter() - template_catalog_start) * 1000, 2
+    )
 
     conversation_ids = [
         _clean_text(row.get("conversacion_id"))
@@ -11705,6 +11774,7 @@ async def get_inbox_threads(
     ]
     wa_atribucion_by_conversation: dict[str, dict[str, Any]] = {}
     wa_rule_ids: set[str] = set()
+    attribution_lookup_start = time.perf_counter()
     if conversation_ids:
         try:
             wa_atribucion_rows = await repo.worker_list_whatsapp_atribucion_events_by_conversations(
@@ -11744,9 +11814,13 @@ async def get_inbox_threads(
             channel_name = _clean_text(rule_row.get("canal_publicitario"))
             if channel_name:
                 wa_rule_channel_map[rule_id_value] = channel_name
+    stage_timings["attribution_lookup_ms"] = round(
+        (time.perf_counter() - attribution_lookup_start) * 1000, 2
+    )
 
     contact_profile_name_map: dict[str, str] = {}
     contact_phone_map: dict[str, str] = {}
+    contact_fallback_start = time.perf_counter()
     if missing_contact_name_ids:
         try:
             contacts_rows = await repo.get_contacts_by_ids(
@@ -11766,7 +11840,11 @@ async def get_inbox_threads(
             phone_value = _clean_text(contact_row.get("telefono_e164"))
             if phone_value:
                 contact_phone_map[contact_id_value] = phone_value
+    stage_timings["contact_fallback_ms"] = round(
+        (time.perf_counter() - contact_fallback_start) * 1000, 2
+    )
 
+    row_enrichment_start = time.perf_counter()
     enriched_rows: list[dict[str, Any]] = []
     for row in rows:
         row_payload = dict(row)
@@ -11900,7 +11978,9 @@ async def get_inbox_threads(
                     row_payload["contacto_telefono"] = fallback_phone
 
         enriched_rows.append(row_payload)
+    stage_timings["row_enrichment_ms"] = round((time.perf_counter() - row_enrichment_start) * 1000, 2)
 
+    model_validate_start = time.perf_counter()
     if source_requested == "publicidad_whatsapp":
         result_threads = [
             CRMInboxThread.model_validate(row)
@@ -11909,10 +11989,28 @@ async def get_inbox_threads(
         ]
     else:
         result_threads = [CRMInboxThread.model_validate(row) for row in enriched_rows]
+    stage_timings["model_validate_ms"] = round((time.perf_counter() - model_validate_start) * 1000, 2)
 
+    cache_write_start = time.perf_counter()
     await _write_inbox_threads_cache(cache_key, result_threads)
+    stage_timings["cache_write_ms"] = round((time.perf_counter() - cache_write_start) * 1000, 2)
     total_duration_ms = (time.perf_counter() - request_start) * 1000
+    stage_timings["total_ms"] = round(total_duration_ms, 2)
     await _record_inbox_threads_metrics(duration_ms=total_duration_ms, cache_hit=False)
+    logger.info(
+        "crm.inbox.threads.stage_profile",
+        extra={
+            "rows": len(rows),
+            "result_rows": len(result_threads),
+            "phones_fallback": len(phones_to_lookup),
+            "batch_ids": len(batch_ids),
+            "campana_ids": len(campana_ids),
+            "template_hints": len(template_ids) + len(template_slugs),
+            "conversation_ids": len(conversation_ids),
+            "missing_contact_names": len(missing_contact_name_ids),
+            "stages": stage_timings,
+        },
+    )
     return result_threads
 
 
@@ -11930,6 +12028,31 @@ async def get_inbox_filter_options(
     """Devuelve catálogos de batch/campaña para los filtros del inbox."""
 
     start = time.perf_counter()
+    cache_key = _build_inbox_filter_options_cache_key(
+        {
+            "org": str(organizacion_id),
+            "user": user_token,
+            "source": _clean_text(source) or "",
+            "channel": _clean_text(channel) or "",
+            "limit": limit,
+        }
+    )
+    cached_payload = await _read_inbox_filter_options_cache(cache_key)
+    if cached_payload is not None:
+        duration_ms = (time.perf_counter() - start) * 1000
+        logger.info(
+            "crm.inbox.filter_options.cache_hit",
+            extra={
+                "duration_ms": round(duration_ms, 2),
+                "batch_options": len(cached_payload.batches),
+                "campana_options": len(cached_payload.campanas),
+                "source": source,
+                "channel": channel,
+                "limit": limit,
+            },
+        )
+        return cached_payload
+
     rows = await repo.inbox_threads(
         usuario_token=user_token,
         source=source,
@@ -12011,7 +12134,9 @@ async def get_inbox_filter_options(
     else:
         logger.info("crm.inbox.filter_options.query", extra=log_payload)
 
-    return CRMInboxContextFilters(batches=batches, campanas=campanas)
+    payload = CRMInboxContextFilters(batches=batches, campanas=campanas)
+    await _write_inbox_filter_options_cache(cache_key, payload)
+    return payload
 
 
 @router.get("/inbox/threads/metrics")

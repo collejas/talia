@@ -3,6 +3,48 @@
 Fecha: 2026-03-17 (UTC)
 Estado: Propuesto
 
+## Avance registrado (2026-03-17)
+
+Estado general: **Fase 1 implementada parcialmente (backend inbox)**.
+
+### Cambios ya implementados
+
+- `inbox/threads`
+  - TTL de cache incrementado de `4s` a `20s`.
+  - Evicción por tamaño en cache (`max entries`) para controlar memoria.
+  - Instrumentación por etapas agregada en backend con log:
+    - `crm.inbox.threads.stage_profile`
+  - Se registran tiempos de:
+    - cache lookup
+    - RPC base de threads
+    - scan de filas
+    - fallback WhatsApp por teléfono
+    - catálogos (batch/campaña/template)
+    - atribución
+    - fallback de contactos
+    - enriquecimiento
+    - validación de modelo
+    - cache write
+    - total
+
+- `inbox/filter-options`
+  - Cache nueva implementada con TTL `45s`.
+  - Evicción por tamaño (`max entries`).
+  - Log de cache hit agregado:
+    - `crm.inbox.filter_options.cache_hit`
+
+### Verificación técnica
+
+- Validación sintáctica ejecutada:
+  - `python3 -m py_compile backend/app/api/routes/crm.py` ✅
+
+### Pendiente para cerrar Fase 1 al 100%
+
+- Medir 24h de resultados post-cambio y comparar:
+  - `inbox/threads` p95/p99 antes vs después.
+  - `inbox/filter-options` p95 antes vs después.
+  - frecuencia de `high_demand_mode` por `inbox_p95_high`.
+
 ## Objetivos
 
 - Sacar `inbox` del estado de alerta recurrente de `high_demand_mode`.
@@ -25,6 +67,10 @@ Estado: Propuesto
 - Implementar cache dedicada para `inbox/filter-options` (TTL inicial 30-60s).
 - Reducir payload por defecto cuando sea posible (`message_limit` conservador en lista).
 
+Estado: **En progreso (2/3)**  
+Completado: TTL inbox + cache filter-options.  
+Pendiente: ajuste de payload por defecto según validación UI.
+
 Resultado esperado:
 - Menos recalculo repetido por polling.
 - Caída rápida de p95 en `inbox/threads` y `filter-options`.
@@ -39,6 +85,10 @@ Resultado esperado:
   - tiempo de fetch de contactos faltantes.
 - Registrar percentiles por etapa en ventana de 5 minutos.
 
+Estado: **En progreso (1/2)**  
+Completado: timings por etapa en `get_inbox_threads`.  
+Pendiente: consolidar percentiles por etapa (agregación/endpoint dedicado).
+
 Resultado esperado:
 - Aislar el subcomponente más caro para fase 2.
 
@@ -46,6 +96,9 @@ Resultado esperado:
 
 - Mantener el umbral actual (`HIGH_DEMAND_INBOX_P95_ALERT_MS`) sin subirlo al inicio.
 - Ajustar solo después de ver mejora real de inbox.
+
+Estado: **Pendiente de evaluación**  
+No se cambió umbral en esta iteración (correcto para no enmascarar problema).
 
 Resultado esperado:
 - Evitar enmascarar el problema subiendo el threshold sin arreglar causa.
