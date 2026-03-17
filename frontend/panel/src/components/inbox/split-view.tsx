@@ -31,7 +31,6 @@ import { matchesReengageFilter } from "@/lib/inbox/reengage-filter";
 const THREADS_REFRESH_INTERVAL_MS = 12000;
 const MESSAGES_REFRESH_INTERVAL_MS = 1500;
 const THREADS_PAGE_SIZE = 100;
-const THREAD_ENRICHMENT_COOLDOWN_MS = 30000;
 const INBOX_STREAM_REFRESH_DEBOUNCE_MS = 400;
 
 const CHANNEL_BADGE_STYLES: Record<string, string> = {
@@ -636,7 +635,7 @@ export function InboxSplitView({
   const [isHydrated, setIsHydrated] = React.useState(false);
   const threadsRefreshingRef = React.useRef(false);
   const threadEnrichmentRef = React.useRef(false);
-  const threadEnrichmentLastAttemptRef = React.useRef<Map<string, number>>(new Map());
+  const threadEnrichedOnceRef = React.useRef<Set<string>>(new Set());
   const messagesRefreshingRef = React.useRef<string | null>(null);
   const messagesContainerRef = React.useRef<HTMLDivElement | null>(null);
   const messagesPollingTimeoutRef = React.useRef<number | null>(null);
@@ -1132,33 +1131,28 @@ export function InboxSplitView({
 
   React.useEffect(() => {
     let cancelled = false;
-    const selected = selectedThread;
+    const selectedId = selectedThread?.id ?? null;
+    if (!selectedId) {
+      return undefined;
+    }
+    const selected = threadItems.find((thread) => thread.id === selectedId);
     if (!selected || !needsThreadEnrichment(selected)) {
+      return undefined;
+    }
+    if (threadEnrichedOnceRef.current.has(selectedId)) {
       return undefined;
     }
     if (threadEnrichmentRef.current) {
       return undefined;
     }
-    const selectedIndex = threadItems.findIndex((thread) => thread.id === selected.id);
+    const selectedIndex = threadItems.findIndex((thread) => thread.id === selectedId);
     const pageOffset =
       selectedIndex >= 0
         ? Math.floor(selectedIndex / THREADS_PAGE_SIZE) * THREADS_PAGE_SIZE
         : 0;
-    const now = Date.now();
-    const lastAttemptAt = threadEnrichmentLastAttemptRef.current.get(selected.id) ?? 0;
-    if (now - lastAttemptAt < THREAD_ENRICHMENT_COOLDOWN_MS) {
-      return undefined;
-    }
 
     async function hydrateSelectedThread() {
       threadEnrichmentRef.current = true;
-      threadEnrichmentLastAttemptRef.current.set(selected.id, Date.now());
-      if (threadEnrichmentLastAttemptRef.current.size > 512) {
-        const oldestKey = threadEnrichmentLastAttemptRef.current.keys().next().value;
-        if (typeof oldestKey === "string") {
-          threadEnrichmentLastAttemptRef.current.delete(oldestKey);
-        }
-      }
       try {
         const params = buildThreadsParams({ offset: pageOffset, enrich: true });
         const response = await fetch(`/api/inbox/threads?${params.toString()}`, {
@@ -1173,6 +1167,13 @@ export function InboxSplitView({
           return;
         }
         setThreadItems((current) => mergeThreadLists(current, incoming));
+        threadEnrichedOnceRef.current.add(selectedId);
+        if (threadEnrichedOnceRef.current.size > 512) {
+          const oldestKey = threadEnrichedOnceRef.current.values().next().value;
+          if (typeof oldestKey === "string") {
+            threadEnrichedOnceRef.current.delete(oldestKey);
+          }
+        }
       } catch (error) {
         console.error("[inbox] selected thread enrichment failed", error);
       } finally {
@@ -1184,7 +1185,7 @@ export function InboxSplitView({
     return () => {
       cancelled = true;
     };
-  }, [selectedThread, threadItems, needsThreadEnrichment, buildThreadsParams]);
+  }, [selectedThread?.id, threadItems, needsThreadEnrichment, buildThreadsParams]);
 
   const refreshMessages = React.useCallback(
     async (conversationId: string, options: { force?: boolean } = {}) => {

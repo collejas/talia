@@ -25,7 +25,7 @@ export async function GET(request: Request) {
   const limit = parseNumber(searchParams.get("limit"), 25, { min: 1, max: 100 });
   const offset = parseNumber(searchParams.get("offset"), 0, { min: 0, max: 10_000 });
   const messageLimit = parseNumber(searchParams.get("message_limit"), 20, { min: 1, max: 100 });
-  const enrich = parseBoolean(searchParams.get("enrich"), true);
+  const enrich = parseBoolean(searchParams.get("enrich"), false);
   const estado = searchParams.get("estado")?.trim() || "";
   const source = searchParams.get("source")?.trim() || "";
   const channel = searchParams.get("channel")?.trim() || "";

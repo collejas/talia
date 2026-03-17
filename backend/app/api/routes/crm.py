@@ -11689,7 +11689,7 @@ async def get_inbox_threads(
     limit: Annotated[int, Query(ge=1, le=200)] = 25,
     offset: Annotated[int, Query(ge=0)] = 0,
     message_limit: Annotated[int, Query(ge=1, le=50)] = 20,
-    enrich: bool = Query(default=True),
+    enrich: bool = Query(default=False),
 ) -> list[CRMInboxThread]:
     request_start = time.perf_counter()
     stage_timings: dict[str, float] = {}
