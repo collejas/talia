@@ -12998,6 +12998,9 @@ class CRMRepository:
     async def refresh_analytics_leads_por_dia(self) -> None:
         await self._rpc("api_refresh_analytics_leads_por_dia", {})
 
+    async def refresh_inbox_conversation_snapshot_mv(self) -> None:
+        await self._rpc("inbox_conversation_snapshot_mv_refresh", {})
+
     async def _request_with_user(
         self,
         method: Literal["GET", "POST", "PATCH", "DELETE"],

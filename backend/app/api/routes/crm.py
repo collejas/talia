@@ -698,6 +698,57 @@ inbox_threads_metrics_snapshot_runner = InboxThreadsMetricsSnapshotRunner(
     window_seconds=300,
 )
 
+
+class InboxSnapshotRefreshRunner:
+    """Refresca periódicamente la MV de snapshot de Inbox."""
+
+    def __init__(self, *, interval_minutes: int = 3) -> None:
+        self._interval_seconds = max(60, interval_minutes * 60)
+        self._task: asyncio.Task[None] | None = None
+        self._stop = asyncio.Event()
+
+    async def start(self) -> None:
+        if self._task and not self._task.done():
+            return
+        self._stop = asyncio.Event()
+        self._task = asyncio.create_task(self._run_loop(), name="inbox-snapshot-mv-refresh")
+        logger.info(
+            "crm.inbox.snapshot_mv.runner_started",
+            extra={"interval_seconds": self._interval_seconds},
+        )
+
+    async def shutdown(self) -> None:
+        self._stop.set()
+        if self._task:
+            await self._task
+            self._task = None
+        logger.info("crm.inbox.snapshot_mv.runner_stopped")
+
+    async def _run_loop(self) -> None:
+        while not self._stop.is_set():
+            started = time.perf_counter()
+            try:
+                repo = CRMRepository()
+                await repo.refresh_inbox_conversation_snapshot_mv()
+                duration_ms = round((time.perf_counter() - started) * 1000, 2)
+                logger.info(
+                    "crm.inbox.snapshot_mv.refresh_ok",
+                    extra={"duration_ms": duration_ms},
+                )
+            except Exception as exc:  # pragma: no cover - defensivo
+                logger.warning(
+                    "crm.inbox.snapshot_mv.refresh_failed",
+                    extra={"error": str(exc)},
+                )
+            try:
+                await asyncio.wait_for(self._stop.wait(), timeout=self._interval_seconds)
+            except asyncio.TimeoutError:
+                continue
+
+
+inbox_snapshot_refresh_runner = InboxSnapshotRefreshRunner(interval_minutes=3)
+
+
 def _write_mapbox_debug_log(tag: str, payload: Any) -> None:
     try:
         MAPBOX_LOG_DIR.mkdir(parents=True, exist_ok=True)

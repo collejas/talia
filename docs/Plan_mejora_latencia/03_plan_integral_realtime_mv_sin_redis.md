@@ -268,3 +268,7 @@ Se considera completado cuando por 7 días consecutivos:
     - Migración aplicada en DB y verificada:
       - MV con datos (`mv_rows=69`).
       - funciones `panel_inbox_threads(...)` e `inbox_conversation_snapshot_mv_refresh()` presentes.
+    - Refresh automático sin `pg_cron`:
+      - Se integró `InboxSnapshotRefreshRunner` en backend (intervalo 3 min).
+      - Runner conectado en `app_lifespan` (startup/shutdown) para ejecutar `inbox_conversation_snapshot_mv_refresh()` periódicamente.
+      - Validación: `python3 -m py_compile backend/app/repositories/crm.py backend/app/api/routes/crm.py backend/app/main.py` ✅
