@@ -15937,6 +15937,7 @@ async def listar_prospectos_query_metadata(
         "ok": True,
         "queries": metadata.get("queries", []),
         "activities": metadata.get("activities", []),
+        "segmentos": metadata.get("segmentos", []),
     }
     await _write_prospecto_queries_cache(cache_key, payload)
     logger.info(
@@ -15947,6 +15948,7 @@ async def listar_prospectos_query_metadata(
             "query_filters": len(normalized_query_filters),
             "queries_rows": len(payload.get("queries", [])),
             "activities_rows": len(payload.get("activities", [])),
+            "segmentos_rows": len(payload.get("segmentos", [])),
         },
     )
     return payload

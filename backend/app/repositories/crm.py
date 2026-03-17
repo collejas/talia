@@ -8892,12 +8892,13 @@ class CRMRepository:
             return {
                 "queries": queries,
                 "activities": activities,
+                "segmentos": [],
             }
         except CRMRepositoryError:
             pass
 
         params: dict[str, str] = {
-            "select": "id,actividad,metadata,creado_en",
+            "select": "id,actividad,segmento,metadata,creado_en",
             # Orden estable para paginación con offset: evita duplicados/saltos entre páginas.
             "order": "metadata->>query.asc,actividad.asc,id.asc",
         }
@@ -8983,6 +8984,7 @@ class CRMRepository:
         query_state_labels: dict[str, str] = {}
         query_municipality_labels: dict[str, str] = {}
         activity_values: set[str] = set()
+        segmento_values: set[str] = set()
         for row in data:
             metadata = row.get("metadata")
             row_queries: list[str] = []
@@ -9123,6 +9125,11 @@ class CRMRepository:
                 candidate = actividad.strip()
                 if candidate:
                     activity_values.add(candidate)
+            segmento = row.get("segmento")
+            if isinstance(segmento, str):
+                candidate = segmento.strip()
+                if candidate:
+                    segmento_values.add(candidate)
 
         if selected_queries is not None:
             query_values = {str(value).strip() for value in (normalized_query_filters or []) if str(value or "").strip()}
@@ -9141,6 +9148,7 @@ class CRMRepository:
         return {
             "queries": queries,
             "activities": sorted(activity_values),
+            "segmentos": sorted(segmento_values, key=lambda value: value.casefold()),
         }
 
     async def get_prospeccion_user_preference(

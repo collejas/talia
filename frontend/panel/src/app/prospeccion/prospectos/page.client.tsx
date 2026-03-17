@@ -787,6 +787,7 @@ function ProspectosView() {
   const [recentBatchError, setRecentBatchError] = useState<string | null>(null)
   const [queryOptions, setQueryOptions] = useState<ProspectoQueryOption[]>([])
   const [activityOptions, setActivityOptions] = useState<string[]>([])
+  const [segmentoOptions, setSegmentoOptions] = useState<string[]>([])
   const [queryOptionsLoading, setQueryOptionsLoading] = useState(false)
   const [activityOptionsLoading, setActivityOptionsLoading] = useState(false)
   const [stageSummary, setStageSummary] = useState<Partial<Record<FlowStepKey, number>>>({})
@@ -1478,15 +1479,20 @@ function ProspectosView() {
       })
       const queries = response.queries ?? []
       const activities = response.activities ?? []
+      const segmentos = response.segmentos ?? []
       setQueryOptions(queries)
       setActivityOptions(activities)
+      setSegmentoOptions(segmentos)
       const queryValues = new Set(queries.map((item) => item.value))
+      const segmentoValues = new Set(segmentos)
       setFilters((prev) => {
         const nextQueryFilters = prev.queryFilters.filter((value) => queryValues.has(value))
         const nextActividadFilters = prev.actividadFilters.filter((value) => activities.includes(value))
+        const nextSegmento = prev.segmento && segmentoValues.has(prev.segmento) ? prev.segmento : ""
         if (
           arraysEqual(nextQueryFilters, prev.queryFilters) &&
-          arraysEqual(nextActividadFilters, prev.actividadFilters)
+          arraysEqual(nextActividadFilters, prev.actividadFilters) &&
+          nextSegmento === prev.segmento
         ) {
           return prev
         }
@@ -1494,19 +1500,22 @@ function ProspectosView() {
           ...prev,
           queryFilters: nextQueryFilters,
           actividadFilters: nextActividadFilters,
+          segmento: nextSegmento,
         }
       })
     } catch {
       setQueryOptions([])
       setActivityOptions([])
+      setSegmentoOptions([])
       setFilters((prev) => {
-        if (!prev.queryFilters.length && !prev.actividadFilters.length) {
+        if (!prev.queryFilters.length && !prev.actividadFilters.length && !prev.segmento) {
           return prev
         }
         return {
           ...prev,
           queryFilters: [],
           actividadFilters: [],
+          segmento: "",
         }
       })
     } finally {
@@ -3430,12 +3439,27 @@ function ProspectosView() {
             </div>
             <div className="space-y-1">
               <Label>Segmento</Label>
-              <Input
-                value={filters.segmento}
-                onChange={(event) => setFilters((prev) => ({ ...prev, segmento: event.target.value }))}
-                className="w-[180px]"
-                placeholder="Ej. Hoteles CDMX"
-              />
+              <Select
+                value={filters.segmento || "all"}
+                onValueChange={(value) =>
+                  setFilters((prev) => ({
+                    ...prev,
+                    segmento: value === "all" ? "" : value,
+                  }))
+                }
+              >
+                <SelectTrigger className="w-[220px]">
+                  <SelectValue placeholder={queryOptionsLoading ? "Cargando..." : "Todos los segmentos"} />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos</SelectItem>
+                  {segmentoOptions.map((segmento) => (
+                    <SelectItem key={segmento} value={segmento}>
+                      {segmento}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div className="space-y-1">
               <Label>Estado</Label>

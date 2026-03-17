@@ -642,7 +642,7 @@ export async function listProspectosQueryMetadata(params?: {
   fuente?: "google_places" | "denue" | "usuario"
   dateFrom?: string
   dateTo?: string
-}): Promise<{ queries: ProspectoQueryOption[]; activities: string[] }> {
+}): Promise<{ queries: ProspectoQueryOption[]; activities: string[]; segmentos: string[] }> {
   const url = buildClientUrl("/api/prospeccion/prospectos/queries")
   if (params?.queries?.length) {
     for (const query of params.queries) {
@@ -674,6 +674,7 @@ export async function listProspectosQueryMetadata(params?: {
         }
     >
     activities: string[]
+    segmentos?: string[]
   }>(url.toString())
   const normalizedQueries = (response.queries ?? [])
     .map((item) => {
@@ -693,6 +694,7 @@ export async function listProspectosQueryMetadata(params?: {
   return {
     queries: normalizedQueries,
     activities: response.activities ?? [],
+    segmentos: response.segmentos ?? [],
   }
 }
 
