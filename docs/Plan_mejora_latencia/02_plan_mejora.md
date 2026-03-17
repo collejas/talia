@@ -5,7 +5,7 @@ Estado: Propuesto
 
 ## Avance registrado (2026-03-17)
 
-Estado general: **Fase 1 implementada parcialmente (backend inbox)**.
+Estado general: **Fase 1 implementada + Fase 2 iniciada (prospección)**.
 
 ### Cambios ya implementados
 
@@ -55,8 +55,26 @@ Estado general: **Fase 1 implementada parcialmente (backend inbox)**.
 
 - Validación sintáctica ejecutada:
   - `python3 -m py_compile backend/app/api/routes/crm.py` ✅
+- Validación frontend ejecutada:
+  - `npx eslint src/lib/prospeccion/prospectos-client.ts src/app/prospeccion/prospectos/page.client.tsx` ✅
 - Métricas de inbox disponibles con percentiles por etapa:
   - `GET /api/crm/inbox/threads/metrics` ahora incluye `stage_latency_ms`.
+
+### Avance adicional (2026-03-17) - Fase 2.3 Prospección
+
+- `GET /api/crm/prospeccion/prospectos`
+  - Nuevo flag `include_scraper_status` en query backend (default `false`).
+  - El endpoint ya no ejecuta `list_scraper_status_by_prospectos` salvo que el cliente lo pida explícitamente.
+  - Se conserva contrato de salida con campos:
+    - `scraper_ejecutado`
+    - `scraper_ultimo_en`
+    - `scraper_ultimo_estado`
+  - En modo default (`false`) esos campos salen en valores vacíos/falsos sin costo extra de consulta.
+
+- Frontend prospección
+  - Cliente `listProspectos` soporta `includeScraperStatus`.
+  - Página de prospectos envía `includeScraperStatus: false` en carga inicial y paginación incremental.
+  - Objetivo: recortar latencia de la lista principal y carga de CPU/DB en picos.
 
 ### Pendiente para cerrar Fase 1 al 100%
 

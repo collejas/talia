@@ -556,6 +556,7 @@ export async function listProspectos(params: {
   campanaId?: string
   conEnvio?: boolean
   conScraper?: boolean
+  includeScraperStatus?: boolean
 } = {}): Promise<ProspectosResponse> {
   const url = buildClientUrl("/api/prospeccion/prospectos")
   if (typeof params.limit === "number") url.searchParams.set("limit", String(params.limit))
@@ -608,6 +609,9 @@ export async function listProspectos(params: {
   }
   if (typeof params.conScraper === "boolean") {
     url.searchParams.set("con_scraper", params.conScraper ? "true" : "false")
+  }
+  if (typeof params.includeScraperStatus === "boolean") {
+    url.searchParams.set("include_scraper_status", params.includeScraperStatus ? "true" : "false")
   }
   if (params.metadataQueries?.length) {
     for (const value of params.metadataQueries) {

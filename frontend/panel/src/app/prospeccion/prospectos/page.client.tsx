@@ -1303,6 +1303,7 @@ function ProspectosView() {
             filters.conEnvio === "si" ? true : filters.conEnvio === "no" ? false : undefined,
           conScraper:
             filters.conScraper === "si" ? true : filters.conScraper === "no" ? false : undefined,
+          includeScraperStatus: false,
           segmento: filters.segmento || undefined,
           geoEstado: filters.geoEstado || undefined,
           geoMunicipio: filters.geoMunicipio || undefined,
@@ -1374,6 +1375,7 @@ function ProspectosView() {
             filters.conEnvio === "si" ? true : filters.conEnvio === "no" ? false : undefined,
           conScraper:
             filters.conScraper === "si" ? true : filters.conScraper === "no" ? false : undefined,
+          includeScraperStatus: false,
           segmento: filters.segmento || undefined,
           geoEstado: filters.geoEstado || undefined,
           geoMunicipio: filters.geoMunicipio || undefined,

@@ -2059,6 +2059,7 @@ class ProspectoListQuery(BaseModel):
     campana_id: UUID | None = Field(default=None)
     con_envio: bool | None = Field(default=None)
     con_scraper: bool | None = Field(default=None)
+    include_scraper_status: bool = Field(default=False)
 
 
 class ProspectoFiltroPayload(BaseModel):
@@ -16117,7 +16118,7 @@ async def listar_prospectos(
     if rows:
         prospecto_ids = [str(row.get("id") or "").strip() for row in rows if str(row.get("id") or "").strip()]
         scraper_status_map: dict[str, dict[str, Any]] = {}
-        if prospecto_ids:
+        if params.include_scraper_status and prospecto_ids:
             try:
                 scraper_status_map = await repo.list_scraper_status_by_prospectos(
                     usuario_token=user_token,
