@@ -47,6 +47,14 @@ type InboxFilterOptionsResponse = {
   campanas?: Array<{ value?: string; label?: string | null }>;
 };
 
+type InboxBootstrapResponse = {
+  summary?: InboxResumenResponse | null;
+  threads?: {
+    items?: InboxThreadRow[];
+  } | null;
+  filter_options?: InboxFilterOptionsResponse | null;
+};
+
 const REENGAGE_TAG_KEYWORDS = [
   "reeng",
   "reenganch",
@@ -120,33 +128,27 @@ export async function loadInboxData(filters?: InboxThreadsFilters): Promise<Inbo
   if (normalizedBatchId) normalizedFilters.batch_id = normalizedBatchId;
   if (normalizedCampanaId) normalizedFilters.campana_id = normalizedCampanaId;
 
-  const [resumen, threads, tags, filterOptions] = await Promise.all([
-    callCrmApi<InboxResumenResponse>("/crm/inbox/summary", { withUserToken: true }),
-    callCrmApi<InboxThreadRow[]>("/crm/inbox/threads", {
+  const [bootstrap, tags] = await Promise.all([
+    callCrmApi<InboxBootstrapResponse>("/crm/inbox/bootstrap", {
       withUserToken: true,
       searchParams: normalizedFilters,
     }),
     callCrmApi<CrmTagRow[]>("/crm/tags", { withUserToken: true }),
-    callCrmApi<InboxFilterOptionsResponse>("/crm/inbox/filter-options", {
-      withUserToken: true,
-      searchParams: {
-        ...(normalizedSource ? { source: normalizedSource } : {}),
-        ...(normalizedChannel ? { channel: normalizedChannel } : {}),
-      },
-    }),
   ]);
 
   const errors: string[] = [];
-  if (!resumen.ok) errors.push(resumen.error);
-  if (!threads.ok) errors.push(threads.error);
+  if (!bootstrap.ok) errors.push(bootstrap.error);
   if (!tags.ok) errors.push(tags.error);
-  if (!filterOptions.ok) errors.push(filterOptions.error);
 
-  const summary = mapSummary(resumen.ok ? resumen.data : undefined);
-  const mappedThreads = mapThreads(threads.ok ? threads.data : undefined);
+  const summary = mapSummary(bootstrap.ok ? bootstrap.data?.summary ?? undefined : undefined);
+  const threadRows =
+    bootstrap.ok && Array.isArray(bootstrap.data?.threads?.items)
+      ? bootstrap.data?.threads?.items
+      : [];
+  const mappedThreads = mapThreads(threadRows);
   const totalThreads =
-    threads.ok && Array.isArray(threads.data) && threads.data.length
-      ? threads.data[0].total_rows ?? threads.data.length
+    threadRows.length
+      ? threadRows[0].total_rows ?? threadRows.length
       : 0;
 
   const reengageTagsFromApi = tags.ok
@@ -157,9 +159,11 @@ export async function loadInboxData(filters?: InboxThreadsFilters): Promise<Inbo
     new Set([...reengageTagsFromApi, ...reengageTagsFromThreads]),
   ).sort((a, b) => a.localeCompare(b, "es", { sensitivity: "base" }));
 
-  const batchOptions = mapContextOptions(filterOptions.ok ? filterOptions.data?.batches : undefined);
+  const batchOptions = mapContextOptions(
+    bootstrap.ok ? bootstrap.data?.filter_options?.batches ?? undefined : undefined,
+  );
   const campanaOptions = mapContextOptions(
-    filterOptions.ok ? filterOptions.data?.campanas : undefined,
+    bootstrap.ok ? bootstrap.data?.filter_options?.campanas ?? undefined : undefined,
   );
 
   return {

@@ -67,6 +67,7 @@ import {
   getBrevoQuota,
   listCrmCampaigns,
   listProspectos,
+  listProspectosBootstrap,
   listProspectosQueryMetadata,
   listContactoEnviosPorProspecto,
   listContactoLogs,
@@ -1293,7 +1294,7 @@ function ProspectosView() {
         filters.customDateFrom,
         filters.customDateTo
       )
-        const response = await listProspectos({
+        const response = await listProspectosBootstrap({
           limit,
           offset: nextOffset,
           search: filters.search || undefined,
@@ -1317,13 +1318,54 @@ function ProspectosView() {
           websitePresent,
           metadataQueries: effectiveMetadataQueries,
           actividades: filters.actividadFilters.length ? filters.actividadFilters : undefined,
+          queryFilters: filters.queryFilters.length ? filters.queryFilters : undefined,
           dateFrom,
           dateTo,
         })
-        const rows = response.items ?? []
+        const rows = response.prospectos?.items ?? []
         setItems(rows)
-        setTotal(typeof response.total === "number" ? response.total : rows.length)
+        setTotal(
+          typeof response.prospectos?.total === "number"
+            ? response.prospectos.total
+            : rows.length
+        )
         setOffset(nextOffset)
+        const scopeKey = JSON.stringify({
+          fuente: filters.fuente || "",
+          dateFrom: dateFrom || "",
+          dateTo: dateTo || "",
+        })
+        const metadata = response.metadata
+        if (metadata?.ok) {
+          const queries = metadata.queries ?? []
+          const activities = metadata.activities ?? []
+          const segmentos = metadata.segmentos ?? []
+          setQueryOptions(queries)
+          baseActivityOptionsRef.current = activities
+          setActivityOptions(activities)
+          setSegmentoOptions(segmentos)
+          const queryValues = new Set(queries.map((item) => item.value))
+          const segmentoValues = new Set(segmentos)
+          setFilters((prev) => {
+            const nextQueryFilters = prev.queryFilters.filter((value) => queryValues.has(value))
+            const nextActividadFilters = prev.actividadFilters.filter((value) => activities.includes(value))
+            const nextSegmento = prev.segmento && segmentoValues.has(prev.segmento) ? prev.segmento : ""
+            if (
+              arraysEqual(nextQueryFilters, prev.queryFilters) &&
+              arraysEqual(nextActividadFilters, prev.actividadFilters) &&
+              nextSegmento === prev.segmento
+            ) {
+              return prev
+            }
+            return {
+              ...prev,
+              queryFilters: nextQueryFilters,
+              actividadFilters: nextActividadFilters,
+              segmento: nextSegmento,
+            }
+          })
+          lastQueryScopeRef.current = scopeKey
+        }
         setSelected((prev) => {
           if (!rows.length) return new Set<string>()
           const allowed = new Set<string>()

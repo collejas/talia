@@ -273,6 +273,13 @@ Se considera completado cuando por 7 días consecutivos:
       - worker nuevo: `app.services.sales_notification_jobs`.
       - los flujos webchat (`booking_confirmed`, `booking_canceled`, `webchat_session_closed`) ahora encolan notificaciones para envío asíncrono con lease y reintentos.
       - `notify_sales_rep` ahora soporta `raise_on_delivery_error=True` para habilitar retry real desde el worker.
+  - Integración frontend (reducción de fan-out):
+    - Inbox `split-view` ahora usa `GET /api/inbox/bootstrap` para polling (threads + runtime profile) en lugar de requests separadas por ciclo.
+    - Carga inicial de inbox (`lib/inbox/data.ts`) migrada a `GET /crm/inbox/bootstrap`.
+    - Prospección (`prospectos/page.client.tsx`) usa `listProspectosBootstrap` para obtener listado + metadata en una sola llamada.
+    - Proxies frontend nuevos:
+      - `/api/inbox/bootstrap`
+      - `/api/prospeccion/prospectos/bootstrap`
     - Se incrementó tamaño de página de escaneo interno para reducir llamadas en esa rama.
     - Validación: `python3 -m py_compile backend/app/repositories/crm.py` ✅
   - Inbox MV implementada:

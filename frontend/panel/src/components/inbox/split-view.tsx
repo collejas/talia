@@ -29,7 +29,6 @@ import type { DateFilterOption } from "@/components/inbox/toolbar";
 import { matchesReengageFilter } from "@/lib/inbox/reengage-filter";
 
 const THREADS_REFRESH_INTERVAL_MS = 12000;
-const RUNTIME_PROFILE_REFRESH_INTERVAL_MS = 60000;
 const MESSAGES_REFRESH_INTERVAL_MS = 1500;
 const THREADS_PAGE_SIZE = 100;
 const THREAD_ENRICHMENT_COOLDOWN_MS = 30000;
@@ -926,43 +925,6 @@ export function InboxSplitView({
     }
   }, [currentMessages, selectedThread?.id, autoScrollLocked]);
 
-  React.useEffect(() => {
-    let cancelled = false;
-
-    async function refreshRuntimeProfile() {
-      if (typeof document !== "undefined" && document.hidden) return;
-      try {
-        const response = await fetch("/api/inbox/runtime-profile", {
-          cache: "no-store",
-        });
-        if (!response.ok) return;
-        const data = (await response.json()) as {
-          recommended_threads_poll_seconds?: number;
-        };
-        const recommendedSeconds = Number(data?.recommended_threads_poll_seconds);
-        if (!Number.isFinite(recommendedSeconds) || recommendedSeconds <= 0) return;
-        const nextIntervalMs = Math.max(5000, Math.trunc(recommendedSeconds * 1000));
-        setThreadsRefreshIntervalMs((current) =>
-          current === nextIntervalMs ? current : nextIntervalMs,
-        );
-      } catch (error) {
-        console.error("[inbox] runtime profile fetch failed", error);
-      }
-    }
-
-    refreshRuntimeProfile();
-    const interval = setInterval(() => {
-      if (!cancelled) {
-        refreshRuntimeProfile();
-      }
-    }, RUNTIME_PROFILE_REFRESH_INTERVAL_MS);
-
-    return () => {
-      cancelled = true;
-      clearInterval(interval);
-    };
-  }, []);
-
   const buildThreadsParams = React.useCallback(
     ({ offset, enrich }: { offset: number; enrich: boolean }) => {
       const params = new URLSearchParams({
@@ -1029,16 +991,29 @@ export function InboxSplitView({
       threadsRefreshingRef.current = true;
       try {
         const params = buildThreadsParams({ offset: 0, enrich: false });
-        const response = await fetch(`/api/inbox/threads?${params.toString()}`, {
+        params.set("include_summary", "false");
+        params.set("include_filter_options", "false");
+        const response = await fetch(`/api/inbox/bootstrap?${params.toString()}`, {
           cache: "no-store",
         });
         if (!response.ok) {
           return;
         }
-        const data = (await response.json()) as { threads?: InboxThread[]; total_threads?: number };
+        const data = (await response.json()) as {
+          threads?: InboxThread[];
+          total_threads?: number;
+          runtime_profile?: { recommended_threads_poll_seconds?: number };
+        };
         const incoming = Array.isArray(data?.threads) ? (data.threads as InboxThread[]) : [];
         if (typeof data?.total_threads === "number") {
           setTotalThreads(Math.max(0, data.total_threads));
+        }
+        const recommendedSeconds = Number(data?.runtime_profile?.recommended_threads_poll_seconds);
+        if (Number.isFinite(recommendedSeconds) && recommendedSeconds > 0) {
+          const nextIntervalMs = Math.max(5000, Math.trunc(recommendedSeconds * 1000));
+          setThreadsRefreshIntervalMs((current) =>
+            current === nextIntervalMs ? current : nextIntervalMs,
+          );
         }
         setThreadItems((current) => {
           if (!incoming.length) {

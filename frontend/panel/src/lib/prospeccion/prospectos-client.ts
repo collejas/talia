@@ -178,6 +178,18 @@ export type ProspectosResponse = {
   offset: number
 }
 
+export type ProspectosBootstrapResponse = {
+  ok: boolean
+  prospectos: ProspectosResponse
+  metadata: {
+    ok: boolean
+    queries: ProspectoQueryOption[]
+    activities: string[]
+    segmentos: string[]
+  }
+  preferences?: Record<string, unknown> | null
+}
+
 export type ProspectoGuardarResponse = {
   ok: boolean
   total: number
@@ -530,7 +542,7 @@ async function requestJson<T>(input: string, init?: RequestInit, retryAuth = tru
 /**
  * List saved prospects with optional filters for fuente, lookup status or search term.
  */
-export async function listProspectos(params: {
+type ListProspectosParams = {
   limit?: number
   offset?: number
   search?: string
@@ -557,8 +569,10 @@ export async function listProspectos(params: {
   conEnvio?: boolean
   conScraper?: boolean
   includeScraperStatus?: boolean
-} = {}): Promise<ProspectosResponse> {
-  const url = buildClientUrl("/api/prospeccion/prospectos")
+}
+
+function buildProspectosListUrl(basePath: string, params: ListProspectosParams = {}): URL {
+  const url = buildClientUrl(basePath)
   if (typeof params.limit === "number") url.searchParams.set("limit", String(params.limit))
   if (typeof params.offset === "number") url.searchParams.set("offset", String(params.offset))
   if (params.search?.trim().length) url.searchParams.set("search", params.search.trim())
@@ -629,7 +643,33 @@ export async function listProspectos(params: {
       }
     }
   }
+  return url
+}
+
+export async function listProspectos(params: ListProspectosParams = {}): Promise<ProspectosResponse> {
+  const url = buildProspectosListUrl("/api/prospeccion/prospectos", params)
   return requestJson<ProspectosResponse>(url.toString())
+}
+
+export async function listProspectosBootstrap(
+  params: ListProspectosParams & {
+    queryFilters?: string[]
+    includePreferences?: boolean
+  } = {}
+): Promise<ProspectosBootstrapResponse> {
+  const url = buildProspectosListUrl("/api/prospeccion/prospectos/bootstrap", params)
+  if (params.queryFilters?.length) {
+    for (const value of params.queryFilters) {
+      const trimmed = value?.trim()
+      if (trimmed) {
+        url.searchParams.append("query", trimmed)
+      }
+    }
+  }
+  if (typeof params.includePreferences === "boolean") {
+    url.searchParams.set("include_preferences", params.includePreferences ? "true" : "false")
+  }
+  return requestJson<ProspectosBootstrapResponse>(url.toString())
 }
 
 export type ProspectoQueryOption = {
