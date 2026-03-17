@@ -236,7 +236,7 @@ Se considera completado cuando por 7 días consecutivos:
   - Confirmada recurrencia de activaciones `high_demand_mode` por `inbox_p95_high`.
   - Fase 1 iniciada (control de concurrencia inbox frontend):
     - `mergeThreadLists` ahora preserva campos enriquecidos (`sourceDetail`, labels de campaña/template/lote) para evitar que el polling base sobrescriba datos y re-dispare hidratación innecesaria.
-    - Se agregó cooldown por hilo (`THREAD_ENRICHMENT_COOLDOWN_MS=30000`) para limitar llamadas repetitivas `enrich=true` en el hilo seleccionado.
+    - Se reemplazó el cooldown por hidratación controlada "una sola vez por hilo seleccionado" para reducir re-disparos de `enrich=true`.
     - Validación: `npx eslint src/components/inbox/split-view.tsx` ✅
   - Fase 1 extendida (control de concurrencia en `prospeccion/prospectos/queries`):
     - Backend: single-flight por `cache_key` en `/crm/prospeccion/prospectos/queries` para que requests concurrentes idénticas esperen el mismo cálculo en lugar de ejecutar múltiples `cache_miss`.
@@ -319,3 +319,61 @@ Se considera completado cuando por 7 días consecutivos:
       - agregado de mensajes por `session_id`: usa índice `idx_mensajes_org_session_id_creado`.
       - `panel_visitantes_geo_resumen_v2(...)`: ~112.9 ms -> ~46.3 ms.
       - `panel_webchat_visitas_detalle(...)`: ~50.0 ms -> ~22.6 ms.
+  - Actualización de diagnóstico (2026-03-17 22:53-22:54 UTC):
+    - Se confirmó en `logs/request.log` que aún se dispara `GET /api/crm/inbox/threads?...enrich=true` al entrar a Inbox y al primer cambio de contexto.
+    - Ese request sigue concentrando la cola alta (`~3.4s-4.0s`) y dispara `high_demand_mode` por `inbox_p95_high`.
+    - Etapa dominante actual en `logs/api.log`: `whatsapp_hint_lookup_ms` (picos ~1.9s-2.8s) dentro de `crm.inbox.threads.stage_profile`.
+    - Con `enrich=false` el camino base se mantiene claramente más liviano (`~0.2s-1.1s`).
+
+## Pendiente crítico de cierre (Inbox)
+
+- Estado: Parcialmente implementado.
+- Pendiente principal:
+  - Forzar que la vista de Inbox no dispare `enrich=true` al entrar/cargar automáticamente.
+  - Permitir `enrich=true` solo en acciones explícitas del usuario (apertura de hilo objetivo o acción de detalle).
+- Verificación de cierre:
+  - En `request.log`, al abrir Inbox no debe aparecer `GET /api/crm/inbox/threads?...enrich=true`.
+  - `inbox_threads_latency_p95_ms` debe mantenerse por debajo del umbral de alerta (2400 ms) en ventana de 5 minutos sin carga extraordinaria.
+
+## Propuesta inmediata para mejora de latencia (sin Redis)
+
+Prioridad 1 (impacto alto, corto plazo):
+- Endurecer "deferred by default" en Inbox:
+  - bloquear cualquier hidratación automática con `enrich=true` durante carga inicial.
+  - hidratar solo por interacción explícita (abrir hilo puntual).
+- Quitar fallback individual en caliente para `whatsapp_hint_lookup`:
+  - en requests interactivos usar solo lookup batch.
+  - mover fallback individual a job asíncrono de relleno.
+- Limitar enriquecimiento por viewport:
+  - enriquecer solo hilo seleccionado.
+  - evitar enriquecer lote completo de 100 cuando el usuario solo abre 1 conversación.
+
+Prioridad 2 (impacto alto, medio plazo):
+- Snapshot persistente de hints WhatsApp por conversación/teléfono:
+  - tabla de cache materializada con `batch_id/campana/template/source_detail`.
+  - refresh por cron corto + invalidación por eventos de envío.
+- Endpoint de detalle de hilo (BFF de detalle):
+  - `threads` base liviano para listado.
+  - endpoint separado para metadatos pesados de un hilo.
+- Paginación estricta en prospección:
+  - bajar payload por defecto y diferir bloques secundarios.
+
+Prioridad 3 (estabilidad operativa):
+- Presupuesto de tiempo por etapa:
+  - timeout suave por sub-etapa de enrich.
+  - si una etapa excede presupuesto, responder base + bandera `enrichment_deferred`.
+- Guardrails de ráfagas frontend:
+  - debounce adicional en cambios de filtro.
+  - deduplicación in-flight por clave de request en inbox/prospección.
+- SLO por endpoint y alertas de regresión:
+  - alarma separada para `whatsapp_hint_lookup_ms` y `prospeccion.prospectos.list`.
+
+## Criterio de validación de la propuesta
+
+- Inbox apertura:
+  - p95 < 1200 ms estable en ventanas de 5 min.
+  - cero llamadas `enrich=true` al entrar a la vista.
+- Inbox detalle (al abrir hilo):
+  - p95 < 2000 ms con degradación controlada.
+- Prospección:
+  - `prospeccion.prospectos.list` p95 < 2000 ms, sin picos > 3000 ms en carga normal.
