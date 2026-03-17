@@ -11648,8 +11648,17 @@ async def get_inbox_threads(
 ) -> list[CRMInboxThread]:
     request_start = time.perf_counter()
     stage_timings: dict[str, float] = {}
+    enrich_requested = bool(enrich)
     source_requested = _clean_text(source)
     source_for_repo = None if source_requested == "publicidad_whatsapp" else source
+    high_demand_mode = await high_demand_controller.current_mode() if enrich_requested else {"active": False}
+    defer_enrichment_due_to_high_demand = bool(
+        enrich_requested
+        and source_requested != "publicidad_whatsapp"
+        and bool(high_demand_mode.get("active"))
+        and bool(getattr(settings, "high_demand_inbox_enrichments_force_defer", True))
+    )
+    effective_enrich = enrich_requested and not defer_enrichment_due_to_high_demand
     effective_timezone, timezone_source = await _resolve_effective_timezone_name(
         repo=repo,
         organizacion_id=organizacion_id,
@@ -11676,7 +11685,9 @@ async def get_inbox_threads(
             "limit": limit,
             "offset": offset,
             "message_limit": message_limit,
-            "enrich": enrich,
+            "enrich": effective_enrich,
+            "enrich_requested": enrich_requested,
+            "defer_enrichment_due_to_high_demand": defer_enrichment_due_to_high_demand,
         }
     )
     cache_lookup_start = time.perf_counter()
@@ -11702,7 +11713,9 @@ async def get_inbox_threads(
                 "has_campana": bool(campana_id),
                 "limit": limit,
                 "offset": offset,
-                "enrich": enrich,
+                "enrich_requested": enrich_requested,
+                "enrich_effective": effective_enrich,
+                "enrich_deferred_due_to_high_demand": defer_enrichment_due_to_high_demand,
                 "stages": stage_timings,
             },
         )
@@ -11738,24 +11751,28 @@ async def get_inbox_threads(
         "has_campana": bool(campana_id),
         "limit": limit,
         "offset": offset,
-        "enrich": enrich,
+        "enrich_requested": enrich_requested,
+        "enrich_effective": effective_enrich,
+        "enrich_deferred_due_to_high_demand": defer_enrichment_due_to_high_demand,
     }
     if duration_ms >= 700:
         logger.warning("crm.inbox.threads.slow_query", extra=log_payload)
     else:
         logger.info("crm.inbox.threads.query", extra=log_payload)
 
-    if source_requested == "publicidad_whatsapp" and not enrich:
+    if source_requested == "publicidad_whatsapp" and not enrich_requested:
         raise HTTPException(
             status_code=400,
             detail="inbox_threads_enrich_required_for_publicidad_whatsapp",
         )
 
-    if not enrich:
+    if not effective_enrich:
         validate_start = time.perf_counter()
         result_threads = [CRMInboxThread.model_validate(row) for row in rows]
         stage_timings["model_validate_ms"] = round((time.perf_counter() - validate_start) * 1000, 2)
         stage_timings["enrich_skipped"] = 1.0
+        if defer_enrichment_due_to_high_demand:
+            stage_timings["enrich_deferred_due_to_high_demand"] = 1.0
         cache_write_start = time.perf_counter()
         await _write_inbox_threads_cache(cache_key, result_threads)
         stage_timings["cache_write_ms"] = round((time.perf_counter() - cache_write_start) * 1000, 2)
@@ -11771,6 +11788,9 @@ async def get_inbox_threads(
                 "source": source_requested,
                 "limit": limit,
                 "offset": offset,
+                "enrich_requested": enrich_requested,
+                "enrich_effective": effective_enrich,
+                "enrich_deferred_due_to_high_demand": defer_enrichment_due_to_high_demand,
                 "stages": stage_timings,
             },
         )
@@ -12397,7 +12417,9 @@ async def get_inbox_threads(
             "template_hints": len(template_ids) + len(template_slugs),
             "conversation_ids": len(conversation_ids),
             "missing_contact_names": len(missing_contact_name_ids),
-            "enrich": enrich,
+            "enrich_requested": enrich_requested,
+            "enrich_effective": effective_enrich,
+            "enrich_deferred_due_to_high_demand": defer_enrichment_due_to_high_demand,
             "stages": stage_timings,
         },
     )
@@ -12617,6 +12639,140 @@ async def get_inbox_runtime_profile(
         "high_demand_mode": high_demand_active,
         "recommended_threads_poll_seconds": int(recommended_seconds),
         "source": source,
+        "defer_enrichments": bool(
+            high_demand_active
+            and bool(getattr(settings, "high_demand_inbox_enrichments_force_defer", True))
+        ),
+    }
+
+
+@router.get("/inbox/bootstrap")
+async def get_inbox_bootstrap(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    _: str = Depends(require_permission("ver_inbox")),
+    user_token: str = Depends(require_user_token),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    usuario_id: UUID | None = Depends(optional_usuario_id),
+    include_summary: bool = Query(default=True),
+    include_filter_options: bool = Query(default=True),
+    estado: str | None = Query(default=None, max_length=50),
+    source: str | None = Query(default=None, max_length=80),
+    channel: str | None = Query(default=None, max_length=30),
+    date: str | None = Query(default=None, max_length=20),
+    batch_id: UUID | None = Query(default=None),
+    campana_id: UUID | None = Query(default=None),
+    asignado_id: UUID | None = Query(default=None),
+    limit: Annotated[int, Query(ge=1, le=200)] = 25,
+    offset: Annotated[int, Query(ge=0)] = 0,
+    message_limit: Annotated[int, Query(ge=1, le=50)] = 20,
+    enrich: bool = Query(default=False),
+) -> dict[str, Any]:
+    """BFF agregador para Inbox: runtime + summary + threads + filtros."""
+
+    started = time.perf_counter()
+    tasks: list[Awaitable[Any]] = []
+    task_labels: list[str] = []
+
+    if include_summary:
+        tasks.append(repo.inbox_summary(usuario_token=user_token))
+        task_labels.append("summary")
+
+    tasks.append(
+        get_inbox_threads(
+            repo=repo,
+            _="",
+            user_token=user_token,
+            organizacion_id=organizacion_id,
+            usuario_id=usuario_id,
+            estado=estado,
+            source=source,
+            channel=channel,
+            date=date,
+            batch_id=batch_id,
+            campana_id=campana_id,
+            asignado_id=asignado_id,
+            limit=limit,
+            offset=offset,
+            message_limit=message_limit,
+            enrich=enrich,
+        )
+    )
+    task_labels.append("threads")
+
+    if include_filter_options:
+        tasks.append(
+            get_inbox_filter_options(
+                repo=repo,
+                _="",
+                user_token=user_token,
+                organizacion_id=organizacion_id,
+                source=source,
+                channel=channel,
+                limit=max(200, limit),
+            )
+        )
+        task_labels.append("filter_options")
+
+    runtime_profile = await get_inbox_runtime_profile(_="")
+    results = await asyncio.gather(*tasks)
+    payload_by_label = {label: value for label, value in zip(task_labels, results, strict=False)}
+
+    summary_payload = payload_by_label.get("summary")
+    summary = (
+        CRMInboxSummary(
+            total=int(summary_payload.get("total") or 0),
+            unread=int(summary_payload.get("unread") or 0),
+            awaiting=int(summary_payload.get("awaiting") or 0),
+            folders=[
+                CRMInboxFolder(
+                    id=str(entry.get("id")),
+                    label=str(entry.get("label") or ""),
+                    count=int(entry.get("count") or 0),
+                )
+                for entry in (summary_payload.get("folders") or [])
+                if isinstance(entry, dict) and entry.get("id")
+            ],
+        ).model_dump()
+        if isinstance(summary_payload, dict)
+        else None
+    )
+
+    threads = [
+        item.model_dump(mode="json") if isinstance(item, CRMInboxThread) else item
+        for item in (payload_by_label.get("threads") or [])
+    ]
+    filter_options_payload = payload_by_label.get("filter_options")
+    filter_options = (
+        filter_options_payload.model_dump(mode="json")
+        if isinstance(filter_options_payload, CRMInboxContextFilters)
+        else None
+    )
+
+    duration_ms = (time.perf_counter() - started) * 1000
+    logger.info(
+        "crm.inbox.bootstrap",
+        extra={
+            "duration_ms": round(duration_ms, 2),
+            "rows": len(threads),
+            "include_summary": include_summary,
+            "include_filter_options": include_filter_options,
+            "limit": limit,
+            "offset": offset,
+            "enrich_requested": bool(enrich),
+        },
+    )
+    return {
+        "ok": True,
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "runtime_profile": runtime_profile,
+        "summary": summary,
+        "threads": {
+            "items": threads,
+            "limit": int(limit),
+            "offset": int(offset),
+        },
+        "filter_options": filter_options,
     }
 
 
@@ -16564,6 +16720,84 @@ async def listar_prospectos_query_metadata(
                 "failed": request_failed,
             },
         )
+
+
+@router.get("/prospeccion/prospectos/bootstrap")
+async def listar_prospectos_bootstrap(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    _: str = Depends(require_permission("ejecutar_busquedas")),
+    user_token: str = Depends(require_user_token),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    usuario_id: UUID | None = Depends(optional_usuario_id),
+    params: ProspectoListQuery = Depends(),
+    metadata_query: Annotated[list[str] | None, Query(alias="metadata_query")] = None,
+    actividad: Annotated[list[str] | None, Query(alias="actividad")] = None,
+    query: Annotated[list[str] | None, Query(alias="query")] = None,
+    include_preferences: bool = Query(default=False),
+) -> dict[str, Any]:
+    """BFF agregador para Prospección: lista + metadatos + preferencias."""
+
+    started = time.perf_counter()
+    list_task = listar_prospectos(
+        repo=repo,
+        _="",
+        user_token=user_token,
+        organizacion_id=organizacion_id,
+        usuario_id=usuario_id,
+        params=params,
+        metadata_query=metadata_query,
+        actividad=actividad,
+    )
+    query_task = listar_prospectos_query_metadata(
+        repo=repo,
+        _="",
+        user_token=user_token,
+        organizacion_id=organizacion_id,
+        usuario_id=usuario_id,
+        query=query,
+        fuente=params.fuente,
+        date_from=params.date_from,
+        date_to=params.date_to,
+    )
+    tasks: list[Awaitable[Any]] = [list_task, query_task]
+    if include_preferences:
+        tasks.append(
+            obtener_preferencias_tabla_prospectos(
+                repo=repo,
+                _="",
+                user_token=user_token,
+            )
+        )
+    results = await asyncio.gather(*tasks)
+    list_payload = results[0] if isinstance(results[0], dict) else {"ok": False}
+    query_payload = results[1] if isinstance(results[1], dict) else {"ok": False}
+    preferences_payload = (
+        results[2] if include_preferences and len(results) >= 3 and isinstance(results[2], dict) else None
+    )
+    duration_ms = (time.perf_counter() - started) * 1000
+    logger.info(
+        "crm.prospectos.bootstrap",
+        extra={
+            "duration_ms": round(duration_ms, 2),
+            "items": len(list_payload.get("items") or []),
+            "queries": len(query_payload.get("queries") or []),
+            "activities": len(query_payload.get("activities") or []),
+            "segmentos": len(query_payload.get("segmentos") or []),
+            "limit": params.limit,
+            "offset": params.offset,
+            "include_preferences": include_preferences,
+        },
+    )
+    return {
+        "ok": True,
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "prospectos": list_payload,
+        "metadata": query_payload,
+        "preferences": preferences_payload.get("preferences")
+        if isinstance(preferences_payload, dict)
+        else None,
+    }
 
 
 @router.get("/prospeccion/prospectos/preferences")

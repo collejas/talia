@@ -258,6 +258,21 @@ Se considera completado cuando por 7 días consecutivos:
   - Ajuste adicional en cuello principal `prospeccion/prospectos`:
     - Optimizada rama `con_envio=false` en backend para evitar conteo exacto por chunks cuando el set excluido es grande (`>500` IDs).
     - En sets grandes se usa total aproximado y se prioriza entrega rápida de página (menos round-trips de conteo).
+  - Fase 2/3 continuada (backend estructural + resiliencia):
+    - BFF Inbox implementado:
+      - endpoint nuevo `GET /api/crm/inbox/bootstrap`
+      - agrega en una sola respuesta: `runtime_profile` + `summary` + `threads` (+ `filter_options` opcional).
+    - BFF Prospección implementado:
+      - endpoint nuevo `GET /api/crm/prospeccion/prospectos/bootstrap`
+      - agrega en una sola respuesta: listado de prospectos + metadata (`queries/activities/segmentos`) + preferencias opcionales.
+    - Circuit breaker Inbox implementado:
+      - cuando `high_demand_mode` está activo, se difiere enriquecimiento pesado en `inbox/threads` (excepto `source=publicidad_whatsapp`).
+      - nueva bandera de configuración: `HIGH_DEMAND_INBOX_ENRICHMENTS_FORCE_DEFER` (default `true`).
+    - Cola robusta de notificaciones críticas al vendedor:
+      - migración aplicada: `20280426_150000_sales_notification_jobs.sql` (tabla `public.sales_notification_jobs`).
+      - worker nuevo: `app.services.sales_notification_jobs`.
+      - los flujos webchat (`booking_confirmed`, `booking_canceled`, `webchat_session_closed`) ahora encolan notificaciones para envío asíncrono con lease y reintentos.
+      - `notify_sales_rep` ahora soporta `raise_on_delivery_error=True` para habilitar retry real desde el worker.
     - Se incrementó tamaño de página de escaneo interno para reducir llamadas en esa rama.
     - Validación: `python3 -m py_compile backend/app/repositories/crm.py` ✅
   - Inbox MV implementada:

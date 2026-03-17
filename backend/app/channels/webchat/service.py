@@ -48,7 +48,6 @@ from app.services import (
 )
 from app.services.tenant_runtime import CalendarProviderSettings
 from app.services.time_utils import get_current_time_reference
-from app.channels.webchat import notifications as webchat_notifications
 from app.services import calendar as calendar_service
 from app.services import openai as openai_service
 from app.services import tenant_runtime
@@ -74,6 +73,7 @@ from app.services.scoring_contract import (
 )
 from app.services.storage import StorageError
 from app.services.high_demand_mode import high_demand_controller
+from app.services.sales_notification_jobs import enqueue_webchat_sales_notification
 from app.services.zoom import ZoomClient, ZoomError
 from app.logging.catalog_debug import write_catalog_debug_entry
 
@@ -4592,9 +4592,13 @@ async def _execute_function_call(
                     extra={"conversation_id": context.conversation_id, "error": str(exc)},
                 )
         try:
-            await webchat_notifications.notify_sales_rep(
-                context=context,
+            org_uuid = UUID(str((contact or {}).get("organizacion_id")))
+            await enqueue_webchat_sales_notification(
+                conversation_id=context.conversation_id,
+                contact_id=context.contact_id,
                 trigger="booking_confirmed",
+                channel="webchat",
+                organizacion_id=org_uuid,
                 contact=contact,
                 opportunity_id=str(tarjeta_id),
                 resumen="Cita agendada",
@@ -4613,7 +4617,7 @@ async def _execute_function_call(
             )
         except Exception as exc:
             logger.warning(
-                "webchat.booking_notify_failed",
+                "webchat.booking_notify_enqueue_failed",
                 extra={
                     "conversation_id": context.conversation_id,
                     "tarjeta_id": tarjeta_id,
@@ -4706,9 +4710,13 @@ async def _execute_function_call(
         }
         contact = await _resolve_contact(context.contact_id)
         try:
-            await webchat_notifications.notify_sales_rep(
-                context=context,
+            org_uuid = UUID(str((contact or {}).get("organizacion_id")))
+            await enqueue_webchat_sales_notification(
+                conversation_id=context.conversation_id,
+                contact_id=context.contact_id,
                 trigger="booking_canceled",
+                channel="webchat",
+                organizacion_id=org_uuid,
                 contact=contact,
                 opportunity_id=None,
                 resumen="Cita cancelada",
@@ -4723,7 +4731,7 @@ async def _execute_function_call(
             )
         except Exception as exc:
             logger.warning(
-                "webchat.cancel_notify_failed",
+                "webchat.cancel_notify_enqueue_failed",
                 extra={
                     "conversation_id": context.conversation_id,
                     "booking_id": booking_payload["booking_id"],

@@ -275,6 +275,7 @@ async def notify_sales_rep(
     email: str | None,
     extra: dict[str, Any] | None = None,
     force_retry: bool = False,
+    raise_on_delivery_error: bool = False,
 ) -> None:
     channel_value = str(getattr(context, "channel", None) or "webchat").strip().lower() or "webchat"
     contact_record = contact or await storage.fetch_contact(context.contact_id)
@@ -526,6 +527,8 @@ async def notify_sales_rep(
                 "error": str(exc),
             },
         )
+        if raise_on_delivery_error:
+            raise RuntimeError(f"sales_notification_delivery_exception:{exc}") from exc
         return
 
     send_error = getattr(send_result, "error", None) if send_result else None
@@ -538,6 +541,8 @@ async def notify_sales_rep(
                 "error": send_error,
             },
         )
+        if raise_on_delivery_error:
+            raise RuntimeError(f"sales_notification_delivery_error:{send_error}")
         return
 
     message_sid = getattr(send_result, "sid", None) if send_result else None

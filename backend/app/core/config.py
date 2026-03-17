@@ -598,6 +598,17 @@ class Settings(BaseSettings):
             "TALIA_HIGH_DEMAND_RECOMMENDED_INBOX_POLL_SECONDS",
         ),
     )
+    high_demand_inbox_enrichments_force_defer: bool = Field(
+        default=True,
+        description=(
+            "Si está activo, difiere enriquecimientos pesados de Inbox threads cuando "
+            "high_demand_mode está activo."
+        ),
+        validation_alias=AliasChoices(
+            "HIGH_DEMAND_INBOX_ENRICHMENTS_FORCE_DEFER",
+            "TALIA_HIGH_DEMAND_INBOX_ENRICHMENTS_FORCE_DEFER",
+        ),
+    )
     inbox_threads_default_poll_seconds: int = Field(
         default=12,
         ge=5,
@@ -640,6 +651,44 @@ class Settings(BaseSettings):
         validation_alias=AliasChoices(
             "HIGH_DEMAND_ALERT_COOLDOWN_SECONDS",
             "TALIA_HIGH_DEMAND_ALERT_COOLDOWN_SECONDS",
+        ),
+    )
+    sales_notification_queue_enabled: bool = Field(
+        default=True,
+        description="Activa la cola asíncrona de notificaciones críticas al vendedor.",
+        validation_alias=AliasChoices(
+            "SALES_NOTIFICATION_QUEUE_ENABLED",
+            "TALIA_SALES_NOTIFICATION_QUEUE_ENABLED",
+        ),
+    )
+    sales_notification_runner_interval_seconds: int = Field(
+        default=20,
+        ge=5,
+        le=300,
+        description="Intervalo del worker de cola para notificaciones a vendedor.",
+        validation_alias=AliasChoices(
+            "SALES_NOTIFICATION_RUNNER_INTERVAL_SECONDS",
+            "TALIA_SALES_NOTIFICATION_RUNNER_INTERVAL_SECONDS",
+        ),
+    )
+    sales_notification_job_lease_seconds: int = Field(
+        default=120,
+        ge=30,
+        le=900,
+        description="Lease por job en procesamiento para evitar dobles envíos concurrentes.",
+        validation_alias=AliasChoices(
+            "SALES_NOTIFICATION_JOB_LEASE_SECONDS",
+            "TALIA_SALES_NOTIFICATION_JOB_LEASE_SECONDS",
+        ),
+    )
+    sales_notification_max_attempts: int = Field(
+        default=5,
+        ge=1,
+        le=20,
+        description="Número máximo de reintentos por notificación al vendedor.",
+        validation_alias=AliasChoices(
+            "SALES_NOTIFICATION_MAX_ATTEMPTS",
+            "TALIA_SALES_NOTIFICATION_MAX_ATTEMPTS",
         ),
     )
     webchat_inactivity_minutes: int | None = Field(

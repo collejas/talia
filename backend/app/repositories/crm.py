@@ -11674,6 +11674,234 @@ class CRMRepository:
         if not isinstance(data, list):
             raise CRMRepositoryError(f"worker_insert_log_invalid:{data!r}")
 
+    async def worker_enqueue_sales_notification_job(
+        self,
+        *,
+        organizacion_id: UUID,
+        channel: str,
+        trigger: str,
+        conversation_id: UUID,
+        contact_id: UUID,
+        opportunity_id: UUID | None,
+        payload: dict[str, Any],
+        max_attempts: int,
+    ) -> dict[str, Any]:
+        """Encola una notificación crítica para vendedor."""
+
+        channel_value = str(channel or "webchat").strip().lower() or "webchat"
+        trigger_value = str(trigger or "").strip()
+        if not trigger_value:
+            raise CRMRepositoryError("worker_sales_notification_trigger_required")
+        row_payload = {
+            "organizacion_id": str(organizacion_id),
+            "channel": channel_value,
+            "trigger": trigger_value,
+            "conversation_id": str(conversation_id),
+            "contact_id": str(contact_id),
+            "opportunity_id": str(opportunity_id) if opportunity_id else None,
+            "payload": payload,
+            "state": "pending",
+            "available_at": datetime.now(timezone.utc).isoformat(),
+            "max_attempts": max(1, int(max_attempts)),
+        }
+        resp = await self._request(
+            "POST",
+            "/rest/v1/sales_notification_jobs",
+            json=[row_payload],
+            prefer="return=representation",
+        )
+        data = resp.json() or []
+        if not isinstance(data, list) or not data or not isinstance(data[0], dict):
+            raise CRMRepositoryError(f"worker_sales_notification_enqueue_invalid:{data!r}")
+        return data[0]
+
+    async def worker_requeue_expired_sales_notification_jobs(self, *, limit: int = 100) -> int:
+        """Regresa a pending jobs en processing cuyo lease expiró."""
+
+        now_iso = datetime.now(timezone.utc).isoformat()
+        resp = await self._request(
+            "PATCH",
+            "/rest/v1/sales_notification_jobs",
+            params={
+                "state": "eq.processing",
+                "lease_until": f"lt.{now_iso}",
+                "limit": str(max(1, int(limit))),
+            },
+            json={
+                "state": "pending",
+                "lease_until": None,
+                "available_at": now_iso,
+                "updated_at": now_iso,
+                "last_error": "lease_expired_auto_requeue",
+            },
+            prefer="return=representation",
+        )
+        data = resp.json() or []
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"worker_sales_notification_requeue_invalid:{data!r}")
+        return len(data)
+
+    async def worker_list_ready_sales_notification_jobs(
+        self,
+        *,
+        limit: int = 25,
+    ) -> list[dict[str, Any]]:
+        """Lista jobs pendientes listos para intentar."""
+
+        now_iso = datetime.now(timezone.utc).isoformat()
+        resp = await self._request(
+            "GET",
+            "/rest/v1/sales_notification_jobs",
+            params={
+                "select": "*",
+                "state": "eq.pending",
+                "available_at": f"lte.{now_iso}",
+                "order": "available_at.asc,created_at.asc",
+                "limit": str(max(1, int(limit))),
+            },
+        )
+        data = resp.json() or []
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"worker_sales_notification_list_invalid:{data!r}")
+        output: list[dict[str, Any]] = []
+        for row in data:
+            if isinstance(row, dict):
+                output.append(row)
+        return output
+
+    async def worker_claim_sales_notification_job(
+        self,
+        *,
+        job_id: UUID,
+        expected_attempt_count: int,
+        lease_seconds: int,
+    ) -> dict[str, Any] | None:
+        """Intenta reclamar un job pendiente para procesamiento exclusivo."""
+
+        now_dt = datetime.now(timezone.utc)
+        now_iso = now_dt.isoformat()
+        lease_until = (now_dt + timedelta(seconds=max(30, int(lease_seconds)))).isoformat()
+        resp = await self._request(
+            "PATCH",
+            "/rest/v1/sales_notification_jobs",
+            params={
+                "id": f"eq.{job_id}",
+                "state": "eq.pending",
+                "attempt_count": f"eq.{max(0, int(expected_attempt_count))}",
+                "available_at": f"lte.{now_iso}",
+            },
+            json={
+                "state": "processing",
+                "attempt_count": max(0, int(expected_attempt_count)) + 1,
+                "lease_until": lease_until,
+                "updated_at": now_iso,
+            },
+            prefer="return=representation",
+        )
+        data = resp.json() or []
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"worker_sales_notification_claim_invalid:{data!r}")
+        if not data:
+            return None
+        row = data[0]
+        if not isinstance(row, dict):
+            raise CRMRepositoryError(f"worker_sales_notification_claim_row_invalid:{row!r}")
+        return row
+
+    async def worker_mark_sales_notification_done(
+        self,
+        *,
+        job_id: UUID,
+        result: dict[str, Any] | None = None,
+    ) -> dict[str, Any] | None:
+        """Marca un job como completado."""
+
+        now_iso = datetime.now(timezone.utc).isoformat()
+        payload: dict[str, Any] = {
+            "state": "done",
+            "lease_until": None,
+            "processed_at": now_iso,
+            "updated_at": now_iso,
+            "last_error": None,
+        }
+        if isinstance(result, dict) and result:
+            payload["payload"] = result
+        resp = await self._request(
+            "PATCH",
+            "/rest/v1/sales_notification_jobs",
+            params={
+                "id": f"eq.{job_id}",
+                "state": "eq.processing",
+            },
+            json=payload,
+            prefer="return=representation",
+        )
+        data = resp.json() or []
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"worker_sales_notification_done_invalid:{data!r}")
+        if not data:
+            return None
+        row = data[0]
+        if not isinstance(row, dict):
+            raise CRMRepositoryError(f"worker_sales_notification_done_row_invalid:{row!r}")
+        return row
+
+    async def worker_mark_sales_notification_retry_or_failed(
+        self,
+        *,
+        job_id: UUID,
+        attempt_count: int,
+        max_attempts: int,
+        error: str,
+        retry_delay_seconds: int,
+    ) -> dict[str, Any] | None:
+        """Reagenda retry o marca fallo definitivo según intentos."""
+
+        now_dt = datetime.now(timezone.utc)
+        now_iso = now_dt.isoformat()
+        attempts_done = max(0, int(attempt_count))
+        attempts_allowed = max(1, int(max_attempts))
+        error_text = str(error or "unknown_error").strip()[:1000] or "unknown_error"
+        should_retry = attempts_done < attempts_allowed
+        if should_retry:
+            next_available = (
+                now_dt + timedelta(seconds=max(5, int(retry_delay_seconds)))
+            ).isoformat()
+            payload = {
+                "state": "pending",
+                "available_at": next_available,
+                "lease_until": None,
+                "updated_at": now_iso,
+                "last_error": error_text,
+            }
+        else:
+            payload = {
+                "state": "failed",
+                "processed_at": now_iso,
+                "lease_until": None,
+                "updated_at": now_iso,
+                "last_error": error_text,
+            }
+        resp = await self._request(
+            "PATCH",
+            "/rest/v1/sales_notification_jobs",
+            params={
+                "id": f"eq.{job_id}",
+                "state": "eq.processing",
+            },
+            json=payload,
+            prefer="return=representation",
+        )
+        data = resp.json() or []
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"worker_sales_notification_retry_invalid:{data!r}")
+        if not data:
+            return None
+        row = data[0]
+        if not isinstance(row, dict):
+            raise CRMRepositoryError(f"worker_sales_notification_retry_row_invalid:{row!r}")
+        return row
+
     async def worker_find_contact_by_prospecto(
         self,
         *,

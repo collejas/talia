@@ -27,6 +27,7 @@ from app.core.middleware import RequestLoggingMiddleware
 from app.services.prospeccion_contact_sender import contact_sender
 from app.services.prospeccion_email_inbound_reader import email_inbound_reader
 from app.services.high_demand_mode import high_demand_mode_runner
+from app.services.sales_notification_jobs import sales_notification_jobs_runner
 from app.services.role_permissions_sync import maybe_sync_role_permissions_on_start
 from app.services.webchat_followups import (
     closure_rescue_runner as webchat_closure_rescue_runner,
@@ -48,9 +49,11 @@ async def app_lifespan(_: FastAPI):
     await inbox_threads_metrics_snapshot_runner.start()
     await inbox_snapshot_refresh_runner.start()
     await high_demand_mode_runner.start()
+    await sales_notification_jobs_runner.start()
     try:
         yield
     finally:
+        await sales_notification_jobs_runner.shutdown()
         await high_demand_mode_runner.shutdown()
         await inbox_snapshot_refresh_runner.shutdown()
         await inbox_threads_metrics_snapshot_runner.shutdown()

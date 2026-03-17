@@ -13,6 +13,7 @@ from app.channels.whatsapp import tools as whatsapp_tools
 from app.core.config import settings
 from app.core.logging import get_logger, log_event
 from app.repositories.crm import CRMRepository, CRMRepositoryError
+from app.services.sales_notification_jobs import enqueue_webchat_sales_notification
 from app.services.non_critical_job_gate import should_defer_non_critical_jobs
 from app.services import storage
 from app.services.storage import StorageError
@@ -876,13 +877,13 @@ async def notify_session_closed_lead(
     if not opportunity_id:
         return False
 
-    # Import diferido para evitar ciclos de importación durante bootstrap.
-    from app.channels.webchat import notifications as webchat_notifications
-
     try:
-        await webchat_notifications.notify_sales_rep(
-            context=context,
+        await enqueue_webchat_sales_notification(
+            conversation_id=context.conversation_id,
+            contact_id=context.contact_id,
             trigger="webchat_session_closed",
+            channel="webchat",
+            organizacion_id=org_uuid,
             contact=contact,
             opportunity_id=opportunity_id,
             resumen=resumen,
@@ -892,7 +893,7 @@ async def notify_session_closed_lead(
         )
     except Exception as exc:  # pragma: no cover - best effort
         logger.warning(
-            "webchat.session_closed.notify_failed",
+            "webchat.session_closed.notify_enqueue_failed",
             extra={
                 "session_id": session_key,
                 "conversation_id": conversation_id,
