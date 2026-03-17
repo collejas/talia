@@ -26467,9 +26467,38 @@ def _buscador_result_to_prospecto(
                 return value.strip()
         return None
 
+    def domain_from_website(value: Any) -> str | None:
+        raw_value = _clean_text(value)
+        if not raw_value:
+            return None
+        candidate = raw_value if raw_value.startswith(("http://", "https://")) else f"https://{raw_value}"
+        try:
+            parsed = urlparse(candidate)
+        except ValueError:
+            return None
+        host = (parsed.hostname or parsed.netloc or "").strip().lower()
+        if not host:
+            return None
+        host = host.split(":", 1)[0].strip(".")
+        host = re.sub(r"^www\d*\.", "", host)
+        return host or None
+
+    def domain_from_email(value: str | None) -> str | None:
+        if not value or "@" not in value:
+            return None
+        host = value.split("@", 1)[1].strip().lower().strip(".")
+        host = re.sub(r"^www\d*\.", "", host)
+        return host or None
+
     email = _normalize_email(pick("correo", "email"))
-    display_name = pick("name") or email or row.get("dominio") or pick("url", "source_url")
-    if not display_name:
+    website = pick("url", "source_url")
+    display_name = (
+        domain_from_website(website)
+        or domain_from_website(row.get("dominio"))
+        or domain_from_email(email)
+        or "Contacto web"
+    )
+    if len(display_name.strip()) < 2:
         display_name = "Contacto web"
 
     metadata = _ensure_dict(row.get("metadata"), default={})
@@ -26486,11 +26515,11 @@ def _buscador_result_to_prospecto(
         "fuente": "usuario",
         "fuente_busqueda": "buscador",
         "display_name": display_name,
-        "actividad": contacto_dict.get("position"),
-        "phone": pick("telefono", "phone"),
+        "actividad": None,
+        "phone": None,
         "email": email,
-        "website": pick("url", "source_url"),
-        "address": pick("address"),
+        "website": website,
+        "address": None,
         "segmento": segmento,
         "metadata": metadata,
     }

@@ -25,7 +25,6 @@ else:  # pragma: no cover - fallback log
     LOG.warning("buscador.path_missing", extra={"expected": str(BUSCADOR_ROOT)})
 
 try:
-    from buscador.core.contact_extractor import ContactContextExtractor
     from buscador.core.extractor import EmailExtractor
     from buscador.core.fetcher import HttpFetcher
     from buscador.scrapers.demo_site import DemoSiteScraper
@@ -105,8 +104,6 @@ def _run_buscador_sync(
     else:
         fetcher = HttpFetcher(min_interval_per_host=0.25)
     email_extractor = EmailExtractor()
-    contact_extractor = ContactContextExtractor()
-
     stop_callback: Callable[[], str | None] | None = None
     if control is not None:
         stop_callback = control.check_stop
@@ -115,7 +112,6 @@ def _run_buscador_sync(
         params,
         fetcher,
         email_extractor,
-        contact_extractor,
         stop_callback=stop_callback,
     )
     start_time = time.perf_counter()
@@ -152,7 +148,6 @@ def _build_scraper(
     params: BuscadorParams,
     fetcher: HttpFetcher,
     email_extractor: EmailExtractor,
-    contact_extractor: ContactContextExtractor,
     *,
     stop_callback: Callable[[], str | None] | None = None,
 ):
@@ -169,7 +164,7 @@ def _build_scraper(
             mode=params.mode,
             fetcher=fetcher,
             extractor=email_extractor,
-            contact_extractor=contact_extractor,
+            contact_extractor=None,
             start_url=params.url or "",
             max_pages=params.max_pages,
             max_depth=params.max_depth,
@@ -209,11 +204,6 @@ def _normalize_results(raw_results: list[dict[str, Any]]) -> list[dict[str, Any]
             {
                 "source_url": source_url,
                 "email": email,
-                "name": item.get("name"),
-                "position": item.get("position"),
-                "phone": item.get("phone"),
-                "extension": item.get("extension"),
-                "address": item.get("address"),
             }
         )
 

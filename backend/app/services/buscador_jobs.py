@@ -162,15 +162,20 @@ class BuscadorJobManager:
         rows: list[dict[str, Any]] = []
         for item in result.results:
             url_value = item.get("source_url") or ""
+            email_value = item.get("email")
+            contact_payload = {
+                "source_url": url_value,
+                "email": email_value,
+            }
             rows.append(
                 {
                     "job_id": str(job.id),
                     "organizacion_id": str(job.organizacion_id) if job.organizacion_id else None,
                     "url": url_value,
                     "dominio": _extract_domain(url_value),
-                    "correo": item.get("email"),
-                    "telefono": item.get("phone"),
-                    "contacto": item,
+                    "correo": email_value,
+                    "telefono": None,
+                    "contacto": contact_payload,
                     "metadata": {},
                 }
             )
