@@ -13,12 +13,19 @@ Documentación generada para diagnóstico y plan de mejora de rendimiento en bac
   - Metas de latencia, riesgos y criterio de cierre.
   - Incluye sección de avance implementado (Fase 1 inbox).
 
+- `03_plan_integral_realtime_mv_sin_redis.md`
+  - Plan maestro actualizado sin Redis.
+  - Integra `Realtime + materialized views/cache + queries optimizadas`.
+  - Incluye 10 líneas de trabajo adicionales, priorización y criterios de éxito.
+
 ## Orden recomendado
 
 1. Leer `01_diagnostico_actual.md`.
-2. Ejecutar `02_plan_mejora.md` en fases, con medición continua.
+2. Revisar avance histórico en `02_plan_mejora.md`.
+3. Ejecutar `03_plan_integral_realtime_mv_sin_redis.md` como plan principal, con medición continua.
 
 ## Estado actual
 
 - Avance registrado al 2026-03-17:
   - Fase 1 parcialmente implementada en backend inbox.
+  - Plan integral actualizado (sin Redis) documentado en archivo 03.
