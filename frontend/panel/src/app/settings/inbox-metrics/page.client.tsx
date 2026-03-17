@@ -33,6 +33,25 @@ type CurrentMetricsResponse = {
     hit_rate?: number;
   };
   slow_queries_over_3000ms?: number;
+  process_metrics?: {
+    window_seconds?: number;
+    sample_count?: number;
+    endpoints?: Record<
+      string,
+      {
+        request_count?: number;
+        latency_ms?: {
+          p50?: number;
+          p90?: number;
+          p95?: number;
+          avg?: number;
+          max?: number;
+        };
+        slow_queries_over_3000ms?: number;
+        flags?: Record<string, number>;
+      }
+    >;
+  };
   error?: string;
 };
 
@@ -68,6 +87,11 @@ function formatDate(value: string | undefined): string {
 function formatRate(value: number | undefined): string {
   if (typeof value !== "number" || Number.isNaN(value)) return "0.00%";
   return `${(value * 100).toFixed(2)}%`;
+}
+
+function formatMetric(value: number | undefined): string {
+  if (typeof value !== "number" || Number.isNaN(value)) return "—";
+  return value.toFixed(2);
 }
 
 function metricTone(value: number | undefined, warnAt: number, dangerAt: number): "secondary" | "outline" | "destructive" {
@@ -215,6 +239,9 @@ export function InboxMetricsOwnerClient() {
   const p95 = current?.latency_ms?.p95;
   const hitRate = current?.cache?.hit_rate;
   const slowQueries = current?.slow_queries_over_3000ms;
+  const processEndpoints = current?.process_metrics?.endpoints ?? {};
+  const prospectListMetrics = processEndpoints["prospeccion.prospectos.list"];
+  const prospectQueriesMetrics = processEndpoints["prospeccion.prospectos.queries"];
   const chartPoints = React.useMemo(() => buildChartPoints(history), [history]);
   const p95Polyline = React.useMemo(
     () => buildPolyline(chartPoints.map((point) => point.p95), 100, 32),
@@ -327,6 +354,32 @@ export function InboxMetricsOwnerClient() {
 
       <Card>
         <CardHeader className="pb-2">
+          <CardTitle>Métricas de Proceso (Prospección)</CardTitle>
+        </CardHeader>
+        <CardContent className="grid gap-4 md:grid-cols-2">
+          <div className="rounded-lg border border-border/60 p-3">
+            <p className="text-sm font-medium">/prospeccion/prospectos</p>
+            <div className="mt-2 text-sm text-muted-foreground">
+              req: {prospectListMetrics?.request_count ?? 0} · p95: {formatMetric(prospectListMetrics?.latency_ms?.p95)} ms
+            </div>
+            <div className="text-sm text-muted-foreground">
+              slow &gt; 3s: {prospectListMetrics?.slow_queries_over_3000ms ?? 0}
+            </div>
+          </div>
+          <div className="rounded-lg border border-border/60 p-3">
+            <p className="text-sm font-medium">/prospeccion/prospectos/queries</p>
+            <div className="mt-2 text-sm text-muted-foreground">
+              req: {prospectQueriesMetrics?.request_count ?? 0} · p95: {formatMetric(prospectQueriesMetrics?.latency_ms?.p95)} ms
+            </div>
+            <div className="text-sm text-muted-foreground">
+              slow &gt; 3s: {prospectQueriesMetrics?.slow_queries_over_3000ms ?? 0}
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="pb-2">
           <CardTitle>Mini gráfica (últimos 24 snapshots)</CardTitle>
         </CardHeader>
         <CardContent className="grid gap-4 md:grid-cols-2">
@@ -382,6 +435,8 @@ export function InboxMetricsOwnerClient() {
                   <TableHead>p95</TableHead>
                   <TableHead>Hit-rate</TableHead>
                   <TableHead>Slow &gt;3s</TableHead>
+                  <TableHead>Prospectos p95</TableHead>
+                  <TableHead>Queries p95</TableHead>
                   <TableHead>Samples</TableHead>
                   <TableHead>Actor</TableHead>
                 </TableRow>
@@ -397,6 +452,12 @@ export function InboxMetricsOwnerClient() {
                         <TableCell>{snapshot.latency_ms?.p95 ?? "—"}</TableCell>
                         <TableCell>{formatRate(snapshot.cache?.hit_rate)}</TableCell>
                         <TableCell>{snapshot.slow_queries_over_3000ms ?? "—"}</TableCell>
+                        <TableCell>
+                          {snapshot.process_metrics?.endpoints?.["prospeccion.prospectos.list"]?.latency_ms?.p95 ?? "—"}
+                        </TableCell>
+                        <TableCell>
+                          {snapshot.process_metrics?.endpoints?.["prospeccion.prospectos.queries"]?.latency_ms?.p95 ?? "—"}
+                        </TableCell>
                         <TableCell>{snapshot.sample_count ?? "—"}</TableCell>
                         <TableCell className="font-mono text-xs">
                           {item.actor_user_id ?? "—"}
@@ -406,7 +467,7 @@ export function InboxMetricsOwnerClient() {
                   })
                 ) : (
                   <TableRow>
-                    <TableCell colSpan={7} className="text-center text-sm text-muted-foreground">
+                    <TableCell colSpan={9} className="text-center text-sm text-muted-foreground">
                       No hay snapshots guardados todavía.
                     </TableCell>
                   </TableRow>

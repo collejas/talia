@@ -152,6 +152,7 @@ _INBOX_CATALOG_CACHE_LOCK = asyncio.Lock()
 INBOX_THREADS_METRICS_WINDOW_SECONDS = 900
 INBOX_THREADS_METRICS_MAX_SAMPLES = 5000
 INBOX_THREADS_STAGE_METRICS_MAX_SAMPLES = 5000
+PROSPECTOS_PROCESS_METRICS_MAX_SAMPLES = 5000
 _INBOX_THREADS_METRICS_LOCK = asyncio.Lock()
 _INBOX_THREADS_METRICS_SAMPLES: deque[tuple[float, float]] = deque(
     maxlen=INBOX_THREADS_METRICS_MAX_SAMPLES
@@ -162,6 +163,10 @@ _INBOX_THREADS_STAGE_METRICS_SAMPLES: deque[tuple[float, dict[str, float]]] = de
 _INBOX_THREADS_METRICS_CACHE_HITS = 0
 _INBOX_THREADS_METRICS_CACHE_MISSES = 0
 _INBOX_THREADS_METRICS_SLOW_QUERIES = 0
+_PROSPECTOS_PROCESS_METRICS_LOCK = asyncio.Lock()
+_PROSPECTOS_PROCESS_METRICS_SAMPLES: deque[tuple[float, str, float, dict[str, Any]]] = deque(
+    maxlen=PROSPECTOS_PROCESS_METRICS_MAX_SAMPLES
+)
 INBOX_THREADS_WHATSAPP_HINT_CACHE_TTL_SECONDS = 60.0
 INBOX_THREADS_WHATSAPP_HINT_LOOKUP_CONCURRENCY = 8
 INBOX_THREADS_WHATSAPP_HINT_CACHE_MAX_ENTRIES = 2048
@@ -495,12 +500,107 @@ async def _snapshot_inbox_threads_metrics(*, window_seconds: int) -> dict[str, A
     }
 
 
+async def _record_prospectos_process_metrics(
+    *,
+    endpoint: str,
+    duration_ms: float,
+    flags: dict[str, Any] | None = None,
+) -> None:
+    now = time.monotonic()
+    normalized_flags: dict[str, Any] = {}
+    for key, value in (flags or {}).items():
+        if not isinstance(key, str):
+            continue
+        if isinstance(value, bool):
+            normalized_flags[key] = value
+            continue
+        if isinstance(value, (int, float)) and not isinstance(value, bool):
+            normalized_flags[key] = float(value)
+            continue
+    async with _PROSPECTOS_PROCESS_METRICS_LOCK:
+        _PROSPECTOS_PROCESS_METRICS_SAMPLES.append(
+            (
+                now,
+                str(endpoint or "unknown"),
+                max(0.0, float(duration_ms)),
+                normalized_flags,
+            )
+        )
+        cutoff = now - INBOX_THREADS_METRICS_WINDOW_SECONDS
+        while _PROSPECTOS_PROCESS_METRICS_SAMPLES and _PROSPECTOS_PROCESS_METRICS_SAMPLES[0][0] < cutoff:
+            _PROSPECTOS_PROCESS_METRICS_SAMPLES.popleft()
+
+
+async def _snapshot_prospectos_process_metrics(*, window_seconds: int) -> dict[str, Any]:
+    now = time.monotonic()
+    cutoff = now - window_seconds
+    async with _PROSPECTOS_PROCESS_METRICS_LOCK:
+        samples = [
+            (endpoint, duration, flags)
+            for ts, endpoint, duration, flags in _PROSPECTOS_PROCESS_METRICS_SAMPLES
+            if ts >= cutoff
+        ]
+
+    endpoints: dict[str, dict[str, Any]] = {}
+    for endpoint, duration, flags in samples:
+        bucket = endpoints.setdefault(
+            endpoint,
+            {
+                "durations": [],
+                "slow_queries_over_3000ms": 0,
+                "flag_counts": {},
+            },
+        )
+        durations = bucket["durations"]
+        durations.append(duration)
+        if duration > 3000:
+            bucket["slow_queries_over_3000ms"] += 1
+        flag_counts = bucket["flag_counts"]
+        for key, value in flags.items():
+            if isinstance(value, bool):
+                if value:
+                    flag_counts[key] = int(flag_counts.get(key, 0)) + 1
+            elif isinstance(value, (int, float)):
+                flag_counts[key] = float(flag_counts.get(key, 0.0)) + float(value)
+
+    normalized_endpoints: dict[str, Any] = {}
+    for endpoint, bucket in endpoints.items():
+        durations = sorted(bucket["durations"])
+        normalized_endpoints[endpoint] = {
+            "request_count": len(durations),
+            "latency_ms": {
+                "p50": round(_percentile(durations, 50), 2),
+                "p90": round(_percentile(durations, 90), 2),
+                "p95": round(_percentile(durations, 95), 2),
+                "max": round(durations[-1], 2) if durations else 0.0,
+                "avg": round((sum(durations) / len(durations)), 2) if durations else 0.0,
+            },
+            "slow_queries_over_3000ms": int(bucket["slow_queries_over_3000ms"]),
+            "flags": bucket["flag_counts"],
+        }
+
+    return {
+        "window_seconds": window_seconds,
+        "sample_count": len(samples),
+        "endpoints": normalized_endpoints,
+    }
+
+
+async def _snapshot_owner_metrics(*, window_seconds: int) -> dict[str, Any]:
+    inbox_snapshot = await _snapshot_inbox_threads_metrics(window_seconds=window_seconds)
+    process_snapshot = await _snapshot_prospectos_process_metrics(window_seconds=window_seconds)
+    return {
+        **inbox_snapshot,
+        "process_metrics": process_snapshot,
+    }
+
+
 async def _capture_inbox_threads_snapshot_entry(
     *,
     window_seconds: int,
     actor_user_id: str | None,
 ) -> dict[str, Any]:
-    snapshot = await _snapshot_inbox_threads_metrics(window_seconds=window_seconds)
+    snapshot = await _snapshot_owner_metrics(window_seconds=window_seconds)
     entry = {
         "captured_at": datetime.now(timezone.utc).isoformat(),
         "window_seconds": window_seconds,
@@ -12311,7 +12411,7 @@ async def get_inbox_threads_metrics(
 ) -> dict[str, Any]:
     """Métricas in-memory de latencia/cache para Inbox threads."""
 
-    snapshot = await _snapshot_inbox_threads_metrics(window_seconds=window_seconds)
+    snapshot = await _snapshot_owner_metrics(window_seconds=window_seconds)
     logger.info("crm.inbox.threads.metrics", extra=snapshot)
     return {"ok": True, **snapshot}
 
@@ -16076,71 +16176,95 @@ async def listar_prospectos(
 ) -> dict[str, Any]:
     """Devuelve prospectos guardados con paginación y filtros básicos."""
 
-    order_value = "display_name.asc.nullslast" if params.order == "nombre" else None
-    effective_timezone, _timezone_source = await _resolve_effective_timezone_name(
-        repo=repo,
-        organizacion_id=organizacion_id,
-        usuario_id=usuario_id,
-    )
+    request_started = time.perf_counter()
+    rows: list[dict[str, Any]] = []
+    total = 0
+    request_failed = False
     try:
-        rows, total = await repo.list_prospectos(
-            usuario_token=user_token,
-            limit=params.limit,
-            offset=params.offset,
-            search=params.search,
-            fuente=params.fuente or None,
-            lookup_status=params.lookup_status,
-            segmento=params.segmento,
-            carrier_type=params.carrier_type or None,
-            order=order_value,
-            stage=params.stage or None,
-            whatsapp_permitido=params.whatsapp_permitido,
-            llamada_permitida=params.llamada_permitida,
-            phone_present=params.phone_present,
-            email_present=params.email_present,
-            website_present=params.website_present,
-            date_from=params.date_from,
-            date_to=params.date_to,
-            geo_estado=params.geo_estado,
-            geo_municipio=params.geo_municipio,
-            min_rating=params.min_rating,
-            estrato_group=params.estrato_group,
-            metadata_queries=metadata_query,
-            actividades=actividad,
-            campana_id=params.campana_id,
-            con_envio=params.con_envio,
-            con_scraper=params.con_scraper,
-            timezone_name=effective_timezone,
+        order_value = "display_name.asc.nullslast" if params.order == "nombre" else None
+        effective_timezone, _timezone_source = await _resolve_effective_timezone_name(
+            repo=repo,
+            organizacion_id=organizacion_id,
+            usuario_id=usuario_id,
         )
-    except CRMRepositoryError as exc:
-        raise HTTPException(status_code=502, detail=str(exc)) from exc
+        try:
+            rows, total = await repo.list_prospectos(
+                usuario_token=user_token,
+                limit=params.limit,
+                offset=params.offset,
+                search=params.search,
+                fuente=params.fuente or None,
+                lookup_status=params.lookup_status,
+                segmento=params.segmento,
+                carrier_type=params.carrier_type or None,
+                order=order_value,
+                stage=params.stage or None,
+                whatsapp_permitido=params.whatsapp_permitido,
+                llamada_permitida=params.llamada_permitida,
+                phone_present=params.phone_present,
+                email_present=params.email_present,
+                website_present=params.website_present,
+                date_from=params.date_from,
+                date_to=params.date_to,
+                geo_estado=params.geo_estado,
+                geo_municipio=params.geo_municipio,
+                min_rating=params.min_rating,
+                estrato_group=params.estrato_group,
+                metadata_queries=metadata_query,
+                actividades=actividad,
+                campana_id=params.campana_id,
+                con_envio=params.con_envio,
+                con_scraper=params.con_scraper,
+                timezone_name=effective_timezone,
+            )
+        except CRMRepositoryError as exc:
+            raise HTTPException(status_code=502, detail=str(exc)) from exc
 
-    if rows:
-        prospecto_ids = [str(row.get("id") or "").strip() for row in rows if str(row.get("id") or "").strip()]
-        scraper_status_map: dict[str, dict[str, Any]] = {}
-        if params.include_scraper_status and prospecto_ids:
-            try:
-                scraper_status_map = await repo.list_scraper_status_by_prospectos(
-                    usuario_token=user_token,
-                    prospecto_ids=prospecto_ids,
-                )
-            except CRMRepositoryError as exc:
-                raise HTTPException(status_code=502, detail=str(exc)) from exc
+        if rows:
+            prospecto_ids = [str(row.get("id") or "").strip() for row in rows if str(row.get("id") or "").strip()]
+            scraper_status_map: dict[str, dict[str, Any]] = {}
+            if params.include_scraper_status and prospecto_ids:
+                try:
+                    scraper_status_map = await repo.list_scraper_status_by_prospectos(
+                        usuario_token=user_token,
+                        prospecto_ids=prospecto_ids,
+                    )
+                except CRMRepositoryError as exc:
+                    raise HTTPException(status_code=502, detail=str(exc)) from exc
 
-        for row in rows:
-            prospecto_id = str(row.get("id") or "").strip()
-            status_info = scraper_status_map.get(prospecto_id)
-            row["scraper_ejecutado"] = bool(status_info)
-            row["scraper_ultimo_en"] = status_info.get("ultimo_en") if status_info else None
-            row["scraper_ultimo_estado"] = status_info.get("estado") if status_info else None
+            for row in rows:
+                prospecto_id = str(row.get("id") or "").strip()
+                status_info = scraper_status_map.get(prospecto_id)
+                row["scraper_ejecutado"] = bool(status_info)
+                row["scraper_ultimo_en"] = status_info.get("ultimo_en") if status_info else None
+                row["scraper_ultimo_estado"] = status_info.get("estado") if status_info else None
 
-    return {
-        "ok": True,
-        "items": rows,
-        "total": total,
-        "limit": params.limit,
-        "offset": params.offset,
-    }
+        return {
+            "ok": True,
+            "items": rows,
+            "total": total,
+            "limit": params.limit,
+            "offset": params.offset,
+        }
+    except Exception:
+        request_failed = True
+        raise
+    finally:
+        duration_ms = (time.perf_counter() - request_started) * 1000
+        await _record_prospectos_process_metrics(
+            endpoint="prospeccion.prospectos.list",
+            duration_ms=duration_ms,
+            flags={
+                "include_scraper_status": bool(params.include_scraper_status),
+                "geo_filter": bool(params.geo_estado or params.geo_municipio),
+                "con_envio_filter": params.con_envio is not None,
+                "con_scraper_filter": params.con_scraper is not None,
+                "metadata_query_filter": bool(metadata_query),
+                "actividad_filter": bool(actividad),
+                "rows_returned": len(rows),
+                "failed": request_failed,
+            },
+        )
 
 
 @router.get("/prospeccion/prospectos/queries")
@@ -16158,6 +16282,9 @@ async def listar_prospectos_query_metadata(
 ) -> dict[str, Any]:
     """Lista nombres de consulta y actividades asociadas para los prospectos guardados."""
 
+    request_started = time.perf_counter()
+    request_failed = False
+    cache_hit = False
     normalized_query_filters = sorted(
         {
             value.strip()
@@ -16185,6 +16312,7 @@ async def listar_prospectos_query_metadata(
     )
     cached_payload = await _read_prospecto_queries_cache(cache_key)
     if cached_payload is not None:
+        cache_hit = True
         cache_entries = await _prospecto_queries_cache_size()
         logger.info(
             "crm.prospectos.queries.cache_hit",
@@ -16198,49 +16326,76 @@ async def listar_prospectos_query_metadata(
                 "has_date_to": bool(date_to),
             },
         )
-        return cached_payload
-    logger.info(
-        "crm.prospectos.queries.cache_miss",
-        extra={
-            "cache_key": cache_key[:12],
-            "query_signature": query_signature,
-            "query_filters": len(normalized_query_filters),
-            "fuente": fuente or "",
-            "has_date_from": bool(date_from),
-            "has_date_to": bool(date_to),
-        },
-    )
-
-    try:
-        metadata = await repo.list_prospecto_query_metadata(
-            usuario_token=user_token,
-            query_filters=normalized_query_filters,
-            fuente=fuente or None,
-            date_from=date_from,
-            date_to=date_to,
-            timezone_name=effective_timezone,
+        duration_ms = (time.perf_counter() - request_started) * 1000
+        await _record_prospectos_process_metrics(
+            endpoint="prospeccion.prospectos.queries",
+            duration_ms=duration_ms,
+            flags={
+                "cache_hit": True,
+                "has_query_filters": bool(normalized_query_filters),
+                "has_date_filter": bool(date_from or date_to),
+                "failed": False,
+            },
         )
-    except CRMRepositoryError as exc:
-        raise HTTPException(status_code=502, detail=str(exc)) from exc
-    payload = {
-        "ok": True,
-        "queries": metadata.get("queries", []),
-        "activities": metadata.get("activities", []),
-        "segmentos": metadata.get("segmentos", []),
-    }
-    await _write_prospecto_queries_cache(cache_key, payload)
-    logger.info(
-        "crm.prospectos.queries.cache_store",
-        extra={
-            "cache_key": cache_key[:12],
-            "query_signature": query_signature,
-            "query_filters": len(normalized_query_filters),
-            "queries_rows": len(payload.get("queries", [])),
-            "activities_rows": len(payload.get("activities", [])),
-            "segmentos_rows": len(payload.get("segmentos", [])),
-        },
-    )
-    return payload
+        return cached_payload
+    try:
+        logger.info(
+            "crm.prospectos.queries.cache_miss",
+            extra={
+                "cache_key": cache_key[:12],
+                "query_signature": query_signature,
+                "query_filters": len(normalized_query_filters),
+                "fuente": fuente or "",
+                "has_date_from": bool(date_from),
+                "has_date_to": bool(date_to),
+            },
+        )
+
+        try:
+            metadata = await repo.list_prospecto_query_metadata(
+                usuario_token=user_token,
+                query_filters=normalized_query_filters,
+                fuente=fuente or None,
+                date_from=date_from,
+                date_to=date_to,
+                timezone_name=effective_timezone,
+            )
+        except CRMRepositoryError as exc:
+            raise HTTPException(status_code=502, detail=str(exc)) from exc
+        payload = {
+            "ok": True,
+            "queries": metadata.get("queries", []),
+            "activities": metadata.get("activities", []),
+            "segmentos": metadata.get("segmentos", []),
+        }
+        await _write_prospecto_queries_cache(cache_key, payload)
+        logger.info(
+            "crm.prospectos.queries.cache_store",
+            extra={
+                "cache_key": cache_key[:12],
+                "query_signature": query_signature,
+                "query_filters": len(normalized_query_filters),
+                "queries_rows": len(payload.get("queries", [])),
+                "activities_rows": len(payload.get("activities", [])),
+                "segmentos_rows": len(payload.get("segmentos", [])),
+            },
+        )
+        return payload
+    except Exception:
+        request_failed = True
+        raise
+    finally:
+        duration_ms = (time.perf_counter() - request_started) * 1000
+        await _record_prospectos_process_metrics(
+            endpoint="prospeccion.prospectos.queries",
+            duration_ms=duration_ms,
+            flags={
+                "cache_hit": cache_hit,
+                "has_query_filters": bool(normalized_query_filters),
+                "has_date_filter": bool(date_from or date_to),
+                "failed": request_failed,
+            },
+        )
 
 
 @router.get("/prospeccion/prospectos/preferences")

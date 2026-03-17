@@ -8,6 +8,8 @@ import unicodedata
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 from functools import lru_cache
+from hashlib import sha1
+from time import monotonic
 from typing import Any, Iterable, Literal, Sequence
 from urllib.parse import quote as urlquote
 from uuid import UUID
@@ -25,6 +27,12 @@ class CRMRepositoryError(RuntimeError):
 
 
 QUOTE_WITH_ITEMS_SELECT = "*,items:lead_cotizacion_items(*,catalog_item:catalog_items(id,slug,nombre,tipo,unidad,precio_base,moneda,impuestos,activo,descripcion_corta))"
+
+PROSPECTOS_ENVIO_IDS_CACHE_TTL_SECONDS = 30.0
+PROSPECTOS_SCRAPER_IDS_CACHE_TTL_SECONDS = 30.0
+PROSPECTOS_IDS_CACHE_MAX_ENTRIES = 256
+_PROSPECTOS_ENVIO_IDS_CACHE: dict[str, tuple[float, set[str]]] = {}
+_PROSPECTOS_SCRAPER_IDS_CACHE: dict[str, tuple[float, set[str]]] = {}
 
 
 def _coerce_uuid(value: Any, *, field: str) -> UUID:
@@ -416,6 +424,41 @@ def _sort_prospect_rows(rows: list[dict[str, Any]], *, order: str | None = None)
         key=lambda row: str(row.get("creado_en") or ""),
         reverse=True,
     )
+
+
+def _build_prospectos_ids_cache_key(*, usuario_token: str, suffix: str) -> str:
+    token_hash = sha1(usuario_token.encode("utf-8")).hexdigest()[:16]
+    return f"{token_hash}:{suffix}"
+
+
+def _read_prospectos_ids_cache(
+    cache: dict[str, tuple[float, set[str]]],
+    *,
+    key: str,
+    ttl_seconds: float,
+) -> set[str] | None:
+    now = monotonic()
+    payload = cache.get(key)
+    if payload is None:
+        return None
+    created_at, values = payload
+    if now - created_at > ttl_seconds:
+        cache.pop(key, None)
+        return None
+    return set(values)
+
+
+def _write_prospectos_ids_cache(
+    cache: dict[str, tuple[float, set[str]]],
+    *,
+    key: str,
+    values: set[str],
+) -> None:
+    cache[key] = (monotonic(), set(values))
+    if len(cache) <= PROSPECTOS_IDS_CACHE_MAX_ENTRIES:
+        return
+    oldest_key = min(cache.items(), key=lambda item: item[1][0])[0]
+    cache.pop(oldest_key, None)
 
 
 def _coerce_positive_int(value: Any, default: int = 1) -> int:
@@ -8680,6 +8723,83 @@ class CRMRepository:
             if total is None:
                 total = len(data)
             return data, total
+        if not geo_estado and not geo_municipio and excluded_ids:
+            base_params = dict(params)
+            base_params.pop("id", None)
+            base_params.pop("limit", None)
+            base_params.pop("offset", None)
+
+            base_total = await self._count_prospectos_exact(
+                usuario_token=usuario_token,
+                params=base_params,
+            )
+
+            excluded_match_total = 0
+            chunk_size = 120
+            sorted_excluded = sorted(excluded_ids)
+            for start in range(0, len(sorted_excluded), chunk_size):
+                chunk = sorted_excluded[start : start + chunk_size]
+                chunk_params = dict(base_params)
+                chunk_params["id"] = _postgrest_in_clause(chunk)
+                chunk_params["limit"] = str(len(chunk))
+                chunk_params["offset"] = "0"
+                resp = await self._request_with_user(
+                    "GET",
+                    "/rest/v1/prospeccion_prospectos",
+                    token=usuario_token,
+                    params=chunk_params,
+                )
+                data = resp.json() or []
+                if not isinstance(data, list):
+                    raise CRMRepositoryError(f"Respuesta inesperada al contar exclusiones: {data!r}")
+                excluded_match_total += len(data)
+
+            effective_total = max(0, (base_total or 0) - excluded_match_total) if base_total is not None else None
+
+            filtered_rows: list[dict[str, Any]] = []
+            accepted_seen = 0
+            scan_offset = 0
+            page_size = max(200, min(1000, max(limit * 3, 300)))
+            max_scan_rows = 200_000
+            target_seen = offset + limit
+
+            while scan_offset < max_scan_rows and len(filtered_rows) < limit:
+                page_params = dict(base_params)
+                page_params["limit"] = str(page_size)
+                page_params["offset"] = str(scan_offset)
+                resp = await self._request_with_user(
+                    "GET",
+                    "/rest/v1/prospeccion_prospectos",
+                    token=usuario_token,
+                    params=page_params,
+                )
+                data = resp.json() or []
+                if not isinstance(data, list):
+                    raise CRMRepositoryError(f"Respuesta inesperada al listar prospectos (exclude paged): {data!r}")
+                if not data:
+                    break
+
+                for row in data:
+                    if not isinstance(row, dict):
+                        continue
+                    row_id = row.get("id")
+                    if row_id is None or str(row_id) in excluded_ids:
+                        continue
+                    accepted_seen += 1
+                    if accepted_seen <= offset:
+                        continue
+                    if len(filtered_rows) < limit:
+                        filtered_rows.append(row)
+                    if accepted_seen >= target_seen and len(filtered_rows) >= limit:
+                        break
+
+                scan_offset += len(data)
+                if len(data) < page_size:
+                    break
+
+            if effective_total is None:
+                effective_total = accepted_seen
+            return filtered_rows, effective_total
 
         filtered_rows: list[dict[str, Any]] = []
         filtered_total = 0
@@ -8847,6 +8967,18 @@ class CRMRepository:
         usuario_token: str,
         campana_id: UUID | None = None,
     ) -> set[str]:
+        cache_key = _build_prospectos_ids_cache_key(
+            usuario_token=usuario_token,
+            suffix=f"envios:{str(campana_id) if campana_id else '__all__'}",
+        )
+        cached_ids = _read_prospectos_ids_cache(
+            _PROSPECTOS_ENVIO_IDS_CACHE,
+            key=cache_key,
+            ttl_seconds=PROSPECTOS_ENVIO_IDS_CACHE_TTL_SECONDS,
+        )
+        if cached_ids is not None:
+            return cached_ids
+
         ids: set[str] = set()
         batch_ids_filter: set[str] | None = None
         if campana_id is not None:
@@ -8895,7 +9027,6 @@ class CRMRepository:
                     "select": "prospecto_id",
                     "limit": str(page_size),
                     "offset": str(offset),
-                    "order": "creado_en.desc",
                     "estado": "neq.cancelado",
                 }
                 if batch_chunk:
@@ -8919,6 +9050,11 @@ class CRMRepository:
                         continue
                     ids.add(str(prospecto_id))
                 offset += len(data)
+        _write_prospectos_ids_cache(
+            _PROSPECTOS_ENVIO_IDS_CACHE,
+            key=cache_key,
+            values=ids,
+        )
         return ids
 
     async def _list_prospecto_ids_with_scraper_jobs(
@@ -8926,6 +9062,18 @@ class CRMRepository:
         *,
         usuario_token: str,
     ) -> set[str]:
+        cache_key = _build_prospectos_ids_cache_key(
+            usuario_token=usuario_token,
+            suffix="scraper",
+        )
+        cached_ids = _read_prospectos_ids_cache(
+            _PROSPECTOS_SCRAPER_IDS_CACHE,
+            key=cache_key,
+            ttl_seconds=PROSPECTOS_SCRAPER_IDS_CACHE_TTL_SECONDS,
+        )
+        if cached_ids is not None:
+            return cached_ids
+
         ids: set[str] = set()
         page_size = 5000
         max_scan = 50000
@@ -8935,7 +9083,6 @@ class CRMRepository:
             params = {
                 "select": "metadata",
                 "metadata->>prospecto_id": "not.is.null",
-                "order": "created_at.desc",
                 "limit": str(page_size),
                 "offset": str(offset),
             }
@@ -8963,6 +9110,11 @@ class CRMRepository:
                 if value:
                     ids.add(value)
             offset += len(data)
+        _write_prospectos_ids_cache(
+            _PROSPECTOS_SCRAPER_IDS_CACHE,
+            key=cache_key,
+            values=ids,
+        )
         return ids
 
     async def list_prospecto_query_metadata(

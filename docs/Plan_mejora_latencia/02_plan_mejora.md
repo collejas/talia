@@ -91,6 +91,16 @@ Estado general: **Fase 1 implementada + Fase 2 iniciada (prospección)**.
   - Include/exclude por IDs optimizado:
     - `include_ids > 400`: ahora consulta por chunks de IDs (`id in (...)`) y ordena en backend, evitando scan completo de tabla.
     - `exclude_ids` pequeño: usa `id=not.in(...)` directo con `count=exact`, evitando scan backend.
+    - `exclude_ids` grande: usa conteo exacto base + conteo por chunks de excluidos y paginación incremental filtrada, evitando scan total para calcular `total`.
+- `con_envio` / `con_scraper` optimizado:
+  - cache in-memory corta (TTL 30s) para sets de `prospecto_id` por usuario (y campaña en `con_envio`).
+  - scans de IDs en tablas de envíos/jobs ya no fuerzan `order` (lectura más ligera).
+  - Observabilidad integrada:
+    - nuevas métricas in-memory de proceso para:
+      - `prospeccion.prospectos.list`
+      - `prospeccion.prospectos.queries`
+    - expuestas en el mismo endpoint owner: `/crm/inbox/threads/metrics` bajo `process_metrics`.
+    - visibles en la misma vista: `settings/inbox-metrics` (estado actual + histórico de snapshots).
 
 - Impacto esperado
   - Menos loops paginados backend sobre `prospeccion_prospectos`.
