@@ -11495,6 +11495,74 @@ class CRMRepository:
             raise CRMRepositoryError(f"worker_get_latest_envio_by_phone_invalid:{row!r}")
         return row
 
+    async def worker_get_latest_envios_by_phones(
+        self,
+        *,
+        phone_values: set[str],
+        canal: str | None = None,
+    ) -> dict[str, dict[str, Any]]:
+        """Obtiene el envío más reciente por teléfono para un conjunto de números."""
+
+        normalized_phones = sorted(
+            {
+                str(value or "").strip()
+                for value in phone_values
+                if str(value or "").strip()
+            }
+        )
+        if not normalized_phones:
+            return {}
+
+        resolved: dict[str, dict[str, Any]] = {}
+        chunk_size = 100
+        max_scan_rows = 5000
+
+        for start in range(0, len(normalized_phones), chunk_size):
+            chunk = normalized_phones[start : start + chunk_size]
+            unresolved_chunk = set(chunk)
+            offset = 0
+            page_size = max(200, min(1000, max(len(chunk) * 6, 300)))
+
+            while unresolved_chunk and offset < max_scan_rows:
+                params: dict[str, str] = {
+                    "select": "id,batch_id,campana_id,payload,detalle,procesado_en,creado_en,canal",
+                    "detalle->>phone": _postgrest_in_clause(chunk),
+                    "order": "procesado_en.desc.nullslast,creado_en.desc",
+                    "limit": str(page_size),
+                    "offset": str(offset),
+                }
+                if canal:
+                    params["canal"] = f"eq.{canal.strip().lower()}"
+                resp = await self._request(
+                    "GET",
+                    "/rest/v1/prospeccion_contacto_envio",
+                    params=params,
+                )
+                data = resp.json() or []
+                if not isinstance(data, list):
+                    raise CRMRepositoryError(f"worker_get_latest_envios_by_phones_invalid:{data!r}")
+                if not data:
+                    break
+
+                for row in data:
+                    if not isinstance(row, dict):
+                        continue
+                    detalle = row.get("detalle") if isinstance(row.get("detalle"), dict) else {}
+                    phone = str(detalle.get("phone") or "").strip()
+                    if not phone or phone not in unresolved_chunk:
+                        continue
+                    resolved[phone] = row
+                    unresolved_chunk.discard(phone)
+                    if not unresolved_chunk:
+                        break
+
+                fetched = len(data)
+                offset += fetched
+                if fetched < page_size:
+                    break
+
+        return resolved
+
     async def worker_get_latest_envio_by_email(
         self,
         *,

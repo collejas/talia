@@ -276,4 +276,7 @@ Se considera completado cuando por 7 días consecutivos:
     - `batch_catalog_ms` optimizado:
       - consulta de lotes por IDs exactos (`list_contact_batches_by_ids`) en lugar de listar catálogos amplios,
       - cache de catálogo de lotes por combinación de `batch_ids` en `get_inbox_threads`.
+    - `whatsapp_hint_lookup_ms` optimizado:
+      - lookup batch por teléfonos (`worker_get_latest_envios_by_phones`) para resolver hints en una sola pasada,
+      - fallback individual sólo para teléfonos no resueltos por batch.
     - Validación: `python3 -m py_compile backend/app/repositories/crm.py backend/app/api/routes/crm.py` ✅

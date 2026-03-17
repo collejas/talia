@@ -11853,43 +11853,85 @@ async def get_inbox_threads(
 
     fallback_lookup_start = time.perf_counter()
     if phones_to_lookup:
-        semaphore = asyncio.Semaphore(INBOX_THREADS_WHATSAPP_HINT_LOOKUP_CONCURRENCY)
+        phone_candidates_map = {
+            phone_value: _whatsapp_phone_lookup_candidates(phone_value)
+            for phone_value in phones_to_lookup
+        }
+        all_lookup_candidates: set[str] = set()
+        for candidates in phone_candidates_map.values():
+            all_lookup_candidates.update(candidates)
 
-        async def _lookup_hint_by_phone(
-            phone_value: str,
-        ) -> tuple[str, tuple[str | None, str | None, str | None, str | None, str | None]]:
-            async with semaphore:
-                hint: tuple[str | None, str | None, str | None, str | None, str | None] = (
-                    None,
-                    None,
-                    None,
-                    None,
-                    None,
+        latest_envios_by_phone: dict[str, dict[str, Any]] = {}
+        if all_lookup_candidates:
+            try:
+                latest_envios_by_phone = await repo.worker_get_latest_envios_by_phones(
+                    phone_values=all_lookup_candidates,
+                    canal="whatsapp",
                 )
-                for lookup_phone in _whatsapp_phone_lookup_candidates(phone_value):
-                    try:
-                        linked_envio = await repo.worker_get_latest_envio_by_phone(
-                            phone_e164=lookup_phone,
-                            canal="whatsapp",
-                        )
-                    except CRMRepositoryError:
-                        linked_envio = None
-                    candidate_hint = _extract_envio_prospeccion_hints(linked_envio)
-                    if any(candidate_hint[:4]) or candidate_hint[4]:
-                        hint = candidate_hint
-                        break
-                await _write_whatsapp_envio_hint_cache(phone_value, hint)
-                return phone_value, hint
+            except CRMRepositoryError:
+                latest_envios_by_phone = {}
 
-        lookup_results = await asyncio.gather(
-            *(_lookup_hint_by_phone(phone_value) for phone_value in phones_to_lookup),
-            return_exceptions=True,
-        )
-        for result in lookup_results:
-            if isinstance(result, Exception):
-                continue
-            phone_value, hint = result
-            whatsapp_phone_cache[phone_value] = hint
+        unresolved_phones: list[str] = []
+        for phone_value in phones_to_lookup:
+            candidates = phone_candidates_map.get(phone_value, [])
+            hint: tuple[str | None, str | None, str | None, str | None, str | None] = (
+                None,
+                None,
+                None,
+                None,
+                None,
+            )
+            for lookup_phone in candidates:
+                envio_row = latest_envios_by_phone.get(lookup_phone)
+                candidate_hint = _extract_envio_prospeccion_hints(envio_row)
+                if any(candidate_hint[:4]) or candidate_hint[4]:
+                    hint = candidate_hint
+                    break
+            if any(hint[:4]) or hint[4]:
+                await _write_whatsapp_envio_hint_cache(phone_value, hint)
+                whatsapp_phone_cache[phone_value] = hint
+            else:
+                unresolved_phones.append(phone_value)
+
+        # Fallback defensivo: para casos no resueltos por el lookup batch.
+        if unresolved_phones:
+            semaphore = asyncio.Semaphore(INBOX_THREADS_WHATSAPP_HINT_LOOKUP_CONCURRENCY)
+
+            async def _lookup_hint_by_phone_fallback(
+                phone_value: str,
+            ) -> tuple[str, tuple[str | None, str | None, str | None, str | None, str | None]]:
+                async with semaphore:
+                    hint: tuple[str | None, str | None, str | None, str | None, str | None] = (
+                        None,
+                        None,
+                        None,
+                        None,
+                        None,
+                    )
+                    for lookup_phone in _whatsapp_phone_lookup_candidates(phone_value):
+                        try:
+                            linked_envio = await repo.worker_get_latest_envio_by_phone(
+                                phone_e164=lookup_phone,
+                                canal="whatsapp",
+                            )
+                        except CRMRepositoryError:
+                            linked_envio = None
+                        candidate_hint = _extract_envio_prospeccion_hints(linked_envio)
+                        if any(candidate_hint[:4]) or candidate_hint[4]:
+                            hint = candidate_hint
+                            break
+                    await _write_whatsapp_envio_hint_cache(phone_value, hint)
+                    return phone_value, hint
+
+            lookup_results = await asyncio.gather(
+                *(_lookup_hint_by_phone_fallback(phone_value) for phone_value in unresolved_phones),
+                return_exceptions=True,
+            )
+            for result in lookup_results:
+                if isinstance(result, Exception):
+                    continue
+                phone_value, hint = result
+                whatsapp_phone_cache[phone_value] = hint
     stage_timings["whatsapp_hint_lookup_ms"] = round(
         (time.perf_counter() - fallback_lookup_start) * 1000, 2
     )
