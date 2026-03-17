@@ -636,6 +636,7 @@ export function InboxSplitView({
   const threadsRefreshingRef = React.useRef(false);
   const threadEnrichmentRef = React.useRef(false);
   const threadEnrichedOnceRef = React.useRef<Set<string>>(new Set());
+  const hasExplicitThreadSelectionRef = React.useRef(false);
   const messagesRefreshingRef = React.useRef<string | null>(null);
   const messagesContainerRef = React.useRef<HTMLDivElement | null>(null);
   const messagesPollingTimeoutRef = React.useRef<number | null>(null);
@@ -782,12 +783,6 @@ export function InboxSplitView({
     setTotalThreads(threads.length);
   }, [threads]);
 
-  React.useEffect(() => {
-    if (!selectedId && threadItems.length) {
-      setSelectedId(threadItems[0]!.id);
-    }
-  }, [selectedId, threadItems]);
-
   const filteredThreads = React.useMemo(() => {
     const term = searchTerm.toLowerCase();
     const normalizedSourceFilter = sourceFilter ? sourceFilter.toLowerCase() : null;
@@ -855,14 +850,14 @@ export function InboxSplitView({
 
   const selectedThread = React.useMemo(() => {
     if (!selectedId) {
-      return filteredThreads[0] ?? null;
+      return null;
     }
     const withinFiltered = filteredThreads.find((thread) => thread.id === selectedId);
     if (withinFiltered) {
       return withinFiltered;
     }
     const inAll = threadItems.find((thread) => thread.id === selectedId);
-    return inAll ?? filteredThreads[0] ?? null;
+    return inAll ?? null;
   }, [selectedId, filteredThreads, threadItems]);
   const selectedSourceBadge = selectedThread
     ? getSourceBadge(selectedThread.source, selectedThread.canal)
@@ -1131,10 +1126,14 @@ export function InboxSplitView({
 
   React.useEffect(() => {
     let cancelled = false;
+    if (!hasExplicitThreadSelectionRef.current) {
+      return undefined;
+    }
     const selectedId = selectedThread?.id ?? null;
     if (!selectedId) {
       return undefined;
     }
+    const targetThreadId = selectedId;
     const selected = threadItems.find((thread) => thread.id === selectedId);
     if (!selected || !needsThreadEnrichment(selected)) {
       return undefined;
@@ -1145,7 +1144,7 @@ export function InboxSplitView({
     if (threadEnrichmentRef.current) {
       return undefined;
     }
-    const selectedIndex = threadItems.findIndex((thread) => thread.id === selectedId);
+    const selectedIndex = threadItems.findIndex((thread) => thread.id === targetThreadId);
     const pageOffset =
       selectedIndex >= 0
         ? Math.floor(selectedIndex / THREADS_PAGE_SIZE) * THREADS_PAGE_SIZE
@@ -1167,7 +1166,7 @@ export function InboxSplitView({
           return;
         }
         setThreadItems((current) => mergeThreadLists(current, incoming));
-        threadEnrichedOnceRef.current.add(selectedId);
+        threadEnrichedOnceRef.current.add(targetThreadId);
         if (threadEnrichedOnceRef.current.size > 512) {
           const oldestKey = threadEnrichedOnceRef.current.values().next().value;
           if (typeof oldestKey === "string") {
@@ -1186,6 +1185,11 @@ export function InboxSplitView({
       cancelled = true;
     };
   }, [selectedThread?.id, threadItems, needsThreadEnrichment, buildThreadsParams]);
+
+  const handleSelectThread = React.useCallback((threadId: string) => {
+    hasExplicitThreadSelectionRef.current = true;
+    setSelectedId(threadId);
+  }, []);
 
   const refreshMessages = React.useCallback(
     async (conversationId: string, options: { force?: boolean } = {}) => {
@@ -1641,7 +1645,7 @@ export function InboxSplitView({
                   <li key={thread.id}>
                     <button
                       type="button"
-                      onClick={() => setSelectedId(thread.id)}
+                      onClick={() => handleSelectThread(thread.id)}
                       className={`flex w-full flex-col gap-1 px-4 py-3 text-left transition ${isActive ? "bg-primary/10" : "hover:bg-muted"}`}
                     >
                       <div className="flex items-center justify-between">
