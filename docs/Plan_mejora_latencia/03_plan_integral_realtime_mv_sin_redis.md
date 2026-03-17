@@ -1,7 +1,7 @@
 # Plan integral de mejora de latencia (sin Redis)
 
 Fecha: 2026-03-17 (UTC)
-Estado: Propuesto
+Estado: En curso
 
 ## Objetivo
 
@@ -227,3 +227,10 @@ Se considera completado cuando por 7 días consecutivos:
 - No hay degradación percibida al abrir inbox/prospección en horario normal.
 - No hay pérdidas de notificación crítica a vendedor.
 - `high_demand_mode` deja de activarse recurrentemente por inbox.
+
+## Avance registrado
+
+- 2026-03-17:
+  - Fase 0 iniciada y baseline inicial documentado en `04_ejecucion_fase0_baseline.md`.
+  - Confirmada persistencia de picos en `prospeccion/prospectos` y `prospeccion/prospectos/queries`.
+  - Confirmada recurrencia de activaciones `high_demand_mode` por `inbox_p95_high`.
