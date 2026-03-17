@@ -363,13 +363,6 @@ async def notify_sales_rep(
     if profile_summary:
         extra_payload.setdefault("profile_summary", profile_summary)
     notifications = _ensure_dict(metadata.get("sales_notifications"))
-    if trigger in {"information_email", "close_lead"}:
-        logger.info(
-            "webchat.notify_sales.skip_legacy_trigger",
-            extra={"conversation_id": context.conversation_id, "trigger": trigger},
-        )
-        return
-
     channel_key = channel_value
     primary_reason: str | None = None
     if trigger == "booking_confirmed":
@@ -419,6 +412,15 @@ async def notify_sales_rep(
                 extra={"conversation_id": context.conversation_id, "trigger": trigger},
             )
             return
+        primary_reason = "case_c_session_closed"
+    elif trigger in {"close_lead", "information_email"}:
+        if not _has_base_fields_for_case_b(contact_record):
+            logger.info(
+                "webchat.notify_sales.skip_case_d_base_missing",
+                extra={"conversation_id": context.conversation_id, "trigger": trigger},
+            )
+            return
+        primary_reason = "case_d_lead_captured"
 
     primary_by_channel = _get_primary_notification_by_channel(metadata)
     if primary_reason and primary_by_channel.get(channel_key) and not force_retry:

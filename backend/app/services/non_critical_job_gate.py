@@ -16,11 +16,17 @@ logger = get_logger("app.services.non_critical_job_gate")
 _LOCK = asyncio.Lock()
 _LAST_CHECK_AT = 0.0
 _LAST_RESULT: tuple[bool, dict[str, Any]] = (False, {"reason": "not_evaluated"})
+_CRITICAL_JOBS_NO_DEFER = {
+    "webchat_followups",
+    "webchat_closure_rescue",
+}
 
 
 async def should_defer_non_critical_jobs(*, job_name: str) -> tuple[bool, dict[str, Any]]:
     """Indica si conviene diferir jobs no críticos por presión de envíos."""
 
+    if job_name in _CRITICAL_JOBS_NO_DEFER:
+        return False, {"reason": "critical_job_no_defer", "job_name": job_name}
     if not bool(getattr(settings, "non_critical_jobs_blast_protection_enabled", True)):
         return False, {"reason": "disabled", "job_name": job_name}
     if bool(getattr(settings, "high_demand_non_critical_force_defer", True)):

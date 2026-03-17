@@ -123,6 +123,60 @@ async def _mark_webchat_delivery(context: ToolRuntimeContext, reason: str) -> No
         )
 
 
+async def _notify_webchat_sales_if_needed(
+    *,
+    context: ToolRuntimeContext,
+    trigger: str,
+    opportunity_id: str | None,
+    resumen: str | None,
+    notes: str | None,
+    email: str | None,
+    contact: dict[str, Any] | None = None,
+    extra: dict[str, Any] | None = None,
+) -> None:
+    if not _is_webchat_context(context):
+        return
+    contact_record = contact
+    if not contact_record:
+        try:
+            contact_record = await storage.fetch_contact(context.contact_id)
+        except StorageError as exc:
+            logger.warning(
+                "lead_tools.notify_sales_contact_fetch_failed",
+                extra={
+                    "conversation_id": context.conversation_id,
+                    "contact_id": context.contact_id,
+                    "trigger": trigger,
+                    "error": str(exc),
+                },
+            )
+            contact_record = None
+
+    try:
+        from app.channels.webchat import notifications as webchat_notifications
+
+        await webchat_notifications.notify_sales_rep(
+            context=context,
+            trigger=trigger,
+            contact=contact_record,
+            opportunity_id=opportunity_id,
+            resumen=resumen,
+            notes=notes,
+            email=email,
+            extra=extra or {},
+        )
+    except Exception as exc:  # pragma: no cover - best effort
+        logger.warning(
+            "lead_tools.notify_sales_failed",
+            extra={
+                "conversation_id": context.conversation_id,
+                "contact_id": context.contact_id,
+                "trigger": trigger,
+                "error": str(exc),
+            },
+        )
+
+
 async def try_execute_lead_tool(
     name: str | None,
     arguments: dict[str, Any],
@@ -333,6 +387,16 @@ async def try_execute_lead_tool(
                     "lead_tools.auto_name_failed",
                     extra={"conversation_id": context.conversation_id, "error": str(exc)},
                 )
+        await _notify_webchat_sales_if_needed(
+            context=context,
+            trigger="close_lead",
+            opportunity_id=tarjeta_id,
+            resumen=necesidad,
+            notes=notes,
+            email=(contact_record or {}).get("correo") if contact_record else None,
+            contact=contact_record,
+            extra={"source": "lead_tool_close_lead"},
+        )
         return {
             "status": "ok",
             "notes": notes,
@@ -504,6 +568,16 @@ async def _handle_information_email(
             extra={"conversation_id": context.conversation_id, "error": str(exc)},
         )
     await _mark_webchat_delivery(context, reason="information_email")
+    await _notify_webchat_sales_if_needed(
+        context=context,
+        trigger="information_email",
+        opportunity_id=None,
+        resumen=summary or contact_need,
+        notes=contact_notes,
+        email=email_value,
+        contact=contact,
+        extra={"source": "lead_tool_information_email", "mail_message_id": message_id},
+    )
 
     return {
         "status": "sent",
