@@ -255,3 +255,8 @@ Se considera completado cuando por 7 días consecutivos:
     - Validaciones:
       - `python3 -m py_compile backend/app/repositories/crm.py backend/app/api/routes/crm.py` ✅
       - `npx eslint src/lib/prospeccion/prospectos-client.ts src/app/prospeccion/prospectos/page.client.tsx src/components/inbox/split-view.tsx` ✅
+  - Ajuste adicional en cuello principal `prospeccion/prospectos`:
+    - Optimizada rama `con_envio=false` en backend para evitar conteo exacto por chunks cuando el set excluido es grande (`>500` IDs).
+    - En sets grandes se usa total aproximado y se prioriza entrega rápida de página (menos round-trips de conteo).
+    - Se incrementó tamaño de página de escaneo interno para reducir llamadas en esa rama.
+    - Validación: `python3 -m py_compile backend/app/repositories/crm.py` ✅

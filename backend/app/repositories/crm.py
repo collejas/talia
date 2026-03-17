@@ -8735,31 +8735,40 @@ class CRMRepository:
             )
 
             excluded_match_total = 0
-            chunk_size = 120
-            sorted_excluded = sorted(excluded_ids)
-            for start in range(0, len(sorted_excluded), chunk_size):
-                chunk = sorted_excluded[start : start + chunk_size]
-                chunk_params = dict(base_params)
-                chunk_params["id"] = _postgrest_in_clause(chunk)
-                chunk_params["limit"] = str(len(chunk))
-                chunk_params["offset"] = "0"
-                resp = await self._request_with_user(
-                    "GET",
-                    "/rest/v1/prospeccion_prospectos",
-                    token=usuario_token,
-                    params=chunk_params,
+            should_compute_exact_excluded_total = len(excluded_ids) <= 500
+            if should_compute_exact_excluded_total:
+                chunk_size = 120
+                sorted_excluded = sorted(excluded_ids)
+                for start in range(0, len(sorted_excluded), chunk_size):
+                    chunk = sorted_excluded[start : start + chunk_size]
+                    chunk_params = dict(base_params)
+                    chunk_params["id"] = _postgrest_in_clause(chunk)
+                    chunk_params["limit"] = str(len(chunk))
+                    chunk_params["offset"] = "0"
+                    resp = await self._request_with_user(
+                        "GET",
+                        "/rest/v1/prospeccion_prospectos",
+                        token=usuario_token,
+                        params=chunk_params,
+                    )
+                    data = resp.json() or []
+                    if not isinstance(data, list):
+                        raise CRMRepositoryError(f"Respuesta inesperada al contar exclusiones: {data!r}")
+                    excluded_match_total += len(data)
+                effective_total = max(0, (base_total or 0) - excluded_match_total) if base_total is not None else None
+            else:
+                # Para sets de exclusión grandes evitamos conteos por chunks (muy costosos).
+                # Conservamos un total aproximado para no bloquear la lista principal.
+                effective_total = (
+                    max(0, (base_total or 0) - len(excluded_ids))
+                    if base_total is not None
+                    else None
                 )
-                data = resp.json() or []
-                if not isinstance(data, list):
-                    raise CRMRepositoryError(f"Respuesta inesperada al contar exclusiones: {data!r}")
-                excluded_match_total += len(data)
-
-            effective_total = max(0, (base_total or 0) - excluded_match_total) if base_total is not None else None
 
             filtered_rows: list[dict[str, Any]] = []
             accepted_seen = 0
             scan_offset = 0
-            page_size = max(200, min(1000, max(limit * 3, 300)))
+            page_size = max(800, min(4000, max(limit * 6, 1500)))
             max_scan_rows = 200_000
             target_seen = offset + limit
 
