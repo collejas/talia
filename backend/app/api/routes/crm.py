@@ -147,9 +147,13 @@ _INBOX_FILTER_OPTIONS_CACHE: dict[str, tuple[float, CRMInboxContextFilters]] = {
 _INBOX_FILTER_OPTIONS_CACHE_LOCK = asyncio.Lock()
 INBOX_THREADS_METRICS_WINDOW_SECONDS = 900
 INBOX_THREADS_METRICS_MAX_SAMPLES = 5000
+INBOX_THREADS_STAGE_METRICS_MAX_SAMPLES = 5000
 _INBOX_THREADS_METRICS_LOCK = asyncio.Lock()
 _INBOX_THREADS_METRICS_SAMPLES: deque[tuple[float, float]] = deque(
     maxlen=INBOX_THREADS_METRICS_MAX_SAMPLES
+)
+_INBOX_THREADS_STAGE_METRICS_SAMPLES: deque[tuple[float, dict[str, float]]] = deque(
+    maxlen=INBOX_THREADS_STAGE_METRICS_MAX_SAMPLES
 )
 _INBOX_THREADS_METRICS_CACHE_HITS = 0
 _INBOX_THREADS_METRICS_CACHE_MISSES = 0
@@ -381,15 +385,56 @@ async def _record_inbox_threads_metrics(*, duration_ms: float, cache_hit: bool) 
     await high_demand_controller.record_inbox_threads_latency(latency_ms=duration_ms)
 
 
+async def _record_inbox_threads_stage_metrics(*, stage_timings: dict[str, float]) -> None:
+    if not stage_timings:
+        return
+    now = time.monotonic()
+    normalized: dict[str, float] = {}
+    for key, value in stage_timings.items():
+        if not isinstance(key, str):
+            continue
+        try:
+            numeric = float(value)
+        except (TypeError, ValueError):
+            continue
+        if numeric < 0:
+            continue
+        normalized[key] = numeric
+    if not normalized:
+        return
+    async with _INBOX_THREADS_METRICS_LOCK:
+        _INBOX_THREADS_STAGE_METRICS_SAMPLES.append((now, normalized))
+        cutoff = now - INBOX_THREADS_METRICS_WINDOW_SECONDS
+        while _INBOX_THREADS_STAGE_METRICS_SAMPLES and _INBOX_THREADS_STAGE_METRICS_SAMPLES[0][0] < cutoff:
+            _INBOX_THREADS_STAGE_METRICS_SAMPLES.popleft()
+
+
 async def _snapshot_inbox_threads_metrics(*, window_seconds: int) -> dict[str, Any]:
     now = time.monotonic()
     cutoff = now - window_seconds
     async with _INBOX_THREADS_METRICS_LOCK:
         samples = [duration for ts, duration in _INBOX_THREADS_METRICS_SAMPLES if ts >= cutoff]
         ordered = sorted(samples)
+        stage_samples = [payload for ts, payload in _INBOX_THREADS_STAGE_METRICS_SAMPLES if ts >= cutoff]
         cache_hits = _INBOX_THREADS_METRICS_CACHE_HITS
         cache_misses = _INBOX_THREADS_METRICS_CACHE_MISSES
         slow_queries = _INBOX_THREADS_METRICS_SLOW_QUERIES
+
+    stage_values: dict[str, list[float]] = {}
+    for sample in stage_samples:
+        for stage_name, metric_value in sample.items():
+            stage_values.setdefault(stage_name, []).append(metric_value)
+    stage_latency_ms: dict[str, dict[str, float]] = {}
+    for stage_name, values in stage_values.items():
+        ordered_stage = sorted(values)
+        stage_latency_ms[stage_name] = {
+            "p50": round(_percentile(ordered_stage, 50), 2),
+            "p90": round(_percentile(ordered_stage, 90), 2),
+            "p95": round(_percentile(ordered_stage, 95), 2),
+            "max": round(ordered_stage[-1], 2) if ordered_stage else 0.0,
+            "avg": round((sum(ordered_stage) / len(ordered_stage)), 2) if ordered_stage else 0.0,
+            "count": len(ordered_stage),
+        }
 
     total = cache_hits + cache_misses
     hit_rate = (cache_hits / total) if total else 0.0
@@ -409,6 +454,7 @@ async def _snapshot_inbox_threads_metrics(*, window_seconds: int) -> dict[str, A
             "hit_rate": round(hit_rate, 4),
         },
         "slow_queries_over_3000ms": slow_queries,
+        "stage_latency_ms": stage_latency_ms,
     }
 
 
@@ -11424,6 +11470,7 @@ async def get_inbox_threads(
         total_duration_ms = (time.perf_counter() - request_start) * 1000
         stage_timings["total_ms"] = round(total_duration_ms, 2)
         await _record_inbox_threads_metrics(duration_ms=total_duration_ms, cache_hit=True)
+        await _record_inbox_threads_stage_metrics(stage_timings=stage_timings)
         logger.info(
             "crm.inbox.threads.cache_hit",
             extra={
@@ -11997,6 +12044,7 @@ async def get_inbox_threads(
     total_duration_ms = (time.perf_counter() - request_start) * 1000
     stage_timings["total_ms"] = round(total_duration_ms, 2)
     await _record_inbox_threads_metrics(duration_ms=total_duration_ms, cache_hit=False)
+    await _record_inbox_threads_stage_metrics(stage_timings=stage_timings)
     logger.info(
         "crm.inbox.threads.stage_profile",
         extra={

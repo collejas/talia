@@ -37,6 +37,8 @@ Estado general: **Fase 1 implementada parcialmente (backend inbox)**.
 
 - Validación sintáctica ejecutada:
   - `python3 -m py_compile backend/app/api/routes/crm.py` ✅
+- Métricas de inbox disponibles con percentiles por etapa:
+  - `GET /api/crm/inbox/threads/metrics` ahora incluye `stage_latency_ms`.
 
 ### Pendiente para cerrar Fase 1 al 100%
 
@@ -86,8 +88,8 @@ Resultado esperado:
 - Registrar percentiles por etapa en ventana de 5 minutos.
 
 Estado: **En progreso (1/2)**  
-Completado: timings por etapa en `get_inbox_threads`.  
-Pendiente: consolidar percentiles por etapa (agregación/endpoint dedicado).
+Completado: timings por etapa en `get_inbox_threads` + consolidación de percentiles en métricas.  
+Pendiente: validar operación 24h y revisar calidad de señales por etapa.
 
 Resultado esperado:
 - Aislar el subcomponente más caro para fase 2.
