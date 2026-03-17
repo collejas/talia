@@ -260,3 +260,11 @@ Se considera completado cuando por 7 días consecutivos:
     - En sets grandes se usa total aproximado y se prioriza entrega rápida de página (menos round-trips de conteo).
     - Se incrementó tamaño de página de escaneo interno para reducir llamadas en esa rama.
     - Validación: `python3 -m py_compile backend/app/repositories/crm.py` ✅
+  - Inbox MV implementada:
+    - Migración nueva: `20280426_130000_inbox_threads_snapshot_mv.sql`
+      - crea `public.inbox_conversation_snapshot_mv` (snapshot por conversación con canal/source/batch/campana/preview/sort_key),
+      - actualiza `panel_inbox_threads(...)` para leer metadata y preview desde MV,
+      - crea `inbox_conversation_snapshot_mv_refresh()`.
+    - Migración aplicada en DB y verificada:
+      - MV con datos (`mv_rows=69`).
+      - funciones `panel_inbox_threads(...)` e `inbox_conversation_snapshot_mv_refresh()` presentes.
