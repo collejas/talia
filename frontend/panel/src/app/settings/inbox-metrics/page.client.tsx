@@ -107,6 +107,11 @@ type ChartPoint = {
   hitRatePct: number;
 };
 
+type ProcessChartPoint = {
+  label: string;
+  p95: number;
+};
+
 function buildChartPoints(items: SnapshotItem[]): ChartPoint[] {
   const ordered = [...items]
     .filter((item) => item?.captured_at && item?.snapshot?.latency_ms?.p95 != null)
@@ -128,6 +133,29 @@ function buildChartPoints(items: SnapshotItem[]): ChartPoint[] {
       label,
       p95: typeof p95Raw === "number" ? p95Raw : 0,
       hitRatePct: typeof hitRateRaw === "number" ? hitRateRaw * 100 : 0,
+    };
+  });
+}
+
+function buildProcessChartPoints(items: SnapshotItem[], endpoint: string): ProcessChartPoint[] {
+  const ordered = [...items]
+    .filter((item) => item?.captured_at)
+    .sort((a, b) => {
+      const aTs = new Date(a.captured_at as string).getTime();
+      const bTs = new Date(b.captured_at as string).getTime();
+      return aTs - bTs;
+    })
+    .slice(-24);
+
+  return ordered.map((item) => {
+    const p95Raw = item.snapshot?.process_metrics?.endpoints?.[endpoint]?.latency_ms?.p95;
+    const dt = new Date(item.captured_at as string);
+    const label = Number.isNaN(dt.getTime())
+      ? "—"
+      : dt.toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit" });
+    return {
+      label,
+      p95: typeof p95Raw === "number" ? p95Raw : 0,
     };
   });
 }
@@ -250,6 +278,22 @@ export function InboxMetricsOwnerClient() {
   const hitRatePolyline = React.useMemo(
     () => buildPolyline(chartPoints.map((point) => point.hitRatePct), 100, 32),
     [chartPoints],
+  );
+  const prospectListChartPoints = React.useMemo(
+    () => buildProcessChartPoints(history, "prospeccion.prospectos.list"),
+    [history],
+  );
+  const prospectListP95Polyline = React.useMemo(
+    () => buildPolyline(prospectListChartPoints.map((point) => point.p95), 100, 32),
+    [prospectListChartPoints],
+  );
+  const prospectQueriesChartPoints = React.useMemo(
+    () => buildProcessChartPoints(history, "prospeccion.prospectos.queries"),
+    [history],
+  );
+  const prospectQueriesP95Polyline = React.useMemo(
+    () => buildPolyline(prospectQueriesChartPoints.map((point) => point.p95), 100, 32),
+    [prospectQueriesChartPoints],
   );
 
   return (
@@ -382,7 +426,7 @@ export function InboxMetricsOwnerClient() {
         <CardHeader className="pb-2">
           <CardTitle>Mini gráfica (últimos 24 snapshots)</CardTitle>
         </CardHeader>
-        <CardContent className="grid gap-4 md:grid-cols-2">
+        <CardContent className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           <div className="rounded-lg border border-border/60 p-3">
             <p className="mb-2 text-xs font-medium text-muted-foreground">p95 (ms)</p>
             {p95Polyline ? (
@@ -409,6 +453,38 @@ export function InboxMetricsOwnerClient() {
                   stroke="currentColor"
                   strokeWidth="1.5"
                   className="text-sky-600"
+                />
+              </svg>
+            ) : (
+              <p className="text-sm text-muted-foreground">Aún no hay suficientes snapshots.</p>
+            )}
+          </div>
+          <div className="rounded-lg border border-border/60 p-3">
+            <p className="mb-2 text-xs font-medium text-muted-foreground">Prospectos list p95 (ms)</p>
+            {prospectListP95Polyline ? (
+              <svg viewBox="0 0 100 32" className="h-24 w-full">
+                <polyline
+                  points={prospectListP95Polyline}
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.5"
+                  className="text-amber-600"
+                />
+              </svg>
+            ) : (
+              <p className="text-sm text-muted-foreground">Aún no hay suficientes snapshots.</p>
+            )}
+          </div>
+          <div className="rounded-lg border border-border/60 p-3">
+            <p className="mb-2 text-xs font-medium text-muted-foreground">Prospectos queries p95 (ms)</p>
+            {prospectQueriesP95Polyline ? (
+              <svg viewBox="0 0 100 32" className="h-24 w-full">
+                <polyline
+                  points={prospectQueriesP95Polyline}
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.5"
+                  className="text-violet-600"
                 />
               </svg>
             ) : (

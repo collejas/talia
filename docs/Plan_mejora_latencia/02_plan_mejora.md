@@ -101,6 +101,7 @@ Estado general: **Fase 1 implementada + Fase 2 iniciada (prospección)**.
       - `prospeccion.prospectos.queries`
     - expuestas en el mismo endpoint owner: `/crm/inbox/threads/metrics` bajo `process_metrics`.
     - visibles en la misma vista: `settings/inbox-metrics` (estado actual + histórico de snapshots).
+    - mini-gráfica agregada para histórico de `prospeccion.prospectos.list` p95 (últimos 24 snapshots).
 
 - Impacto esperado
   - Menos loops paginados backend sobre `prospeccion_prospectos`.
