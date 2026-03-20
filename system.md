@@ -33,7 +33,8 @@ WorkingDirectory=/var/www/talia/frontend/panel
 
 # Variables de entorno
 Environment=NODE_ENV=production
-Environment=PANEL_API_URL=http://127.0.0.1:8004
+Environment=NODE_OPTIONS=--max-old-space-size=384
+Environment=PANEL_API_URL=http://127.0.0.1:8004/api
 EnvironmentFile=/var/www/talia/frontend/panel/.env.local
 # Nota: si `PANEL_API_URL` también existe en `.env.local`, systemd tomará el valor del archivo
 # (por eso conviene que ambos coincidan).
