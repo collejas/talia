@@ -13377,6 +13377,9 @@ class CRMRepository:
     async def refresh_inbox_conversation_snapshot_mv(self) -> None:
         await self._rpc("inbox_conversation_snapshot_mv_refresh", {})
 
+    async def refresh_prospeccion_query_daily_mv(self) -> None:
+        await self._rpc("prospeccion_query_daily_mv_refresh", {})
+
     async def _request_with_user(
         self,
         method: Literal["GET", "POST", "PATCH", "DELETE"],

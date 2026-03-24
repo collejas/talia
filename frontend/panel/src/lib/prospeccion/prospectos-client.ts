@@ -1549,3 +1549,16 @@ export async function eliminarProspectos(prospectoIds: string[]) {
     body: JSON.stringify({ ids: prospectoIds }),
   })
 }
+
+/**
+ * Delete complete prospect groups by query/busqueda values.
+ */
+export async function eliminarGruposProspectos(queryValues: string[]) {
+  return requestJson<{ ok: boolean; total: number; prospecto_ids: string[]; query_values: string[] }>(
+    "/api/prospeccion/prospectos/grupos-delete",
+    {
+      method: "POST",
+      body: JSON.stringify({ query_values: queryValues }),
+    }
+  )
+}

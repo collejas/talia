@@ -2108,6 +2108,36 @@ class ProspectoDeletePayload(BaseModel):
         return deduped
 
 
+class ProspectoDeleteGroupsPayload(BaseModel):
+    """Valores de grupo (query/busqueda) a eliminar por completo."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    query_values: list[str] = Field(
+        ...,
+        min_length=1,
+        max_length=200,
+        description="Valores de grupo (metadata query/busqueda) a eliminar.",
+    )
+
+    @field_validator("query_values")
+    @classmethod
+    def _normalize_query_values(cls, value: list[str]) -> list[str]:
+        seen: set[str] = set()
+        normalized: list[str] = []
+        for item in value:
+            candidate = str(item or "").strip()
+            if not candidate:
+                continue
+            if candidate in seen:
+                continue
+            seen.add(candidate)
+            normalized.append(candidate)
+        if not normalized:
+            raise ValueError("query_values_empty")
+        return normalized
+
+
 class ProspectoSeleccionPayload(BaseModel):
     """IDs de resultados a convertir en prospectos."""
 
@@ -19668,6 +19698,10 @@ async def guardar_prospectos(
         )
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
+    try:
+        await repo.refresh_prospeccion_query_daily_mv()
+    except CRMRepositoryError as exc:  # pragma: no cover - no bloquea guardado
+        logger.warning("prospeccion.query_daily_mv_refresh_failed", extra={"error": str(exc)})
     await _clear_prospecto_queries_cache()
     await _publish_prospectos_ui_event(
         organizacion_id=organizacion_id,
@@ -19783,6 +19817,10 @@ async def eliminar_prospecto(
         )
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
+    try:
+        await repo.refresh_prospeccion_query_daily_mv()
+    except CRMRepositoryError as exc:  # pragma: no cover - no bloquea flujo principal
+        logger.warning("prospeccion.query_daily_mv_refresh_failed", extra={"error": str(exc)})
     await _clear_prospecto_queries_cache()
     await _publish_prospectos_ui_event(
         organizacion_id=organizacion_id,
@@ -19811,6 +19849,10 @@ async def eliminar_prospectos(
         )
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
+    try:
+        await repo.refresh_prospeccion_query_daily_mv()
+    except CRMRepositoryError as exc:  # pragma: no cover - no bloquea flujo principal
+        logger.warning("prospeccion.query_daily_mv_refresh_failed", extra={"error": str(exc)})
     await _clear_prospecto_queries_cache()
     await _publish_prospectos_ui_event(
         organizacion_id=organizacion_id,
@@ -19819,6 +19861,84 @@ async def eliminar_prospectos(
     )
 
     return {"ok": True, "prospecto_ids": [str(value) for value in deleted_ids]}
+
+
+@router.post("/prospeccion/prospectos/grupos-delete")
+async def eliminar_grupos_prospectos(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    _: str = Depends(require_permission("ejecutar_busquedas")),
+    user_token: str = Depends(require_user_token),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    payload: ProspectoDeleteGroupsPayload,
+) -> dict[str, Any]:
+    """Elimina todos los prospectos pertenecientes a uno o más grupos de búsqueda."""
+
+    deleted_ids_accum: set[UUID] = set()
+    chunk_size = 200
+    page_limit = 500
+
+    for query_value in payload.query_values:
+        while True:
+            try:
+                rows, _ = await repo.list_prospectos(
+                    usuario_token=user_token,
+                    limit=page_limit,
+                    offset=0,
+                    metadata_queries=[query_value],
+                )
+            except CRMRepositoryError as exc:
+                raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+            ids_batch: list[UUID] = []
+            for row in rows:
+                if not isinstance(row, dict):
+                    continue
+                row_id = row.get("id")
+                if row_id is None:
+                    continue
+                try:
+                    candidate = UUID(str(row_id))
+                except (TypeError, ValueError):
+                    continue
+                ids_batch.append(candidate)
+
+            if not ids_batch:
+                break
+
+            for start in range(0, len(ids_batch), chunk_size):
+                chunk = ids_batch[start : start + chunk_size]
+                try:
+                    deleted_chunk = await repo.delete_prospectos(
+                        usuario_token=user_token,
+                        prospecto_ids=chunk,
+                    )
+                except CRMRepositoryError as exc:
+                    raise HTTPException(status_code=502, detail=str(exc)) from exc
+                deleted_ids_accum.update(deleted_chunk)
+
+            if len(ids_batch) < page_limit:
+                break
+
+    try:
+        await repo.refresh_prospeccion_query_daily_mv()
+    except CRMRepositoryError as exc:  # pragma: no cover - no bloquea flujo principal
+        logger.warning("prospeccion.query_daily_mv_refresh_failed", extra={"error": str(exc)})
+    await _clear_prospecto_queries_cache()
+    await _publish_prospectos_ui_event(
+        organizacion_id=organizacion_id,
+        event_type="prospectos_groups_deleted",
+        payload={
+            "total": len(deleted_ids_accum),
+            "groups": payload.query_values,
+        },
+    )
+    return {
+        "ok": True,
+        "total": len(deleted_ids_accum),
+        "prospecto_ids": [str(value) for value in sorted(deleted_ids_accum, key=str)],
+        "query_values": payload.query_values,
+    }
 
 
 @router.post("/prospeccion/prospectos/verificar-telefonos")

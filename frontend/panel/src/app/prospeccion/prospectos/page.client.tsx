@@ -61,6 +61,7 @@ import {
   crearProspectoManual,
   eliminarProspecto,
   eliminarProspectos,
+  eliminarGruposProspectos,
   convertirProspectoAContacto,
   type ConvertirProspectoPayload,
   listContactoTemplates,
@@ -736,7 +737,7 @@ function ProspectosView() {
   const [savedViewsLoading, setSavedViewsLoading] = useState(false)
   const [savedViewsSaving, setSavedViewsSaving] = useState(false)
   const [searchInput, setSearchInput] = useState(initialFilters.search)
-  const [prospectosViewMode, setProspectosViewMode] = useState<ProspectosViewMode>("grupos")
+  const [prospectosViewMode, setProspectosViewMode] = useState<ProspectosViewMode>("prospectos")
   const [openedQueryScope, setOpenedQueryScope] = useState<string | null>(null)
   const [groupSort, setGroupSort] = useState<{ key: GroupSortKey; direction: "asc" | "desc" }>({
     key: "created_at",
@@ -766,6 +767,10 @@ function ProspectosView() {
   const [bulkDeleteDialogOpen, setBulkDeleteDialogOpen] = useState(false)
   const [bulkDeleteError, setBulkDeleteError] = useState<string | null>(null)
   const [bulkDeleteLoading, setBulkDeleteLoading] = useState(false)
+  const [selectedGroups, setSelectedGroups] = useState<Set<string>>(new Set())
+  const [groupDeleteDialogOpen, setGroupDeleteDialogOpen] = useState(false)
+  const [groupDeleteError, setGroupDeleteError] = useState<string | null>(null)
+  const [groupDeleteLoading, setGroupDeleteLoading] = useState(false)
   const [contactDrawerOpen, setContactDrawerOpen] = useState(false)
   const [contactDrawerData, setContactDrawerData] = useState<ContactDrawerData | null>(null)
   const [contactIndicators, setContactIndicators] = useState<Record<string, ProspectoContactIndicators>>({})
@@ -861,6 +866,8 @@ function ProspectosView() {
   )
   const selectedIds = useMemo(() => Array.from(selected.values()), [selected])
   const selectedCount = selectedIds.length
+  const selectedGroupValues = useMemo(() => Array.from(selectedGroups.values()), [selectedGroups])
+  const selectedGroupCount = selectedGroupValues.length
   const selectedPlannerCampaign = useMemo(
     () => plannerCampaignOptions.find((item) => item.id === plannerCampaignId) ?? null,
     [plannerCampaignId, plannerCampaignOptions]
@@ -1630,6 +1637,21 @@ function ProspectosView() {
   }, [openedQueryScope, prospectosViewMode, queryOptions])
 
   useEffect(() => {
+    setSelectedGroups((prev) => {
+      if (!prev.size) return prev
+      const available = new Set(groupedQueryOptions.map((group) => group.value))
+      const next = new Set<string>()
+      for (const value of prev) {
+        if (available.has(value)) {
+          next.add(value)
+        }
+      }
+      if (next.size === prev.size) return prev
+      return next
+    })
+  }, [groupedQueryOptions])
+
+  useEffect(() => {
     const { from: dateFrom, to: dateTo } = getDateRangeFromFilters(
       filters.dateOption,
       filters.customDateFrom,
@@ -2051,6 +2073,10 @@ function ProspectosView() {
     activeQueryGroup && prospectosViewMode === "prospectos"
       ? queryOptions.find((option) => option.value === activeQueryGroup)?.count
       : undefined
+  const allGroupsSelected =
+    groupedQueryOptions.length > 0 && groupedQueryOptions.every((group) => selectedGroups.has(group.value))
+  const someGroupsSelected =
+    !allGroupsSelected && groupedQueryOptions.some((group) => selectedGroups.has(group.value))
   const effectiveTotal =
     typeof activeQueryGroupCount === "number" && activeQueryGroupCount > 0 && total <= limit
       ? Math.max(total, activeQueryGroupCount)
@@ -2135,6 +2161,7 @@ function ProspectosView() {
     setSearchInput(initialFilters.search)
     setProspectosViewMode("grupos")
     setOpenedQueryScope(null)
+    setSelectedGroups(new Set())
   }
 
   const handleOpenQueryGroup = useCallback((queryValue: string) => {
@@ -2153,6 +2180,33 @@ function ProspectosView() {
     setFilters((prev) => ({ ...prev, queryFilters: [] }))
     setProspectosViewMode("grupos")
   }, [])
+
+  const handleToggleGroup = useCallback((queryValue: string, enabled: boolean) => {
+    setSelectedGroups((prev) => {
+      const next = new Set(prev)
+      if (enabled) {
+        next.add(queryValue)
+      } else {
+        next.delete(queryValue)
+      }
+      return next
+    })
+  }, [])
+
+  const handleToggleAllGroups = useCallback(
+    (enabled: boolean) => {
+      if (!groupedQueryOptions.length) {
+        setSelectedGroups(new Set())
+        return
+      }
+      if (enabled) {
+        setSelectedGroups(new Set(groupedQueryOptions.map((group) => group.value)))
+        return
+      }
+      setSelectedGroups(new Set())
+    },
+    [groupedQueryOptions]
+  )
 
   const handleContactFilterToggle = (value: ContactPresenceFilter, enabled: boolean) => {
     setFilters((prev) => {
@@ -2952,6 +3006,32 @@ function ProspectosView() {
       setBulkDeleteLoading(false)
     }
   }, [appendProspectos, fetchStageSummary, items, limit, offset, selectedIds, total])
+
+  const handleGroupDeleteConfirm = useCallback(async () => {
+    if (!selectedGroupValues.length) return
+    setGroupDeleteLoading(true)
+    setGroupDeleteError(null)
+    try {
+      const response = await eliminarGruposProspectos(selectedGroupValues)
+      const deletedTotal = typeof response.total === "number" ? response.total : 0
+      setSelectedGroups(new Set())
+      setOpenedQueryScope(null)
+      setProspectosViewMode("grupos")
+      setOffset(0)
+      await fetchProspectos(0)
+      void fetchStageSummary()
+      setBanner({
+        type: "success",
+        message: `Se eliminaron ${deletedTotal.toLocaleString("es-MX")} prospecto${deletedTotal === 1 ? "" : "s"} de ${selectedGroupValues.length} grupo${selectedGroupValues.length === 1 ? "" : "s"}.`,
+      })
+      setGroupDeleteDialogOpen(false)
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "No se pudieron eliminar los grupos seleccionados."
+      setGroupDeleteError(message)
+    } finally {
+      setGroupDeleteLoading(false)
+    }
+  }, [fetchProspectos, fetchStageSummary, selectedGroupValues])
 
   return (
     <div className="space-y-4">
@@ -4059,6 +4139,17 @@ function ProspectosView() {
               <IconTrash className="mr-1.5 size-4" />
               Eliminar seleccionados
             </Button>
+            {prospectosViewMode === "grupos" ? (
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={() => setGroupDeleteDialogOpen(true)}
+                disabled={!selectedGroupCount}
+              >
+                <IconTrash className="mr-1.5 size-4" />
+                Eliminar grupos
+              </Button>
+            ) : null}
           </div>
         </div>
 
@@ -4077,6 +4168,14 @@ function ProspectosView() {
               <Table className="text-[11px]">
                 <TableHeader>
                   <TableRow>
+                    <TableHead className="w-10">
+                      <Checkbox
+                        aria-label="Seleccionar todos los grupos"
+                        checked={allGroupsSelected ? true : someGroupsSelected ? "indeterminate" : false}
+                        onCheckedChange={(value) => handleToggleAllGroups(value === true)}
+                        disabled={!groupedQueryOptions.length}
+                      />
+                    </TableHead>
                     <TableHead className="w-[36%]">
                       <button type="button" onClick={() => toggleGroupSort("query")}>
                         Consulta {groupSort.key === "query" ? (groupSort.direction === "asc" ? "↑" : "↓") : ""}
@@ -4108,7 +4207,7 @@ function ProspectosView() {
                 <TableBody>
               {queryOptionsLoading ? (
                     <TableRow>
-                      <TableCell colSpan={6} className="py-8 text-center text-sm text-muted-foreground">
+                      <TableCell colSpan={7} className="py-8 text-center text-sm text-muted-foreground">
                         Cargando grupos de búsqueda...
                       </TableCell>
                     </TableRow>
@@ -4120,6 +4219,13 @@ function ProspectosView() {
                       key={group.value}
                           className={cn(isActive && "bg-primary/5")}
                         >
+                          <TableCell>
+                            <Checkbox
+                              aria-label={`Seleccionar grupo ${group.label}`}
+                              checked={selectedGroups.has(group.value)}
+                              onCheckedChange={(value) => handleToggleGroup(group.value, value === true)}
+                            />
+                          </TableCell>
                           <TableCell>
                             <div className="max-w-[640px] truncate font-medium" title={group.label}>
                               {group.label}
@@ -4151,7 +4257,7 @@ function ProspectosView() {
                 })
               ) : (
                     <TableRow>
-                      <TableCell colSpan={6} className="py-8 text-center text-sm text-muted-foreground">
+                      <TableCell colSpan={7} className="py-8 text-center text-sm text-muted-foreground">
                         No hay grupos de búsqueda para los filtros actuales.
                       </TableCell>
                     </TableRow>
@@ -4729,6 +4835,47 @@ function ProspectosView() {
                 <>
                   <IconTrash className="mr-2 size-4" />
                   Eliminar
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={groupDeleteDialogOpen} onOpenChange={setGroupDeleteDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Eliminar grupos seleccionados</DialogTitle>
+            <DialogDescription>
+              Se eliminarán todos los prospectos que pertenezcan a esos grupos de búsqueda.
+            </DialogDescription>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            ¿Deseas eliminar{" "}
+            <span className="font-semibold text-foreground">
+              {selectedGroupCount} grupo{selectedGroupCount === 1 ? "" : "s"}
+            </span>
+            {" "}completo{selectedGroupCount === 1 ? "" : "s"}?
+          </p>
+          {groupDeleteError ? <p className="text-sm text-destructive">{groupDeleteError}</p> : null}
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setGroupDeleteDialogOpen(false)}>
+              Cancelar
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => void handleGroupDeleteConfirm()}
+              disabled={groupDeleteLoading}
+            >
+              {groupDeleteLoading ? (
+                <>
+                  <IconLoader className="mr-2 size-4 animate-spin" />
+                  Eliminando...
+                </>
+              ) : (
+                <>
+                  <IconTrash className="mr-2 size-4" />
+                  Eliminar grupos
                 </>
               )}
             </Button>
