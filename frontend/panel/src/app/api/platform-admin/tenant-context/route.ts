@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server"
+import { cookies } from "next/headers"
 
 import { callCrmApi } from "@/lib/api/crm"
 import { COOKIE_BASE_OPTIONS, TENANT_CONTEXT_COOKIE } from "@/lib/auth/cookies"
@@ -18,14 +19,39 @@ function clearTenantContextCookie(response: NextResponse) {
   })
 }
 
-export async function GET(request: Request) {
-  const raw = request.headers.get("cookie") || ""
-  const tenantCookie = raw
-    .split(";")
-    .map((entry) => entry.trim())
-    .find((entry) => entry.startsWith(`${TENANT_CONTEXT_COOKIE}=`))
-  const tenantId = tenantCookie ? decodeURIComponent(tenantCookie.split("=").slice(1).join("=")) : null
-  return NextResponse.json({ tenant_id: tenantId || null })
+export async function GET() {
+  const store = await cookies()
+  const tenantId = store.get(TENANT_CONTEXT_COOKIE)?.value?.trim() || null
+  if (!tenantId) {
+    return NextResponse.json({ tenant_id: null, tenant_name: null })
+  }
+
+  const adminCheck = await callCrmApi<{ is_platform_admin: boolean }>("/admin/me/platform-admin", {
+    method: "GET",
+    organizacionId: null,
+    withUserToken: true,
+  })
+  if (!adminCheck.ok || !adminCheck.data?.is_platform_admin) {
+    const response = NextResponse.json({ tenant_id: null, tenant_name: null })
+    clearTenantContextCookie(response)
+    return response
+  }
+
+  const tenantCheck = await callCrmApi<{ tenant?: { nombre?: string | null } }>(`/admin/tenants/${tenantId}`, {
+    method: "GET",
+    organizacionId: null,
+    withUserToken: true,
+  })
+  if (!tenantCheck.ok) {
+    const response = NextResponse.json({ tenant_id: null, tenant_name: null })
+    clearTenantContextCookie(response)
+    return response
+  }
+
+  return NextResponse.json({
+    tenant_id: tenantId,
+    tenant_name: tenantCheck.data.tenant?.nombre ?? null,
+  })
 }
 
 export async function PUT(request: Request) {

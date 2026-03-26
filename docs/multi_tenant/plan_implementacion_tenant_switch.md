@@ -34,7 +34,7 @@ No incluye:
 
 - [x] TKT-01 completado.
 - [x] TKT-02 completado.
-- [ ] TKT-03 pendiente.
+- [x] TKT-03 completado.
 - [x] TKT-04 completado (botón de entrada desde detalle tenant).
 - [ ] TKT-05 pendiente.
 - [ ] TKT-06 pendiente.
@@ -59,6 +59,10 @@ Cambios implementados:
 - Integración en detalle tenant:
   - botón “Operar este tenant” en `/settings/tenants/[tenantId]`
   - setea contexto y redirige a `/settings/usuarios`.
+- Integración global de contexto en sidebar:
+  - muestra “Operando como tenant”.
+  - botón “Salir de contexto”.
+  - consume `GET/DELETE /api/platform-admin/tenant-context`.
 
 ## Tickets de implementación
 

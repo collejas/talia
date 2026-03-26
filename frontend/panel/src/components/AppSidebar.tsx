@@ -36,10 +36,12 @@ import { useCurrentUser } from "@/hooks/use-current-user"
 import { usePermissions } from "@/hooks/use-permissions"
 import { usePlatformAdminStatus } from "@/hooks/use-platform-admin-status"
 import { useScoringFeatureStatus } from "@/hooks/use-scoring-feature-status"
+import { useTenantContext } from "@/hooks/use-tenant-context"
 import { NavDocuments } from '@/components/nav-documents'
 import { NavMain } from '@/components/nav-main'
 import { NavSecondary } from '@/components/nav-secondary'
 import { NavUser } from '@/components/nav-user'
+import { Button } from "@/components/ui/button"
 import {
   Sidebar,
   SidebarContent,
@@ -198,6 +200,7 @@ export function AppSidebar({
   const [hydrated, setHydrated] = useState(false)
 
   const { isPlatformAdmin } = usePlatformAdminStatus()
+  const { tenantId: activeTenantId, tenantName: activeTenantName, refresh: refreshTenantContext } = useTenantContext()
   const { profilingEnabled } = useScoringFeatureStatus()
   const settingsChildren = useMemo(() => {
     const base = SETTINGS_CHILDREN_TEMPLATE.map((child) => ({ ...child })).filter((child) =>
@@ -295,6 +298,17 @@ export function AppSidebar({
     }
   }, [router])
 
+  const handleClearTenantContext = useCallback(async () => {
+    try {
+      await fetch("/api/platform-admin/tenant-context", { method: "DELETE" })
+    } catch (error) {
+      console.error("[tenant-context] clear error", error)
+    } finally {
+      await refreshTenantContext()
+      router.refresh()
+    }
+  }, [refreshTenantContext, router])
+
   if (!hydrated) {
     return (
       <div
@@ -338,6 +352,25 @@ export function AppSidebar({
         </SidebarMenu>
       </SidebarHeader>
       <SidebarContent>
+        {isPlatformAdmin && activeTenantId ? (
+          <div className="mx-2 mb-2 rounded-lg border border-amber-300/40 bg-amber-100/40 p-2 text-xs text-amber-950 dark:border-amber-500/40 dark:bg-amber-900/20 dark:text-amber-100">
+            <p className="font-medium">Operando como tenant</p>
+            <p className="truncate">
+              {activeTenantName || activeTenantId}
+            </p>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className="mt-2 h-7 w-full text-xs"
+              onClick={() => {
+                void handleClearTenantContext()
+              }}
+            >
+              Salir de contexto
+            </Button>
+          </div>
+        ) : null}
         <NavMain items={navItems} />
         <NavDocuments items={NAVIGATION.documents} />
         <NavSecondary items={NAVIGATION.navSecondary} className="mt-auto" />
