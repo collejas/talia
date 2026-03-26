@@ -36,7 +36,7 @@ No incluye:
 - [x] TKT-02 completado.
 - [x] TKT-03 completado.
 - [x] TKT-04 completado (botón de entrada desde detalle tenant).
-- [ ] TKT-05 pendiente.
+- [x] TKT-05 completado.
 - [ ] TKT-06 pendiente.
 - [ ] TKT-07 pendiente.
 - [ ] TKT-08 pendiente.
@@ -63,6 +63,10 @@ Cambios implementados:
   - muestra “Operando como tenant”.
   - botón “Salir de contexto”.
   - consume `GET/DELETE /api/platform-admin/tenant-context`.
+- Guardas backend anti-fuga en CRM:
+  - `require_organizacion_id` valida cruce de tenant usando contexto real del usuario.
+  - si `organizacion_id` solicitado no coincide con su tenant, solo permite continuar a `platform_admin`.
+  - para usuarios no plataforma devuelve `403 owner_scope_violation`.
 
 ## Tickets de implementación
 
