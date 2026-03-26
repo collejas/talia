@@ -1,6 +1,7 @@
 export const ACCESS_TOKEN_COOKIE = "talia.access_token";
 export const REFRESH_TOKEN_COOKIE = "talia.refresh_token";
 export const SESSION_REMEMBER_COOKIE = "talia.remember";
+export const TENANT_CONTEXT_COOKIE = "talia.tenant_context";
 
 export const COOKIE_BASE_OPTIONS = {
   httpOnly: true,

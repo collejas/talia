@@ -5,6 +5,7 @@ import {
   COOKIE_BASE_OPTIONS,
   REFRESH_TOKEN_COOKIE,
   SESSION_REMEMBER_COOKIE,
+  TENANT_CONTEXT_COOKIE,
 } from "@/lib/auth/cookies"
 import { getSupabaseConfig } from "@/lib/auth/supabase"
 import { SupabaseErrorResponse, SupabaseTokenResponse } from "@/lib/auth/types"
@@ -111,6 +112,14 @@ export async function POST(request: Request) {
     name: SESSION_REMEMBER_COOKIE,
     value: rememberMe ? "1" : "0",
     maxAge: refreshMaxAge,
+  })
+
+  // Evita arrastrar contexto de tenant de una sesión previa.
+  response.cookies.set({
+    ...COOKIE_BASE_OPTIONS,
+    name: TENANT_CONTEXT_COOKIE,
+    value: "",
+    maxAge: 0,
   })
 
   return response

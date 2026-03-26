@@ -1,8 +1,11 @@
 "use server"
 
 import { revalidatePath } from "next/cache"
+import { cookies } from "next/headers"
+import { redirect } from "next/navigation"
 
 import { callCrmApi } from "@/lib/api/crm"
+import { COOKIE_BASE_OPTIONS, TENANT_CONTEXT_COOKIE } from "@/lib/auth/cookies"
 
 export type CrudActionState = {
   status: "idle" | "success" | "error"
@@ -16,6 +19,53 @@ export type CrudActionState = {
 }
 
 export type CrudActionHandler = (prevState: CrudActionState, formData: FormData) => Promise<CrudActionState>
+
+export async function activateTenantContextAndRedirectAction(formData: FormData): Promise<void> {
+  const tenantId = getText(formData, "tenant_id")
+  if (!tenantId) {
+    throw new Error("Falta tenant_id.")
+  }
+
+  const adminCheck = await callCrmApi<{ is_platform_admin: boolean }>("/admin/me/platform-admin", {
+    method: "GET",
+    organizacionId: null,
+    withUserToken: true,
+  })
+  if (!adminCheck.ok || !adminCheck.data?.is_platform_admin) {
+    throw new Error("platform_admin_required")
+  }
+
+  const tenantCheck = await callCrmApi<{ ok?: boolean }>(`/admin/tenants/${tenantId}`, {
+    method: "GET",
+    organizacionId: null,
+    withUserToken: true,
+  })
+  if (!tenantCheck.ok) {
+    throw new Error(tenantCheck.error || "tenant_not_found")
+  }
+
+  const store = await cookies()
+  store.set({
+    ...COOKIE_BASE_OPTIONS,
+    name: TENANT_CONTEXT_COOKIE,
+    value: tenantId,
+    maxAge: 60 * 60 * 24 * 30,
+  })
+
+  revalidatePath("/settings/usuarios")
+  redirect("/settings/usuarios")
+}
+
+export async function clearTenantContextAction(): Promise<void> {
+  const store = await cookies()
+  store.set({
+    ...COOKIE_BASE_OPTIONS,
+    name: TENANT_CONTEXT_COOKIE,
+    value: "",
+    maxAge: 0,
+  })
+  revalidatePath("/settings/usuarios")
+}
 
 function success(message: string): CrudActionState {
   return { status: "success", message }

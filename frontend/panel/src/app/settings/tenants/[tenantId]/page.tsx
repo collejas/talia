@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { callCrmApi } from "@/lib/api/crm"
+import { activateTenantContextAndRedirectAction } from "./actions"
 
 import {
   TenantCalendarSettings,
@@ -220,9 +221,19 @@ export default async function TenantDetailSettingsPage({ params }: { params: Pro
     <AppViewLayout title="Settings · Tenant" withThemeToggle={false} contentClassName="px-0">
       <div className="flex flex-col gap-6 px-4 py-6 lg:px-6">
         <header className="space-y-2">
-          <Button asChild size="sm" variant="outline">
-            <Link href="/settings/tenants">Volver</Link>
-          </Button>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button asChild size="sm" variant="outline">
+              <Link href="/settings/tenants">Volver</Link>
+            </Button>
+            {isPlatformAdmin ? (
+              <form action={activateTenantContextAndRedirectAction}>
+                <input type="hidden" name="tenant_id" value={tenantId} />
+                <Button size="sm" type="submit">
+                  Operar este tenant
+                </Button>
+              </form>
+            ) : null}
+          </div>
           <p className="text-sm font-medium text-muted-foreground uppercase tracking-wide">Configuración / Plataforma</p>
           <h1 className="text-3xl font-semibold tracking-tight">Tenant</h1>
           <p className="text-muted-foreground max-w-3xl text-sm">

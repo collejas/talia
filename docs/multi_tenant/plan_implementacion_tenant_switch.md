@@ -30,6 +30,36 @@ No incluye:
 - Refactor de modelo de identidad a usuarios multi-tenant nativos.
 - Login con selector empresa/correo/contraseña.
 
+## Avance actual (2026-03-26)
+
+- [x] TKT-01 completado.
+- [x] TKT-02 completado.
+- [ ] TKT-03 pendiente.
+- [x] TKT-04 completado (botón de entrada desde detalle tenant).
+- [ ] TKT-05 pendiente.
+- [ ] TKT-06 pendiente.
+- [ ] TKT-07 pendiente.
+- [ ] TKT-08 pendiente.
+
+Cambios implementados:
+- Cookie de contexto de tenant: `talia.tenant_context`.
+- Endpoint interno del panel para contexto:
+  - `GET /api/platform-admin/tenant-context`
+  - `PUT /api/platform-admin/tenant-context`
+  - `DELETE /api/platform-admin/tenant-context`
+- Validación de seguridad en `PUT`:
+  - verifica `platform_admin` con `/admin/me/platform-admin`.
+  - valida existencia del tenant con `/admin/tenants/{tenant_id}`.
+- Resolución de organización ajustada:
+  - `frontend/panel/src/lib/settings/org.ts`
+  - usa override solo cuando el usuario es `platform_admin`.
+  - mantiene fallback al `organizacion_id` del JWT para usuarios normales.
+- Limpieza de contexto en flujo de sesión:
+  - login/logout/session limpian `talia.tenant_context`.
+- Integración en detalle tenant:
+  - botón “Operar este tenant” en `/settings/tenants/[tenantId]`
+  - setea contexto y redirige a `/settings/usuarios`.
+
 ## Tickets de implementación
 
 ### TKT-01: Tenant Context (server-side)
@@ -38,7 +68,7 @@ Objetivo:
 - Definir tenant activo por sesión para `platform_admin`.
 
 Cambios:
-- Backend: `POST /admin/context/tenant` (set), `DELETE /admin/context/tenant` (clear).
+- Panel API: `PUT /api/platform-admin/tenant-context` (set), `DELETE /api/platform-admin/tenant-context` (clear), `GET /api/platform-admin/tenant-context` (read).
 - Autorización: `require_platform_admin`.
 - Persistencia: cookie de sesión httpOnly (o mecanismo equivalente server-side).
 
