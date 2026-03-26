@@ -200,3 +200,197 @@ Criterio de salida:
 3. Definir y probar deploy atómico de staging.
 4. Formalizar rama `develop` y policy de PR.
 5. Ejecutar primera prueba completa usando tenant `0001` en staging.
+
+## Matriz de owners y aprobaciones
+Definir responsables por tipo de cambio y aprobación mínima antes de promover a `main`.
+
+Roles sugeridos:
+- Owner Backend
+- Owner Frontend
+- Owner DB
+- Owner Infra/DevOps
+- Release Manager
+
+Reglas:
+- Cambios con migraciones SQL requieren aprobación de Owner DB.
+- Cambios en servicios/systemd/nginx requieren aprobación de Owner Infra.
+- Cambios cross-stack (frontend+backend+db) requieren aprobación del Release Manager.
+
+Checklist:
+- [ ] Owner asignado por PR
+- [ ] Reviewer técnico asignado
+- [ ] Aprobaciones requeridas completas
+- [ ] Riesgo del cambio etiquetado (`low|medium|high`)
+
+## Go/No-Go por ambiente
+Criterios mínimos para promocionar cambios entre ambientes.
+
+Go `develop -> staging`:
+- [ ] CI verde (build + lint + tests)
+- [ ] Sin cambios pendientes de migración no versionada
+- [ ] Feature flags definidas para funcionalidades nuevas
+
+Go `staging -> main`:
+- [ ] Smoke suite completa en tenant `0001`
+- [ ] Errores críticos = 0 en staging durante ventana de validación
+- [ ] p95 endpoints críticos dentro de umbral definido
+- [ ] Validación manual de flujos críticos completada
+
+No-Go (bloquea release):
+- fallo en migración
+- regresión en login/inbox/crm/webchat
+- incremento significativo de error rate o latencia
+
+## Runbook de rollback detallado
+Objetivo: restaurar servicio estable en minutos.
+
+Rollback aplicación (panel/api):
+1. Identificar último release sano.
+2. Reapuntar symlink `current/...` al release anterior.
+3. Reiniciar servicios del ambiente afectado.
+4. Validar health endpoints y smoke básico.
+
+Rollback base de datos:
+1. Si migración es reversible, ejecutar migración de rollback versionada.
+2. Si no es reversible, ejecutar plan de contingencia desde backup.
+3. Verificar integridad de datos y RLS.
+
+Rollback de feature flags por tenant:
+1. Desactivar `features.<modulo>.enabled` para tenants afectados.
+2. Mantener activo sólo en `0001` si aplica diagnóstico.
+3. Documentar incidente y causa raíz.
+
+Checklist:
+- [ ] Runbook probado al menos una vez en staging
+- [ ] Tiempo objetivo de recuperación (RTO) documentado
+- [ ] Persona on-call definida por ventana de release
+
+## Plan de migraciones con ventana y respaldo
+Secuencia obligatoria por release con cambios SQL.
+
+1. Antes de staging:
+- [ ] Backup lógico reciente
+- [ ] Script/migración revisado por Owner DB
+
+2. En staging:
+- [ ] Aplicar migraciones
+- [ ] Validar queries críticas
+- [ ] Ejecutar smoke/regresión
+
+3. Antes de producción:
+- [ ] Confirmar backup pre-release de producción
+- [ ] Confirmar ventana de mantenimiento (si aplica)
+
+4. En producción:
+- [ ] Aplicar migraciones en orden
+- [ ] Validar métricas + consultas críticas
+- [ ] Confirmar consistencia por tenant (incluyendo `0001`)
+
+## Observabilidad mínima obligatoria
+Métricas y señales mínimas a revisar por ambiente.
+
+API:
+- error rate
+- p95/p99 latencia
+- throughput por endpoint crítico
+
+Panel:
+- errores de render/hidratación
+- tiempos de respuesta de APIs server-side
+
+DB/Supabase:
+- errores SQL
+- locks largos
+- tiempo de consultas críticas
+
+Canales (webchat/whatsapp):
+- tasa de entrega
+- errores de webhook
+- tiempo de procesamiento
+
+Checklist:
+- [ ] Dashboard por ambiente (`prod`, `staging`)
+- [ ] Alertas configuradas para error rate y p95
+- [ ] Logs centralizados por servicio
+
+## Plan de pruebas por tenant `0001`
+Suite funcional mínima por cada release en staging.
+
+Flujos obligatorios:
+- [ ] Login y sesión
+- [ ] Dashboard principal
+- [ ] CRM (contactos/oportunidades)
+- [ ] Inbox (lectura/respuesta)
+- [ ] Webchat (entrada -> creación/actualización de entidad)
+- [ ] WhatsApp (si aplica canal activo)
+- [ ] Settings críticos (tenants, usuarios, variables)
+
+Regla:
+- No pasar a producción sin suite `0001` completa en staging.
+
+## Política de secretos y variables por ambiente
+Separación estricta de configuración sensible.
+
+Reglas:
+- Secrets de terceros por tenant en `public.secretos` (cifrado).
+- Variables de infraestructura por ambiente en `.env` del servicio correspondiente.
+- No reutilizar keys de producción en staging/desarrollo.
+- Rotación periódica de llaves críticas (service role, APIs externas, SMTP, etc.).
+
+Checklist:
+- [ ] Inventario de variables por ambiente
+- [ ] Inventario de secretos por tenant
+- [ ] Política de rotación y fecha de última rotación
+- [ ] Acceso mínimo necesario por rol
+
+## Cronograma de implementación
+Plan sugerido en 4 semanas (ajustable).
+
+Semana 1:
+- Definir owners, aprobaciones y política Go/No-Go
+- Preparar archivos `.env` por ambiente
+
+Semana 2:
+- Levantar servicios/dominio de staging
+- Implementar deploy atómico staging
+
+Semana 3:
+- Alinear producción a runtime por symlink (`current/panel`)
+- Ejecutar primer ciclo completo `develop -> staging -> main`
+
+Semana 4:
+- Activar observabilidad/alertas mínimas
+- Simular rollback en staging
+- Cerrar checklist de hardening
+
+Entregables:
+- [ ] Staging operativo
+- [ ] Flujo de release formalizado
+- [ ] Runbook validado
+- [ ] Primer release completo con validación en `0001`
+
+## Tabla de ejecución (seguimiento)
+Usar esta tabla como control semanal. El estado debe actualizarse en cada revisión.
+
+| ID | Tarea | Responsable sugerido | Fecha objetivo | Estado |
+|---|---|---|---|---|
+| E1 | Definir owners y aprobaciones por tipo de cambio | Release Manager | 2026-03-29 | Pendiente |
+| E2 | Formalizar política Go/No-Go (`develop->staging->main`) | Release Manager + Owners | 2026-03-30 | Pendiente |
+| E3 | Crear `.env.production` y `.env.staging` (API/panel) | Owner Infra + Owners App | 2026-03-31 | Pendiente |
+| E4 | Crear `talia-api-staging.service` y `talia-panel-staging.service` | Owner Infra | 2026-04-01 | Pendiente |
+| E5 | Configurar `staging.talia.mx` en Nginx | Owner Infra | 2026-04-01 | Pendiente |
+| E6 | Implementar `scripts/deploy_panel_staging_atomic.sh` | Owner Infra + Owner Frontend | 2026-04-02 | Pendiente |
+| E7 | Validar rollback de panel en staging (symlink `current/panel-staging`) | Owner Infra | 2026-04-03 | Pendiente |
+| E8 | Alinear producción a runtime por symlink `current/panel` | Owner Infra | 2026-04-04 | Pendiente |
+| E9 | Definir checklist de migraciones con backup pre-release | Owner DB | 2026-04-05 | Pendiente |
+| E10 | Activar dashboard y alertas mínimas por ambiente | Owner Infra + Owner Backend | 2026-04-06 | Pendiente |
+| E11 | Ejecutar suite smoke `0001` completa en staging | QA/Owner Frontend + Owner Backend | 2026-04-07 | Pendiente |
+| E12 | Primer ciclo completo `feature -> develop -> staging -> main -> prod` | Release Manager | 2026-04-08 | Pendiente |
+| E13 | Simulación de incidente + rollback (app + DB + flags) | Owner Infra + Owner DB | 2026-04-09 | Pendiente |
+| E14 | Cierre de hardening y acta de operación estable | Release Manager | 2026-04-10 | Pendiente |
+
+Leyenda de estado:
+- `Pendiente`
+- `En progreso`
+- `Bloqueado`
+- `Completado`
