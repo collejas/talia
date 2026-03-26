@@ -395,6 +395,29 @@ class PlatformRepository:
             raise PlatformRepositoryError("position_create_failed")
         return data[0]
 
+    async def list_tenant_bootstrap_catalog(self, *, tipo: Literal["departamento", "puesto"]) -> list[str]:
+        data = await self._rest(
+            "GET",
+            "/rest/v1/tenant_bootstrap_catalog",
+            params={
+                "select": "nombre",
+                "tipo": f"eq.{tipo}",
+                "activo": "eq.true",
+                "order": "orden.asc,nombre.asc",
+                "limit": "500",
+            },
+        )
+        if not isinstance(data, list):
+            raise PlatformRepositoryError("tenant_bootstrap_catalog_read_failed")
+        names: list[str] = []
+        for row in data:
+            if not isinstance(row, dict):
+                continue
+            name = str(row.get("nombre") or "").strip()
+            if name:
+                names.append(name)
+        return names
+
     async def upsert_usuario(
         self,
         *,

@@ -78,6 +78,8 @@ El método `create_tenant_with_admin` en `backend/app/api/routes/admin.py` sigue
    - Asociar permisos base a roles semilla. `owner` y roles administrativos quedan con cobertura alta para operar la app desde el día 1.
    - Crear/asegurar rol de seed (`payload.seed.rol_nombre`) y asociar sus permisos explícitos.
    - Crear departamento y puesto (`departamentos`, `puestos`).
+   - Además del seed principal, el backend crea un catálogo base adicional en cada tenant nuevo leyendo `public.tenant_bootstrap_catalog` (tipos `departamento` y `puesto`).
+   - Si el catálogo no existe o está vacío, el backend usa fallback interno para no bloquear el alta.
 4. **Usuario Supabase**: `create_supabase_user` (en `backend/app/services/supabase_admin.py`) lanza:
    - `POST /auth/v1/admin/users` + `PUT /auth/v1/admin/users/{id}` para fijar metadata/app_metadata con `organizacion_id`. Se genera una contraseña temporal, se marca `email_confirm`, y se formatea el teléfono a E.164 (fallback `+000...` si no es válido).
    - Envía `POST /auth/v1/recover` con `supabase_reset_redirect_url` para que el admin reciba un correo de recuperación.

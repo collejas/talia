@@ -720,6 +720,26 @@ TENANT_BASE_PERMISSION_CODES = (
     "ejecutar_busquedas",
 )
 
+FALLBACK_TENANT_DEPARTMENT_NAMES = (
+    "Administración",
+    "Comercial",
+    "Marketing",
+    "Operaciones",
+    "Soporte",
+    "Finanzas",
+)
+
+FALLBACK_TENANT_POSITION_NAMES = (
+    "Administrador General",
+    "Gerente Comercial",
+    "Supervisor Comercial",
+    "Ejecutivo de Ventas",
+    "Analista de Marketing",
+    "Especialista de Soporte",
+    "Coordinador Operativo",
+    "Auxiliar Administrativo",
+)
+
 
 def _normalize_role_name(raw: str) -> str:
     return raw.split("(", 1)[0].strip()
@@ -1020,6 +1040,78 @@ async def _grant_all_permissions_to_role(
         )
 
 
+async def _bootstrap_default_org_structure(
+    *,
+    repo: PlatformRepository,
+    organizacion_id: UUID,
+    primary_department_name: str | None = None,
+    primary_position_name: str | None = None,
+) -> None:
+    try:
+        department_names = await repo.list_tenant_bootstrap_catalog(tipo="departamento")
+    except PlatformRepositoryError as exc:
+        logger.warning(
+            "tenant_bootstrap.department_catalog_fallback",
+            extra={"organizacion_id": str(organizacion_id), "error": str(exc)},
+        )
+        department_names = list(FALLBACK_TENANT_DEPARTMENT_NAMES)
+    if not department_names:
+        department_names = list(FALLBACK_TENANT_DEPARTMENT_NAMES)
+
+    try:
+        position_names = await repo.list_tenant_bootstrap_catalog(tipo="puesto")
+    except PlatformRepositoryError as exc:
+        logger.warning(
+            "tenant_bootstrap.position_catalog_fallback",
+            extra={"organizacion_id": str(organizacion_id), "error": str(exc)},
+        )
+        position_names = list(FALLBACK_TENANT_POSITION_NAMES)
+    if not position_names:
+        position_names = list(FALLBACK_TENANT_POSITION_NAMES)
+
+    existing_department_names: set[str] = set()
+    existing_position_names: set[str] = set()
+
+    if primary_department_name and primary_department_name.strip():
+        existing_department_names.add(primary_department_name.strip().lower())
+    if primary_position_name and primary_position_name.strip():
+        existing_position_names.add(primary_position_name.strip().lower())
+
+    for name in department_names:
+        normalized = name.strip().lower()
+        if not normalized or normalized in existing_department_names:
+            continue
+        try:
+            await repo.create_department(organizacion_id=organizacion_id, nombre=name)
+            existing_department_names.add(normalized)
+        except PlatformRepositoryError as exc:
+            logger.warning(
+                "tenant_bootstrap.department_seed_failed",
+                extra={
+                    "organizacion_id": str(organizacion_id),
+                    "departamento": name,
+                    "error": str(exc),
+                },
+            )
+
+    for name in position_names:
+        normalized = name.strip().lower()
+        if not normalized or normalized in existing_position_names:
+            continue
+        try:
+            await repo.create_position(organizacion_id=organizacion_id, nombre=name)
+            existing_position_names.add(normalized)
+        except PlatformRepositoryError as exc:
+            logger.warning(
+                "tenant_bootstrap.position_seed_failed",
+                extra={
+                    "organizacion_id": str(organizacion_id),
+                    "puesto": name,
+                    "error": str(exc),
+                },
+            )
+
+
 @router.get("/tenants", response_model=TenantsResponse)
 async def list_tenants(
     actor: AdminActor = Depends(require_platform_admin_or_owner),
@@ -1092,6 +1184,11 @@ async def create_tenant(
             channel_routing.invalidate_cache(canal="webchat", clave=alias)
         except PlatformRepositoryError as exc:
             raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+    await _bootstrap_default_org_structure(
+        repo=repo,
+        organizacion_id=tenant_id,
+    )
 
     return CreateTenantResponse(tenant=TenantSummary.model_validate(tenant))
 
@@ -1269,6 +1366,13 @@ async def create_tenant_with_admin(
         departamento_id = UUID(str(departamento["id"]))
         puesto = await repo.create_position(organizacion_id=tenant_id, nombre=payload.seed.puesto)
         puesto_id = UUID(str(puesto["id"]))
+
+        await _bootstrap_default_org_structure(
+            repo=repo,
+            organizacion_id=tenant_id,
+            primary_department_name=payload.seed.departamento,
+            primary_position_name=payload.seed.puesto,
+        )
 
         owner_role_id = await _resolve_owner_role_id(repo=repo, organizacion_id=tenant_id)
         admin_role_id = owner_role_id or role_id
