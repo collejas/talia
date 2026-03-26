@@ -13,6 +13,49 @@ Permitir que el equipo siga desarrollando y validando cambios reales sin impacta
 - El sistema sí es multi-tenant por `organizacion_id` + RLS.
 - Ya existe mecanismo para operar contexto de tenant en panel (`Operar este tenant`) con cookie `talia.tenant_context`.
 - Tenant maestro identificado: `00000000-0000-0000-0000-000000000001`.
+- Existe script de deploy atómico de panel (`scripts/deploy_panel_atomic.sh`), pero actualmente el servicio de panel usa `WorkingDirectory=/var/www/talia/frontend/panel`; por lo tanto, el symlink `current/panel` aún no es el runtime efectivo de producción.
+
+## Estrategia de deploy atómico (panel)
+Objetivo: conservar el script actual y convertirlo en ruta oficial de despliegue, evitando cortes y permitiendo rollback rápido.
+
+Decisión:
+1. No eliminar `scripts/deploy_panel_atomic.sh`.
+2. Mantenerlo para `producción`.
+3. Crear variante `staging` (o parametrización por ambiente) para no mezclar rutas/servicios.
+4. Ajustar `talia-panel.service` para ejecutar desde `current/panel` cuando se haga el cutover.
+
+Secuencia de migración segura:
+1. Preparar staging con deploy atómico primero.
+2. Validar que staging usa symlink `current/panel-staging` y rollback funcional.
+3. Replicar el mismo patrón en producción.
+4. Cambiar `talia-panel.service` a `WorkingDirectory=/var/www/talia/current/panel`.
+5. Confirmar que el script y el servicio apuntan a la misma ruta runtime.
+
+Criterio de salida:
+- El release activo siempre se identifica por symlink (`current/...`) y no por carpeta fija.
+- Rollback a release previo se puede ejecutar en minutos.
+- Producción y staging tienen scripts/servicios desacoplados.
+
+## Convención exacta de servicios y rutas
+Definir desde ahora nombres y rutas fijas para evitar ambigüedad operativa.
+
+Producción:
+- Servicio API: `talia-api.service`
+- Servicio panel: `talia-panel.service`
+- Symlink runtime panel: `/var/www/talia/current/panel`
+- Releases panel: `/var/www/talia/releases/panel/<timestamp>`
+- Script deploy panel: `scripts/deploy_panel_atomic.sh`
+
+Staging:
+- Servicio API: `talia-api-staging.service`
+- Servicio panel: `talia-panel-staging.service`
+- Symlink runtime panel: `/var/www/talia/current/panel-staging`
+- Releases panel: `/var/www/talia/releases/panel-staging/<timestamp>`
+- Script deploy panel: `scripts/deploy_panel_staging_atomic.sh`
+
+Regla:
+- Cada servicio debe ejecutar desde su symlink `current/*`.
+- Ningún servicio debe ejecutar directamente desde `frontend/panel` en despliegues administrados.
 
 ## Principio operativo
 No mezclar "aislamiento por tenant" con "aislamiento por ambiente".
@@ -91,7 +134,11 @@ Criterio de salida:
 1. Duplicar/ajustar script de deploy para staging:
 - `scripts/deploy_panel_staging_atomic.sh`
 
-2. Definir pipeline manual mínimo:
+2. Hacer compatible runtime + script (staging primero, producción después):
+- staging: servicio apunta a `current/panel-staging`
+- producción: servicio apunta a `current/panel`
+
+3. Definir pipeline manual mínimo:
 - deploy staging desde `develop`
 - pruebas smoke
 - promoción a `main`
@@ -99,6 +146,7 @@ Criterio de salida:
 
 Criterio de salida:
 - cada cambio pasa por staging antes de producción.
+- el deploy atómico realmente controla el runtime activo.
 
 ### Fase 3 - Control por tenant
 1. Estandarizar flags en `organizaciones.config`:
