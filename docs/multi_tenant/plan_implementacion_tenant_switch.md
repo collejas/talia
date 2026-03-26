@@ -38,8 +38,8 @@ No incluye:
 - [x] TKT-04 completado (botón de entrada desde detalle tenant).
 - [x] TKT-05 completado.
 - [x] TKT-06 completado.
-- [ ] TKT-07 pendiente.
-- [ ] TKT-08 pendiente.
+- [x] TKT-07 completado.
+- [x] TKT-08 completado.
 
 Cambios implementados:
 - Cookie de contexto de tenant: `talia.tenant_context`.
@@ -80,6 +80,18 @@ Cambios implementados:
     - `tenant_access.allowed`
     - `tenant_access.denied`
     - `tenant_access.allowed_legacy`
+- QA técnico automatizado agregado:
+  - archivo `backend/tests/api/test_crm_tenant_scope.py` con casos:
+    - same-tenant permitido.
+    - cross-tenant denegado para no `platform_admin`.
+    - cross-tenant permitido para `platform_admin`.
+  - resultado validado en corrida general (`backend/resultados_pytest_general_20260326_203316.txt`):
+    - `153 passed, 1 skipped, 0 failed`.
+- Documentación operativa alineada:
+  - `docs/Instructivo_creacion_tenant/crear_tenant.md`
+  - `docs/multi_tenant/plan_admin_ui_tenants.md`
+  - `docs/multi_tenant/tenants_onboarding.md`
+  - Se agregó flujo de tenant context, guardas de seguridad y operación diaria para plataforma.
 
 ## Tickets de implementación
 

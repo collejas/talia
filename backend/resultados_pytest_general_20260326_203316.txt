@@ -1,0 +1,41 @@
+============================= test session starts ==============================
+platform linux -- Python 3.12.3, pytest-8.4.2, pluggy-1.6.0
+rootdir: /var/www/talia/backend
+configfile: pyproject.toml
+plugins: anyio-4.11.0, asyncio-0.23.8
+asyncio: mode=Mode.AUTO
+collected 154 items
+
+tests/api/test_admin_tenant_flow.py ...                                  [  1%]
+tests/api/test_crm_pipeline_flow.py .                                    [  2%]
+tests/api/test_crm_routes.py ........................................... [ 30%]
+...                                                                      [ 32%]
+tests/api/test_crm_scoring_kpis.py .                                     [ 33%]
+tests/api/test_crm_tenant_scope.py ...                                   [ 35%]
+tests/api/test_crm_timezone_helpers.py ....                              [ 37%]
+tests/assistants/test_lead_tools.py ....                                 [ 40%]
+tests/assistants/test_registry.py .                                      [ 40%]
+tests/assistants/test_tool_runtime_controls.py ....                      [ 43%]
+tests/channels/test_voice_service.py ..                                  [ 44%]
+tests/channels/test_voice_stream.py s                                    [ 45%]
+tests/channels/test_webchat_calendar.py ....                             [ 48%]
+tests/channels/test_webchat_service_assignment.py ..                     [ 49%]
+tests/channels/test_whatsapp_service.py .........                        [ 55%]
+tests/channels/test_whatsapp_tools.py ..........                         [ 61%]
+tests/channels/test_whatsapp_webhook.py ...                              [ 63%]
+tests/repositories/test_crm_sales_assignment.py ......                   [ 67%]
+tests/repositories/test_crm_timezone_filters.py ..                       [ 68%]
+tests/repositories/test_crm_user_token.py ..                             [ 70%]
+tests/services/test_brevo.py ..........                                  [ 76%]
+tests/services/test_calendar.py ...                                      [ 78%]
+tests/services/test_email.py ...                                         [ 80%]
+tests/services/test_lead_scoring_runtime.py ...                          [ 82%]
+tests/services/test_leads_geo.py ..                                      [ 83%]
+tests/services/test_phone_lookup_free.py .....                           [ 87%]
+tests/services/test_prospeccion_contact_sender.py .........              [ 92%]
+tests/services/test_storage_channels.py ..                               [ 94%]
+tests/services/test_webchat_followups.py .....                           [ 97%]
+tests/services/test_whatsapp_followups.py ...                            [ 99%]
+tests/test_health.py .                                                   [100%]
+
+================== 153 passed, 1 skipped in 75.95s (0:01:15) ===================

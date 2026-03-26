@@ -25,6 +25,24 @@ Documentos de RBAC relacionados (2026-02-15)
 - [ ] (pendiente) Primer arranque / notas de implementación.
 - [ ] Decisión: proveedores/credenciales son POR_TENANT (OpenAI/Twilio/Meta/Mail/Calendar/Google).
 
+## Actualización 2026-03-26: operación cross-tenant controlada
+
+Estado:
+- [x] `platform_admin` puede entrar en contexto de tenant sin relogin (tenant switch).
+- [x] `owner` mantiene alcance solo a su tenant.
+- [x] Backend CRM valida override de tenant y bloquea cruces no autorizados.
+
+Flujo operativo:
+1. Entrar a `/settings/tenants/{tenantId}`.
+2. Clic en **“Operar este tenant”**.
+3. El panel activa `talia.tenant_context` y redirige a una vista tenant-scoped (ej. `/settings/usuarios`).
+4. Sidebar muestra el contexto activo y permite **“Salir de contexto”**.
+
+Controles de seguridad:
+- El override de tenant se aplica solo cuando `/admin/me/platform-admin` confirma acceso de plataforma.
+- Para usuarios no plataforma, el panel usa el `organizacion_id` del JWT.
+- En CRM backend, cruce de tenant sin privilegio de plataforma -> `403 owner_scope_violation`.
+
 ## Objetivo
 Registrar nuevos tenants (tabla `public.organizaciones`) y configurar el **routing** de canales (por ejemplo `tenant_alias` del widget webchat) desde una vista/admin interna, sin añadir un bloque nuevo de variables por cada cliente en `.env`.
 

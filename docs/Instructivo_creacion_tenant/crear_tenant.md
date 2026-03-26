@@ -1,5 +1,19 @@
 # Instructivo de creación y configuración de un tenant
 
+## Actualización 2026-03-26: contexto operativo de tenant (platform admin)
+
+Ya está habilitado el flujo para que un `platform_admin` opere vistas tenant-scoped sin relogin:
+
+- Desde `/settings/tenants/{tenantId}` existe el botón **“Operar este tenant”**.
+- Ese botón activa un contexto de tenant en cookie (`talia.tenant_context`) y redirige a `/settings/usuarios`.
+- El panel resuelve `X-Organizacion-Id` con este contexto **solo** cuando el actor es `platform_admin`.
+- En sidebar se muestra un indicador “Operando como tenant” y acción **“Salir de contexto”**.
+
+Seguridad aplicada:
+
+- Si el usuario no es `platform_admin`, el override se ignora y se usa el `organizacion_id` del JWT.
+- En backend CRM, cualquier intento cross-tenant sin privilegio de plataforma devuelve `403 owner_scope_violation`.
+
 Este instructivo recoge el flujo completo para registrar un nuevo tenant (el cliente que renta tu plataforma), crear su admin y pulir todas las variables que necesita para operar (config, rutas y secretos). Toda la lógica ya existe en el backend (`backend/app/api/routes/admin.py` + `backend/app/api/routes/tenant.py`), en los helpers que hablan con Supabase (`backend/app/repositories/platform_admin.py`, `backend/app/services/supabase_admin.py`, `backend/app/core/secrets_crypto.py`) y en el frontend (`frontend/panel/src/app/settings/tenants` y `frontend/panel/src/app/settings/variables`). La estructura física de las tablas está disponible en `/var/www/talia/backups/postgres_20260204_142816/postgres_20260204_142816_schema.sql` (organizaciones, permisos, rutas, secretos, departamentos, puestos, usuarios, empleados, roles, roles_permisos, etc.).
 
 ## 1. Pre-requisitos

@@ -12,9 +12,18 @@ class DummyRepo:
         self.opportunity_metadata = opportunity_metadata or {}
         self.updated_payloads = []
 
-    async def list_whatsapp_conversations_for_followup(self, *, inactive_since, limit):
+    async def list_whatsapp_conversations_for_followup(
+        self,
+        *,
+        inactive_since,
+        limit,
+        cursor_last_out=None,
+        cursor_last_id=None,
+    ):
         self.inactive_since = inactive_since
         self.limit = limit
+        self.cursor_last_out = cursor_last_out
+        self.cursor_last_id = cursor_last_id
         return self.conversations
 
     async def get_pipeline_opportunity(self, *, organizacion_id, oportunidad_id):
