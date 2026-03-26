@@ -37,7 +37,7 @@ No incluye:
 - [x] TKT-03 completado.
 - [x] TKT-04 completado (botón de entrada desde detalle tenant).
 - [x] TKT-05 completado.
-- [ ] TKT-06 pendiente.
+- [x] TKT-06 completado.
 - [ ] TKT-07 pendiente.
 - [ ] TKT-08 pendiente.
 
@@ -67,6 +67,19 @@ Cambios implementados:
   - `require_organizacion_id` valida cruce de tenant usando contexto real del usuario.
   - si `organizacion_id` solicitado no coincide con su tenant, solo permite continuar a `platform_admin`.
   - para usuarios no plataforma devuelve `403 owner_scope_violation`.
+- Auditoría de contexto efectivo en CRM:
+  - logs estructurados por request de tenant con:
+    - `actor_user_id`
+    - `actor_organizacion_id`
+    - `requested_organizacion_id`
+    - `effective_organizacion_id`
+    - `is_platform_admin`
+    - `scope_mode`
+    - `scope_allowed`
+  - eventos de resultado:
+    - `tenant_access.allowed`
+    - `tenant_access.denied`
+    - `tenant_access.allowed_legacy`
 
 ## Tickets de implementación
 

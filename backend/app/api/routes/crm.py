@@ -3786,31 +3786,43 @@ async def require_organizacion_id(
             detail="Encabezado X-Organizacion-Id inválido",
         ) from exc
 
-    tenant_access_logger.info(
-        "tenant_access",
-        extra={
-            "organizacion_id": str(organizacion_id),
-            "path": request.url.path,
-            "query": request.url.query or None,
-            "method": request.method,
-            "user_id": request.headers.get("X-Usuario-Id"),
-        },
-    )
+    audit_context: dict[str, Any] = {
+        "requested_organizacion_id": str(organizacion_id),
+        "effective_organizacion_id": str(organizacion_id),
+        "path": request.url.path,
+        "query": request.url.query or None,
+        "method": request.method,
+        "header_usuario_id": request.headers.get("X-Usuario-Id"),
+        "actor_user_id": None,
+        "actor_organizacion_id": None,
+        "is_platform_admin": False,
+        "scope_mode": "unknown",
+        "scope_allowed": True,
+    }
+    tenant_access_logger.info("tenant_access.request", extra=audit_context)
 
     if settings.environment.strip().lower() == "test" or _is_pytest_runtime():
+        audit_context["scope_mode"] = "test_bypass"
+        tenant_access_logger.info("tenant_access.allowed", extra=audit_context)
         return organizacion_id
 
     if not user_token:
         # Para rutas sin token explícito, mantenemos comportamiento legacy.
+        audit_context["scope_mode"] = "legacy_without_user_token"
+        tenant_access_logger.warning("tenant_access.allowed_legacy", extra=audit_context)
         return organizacion_id
 
     repo = CRMRepository(user_token=user_token)
     actor_org_id: UUID | None = None
     try:
         permission_context = await repo.get_permission_context()
+        raw_user_id = permission_context.get("usuario_id")
+        if raw_user_id:
+            audit_context["actor_user_id"] = str(raw_user_id)
         raw_org_id = permission_context.get("organizacion_id")
         if raw_org_id:
             actor_org_id = UUID(str(raw_org_id))
+            audit_context["actor_organizacion_id"] = str(actor_org_id)
     except CRMRepositoryError as exc:
         if _is_jwt_expired_repo_error(exc):
             raise HTTPException(
@@ -3824,6 +3836,8 @@ async def require_organizacion_id(
         actor_org_id = None
 
     if actor_org_id and actor_org_id == organizacion_id:
+        audit_context["scope_mode"] = "same_tenant"
+        tenant_access_logger.info("tenant_access.allowed", extra=audit_context)
         return organizacion_id
 
     # Si intenta operar sobre otro tenant (o no tiene tenant en contexto),
@@ -3841,6 +3855,7 @@ async def require_organizacion_id(
     raw_id = user.get("id")
     try:
         user_id = UUID(str(raw_id))
+        audit_context["actor_user_id"] = str(user_id)
     except (TypeError, ValueError) as exc:
         raise HTTPException(status_code=401, detail="auth_user_invalid") from exc
 
@@ -3850,8 +3865,14 @@ async def require_organizacion_id(
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
     if not allowed:
+        audit_context["scope_mode"] = "cross_tenant_denied"
+        audit_context["scope_allowed"] = False
+        tenant_access_logger.warning("tenant_access.denied", extra=audit_context)
         raise HTTPException(status_code=403, detail="owner_scope_violation")
 
+    audit_context["is_platform_admin"] = True
+    audit_context["scope_mode"] = "cross_tenant_platform_admin"
+    tenant_access_logger.info("tenant_access.allowed", extra=audit_context)
     return organizacion_id
 
 
