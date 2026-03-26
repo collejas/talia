@@ -16,7 +16,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { TableCell, TableRow } from "@/components/ui/table"
 import { formatDateTime } from "@/lib/formatters"
-import { HrRoleOption, HrUserItem } from "@/lib/settings/hr-types"
+import { HrDepartmentOption, HrPositionOption, HrRoleOption, HrUserItem } from "@/lib/settings/hr-types"
 import { cn } from "@/lib/utils"
 
 const INITIAL_STATE: CrudActionState = { status: "idle" }
@@ -24,9 +24,17 @@ const INITIAL_STATE: CrudActionState = { status: "idle" }
 type UserInlineRowProps = {
   user: HrUserItem
   rolesCatalog: HrRoleOption[]
+  departments: HrDepartmentOption[]
+  positions: HrPositionOption[]
 }
 
-export function UserCreateSection() {
+export function UserCreateSection({
+  departments,
+  positions,
+}: {
+  departments: HrDepartmentOption[]
+  positions: HrPositionOption[]
+}) {
   const [state, action] = useActionState(createUserAction, INITIAL_STATE)
   return (
     <div className="rounded-lg border border-border/60 bg-muted/20 px-4 py-4">
@@ -73,6 +81,44 @@ export function UserCreateSection() {
               <option value="bloqueado">Bloqueado</option>
             </select>
           </div>
+          <div className="space-y-1">
+            <Label htmlFor="user-new-departamento">Departamento</Label>
+            <select
+              id="user-new-departamento"
+              name="departamento_id"
+              defaultValue=""
+              className={cn(
+                "h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm",
+                "ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+              )}
+            >
+              <option value="">Sin departamento</option>
+              {departments.map((department) => (
+                <option key={department.id} value={department.id}>
+                  {department.nombre}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="space-y-1">
+            <Label htmlFor="user-new-puesto">Puesto</Label>
+            <select
+              id="user-new-puesto"
+              name="puesto_id"
+              defaultValue=""
+              className={cn(
+                "h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm",
+                "ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+              )}
+            >
+              <option value="">Sin puesto</option>
+              {positions.map((position) => (
+                <option key={position.id} value={position.id}>
+                  {position.nombre} · {position.departamentoNombre}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
         <InlineStateMessage state={state} />
         <div className="flex justify-end">
@@ -83,7 +129,7 @@ export function UserCreateSection() {
   )
 }
 
-export function UserInlineRow({ user, rolesCatalog }: UserInlineRowProps) {
+export function UserInlineRow({ user, rolesCatalog, departments, positions }: UserInlineRowProps) {
   const [isEditing, setIsEditing] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
 
@@ -240,6 +286,44 @@ export function UserInlineRow({ user, rolesCatalog }: UserInlineRowProps) {
                     >
                       <option value="activo">Activo</option>
                       <option value="bloqueado">Bloqueado</option>
+                    </select>
+                  </div>
+                  <div className="space-y-1">
+                    <Label htmlFor={`user-edit-departamento-${user.id}`}>Departamento</Label>
+                    <select
+                      id={`user-edit-departamento-${user.id}`}
+                      name="departamento_id"
+                      defaultValue={user.departamentoId ?? ""}
+                      className={cn(
+                        "h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm",
+                        "ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+                      )}
+                    >
+                      <option value="">Sin departamento</option>
+                      {departments.map((department) => (
+                        <option key={department.id} value={department.id}>
+                          {department.nombre}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="space-y-1">
+                    <Label htmlFor={`user-edit-puesto-${user.id}`}>Puesto</Label>
+                    <select
+                      id={`user-edit-puesto-${user.id}`}
+                      name="puesto_id"
+                      defaultValue={user.puestoId ?? ""}
+                      className={cn(
+                        "h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm",
+                        "ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+                      )}
+                    >
+                      <option value="">Sin puesto</option>
+                      {positions.map((position) => (
+                        <option key={position.id} value={position.id}>
+                          {position.nombre} · {position.departamentoNombre}
+                        </option>
+                      ))}
                     </select>
                   </div>
                 </div>

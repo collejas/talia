@@ -11,6 +11,7 @@ import {
   HrPermissionItem,
   HrPermissionsDirectory,
   HrPositionItem,
+  HrPositionOption,
   HrPositionsDirectory,
   HrRoleItem,
   HrRolePermissionMatrix,
@@ -491,9 +492,19 @@ export async function fetchUsersDirectory(limit = LARGE_LIMIT): Promise<HrUsersD
   }
 
   const puestos = new Map<string, string>()
+  const puestosCatalog: HrPositionOption[] = []
   if (puestosRes.ok && Array.isArray(puestosRes.data)) {
     puestosRes.data.forEach((puesto) => {
-      puestos.set(puesto.id, sanitizeText(puesto.nombre) || "Sin nombre")
+      const nombre = sanitizeText(puesto.nombre) || "Sin nombre"
+      const departamentoNombre = puesto.departamento_id
+        ? departamentos.get(puesto.departamento_id) || "Sin departamento"
+        : "Sin departamento"
+      puestos.set(puesto.id, nombre)
+      puestosCatalog.push({
+        id: puesto.id,
+        nombre,
+        departamentoNombre,
+      })
     })
   } else if (!puestosRes.ok) {
     errors.push(puestosRes.error)
@@ -573,6 +584,10 @@ export async function fetchUsersDirectory(limit = LARGE_LIMIT): Promise<HrUsersD
     total,
     stats,
     rolesCatalog,
+    departamentos: Array.from(departamentos.entries())
+      .map(([id, nombre]) => ({ id, nombre }))
+      .sort((a, b) => a.nombre.localeCompare(b.nombre)),
+    puestos: puestosCatalog.sort((a, b) => a.nombre.localeCompare(b.nombre)),
     errors,
   }
 }

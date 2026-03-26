@@ -55,7 +55,10 @@ function UsersDirectoryCard({ data }: { data: HrUsersDirectory }) {
           title="No se pudo recuperar toda la información"
           messages={data.errors}
         />
-        <UserCreateSection />
+        <UserCreateSection
+          departments={data.departamentos}
+          positions={data.puestos}
+        />
         <div className="grid gap-3 sm:grid-cols-4">
           <SettingsStatCard label="Usuarios" value={data.total} />
           <SettingsStatCard label="Activos" value={data.stats.activos} />
@@ -86,7 +89,13 @@ function UsersDirectoryCard({ data }: { data: HrUsersDirectory }) {
                   </TableRow>
                 ) : (
                   data.items.map((user) => (
-                    <UserInlineRow key={user.id} user={user} rolesCatalog={data.rolesCatalog} />
+                    <UserInlineRow
+                      key={user.id}
+                      user={user}
+                      rolesCatalog={data.rolesCatalog}
+                      departments={data.departamentos}
+                      positions={data.puestos}
+                    />
                   ))
                 )}
               </TableBody>

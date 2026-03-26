@@ -102,6 +102,8 @@ export type HrUsersDirectory = {
   total: number
   stats: { activos: number; bloqueados: number; sinRoles: number }
   rolesCatalog: HrRoleOption[]
+  departamentos: HrDepartmentOption[]
+  puestos: HrPositionOption[]
   errors: string[]
 }
 

@@ -390,6 +390,64 @@ function parseUserTimezone(raw: string | null): string | null {
   return trimmed
 }
 
+async function syncUserEmployeeAssignment(params: {
+  orgId: string
+  userId: string
+  departamentoId: string | null
+  puestoId: string | null
+}): Promise<void> {
+  const { orgId, userId, departamentoId, puestoId } = params
+  const shouldAssign = Boolean(departamentoId || puestoId)
+  const existingRes = await callSupabaseRest<{ usuario_id: string }[]>("/rest/v1/empleados", {
+    searchParams: {
+      select: "usuario_id",
+      usuario_id: `eq.${userId}`,
+      limit: "1",
+    },
+    enforceOrganization: true,
+    forceServiceToken: true,
+  })
+  if (!existingRes.ok) {
+    throw new Error(existingRes.error || "No se pudo validar el empleado del usuario.")
+  }
+  const exists = Array.isArray(existingRes.data) && existingRes.data.length > 0
+
+  if (exists) {
+    await callAndValidate("/rest/v1/empleados", {
+      method: "PATCH",
+      body: {
+        departamento_id: departamentoId,
+        puesto_id: puestoId,
+      },
+      searchParams: {
+        usuario_id: `eq.${userId}`,
+      },
+      prefer: "return=representation",
+      enforceOrganization: true,
+      forceServiceToken: true,
+    })
+    return
+  }
+
+  if (!shouldAssign) {
+    return
+  }
+
+  await callAndValidate("/rest/v1/empleados", {
+    method: "POST",
+    body: {
+      usuario_id: userId,
+      organizacion_id: orgId,
+      departamento_id: departamentoId,
+      puesto_id: puestoId,
+      es_gestor: false,
+      es_vendedor: false,
+    },
+    prefer: "return=representation",
+    forceServiceToken: true,
+  })
+}
+
 export const createUserAction: CrudActionHandler = async (_, formData) => {
   try {
     await requirePermission("user.manage")
@@ -401,6 +459,10 @@ export const createUserAction: CrudActionHandler = async (_, formData) => {
     const timezoneInput = getOptionalText(formData, "timezone")
     const timezoneValue = parseUserTimezone(timezoneInput)
     const estado = getOptionalText(formData, "estado")
+    const departamentoIdInput = getOptionalText(formData, "departamento_id")
+    const puestoIdInput = getOptionalText(formData, "puesto_id")
+    const departamentoId = departamentoIdInput === null || departamentoIdInput === "" ? null : departamentoIdInput
+    const puestoId = puestoIdInput === null || puestoIdInput === "" ? null : puestoIdInput
 
     let userId = idInput && idInput.length ? idInput : null
     if (!userId) {
@@ -431,7 +493,18 @@ export const createUserAction: CrudActionHandler = async (_, formData) => {
         id: `eq.${userId}`,
       },
       prefer: "return=representation",
+      forceServiceToken: true,
     })
+
+    if (userId) {
+      await syncUserEmployeeAssignment({
+        orgId,
+        userId,
+        departamentoId,
+        puestoId,
+      })
+    }
+
     const message = correo
       ? "Usuario registrado. Enviamos un correo para que establezca su contraseña."
       : "Usuario registrado."
@@ -444,6 +517,7 @@ export const createUserAction: CrudActionHandler = async (_, formData) => {
 
 export const updateUserAction: CrudActionHandler = async (_, formData) => {
   try {
+    const orgId = await requireOrgId()
     const userId = getText(formData, "id")
     const correo = getOptionalText(formData, "correo")
     const nombre = getOptionalText(formData, "nombre_completo")
@@ -452,6 +526,10 @@ export const updateUserAction: CrudActionHandler = async (_, formData) => {
     const timezoneInput = getOptionalText(formData, "timezone")
     const timezoneValue = timezoneInput === null ? null : parseUserTimezone(timezoneInput)
     const estado = getOptionalText(formData, "estado")
+    const departamentoIdInput = getOptionalText(formData, "departamento_id")
+    const puestoIdInput = getOptionalText(formData, "puesto_id")
+    const departamentoId = departamentoIdInput === null || departamentoIdInput === "" ? null : departamentoIdInput
+    const puestoId = puestoIdInput === null || puestoIdInput === "" ? null : puestoIdInput
     const body: Record<string, unknown> = {}
     if (correo !== null) body.correo = correo || null
     if (nombre !== null) body.nombre_completo = nombre || null
@@ -476,6 +554,16 @@ export const updateUserAction: CrudActionHandler = async (_, formData) => {
       enforceOrganization: true,
       forceServiceToken: true,
     })
+
+    if (departamentoIdInput !== null || puestoIdInput !== null) {
+      await syncUserEmployeeAssignment({
+        orgId,
+        userId,
+        departamentoId,
+        puestoId,
+      })
+    }
+
     revalidatePath(PATHS.usuarios)
     return success("Usuario actualizado.")
   } catch (error) {
