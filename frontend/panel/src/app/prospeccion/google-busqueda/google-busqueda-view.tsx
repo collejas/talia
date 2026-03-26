@@ -85,6 +85,8 @@ const DEFAULT_TYPES = "restaurant,store";
 const LIST_PAGE_SIZE = 1000;
 const MAP_RESULTS_LIMIT = 1000;
 const BUSQUEDAS_PAGE_SIZE = 100;
+const SAVE_PROSPECTOS_FETCH_BATCH = 2000;
+const SAVE_PROSPECTOS_UPSERT_BATCH = 5000;
 
 function normalizeBusquedaLabel(value: string | null | undefined): string {
   const base = (value ?? "").trim();
@@ -1091,17 +1093,23 @@ export function GoogleBusquedaView() {
     }
     setIsSavingProspectos(true);
     try {
-      const response = await guardarProspectos({
-        fuente: "google_places",
-        resultado_ids: Array.from(selectedIds),
-        metadata: {
-          busqueda_id: activeBusqueda?.id,
-          busqueda_query: activeBusqueda?.query,
-        },
-      });
+      let totalGuardados = 0;
+      const selectedIdsList = Array.from(selectedIds);
+      for (let start = 0; start < selectedIdsList.length; start += SAVE_PROSPECTOS_UPSERT_BATCH) {
+        const chunk = selectedIdsList.slice(start, start + SAVE_PROSPECTOS_UPSERT_BATCH);
+        const response = await guardarProspectos({
+          fuente: "google_places",
+          resultado_ids: chunk,
+          metadata: {
+            busqueda_id: activeBusqueda?.id,
+            busqueda_query: activeBusqueda?.query,
+          },
+        });
+        totalGuardados += Number(response.total ?? 0);
+      }
       setFeedback({
         type: "success",
-        message: `Se guardaron ${response.total} prospectos. Continúa con la verificación desde la vista Prospección.`,
+        message: `Se guardaron ${numberFormatter.format(totalGuardados)} prospectos. Continúa con la verificación desde la vista Prospección.`,
       });
     } catch (error) {
       setFeedback({
@@ -1115,6 +1123,87 @@ export function GoogleBusquedaView() {
       setIsSavingProspectos(false);
     }
   }, [activeBusqueda?.id, activeBusqueda?.query, selectedIds]);
+
+  const collectFilteredResultadoIds = useCallback(async () => {
+    if (!activeBusquedaId) return [] as string[];
+    const ids: string[] = [];
+    const seen = new Set<string>();
+    let offset = 0;
+    let total = Number.POSITIVE_INFINITY;
+    while (offset < total) {
+      const response = await listGoogleResultados({
+        busquedaId: activeBusquedaId,
+        limit: SAVE_PROSPECTOS_FETCH_BATCH,
+        offset,
+        q: currentResultFilters.q,
+        phonePresent: currentResultFilters.phonePresent,
+        websitePresent: currentResultFilters.websitePresent,
+        minRating: currentResultFilters.minRating,
+        actividades: currentResultFilters.actividades,
+      });
+      const rows = response.items ?? [];
+      for (const row of rows) {
+        const id = String(row.resultado_id ?? "").trim();
+        if (!id || seen.has(id)) continue;
+        seen.add(id);
+        ids.push(id);
+      }
+      total = typeof response.total === "number" ? response.total : ids.length;
+      if (!rows.length || rows.length < SAVE_PROSPECTOS_FETCH_BATCH) {
+        break;
+      }
+      offset += rows.length;
+    }
+    return ids;
+  }, [activeBusquedaId, currentResultFilters]);
+
+  const handleGuardarFiltrados = useCallback(async () => {
+    if (!activeBusquedaId || totalFiltered <= 0) {
+      setFeedback({
+        type: "info",
+        message: "No hay resultados filtrados para guardar como prospectos.",
+      });
+      return;
+    }
+    setIsSavingProspectos(true);
+    try {
+      const targetIds = await collectFilteredResultadoIds();
+      if (!targetIds.length) {
+        setFeedback({
+          type: "info",
+          message: "No hay resultados filtrados para guardar como prospectos.",
+        });
+        return;
+      }
+      let totalGuardados = 0;
+      for (let start = 0; start < targetIds.length; start += SAVE_PROSPECTOS_UPSERT_BATCH) {
+        const chunk = targetIds.slice(start, start + SAVE_PROSPECTOS_UPSERT_BATCH);
+        const response = await guardarProspectos({
+          fuente: "google_places",
+          resultado_ids: chunk,
+          metadata: {
+            busqueda_id: activeBusqueda?.id,
+            busqueda_query: activeBusqueda?.query,
+          },
+        });
+        totalGuardados += Number(response.total ?? 0);
+      }
+      setFeedback({
+        type: "success",
+        message: `Se guardaron ${numberFormatter.format(totalGuardados)} prospectos desde todos los resultados filtrados (${numberFormatter.format(targetIds.length)} IDs procesados).`,
+      });
+    } catch (error) {
+      setFeedback({
+        type: "error",
+        message:
+          error instanceof Error
+            ? error.message
+            : "No fue posible guardar los resultados filtrados como prospectos.",
+      });
+    } finally {
+      setIsSavingProspectos(false);
+    }
+  }, [activeBusqueda?.id, activeBusqueda?.query, activeBusquedaId, collectFilteredResultadoIds, totalFiltered]);
 
   return (
     <div className="space-y-6">
@@ -1589,6 +1678,23 @@ export function GoogleBusquedaView() {
                     <Save className="h-4 w-4" />
                   )}
                   Guardar como prospectos
+                </Button>
+              ) : null}
+              {canSaveProspectos ? (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="secondary"
+                  onClick={handleGuardarFiltrados}
+                  disabled={totalFiltered <= 0 || isSavingProspectos}
+                  className="flex items-center gap-2"
+                >
+                  {isSavingProspectos ? (
+                    <RefreshCw className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Save className="h-4 w-4" />
+                  )}
+                  Guardar filtrados (todas las páginas)
                 </Button>
               ) : null}
               {canDeleteBusquedas ? (

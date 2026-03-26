@@ -98,6 +98,8 @@ const RADIUS_MAX = 5_000;
 const LIST_PAGE_SIZE = 1000;
 const BUSQUEDAS_PAGE_SIZE = 100;
 const JOB_POLL_INTERVAL_MS = 2000;
+const SAVE_PROSPECTOS_FETCH_BATCH = 2000;
+const SAVE_PROSPECTOS_UPSERT_BATCH = 5000;
 
 function normalizeBusquedaLabel(value: string | null | undefined): string {
   const base = (value ?? "").trim();
@@ -360,6 +362,7 @@ export function DenueBusquedaView() {
   const [isDeletingResultados, setIsDeletingResultados] = useState(false);
   const [isSavingProspectos, setIsSavingProspectos] = useState(false);
   const [saveProspectosModalOpen, setSaveProspectosModalOpen] = useState(false);
+  const [saveProspectosMode, setSaveProspectosMode] = useState<"selected" | "filtered">("selected");
   const [saveProspectosSegmento, setSaveProspectosSegmento] = useState("");
   const [saveProspectosSegmentoError, setSaveProspectosSegmentoError] = useState<string | null>(null);
   const [advancedModalOpen, setAdvancedModalOpen] = useState(false);
@@ -1600,9 +1603,61 @@ export function DenueBusquedaView() {
       });
       return;
     }
+    setSaveProspectosMode("selected");
     setSaveProspectosSegmentoError(null);
     setSaveProspectosModalOpen(true);
   }, [selectedIds.size]);
+
+  const handleOpenGuardarFiltrados = useCallback(() => {
+    if (!activeBusquedaId || effectiveTotal <= 0) {
+      setFeedback({
+        type: "info",
+        message: "No hay resultados filtrados para guardar como prospectos.",
+      });
+      return;
+    }
+    setSaveProspectosMode("filtered");
+    setSaveProspectosSegmentoError(null);
+    setSaveProspectosModalOpen(true);
+  }, [activeBusquedaId, effectiveTotal]);
+
+  const collectFilteredResultadoIds = useCallback(async () => {
+    if (!activeBusquedaId) return [] as string[];
+    const ids: string[] = [];
+    const seen = new Set<string>();
+    let offset = 0;
+    let total = Number.POSITIVE_INFINITY;
+    while (offset < total) {
+      const response = await listDenueResultados({
+        busquedaId: activeBusquedaId,
+        q: currentResultFilters.q,
+        limit: SAVE_PROSPECTOS_FETCH_BATCH,
+        offset,
+        order: "recientes",
+        phonePresent: currentResultFilters.phonePresent,
+        emailPresent: currentResultFilters.emailPresent,
+        websitePresent: currentResultFilters.websitePresent,
+        contactMatch: currentResultFilters.contactMatch,
+        estratoGroup: currentResultFilters.estratoGroup,
+        actividades: currentResultFilters.actividades,
+        geoEstado: currentResultFilters.geoEstado,
+        geoMunicipio: currentResultFilters.geoMunicipio,
+      });
+      const rows = response.items ?? [];
+      for (const row of rows) {
+        const id = String(row.resultado_id ?? "").trim();
+        if (!id || seen.has(id)) continue;
+        seen.add(id);
+        ids.push(id);
+      }
+      total = typeof response.total === "number" ? response.total : ids.length;
+      if (!rows.length || rows.length < SAVE_PROSPECTOS_FETCH_BATCH) {
+        break;
+      }
+      offset += rows.length;
+    }
+    return ids;
+  }, [activeBusquedaId, currentResultFilters]);
 
   const handleGuardarSeleccion = useCallback(async () => {
     const segmento = saveProspectosSegmento.trim();
@@ -1614,20 +1669,42 @@ export function DenueBusquedaView() {
     setSaveProspectosSegmentoError(null);
     try {
       const busquedaLabel = resolveBusquedaLabel(activeBusqueda);
-      const response = await guardarProspectos({
-        fuente: "denue",
-        resultado_ids: Array.from(selectedIds),
-        segmento,
-        metadata: {
-          busqueda_id: activeBusqueda?.id,
-          busqueda_query: busquedaLabel ?? activeBusqueda?.query,
-        },
-      });
+      const targetIds =
+        saveProspectosMode === "filtered"
+          ? await collectFilteredResultadoIds()
+          : Array.from(selectedIds);
+      if (!targetIds.length) {
+        setFeedback({
+          type: "info",
+          message:
+            saveProspectosMode === "filtered"
+              ? "No hay resultados filtrados para guardar como prospectos."
+              : "Selecciona al menos un resultado para guardarlo como prospecto.",
+        });
+        return;
+      }
+      let totalGuardados = 0;
+      for (let start = 0; start < targetIds.length; start += SAVE_PROSPECTOS_UPSERT_BATCH) {
+        const chunk = targetIds.slice(start, start + SAVE_PROSPECTOS_UPSERT_BATCH);
+        const response = await guardarProspectos({
+          fuente: "denue",
+          resultado_ids: chunk,
+          segmento,
+          metadata: {
+            busqueda_id: activeBusqueda?.id,
+            busqueda_query: busquedaLabel ?? activeBusqueda?.query,
+          },
+        });
+        totalGuardados += Number(response.total ?? 0);
+      }
       setSaveProspectosModalOpen(false);
       setSaveProspectosSegmento("");
       setFeedback({
         type: "success",
-        message: `Se guardaron ${response.total} prospectos desde DENUE. Continúa con la verificación en la vista Prospección.`,
+        message:
+          saveProspectosMode === "filtered"
+            ? `Se guardaron ${numberFormatter.format(totalGuardados)} prospectos desde todos los resultados filtrados (${numberFormatter.format(targetIds.length)} IDs procesados).`
+            : `Se guardaron ${numberFormatter.format(totalGuardados)} prospectos desde DENUE. Continúa con la verificación en la vista Prospección.`,
       });
     } catch (error) {
       setFeedback({
@@ -1640,7 +1717,7 @@ export function DenueBusquedaView() {
     } finally {
       setIsSavingProspectos(false);
     }
-  }, [activeBusqueda, resolveBusquedaLabel, saveProspectosSegmento, selectedIds]);
+  }, [activeBusqueda, collectFilteredResultadoIds, resolveBusquedaLabel, saveProspectosMode, saveProspectosSegmento, selectedIds]);
 
   return (
     <div className="space-y-6">
@@ -2174,6 +2251,23 @@ export function DenueBusquedaView() {
                     Guardar como prospectos
                   </Button>
                 ) : null}
+                {canSaveProspectos ? (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="secondary"
+                    onClick={handleOpenGuardarFiltrados}
+                    disabled={effectiveTotal <= 0 || isSavingProspectos}
+                    className="flex items-center gap-2"
+                  >
+                    {isSavingProspectos ? (
+                      <RefreshCw className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Save className="h-4 w-4" />
+                    )}
+                    Guardar filtrados (todas las páginas)
+                  </Button>
+                ) : null}
                 {canDeleteBusquedas ? (
                   <Button
                     type="button"
@@ -2585,7 +2679,9 @@ export function DenueBusquedaView() {
           <DialogHeader>
             <DialogTitle>Guardar como prospectos</DialogTitle>
             <DialogDescription>
-              Define el segmento que se asignará a todos los resultados seleccionados.
+              {saveProspectosMode === "filtered"
+                ? "Define el segmento que se asignará a todos los resultados filtrados de esta búsqueda."
+                : "Define el segmento que se asignará a todos los resultados seleccionados."}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-2">
