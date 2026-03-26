@@ -350,6 +350,11 @@ export function EmployeeInlineRow({
                 </div>
               </div>
               <InlineStateMessage state={editState} successMessage="Cambios guardados." />
+              {editState.status === "success" ? (
+                <p className="text-xs text-emerald-700 dark:text-emerald-400">
+                  Guardado correctamente. Si no ves el cambio en la tabla, recarga la vista.
+                </p>
+              ) : null}
               <div className="flex justify-end gap-2">
                 <Button type="button" variant="ghost" onClick={() => setIsEditing(false)}>
                   Cancelar

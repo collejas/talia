@@ -170,6 +170,7 @@ export const updateEmployeeAction: CrudActionHandler = async (_, formData) => {
       },
       prefer: "return=representation",
       enforceOrganization: true,
+      forceServiceToken: true,
     })
 
     if (supervisorId !== null) {
@@ -211,6 +212,7 @@ export const deleteEmployeeAction: CrudActionHandler = async (_, formData) => {
         usuario_id: `eq.${usuarioId}`,
       },
       enforceOrganization: true,
+      forceServiceToken: true,
     })
     revalidatePath(PATHS.empleados)
     return success("Empleado eliminado.")

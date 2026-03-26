@@ -153,6 +153,7 @@ export async function fetchEmployeesDirectory(
       },
       prefer: "count=exact",
       enforceOrganization: true,
+      forceServiceToken: true,
     }),
     callSupabaseRest<SupabaseSupervisorRow[]>("/rest/v1/empleados_supervisores", {
       searchParams: {
