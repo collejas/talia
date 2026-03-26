@@ -407,6 +407,37 @@ def _build_geo_postgrest_filters(
     return filters
 
 
+def _format_query_geo_state_label(raw_value: Any) -> str | None:
+    raw = str(raw_value or "").strip()
+    if not raw:
+        return None
+    if raw.casefold() == "multiple":
+        return "Múltiples"
+    digits = _digits_only(raw)
+    if not digits:
+        return raw
+    state_code = digits[-2:].zfill(2)
+    return get_state_name(state_code) or state_code
+
+
+def _format_query_geo_municipality_label(raw_value: Any) -> str | None:
+    raw = str(raw_value or "").strip()
+    if not raw:
+        return None
+    if raw.casefold() == "multiple":
+        return "Múltiples"
+    parts = raw.split("::", 1)
+    if len(parts) != 2:
+        return raw
+    state_digits = _digits_only(parts[0])
+    municipality_digits = _digits_only(parts[1])
+    if not state_digits or not municipality_digits:
+        return raw
+    state_code = state_digits[-2:].zfill(2)
+    municipality_code = municipality_digits[-3:].zfill(3)
+    return get_municipality_name(state_code, municipality_code) or f"{state_code}-{municipality_code}"
+
+
 def _sort_prospect_rows(rows: list[dict[str, Any]], *, order: str | None = None) -> list[dict[str, Any]]:
     """Sort prospect rows consistently when results are assembled in backend chunks."""
 
@@ -9209,14 +9240,16 @@ class CRMRepository:
                 except (TypeError, ValueError):
                     count_value = 0
                 created_at = row.get("created_at")
+                estado_label = _format_query_geo_state_label(row.get("estado"))
+                municipio_label = _format_query_geo_municipality_label(row.get("municipio"))
                 queries.append(
                     {
                         "value": value,
                         "label": label,
                         "count": count_value,
                         "created_at": created_at if isinstance(created_at, str) else None,
-                        "estado": None,
-                        "municipio": None,
+                        "estado": estado_label,
+                        "municipio": municipio_label,
                     }
                 )
 
@@ -9260,8 +9293,14 @@ class CRMRepository:
                             (item["created_at"] for item in queries if item["value"] == value),
                             None,
                         ),
-                        "estado": None,
-                        "municipio": None,
+                        "estado": next(
+                            (item["estado"] for item in queries if item["value"] == value),
+                            None,
+                        ),
+                        "municipio": next(
+                            (item["municipio"] for item in queries if item["value"] == value),
+                            None,
+                        ),
                     }
                     for value in sorted(query_values, key=lambda item: item.casefold())
                 ]
