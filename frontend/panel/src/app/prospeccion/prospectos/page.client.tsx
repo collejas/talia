@@ -157,6 +157,7 @@ type ContactDrawerData = {
 type LocationOption = { value: string; label: string }
 type GeoFeature = { properties?: Record<string, unknown> }
 type CampaignOption = { id: string; nombre: string; canal: "correo" | "whatsapp" | "llamada" | null }
+type ConsolidatedQueryOption = ProspectoQueryOption & { values: string[] }
 const PLANNER_ALL_TEMPLATES_VALUE = "__all_templates__"
 const plannerCanalLabel: Record<"correo" | "whatsapp" | "llamada", string> = {
   correo: "Correo",
@@ -907,10 +908,61 @@ function ProspectosView() {
     }
     return ordered
   }
-  const queryLabelMap = useMemo(
-    () => new Map(queryOptions.map((option) => [option.value, option.label])),
-    [queryOptions]
-  )
+  const consolidatedQueryOptions = useMemo<ConsolidatedQueryOption[]>(() => {
+    const byLabel = new Map<string, ConsolidatedQueryOption>()
+    for (const option of queryOptions) {
+      const value = (option.value || "").trim()
+      if (!value) continue
+      const label = (option.label || value).trim() || value
+      const key = label.toLocaleLowerCase("es-MX")
+      const current = byLabel.get(key)
+      if (!current) {
+        byLabel.set(key, {
+          value,
+          values: [value],
+          label,
+          count: typeof option.count === "number" ? option.count : undefined,
+          created_at: option.created_at ?? null,
+          estado: option.estado ?? null,
+          municipio: option.municipio ?? null,
+        })
+        continue
+      }
+      if (!current.values.includes(value)) {
+        current.values.push(value)
+      }
+      if (typeof option.count === "number") {
+        current.count = (current.count ?? 0) + option.count
+      }
+      if (option.created_at) {
+        if (!current.created_at || option.created_at > current.created_at) {
+          current.created_at = option.created_at
+        }
+      }
+      const nextEstado = option.estado ?? null
+      if (nextEstado && current.estado && nextEstado !== current.estado) {
+        current.estado = "Múltiples"
+      } else if (nextEstado && !current.estado) {
+        current.estado = nextEstado
+      }
+      const nextMunicipio = option.municipio ?? null
+      if (nextMunicipio && current.municipio && nextMunicipio !== current.municipio) {
+        current.municipio = "Múltiples"
+      } else if (nextMunicipio && !current.municipio) {
+        current.municipio = nextMunicipio
+      }
+    }
+    return Array.from(byLabel.values())
+  }, [queryOptions])
+  const queryLabelMap = useMemo(() => {
+    const map = new Map<string, string>()
+    for (const option of consolidatedQueryOptions) {
+      for (const value of option.values) {
+        map.set(value, option.label)
+      }
+    }
+    return map
+  }, [consolidatedQueryOptions])
   const effectiveMetadataQueries = useMemo(() => {
     if (openedQueryScope) return [openedQueryScope]
     return filters.queryFilters.length ? filters.queryFilters : undefined
@@ -2223,14 +2275,16 @@ function ProspectosView() {
     })
   }
 
-  const handleQueryFilterToggle = (value: string, enabled: boolean) => {
+  const handleQueryFilterToggle = (values: string[], enabled: boolean) => {
     if (openedQueryScope) return
     setFilters((prev) => {
       const next = new Set(prev.queryFilters)
-      if (enabled) {
-        next.add(value)
-      } else {
-        next.delete(value)
+      for (const value of values) {
+        if (enabled) {
+          next.add(value)
+        } else {
+          next.delete(value)
+        }
       }
       return {
         ...prev,
@@ -3547,9 +3601,11 @@ function ProspectosView() {
                   >
                     <span className="max-w-[160px] truncate text-left text-sm">
                       {(effectiveMetadataQueries?.length ?? 0) > 0
-                        ? (effectiveMetadataQueries ?? [])
-                            .map((value) => queryOptions.find((option) => option.value === value)?.label ?? value)
-                            .join(", ")
+                        ? Array.from(
+                            new Set(
+                              (effectiveMetadataQueries ?? []).map((value) => queryLabelMap.get(value) ?? value)
+                            )
+                          ).join(", ")
                         : QUERY_FILTER_PLACEHOLDER}
                     </span>
                     <IconChevronDown className="size-4 opacity-70" />
@@ -3558,12 +3614,15 @@ function ProspectosView() {
                 <DropdownMenuContent align="start" className="w-[260px]">
                 {queryOptionsLoading ? (
                   <div className="px-3 py-2 text-xs text-muted-foreground">Cargando consultas …</div>
-                ) : queryOptions.length ? (
-                  queryOptions.map((option) => (
+                ) : consolidatedQueryOptions.length ? (
+                  consolidatedQueryOptions.map((option) => (
                     <DropdownMenuCheckboxItem
                       key={option.value}
-                      checked={filters.queryFilters.includes(option.value)}
-                      onCheckedChange={(checked) => handleQueryFilterToggle(option.value, Boolean(checked))}
+                      checked={
+                        option.values.length > 0 &&
+                        option.values.every((value) => filters.queryFilters.includes(value))
+                      }
+                      onCheckedChange={(checked) => handleQueryFilterToggle(option.values, Boolean(checked))}
                     >
                       {option.label}
                       {typeof option.count === "number" ? ` (${option.count})` : ""}
