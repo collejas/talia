@@ -151,6 +151,38 @@ TU_puTA_mADRE_479156376421_8NbukI5vDpp0We1Ufhdfy%^$%^$VDFGdff
 npm run dev
 - Local:         http://localhost:3000
 
+ npx next dev --webpack
+
+• Ese error es del sistema, no de tu código: se acabó el límite de file watchers (inotify).
+
+  Haz esto en Ubuntu:
+
+  # Ver valores actuales
+  cat /proc/sys/fs/inotify/max_user_watches
+  cat /proc/sys/fs/inotify/max_user_instances
+  cat /proc/sys/fs/inotify/max_queued_events
+
+  # Subir límites (inmediato)
+  sudo sysctl -w fs.inotify.max_user_watches=524288
+  sudo sysctl -w fs.inotify.max_user_instances=1024
+  sudo sysctl -w fs.inotify.max_queued_events=32768
+
+  # Dejarlo permanente
+  echo "fs.inotify.max_user_watches=524288" | sudo tee -a /etc/sysctl.conf
+  echo "fs.inotify.max_user_instances=1024" | sudo tee -a /etc/sysctl.conf
+  echo "fs.inotify.max_queued_events=32768" | sudo tee -a /etc/sysctl.conf
+  sudo sysctl -p
+
+  Luego limpia y vuelve a levantar:
+
+  cd /var/www/talia/frontend/panel
+  rm -rf .next
+  npm run dev
+
+  Si quieres evitar Turbopack temporalmente:
+
+  npx next dev --webpack
+
 # Entarada a Ser
 ssh jorge T@67.205.156.148 port: 2222
 
