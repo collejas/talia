@@ -372,14 +372,25 @@ Entregables:
 ## Tabla de ejecución (seguimiento)
 Usar esta tabla como control semanal. El estado debe actualizarse en cada revisión.
 
+Avance ejecutado (2026-03-26):
+- Script creado: `scripts/deploy_panel_staging_atomic.sh`.
+- Script backend staging creado: `backend/scripts/run_api_staging.sh` (puerto `8104`, env `backend/.env.staging`).
+- Plantillas systemd creadas: `infra/systemd/talia-api-staging.service`, `infra/systemd/talia-panel-staging.service`.
+- Plantilla Nginx creada: `infra/nginx/staging.talia.mx.conf.example`.
+- Plantillas de entorno creadas: `backend/.env.staging.example`, `frontend/panel/.env.staging.example`.
+- Archivos reales creados: `backend/.env.staging`, `frontend/panel/.env.staging`.
+- Primer release staging generado con deploy atómico (sin restart): `releases/panel-staging/20260326_232813`.
+- Guía de bootstrap creada: `docs/Plan_branches/bootstrap/README_STAGING_BOOTSTRAP.md`.
+- Bloqueo actual: esta sesión no tiene `sudo` sin contraseña para instalar/activar servicios y Nginx.
+
 | ID | Tarea | Responsable sugerido | Fecha objetivo | Estado |
 |---|---|---|---|---|
 | E1 | Definir owners y aprobaciones por tipo de cambio | Release Manager | 2026-03-29 | Pendiente |
 | E2 | Formalizar política Go/No-Go (`develop->staging->main`) | Release Manager + Owners | 2026-03-30 | Pendiente |
-| E3 | Crear `.env.production` y `.env.staging` (API/panel) | Owner Infra + Owners App | 2026-03-31 | Pendiente |
-| E4 | Crear `talia-api-staging.service` y `talia-panel-staging.service` | Owner Infra | 2026-04-01 | Pendiente |
-| E5 | Configurar `staging.talia.mx` en Nginx | Owner Infra | 2026-04-01 | Pendiente |
-| E6 | Implementar `scripts/deploy_panel_staging_atomic.sh` | Owner Infra + Owner Frontend | 2026-04-02 | Pendiente |
+| E3 | Crear `.env.production` y `.env.staging` (API/panel) | Owner Infra + Owners App | 2026-03-31 | En progreso |
+| E4 | Crear `talia-api-staging.service` y `talia-panel-staging.service` | Owner Infra | 2026-04-01 | Completado |
+| E5 | Configurar `staging.talia.mx` en Nginx | Owner Infra | 2026-04-01 | Completado |
+| E6 | Implementar `scripts/deploy_panel_staging_atomic.sh` | Owner Infra + Owner Frontend | 2026-04-02 | Completado |
 | E7 | Validar rollback de panel en staging (symlink `current/panel-staging`) | Owner Infra | 2026-04-03 | Pendiente |
 | E8 | Alinear producción a runtime por symlink `current/panel` | Owner Infra | 2026-04-04 | Pendiente |
 | E9 | Definir checklist de migraciones con backup pre-release | Owner DB | 2026-04-05 | Pendiente |
