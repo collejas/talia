@@ -47,3 +47,5 @@ logs/
 releases/
 # Backups
 backups/*/*_full.dump
+
+current/

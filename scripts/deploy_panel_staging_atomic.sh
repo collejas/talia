@@ -26,7 +26,7 @@ set -euo pipefail
 #   CF_API_TOKEN=...
 #   CF_PURGE_URLS='https://staging.talia.mx/inbox,https://staging.talia.mx/_next/static/chunks/app/inbox/page-xxxx.js'
 #   CF_FULL_PURGE=0|1
-#   KEEP_RELEASES=5
+#   KEEP_RELEASES=2
 
 PANEL_SOURCE_DIR="${PANEL_SOURCE_DIR:-/var/www/talia/frontend/panel}"
 PANEL_RELEASES_DIR="${PANEL_RELEASES_DIR:-/var/www/talia/releases/panel-staging}"
@@ -40,7 +40,7 @@ SKIP_BUILD="${SKIP_BUILD:-0}"
 RUN_NPM_CI="${RUN_NPM_CI:-0}"
 SKIP_RESTART="${SKIP_RESTART:-0}"
 CF_FULL_PURGE="${CF_FULL_PURGE:-0}"
-KEEP_RELEASES="${KEEP_RELEASES:-5}"
+KEEP_RELEASES="${KEEP_RELEASES:-2}"
 
 NOW_UTC="$(date -u +%Y%m%d_%H%M%S)"
 NEW_RELEASE="${PANEL_RELEASES_DIR}/${NOW_UTC}"
@@ -81,6 +81,14 @@ rsync -a --delete \
   "${PANEL_SOURCE_DIR}/" "${TMP_RELEASE}/"
 
 cd "${TMP_RELEASE}"
+
+# Evita contaminar el build de staging con valores locales/prod del repo.
+if [[ -f ".env.local" ]]; then
+  rm -f ".env.local"
+fi
+if [[ -f ".env.staging" ]]; then
+  cp ".env.staging" ".env.production"
+fi
 
 if [[ "${RUN_NPM_CI}" == "1" ]]; then
   echo "[deploy-staging] npm ci"
@@ -153,7 +161,10 @@ fi
 
 echo "[deploy-staging] Limpieza de releases viejos (keep=${KEEP_RELEASES})"
 if [[ "${KEEP_RELEASES}" =~ ^[0-9]+$ ]]; then
-  ls -1dt "${PANEL_RELEASES_DIR}"/* 2>/dev/null | tail -n +"$((KEEP_RELEASES + 1))" | xargs -r rm -rf --
+  # 1) limpiar temporales fallidos
+  ls -1dt "${PANEL_RELEASES_DIR}"/*.tmp 2>/dev/null | xargs -r rm -rf --
+  # 2) conservar solo releases validos mas recientes
+  ls -1dt "${PANEL_RELEASES_DIR}"/* 2>/dev/null | grep -v '\.tmp$' | tail -n +"$((KEEP_RELEASES + 1))" | xargs -r rm -rf --
 fi
 
 echo "[deploy-staging] OK. Release activo: ${NEW_RELEASE}"

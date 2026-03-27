@@ -859,8 +859,8 @@ export default function Page() {
           </div>
           <div className="mt-4 flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
             <div className="space-y-1 text-sm text-muted-foreground">
-              <p>Cel: 4441302811</p>
-              <p>Email: administracion@geoactiv.mx</p>
+              <p>Cel: 4443354450</p>
+              <p>Email: administracion@talia.mx</p>
               {secondaryContactName.trim() ? (
                 <p className="pt-2 font-semibold text-foreground">{secondaryContactName.trim()}</p>
               ) : null}

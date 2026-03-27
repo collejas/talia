@@ -1,0 +1,4 @@
+stable_since_utc=2026-03-27T04:30:00Z
+release_path=/var/www/talia/releases/panel/20260327_042817
+build_id=ZijTNzA_5mJAoBXB2JCLS
+notes=Release de produccion actualizado a la version mas reciente valida con assets completos y respuesta HTTP 200.

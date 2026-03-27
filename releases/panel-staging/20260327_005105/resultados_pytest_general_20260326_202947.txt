@@ -1,2 +1,0 @@
-
-Poetry could not find a pyproject.toml file in /var/www/talia/frontend/panel or its parents

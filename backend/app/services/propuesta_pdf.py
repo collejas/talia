@@ -650,8 +650,8 @@ def _build_html(
         <p>Jorge Torre · Sistema Tal-IA*</p>
         <div class="footer-content">
           <div class="contact">
-            <p>Cel: 4441302811</p>
-            <p>Email: administracion@geoactiv.mx</p>
+            <p>Cel: 4443354450</p>
+            <p>Email: administracion@talia.mx</p>
             {secondary_contact_html}
             <p>Web: <a href="https://geoactiv.mx/">https://geoactiv.mx/</a></p>
             <p>Web: <a href="https://talia.mx/">https://talia.mx/</a></p>
