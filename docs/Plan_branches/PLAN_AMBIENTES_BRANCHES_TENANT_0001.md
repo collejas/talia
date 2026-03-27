@@ -391,7 +391,7 @@ Avance ejecutado (2026-03-26):
 | E4 | Crear `talia-api-staging.service` y `talia-panel-staging.service` | Owner Infra | 2026-04-01 | Completado |
 | E5 | Configurar `staging.talia.mx` en Nginx | Owner Infra | 2026-04-01 | Completado |
 | E6 | Implementar `scripts/deploy_panel_staging_atomic.sh` | Owner Infra + Owner Frontend | 2026-04-02 | Completado |
-| E7 | Validar rollback de panel en staging (symlink `current/panel-staging`) | Owner Infra | 2026-04-03 | Pendiente |
+| E7 | Validar rollback de panel en staging (symlink `current/panel-staging`) | Owner Infra | 2026-04-03 | Completado |
 | E8 | Alinear producción a runtime por symlink `current/panel` | Owner Infra | 2026-04-04 | Pendiente |
 | E9 | Definir checklist de migraciones con backup pre-release | Owner DB | 2026-04-05 | Pendiente |
 | E10 | Activar dashboard y alertas mínimas por ambiente | Owner Infra + Owner Backend | 2026-04-06 | Pendiente |
