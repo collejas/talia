@@ -1,4 +1,4 @@
-stable_since_utc=2026-03-27T03:40:52Z
-release_path=/var/www/talia/releases/panel/20260320_035139
-build_id=mcptwPcQayJtpU6MP_zVl
-notes=Release estable fijado tras rollback por assets CSS en release 20260327_023738_from_staging.
+stable_since_utc=2026-03-27T04:30:00Z
+release_path=/var/www/talia/releases/panel/20260327_042817
+build_id=ZijTNzA_5mJAoBXB2JCLS
+notes=Release de produccion actualizado a la version mas reciente valida con assets completos y respuesta HTTP 200.
