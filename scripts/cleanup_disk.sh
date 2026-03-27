@@ -9,11 +9,21 @@ JOURNAL_VACUUM_TIME="${JOURNAL_VACUUM_TIME:-14d}"
 DRY_RUN="${DRY_RUN:-0}"
 
 LOG_DIR="${ROOT_DIR}/logs/maintenance"
-mkdir -p "${LOG_DIR}"
+mkdir -p "${LOG_DIR}" 2>/dev/null || true
 LOG_FILE="${LOG_DIR}/disk_cleanup.log"
 
 ts() { date -u +"%Y-%m-%dT%H:%M:%SZ"; }
-log() { echo "$(ts) $*" | tee -a "${LOG_FILE}"; }
+log() {
+  local line
+  line="$(ts) $*"
+  echo "${line}"
+  if [[ -n "${LOG_FILE}" ]]; then
+    touch "${LOG_FILE}" 2>/dev/null || true
+    if [[ -w "${LOG_FILE}" ]]; then
+      echo "${line}" >> "${LOG_FILE}"
+    fi
+  fi
+}
 
 run_rm_rf() {
   local target="$1"

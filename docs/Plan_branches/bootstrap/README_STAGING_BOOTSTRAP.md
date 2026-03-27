@@ -36,5 +36,22 @@ Opción paso a paso:
 4. Deploy del panel staging:
 - `bash scripts/deploy_panel_staging_atomic.sh`
 
+## Preflight recomendado antes de deploy
+- Validar espacio libre en disco (`/`): minimo sugerido `>= 3G`.
+- Ejecutar limpieza previa si hay releases temporales (`*.tmp`):
+  - `bash scripts/cleanup_disk.sh`
+- Verificar que el usuario de deploy puede reiniciar servicios de staging sin prompt:
+  - `sudo -n true`
+  - Si falla, usar `SKIP_RESTART=1` y reiniciar servicios manualmente con usuario privilegiado.
+
+## Troubleshooting comun
+- Error `no space left` o crecimiento de `releases/panel-staging`:
+  - ejecutar `bash scripts/cleanup_disk.sh`
+  - bajar retenciones (`KEEP_STG_RELEASES`, `KEEP_BACKUPS`) en `.env.disk_cleanup` si aplica.
+- Error `sudo: a terminal is required` durante deploy:
+  - correr deploy como root, o
+  - configurar `NOPASSWD` para reinicio de `talia-panel-staging.service` y `talia-api-staging.service`, o
+  - usar `SKIP_RESTART=1` y reiniciar manualmente.
+
 ## Nota importante
 Estos archivos son plantillas de arranque. Ajustar rutas/puertos/env según política final del equipo antes de activar en servidor.

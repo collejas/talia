@@ -26,6 +26,9 @@ set -euo pipefail
 #   CF_PURGE_URLS='https://talia.mx/inbox,https://talia.mx/_next/static/chunks/app/inbox/page-xxxx.js'
 #   CF_FULL_PURGE=0|1
 #   KEEP_RELEASES=5
+#   MIN_FREE_GB=4
+#   CLEAN_TMP_ON_FAIL=1
+#   NPM_CACHE_DIR=/var/www/talia/.npm-cache
 
 PANEL_SOURCE_DIR="${PANEL_SOURCE_DIR:-/var/www/talia/frontend/panel}"
 PANEL_RELEASES_DIR="${PANEL_RELEASES_DIR:-/var/www/talia/releases/panel}"
@@ -39,6 +42,9 @@ SKIP_BUILD="${SKIP_BUILD:-0}"
 RUN_NPM_CI="${RUN_NPM_CI:-0}"
 CF_FULL_PURGE="${CF_FULL_PURGE:-0}"
 KEEP_RELEASES="${KEEP_RELEASES:-5}"
+MIN_FREE_GB="${MIN_FREE_GB:-4}"
+CLEAN_TMP_ON_FAIL="${CLEAN_TMP_ON_FAIL:-1}"
+NPM_CACHE_DIR="${NPM_CACHE_DIR:-/var/www/talia/.npm-cache}"
 
 NOW_UTC="$(date -u +%Y%m%d_%H%M%S)"
 NEW_RELEASE="${PANEL_RELEASES_DIR}/${NOW_UTC}"
@@ -52,6 +58,9 @@ fi
 
 rollback_if_needed() {
   local exit_code=$?
+  if [[ ${exit_code} -ne 0 && "${CLEAN_TMP_ON_FAIL}" == "1" ]]; then
+    rm -rf "${TMP_RELEASE}" || true
+  fi
   if [[ ${exit_code} -ne 0 && ${SWAPPED} -eq 1 && -n "${PREV_RELEASE}" ]]; then
     echo "[rollback] Fallo despues de swap. Revirtiendo symlink a: ${PREV_RELEASE}"
     ln -sfn "${PREV_RELEASE}" "${PANEL_CURRENT_LINK}" || true
@@ -63,12 +72,73 @@ rollback_if_needed() {
 }
 trap rollback_if_needed EXIT
 
+cleanup_old_releases() {
+  echo "[deploy] Pre-clean de releases antiguos (keep=${KEEP_RELEASES})"
+  # 1) limpiar temporales fallidos
+  find "${PANEL_RELEASES_DIR}" -mindepth 1 -maxdepth 1 -type d -name "*.tmp" -print0 | xargs -0r rm -rf --
+
+  # 2) conservar release activo + N recientes validos
+  local current_target=""
+  if [[ -L "${PANEL_CURRENT_LINK}" ]]; then
+    current_target="$(readlink -f "${PANEL_CURRENT_LINK}" || true)"
+  fi
+
+  mapfile -t valid_releases < <(ls -1dt "${PANEL_RELEASES_DIR}"/* 2>/dev/null | grep -v '\.tmp$' || true)
+  if [[ "${KEEP_RELEASES}" =~ ^[0-9]+$ ]] && [[ "${#valid_releases[@]}" -gt 0 ]]; then
+    declare -A preserve=()
+    local count=0
+    local rel=""
+    for rel in "${valid_releases[@]}"; do
+      if [[ $count -lt "${KEEP_RELEASES}" ]]; then
+        preserve["$rel"]=1
+        count=$((count + 1))
+      fi
+    done
+    if [[ -n "${current_target}" ]]; then
+      preserve["${current_target}"]=1
+    fi
+    for rel in "${valid_releases[@]}"; do
+      if [[ -n "${preserve[$rel]:-}" ]]; then
+        continue
+      fi
+      rm -rf -- "${rel}"
+    done
+  fi
+}
+
+ensure_free_space() {
+  local avail_gb
+  avail_gb="$(df -BG "${PANEL_RELEASES_DIR}" | awk 'NR==2 {gsub(/G/, "", $4); print $4+0}')"
+  if [[ -z "${avail_gb}" ]]; then
+    echo "[deploy] WARN no fue posible medir espacio libre."
+    return 0
+  fi
+  if (( avail_gb < MIN_FREE_GB )); then
+    echo "[deploy] ERROR espacio insuficiente: ${avail_gb}G libres, minimo requerido=${MIN_FREE_GB}G."
+    echo "[deploy] Ejecuta scripts/cleanup_disk.sh o reduce KEEP_RELEASES/KEEP_BACKUPS antes de continuar."
+    return 1
+  fi
+  echo "[deploy] Espacio libre OK: ${avail_gb}G"
+}
+
+preflight_restart_permissions() {
+  if ! sudo -n true >/dev/null 2>&1; then
+    echo "[deploy] ERROR no hay permisos sudo no-interactivos para reiniciar servicios."
+    echo "[deploy] Ejecuta como root o configura sudo NOPASSWD para ${PANEL_SERVICE} y ${API_SERVICE}."
+    return 1
+  fi
+}
+
 echo "[deploy] Source:  ${PANEL_SOURCE_DIR}"
 echo "[deploy] Release: ${NEW_RELEASE}"
 echo "[deploy] Current: ${PANEL_CURRENT_LINK}"
 
 test -d "${PANEL_SOURCE_DIR}"
 mkdir -p "${PANEL_RELEASES_DIR}"
+mkdir -p "${NPM_CACHE_DIR}"
+cleanup_old_releases
+ensure_free_space
+preflight_restart_permissions
 rm -rf "${TMP_RELEASE}"
 mkdir -p "${TMP_RELEASE}"
 
@@ -87,10 +157,10 @@ fi
 
 if [[ "${RUN_NPM_CI}" == "1" ]]; then
   echo "[deploy] npm ci"
-  npm ci
+  npm ci --cache "${NPM_CACHE_DIR}" --prefer-offline
 elif [[ ! -d node_modules ]]; then
   echo "[deploy] node_modules no existe en release temporal. Ejecutando npm ci"
-  npm ci
+  npm ci --cache "${NPM_CACHE_DIR}" --prefer-offline
 fi
 
 if [[ "${SKIP_TS}" != "1" ]]; then
@@ -104,6 +174,7 @@ if [[ "${SKIP_LINT}" != "1" ]]; then
 fi
 
 if [[ "${SKIP_BUILD}" != "1" ]]; then
+  export NODE_OPTIONS="${NODE_OPTIONS:---max-old-space-size=1536}"
   echo "[deploy] npm run build"
   npm run build
 fi
@@ -152,7 +223,8 @@ fi
 
 echo "[deploy] Limpieza de releases viejos (keep=${KEEP_RELEASES})"
 if [[ "${KEEP_RELEASES}" =~ ^[0-9]+$ ]]; then
-  ls -1dt "${PANEL_RELEASES_DIR}"/* 2>/dev/null | tail -n +"$((KEEP_RELEASES + 1))" | xargs -r rm -rf --
+  find "${PANEL_RELEASES_DIR}" -mindepth 1 -maxdepth 1 -type d -name "*.tmp" -print0 | xargs -0r rm -rf --
+  ls -1dt "${PANEL_RELEASES_DIR}"/* 2>/dev/null | grep -v '\.tmp$' | tail -n +"$((KEEP_RELEASES + 1))" | xargs -r rm -rf --
 fi
 
 echo "[deploy] OK. Release activo: ${NEW_RELEASE}"
