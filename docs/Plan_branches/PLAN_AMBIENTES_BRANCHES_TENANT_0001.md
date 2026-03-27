@@ -204,17 +204,18 @@ Criterio de salida:
 ## Matriz de owners y aprobaciones
 Definir responsables por tipo de cambio y aprobación mínima antes de promover a `main`.
 
-Roles sugeridos:
-- Owner Backend
-- Owner Frontend
-- Owner DB
-- Owner Infra/DevOps
-- Release Manager
+Owners v1 (actual):
+- Release Manager: Jorge
+- Owner Infra/DevOps: Jorge
+- Owner Backend: Jorge
+- Owner Frontend: Jorge
+- Owner DB: Jorge
 
 Reglas:
 - Cambios con migraciones SQL requieren aprobación de Owner DB.
 - Cambios en servicios/systemd/nginx requieren aprobación de Owner Infra.
 - Cambios cross-stack (frontend+backend+db) requieren aprobación del Release Manager.
+- Si una persona cubre múltiples roles (caso actual), debe dejar evidencia de revisión en PR/checklist antes de promover a `main`.
 
 Checklist:
 - [ ] Owner asignado por PR
@@ -229,12 +230,16 @@ Go `develop -> staging`:
 - [ ] CI verde (build + lint + tests)
 - [ ] Sin cambios pendientes de migración no versionada
 - [ ] Feature flags definidas para funcionalidades nuevas
+- [ ] Deploy staging exitoso y endpoint `https://staging.talia.mx` con `200`
 
 Go `staging -> main`:
 - [ ] Smoke suite completa en tenant `0001`
 - [ ] Errores críticos = 0 en staging durante ventana de validación
-- [ ] p95 endpoints críticos dentro de umbral definido
+- [ ] p95 endpoints críticos dentro de umbral definido:
+  `GET /api/health <= 300ms`, `POST /api/auth/login <= 1200ms`, `GET /dashboard <= 2500ms`
 - [ ] Validación manual de flujos críticos completada
+- [ ] Rollback de panel validado (E7) en la versión candidata
+- [ ] Backup pre-release disponible para cambios de DB (si aplica)
 
 No-Go (bloquea release):
 - fallo en migración
@@ -381,12 +386,12 @@ Avance ejecutado (2026-03-26):
 - Archivos reales creados: `backend/.env.staging`, `frontend/panel/.env.staging`.
 - Primer release staging generado con deploy atómico (sin restart): `releases/panel-staging/20260326_232813`.
 - Guía de bootstrap creada: `docs/Plan_branches/bootstrap/README_STAGING_BOOTSTRAP.md`.
-- Bloqueo actual: esta sesión no tiene `sudo` sin contraseña para instalar/activar servicios y Nginx.
+- Servicios staging + Nginx + SSL de `staging.talia.mx` activos y validados.
 
 | ID | Tarea | Responsable sugerido | Fecha objetivo | Estado |
 |---|---|---|---|---|
-| E1 | Definir owners y aprobaciones por tipo de cambio | Release Manager | 2026-03-29 | Pendiente |
-| E2 | Formalizar política Go/No-Go (`develop->staging->main`) | Release Manager + Owners | 2026-03-30 | Pendiente |
+| E1 | Definir owners y aprobaciones por tipo de cambio | Release Manager | 2026-03-29 | Completado |
+| E2 | Formalizar política Go/No-Go (`develop->staging->main`) | Release Manager + Owners | 2026-03-30 | Completado |
 | E3 | Crear `.env.production` y `.env.staging` (API/panel) | Owner Infra + Owners App | 2026-03-31 | En progreso |
 | E4 | Crear `talia-api-staging.service` y `talia-panel-staging.service` | Owner Infra | 2026-04-01 | Completado |
 | E5 | Configurar `staging.talia.mx` en Nginx | Owner Infra | 2026-04-01 | Completado |
