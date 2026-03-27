@@ -273,8 +273,8 @@ export default function PrivacyPolicyPage() {
           </p>
           <p className="text-sm text-muted-foreground">
             Questions? Contact us via email at{" "}
-            <a className="text-primary underline" href="mailto:administracion@geoactiv.mx">
-              administracion@geoactiv.mx
+            <a className="text-primary underline" href="mailto:administracion@talia.mx">
+              administracion@talia.mx
             </a>
             .
           </p>
