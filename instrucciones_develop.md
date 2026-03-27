@@ -88,3 +88,7 @@ LATEST="$(echo "$VALID_RELEASES" | sed -n '1p')"
 PREV="$(echo "$VALID_RELEASES" | sed -n '2p')"
 ln -sfn "$PREV" /var/www/talia/current/panel
 sudo systemctl restart talia-panel.service
+
+9) Checklist oficial (recomendado en cada release)
+- Archivo: `checklists/RELEASE_STAGING_A_PROD.md`
+- Marca `OK/FAIL` en cada paso antes de promover a producción.
