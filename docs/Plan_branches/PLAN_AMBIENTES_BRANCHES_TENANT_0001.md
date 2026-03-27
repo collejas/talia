@@ -371,6 +371,17 @@ Checklist:
 - [ ] Alertas configuradas para error rate y p95
 - [ ] Logs centralizados por servicio
 
+Implementación E10 (2026-03-27):
+- Script de probes creado: `scripts/monitor_env_health.sh` (checks: `api_health`, `panel_dashboard`, `auth_login`).
+- Units/timers creados: `infra/systemd/talia-observability-{production,staging}.{service,timer}`.
+- Script de instalación creado: `scripts/install_observability_timers.sh`.
+- Ejemplos de variables creados: `infra/env/observability.{production,staging}.env.example`.
+- Guía operativa: `docs/Plan_branches/observability/README_E10_OBSERVABILIDAD_MINIMA.md`.
+- Activación en servidor completada:
+  - `talia-observability-production.timer` activo.
+  - `talia-observability-staging.timer` activo.
+  - logs en `logs/observability/production-health.log` y `logs/observability/staging-health.log`.
+
 ## Plan de pruebas por tenant `0001`
 Suite funcional mínima por cada release en staging.
 
@@ -442,6 +453,11 @@ Avance ejecutado (2026-03-26):
 - Guía de bootstrap creada: `docs/Plan_branches/bootstrap/README_STAGING_BOOTSTRAP.md`.
 - Servicios staging + Nginx + SSL de `staging.talia.mx` activos y validados.
 - Producción alineada a runtime por symlink: `talia-panel.service` ahora usa `WorkingDirectory=/var/www/talia/current/panel`.
+- Observabilidad mínima activada (2026-03-27):
+  - Script: `scripts/monitor_env_health.sh`.
+  - Timers: `talia-observability-production.timer`, `talia-observability-staging.timer`.
+  - Instalador: `scripts/install_observability_timers.sh`.
+  - Estado validado con probes exitosos en producción y staging.
 
 | ID | Tarea | Responsable sugerido | Fecha objetivo | Estado |
 |---|---|---|---|---|
@@ -454,7 +470,7 @@ Avance ejecutado (2026-03-26):
 | E7 | Validar rollback de panel en staging (symlink `current/panel-staging`) | Owner Infra | 2026-04-03 | Completado |
 | E8 | Alinear producción a runtime por symlink `current/panel` | Owner Infra | 2026-04-04 | Completado |
 | E9 | Definir checklist de migraciones con backup pre-release | Owner DB | 2026-04-05 | Completado |
-| E10 | Activar dashboard y alertas mínimas por ambiente | Owner Infra + Owner Backend | 2026-04-06 | Pendiente |
+| E10 | Activar dashboard y alertas mínimas por ambiente | Owner Infra + Owner Backend | 2026-04-06 | Completado |
 | E11 | Ejecutar suite smoke `0001` completa en staging | QA/Owner Frontend + Owner Backend | 2026-04-07 | Completado |
 | E12 | Primer ciclo completo `feature -> develop -> staging -> main -> prod` | Release Manager | 2026-04-08 | Pendiente |
 | E13 | Simulación de incidente + rollback (app + DB + flags) | Owner Infra + Owner DB | 2026-04-09 | Pendiente |

@@ -1,0 +1,16 @@
+[Unit]
+Description=Tal-IA Observability probe (staging)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/var/www/talia
+EnvironmentFile=-/var/www/talia/.env.observability.staging
+Environment=ALERT_WEBHOOK_URL=
+Environment=ALERT_EMAIL=
+ExecStart=/usr/bin/bash /var/www/talia/scripts/monitor_env_health.sh staging
+User=root
+
+[Install]
+WantedBy=multi-user.target
