@@ -82,6 +82,14 @@ rsync -a --delete \
 
 cd "${TMP_RELEASE}"
 
+# Evita contaminar el build de staging con valores locales/prod del repo.
+if [[ -f ".env.local" ]]; then
+  rm -f ".env.local"
+fi
+if [[ -f ".env.staging" ]]; then
+  cp ".env.staging" ".env.production"
+fi
+
 if [[ "${RUN_NPM_CI}" == "1" ]]; then
   echo "[deploy-staging] npm ci"
   npm ci

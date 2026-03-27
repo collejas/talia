@@ -80,6 +80,11 @@ rsync -a --delete \
 
 cd "${TMP_RELEASE}"
 
+# Evita que .env.local del repo altere el build de producción.
+if [[ -f ".env.local" ]]; then
+  rm -f ".env.local"
+fi
+
 if [[ "${RUN_NPM_CI}" == "1" ]]; then
   echo "[deploy] npm ci"
   npm ci
