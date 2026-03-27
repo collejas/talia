@@ -384,6 +384,7 @@ Avance ejecutado (2026-03-26):
 - Plantilla Nginx creada: `infra/nginx/staging.talia.mx.conf.example`.
 - Plantillas de entorno creadas: `backend/.env.staging.example`, `frontend/panel/.env.staging.example`.
 - Archivos reales creados: `backend/.env.staging`, `frontend/panel/.env.staging`.
+- Archivos reales de producción creados: `backend/.env.production`, `frontend/panel/.env.production`.
 - Primer release staging generado con deploy atómico (sin restart): `releases/panel-staging/20260326_232813`.
 - Guía de bootstrap creada: `docs/Plan_branches/bootstrap/README_STAGING_BOOTSTRAP.md`.
 - Servicios staging + Nginx + SSL de `staging.talia.mx` activos y validados.
@@ -392,7 +393,7 @@ Avance ejecutado (2026-03-26):
 |---|---|---|---|---|
 | E1 | Definir owners y aprobaciones por tipo de cambio | Release Manager | 2026-03-29 | Completado |
 | E2 | Formalizar política Go/No-Go (`develop->staging->main`) | Release Manager + Owners | 2026-03-30 | Completado |
-| E3 | Crear `.env.production` y `.env.staging` (API/panel) | Owner Infra + Owners App | 2026-03-31 | En progreso |
+| E3 | Crear `.env.production` y `.env.staging` (API/panel) | Owner Infra + Owners App | 2026-03-31 | Completado |
 | E4 | Crear `talia-api-staging.service` y `talia-panel-staging.service` | Owner Infra | 2026-04-01 | Completado |
 | E5 | Configurar `staging.talia.mx` en Nginx | Owner Infra | 2026-04-01 | Completado |
 | E6 | Implementar `scripts/deploy_panel_staging_atomic.sh` | Owner Infra + Owner Frontend | 2026-04-02 | Completado |
