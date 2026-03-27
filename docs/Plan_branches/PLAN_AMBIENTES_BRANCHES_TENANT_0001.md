@@ -395,7 +395,7 @@ Avance ejecutado (2026-03-26):
 | E8 | Alinear producción a runtime por symlink `current/panel` | Owner Infra | 2026-04-04 | Pendiente |
 | E9 | Definir checklist de migraciones con backup pre-release | Owner DB | 2026-04-05 | Pendiente |
 | E10 | Activar dashboard y alertas mínimas por ambiente | Owner Infra + Owner Backend | 2026-04-06 | Pendiente |
-| E11 | Ejecutar suite smoke `0001` completa en staging | QA/Owner Frontend + Owner Backend | 2026-04-07 | Pendiente |
+| E11 | Ejecutar suite smoke `0001` completa en staging | QA/Owner Frontend + Owner Backend | 2026-04-07 | Completado |
 | E12 | Primer ciclo completo `feature -> develop -> staging -> main -> prod` | Release Manager | 2026-04-08 | Pendiente |
 | E13 | Simulación de incidente + rollback (app + DB + flags) | Owner Infra + Owner DB | 2026-04-09 | Pendiente |
 | E14 | Cierre de hardening y acta de operación estable | Release Manager | 2026-04-10 | Pendiente |
