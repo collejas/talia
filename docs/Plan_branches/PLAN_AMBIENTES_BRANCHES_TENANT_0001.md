@@ -388,6 +388,7 @@ Avance ejecutado (2026-03-26):
 - Primer release staging generado con deploy atómico (sin restart): `releases/panel-staging/20260326_232813`.
 - Guía de bootstrap creada: `docs/Plan_branches/bootstrap/README_STAGING_BOOTSTRAP.md`.
 - Servicios staging + Nginx + SSL de `staging.talia.mx` activos y validados.
+- Producción alineada a runtime por symlink: `talia-panel.service` ahora usa `WorkingDirectory=/var/www/talia/current/panel`.
 
 | ID | Tarea | Responsable sugerido | Fecha objetivo | Estado |
 |---|---|---|---|---|
@@ -398,7 +399,7 @@ Avance ejecutado (2026-03-26):
 | E5 | Configurar `staging.talia.mx` en Nginx | Owner Infra | 2026-04-01 | Completado |
 | E6 | Implementar `scripts/deploy_panel_staging_atomic.sh` | Owner Infra + Owner Frontend | 2026-04-02 | Completado |
 | E7 | Validar rollback de panel en staging (symlink `current/panel-staging`) | Owner Infra | 2026-04-03 | Completado |
-| E8 | Alinear producción a runtime por symlink `current/panel` | Owner Infra | 2026-04-04 | Pendiente |
+| E8 | Alinear producción a runtime por symlink `current/panel` | Owner Infra | 2026-04-04 | Completado |
 | E9 | Definir checklist de migraciones con backup pre-release | Owner DB | 2026-04-05 | Pendiente |
 | E10 | Activar dashboard y alertas mínimas por ambiente | Owner Infra + Owner Backend | 2026-04-06 | Pendiente |
 | E11 | Ejecutar suite smoke `0001` completa en staging | QA/Owner Frontend + Owner Backend | 2026-04-07 | Completado |
