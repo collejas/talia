@@ -1,0 +1,14 @@
+[Unit]
+Description=Tal-IA disk cleanup routine
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/var/www/talia
+EnvironmentFile=-/var/www/talia/.env.disk_cleanup
+ExecStart=/usr/bin/bash /var/www/talia/scripts/cleanup_disk.sh
+User=root
+
+[Install]
+WantedBy=multi-user.target
