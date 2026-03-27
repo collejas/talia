@@ -1,10 +1,9 @@
-import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 
 import { getPanelApiBaseUrl } from "@/lib/api/panel";
-import { ACCESS_TOKEN_COOKIE } from "@/lib/auth/cookies";
 import { decodeJwtUserId } from "@/lib/auth/jwt";
 import { resolvePanelApiToken } from "@/lib/auth/panel-token";
+import { resolveServerAccessToken } from "@/lib/auth/server-session";
 import { resolveOrganizacionId } from "@/lib/settings/org";
 
 export async function GET() {
@@ -25,13 +24,7 @@ export async function GET() {
     );
   }
 
-  const store = await cookies();
-  const userAccessToken =
-    store.get(ACCESS_TOKEN_COOKIE)?.value ||
-    store.get("talia.access_token")?.value ||
-    store.get("sb-access-token")?.value ||
-    store.get("access_token")?.value ||
-    "";
+  const userAccessToken = (await resolveServerAccessToken({ minTtlSeconds: 300 })) || "";
   const organizacionId = await resolveOrganizacionId();
   const usuarioId = decodeJwtUserId(userAccessToken || null);
 

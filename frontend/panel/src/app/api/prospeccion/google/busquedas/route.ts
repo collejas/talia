@@ -1,16 +1,9 @@
 import { NextResponse } from "next/server";
-import { cookies } from "next/headers";
-
-import { ACCESS_TOKEN_COOKIE } from "@/lib/auth/cookies";
 import { getPanelApiBaseUrl } from "@/lib/api/panel";
+import { resolveServerAccessToken } from "@/lib/auth/server-session";
 
 async function resolveAccessToken(): Promise<string | null> {
-  const store = await cookies();
-  const cookieToken = store.get(ACCESS_TOKEN_COOKIE)?.value;
-  if (cookieToken && cookieToken.trim().length) {
-    return cookieToken;
-  }
-  return null;
+  return resolveServerAccessToken({ minTtlSeconds: 300 });
 }
 
 function buildBackendUrl(request: Request, basePath: string): URL {
