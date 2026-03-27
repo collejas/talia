@@ -1,8 +1,7 @@
 import { NextResponse } from "next/server"
-import { cookies } from "next/headers"
 
-import { ACCESS_TOKEN_COOKIE } from "@/lib/auth/cookies"
 import { decodeJwtOrganizacionId, decodeJwtUserId } from "@/lib/auth/jwt"
+import { resolveServerAccessToken } from "@/lib/auth/server-session"
 
 export async function GET() {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
@@ -14,11 +13,7 @@ export async function GET() {
     )
   }
 
-  const store = await cookies()
-  const accessToken =
-    store.get(ACCESS_TOKEN_COOKIE)?.value ||
-    store.get("sb-access-token")?.value ||
-    store.get("access_token")?.value
+  const accessToken = await resolveServerAccessToken({ minTtlSeconds: 300 })
 
   if (!accessToken) {
     return NextResponse.json({ error: "auth_required" }, { status: 401 })

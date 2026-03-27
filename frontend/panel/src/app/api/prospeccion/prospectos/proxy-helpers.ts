@@ -1,17 +1,11 @@
-import { cookies } from "next/headers"
 import { NextResponse } from "next/server"
 
 import { getPanelApiBaseUrl } from "@/lib/api/panel"
-import { ACCESS_TOKEN_COOKIE } from "@/lib/auth/cookies"
+import { resolveServerAccessToken } from "@/lib/auth/server-session"
 import { resolveOrganizacionId } from "@/lib/settings/org"
 
 export async function resolveProspeccionAccessToken(): Promise<string | null> {
-  const store = await cookies()
-  const cookieToken =
-    store.get(ACCESS_TOKEN_COOKIE)?.value ||
-    store.get("talia.access_token")?.value ||
-    store.get("sb-access-token")?.value ||
-    store.get("access_token")?.value
+  const cookieToken = await resolveServerAccessToken({ minTtlSeconds: 300 })
   if (cookieToken && cookieToken.trim().length) {
     return cookieToken.trim()
   }

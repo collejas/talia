@@ -1,15 +1,13 @@
-import { cookies } from "next/headers"
 import { NextResponse } from "next/server"
 
 import { getPanelApiBaseUrl } from "@/lib/api/panel"
-import { ACCESS_TOKEN_COOKIE } from "@/lib/auth/cookies"
+import { resolveServerAccessToken } from "@/lib/auth/server-session"
 
 /**
  * Forward verification requests for prospect phone numbers to the backend API.
  */
 export async function POST(request: Request) {
-  const store = await cookies()
-  const token = store.get(ACCESS_TOKEN_COOKIE)?.value
+  const token = await resolveServerAccessToken({ minTtlSeconds: 300 })
 
   if (!token || !token.trim().length) {
     return NextResponse.json({ error: "auth_required" }, { status: 401 })
