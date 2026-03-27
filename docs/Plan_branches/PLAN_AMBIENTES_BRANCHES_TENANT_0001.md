@@ -291,6 +291,59 @@ Secuencia obligatoria por release con cambios SQL.
 - [ ] Validar métricas + consultas críticas
 - [ ] Confirmar consistencia por tenant (incluyendo `0001`)
 
+## Protocolo E9 (checklist operativo de migraciones + backup)
+Este protocolo se ejecuta en cada release que incluya cambios en `supabase/migrations`.
+
+### A. Pre-check (antes de tocar DB)
+- [ ] Confirmar ambiente objetivo (`staging` o `producción`).
+- [ ] Confirmar archivo(s) SQL a promover (`supabase/migrations/*.sql`).
+- [ ] Confirmar plan de rollback documentado para ese cambio.
+
+### B. Backup obligatorio
+Comando recomendado (usa `backend/scripts/backup_db.py`):
+
+Staging:
+```bash
+cd /var/www/talia
+set -a; source backend/.env.staging >/dev/null 2>&1
+python3 backend/scripts/backup_db.py --mode all --prefix postgres_staging --output-dir backups
+```
+
+Producción:
+```bash
+cd /var/www/talia
+set -a; source backend/.env.production >/dev/null 2>&1
+python3 backend/scripts/backup_db.py --mode all --prefix postgres_production --output-dir backups
+```
+
+Validación mínima del backup:
+- [ ] Existe carpeta nueva en `backups/`.
+- [ ] Incluye `*_full.dump`, `*_schema.sql` y `*_globals.sql`.
+- [ ] Registro de timestamp guardado en bitácora del release.
+
+### C. Ejecución de migración (orden)
+1. Aplicar primero en staging.
+2. Ejecutar smoke suite en tenant `0001`.
+3. Si pasa, aplicar exactamente el mismo set de migraciones en producción.
+
+Checklist:
+- [ ] Staging aplicado sin error.
+- [ ] Smoke `0001` post-migración en staging OK.
+- [ ] Producción aplicado sin error.
+
+### D. Verificación post-migración
+- [ ] `https://staging.talia.mx` y `https://talia.mx` responden correctamente.
+- [ ] Sin errores críticos en `journalctl` de `talia-api*` y `talia-panel*`.
+- [ ] Endpoints críticos dentro de umbral.
+- [ ] Confirmación funcional en módulos impactados.
+
+### E. Regla de bloqueo (No-Go)
+No promover si ocurre cualquiera:
+- Falla de backup.
+- Falla al aplicar migración en staging.
+- Regresión en smoke `0001`.
+- Error rate/latencia fuera de umbral acordado.
+
 ## Observabilidad mínima obligatoria
 Métricas y señales mínimas a revisar por ambiente.
 
@@ -400,7 +453,7 @@ Avance ejecutado (2026-03-26):
 | E6 | Implementar `scripts/deploy_panel_staging_atomic.sh` | Owner Infra + Owner Frontend | 2026-04-02 | Completado |
 | E7 | Validar rollback de panel en staging (symlink `current/panel-staging`) | Owner Infra | 2026-04-03 | Completado |
 | E8 | Alinear producción a runtime por symlink `current/panel` | Owner Infra | 2026-04-04 | Completado |
-| E9 | Definir checklist de migraciones con backup pre-release | Owner DB | 2026-04-05 | Pendiente |
+| E9 | Definir checklist de migraciones con backup pre-release | Owner DB | 2026-04-05 | Completado |
 | E10 | Activar dashboard y alertas mínimas por ambiente | Owner Infra + Owner Backend | 2026-04-06 | Pendiente |
 | E11 | Ejecutar suite smoke `0001` completa en staging | QA/Owner Frontend + Owner Backend | 2026-04-07 | Completado |
 | E12 | Primer ciclo completo `feature -> develop -> staging -> main -> prod` | Release Manager | 2026-04-08 | Pendiente |
