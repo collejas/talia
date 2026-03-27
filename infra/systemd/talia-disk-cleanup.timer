@@ -1,0 +1,11 @@
+[Unit]
+Description=Run Tal-IA disk cleanup weekly
+
+[Timer]
+OnCalendar=Sun *-*-* 04:10:00
+RandomizedDelaySec=15m
+Persistent=true
+Unit=talia-disk-cleanup.service
+
+[Install]
+WantedBy=timers.target
