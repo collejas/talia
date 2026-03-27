@@ -1,0 +1,102 @@
+import { IconRocket, IconRoute, IconMessageCircle, IconWorld } from "@tabler/icons-react"
+
+import {
+  Card,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card"
+import { formatSourceClassLabel } from "@/lib/mapa-conversion/source-class"
+type MapKpisProps = {
+  nivelLabel: string
+  visitasTotales: number
+  sesionesWebTotales: number
+  sesionesWebchatTotales: number
+  conversacionesWhatsapp: number
+  conversacionesVoz: number
+  topLocationName: string
+  topLocationLeads: number
+  topLocationVisits: number
+  topSource: string
+  topSourceValue: number
+  stageLeader: string
+  stageLeaderValue: number
+}
+
+function formatDisplayNumber(value: number | undefined | null): string {
+  if (value == null) {
+    return "0"
+  }
+  return new Intl.NumberFormat("es-MX").format(value)
+}
+
+export function MapKpis({
+  nivelLabel,
+  visitasTotales,
+  sesionesWebTotales,
+  sesionesWebchatTotales,
+  conversacionesWhatsapp,
+  conversacionesVoz,
+  topLocationName,
+  topLocationLeads,
+  topLocationVisits,
+  topSource,
+  topSourceValue,
+  stageLeader,
+  stageLeaderValue,
+}: MapKpisProps) {
+  const cards = [
+    {
+      title: "Top ubicación",
+      value: topLocationName || "Sin datos",
+      helper: `Leads ${formatDisplayNumber(topLocationLeads)} · Visitas ${formatDisplayNumber(
+        topLocationVisits,
+      )}`,
+      icon: IconRocket,
+    },
+    {
+      title: "Tráfico web",
+      value: formatDisplayNumber(sesionesWebTotales),
+      helper: `Nivel ${nivelLabel} · Visitas totales ${formatDisplayNumber(visitasTotales)}`,
+      icon: IconWorld,
+    },
+    {
+      title: "Origen principal",
+      value: topSource
+        ? `${formatSourceClassLabel(topSource)} (${formatDisplayNumber(topSourceValue)})`
+        : "Sin datos",
+      helper: `Nivel ${nivelLabel} · Origen principal de sesiones web`,
+      icon: IconRoute,
+    },
+    {
+      title: "Conversaciones",
+      value: formatDisplayNumber(
+        sesionesWebchatTotales + conversacionesWhatsapp + conversacionesVoz,
+      ),
+      helper: `Webchat ${formatDisplayNumber(sesionesWebchatTotales)} · WA ${formatDisplayNumber(
+        conversacionesWhatsapp,
+      )} · Voz ${formatDisplayNumber(conversacionesVoz)} · Etapa líder ${stageLeader || "N/A"} (${formatDisplayNumber(stageLeaderValue)})`,
+      icon: IconMessageCircle,
+    },
+  ]
+
+  return (
+    <div className="grid grid-cols-1 gap-4 px-4 sm:grid-cols-2 lg:grid-cols-4">
+      {cards.map((config) => (
+        <Card key={config.title} className="@container/card">
+          <CardHeader>
+            <CardDescription className="flex items-center gap-2">
+              <config.icon className="size-4" />
+              {config.title}
+            </CardDescription>
+            <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl">
+              {config.value}
+            </CardTitle>
+          </CardHeader>
+          <CardFooter className="text-xs text-muted-foreground">{config.helper}</CardFooter>
+        </Card>
+      ))}
+    </div>
+  )
+}

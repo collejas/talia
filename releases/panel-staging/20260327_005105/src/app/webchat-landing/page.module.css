@@ -1,0 +1,330 @@
+.page {
+  min-height: 100vh;
+  background: radial-gradient(circle at top right, rgba(99, 102, 241, 0.25), transparent 35%),
+    linear-gradient(180deg, #050505, #0e0e14 55%, #06070b);
+  color: #f4f4f5;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 3rem 1.5rem 4rem;
+}
+
+.layout {
+  width: min(1200px, 100%);
+}
+
+.hero {
+  text-align: center;
+  margin-bottom: 3rem;
+}
+
+.hero h1 {
+  font-size: clamp(2.5rem, 4vw, 3.5rem);
+  margin-bottom: 1rem;
+}
+
+.eyebrow {
+  text-transform: uppercase;
+  letter-spacing: 0.4em;
+  font-size: 0.75rem;
+  margin: 0;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.hero p {
+  color: rgba(244, 244, 245, 0.8);
+  max-width: 720px;
+  margin: 0 auto 1.75rem;
+  line-height: 1.6;
+}
+
+.actions {
+  display: flex;
+  justify-content: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.ctaButton,
+.secondaryButton {
+  border: none;
+  border-radius: 999px;
+  padding: 0.85rem 1.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.ctaButton {
+  background: linear-gradient(135deg, #7c3aed, #4c1d95);
+  color: #fff;
+  box-shadow: 0 15px 30px rgba(124, 58, 237, 0.35);
+}
+
+.ctaButton:hover {
+  transform: translateY(-2px);
+}
+
+.secondaryButton {
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.features {
+  width: 100%;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 1rem;
+  margin-top: 2rem;
+}
+
+.featureCard {
+  background: rgba(15, 15, 25, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 1rem;
+  padding: 1.25rem;
+  box-shadow: inset 0 0 35px rgba(255, 255, 255, 0.03);
+  min-height: 160px;
+}
+
+.featureCard h3 {
+  margin: 0 0 0.5rem;
+  font-size: 1.1rem;
+}
+
+.featureCard p {
+  margin: 0;
+  color: rgba(244, 244, 245, 0.75);
+  line-height: 1.5;
+  font-size: 0.95rem;
+}
+
+.pillars {
+  max-width: 900px;
+  margin-top: 2.5rem;
+  text-align: center;
+  color: rgba(244, 244, 245, 0.8);
+}
+
+.storybook {
+  margin-top: 2rem;
+  width: 100%;
+  height: 320px;
+  border-radius: 1.25rem;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: radial-gradient(circle at 20% 20%, rgba(124, 58, 237, 0.37), transparent 40%),
+    rgba(15, 15, 25, 0.85);
+  box-shadow: 0 25px 45px rgba(0, 0, 0, 0.55);
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: rgba(244, 244, 245, 0.8);
+}
+
+.storybook span {
+  font-size: 0.95rem;
+}
+
+.webchatModal {
+  position: fixed;
+  inset: 0;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: 999;
+}
+
+.webchatModal[data-open='true'] {
+  display: flex;
+}
+
+.modalBackdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.65);
+  backdrop-filter: blur(18px);
+}
+
+.modalPanel {
+  position: relative;
+  background: #0b0b14;
+  border-radius: 1.5rem;
+  width: min(960px, 95vw);
+  max-height: min(90vh, 720px);
+  box-shadow: 0 40px 80px rgba(0, 0, 0, 0.6);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.modalHeader {
+  padding: 1.5rem 1.75rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.modalHeader h2 {
+  margin: 0;
+  font-size: 1.4rem;
+}
+
+.modalHeader button {
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 999px;
+  color: #f4f4f5;
+  padding: 0.5rem 0.85rem;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.chatPanel {
+  flex: 1;
+  padding: 1.25rem 1.5rem 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  background: linear-gradient(180deg, rgba(15, 15, 25, 0.9), rgba(8, 8, 12, 0.9));
+}
+
+.chatShell {
+  flex: 1;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 1rem;
+  overflow: hidden;
+  padding: 0.75rem;
+  background: rgba(0, 0, 0, 0.35);
+  display: flex;
+  flex-direction: column;
+}
+
+.chatLog {
+  flex: 1;
+  overflow-y: auto;
+  padding-right: 0.35rem;
+}
+
+.chatForm {
+  display: flex;
+  gap: 0.75rem;
+}
+
+.chatInput {
+  flex: 1;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  padding: 0.75rem 1rem;
+  background: rgba(255, 255, 255, 0.05);
+  color: #fff;
+  font-size: 1rem;
+}
+
+.chatForm button[type='submit'] {
+  border-radius: 999px;
+  border: none;
+  padding: 0.75rem 1.5rem;
+  background: linear-gradient(135deg, #38bdf8, #6366f1);
+  color: #fff;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.attachmentRow {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.attachmentRow button {
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  padding: 0.55rem 1rem;
+  background: transparent;
+  color: #fff;
+  cursor: pointer;
+}
+
+.composer-attachments__list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-top: 0.35rem;
+}
+
+.composer-attachments__item {
+  padding: 0.35rem 0.6rem;
+  border-radius: 0.65rem;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px dashed rgba(255, 255, 255, 0.35);
+  font-size: 0.85rem;
+}
+
+.chatLog :global(.message) {
+  padding: 0.65rem 0.75rem;
+  border-radius: 0.85rem;
+  margin-bottom: 0.5rem;
+  background: rgba(255, 255, 255, 0.04);
+  max-width: 80%;
+  word-break: break-word;
+}
+
+.chatLog :global(.message--assistant) {
+  align-self: flex-start;
+  background: rgba(99, 102, 241, 0.15);
+}
+
+.chatLog :global(.message--human),
+.chatLog :global(.message--user) {
+  align-self: flex-end;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.chatLog :global(.message__body) {
+  margin: 0;
+  color: #fff;
+  line-height: 1.5;
+  font-size: 0.95rem;
+}
+
+.chatLog :global(.message__label) {
+  display: block;
+  margin-bottom: 0.35rem;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.chatLog :global(.typing-indicator) {
+  width: 42px;
+  height: 16px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.1);
+  position: relative;
+  margin-bottom: 0.45rem;
+}
+
+.chatLog :global(.typing-indicator::after) {
+  content: '';
+  position: absolute;
+  inset: 4px;
+  border-radius: 50%;
+  animation: blink 1.2s infinite;
+  box-shadow: 8px 0 0 rgba(255, 255, 255, 0.6), 16px 0 0 rgba(255, 255, 255, 0.4);
+}
+
+@keyframes blink {
+  0% {
+    opacity: 0.1;
+  }
+  50% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0.1;
+  }
+}
