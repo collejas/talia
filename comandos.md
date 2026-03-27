@@ -100,6 +100,35 @@ codex resume 019ced77-b0b4-70f2-8c03-3ba8c5813241
 
 sudo rsync -a landing/src/ /var/www/talia-landing/ 
 
+# LIMPIEZA
+  cd /var/www/talia
+
+  # Ver releases activos (NO borrar estos)
+  CUR_STG="$(readlink -f current/panel-staging)"
+  CUR_PROD="$(readlink -f current/panel)"
+  echo "CUR_STG=$CUR_STG"
+  echo "CUR_PROD=$CUR_PROD"
+
+  # Borrar temporales staging
+  sudo rm -rf releases/panel-staging/*.tmp 2>/dev/null || true
+
+  # Dejar solo 2 releases de staging (incluyendo el activo)
+  for d in $(ls -1dt releases/panel-staging/* 2>/dev/null); do
+    [ "$d" = "$CUR_STG" ] && continue
+    KEEP="${KEEP:-$d}"
+  done
+  for d in $(ls -1dt releases/panel-staging/* 2>/dev/null | tail -n +3); do
+    [ "$d" = "$CUR_STG" ] && continue
+    sudo rm -rf "$d"
+  done
+
+  # Dejar solo 2 releases de prod (incluyendo el activo)
+  for d in $(ls -1dt releases/panel/* 2>/dev/null | tail -n +3); do
+    [ "$d" = "$CUR_PROD" ] && continue
+    sudo rm -rf "$d"
+  done
+
+  df -h /
 # Gilberto Nunez director comercial comebi cel personal +5215530862988   cel trabajo +5214441692305
 
 sudo cat /proc/$(pgrep -f "next start")/environ | tr '\0' '\n' | grep -E 'SUPABASE|PANEL'
