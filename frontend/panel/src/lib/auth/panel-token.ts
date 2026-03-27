@@ -1,16 +1,9 @@
 "use server";
 
-import { cookies } from "next/headers";
-
-import { ACCESS_TOKEN_COOKIE } from "@/lib/auth/cookies";
+import { resolveServerAccessToken } from "@/lib/auth/server-session";
 
 export async function resolvePanelApiToken(): Promise<string> {
-  const store = await cookies();
-  const token =
-    store.get(ACCESS_TOKEN_COOKIE)?.value ||
-    store.get("talia.access_token")?.value ||
-    store.get("sb-access-token")?.value ||
-    store.get("access_token")?.value;
+  const token = await resolveServerAccessToken({ minTtlSeconds: 300 });
 
   if (token && token.trim().length) {
     return token;

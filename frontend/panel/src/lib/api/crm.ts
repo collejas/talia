@@ -6,6 +6,7 @@ import { getPanelApiBaseUrl } from "@/lib/api/panel";
 import { ACCESS_TOKEN_COOKIE } from "@/lib/auth/cookies";
 import { decodeJwtOrganizacionId, decodeJwtPayload, decodeJwtUserId } from "@/lib/auth/jwt";
 import { resolvePanelApiToken } from "@/lib/auth/panel-token";
+import { resolveServerAccessToken } from "@/lib/auth/server-session";
 
 type CrmFetchOptions = {
   method?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
@@ -251,6 +252,10 @@ async function resolveCurrentUsuarioId(): Promise<string | null> {
 }
 
 async function resolveCurrentAccessToken(): Promise<string | null> {
+  const refreshedToken = await resolveServerAccessToken({ minTtlSeconds: 300 })
+  if (refreshedToken) {
+    return refreshedToken
+  }
   try {
     const store = await cookies();
     const token =

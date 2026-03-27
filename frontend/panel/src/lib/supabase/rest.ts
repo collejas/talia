@@ -3,6 +3,7 @@
 import { cookies } from "next/headers"
 
 import { ACCESS_TOKEN_COOKIE } from "@/lib/auth/cookies"
+import { resolveServerAccessToken } from "@/lib/auth/server-session"
 import { getSupabaseConfig } from "@/lib/auth/supabase"
 import { resolveOrganizacionId } from "@/lib/settings/org"
 
@@ -195,6 +196,10 @@ export async function callSupabaseRest<T = unknown>(
 }
 
 async function resolveSupabaseAuthToken(): Promise<string | null> {
+  const refreshedToken = await resolveServerAccessToken({ minTtlSeconds: 300 })
+  if (refreshedToken) {
+    return refreshedToken
+  }
   try {
     const store = await cookies()
     return (
