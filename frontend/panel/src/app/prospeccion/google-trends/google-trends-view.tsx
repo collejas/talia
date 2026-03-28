@@ -53,6 +53,7 @@ const SOURCE_OPTIONS = [
   { value: "youtube", label: "Búsqueda de YouTube" },
 ] as const;
 const WEB_SOURCE_VALUE = "__web__";
+const GLOBAL_LOCATION_LABEL = "GLOBAL - Todo el mundo";
 const TERM_STYLES = [
   { color: "#4285F4", tone: "rgba(66,133,244,0.12)", shape: "circle" as const },
   { color: "#DB4437", tone: "rgba(219,68,55,0.12)", shape: "square" as const },
@@ -311,12 +312,16 @@ export function GoogleTrendsView() {
 
   useEffect(() => {
     const code = geo.trim().toUpperCase();
+    if (!code) {
+      setGeoInput(GLOBAL_LOCATION_LABEL);
+      return;
+    }
     const country = countryOptions.find((item) => item.code === code);
     if (country) {
       setGeoInput(`${country.code} - ${country.name}`);
       return;
     }
-    setGeoInput(code || "MX");
+    setGeoInput(code);
   }, [geo, countryOptions]);
 
   function persistPresets(nextPresets: TrendsPreset[]) {
@@ -395,7 +400,7 @@ export function GoogleTrendsView() {
       name,
       keywordsText,
       timeframe: timeframe.trim() || "today 12-m",
-      geo: geo.trim().toUpperCase() || "MX",
+      geo: geo.trim().toUpperCase(),
       source,
       includeRegion,
       createdAt: new Date().toISOString(),
@@ -468,7 +473,7 @@ export function GoogleTrendsView() {
       const data = await fetchGoogleTrends({
         keywords: parsedKeywords,
         timeframe: timeframe.trim() || "today 12-m",
-        geo: geo.trim().toUpperCase() || "MX",
+        geo: geo.trim().toUpperCase(),
         ...(source ? { source } : {}),
         include_region: includeRegion,
       });
@@ -630,6 +635,10 @@ export function GoogleTrendsView() {
                     onChange={(event) => {
                       const raw = event.target.value;
                       setGeoInput(raw);
+                      if (raw.trim().toLocaleLowerCase("es-MX") === GLOBAL_LOCATION_LABEL.toLocaleLowerCase("es-MX")) {
+                        setGeo("");
+                        return;
+                      }
                       const exact = countryOptions.find(
                         (item) => `${item.code} - ${item.name}`.toLocaleLowerCase("es-MX") === raw.trim().toLocaleLowerCase("es-MX"),
                       );
@@ -647,12 +656,17 @@ export function GoogleTrendsView() {
                       const codeMatch = raw.trim().match(/^([A-Za-z]{2})\b/);
                       if (codeMatch) {
                         setGeo(codeMatch[1].toUpperCase());
+                        return;
+                      }
+                      if (!raw.trim()) {
+                        setGeo("");
                       }
                     }}
                     placeholder={isLoadingCountries ? "Cargando países..." : "MX - México"}
                   />
                 </div>
                 <datalist id="google-trends-country-options">
+                  <option value={GLOBAL_LOCATION_LABEL} />
                   {countryOptions.map((item) => (
                     <option key={item.code} value={`${item.code} - ${item.name}`} />
                   ))}
@@ -800,7 +814,7 @@ export function GoogleTrendsView() {
           <Card className="rounded-2xl border-slate-200 bg-white shadow-none">
             <CardHeader>
               <CardTitle>Comparativo de interés</CardTitle>
-              <CardDescription>{result.geo} · {result.timeframe} · {selectedSourceLabel}</CardDescription>
+              <CardDescription>{result.geo || "GLOBAL"} · {result.timeframe} · {selectedSourceLabel}</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="flex flex-wrap gap-2">
@@ -884,7 +898,7 @@ export function GoogleTrendsView() {
             <CardHeader>
               <CardTitle>Últimos valores</CardTitle>
               <CardDescription>
-                Consulta generada: {new Date(result.generated_at).toLocaleString("es-MX")} | {result.geo} |{" "}
+                Consulta generada: {new Date(result.generated_at).toLocaleString("es-MX")} | {result.geo || "GLOBAL"} |{" "}
                 {result.timeframe} | {selectedSourceLabel}
               </CardDescription>
             </CardHeader>
