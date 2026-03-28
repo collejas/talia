@@ -157,6 +157,12 @@ npm run dev
 
 npx next dev --webpack
 
+IA de WhatsApp
+IA para WhatsApp
+IA para ventas
+asistente de IA
+CRM IA
+
 • Ese error es del sistema, no de tu código: se acabó el límite de file watchers (inotify).
 
   Haz esto en Ubuntu:
