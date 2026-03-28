@@ -11,8 +11,14 @@ type Params = {
   }>;
 };
 
-const GEO_BASE = path.join(process.cwd(), "..", "..", "backend/app/data/geo");
-const MANIFEST_FILE = path.join(GEO_BASE, "municipios", "manifest.json");
+const CWD = process.cwd();
+const CANDIDATE_GEO_BASE_DIRS = [
+  process.env.TALIA_GEO_BASE_DIR,
+  path.join(CWD, "..", "..", "backend/app/data/geo"),
+  path.join(CWD, "..", "..", "..", "backend/app/data/geo"),
+  path.join(CWD, "..", "..", "..", "..", "backend/app/data/geo"),
+  "/var/www/talia/backend/app/data/geo",
+].filter((value): value is string => Boolean(value && value.trim()));
 
 function normalizeStateCode(value: string): string | null {
   const digits = value.replace(/[^\d]+/g, "");
@@ -31,13 +37,30 @@ export async function GET(_request: Request, { params }: Params) {
   }
 
   try {
-    const manifestText = await fs.readFile(MANIFEST_FILE, "utf-8");
-    const manifest = JSON.parse(manifestText) as Record<string, { path: string }>;
+    let geoBase: string | null = null;
+    let manifest: Record<string, { path: string }> | null = null;
+    for (const candidate of CANDIDATE_GEO_BASE_DIRS) {
+      const manifestFile = path.join(candidate, "municipios", "manifest.json");
+      try {
+        const manifestText = await fs.readFile(manifestFile, "utf-8");
+        manifest = JSON.parse(manifestText) as Record<string, { path: string }>;
+        geoBase = candidate;
+        break;
+      } catch {
+        // keep trying other paths
+      }
+    }
+    if (!geoBase || !manifest) {
+      return NextResponse.json(
+        { error: "geojson_missing", message: "No fue posible cargar el catálogo de municipios." },
+        { status: 500 },
+      );
+    }
     const entry = manifest[estadoCode];
     if (!entry || !entry.path) {
       return NextResponse.json({ error: "estado_not_found" }, { status: 404 });
     }
-    const municipalitiesFile = path.join(GEO_BASE, "municipios", entry.path);
+    const municipalitiesFile = path.join(geoBase, "municipios", entry.path);
     const geoText = await fs.readFile(municipalitiesFile, "utf-8");
     const geojson = JSON.parse(geoText);
     return NextResponse.json({ geojson });
