@@ -876,7 +876,7 @@ export function GoogleTrendsView() {
                         tick={(props) => {
                           const { x, y, payload } = props;
                           const item = averageByKeyword.find((entry) => entry.keyword === payload?.value);
-                          if (!item) return null;
+                          if (!item) return <g />;
                           return <g>{renderSvgMarker(item.shape, item.color, Number(x), Number(y) + 8)}</g>;
                         }}
                       />

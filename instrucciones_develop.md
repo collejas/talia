@@ -30,6 +30,8 @@ sudo systemctl restart talia-api-staging.service talia-panel-staging.service
 sudo systemctl is-active talia-api-staging.service
 sudo systemctl is-active talia-panel-staging.service
 
+sudo bash scripts/cleanup_disk.sh
+
 Este script ya hace:
 - npm ci (si hace falta)
 - npx tsc --noEmit
