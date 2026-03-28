@@ -127,7 +127,12 @@ def fetch_google_trends(
             status_code=500,
         )
 
-    pytrends = TrendReq(hl=hl, tz=tz)
+    # Evita bloqueos indefinidos cuando Google no responde.
+    pytrends = TrendReq(
+        hl=hl,
+        tz=tz,
+        timeout=(8, 20),  # (connect_timeout, read_timeout)
+    )
     try:
         pytrends.build_payload(keywords, timeframe=timeframe, geo=geo)
         timeline_df = pytrends.interest_over_time()
@@ -137,6 +142,11 @@ def fetch_google_trends(
             status_code=429,
         ) from exc
     except Exception as exc:
+        if "timed out" in str(exc).lower() or "timeout" in str(exc).lower():
+            raise GoogleTrendsServiceError(
+                "google_trends_timeout",
+                status_code=504,
+            ) from exc
         raise GoogleTrendsServiceError(f"google_trends_request_failed: {exc}") from exc
 
     if timeline_df is None or timeline_df.empty:

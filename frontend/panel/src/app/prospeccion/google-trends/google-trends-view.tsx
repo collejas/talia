@@ -130,7 +130,7 @@ export function GoogleTrendsView() {
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <Button onClick={handleSearch} disabled={isLoading || loading || !canUseModule}>
+            <Button onClick={handleSearch} disabled={isLoading || loading}>
               {isLoading ? "Consultando..." : "Consultar tendencias"}
             </Button>
             <Badge variant={canUseModule ? "default" : "destructive"}>

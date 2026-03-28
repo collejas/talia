@@ -142,11 +142,15 @@ async function requestJson<T>(
   retryAuth = true,
   retryNetwork = true,
 ): Promise<T> {
+  const controller = new AbortController();
+  const timeoutMs = 45000;
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
   let response: Response;
   try {
     response = await fetch(input, {
       cache: "no-store",
       ...init,
+      signal: controller.signal,
       headers: {
         Accept: "application/json",
         "Content-Type": "application/json",
@@ -154,6 +158,10 @@ async function requestJson<T>(
       },
     });
   } catch (error) {
+    clearTimeout(timeoutId);
+    if (error instanceof DOMException && error.name === "AbortError") {
+      throw new Error("La consulta tardó demasiado (timeout). Intenta con menos frases o reintenta en unos minutos.");
+    }
     if (retryNetwork) {
       await delay(400);
       return requestJson<T>(input, init, retryAuth, false);
@@ -161,6 +169,7 @@ async function requestJson<T>(
     const message = error instanceof Error ? error.message : null;
     throw new Error(message || "Error de red al contactar el backend.");
   }
+  clearTimeout(timeoutId);
 
   const rawText = await response.text();
   let data: unknown = null;

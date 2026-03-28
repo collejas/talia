@@ -42,13 +42,18 @@ export async function GET() {
   }
 
   const payload = (await response.json()) as
-    | { permisos?: string[]; es_admin?: boolean; es_owner?: boolean }
-    | Array<{ permisos?: string[]; es_admin?: boolean; es_owner?: boolean }>
+    | { permisos?: string[]; es_admin?: boolean; es_owner?: boolean; organizacion_id?: string }
+    | Array<{ permisos?: string[]; es_admin?: boolean; es_owner?: boolean; organizacion_id?: string }>
 
   const data = Array.isArray(payload) ? payload[0] ?? {} : payload ?? {}
+  const contextOrganizacionId =
+    typeof data.organizacion_id === "string" && data.organizacion_id.trim().length
+      ? data.organizacion_id.trim()
+      : null
+
   return NextResponse.json({
     ...data,
     usuario_id: usuarioId ?? undefined,
-    organizacion_id: organizacionId ?? undefined,
+    organizacion_id: organizacionId ?? contextOrganizacionId ?? undefined,
   })
 }
