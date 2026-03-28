@@ -349,7 +349,7 @@ export function GoogleTrendsView() {
 
   return (
     <div className="space-y-6 [font-family:'Google_Sans',Roboto,Arial,sans-serif]">
-      <Card className="rounded-2xl border-slate-200 bg-slate-50/60">
+      <Card className="rounded-2xl border-slate-200 bg-white shadow-none">
         <CardHeader>
           <CardTitle>Consulta Google Trends</CardTitle>
           <CardDescription>
@@ -406,27 +406,33 @@ export function GoogleTrendsView() {
               </select>
             </div>
           ) : null}
-          <div className="grid gap-4 md:grid-cols-3">
-            <div className="space-y-2">
-              <Label htmlFor="timeframe">Timeframe</Label>
-              <Input
-                id="timeframe"
-                value={timeframe}
-                onChange={(event) => setTimeframe(event.target.value)}
-                placeholder="today 12-m"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="geo">País/Región</Label>
-              <Input id="geo" value={geo} onChange={(event) => setGeo(event.target.value)} placeholder="MX" />
-            </div>
-            <div className="flex items-end gap-2 pb-1">
-              <Checkbox
-                id="include-region"
-                checked={includeRegion}
-                onCheckedChange={(checked) => setIncludeRegion(Boolean(checked))}
-              />
-              <Label htmlFor="include-region">Incluir interés por región</Label>
+          <div className="rounded-xl border border-slate-200 bg-slate-50/40 p-3">
+            <div className="flex flex-wrap items-end gap-3">
+              <div className="min-w-[120px] space-y-1">
+                <Label className="text-[11px] text-slate-500" htmlFor="geo">País/Región</Label>
+                <Input id="geo" value={geo} onChange={(event) => setGeo(event.target.value)} placeholder="MX" />
+              </div>
+              <div className="min-w-[150px] space-y-1">
+                <Label className="text-[11px] text-slate-500" htmlFor="timeframe">Periodo</Label>
+                <Input
+                  id="timeframe"
+                  value={timeframe}
+                  onChange={(event) => setTimeframe(event.target.value)}
+                  placeholder="today 12-m"
+                />
+              </div>
+              <div className="min-w-[180px] space-y-1">
+                <Label className="text-[11px] text-slate-500" htmlFor="trend-source">Fuente</Label>
+                <Input id="trend-source" value="Búsqueda web de Google" readOnly />
+              </div>
+              <div className="flex items-center gap-2 pb-1">
+                <Checkbox
+                  id="include-region"
+                  checked={includeRegion}
+                  onCheckedChange={(checked) => setIncludeRegion(Boolean(checked))}
+                />
+                <Label className="text-xs text-slate-600" htmlFor="include-region">Incluir región</Label>
+              </div>
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2 pt-1">
@@ -449,7 +455,7 @@ export function GoogleTrendsView() {
       </Card>
 
       {isLoading && !result ? (
-        <Card className="rounded-2xl border-slate-200 bg-slate-50/60">
+        <Card className="rounded-2xl border-slate-200 bg-white shadow-none">
           <CardHeader>
             <CardTitle>Cargando resultados</CardTitle>
             <CardDescription>Generando gráficas y tablas…</CardDescription>
@@ -467,7 +473,7 @@ export function GoogleTrendsView() {
 
       {result ? (
         <>
-          <Card className="rounded-2xl border-slate-200 bg-slate-50/60">
+          <Card className="rounded-2xl border-slate-200 bg-white shadow-none">
             <CardHeader>
               <CardTitle>Explora las tendencias de búsqueda</CardTitle>
               <CardDescription>Formato comparativo al estilo Google Trends para tus frases activas.</CardDescription>
@@ -482,7 +488,7 @@ export function GoogleTrendsView() {
                       key={keyword}
                       type="button"
                       onClick={() => setSelectedKeyword(keyword)}
-                      className="rounded-xl border p-4 text-left shadow-sm transition hover:shadow"
+                      className="rounded-xl border p-4 text-left shadow-none transition"
                       style={{
                         backgroundColor: style.tone,
                         borderColor: selectedKeyword === keyword ? style.color : "rgba(148,163,184,0.25)",
@@ -509,7 +515,7 @@ export function GoogleTrendsView() {
             </CardContent>
           </Card>
 
-          <Card className="rounded-2xl border-slate-200 bg-slate-50/60">
+          <Card className="rounded-2xl border-slate-200 bg-white shadow-none">
             <CardHeader>
               <CardTitle>Comparativo de interés</CardTitle>
               <CardDescription>{result.geo} · {result.timeframe}</CardDescription>
@@ -529,7 +535,7 @@ export function GoogleTrendsView() {
                 </Button>
               </div>
               <div className="grid gap-4 lg:[grid-template-columns:minmax(0,6fr)_minmax(0,1fr)]">
-                <div className="min-w-0 space-y-2 rounded-xl border bg-white p-3">
+                <div className="min-w-0 space-y-2 rounded-xl border border-slate-200 bg-white p-3">
                   <p className="text-sm font-semibold text-slate-700">Interés a lo largo del tiempo</p>
                   <ChartContainer config={timelineChartConfig} className="!aspect-auto w-full" style={{ height: chartHeight }}>
                     <LineChart data={timelineData}>
@@ -551,7 +557,7 @@ export function GoogleTrendsView() {
                     </LineChart>
                   </ChartContainer>
                 </div>
-                <div className="min-w-0 overflow-hidden space-y-2 rounded-xl border bg-white p-3">
+                <div className="min-w-0 overflow-hidden space-y-2 rounded-xl border border-slate-200 bg-white p-3">
                   <p className="text-sm font-semibold text-slate-700">Interés promedio</p>
                   <ChartContainer
                     config={{ avg: { label: "Interés promedio", color: "#4285F4" } }}
@@ -592,7 +598,7 @@ export function GoogleTrendsView() {
             </CardContent>
           </Card>
 
-          <Card className="rounded-2xl border-slate-200 bg-slate-50/60">
+          <Card className="rounded-2xl border-slate-200 bg-white shadow-none">
             <CardHeader>
               <CardTitle>Últimos valores</CardTitle>
               <CardDescription>
@@ -612,13 +618,13 @@ export function GoogleTrendsView() {
           </Card>
 
           {!compactMode ? (
-          <Card className="rounded-2xl border-slate-200 bg-slate-50/60">
+          <Card className="rounded-2xl border-slate-200 bg-white shadow-none">
             <CardHeader>
               <CardTitle>Serie temporal</CardTitle>
               <CardDescription>{result.points.length} registros</CardDescription>
             </CardHeader>
             <CardContent>
-              <div className={`${isMobile ? "max-h-[260px]" : "max-h-[420px]"} overflow-auto rounded-md border`}>
+              <div className={`${isMobile ? "max-h-[260px]" : "max-h-[420px]"} overflow-auto rounded-md border border-slate-200 bg-white`}>
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -647,13 +653,13 @@ export function GoogleTrendsView() {
           ) : null}
 
           {result.by_region.length && !compactMode ? (
-            <Card className="rounded-2xl border-slate-200 bg-slate-50/60">
+            <Card className="rounded-2xl border-slate-200 bg-white shadow-none">
               <CardHeader>
                 <CardTitle>Interés por región</CardTitle>
                 <CardDescription>{result.by_region.length} filas</CardDescription>
               </CardHeader>
               <CardContent>
-                <div className={`${isMobile ? "max-h-[240px]" : "max-h-[360px]"} overflow-auto rounded-md border`}>
+                <div className={`${isMobile ? "max-h-[240px]" : "max-h-[360px]"} overflow-auto rounded-md border border-slate-200 bg-white`}>
                   <Table>
                     <TableHeader>
                       <TableRow>
@@ -679,7 +685,7 @@ export function GoogleTrendsView() {
             </Card>
           ) : null}
 
-          <Card className="rounded-2xl border-slate-200 bg-slate-50/60">
+          <Card className="rounded-2xl border-slate-200 bg-white shadow-none">
             <CardHeader>
               <CardTitle>Búsquedas frecuentes</CardTitle>
               <CardDescription>
@@ -701,7 +707,7 @@ export function GoogleTrendsView() {
                 ))}
               </div>
               <div className="grid gap-4 lg:grid-cols-2">
-                <div className="rounded-md border p-3">
+                <div className="rounded-md border border-slate-200 bg-white p-3">
                   <p className="mb-2 text-sm font-medium">Búsquedas más frecuentes</p>
                   <div className="space-y-2">
                     {selectedRelated.top.length ? (
@@ -716,7 +722,7 @@ export function GoogleTrendsView() {
                     )}
                   </div>
                 </div>
-                <div className="rounded-md border p-3">
+                <div className="rounded-md border border-slate-200 bg-white p-3">
                   <p className="mb-2 text-sm font-medium">Búsquedas en aumento</p>
                   <div className="space-y-2">
                     {selectedRelated.rising.length ? (
@@ -733,7 +739,7 @@ export function GoogleTrendsView() {
                 </div>
               </div>
               {regionBarData.length ? (
-                <div className="rounded-md border p-3">
+                <div className="rounded-md border border-slate-200 bg-white p-3">
                   <p className="mb-2 text-sm font-medium">Top regiones ({selectedKeyword || result.keywords[0]})</p>
                   <ChartContainer config={{ value: { label: "Interés", color: "hsl(var(--chart-1))" } }} className="h-[260px] w-full">
                     <BarChart data={regionBarData} layout="vertical" margin={{ left: 12, right: 12 }}>
