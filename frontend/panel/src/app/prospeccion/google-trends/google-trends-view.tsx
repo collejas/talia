@@ -45,6 +45,14 @@ const TIMEFRAME_OPTIONS = [
   { value: "today 5-y", label: "Últimos 5 años" },
   { value: "all", label: "Desde 2004 - presente" },
 ];
+const SOURCE_OPTIONS = [
+  { value: "", label: "Búsqueda web de Google" },
+  { value: "images", label: "Búsqueda de imágenes" },
+  { value: "news", label: "Búsqueda de noticias" },
+  { value: "froogle", label: "Google Shopping" },
+  { value: "youtube", label: "Búsqueda de YouTube" },
+] as const;
+const WEB_SOURCE_VALUE = "__web__";
 const TERM_STYLES = [
   { color: "#4285F4", tone: "rgba(66,133,244,0.12)", shape: "circle" as const },
   { color: "#DB4437", tone: "rgba(219,68,55,0.12)", shape: "square" as const },
@@ -60,6 +68,7 @@ type TrendsPreset = {
   keywordsText: string;
   timeframe: string;
   geo: string;
+  source: "" | "images" | "news" | "froogle" | "youtube";
   includeRegion: boolean;
   createdAt: string;
 };
@@ -121,6 +130,7 @@ export function GoogleTrendsView() {
   const [editingKeywordIndex, setEditingKeywordIndex] = useState<number | null>(null);
   const [timeframe, setTimeframe] = useState("today 12-m");
   const [geo, setGeo] = useState("MX");
+  const [source, setSource] = useState<"" | "images" | "news" | "froogle" | "youtube">("");
   const [geoInput, setGeoInput] = useState("MX");
   const [countryOptions, setCountryOptions] = useState<GoogleTrendsCountryItem[]>([]);
   const [isLoadingCountries, setIsLoadingCountries] = useState(false);
@@ -165,6 +175,8 @@ export function GoogleTrendsView() {
     const hasOption = TIMEFRAME_OPTIONS.some((option) => option.value === timeframe);
     return hasOption ? timeframe : CUSTOM_TIMEFRAME_VALUE;
   }, [timeframe]);
+  const selectedSourceValue = source === "" ? WEB_SOURCE_VALUE : source;
+  const selectedSourceLabel = SOURCE_OPTIONS.find((item) => item.value === source)?.label ?? "Búsqueda web de Google";
   const timelineChartConfig = useMemo(() => {
     const config: ChartConfig = {};
     for (let index = 0; index < (result?.keywords.length ?? 0); index += 1) {
@@ -384,6 +396,7 @@ export function GoogleTrendsView() {
       keywordsText,
       timeframe: timeframe.trim() || "today 12-m",
       geo: geo.trim().toUpperCase() || "MX",
+      source,
       includeRegion,
       createdAt: new Date().toISOString(),
     };
@@ -400,6 +413,7 @@ export function GoogleTrendsView() {
     setKeywordsText(preset.keywordsText);
     setTimeframe(preset.timeframe);
     setGeo(preset.geo);
+    setSource(preset.source ?? "");
     setIncludeRegion(Boolean(preset.includeRegion));
     setError(null);
   }
@@ -455,11 +469,21 @@ export function GoogleTrendsView() {
         keywords: parsedKeywords,
         timeframe: timeframe.trim() || "today 12-m",
         geo: geo.trim().toUpperCase() || "MX",
+        ...(source ? { source } : {}),
         include_region: includeRegion,
       });
       setResult(data);
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : "No se pudo consultar Google Trends.");
+      const rawMessage = requestError instanceof Error ? requestError.message : "No se pudo consultar Google Trends.";
+      if (rawMessage.includes("google_trends_empty_response") || rawMessage.includes("404")) {
+        if (source === "news") {
+          setError("No hay datos en Noticias para esas frases y periodo. Prueba frases más amplias o un periodo más corto.");
+        } else {
+          setError("No se encontraron datos para esta combinación de frases, ubicación, periodo y fuente.");
+        }
+      } else {
+        setError(rawMessage);
+      }
     } finally {
       setIsLoading(false);
     }
@@ -665,7 +689,23 @@ export function GoogleTrendsView() {
               </div>
               <div className="min-w-[180px] space-y-1">
                 <Label className="text-[11px] text-slate-500" htmlFor="trend-source">Fuente</Label>
-                <Input id="trend-source" value="Búsqueda web de Google" readOnly />
+                <Select
+                  value={selectedSourceValue}
+                  onValueChange={(value) => {
+                    setSource(value === WEB_SOURCE_VALUE ? "" : (value as "images" | "news" | "froogle" | "youtube"));
+                  }}
+                >
+                  <SelectTrigger id="trend-source" className="w-full">
+                    <SelectValue placeholder="Selecciona fuente" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {SOURCE_OPTIONS.map((option) => (
+                      <SelectItem key={option.value || WEB_SOURCE_VALUE} value={option.value || WEB_SOURCE_VALUE}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
               <div className="flex items-center gap-2 pb-1">
                 <Checkbox
@@ -760,7 +800,7 @@ export function GoogleTrendsView() {
           <Card className="rounded-2xl border-slate-200 bg-white shadow-none">
             <CardHeader>
               <CardTitle>Comparativo de interés</CardTitle>
-              <CardDescription>{result.geo} · {result.timeframe}</CardDescription>
+              <CardDescription>{result.geo} · {result.timeframe} · {selectedSourceLabel}</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="flex flex-wrap gap-2">
@@ -845,7 +885,7 @@ export function GoogleTrendsView() {
               <CardTitle>Últimos valores</CardTitle>
               <CardDescription>
                 Consulta generada: {new Date(result.generated_at).toLocaleString("es-MX")} | {result.geo} |{" "}
-                {result.timeframe}
+                {result.timeframe} | {selectedSourceLabel}
               </CardDescription>
             </CardHeader>
             <CardContent>

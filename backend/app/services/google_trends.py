@@ -203,6 +203,7 @@ def fetch_google_trends(
     keywords: list[str],
     timeframe: str,
     geo: str,
+    source: Literal["", "images", "news", "froogle", "youtube"],
     hl: str,
     tz: int,
     include_region: bool,
@@ -225,7 +226,7 @@ def fetch_google_trends(
         timeout=(8, 20),  # (connect_timeout, read_timeout)
     )
     try:
-        pytrends.build_payload(keywords, timeframe=timeframe, geo=geo)
+        pytrends.build_payload(keywords, timeframe=timeframe, geo=geo, gprop=source)
         timeline_df = pytrends.interest_over_time()
     except TooManyRequestsError as exc:
         raise GoogleTrendsServiceError(
@@ -276,6 +277,7 @@ def fetch_google_trends(
         "keywords": keywords,
         "timeframe": timeframe,
         "geo": geo,
+        "source": source,
         "hl": hl,
         "tz": tz,
         "points": _serialize_interest_points(timeline_df, keywords),

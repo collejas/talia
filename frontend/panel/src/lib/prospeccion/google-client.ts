@@ -107,6 +107,7 @@ export type GoogleTrendsRequestPayload = {
   keywords: string[];
   timeframe?: string;
   geo?: string;
+  source?: "" | "images" | "news" | "froogle" | "youtube";
   hl?: string;
   tz?: number;
   include_region?: boolean;
@@ -138,6 +139,7 @@ export type GoogleTrendsResponse = {
   keywords: string[];
   timeframe: string;
   geo: string;
+  source?: "" | "images" | "news" | "froogle" | "youtube";
   hl: string;
   tz: number;
   points: GoogleTrendsPoint[];

@@ -2900,6 +2900,7 @@ class GoogleTrendsPayload(BaseModel):
     )
     timeframe: str = Field(default="today 12-m", min_length=3, max_length=32)
     geo: str = Field(default="MX", max_length=10)
+    source: Literal["", "images", "news", "froogle", "youtube"] = Field(default="")
     hl: str = Field(default="es-MX", min_length=2, max_length=10)
     tz: int = Field(default=360, ge=-720, le=840)
     include_region: bool = Field(default=True)
@@ -6762,6 +6763,7 @@ async def ejecutar_google_trends(
             keywords=payload.keywords,
             timeframe=payload.timeframe,
             geo=payload.geo,
+            source=payload.source,
             hl=payload.hl,
             tz=payload.tz,
             include_region=payload.include_region,
