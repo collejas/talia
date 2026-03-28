@@ -133,6 +133,13 @@ export type GoogleTrendsResponse = {
   points: GoogleTrendsPoint[];
   latest: Record<string, number | null>;
   by_region: Array<Record<string, string | number | null>>;
+  related_queries?: Record<
+    string,
+    {
+      top?: Array<{ query?: string; value?: number | string }>;
+      rising?: Array<{ query?: string; value?: number | string }>;
+    }
+  >;
   generated_at: string;
 };
 

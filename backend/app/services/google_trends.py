@@ -107,6 +107,39 @@ def _serialize_by_region(dataframe: Any) -> list[dict[str, Any]]:
     return serialized
 
 
+def _serialize_related_queries(raw: Any) -> dict[str, dict[str, list[dict[str, Any]]]]:
+    if not isinstance(raw, dict):
+        return {}
+    result: dict[str, dict[str, list[dict[str, Any]]]] = {}
+    for keyword, sections in raw.items():
+        key = str(keyword)
+        section_payload: dict[str, list[dict[str, Any]]] = {"top": [], "rising": []}
+        if isinstance(sections, dict):
+            for section_name in ("top", "rising"):
+                dataframe = sections.get(section_name)
+                if dataframe is None:
+                    continue
+                try:
+                    rows = dataframe.reset_index().to_dict(orient="records")
+                except Exception:  # pragma: no cover
+                    rows = []
+                parsed_rows: list[dict[str, Any]] = []
+                for row in rows:
+                    query = row.get("query")
+                    value = row.get("value")
+                    if query is None:
+                        continue
+                    parsed_rows.append(
+                        {
+                            "query": _serialize_scalar(query),
+                            "value": _serialize_scalar(value),
+                        }
+                    )
+                section_payload[section_name] = parsed_rows[:10]
+        result[key] = section_payload
+    return result
+
+
 def fetch_google_trends(
     *,
     keywords: list[str],
@@ -172,6 +205,15 @@ def fetch_google_trends(
         else:
             by_region = _serialize_by_region(by_region_df)
 
+    related_queries: dict[str, dict[str, list[dict[str, Any]]]] = {}
+    try:
+        related_raw = pytrends.related_queries()
+        related_queries = _serialize_related_queries(related_raw)
+    except TooManyRequestsError as exc:
+        logger.warning("google_trends.related_queries.rate_limited", extra={"error": str(exc)})
+    except Exception as exc:  # pragma: no cover
+        logger.warning("google_trends.related_queries.failed", extra={"error": str(exc)})
+
     return {
         "keywords": keywords,
         "timeframe": timeframe,
@@ -181,5 +223,6 @@ def fetch_google_trends(
         "points": _serialize_interest_points(timeline_df, keywords),
         "latest": _serialize_latest_values(timeline_df, keywords),
         "by_region": by_region,
+        "related_queries": related_queries,
         "generated_at": datetime.utcnow().isoformat() + "Z",
     }
