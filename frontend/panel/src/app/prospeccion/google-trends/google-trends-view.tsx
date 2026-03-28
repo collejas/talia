@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { MapPinIcon, PencilIcon, PlusIcon, XIcon } from "lucide-react";
 import { Bar, BarChart, CartesianGrid, Cell, Line, LineChart, XAxis, YAxis } from "recharts";
 
 import { usePermissions } from "@/hooks/use-permissions";
@@ -13,8 +14,8 @@ import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } f
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Textarea } from "@/components/ui/textarea";
 
 const ALLOWED_TENANT_ID = "00000000-0000-0000-0000-000000000001";
 
@@ -27,6 +28,18 @@ const DEFAULT_KEYWORDS = [
 ];
 
 const PRESET_STORAGE_PREFIX = "google-trends-presets";
+const CUSTOM_TIMEFRAME_VALUE = "__custom__";
+const TIMEFRAME_OPTIONS = [
+  { value: "now 1-H", label: "Última hora" },
+  { value: "now 4-H", label: "Últimas 4 horas" },
+  { value: "now 1-d", label: "Últimas 24 horas" },
+  { value: "now 7-d", label: "Últimos 7 días" },
+  { value: "today 1-m", label: "Últimos 30 días" },
+  { value: "today 3-m", label: "Últimos 90 días" },
+  { value: "today 12-m", label: "Últimos 12 meses" },
+  { value: "today 5-y", label: "Últimos 5 años" },
+  { value: "all", label: "Desde 2004 - presente" },
+];
 const TERM_STYLES = [
   { color: "#4285F4", tone: "rgba(66,133,244,0.12)", shape: "circle" as const },
   { color: "#DB4437", tone: "rgba(219,68,55,0.12)", shape: "square" as const },
@@ -99,6 +112,8 @@ export function GoogleTrendsView() {
   const { context, loading } = usePermissions();
   const isMobile = useIsMobile();
   const [keywordsText, setKeywordsText] = useState(DEFAULT_KEYWORDS.join("\n"));
+  const [keywordDraft, setKeywordDraft] = useState("");
+  const [editingKeywordIndex, setEditingKeywordIndex] = useState<number | null>(null);
   const [timeframe, setTimeframe] = useState("today 12-m");
   const [geo, setGeo] = useState("MX");
   const [includeRegion, setIncludeRegion] = useState(true);
@@ -138,6 +153,10 @@ export function GoogleTrendsView() {
     }
     return unique;
   }, [keywordsText]);
+  const selectedTimeframeValue = useMemo(() => {
+    const hasOption = TIMEFRAME_OPTIONS.some((option) => option.value === timeframe);
+    return hasOption ? timeframe : CUSTOM_TIMEFRAME_VALUE;
+  }, [timeframe]);
 
   const timelineChartConfig = useMemo(() => {
     const config: ChartConfig = {};
@@ -254,6 +273,66 @@ export function GoogleTrendsView() {
     window.localStorage.setItem(storageKey, JSON.stringify(nextPresets));
   }
 
+  function overwriteKeywords(next: string[]) {
+    setKeywordsText(next.join("\n"));
+  }
+
+  function addKeywordFromDraft() {
+    const value = keywordDraft.trim();
+    if (!value) return;
+    if (parsedKeywords.length >= 5) {
+      setError("Google Trends permite comparar hasta 5 frases por consulta.");
+      return;
+    }
+    const exists = parsedKeywords.some((item) => item.toLocaleLowerCase("es-MX") === value.toLocaleLowerCase("es-MX"));
+    if (exists) {
+      setError("Esa frase ya está agregada.");
+      return;
+    }
+    overwriteKeywords([...parsedKeywords, value]);
+    setKeywordDraft("");
+    setError(null);
+  }
+
+  function removeKeyword(index: number) {
+    overwriteKeywords(parsedKeywords.filter((_, idx) => idx !== index));
+    if (editingKeywordIndex === index) {
+      setEditingKeywordIndex(null);
+      setKeywordDraft("");
+    }
+  }
+
+  function startEditKeyword(index: number) {
+    setEditingKeywordIndex(index);
+    setKeywordDraft(parsedKeywords[index] ?? "");
+    setError(null);
+  }
+
+  function applyEditKeyword() {
+    if (editingKeywordIndex === null) {
+      addKeywordFromDraft();
+      return;
+    }
+    const value = keywordDraft.trim();
+    if (!value) {
+      setError("La frase no puede estar vacía.");
+      return;
+    }
+    const exists = parsedKeywords.some(
+      (item, idx) => idx !== editingKeywordIndex && item.toLocaleLowerCase("es-MX") === value.toLocaleLowerCase("es-MX"),
+    );
+    if (exists) {
+      setError("Esa frase ya está agregada.");
+      return;
+    }
+    const next = [...parsedKeywords];
+    next[editingKeywordIndex] = value;
+    overwriteKeywords(next);
+    setEditingKeywordIndex(null);
+    setKeywordDraft("");
+    setError(null);
+  }
+
   function savePreset() {
     const name = presetName.trim();
     if (!name) {
@@ -359,13 +438,81 @@ export function GoogleTrendsView() {
         <CardContent className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="keywords">Frases de búsqueda</Label>
-            <Textarea
-              id="keywords"
-              rows={isMobile ? 4 : 5}
-              value={keywordsText}
-              onChange={(event) => setKeywordsText(event.target.value)}
-              placeholder="Una frase por línea (máximo 5)"
-            />
+            <div className="rounded-xl border border-slate-200 bg-white p-3">
+              <div className="mb-3 flex flex-wrap gap-2">
+                {parsedKeywords.map((keyword, index) => {
+                  const style = termStyle(index);
+                  return (
+                    <div
+                      key={`${keyword}-${index}`}
+                      className="inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm"
+                      style={{ borderColor: style.color, backgroundColor: style.tone }}
+                    >
+                      <span
+                        className={`inline-block ${markerClass(style.shape)}`}
+                        style={{
+                          backgroundColor: style.shape === "triangle" ? "transparent" : style.color,
+                          borderBottomColor: style.shape === "triangle" ? style.color : undefined,
+                        }}
+                      />
+                      <span className="max-w-[180px] truncate">{keyword}</span>
+                      <button
+                        type="button"
+                        className="text-slate-600 hover:text-slate-900"
+                        onClick={() => startEditKeyword(index)}
+                        aria-label={`Editar ${keyword}`}
+                      >
+                        <PencilIcon className="size-3.5" />
+                      </button>
+                      <button
+                        type="button"
+                        className="text-slate-600 hover:text-red-600"
+                        onClick={() => removeKeyword(index)}
+                        aria-label={`Quitar ${keyword}`}
+                      >
+                        <XIcon className="size-3.5" />
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <Input
+                  id="keywords"
+                  className="min-w-[220px] flex-1"
+                  value={keywordDraft}
+                  onChange={(event) => setKeywordDraft(event.target.value)}
+                  placeholder={editingKeywordIndex === null ? "Escribe frase y presiona Enter" : "Editando frase"}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") {
+                      event.preventDefault();
+                      applyEditKeyword();
+                    }
+                    if (event.key === "Escape") {
+                      setEditingKeywordIndex(null);
+                      setKeywordDraft("");
+                    }
+                  }}
+                />
+                <Button type="button" variant="outline" size="icon" onClick={applyEditKeyword} aria-label="Agregar o guardar frase">
+                  {editingKeywordIndex === null ? <PlusIcon className="size-4" /> : <PencilIcon className="size-4" />}
+                </Button>
+                {editingKeywordIndex !== null ? (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      setEditingKeywordIndex(null);
+                      setKeywordDraft("");
+                    }}
+                  >
+                    Cancelar edición
+                  </Button>
+                ) : null}
+                <Badge variant="outline">{parsedKeywords.length}/5</Badge>
+              </div>
+            </div>
           </div>
           <div className="grid gap-4 md:grid-cols-[1fr_auto_auto]">
             <div className="space-y-2">
@@ -409,17 +556,46 @@ export function GoogleTrendsView() {
           <div className="rounded-xl border border-slate-200 bg-slate-50/40 p-3">
             <div className="flex flex-wrap items-end gap-3">
               <div className="min-w-[120px] space-y-1">
-                <Label className="text-[11px] text-slate-500" htmlFor="geo">País/Región</Label>
-                <Input id="geo" value={geo} onChange={(event) => setGeo(event.target.value)} placeholder="MX" />
+                <Label className="text-[11px] text-slate-500" htmlFor="geo">Ubicación</Label>
+                <div className="relative">
+                  <MapPinIcon className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-slate-500" />
+                  <Input
+                    id="geo"
+                    className="pl-8"
+                    value={geo}
+                    onChange={(event) => setGeo(event.target.value)}
+                    placeholder="MX"
+                  />
+                </div>
               </div>
               <div className="min-w-[150px] space-y-1">
                 <Label className="text-[11px] text-slate-500" htmlFor="timeframe">Periodo</Label>
-                <Input
-                  id="timeframe"
-                  value={timeframe}
-                  onChange={(event) => setTimeframe(event.target.value)}
-                  placeholder="today 12-m"
-                />
+                <Select
+                  value={selectedTimeframeValue}
+                  onValueChange={(value) => {
+                    if (value === CUSTOM_TIMEFRAME_VALUE) return;
+                    setTimeframe(value);
+                  }}
+                >
+                  <SelectTrigger id="timeframe" className="w-full">
+                    <SelectValue placeholder="Selecciona periodo" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {TIMEFRAME_OPTIONS.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                    <SelectItem value={CUSTOM_TIMEFRAME_VALUE}>Personalizado</SelectItem>
+                  </SelectContent>
+                </Select>
+                {selectedTimeframeValue === CUSTOM_TIMEFRAME_VALUE ? (
+                  <Input
+                    value={timeframe}
+                    onChange={(event) => setTimeframe(event.target.value)}
+                    placeholder="Ej: today 12-m"
+                  />
+                ) : null}
               </div>
               <div className="min-w-[180px] space-y-1">
                 <Label className="text-[11px] text-slate-500" htmlFor="trend-source">Fuente</Label>
