@@ -20,6 +20,16 @@ git pull origin develop
 cd /var/www/talia
 SKIP_RESTART=0 SKIP_LINT=1 bash scripts/deploy_panel_staging_atomic.sh
 
+
+cd /var/www/talia
+sudo chown -R jorge:jorge /var/www/talia/releases/panel-staging
+sudo chown -R jorge:jorge /var/www/talia/current
+sudo chown -R jorge:jorge /var/www/talia/.npm-cache
+NODE_OPTIONS=--max-old-space-size=1536 SKIP_RESTART=1 bash scripts/deploy_panel_staging_atomic.sh
+sudo systemctl restart talia-api-staging.service talia-panel-staging.service
+sudo systemctl is-active talia-api-staging.service
+sudo systemctl is-active talia-panel-staging.service
+
 Este script ya hace:
 - npm ci (si hace falta)
 - npx tsc --noEmit
