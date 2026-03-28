@@ -7,6 +7,11 @@ KEEP_STG_RELEASES="${KEEP_STG_RELEASES:-2}"
 KEEP_BACKUPS="${KEEP_BACKUPS:-2}"
 JOURNAL_VACUUM_TIME="${JOURNAL_VACUUM_TIME:-14d}"
 DRY_RUN="${DRY_RUN:-0}"
+KEEP_LOG_DAYS="${KEEP_LOG_DAYS:-14}"
+RUN_NPM_CACHE_CLEAN="${RUN_NPM_CACHE_CLEAN:-1}"
+RUN_GIT_GC="${RUN_GIT_GC:-1}"
+RUN_TOOL_CACHE_CLEAN="${RUN_TOOL_CACHE_CLEAN:-1}"
+RUN_NEXT_CACHE_CLEAN="${RUN_NEXT_CACHE_CLEAN:-1}"
 
 LOG_DIR="${ROOT_DIR}/logs/maintenance"
 mkdir -p "${LOG_DIR}" 2>/dev/null || true
@@ -33,6 +38,15 @@ run_rm_rf() {
   else
     rm -rf -- "$target"
     log "removed $target"
+  fi
+}
+
+run_cmd() {
+  if [[ "${DRY_RUN}" == "1" ]]; then
+    log "DRY_RUN $*"
+  else
+    "$@" >/dev/null 2>&1 || true
+    log "ran $*"
   fi
 }
 
@@ -94,6 +108,66 @@ cleanup_backups() {
   done
 }
 
+cleanup_old_logs() {
+  local logs_dir="${ROOT_DIR}/logs"
+  [[ -d "$logs_dir" ]] || return 0
+  if [[ "${DRY_RUN}" == "1" ]]; then
+    log "DRY_RUN find ${logs_dir} -type f -name '*.log' -mtime +${KEEP_LOG_DAYS} -delete"
+    return 0
+  fi
+  find "$logs_dir" -type f -name "*.log" -mtime +"${KEEP_LOG_DAYS}" -delete 2>/dev/null || true
+  find "$logs_dir" -type f -name "*.log.*" -mtime +"${KEEP_LOG_DAYS}" -delete 2>/dev/null || true
+  log "old logs pruned keep_days=${KEEP_LOG_DAYS}"
+}
+
+cleanup_tool_caches() {
+  if [[ "${RUN_TOOL_CACHE_CLEAN}" != "1" ]]; then
+    return 0
+  fi
+  run_rm_rf "${ROOT_DIR}/backend/.pytest_cache"
+  run_rm_rf "${ROOT_DIR}/backend/.ruff_cache"
+  run_rm_rf "${ROOT_DIR}/frontend/panel/.next/cache"
+}
+
+cleanup_next_cache_in_releases() {
+  if [[ "${RUN_NEXT_CACHE_CLEAN}" != "1" ]]; then
+    return 0
+  fi
+  local rel
+  for rel in "${ROOT_DIR}/releases/panel" "${ROOT_DIR}/releases/panel-staging"; do
+    [[ -d "$rel" ]] || continue
+    if [[ "${DRY_RUN}" == "1" ]]; then
+      log "DRY_RUN find ${rel} -type d -path '*/.next/cache' -prune -exec rm -rf {} +"
+      continue
+    fi
+    find "$rel" -type d -path "*/.next/cache" -prune -exec rm -rf {} + 2>/dev/null || true
+    log "next cache cleaned in ${rel}"
+  done
+}
+
+cleanup_npm_cache() {
+  if [[ "${RUN_NPM_CACHE_CLEAN}" != "1" ]]; then
+    return 0
+  fi
+  if command -v npm >/dev/null 2>&1; then
+    run_cmd npm cache clean --force
+  fi
+}
+
+cleanup_git_objects() {
+  if [[ "${RUN_GIT_GC}" != "1" ]]; then
+    return 0
+  fi
+  if [[ -d "${ROOT_DIR}/.git" ]] && command -v git >/dev/null 2>&1; then
+    if [[ "${DRY_RUN}" == "1" ]]; then
+      log "DRY_RUN git -C ${ROOT_DIR} gc --prune=now"
+    else
+      git -C "${ROOT_DIR}" gc --prune=now >/dev/null 2>&1 || true
+      log "git gc completed"
+    fi
+  fi
+}
+
 cleanup_system_logs() {
   if command -v journalctl >/dev/null 2>&1; then
     if [[ "$DRY_RUN" == "1" ]]; then
@@ -113,10 +187,15 @@ cleanup_system_logs() {
 }
 
 main() {
-  log "start cleanup root=${ROOT_DIR} keep_prod=${KEEP_PROD_RELEASES} keep_stg=${KEEP_STG_RELEASES} keep_backups=${KEEP_BACKUPS} dry_run=${DRY_RUN}"
+  log "start cleanup root=${ROOT_DIR} keep_prod=${KEEP_PROD_RELEASES} keep_stg=${KEEP_STG_RELEASES} keep_backups=${KEEP_BACKUPS} keep_log_days=${KEEP_LOG_DAYS} dry_run=${DRY_RUN}"
   cleanup_release_dir "${ROOT_DIR}/releases/panel" "${ROOT_DIR}/current/panel" "${KEEP_PROD_RELEASES}"
   cleanup_release_dir "${ROOT_DIR}/releases/panel-staging" "${ROOT_DIR}/current/panel-staging" "${KEEP_STG_RELEASES}"
   cleanup_backups
+  cleanup_old_logs
+  cleanup_tool_caches
+  cleanup_next_cache_in_releases
+  cleanup_npm_cache
+  cleanup_git_objects
   cleanup_system_logs
   local usage
   usage="$(df -h / | awk 'NR==2 {print $5 " used, " $4 " free"}')"

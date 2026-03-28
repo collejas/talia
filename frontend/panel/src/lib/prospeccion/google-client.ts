@@ -103,17 +103,73 @@ export type GoogleResultadosBoundsResponse = {
   total: number;
 };
 
+export type GoogleTrendsRequestPayload = {
+  keywords: string[];
+  timeframe?: string;
+  geo?: string;
+  source?: "" | "images" | "news" | "froogle" | "youtube";
+  hl?: string;
+  tz?: number;
+  include_region?: boolean;
+  region_resolution?: "COUNTRY" | "REGION" | "SUBREGION" | "DMA" | "CITY";
+  inc_low_vol?: boolean;
+  inc_geo_code?: boolean;
+  min_sleep?: number;
+  max_sleep?: number;
+};
+
+export type GoogleTrendsCountryItem = {
+  code: string;
+  name: string;
+};
+
+export type GoogleTrendsCountriesResponse = {
+  ok: boolean;
+  items: GoogleTrendsCountryItem[];
+};
+
+export type GoogleTrendsPoint = {
+  date: string;
+  isPartial?: boolean;
+  [keyword: string]: string | number | boolean | undefined;
+};
+
+export type GoogleTrendsResponse = {
+  ok: boolean;
+  keywords: string[];
+  timeframe: string;
+  geo: string;
+  source?: "" | "images" | "news" | "froogle" | "youtube";
+  hl: string;
+  tz: number;
+  points: GoogleTrendsPoint[];
+  latest: Record<string, number | null>;
+  by_region: Array<Record<string, string | number | null>>;
+  related_queries?: Record<
+    string,
+    {
+      top?: Array<{ query?: string; value?: number | string }>;
+      rising?: Array<{ query?: string; value?: number | string }>;
+    }
+  >;
+  generated_at: string;
+};
+
 async function requestJson<T>(
   input: string,
   init?: RequestInit,
   retryAuth = true,
   retryNetwork = true,
 ): Promise<T> {
+  const controller = new AbortController();
+  const timeoutMs = 45000;
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
   let response: Response;
   try {
     response = await fetch(input, {
       cache: "no-store",
       ...init,
+      signal: controller.signal,
       headers: {
         Accept: "application/json",
         "Content-Type": "application/json",
@@ -121,6 +177,10 @@ async function requestJson<T>(
       },
     });
   } catch (error) {
+    clearTimeout(timeoutId);
+    if (error instanceof DOMException && error.name === "AbortError") {
+      throw new Error("La consulta tardó demasiado (timeout). Intenta con menos frases o reintenta en unos minutos.");
+    }
     if (retryNetwork) {
       await delay(400);
       return requestJson<T>(input, init, retryAuth, false);
@@ -128,6 +188,7 @@ async function requestJson<T>(
     const message = error instanceof Error ? error.message : null;
     throw new Error(message || "Error de red al contactar el backend.");
   }
+  clearTimeout(timeoutId);
 
   const rawText = await response.text();
   let data: unknown = null;
@@ -337,6 +398,21 @@ export async function deleteGoogleResultados(ids: string[]) {
   return requestJson<{ ok: boolean; deleted: number }>("/api/prospeccion/google/resultados", {
     method: "DELETE",
     body: JSON.stringify({ ids }),
+  });
+}
+
+export async function fetchGoogleTrends(
+  payload: GoogleTrendsRequestPayload,
+): Promise<GoogleTrendsResponse> {
+  return requestJson<GoogleTrendsResponse>("/api/prospeccion/google/trends", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function fetchGoogleTrendCountries(): Promise<GoogleTrendsCountriesResponse> {
+  return requestJson<GoogleTrendsCountriesResponse>("/api/prospeccion/google/countries", {
+    method: "GET",
   });
 }
 

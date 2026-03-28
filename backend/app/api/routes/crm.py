@@ -100,6 +100,11 @@ from app.services.metrics import metrics as contact_metrics
 from app.services.prospeccion_whatsapp_atribucion import resolve_first_matching_rule
 from app.services.prospeccion_contact_sender import contact_sender
 from app.services.prospeccion_progress import progress_hub
+from app.services.google_trends import (
+    GoogleTrendsServiceError,
+    fetch_google_trends,
+    list_google_trends_countries,
+)
 from app.services.ui_realtime_hub import (
     inbox_topic_for_org,
     prospectos_topic_for_org,
@@ -193,6 +198,7 @@ _PROSPECTO_QUERIES_CACHE: dict[str, tuple[float, dict[str, Any]]] = {}
 _PROSPECTO_QUERIES_CACHE_LOCK = asyncio.Lock()
 _PROSPECTO_QUERIES_INFLIGHT_LOCK = asyncio.Lock()
 _PROSPECTO_QUERIES_INFLIGHT: dict[str, asyncio.Future[dict[str, Any]]] = {}
+GOOGLE_TRENDS_ALLOWED_ORGANIZACION_ID = UUID("00000000-0000-0000-0000-000000000001")
 
 
 def _build_inbox_threads_cache_key(payload: dict[str, Any]) -> str:
@@ -2873,6 +2879,61 @@ class GoogleProspeccionBusquedaPayload(BaseModel):
             if not query:
                 raise ValueError("query_required")
             self.query = query
+        return self
+
+
+class GoogleTrendsPayload(BaseModel):
+    """Parámetros de consulta para Google Trends."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    keywords: list[str] = Field(
+        default_factory=lambda: [
+            "IA de WhatsApp",
+            "IA para WhatsApp",
+            "IA para ventas",
+            "asistente de IA",
+            "CRM IA",
+        ],
+        min_length=1,
+        max_length=5,
+    )
+    timeframe: str = Field(default="today 12-m", min_length=3, max_length=32)
+    geo: str = Field(default="MX", max_length=10)
+    source: Literal["", "images", "news", "froogle", "youtube"] = Field(default="")
+    hl: str = Field(default="es-MX", min_length=2, max_length=10)
+    tz: int = Field(default=360, ge=-720, le=840)
+    include_region: bool = Field(default=True)
+    region_resolution: Literal["COUNTRY", "REGION", "SUBREGION", "DMA", "CITY"] = Field(default="REGION")
+    inc_low_vol: bool = Field(default=False)
+    inc_geo_code: bool = Field(default=False)
+    min_sleep: float = Field(default=1.5, ge=0, le=10)
+    max_sleep: float = Field(default=3.0, ge=0, le=20)
+
+    @field_validator("keywords")
+    @classmethod
+    def _normalize_keywords(cls, value: list[str]) -> list[str]:
+        cleaned: list[str] = []
+        seen: set[str] = set()
+        for raw in value:
+            normalized = str(raw or "").strip()
+            if not normalized:
+                continue
+            key = normalized.casefold()
+            if key in seen:
+                continue
+            seen.add(key)
+            cleaned.append(normalized[:100])
+        if not cleaned:
+            raise ValueError("keywords_required")
+        if len(cleaned) > 5:
+            raise ValueError("keywords_limit_exceeded")
+        return cleaned
+
+    @model_validator(mode="after")
+    def _validate_sleep_bounds(self) -> "GoogleTrendsPayload":
+        if self.max_sleep and self.max_sleep < self.min_sleep:
+            self.min_sleep, self.max_sleep = self.max_sleep, self.min_sleep
         return self
 
 
@@ -6624,6 +6685,38 @@ def require_owner_only():
     return _dependency
 
 
+def require_owner_or_admin_for_master_tenant():
+    async def _dependency(user_token: str = Depends(require_user_token)) -> str:
+        if settings.environment.strip().lower() == "test" or _is_pytest_runtime():
+            return user_token
+        repo = CRMRepository(user_token=user_token)
+        try:
+            context = await repo.get_permission_context()
+            es_admin = _coerce_bool(context.get("es_admin")) is True
+            es_owner = _coerce_bool(context.get("es_owner")) is True
+            org_raw = context.get("organizacion_id")
+            org_id = UUID(str(org_raw)) if org_raw else None
+        except CRMRepositoryError as exc:
+            if _is_jwt_expired_repo_error(exc):
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="auth_required",
+                ) from exc
+            raise HTTPException(status_code=502, detail=str(exc)) from exc
+        except (TypeError, ValueError):
+            org_id = None
+            es_admin = False
+            es_owner = False
+
+        if not (es_owner or es_admin):
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="owner_or_admin_required")
+        if org_id != GOOGLE_TRENDS_ALLOWED_ORGANIZACION_ID:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="tenant_not_allowed")
+        return user_token
+
+    return _dependency
+
+
 async def require_platform_admin(
     user_token: str = Depends(require_user_token),
 ) -> UUID:
@@ -6657,6 +6750,44 @@ async def require_platform_admin(
     if not allowed:
         raise HTTPException(status_code=403, detail="platform_admin_required")
     return user_id
+
+
+@router.post("/prospeccion/google/trends")
+async def ejecutar_google_trends(
+    payload: GoogleTrendsPayload,
+    _: str = Depends(require_owner_or_admin_for_master_tenant()),
+) -> dict[str, Any]:
+    try:
+        result = await asyncio.to_thread(
+            fetch_google_trends,
+            keywords=payload.keywords,
+            timeframe=payload.timeframe,
+            geo=payload.geo,
+            source=payload.source,
+            hl=payload.hl,
+            tz=payload.tz,
+            include_region=payload.include_region,
+            region_resolution=payload.region_resolution,
+            inc_low_vol=payload.inc_low_vol,
+            inc_geo_code=payload.inc_geo_code,
+            min_sleep=payload.min_sleep,
+            max_sleep=payload.max_sleep,
+        )
+    except GoogleTrendsServiceError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.message) from exc
+
+    return {"ok": True, **result}
+
+
+@router.get("/prospeccion/google/countries")
+async def listar_google_trends_paises(
+    _: str = Depends(require_owner_or_admin_for_master_tenant()),
+) -> dict[str, Any]:
+    try:
+        items = await asyncio.to_thread(list_google_trends_countries)
+    except GoogleTrendsServiceError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.message) from exc
+    return {"ok": True, "items": items}
 
 
 @router.post("/catalog/item-details")

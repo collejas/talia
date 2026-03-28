@@ -184,7 +184,13 @@ TU_puTA_mADRE_479156376421_8NbukI5vDpp0We1Ufhdfy%^$%^$VDFGdff
 npm run dev
 - Local:         http://localhost:3000
 
- npx next dev --webpack
+npx next dev --webpack
+
+IA de WhatsApp
+IA para WhatsApp
+IA para ventas
+asistente de IA
+CRM IA
 
 • Ese error es del sistema, no de tu código: se acabó el límite de file watchers (inotify).
 
