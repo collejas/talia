@@ -59,6 +59,7 @@ type NavItem = {
   url: string
   icon?: Icon
   permission?: NavPermission
+  ownerAdminOnly?: boolean
   children?: NavItem[]
 }
 
@@ -111,6 +112,12 @@ const NAVIGATION: {
       icon: IconTargetArrow,
       children: [
         { title: "Google búsqueda", url: "/prospeccion/google-busqueda", permission: "busquedas.view" },
+        {
+          title: "Google Trends",
+          url: "/prospeccion/google-trends",
+          permission: "__owner_admin_only__",
+          ownerAdminOnly: true,
+        },
         { title: "Denue búsqueda", url: "/prospeccion/denue-busqueda", permission: "busquedas.view" },
         { title: "Buscador web", url: "/prospeccion/buscador", permission: "busquedas.run" },
         { title: "Prospectos", url: "/prospeccion/prospectos", permission: "busquedas.run" },
@@ -239,7 +246,8 @@ export function AppSidebar({
     const filterItems = (list: NavItem[]): NavItem[] =>
       list.reduce<NavItem[]>((acc, item) => {
         const children = item.children ? filterItems(item.children) : undefined
-        const allowed = hasPermission(item.permission) || (children && children.length > 0)
+        const allowedByRole = item.ownerAdminOnly ? isAdmin : hasPermission(item.permission)
+        const allowed = allowedByRole || (children && children.length > 0)
         if (!allowed) return acc
         acc.push({ ...item, children })
         return acc

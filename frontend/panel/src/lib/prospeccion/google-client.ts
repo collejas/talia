@@ -103,6 +103,39 @@ export type GoogleResultadosBoundsResponse = {
   total: number;
 };
 
+export type GoogleTrendsRequestPayload = {
+  keywords: string[];
+  timeframe?: string;
+  geo?: string;
+  hl?: string;
+  tz?: number;
+  include_region?: boolean;
+  region_resolution?: "COUNTRY" | "REGION" | "SUBREGION" | "DMA" | "CITY";
+  inc_low_vol?: boolean;
+  inc_geo_code?: boolean;
+  min_sleep?: number;
+  max_sleep?: number;
+};
+
+export type GoogleTrendsPoint = {
+  date: string;
+  isPartial?: boolean;
+  [keyword: string]: string | number | boolean | undefined;
+};
+
+export type GoogleTrendsResponse = {
+  ok: boolean;
+  keywords: string[];
+  timeframe: string;
+  geo: string;
+  hl: string;
+  tz: number;
+  points: GoogleTrendsPoint[];
+  latest: Record<string, number | null>;
+  by_region: Array<Record<string, string | number | null>>;
+  generated_at: string;
+};
+
 async function requestJson<T>(
   input: string,
   init?: RequestInit,
@@ -337,6 +370,15 @@ export async function deleteGoogleResultados(ids: string[]) {
   return requestJson<{ ok: boolean; deleted: number }>("/api/prospeccion/google/resultados", {
     method: "DELETE",
     body: JSON.stringify({ ids }),
+  });
+}
+
+export async function fetchGoogleTrends(
+  payload: GoogleTrendsRequestPayload,
+): Promise<GoogleTrendsResponse> {
+  return requestJson<GoogleTrendsResponse>("/api/prospeccion/google/trends", {
+    method: "POST",
+    body: JSON.stringify(payload),
   });
 }
 
