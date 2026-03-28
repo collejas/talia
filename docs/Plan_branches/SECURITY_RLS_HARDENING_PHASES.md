@@ -39,7 +39,7 @@ Vistas marcadas:
 - `public.v_asignaciones_vendedores`
 - `public.organizaciones_missing_etapas_pipeline`
 
-## Fase 3 (pendiente)
+## Fase 3 (implementada en migración)
 Migración: `supabase/migrations/20280428_140000_security_function_search_path_phase3.sql`
 
 Objetivo:
@@ -87,6 +87,17 @@ Estado actual (security):
   - `public.spatial_ref_sys` (`rls_disabled_in_public`) por ownership de extensión.
   - `extension_in_public` para `btree_gist`, `pg_trgm`, `postgis`, `unaccent`, `vector`.
   - `auth_leaked_password_protection` (setting de Auth en dashboard).
+
+## Excepciones Operativas Aceptadas
+Fecha de registro: 2026-03-28
+
+- `public.spatial_ref_sys`:
+  - Motivo: tabla gestionada por extensión PostGIS, sin ownership editable desde flujo normal de migraciones.
+  - Decisión: excepción aceptada en `develop` y `production` hasta tener ruta oficial de Supabase/owner-change.
+
+- `extension_in_public` (`btree_gist`, `pg_trgm`, `postgis`, `unaccent`, `vector`):
+  - Motivo: mover extensiones fuera de `public` requiere refactor y validación amplia.
+  - Decisión: excepción aceptada temporalmente; no mover en esta fase para evitar regresiones.
 
 ## Regla operativa
 - Aplicar primero en proyecto Supabase de staging aislado.
