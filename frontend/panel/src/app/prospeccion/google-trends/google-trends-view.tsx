@@ -6,7 +6,12 @@ import { Bar, BarChart, CartesianGrid, Cell, Line, LineChart, XAxis, YAxis } fro
 
 import { usePermissions } from "@/hooks/use-permissions";
 import { useIsMobile } from "@/hooks/use-mobile";
-import { fetchGoogleTrends, type GoogleTrendsResponse } from "@/lib/prospeccion/google-client";
+import {
+  fetchGoogleTrendCountries,
+  fetchGoogleTrends,
+  type GoogleTrendsCountryItem,
+  type GoogleTrendsResponse,
+} from "@/lib/prospeccion/google-client";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -116,6 +121,9 @@ export function GoogleTrendsView() {
   const [editingKeywordIndex, setEditingKeywordIndex] = useState<number | null>(null);
   const [timeframe, setTimeframe] = useState("today 12-m");
   const [geo, setGeo] = useState("MX");
+  const [geoInput, setGeoInput] = useState("MX");
+  const [countryOptions, setCountryOptions] = useState<GoogleTrendsCountryItem[]>([]);
+  const [isLoadingCountries, setIsLoadingCountries] = useState(false);
   const [includeRegion, setIncludeRegion] = useState(true);
   const [presets, setPresets] = useState<TrendsPreset[]>([]);
   const [presetName, setPresetName] = useState("");
@@ -157,7 +165,6 @@ export function GoogleTrendsView() {
     const hasOption = TIMEFRAME_OPTIONS.some((option) => option.value === timeframe);
     return hasOption ? timeframe : CUSTOM_TIMEFRAME_VALUE;
   }, [timeframe]);
-
   const timelineChartConfig = useMemo(() => {
     const config: ChartConfig = {};
     for (let index = 0; index < (result?.keywords.length ?? 0); index += 1) {
@@ -267,6 +274,38 @@ export function GoogleTrendsView() {
   useEffect(() => {
     setCompactMode(isMobile);
   }, [isMobile]);
+
+  useEffect(() => {
+    if (!canUseModule) return;
+    let active = true;
+    setIsLoadingCountries(true);
+    fetchGoogleTrendCountries()
+      .then((response) => {
+        if (!active) return;
+        setCountryOptions(Array.isArray(response.items) ? response.items : []);
+      })
+      .catch(() => {
+        if (!active) return;
+        setCountryOptions([]);
+      })
+      .finally(() => {
+        if (!active) return;
+        setIsLoadingCountries(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [canUseModule]);
+
+  useEffect(() => {
+    const code = geo.trim().toUpperCase();
+    const country = countryOptions.find((item) => item.code === code);
+    if (country) {
+      setGeoInput(`${country.code} - ${country.name}`);
+      return;
+    }
+    setGeoInput(code || "MX");
+  }, [geo, countryOptions]);
 
   function persistPresets(nextPresets: TrendsPreset[]) {
     setPresets(nextPresets);
@@ -562,11 +601,38 @@ export function GoogleTrendsView() {
                   <Input
                     id="geo"
                     className="pl-8"
-                    value={geo}
-                    onChange={(event) => setGeo(event.target.value)}
-                    placeholder="MX"
+                    list="google-trends-country-options"
+                    value={geoInput}
+                    onChange={(event) => {
+                      const raw = event.target.value;
+                      setGeoInput(raw);
+                      const exact = countryOptions.find(
+                        (item) => `${item.code} - ${item.name}`.toLocaleLowerCase("es-MX") === raw.trim().toLocaleLowerCase("es-MX"),
+                      );
+                      if (exact) {
+                        setGeo(exact.code);
+                        return;
+                      }
+                      const byName = countryOptions.find(
+                        (item) => item.name.toLocaleLowerCase("es-MX") === raw.trim().toLocaleLowerCase("es-MX"),
+                      );
+                      if (byName) {
+                        setGeo(byName.code);
+                        return;
+                      }
+                      const codeMatch = raw.trim().match(/^([A-Za-z]{2})\b/);
+                      if (codeMatch) {
+                        setGeo(codeMatch[1].toUpperCase());
+                      }
+                    }}
+                    placeholder={isLoadingCountries ? "Cargando países..." : "MX - México"}
                   />
                 </div>
+                <datalist id="google-trends-country-options">
+                  {countryOptions.map((item) => (
+                    <option key={item.code} value={`${item.code} - ${item.name}`} />
+                  ))}
+                </datalist>
               </div>
               <div className="min-w-[150px] space-y-1">
                 <Label className="text-[11px] text-slate-500" htmlFor="timeframe">Periodo</Label>

@@ -100,7 +100,11 @@ from app.services.metrics import metrics as contact_metrics
 from app.services.prospeccion_whatsapp_atribucion import resolve_first_matching_rule
 from app.services.prospeccion_contact_sender import contact_sender
 from app.services.prospeccion_progress import progress_hub
-from app.services.google_trends import GoogleTrendsServiceError, fetch_google_trends
+from app.services.google_trends import (
+    GoogleTrendsServiceError,
+    fetch_google_trends,
+    list_google_trends_countries,
+)
 from app.services.ui_realtime_hub import (
     inbox_topic_for_org,
     prospectos_topic_for_org,
@@ -6771,6 +6775,17 @@ async def ejecutar_google_trends(
         raise HTTPException(status_code=exc.status_code, detail=exc.message) from exc
 
     return {"ok": True, **result}
+
+
+@router.get("/prospeccion/google/countries")
+async def listar_google_trends_paises(
+    _: str = Depends(require_owner_or_admin_for_master_tenant()),
+) -> dict[str, Any]:
+    try:
+        items = await asyncio.to_thread(list_google_trends_countries)
+    except GoogleTrendsServiceError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.message) from exc
+    return {"ok": True, "items": items}
 
 
 @router.post("/catalog/item-details")

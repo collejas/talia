@@ -117,6 +117,16 @@ export type GoogleTrendsRequestPayload = {
   max_sleep?: number;
 };
 
+export type GoogleTrendsCountryItem = {
+  code: string;
+  name: string;
+};
+
+export type GoogleTrendsCountriesResponse = {
+  ok: boolean;
+  items: GoogleTrendsCountryItem[];
+};
+
 export type GoogleTrendsPoint = {
   date: string;
   isPartial?: boolean;
@@ -395,6 +405,12 @@ export async function fetchGoogleTrends(
   return requestJson<GoogleTrendsResponse>("/api/prospeccion/google/trends", {
     method: "POST",
     body: JSON.stringify(payload),
+  });
+}
+
+export async function fetchGoogleTrendCountries(): Promise<GoogleTrendsCountriesResponse> {
+  return requestJson<GoogleTrendsCountriesResponse>("/api/prospeccion/google/countries", {
+    method: "GET",
   });
 }
 
