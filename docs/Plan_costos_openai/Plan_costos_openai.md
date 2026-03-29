@@ -755,8 +755,8 @@ Notas:
    - Pendiente fino: export por assistant.
 
 3. Export CSV
-   - Permitir exportar diario, modelos, proyectos y conversaciones desde la vista de costos.
-   - Facilita auditoría, finanzas y revisiones manuales fuera del panel.
+   - Ya implementado en primera versión desde la pantalla de costos.
+   - Exporta el dataset visible con los filtros activos para diario, proyectos, modelos, asistentes y conversaciones.
 
 4. Reconciliación con Usage/Costs API de OpenAI
    - Registrar buckets agregados de OpenAI y compararlos contra el ledger interno.
@@ -852,10 +852,9 @@ Para tráfico nuevo, `public.openai_request_usage` ya puede guardar:
 
 ### Siguiente hito recomendado
 
-1. agregar export CSV
-2. preparar reconciliación con Usage/Costs API de OpenAI
-3. agregar alertas y presupuestos
-4. evaluar backfill histórico de `shared-default` a proyectos reales cuando aplique
+1. preparar reconciliación con Usage/Costs API de OpenAI
+2. agregar alertas y presupuestos
+3. evaluar backfill histórico de `shared-default` a proyectos reales cuando aplique
    - Ya aplicado para el histórico del tenant maestro que correspondía a `TALIA`.
 
 ## Resultado esperado final

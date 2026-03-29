@@ -199,6 +199,36 @@ function formatMonthLabel(value: string | null | undefined): string {
   return date.toLocaleDateString("es-MX", { year: "numeric", month: "short" });
 }
 
+function csvValue(value: unknown): string {
+  if (value == null) return "";
+  if (Array.isArray(value)) return value.join(", ");
+  const text = String(value);
+  if (/[",\n]/.test(text)) {
+    return `"${text.replaceAll('"', '""')}"`;
+  }
+  return text;
+}
+
+function buildCsv<T extends Record<string, unknown>>(rows: T[], columns: Array<{ key: keyof T; label: string }>): string {
+  const header = columns.map((column) => csvValue(column.label)).join(",");
+  const lines = rows.map((row) =>
+    columns.map((column) => csvValue(row[column.key])).join(","),
+  );
+  return [header, ...lines].join("\n");
+}
+
+function downloadCsv(filename: string, content: string): void {
+  const blob = new Blob([content], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = filename;
+  document.body.appendChild(anchor);
+  anchor.click();
+  document.body.removeChild(anchor);
+  URL.revokeObjectURL(url);
+}
+
 async function fetchRows<T>(path: string, searchParams: URLSearchParams): Promise<T[]> {
   const response = await fetch(`${path}?${searchParams.toString()}`, { cache: "no-store" });
   const body = (await response.json().catch(() => ({}))) as ApiResponse<T>;
@@ -364,6 +394,106 @@ export function OpenAiCostsPageClient() {
   }, [assistantRows, conversationRows, dailyRows, modelRows, projectRows]);
 
   const selectedTenantValue = activeTenantId ?? "__all__";
+  const exportPrefix = `openai-costs-${scope}-${dateFrom}-${dateTo}`;
+
+  const handleExportDaily = React.useCallback(() => {
+    downloadCsv(
+      `${exportPrefix}-daily.csv`,
+      buildCsv(dailyRows, [
+        { key: "usage_date", label: "Fecha" },
+        { key: "organizacion_nombre", label: "Organización" },
+        { key: "channel", label: "Canal" },
+        { key: "feature", label: "Feature" },
+        { key: "openai_project_display_name", label: "Proyecto" },
+        { key: "openai_model_family", label: "Modelo" },
+        { key: "requests_count", label: "Requests" },
+        { key: "conversations_count", label: "Conversaciones" },
+        { key: "total_tokens", label: "Tokens" },
+        { key: "avg_latency_ms", label: "Latencia promedio ms" },
+        { key: "estimated_total_cost_usd", label: "Costo USD" },
+        { key: "missing_pricing_count", label: "Pricing faltante" },
+      ]),
+    );
+  }, [dailyRows, exportPrefix]);
+
+  const handleExportProjects = React.useCallback(() => {
+    downloadCsv(
+      `${exportPrefix}-projects.csv`,
+      buildCsv(projectRows, [
+        { key: "usage_month", label: "Mes" },
+        { key: "organizacion_nombre", label: "Organización" },
+        { key: "openai_project_display_name", label: "Proyecto" },
+        { key: "source_tenant_mode", label: "Modo" },
+        { key: "requests_count", label: "Requests" },
+        { key: "conversations_count", label: "Conversaciones" },
+        { key: "models_count", label: "Modelos" },
+        { key: "total_tokens", label: "Tokens" },
+        { key: "avg_latency_ms", label: "Latencia promedio ms" },
+        { key: "estimated_total_cost_usd", label: "Costo USD" },
+        { key: "missing_pricing_count", label: "Pricing faltante" },
+      ]),
+    );
+  }, [exportPrefix, projectRows]);
+
+  const handleExportModels = React.useCallback(() => {
+    downloadCsv(
+      `${exportPrefix}-models.csv`,
+      buildCsv(modelRows, [
+        { key: "usage_month", label: "Mes" },
+        { key: "organizacion_nombre", label: "Organización" },
+        { key: "channel", label: "Canal" },
+        { key: "feature", label: "Feature" },
+        { key: "openai_project_display_name", label: "Proyecto" },
+        { key: "openai_model_family", label: "Modelo" },
+        { key: "requests_count", label: "Requests" },
+        { key: "total_tokens", label: "Tokens" },
+        { key: "avg_latency_ms", label: "Latencia promedio ms" },
+        { key: "estimated_total_cost_usd", label: "Costo USD" },
+      ]),
+    );
+  }, [exportPrefix, modelRows]);
+
+  const handleExportAssistants = React.useCallback(() => {
+    downloadCsv(
+      `${exportPrefix}-assistants.csv`,
+      buildCsv(assistantRows, [
+        { key: "usage_month", label: "Mes" },
+        { key: "organizacion_nombre", label: "Organización" },
+        { key: "channel", label: "Canal" },
+        { key: "feature", label: "Feature" },
+        { key: "openai_project_display_name", label: "Proyecto" },
+        { key: "assistant_kind", label: "Tipo" },
+        { key: "assistant_display_name", label: "Asistente" },
+        { key: "assistant_ref", label: "Referencia" },
+        { key: "requests_count", label: "Requests" },
+        { key: "conversations_count", label: "Conversaciones" },
+        { key: "total_tokens", label: "Tokens" },
+        { key: "avg_latency_ms", label: "Latencia promedio ms" },
+        { key: "estimated_total_cost_usd", label: "Costo USD" },
+      ]),
+    );
+  }, [assistantRows, exportPrefix]);
+
+  const handleExportConversations = React.useCallback(() => {
+    downloadCsv(
+      `${exportPrefix}-conversations.csv`,
+      buildCsv(conversationRows, [
+        { key: "conversation_id", label: "Conversación ID" },
+        { key: "conversation_display_name", label: "Conversación" },
+        { key: "organizacion_nombre", label: "Organización" },
+        { key: "channel", label: "Canal" },
+        { key: "feature", label: "Feature" },
+        { key: "openai_project_display_name", label: "Proyecto" },
+        { key: "models_used", label: "Modelos" },
+        { key: "requests_count", label: "Requests" },
+        { key: "total_tokens", label: "Tokens" },
+        { key: "avg_latency_ms", label: "Latencia promedio ms" },
+        { key: "fallback_count", label: "Fallbacks" },
+        { key: "quality_retry_count", label: "Quality retries" },
+        { key: "estimated_total_cost_usd", label: "Costo USD" },
+      ]),
+    );
+  }, [conversationRows, exportPrefix]);
 
   return (
     <div className="flex flex-col gap-6 px-4 py-2 lg:px-6">
@@ -524,6 +654,30 @@ export function OpenAiCostsPageClient() {
         <MetricCard label="Tokens" value={formatInt(totals.tokens)} />
         <MetricCard label="Conversaciones" value={formatInt(totals.conversations)} />
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Export CSV</CardTitle>
+          <CardDescription>Descarga el dataset visible con los filtros activos.</CardDescription>
+        </CardHeader>
+        <CardContent className="flex flex-wrap gap-2">
+          <Button type="button" variant="outline" onClick={handleExportDaily} disabled={!dailyRows.length}>
+            Diario
+          </Button>
+          <Button type="button" variant="outline" onClick={handleExportProjects} disabled={!projectRows.length}>
+            Proyectos
+          </Button>
+          <Button type="button" variant="outline" onClick={handleExportModels} disabled={!modelRows.length}>
+            Modelos
+          </Button>
+          <Button type="button" variant="outline" onClick={handleExportAssistants} disabled={!assistantRows.length}>
+            Asistentes
+          </Button>
+          <Button type="button" variant="outline" onClick={handleExportConversations} disabled={!conversationRows.length}>
+            Conversaciones
+          </Button>
+        </CardContent>
+      </Card>
 
       <div className="grid gap-6 xl:grid-cols-2">
         <Card>
