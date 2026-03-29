@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import time
 from dataclasses import dataclass
 from typing import Any, Awaitable, Callable
 
@@ -142,14 +143,21 @@ async def run_tool_loop(
     side_effects: dict[str, Any] = {}
     tools_called: list[str] = []
     tool_call_ids: list[str] = []
+    tool_runtime_debug: dict[str, Any] = {
+        "iterations": [],
+        "tool_calls": [],
+    }
+    iteration_index = 0
 
     while True:
+        response_started = time.perf_counter()
         response = await _create_response_with_retry(
             client=client,
             request_kwargs=request_kwargs,
             context=context,
             log=log,
         )
+        response_ms = round((time.perf_counter() - response_started) * 1000, 2)
         response_dict = response.model_dump()
         latest_response_id = response_dict.get("id") or latest_response_id
         conversation_obj = response_dict.get("conversation") or {}
@@ -157,8 +165,18 @@ async def run_tool_loop(
 
         output_items = response_dict.get("output") or []
         pending_calls = [item for item in output_items if item.get("type") == "function_call"]
+        tool_runtime_debug["iterations"].append(
+            {
+                "index": iteration_index,
+                "response_ms": response_ms,
+                "pending_calls": len(pending_calls),
+                "response_id": latest_response_id,
+            }
+        )
+        iteration_index += 1
 
         if not pending_calls:
+            side_effects["tool_runtime_debug"] = tool_runtime_debug
             return ToolRuntimeResult(
                 response=response_dict,
                 conversation_id=latest_conversation_id,
@@ -173,6 +191,7 @@ async def run_tool_loop(
             name = call.get("name")
             call_id = call.get("call_id")
             arguments = call.get("arguments")
+            tool_started = time.perf_counter()
             try:
                 result = await execute_tool(name, arguments, context)
             except Exception as exc:  # pragma: no cover - defensivo
@@ -185,6 +204,14 @@ async def run_tool_loop(
                     },
                 )
                 result = _build_tool_error_payload(exc)
+            tool_ms = round((time.perf_counter() - tool_started) * 1000, 2)
+            tool_runtime_debug["tool_calls"].append(
+                {
+                    "name": str(name) if name else None,
+                    "call_id": str(call_id) if call_id else None,
+                    "tool_ms": tool_ms,
+                }
+            )
             extras = None
             if isinstance(result, dict):
                 extras = result.pop("_side_effects", None)

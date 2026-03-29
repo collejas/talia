@@ -13,7 +13,7 @@ from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Mapping
 from urllib.parse import urlparse
-from uuid import UUID
+from uuid import UUID, uuid4
 from xml.etree import ElementTree as ET
 
 import httpx
@@ -252,6 +252,37 @@ def _log_trace_stage(
     if extra:
         payload.update(extra)
     log_event(logger, "webchat.message_trace", **payload)
+
+
+def _record_stage_timing(
+    stage_timings: dict[str, float],
+    stage_name: str,
+    started_at: float,
+) -> None:
+    stage_timings[stage_name] = round((time.perf_counter() - started_at) * 1000, 2)
+
+
+def _log_turn_timing(
+    *,
+    trace_id: str,
+    conversation_id: str | None,
+    contact_id: str | None,
+    inbound_message_id: str | None,
+    total_started_at: float,
+    stage_timings: dict[str, float],
+    extra: dict[str, Any] | None = None,
+) -> None:
+    payload: dict[str, Any] = {
+        "trace_id": trace_id,
+        "conversation_id": conversation_id,
+        "contact_id": contact_id,
+        "inbound_message_id": inbound_message_id,
+        "total_ms": round((time.perf_counter() - total_started_at) * 1000, 2),
+        "stage_timings": dict(stage_timings),
+    }
+    if extra:
+        payload.update(extra)
+    log_event(logger, "webchat.turn_timing", **payload)
 
 
 def _has_text(value: Any) -> bool:
@@ -2882,6 +2913,8 @@ async def handle_message(
 ) -> schemas.MessageResponse:
     """Orquesta la recepción de un mensaje y delega en OpenAI/Supabase."""
     turn_started = time.perf_counter()
+    trace_id = f"webchat-{uuid4().hex[:12]}"
+    stage_timings: dict[str, float] = {}
     if payload.author != "user":
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -2904,6 +2937,7 @@ async def handle_message(
     runtime_assistant_id: str | None = None
     runtime_prompt_version: str | None = None
     if organizacion_hint:
+        runtime_started = time.perf_counter()
         try:
             org_uuid = UUID(str(organizacion_hint))
         except (TypeError, ValueError):
@@ -2922,8 +2956,10 @@ async def handle_message(
                 runtime_prompt_version = rt.prompt_version
                 if rt.inactivity_minutes is not None:
                     runtime_inactivity_minutes = rt.inactivity_minutes
+        _record_stage_timing(stage_timings, "runtime_settings_ms", runtime_started)
 
     try:
+        register_started = time.perf_counter()
         registration = await storage.register_webchat_message(
             session_id=payload.session_id,
             author="user",
@@ -2938,6 +2974,7 @@ async def handle_message(
             attachments=[attachment.model_dump(mode="json") for attachment in attachments_payload],
             organizacion_id=organizacion_hint,
         )
+        _record_stage_timing(stage_timings, "register_inbound_ms", register_started)
     except storage.StorageError as exc:
         logger.exception(
             "webchat.register_failed",
@@ -2951,7 +2988,9 @@ async def handle_message(
     inbound_message_id = _normalize_inbound_message_id(registration.get("message_id"))
 
     try:
+        fetch_conversation_started = time.perf_counter()
         conversation_meta = await storage.fetch_webchat_conversation(conversation_id)
+        _record_stage_timing(stage_timings, "fetch_conversation_ms", fetch_conversation_started)
     except storage.StorageError as exc:
         logger.exception(
             "webchat.conversation_lookup_failed",
@@ -3009,11 +3048,14 @@ async def handle_message(
         extra={"session_id": payload.session_id},
     )
     await high_demand_controller.record_inbound(channel="webchat")
+    resolve_contact_started = time.perf_counter()
     contact: dict[str, Any] | None = await _resolve_contact(str(contact_id))
+    _record_stage_timing(stage_timings, "resolve_contact_ms", resolve_contact_started)
     resolved_organizacion_id = (
         await resolve_webchat_organizacion(metadata_dict, contact=contact) or organizacion_hint
     )
 
+    register_visit_started = time.perf_counter()
     contact_id_value = await _register_webchat_visit(
         payload.session_id,
         request=request,
@@ -3021,10 +3063,12 @@ async def handle_message(
         contact_id_hint=str(contact_id),
         contact=contact,
     )
+    _record_stage_timing(stage_timings, "register_visit_ms", register_visit_started)
     contact_id = contact_id_value or str(contact_id)
 
     assistant: AssistantConfig
     try:
+        assistant_resolve_started = time.perf_counter()
         if runtime_assistant_id:
             # Permite configurar por tenant vía `organizaciones.config.webchat.assistant_id`.
             if runtime_assistant_id.startswith("pmpt_"):
@@ -3042,6 +3086,7 @@ async def handle_message(
                 )
         else:
             assistant = registry.resolve_assistant("landing")
+        _record_stage_timing(stage_timings, "assistant_resolve_ms", assistant_resolve_started)
     except ValueError as exc:  # pragma: no cover - configuración inválida
         logger.exception("webchat.assistant_resolve_failed", extra={"error": str(exc)})
         raise HTTPException(status_code=500, detail="Asistente no configurado") from exc
@@ -3069,20 +3114,24 @@ async def handle_message(
 
     catalog_context: CatalogContext | None = None
     if settings.catalog_context_autoload:
+        catalog_context_started = time.perf_counter()
         catalog_context = await build_catalog_context(
             organizacion_hint,
             payload.content or "",
             user_id=context.contact_id,
             channel="webchat",
         )
+        _record_stage_timing(stage_timings, "catalog_context_ms", catalog_context_started)
     booking_context_text = None
     try:
+        booking_context_started = time.perf_counter()
         booking_context_text = await build_booking_context_message(
             contact_id=context.contact_id,
             conversation_id=context.conversation_id,
             channel="webchat",
             contact=contact,
         )
+        _record_stage_timing(stage_timings, "booking_context_ms", booking_context_started)
     except Exception as exc:
         logger.warning(
             "webchat.booking_context_failed",
@@ -3093,6 +3142,7 @@ async def handle_message(
             },
         )
     try:
+        assistant_generation_started = time.perf_counter()
         _log_trace_stage(
             stage="assistant_generation_started",
             conversation_id=str(conversation_id),
@@ -3123,6 +3173,10 @@ async def handle_message(
             booking_context=booking_context_text,
             inbound_message_id=inbound_message_id,
         )
+        _record_stage_timing(stage_timings, "assistant_generation_ms", assistant_generation_started)
+        assistant_debug_timings = side_effects.get("assistant_debug_timings")
+        if isinstance(assistant_debug_timings, dict) and assistant_debug_timings:
+            stage_timings["assistant_generation_substages"] = assistant_debug_timings  # type: ignore[assignment]
     except Exception as exc:  # pragma: no cover - se registra y responde fallback
         error_meta = classify_runtime_error(exc)
         logger.exception(
@@ -3138,6 +3192,18 @@ async def handle_message(
         await high_demand_controller.record_assistant_latency(
             channel="webchat",
             latency_ms=(time.perf_counter() - turn_started) * 1000,
+        )
+        _log_turn_timing(
+            trace_id=trace_id,
+            conversation_id=str(conversation_id),
+            contact_id=str(contact_id),
+            inbound_message_id=inbound_message_id,
+            total_started_at=turn_started,
+            stage_timings=stage_timings,
+            extra={
+                "fallback_used": True,
+                "error_type": error_meta.get("error_type"),
+            },
         )
         return schemas.MessageResponse(
             reply=DEFAULT_FALLBACK,
@@ -3183,6 +3249,7 @@ async def handle_message(
 
     if assistant_reply:
         try:
+            persist_outbound_started = time.perf_counter()
             message_metadata = {
                 "openai_conversation_id": metadata.openai_conversation_id,
                 "tools_called": tools_called,
@@ -3210,6 +3277,7 @@ async def handle_message(
                 metadata=message_metadata,
                 organizacion_id=resolved_organizacion_id,
             )
+            _record_stage_timing(stage_timings, "persist_outbound_ms", persist_outbound_started)
         except storage.StorageError as exc:
             logger.exception(
                 "webchat.register_assistant_failed",
@@ -3239,6 +3307,21 @@ async def handle_message(
     await high_demand_controller.record_assistant_latency(
         channel="webchat",
         latency_ms=(time.perf_counter() - turn_started) * 1000,
+    )
+    _log_turn_timing(
+        trace_id=trace_id,
+        conversation_id=str(conversation_id),
+        contact_id=str(contact_id),
+        inbound_message_id=inbound_message_id,
+        total_started_at=turn_started,
+        stage_timings=stage_timings,
+        extra={
+            "fallback_used": assistant_reply == DEFAULT_FALLBACK,
+            "assistant_response_id": metadata.assistant_response_id,
+            "openai_conversation_id": metadata.openai_conversation_id,
+            "session_id": payload.session_id,
+            "client_message_id": payload.client_message_id,
+        },
     )
 
     return schemas.MessageResponse(
@@ -3549,6 +3632,7 @@ async def _run_assistant_turn(
     inbound_message_id: str | None = None,
 ) -> tuple[str | None, dict[str, Any], list[str], list[str], str | None, dict[str, Any]]:
     """Gestiona la interacción con OpenAI y la resolución de tool calls."""
+    debug_timings: dict[str, float] = {}
     metadata_payload = {
         "session_id": context.session_id,
         "conversation_id": context.conversation_id,
@@ -3559,7 +3643,9 @@ async def _run_assistant_turn(
     sanitized_metadata = {k: v for k, v in metadata_payload.items() if v is not None}
 
     try:
+        prepare_content_started = time.perf_counter()
         user_content = await _prepare_user_content_with_attachments(client, user_message)
+        debug_timings["prepare_user_content_ms"] = round((time.perf_counter() - prepare_content_started) * 1000, 2)
     except Exception as exc:  # pragma: no cover - defensivo ante adjuntos inesperados
         logger.exception(
             "webchat.build_user_content_failed",
@@ -3598,10 +3684,12 @@ async def _run_assistant_turn(
         resolved_org = _resolve_org_uuid(organizacion_id)
         if resolved_org:
             try:
+                profiling_started = time.perf_counter()
                 profiling_enabled_for_channel = await tenant_runtime.is_profiling_enabled(
                     organizacion_id=UUID(resolved_org),
                     channel="webchat",
                 )
+                debug_timings["profiling_toggle_ms"] = round((time.perf_counter() - profiling_started) * 1000, 2)
             except Exception as exc:  # pragma: no cover
                 logger.warning(
                     "webchat.profiling_toggle_lookup_failed",
@@ -3779,6 +3867,7 @@ async def _run_assistant_turn(
         channel="webchat",
     )
 
+    tool_loop_started = time.perf_counter()
     result = await run_tool_loop(
         client=client,
         assistant=assistant,
@@ -3791,10 +3880,13 @@ async def _run_assistant_turn(
         previous_response_id=previous_response_id,
         log=logger,
     )
+    debug_timings["tool_loop_ms"] = round((time.perf_counter() - tool_loop_started) * 1000, 2)
 
     assistant_reply = _extract_text_from_response(result.response)
     side_effects = dict(result.side_effects or {})
+    quality_eval_started = time.perf_counter()
     quality_ok, quality_reason = evaluate_reply_quality(assistant_reply)
+    debug_timings["quality_eval_ms"] = round((time.perf_counter() - quality_eval_started) * 1000, 2)
     if not quality_ok:
         logger.warning(
             "webchat.reply_quality_low",
@@ -3831,7 +3923,9 @@ async def _run_assistant_turn(
         elif result.response_id:
             guard_retry_kwargs["previous_response_id"] = result.response_id
         try:
+            quality_retry_started = time.perf_counter()
             retry_response = await client.responses.create(**guard_retry_kwargs)
+            debug_timings["quality_retry_ms"] = round((time.perf_counter() - quality_retry_started) * 1000, 2)
             retry_payload = retry_response.model_dump()
             retry_text = _extract_text_from_response(retry_payload)
             retry_ok, retry_reason = evaluate_reply_quality(retry_text)
@@ -3875,6 +3969,7 @@ async def _run_assistant_turn(
                     "error": str(exc),
                 },
             )
+    side_effects["assistant_debug_timings"] = debug_timings
 
     return (
         assistant_reply,

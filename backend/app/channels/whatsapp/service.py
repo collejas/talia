@@ -8,7 +8,7 @@ import time
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Any, Mapping
-from uuid import UUID
+from uuid import UUID, uuid4
 
 import httpx
 from fastapi import HTTPException
@@ -99,9 +99,11 @@ _WHATSAPP_TYPING_INDICATOR_URL = "https://messaging.twilio.com/v2/Indicators/Typ
 _WHATSAPP_READ_INDICATOR_URL = "https://messaging.twilio.com/v2/Indicators/Read.json"
 _WHATSAPP_TYPING_TIMEOUT_SECONDS = 6.0
 _WHATSAPP_READ_TIMEOUT_SECONDS = 6.0
-_WHATSAPP_INBOUND_DEBOUNCE_SECONDS = 5.0
+_WHATSAPP_INBOUND_DEBOUNCE_SECONDS = 1.2
 _WHATSAPP_INBOUND_MERGE_MAX_MESSAGES = 4
 _WHATSAPP_INBOUND_MERGE_MAX_WINDOW_SECONDS = 12
+_WHATSAPP_INBOUND_FRAGMENT_MAX_CHARS = 80
+_WHATSAPP_INBOUND_FRAGMENT_MAX_WORDS = 12
 
 
 def _normalize_inbound_message_id(value: Any) -> str | None:
@@ -128,6 +130,37 @@ def _log_trace_stage(
     log_event(logger, "whatsapp.message_trace", **payload)
 
 
+def _record_stage_timing(
+    stage_timings: dict[str, float],
+    stage_name: str,
+    started_at: float,
+) -> None:
+    stage_timings[stage_name] = round((time.perf_counter() - started_at) * 1000, 2)
+
+
+def _log_turn_timing(
+    *,
+    trace_id: str,
+    conversation_id: str | None,
+    contact_id: str | None,
+    inbound_message_id: str | None,
+    total_started_at: float,
+    stage_timings: dict[str, float],
+    extra: dict[str, Any] | None = None,
+) -> None:
+    payload: dict[str, Any] = {
+        "trace_id": trace_id,
+        "conversation_id": conversation_id,
+        "contact_id": contact_id,
+        "inbound_message_id": inbound_message_id,
+        "total_ms": round((time.perf_counter() - total_started_at) * 1000, 2),
+        "stage_timings": dict(stage_timings),
+    }
+    if extra:
+        payload.update(extra)
+    log_event(logger, "whatsapp.turn_timing", **payload)
+
+
 @dataclass(slots=True)
 class AssistantReply:
     """Respuesta del asistente junto con metadatos para persistencia."""
@@ -135,6 +168,7 @@ class AssistantReply:
     text: str | None
     openai_conversation_id: str | None
     response_id: str | None
+    debug_timings: dict[str, float] | None = None
 
 
 @dataclass(slots=True)
@@ -678,9 +712,42 @@ def _compact_whatsapp_reply(text: str | None, max_chars: int = _DEFAULT_WHATSAPP
     return compact[: max_chars - 1].rstrip() + "…"
 
 
+def _should_wait_for_inbound_burst(text: str | None) -> bool:
+    normalized = " ".join(str(text or "").split())
+    if not normalized:
+        return False
+    if any(punct in normalized for punct in ".!?"):
+        return False
+    return (
+        len(normalized) <= _WHATSAPP_INBOUND_FRAGMENT_MAX_CHARS
+        and len(normalized.split()) <= _WHATSAPP_INBOUND_FRAGMENT_MAX_WORDS
+    )
+
+
 def _is_unknown_prompt_variable_error(exc: Exception) -> bool:
     text = str(exc or "").lower()
     return "prompt_variable_unknown" in text or "unknown prompt variables" in text
+
+
+async def _refresh_conversation_summary_best_effort(
+    *,
+    conversation_id: str,
+    contact_id: str | None,
+    organizacion_id: UUID | None,
+    context_data: dict[str, Any] | None,
+) -> None:
+    try:
+        await conversation_summary.ensure_conversation_summary(
+            conversation_id=conversation_id,
+            contact_id=contact_id,
+            context_data=context_data,
+            organizacion_id=organizacion_id,
+        )
+    except Exception as exc:  # pragma: no cover
+        logger.warning(
+            "whatsapp.conversation_summary_refresh_failed",
+            extra={"conversation_id": conversation_id, "error": str(exc)},
+        )
 
 
 async def _guard_booking_confirmation_claim(
@@ -762,6 +829,8 @@ async def handle_incoming_message(
 ) -> None:
     """Procesa un mensaje entrante desde Twilio y delega la respuesta a OpenAI."""
     turn_started = time.perf_counter()
+    trace_id = f"whatsapp-{uuid4().hex[:12]}"
+    stage_timings: dict[str, float] = {}
     log_event(
         logger,
         "whatsapp.incoming_message_received",
@@ -774,7 +843,9 @@ async def handle_incoming_message(
 
     if message.message_sid:
         try:
+            duplicate_check_started = time.perf_counter()
             existing_message = await storage.fetch_message_by_twilio_sid(message.message_sid)
+            _record_stage_timing(stage_timings, "duplicate_check_ms", duplicate_check_started)
         except StorageError as exc:
             logger.warning(
                 "whatsapp.fetch_message_by_sid_failed",
@@ -792,7 +863,9 @@ async def handle_incoming_message(
 
     normalized_from = _normalize_phone_number(message.from_number)
     recipient_number = _normalize_phone_number(message.to_number)
+    resolve_org_started = time.perf_counter()
     organizacion_hint = await resolve_whatsapp_organizacion(to_number=recipient_number)
+    _record_stage_timing(stage_timings, "resolve_org_ms", resolve_org_started)
 
     if not organizacion_hint:
         logger.error(
@@ -802,8 +875,11 @@ async def handle_incoming_message(
         raise HTTPException(status_code=500, detail="No se pudo enrutar el mensaje entrante")
 
     org_uuid = _parse_org_uuid(organizacion_hint)
+    runtime_settings_started = time.perf_counter()
     whatsapp_settings = await tenant_runtime.get_whatsapp_runtime_settings(organizacion_id=org_uuid)
+    _record_stage_timing(stage_timings, "runtime_settings_ms", runtime_settings_started)
     try:
+        register_inbound_started = time.perf_counter()
         registration = await storage.register_whatsapp_message(
             direction="entrante",
             wa_id=message.wa_id,
@@ -817,6 +893,7 @@ async def handle_incoming_message(
             webhook_payload=message.raw_payload,
             organizacion_id=organizacion_hint,
         )
+        _record_stage_timing(stage_timings, "register_inbound_ms", register_inbound_started)
     except StorageError as exc:
         logger.exception(
             "whatsapp.register_incoming_failed",
@@ -864,12 +941,25 @@ async def handle_incoming_message(
         )
         return
 
-    should_continue, merged_body = await _coalesce_inbound_burst(
+    burst_merge_started = time.perf_counter()
+    should_continue, merged_body, burst_timings = await _coalesce_inbound_burst(
         conversation_id=conversation_id,
         current_message_id=current_message_id,
         fallback_body=message.body,
     )
+    _record_stage_timing(stage_timings, "burst_merge_ms", burst_merge_started)
+    if burst_timings:
+        stage_timings["burst_merge_substages"] = burst_timings  # type: ignore[assignment]
     if not should_continue:
+        _log_turn_timing(
+            trace_id=trace_id,
+            conversation_id=conversation_id,
+            contact_id=contact_id,
+            inbound_message_id=inbound_message_id,
+            total_started_at=turn_started,
+            stage_timings=stage_timings,
+            extra={"ended_early": "coalesced_burst", "source": source},
+        )
         return
     message.body = merged_body
 
@@ -881,6 +971,7 @@ async def handle_incoming_message(
     is_prospeccion_context = False
     publicidad_atribucion_event: Mapping[str, Any] | None = None
     if repo:
+        prospeccion_sync_started = time.perf_counter()
         is_prospeccion_context = await _sync_inbound_to_prospeccion_log(
             repo=repo,
             contact_id=contact_id,
@@ -893,6 +984,7 @@ async def handle_incoming_message(
             contact_id=contact_id,
             message=message,
         )
+        _record_stage_timing(stage_timings, "prospeccion_sync_ms", prospeccion_sync_started)
     origin_type = (
         "publicidad_whatsapp"
         if publicidad_atribucion_event
@@ -906,6 +998,7 @@ async def handle_incoming_message(
     opportunity_ref: str | None = None
     ensure_contact_id = contact_id
     if repo:
+        ensure_opportunity_started = time.perf_counter()
         prospecto_uuid = await _resolve_prospeccion_prospecto_id(
             repo=repo,
             contact_id=contact_id,
@@ -964,6 +1057,7 @@ async def handle_incoming_message(
                 "restart_created": False,
                 "restart_sequence": 1,
             }
+        _record_stage_timing(stage_timings, "ensure_opportunity_ms", ensure_opportunity_started)
     if repo and opportunity_ref and publicidad_atribucion_event:
         await _mark_opportunity_as_prospeccion_whatsapp(
             repo=repo,
@@ -1003,7 +1097,9 @@ async def handle_incoming_message(
             )
 
     try:
+        fetch_conversation_started = time.perf_counter()
         conversation_meta = await storage.fetch_conversation(conversation_id)
+        _record_stage_timing(stage_timings, "fetch_conversation_ms", fetch_conversation_started)
     except StorageError as exc:
         logger.exception(
             "whatsapp.fetch_conversation_failed",
@@ -1025,20 +1121,24 @@ async def handle_incoming_message(
 
     catalog_context = None
     if settings.catalog_context_autoload:
+        catalog_context_started = time.perf_counter()
         catalog_context = await build_catalog_context(
             organizacion_hint,
             message.body or "",
             user_id=message.wa_id or message.from_number,
             channel="whatsapp",
         )
+        _record_stage_timing(stage_timings, "catalog_context_ms", catalog_context_started)
     booking_context_text = None
     try:
+        booking_context_started = time.perf_counter()
         booking_context_text = await build_booking_context_message(
             contact_id=contact_id,
             conversation_id=conversation_id,
             channel="whatsapp",
             contact=contact_record,
         )
+        _record_stage_timing(stage_timings, "booking_context_ms", booking_context_started)
     except Exception as exc:
         logger.warning(
             "whatsapp.booking_context_failed",
@@ -1050,16 +1150,21 @@ async def handle_incoming_message(
         )
 
     # Best-effort UX: marcar leído y mostrar "escribiendo..." mientras se procesa la respuesta.
+    read_indicator_started = time.perf_counter()
     await _send_whatsapp_read_indicator(
         incoming_message_sid=message.message_sid,
         organizacion_id=org_uuid,
     )
+    _record_stage_timing(stage_timings, "read_indicator_ms", read_indicator_started)
+    typing_indicator_started = time.perf_counter()
     await _send_whatsapp_typing_indicator(
         incoming_message_sid=message.message_sid,
         organizacion_id=org_uuid,
     )
+    _record_stage_timing(stage_timings, "typing_indicator_ms", typing_indicator_started)
 
     try:
+        assistant_generation_started = time.perf_counter()
         _log_trace_stage(
             stage="assistant_generation_started",
             conversation_id=conversation_id,
@@ -1084,6 +1189,9 @@ async def handle_incoming_message(
             origin_type=origin_type,
             inbound_message_id=inbound_message_id,
         )
+        _record_stage_timing(stage_timings, "assistant_generation_ms", assistant_generation_started)
+        if assistant_reply.debug_timings:
+            stage_timings["assistant_generation_substages"] = assistant_reply.debug_timings  # type: ignore[assignment]
         log_event(
             logger,
             "whatsapp.reply_generated",
@@ -1144,11 +1252,13 @@ async def handle_incoming_message(
     )
     final_reply_text = _compact_whatsapp_reply(final_reply_text, _DEFAULT_WHATSAPP_MAX_CHARS)
 
+    twilio_send_started = time.perf_counter()
     send_result = await _send_whatsapp_reply(
         to_number=message.from_number,
         body=final_reply_text,
         organizacion_id=org_uuid,
     )
+    _record_stage_timing(stage_timings, "twilio_send_ms", twilio_send_started)
     log_event(
         logger,
         "whatsapp.reply_dispatched",
@@ -1186,6 +1296,7 @@ async def handle_incoming_message(
 
     resolved_contact_org = await resolve_whatsapp_organizacion(contact=contact_record)
     try:
+        persist_outbound_started = time.perf_counter()
         outgoing_registration = await storage.register_whatsapp_message(
             direction="saliente",
             conversation_id=conversation_id,
@@ -1198,6 +1309,7 @@ async def handle_incoming_message(
             phone_e164=normalized_from,
             organizacion_id=resolved_contact_org,
         )
+        _record_stage_timing(stage_timings, "persist_outbound_ms", persist_outbound_started)
     except StorageError as exc:
         logger.warning(
             "whatsapp.register_outgoing_failed",
@@ -1229,6 +1341,23 @@ async def handle_incoming_message(
                 "twilio_sid": _trim_text(send_result.sid),
             },
         )
+    _log_turn_timing(
+        trace_id=trace_id,
+        conversation_id=conversation_id,
+        contact_id=contact_id,
+        inbound_message_id=inbound_message_id,
+        total_started_at=turn_started,
+        stage_timings=stage_timings,
+        extra={
+            "source": source,
+            "fallback_used": final_reply_text == DEFAULT_FALLBACK,
+            "assistant_response_id": assistant_reply.response_id,
+            "openai_conversation_id": assistant_reply.openai_conversation_id,
+            "message_sid": _trim_text(message.message_sid),
+            "twilio_sid": _trim_text(send_result.sid),
+            "delivery_status": _trim_text(send_result.status),
+        },
+    )
 
 
 async def handle_status_callback(callback: schemas.WhatsAppStatusCallback) -> None:
@@ -1631,7 +1760,10 @@ async def _generate_assistant_reply(
     origin_type: str | None = None,
     inbound_message_id: str | None = None,
 ) -> AssistantReply:
+    debug_timings: dict[str, float] = {}
+    started = time.perf_counter()
     assistant = _build_assistant_from_runtime(whatsapp_settings, prospeccion_mode=prospeccion_mode)
+    debug_timings["assistant_build_ms"] = round((time.perf_counter() - started) * 1000, 2)
     log_event(
         logger,
         "whatsapp.assistant_routing",
@@ -1646,7 +1778,9 @@ async def _generate_assistant_reply(
     if not assistant.is_prompt:
         if not assistant.assistant_id:
             raise RuntimeError("WHATSAPP_ASSISTANT_ID is not configured")
+        assistant_spec_started = time.perf_counter()
         assistant_spec = await resolve_assistant_spec(client, assistant.assistant_id)
+        debug_timings["assistant_spec_ms"] = round((time.perf_counter() - assistant_spec_started) * 1000, 2)
 
     metadata_payload = {
         "conversation_id": conversation_id,
@@ -1659,10 +1793,12 @@ async def _generate_assistant_reply(
     }
     context_payload: dict[str, Any] | None = None
     try:
+        context_fetch_started = time.perf_counter()
         context_payload = await storage.fetch_contact_context(
             conversation_id=conversation_id,
             contact_id=contact_id,
         )
+        debug_timings["fetch_contact_context_ms"] = round((time.perf_counter() - context_fetch_started) * 1000, 2)
     except StorageError as exc:  # pragma: no cover - fallbacks informativos
         logger.warning(
             "whatsapp.fetch_contact_context_failed",
@@ -1677,12 +1813,15 @@ async def _generate_assistant_reply(
     summary_text: str | None = None
     summary_created_en: str | None = None
     try:
+        summary_started = time.perf_counter()
         summary_record = await conversation_summary.ensure_conversation_summary(
             conversation_id=conversation_id,
             contact_id=contact_id,
             context_data=context_payload,
             organizacion_id=organizacion_id,
+            generate_if_missing=False,
         )
+        debug_timings["summary_initial_ms"] = round((time.perf_counter() - summary_started) * 1000, 2)
         if summary_record:
             candidate = summary_record.get("resumen")
             if isinstance(candidate, str) and candidate.strip():
@@ -1717,10 +1856,12 @@ async def _generate_assistant_reply(
     profiling_enabled_for_channel = True
     if organizacion_id:
         try:
+            profiling_started = time.perf_counter()
             profiling_enabled_for_channel = await tenant_runtime.is_profiling_enabled(
                 organizacion_id=organizacion_id,
                 channel="whatsapp",
             )
+            debug_timings["profiling_toggle_ms"] = round((time.perf_counter() - profiling_started) * 1000, 2)
         except Exception as exc:  # pragma: no cover
             logger.warning(
                 "whatsapp.profiling_toggle_lookup_failed",
@@ -1905,20 +2046,6 @@ async def _generate_assistant_reply(
         "tool_choice": "auto",
     }
 
-    summary_record: dict[str, Any] | None = None
-    try:
-        summary_record = await conversation_summary.ensure_conversation_summary(
-            conversation_id=conversation_id,
-            contact_id=contact_id,
-            context_data=context_payload,
-            organizacion_id=organizacion_id,
-        )
-    except Exception as exc:  # pragma: no cover
-        logger.warning(
-            "whatsapp.conversation_summary_failed",
-            extra={"conversation_id": conversation_id, "error": str(exc)},
-        )
-
     prompt_variables: dict[str, Any] = {"conversacion_id": conversation_id}
 
     def _build_request_template(*, include_tools: bool = True) -> dict[str, Any]:
@@ -1953,6 +2080,7 @@ async def _generate_assistant_reply(
     )
 
     try:
+        tool_loop_started = time.perf_counter()
         result = await run_tool_loop(
             client=client,
             assistant=assistant,
@@ -1965,6 +2093,10 @@ async def _generate_assistant_reply(
             previous_response_id=previous_response_id,
             log=logger,
         )
+        debug_timings["tool_loop_ms"] = round((time.perf_counter() - tool_loop_started) * 1000, 2)
+        tool_runtime_debug = result.side_effects.get("tool_runtime_debug")
+        if isinstance(tool_runtime_debug, dict) and tool_runtime_debug:
+            debug_timings["tool_runtime_debug"] = tool_runtime_debug
     except Exception as exc:
         if assistant.is_prompt and prompt_variables and _is_unknown_prompt_variable_error(exc):
             log_event(
@@ -1976,6 +2108,7 @@ async def _generate_assistant_reply(
             )
             prompt_variables = {}
             request_kwargs.update(_build_request_template(include_tools=True))
+            tool_loop_retry_started = time.perf_counter()
             result = await run_tool_loop(
                 client=client,
                 assistant=assistant,
@@ -1988,81 +2121,18 @@ async def _generate_assistant_reply(
                 previous_response_id=previous_response_id,
                 log=logger,
             )
+            debug_timings["tool_loop_retry_ms"] = round((time.perf_counter() - tool_loop_retry_started) * 1000, 2)
         else:
             raise
 
     reply_text = _extract_text_from_response(result.response)
-    final_text = reply_text
-    followup_kwargs: dict[str, Any] = {
-        "input": [
-            {
-                "role": "developer",
-                "content": [
-                    {
-                        "type": "input_text",
-                        "text": (
-                            "Redacta SOLO el mensaje final para WhatsApp al último usuario. "
-                            "Máximo 500 caracteres, 1-3 frases, directo, sin listas largas."
-                        ),
-                    }
-                ],
-            }
-        ],
-        "store": True,
-        "max_output_tokens": 140,
-        "temperature": 0.3,
-        "metadata": metadata_payload,
-        "tool_choice": "none",
-    }
-    followup_kwargs.update(_build_request_template(include_tools=False))
-    if assistant.is_prompt:
-        followup_kwargs.pop("temperature", None)
-    if result.conversation_id:
-        followup_kwargs["conversation"] = result.conversation_id
-    elif result.response_id:
-        followup_kwargs["previous_response_id"] = result.response_id
-    try:
-        final_response = await client.responses.create(**followup_kwargs)
-        final_response_dict = final_response.model_dump()
-        followup_text = _extract_text_from_response(final_response_dict)
-        if followup_text:
-            final_text = followup_text
-        final_response_id = final_response_dict.get("id") or result.response_id
-        final_conversation_id = (
-            (final_response_dict.get("conversation") or {}).get("id")
-            or result.conversation_id
-        )
-    except Exception as exc:  # pragma: no cover - tolerante a falla de red/SDK
-        if assistant.is_prompt and prompt_variables and _is_unknown_prompt_variable_error(exc):
-            prompt_variables = {}
-            try:
-                followup_kwargs.update(_build_request_template(include_tools=False))
-                final_response = await client.responses.create(**followup_kwargs)
-                final_response_dict = final_response.model_dump()
-                followup_text = _extract_text_from_response(final_response_dict)
-                if followup_text:
-                    final_text = followup_text
-                final_response_id = final_response_dict.get("id") or result.response_id
-                final_conversation_id = (
-                    (final_response_dict.get("conversation") or {}).get("id")
-                    or result.conversation_id
-                )
-            except Exception as retry_exc:
-                logger.warning(
-                    "whatsapp.concise_reply_generation_failed",
-                    extra={"conversation_id": conversation_id, "error": str(retry_exc)},
-                )
-                final_response_id = result.response_id
-                final_conversation_id = result.conversation_id
-        else:
-            logger.warning(
-                "whatsapp.concise_reply_generation_failed",
-                extra={"conversation_id": conversation_id, "error": str(exc)},
-            )
-            final_response_id = result.response_id
-            final_conversation_id = result.conversation_id
+    final_text = _compact_whatsapp_reply(reply_text, _DEFAULT_WHATSAPP_MAX_CHARS)
+    final_response_id = result.response_id
+    final_conversation_id = result.conversation_id
 
+    quality_eval_started = time.perf_counter()
     quality_ok, quality_reason = evaluate_reply_quality(final_text)
+    debug_timings["quality_eval_ms"] = round((time.perf_counter() - quality_eval_started) * 1000, 2)
     if not quality_ok:
         logger.warning(
             "whatsapp.reply_quality_low",
@@ -2098,7 +2168,9 @@ async def _generate_assistant_reply(
         elif final_response_id:
             guard_retry_kwargs["previous_response_id"] = final_response_id
         try:
+            quality_retry_started = time.perf_counter()
             retry_response = await client.responses.create(**guard_retry_kwargs)
+            debug_timings["quality_retry_ms"] = round((time.perf_counter() - quality_retry_started) * 1000, 2)
             retry_payload = retry_response.model_dump()
             retry_text = _extract_text_from_response(retry_payload)
             retry_ok, retry_reason = evaluate_reply_quality(retry_text)
@@ -2134,10 +2206,22 @@ async def _generate_assistant_reply(
                 },
             )
 
+    if conversation_id:
+        asyncio.create_task(
+            _refresh_conversation_summary_best_effort(
+                conversation_id=conversation_id,
+                contact_id=contact_id,
+                organizacion_id=organizacion_id,
+                context_data=context_payload,
+            )
+        )
+        debug_timings["summary_refresh_scheduled"] = 1.0
+
     return AssistantReply(
         text=final_text.strip() if final_text else None,
         openai_conversation_id=final_conversation_id,
         response_id=final_response_id,
+        debug_timings=debug_timings,
     )
 
 
@@ -2574,31 +2658,38 @@ async def _coalesce_inbound_burst(
     conversation_id: str,
     current_message_id: str | None,
     fallback_body: str | None,
-) -> tuple[bool, str | None]:
+) -> tuple[bool, str | None, dict[str, float]]:
     """Agrupa mensajes entrantes consecutivos y evita respuestas duplicadas."""
 
+    debug_timings: dict[str, float] = {}
     message_id = str(current_message_id or "").strip()
     fallback_text = str(fallback_body or "").strip() or None
     if not conversation_id or not message_id:
-        return True, fallback_text
+        return True, fallback_text, debug_timings
 
-    if _WHATSAPP_INBOUND_DEBOUNCE_SECONDS > 0:
+    should_wait_for_more = _should_wait_for_inbound_burst(fallback_text)
+    debug_timings["debounce_applied"] = 1.0 if should_wait_for_more else 0.0
+    if should_wait_for_more and _WHATSAPP_INBOUND_DEBOUNCE_SECONDS > 0:
+        debounce_started = time.perf_counter()
         await asyncio.sleep(_WHATSAPP_INBOUND_DEBOUNCE_SECONDS)
+        debug_timings["debounce_sleep_ms"] = round((time.perf_counter() - debounce_started) * 1000, 2)
 
     try:
+        fetch_started = time.perf_counter()
         recent_messages = await storage.fetch_recent_messages(
             conversation_id=conversation_id,
             limit=max(8, _WHATSAPP_INBOUND_MERGE_MAX_MESSAGES + 4),
         )
+        debug_timings["fetch_recent_messages_ms"] = round((time.perf_counter() - fetch_started) * 1000, 2)
     except StorageError as exc:
         logger.warning(
             "whatsapp.inbound_burst_fetch_failed",
             extra={"conversation_id": conversation_id, "error": str(exc)},
         )
-        return True, fallback_text
+        return True, fallback_text, debug_timings
 
     if not recent_messages:
-        return True, fallback_text
+        return True, fallback_text, debug_timings
 
     latest_inbound: dict[str, Any] | None = None
     for row in reversed(recent_messages):
@@ -2607,11 +2698,11 @@ async def _coalesce_inbound_burst(
             break
 
     if not isinstance(latest_inbound, dict):
-        return True, fallback_text
+        return True, fallback_text, debug_timings
 
     latest_inbound_id = str(latest_inbound.get("id") or "").strip()
     if not latest_inbound_id:
-        return True, fallback_text
+        return True, fallback_text, debug_timings
 
     if latest_inbound_id != message_id:
         log_event(
@@ -2621,7 +2712,7 @@ async def _coalesce_inbound_burst(
             message_id=message_id,
             latest_inbound_id=latest_inbound_id,
         )
-        return False, None
+        return False, None, debug_timings
 
     latest_created = _parse_iso_datetime(latest_inbound.get("creado_en"))
     fragments: list[str] = []
@@ -2644,12 +2735,12 @@ async def _coalesce_inbound_burst(
             fragments.append(candidate)
 
     if not fragments:
-        return True, fallback_text
+        return True, fallback_text, debug_timings
 
     fragments.reverse()
     merged_text = " ".join(fragment for fragment in fragments if fragment).strip()
     if not merged_text:
-        return True, fallback_text
+        return True, fallback_text, debug_timings
 
     if len(fragments) > 1:
         log_event(
@@ -2659,7 +2750,8 @@ async def _coalesce_inbound_burst(
             message_id=message_id,
             fragments=len(fragments),
         )
-    return True, merged_text
+    debug_timings["fragments_count"] = float(len(fragments))
+    return True, merged_text, debug_timings
 
 
 def _map_status_to_event(status: str | None) -> str | None:

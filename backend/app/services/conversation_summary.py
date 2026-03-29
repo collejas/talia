@@ -161,6 +161,7 @@ async def ensure_conversation_summary(
     organizacion_id: str | UUID | None = None,
     tipo: str = "conversation",
     context_data: dict[str, Any] | None = None,
+    generate_if_missing: bool = True,
 ) -> dict[str, Any] | None:
     """Garantiza que exista un resumen actualizado para la conversación."""
     summary: dict[str, Any] | None
@@ -175,6 +176,9 @@ async def ensure_conversation_summary(
             extra={"conversation_id": conversation_id, "error": str(exc)},
         )
         summary = None
+
+    if not generate_if_missing and not summary:
+        return None
 
     try:
         messages = await storage.fetch_recent_messages(
@@ -202,6 +206,8 @@ async def ensure_conversation_summary(
             summary["metadatos"] = metadata
         return summary
     else:
+        if not generate_if_missing:
+            return None
         metadata = {}
 
     summary_text = await _summarize_messages(
