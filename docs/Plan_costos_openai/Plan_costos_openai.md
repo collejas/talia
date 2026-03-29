@@ -759,8 +759,9 @@ Notas:
    - Exporta el dataset visible con los filtros activos para diario, proyectos, modelos, asistentes y conversaciones.
 
 4. Reconciliación con Usage/Costs API de OpenAI
-   - Registrar buckets agregados de OpenAI y compararlos contra el ledger interno.
-   - Detectar desviaciones por pricing, requests no registradas o diferencias por proyecto.
+   - Ya implementada en primera versión para `organization/costs`.
+   - Persiste buckets diarios oficiales por proyecto y compara contra el ledger interno por día/proyecto.
+   - Queda pendiente extender el mismo patrón a `organization/usage/completions` si se requiere reconciliación de tokens y requests oficiales.
 
 5. Alertas de costo o presupuesto
    - Definir umbrales por tenant, proyecto o canal.
@@ -781,6 +782,11 @@ Notas:
   - tablas de catálogo locales
   - sincronización manual protegida
   - resolución real de nombres de proyecto vía OpenAI admin API cuando existe `project_id`.
+- Reconciliación oficial OpenAI ya implementada en primera versión:
+  - tabla `openai_cost_api_buckets`
+  - vista `v_openai_cost_reconciliation_daily`
+  - sync manual protegido desde backend
+  - tabla frontend visible en `master global`
 
 Estado al 2026-03-29:
 
@@ -848,12 +854,12 @@ Para tráfico nuevo, `public.openai_request_usage` ya puede guardar:
 - Los nombres reales de proyecto ya pueden obtenerse desde OpenAI cuando existe `project_id` y `admin key` con `api.management.read`.
 - Los prompts `pmpt_...` todavía no tienen una resolución oficial estable por nombre en la integración actual; hoy usan catálogo/alias local.
 - Las filas históricas previas a configurar `project_id` seguirán apareciendo como `shared-default` hasta que se haga backfill.
-- Aún no existe reconciliación con Usage/Costs API oficial de OpenAI.
+- Ya existe reconciliación con `organization/costs`; sigue pendiente decidir si se amplía a `organization/usage/completions`.
 
 ### Siguiente hito recomendado
 
-1. preparar reconciliación con Usage/Costs API de OpenAI
-2. agregar alertas y presupuestos
+1. agregar alertas y presupuestos
+2. decidir si se amplía la reconciliación a `organization/usage/completions`
 3. evaluar backfill histórico de `shared-default` a proyectos reales cuando aplique
    - Ya aplicado para el histórico del tenant maestro que correspondía a `TALIA`.
 

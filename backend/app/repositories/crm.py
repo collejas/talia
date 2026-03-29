@@ -7554,6 +7554,35 @@ class CRMRepository:
             params=params,
         )
 
+    async def master_openai_cost_reconciliation_daily(
+        self,
+        *,
+        date_from: str | None = None,
+        date_to: str | None = None,
+        project_id: str | None = None,
+    ) -> list[dict[str, Any]]:
+        params: dict[str, str] = {
+            "order": "usage_date.desc,variance_usd.desc",
+        }
+        and_parts: list[str] = []
+        if date_from:
+            and_parts.append(f"usage_date.gte.{date_from}")
+        if date_to:
+            and_parts.append(f"usage_date.lte.{date_to}")
+        if and_parts:
+            params["and"] = f"({','.join(and_parts)})"
+        if project_id:
+            params["openai_project_id"] = f"eq.{project_id}"
+        return await self._fetch_openai_cost_view_service_role(
+            view_name="v_openai_cost_reconciliation_daily",
+            select=(
+                "usage_date,openai_project_id,openai_project_display_name,openai_organization_id,"
+                "openai_organization_name,internal_requests_count,internal_estimated_cost_usd,"
+                "official_cost_usd,variance_usd,variance_pct"
+            ),
+            params=params,
+        )
+
     async def visitas_detalle(
         self,
         *,

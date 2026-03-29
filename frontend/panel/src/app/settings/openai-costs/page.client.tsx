@@ -93,6 +93,19 @@ type AssistantRow = {
   avg_latency_ms: number | string | null;
 };
 
+type ReconciliationRow = {
+  usage_date: string;
+  openai_project_id: string | null;
+  openai_project_display_name: string | null;
+  openai_organization_id: string | null;
+  openai_organization_name: string | null;
+  internal_requests_count: number;
+  internal_estimated_cost_usd: number | string;
+  official_cost_usd: number | string;
+  variance_usd: number | string;
+  variance_pct: number | string | null;
+};
+
 type ApiResponse<T> = {
   ok?: boolean;
   rows?: T[];
@@ -256,8 +269,10 @@ export function OpenAiCostsPageClient() {
   const [modelRows, setModelRows] = React.useState<ModelRow[]>([]);
   const [projectRows, setProjectRows] = React.useState<ProjectRow[]>([]);
   const [assistantRows, setAssistantRows] = React.useState<AssistantRow[]>([]);
+  const [reconciliationRows, setReconciliationRows] = React.useState<ReconciliationRow[]>([]);
   const [tenantOptions, setTenantOptions] = React.useState<TenantOption[]>([]);
   const [tenantsLoading, setTenantsLoading] = React.useState(false);
+  const [syncingReconciliation, setSyncingReconciliation] = React.useState(false);
 
   const loadTenantOptions = React.useCallback(async () => {
     if (!canUseMasterScope(permissionContext.organizacion_id, permissionContext.es_owner, permissionContext.es_admin)) {
@@ -292,6 +307,7 @@ export function OpenAiCostsPageClient() {
       const modelsBasePath = "/api/analytics/openai/costs/models";
       const projectsBasePath = "/api/analytics/openai/costs/projects";
       const assistantsBasePath = "/api/analytics/openai/costs/assistants";
+      const reconciliationBasePath = "/api/analytics/openai/reconciliation/daily";
       const commonDaily = new URLSearchParams({ date_from: dateFrom, date_to: dateTo });
       const commonMonthly = new URLSearchParams({
         month_from: monthStart(dateFrom),
@@ -325,12 +341,18 @@ export function OpenAiCostsPageClient() {
         assistantParams.set("assistant_kind", assistantKind);
       }
 
-      const [daily, conversations, models, projects, assistants] = await Promise.all([
+      const reconciliationParams = new URLSearchParams({ date_from: dateFrom, date_to: dateTo });
+      if (projectKey !== "__all__") {
+        reconciliationParams.set("project_id", projectKey);
+      }
+
+      const [daily, conversations, models, projects, assistants, reconciliation] = await Promise.all([
         fetchRows<DailyRow>(dailyBasePath, commonDaily),
         fetchRows<ConversationRow>(conversationsBasePath, conversationParams),
         fetchRows<ModelRow>(modelsBasePath, commonMonthly),
         fetchRows<ProjectRow>(projectsBasePath, commonMonthly),
         fetchRows<AssistantRow>(assistantsBasePath, assistantParams),
+        useMasterScope ? fetchRows<ReconciliationRow>(reconciliationBasePath, reconciliationParams) : Promise.resolve([]),
       ]);
 
       setDailyRows(daily);
@@ -338,6 +360,7 @@ export function OpenAiCostsPageClient() {
       setModelRows(models);
       setProjectRows(projects);
       setAssistantRows(assistants);
+      setReconciliationRows(reconciliation);
     } catch (fetchError) {
       console.error("[openai-costs] fetch failed", fetchError);
       setError(fetchError instanceof Error ? fetchError.message : "No se pudieron cargar los costos OpenAI.");
@@ -395,6 +418,17 @@ export function OpenAiCostsPageClient() {
 
   const selectedTenantValue = activeTenantId ?? "__all__";
   const exportPrefix = `openai-costs-${scope}-${dateFrom}-${dateTo}`;
+  const reconciliationSummary = React.useMemo(() => {
+    return reconciliationRows.reduce(
+      (acc, row) => {
+        acc.internal += parseNumber(row.internal_estimated_cost_usd);
+        acc.official += parseNumber(row.official_cost_usd);
+        acc.variance += parseNumber(row.variance_usd);
+        return acc;
+      },
+      { internal: 0, official: 0, variance: 0 },
+    );
+  }, [reconciliationRows]);
 
   const handleExportDaily = React.useCallback(() => {
     downloadCsv(
@@ -494,6 +528,26 @@ export function OpenAiCostsPageClient() {
       ]),
     );
   }, [conversationRows, exportPrefix]);
+
+  const handleSyncReconciliation = React.useCallback(async () => {
+    setSyncingReconciliation(true);
+    try {
+      const params = new URLSearchParams({ date_from: dateFrom, date_to: dateTo });
+      const response = await fetch(`/api/analytics/openai/reconciliation/sync?${params.toString()}`, {
+        method: "POST",
+      });
+      const body = (await response.json().catch(() => ({}))) as { error?: string };
+      if (!response.ok) {
+        throw new Error(body.error || `Error ${response.status}`);
+      }
+      await load();
+    } catch (syncError) {
+      console.error("[openai-reconciliation] sync failed", syncError);
+      setError(syncError instanceof Error ? syncError.message : "No se pudo sincronizar la reconciliación OpenAI.");
+    } finally {
+      setSyncingReconciliation(false);
+    }
+  }, [dateFrom, dateTo, load]);
 
   return (
     <div className="flex flex-col gap-6 px-4 py-2 lg:px-6">
@@ -678,6 +732,61 @@ export function OpenAiCostsPageClient() {
           </Button>
         </CardContent>
       </Card>
+
+      {masterScopeEnabled && scope === "master" ? (
+        <Card>
+          <CardHeader className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+            <div className="space-y-1">
+              <CardTitle>Reconciliación oficial OpenAI</CardTitle>
+              <CardDescription>
+                Compara costo oficial diario de `organization/costs` contra el ledger interno por proyecto.
+              </CardDescription>
+            </div>
+            <Button type="button" variant="outline" onClick={() => void handleSyncReconciliation()} disabled={syncingReconciliation}>
+              {syncingReconciliation ? "Sincronizando..." : "Sincronizar OpenAI"}
+            </Button>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid gap-4 md:grid-cols-3">
+              <MetricCard label="Interno" value={formatUsd(reconciliationSummary.internal)} />
+              <MetricCard label="Oficial OpenAI" value={formatUsd(reconciliationSummary.official)} />
+              <MetricCard label="Delta" value={formatUsd(reconciliationSummary.variance)} />
+            </div>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Fecha</TableHead>
+                  <TableHead>Proyecto</TableHead>
+                  <TableHead className="text-right">Req internos</TableHead>
+                  <TableHead className="text-right">Interno</TableHead>
+                  <TableHead className="text-right">Oficial</TableHead>
+                  <TableHead className="text-right">Delta</TableHead>
+                  <TableHead className="text-right">Delta %</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {reconciliationRows.length ? (
+                  reconciliationRows.slice(0, 20).map((row, index) => (
+                    <TableRow key={[row.usage_date, row.openai_project_id ?? "project", index].join("-")}>
+                      <TableCell>{row.usage_date}</TableCell>
+                      <TableCell>{projectLabel(row.openai_project_display_name, row.openai_project_id)}</TableCell>
+                      <TableCell className="text-right">{formatInt(row.internal_requests_count)}</TableCell>
+                      <TableCell className="text-right">{formatUsd(row.internal_estimated_cost_usd)}</TableCell>
+                      <TableCell className="text-right">{formatUsd(row.official_cost_usd)}</TableCell>
+                      <TableCell className="text-right">{formatUsd(row.variance_usd)}</TableCell>
+                      <TableCell className="text-right">
+                        {row.variance_pct == null ? "—" : `${parseNumber(row.variance_pct).toFixed(2)}%`}
+                      </TableCell>
+                    </TableRow>
+                  ))
+                ) : (
+                  <EmptyTable colSpan={7} label={loading ? "Cargando reconciliación..." : "Sin datos de reconciliación para el rango actual."} />
+                )}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      ) : null}
 
       <div className="grid gap-6 xl:grid-cols-2">
         <Card>

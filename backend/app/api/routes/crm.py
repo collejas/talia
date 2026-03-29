@@ -106,6 +106,7 @@ from app.services.google_trends import (
     list_google_trends_countries,
 )
 from app.services.openai_catalog_sync import sync_openai_catalogs
+from app.services.openai_reconciliation import sync_openai_cost_reconciliation
 from app.services.ui_realtime_hub import (
     inbox_topic_for_org,
     prospectos_topic_for_org,
@@ -23087,6 +23088,39 @@ async def analytics_openai_master_costs_by_assistant(
             feature=feature,
             project_key=project_key,
             assistant_kind=assistant_kind,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return {"ok": True, "rows": rows}
+
+
+@router.post("/analytics/openai/master/reconciliation/sync")
+async def analytics_openai_master_reconciliation_sync(
+    *,
+    _: str = Depends(require_owner_or_admin_for_master_tenant()),
+    date_from: Annotated[str | None, Query(description="YYYY-MM-DD")] = None,
+    date_to: Annotated[str | None, Query(description="YYYY-MM-DD")] = None,
+) -> dict[str, Any]:
+    try:
+        return await sync_openai_cost_reconciliation(date_from=date_from, date_to=date_to)
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+
+@router.get("/analytics/openai/master/reconciliation/daily")
+async def analytics_openai_master_reconciliation_daily(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    _: str = Depends(require_owner_or_admin_for_master_tenant()),
+    date_from: Annotated[str | None, Query(description="YYYY-MM-DD")] = None,
+    date_to: Annotated[str | None, Query(description="YYYY-MM-DD")] = None,
+    project_id: str | None = None,
+) -> dict[str, Any]:
+    try:
+        rows = await repo.master_openai_cost_reconciliation_daily(
+            date_from=date_from,
+            date_to=date_to,
+            project_id=project_id,
         )
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
