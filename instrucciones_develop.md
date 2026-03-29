@@ -20,7 +20,15 @@ git pull origin develop
 cd /var/www/talia
 SKIP_RESTART=0 SKIP_LINT=1 bash scripts/deploy_panel_staging_atomic.sh
 
+Este script ya hace:
+- npm ci (si hace falta)
+- npx tsc --noEmit
+- npm run build
+- swap atómico de release
+- restart de Panel de staging
+- restart de API solo si `RESTART_API=1`
 
+* O asi:
 cd /var/www/talia
 sudo chown -R jorge:jorge /var/www/talia/releases/panel-staging
 sudo chown -R jorge:jorge /var/www/talia/current
@@ -30,15 +38,8 @@ sudo systemctl restart talia-panel-staging.service
 sudo systemctl is-active talia-api-staging.service
 sudo systemctl is-active talia-panel-staging.service
 
+* O asi:
 sudo bash scripts/cleanup_disk.sh
-
-Este script ya hace:
-- npm ci (si hace falta)
-- npx tsc --noEmit
-- npm run build
-- swap atómico de release
-- restart de Panel de staging
-- restart de API solo si `RESTART_API=1`
 
 3) Si hubo SOLO cambios en BACKEND (FastAPI)
 cd /var/www/talia/backend

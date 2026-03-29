@@ -224,7 +224,7 @@ function unwrapWebSessionsPayload(payload: unknown): {
   return { rows: [], shape: "none" };
 }
 
-function normalizeWebSessionRows(rows: WebSessionAttributionRow[], filters: VisitsFilters): VisitDetailRaw[] {
+function normalizeWebSessionRows(rows: WebSessionAttributionRow[]): VisitDetailRaw[] {
   const normalized: VisitDetailRaw[] = [];
   for (const candidate of rows) {
     if (!candidate || typeof candidate !== "object") continue;
@@ -292,12 +292,7 @@ function normalizeWebSessionRows(rows: WebSessionAttributionRow[], filters: Visi
         total_chat_rows: null,
         total_no_chat_rows: null,
       });
-    } catch (error) {
-      console.error("[visits] normalize_row_failed", {
-        error: error instanceof Error ? error.message : String(error),
-        rango: filters.rango || null,
-        sessionId: typeof row.session_id === "string" ? row.session_id : null,
-      });
+    } catch {
     }
   }
   return normalized;
@@ -369,12 +364,7 @@ function enrichVisitRows(
           null,
         template_captada: tracking.template_captada,
       });
-    } catch (error) {
-      console.error("[visits] enrich_row_failed", {
-        error: error instanceof Error ? error.message : String(error),
-        rango: filters.rango || null,
-        sessionId: row.session_id ?? null,
-      });
+    } catch {
     }
   }
   return enriched;
@@ -405,7 +395,7 @@ async function loadWebchatVisitRows(
   }
 
   const { rows: rawRows, shape } = unwrapWebSessionsPayload(detalleResult.data);
-  const normalized = normalizeWebSessionRows(rawRows, filters);
+  const normalized = normalizeWebSessionRows(rawRows);
   return {
     rows: applyChannelFilter(normalized, filters),
     shape,
@@ -428,11 +418,6 @@ export async function loadVisitsTableForConversionMap(
   const lookup = templatesResult?.ok ? buildTemplateLookup(templatesResult.data) : undefined;
   const enrichedRows = enrichVisitRows(webchat.rows, filters, lookup);
   const filteredRows = enrichedRows.filter((row) => matchesVisitsFilters(row, filters));
-  console.info("[visits] conversion_map_table_debug", {
-    rango: filters.rango || null,
-    rowsRaw: webchat.detailRows,
-    rowsFiltered: filteredRows.length,
-  });
   return mapTable(filteredRows, lookup);
 }
 
@@ -473,24 +458,6 @@ export async function loadVisitsData(filters: VisitsFilters = {}): Promise<Visit
   const enrichedDetalle = enrichVisitRows(mergedDetalleBase, filters, lookup);
 
   const filteredDetalle = enrichedDetalle.filter((row) => matchesVisitsFilters(row, filters));
-  console.info("[visits] loader_debug", {
-    detailOk: webchatResult.detailOk,
-    detailShape: webchatResult.shape,
-    detailRows: webchatResult.detailRows,
-    whatsappRows: whatsappDetail.length,
-    mergedRows: mergedDetalleBase.length,
-    enrichedRows: enrichedDetalle.length,
-    filteredRows: filteredDetalle.length,
-    includeAllCanales: !(filters.canales?.length),
-    canales: filters.canales ?? [],
-    estado: filters.estado || null,
-    sourceClass: filters.sourceClass || null,
-    utmSource: filters.utmSource || null,
-    utmMedium: filters.utmMedium || null,
-    utmCampaign: filters.utmCampaign || null,
-    templateId: filters.templateId || null,
-    rango: filters.rango || null,
-  });
   const whatsappTotal = extractTotal(whatsappVisitResult, whatsappDetail.length);
   const cards = mapCards(filters, kpisResult.ok ? kpisResult.data : undefined, filteredDetalle, whatsappTotal);
   const chart = mapChart(filteredDetalle);

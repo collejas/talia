@@ -465,15 +465,6 @@ export default async function Page({
     }
     return null;
   })();
-  console.info("[mapa-conversion] visits_table_stats", {
-    nivel,
-    rango,
-    estado: nivel === "municipio" ? normalizedEstado : null,
-    canales: canalesSelected,
-    visitsRows: visitsTable.length,
-    visitsErrors: errores.length,
-  });
-
   return (
     <SidebarProvider
       style={
