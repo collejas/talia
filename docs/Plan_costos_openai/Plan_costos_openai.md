@@ -708,6 +708,19 @@ Hoy tu sistema tiene estos vacíos principales:
     - `whatsapp / quality_retry`: `gpt-5-nano-2025-08-07`, `estimated_total_cost_usd=0.00033731`
     - `summary / summary`: `gpt-4o-mini`, `estimated_total_cost_usd=0.00004845`
 
+## Vistas SQL implementadas
+
+- `public.v_openai_usage_enriched`
+  - Base enriquecida con organización, familia de modelo, proyecto normalizado, `pricing_found`, `usage_date` y `usage_month`.
+- `public.v_openai_costs_daily`
+  - Agregado diario por tenant, canal, feature, proyecto y familia de modelo.
+- `public.v_openai_costs_by_conversation`
+  - Agregado por conversación para costo total, modelos usados, retries y fallbacks.
+- `public.v_openai_costs_by_model`
+  - Agregado mensual por tenant/canal/modelo para análisis comparativo de modelos.
+- `public.v_openai_costs_by_project`
+  - Agregado mensual por tenant/proyecto OpenAI para reconciliación por proyecto.
+
 ## Avance actual
 
 Estado al 2026-03-29:
