@@ -402,8 +402,18 @@ export function OpenAiCostsPageClient() {
               </TableHeader>
               <TableBody>
                 {dailyRows.length ? (
-                  dailyRows.slice(0, 12).map((row) => (
-                    <TableRow key={`${row.usage_date}-${row.channel}-${row.openai_model_family}-${row.feature}`}>
+                  dailyRows.slice(0, 12).map((row, index) => (
+                    <TableRow
+                      key={[
+                        row.usage_date,
+                        row.organizacion_nombre ?? "org",
+                        row.channel ?? "channel",
+                        row.openai_project_key ?? "project",
+                        row.openai_model_family ?? "model",
+                        row.feature ?? "feature",
+                        index,
+                      ].join("-")}
+                    >
                       <TableCell>{row.usage_date}</TableCell>
                       <TableCell>{row.organizacion_nombre ?? "—"}</TableCell>
                       <TableCell>{row.channel ?? "—"}</TableCell>
@@ -442,8 +452,8 @@ export function OpenAiCostsPageClient() {
               </TableHeader>
               <TableBody>
                 {projectRows.length ? (
-                  projectRows.slice(0, 12).map((row) => (
-                    <TableRow key={`${row.usage_month}-${row.openai_project_key}`}> 
+                  projectRows.slice(0, 12).map((row, index) => (
+                    <TableRow key={[row.usage_month, row.organizacion_nombre ?? "org", row.openai_project_key ?? "project", index].join("-")}> 
                       <TableCell>{formatMonthLabel(row.usage_month)}</TableCell>
                       <TableCell>{row.organizacion_nombre ?? "—"}</TableCell>
                       <TableCell>{projectLabel(row.openai_project_display_name, row.openai_project_key)}</TableCell>
@@ -482,8 +492,17 @@ export function OpenAiCostsPageClient() {
               </TableHeader>
               <TableBody>
                 {modelRows.length ? (
-                  modelRows.slice(0, 12).map((row) => (
-                    <TableRow key={`${row.usage_month}-${row.channel}-${row.openai_model_family}`}> 
+                  modelRows.slice(0, 12).map((row, index) => (
+                    <TableRow
+                      key={[
+                        row.usage_month,
+                        row.organizacion_nombre ?? "org",
+                        row.channel ?? "channel",
+                        row.openai_project_key ?? "project",
+                        row.openai_model_family ?? "model",
+                        index,
+                      ].join("-")}
+                    > 
                       <TableCell>{formatMonthLabel(row.usage_month)}</TableCell>
                       <TableCell>{row.organizacion_nombre ?? "—"}</TableCell>
                       <TableCell>{row.channel ?? "—"}</TableCell>
@@ -522,8 +541,18 @@ export function OpenAiCostsPageClient() {
               </TableHeader>
               <TableBody>
                 {assistantRows.length ? (
-                  assistantRows.slice(0, 12).map((row) => (
-                    <TableRow key={`${row.usage_month}-${row.channel}-${row.assistant_kind}-${row.assistant_ref ?? "null"}`}>
+                  assistantRows.slice(0, 12).map((row, index) => (
+                    <TableRow
+                      key={[
+                        row.usage_month,
+                        row.organizacion_nombre ?? "org",
+                        row.channel ?? "channel",
+                        row.openai_project_key ?? "project",
+                        row.assistant_kind ?? "kind",
+                        row.assistant_ref ?? "ref",
+                        index,
+                      ].join("-")}
+                    >
                       <TableCell>{formatMonthLabel(row.usage_month)}</TableCell>
                       <TableCell>{row.organizacion_nombre ?? "—"}</TableCell>
                       <TableCell>{row.channel ?? "—"}</TableCell>

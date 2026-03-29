@@ -723,20 +723,30 @@ Hoy tu sistema tiene estos vacíos principales:
 
 ## Endpoints backend implementados
 
+Tenant actual:
 - `GET /api/crm/analytics/openai/costs/daily`
 - `GET /api/crm/analytics/openai/costs/conversations`
 - `GET /api/crm/analytics/openai/costs/models`
 - `GET /api/crm/analytics/openai/costs/projects`
+- `GET /api/crm/analytics/openai/costs/assistants`
+
+Master cross-tenant:
+- `GET /api/crm/analytics/openai/master/costs/daily`
+- `GET /api/crm/analytics/openai/master/costs/conversations`
+- `GET /api/crm/analytics/openai/master/costs/models`
+- `GET /api/crm/analytics/openai/master/costs/projects`
+- `GET /api/crm/analytics/openai/master/costs/assistants`
+- `POST /api/crm/analytics/openai/master/catalog/sync`
 
 Notas:
-- En esta iteración los endpoints operan con `user_token` y RLS, por lo que exponen costos del tenant actual.
-- La vista cross-tenant para tenant maestro queda como siguiente fase, porque requiere una política explícita de acceso agregada fuera del RLS actual.
+- Los endpoints del tenant actual operan con `user_token` y RLS.
+- Los endpoints master usan lectura service-role y exigen `owner/admin` del tenant maestro.
 
 ## Backlog priorizado
 
 1. Modo master cross-tenant
-   - Exponer una vista agregada para el tenant maestro fuera del RLS actual del tenant individual.
-   - Permitir comparar costo, tokens y modelos entre tenants clientes.
+   - Ya implementado en primera versión: backend protegido, frontend con alcance `tenant actual` vs `master global` y soporte de filtro por `tenant-context`.
+   - Pendiente fino: selector visual explícito de tenant dentro de la pantalla.
 
 2. Desglose por assistant_ref / assistant_kind
    - Ya implementado en primera versión: vista SQL, endpoints backend y tabla frontend.
@@ -760,18 +770,33 @@ Notas:
   - Backend con rutas protegidas `owner/admin` del tenant maestro.
   - Frontend con selector de alcance `tenant actual` vs `master global`.
   - Soporte para filtrar por `tenant_id` cuando existe contexto de tenant seleccionado.
+- `assistant_ref / assistant_kind` ya implementado:
+  - vista SQL, endpoints y tabla frontend.
+- Nombres legibles ya implementados para:
+  - proyecto OpenAI
+  - asistente lógico
+  - conversación
+- Sync de catálogo OpenAI ya implementado:
+  - tablas de catálogo locales
+  - sincronización manual protegida
+  - resolución real de nombres de proyecto vía OpenAI admin API cuando existe `project_id`.
 
 Estado al 2026-03-29:
 
 ### Ya implementado
 
-- Se creó y aplicó la migración SQL:
+- Se crearon y aplicaron las migraciones SQL:
   - `supabase/migrations/20280429_120000_openai_usage_ledger.sql`
+  - `supabase/migrations/20280429_121500_openai_usage_views.sql`
+  - `supabase/migrations/20280429_122500_openai_assistant_views.sql`
+  - `supabase/migrations/20280429_124500_openai_catalogs.sql`
+  - `supabase/migrations/20280429_125500_openai_catalog_enrichment.sql`
 - Ya existen en Supabase:
   - `public.openai_pricing_catalog`
   - `public.openai_request_usage`
-- Se creó el servicio backend:
+- Se crearon los servicios backend:
   - `backend/app/services/openai_usage_ledger.py`
+  - `backend/app/services/openai_catalog_sync.py`
 - El cliente OpenAI ya soporta `project_id` efectivo en runtime:
   - `backend/app/services/openai.py`
 - `tenant_runtime` ya expone `project_id` para webchat/whatsapp:
@@ -784,6 +809,7 @@ Estado al 2026-03-29:
 - El backend fue reiniciado y validado:
   - `talia-api.service` activo
   - `GET /api/health` responde `ok`
+- El frontend `/settings/openai-costs` ya está operativo para tenant actual y `master global`.
 
 ### Qué captura ya el ledger
 
@@ -806,26 +832,29 @@ Para tráfico nuevo, `public.openai_request_usage` ya puede guardar:
 - latencia
 - `fallback_used`
 - `quality_retry_used`
+- `assistant_kind` / `assistant_ref`
+- nombre legible de proyecto/asistente/conversación vía vistas enriquecidas
 
 ### Pendiente inmediato
 
-- `public.openai_pricing_catalog` sigue vacío
-- por eso el costo estimado hoy queda en `0`
-- el ledger sí guarda uso y metadatos, pero aún no costo económico real
+- Agregar selector explícito de tenant dentro de `Master global` para no depender solo de `tenant-context`.
+- Agregar export CSV.
+- Agregar filtros dedicados por `assistant_kind`, proyecto y organización.
 
 ### Riesgos/observaciones vigentes
 
-- La segregación por `project_id` ya quedó soportada en código, pero depende de que cada tenant realmente tenga configurado su `openai.general.project_id`
-- En la data observada, `organizaciones.config->openai` sigue `null` en tenants consultados; esto debe poblarse para aprovechar conciliación por proyecto
-- Aún no existe reconciliación con Usage/Costs API oficial de OpenAI
-- Aún no existe dashboard/frontend para visualizar este ledger
+- La segregación por `project_id` ya quedó soportada en código, pero depende de que cada tenant realmente tenga configurado su `openai.general.project_id`.
+- Los nombres reales de proyecto ya pueden obtenerse desde OpenAI cuando existe `project_id` y `admin key` con `api.management.read`.
+- Los prompts `pmpt_...` todavía no tienen una resolución oficial estable por nombre en la integración actual; hoy usan catálogo/alias local.
+- Las filas históricas previas a configurar `project_id` seguirán apareciendo como `shared-default` hasta que se haga backfill.
+- Aún no existe reconciliación con Usage/Costs API oficial de OpenAI.
 
 ### Siguiente hito recomendado
 
-1. cargar pricing inicial en `openai_pricing_catalog`
-2. ejecutar tráfico real de prueba
-3. verificar filas nuevas en `openai_request_usage`
-4. construir agregados SQL/API para el panel
+1. agregar export CSV
+2. agregar selector visual de tenant en `Master global`
+3. agregar filtros dedicados por `assistant_kind` / proyecto / organización
+4. preparar reconciliación con Usage/Costs API de OpenAI
 
 ## Resultado esperado final
 
