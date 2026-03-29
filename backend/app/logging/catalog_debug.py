@@ -5,10 +5,11 @@ from __future__ import annotations
 import json
 import logging
 from datetime import datetime, timezone
-from pathlib import Path
 from typing import Any
 
-CATALOG_DEBUG_LOG_PATH = Path("/var/www/talia/logs/catalogo-debug.log")
+from app.core.config import resolve_log_path
+
+CATALOG_DEBUG_LOG_PATH = resolve_log_path("catalogo-debug.log")
 
 
 def write_catalog_debug_entry(entry: dict[str, Any]) -> None:

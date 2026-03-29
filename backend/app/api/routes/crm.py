@@ -53,7 +53,7 @@ from app.channels.webchat import schemas as webchat_schemas
 from app.channels.webchat import service as webchat_service
 from app.channels.whatsapp import service as whatsapp_service
 from app.channels.whatsapp.routing import resolve_whatsapp_organizacion
-from app.core.config import settings
+from app.core.config import resolve_log_path, settings
 from app.core.logging import get_logger
 from app.data.geo.locations import get_municipality_name, get_state_name
 from app.repositories.crm import CRMRepository, CRMRepositoryError
@@ -125,12 +125,12 @@ UTC = timezone.utc
 TIMEZONE_CACHE_TTL_SECONDS = 300
 _USER_TIMEZONE_CACHE: dict[str, tuple[str | None, float]] = {}
 
-MAPBOX_LOG_DIR = Path("/var/www/talia/logs")
-MAPBOX_LOG_FILE = MAPBOX_LOG_DIR / "mapbox-debug.log"
-SALE_LOG_FILE = MAPBOX_LOG_DIR / "propiedades-ventas.log"
+MAPBOX_LOG_DIR = Path(settings.log_file_path).parent
+MAPBOX_LOG_FILE = resolve_log_path("mapbox-debug.log")
+SALE_LOG_FILE = resolve_log_path("propiedades-ventas.log")
 SALE_LOG_TAIL_BYTES = 64 * 1024
 DEFAULT_SALE_LOG_LIMIT = 20
-INBOX_THREADS_METRICS_LOG_FILE = MAPBOX_LOG_DIR / "inbox-threads-metrics.log"
+INBOX_THREADS_METRICS_LOG_FILE = resolve_log_path("inbox-threads-metrics.log")
 INBOX_THREADS_METRICS_LOG_TAIL_BYTES = 256 * 1024
 DEFAULT_INBOX_THREADS_METRICS_HISTORY_LIMIT = 100
 

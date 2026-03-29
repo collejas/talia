@@ -10,7 +10,11 @@ IMPORTANTE:
 - Para staging usa solo:
   - `talia-api-staging.service`
   - `talia-panel-staging.service`
+- `talia-api-staging.service` y `talia-panel-staging.service` corren como `jorge`, no como `root`.
 - El deploy de frontend en staging ya es no interactivo para reinicios de servicios; no hace falta `sudo systemctl ...` manual para el flujo normal.
+- La política `NOPASSWD` esperada para deploys está documentada en:
+  - `infra/sudoers/talia-staging-deploy.sudoers`
+  - `infra/sudoers/talia-production-deploy.sudoers`
 
 1) Ir al repo y actualizar `develop`
 cd /var/www/talia
@@ -80,6 +84,8 @@ sudo journalctl -u talia-panel-staging.service -n 120 --no-pager
 y logs de archivos locales:
 tail -n 120 /var/www/talia/logs/panel-staging.log
 tail -n 120 /var/www/talia/logs/panel-staging-error.log
+tail -n 120 /var/www/talia/logs/api-staging.log
+tail -n 120 /var/www/talia/logs/request-staging.log
 
 7) Troubleshooting útil
 Si falta espacio o quieres mantenimiento de disco:
@@ -89,6 +95,10 @@ Si hiciste cambios en unit files de systemd:
 sudo systemctl daemon-reload
 sudo systemctl restart talia-api-staging.service
 sudo systemctl restart talia-panel-staging.service
+
+Si aparece un error de permisos en logs o archivos temporales:
+ls -l /var/www/talia/logs
+ls -ld /var/www/talia/releases/panel-staging /var/www/talia/current /var/www/talia/.npm-cache
 
 Si necesitas compilar pero no reiniciar todavía:
 cd /var/www/talia

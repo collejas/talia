@@ -13,6 +13,9 @@ IMPORTANTE:
 - El deploy de panel en producción ya soporta reinicio no interactivo con `sudoers` restringido.
 - `talia-api.service` y `talia-panel.service` corren como `jorge`, no como `root`.
 - Si aparecen errores de permisos, revisar ownership en `/var/www/talia/logs`, releases y archivos creados por procesos anteriores.
+- La política `NOPASSWD` esperada para deploys está documentada en:
+  - `infra/sudoers/talia-staging-deploy.sudoers`
+  - `infra/sudoers/talia-production-deploy.sudoers`
 
 1) Pre-check antes de promover
 cd /var/www/talia
