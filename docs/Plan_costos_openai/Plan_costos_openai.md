@@ -755,6 +755,10 @@ Notas:
    - Disparar alertas cuando el gasto diario/mensual supere presupuesto o cuando cambie anómalamente la latencia/costo por request.
 
 ## Avance actual
+- `master cross-tenant` ya implementado en primera versión:
+  - Backend con rutas protegidas `owner/admin` del tenant maestro.
+  - Frontend con selector de alcance `tenant actual` vs `master global`.
+  - Soporte para filtrar por `tenant_id` cuando existe contexto de tenant seleccionado.
 
 Estado al 2026-03-29:
 

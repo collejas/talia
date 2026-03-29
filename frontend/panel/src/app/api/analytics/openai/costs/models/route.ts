@@ -1,5 +1,9 @@
 import { proxyOpenAiCostsRequest } from "../proxy";
 
 export async function GET(request: Request) {
-  return proxyOpenAiCostsRequest(request, "/crm/analytics/openai/costs/models");
+  return proxyOpenAiCostsRequest(
+    request,
+    "/crm/analytics/openai/costs/models",
+    "/crm/analytics/openai/master/costs/models",
+  );
 }

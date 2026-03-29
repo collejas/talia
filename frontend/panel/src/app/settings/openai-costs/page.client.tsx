@@ -2,6 +2,8 @@
 
 import * as React from "react";
 
+import { usePermissions } from "@/hooks/use-permissions";
+import { useTenantContext } from "@/hooks/use-tenant-context";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -82,6 +84,16 @@ const FEATURE_OPTIONS = [
   { value: "conversation_summary", label: "conversation_summary" },
 ];
 
+const MASTER_TENANT_ID = "00000000-0000-0000-0000-000000000001";
+
+function canUseMasterScope(
+  organizacionId: string | undefined,
+  isOwner: boolean,
+  isAdmin: boolean,
+): boolean {
+  return Boolean((isOwner || isAdmin) && organizacionId === MASTER_TENANT_ID);
+}
+
 function isoDate(value: Date): string {
   return value.toISOString().slice(0, 10);
 }
@@ -137,10 +149,13 @@ async function fetchRows<T>(path: string, searchParams: URLSearchParams): Promis
 
 export function OpenAiCostsPageClient() {
   const today = React.useMemo(() => new Date(), []);
+  const { context: permissionContext } = usePermissions();
+  const { tenantId: activeTenantId, tenantName: activeTenantName } = useTenantContext();
   const [dateFrom, setDateFrom] = React.useState(() => isoDate(new Date(today.getTime() - 29 * 24 * 60 * 60 * 1000)));
   const [dateTo, setDateTo] = React.useState(() => isoDate(today));
   const [channel, setChannel] = React.useState("__all__");
   const [feature, setFeature] = React.useState("__all__");
+  const [scope, setScope] = React.useState<"tenant" | "master">("tenant");
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [dailyRows, setDailyRows] = React.useState<DailyRow[]>([]);
@@ -152,11 +167,24 @@ export function OpenAiCostsPageClient() {
     setLoading(true);
     setError(null);
     try {
+      const useMasterScope = scope === "master" && canUseMasterScope(permissionContext.organizacion_id, permissionContext.es_owner, permissionContext.es_admin);
+      const dailyBasePath = "/api/analytics/openai/costs/daily";
+      const conversationsBasePath = "/api/analytics/openai/costs/conversations";
+      const modelsBasePath = "/api/analytics/openai/costs/models";
+      const projectsBasePath = "/api/analytics/openai/costs/projects";
       const commonDaily = new URLSearchParams({ date_from: dateFrom, date_to: dateTo });
       const commonMonthly = new URLSearchParams({
         month_from: monthStart(dateFrom),
         month_to: monthStart(dateTo),
       });
+      if (useMasterScope) {
+        commonDaily.set("scope", "master");
+        commonMonthly.set("scope", "master");
+      }
+      if (useMasterScope && activeTenantId) {
+        commonDaily.set("tenant_id", activeTenantId);
+        commonMonthly.set("tenant_id", activeTenantId);
+      }
       if (channel !== "__all__") {
         commonDaily.set("channel", channel);
         commonMonthly.set("channel", channel);
@@ -170,10 +198,10 @@ export function OpenAiCostsPageClient() {
       conversationParams.set("limit", "20");
 
       const [daily, conversations, models, projects] = await Promise.all([
-        fetchRows<DailyRow>("/api/analytics/openai/costs/daily", commonDaily),
-        fetchRows<ConversationRow>("/api/analytics/openai/costs/conversations", conversationParams),
-        fetchRows<ModelRow>("/api/analytics/openai/costs/models", commonMonthly),
-        fetchRows<ProjectRow>("/api/analytics/openai/costs/projects", commonMonthly),
+        fetchRows<DailyRow>(dailyBasePath, commonDaily),
+        fetchRows<ConversationRow>(conversationsBasePath, conversationParams),
+        fetchRows<ModelRow>(modelsBasePath, commonMonthly),
+        fetchRows<ProjectRow>(projectsBasePath, commonMonthly),
       ]);
 
       setDailyRows(daily);
@@ -186,7 +214,13 @@ export function OpenAiCostsPageClient() {
     } finally {
       setLoading(false);
     }
-  }, [channel, dateFrom, dateTo, feature]);
+  }, [activeTenantId, channel, dateFrom, dateTo, feature, permissionContext.es_admin, permissionContext.es_owner, permissionContext.organizacion_id, scope]);
+
+  const masterScopeEnabled = canUseMasterScope(
+    permissionContext.organizacion_id,
+    permissionContext.es_owner,
+    permissionContext.es_admin,
+  );
 
   React.useEffect(() => {
     void load();
@@ -222,6 +256,20 @@ export function OpenAiCostsPageClient() {
           <CardDescription>Consulta rápida para el tenant actual autenticado.</CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-3 lg:flex-row lg:items-end">
+          {masterScopeEnabled ? (
+            <div className="grid gap-2">
+              <label className="text-xs font-medium text-muted-foreground">Alcance</label>
+              <Select value={scope} onValueChange={(value) => setScope(value as "tenant" | "master")}>
+                <SelectTrigger className="w-full lg:w-[180px]">
+                  <SelectValue placeholder="Tenant actual" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="tenant">Tenant actual</SelectItem>
+                  <SelectItem value="master">Master global</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          ) : null}
           <div className="grid gap-2">
             <label className="text-xs font-medium text-muted-foreground">Desde</label>
             <Input type="date" value={dateFrom} onChange={(event) => setDateFrom(event.target.value)} className="w-full lg:w-[180px]" />
@@ -263,6 +311,9 @@ export function OpenAiCostsPageClient() {
           <Button type="button" variant="outline" onClick={() => void load()} disabled={loading}>
             {loading ? "Actualizando..." : "Actualizar"}
           </Button>
+          {scope === "master" && activeTenantId ? (
+            <Badge variant="outline">Tenant filtro: {activeTenantName ?? shortId(activeTenantId)}</Badge>
+          ) : null}
           {totals.missingPricing > 0 ? <Badge variant="secondary">Pricing faltante: {totals.missingPricing}</Badge> : null}
         </CardContent>
       </Card>
