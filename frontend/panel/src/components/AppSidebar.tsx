@@ -167,6 +167,12 @@ const NAVIGATION: {
           icon: IconGauge,
           permission: "settings.manage",
         },
+        {
+          title: "Costos OpenAI",
+          url: "/settings/openai-costs",
+          icon: IconDatabase,
+          permission: "reports.view",
+        },
         { title: "Recursos Humanos", url: "/settings/rh", icon: IconUsersGroup, permission: "user.manage" },
         
       ],
