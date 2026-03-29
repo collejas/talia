@@ -746,12 +746,13 @@ Notas:
 
 1. Modo master cross-tenant
    - Ya implementado en primera versión: backend protegido, frontend con alcance `tenant actual` vs `master global` y soporte de filtro por `tenant-context`.
-   - Pendiente fino: selector visual explícito de tenant dentro de la pantalla.
+   - Ya implementado además el selector visual explícito de tenant/organización dentro de la pantalla.
 
 2. Desglose por assistant_ref / assistant_kind
    - Ya implementado en primera versión: vista SQL, endpoints backend y tabla frontend.
    - Actualizado además con nombres legibles para proyecto, asistente y conversación.
-   - Pendiente fino: filtros dedicados y export por assistant.
+   - Ya implementados además los filtros dedicados de `assistant_kind` y `project_key` en la pantalla.
+   - Pendiente fino: export por assistant.
 
 3. Export CSV
    - Permitir exportar diario, modelos, proyectos y conversaciones desde la vista de costos.
@@ -837,9 +838,9 @@ Para tráfico nuevo, `public.openai_request_usage` ya puede guardar:
 
 ### Pendiente inmediato
 
-- Agregar selector explícito de tenant dentro de `Master global` para no depender solo de `tenant-context`.
 - Agregar export CSV.
-- Agregar filtros dedicados por `assistant_kind`, proyecto y organización.
+- Evaluar si conviene llevar el filtro de `assistant_kind` al backend agregado completo o mantenerlo acotado a la vista de asistentes.
+- Si se requiere, agregar selector/buscador más robusto de organización para instalaciones con muchos tenants.
 
 ### Riesgos/observaciones vigentes
 
@@ -852,9 +853,10 @@ Para tráfico nuevo, `public.openai_request_usage` ya puede guardar:
 ### Siguiente hito recomendado
 
 1. agregar export CSV
-2. agregar selector visual de tenant en `Master global`
-3. agregar filtros dedicados por `assistant_kind` / proyecto / organización
-4. preparar reconciliación con Usage/Costs API de OpenAI
+2. preparar reconciliación con Usage/Costs API de OpenAI
+3. agregar alertas y presupuestos
+4. evaluar backfill histórico de `shared-default` a proyectos reales cuando aplique
+   - Ya aplicado para el histórico del tenant maestro que correspondía a `TALIA`.
 
 ## Resultado esperado final
 

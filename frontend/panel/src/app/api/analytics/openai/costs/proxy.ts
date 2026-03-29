@@ -4,6 +4,7 @@ import { callCrmApi } from "@/lib/api/crm";
 
 const ALLOWED_PARAMS = [
   "scope",
+  "tenant_id",
   "date_from",
   "date_to",
   "month_from",

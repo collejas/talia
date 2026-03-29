@@ -99,6 +99,11 @@ type ApiResponse<T> = {
   error?: string;
 };
 
+type TenantOption = {
+  id: string;
+  nombre: string | null;
+};
+
 const CHANNEL_OPTIONS = [
   { value: "__all__", label: "Todos los canales" },
   { value: "webchat", label: "Webchat" },
@@ -110,6 +115,13 @@ const FEATURE_OPTIONS = [
   { value: "__all__", label: "Todas las features" },
   { value: "sales_chat", label: "sales_chat" },
   { value: "conversation_summary", label: "conversation_summary" },
+];
+
+const ASSISTANT_KIND_OPTIONS = [
+  { value: "__all__", label: "Todos los tipos" },
+  { value: "prompt", label: "Prompt" },
+  { value: "assistant", label: "Assistant" },
+  { value: "raw_model", label: "Raw model" },
 ];
 
 const MASTER_TENANT_ID = "00000000-0000-0000-0000-000000000001";
@@ -199,11 +211,13 @@ async function fetchRows<T>(path: string, searchParams: URLSearchParams): Promis
 export function OpenAiCostsPageClient() {
   const today = React.useMemo(() => new Date(), []);
   const { context: permissionContext } = usePermissions();
-  const { tenantId: activeTenantId, tenantName: activeTenantName } = useTenantContext();
+  const { tenantId: activeTenantId, tenantName: activeTenantName, refresh } = useTenantContext();
   const [dateFrom, setDateFrom] = React.useState(() => isoDate(new Date(today.getTime() - 29 * 24 * 60 * 60 * 1000)));
   const [dateTo, setDateTo] = React.useState(() => isoDate(today));
   const [channel, setChannel] = React.useState("__all__");
   const [feature, setFeature] = React.useState("__all__");
+  const [projectKey, setProjectKey] = React.useState("__all__");
+  const [assistantKind, setAssistantKind] = React.useState("__all__");
   const [scope, setScope] = React.useState<"tenant" | "master">("tenant");
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
@@ -212,6 +226,31 @@ export function OpenAiCostsPageClient() {
   const [modelRows, setModelRows] = React.useState<ModelRow[]>([]);
   const [projectRows, setProjectRows] = React.useState<ProjectRow[]>([]);
   const [assistantRows, setAssistantRows] = React.useState<AssistantRow[]>([]);
+  const [tenantOptions, setTenantOptions] = React.useState<TenantOption[]>([]);
+  const [tenantsLoading, setTenantsLoading] = React.useState(false);
+
+  const loadTenantOptions = React.useCallback(async () => {
+    if (!canUseMasterScope(permissionContext.organizacion_id, permissionContext.es_owner, permissionContext.es_admin)) {
+      setTenantOptions([]);
+      return;
+    }
+    setTenantsLoading(true);
+    try {
+      const response = await fetch("/api/platform-admin/tenants", { cache: "no-store" });
+      const body = (await response.json().catch(() => ({}))) as { items?: TenantOption[] };
+      setTenantOptions(
+        Array.isArray(body.items)
+          ? body.items
+              .filter((item) => typeof item?.id === "string" && item.id.trim().length)
+              .map((item) => ({ id: item.id.trim(), nombre: typeof item.nombre === "string" ? item.nombre : null }))
+          : [],
+      );
+    } catch {
+      setTenantOptions([]);
+    } finally {
+      setTenantsLoading(false);
+    }
+  }, [permissionContext.es_admin, permissionContext.es_owner, permissionContext.organizacion_id]);
 
   const load = React.useCallback(async () => {
     setLoading(true);
@@ -244,16 +283,24 @@ export function OpenAiCostsPageClient() {
         commonDaily.set("feature", feature);
         commonMonthly.set("feature", feature);
       }
+      if (projectKey !== "__all__") {
+        commonDaily.set("project_key", projectKey);
+        commonMonthly.set("project_key", projectKey);
+      }
 
       const conversationParams = new URLSearchParams(commonDaily);
       conversationParams.set("limit", "20");
+      const assistantParams = new URLSearchParams(commonMonthly);
+      if (assistantKind !== "__all__") {
+        assistantParams.set("assistant_kind", assistantKind);
+      }
 
       const [daily, conversations, models, projects, assistants] = await Promise.all([
         fetchRows<DailyRow>(dailyBasePath, commonDaily),
         fetchRows<ConversationRow>(conversationsBasePath, conversationParams),
         fetchRows<ModelRow>(modelsBasePath, commonMonthly),
         fetchRows<ProjectRow>(projectsBasePath, commonMonthly),
-        fetchRows<AssistantRow>(assistantsBasePath, commonMonthly),
+        fetchRows<AssistantRow>(assistantsBasePath, assistantParams),
       ]);
 
       setDailyRows(daily);
@@ -267,7 +314,7 @@ export function OpenAiCostsPageClient() {
     } finally {
       setLoading(false);
     }
-  }, [activeTenantId, channel, dateFrom, dateTo, feature, permissionContext.es_admin, permissionContext.es_owner, permissionContext.organizacion_id, scope]);
+  }, [activeTenantId, assistantKind, channel, dateFrom, dateTo, feature, permissionContext.es_admin, permissionContext.es_owner, permissionContext.organizacion_id, projectKey, scope]);
 
   const masterScopeEnabled = canUseMasterScope(
     permissionContext.organizacion_id,
@@ -278,6 +325,10 @@ export function OpenAiCostsPageClient() {
   React.useEffect(() => {
     void load();
   }, [load]);
+
+  React.useEffect(() => {
+    void loadTenantOptions();
+  }, [loadTenantOptions]);
 
   const totals = React.useMemo(() => {
     return dailyRows.reduce(
@@ -292,6 +343,27 @@ export function OpenAiCostsPageClient() {
       { cost: 0, requests: 0, tokens: 0, conversations: 0, missingPricing: 0 },
     );
   }, [dailyRows]);
+
+  const projectOptions = React.useMemo(() => {
+    const seen = new Map<string, string>();
+    const push = (key: string | null | undefined, displayName: string | null | undefined) => {
+      const normalizedKey = typeof key === "string" ? key.trim() : "";
+      if (!normalizedKey.length || seen.has(normalizedKey)) return;
+      seen.set(normalizedKey, projectLabel(displayName, normalizedKey));
+    };
+
+    for (const row of dailyRows) push(row.openai_project_key, row.openai_project_display_name);
+    for (const row of projectRows) push(row.openai_project_key, row.openai_project_display_name);
+    for (const row of modelRows) push(row.openai_project_key, row.openai_project_display_name);
+    for (const row of assistantRows) push(row.openai_project_key, row.openai_project_display_name);
+    for (const row of conversationRows) push(row.openai_project_key, row.openai_project_display_name);
+
+    return Array.from(seen.entries())
+      .map(([value, label]) => ({ value, label }))
+      .sort((a, b) => a.label.localeCompare(b.label, "es"));
+  }, [assistantRows, conversationRows, dailyRows, modelRows, projectRows]);
+
+  const selectedTenantValue = activeTenantId ?? "__all__";
 
   return (
     <div className="flex flex-col gap-6 px-4 py-2 lg:px-6">
@@ -308,12 +380,13 @@ export function OpenAiCostsPageClient() {
           <CardTitle>Filtros</CardTitle>
           <CardDescription>Consulta rápida para el tenant actual autenticado.</CardDescription>
         </CardHeader>
-        <CardContent className="flex flex-col gap-3 lg:flex-row lg:items-end">
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-5">
           {masterScopeEnabled ? (
-            <div className="grid gap-2">
+            <div className="grid gap-2 min-w-0">
               <label className="text-xs font-medium text-muted-foreground">Alcance</label>
               <Select value={scope} onValueChange={(value) => setScope(value as "tenant" | "master")}>
-                <SelectTrigger className="w-full lg:w-[180px]">
+                <SelectTrigger className="w-full">
                   <SelectValue placeholder="Tenant actual" />
                 </SelectTrigger>
                 <SelectContent>
@@ -323,18 +396,69 @@ export function OpenAiCostsPageClient() {
               </Select>
             </div>
           ) : null}
-          <div className="grid gap-2">
+          {masterScopeEnabled && scope === "master" ? (
+            <div className="grid gap-2 min-w-0">
+              <label className="text-xs font-medium text-muted-foreground">Organización / tenant</label>
+              <Select
+                value={selectedTenantValue}
+                onValueChange={async (value) => {
+                  try {
+                    if (value === "__all__") {
+                      await fetch("/api/platform-admin/tenant-context", { method: "DELETE" });
+                    } else {
+                      await fetch("/api/platform-admin/tenant-context", {
+                        method: "PUT",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ tenant_id: value }),
+                      });
+                    }
+                  } finally {
+                    await refresh();
+                  }
+                }}
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder={tenantsLoading ? "Cargando tenants..." : "Todos los tenants"} />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__all__">Todos los tenants</SelectItem>
+                  {tenantOptions.map((tenant) => (
+                    <SelectItem key={tenant.id} value={tenant.id}>
+                      {tenant.nombre ?? shortId(tenant.id)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          ) : null}
+          <div className="grid gap-2 min-w-0">
+            <label className="text-xs font-medium text-muted-foreground">Proyecto</label>
+            <Select value={projectKey} onValueChange={setProjectKey}>
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="Todos los proyectos" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__all__">Todos los proyectos</SelectItem>
+                {projectOptions.map((option) => (
+                  <SelectItem key={option.value} value={option.value}>
+                    {option.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="grid gap-2 min-w-0">
             <label className="text-xs font-medium text-muted-foreground">Desde</label>
-            <Input type="date" value={dateFrom} onChange={(event) => setDateFrom(event.target.value)} className="w-full lg:w-[180px]" />
+            <Input type="date" value={dateFrom} onChange={(event) => setDateFrom(event.target.value)} className="w-full" />
           </div>
-          <div className="grid gap-2">
+          <div className="grid gap-2 min-w-0">
             <label className="text-xs font-medium text-muted-foreground">Hasta</label>
-            <Input type="date" value={dateTo} onChange={(event) => setDateTo(event.target.value)} className="w-full lg:w-[180px]" />
+            <Input type="date" value={dateTo} onChange={(event) => setDateTo(event.target.value)} className="w-full" />
           </div>
-          <div className="grid gap-2">
+          <div className="grid gap-2 min-w-0">
             <label className="text-xs font-medium text-muted-foreground">Canal</label>
             <Select value={channel} onValueChange={setChannel}>
-              <SelectTrigger className="w-full lg:w-[200px]">
+              <SelectTrigger className="w-full">
                 <SelectValue placeholder="Todos" />
               </SelectTrigger>
               <SelectContent>
@@ -346,10 +470,10 @@ export function OpenAiCostsPageClient() {
               </SelectContent>
             </Select>
           </div>
-          <div className="grid gap-2">
+          <div className="grid gap-2 min-w-0">
             <label className="text-xs font-medium text-muted-foreground">Feature</label>
             <Select value={feature} onValueChange={setFeature}>
-              <SelectTrigger className="w-full lg:w-[220px]">
+              <SelectTrigger className="w-full">
                 <SelectValue placeholder="Todas" />
               </SelectTrigger>
               <SelectContent>
@@ -361,13 +485,34 @@ export function OpenAiCostsPageClient() {
               </SelectContent>
             </Select>
           </div>
-          <Button type="button" variant="outline" onClick={() => void load()} disabled={loading}>
-            {loading ? "Actualizando..." : "Actualizar"}
-          </Button>
-          {scope === "master" && activeTenantId ? (
-            <Badge variant="outline">Tenant filtro: {activeTenantName ?? shortId(activeTenantId)}</Badge>
-          ) : null}
-          {totals.missingPricing > 0 ? <Badge variant="secondary">Pricing faltante: {totals.missingPricing}</Badge> : null}
+          <div className="grid gap-2 min-w-0">
+            <label className="text-xs font-medium text-muted-foreground">Tipo de asistente</label>
+            <Select value={assistantKind} onValueChange={setAssistantKind}>
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="Todos" />
+              </SelectTrigger>
+              <SelectContent>
+                {ASSISTANT_KIND_OPTIONS.map((option) => (
+                  <SelectItem key={option.value} value={option.value}>
+                    {option.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="grid gap-2 min-w-0">
+            <label className="text-xs font-medium text-muted-foreground">Acción</label>
+            <Button type="button" variant="outline" onClick={() => void load()} disabled={loading} className="w-full">
+              {loading ? "Actualizando..." : "Actualizar"}
+            </Button>
+          </div>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            {scope === "master" && activeTenantId ? (
+              <Badge variant="outline">Tenant filtro: {activeTenantName ?? shortId(activeTenantId)}</Badge>
+            ) : null}
+            {totals.missingPricing > 0 ? <Badge variant="secondary">Pricing faltante: {totals.missingPricing}</Badge> : null}
+          </div>
         </CardContent>
       </Card>
 
