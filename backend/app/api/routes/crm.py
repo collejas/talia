@@ -22822,6 +22822,108 @@ async def analytics_catalog_sales_export(
     )
 
 
+@router.get("/analytics/openai/costs/daily")
+async def analytics_openai_costs_daily(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    _: str = Depends(require_permission("reports.view")),
+    user_token: str = Depends(require_user_token),
+    date_from: Annotated[str | None, Query(description="YYYY-MM-DD")] = None,
+    date_to: Annotated[str | None, Query(description="YYYY-MM-DD")] = None,
+    channel: str | None = None,
+    feature: str | None = None,
+    model_family: str | None = None,
+    project_key: str | None = None,
+) -> dict[str, Any]:
+    try:
+        rows = await repo.openai_costs_daily(
+            usuario_token=user_token,
+            date_from=date_from,
+            date_to=date_to,
+            channel=channel,
+            feature=feature,
+            model_family=model_family,
+            project_key=project_key,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return {"ok": True, "rows": rows}
+
+
+@router.get("/analytics/openai/costs/conversations")
+async def analytics_openai_costs_by_conversation(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    _: str = Depends(require_permission("reports.view")),
+    user_token: str = Depends(require_user_token),
+    date_from: Annotated[str | None, Query(description="YYYY-MM-DD")] = None,
+    date_to: Annotated[str | None, Query(description="YYYY-MM-DD")] = None,
+    channel: str | None = None,
+    feature: str | None = None,
+    project_key: str | None = None,
+    limit: int = Query(default=100, ge=1, le=500),
+) -> dict[str, Any]:
+    try:
+        rows = await repo.openai_costs_by_conversation(
+            usuario_token=user_token,
+            date_from=date_from,
+            date_to=date_to,
+            channel=channel,
+            feature=feature,
+            project_key=project_key,
+            limit=limit,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return {"ok": True, "rows": rows}
+
+
+@router.get("/analytics/openai/costs/models")
+async def analytics_openai_costs_by_model(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    _: str = Depends(require_permission("reports.view")),
+    user_token: str = Depends(require_user_token),
+    month_from: Annotated[str | None, Query(description="YYYY-MM-01")] = None,
+    month_to: Annotated[str | None, Query(description="YYYY-MM-01")] = None,
+    channel: str | None = None,
+    feature: str | None = None,
+    project_key: str | None = None,
+) -> dict[str, Any]:
+    try:
+        rows = await repo.openai_costs_by_model(
+            usuario_token=user_token,
+            month_from=month_from,
+            month_to=month_to,
+            channel=channel,
+            feature=feature,
+            project_key=project_key,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return {"ok": True, "rows": rows}
+
+
+@router.get("/analytics/openai/costs/projects")
+async def analytics_openai_costs_by_project(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    _: str = Depends(require_permission("reports.view")),
+    user_token: str = Depends(require_user_token),
+    month_from: Annotated[str | None, Query(description="YYYY-MM-01")] = None,
+    month_to: Annotated[str | None, Query(description="YYYY-MM-01")] = None,
+) -> dict[str, Any]:
+    try:
+        rows = await repo.openai_costs_by_project(
+            usuario_token=user_token,
+            month_from=month_from,
+            month_to=month_to,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return {"ok": True, "rows": rows}
+
+
 @router.post(
     "/web/visit",
     status_code=204,

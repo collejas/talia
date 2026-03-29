@@ -721,6 +721,17 @@ Hoy tu sistema tiene estos vacíos principales:
 - `public.v_openai_costs_by_project`
   - Agregado mensual por tenant/proyecto OpenAI para reconciliación por proyecto.
 
+## Endpoints backend implementados
+
+- `GET /api/crm/analytics/openai/costs/daily`
+- `GET /api/crm/analytics/openai/costs/conversations`
+- `GET /api/crm/analytics/openai/costs/models`
+- `GET /api/crm/analytics/openai/costs/projects`
+
+Notas:
+- En esta iteración los endpoints operan con `user_token` y RLS, por lo que exponen costos del tenant actual.
+- La vista cross-tenant para tenant maestro queda como siguiente fase, porque requiere una política explícita de acceso agregada fuera del RLS actual.
+
 ## Avance actual
 
 Estado al 2026-03-29:
