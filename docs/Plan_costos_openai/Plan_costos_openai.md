@@ -294,6 +294,112 @@ Desventaja:
 - Tenants pequeños: proyecto compartido al inicio, pero con ledger interno completo
 - La arquitectura debe soportar ambos modos
 
+## Medibilidad obligatoria por tenant
+
+## Regla de producto
+
+Cada tenant debe ser medible de punta a punta en:
+
+- requests
+- tokens
+- costos internos
+- costos oficiales OpenAI
+- latencia
+- retries y fallbacks
+- canal
+- asistente lógico
+- conversación
+- proyecto OpenAI
+
+No se debe permitir que un tenant quede parcialmente instrumentado.
+
+## Configuración mínima obligatoria por tenant
+
+Cada tenant que use OpenAI debe tener configurado, como mínimo:
+
+- `openai.general.project_id`
+- `openai.general.api_key` o `openai.general.api_key_id`
+
+Y además debe tener instrumentados todos los caminos que llamen OpenAI, por ejemplo:
+
+- `webchat`
+- `whatsapp`
+- `summary`
+- `voice`
+- jobs internos que usen Responses, Assistants, Embeddings o similares
+
+## Riesgo operativo observado
+
+Ya se observó un caso real donde un tenant generó tráfico interno en el ledger con:
+
+- `organizacion_id` correcto
+- costo interno correcto
+- pero `openai_project_id = null`
+
+Resultado:
+
+- el tenant sí aparece en costos internos
+- pero no puede reconciliarse correctamente contra el costo oficial por proyecto OpenAI
+- la vista de reconciliación muestra `internal_requests_count = 0` aunque sí hubo requests internas
+
+Este caso confirma que la medición incompleta por tenant rompe la trazabilidad.
+
+## Enforcement recomendado
+
+### 1. Auditoría de configuración
+
+Crear una auditoría periódica que detecte tenants con configuración OpenAI incompleta:
+
+- sin `project_id`
+- sin `api_key` o `api_key_id`
+- con features OpenAI habilitadas pero sin configuración medible completa
+
+Resultado esperado:
+
+- lista clara de tenants no reconciliables
+- warning operativo antes de que el problema llegue a facturación o soporte
+
+### 2. Warning visible en UI
+
+Mostrar en settings/admin un estado explícito de medición por tenant:
+
+- `medición completa`
+- `medición incompleta`
+- `no reconciliable`
+
+Y mostrar la causa exacta, por ejemplo:
+
+- falta `openai.general.project_id`
+- falta `openai.general.api_key`
+- el canal usa OpenAI pero no reporta `project_id`
+
+### 3. Endurecimiento en runtime
+
+Cuando un request OpenAI se ejecute sin configuración medible completa:
+
+- persistir el incidente en logs/telemetría
+- marcar la request como `measurement_incomplete=true`
+- evitar que el problema quede silencioso
+
+Opcionalmente, en tenants que deban ser totalmente auditables, permitir bloqueo duro del request hasta corregir la configuración.
+
+### 4. Reconciliación como criterio de salud
+
+La reconciliación por proyecto no debe verse como reporte opcional, sino como señal de salud del tenant:
+
+- si un tenant produce requests internas sin `project_id`, está en estado degradado de medición
+- si el delta oficial/interno crece por tráfico no atribuible, debe investigarse
+
+## Política operativa recomendada
+
+- ningún tenant productivo debe quedar con `project_id` nulo si usa OpenAI
+- ningún tenant con features OpenAI habilitadas debe quedar sin key/proyecto resolubles
+- el tenant maestro debe poder auditar qué tenants son reconciliables y cuáles no
+- la plataforma debe distinguir entre:
+  - tenant completamente medible
+  - tenant parcialmente medible
+  - tenant no reconciliable
+
 ## Diseño de datos propuesto
 
 Crear estas tablas nuevas en Supabase.
@@ -847,6 +953,9 @@ Para tráfico nuevo, `public.openai_request_usage` ya puede guardar:
 - Agregar export CSV.
 - Evaluar si conviene llevar el filtro de `assistant_kind` al backend agregado completo o mantenerlo acotado a la vista de asistentes.
 - Si se requiere, agregar selector/buscador más robusto de organización para instalaciones con muchos tenants.
+- Agregar auditoría de tenants con OpenAI incompleto (`project_id`, `api_key`, canales instrumentados).
+- Agregar estado visible de medibilidad/reconciliación por tenant en UI/admin.
+- Definir si el runtime solo advierte o también bloquea requests para tenants no medibles.
 
 ### Riesgos/observaciones vigentes
 
@@ -855,6 +964,7 @@ Para tráfico nuevo, `public.openai_request_usage` ya puede guardar:
 - Los prompts `pmpt_...` todavía no tienen una resolución oficial estable por nombre en la integración actual; hoy usan catálogo/alias local.
 - Las filas históricas previas a configurar `project_id` seguirán apareciendo como `shared-default` hasta que se haga backfill.
 - Ya existe reconciliación con `organization/costs`; sigue pendiente decidir si se amplía a `organization/usage/completions`.
+- Ya quedó evidenciado que un tenant puede generar costo interno con `openai_project_id = null`; esto debe tratarse como incidencia de medición, no como caso aceptable.
 
 ### Siguiente hito recomendado
 
