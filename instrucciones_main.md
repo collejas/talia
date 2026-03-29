@@ -10,6 +10,7 @@ IMPORTANTE:
   - `talia-api.service`
   - `talia-panel.service`
 - No desplegar a producción si staging no fue validado funcionalmente.
+- El deploy de panel en producción ya soporta reinicio no interactivo con `sudoers` restringido.
 
 1) Pre-check antes de promover
 cd /var/www/talia
@@ -21,7 +22,7 @@ Resultado esperado:
 - `working tree clean`
 - `develop` actualizado y probado en staging
 
-2) Merge de develop a main
+2) Merge de `develop` a `main`
 cd /var/www/talia
 git checkout main
 git pull origin main
@@ -40,46 +41,90 @@ Si hay cambios en `supabase/migrations`:
 - Respaldar producción antes de aplicar.
 - Aplicar exactamente el mismo set de migraciones en producción.
 
-4) Deploy de producción (panel)
+4) Deploy de producción si hubo cambios de FRONTEND
+Comando recomendado:
 cd /var/www/talia
-NODE_OPTIONS=--max-old-space-size=1536 bash scripts/deploy_panel_atomic.sh
+bash scripts/deploy_panel_atomic.sh
 
-Notas:
-- Este script compila, hace swap atómico de release y reinicia servicios de producción.
-- Si falla por sudo no interactivo, usar flujo alterno:
-
-4.1) Flujo alterno (sin restart automático)
+Variante rápida:
 cd /var/www/talia
-NODE_OPTIONS=--max-old-space-size=1536 SKIP_RESTART=1 bash scripts/deploy_panel_atomic.sh
-sudo systemctl restart talia-api.service talia-panel.service
-sudo systemctl is-active talia-api.service
-sudo systemctl is-active talia-panel.service
+SKIP_LINT=1 bash scripts/deploy_panel_atomic.sh
 
-Resultado esperado:
-- deploy completado
-- ambos servicios en `active` tras reinicio manual
+Este script ya hace:
+- `npm ci` si hace falta en el release temporal
+- `npx tsc --noEmit`
+- `npm run lint` salvo que `SKIP_LINT=1`
+- `npm run build`
+- swap atómico del release en `/var/www/talia/current/panel`
+- restart de `talia-panel.service`
+- restart de API solo si `RESTART_API=1`
+- limpieza de releases viejos
 
-5) Verificación post-deploy en producción
+Variables útiles:
+- `SKIP_LINT=1`: omite lint
+- `SKIP_TS=1`: omite TypeScript
+- `SKIP_BUILD=1`: omite build
+- `SKIP_RESTART=1`: no reinicia servicios
+- `RESTART_API=1`: reinicia también `talia-api.service`
+
+5) Deploy de producción si hubo SOLO cambios de BACKEND
+cd /var/www/talia/backend
+poetry install
+sudo systemctl restart talia-api.service
+sudo systemctl is-active --quiet talia-api.service
+
+6) Si hubo cambios de FRONTEND y BACKEND al mismo tiempo
+cd /var/www/talia
+RESTART_API=1 bash scripts/deploy_panel_atomic.sh
+
+Variante rápida:
+cd /var/www/talia
+RESTART_API=1 SKIP_LINT=1 bash scripts/deploy_panel_atomic.sh
+
+7) Verificación post-deploy en producción
+Verificación operativa:
 systemctl is-active talia-api.service talia-panel.service
 curl -I https://talia.mx
 curl -s -o /dev/null -w "dashboard=%{http_code}\n" https://talia.mx/dashboard
 
+Verificación funcional recomendada:
+- abre la ruta que realmente cambiaste en `https://talia.mx`
+- si el cambio fue en panel SSR o vistas CRM, valida también una página funcional concreta
+
 Resultado esperado:
 - ambos servicios en `active`
 - HTTP 200 en `/` y `/dashboard`
+- la funcionalidad modificada visible y estable tras refrescar
 
-6) Logs si algo falla
+8) Logs si algo falla
 sudo journalctl -u talia-api.service -n 120 --no-pager
 sudo journalctl -u talia-panel.service -n 120 --no-pager
 
-7) Rollback rapido de producción
-VALID_RELEASES="$(ls -1dt /var/www/talia/releases/panel/* | grep -v '\.tmp$')"
+y logs de archivos locales:
+tail -n 120 /var/www/talia/logs/panel.log
+tail -n 120 /var/www/talia/logs/panel-error.log
+
+9) Troubleshooting útil
+Si falta espacio o quieres mantenimiento de disco:
+sudo bash scripts/cleanup_disk.sh
+
+Si hiciste cambios en unit files de systemd:
+sudo systemctl daemon-reload
+sudo systemctl restart talia-panel.service
+sudo systemctl restart talia-api.service
+
+Si necesitas compilar pero no reiniciar todavía:
+cd /var/www/talia
+SKIP_RESTART=1 bash scripts/deploy_panel_atomic.sh
+
+10) Rollback rapido de producción
+VALID_RELEASES="$(ls -1dt /var/www/talia/releases/panel/* | grep -v '\\.tmp$')"
 LATEST="$(echo "$VALID_RELEASES" | sed -n '1p')"
 PREV="$(echo "$VALID_RELEASES" | sed -n '2p')"
 ln -sfn "$PREV" /var/www/talia/current/panel
 sudo systemctl restart talia-panel.service
-systemctl is-active talia-panel.service
+sudo systemctl is-active --quiet talia-panel.service
 
-8) Checklist recomendado por release
+11) Checklist recomendado por release
 - Archivo: `checklists/RELEASE_STAGING_A_PROD.md`
 - Marcar `OK/FAIL` en cada paso antes de cerrar release.

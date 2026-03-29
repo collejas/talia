@@ -1,0 +1,30 @@
+[Unit]
+Description=Tal-IA Panel (Next.js)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/var/www/talia/current/panel
+
+Environment=NODE_ENV=production
+Environment=NODE_OPTIONS=--max-old-space-size=384
+Environment=PANEL_API_URL=http://127.0.0.1:8004/api
+EnvironmentFile=/var/www/talia/frontend/panel/.env.production
+
+ExecStartPre=/usr/bin/mkdir -p /var/www/talia/logs
+ExecStartPre=/usr/bin/touch /var/www/talia/logs/panel.log
+ExecStartPre=/usr/bin/touch /var/www/talia/logs/panel-error.log
+
+ExecStart=/usr/bin/npm run start -- -p 3001
+
+Restart=on-failure
+RestartSec=5
+User=jorge
+Group=jorge
+
+StandardOutput=append:/var/www/talia/logs/panel.log
+StandardError=append:/var/www/talia/logs/panel-error.log
+
+[Install]
+WantedBy=multi-user.target
