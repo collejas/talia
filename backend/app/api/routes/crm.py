@@ -3838,6 +3838,7 @@ async def require_organizacion_id(
     x_organizacion_id: Annotated[str, Header(alias="X-Organizacion-Id")],
     request: Request,
     user_token: str | None = Depends(optional_user_token),
+    x_usuario_id: Annotated[str | None, Header(alias="X-Usuario-Id")] = None,
 ) -> UUID:
     try:
         organizacion_id = UUID(x_organizacion_id)
@@ -3871,6 +3872,39 @@ async def require_organizacion_id(
         # Para rutas sin token explícito, mantenemos comportamiento legacy.
         audit_context["scope_mode"] = "legacy_without_user_token"
         tenant_access_logger.warning("tenant_access.allowed_legacy", extra=audit_context)
+        return organizacion_id
+
+    if _jwt_role(user_token) == "service_role":
+        try:
+            usuario_id = UUID(x_usuario_id) if x_usuario_id else None
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Encabezado X-Usuario-Id inválido",
+            ) from exc
+        if not usuario_id:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="auth_required",
+            )
+        repo = CRMRepository()
+        try:
+            belongs_to_org = await repo.user_belongs_to_organizacion(
+                organizacion_id=organizacion_id,
+                usuario_id=usuario_id,
+            )
+        except CRMRepositoryError as exc:
+            raise HTTPException(status_code=502, detail=str(exc)) from exc
+        if not belongs_to_org:
+            audit_context["scope_mode"] = "service_role_scope_denied"
+            audit_context["scope_allowed"] = False
+            audit_context["actor_user_id"] = str(usuario_id)
+            tenant_access_logger.warning("tenant_access.denied", extra=audit_context)
+            raise HTTPException(status_code=403, detail="owner_scope_violation")
+        audit_context["scope_mode"] = "service_role_header_user"
+        audit_context["actor_user_id"] = str(usuario_id)
+        audit_context["actor_organizacion_id"] = str(organizacion_id)
+        tenant_access_logger.info("tenant_access.allowed", extra=audit_context)
         return organizacion_id
 
     repo = CRMRepository(user_token=user_token)
@@ -6588,9 +6622,61 @@ async def require_admin_user(
     return usuario_id
 
 
+def _normalize_reports_user_token(user_token: str | None) -> str | None:
+    token = (user_token or "").strip()
+    if not token:
+        return None
+    if _jwt_role(token) == "service_role":
+        return None
+    return token
+
+
 def require_permission(permission_code: str):
-    async def _dependency(user_token: str = Depends(require_user_token)) -> str:
+    async def _dependency(
+        user_token: str | None = Depends(optional_user_token),
+        usuario_id: UUID | None = Depends(optional_usuario_id),
+        x_organizacion_id: Annotated[str | None, Header(alias="X-Organizacion-Id")] = None,
+    ) -> str:
         if settings.environment.strip().lower() == "test" or _is_pytest_runtime():
+            return user_token or "test-token"
+        if not user_token:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="auth_required")
+        if _jwt_role(user_token) == "service_role":
+            if not usuario_id:
+                raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="auth_required")
+            if not x_organizacion_id:
+                raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="auth_required")
+            try:
+                organizacion_id = UUID(x_organizacion_id)
+            except ValueError as exc:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Encabezado X-Organizacion-Id inválido",
+                ) from exc
+            repo = CRMRepository()
+            try:
+                is_admin = await repo.user_has_role(usuario_id=usuario_id, role_code="admin")
+                is_owner = await repo.user_has_role(usuario_id=usuario_id, role_code="owner")
+                allowed = is_admin or is_owner or await repo.user_has_permission(
+                    organizacion_id=organizacion_id,
+                    usuario_id=usuario_id,
+                    codigo=permission_code,
+                )
+            except CRMRepositoryError as exc:
+                raise HTTPException(status_code=502, detail=str(exc)) from exc
+            logger.info(
+                "permission.check.service_role",
+                extra={
+                    "user_id": str(usuario_id),
+                    "permission": permission_code,
+                    "allowed": allowed,
+                    "ctx_es_admin": is_admin,
+                    "ctx_es_owner": is_owner,
+                    "organizacion_id": str(organizacion_id),
+                },
+            )
+            if not allowed:
+                raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden")
             return user_token
         repo = CRMRepository(user_token=user_token)
         user_id = _jwt_verify_and_sub(user_token)
@@ -21176,11 +21262,15 @@ async def prospeccion_contacto_brevo_webhook(
 async def get_visits_kpis(
     *,
     repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
     _: str = Depends(require_permission("reports.view")),
-    user_token: str = Depends(require_user_token),
+    user_token: str | None = Depends(optional_user_token),
 ) -> dict[str, Any]:
     try:
-        data = await repo.visitas_dashboard_kpis(usuario_token=user_token)
+        data = await repo.visitas_dashboard_kpis(
+            usuario_token=_normalize_reports_user_token(user_token),
+            organizacion_id=organizacion_id,
+        )
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     return data
@@ -21434,6 +21524,24 @@ async def get_visits_web_sessions(
                 "metadata": row.get("metadata"),
             }
         )
+    logger.info(
+        "visitas.web_sessions.summary",
+        extra={
+            "organizacion_id": str(organizacion_id),
+            "rows_raw": len(rows),
+            "rows_items": len(items),
+            "limit": limit,
+            "offset": offset,
+            "state_code": state_code,
+            "source_class": source_class_value,
+            "utm_source": utm_source_value,
+            "utm_medium": utm_medium_value,
+            "utm_campaign": utm_campaign_value,
+            "template_id": str(template_uuid_value) if template_uuid_value else None,
+            "date_from": date_from.isoformat() if date_from else None,
+            "date_to": date_to.isoformat() if date_to else None,
+        },
+    )
     return items
 
 
@@ -21443,7 +21551,7 @@ async def get_visits_whatsapp_total(
     repo: CRMRepository = Depends(get_repository),
     organizacion_id: UUID = Depends(require_organizacion_id),
     _: str = Depends(require_permission("reports.view")),
-    user_token: str = Depends(require_user_token),
+    user_token: str | None = Depends(optional_user_token),
     usuario_id: UUID | None = Depends(optional_usuario_id),
     rango: str | None = Query(default=None),
     desde: str | None = Query(default=None),
@@ -21462,7 +21570,7 @@ async def get_visits_whatsapp_total(
     )
     try:
         total = await repo.visitas_whatsapp_total(
-            usuario_token=user_token,
+            usuario_token=_normalize_reports_user_token(user_token),
             date_from=date_from,
             date_to=date_to,
         )
@@ -21477,7 +21585,7 @@ async def get_visits_whatsapp_conversations(
     repo: CRMRepository = Depends(get_repository),
     organizacion_id: UUID = Depends(require_organizacion_id),
     _: str = Depends(require_permission("reports.view")),
-    user_token: str = Depends(require_user_token),
+    user_token: str | None = Depends(optional_user_token),
     usuario_id: UUID | None = Depends(optional_usuario_id),
     limit: Annotated[int, Query(ge=1, le=500)] = 200,
     rango: str | None = Query(default=None),
@@ -21497,7 +21605,7 @@ async def get_visits_whatsapp_conversations(
     )
     try:
         rows = await repo.visitas_whatsapp_conversaciones(
-            usuario_token=user_token,
+            usuario_token=_normalize_reports_user_token(user_token),
             limit=limit,
             date_from=date_from,
             date_to=date_to,
@@ -23600,7 +23708,7 @@ async def demografia_resumen_v2(
     repo: CRMRepository = Depends(get_repository),
     organizacion_id: UUID = Depends(require_organizacion_id),
     _: str = Depends(require_permission("reports.view")),
-    user_token: str = Depends(require_user_token),
+    user_token: str | None = Depends(optional_user_token),
     usuario_id: UUID | None = Depends(optional_usuario_id),
     nivel: Annotated[str, Query(pattern="^(pais|estado|municipio)$")] = "estado",
     estado: str | None = Query(default=None),
@@ -23615,6 +23723,7 @@ async def demografia_resumen_v2(
     desde: str | None = Query(default=None),
     hasta: str | None = Query(default=None),
 ) -> dict[str, Any]:
+    effective_user_token = _normalize_reports_user_token(user_token)
     nivel_normalizado = (nivel or "estado").strip().lower() or "estado"
     state_code: str | None = None
     if nivel_normalizado == "municipio":
@@ -23655,7 +23764,7 @@ async def demografia_resumen_v2(
             stages=stage_values,
             date_from=date_from,
             date_to=date_to,
-            jwt=user_token,
+            jwt=effective_user_token,
         )
         visitantes_payload = await demografia_service.fetch_visitantes_resumen_v2(
             nivel=nivel_normalizado,
@@ -23667,7 +23776,7 @@ async def demografia_resumen_v2(
             utm_medium=utm_medium_value,
             utm_campaign=utm_campaign_value,
             template_id=str(template_uuid_value) if template_uuid_value else None,
-            jwt=user_token,
+            jwt=effective_user_token,
         )
 
         utm_campaign_values: list[str] = []
@@ -23811,7 +23920,7 @@ async def demografia_mapa_v2(
     repo: CRMRepository = Depends(get_repository),
     organizacion_id: UUID = Depends(require_organizacion_id),
     _: str = Depends(require_permission("reports.view")),
-    user_token: str = Depends(require_user_token),
+    user_token: str | None = Depends(optional_user_token),
     usuario_id: UUID | None = Depends(optional_usuario_id),
     nivel: Annotated[str, Query(pattern="^(pais|estado|municipio)$")] = "estado",
     estado: str | None = Query(default=None),
@@ -23826,6 +23935,7 @@ async def demografia_mapa_v2(
     desde: str | None = Query(default=None),
     hasta: str | None = Query(default=None),
 ) -> dict[str, Any]:
+    effective_user_token = _normalize_reports_user_token(user_token)
     nivel_normalizado = (nivel or "estado").strip().lower() or "estado"
     state_code: str | None = None
     if nivel_normalizado == "municipio":
@@ -23866,7 +23976,7 @@ async def demografia_mapa_v2(
             stages=stage_values,
             date_from=date_from,
             date_to=date_to,
-            jwt=user_token,
+            jwt=effective_user_token,
         )
         fallback_leads_payload = None
         if nivel_normalizado == "municipio":
@@ -23876,7 +23986,7 @@ async def demografia_mapa_v2(
                 stages=stage_values,
                 date_from=date_from,
                 date_to=date_to,
-                jwt=user_token,
+                jwt=effective_user_token,
             )
         visitantes_payload = await demografia_service.fetch_visitantes_resumen_v2(
             nivel=nivel_normalizado,
@@ -23888,7 +23998,7 @@ async def demografia_mapa_v2(
             utm_medium=utm_medium_value,
             utm_campaign=utm_campaign_value,
             template_id=str(template_uuid_value) if template_uuid_value else None,
-            jwt=user_token,
+            jwt=effective_user_token,
         )
         dataset = demografia_service.build_map_dataset(
             nivel=nivel_normalizado,

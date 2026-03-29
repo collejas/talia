@@ -20,7 +20,8 @@ ExecStart=/usr/bin/npm run start -- -p 3101
 
 Restart=on-failure
 RestartSec=5
-User=root
+User=jorge
+Group=jorge
 
 StandardOutput=append:/var/www/talia/logs/panel-staging.log
 StandardError=append:/var/www/talia/logs/panel-staging-error.log

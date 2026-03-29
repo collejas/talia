@@ -91,6 +91,12 @@ export async function callCrmApi<T = unknown>(
   const shouldSendUserToken = options.withUserToken ?? true;
   if (shouldSendUserToken && userAccessToken) {
     headers["X-User-Token"] = userAccessToken;
+    if (!headers["X-Usuario-Id"]) {
+      const tokenUserId = decodeJwtUserId(userAccessToken);
+      if (tokenUserId) {
+        headers["X-Usuario-Id"] = tokenUserId;
+      }
+    }
   }
 
   let body: BodyInit | undefined;
@@ -134,29 +140,50 @@ export async function callCrmApi<T = unknown>(
 
   const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms))
   const maxAttempts = 3
-  let response: Response | undefined
-  let lastError: unknown
-  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-    try {
-      response = await fetch(url.toString(), {
-        method,
-        headers,
-        cache: "no-store",
-        ...(body ? { body } : {}),
-      })
-      lastError = undefined
-      break
-    } catch (error) {
-      lastError = error
-      const rawError = error as unknown as { cause?: unknown }
-      const cause = rawError?.cause as { code?: string } | undefined
-      const retryableCodes = new Set(["ECONNREFUSED", "EHOSTUNREACH", "ENETUNREACH"])
-      const isRetryable = cause?.code && retryableCodes.has(cause.code)
-      if (attempt < maxAttempts && isRetryable) {
-        await sleep(250 * attempt)
-        continue
+  const runFetchWithNetworkRetry = async (): Promise<{ response?: Response; lastError?: unknown }> => {
+    let response: Response | undefined
+    let lastError: unknown
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      try {
+        response = await fetch(url.toString(), {
+          method,
+          headers,
+          cache: "no-store",
+          ...(body ? { body } : {}),
+        })
+        lastError = undefined
+        break
+      } catch (error) {
+        lastError = error
+        const rawError = error as unknown as { cause?: unknown }
+        const cause = rawError?.cause as { code?: string } | undefined
+        const retryableCodes = new Set(["ECONNREFUSED", "EHOSTUNREACH", "ENETUNREACH"])
+        const isRetryable = cause?.code && retryableCodes.has(cause.code)
+        if (attempt < maxAttempts && isRetryable) {
+          await sleep(250 * attempt)
+          continue
+        }
+        break
       }
-      break
+    }
+    return { response, lastError }
+  }
+
+  let { response, lastError } = await runFetchWithNetworkRetry()
+
+  if (response && (response.status === 401 || response.status === 403) && shouldSendUserToken) {
+    const refreshedToken = await resolveServerAccessToken({ forceRefresh: true, minTtlSeconds: 0 })
+    if (refreshedToken && refreshedToken !== userAccessToken) {
+      userAccessToken = refreshedToken
+      headers["Authorization"] = `Bearer ${refreshedToken}`
+      headers["X-User-Token"] = refreshedToken
+      const refreshedUserId = decodeJwtUserId(refreshedToken)
+      if (refreshedUserId) {
+        headers["X-Usuario-Id"] = refreshedUserId
+      }
+      const retried = await runFetchWithNetworkRetry()
+      response = retried.response
+      lastError = retried.lastError
     }
   }
 

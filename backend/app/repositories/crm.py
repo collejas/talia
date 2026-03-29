@@ -2163,35 +2163,63 @@ class CRMRepository:
         limit: int = 1000,
         offset: int = 0,
     ) -> list[dict[str, Any]]:
-        params: dict[str, str] = {
-            "organizacion_id": f"eq.{organizacion_id}",
-            "select": (
+        def _build_params(*, legacy: bool = False) -> dict[str, str]:
+            select_clause = (
                 "session_id,contacto_id,first_seen_at,last_seen_at,visit_count,ip,"
                 "device_type,country_code,country_name,cve_ent,nom_ent,cve_mun,nom_mun,cvegeo,"
-                "referrer,landing_url,utm_source,utm_medium,utm_campaign,eid,tid,source_class,metadata"
-            ),
-            "order": "last_seen_at.desc,first_seen_at.desc",
-            "limit": str(max(1, min(limit, 5000))),
-            "offset": str(max(0, int(offset))),
-        }
-        if date_from:
-            params["last_seen_at"] = f"gte.{date_from.isoformat()}"
-        if date_to:
-            params["first_seen_at"] = f"lte.{date_to.isoformat()}"
-        if state_code:
-            params["cve_ent"] = f"eq.{state_code}"
-        if source_class:
-            params["source_class"] = f"eq.{source_class}"
-        if utm_source:
-            params["utm_source"] = f"eq.{utm_source}"
-        if utm_medium:
-            params["utm_medium"] = f"eq.{utm_medium}"
-        if utm_campaign:
-            params["utm_campaign"] = f"eq.{utm_campaign}"
-        if template_id:
-            params["tid"] = f"eq.{template_id}"
+                "referrer,landing_url,utm_source,utm_medium,utm_campaign"
+            )
+            if not legacy:
+                select_clause = f"{select_clause},eid,tid,source_class,metadata"
+            params: dict[str, str] = {
+                "organizacion_id": f"eq.{organizacion_id}",
+                "select": select_clause,
+                "order": "last_seen_at.desc,first_seen_at.desc",
+                "limit": str(max(1, min(limit, 5000))),
+                "offset": str(max(0, int(offset))),
+            }
+            if date_from:
+                params["last_seen_at"] = f"gte.{date_from.isoformat()}"
+            if date_to:
+                params["first_seen_at"] = f"lte.{date_to.isoformat()}"
+            if state_code:
+                params["cve_ent"] = f"eq.{state_code}"
+            if source_class and not legacy:
+                params["source_class"] = f"eq.{source_class}"
+            if utm_source:
+                params["utm_source"] = f"eq.{utm_source}"
+            if utm_medium:
+                params["utm_medium"] = f"eq.{utm_medium}"
+            if utm_campaign:
+                params["utm_campaign"] = f"eq.{utm_campaign}"
+            if template_id and not legacy:
+                params["tid"] = f"eq.{template_id}"
+            return params
 
-        resp = await self._request("GET", "/rest/v1/web_sessions", params=params)
+        def _is_missing_column_error(error: CRMRepositoryError) -> bool:
+            message = str(error).lower()
+            return (
+                ("schema cache" in message and "column" in message)
+                or ("does not exist" in message and "web_sessions" in message)
+            )
+
+        params = _build_params(legacy=False)
+        try:
+            resp = await self._request("GET", "/rest/v1/web_sessions", params=params)
+        except CRMRepositoryError as exc:
+            if not _is_missing_column_error(exc):
+                raise
+            logger.warning(
+                "crm.web_sessions.legacy_select_fallback",
+                extra={
+                    "reason": str(exc),
+                    "used_template_filter": bool(template_id),
+                    "used_source_class_filter": bool(source_class),
+                },
+            )
+            legacy_params = _build_params(legacy=True)
+            resp = await self._request("GET", "/rest/v1/web_sessions", params=legacy_params)
+
         data = resp.json() or []
         if not isinstance(data, list):
             raise CRMRepositoryError(
@@ -6837,7 +6865,8 @@ class CRMRepository:
     async def visitas_dashboard_kpis(
         self,
         *,
-        usuario_token: str,
+        usuario_token: str | None = None,
+        organizacion_id: UUID | None = None,
         date_from: datetime | None = None,
         date_to: datetime | None = None,
     ) -> dict[str, Any]:
@@ -6846,13 +6875,23 @@ class CRMRepository:
             body["p_from"] = date_from.isoformat()
         if date_to:
             body["p_to"] = date_to.isoformat()
-        resp = await self._request_with_user(
-            "POST",
-            "/rest/v1/rpc/dashboard_kpis",
-            token=usuario_token,
-            json=body or None,
-            prefer="return=representation",
-        )
+        if not usuario_token and organizacion_id:
+            body["p_organizacion"] = str(organizacion_id)
+        if usuario_token:
+            resp = await self._request_with_user(
+                "POST",
+                "/rest/v1/rpc/dashboard_kpis",
+                token=usuario_token,
+                json=body or None,
+                prefer="return=representation",
+            )
+        else:
+            resp = await self._request(
+                "POST",
+                "/rest/v1/rpc/dashboard_kpis",
+                json=body or None,
+                prefer="return=representation",
+            )
         data = resp.json()
         if isinstance(data, dict):
             return data
@@ -7132,7 +7171,7 @@ class CRMRepository:
     async def visitas_whatsapp_total(
         self,
         *,
-        usuario_token: str,
+        usuario_token: str | None = None,
         date_from: datetime | None = None,
         date_to: datetime | None = None,
     ) -> int:
@@ -7141,13 +7180,21 @@ class CRMRepository:
             body["p_from"] = date_from.isoformat()
         if date_to:
             body["p_to"] = date_to.isoformat()
-        resp = await self._request_with_user(
-            "POST",
-            "/rest/v1/rpc/embudo_visitantes_whatsapp",
-            token=usuario_token,
-            json=body or None,
-            prefer="return=representation",
-        )
+        if usuario_token:
+            resp = await self._request_with_user(
+                "POST",
+                "/rest/v1/rpc/embudo_visitantes_whatsapp",
+                token=usuario_token,
+                json=body or None,
+                prefer="return=representation",
+            )
+        else:
+            resp = await self._request(
+                "POST",
+                "/rest/v1/rpc/embudo_visitantes_whatsapp",
+                json=body or None,
+                prefer="return=representation",
+            )
         data = resp.json()
         if isinstance(data, list) and data:
             first = data[0]
@@ -7170,7 +7217,7 @@ class CRMRepository:
     async def visitas_whatsapp_conversaciones(
         self,
         *,
-        usuario_token: str,
+        usuario_token: str | None = None,
         limit: int = 200,
         date_from: datetime | None = None,
         date_to: datetime | None = None,
@@ -7193,12 +7240,19 @@ class CRMRepository:
             params["iniciada_en"] = f"gte.{date_from.isoformat()}"
         elif date_to:
             params["iniciada_en"] = f"lte.{date_to.isoformat()}"
-        resp = await self._request_with_user(
-            "GET",
-            "/rest/v1/conversaciones",
-            token=usuario_token,
-            params=params,
-        )
+        if usuario_token:
+            resp = await self._request_with_user(
+                "GET",
+                "/rest/v1/conversaciones",
+                token=usuario_token,
+                params=params,
+            )
+        else:
+            resp = await self._request(
+                "GET",
+                "/rest/v1/conversaciones",
+                params=params,
+            )
         data = resp.json()
         if not isinstance(data, list):
             raise CRMRepositoryError(f"Respuesta inesperada en conversaciones: {data!r}")
@@ -7411,23 +7465,39 @@ class CRMRepository:
         }
         lookup_targets = alias_map.get(normalized_target, {normalized_target})
 
-        params = {
-            "select": "rol:roles(codigo,nombre)",
-            "usuario_id": f"eq.{usuario_id}",
-        }
-        resp = await self._request("GET", "/rest/v1/usuarios_roles", params=params)
-        data = resp.json() or []
+        user_roles_resp = await self._request(
+            "GET",
+            "/rest/v1/usuarios_roles",
+            params={
+                "select": "rol_id",
+                "usuario_id": f"eq.{usuario_id}",
+            },
+        )
+        user_roles_data = user_roles_resp.json() or []
+        if not isinstance(user_roles_data, list):
+            return False
 
-        rows: list[Any]
-        if isinstance(data, list):
-            rows = data
-        elif isinstance(data, dict):
-            rows = [data]
-        else:
-            rows = []
+        role_ids = [
+            str(row.get("rol_id")).strip()
+            for row in user_roles_data
+            if isinstance(row, dict) and str(row.get("rol_id") or "").strip()
+        ]
+        if not role_ids:
+            return False
 
-        for row in rows:
-            role = row.get("rol") if isinstance(row, dict) else None
+        roles_resp = await self._request(
+            "GET",
+            "/rest/v1/roles",
+            params={
+                "select": "codigo,nombre",
+                "id": f"in.({','.join(role_ids)})",
+            },
+        )
+        roles_data = roles_resp.json() or []
+        if not isinstance(roles_data, list):
+            return False
+
+        for role in roles_data:
             if not isinstance(role, dict):
                 continue
             codigo_norm = str(role.get("codigo") or "").strip().lower()
@@ -7435,6 +7505,100 @@ class CRMRepository:
             if codigo_norm in lookup_targets or nombre_norm in lookup_targets:
                 return True
         return False
+
+    async def user_has_permission(
+        self,
+        *,
+        organizacion_id: UUID,
+        usuario_id: UUID,
+        codigo: str,
+    ) -> bool:
+        perm_code = (codigo or "").strip().lower()
+        if not perm_code:
+            return False
+
+        roles_resp = await self._request(
+            "GET",
+            "/rest/v1/usuarios_roles",
+            params={
+                "select": "rol_id",
+                "organizacion_id": f"eq.{organizacion_id}",
+                "usuario_id": f"eq.{usuario_id}",
+            },
+        )
+        roles_data = roles_resp.json() or []
+        if not isinstance(roles_data, list):
+            return False
+
+        role_ids = [
+            str(row.get("rol_id")).strip()
+            for row in roles_data
+            if isinstance(row, dict) and str(row.get("rol_id") or "").strip()
+        ]
+        if not role_ids:
+            return False
+
+        role_permissions_resp = await self._request(
+            "GET",
+            "/rest/v1/roles_permisos",
+            params={
+                "select": "permiso_id",
+                "organizacion_id": f"eq.{organizacion_id}",
+                "rol_id": f"in.({','.join(role_ids)})",
+            },
+        )
+        role_permissions_data = role_permissions_resp.json() or []
+        if not isinstance(role_permissions_data, list):
+            return False
+
+        permiso_ids = [
+            str(row.get("permiso_id")).strip()
+            for row in role_permissions_data
+            if isinstance(row, dict) and str(row.get("permiso_id") or "").strip()
+        ]
+        if not permiso_ids:
+            return False
+
+        permisos_resp = await self._request(
+            "GET",
+            "/rest/v1/permisos",
+            params={
+                "select": "codigo",
+                "organizacion_id": f"eq.{organizacion_id}",
+                "id": f"in.({','.join(permiso_ids)})",
+                "codigo": f"eq.{perm_code}",
+                "limit": "1",
+            },
+        )
+        permisos_data = permisos_resp.json() or []
+        if isinstance(permisos_data, list):
+            return bool(permisos_data)
+        if isinstance(permisos_data, dict):
+            return bool(str(permisos_data.get("codigo") or "").strip())
+        return False
+
+    async def user_belongs_to_organizacion(
+        self,
+        *,
+        organizacion_id: UUID,
+        usuario_id: UUID,
+    ) -> bool:
+        roles_resp = await self._request(
+            "GET",
+            "/rest/v1/usuarios_roles",
+            params={
+                "select": "usuario_id",
+                "organizacion_id": f"eq.{organizacion_id}",
+                "usuario_id": f"eq.{usuario_id}",
+                "limit": "1",
+            },
+        )
+        roles_data = roles_resp.json() or []
+        if isinstance(roles_data, list) and roles_data:
+            return True
+
+        direct_org_id = await self._get_usuario_organizacion_id(usuario_id=usuario_id)
+        return direct_org_id == organizacion_id
 
     async def current_user_has_perm(self, *, codigo: str) -> bool:
         perm_code = (codigo or "").strip()

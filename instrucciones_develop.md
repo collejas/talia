@@ -26,7 +26,7 @@ sudo chown -R jorge:jorge /var/www/talia/releases/panel-staging
 sudo chown -R jorge:jorge /var/www/talia/current
 sudo chown -R jorge:jorge /var/www/talia/.npm-cache
 NODE_OPTIONS=--max-old-space-size=1536 SKIP_RESTART=1 bash scripts/deploy_panel_staging_atomic.sh
-sudo systemctl restart talia-api-staging.service talia-panel-staging.service
+sudo systemctl restart talia-panel-staging.service
 sudo systemctl is-active talia-api-staging.service
 sudo systemctl is-active talia-panel-staging.service
 
@@ -37,12 +37,17 @@ Este script ya hace:
 - npx tsc --noEmit
 - npm run build
 - swap atómico de release
-- restart de API y Panel de staging
+- restart de Panel de staging
+- restart de API solo si `RESTART_API=1`
 
 3) Si hubo SOLO cambios en BACKEND (FastAPI)
 cd /var/www/talia/backend
 poetry install
 sudo systemctl restart talia-api-staging.service
+
+Si hubo cambios en FRONTEND y BACKEND al mismo tiempo:
+cd /var/www/talia
+RESTART_API=1 SKIP_LINT=1 bash scripts/deploy_panel_staging_atomic.sh
 
 4) Verificar servicios y sitio
 systemctl is-active talia-api-staging.service talia-panel-staging.service

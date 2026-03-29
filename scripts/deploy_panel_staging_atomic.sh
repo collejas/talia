@@ -22,6 +22,7 @@ set -euo pipefail
 #   SKIP_BUILD=0|1
 #   RUN_NPM_CI=0|1
 #   SKIP_RESTART=0|1
+#   RESTART_API=0|1
 #   CF_ZONE_ID=...
 #   CF_API_TOKEN=...
 #   CF_PURGE_URLS='https://staging.talia.mx/inbox,https://staging.talia.mx/_next/static/chunks/app/inbox/page-xxxx.js'
@@ -42,11 +43,15 @@ SKIP_LINT="${SKIP_LINT:-0}"
 SKIP_BUILD="${SKIP_BUILD:-0}"
 RUN_NPM_CI="${RUN_NPM_CI:-0}"
 SKIP_RESTART="${SKIP_RESTART:-0}"
+RESTART_API="${RESTART_API:-0}"
 CF_FULL_PURGE="${CF_FULL_PURGE:-0}"
 KEEP_RELEASES="${KEEP_RELEASES:-2}"
 MIN_FREE_GB="${MIN_FREE_GB:-3}"
 CLEAN_TMP_ON_FAIL="${CLEAN_TMP_ON_FAIL:-1}"
 NPM_CACHE_DIR="${NPM_CACHE_DIR:-/var/www/talia/.npm-cache}"
+RUN_AS_USER="${RUN_AS_USER:-jorge}"
+PANEL_LOG_FILE="${PANEL_LOG_FILE:-/var/www/talia/logs/panel-staging.log}"
+PANEL_ERROR_LOG_FILE="${PANEL_ERROR_LOG_FILE:-/var/www/talia/logs/panel-staging-error.log}"
 
 NOW_UTC="$(date -u +%Y%m%d_%H%M%S)"
 NEW_RELEASE="${PANEL_RELEASES_DIR}/${NOW_UTC}"
@@ -67,7 +72,9 @@ rollback_if_needed() {
     echo "[rollback] Fallo despues de swap. Revirtiendo symlink a: ${PREV_RELEASE}"
     ln -sfn "${PREV_RELEASE}" "${PANEL_CURRENT_LINK}" || true
     echo "[rollback] Reiniciando servicios staging tras rollback"
-    sudo systemctl restart "${API_SERVICE}" || true
+    if [[ "${RESTART_API}" == "1" ]]; then
+      sudo systemctl restart "${API_SERVICE}" || true
+    fi
     sudo systemctl restart "${PANEL_SERVICE}" || true
   fi
   exit ${exit_code}
@@ -76,6 +83,9 @@ trap rollback_if_needed EXIT
 
 cleanup_old_releases() {
   echo "[deploy-staging] Pre-clean de releases antiguos (keep=${KEEP_RELEASES})"
+  if command -v sudo >/dev/null 2>&1; then
+    sudo -n chown -R "${RUN_AS_USER}:${RUN_AS_USER}" "${PANEL_RELEASES_DIR}" >/dev/null 2>&1 || true
+  fi
   # 1) limpiar temporales fallidos
   find "${PANEL_RELEASES_DIR}" -mindepth 1 -maxdepth 1 -type d -name "*.tmp" -print0 | xargs -0r rm -rf --
 
@@ -103,7 +113,7 @@ cleanup_old_releases() {
       if [[ -n "${preserve[$rel]:-}" ]]; then
         continue
       fi
-      rm -rf -- "${rel}"
+      rm -rf -- "${rel}" 2>/dev/null || sudo -n rm -rf -- "${rel}" 2>/dev/null || true
     done
   fi
 }
@@ -141,6 +151,11 @@ echo "[deploy-staging] Current: ${PANEL_CURRENT_LINK}"
 test -d "${PANEL_SOURCE_DIR}"
 mkdir -p "${PANEL_RELEASES_DIR}"
 mkdir -p "${NPM_CACHE_DIR}"
+mkdir -p "$(dirname "${PANEL_LOG_FILE}")"
+touch "${PANEL_LOG_FILE}" "${PANEL_ERROR_LOG_FILE}"
+if command -v sudo >/dev/null 2>&1; then
+  sudo -n chown "${RUN_AS_USER}:${RUN_AS_USER}" "${PANEL_LOG_FILE}" "${PANEL_ERROR_LOG_FILE}" >/dev/null 2>&1 || true
+fi
 cleanup_old_releases
 ensure_free_space
 preflight_restart_permissions
@@ -189,6 +204,9 @@ fi
 
 echo "[deploy-staging] Promoviendo release temporal a release final"
 mv "${TMP_RELEASE}" "${NEW_RELEASE}"
+if command -v sudo >/dev/null 2>&1; then
+  sudo -n chown -R "${RUN_AS_USER}:${RUN_AS_USER}" "${NEW_RELEASE}" >/dev/null 2>&1 || true
+fi
 
 mkdir -p "$(dirname "${PANEL_CURRENT_LINK}")"
 echo "[deploy-staging] Swap atomico: ${PANEL_CURRENT_LINK} -> ${NEW_RELEASE}"
@@ -198,10 +216,14 @@ SWAPPED=1
 if [[ "${SKIP_RESTART}" == "1" ]]; then
   echo "[deploy-staging] SKIP_RESTART=1, se omite restart de servicios"
 else
-  echo "[deploy-staging] Reiniciando servicios"
-  sudo systemctl restart "${API_SERVICE}"
+  if [[ "${RESTART_API}" == "1" ]]; then
+    echo "[deploy-staging] Reiniciando API + Panel"
+    sudo systemctl restart "${API_SERVICE}"
+    sudo systemctl is-active --quiet "${API_SERVICE}"
+  else
+    echo "[deploy-staging] Reiniciando solo Panel (API sin cambios)"
+  fi
   sudo systemctl restart "${PANEL_SERVICE}"
-  sudo systemctl is-active --quiet "${API_SERVICE}"
   sudo systemctl is-active --quiet "${PANEL_SERVICE}"
 fi
 
@@ -236,9 +258,16 @@ fi
 echo "[deploy-staging] Limpieza de releases viejos (keep=${KEEP_RELEASES})"
 if [[ "${KEEP_RELEASES}" =~ ^[0-9]+$ ]]; then
   # 1) limpiar temporales fallidos
-  find "${PANEL_RELEASES_DIR}" -mindepth 1 -maxdepth 1 -type d -name "*.tmp" -print0 | xargs -0r rm -rf --
+  find "${PANEL_RELEASES_DIR}" -mindepth 1 -maxdepth 1 -type d -name "*.tmp" -print0 | xargs -0r rm -rf -- || true
   # 2) conservar solo releases validos mas recientes
-  ls -1dt "${PANEL_RELEASES_DIR}"/* 2>/dev/null | grep -v '\.tmp$' | tail -n +"$((KEEP_RELEASES + 1))" | xargs -r rm -rf --
+  old_releases="$(ls -1dt "${PANEL_RELEASES_DIR}"/* 2>/dev/null | grep -v '\.tmp$' | tail -n +"$((KEEP_RELEASES + 1))" || true)"
+  if [[ -n "${old_releases}" ]]; then
+    if ! printf '%s\n' "${old_releases}" | xargs -r rm -rf -- 2>/dev/null; then
+      if ! printf '%s\n' "${old_releases}" | xargs -r sudo -n rm -rf -- 2>/dev/null; then
+        echo "[deploy-staging] WARN no se pudieron limpiar algunos releases antiguos; se conserva deploy activo."
+      fi
+    fi
+  fi
 fi
 
 echo "[deploy-staging] OK. Release activo: ${NEW_RELEASE}"

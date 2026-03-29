@@ -10,6 +10,8 @@ ExecStart=/var/www/talia/backend/scripts/run_api_staging.sh
 EnvironmentFile=/var/www/talia/backend/.env.staging
 Restart=always
 RestartSec=5
+TimeoutStopSec=25
+KillMode=mixed
 Environment=PYTHONUNBUFFERED=1
 User=root
 

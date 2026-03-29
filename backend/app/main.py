@@ -1,8 +1,10 @@
 """Punto de entrada principal para la aplicación FastAPI."""
 
+import asyncio
 import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
+from typing import Awaitable
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -36,6 +38,24 @@ from app.services.webchat_followups import followup_runner as webchat_followup_r
 from app.services.whatsapp_followups import followup_runner as whatsapp_followup_runner
 
 
+async def _shutdown_with_timeout(
+    *, name: str, coro: Awaitable[object], timeout_seconds: float = 12.0
+) -> None:
+    log = get_logger("app")
+    try:
+        await asyncio.wait_for(coro, timeout=timeout_seconds)
+    except asyncio.TimeoutError:
+        log.error(
+            "lifespan.shutdown_timeout",
+            extra={"runner": name, "timeout_seconds": timeout_seconds},
+        )
+    except Exception as exc:  # pragma: no cover - defensivo
+        log.exception(
+            "lifespan.shutdown_failed",
+            extra={"runner": name, "error": str(exc)},
+        )
+
+
 @asynccontextmanager
 async def app_lifespan(_: FastAPI):
     """Administra recursos de inicio/cierre sin usar on_event."""
@@ -53,15 +73,26 @@ async def app_lifespan(_: FastAPI):
     try:
         yield
     finally:
-        await sales_notification_jobs_runner.shutdown()
-        await high_demand_mode_runner.shutdown()
-        await inbox_snapshot_refresh_runner.shutdown()
-        await inbox_threads_metrics_snapshot_runner.shutdown()
-        await webchat_closure_rescue_runner.shutdown()
-        await webchat_followup_runner.shutdown()
-        await whatsapp_followup_runner.shutdown()
-        await email_inbound_reader.shutdown()
-        await contact_sender.shutdown()
+        await _shutdown_with_timeout(
+            name="sales_notification_jobs_runner", coro=sales_notification_jobs_runner.shutdown()
+        )
+        await _shutdown_with_timeout(name="high_demand_mode_runner", coro=high_demand_mode_runner.shutdown())
+        await _shutdown_with_timeout(
+            name="inbox_snapshot_refresh_runner", coro=inbox_snapshot_refresh_runner.shutdown()
+        )
+        await _shutdown_with_timeout(
+            name="inbox_threads_metrics_snapshot_runner",
+            coro=inbox_threads_metrics_snapshot_runner.shutdown(),
+        )
+        await _shutdown_with_timeout(
+            name="webchat_closure_rescue_runner", coro=webchat_closure_rescue_runner.shutdown()
+        )
+        await _shutdown_with_timeout(name="webchat_followup_runner", coro=webchat_followup_runner.shutdown())
+        await _shutdown_with_timeout(
+            name="whatsapp_followup_runner", coro=whatsapp_followup_runner.shutdown()
+        )
+        await _shutdown_with_timeout(name="email_inbound_reader", coro=email_inbound_reader.shutdown())
+        await _shutdown_with_timeout(name="contact_sender", coro=contact_sender.shutdown())
 
 
 def create_app() -> FastAPI:

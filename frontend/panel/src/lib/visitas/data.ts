@@ -175,25 +175,271 @@ type VisitsFilters = {
   hasta?: string | null;
 };
 
+function buildVisitsSearchParams(filters: VisitsFilters) {
+  return {
+    limit: 5000,
+    offset: 0,
+    estado: filters.estado || undefined,
+    source_class: filters.sourceClass || undefined,
+    utm_source: filters.utmSource || undefined,
+    utm_medium: filters.utmMedium || undefined,
+    utm_campaign: filters.utmCampaign || undefined,
+    template_id: filters.templateId || undefined,
+    rango: filters.rango || undefined,
+    desde: filters.desde || undefined,
+    hasta: filters.hasta || undefined,
+  };
+}
+
+function hasAttributionFilters(filters: VisitsFilters): boolean {
+  return Boolean(
+    (filters.sourceClass || "").trim() ||
+    (filters.utmSource || "").trim() ||
+    (filters.utmMedium || "").trim() ||
+    (filters.utmCampaign || "").trim() ||
+    (filters.templateId || "").trim(),
+  );
+}
+
+function unwrapWebSessionsPayload(payload: unknown): {
+  rows: WebSessionAttributionRow[];
+  shape: "array" | "items" | "other" | "none";
+} {
+  if (Array.isArray(payload)) {
+    return { rows: payload as WebSessionAttributionRow[], shape: "array" };
+  }
+  if (
+    payload &&
+    typeof payload === "object" &&
+    Array.isArray((payload as { items?: unknown[] }).items)
+  ) {
+    return {
+      rows: (payload as { items: WebSessionAttributionRow[] }).items,
+      shape: "items",
+    };
+  }
+  if (payload != null) {
+    return { rows: [], shape: "other" };
+  }
+  return { rows: [], shape: "none" };
+}
+
+function normalizeWebSessionRows(rows: WebSessionAttributionRow[], filters: VisitsFilters): VisitDetailRaw[] {
+  const normalized: VisitDetailRaw[] = [];
+  for (const candidate of rows) {
+    if (!candidate || typeof candidate !== "object") continue;
+    const row = candidate as WebSessionAttributionRow;
+    try {
+      normalized.push({
+        session_id: row.session_id ?? null,
+        eid: row.eid ?? null,
+        oportunidad_id: null,
+        canal: "webchat",
+        ip: row.ip ?? null,
+        registrado_en: row.first_seen_at ?? null,
+        primera_visita_en: row.first_seen_at ?? null,
+        ultimo_evento_en: row.last_seen_at ?? null,
+        closed_at: null,
+        stay_seconds: null,
+        avg_stay_seconds: null,
+        visit_count: row.visit_count ?? 1,
+        total_visitas: row.visit_count ?? 1,
+        tuvo_chat: null,
+        mensajes_entrantes: null,
+        mensajes_salientes: null,
+        primer_mensaje_en: null,
+        ultimo_mensaje_conversacion: null,
+        contacto_id: row.contacto_id ?? null,
+        contacto_nombre: row.contacto_nombre ?? null,
+        contacto_correo: row.correo_envio ?? row.contacto_correo ?? null,
+        correo_envio: row.correo_envio ?? null,
+        contacto_telefono: row.contacto_telefono ?? null,
+        contacto_empresa: null,
+        contacto_estado: null,
+        contacto_captura: null,
+        contacto_creado_en: null,
+        country_code: row.country_code ?? null,
+        country_name: row.country_name ?? null,
+        state_name: row.nom_ent ?? null,
+        state_code: row.cve_ent ?? null,
+        city_name: row.nom_mun ?? null,
+        cve_ent: row.cve_ent ?? null,
+        nom_ent: row.nom_ent ?? null,
+        cve_mun: row.cve_mun ?? null,
+        nom_mun: row.nom_mun ?? null,
+        cvegeo: row.cvegeo ?? null,
+        ubicacion_cache: null,
+        device_type: row.device_type ?? null,
+        dispositivo_cache: null,
+        pantalla_cache: null,
+        sistema_operativo: null,
+        idioma: null,
+        timezone: null,
+        prefiere_modo_oscuro: null,
+        referrer: row.referrer ?? null,
+        landing_url: row.landing_url ?? null,
+        trazabilidad_cache: row.metadata ?? null,
+        source_class: row.source_class ?? null,
+        utm_source: row.utm_source ?? null,
+        utm_medium: row.utm_medium ?? null,
+        utm_campaign: row.utm_campaign ?? null,
+        template_id: row.template_id ?? null,
+        template_slug: row.template_slug ?? null,
+        template_nombre: row.template_nombre ?? null,
+        template_captada: Boolean(row.template_id || row.template_slug),
+        geo: null,
+        total_rows: null,
+        total_chat_rows: null,
+        total_no_chat_rows: null,
+      });
+    } catch (error) {
+      console.error("[visits] normalize_row_failed", {
+        error: error instanceof Error ? error.message : String(error),
+        rango: filters.rango || null,
+        sessionId: typeof row.session_id === "string" ? row.session_id : null,
+      });
+    }
+  }
+  return normalized;
+}
+
+function buildTemplateLookup(
+  payload: { items?: ContactoTemplateRow[] } | undefined,
+): { templateNameById: Map<string, string>; templateNameBySlug: Map<string, string> } {
+  const templateNameById = new Map<string, string>();
+  const templateNameBySlug = new Map<string, string>();
+  const templateItems = Array.isArray(payload?.items) ? payload.items : [];
+  for (const template of templateItems) {
+    if (!template || typeof template !== "object") continue;
+    const templateName = (typeof template.nombre === "string" ? template.nombre : "").trim();
+    if (!templateName) continue;
+    const templateId = (typeof template.id === "string" ? template.id : "").trim().toLowerCase();
+    const templateSlug = (typeof template.slug === "string" ? template.slug : "").trim().toLowerCase();
+    if (templateId) templateNameById.set(templateId, templateName);
+    if (templateSlug) templateNameBySlug.set(templateSlug, templateName);
+  }
+  return { templateNameById, templateNameBySlug };
+}
+
+function applyChannelFilter(rows: VisitDetailRaw[], filters: VisitsFilters): VisitDetailRaw[] {
+  const selectedCanales = new Set(
+    (filters.canales ?? []).map((value) => (value || "").trim().toLowerCase()).filter(Boolean),
+  );
+  if (selectedCanales.size === 0) return rows;
+  return rows.filter((row) => selectedCanales.has((row.canal || "").trim().toLowerCase()));
+}
+
+function enrichVisitRows(
+  rows: VisitDetailRaw[],
+  filters: VisitsFilters,
+  lookup?: { templateNameById: Map<string, string>; templateNameBySlug: Map<string, string> },
+): VisitDetailRaw[] {
+  if (!hasAttributionFilters(filters)) {
+    return rows;
+  }
+  const enriched: VisitDetailRaw[] = [];
+  for (const row of rows) {
+    try {
+      const tracking = extractTrackingFields(
+        row.trazabilidad_cache,
+        row.landing_url || null,
+        row.referrer || null,
+        {
+          utm_source: row.utm_source ?? null,
+          utm_medium: row.utm_medium ?? null,
+          utm_campaign: row.utm_campaign ?? null,
+          template_id: row.template_id ?? null,
+          template_slug: row.template_slug ?? null,
+          template_nombre: row.template_nombre ?? null,
+        },
+      );
+      const templateIdKey = (tracking.template_id || "").trim().toLowerCase();
+      const templateSlugKey = (tracking.template_slug || "").trim().toLowerCase();
+      enriched.push({
+        ...row,
+        utm_source: tracking.utm_source,
+        utm_medium: tracking.utm_medium,
+        utm_campaign: tracking.utm_campaign,
+        template_id: tracking.template_id,
+        template_slug: tracking.template_slug,
+        template_nombre:
+          tracking.template_nombre ||
+          lookup?.templateNameById.get(templateIdKey) ||
+          lookup?.templateNameBySlug.get(templateSlugKey) ||
+          null,
+        template_captada: tracking.template_captada,
+      });
+    } catch (error) {
+      console.error("[visits] enrich_row_failed", {
+        error: error instanceof Error ? error.message : String(error),
+        rango: filters.rango || null,
+        sessionId: row.session_id ?? null,
+      });
+    }
+  }
+  return enriched;
+}
+
+async function loadWebchatVisitRows(
+  filters: VisitsFilters = {},
+): Promise<{
+  rows: VisitDetailRaw[];
+  shape: "array" | "items" | "other" | "none";
+  detailOk: boolean;
+  detailRows: number;
+  errors: string[];
+}> {
+  const detalleResult = await callCrmApi<WebSessionAttributionRow[]>("/crm/visitas/web-sessions", {
+    withUserToken: true,
+    searchParams: buildVisitsSearchParams(filters),
+  });
+
+  if (!detalleResult.ok) {
+    return {
+      rows: [],
+      shape: "none",
+      detailOk: false,
+      detailRows: 0,
+      errors: [detalleResult.error],
+    };
+  }
+
+  const { rows: rawRows, shape } = unwrapWebSessionsPayload(detalleResult.data);
+  const normalized = normalizeWebSessionRows(rawRows, filters);
+  return {
+    rows: applyChannelFilter(normalized, filters),
+    shape,
+    detailOk: true,
+    detailRows: rawRows.length,
+    errors: [],
+  };
+}
+
+export async function loadVisitsTableForConversionMap(
+  filters: VisitsFilters = {},
+): Promise<VisitTableRow[]> {
+  const templatesResult = hasAttributionFilters(filters)
+    ? await callCrmApi<{ items?: ContactoTemplateRow[] }>("/crm/prospeccion/contacto/templates", { withUserToken: true })
+    : null;
+  const webchat = await loadWebchatVisitRows(filters);
+  if (webchat.errors.length) {
+    throw new Error(webchat.errors[0]);
+  }
+  const lookup = templatesResult?.ok ? buildTemplateLookup(templatesResult.data) : undefined;
+  const enrichedRows = enrichVisitRows(webchat.rows, filters, lookup);
+  const filteredRows = enrichedRows.filter((row) => matchesVisitsFilters(row, filters));
+  console.info("[visits] conversion_map_table_debug", {
+    rango: filters.rango || null,
+    rowsRaw: webchat.detailRows,
+    rowsFiltered: filteredRows.length,
+  });
+  return mapTable(filteredRows, lookup);
+}
+
 export async function loadVisitsData(filters: VisitsFilters = {}): Promise<VisitsPayload> {
-  const [kpisResult, detalleResult, whatsappVisitResult, whatsappDetailResult, templatesResult] = await Promise.all([
+  const [kpisResult, webchatResult, whatsappVisitResult, whatsappDetailResult, templatesResult] = await Promise.all([
     callCrmApi<DashboardKpisResponse>("/crm/visitas/kpis", { withUserToken: true }),
-    callCrmApi<WebSessionAttributionRow[]>("/crm/visitas/web-sessions", {
-      withUserToken: true,
-      searchParams: {
-        limit: 5000,
-        offset: 0,
-        estado: filters.estado || undefined,
-        source_class: filters.sourceClass || undefined,
-        utm_source: filters.utmSource || undefined,
-        utm_medium: filters.utmMedium || undefined,
-        utm_campaign: filters.utmCampaign || undefined,
-        template_id: filters.templateId || undefined,
-        rango: filters.rango || undefined,
-        desde: filters.desde || undefined,
-        hasta: filters.hasta || undefined,
-      },
-    }),
+    loadWebchatVisitRows(filters),
     callCrmApi<VisitantesCounterResponse>("/crm/visitas/whatsapp/total", {
       withUserToken: true,
       searchParams: {
@@ -216,141 +462,39 @@ export async function loadVisitsData(filters: VisitsFilters = {}): Promise<Visit
 
   const errors: string[] = [];
   if (!kpisResult.ok) errors.push(kpisResult.error);
-  if (!detalleResult.ok) errors.push(detalleResult.error);
+  errors.push(...webchatResult.errors);
   if (!whatsappVisitResult.ok) errors.push(whatsappVisitResult.error);
   if (!whatsappDetailResult.ok) errors.push(whatsappDetailResult.error);
   if (!templatesResult.ok) errors.push(templatesResult.error);
 
-  const detalleWebchat = detalleResult.ok ? detalleResult.data : undefined;
-  const normalizedWebchat: VisitDetailRaw[] =
-    detalleWebchat?.map((row) => ({
-      session_id: row.session_id ?? null,
-      eid: row.eid ?? null,
-      oportunidad_id: null,
-      canal: "webchat",
-      ip: row.ip ?? null,
-      registrado_en: row.first_seen_at ?? null,
-      primera_visita_en: row.first_seen_at ?? null,
-      ultimo_evento_en: row.last_seen_at ?? null,
-      closed_at: null,
-      stay_seconds: null,
-      avg_stay_seconds: null,
-      visit_count: row.visit_count ?? 1,
-      total_visitas: row.visit_count ?? 1,
-      tuvo_chat: null,
-      mensajes_entrantes: null,
-      mensajes_salientes: null,
-      primer_mensaje_en: null,
-      ultimo_mensaje_conversacion: null,
-      contacto_id: row.contacto_id ?? null,
-      contacto_nombre: row.contacto_nombre ?? null,
-      contacto_correo: row.correo_envio ?? row.contacto_correo ?? null,
-      correo_envio: row.correo_envio ?? null,
-      contacto_telefono: row.contacto_telefono ?? null,
-      contacto_empresa: null,
-      contacto_estado: null,
-      contacto_captura: null,
-      contacto_creado_en: null,
-      country_code: row.country_code ?? null,
-      country_name: row.country_name ?? null,
-      state_name: row.nom_ent ?? null,
-      state_code: row.cve_ent ?? null,
-      city_name: row.nom_mun ?? null,
-      cve_ent: row.cve_ent ?? null,
-      nom_ent: row.nom_ent ?? null,
-      cve_mun: row.cve_mun ?? null,
-      nom_mun: row.nom_mun ?? null,
-      cvegeo: row.cvegeo ?? null,
-      ubicacion_cache: null,
-      device_type: row.device_type ?? null,
-      dispositivo_cache: null,
-      pantalla_cache: null,
-      sistema_operativo: null,
-      idioma: null,
-      timezone: null,
-      prefiere_modo_oscuro: null,
-      referrer: row.referrer ?? null,
-      landing_url: row.landing_url ?? null,
-      trazabilidad_cache: row.metadata ?? null,
-      source_class: row.source_class ?? null,
-      utm_source: row.utm_source ?? null,
-      utm_medium: row.utm_medium ?? null,
-      utm_campaign: row.utm_campaign ?? null,
-      template_id: row.template_id ?? null,
-      template_slug: row.template_slug ?? null,
-      template_nombre: row.template_nombre ?? null,
-      template_captada: Boolean(row.template_id || row.template_slug),
-      geo: null,
-      total_rows: null,
-      total_chat_rows: null,
-      total_no_chat_rows: null,
-    })) ?? [];
   const whatsappDetail = whatsappDetailResult.ok ? mapWhatsappRows(whatsappDetailResult.data) : [];
-  const selectedCanales = new Set(
-    (filters.canales ?? []).map((value) => (value || "").trim().toLowerCase()).filter(Boolean),
-  );
-  const includeAllCanales = selectedCanales.size === 0;
-  const mergedDetalleBase: VisitDetailRaw[] = [...normalizedWebchat, ...whatsappDetail].filter((row) => {
-    if (includeAllCanales) return true;
-    const canal = (row.canal || "").trim().toLowerCase();
-    return selectedCanales.has(canal);
-  });
-  const templateNameById = new Map<string, string>();
-  const templateNameBySlug = new Map<string, string>();
-  if (templatesResult.ok) {
-    const templateItems = Array.isArray(templatesResult.data?.items) ? templatesResult.data.items : [];
-    for (const template of templateItems) {
-      if (!template || typeof template !== "object") continue;
-      const templateName = (typeof template.nombre === "string" ? template.nombre : "").trim();
-      if (!templateName) continue;
-      const templateId = (typeof template.id === "string" ? template.id : "").trim().toLowerCase();
-      const templateSlug = (typeof template.slug === "string" ? template.slug : "").trim().toLowerCase();
-      if (templateId) templateNameById.set(templateId, templateName);
-      if (templateSlug) templateNameBySlug.set(templateSlug, templateName);
-    }
-  }
-
-  const enrichedDetalle = mergedDetalleBase.map((row) => {
-    const tracking = extractTrackingFields(
-      row.trazabilidad_cache,
-      row.landing_url || null,
-      row.referrer || null,
-      {
-        utm_source: row.utm_source ?? null,
-        utm_medium: row.utm_medium ?? null,
-        utm_campaign: row.utm_campaign ?? null,
-        template_id: row.template_id ?? null,
-        template_slug: row.template_slug ?? null,
-        template_nombre: row.template_nombre ?? null,
-      },
-    );
-    const templateIdKey = (tracking.template_id || "").trim().toLowerCase();
-    const templateSlugKey = (tracking.template_slug || "").trim().toLowerCase();
-    const templateNombre =
-      tracking.template_nombre ||
-      templateNameById.get(templateIdKey) ||
-      templateNameBySlug.get(templateSlugKey) ||
-      null;
-    return {
-      ...row,
-      utm_source: tracking.utm_source,
-      utm_medium: tracking.utm_medium,
-      utm_campaign: tracking.utm_campaign,
-      template_id: tracking.template_id,
-      template_slug: tracking.template_slug,
-      template_nombre: templateNombre,
-      template_captada: tracking.template_captada,
-    } satisfies VisitDetailRaw;
-  });
+  const mergedDetalleBase: VisitDetailRaw[] = [...webchatResult.rows, ...applyChannelFilter(whatsappDetail, filters)];
+  const lookup = templatesResult.ok ? buildTemplateLookup(templatesResult.data) : undefined;
+  const enrichedDetalle = enrichVisitRows(mergedDetalleBase, filters, lookup);
 
   const filteredDetalle = enrichedDetalle.filter((row) => matchesVisitsFilters(row, filters));
+  console.info("[visits] loader_debug", {
+    detailOk: webchatResult.detailOk,
+    detailShape: webchatResult.shape,
+    detailRows: webchatResult.detailRows,
+    whatsappRows: whatsappDetail.length,
+    mergedRows: mergedDetalleBase.length,
+    enrichedRows: enrichedDetalle.length,
+    filteredRows: filteredDetalle.length,
+    includeAllCanales: !(filters.canales?.length),
+    canales: filters.canales ?? [],
+    estado: filters.estado || null,
+    sourceClass: filters.sourceClass || null,
+    utmSource: filters.utmSource || null,
+    utmMedium: filters.utmMedium || null,
+    utmCampaign: filters.utmCampaign || null,
+    templateId: filters.templateId || null,
+    rango: filters.rango || null,
+  });
   const whatsappTotal = extractTotal(whatsappVisitResult, whatsappDetail.length);
   const cards = mapCards(filters, kpisResult.ok ? kpisResult.data : undefined, filteredDetalle, whatsappTotal);
   const chart = mapChart(filteredDetalle);
-  const table = mapTable(filteredDetalle, {
-    templateNameById,
-    templateNameBySlug,
-  });
+  const table = mapTable(filteredDetalle, lookup);
 
   return {
     cards,
@@ -538,9 +682,17 @@ function pickString(record: Record<string, unknown> | null, keys: string[]): str
   return null;
 }
 
-function normalizeTrackingValue(value: string | null): string | null {
-  if (!value) return null;
-  const cleaned = value.trim();
+function normalizeTrackingValue(value: unknown): string | null {
+  if (value === null || value === undefined) return null;
+  let raw: string;
+  if (typeof value === "string") {
+    raw = value;
+  } else if (typeof value === "number" || typeof value === "boolean") {
+    raw = String(value);
+  } else {
+    return null;
+  }
+  const cleaned = raw.trim();
   if (!cleaned || cleaned === "(none)") return null;
   return cleaned.toLowerCase();
 }
@@ -574,7 +726,7 @@ function resolveSourceClass(row: VisitDetailRaw): string {
   const utmSource = normalizeTrackingValue(row.utm_source ?? null);
   const utmMedium = normalizeTrackingValue(row.utm_medium ?? null);
   const utmCampaign = normalizeTrackingValue(row.utm_campaign ?? null);
-  const referrer = (row.referrer || "").trim().toLowerCase();
+  const referrer = normalizeTrackingValue(row.referrer ?? null) || "";
   if (utmSource || utmMedium || utmCampaign) return "campaign";
   if (!referrer) return "direct";
   if (/google\./i.test(referrer)) return "organic_search";
