@@ -7583,6 +7583,31 @@ class CRMRepository:
             params=params,
         )
 
+    async def master_openai_tenant_measurement_audit(
+        self,
+        *,
+        tenant_id: UUID | None = None,
+        status: str | None = None,
+    ) -> list[dict[str, Any]]:
+        params: dict[str, str] = {
+            "order": "measurement_status.asc,organizacion_nombre.asc",
+        }
+        if tenant_id:
+            params["organizacion_id"] = f"eq.{tenant_id}"
+        if status:
+            params["measurement_status"] = f"eq.{status}"
+        return await self._fetch_openai_cost_view_service_role(
+            view_name="v_openai_tenant_measurement_audit",
+            select=(
+                "organizacion_id,organizacion_nombre,activo,openai_project_id,has_openai_api_secret,"
+                "has_openai_voice_secret,webchat_assistant_id,whatsapp_prompt_id,whatsapp_assistant_id,"
+                "webchat_enabled,whatsapp_enabled,internal_requests_30d,requests_missing_project_30d,"
+                "measurement_incomplete_requests_30d,last_request_at,uses_openai,measurement_status,"
+                "measurement_reason"
+            ),
+            params=params,
+        )
+
     async def visitas_detalle(
         self,
         *,

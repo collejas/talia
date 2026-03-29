@@ -893,6 +893,11 @@ Notas:
   - vista `v_openai_cost_reconciliation_daily`
   - sync manual protegido desde backend
   - tabla frontend visible en `master global`
+- Auditoría de medibilidad por tenant ya implementada en primera versión:
+  - vista `v_openai_tenant_measurement_audit`
+  - endpoint backend master protegido
+  - tabla frontend visible en `master global`
+  - clasificación inicial: `complete`, `degraded`, `incomplete`, `not_reconcilable`, `not_applicable`
 
 Estado al 2026-03-29:
 
@@ -904,6 +909,7 @@ Estado al 2026-03-29:
   - `supabase/migrations/20280429_122500_openai_assistant_views.sql`
   - `supabase/migrations/20280429_124500_openai_catalogs.sql`
   - `supabase/migrations/20280429_125500_openai_catalog_enrichment.sql`
+  - `supabase/migrations/20280429_131500_openai_tenant_measurement_audit.sql`
 - Ya existen en Supabase:
   - `public.openai_pricing_catalog`
   - `public.openai_request_usage`
@@ -923,6 +929,7 @@ Estado al 2026-03-29:
   - `talia-api.service` activo
   - `GET /api/health` responde `ok`
 - El frontend `/settings/openai-costs` ya está operativo para tenant actual y `master global`.
+- El frontend `/settings/openai-costs` ya muestra además la auditoría de medibilidad por tenant en `master global`.
 
 ### Qué captura ya el ledger
 
@@ -950,12 +957,9 @@ Para tráfico nuevo, `public.openai_request_usage` ya puede guardar:
 
 ### Pendiente inmediato
 
-- Agregar export CSV.
-- Evaluar si conviene llevar el filtro de `assistant_kind` al backend agregado completo o mantenerlo acotado a la vista de asistentes.
-- Si se requiere, agregar selector/buscador más robusto de organización para instalaciones con muchos tenants.
-- Agregar auditoría de tenants con OpenAI incompleto (`project_id`, `api_key`, canales instrumentados).
-- Agregar estado visible de medibilidad/reconciliación por tenant en UI/admin.
+- Definir si el runtime marca explícitamente `measurement_incomplete=true` cuando falta `project_id` o key resoluble.
 - Definir si el runtime solo advierte o también bloquea requests para tenants no medibles.
+- Si se requiere, agregar filtros explícitos por `measurement_status` en la pantalla.
 
 ### Riesgos/observaciones vigentes
 

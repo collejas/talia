@@ -23127,6 +23127,24 @@ async def analytics_openai_master_reconciliation_daily(
     return {"ok": True, "rows": rows}
 
 
+@router.get("/analytics/openai/master/measurement-audit")
+async def analytics_openai_master_measurement_audit(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    _: str = Depends(require_owner_or_admin_for_master_tenant()),
+    tenant_id: UUID | None = Query(default=None),
+    status: str | None = Query(default=None),
+) -> dict[str, Any]:
+    try:
+        rows = await repo.master_openai_tenant_measurement_audit(
+            tenant_id=tenant_id,
+            status=status,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return {"ok": True, "rows": rows}
+
+
 @router.post(
     "/web/visit",
     status_code=204,

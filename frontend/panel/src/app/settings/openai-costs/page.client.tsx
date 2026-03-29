@@ -106,6 +106,27 @@ type ReconciliationRow = {
   variance_pct: number | string | null;
 };
 
+type MeasurementAuditRow = {
+  organizacion_id: string;
+  organizacion_nombre: string | null;
+  activo: boolean | null;
+  openai_project_id: string | null;
+  has_openai_api_secret: boolean;
+  has_openai_voice_secret: boolean;
+  webchat_assistant_id: string | null;
+  whatsapp_prompt_id: string | null;
+  whatsapp_assistant_id: string | null;
+  webchat_enabled: boolean;
+  whatsapp_enabled: boolean;
+  internal_requests_30d: number;
+  requests_missing_project_30d: number;
+  measurement_incomplete_requests_30d: number;
+  last_request_at: string | null;
+  uses_openai: boolean;
+  measurement_status: string;
+  measurement_reason: string;
+};
+
 type ApiResponse<T> = {
   ok?: boolean;
   rows?: T[];
@@ -212,6 +233,38 @@ function formatMonthLabel(value: string | null | undefined): string {
   return date.toLocaleDateString("es-MX", { year: "numeric", month: "short" });
 }
 
+function measurementStatusLabel(value: string | null | undefined): string {
+  switch (value) {
+    case "complete":
+      return "Completo";
+    case "degraded":
+      return "Degradado";
+    case "incomplete":
+      return "Incompleto";
+    case "not_reconcilable":
+      return "No reconciliable";
+    case "not_applicable":
+      return "No aplica";
+    default:
+      return value ?? "—";
+  }
+}
+
+function measurementStatusVariant(value: string | null | undefined): "default" | "secondary" | "destructive" | "outline" {
+  switch (value) {
+    case "complete":
+      return "default";
+    case "degraded":
+    case "incomplete":
+    case "not_reconcilable":
+      return "destructive";
+    case "not_applicable":
+      return "secondary";
+    default:
+      return "outline";
+  }
+}
+
 function csvValue(value: unknown): string {
   if (value == null) return "";
   if (Array.isArray(value)) return value.join(", ");
@@ -270,6 +323,7 @@ export function OpenAiCostsPageClient() {
   const [projectRows, setProjectRows] = React.useState<ProjectRow[]>([]);
   const [assistantRows, setAssistantRows] = React.useState<AssistantRow[]>([]);
   const [reconciliationRows, setReconciliationRows] = React.useState<ReconciliationRow[]>([]);
+  const [measurementAuditRows, setMeasurementAuditRows] = React.useState<MeasurementAuditRow[]>([]);
   const [tenantOptions, setTenantOptions] = React.useState<TenantOption[]>([]);
   const [tenantsLoading, setTenantsLoading] = React.useState(false);
   const [syncingReconciliation, setSyncingReconciliation] = React.useState(false);
@@ -308,6 +362,7 @@ export function OpenAiCostsPageClient() {
       const projectsBasePath = "/api/analytics/openai/costs/projects";
       const assistantsBasePath = "/api/analytics/openai/costs/assistants";
       const reconciliationBasePath = "/api/analytics/openai/reconciliation/daily";
+      const measurementAuditBasePath = "/api/analytics/openai/measurement-audit";
       const commonDaily = new URLSearchParams({ date_from: dateFrom, date_to: dateTo });
       const commonMonthly = new URLSearchParams({
         month_from: monthStart(dateFrom),
@@ -345,14 +400,19 @@ export function OpenAiCostsPageClient() {
       if (projectKey !== "__all__") {
         reconciliationParams.set("project_id", projectKey);
       }
+      const measurementAuditParams = new URLSearchParams();
+      if (useMasterScope && activeTenantId) {
+        measurementAuditParams.set("tenant_id", activeTenantId);
+      }
 
-      const [daily, conversations, models, projects, assistants, reconciliation] = await Promise.all([
+      const [daily, conversations, models, projects, assistants, reconciliation, measurementAudit] = await Promise.all([
         fetchRows<DailyRow>(dailyBasePath, commonDaily),
         fetchRows<ConversationRow>(conversationsBasePath, conversationParams),
         fetchRows<ModelRow>(modelsBasePath, commonMonthly),
         fetchRows<ProjectRow>(projectsBasePath, commonMonthly),
         fetchRows<AssistantRow>(assistantsBasePath, assistantParams),
         useMasterScope ? fetchRows<ReconciliationRow>(reconciliationBasePath, reconciliationParams) : Promise.resolve([]),
+        useMasterScope ? fetchRows<MeasurementAuditRow>(measurementAuditBasePath, measurementAuditParams) : Promise.resolve([]),
       ]);
 
       setDailyRows(daily);
@@ -361,6 +421,7 @@ export function OpenAiCostsPageClient() {
       setProjectRows(projects);
       setAssistantRows(assistants);
       setReconciliationRows(reconciliation);
+      setMeasurementAuditRows(measurementAudit);
     } catch (fetchError) {
       console.error("[openai-costs] fetch failed", fetchError);
       setError(fetchError instanceof Error ? fetchError.message : "No se pudieron cargar los costos OpenAI.");
@@ -429,6 +490,18 @@ export function OpenAiCostsPageClient() {
       { internal: 0, official: 0, variance: 0 },
     );
   }, [reconciliationRows]);
+  const measurementAuditSummary = React.useMemo(() => {
+    return measurementAuditRows.reduce(
+      (acc, row) => {
+        acc.total += 1;
+        if (row.measurement_status === "complete") acc.complete += 1;
+        if (row.measurement_status === "degraded") acc.degraded += 1;
+        if (row.measurement_status === "incomplete" || row.measurement_status === "not_reconcilable") acc.incomplete += 1;
+        return acc;
+      },
+      { total: 0, complete: 0, degraded: 0, incomplete: 0 },
+    );
+  }, [measurementAuditRows]);
 
   const handleExportDaily = React.useCallback(() => {
     downloadCsv(
@@ -781,6 +854,63 @@ export function OpenAiCostsPageClient() {
                   ))
                 ) : (
                   <EmptyTable colSpan={7} label={loading ? "Cargando reconciliación..." : "Sin datos de reconciliación para el rango actual."} />
+                )}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      ) : null}
+
+      {masterScopeEnabled && scope === "master" ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>Auditoría de medibilidad por tenant</CardTitle>
+            <CardDescription>
+              Verifica qué tenants están completos, degradados o incompletos para medición y reconciliación OpenAI.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid gap-4 md:grid-cols-4">
+              <MetricCard label="Tenants auditados" value={formatInt(measurementAuditSummary.total)} />
+              <MetricCard label="Completos" value={formatInt(measurementAuditSummary.complete)} />
+              <MetricCard label="Degradados" value={formatInt(measurementAuditSummary.degraded)} />
+              <MetricCard label="Incompletos" value={formatInt(measurementAuditSummary.incomplete)} />
+            </div>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Tenant</TableHead>
+                  <TableHead>Estado</TableHead>
+                  <TableHead>Motivo</TableHead>
+                  <TableHead>Proyecto</TableHead>
+                  <TableHead className="text-right">Req 30d</TableHead>
+                  <TableHead className="text-right">Sin project</TableHead>
+                  <TableHead className="text-right">Última req</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {measurementAuditRows.length ? (
+                  measurementAuditRows.slice(0, 20).map((row, index) => (
+                    <TableRow key={[row.organizacion_id, row.measurement_status, index].join("-")}>
+                      <TableCell>{row.organizacion_nombre ?? shortId(row.organizacion_id)}</TableCell>
+                      <TableCell>
+                        <Badge variant={measurementStatusVariant(row.measurement_status)}>
+                          {measurementStatusLabel(row.measurement_status)}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="max-w-[280px] whitespace-normal text-xs text-muted-foreground">
+                        {row.measurement_reason ?? "—"}
+                      </TableCell>
+                      <TableCell>{projectLabel(row.openai_project_id, row.openai_project_id)}</TableCell>
+                      <TableCell className="text-right">{formatInt(row.internal_requests_30d)}</TableCell>
+                      <TableCell className="text-right">{formatInt(row.requests_missing_project_30d)}</TableCell>
+                      <TableCell className="text-right text-xs text-muted-foreground">
+                        {row.last_request_at ? new Date(row.last_request_at).toLocaleString("es-MX") : "—"}
+                      </TableCell>
+                    </TableRow>
+                  ))
+                ) : (
+                  <EmptyTable colSpan={7} label={loading ? "Cargando auditoría..." : "Sin datos de auditoría para el contexto actual."} />
                 )}
               </TableBody>
             </Table>
