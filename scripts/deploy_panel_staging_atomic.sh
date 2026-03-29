@@ -137,10 +137,25 @@ preflight_restart_permissions() {
   if [[ "${SKIP_RESTART}" == "1" ]]; then
     return 0
   fi
-  if ! sudo -n true >/dev/null 2>&1; then
-    echo "[deploy-staging] ERROR no hay permisos sudo no-interactivos para reiniciar servicios."
-    echo "[deploy-staging] Usa SKIP_RESTART=1 o configura sudo NOPASSWD para ${PANEL_SERVICE} y ${API_SERVICE}."
-    return 1
+  local required_checks=()
+  required_checks+=("sudo -n systemctl status ${PANEL_SERVICE}")
+  if [[ "${RESTART_API}" == "1" ]]; then
+    required_checks+=("sudo -n systemctl status ${API_SERVICE}")
+  fi
+
+  local check
+  for check in "${required_checks[@]}"; do
+    if ! eval "${check}" >/dev/null 2>&1; then
+      echo "[deploy-staging] ERROR no hay permisos sudo no-interactivos para reiniciar servicios."
+      echo "[deploy-staging] Falta permiso para: ${check#sudo -n }"
+      echo "[deploy-staging] Configura sudo NOPASSWD para status/restart de ${PANEL_SERVICE}${RESTART_API:+ y ${API_SERVICE}} o usa SKIP_RESTART=1."
+      return 1
+    fi
+  done
+
+  if ! sudo -n systemctl daemon-reload >/dev/null 2>&1; then
+    echo "[deploy-staging] WARN no hay permiso NOPASSWD para systemctl daemon-reload."
+    echo "[deploy-staging] El deploy puede continuar, pero un cambio de unit file requerira recarga manual."
   fi
 }
 
