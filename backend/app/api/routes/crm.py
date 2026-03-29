@@ -105,6 +105,7 @@ from app.services.google_trends import (
     fetch_google_trends,
     list_google_trends_countries,
 )
+from app.services.openai_catalog_sync import sync_openai_catalogs
 from app.services.ui_realtime_hub import (
     inbox_topic_for_org,
     prospectos_topic_for_org,
@@ -23052,6 +23053,16 @@ async def analytics_openai_master_costs_by_project(
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     return {"ok": True, "rows": rows}
+
+
+@router.post("/analytics/openai/master/catalog/sync")
+async def analytics_openai_master_catalog_sync(
+    _: str = Depends(require_owner_or_admin_for_master_tenant()),
+) -> dict[str, Any]:
+    try:
+        return await sync_openai_catalogs()
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
 
 
 @router.get("/analytics/openai/master/costs/assistants")

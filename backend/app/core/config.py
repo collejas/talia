@@ -37,6 +37,7 @@ class Settings(BaseSettings):
         description="Prefijos de ruta para los que no se registrarán eventos de request.started/completed.",
     )
     openai_api_key: str | None = None
+    openai_admin_api_key: str | None = None
     embeddings_model: str = Field(
         default="text-embedding-3-small",
         description="Modelo de embeddings que se usa para la vector store.",
