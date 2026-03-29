@@ -1645,6 +1645,11 @@ async def set_tenant_secret(
     if actor.is_owner and actor.organizacion_id != organizacion_id:
         raise HTTPException(status_code=403, detail="owner_scope_violation")
     secret_key = _normalize_secret_key(clave)
+    # La FK de `public.secretos` exige que (organizacion_id, creado_por/actualizado_por)
+    # exista en `public.usuarios`. Cuando un actor del tenant maestro administra secretos
+    # de otro tenant, ese usuario no pertenece a la organización destino, por lo que
+    # debemos omitir el auditor local y permitir metadata nula.
+    updated_by: UUID | None = actor.user_id if actor.organizacion_id == organizacion_id else None
 
     master_key = _get_master_key_for_tier(payload.tier)
     aad = f"org:{organizacion_id}:key:{secret_key}:tier:{payload.tier}"
@@ -1672,7 +1677,7 @@ async def set_tenant_secret(
             nonce=nonce_b64,
             etiqueta=etiqueta,
             version=version,
-            updated_by=actor.user_id,
+            updated_by=updated_by,
         )
     except PlatformRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
