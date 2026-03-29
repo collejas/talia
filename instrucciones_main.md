@@ -11,6 +11,8 @@ IMPORTANTE:
   - `talia-panel.service`
 - No desplegar a producción si staging no fue validado funcionalmente.
 - El deploy de panel en producción ya soporta reinicio no interactivo con `sudoers` restringido.
+- `talia-api.service` y `talia-panel.service` corren como `jorge`, no como `root`.
+- Si aparecen errores de permisos, revisar ownership en `/var/www/talia/logs`, releases y archivos creados por procesos anteriores.
 
 1) Pre-check antes de promover
 cd /var/www/talia
@@ -103,6 +105,8 @@ sudo journalctl -u talia-panel.service -n 120 --no-pager
 y logs de archivos locales:
 tail -n 120 /var/www/talia/logs/panel.log
 tail -n 120 /var/www/talia/logs/panel-error.log
+tail -n 120 /var/www/talia/logs/api.log
+tail -n 120 /var/www/talia/logs/request.log
 
 9) Troubleshooting útil
 Si falta espacio o quieres mantenimiento de disco:
@@ -112,6 +116,10 @@ Si hiciste cambios en unit files de systemd:
 sudo systemctl daemon-reload
 sudo systemctl restart talia-panel.service
 sudo systemctl restart talia-api.service
+
+Si aparece un error de permisos en logs o archivos temporales:
+ls -l /var/www/talia/logs
+ls -ld /var/www/talia/releases/panel /var/www/talia/current /var/www/talia/.npm-cache
 
 Si necesitas compilar pero no reiniciar todavía:
 cd /var/www/talia

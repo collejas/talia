@@ -12,9 +12,14 @@ touched_logs=(
   "$LOG_DIR/api.log"
   "$LOG_DIR/request.log"
   "$LOG_DIR/whatsapp.log"
+  "$LOG_DIR/messenger.log"
   "$LOG_DIR/voice.log"
   "$LOG_DIR/webchat.log"
   "$LOG_DIR/visitas.log"
+  "$LOG_DIR/propiedades-import.log"
+  "$LOG_DIR/tenant-access.log"
+  "$LOG_DIR/inbox-threads-metrics.log"
+  "$LOG_DIR/busquedas/busquedas.log"
 )
 for log_file in "${touched_logs[@]}"; do
   touch "$log_file" || true
