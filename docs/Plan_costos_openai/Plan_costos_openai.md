@@ -700,6 +700,13 @@ Hoy tu sistema tiene estos vacíos principales:
 - Se corrigió el lookup de pricing para modelos versionados, por ejemplo:
   - `gpt-4.1-2025-04-14` -> `gpt-4.1`
 - Quedó evidenciado un primer registro previo con costo `0` por falta de normalización; ese comportamiento ya quedó corregido para tráfico nuevo.
+- Validaciones adicionales completadas:
+  - `whatsapp` registró `tool_loop_iteration` y `quality_retry` con costo estimado correcto.
+  - `summary` registró ejecución real sobre `conversation_summary` con costo estimado correcto.
+  - Ejemplos validados:
+    - `whatsapp / tool_loop_iteration`: `gpt-5-nano-2025-08-07`, `estimated_total_cost_usd=0.00086615`
+    - `whatsapp / quality_retry`: `gpt-5-nano-2025-08-07`, `estimated_total_cost_usd=0.00033731`
+    - `summary / summary`: `gpt-4o-mini`, `estimated_total_cost_usd=0.00004845`
 
 ## Avance actual
 
