@@ -3172,6 +3172,7 @@ async def handle_message(
             client=client,
             assistant=assistant,
             assistant_spec=assistant_spec,
+            api_key=runtime_openai_api_key,
             context=context,
             user_message=payload,
             openai_conversation_id=openai_conversation_id,
@@ -3630,6 +3631,7 @@ async def _run_assistant_turn(
     client: AsyncOpenAI,
     assistant: AssistantConfig,
     assistant_spec: AssistantSpec | None,
+    api_key: str | None,
     context: WebchatContext,
     user_message: schemas.MessageRequest,
     openai_conversation_id: str | None,
@@ -3873,7 +3875,7 @@ async def _run_assistant_turn(
         contact_id=context.contact_id,
         session_id=context.session_id,
         channel="webchat",
-        organizacion_id=str(resolved_organizacion_id) if resolved_organizacion_id else None,
+        organizacion_id=organizacion_id,
         feature="sales_chat",
     )
 
@@ -3888,7 +3890,7 @@ async def _run_assistant_turn(
         execute_tool=lambda name, args, _: _execute_function_call(name, args, context),
         openai_conversation_id=openai_conversation_id,
         previous_response_id=previous_response_id,
-        api_key=runtime_openai_api_key,
+        api_key=api_key,
         log=logger,
     )
     debug_timings["tool_loop_ms"] = round((time.perf_counter() - tool_loop_started) * 1000, 2)
@@ -3939,14 +3941,14 @@ async def _run_assistant_turn(
             debug_timings["quality_retry_ms"] = round((time.perf_counter() - quality_retry_started) * 1000, 2)
             retry_payload = retry_response.model_dump()
             await openai_usage_ledger.record_response_usage(
-                organizacion_id=resolved_organizacion_id,
+                organizacion_id=organizacion_id,
                 channel="webchat",
                 feature="sales_chat",
                 assistant=assistant,
                 response_payload=retry_payload,
                 request_purpose="quality_retry",
                 latency_ms=int(round(debug_timings["quality_retry_ms"])),
-                api_key=runtime_openai_api_key,
+                api_key=api_key,
                 request_metadata={"conversation_id": context.conversation_id},
                 conversation_id=context.conversation_id,
                 contact_id=context.contact_id,

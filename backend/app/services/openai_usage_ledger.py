@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import re
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from decimal import Decimal
@@ -56,6 +57,13 @@ def _to_decimal(value: Any) -> Decimal:
 
 def _quantize_money(value: Decimal) -> Decimal:
     return value.quantize(Decimal("0.00000001"))
+
+
+def _normalize_model_name(model: str | None) -> str:
+    raw = (model or "").strip()
+    if not raw:
+        return "unknown"
+    return re.sub(r"-\d{4}-\d{2}-\d{2}$", "", raw)
 
 
 def api_key_fingerprint(api_key: str | None) -> str | None:
@@ -224,10 +232,11 @@ async def record_response_usage(
         or (response_payload.get("response") or {}).get("model")
         or "unknown"
     )
+    normalized_model = _normalize_model_name(str(model))
     resolved_project_id = project_id or (assistant.project_id if assistant else None)
     costs, pricing_found = await _estimate_cost(
         provider="openai",
-        model=str(model),
+        model=normalized_model,
         input_tokens=input_tokens,
         cached_input_tokens=cached_input_tokens,
         output_tokens=output_tokens,
@@ -235,6 +244,7 @@ async def record_response_usage(
     )
     metadata = _ensure_dict(request_metadata)
     metadata.setdefault("pricing_found", pricing_found)
+    metadata.setdefault("pricing_model_lookup", normalized_model)
     payload = {
         "organizacion_id": str(organizacion_id),
         "source_tenant_mode": _source_tenant_mode(

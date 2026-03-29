@@ -686,6 +686,21 @@ Hoy tu sistema tiene estos vacíos principales:
 6. Construir dashboards
 7. Agregar reconciliación oficial con Usage/Costs API
 
+## Validación inicial completada
+
+- Se generó tráfico controlado de `webchat` después de instrumentar el ledger.
+- Se confirmó inserción real en `public.openai_request_usage`.
+- Ejemplo validado:
+  - `channel`: `webchat`
+  - `openai_model`: `gpt-4.1-2025-04-14`
+  - `input_tokens`: `3332`
+  - `cached_input_tokens`: `2048`
+  - `output_tokens`: `38`
+  - `estimated_total_cost_usd`: `0.00389600`
+- Se corrigió el lookup de pricing para modelos versionados, por ejemplo:
+  - `gpt-4.1-2025-04-14` -> `gpt-4.1`
+- Quedó evidenciado un primer registro previo con costo `0` por falta de normalización; ese comportamiento ya quedó corregido para tráfico nuevo.
+
 ## Avance actual
 
 Estado al 2026-03-29:
