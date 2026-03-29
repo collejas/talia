@@ -740,6 +740,7 @@ Notas:
 
 2. Desglose por assistant_ref / assistant_kind
    - Ya implementado en primera versión: vista SQL, endpoints backend y tabla frontend.
+   - Actualizado además con nombres legibles para proyecto, asistente y conversación.
    - Pendiente fino: filtros dedicados y export por assistant.
 
 3. Export CSV

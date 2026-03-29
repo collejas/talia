@@ -18,6 +18,7 @@ type DailyRow = {
   channel: string | null;
   feature: string | null;
   openai_project_key: string | null;
+  openai_project_display_name: string | null;
   openai_model_family: string | null;
   requests_count: number;
   conversations_count: number;
@@ -29,8 +30,12 @@ type DailyRow = {
 
 type ConversationRow = {
   conversation_id: string;
+  conversation_display_name: string | null;
+  organizacion_nombre: string | null;
   channel: string | null;
   feature: string | null;
+  openai_project_key: string | null;
+  openai_project_display_name: string | null;
   models_used: string[] | null;
   requests_count: number;
   total_tokens: number;
@@ -42,9 +47,11 @@ type ConversationRow = {
 
 type ModelRow = {
   usage_month: string;
+  organizacion_nombre: string | null;
   channel: string | null;
   feature: string | null;
   openai_project_key: string | null;
+  openai_project_display_name: string | null;
   openai_model_family: string | null;
   requests_count: number;
   total_tokens: number;
@@ -54,8 +61,10 @@ type ModelRow = {
 
 type ProjectRow = {
   usage_month: string;
+  organizacion_nombre: string | null;
   source_tenant_mode: string | null;
   openai_project_key: string | null;
+  openai_project_display_name: string | null;
   requests_count: number;
   conversations_count: number;
   models_count: number;
@@ -72,9 +81,11 @@ type AssistantRow = {
   channel: string | null;
   feature: string | null;
   openai_project_key: string | null;
+  openai_project_display_name: string | null;
   openai_model_family: string | null;
   assistant_kind: string | null;
   assistant_ref: string | null;
+  assistant_display_name: string | null;
   requests_count: number;
   conversations_count: number;
   total_tokens: number;
@@ -146,6 +157,27 @@ function shortId(value: string | null | undefined): string {
   if (!value) return "—";
   if (value.length <= 12) return value;
   return `${value.slice(0, 8)}…${value.slice(-4)}`;
+}
+
+function projectLabel(displayName: string | null | undefined, key: string | null | undefined): string {
+  if (displayName && displayName.trim().length) return displayName.trim();
+  if (key && key.trim().length) return key.trim();
+  return "—";
+}
+
+function assistantLabel(
+  displayName: string | null | undefined,
+  kind: string | null | undefined,
+  ref: string | null | undefined,
+): string {
+  const base = displayName && displayName.trim().length ? displayName.trim() : kind ?? "Asistente";
+  if (!ref || !ref.trim().length) return base;
+  return `${base} · ${shortId(ref.trim())}`;
+}
+
+function conversationLabel(displayName: string | null | undefined, conversationId: string): string {
+  if (displayName && displayName.trim().length) return displayName.trim();
+  return `Conversación · ${shortId(conversationId)}`;
 }
 
 function formatMonthLabel(value: string | null | undefined): string {
@@ -359,7 +391,9 @@ export function OpenAiCostsPageClient() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Fecha</TableHead>
+                  <TableHead>Organización</TableHead>
                   <TableHead>Canal</TableHead>
+                  <TableHead>Proyecto</TableHead>
                   <TableHead>Modelo</TableHead>
                   <TableHead className="text-right">Req</TableHead>
                   <TableHead className="text-right">Tokens</TableHead>
@@ -371,7 +405,9 @@ export function OpenAiCostsPageClient() {
                   dailyRows.slice(0, 12).map((row) => (
                     <TableRow key={`${row.usage_date}-${row.channel}-${row.openai_model_family}-${row.feature}`}>
                       <TableCell>{row.usage_date}</TableCell>
+                      <TableCell>{row.organizacion_nombre ?? "—"}</TableCell>
                       <TableCell>{row.channel ?? "—"}</TableCell>
+                      <TableCell>{projectLabel(row.openai_project_display_name, row.openai_project_key)}</TableCell>
                       <TableCell>{row.openai_model_family ?? "—"}</TableCell>
                       <TableCell className="text-right">{formatInt(row.requests_count)}</TableCell>
                       <TableCell className="text-right">{formatInt(row.total_tokens)}</TableCell>
@@ -379,7 +415,7 @@ export function OpenAiCostsPageClient() {
                     </TableRow>
                   ))
                 ) : (
-                  <EmptyTable colSpan={6} label={loading ? "Cargando diario..." : "Sin datos diarios para el rango actual."} />
+                  <EmptyTable colSpan={8} label={loading ? "Cargando diario..." : "Sin datos diarios para el rango actual."} />
                 )}
               </TableBody>
             </Table>
@@ -396,6 +432,7 @@ export function OpenAiCostsPageClient() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Mes</TableHead>
+                  <TableHead>Organización</TableHead>
                   <TableHead>Proyecto</TableHead>
                   <TableHead>Modo</TableHead>
                   <TableHead className="text-right">Req</TableHead>
@@ -408,7 +445,8 @@ export function OpenAiCostsPageClient() {
                   projectRows.slice(0, 12).map((row) => (
                     <TableRow key={`${row.usage_month}-${row.openai_project_key}`}> 
                       <TableCell>{formatMonthLabel(row.usage_month)}</TableCell>
-                      <TableCell>{row.openai_project_key ?? "—"}</TableCell>
+                      <TableCell>{row.organizacion_nombre ?? "—"}</TableCell>
+                      <TableCell>{projectLabel(row.openai_project_display_name, row.openai_project_key)}</TableCell>
                       <TableCell>{row.source_tenant_mode ?? "—"}</TableCell>
                       <TableCell className="text-right">{formatInt(row.requests_count)}</TableCell>
                       <TableCell className="text-right">{formatInt(row.conversations_count)}</TableCell>
@@ -416,7 +454,7 @@ export function OpenAiCostsPageClient() {
                     </TableRow>
                   ))
                 ) : (
-                  <EmptyTable colSpan={6} label={loading ? "Cargando proyectos..." : "Sin datos de proyectos."} />
+                  <EmptyTable colSpan={7} label={loading ? "Cargando proyectos..." : "Sin datos de proyectos."} />
                 )}
               </TableBody>
             </Table>
@@ -433,7 +471,9 @@ export function OpenAiCostsPageClient() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Mes</TableHead>
+                  <TableHead>Organización</TableHead>
                   <TableHead>Canal</TableHead>
+                  <TableHead>Proyecto</TableHead>
                   <TableHead>Modelo</TableHead>
                   <TableHead className="text-right">Req</TableHead>
                   <TableHead className="text-right">Tokens</TableHead>
@@ -445,7 +485,9 @@ export function OpenAiCostsPageClient() {
                   modelRows.slice(0, 12).map((row) => (
                     <TableRow key={`${row.usage_month}-${row.channel}-${row.openai_model_family}`}> 
                       <TableCell>{formatMonthLabel(row.usage_month)}</TableCell>
+                      <TableCell>{row.organizacion_nombre ?? "—"}</TableCell>
                       <TableCell>{row.channel ?? "—"}</TableCell>
+                      <TableCell>{projectLabel(row.openai_project_display_name, row.openai_project_key)}</TableCell>
                       <TableCell>{row.openai_model_family ?? "—"}</TableCell>
                       <TableCell className="text-right">{formatInt(row.requests_count)}</TableCell>
                       <TableCell className="text-right">{formatInt(row.total_tokens)}</TableCell>
@@ -453,7 +495,7 @@ export function OpenAiCostsPageClient() {
                     </TableRow>
                   ))
                 ) : (
-                  <EmptyTable colSpan={6} label={loading ? "Cargando modelos..." : "Sin datos por modelo."} />
+                  <EmptyTable colSpan={8} label={loading ? "Cargando modelos..." : "Sin datos por modelo."} />
                 )}
               </TableBody>
             </Table>
@@ -470,9 +512,10 @@ export function OpenAiCostsPageClient() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Mes</TableHead>
+                  <TableHead>Organización</TableHead>
                   <TableHead>Canal</TableHead>
-                  <TableHead>Tipo</TableHead>
-                  <TableHead>Ref</TableHead>
+                  <TableHead>Proyecto</TableHead>
+                  <TableHead>Asistente</TableHead>
                   <TableHead className="text-right">Req</TableHead>
                   <TableHead className="text-right">Costo</TableHead>
                 </TableRow>
@@ -482,17 +525,18 @@ export function OpenAiCostsPageClient() {
                   assistantRows.slice(0, 12).map((row) => (
                     <TableRow key={`${row.usage_month}-${row.channel}-${row.assistant_kind}-${row.assistant_ref ?? "null"}`}>
                       <TableCell>{formatMonthLabel(row.usage_month)}</TableCell>
+                      <TableCell>{row.organizacion_nombre ?? "—"}</TableCell>
                       <TableCell>{row.channel ?? "—"}</TableCell>
-                      <TableCell>{row.assistant_kind ?? "—"}</TableCell>
-                      <TableCell className="max-w-[260px] whitespace-normal text-xs font-mono text-muted-foreground">
-                        {row.assistant_ref ?? "—"}
+                      <TableCell>{projectLabel(row.openai_project_display_name, row.openai_project_key)}</TableCell>
+                      <TableCell className="max-w-[260px] whitespace-normal text-xs text-muted-foreground">
+                        {assistantLabel(row.assistant_display_name, row.assistant_kind, row.assistant_ref)}
                       </TableCell>
                       <TableCell className="text-right">{formatInt(row.requests_count)}</TableCell>
                       <TableCell className="text-right font-medium">{formatUsd(row.estimated_total_cost_usd)}</TableCell>
                     </TableRow>
                   ))
                 ) : (
-                  <EmptyTable colSpan={6} label={loading ? "Cargando asistentes..." : "Sin datos por asistente."} />
+                  <EmptyTable colSpan={7} label={loading ? "Cargando asistentes..." : "Sin datos por asistente."} />
                 )}
               </TableBody>
             </Table>
@@ -509,7 +553,9 @@ export function OpenAiCostsPageClient() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Conversación</TableHead>
+                  <TableHead>Organización</TableHead>
                   <TableHead>Canal</TableHead>
+                  <TableHead>Proyecto</TableHead>
                   <TableHead>Modelos</TableHead>
                   <TableHead className="text-right">Req</TableHead>
                   <TableHead className="text-right">Costo</TableHead>
@@ -519,8 +565,12 @@ export function OpenAiCostsPageClient() {
                 {conversationRows.length ? (
                   conversationRows.map((row) => (
                     <TableRow key={row.conversation_id}>
-                      <TableCell className="font-mono text-xs">{shortId(row.conversation_id)}</TableCell>
+                      <TableCell className="max-w-[240px] whitespace-normal text-xs">
+                        {conversationLabel(row.conversation_display_name, row.conversation_id)}
+                      </TableCell>
+                      <TableCell>{row.organizacion_nombre ?? "—"}</TableCell>
                       <TableCell>{row.channel ?? "—"}</TableCell>
+                      <TableCell>{projectLabel(row.openai_project_display_name, row.openai_project_key)}</TableCell>
                       <TableCell className="max-w-[260px] whitespace-normal text-xs text-muted-foreground">
                         {(row.models_used ?? []).length ? (row.models_used ?? []).join(", ") : "—"}
                       </TableCell>
@@ -529,7 +579,7 @@ export function OpenAiCostsPageClient() {
                     </TableRow>
                   ))
                 ) : (
-                  <EmptyTable colSpan={5} label={loading ? "Cargando conversaciones..." : "Sin conversaciones para el rango actual."} />
+                  <EmptyTable colSpan={7} label={loading ? "Cargando conversaciones..." : "Sin conversaciones para el rango actual."} />
                 )}
               </TableBody>
             </Table>

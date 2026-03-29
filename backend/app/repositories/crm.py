@@ -7179,7 +7179,7 @@ class CRMRepository:
             usuario_token=usuario_token,
             select=(
                 "usage_date,organizacion_id,organizacion_nombre,source_tenant_mode,channel,feature,"
-                "openai_project_key,openai_model_family,requests_count,conversations_count,input_tokens,"
+                "openai_project_key,openai_project_display_name,openai_model_family,requests_count,conversations_count,input_tokens,"
                 "cached_input_tokens,output_tokens,reasoning_tokens,total_tokens,estimated_total_cost_usd,"
                 "avg_latency_ms,p50_latency_ms,p90_latency_ms,fallback_count,quality_retry_count,"
                 "missing_pricing_count"
@@ -7220,7 +7220,7 @@ class CRMRepository:
             usuario_token=usuario_token,
             select=(
                 "conversation_id,first_request_at,last_request_at,organizacion_id,organizacion_nombre,"
-                "source_tenant_mode,channel,feature,openai_project_key,requests_count,models_count,"
+                "source_tenant_mode,channel,feature,openai_project_key,openai_project_display_name,conversation_display_name,requests_count,models_count,"
                 "models_used,input_tokens,cached_input_tokens,output_tokens,reasoning_tokens,total_tokens,"
                 "estimated_total_cost_usd,avg_latency_ms,fallback_count,quality_retry_count"
             ),
@@ -7258,7 +7258,7 @@ class CRMRepository:
             usuario_token=usuario_token,
             select=(
                 "usage_month,organizacion_id,organizacion_nombre,source_tenant_mode,channel,feature,"
-                "openai_project_key,openai_model_family,requests_count,input_tokens,cached_input_tokens,"
+                "openai_project_key,openai_project_display_name,openai_model_family,requests_count,input_tokens,cached_input_tokens,"
                 "output_tokens,reasoning_tokens,total_tokens,estimated_total_cost_usd,avg_latency_ms,"
                 "fallback_count,quality_retry_count"
             ),
@@ -7286,7 +7286,7 @@ class CRMRepository:
             view_name="v_openai_costs_by_project",
             usuario_token=usuario_token,
             select=(
-                "usage_month,organizacion_id,organizacion_nombre,source_tenant_mode,openai_project_key,"
+                "usage_month,organizacion_id,organizacion_nombre,source_tenant_mode,openai_project_key,openai_project_display_name,"
                 "requests_count,conversations_count,models_count,input_tokens,cached_input_tokens,"
                 "output_tokens,reasoning_tokens,total_tokens,estimated_total_cost_usd,avg_latency_ms,"
                 "fallback_count,quality_retry_count,missing_pricing_count"
@@ -7328,7 +7328,7 @@ class CRMRepository:
             usuario_token=usuario_token,
             select=(
                 "usage_month,organizacion_id,organizacion_nombre,source_tenant_mode,channel,feature,"
-                "openai_project_key,openai_model_family,assistant_kind,assistant_ref,requests_count,"
+                "openai_project_key,openai_project_display_name,openai_model_family,assistant_kind,assistant_ref,assistant_display_name,requests_count,"
                 "conversations_count,input_tokens,cached_input_tokens,output_tokens,reasoning_tokens,"
                 "total_tokens,estimated_total_cost_usd,avg_latency_ms,fallback_count,quality_retry_count,"
                 "missing_pricing_count"
@@ -7393,7 +7393,7 @@ class CRMRepository:
             view_name="v_openai_costs_daily",
             select=(
                 "usage_date,organizacion_id,organizacion_nombre,source_tenant_mode,channel,feature,"
-                "openai_project_key,openai_model_family,requests_count,conversations_count,input_tokens,"
+                "openai_project_key,openai_project_display_name,openai_model_family,requests_count,conversations_count,input_tokens,"
                 "cached_input_tokens,output_tokens,reasoning_tokens,total_tokens,estimated_total_cost_usd,"
                 "avg_latency_ms,p50_latency_ms,p90_latency_ms,fallback_count,quality_retry_count,"
                 "missing_pricing_count"
@@ -7435,7 +7435,7 @@ class CRMRepository:
             view_name="v_openai_costs_by_conversation",
             select=(
                 "conversation_id,first_request_at,last_request_at,organizacion_id,organizacion_nombre,"
-                "source_tenant_mode,channel,feature,openai_project_key,requests_count,models_count,"
+                "source_tenant_mode,channel,feature,openai_project_key,openai_project_display_name,conversation_display_name,requests_count,models_count,"
                 "models_used,input_tokens,cached_input_tokens,output_tokens,reasoning_tokens,total_tokens,"
                 "estimated_total_cost_usd,avg_latency_ms,fallback_count,quality_retry_count"
             ),
@@ -7474,7 +7474,7 @@ class CRMRepository:
             view_name="v_openai_costs_by_model",
             select=(
                 "usage_month,organizacion_id,organizacion_nombre,source_tenant_mode,channel,feature,"
-                "openai_project_key,openai_model_family,requests_count,input_tokens,cached_input_tokens,"
+                "openai_project_key,openai_project_display_name,openai_model_family,requests_count,input_tokens,cached_input_tokens,"
                 "output_tokens,reasoning_tokens,total_tokens,estimated_total_cost_usd,avg_latency_ms,"
                 "fallback_count,quality_retry_count"
             ),
@@ -7503,7 +7503,7 @@ class CRMRepository:
         return await self._fetch_openai_cost_view_service_role(
             view_name="v_openai_costs_by_project",
             select=(
-                "usage_month,organizacion_id,organizacion_nombre,source_tenant_mode,openai_project_key,"
+                "usage_month,organizacion_id,organizacion_nombre,source_tenant_mode,openai_project_key,openai_project_display_name,"
                 "requests_count,conversations_count,models_count,input_tokens,cached_input_tokens,"
                 "output_tokens,reasoning_tokens,total_tokens,estimated_total_cost_usd,avg_latency_ms,"
                 "fallback_count,quality_retry_count,missing_pricing_count"
@@ -7546,7 +7546,7 @@ class CRMRepository:
             view_name="v_openai_costs_by_assistant",
             select=(
                 "usage_month,organizacion_id,organizacion_nombre,source_tenant_mode,channel,feature,"
-                "openai_project_key,openai_model_family,assistant_kind,assistant_ref,requests_count,"
+                "openai_project_key,openai_project_display_name,openai_model_family,assistant_kind,assistant_ref,assistant_display_name,requests_count,"
                 "conversations_count,input_tokens,cached_input_tokens,output_tokens,reasoning_tokens,"
                 "total_tokens,estimated_total_cost_usd,avg_latency_ms,fallback_count,quality_retry_count,"
                 "missing_pricing_count"
