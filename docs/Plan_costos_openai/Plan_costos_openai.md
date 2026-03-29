@@ -732,6 +732,28 @@ Notas:
 - En esta iteración los endpoints operan con `user_token` y RLS, por lo que exponen costos del tenant actual.
 - La vista cross-tenant para tenant maestro queda como siguiente fase, porque requiere una política explícita de acceso agregada fuera del RLS actual.
 
+## Backlog priorizado
+
+1. Modo master cross-tenant
+   - Exponer una vista agregada para el tenant maestro fuera del RLS actual del tenant individual.
+   - Permitir comparar costo, tokens y modelos entre tenants clientes.
+
+2. Desglose por assistant_ref / assistant_kind
+   - Extender vistas y frontend para separar costo por prompt, assistant id y tipo de asistente.
+   - Útil para medir qué configuración de assistant consume más y cuál convierte mejor.
+
+3. Export CSV
+   - Permitir exportar diario, modelos, proyectos y conversaciones desde la vista de costos.
+   - Facilita auditoría, finanzas y revisiones manuales fuera del panel.
+
+4. Reconciliación con Usage/Costs API de OpenAI
+   - Registrar buckets agregados de OpenAI y compararlos contra el ledger interno.
+   - Detectar desviaciones por pricing, requests no registradas o diferencias por proyecto.
+
+5. Alertas de costo o presupuesto
+   - Definir umbrales por tenant, proyecto o canal.
+   - Disparar alertas cuando el gasto diario/mensual supere presupuesto o cuando cambie anómalamente la latencia/costo por request.
+
 ## Avance actual
 
 Estado al 2026-03-29:
