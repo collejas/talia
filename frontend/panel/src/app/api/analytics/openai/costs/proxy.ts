@@ -12,6 +12,7 @@ const ALLOWED_PARAMS = [
   "feature",
   "model_family",
   "project_key",
+  "assistant_kind",
   "limit",
 ] as const;
 

@@ -65,6 +65,23 @@ type ProjectRow = {
   missing_pricing_count: number;
 };
 
+type AssistantRow = {
+  usage_month: string;
+  organizacion_nombre: string | null;
+  source_tenant_mode: string | null;
+  channel: string | null;
+  feature: string | null;
+  openai_project_key: string | null;
+  openai_model_family: string | null;
+  assistant_kind: string | null;
+  assistant_ref: string | null;
+  requests_count: number;
+  conversations_count: number;
+  total_tokens: number;
+  estimated_total_cost_usd: number | string;
+  avg_latency_ms: number | string | null;
+};
+
 type ApiResponse<T> = {
   ok?: boolean;
   rows?: T[];
@@ -162,6 +179,7 @@ export function OpenAiCostsPageClient() {
   const [conversationRows, setConversationRows] = React.useState<ConversationRow[]>([]);
   const [modelRows, setModelRows] = React.useState<ModelRow[]>([]);
   const [projectRows, setProjectRows] = React.useState<ProjectRow[]>([]);
+  const [assistantRows, setAssistantRows] = React.useState<AssistantRow[]>([]);
 
   const load = React.useCallback(async () => {
     setLoading(true);
@@ -172,6 +190,7 @@ export function OpenAiCostsPageClient() {
       const conversationsBasePath = "/api/analytics/openai/costs/conversations";
       const modelsBasePath = "/api/analytics/openai/costs/models";
       const projectsBasePath = "/api/analytics/openai/costs/projects";
+      const assistantsBasePath = "/api/analytics/openai/costs/assistants";
       const commonDaily = new URLSearchParams({ date_from: dateFrom, date_to: dateTo });
       const commonMonthly = new URLSearchParams({
         month_from: monthStart(dateFrom),
@@ -197,17 +216,19 @@ export function OpenAiCostsPageClient() {
       const conversationParams = new URLSearchParams(commonDaily);
       conversationParams.set("limit", "20");
 
-      const [daily, conversations, models, projects] = await Promise.all([
+      const [daily, conversations, models, projects, assistants] = await Promise.all([
         fetchRows<DailyRow>(dailyBasePath, commonDaily),
         fetchRows<ConversationRow>(conversationsBasePath, conversationParams),
         fetchRows<ModelRow>(modelsBasePath, commonMonthly),
         fetchRows<ProjectRow>(projectsBasePath, commonMonthly),
+        fetchRows<AssistantRow>(assistantsBasePath, commonMonthly),
       ]);
 
       setDailyRows(daily);
       setConversationRows(conversations);
       setModelRows(models);
       setProjectRows(projects);
+      setAssistantRows(assistants);
     } catch (fetchError) {
       console.error("[openai-costs] fetch failed", fetchError);
       setError(fetchError instanceof Error ? fetchError.message : "No se pudieron cargar los costos OpenAI.");
@@ -433,6 +454,45 @@ export function OpenAiCostsPageClient() {
                   ))
                 ) : (
                   <EmptyTable colSpan={6} label={loading ? "Cargando modelos..." : "Sin datos por modelo."} />
+                )}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Mensual por asistente</CardTitle>
+            <CardDescription>Desglose por `assistant_kind` y referencia efectiva usada en cada request.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Mes</TableHead>
+                  <TableHead>Canal</TableHead>
+                  <TableHead>Tipo</TableHead>
+                  <TableHead>Ref</TableHead>
+                  <TableHead className="text-right">Req</TableHead>
+                  <TableHead className="text-right">Costo</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {assistantRows.length ? (
+                  assistantRows.slice(0, 12).map((row) => (
+                    <TableRow key={`${row.usage_month}-${row.channel}-${row.assistant_kind}-${row.assistant_ref ?? "null"}`}>
+                      <TableCell>{formatMonthLabel(row.usage_month)}</TableCell>
+                      <TableCell>{row.channel ?? "—"}</TableCell>
+                      <TableCell>{row.assistant_kind ?? "—"}</TableCell>
+                      <TableCell className="max-w-[260px] whitespace-normal text-xs font-mono text-muted-foreground">
+                        {row.assistant_ref ?? "—"}
+                      </TableCell>
+                      <TableCell className="text-right">{formatInt(row.requests_count)}</TableCell>
+                      <TableCell className="text-right font-medium">{formatUsd(row.estimated_total_cost_usd)}</TableCell>
+                    </TableRow>
+                  ))
+                ) : (
+                  <EmptyTable colSpan={6} label={loading ? "Cargando asistentes..." : "Sin datos por asistente."} />
                 )}
               </TableBody>
             </Table>

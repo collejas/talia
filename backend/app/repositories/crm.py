@@ -7294,6 +7294,48 @@ class CRMRepository:
             params=params,
         )
 
+    async def openai_costs_by_assistant(
+        self,
+        *,
+        usuario_token: str,
+        month_from: str | None = None,
+        month_to: str | None = None,
+        channel: str | None = None,
+        feature: str | None = None,
+        project_key: str | None = None,
+        assistant_kind: str | None = None,
+    ) -> list[dict[str, Any]]:
+        params: dict[str, str] = {
+            "order": "usage_month.desc,estimated_total_cost_usd.desc",
+        }
+        and_parts: list[str] = []
+        if month_from:
+            and_parts.append(f"usage_month.gte.{month_from}T00:00:00+00:00")
+        if month_to:
+            and_parts.append(f"usage_month.lte.{month_to}T23:59:59+00:00")
+        if and_parts:
+            params["and"] = f"({','.join(and_parts)})"
+        if channel:
+            params["channel"] = f"eq.{channel}"
+        if feature:
+            params["feature"] = f"eq.{feature}"
+        if project_key:
+            params["openai_project_key"] = f"eq.{project_key}"
+        if assistant_kind:
+            params["assistant_kind"] = f"eq.{assistant_kind}"
+        return await self._fetch_openai_cost_view(
+            view_name="v_openai_costs_by_assistant",
+            usuario_token=usuario_token,
+            select=(
+                "usage_month,organizacion_id,organizacion_nombre,source_tenant_mode,channel,feature,"
+                "openai_project_key,openai_model_family,assistant_kind,assistant_ref,requests_count,"
+                "conversations_count,input_tokens,cached_input_tokens,output_tokens,reasoning_tokens,"
+                "total_tokens,estimated_total_cost_usd,avg_latency_ms,fallback_count,quality_retry_count,"
+                "missing_pricing_count"
+            ),
+            params=params,
+        )
+
     async def _fetch_openai_cost_view_service_role(
         self,
         *,
@@ -7465,6 +7507,49 @@ class CRMRepository:
                 "requests_count,conversations_count,models_count,input_tokens,cached_input_tokens,"
                 "output_tokens,reasoning_tokens,total_tokens,estimated_total_cost_usd,avg_latency_ms,"
                 "fallback_count,quality_retry_count,missing_pricing_count"
+            ),
+            params=params,
+        )
+
+    async def master_openai_costs_by_assistant(
+        self,
+        *,
+        tenant_id: UUID | None = None,
+        month_from: str | None = None,
+        month_to: str | None = None,
+        channel: str | None = None,
+        feature: str | None = None,
+        project_key: str | None = None,
+        assistant_kind: str | None = None,
+    ) -> list[dict[str, Any]]:
+        params: dict[str, str] = {
+            "order": "usage_month.desc,estimated_total_cost_usd.desc",
+        }
+        and_parts: list[str] = []
+        if month_from:
+            and_parts.append(f"usage_month.gte.{month_from}T00:00:00+00:00")
+        if month_to:
+            and_parts.append(f"usage_month.lte.{month_to}T23:59:59+00:00")
+        if and_parts:
+            params["and"] = f"({','.join(and_parts)})"
+        if tenant_id:
+            params["organizacion_id"] = f"eq.{tenant_id}"
+        if channel:
+            params["channel"] = f"eq.{channel}"
+        if feature:
+            params["feature"] = f"eq.{feature}"
+        if project_key:
+            params["openai_project_key"] = f"eq.{project_key}"
+        if assistant_kind:
+            params["assistant_kind"] = f"eq.{assistant_kind}"
+        return await self._fetch_openai_cost_view_service_role(
+            view_name="v_openai_costs_by_assistant",
+            select=(
+                "usage_month,organizacion_id,organizacion_nombre,source_tenant_mode,channel,feature,"
+                "openai_project_key,openai_model_family,assistant_kind,assistant_ref,requests_count,"
+                "conversations_count,input_tokens,cached_input_tokens,output_tokens,reasoning_tokens,"
+                "total_tokens,estimated_total_cost_usd,avg_latency_ms,fallback_count,quality_retry_count,"
+                "missing_pricing_count"
             ),
             params=params,
         )

@@ -22924,6 +22924,34 @@ async def analytics_openai_costs_by_project(
     return {"ok": True, "rows": rows}
 
 
+@router.get("/analytics/openai/costs/assistants")
+async def analytics_openai_costs_by_assistant(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    _: str = Depends(require_permission("reports.view")),
+    user_token: str = Depends(require_user_token),
+    month_from: Annotated[str | None, Query(description="YYYY-MM-01")] = None,
+    month_to: Annotated[str | None, Query(description="YYYY-MM-01")] = None,
+    channel: str | None = None,
+    feature: str | None = None,
+    project_key: str | None = None,
+    assistant_kind: str | None = None,
+) -> dict[str, Any]:
+    try:
+        rows = await repo.openai_costs_by_assistant(
+            usuario_token=user_token,
+            month_from=month_from,
+            month_to=month_to,
+            channel=channel,
+            feature=feature,
+            project_key=project_key,
+            assistant_kind=assistant_kind,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return {"ok": True, "rows": rows}
+
+
 @router.get("/analytics/openai/master/costs/daily")
 async def analytics_openai_master_costs_daily(
     *,
@@ -23020,6 +23048,34 @@ async def analytics_openai_master_costs_by_project(
             tenant_id=tenant_id,
             month_from=month_from,
             month_to=month_to,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return {"ok": True, "rows": rows}
+
+
+@router.get("/analytics/openai/master/costs/assistants")
+async def analytics_openai_master_costs_by_assistant(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    _: str = Depends(require_owner_or_admin_for_master_tenant()),
+    tenant_id: UUID | None = Query(default=None),
+    month_from: Annotated[str | None, Query(description="YYYY-MM-01")] = None,
+    month_to: Annotated[str | None, Query(description="YYYY-MM-01")] = None,
+    channel: str | None = None,
+    feature: str | None = None,
+    project_key: str | None = None,
+    assistant_kind: str | None = None,
+) -> dict[str, Any]:
+    try:
+        rows = await repo.master_openai_costs_by_assistant(
+            tenant_id=tenant_id,
+            month_from=month_from,
+            month_to=month_to,
+            channel=channel,
+            feature=feature,
+            project_key=project_key,
+            assistant_kind=assistant_kind,
         )
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc

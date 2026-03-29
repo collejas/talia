@@ -739,8 +739,8 @@ Notas:
    - Permitir comparar costo, tokens y modelos entre tenants clientes.
 
 2. Desglose por assistant_ref / assistant_kind
-   - Extender vistas y frontend para separar costo por prompt, assistant id y tipo de asistente.
-   - Útil para medir qué configuración de assistant consume más y cuál convierte mejor.
+   - Ya implementado en primera versión: vista SQL, endpoints backend y tabla frontend.
+   - Pendiente fino: filtros dedicados y export por assistant.
 
 3. Export CSV
    - Permitir exportar diario, modelos, proyectos y conversaciones desde la vista de costos.
