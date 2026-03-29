@@ -15,7 +15,7 @@ from app.core.config import settings
 from app.core.logging import get_logger
 from app.repositories.crm import CRMRepository, CRMRepositoryError
 from app.services.non_critical_job_gate import should_defer_non_critical_jobs
-from app.services import storage, tenant_runtime
+from app.services import conversation_summary, storage, tenant_runtime
 from app.services.storage import StorageError
 
 logger = get_logger("app.services.whatsapp_followups")
@@ -26,6 +26,7 @@ REENGAGE_TEMPLATE = "¿Seguimos en contacto?"
 # Usamos una ventana corta para no excluir tenants con reengage_minutes bajos
 # y aplicamos la regla exacta por tenant dentro de _process_conversation.
 WHATSAPP_FOLLOWUP_PREFILTER_MINUTES = 3
+_INFERRED_INACTIVITY_LABEL = "Resumen inferido por inactividad"
 
 
 def _extract_cursor(conversation: dict[str, Any]) -> tuple[datetime, str] | None:
@@ -444,9 +445,18 @@ async def _escalate_to_sales(
     repo: CRMRepository,
 ) -> None:
     contact = opportunity.get("contacto")
+    if isinstance(contact, dict):
+        contact = await _ensure_inferred_contact_context(
+            conversation_id=conversation_id,
+            contact_id=contact_id,
+            contact=contact,
+            opportunity=opportunity,
+        )
     resumen = None
+    notes = None
     if isinstance(contact, dict):
         resumen = contact.get("necesidad_proposito") or contact.get("notes")
+        notes = contact.get("notes")
 
     context = ToolRuntimeContext(
         conversation_id=conversation_id,
@@ -460,7 +470,7 @@ async def _escalate_to_sales(
             contact=contact,
             opportunity_id=str(opportunity.get("id")),
             resumen=resumen,
-            notes=None,
+            notes=notes,
             email=None,
             extra={"reason": "inactivity"},
         )
@@ -488,6 +498,98 @@ async def _escalate_to_sales(
             "whatsapp.followup.escalate_metadata_failed",
             extra={"conversation_id": conversation_id, "error": str(exc)},
         )
+
+
+def _build_inactivity_need(summary_text: str) -> str:
+    normalized = " ".join(str(summary_text or "").split()).strip(" .")
+    if not normalized:
+        return _INFERRED_INACTIVITY_LABEL
+    first_sentence = normalized.split(". ", 1)[0].strip(" .")
+    if not first_sentence:
+        first_sentence = normalized[:220].rstrip(" ,;:")
+    if len(first_sentence) > 220:
+        first_sentence = first_sentence[:219].rstrip() + "…"
+    return f"{_INFERRED_INACTIVITY_LABEL}: {first_sentence}"
+
+
+async def _ensure_inferred_contact_context(
+    *,
+    conversation_id: str,
+    contact_id: str,
+    contact: dict[str, Any],
+    opportunity: dict[str, Any],
+) -> dict[str, Any]:
+    existing_notes = str(contact.get("notes") or "").strip()
+    existing_need = str(contact.get("necesidad_proposito") or "").strip()
+    if existing_notes and existing_need:
+        return contact
+
+    org_id = contact.get("organizacion_id") or opportunity.get("organizacion_id")
+    try:
+        org_uuid = UUID(str(org_id)) if org_id else None
+    except (TypeError, ValueError):
+        org_uuid = None
+
+    try:
+        summary_record = await conversation_summary.ensure_conversation_summary(
+            conversation_id=conversation_id,
+            contact_id=contact_id,
+            organizacion_id=org_uuid,
+            generate_if_missing=True,
+        )
+    except Exception as exc:  # pragma: no cover
+        logger.warning(
+            "whatsapp.followup.inferred_summary_failed",
+            extra={"conversation_id": conversation_id, "error": str(exc)},
+        )
+        return contact
+
+    summary_text = ""
+    if isinstance(summary_record, dict):
+        summary_text = str(summary_record.get("resumen") or "").strip()
+    if not summary_text:
+        return contact
+
+    inferred_notes = existing_notes or f"{_INFERRED_INACTIVITY_LABEL}: {summary_text}"
+    inferred_need = existing_need or _build_inactivity_need(summary_text)
+    patch_payload: dict[str, Any] = {}
+    if not existing_notes:
+        patch_payload["notes"] = inferred_notes
+    if not existing_need:
+        patch_payload["necesidad_proposito"] = inferred_need
+    if not patch_payload:
+        return contact
+
+    try:
+        updated_contact = await storage.update_contact(contact_id, patch_payload)
+    except StorageError as exc:
+        logger.warning(
+            "whatsapp.followup.inferred_contact_update_failed",
+            extra={"conversation_id": conversation_id, "contact_id": contact_id, "error": str(exc)},
+        )
+        updated_contact = {**contact, **patch_payload}
+    try:
+        await storage.upsert_conversation_insights(
+            conversation_id=conversation_id,
+            resumen=inferred_notes,
+            intencion=inferred_need,
+            siguiente_accion="seguimiento_vendedor_por_inactividad",
+        )
+    except StorageError as exc:
+        logger.warning(
+            "whatsapp.followup.inferred_insights_failed",
+            extra={"conversation_id": conversation_id, "error": str(exc)},
+        )
+    logger.info(
+        "whatsapp.followup.inferred_contact_context_created",
+        extra={
+            "conversation_id": conversation_id,
+            "contact_id": contact_id,
+            "filled_notes": "notes" in patch_payload,
+            "filled_need": "necesidad_proposito" in patch_payload,
+        },
+    )
+    return updated_contact if isinstance(updated_contact, dict) else {**contact, **patch_payload}
 
 
 def _manual_override(conversation: dict[str, Any]) -> bool:
