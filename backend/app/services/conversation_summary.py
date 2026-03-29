@@ -3,14 +3,16 @@
 from __future__ import annotations
 
 import json
+import time
 from typing import Any
 from uuid import UUID
 
 from openai import AsyncOpenAI
 
+from app.assistants.manager import AssistantConfig
 from app.core.config import settings
 from app.core.logging import get_logger
-from app.services import openai as openai_service, storage, tenant_runtime
+from app.services import openai as openai_service, openai_usage_ledger, storage, tenant_runtime
 from app.services.context_formatter import build_crm_context_lines
 from app.services.storage import StorageError
 
@@ -118,6 +120,8 @@ def _resolve_organizacion_uuid(value: str | UUID | None) -> UUID | None:
 async def _summarize_messages(
     messages: list[dict[str, Any]],
     *,
+    conversation_id: str | None = None,
+    contact_id: str | None = None,
     organizacion_id: UUID | None = None,
     context_data: dict[str, Any] | None = None,
 ) -> str | None:
@@ -125,8 +129,10 @@ async def _summarize_messages(
         return None
     prompt_text = _build_prompt(messages, context_data=context_data)
     api_key = await tenant_runtime.get_openai_api_key(organizacion_id=organizacion_id)
-    client: AsyncOpenAI = openai_service.get_assistant_client(api_key=api_key)
+    project_id = await tenant_runtime.get_openai_project_id(organizacion_id=organizacion_id)
+    client: AsyncOpenAI = openai_service.get_assistant_client(api_key=api_key, project_id=project_id)
     try:
+        started = time.perf_counter()
         response = await client.responses.create(
             model=settings.conversation_summary_model,
             temperature=settings.conversation_summary_temperature,
@@ -148,6 +154,22 @@ async def _summarize_messages(
         logger.exception("conversation_summary.llm_failed", exc_info=exc)
         return None
     response_data = response.model_dump()
+    elapsed_ms = round((time.perf_counter() - started) * 1000)
+    await openai_usage_ledger.record_response_usage(
+        organizacion_id=organizacion_id,
+        channel="summary",
+        feature="conversation_summary",
+        assistant=AssistantConfig(project_id=project_id),
+        response_payload=response_data,
+        request_purpose="summary",
+        latency_ms=int(elapsed_ms),
+        api_key=api_key,
+        request_metadata={"history_messages": len(messages)},
+        conversation_id=conversation_id,
+        contact_id=contact_id,
+        model_override=settings.conversation_summary_model,
+        project_id=project_id,
+    )
     text = _extract_text_from_response(response_data)
     if not text:
         return None
@@ -212,6 +234,8 @@ async def ensure_conversation_summary(
 
     summary_text = await _summarize_messages(
         messages,
+        conversation_id=conversation_id,
+        contact_id=contact_id,
         organizacion_id=organizacion_uuid,
         context_data=context_data,
     )

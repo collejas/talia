@@ -33,6 +33,8 @@ class ToolRuntimeContext:
     contact_id: str
     session_id: str | None = None
     channel: str | None = None
+    organizacion_id: str | None = None
+    feature: str | None = None
 
 
 @dataclass(slots=True)
@@ -126,6 +128,7 @@ async def run_tool_loop(
     execute_tool: ExecuteToolFn,
     openai_conversation_id: str | None,
     previous_response_id: str | None,
+    api_key: str | None = None,
     log=logger,
 ) -> ToolRuntimeResult:
     """Ejecuta Responses API resolviendo function calls hasta obtener texto final."""
@@ -173,6 +176,26 @@ async def run_tool_loop(
                 "response_id": latest_response_id,
             }
         )
+        if context.organizacion_id and context.channel:
+            from app.services import openai_usage_ledger
+
+            await openai_usage_ledger.record_response_usage(
+                organizacion_id=context.organizacion_id,
+                channel=context.channel,
+                feature=context.feature,
+                assistant=assistant,
+                response_payload=response_dict,
+                request_purpose="tool_loop_iteration",
+                latency_ms=int(round(response_ms)),
+                api_key=api_key,
+                request_metadata={
+                    "iteration_index": iteration_index,
+                    "pending_calls": len(pending_calls),
+                },
+                conversation_id=context.conversation_id,
+                contact_id=context.contact_id,
+                project_id=assistant.project_id,
+            )
         iteration_index += 1
 
         if not pending_calls:

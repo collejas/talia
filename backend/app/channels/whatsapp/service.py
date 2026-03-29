@@ -27,6 +27,7 @@ from app.core.logging import get_logger, log_event
 from app.repositories.crm import CRMRepository, CRMRepositoryError
 from app.services import conversation_summary, leads_geo, storage
 from app.services import openai as openai_service
+from app.services import openai_usage_ledger
 from app.services.prospeccion_whatsapp_atribucion import resolve_first_matching_rule
 from app.services.context_formatter import build_crm_context_lines
 from app.services import tenant_runtime
@@ -1773,7 +1774,10 @@ async def _generate_assistant_reply(
         prompt_version=assistant.prompt_version,
         assistant_id=assistant.assistant_id,
     )
-    client = openai_service.get_assistant_client(api_key=whatsapp_settings.voice_api_key)
+    client = openai_service.get_assistant_client(
+        api_key=whatsapp_settings.voice_api_key,
+        project_id=whatsapp_settings.project_id,
+    )
     assistant_spec = None
     if not assistant.is_prompt:
         if not assistant.assistant_id:
@@ -2077,6 +2081,8 @@ async def _generate_assistant_reply(
         contact_id=contact_id,
         session_id=f"whatsapp:{conversation_id}",
         channel="whatsapp",
+        organizacion_id=str(organizacion_id) if organizacion_id else None,
+        feature="sales_chat",
     )
 
     try:
@@ -2091,6 +2097,7 @@ async def _generate_assistant_reply(
             execute_tool=whatsapp_tools.execute_tool,
             openai_conversation_id=openai_conversation_id,
             previous_response_id=previous_response_id,
+            api_key=whatsapp_settings.voice_api_key,
             log=logger,
         )
         debug_timings["tool_loop_ms"] = round((time.perf_counter() - tool_loop_started) * 1000, 2)
@@ -2119,6 +2126,7 @@ async def _generate_assistant_reply(
                 execute_tool=whatsapp_tools.execute_tool,
                 openai_conversation_id=openai_conversation_id,
                 previous_response_id=previous_response_id,
+                api_key=whatsapp_settings.voice_api_key,
                 log=logger,
             )
             debug_timings["tool_loop_retry_ms"] = round((time.perf_counter() - tool_loop_retry_started) * 1000, 2)
@@ -2172,6 +2180,21 @@ async def _generate_assistant_reply(
             retry_response = await client.responses.create(**guard_retry_kwargs)
             debug_timings["quality_retry_ms"] = round((time.perf_counter() - quality_retry_started) * 1000, 2)
             retry_payload = retry_response.model_dump()
+            await openai_usage_ledger.record_response_usage(
+                organizacion_id=organizacion_id,
+                channel="whatsapp",
+                feature="sales_chat",
+                assistant=assistant,
+                response_payload=retry_payload,
+                request_purpose="quality_retry",
+                latency_ms=int(round(debug_timings["quality_retry_ms"])),
+                api_key=whatsapp_settings.voice_api_key,
+                request_metadata={"conversation_id": conversation_id},
+                conversation_id=conversation_id,
+                contact_id=contact_id,
+                quality_retry_used=True,
+                project_id=assistant.project_id,
+            )
             retry_text = _extract_text_from_response(retry_payload)
             retry_ok, retry_reason = evaluate_reply_quality(retry_text)
             if retry_ok:
@@ -2799,19 +2822,19 @@ def _build_assistant_from_runtime(
             assistant_id=None,
             prompt_id=settings_values.prospeccion_prompt_id,
             prompt_version=settings_values.prospeccion_prompt_version or settings_values.prompt_version,
-            project_id=settings.openai_project_id,
+            project_id=settings_values.project_id or settings.openai_project_id,
         )
     if settings_values.prompt_id:
         return AssistantConfig(
             assistant_id=None,
             prompt_id=settings_values.prompt_id,
             prompt_version=settings_values.prompt_version,
-            project_id=settings.openai_project_id,
+            project_id=settings_values.project_id or settings.openai_project_id,
         )
     target_id = settings_values.assistant_id or settings.openai_assistant_id
     if not target_id:
         raise RuntimeError("No se configuró un ASSISTANT_ID para WhatsApp")
     return AssistantConfig(
         assistant_id=target_id,
-        project_id=settings.openai_project_id,
+        project_id=settings_values.project_id or settings.openai_project_id,
     )

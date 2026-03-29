@@ -41,6 +41,7 @@ from app.services import (
     EmailSendError,
     geolocation,
     leads_geo,
+    openai_usage_ledger,
     send_email,
     storage,
     tenant_runtime,
@@ -2934,6 +2935,7 @@ async def handle_message(
         )
     )
     runtime_openai_api_key: str | None = None
+    runtime_openai_project_id: str | None = None
     runtime_assistant_id: str | None = None
     runtime_prompt_version: str | None = None
     if organizacion_hint:
@@ -2952,6 +2954,7 @@ async def handle_message(
                 )
             else:
                 runtime_openai_api_key = rt.openai_api_key
+                runtime_openai_project_id = rt.project_id
                 runtime_assistant_id = rt.assistant_id
                 runtime_prompt_version = rt.prompt_version
                 if rt.inactivity_minutes is not None:
@@ -3072,26 +3075,31 @@ async def handle_message(
         if runtime_assistant_id:
             # Permite configurar por tenant vía `organizaciones.config.webchat.assistant_id`.
             if runtime_assistant_id.startswith("pmpt_"):
-                assistant = AssistantConfig(
-                    assistant_id=None,
-                    prompt_id=runtime_assistant_id,
-                    prompt_version=runtime_prompt_version or settings.openai_prompt_webchat_version or settings.openai_prompt_version,
-                    project_id=settings.openai_project_id,
-                )
+                    assistant = AssistantConfig(
+                        assistant_id=None,
+                        prompt_id=runtime_assistant_id,
+                        prompt_version=runtime_prompt_version or settings.openai_prompt_webchat_version or settings.openai_prompt_version,
+                        project_id=runtime_openai_project_id or settings.openai_project_id,
+                    )
             else:
                 assistant = AssistantConfig(
                     assistant_id=runtime_assistant_id,
                     prompt_id=None,
-                    project_id=settings.openai_project_id,
+                    project_id=runtime_openai_project_id or settings.openai_project_id,
                 )
         else:
             assistant = registry.resolve_assistant("landing")
+        if runtime_openai_project_id:
+            assistant.project_id = runtime_openai_project_id
         _record_stage_timing(stage_timings, "assistant_resolve_ms", assistant_resolve_started)
     except ValueError as exc:  # pragma: no cover - configuración inválida
         logger.exception("webchat.assistant_resolve_failed", extra={"error": str(exc)})
         raise HTTPException(status_code=500, detail="Asistente no configurado") from exc
 
-    client = openai_service.get_assistant_client(api_key=runtime_openai_api_key)
+    client = openai_service.get_assistant_client(
+        api_key=runtime_openai_api_key,
+        project_id=runtime_openai_project_id,
+    )
     assistant_spec: AssistantSpec | None = None
     if assistant.is_prompt:
         if not assistant.prompt_id:
@@ -3865,6 +3873,8 @@ async def _run_assistant_turn(
         contact_id=context.contact_id,
         session_id=context.session_id,
         channel="webchat",
+        organizacion_id=str(resolved_organizacion_id) if resolved_organizacion_id else None,
+        feature="sales_chat",
     )
 
     tool_loop_started = time.perf_counter()
@@ -3878,6 +3888,7 @@ async def _run_assistant_turn(
         execute_tool=lambda name, args, _: _execute_function_call(name, args, context),
         openai_conversation_id=openai_conversation_id,
         previous_response_id=previous_response_id,
+        api_key=runtime_openai_api_key,
         log=logger,
     )
     debug_timings["tool_loop_ms"] = round((time.perf_counter() - tool_loop_started) * 1000, 2)
@@ -3927,6 +3938,21 @@ async def _run_assistant_turn(
             retry_response = await client.responses.create(**guard_retry_kwargs)
             debug_timings["quality_retry_ms"] = round((time.perf_counter() - quality_retry_started) * 1000, 2)
             retry_payload = retry_response.model_dump()
+            await openai_usage_ledger.record_response_usage(
+                organizacion_id=resolved_organizacion_id,
+                channel="webchat",
+                feature="sales_chat",
+                assistant=assistant,
+                response_payload=retry_payload,
+                request_purpose="quality_retry",
+                latency_ms=int(round(debug_timings["quality_retry_ms"])),
+                api_key=runtime_openai_api_key,
+                request_metadata={"conversation_id": context.conversation_id},
+                conversation_id=context.conversation_id,
+                contact_id=context.contact_id,
+                quality_retry_used=True,
+                project_id=assistant.project_id,
+            )
             retry_text = _extract_text_from_response(retry_payload)
             retry_ok, retry_reason = evaluate_reply_quality(retry_text)
             if retry_ok:

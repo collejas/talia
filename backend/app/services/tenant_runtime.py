@@ -43,6 +43,7 @@ class WebchatRuntimeSettings:
     assistant_id: str | None
     prompt_version: str | None
     inactivity_minutes: int | None
+    project_id: str | None
 
 
 @dataclass(slots=True)
@@ -230,9 +231,20 @@ async def get_openai_api_key(*, organizacion_id: UUID | None, channel: str | Non
     return settings.openai_api_key
 
 
+async def get_openai_project_id(*, organizacion_id: UUID | None) -> str | None:
+    if organizacion_id is None:
+        return settings.openai_project_id
+    config = await get_org_config(organizacion_id=organizacion_id)
+    openai_cfg = _as_dict(config.get("openai")) or {}
+    general_cfg = _as_dict(openai_cfg.get("general")) or {}
+    return _coerce_str_or_none(general_cfg.get("project_id")) or settings.openai_project_id
+
+
 async def get_webchat_runtime_settings(*, organizacion_id: UUID) -> WebchatRuntimeSettings:
     config = await get_org_config(organizacion_id=organizacion_id)
     webchat = _as_dict(config.get("webchat")) or {}
+    openai_cfg = _as_dict(config.get("openai")) or {}
+    general_cfg = _as_dict(openai_cfg.get("general")) or {}
     assistant_id = webchat.get("assistant_id") if isinstance(webchat.get("assistant_id"), str) else None
     prompt_version = webchat.get("prompt_version") if isinstance(webchat.get("prompt_version"), str) else None
 
@@ -251,12 +263,14 @@ async def get_webchat_runtime_settings(*, organizacion_id: UUID) -> WebchatRunti
         inactivity_minutes = 1
 
     openai_api_key = await get_openai_api_key(organizacion_id=organizacion_id)
+    project_id = _coerce_str_or_none(general_cfg.get("project_id")) or settings.openai_project_id
 
     return WebchatRuntimeSettings(
         openai_api_key=openai_api_key,
         assistant_id=assistant_id,
         prompt_version=prompt_version,
         inactivity_minutes=inactivity_minutes,
+        project_id=project_id,
     )
 
 
