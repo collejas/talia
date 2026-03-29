@@ -1,17 +1,15 @@
 [Unit]
-Description=TalIA FastAPI service (staging)
+Description=TalIA FastAPI service
 After=network-online.target
 Wants=network-online.target
 
 [Service]
 Type=simple
 WorkingDirectory=/var/www/talia/backend
-ExecStart=/var/www/talia/backend/scripts/run_api_staging.sh
-EnvironmentFile=/var/www/talia/backend/.env.staging
+ExecStart=/var/www/talia/backend/scripts/run_api.sh
+EnvironmentFile=/var/www/talia/backend/.env
 Restart=always
 RestartSec=5
-TimeoutStopSec=25
-KillMode=mixed
 Environment=PYTHONUNBUFFERED=1
 User=jorge
 Group=jorge

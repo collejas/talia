@@ -10,9 +10,17 @@ touched_logs=(
   "$LOG_DIR/api-staging.log"
   "$LOG_DIR/request-staging.log"
   "$LOG_DIR/whatsapp-staging.log"
+  "$LOG_DIR/messenger-staging.log"
   "$LOG_DIR/voice-staging.log"
   "$LOG_DIR/webchat-staging.log"
   "$LOG_DIR/visitas-staging.log"
+  "$LOG_DIR/propiedades-import-staging.log"
+  "$LOG_DIR/tenant-access-staging.log"
+  "$LOG_DIR/inbox-threads-metrics-staging.log"
+  "$LOG_DIR/catalogo-debug-staging.log"
+  "$LOG_DIR/mapbox-debug-staging.log"
+  "$LOG_DIR/propiedades-ventas-staging.log"
+  "$LOG_DIR/busquedas/busquedas-staging.log"
 )
 for log_file in "${touched_logs[@]}"; do
   touch "$log_file" || true

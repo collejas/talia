@@ -1,6 +1,7 @@
 """Configuración central basada en variables de entorno."""
 
 import json
+from pathlib import Path
 
 from pydantic import AliasChoices, Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -1199,3 +1200,21 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
+
+
+def resolve_log_path(filename: str) -> Path:
+    """Resuelve rutas de log hermanas respetando el sufijo del log principal.
+
+    Ejemplos:
+    - api.log -> request.log
+    - api-staging.log -> request-staging.log
+    """
+
+    base_path = Path(settings.log_file_path)
+    stem = base_path.stem
+    suffix = ""
+    if stem.startswith("api-"):
+        suffix = stem[len("api"):]
+    target_stem = Path(filename).stem
+    target_suffix = Path(filename).suffix
+    return base_path.with_name(f"{target_stem}{suffix}{target_suffix}")

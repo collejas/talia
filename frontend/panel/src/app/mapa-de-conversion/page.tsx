@@ -20,7 +20,7 @@ import {
   createEmptyStageTotals,
   orderStageKeys,
 } from "@/lib/mapa-conversion/stages";
-import { loadVisitsData } from "@/lib/visitas/data";
+import { loadVisitsTableForConversionMap } from "@/lib/visitas/data";
 import { MapKpis } from "@/components/mapa-conversion/map-kpis";
 
 export const dynamic = "force-dynamic";
@@ -257,7 +257,7 @@ export default async function Page({
   const hasta = hastaParam.length ? hastaParam : null;
 
   let demografiaResponse: Awaited<ReturnType<typeof loadDemografiaData>> | null = null;
-  let visitsPayload: Awaited<ReturnType<typeof loadVisitsData>> | null = null;
+  let visitsTable: Awaited<ReturnType<typeof loadVisitsTableForConversionMap>> = [];
   const errores: string[] = [];
 
   try {
@@ -283,9 +283,11 @@ export default async function Page({
   }
 
   try {
-    visitsPayload = await loadVisitsData({
+    visitsTable = await loadVisitsTableForConversionMap({
       canales: canalesSelected,
-      estado: normalizedEstado,
+      // Mantener el filtro de estado alineado con demografia:
+      // solo aplica cuando el usuario navega a nivel municipio.
+      estado: nivel === "municipio" ? normalizedEstado : null,
       sourceClass,
       utmSource,
       utmMedium,
@@ -463,15 +465,6 @@ export default async function Page({
     }
     return null;
   })();
-  const visitsTable = visitsPayload?.table ?? [];
-  if (visitsPayload?.errors?.length) {
-    for (const message of visitsPayload.errors) {
-      if (message && !errores.includes(message)) {
-        errores.push(message);
-      }
-    }
-  }
-
   return (
     <SidebarProvider
       style={

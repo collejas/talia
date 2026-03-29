@@ -1,0 +1,10 @@
+Cmnd_Alias TALIA_PRODUCTION_SYSTEMCTL = \
+  /bin/systemctl daemon-reload, \
+  /bin/systemctl restart talia-panel.service, \
+  /bin/systemctl restart talia-api.service, \
+  /bin/systemctl status talia-panel.service, \
+  /bin/systemctl status talia-api.service, \
+  /bin/systemctl is-active --quiet talia-panel.service, \
+  /bin/systemctl is-active --quiet talia-api.service
+
+jorge ALL=(root) NOPASSWD: TALIA_PRODUCTION_SYSTEMCTL

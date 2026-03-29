@@ -1,0 +1,10 @@
+Cmnd_Alias TALIA_STAGING_SYSTEMCTL = \
+  /bin/systemctl daemon-reload, \
+  /bin/systemctl restart talia-panel-staging.service, \
+  /bin/systemctl restart talia-api-staging.service, \
+  /bin/systemctl status talia-panel-staging.service, \
+  /bin/systemctl status talia-api-staging.service, \
+  /bin/systemctl is-active --quiet talia-panel-staging.service, \
+  /bin/systemctl is-active --quiet talia-api-staging.service
+
+jorge ALL=(root) NOPASSWD: TALIA_STAGING_SYSTEMCTL
