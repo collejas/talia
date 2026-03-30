@@ -6633,7 +6633,44 @@ def _normalize_reports_user_token(user_token: str | None) -> str | None:
     return token
 
 
+_PERMISSION_EQUIVALENTS: dict[str, tuple[str, ...]] = {
+    "ejecutar_busquedas": ("busquedas.run",),
+    "busquedas.run": ("ejecutar_busquedas",),
+}
+
+
+async def _user_has_any_permission(
+    repo: CRMRepository,
+    *,
+    organizacion_id: UUID,
+    usuario_id: UUID,
+    permission_codes: tuple[str, ...],
+) -> bool:
+    for code in permission_codes:
+        if await repo.user_has_permission(
+            organizacion_id=organizacion_id,
+            usuario_id=usuario_id,
+            codigo=code,
+        ):
+            return True
+    return False
+
+
+async def _current_user_has_any_permission(
+    repo: CRMRepository,
+    *,
+    permission_codes: tuple[str, ...],
+) -> bool:
+    for code in permission_codes:
+        if await repo.current_user_has_perm(codigo=code):
+            return True
+    return False
+
+
 def require_permission(permission_code: str):
+    normalized_code = permission_code.strip().lower()
+    permission_codes = (normalized_code, *_PERMISSION_EQUIVALENTS.get(normalized_code, ()))
+
     async def _dependency(
         user_token: str | None = Depends(optional_user_token),
         usuario_id: UUID | None = Depends(optional_usuario_id),
@@ -6659,10 +6696,11 @@ def require_permission(permission_code: str):
             try:
                 is_admin = await repo.user_has_role(usuario_id=usuario_id, role_code="admin")
                 is_owner = await repo.user_has_role(usuario_id=usuario_id, role_code="owner")
-                allowed = is_admin or is_owner or await repo.user_has_permission(
+                allowed = is_admin or is_owner or await _user_has_any_permission(
+                    repo,
                     organizacion_id=organizacion_id,
                     usuario_id=usuario_id,
-                    codigo=permission_code,
+                    permission_codes=permission_codes,
                 )
             except CRMRepositoryError as exc:
                 raise HTTPException(status_code=502, detail=str(exc)) from exc
@@ -6670,7 +6708,8 @@ def require_permission(permission_code: str):
                 "permission.check.service_role",
                 extra={
                     "user_id": str(usuario_id),
-                    "permission": permission_code,
+                    "permission": normalized_code,
+                    "permission_codes": permission_codes,
                     "allowed": allowed,
                     "ctx_es_admin": is_admin,
                     "ctx_es_owner": is_owner,
@@ -6686,7 +6725,10 @@ def require_permission(permission_code: str):
             permission_context = await repo.get_permission_context()
             es_admin = _coerce_bool(permission_context.get("es_admin")) is True
             es_owner = _coerce_bool(permission_context.get("es_owner")) is True
-            allowed = es_admin or es_owner or await repo.current_user_has_perm(codigo=permission_code)
+            allowed = es_admin or es_owner or await _current_user_has_any_permission(
+                repo,
+                permission_codes=permission_codes,
+            )
         except CRMRepositoryError as exc:
             if _is_jwt_expired_repo_error(exc):
                 raise HTTPException(
@@ -6698,7 +6740,8 @@ def require_permission(permission_code: str):
             "permission.check",
             extra={
                 "user_id": user_id,
-                "permission": permission_code,
+                "permission": normalized_code,
+                "permission_codes": permission_codes,
                 "allowed": allowed,
                 "ctx_es_admin": es_admin,
                 "ctx_es_owner": es_owner,

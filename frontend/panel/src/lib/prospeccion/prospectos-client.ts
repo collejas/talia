@@ -687,6 +687,8 @@ type ProspectosQueryMetadataResult = {
   segmentos: string[]
 }
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+
 const prospectosQueryMetadataInflight = new Map<string, Promise<ProspectosQueryMetadataResult>>()
 
 function buildProspectosQueryMetadataInflightKey(params?: {
@@ -804,11 +806,18 @@ export async function verificarProspectos(payload: {
   reintentar?: boolean
   proveedor?: "gratis" | "twilio"
 }): Promise<ProspectoLookupResponse> {
+  const prospectoIds = payload.prospecto_ids
+    .map((id) => (id || "").trim())
+    .filter((id) => UUID_RE.test(id))
+  if (!prospectoIds.length) {
+    throw new Error("No hay prospectos válidos para verificar.")
+  }
   return requestJson<ProspectoLookupResponse>("/api/prospeccion/prospectos/verificar-telefonos", {
     method: "POST",
     body: JSON.stringify({
       proveedor: payload.proveedor ?? "gratis",
       ...payload,
+      prospecto_ids: prospectoIds,
     }),
   })
 }
@@ -863,7 +872,7 @@ export async function ejecutarChecklistScraper(payload: {
   if (Array.isArray(payload.prospectoIds)) {
     for (const id of payload.prospectoIds) {
       const trimmed = (id || "").trim()
-      if (trimmed) {
+      if (UUID_RE.test(trimmed)) {
         if (!Array.isArray(body.prospecto_ids)) {
           body.prospecto_ids = []
         }

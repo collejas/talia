@@ -106,6 +106,7 @@ type ConScraperFilter = "" | "si" | "no"
 type MinRatingFilter = "" | "3" | "4" | "4.5"
 type EstratoGroupFilter = "" | "micro" | "pequena" | "mediana" | "grande"
 type OrderOption = "creado" | "nombre"
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 type ProspectosSortKey =
   | "prospecto"
   | "correo"
@@ -1992,14 +1993,25 @@ function ProspectosView() {
     if (!selectedIds.length) return
     setChecklistAction("scraper")
     setBanner(null)
-    const cappedIds = selectedIds.slice(0, 200)
+    const cappedIds = selectedIds
+      .map((id) => id.trim())
+      .filter((id) => UUID_RE.test(id))
+      .slice(0, 200)
+    if (!cappedIds.length) {
+      setBanner({
+        type: "error",
+        message: "La selección actual no contiene IDs válidos para lanzar el scraper.",
+      })
+      setChecklistAction(null)
+      return
+    }
     const limit = Math.max(1, Math.min(20, cappedIds.length))
     try {
       const response = await ejecutarChecklistScraper({
         limit,
-        mode: "stealth",
-        maxPages: 1000,
-        maxDepth: 20,
+        mode: "government",
+        maxPages: 500,
+        maxDepth: 10,
         prospectoIds: cappedIds,
       })
       if (!response.programados) {

@@ -2,9 +2,11 @@ import { NextResponse } from "next/server"
 
 import { getPanelApiBaseUrl } from "@/lib/api/panel"
 import { resolveServerAccessToken } from "@/lib/auth/server-session"
+import { resolveOrganizacionId } from "@/lib/settings/org"
 
 export async function POST(request: Request) {
   const token = await resolveServerAccessToken({ minTtlSeconds: 300 })
+  const organizacionId = await resolveOrganizacionId()
 
   if (!token || !token.trim().length) {
     return NextResponse.json({ error: "auth_required" }, { status: 401 })
@@ -26,6 +28,7 @@ export async function POST(request: Request) {
         Accept: "application/json",
         "Content-Type": "application/json",
         Authorization: `Bearer ${token.trim()}`,
+        ...(organizacionId ? { "X-Organizacion-Id": organizacionId } : {}),
       },
       cache: "no-store",
       body: await request.text(),
