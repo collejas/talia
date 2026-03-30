@@ -24,8 +24,12 @@ import {
 type NotificationsContextValue = {
   items: NotificationItem[]
   unreadCount: number
+  totalCount: number
   loading: boolean
-  refresh: () => Promise<void>
+  refresh: (options?: { unreadOnly?: boolean }) => Promise<void>
+  loadMore: () => Promise<void>
+  hasMore: boolean
+  unreadOnly: boolean
   markAsRead: (notificationId: string) => Promise<void>
   markAllAsRead: () => Promise<void>
   hideItem: (notificationId: string) => Promise<void>
@@ -45,7 +49,8 @@ type BufferedGroup = {
   toastId: string
 }
 
-const INITIAL_LIMIT = 20
+const PAGE_SIZE = 20
+const MAX_CACHE_ITEMS = 200
 const GROUPABLE_TYPES = new Set(["scraper.finished", "lookup.finished"])
 const GROUP_FLUSH_MS = 6000
 
@@ -93,19 +98,26 @@ export function GlobalNotificationsProvider({ children }: GlobalNotificationsPro
   const router = useRouter()
   const [items, setItems] = useState<NotificationItem[]>([])
   const [unreadCount, setUnreadCount] = useState(0)
+  const [totalCount, setTotalCount] = useState(0)
   const [loading, setLoading] = useState(true)
+  const [unreadOnly, setUnreadOnly] = useState(false)
+  const [offset, setOffset] = useState(0)
   const seenRef = useRef<Set<string>>(new Set())
   const groupedRef = useRef<Map<string, BufferedGroup>>(new Map())
 
-  const refresh = useCallback(async () => {
+  const refresh = useCallback(async (options?: { unreadOnly?: boolean }) => {
+    const nextUnreadOnly = options?.unreadOnly ?? unreadOnly
     setLoading(true)
     try {
       const [notifications, unread] = await Promise.all([
-        fetchNotifications({ limit: INITIAL_LIMIT, offset: 0 }),
+        fetchNotifications({ limit: PAGE_SIZE, offset: 0, unreadOnly: nextUnreadOnly }),
         fetchNotificationsUnreadCount(),
       ])
       setItems(notifications.items ?? [])
+      setTotalCount(Number(notifications.total ?? 0))
       setUnreadCount(unread)
+      setOffset((notifications.items ?? []).length)
+      setUnreadOnly(nextUnreadOnly)
       const nextSeen = new Set<string>()
       for (const item of notifications.items ?? []) {
         const dedupeKey = (item.dedupe_key ?? "").trim()
@@ -117,7 +129,33 @@ export function GlobalNotificationsProvider({ children }: GlobalNotificationsPro
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [unreadOnly])
+
+  const loadMore = useCallback(async () => {
+    if (loading) return
+    setLoading(true)
+    try {
+      const notifications = await fetchNotifications({
+        limit: PAGE_SIZE,
+        offset,
+        unreadOnly,
+      })
+      const nextItems = notifications.items ?? []
+      setItems((prev) => {
+        const merged = [...prev]
+        for (const item of nextItems) {
+          if (!merged.some((existing) => existing.id === item.id)) {
+            merged.push(item)
+          }
+        }
+        return merged.slice(0, MAX_CACHE_ITEMS)
+      })
+      setTotalCount(Number(notifications.total ?? 0))
+      setOffset((prev) => prev + nextItems.length)
+    } finally {
+      setLoading(false)
+    }
+  }, [loading, offset, unreadOnly])
 
   const markAsRead = useCallback(async (notificationId: string) => {
     const updated = await markNotificationRead(notificationId)
@@ -316,8 +354,11 @@ export function GlobalNotificationsProvider({ children }: GlobalNotificationsPro
         }
 
         setItems((prev) => {
+          if (unreadOnly && payload.read_at) {
+            return prev
+          }
           const next = [payload, ...prev.filter((item) => item.id !== payload.id)]
-          return next.slice(0, INITIAL_LIMIT)
+          return next.slice(0, MAX_CACHE_ITEMS)
         })
         setUnreadCount((prev) => prev + (payload.read_at ? 0 : 1))
         enqueueToast(payload)
@@ -331,19 +372,35 @@ export function GlobalNotificationsProvider({ children }: GlobalNotificationsPro
       grouped.clear()
       stream.close()
     }
-  }, [enqueueToast])
+  }, [enqueueToast, unreadOnly])
 
   const value = useMemo<NotificationsContextValue>(
     () => ({
       items,
       unreadCount,
+      totalCount,
       loading,
       refresh,
+      loadMore,
+      hasMore: offset < totalCount,
+      unreadOnly,
       markAsRead,
       markAllAsRead,
       hideItem,
     }),
-    [hideItem, items, loading, markAllAsRead, markAsRead, refresh, unreadCount]
+    [
+      hideItem,
+      items,
+      loading,
+      markAllAsRead,
+      markAsRead,
+      refresh,
+      loadMore,
+      unreadCount,
+      totalCount,
+      offset,
+      unreadOnly,
+    ]
   )
 
   return (

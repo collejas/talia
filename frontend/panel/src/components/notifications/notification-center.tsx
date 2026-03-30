@@ -86,7 +86,19 @@ function summarizeGroup(type: string, items: NotificationItem[]) {
 
 export function NotificationCenter() {
   const router = useRouter()
-  const { items, unreadCount, loading, refresh, markAsRead, markAllAsRead, hideItem } = useNotifications()
+  const {
+    items,
+    unreadCount,
+    totalCount,
+    loading,
+    refresh,
+    loadMore,
+    hasMore,
+    unreadOnly,
+    markAsRead,
+    markAllAsRead,
+    hideItem,
+  } = useNotifications()
   const [open, setOpen] = useState(false)
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set())
   const unreadLabel = unreadCount > 99 ? "99+" : unreadCount > 0 ? String(unreadCount) : ""
@@ -151,6 +163,47 @@ export function NotificationCenter() {
     return entries
   }, [orderedItems])
 
+  const sections = useMemo(() => {
+    const now = new Date()
+    const todayKey = `${now.getFullYear()}-${now.getMonth() + 1}-${now.getDate()}`
+    const yesterday = new Date(now)
+    yesterday.setDate(now.getDate() - 1)
+    const yesterdayKey = `${yesterday.getFullYear()}-${yesterday.getMonth() + 1}-${yesterday.getDate()}`
+
+    const list: Array<{
+      key: string
+      label: string
+      entries: typeof groupedEntries
+    }> = []
+    const map = new Map<string, number>()
+
+    for (const entry of groupedEntries) {
+      const createdAt = entry.kind === "group" ? entry.latest.created_at : entry.item.created_at
+      const date = createdAt ? new Date(createdAt) : null
+      const key = date
+        ? `${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}`
+        : "sin-fecha"
+      let label = "Sin fecha"
+      if (date) {
+        if (key === todayKey) {
+          label = "Hoy"
+        } else if (key === yesterdayKey) {
+          label = "Ayer"
+        } else {
+          label = new Intl.DateTimeFormat("es-MX", { dateStyle: "full" }).format(date)
+        }
+      }
+      if (!map.has(key)) {
+        map.set(key, list.length)
+        list.push({ key, label, entries: [entry] })
+      } else {
+        const index = map.get(key) ?? 0
+        list[index].entries.push(entry)
+      }
+    }
+    return list
+  }, [groupedEntries])
+
   const toggleGroup = (key: string) => {
     setExpandedGroups((prev) => {
       const next = new Set(prev)
@@ -190,6 +243,14 @@ export function NotificationCenter() {
                 <IconRefresh className={cn("size-4", loading ? "animate-spin" : "")} />
                 Actualizar
               </Button>
+              <Button
+                variant={unreadOnly ? "default" : "outline"}
+                size="sm"
+                onClick={() => void refresh({ unreadOnly: !unreadOnly })}
+                disabled={loading}
+              >
+                {unreadOnly ? "Mostrando no leidas" : "Solo no leidas"}
+              </Button>
               <Button variant="ghost" size="sm" onClick={() => void markAllAsRead()} disabled={!unreadCount}>
                 Marcar todas
               </Button>
@@ -205,7 +266,19 @@ export function NotificationCenter() {
               </div>
             ) : null}
 
-            {groupedEntries.map((entry) => {
+            {orderedItems.length ? (
+              <div className="text-xs text-muted-foreground">
+                Mostrando {orderedItems.length} de {totalCount || orderedItems.length}
+              </div>
+            ) : null}
+
+            {sections.map((section) => (
+              <div key={section.key} className="space-y-3">
+                <div className="flex items-center justify-between text-xs text-muted-foreground">
+                  <span className="font-medium uppercase tracking-wide">{section.label}</span>
+                  <span>{pluralize(section.entries.length, "evento")}</span>
+                </div>
+                {section.entries.map((entry) => {
               if (entry.kind === "group") {
                 const isUnread = entry.items.some((item) => !item.read_at)
                 const createdLabel = formatDateTime(entry.latest.created_at)
@@ -404,6 +477,16 @@ export function NotificationCenter() {
                 </article>
               )
             })}
+              </div>
+            ))}
+
+            {hasMore ? (
+              <div className="flex justify-center pt-2">
+                <Button variant="outline" size="sm" onClick={() => void loadMore()} disabled={loading}>
+                  Cargar mas
+                </Button>
+              </div>
+            ) : null}
           </div>
         </ScrollArea>
       </SheetContent>
