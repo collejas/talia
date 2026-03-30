@@ -3,6 +3,7 @@
 import { useMemo } from "react"
 import Image from 'next/image'
 
+import { NotificationCenter } from "@/components/notifications/notification-center"
 import { Separator } from '@/components/ui/separator'
 import { SidebarTrigger } from '@/components/ui/sidebar'
 import { useCurrentUser } from '@/hooks/use-current-user'
@@ -57,6 +58,7 @@ export function SiteHeader({ title = "Panel" }: SiteHeaderProps) {
         <Separator orientation="vertical" className="data-[orientation=vertical]:h-4" />
         <span className="text-base font-semibold text-foreground">{title}</span>
         <div className="ml-auto flex items-center gap-3">
+          <NotificationCenter />
           <Image
             src="/assets/logos/Logo8.png"
             alt="Tal-IA"

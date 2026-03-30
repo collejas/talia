@@ -158,7 +158,7 @@ class BuscadorJobManager:
                 "buscador.job_complete_update_failed",
                 extra={"job_id": str(job.id), "error": str(exc)},
             )
-        await self._publish_job_event(job=job, status=final_status, result=result)
+        await self._publish_job_event(repo=repo, job=job, status=final_status, result=result)
 
     async def _mark_job_failed(self, repo: CRMRepository, job: QueuedBuscadorJob, error: str) -> None:
         finish_iso = datetime.now(timezone.utc).isoformat()
@@ -169,11 +169,12 @@ class BuscadorJobManager:
             )
         except CRMRepositoryError:  # pragma: no cover - red externa
             logger.exception("buscador.job_fail_update_failed", extra={"job_id": str(job.id), "error": error})
-        await self._publish_job_event(job=job, status="failed", error=error)
+        await self._publish_job_event(repo=repo, job=job, status="failed", error=error)
 
     async def _publish_job_event(
         self,
         *,
+        repo: CRMRepository,
         job: QueuedBuscadorJob,
         status: str,
         result: BuscadorRunResult | None = None,

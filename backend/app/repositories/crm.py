@@ -10287,12 +10287,23 @@ class CRMRepository:
         *,
         payload: dict[str, Any],
     ) -> dict[str, Any]:
-        resp = await self._request(
-            "POST",
-            "/rest/v1/ui_notificaciones",
-            json=[payload],
-            prefer="return=representation",
+        request = (
+            self._request_with_user(
+                "POST",
+                "/rest/v1/ui_notificaciones",
+                token=self._user_token,
+                json=[payload],
+                prefer="return=representation,resolution=merge-duplicates",
+            )
+            if self._user_token
+            else self._request(
+                "POST",
+                "/rest/v1/ui_notificaciones",
+                json=[payload],
+                prefer="return=representation,resolution=merge-duplicates",
+            )
         )
+        resp = await request
         data = resp.json() or []
         row = self._first_row(data)
         if not isinstance(row, dict):
@@ -10334,12 +10345,23 @@ class CRMRepository:
             if normalized_niveles:
                 params["nivel"] = _postgrest_in_clause(normalized_niveles)
 
-        resp = await self._request(
-            "GET",
-            "/rest/v1/ui_notificaciones",
-            params=params,
-            prefer="count=exact",
+        request = (
+            self._request_with_user(
+                "GET",
+                "/rest/v1/ui_notificaciones",
+                token=self._user_token,
+                params=params,
+                prefer="count=exact",
+            )
+            if self._user_token
+            else self._request(
+                "GET",
+                "/rest/v1/ui_notificaciones",
+                params=params,
+                prefer="count=exact",
+            )
         )
+        resp = await request
         data = resp.json() or []
         if not isinstance(data, list):
             raise CRMRepositoryError(f"ui_notification_list_invalid:{data!r}")
@@ -10353,19 +10375,37 @@ class CRMRepository:
         usuario_id: UUID,
         organizacion_id: UUID,
     ) -> int:
-        resp = await self._request(
-            "GET",
-            "/rest/v1/ui_notificaciones",
-            params={
-                "select": "id",
-                "usuario_id": f"eq.{usuario_id}",
-                "organizacion_id": f"eq.{organizacion_id}",
-                "read_at": "is.null",
-                "hidden_at": "is.null",
-                "limit": "1",
-            },
-            prefer="count=exact",
+        request = (
+            self._request_with_user(
+                "GET",
+                "/rest/v1/ui_notificaciones",
+                token=self._user_token,
+                params={
+                    "select": "id",
+                    "usuario_id": f"eq.{usuario_id}",
+                    "organizacion_id": f"eq.{organizacion_id}",
+                    "read_at": "is.null",
+                    "hidden_at": "is.null",
+                    "limit": "1",
+                },
+                prefer="count=exact",
+            )
+            if self._user_token
+            else self._request(
+                "GET",
+                "/rest/v1/ui_notificaciones",
+                params={
+                    "select": "id",
+                    "usuario_id": f"eq.{usuario_id}",
+                    "organizacion_id": f"eq.{organizacion_id}",
+                    "read_at": "is.null",
+                    "hidden_at": "is.null",
+                    "limit": "1",
+                },
+                prefer="count=exact",
+            )
         )
+        resp = await request
         total = self._extract_total_count(resp.headers.get("content-range"))
         return int(total or 0)
 
@@ -10377,17 +10417,33 @@ class CRMRepository:
         organizacion_id: UUID,
         read_at: datetime | None = None,
     ) -> dict[str, Any] | None:
-        resp = await self._request(
-            "PATCH",
-            "/rest/v1/ui_notificaciones",
-            params={
-                "id": f"eq.{notification_id}",
-                "usuario_id": f"eq.{usuario_id}",
-                "organizacion_id": f"eq.{organizacion_id}",
-            },
-            json={"read_at": (read_at or datetime.now(timezone.utc)).isoformat()},
-            prefer="return=representation",
+        request = (
+            self._request_with_user(
+                "PATCH",
+                "/rest/v1/ui_notificaciones",
+                token=self._user_token,
+                params={
+                    "id": f"eq.{notification_id}",
+                    "usuario_id": f"eq.{usuario_id}",
+                    "organizacion_id": f"eq.{organizacion_id}",
+                },
+                json={"read_at": (read_at or datetime.now(timezone.utc)).isoformat()},
+                prefer="return=representation",
+            )
+            if self._user_token
+            else self._request(
+                "PATCH",
+                "/rest/v1/ui_notificaciones",
+                params={
+                    "id": f"eq.{notification_id}",
+                    "usuario_id": f"eq.{usuario_id}",
+                    "organizacion_id": f"eq.{organizacion_id}",
+                },
+                json={"read_at": (read_at or datetime.now(timezone.utc)).isoformat()},
+                prefer="return=representation",
+            )
         )
+        resp = await request
         data = resp.json() or []
         row = self._first_row(data)
         if row is None:
@@ -10403,18 +10459,35 @@ class CRMRepository:
         organizacion_id: UUID,
         read_at: datetime | None = None,
     ) -> int:
-        resp = await self._request(
-            "PATCH",
-            "/rest/v1/ui_notificaciones",
-            params={
-                "usuario_id": f"eq.{usuario_id}",
-                "organizacion_id": f"eq.{organizacion_id}",
-                "read_at": "is.null",
-                "hidden_at": "is.null",
-            },
-            json={"read_at": (read_at or datetime.now(timezone.utc)).isoformat()},
-            prefer="return=representation",
+        request = (
+            self._request_with_user(
+                "PATCH",
+                "/rest/v1/ui_notificaciones",
+                token=self._user_token,
+                params={
+                    "usuario_id": f"eq.{usuario_id}",
+                    "organizacion_id": f"eq.{organizacion_id}",
+                    "read_at": "is.null",
+                    "hidden_at": "is.null",
+                },
+                json={"read_at": (read_at or datetime.now(timezone.utc)).isoformat()},
+                prefer="return=representation",
+            )
+            if self._user_token
+            else self._request(
+                "PATCH",
+                "/rest/v1/ui_notificaciones",
+                params={
+                    "usuario_id": f"eq.{usuario_id}",
+                    "organizacion_id": f"eq.{organizacion_id}",
+                    "read_at": "is.null",
+                    "hidden_at": "is.null",
+                },
+                json={"read_at": (read_at or datetime.now(timezone.utc)).isoformat()},
+                prefer="return=representation",
+            )
         )
+        resp = await request
         data = resp.json() or []
         if not isinstance(data, list):
             raise CRMRepositoryError(f"ui_notification_mark_all_read_invalid:{data!r}")
@@ -10428,17 +10501,33 @@ class CRMRepository:
         organizacion_id: UUID,
         hidden_at: datetime | None = None,
     ) -> dict[str, Any] | None:
-        resp = await self._request(
-            "PATCH",
-            "/rest/v1/ui_notificaciones",
-            params={
-                "id": f"eq.{notification_id}",
-                "usuario_id": f"eq.{usuario_id}",
-                "organizacion_id": f"eq.{organizacion_id}",
-            },
-            json={"hidden_at": (hidden_at or datetime.now(timezone.utc)).isoformat()},
-            prefer="return=representation",
+        request = (
+            self._request_with_user(
+                "PATCH",
+                "/rest/v1/ui_notificaciones",
+                token=self._user_token,
+                params={
+                    "id": f"eq.{notification_id}",
+                    "usuario_id": f"eq.{usuario_id}",
+                    "organizacion_id": f"eq.{organizacion_id}",
+                },
+                json={"hidden_at": (hidden_at or datetime.now(timezone.utc)).isoformat()},
+                prefer="return=representation",
+            )
+            if self._user_token
+            else self._request(
+                "PATCH",
+                "/rest/v1/ui_notificaciones",
+                params={
+                    "id": f"eq.{notification_id}",
+                    "usuario_id": f"eq.{usuario_id}",
+                    "organizacion_id": f"eq.{organizacion_id}",
+                },
+                json={"hidden_at": (hidden_at or datetime.now(timezone.utc)).isoformat()},
+                prefer="return=representation",
+            )
         )
+        resp = await request
         data = resp.json() or []
         row = self._first_row(data)
         if row is None:
