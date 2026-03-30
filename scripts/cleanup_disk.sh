@@ -50,6 +50,14 @@ run_cmd() {
   fi
 }
 
+resolve_path_owner() {
+  local target="$1"
+  if [[ ! -e "$target" ]]; then
+    return 1
+  fi
+  stat -c '%U' "$target" 2>/dev/null || return 1
+}
+
 cleanup_release_dir() {
   local releases_dir="$1"
   local current_link="$2"
@@ -159,11 +167,24 @@ cleanup_git_objects() {
     return 0
   fi
   if [[ -d "${ROOT_DIR}/.git" ]] && command -v git >/dev/null 2>&1; then
+    local repo_owner
+    repo_owner="$(resolve_path_owner "${ROOT_DIR}/.git" || resolve_path_owner "${ROOT_DIR}" || true)"
     if [[ "${DRY_RUN}" == "1" ]]; then
-      log "DRY_RUN git -C ${ROOT_DIR} gc --prune=now"
+      log "DRY_RUN git -C ${ROOT_DIR} gc --prune=now (owner=${repo_owner:-unknown})"
     else
-      git -C "${ROOT_DIR}" gc --prune=now >/dev/null 2>&1 || true
-      log "git gc completed"
+      if [[ "$(id -u)" -eq 0 && -n "${repo_owner}" && "${repo_owner}" != "root" ]]; then
+        if command -v sudo >/dev/null 2>&1; then
+          sudo -u "${repo_owner}" git -C "${ROOT_DIR}" gc --prune=now >/dev/null 2>&1 || true
+        elif command -v runuser >/dev/null 2>&1; then
+          runuser -u "${repo_owner}" -- git -C "${ROOT_DIR}" gc --prune=now >/dev/null 2>&1 || true
+        else
+          su -s /bin/bash - "${repo_owner}" -c "git -C '${ROOT_DIR}' gc --prune=now" >/dev/null 2>&1 || true
+        fi
+        log "git gc completed as ${repo_owner}"
+      else
+        git -C "${ROOT_DIR}" gc --prune=now >/dev/null 2>&1 || true
+        log "git gc completed"
+      fi
     fi
   fi
 }
