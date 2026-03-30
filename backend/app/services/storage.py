@@ -22,6 +22,11 @@ from app.services.scoring_contract import (
 from app.services.phone_utils import normalize_phone
 from app.services import tenant_runtime
 from app.services.ui_realtime_hub import inbox_topic_for_org, ui_realtime_hub
+from app.services.user_notifications import (
+    UserNotificationAction,
+    UserNotificationCreate,
+    create_and_publish_user_notification,
+)
 
 logger = get_logger(__name__)
 
@@ -118,6 +123,33 @@ def _clean_text(value: Any) -> str:
     return " ".join(text.split())
 
 
+def _safe_uuid(value: Any) -> UUID | None:
+    try:
+        return UUID(str(value))
+    except (TypeError, ValueError):
+        return None
+
+
+def _normalize_channel_label(value: Any) -> str:
+    raw = _clean_text(value).lower()
+    if raw == "whatsapp":
+        return "WhatsApp"
+    if raw == "webchat":
+        return "Webchat"
+    if raw == "messenger":
+        return "Messenger"
+    return "Inbox"
+
+
+def _truncate_message(value: Any, *, max_len: int = 160) -> str:
+    text = _clean_text(value)
+    if not text:
+        return ""
+    if len(text) <= max_len:
+        return text
+    return text[: max_len - 1].rstrip() + "…"
+
+
 def _normalize_title_fragment(value: Any, *, max_len: int = 96) -> str | None:
     text = _clean_text(value)
     if not text:
@@ -149,6 +181,109 @@ def _normalize_title_fragment(value: Any, *, max_len: int = 96) -> str | None:
     if len(fragment) > max_len:
         fragment = fragment[: max_len - 1].rstrip() + "…"
     return fragment
+
+
+async def _resolve_inbox_notification_users(
+    *,
+    repo: CRMRepository,
+    organizacion_id: UUID,
+    conversation_id: UUID,
+) -> list[UUID]:
+    try:
+        convo = await repo.get_conversation_summary(conversation_id=conversation_id)
+    except CRMRepositoryError:
+        convo = None
+    if isinstance(convo, dict):
+        assigned = _safe_uuid(convo.get("asignado_a_usuario_id"))
+        if assigned:
+            recipients: list[UUID] = [assigned]
+            try:
+                supervisors = await repo.list_supervisor_user_ids_for_sales_rep(
+                    organizacion_id=organizacion_id,
+                    empleado_usuario_id=assigned,
+                )
+            except CRMRepositoryError:
+                supervisors = []
+            for supervisor_id in supervisors:
+                if supervisor_id not in recipients:
+                    recipients.append(supervisor_id)
+            return recipients
+    try:
+        return await repo.list_user_ids_with_permission(
+            organizacion_id=organizacion_id,
+            codigo="ver_inbox",
+        )
+    except CRMRepositoryError:
+        return []
+
+
+async def _notify_inbox_message(
+    *,
+    repo: CRMRepository,
+    organizacion_id: UUID | None,
+    conversation_id: str | None,
+    contact_id: str | None,
+    channel: str | None,
+    direction: str | None,
+    author: str | None = None,
+    message_text: str | None = None,
+    message_id: str | None = None,
+) -> None:
+    if not organizacion_id or not conversation_id:
+        return
+    if direction and direction != "entrante":
+        return
+    if author and author != "user":
+        return
+
+    convo_uuid = _safe_uuid(conversation_id)
+    if not convo_uuid:
+        return
+
+    recipients = await _resolve_inbox_notification_users(
+        repo=repo,
+        organizacion_id=organizacion_id,
+        conversation_id=convo_uuid,
+    )
+    if not recipients:
+        return
+
+    channel_label = _normalize_channel_label(channel)
+    snippet = _normalize_title_fragment(_truncate_message(message_text))
+    message = f"{channel_label}: {snippet}" if snippet else f"{channel_label}: Nuevo mensaje entrante."
+    dedupe = f"inbox.message:{message_id}" if message_id else None
+    group_key = f"inbox.message:{conversation_id}"
+    action = UserNotificationAction(label="Abrir Inbox", href="/inbox")
+
+    meta: dict[str, Any] = {
+        "channel": channel,
+        "conversation_id": conversation_id,
+        "contact_id": contact_id,
+        "message_id": message_id,
+    }
+
+    for usuario_id in recipients:
+        try:
+            await create_and_publish_user_notification(
+                repo=repo,
+                notification=UserNotificationCreate(
+                    organizacion_id=organizacion_id,
+                    usuario_id=usuario_id,
+                    type="inbox.message",
+                    level="info",
+                    title="Nuevo mensaje en Inbox",
+                    message=message,
+                    category="inbox",
+                    entity_kind="conversation",
+                    entity_id=conversation_id,
+                    action=action,
+                    meta=meta,
+                    dedupe_key=dedupe,
+                    group_key=group_key,
+                ),
+            )
+        except CRMRepositoryError:
+            continue
 
 
 def _looks_like_placeholder_name(value: str) -> bool:
@@ -1102,6 +1237,25 @@ async def register_webchat_message(
         )
     except Exception:
         pass
+    try:
+        org_value = _safe_uuid(
+            result.get("organizacion_id")
+            or organizacion_id
+            or (metadata or {}).get("resolved_organizacion_id")
+        )
+        await _notify_inbox_message(
+            repo=repo,
+            organizacion_id=org_value,
+            conversation_id=str(result.get("conversation_id") or ""),
+            contact_id=str(result.get("contact_id") or ""),
+            channel="webchat",
+            direction="entrante",
+            author=author,
+            message_text=content,
+            message_id=str(result.get("message_id") or ""),
+        )
+    except Exception:
+        pass
     return result
 
 
@@ -1258,6 +1412,22 @@ async def register_whatsapp_message(
         )
     except Exception:
         pass
+    try:
+        org_value = _safe_uuid(
+            result.get("organizacion_id") or organizacion_id or metadata_payload.get("resolved_organizacion_id")
+        )
+        await _notify_inbox_message(
+            repo=repo,
+            organizacion_id=org_value,
+            conversation_id=str(result.get("conversation_id") or ""),
+            contact_id=str(result.get("contact_id") or ""),
+            channel="whatsapp",
+            direction=str(direction),
+            message_text=body,
+            message_id=str(result.get("message_id") or ""),
+        )
+    except Exception:
+        pass
     return result
 
 
@@ -1321,6 +1491,22 @@ async def register_messenger_message(
                 "contact_id": str(result.get("contact_id") or ""),
                 "direction": str(direction),
             },
+        )
+    except Exception:
+        pass
+    try:
+        org_value = _safe_uuid(
+            result.get("organizacion_id") or organizacion_id or metadata_payload.get("resolved_organizacion_id")
+        )
+        await _notify_inbox_message(
+            repo=repo,
+            organizacion_id=org_value,
+            conversation_id=str(result.get("conversation_id") or ""),
+            contact_id=str(result.get("contact_id") or ""),
+            channel="messenger",
+            direction=str(direction),
+            message_text=text,
+            message_id=str(result.get("message_id") or ""),
         )
     except Exception:
         pass

@@ -5432,6 +5432,43 @@ class CRMRepository:
                 results.append(entry)
         return results
 
+    async def list_supervisor_user_ids_for_sales_rep(
+        self,
+        *,
+        organizacion_id: UUID,
+        empleado_usuario_id: UUID,
+        limit: int = 50,
+    ) -> list[UUID]:
+        params = {
+            "organizacion_id": f"eq.{organizacion_id}",
+            "empleado_id": f"eq.{empleado_usuario_id}",
+            "select": "supervisor_id",
+            "limit": str(limit),
+        }
+        resp = await self._request("GET", "/rest/v1/empleados_supervisores", params=params)
+        data = resp.json() or []
+        if not isinstance(data, list) or not data:
+            return []
+
+        supervisors: list[UUID] = []
+        for row in data:
+            if not isinstance(row, dict):
+                continue
+            raw_id = row.get("supervisor_id")
+            try:
+                supervisors.append(UUID(str(raw_id)))
+            except (TypeError, ValueError):
+                continue
+
+        unique: list[UUID] = []
+        seen: set[UUID] = set()
+        for supervisor_id in supervisors:
+            if supervisor_id in seen:
+                continue
+            seen.add(supervisor_id)
+            unique.append(supervisor_id)
+        return unique
+
     async def list_sales_reps(
         self,
         *,
@@ -8063,6 +8100,108 @@ class CRMRepository:
         if isinstance(permisos_data, dict):
             return bool(str(permisos_data.get("codigo") or "").strip())
         return False
+
+    async def list_user_ids_with_permission(
+        self,
+        *,
+        organizacion_id: UUID,
+        codigo: str,
+    ) -> list[UUID]:
+        perm_code = (codigo or "").strip().lower()
+        if not perm_code:
+            return []
+
+        permisos_resp = await self._request(
+            "GET",
+            "/rest/v1/permisos",
+            params={
+                "select": "id",
+                "organizacion_id": f"eq.{organizacion_id}",
+                "codigo": f"eq.{perm_code}",
+            },
+        )
+        permisos_data = permisos_resp.json() or []
+        if not isinstance(permisos_data, list) or not permisos_data:
+            return []
+
+        permiso_ids = [
+            str(row.get("id")).strip()
+            for row in permisos_data
+            if isinstance(row, dict) and str(row.get("id") or "").strip()
+        ]
+        if not permiso_ids:
+            return []
+
+        roles_permisos_resp = await self._request(
+            "GET",
+            "/rest/v1/roles_permisos",
+            params={
+                "select": "rol_id",
+                "organizacion_id": f"eq.{organizacion_id}",
+                "permiso_id": f"in.({','.join(permiso_ids)})",
+            },
+        )
+        roles_permisos_data = roles_permisos_resp.json() or []
+        if not isinstance(roles_permisos_data, list) or not roles_permisos_data:
+            return []
+
+        role_ids = [
+            str(row.get("rol_id")).strip()
+            for row in roles_permisos_data
+            if isinstance(row, dict) and str(row.get("rol_id") or "").strip()
+        ]
+        if not role_ids:
+            return []
+
+        usuarios_roles_resp = await self._request(
+            "GET",
+            "/rest/v1/usuarios_roles",
+            params={
+                "select": "usuario_id",
+                "organizacion_id": f"eq.{organizacion_id}",
+                "rol_id": f"in.({','.join(role_ids)})",
+            },
+        )
+        usuarios_roles_data = usuarios_roles_resp.json() or []
+        if not isinstance(usuarios_roles_data, list) or not usuarios_roles_data:
+            return []
+
+        user_ids: list[UUID] = []
+        for row in usuarios_roles_data:
+            if not isinstance(row, dict):
+                continue
+            raw_id = row.get("usuario_id")
+            try:
+                user_ids.append(UUID(str(raw_id)))
+            except (TypeError, ValueError):
+                continue
+        unique = []
+        seen = set()
+        for user_id in user_ids:
+            if user_id in seen:
+                continue
+            seen.add(user_id)
+            unique.append(user_id)
+        return unique
+
+    async def get_conversation_summary(
+        self,
+        *,
+        conversation_id: UUID,
+    ) -> dict[str, Any] | None:
+        resp = await self._request(
+            "GET",
+            "/rest/v1/conversaciones",
+            params={
+                "id": f"eq.{conversation_id}",
+                "select": "id,organizacion_id,contacto_id,asignado_a_usuario_id,canal,estado,no_leidos",
+                "limit": "1",
+            },
+        )
+        data = resp.json() or []
+        if not isinstance(data, list) or not data or not isinstance(data[0], dict):
+            return None
+        return data[0]
 
     async def user_belongs_to_organizacion(
         self,

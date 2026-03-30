@@ -52,7 +52,7 @@ type BufferedGroup = {
 
 const PAGE_SIZE = 20
 const MAX_CACHE_ITEMS = 200
-const GROUPABLE_TYPES = new Set(["scraper.finished", "lookup.finished"])
+const GROUPABLE_TYPES = new Set(["scraper.finished", "lookup.finished", "inbox.message"])
 const GROUP_FLUSH_MS = 6000
 
 function pluralize(count: number, singular: string, plural?: string) {
@@ -86,6 +86,13 @@ function summarizeGroupedNotifications(type: string, items: NotificationItem[]) 
       title: "Lote de verificacion terminado",
       description: `${pluralize(items.length, "verificacion")} finalizadas.`,
       level: items.some((item) => item.level === "error") ? "warning" : "success",
+    }
+  }
+  if (type === "inbox.message") {
+    return {
+      title: "Mensajes nuevos en Inbox",
+      description: `${pluralize(items.length, "mensaje")} nuevo${items.length === 1 ? "" : "s"}.`,
+      level: items.some((item) => item.level === "error") ? "warning" : "info",
     }
   }
   return {
