@@ -1,0 +1,315 @@
+server {
+    # Redirecciona www -> no-www (HTTPS)
+    server_name www.talia.mx;
+
+    return 301 https://talia.mx$request_uri;
+
+    listen [::]:443 ssl;
+    listen 443 ssl;
+    ssl_certificate /etc/letsencrypt/live/talia.mx/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/talia.mx/privkey.pem;
+    include /etc/letsencrypt/options-ssl-nginx.conf;
+    ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem;
+}
+
+server {
+    server_name talia.mx;
+
+    root /var/www/talia-landing;
+    index index.html;
+
+    add_header X-Content-Type-Options "nosniff";
+
+    # =========== Backend FastAPI ===========
+    location ^~ /api/whatsapp/ {
+        proxy_pass http://127.0.0.1:8004;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Prefix /api;
+        proxy_set_header Connection "";
+        proxy_buffering off;
+    }
+
+    location ^~ /api/webchat {
+        proxy_pass http://127.0.0.1:8004;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Prefix /api;
+        proxy_set_header Connection "";
+        proxy_buffering off;
+    }
+
+    location ^~ /api/shared/ {
+        proxy_pass http://127.0.0.1:8004;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Prefix /api;
+        proxy_set_header Connection "";
+        proxy_buffering off;
+    }
+
+    location ^~ /api/panel/ {
+        proxy_pass http://127.0.0.1:8004;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Prefix /api;
+        proxy_set_header Connection "";
+        proxy_buffering off;
+    }
+
+    location ^~ /api/panel-react/ {
+        proxy_pass http://127.0.0.1:8004;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Prefix /api;
+        proxy_set_header Connection "";
+        proxy_buffering off;
+    }
+
+    location = /api/info {
+        proxy_pass http://127.0.0.1:8004;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Prefix /api;
+        proxy_set_header Connection "";
+        proxy_buffering off;
+    }
+
+    location = /api/health {
+        proxy_pass http://127.0.0.1:8004;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Prefix /api;
+        proxy_set_header Connection "";
+        proxy_buffering off;
+    }
+
+    location ^~ /api/messenger/ {
+        proxy_pass http://127.0.0.1:8004;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Prefix /api;
+        proxy_set_header Connection "";
+        proxy_buffering off;
+     }
+
+    location ^~ /api/kpis/ {
+        proxy_pass http://127.0.0.1:8004;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Prefix /api;
+        proxy_set_header Connection "";
+        proxy_buffering off;
+    }
+
+    location ^~ /privacy-policy {
+        proxy_pass http://127.0.0.1:3001;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header Connection "";
+        proxy_buffering off;
+    }
+
+    location ^~ /portal/ {
+        proxy_pass http://127.0.0.1:3001;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header Connection "";
+        proxy_buffering off;
+    }
+
+    location ^~ /api/ {
+        proxy_pass http://127.0.0.1:3001;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header Connection "";
+        proxy_buffering off;
+        proxy_read_timeout 300s;
+        proxy_send_timeout 300s;
+        proxy_connect_timeout 60s;
+    }
+
+    location ^~ /panel/ {
+        rewrite ^/panel/(.*)$ /$1 break;
+        proxy_pass http://127.0.0.1:3001;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header Connection "";
+        proxy_buffering off;
+    }
+
+    location ^~ /settings/ {
+        proxy_pass http://127.0.0.1:3001;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header Connection "";
+        proxy_buffering off;
+    }
+
+    location = /settings {
+        return 301 /settings/;
+    }
+
+    location ^~ /ops/ {
+        proxy_pass http://127.0.0.1:3001;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header Connection "";
+        proxy_buffering off;
+    }
+
+    location = /ops {
+        return 301 /ops/;
+    }
+
+    location ^~ /prospeccion/ {
+        proxy_pass http://127.0.0.1:3001;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header Connection "";
+        proxy_buffering off;
+    }
+
+    location = /prospeccion {
+        return 301 /prospeccion/;
+    }
+
+    location ^~ /_next/static/ {
+        proxy_pass http://127.0.0.1:3001;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        add_header Cache-Control "public, max-age=31536000, immutable";
+    }
+
+    location ^~ /_next/image {
+        proxy_pass http://127.0.0.1:3001;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+    }
+
+    location ^~ /_next/ {
+        proxy_pass http://127.0.0.1:3001;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+    }
+
+    location ~* ^/(auth|dashboard|crm|contactos|leads|visitas|inbox|embudo|agenda|propuesta|mapa-de-conversion|vista-2|settings|ops|prospeccion|portal|clientes|oportunidades|propiedades)(/.*)?$ {
+        proxy_pass http://127.0.0.1:3001;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header Connection "";
+        proxy_buffering off;
+    }
+
+    # Archivos estaticos
+    location ~* \.(css|js|mjs|png|jpg|jpeg|gif|ico|svg|webp|woff|woff2|ttf|otf)$ {
+        try_files $uri =404;
+        add_header Cache-Control "public, max-age=86400";
+    }
+
+    # Landing demos direct access
+    location = /presentacion.html {
+        root /var/www/talia/landing/src;
+        add_header Cache-Control "no-cache, must-revalidate";
+    }
+
+    location = /nota.html {
+        root /var/www/talia/landing/src;
+        add_header Cache-Control "no-cache, must-revalidate";
+    }
+
+    location = /presentacion {
+        return 302 /presentacion.html;
+    }
+
+    location = /nota {
+        return 302 /nota.html;
+    }
+
+    # Fallback SPA
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+
+    listen [::]:443 ssl;
+    listen 443 ssl;
+    ssl_certificate /etc/letsencrypt/live/talia.mx/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/talia.mx/privkey.pem;
+    include /etc/letsencrypt/options-ssl-nginx.conf;
+    ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem;
+}
+
+server {
+    listen 80;
+    listen [::]:80;
+    server_name tal-ia.mx www.tal-ia.mx;
+
+    return 301 http://talia.mx$request_uri;
+}
+
+server {
+    listen 80;
+    listen [::]:80;
+    server_name www.talia.mx;
+
+    return 301 https://talia.mx$request_uri;
+}
+
+server {
+    listen 80;
+    listen [::]:80;
+    server_name talia.mx;
+
+    return 301 https://talia.mx$request_uri;
+}
