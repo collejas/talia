@@ -18,7 +18,11 @@ from app.services.buscador_runner import (
     BuscadorRunResult,
     run_buscador,
 )
-from app.services.ui_realtime_hub import prospectos_topic_for_org, ui_realtime_hub
+from app.services.ui_realtime_hub import (
+    prospectos_topic_for_org,
+    ui_realtime_hub,
+    user_notifications_topic_for_user,
+)
 
 logger = get_logger(__name__)
 
@@ -34,6 +38,7 @@ def _safe_uuid(value: Any) -> UUID | None:
 class QueuedBuscadorJob:
     id: UUID
     organizacion_id: UUID | None
+    creado_por: UUID | None
     params: BuscadorParams
     metadata: dict[str, Any]
 
@@ -62,10 +67,12 @@ class BuscadorJobManager:
             logger.error("buscador.invalid_job_id", extra={"job_id": job_row.get("id")})
             return
         organizacion_id = _safe_uuid(job_row.get("organizacion_id"))
+        creado_por = _safe_uuid(job_row.get("creado_por"))
         metadata = job_row.get("metadata") if isinstance(job_row.get("metadata"), dict) else {}
         job = QueuedBuscadorJob(
             id=job_id,
             organizacion_id=organizacion_id,
+            creado_por=creado_por,
             params=params,
             metadata=metadata,
         )
@@ -194,6 +201,42 @@ class BuscadorJobManager:
                 "payload": payload,
             },
         )
+        if job.creado_por:
+            level = "success" if status == "completed" else "error"
+            if status == "completed":
+                if payload["emails_total"] > 0:
+                    message = (
+                        f"Scraper terminado. Se encontraron {payload['emails_total']} "
+                        f"correo{'' if payload['emails_total'] == 1 else 's'}."
+                    )
+                else:
+                    message = "Scraper terminado. No se encontraron correos en este sitio."
+            elif status == "failed":
+                message = "El scraper terminó con error. Revisa el historial del buscador."
+            else:
+                message = f"El scraper terminó con estado {status}."
+            await ui_realtime_hub.publish(
+                user_notifications_topic_for_user(usuario_id=str(job.creado_por)),
+                {
+                    "type": "scraper.finished",
+                    "level": level,
+                    "title": "Scraper terminado",
+                    "message": message,
+                    "organizacion_id": str(job.organizacion_id),
+                    "user_id": str(job.creado_por),
+                    "entity": {
+                        "kind": "buscador_job",
+                        "id": str(job.id),
+                    },
+                    "action": {
+                        "label": "Ver historial",
+                        "href": "/prospeccion/buscador",
+                    },
+                    "meta": payload,
+                    "dedupe_key": f"scraper.finished:{job.id}:{status}",
+                    "at": datetime.now(timezone.utc).isoformat(),
+                },
+            )
 
     async def _store_results(
         self,

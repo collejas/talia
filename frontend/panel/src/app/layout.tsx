@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { GlobalNotificationsProvider } from "@/components/notifications/global-notifications-provider";
 import { SessionExpirationProvider } from "@/components/session/session-expiration-provider";
 import "./globals.css";
 
@@ -15,7 +16,9 @@ export default function RootLayout({
   return (
     <html lang="es">
       <body className="antialiased theme-classic">
-        <SessionExpirationProvider>{children}</SessionExpirationProvider>
+        <SessionExpirationProvider>
+          <GlobalNotificationsProvider>{children}</GlobalNotificationsProvider>
+        </SessionExpirationProvider>
       </body>
     </html>
   );

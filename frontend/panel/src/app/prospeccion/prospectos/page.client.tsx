@@ -150,12 +150,6 @@ type BannerState = {
   message: string
 }
 
-type FloatingNotice = {
-  id: string
-  type: "success" | "error"
-  message: string
-}
-
 type ContactDrawerData = {
   batchId?: string | null
   results: ProspeccionContactResult[]
@@ -862,9 +856,6 @@ function ProspectosView() {
   const prospectosStreamRef = useRef<EventSource | null>(null)
   const prospectosStreamRefreshTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const prospectosStreamRefreshInFlightRef = useRef(false)
-  const scraperNoticeSeenRef = useRef<Set<string>>(new Set())
-  const scraperNoticeTimeoutsRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map())
-  const [floatingNotices, setFloatingNotices] = useState<FloatingNotice[]>([])
 
   const currentIds = useMemo(() => items.map((item) => item.id).filter(Boolean) as string[], [items])
   const geoEstadoLabelMap = useMemo(
@@ -1868,16 +1859,6 @@ function ProspectosView() {
     void fetchRecentBatches()
   }, [fetchRecentBatches])
 
-  const pushFloatingNotice = useCallback((notice: Omit<FloatingNotice, "id">) => {
-    const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
-    setFloatingNotices((prev) => [...prev, { id, ...notice }].slice(-4))
-    const timeoutId = setTimeout(() => {
-      setFloatingNotices((prev) => prev.filter((item) => item.id !== id))
-      scraperNoticeTimeoutsRef.current.delete(id)
-    }, 7000)
-    scraperNoticeTimeoutsRef.current.set(id, timeoutId)
-  }, [])
-
   useEffect(() => {
     if (typeof window === "undefined") return undefined
     let closed = false
@@ -1912,41 +1893,10 @@ function ProspectosView() {
 
     stream.onmessage = (event) => {
       try {
-        const payload = JSON.parse(event.data) as {
-          type?: string
-          payload?: { job_id?: string; status?: string; emails_total?: number; error?: string | null }
-        }
+        const payload = JSON.parse(event.data) as { type?: string }
         const eventType = (payload?.type ?? "").toLowerCase()
         if (!eventType || eventType === "ping" || eventType === "connected") {
           return
-        }
-        if (eventType === "prospectos_checklist_scraper_finished") {
-          const jobId = payload.payload?.job_id?.trim() ?? ""
-          const status = payload.payload?.status?.trim().toLowerCase() ?? ""
-          const emailsTotal = Number(payload.payload?.emails_total ?? 0)
-          const dedupeKey = `${jobId}:${status}`
-          if (jobId && status && !scraperNoticeSeenRef.current.has(dedupeKey)) {
-            scraperNoticeSeenRef.current.add(dedupeKey)
-            if (status === "completed") {
-              pushFloatingNotice({
-                type: "success",
-                message:
-                  emailsTotal > 0
-                    ? `Scraper terminado. Se encontraron ${emailsTotal} correo${emailsTotal === 1 ? "" : "s"}.`
-                    : "Scraper terminado. No se encontraron correos en este sitio.",
-              })
-            } else if (status === "failed") {
-              pushFloatingNotice({
-                type: "error",
-                message: "El scraper terminó con error. Revisa el historial del buscador.",
-              })
-            } else if (status === "canceled" || status === "paused") {
-              pushFloatingNotice({
-                type: "error",
-                message: `El scraper terminó con estado ${status}.`,
-              })
-            }
-          }
         }
       } catch {
         // si falla parseo, forzamos refresh para no perder invalidaciones
@@ -1960,14 +1910,12 @@ function ProspectosView() {
         clearTimeout(prospectosStreamRefreshTimeoutRef.current)
         prospectosStreamRefreshTimeoutRef.current = null
       }
-      scraperNoticeTimeoutsRef.current.forEach((timeoutId) => clearTimeout(timeoutId))
-      scraperNoticeTimeoutsRef.current.clear()
       stream.close()
       if (prospectosStreamRef.current === stream) {
         prospectosStreamRef.current = null
       }
     }
-  }, [fetchProspectos, fetchStageSummary, pushFloatingNotice, refreshChecklist])
+  }, [fetchProspectos, fetchStageSummary, refreshChecklist])
 
   useEffect(() => {
     if (!formDialogOpen) {
@@ -3171,37 +3119,6 @@ function ProspectosView() {
           <Button variant="ghost" size="sm" onClick={() => setBanner(null)}>
             Ocultar
           </Button>
-        </div>
-      ) : null}
-
-      {floatingNotices.length ? (
-        <div className="pointer-events-none fixed bottom-4 right-4 z-50 flex w-full max-w-sm flex-col gap-2">
-          {floatingNotices.map((notice) => (
-            <div
-              key={notice.id}
-              className={cn(
-                "pointer-events-auto flex items-start gap-3 rounded-lg border px-4 py-3 text-sm shadow-lg backdrop-blur",
-                notice.type === "success"
-                  ? "border-emerald-500/40 bg-emerald-500/95 text-white"
-                  : "border-destructive/40 bg-destructive text-white"
-              )}
-            >
-              {notice.type === "success" ? (
-                <IconCircleCheck className="mt-0.5 size-4 shrink-0" />
-              ) : (
-                <IconAlertTriangle className="mt-0.5 size-4 shrink-0" />
-              )}
-              <div className="flex-1">{notice.message}</div>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-auto px-2 py-1 text-white hover:bg-white/10 hover:text-white"
-                onClick={() => setFloatingNotices((prev) => prev.filter((item) => item.id !== notice.id))}
-              >
-                Cerrar
-              </Button>
-            </div>
-          ))}
         </div>
       ) : null}
 

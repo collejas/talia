@@ -4,12 +4,35 @@ Fecha: 2026-03-30
 
 ## Objetivo
 
-Implementar un sistema de notificaciones generales para el panel que permita mostrar avisos flotantes al usuario desde cualquier vista de la app, reutilizable para distintos tipos de eventos asincronos (scraper, lookup, lotes, importaciones, errores de jobs, etc.).
+Implementar un sistema serio, persistente y reusable de notificaciones para el panel.
 
-La meta es separar dos necesidades distintas:
+El sistema debe cubrir dos necesidades al mismo tiempo:
 
-- refresco de datos por modulo/vista
-- notificaciones UX dirigidas al usuario que disparo una accion o al usuario destinatario del evento
+- avisos realtime al usuario desde cualquier vista de la app
+- centro de notificaciones persistente con historial, no leidas, acciones y deduplicacion
+
+La meta ya no es un MVP efimero. La meta es una arquitectura profesional que sirva para:
+
+- `scraper.finished`
+- `lookup.finished`
+- lotes de contacto
+- importaciones y exportaciones
+- errores de jobs asincronos
+- eventos operativos relevantes del producto
+
+## Cambio de decision
+
+Decision actualizada:
+
+- Ya no conviene tratar la persistencia como fase opcional.
+- La persistencia en base de datos pasa a ser parte del nucleo del sistema.
+- El SSE global se mantiene, pero como complemento del inbox persistente, no como unica fuente.
+
+Principio rector:
+
+- `BD = fuente de verdad`
+- `SSE = entrega inmediata`
+- `frontend global = experiencia UX`
 
 ## Entendimiento del sistema actual
 
@@ -17,8 +40,8 @@ La meta es separar dos necesidades distintas:
 
 Hallazgos principales:
 
-- No existe hoy una tabla general de notificaciones de UI para usuario.
-- Existen tablas de jobs/eventos de dominio que pueden servir como origen de notificaciones:
+- No existe hoy una tabla general de notificaciones de UI por usuario.
+- Existen multiples tablas de jobs/eventos de dominio que pueden originar notificaciones:
   - `public.prospeccion_buscador_jobs`
   - `public.prospeccion_denue_jobs`
   - `public.prospeccion_contacto_batch`
@@ -26,14 +49,19 @@ Hallazgos principales:
   - `public.sales_notification_jobs`
   - `public.eventos_entrega`
   - `public.prospeccion_user_preferences`
-- El sistema ya persiste `creado_por`, `organizacion_id`, `metadata`, `status`, `finished_at`, etc. en varios jobs, por lo que hay suficiente informacion para generar notificaciones derivadas.
-- `public.prospeccion_user_preferences` ya existe y es un buen candidato para almacenar preferencias de notificaciones por usuario/modulo/canal sin crear otra tabla de settings desde cero.
+- Los jobs actuales ya guardan datos utiles para notificar:
+  - `creado_por`
+  - `organizacion_id`
+  - `status`
+  - `finished_at`
+  - `metadata`
+- `public.prospeccion_user_preferences` puede reutilizarse despues para preferencias de notificaciones.
 
 Lectura arquitectonica:
 
-- La BD ya modela bien los procesos de negocio y sus jobs.
-- Lo que falta no es tanto un origen de eventos, sino una capa uniforme de "notificacion de UI" dirigida a usuario.
-- Para un MVP no es obligatorio persistir notificaciones en BD; puede usarse infraestructura ephemeral en backend. Para una fase posterior, si se quiere historial/acknowledge/no leidas, si conviene crear tabla dedicada.
+- Los eventos de dominio ya existen.
+- Lo que falta es una capa transversal de notificaciones persistentes por usuario.
+- La BD debe guardar las notificaciones, no solo los jobs que las originan.
 
 ### 2. Backend
 
@@ -41,376 +69,559 @@ Hallazgos principales:
 
 - Existe un hub in-memory para realtime UI:
   - `backend/app/services/ui_realtime_hub.py`
-- Hoy hay topicos por organizacion y por modulo:
-  - `inbox:{organizacion_id}`
-  - `prospeccion:prospectos:{organizacion_id}`
-- Existen helpers de publicacion:
-  - `_publish_inbox_ui_event(...)`
-  - `_publish_prospectos_ui_event(...)`
 - Existen streams SSE por modulo:
   - `/crm/inbox/stream`
   - `/crm/prospeccion/prospectos/stream`
-- El panel ya proxea streams SSE desde Next:
-  - `frontend/panel/src/app/api/prospeccion/prospectos/proxy-helpers.ts`
-- El caso nuevo del scraper ya emite evento al terminar, pero todavia acoplado al topico de prospectos y a la vista de prospectos.
-- El backend ya tiene piezas utiles para resolver scope y usuario actual:
-  - `require_user_token`
-  - `require_permission(...)`
-  - `require_organizacion_id(...)`
-  - `/crm/me/permissions`
+- Ya existe un stream global nuevo por usuario:
+  - `/crm/me/notifications/stream`
+- Ya existe publicacion de `scraper.finished` al topico global por usuario.
 
 Lectura arquitectonica:
 
-- La infraestructura SSE ya existe y funciona.
-- La limitacion actual es el scope: hoy el broadcast se hace por modulo/organizacion, no por usuario.
-- Para notificaciones globales no conviene reutilizar directamente los topicos de modulo. Conviene agregar un topico nuevo por usuario.
+- La parte realtime ya esta encaminada.
+- Lo que falta es volverla confiable y persistente.
+- El hub in-memory sirve para entrega inmediata, pero no para historial ni rehidratacion.
 
 ### 3. Frontend
 
 Hallazgos principales:
 
-- El panel ya tiene un `RootLayout` claro donde se puede montar un provider global:
-  - `frontend/panel/src/app/layout.tsx`
-- Ya existe un provider global de sesion:
-  - `SessionExpirationProvider`
-- Hay uso parcial de `toast` de `sonner` en otras vistas/componentes, pero hoy no existe una capa global consistente para notificaciones del sistema.
-- En prospeccion/prospectos ya hay:
-  - banner local de pagina
-  - stream SSE local con `EventSource`
-  - notificacion flotante implementada localmente para el scraper terminado
-- En inbox y otros modulos tambien existen streams locales independientes.
+- El panel ya tiene montaje global en `frontend/panel/src/app/layout.tsx`
+- Ya existe `GlobalNotificationsProvider`
+- Ya existe un `Toaster` global
+- Ya se elimino la dependencia de notificacion local flotante solo en prospectos
 
 Lectura arquitectonica:
 
-- El frontend esta listo para un `GlobalNotificationsProvider` en layout.
-- Hoy la app mezcla tres patrones:
-  - banners locales
-  - toasts puntuales
-  - streams SSE por vista
-- El siguiente paso correcto es centralizar notificaciones UX en un provider global, sin quitar de entrada los streams de refresco por modulo.
+- La app ya tiene punto de integracion global.
+- Falta agregar inbox persistente, badge, consulta inicial y logica de agrupacion.
 
-## Decision de arquitectura
+## Arquitectura objetivo
 
-### Principio clave
+Separar claramente tres capas:
 
-Separar:
+### 1. Capa de origen
 
-- `streams de datos por modulo`: usados para invalidar/recargar vistas
-- `streams de notificaciones por usuario`: usados para avisar al usuario en cualquier vista
+Los modulos y jobs del backend detectan eventos relevantes:
 
-### Topologia propuesta
+- job terminado
+- job fallido
+- lote completado
+- archivo listo
+- error operativo
 
-Backend:
+### 2. Capa de notificacion persistente
 
-- Mantener topicos por modulo para refresh:
-  - inbox por organizacion
-  - prospectos por organizacion
-  - otros modulos segun se necesite
-- Agregar topico global por usuario:
-  - `user:{usuario_id}:notifications`
+Un servicio comun crea una notificacion en BD con contrato uniforme.
 
-Frontend:
+Ese servicio debe:
 
-- Mantener streams locales donde el modulo necesita refresh incremental.
-- Agregar un solo `EventSource` global para notificaciones del usuario autenticado.
-- Renderizar toasts/notificaciones flotantes desde cualquier vista.
+- insertar registro en `ui_notificaciones`
+- deduplicar cuando aplique
+- decidir nivel, titulo, mensaje y accion
+- publicar SSE al usuario destinatario
 
-## Contrato propuesto de notificacion
+### 3. Capa de entrega UX
 
-Payload recomendado:
+El frontend debe:
+
+- cargar notificaciones pendientes al iniciar
+- escuchar SSE para nuevas notificaciones
+- mostrar toasts globales importantes
+- mantener un centro de notificaciones con historial y no leidas
+
+## Modelo de datos recomendado
+
+### Tabla nueva: `public.ui_notificaciones`
+
+Columnas recomendadas:
+
+- `id uuid primary key default gen_random_uuid()`
+- `creada_at timestamptz not null default now()`
+- `organizacion_id uuid not null`
+- `usuario_id uuid not null`
+- `tipo text not null`
+- `categoria text null`
+- `nivel text not null`
+- `titulo text null`
+- `mensaje text not null`
+- `entity_kind text null`
+- `entity_id text null`
+- `action_label text null`
+- `action_href text null`
+- `payload jsonb not null default '{}'::jsonb`
+- `dedupe_key text null`
+- `agrupacion_key text null`
+- `leida_at timestamptz null`
+- `oculta_at timestamptz null`
+- `expira_at timestamptz null`
+- `toast_mostrado_at timestamptz null`
+
+Indices recomendados:
+
+- `idx_ui_notificaciones_usuario_creada_at` sobre `(usuario_id, creada_at desc)`
+- `idx_ui_notificaciones_usuario_no_leidas` parcial sobre `(usuario_id, creada_at desc)` donde `leida_at is null and oculta_at is null`
+- `idx_ui_notificaciones_dedupe_key` sobre `(usuario_id, dedupe_key)` donde `dedupe_key is not null`
+- `idx_ui_notificaciones_entity` sobre `(entity_kind, entity_id)`
+- `idx_ui_notificaciones_expira_at` sobre `(expira_at)`
+
+Restricciones recomendadas:
+
+- `nivel` limitado a: `success`, `info`, `warning`, `error`
+- `mensaje` obligatorio
+- `tipo` obligatorio
+
+### Preferencias opcionales posteriores
+
+Reutilizar `public.prospeccion_user_preferences` o crear despues una tabla especifica si se requiere:
+
+- silenciar tipos concretos
+- desactivar toasts pero mantener inbox
+- frecuencia de resumen
+- canales futuros como email o push
+
+## Contrato canonico de notificacion
+
+Payload backend/frontend recomendado:
 
 ```json
 {
+  "id": "uuid",
   "type": "scraper.finished",
   "level": "success",
   "title": "Scraper terminado",
   "message": "Se encontraron 3 correos.",
-  "organizacion_id": "...",
-  "user_id": "...",
+  "organizacion_id": "uuid",
+  "user_id": "uuid",
   "entity": {
     "kind": "buscador_job",
-    "id": "..."
+    "id": "uuid"
   },
   "action": {
     "label": "Ver historial",
     "href": "/prospeccion/buscador"
   },
   "meta": {
-    "prospecto_id": "...",
+    "prospecto_id": "uuid",
     "emails_total": 3,
     "status": "completed"
   },
-  "at": "2026-03-30T15:00:00Z"
+  "dedupe_key": "scraper.finished:job_uuid:completed",
+  "group_key": "scraper.finished:lote_uuid",
+  "read_at": null,
+  "created_at": "2026-03-30T15:00:00Z"
 }
 ```
 
-Campos minimos para v1:
+Campos obligatorios del sistema:
 
+- `id`
 - `type`
 - `level`
 - `message`
-- `user_id`
 - `organizacion_id`
-- `at`
+- `user_id`
+- `created_at`
 
-Campos recomendados:
+Campos fuertemente recomendados:
 
 - `title`
 - `action`
 - `entity`
 - `meta`
 - `dedupe_key`
+- `group_key`
+
+## Endpoints backend requeridos
+
+### SSE global
+
+- `GET /crm/me/notifications/stream`
+
+Uso:
+
+- entrega realtime inmediata al usuario autenticado
+- publica eventos nuevos creados en BD
+
+### Inbox persistente
+
+- `GET /crm/me/notifications`
+  - lista paginada
+  - filtros por `read`, `type`, `level`, `limit`, `offset`
+- `GET /crm/me/notifications/unread-count`
+  - devuelve contador de no leidas
+- `POST /crm/me/notifications/{id}/read`
+  - marca una como leida
+- `POST /crm/me/notifications/read-all`
+  - marca todas como leidas
+- `POST /crm/me/notifications/{id}/hide`
+  - oculta una del inbox si aplica
+
+Opcional despues:
+
+- `POST /crm/me/notifications/mark-toast-shown`
+- `GET /crm/me/notifications/preferences`
+- `PUT /crm/me/notifications/preferences`
+
+## Servicio backend requerido
+
+Crear un servicio reusable, por ejemplo:
+
+- `backend/app/services/user_notifications.py`
+
+Responsabilidades:
+
+- construir payload uniforme
+- insertar notificacion en repositorio
+- deduplicar por `dedupe_key` si corresponde
+- publicar SSE al usuario
+- centralizar reglas de agrupacion si despues se mueven al backend
+
+Helpers propuestos:
+
+- `create_user_notification(...)`
+- `publish_user_notification(...)`
+- `create_and_publish_user_notification(...)`
+- `build_notification_from_scraper_job(...)`
+- `build_notification_from_lookup_job(...)`
+
+Principio:
+
+- los modulos de negocio no deben saber de UI en detalle
+- solo deben invocar un helper comun de notificaciones
+
+## Cambios requeridos en repositorio/backend
+
+### Repositorio
+
+Agregar metodos en `CRMRepository` para:
+
+- insertar notificaciones
+- listar notificaciones por usuario
+- contar no leidas
+- marcar leida
+- marcar todas leidas
+- ocultar notificacion
+- buscar por `dedupe_key`
+
+### Router CRM
+
+Agregar endpoints de notificaciones bajo `/crm/me/notifications...`
+
+### Jobs y dominios a migrar
+
+Orden recomendado:
+
+1. `scraper.finished`
+2. `lookup.finished`
+3. `prospeccion_contacto_batch.finished`
+4. `import.finished`
+5. `export.ready`
+6. `job.failed`
+
+## Cambios requeridos en frontend
+
+### Provider global
+
+Mantener `GlobalNotificationsProvider`, pero ampliarlo para:
+
+- consultar notificaciones pendientes al iniciar sesion/cargar layout
+- escuchar SSE global
+- deduplicar eventos ya cargados
+- disparar toast solo cuando corresponda
+- refrescar contador de no leidas
+
+### Centro de notificaciones
+
+Crear componentes globales, por ejemplo:
+
+- `NotificationBell`
+- `NotificationsPanel`
+- `NotificationList`
+- `NotificationItem`
+
+Capacidades minimas:
+
+- badge de no leidas
+- listado paginado/scrollable
+- marcar individual como leida
+- marcar todas como leidas
+- abrir accion asociada
+- resaltar errores y advertencias
+
+### Reglas UX recomendadas
+
+#### Toasts
+
+- mostrar solo eventos importantes o recientes
+- `success`: 8-12 segundos
+- `warning`: 10-12 segundos
+- `error`: persistente hasta cerrar o leer
+- no mostrar una cascada de 20 toasts individuales
+
+#### Agrupacion
+
+Implementar agrupacion visual/logica para eventos repetidos:
+
+- agrupar `scraper.finished` por ventana corta de tiempo
+- mostrar resumen tipo:
+  - `Termino el lote de scraper: 5 completados, 2 con correos, 1 sin resultados, 2 con error.`
+
+#### Inbox
+
+- el inbox debe mostrar cada registro persistente real
+- el toast puede ser individual o resumido
+- el inbox no debe depender del toast
 
 ## Estrategia de implementacion
 
-### Fase 1. Infraestructura backend para notificaciones globales
+### Fase 1. Esquema y persistencia en BD
 
 Objetivo:
-crear canal SSE global por usuario reutilizable.
+crear la base de datos del sistema profesional.
 
 Cambios:
 
-- Agregar en `ui_realtime_hub.py`:
-  - `user_notifications_topic_for_user(usuario_id: str) -> str`
-- Agregar helper backend:
-  - `publish_user_notification(...)`
-- Crear endpoint SSE nuevo, ejemplo:
-  - `GET /crm/me/notifications/stream`
-- El endpoint debe autenticar usuario, resolver `usuario_id` y suscribirse al topico de ese usuario.
-- Mantener payload JSON uniforme y ping/connected igual que en streams actuales.
+- crear migracion para `public.ui_notificaciones`
+- agregar indices y restricciones
+- definir RLS adecuada o acceso exclusivo via backend service role
 
-Notas:
+Resultado:
 
-- Este endpoint no debe depender de una vista/modulo concreto.
-- Debe funcionar aunque el usuario este en `/dashboard`, `/agenda`, `/inbox`, `/prospeccion/...`, etc.
+- el sistema ya no depende solo de memoria
 
-### Fase 2. Proxy Next para el stream global
+### Fase 2. Repositorio y servicio backend comun
 
 Objetivo:
-exponer el stream desde el panel sin duplicar logica de auth/headers.
+centralizar creacion, lectura y actualizacion de notificaciones.
 
 Cambios:
 
-- Crear route handler en panel, ejemplo:
-  - `frontend/panel/src/app/api/notifications/stream/route.ts`
-- Reusar el patron de `proxyProspeccionStreamingRequest(...)` o extraer un helper mas general para streaming autenticado con `Authorization` y `X-Organizacion-Id`.
+- metodos nuevos en `CRMRepository`
+- servicio `user_notifications.py`
+- helpers para crear + publicar notificaciones
 
-Notas:
+Resultado:
 
-- Conviene dejar helper reutilizable, no otro proxy manual aislado.
+- cualquier modulo puede integrarse sin duplicar logica
 
-### Fase 3. Provider global de frontend
+### Fase 3. Endpoints del inbox
 
 Objetivo:
-mostrar notificaciones en cualquier vista.
+exponer centro de notificaciones persistente.
 
 Cambios:
 
-- Crear algo como:
-  - `frontend/panel/src/components/notifications/global-notifications-provider.tsx`
-- Montarlo en:
-  - `frontend/panel/src/app/layout.tsx`
-- Abrir un unico `EventSource("/api/notifications/stream")`
-- Mantener dedupe por `dedupe_key` o `entity.id + type + status`
-- Renderizar toasts flotantes o integrar `sonner` correctamente a nivel global
+- listar notificaciones
+- contar no leidas
+- marcar leida
+- marcar todas
+- ocultar
 
-Decisiones UI recomendadas:
+Resultado:
 
-- posicion: inferior derecha
-- autocierre: 5-8 segundos
-- accion opcional: boton/link
-- severidades:
-  - `success`
-  - `info`
-  - `warning`
-  - `error`
+- base funcional para campanita + panel
 
-### Fase 4. Migracion del caso actual del scraper
+### Fase 4. Integracion realtime con SSE
 
 Objetivo:
-pasar el caso del scraper al sistema general.
+mantener entrega inmediata.
 
 Cambios:
 
-- En lugar de depender de la vista de prospectos, publicar tambien una notificacion global al `creado_por` del job.
-- El evento debe incluir:
-  - job id
-  - status
-  - total de correos encontrados
-  - link sugerido a historial del buscador
-- Mantener temporalmente el evento local de prospectos si todavia sirve para refresh de esa vista.
+- mantener `GET /crm/me/notifications/stream`
+- publicar SSE cada vez que se cree notificacion persistente
+- asegurar que el frontend no dependa del SSE para enterarse de eventos pasados
 
-Resultado esperado:
+Resultado:
 
-- si el usuario dispara el scraper y luego navega a otra vista, recibira el toast igualmente.
+- realtime + persistencia
 
-### Fase 5. Reutilizacion para otros dominios
+### Fase 5. UI global profesional
 
-Casos candidatos inmediatos:
+Objetivo:
+crear experiencia global consistente.
 
-- `lookup` telefonico terminado
-- lotes de prospeccion/contacto terminados
-- importaciones terminadas
-- exportaciones listas para descargar
-- errores de jobs asincronos
-- `sales_notification_jobs` completados o fallidos cuando aplique
+Cambios:
 
-Regla:
+- campanita global con badge
+- panel dropdown/sheet con historial reciente
+- carga inicial de pendientes
+- toasts globales con dedupe
+- navegacion por acciones
 
-- no publicar directamente desde cada vista
-- publicar desde el backend al canal global por usuario
+Resultado:
 
-### Fase 6. Persistencia opcional (fase posterior)
+- centro de notificaciones reutilizable y visible desde toda la app
 
-Esta fase solo si se requiere historial, badge de "no leidas", centro de notificaciones o auditoria UX.
+### Fase 6. Agrupacion y mejora UX
 
-Propuesta:
+Objetivo:
+reducir ruido y mejorar lectura.
 
-- crear tabla nueva, por ejemplo `public.ui_user_notifications`
-- columnas sugeridas:
-  - `id`
-  - `created_at`
-  - `organizacion_id`
-  - `usuario_id`
-  - `type`
-  - `level`
-  - `title`
-  - `message`
-  - `entity_kind`
-  - `entity_id`
-  - `action_label`
-  - `action_href`
-  - `dedupe_key`
-  - `metadata jsonb`
-  - `read_at`
-  - `dismissed_at`
-- exponer endpoints para listar/marcar leidas/descartar
-- RLS por `usuario_id` y `organizacion_id`
+Cambios:
 
-Importante:
+- agrupar eventos repetitivos por tipo y ventana de tiempo
+- resumir lotes de scraper y lookup
+- duraciones diferenciadas
+- errores persistentes
+- marcar `toast_mostrado_at` cuando aplique
 
-- No es necesario para el MVP.
-- El MVP puede funcionar 100% en memoria mientras el backend este arriba.
+Resultado:
+
+- experiencia visual limpia y logica mas fuerte
+
+### Fase 7. Expansion a otros dominios
+
+Objetivo:
+reutilizar infraestructura.
+
+Migraciones recomendadas:
+
+1. `scraper.finished`
+2. `lookup.finished`
+3. `contact.batch.finished`
+4. `import.finished`
+5. `export.ready`
+6. `integration.error`
 
 ## Diseño de permisos y scope
 
 Requisitos:
 
-- Solo el usuario destinatario debe recibir su notificacion global.
-- Los streams de modulo pueden seguir siendo por organizacion para refresco de datos.
-- Los eventos globales no deben filtrarse a otros usuarios del mismo tenant salvo que el caso de uso lo pida explicitamente.
+- cada notificacion pertenece a un `usuario_id`
+- debe incluir `organizacion_id`
+- el usuario solo ve sus notificaciones
+- no se mezclan con eventos tenant-wide salvo caso explicito
 
 Casos especiales:
 
-- si el evento va dirigido a varios usuarios, publicar una vez por cada `usuario_id`
-- si es evento administrativo/tenant-wide, definirlo explicitamente y no mezclarlo con notificacion personal
+- si un evento va a varios usuarios, se crea un registro por usuario
+- si es un evento organizacional, debe modelarse explicitamente como broadcast tenant-wide y no como notificacion personal improvisada
 
-## Riesgos
+## Riesgos y mitigaciones
 
-### 1. Hub in-memory
+### 1. Hub in-memory actual
 
-El `ui_realtime_hub` actual es in-memory.
+Riesgo:
 
-Impacto:
-
-- si hay mas de un worker/proceso backend, un usuario podria no recibir eventos publicados por otro proceso
-- si el backend reinicia, se pierden eventos en vuelo
+- no sirve como fuente de verdad
+- no garantiza entrega entre procesos si algun dia hay multiples workers
 
 Mitigacion:
 
-- Para MVP y un solo proceso puede ser aceptable.
-- Si el despliegue ya usa multiples workers o escalado horizontal, migrar despues a broker comun (Redis pub/sub o similar).
+- dejar el hub solo para realtime
+- usar BD como fuente canonica
+- si despues hay multiples procesos y se requiere realtime interproceso, agregar Redis pub/sub o equivalente
 
 ### 2. Duplicados
 
-Si se publica por modulo y por usuario, el frontend podria mostrar doble toast.
+Riesgo:
+
+- un mismo evento puede crear varias notificaciones si no hay control
 
 Mitigacion:
 
-- dedupe_key
-- provider global responsable de deduplicar
-- definir si un evento es solo refresh, solo notificacion o ambos
+- `dedupe_key`
+- validacion previa en servicio backend
+- dedupe adicional en frontend
 
 ### 3. Fatiga de notificaciones
 
-Muchos jobs en lote podrian disparar demasiados toasts.
+Riesgo:
+
+- lotes grandes disparan demasiado ruido
 
 Mitigacion:
 
-- agrupar por lote
-- throttle/coalesce en frontend o backend
-- preferir resumen de lote cuando el usuario dispara 20 jobs juntos
+- agrupacion por ventana de tiempo
+- resumenes de lote
+- diferenciar inbox de toast
 
-## Recomendacion final de implementacion
+### 4. Notificaciones perdidas al no estar conectado
 
-### MVP recomendado
+Riesgo:
 
-Implementar primero:
+- el usuario no ve el evento en vivo
 
-1. stream global por usuario
-2. provider global en layout
-3. toast global reutilizable
-4. migrar `scraper.finished` al canal global
-5. agregar `lookup.finished` como segundo caso de prueba
+Mitigacion:
 
-### Que no hacer en el MVP
-
-- no crear aun centro completo de notificaciones
-- no persistir si todavia no se necesita historial
-- no mezclar refresh de vistas con notificacion UX en el mismo contrato logico
+- consulta inicial al inbox persistente
+- badge de no leidas
+- rehidratacion desde BD
 
 ## Validacion propuesta
 
 ### Backend
 
-- usuario autenticado se conecta a `/crm/me/notifications/stream`
-- recibe `connected`
-- al terminar un scraper del que es autor, recibe `scraper.finished`
-- otro usuario del mismo tenant no recibe ese evento
+- crear notificacion persistente desde scraper terminado
+- verificar registro en `ui_notificaciones`
+- verificar que otro usuario del mismo tenant no la vea
+- verificar contador de no leidas
+- verificar `mark as read`
 
 ### Frontend
 
-- con el usuario en cualquier vista del panel, aparece el toast
-- al hacer click en accion, navega a la vista sugerida
-- no se duplica el mismo toast
-- al cambiar de ruta, el stream global sigue vivo
+- abrir cualquier vista del panel
+- lanzar scraper
+- esperar finalizacion
+- validar toast global
+- recargar la app y validar que sigue en el centro de notificaciones si no se marco como leida
+- validar badge de no leidas
 
 ### Integracion
 
-- disparar scraper desde prospectos
-- navegar a dashboard o agenda
-- esperar finalizacion
-- validar toast abajo a la derecha
+- disparar varios scrapers a la vez
+- validar que el inbox tenga todas las notificaciones persistidas
+- validar que el toast se agrupe visualmente
+- validar accion `Ver historial`
 
 ## Archivos probables a tocar
 
-Backend:
+### Base de datos
 
+- nueva migracion en `supabase/migrations/..._ui_notificaciones.sql`
+
+### Backend
+
+- `backend/app/repositories/crm.py`
+- `backend/app/services/user_notifications.py`
 - `backend/app/services/ui_realtime_hub.py`
 - `backend/app/api/routes/crm.py`
 - `backend/app/services/buscador_jobs.py`
-- posiblemente otros servicios de jobs asincronos
+- despues otros servicios de jobs
 
-Frontend:
+### Frontend
 
 - `frontend/panel/src/app/layout.tsx`
 - `frontend/panel/src/components/notifications/global-notifications-provider.tsx`
 - `frontend/panel/src/app/api/notifications/stream/route.ts`
-- helpers de proxy streaming reutilizable si se extraen
+- nuevos componentes de campanita/panel/listado
+- cliente API de notificaciones
 
-Base de datos:
+## Recomendacion final
 
-- Ningun cambio obligatorio para MVP
-- opcional en fase posterior: nueva migracion para `ui_user_notifications`
+Implementar ya el sistema persistente como base oficial.
+
+Orden recomendado de trabajo:
+
+1. migracion `ui_notificaciones`
+2. repositorio y servicio comun de notificaciones
+3. endpoints `/crm/me/notifications*`
+4. integrar `scraper.finished` con persistencia + SSE
+5. campanita global + panel + badge
+6. agrupacion visual/logica de toasts
+7. migrar mas dominios
 
 ## Conclusión
 
-El sistema actual ya tiene la mitad de la infraestructura resuelta:
+El sistema ya tiene una parte realtime inicial, pero para que sea serio y profesional necesita persistencia.
 
-- autenticacion
-- organizacion/scope
-- SSE por modulo
-- hub realtime
-- jobs persistidos con metadatos
+La arquitectura correcta para TalIA es:
 
-Lo que falta es generalizarlo con una capa de notificaciones por usuario. La implementacion recomendada es incremental y de bajo riesgo: agregar un stream global por usuario, montar un provider en el layout y migrar primero el caso del scraper. Desde ahi el sistema queda listo para reutilizarse en otros eventos asincronos del producto.
+- notificacion persistida en BD por usuario
+- entrega realtime por SSE
+- centro global de notificaciones en frontend
+- contrato reusable para cualquier evento asincrono
+
+Con esa base, el sistema deja de depender de que el usuario este conectado justo en el instante del evento y se convierte en infraestructura real del producto.

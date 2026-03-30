@@ -110,6 +110,7 @@ from app.services.openai_reconciliation import sync_openai_cost_reconciliation
 from app.services.ui_realtime_hub import (
     inbox_topic_for_org,
     prospectos_topic_for_org,
+    user_notifications_topic_for_user,
     ui_realtime_hub,
 )
 from app.services.timezone_resolver import local_date_range_to_utc, resolve_timezone_zoneinfo
@@ -17330,6 +17331,50 @@ async def stream_prospectos_updates(
                     event = await asyncio.wait_for(queue.get(), timeout=25)
                 except asyncio.TimeoutError:
                     yield _sse_payload({"type": "ping", "scope": "prospeccion_prospectos"})
+                    continue
+                yield _sse_payload(event)
+        finally:
+            await ui_realtime_hub.unsubscribe(topic, queue)
+
+    headers = {
+        "Cache-Control": "no-cache",
+        "Content-Type": "text/event-stream",
+        "Connection": "keep-alive",
+    }
+    return StreamingResponse(event_generator(), media_type="text/event-stream", headers=headers)
+
+
+@router.get("/me/notifications/stream")
+async def stream_my_notifications(
+    *,
+    user_token: str = Depends(require_user_token),
+) -> StreamingResponse:
+    """Stream SSE global de notificaciones dirigidas al usuario autenticado."""
+
+    user_sub = _jwt_verify_and_sub(user_token)
+    try:
+        usuario_id = UUID(str(user_sub))
+    except (TypeError, ValueError) as exc:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="auth_required") from exc
+
+    topic = user_notifications_topic_for_user(usuario_id=str(usuario_id))
+    queue = await ui_realtime_hub.subscribe(topic)
+
+    async def event_generator() -> Any:
+        try:
+            yield _sse_payload(
+                {
+                    "type": "connected",
+                    "scope": "user_notifications",
+                    "usuario_id": str(usuario_id),
+                    "at": datetime.now(timezone.utc).isoformat(),
+                }
+            )
+            while True:
+                try:
+                    event = await asyncio.wait_for(queue.get(), timeout=25)
+                except asyncio.TimeoutError:
+                    yield _sse_payload({"type": "ping", "scope": "user_notifications"})
                     continue
                 yield _sse_payload(event)
         finally:
