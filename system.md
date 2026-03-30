@@ -39,20 +39,16 @@ EnvironmentFile=/var/www/talia/frontend/panel/.env.local
 # Nota: si `PANEL_API_URL` también existe en `.env.local`, systemd tomará el valor del archivo
 # (por eso conviene que ambos coincidan).
 
-# Crear carpeta de logs (propietario root)
+# Crear carpeta de logs
 ExecStartPre=/usr/bin/mkdir -p /var/www/talia/logs
-ExecStartPre=/usr/bin/touch /var/www/talia/logs/panel.log
-ExecStartPre=/usr/bin/touch /var/www/talia/logs/panel-error.log
 
-# Usamos npm global (ajusta si `which npm` te da otra ruta)
-ExecStart=/usr/bin/npm run start -- -p 3001
+# El shell abre los logs como el usuario del servicio y evita que queden root:root.
+ExecStart=/bin/bash -lc '/usr/bin/npm run start -- -p 3001 >> /var/www/talia/logs/panel.log 2>> /var/www/talia/logs/panel-error.log'
 
 Restart=on-failure
 RestartSec=5
-User=root
-
-StandardOutput=append:/var/www/talia/logs/panel.log
-StandardError=append:/var/www/talia/logs/panel-error.log
+User=jorge
+Group=jorge
 
 [Install]
 WantedBy=multi-user.target
