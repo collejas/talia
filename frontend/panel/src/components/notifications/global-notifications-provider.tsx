@@ -52,7 +52,7 @@ type BufferedGroup = {
 
 const PAGE_SIZE = 20
 const MAX_CACHE_ITEMS = 200
-const GROUPABLE_TYPES = new Set(["scraper.finished", "lookup.finished", "inbox.message"])
+const GROUPABLE_TYPES = new Set(["scraper.finished", "lookup.finished", "inbox.message", "opportunity.created"])
 const GROUP_FLUSH_MS = 6000
 
 function pluralize(count: number, singular: string, plural?: string) {
@@ -93,6 +93,13 @@ function summarizeGroupedNotifications(type: string, items: NotificationItem[]) 
       title: "Mensajes nuevos en Inbox",
       description: `${pluralize(items.length, "mensaje")} nuevo${items.length === 1 ? "" : "s"}.`,
       level: items.some((item) => item.level === "error") ? "warning" : "info",
+    }
+  }
+  if (type === "opportunity.created") {
+    return {
+      title: "Oportunidades nuevas",
+      description: `${pluralize(items.length, "oportunidad")} creada${items.length === 1 ? "" : "s"}.`,
+      level: items.some((item) => item.level === "error") ? "warning" : "success",
     }
   }
   return {

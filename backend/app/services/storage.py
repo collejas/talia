@@ -217,6 +217,28 @@ async def _resolve_inbox_notification_users(
         return []
 
 
+async def _resolve_opportunity_notification_users(
+    *,
+    repo: CRMRepository,
+    organizacion_id: UUID,
+    assigned_user_id: UUID | None,
+) -> list[UUID]:
+    if not assigned_user_id:
+        return []
+    recipients: list[UUID] = [assigned_user_id]
+    try:
+        supervisors = await repo.list_supervisor_user_ids_for_sales_rep(
+            organizacion_id=organizacion_id,
+            empleado_usuario_id=assigned_user_id,
+        )
+    except CRMRepositoryError:
+        supervisors = []
+    for supervisor_id in supervisors:
+        if supervisor_id not in recipients:
+            recipients.append(supervisor_id)
+    return recipients
+
+
 async def _notify_inbox_message(
     *,
     repo: CRMRepository,
@@ -2488,6 +2510,81 @@ async def ensure_conversation_opportunity(
         )
     except CRMRepositoryError as exc:
         raise StorageError(str(exc)) from exc
+
+    created_new = restart_created
+    if not created_new:
+        try:
+            existing_by_conversation = await repo.list_opportunities_by_conversation_ids(
+                organizacion_id=organizacion_uuid,
+                conversation_ids=[conversation_id],
+                limit=1,
+            )
+        except CRMRepositoryError:
+            existing_by_conversation = []
+        if existing_by_conversation:
+            created_new = False
+        else:
+            try:
+                existing_contact_opportunity = await repo.get_contact_opportunity(
+                    contact_id=contacto_uuid,
+                )
+            except CRMRepositoryError:
+                existing_contact_opportunity = None
+            if existing_contact_opportunity and str(existing_contact_opportunity.get("id")) == str(opportunity_id):
+                created_new = False
+            else:
+                created_new = True
+
+    if created_new and normalized_channel in {"webchat", "whatsapp"}:
+        try:
+            opportunity = await repo.get_pipeline_opportunity(
+                organizacion_id=organizacion_uuid,
+                oportunidad_id=opportunity_id,
+            )
+        except CRMRepositoryError:
+            opportunity = None
+        if isinstance(opportunity, dict):
+            assigned_id = _safe_uuid(opportunity.get("asignado_a_usuario_id"))
+            recipients = await _resolve_opportunity_notification_users(
+                repo=repo,
+                organizacion_id=organizacion_uuid,
+                assigned_user_id=assigned_id,
+            )
+            if recipients:
+                channel_label = _normalize_channel_label(channel)
+                title_value = _clean_text(opportunity.get("titulo")) or "Oportunidad nueva"
+                message = f"{channel_label}: {title_value}"
+                meta = {
+                    "channel": normalized_channel,
+                    "conversation_id": conversation_id,
+                    "contact_id": contact_id,
+                    "opportunity_id": str(opportunity_id),
+                }
+                for usuario_id in recipients:
+                    try:
+                        await create_and_publish_user_notification(
+                            repo=repo,
+                            notification=UserNotificationCreate(
+                                organizacion_id=organizacion_uuid,
+                                usuario_id=usuario_id,
+                                type="opportunity.created",
+                                level="success",
+                                title="Nueva oportunidad creada",
+                                message=message,
+                                category="pipeline",
+                                entity_kind="opportunity",
+                                entity_id=str(opportunity_id),
+                                action=UserNotificationAction(
+                                    label="Ver oportunidad",
+                                    href=f"/embudo?oportunidadId={opportunity_id}",
+                                ),
+                                meta=meta,
+                                dedupe_key=f"opportunity.created:{opportunity_id}",
+                                group_key=f"opportunity.created:{assigned_id or 'unassigned'}",
+                            ),
+                        )
+                    except CRMRepositoryError:
+                        continue
     if include_restart_metadata:
         return {
             "oportunidad_id": str(opportunity_id),

@@ -31,7 +31,7 @@ import {
 import { cn } from "@/lib/utils"
 import type { NotificationItem } from "@/lib/notifications/client"
 
-const GROUPABLE_TYPES = new Set(["scraper.finished", "lookup.finished", "inbox.message"])
+const GROUPABLE_TYPES = new Set(["scraper.finished", "lookup.finished", "inbox.message", "opportunity.created"])
 
 function formatDateTime(value: string | null | undefined) {
   if (!value) return ""
@@ -82,6 +82,13 @@ function summarizeGroup(type: string, items: NotificationItem[]) {
       title: "Mensajes nuevos en Inbox",
       description: `${pluralize(items.length, "mensaje")} nuevo${items.length === 1 ? "" : "s"}.`,
       level: (items.some((item) => item.level === "error") ? "warning" : "info") as NotificationItem["level"],
+    }
+  }
+  if (type === "opportunity.created") {
+    return {
+      title: "Oportunidades nuevas",
+      description: `${pluralize(items.length, "oportunidad")} creada${items.length === 1 ? "" : "s"}.`,
+      level: (items.some((item) => item.level === "error") ? "warning" : "success") as NotificationItem["level"],
     }
   }
   return {

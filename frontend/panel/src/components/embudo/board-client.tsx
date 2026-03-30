@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { useSearchParams } from "next/navigation";
 import {
   DndContext,
   DragOverlay,
@@ -248,6 +249,46 @@ export function EmbudoBoardClient({
   const [boardFetchError, setBoardFetchError] = useState<string | null>(null);
   const hasMountedRef = useRef(false);
   const boardFetchInFlightRef = useRef(false);
+  const searchParams = useSearchParams();
+  const pendingOpenIdRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (pendingOpenIdRef.current) return;
+    const fromQuery =
+      searchParams.get("oportunidadId") ||
+      searchParams.get("oportunidad_id") ||
+      searchParams.get("leadId") ||
+      searchParams.get("lead_id");
+    if (fromQuery && fromQuery.trim()) {
+      pendingOpenIdRef.current = fromQuery.trim();
+    }
+  }, [searchParams]);
+
+  useEffect(() => {
+    const targetId = pendingOpenIdRef.current;
+    if (!targetId) return;
+    if (!stages.length) return;
+    if (drawerOpen) return;
+
+    let targetStage: EmbudoStage | null = null;
+    let targetCard: EmbudoCard | null = null;
+    for (const stage of stages) {
+      const card = (stage.tarjetas ?? []).find((item) => item.oportunidadId === targetId);
+      if (card) {
+        targetStage = stage;
+        targetCard = card;
+        break;
+      }
+    }
+    if (!targetStage || !targetCard) {
+      return;
+    }
+    setSelectedStage(targetStage);
+    setSelectedCard(targetCard);
+    setDrawerMode("edit");
+    setDrawerOpen(true);
+    pendingOpenIdRef.current = null;
+  }, [drawerOpen, stages]);
 
   const scheduleMinValue = useMemo(() => toDateTimeLocalInput(new Date().toISOString()), []);
 
