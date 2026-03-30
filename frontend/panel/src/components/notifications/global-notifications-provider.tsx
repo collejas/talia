@@ -42,10 +42,16 @@ type GlobalNotificationsProviderProps = {
 type BufferedGroup = {
   items: NotificationItem[]
   timer: ReturnType<typeof setTimeout>
+  toastId: string
 }
 
 const INITIAL_LIMIT = 20
 const GROUPABLE_TYPES = new Set(["scraper.finished", "lookup.finished"])
+const GROUP_FLUSH_MS = 6000
+
+function pluralize(count: number, singular: string, plural?: string) {
+  return `${count} ${count === 1 ? singular : plural ?? `${singular}s`}`
+}
 
 function summarizeGroupedNotifications(type: string, items: NotificationItem[]) {
   if (type === "scraper.finished") {
@@ -54,20 +60,32 @@ function summarizeGroupedNotifications(type: string, items: NotificationItem[]) 
     const error = items.filter((item) => item.level === "error").length
     const withEmails = items.filter((item) => Number(item.meta?.emails_total ?? 0) > 0).length
     const withoutEmails = success - withEmails
+    const totalEmails = items.reduce((sum, item) => sum + Number(item.meta?.emails_total ?? 0), 0)
     return {
       title: "Lote de scraper terminado",
-      description: `${total} eventos: ${withEmails} con correos, ${Math.max(withoutEmails, 0)} sin hallazgos, ${error} con error.`,
+      description: [
+        pluralize(total, "scraper"),
+        `${withEmails} con correos`,
+        `${Math.max(withoutEmails, 0)} sin hallazgos`,
+        `${error} con error`,
+        totalEmails > 0 ? `${pluralize(totalEmails, "correo")}` : null,
+      ]
+        .filter(Boolean)
+        .join(", "),
+      level: error > 0 ? (success > 0 ? "warning" : "error") : "success",
     }
   }
   if (type === "lookup.finished") {
     return {
       title: "Lote de verificacion terminado",
-      description: `${items.length} eventos finalizados.`,
+      description: `${pluralize(items.length, "verificacion")} finalizadas.`,
+      level: items.some((item) => item.level === "error") ? "warning" : "success",
     }
   }
   return {
     title: "Notificaciones agrupadas",
-    description: `${items.length} eventos nuevos.`,
+    description: `${pluralize(items.length, "evento")} nuevos.`,
+    level: "info",
   }
 }
 
@@ -155,34 +173,122 @@ export function GlobalNotificationsProvider({ children }: GlobalNotificationsPro
     [router]
   )
 
+  const showSummaryToast = useCallback(
+    (
+      summary: ReturnType<typeof summarizeGroupedNotifications>,
+      {
+        id,
+        action,
+        pending,
+      }: {
+        id: string
+        action: NotificationItem["action"] | null | undefined
+        pending: boolean
+      }
+    ) => {
+      const actionLabel = (action?.label ?? "").trim()
+      const actionHref = (action?.href ?? "").trim()
+      const toastOptions =
+        actionLabel && actionHref
+          ? {
+              action: {
+                label: actionLabel,
+                onClick: () => router.push(actionHref),
+              },
+            }
+          : undefined
+      const duration = pending ? Infinity : summary.level === "error" ? Infinity : 16000
+
+      if (summary.level === "error") {
+        toast.error(summary.title, {
+          id,
+          description: summary.description,
+          duration,
+          ...toastOptions,
+        })
+        return
+      }
+      if (summary.level === "warning") {
+        toast.warning(summary.title, {
+          id,
+          description: summary.description,
+          duration,
+          ...toastOptions,
+        })
+        return
+      }
+      if (summary.level === "success") {
+        toast.success(summary.title, {
+          id,
+          description: summary.description,
+          duration,
+          ...toastOptions,
+        })
+        return
+      }
+      toast(summary.title, {
+        id,
+        description: summary.description,
+        duration,
+        ...toastOptions,
+      })
+    },
+    [router]
+  )
+
   const enqueueToast = useCallback(
     (payload: NotificationItem) => {
       if (!GROUPABLE_TYPES.has(payload.type)) {
         showImmediateToast(payload)
         return
       }
-      const group = groupedRef.current.get(payload.type)
+      const groupKey = (payload.group_key ?? "").trim() || payload.type
+      const toastId = `notification-group:${groupKey}`
+      const group = groupedRef.current.get(groupKey)
       if (group) {
+        clearTimeout(group.timer)
         group.items.push(payload)
+        const summary = summarizeGroupedNotifications(payload.type, group.items)
+        showSummaryToast(summary, {
+          id: group.toastId,
+          action: payload.action ?? group.items[0]?.action,
+          pending: true,
+        })
+        group.timer = setTimeout(() => {
+          const current = groupedRef.current.get(groupKey)
+          if (!current) return
+          groupedRef.current.delete(groupKey)
+          if (current.items.length <= 1) {
+            showImmediateToast(current.items[0])
+            return
+          }
+          const finalSummary = summarizeGroupedNotifications(payload.type, current.items)
+          showSummaryToast(finalSummary, {
+            id: current.toastId,
+            action: current.items[current.items.length - 1]?.action ?? current.items[0]?.action,
+            pending: false,
+          })
+        }, GROUP_FLUSH_MS)
         return
       }
       const timer = setTimeout(() => {
-        const current = groupedRef.current.get(payload.type)
+        const current = groupedRef.current.get(groupKey)
         if (!current) return
-        groupedRef.current.delete(payload.type)
+        groupedRef.current.delete(groupKey)
         if (current.items.length <= 1) {
           showImmediateToast(current.items[0])
           return
         }
         const summary = summarizeGroupedNotifications(payload.type, current.items)
-        toast(summary.title, {
-          description: summary.description,
-          duration: 12000,
+        showSummaryToast(summary, {
+          id: current.toastId,
+          action: current.items[current.items.length - 1]?.action ?? current.items[0]?.action,
+          pending: false,
         })
-      }, 3500)
-      groupedRef.current.set(payload.type, { items: [payload], timer })
+      }, GROUP_FLUSH_MS)
+      groupedRef.current.set(groupKey, { items: [payload], timer, toastId })
     },
-    [showImmediateToast]
+    [showImmediateToast, showSummaryToast]
   )
 
   useEffect(() => {
@@ -243,7 +349,7 @@ export function GlobalNotificationsProvider({ children }: GlobalNotificationsPro
   return (
     <NotificationsContext.Provider value={value}>
       {children}
-      <Toaster position="bottom-right" richColors closeButton />
+      <Toaster position="bottom-right" richColors closeButton visibleToasts={2} />
     </NotificationsContext.Provider>
   )
 }
