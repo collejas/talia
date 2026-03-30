@@ -10282,6 +10282,171 @@ class CRMRepository:
             raise CRMRepositoryError(f"preferencia_usuario_upsert_invalid:{row!r}")
         return row
 
+    async def create_ui_notification(
+        self,
+        *,
+        payload: dict[str, Any],
+    ) -> dict[str, Any]:
+        resp = await self._request(
+            "POST",
+            "/rest/v1/ui_notificaciones",
+            json=[payload],
+            prefer="return=representation",
+        )
+        data = resp.json() or []
+        row = self._first_row(data)
+        if not isinstance(row, dict):
+            raise CRMRepositoryError("ui_notification_create_failed")
+        return row
+
+    async def list_ui_notifications(
+        self,
+        *,
+        usuario_id: UUID,
+        organizacion_id: UUID,
+        limit: int = 20,
+        offset: int = 0,
+        unread_only: bool = False,
+        tipos: Sequence[str] | None = None,
+        niveles: Sequence[str] | None = None,
+        include_hidden: bool = False,
+    ) -> tuple[list[dict[str, Any]], int]:
+        limit_value = max(1, min(limit, 200))
+        offset_value = max(0, offset)
+        params: dict[str, str] = {
+            "usuario_id": f"eq.{usuario_id}",
+            "organizacion_id": f"eq.{organizacion_id}",
+            "order": "created_at.desc",
+            "limit": str(limit_value),
+        }
+        if offset_value:
+            params["offset"] = str(offset_value)
+        if unread_only:
+            params["read_at"] = "is.null"
+        if not include_hidden:
+            params["hidden_at"] = "is.null"
+        if tipos:
+            normalized_tipos = [str(item).strip() for item in tipos if str(item).strip()]
+            if normalized_tipos:
+                params["tipo"] = _postgrest_in_clause(normalized_tipos)
+        if niveles:
+            normalized_niveles = [str(item).strip() for item in niveles if str(item).strip()]
+            if normalized_niveles:
+                params["nivel"] = _postgrest_in_clause(normalized_niveles)
+
+        resp = await self._request(
+            "GET",
+            "/rest/v1/ui_notificaciones",
+            params=params,
+            prefer="count=exact",
+        )
+        data = resp.json() or []
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"ui_notification_list_invalid:{data!r}")
+        total = self._extract_total_count(resp.headers.get("content-range"))
+        total_value = total if total is not None else len(data)
+        return [row for row in data if isinstance(row, dict)], total_value
+
+    async def count_ui_notifications_unread(
+        self,
+        *,
+        usuario_id: UUID,
+        organizacion_id: UUID,
+    ) -> int:
+        resp = await self._request(
+            "GET",
+            "/rest/v1/ui_notificaciones",
+            params={
+                "select": "id",
+                "usuario_id": f"eq.{usuario_id}",
+                "organizacion_id": f"eq.{organizacion_id}",
+                "read_at": "is.null",
+                "hidden_at": "is.null",
+                "limit": "1",
+            },
+            prefer="count=exact",
+        )
+        total = self._extract_total_count(resp.headers.get("content-range"))
+        return int(total or 0)
+
+    async def mark_ui_notification_read(
+        self,
+        *,
+        notification_id: UUID,
+        usuario_id: UUID,
+        organizacion_id: UUID,
+        read_at: datetime | None = None,
+    ) -> dict[str, Any] | None:
+        resp = await self._request(
+            "PATCH",
+            "/rest/v1/ui_notificaciones",
+            params={
+                "id": f"eq.{notification_id}",
+                "usuario_id": f"eq.{usuario_id}",
+                "organizacion_id": f"eq.{organizacion_id}",
+            },
+            json={"read_at": (read_at or datetime.now(timezone.utc)).isoformat()},
+            prefer="return=representation",
+        )
+        data = resp.json() or []
+        row = self._first_row(data)
+        if row is None:
+            return None
+        if not isinstance(row, dict):
+            raise CRMRepositoryError(f"ui_notification_mark_read_invalid:{row!r}")
+        return row
+
+    async def mark_all_ui_notifications_read(
+        self,
+        *,
+        usuario_id: UUID,
+        organizacion_id: UUID,
+        read_at: datetime | None = None,
+    ) -> int:
+        resp = await self._request(
+            "PATCH",
+            "/rest/v1/ui_notificaciones",
+            params={
+                "usuario_id": f"eq.{usuario_id}",
+                "organizacion_id": f"eq.{organizacion_id}",
+                "read_at": "is.null",
+                "hidden_at": "is.null",
+            },
+            json={"read_at": (read_at or datetime.now(timezone.utc)).isoformat()},
+            prefer="return=representation",
+        )
+        data = resp.json() or []
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"ui_notification_mark_all_read_invalid:{data!r}")
+        return len(data)
+
+    async def hide_ui_notification(
+        self,
+        *,
+        notification_id: UUID,
+        usuario_id: UUID,
+        organizacion_id: UUID,
+        hidden_at: datetime | None = None,
+    ) -> dict[str, Any] | None:
+        resp = await self._request(
+            "PATCH",
+            "/rest/v1/ui_notificaciones",
+            params={
+                "id": f"eq.{notification_id}",
+                "usuario_id": f"eq.{usuario_id}",
+                "organizacion_id": f"eq.{organizacion_id}",
+            },
+            json={"hidden_at": (hidden_at or datetime.now(timezone.utc)).isoformat()},
+            prefer="return=representation",
+        )
+        data = resp.json() or []
+        row = self._first_row(data)
+        if row is None:
+            return None
+        if not isinstance(row, dict):
+            raise CRMRepositoryError(f"ui_notification_hide_invalid:{row!r}")
+        return row
+
     async def worker_get_prospecto(
         self,
         *,

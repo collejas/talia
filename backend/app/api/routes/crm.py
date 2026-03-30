@@ -113,6 +113,7 @@ from app.services.ui_realtime_hub import (
     user_notifications_topic_for_user,
     ui_realtime_hub,
 )
+from app.services.user_notifications import user_notification_row_to_event
 from app.services.timezone_resolver import local_date_range_to_utc, resolve_timezone_zoneinfo
 from app.services.storage import StorageError
 from app.logging.catalog_debug import write_catalog_debug_entry
@@ -17386,6 +17387,130 @@ async def stream_my_notifications(
         "Connection": "keep-alive",
     }
     return StreamingResponse(event_generator(), media_type="text/event-stream", headers=headers)
+
+
+def _current_usuario_id_from_token(user_token: str) -> UUID:
+    user_sub = _jwt_verify_and_sub(user_token)
+    try:
+        return UUID(str(user_sub))
+    except (TypeError, ValueError) as exc:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="auth_required") from exc
+
+
+@router.get("/me/notifications")
+async def list_my_notifications(
+    *,
+    limit: int = Query(20, ge=1, le=200),
+    offset: int = Query(0, ge=0, le=10_000),
+    unread_only: bool = Query(False),
+    include_hidden: bool = Query(False),
+    type: list[str] | None = Query(None),
+    level: list[str] | None = Query(None),
+    repo: CRMRepository = Depends(get_repository),
+    user_token: str = Depends(require_user_token),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+) -> dict[str, Any]:
+    usuario_id = _current_usuario_id_from_token(user_token)
+    try:
+        rows, total = await repo.list_ui_notifications(
+            usuario_id=usuario_id,
+            organizacion_id=organizacion_id,
+            limit=limit,
+            offset=offset,
+            unread_only=unread_only,
+            tipos=type,
+            niveles=level,
+            include_hidden=include_hidden,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return {
+        "ok": True,
+        "items": [user_notification_row_to_event(row) for row in rows],
+        "total": total,
+        "limit": limit,
+        "offset": offset,
+    }
+
+
+@router.get("/me/notifications/unread-count")
+async def get_my_notifications_unread_count(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    user_token: str = Depends(require_user_token),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+) -> dict[str, Any]:
+    usuario_id = _current_usuario_id_from_token(user_token)
+    try:
+        total = await repo.count_ui_notifications_unread(
+            usuario_id=usuario_id,
+            organizacion_id=organizacion_id,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return {"ok": True, "unread": total}
+
+
+@router.post("/me/notifications/{notification_id}/read")
+async def mark_my_notification_read(
+    *,
+    notification_id: UUID,
+    repo: CRMRepository = Depends(get_repository),
+    user_token: str = Depends(require_user_token),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+) -> dict[str, Any]:
+    usuario_id = _current_usuario_id_from_token(user_token)
+    try:
+        row = await repo.mark_ui_notification_read(
+            notification_id=notification_id,
+            usuario_id=usuario_id,
+            organizacion_id=organizacion_id,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    if row is None:
+        raise HTTPException(status_code=404, detail="notification_not_found")
+    return {"ok": True, "item": user_notification_row_to_event(row)}
+
+
+@router.post("/me/notifications/read-all")
+async def mark_all_my_notifications_read(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    user_token: str = Depends(require_user_token),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+) -> dict[str, Any]:
+    usuario_id = _current_usuario_id_from_token(user_token)
+    try:
+        updated = await repo.mark_all_ui_notifications_read(
+            usuario_id=usuario_id,
+            organizacion_id=organizacion_id,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return {"ok": True, "updated": updated}
+
+
+@router.post("/me/notifications/{notification_id}/hide")
+async def hide_my_notification(
+    *,
+    notification_id: UUID,
+    repo: CRMRepository = Depends(get_repository),
+    user_token: str = Depends(require_user_token),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+) -> dict[str, Any]:
+    usuario_id = _current_usuario_id_from_token(user_token)
+    try:
+        row = await repo.hide_ui_notification(
+            notification_id=notification_id,
+            usuario_id=usuario_id,
+            organizacion_id=organizacion_id,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    if row is None:
+        raise HTTPException(status_code=404, detail="notification_not_found")
+    return {"ok": True, "item": user_notification_row_to_event(row)}
 
 
 @router.get("/prospeccion/prospectos/preferences")

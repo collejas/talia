@@ -18,10 +18,11 @@ from app.services.buscador_runner import (
     BuscadorRunResult,
     run_buscador,
 )
-from app.services.ui_realtime_hub import (
-    prospectos_topic_for_org,
-    ui_realtime_hub,
-    user_notifications_topic_for_user,
+from app.services.ui_realtime_hub import prospectos_topic_for_org, ui_realtime_hub
+from app.services.user_notifications import (
+    UserNotificationAction,
+    UserNotificationCreate,
+    create_and_publish_user_notification,
 )
 
 logger = get_logger(__name__)
@@ -215,28 +216,33 @@ class BuscadorJobManager:
                 message = "El scraper terminó con error. Revisa el historial del buscador."
             else:
                 message = f"El scraper terminó con estado {status}."
-            await ui_realtime_hub.publish(
-                user_notifications_topic_for_user(usuario_id=str(job.creado_por)),
-                {
-                    "type": "scraper.finished",
-                    "level": level,
-                    "title": "Scraper terminado",
-                    "message": message,
-                    "organizacion_id": str(job.organizacion_id),
-                    "user_id": str(job.creado_por),
-                    "entity": {
-                        "kind": "buscador_job",
-                        "id": str(job.id),
-                    },
-                    "action": {
-                        "label": "Ver historial",
-                        "href": "/prospeccion/buscador",
-                    },
-                    "meta": payload,
-                    "dedupe_key": f"scraper.finished:{job.id}:{status}",
-                    "at": datetime.now(timezone.utc).isoformat(),
-                },
-            )
+            try:
+                await create_and_publish_user_notification(
+                    repo=repo,
+                    notification=UserNotificationCreate(
+                        organizacion_id=job.organizacion_id,
+                        usuario_id=job.creado_por,
+                        type="scraper.finished",
+                        level=level,
+                        title="Scraper terminado",
+                        message=message,
+                        category="prospeccion",
+                        entity_kind="buscador_job",
+                        entity_id=str(job.id),
+                        action=UserNotificationAction(
+                            label="Ver historial",
+                            href="/prospeccion/buscador",
+                        ),
+                        meta=payload,
+                        dedupe_key=f"scraper.finished:{job.id}:{status}",
+                        group_key=f"scraper.finished:{job.metadata.get('fuente') or 'default'}",
+                    ),
+                )
+            except CRMRepositoryError as exc:
+                logger.warning(
+                    "buscador.user_notification_create_failed",
+                    extra={"job_id": str(job.id), "error": str(exc)},
+                )
 
     async def _store_results(
         self,
