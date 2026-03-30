@@ -95,6 +95,7 @@ export function NotificationCenter() {
     loadMore,
     hasMore,
     unreadOnly,
+    levelFilter,
     markAsRead,
     markAllAsRead,
     hideItem,
@@ -250,6 +251,18 @@ export function NotificationCenter() {
                 disabled={loading}
               >
                 {unreadOnly ? "Mostrando no leidas" : "Solo no leidas"}
+              </Button>
+              <Button
+                variant={levelFilter?.includes("error") ? "default" : "outline"}
+                size="sm"
+                onClick={() =>
+                  void refresh({
+                    levels: levelFilter?.includes("error") ? null : ["error"],
+                  })
+                }
+                disabled={loading}
+              >
+                {levelFilter?.includes("error") ? "Mostrando errores" : "Solo errores"}
               </Button>
               <Button variant="ghost" size="sm" onClick={() => void markAllAsRead()} disabled={!unreadCount}>
                 Marcar todas

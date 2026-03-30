@@ -26,10 +26,11 @@ type NotificationsContextValue = {
   unreadCount: number
   totalCount: number
   loading: boolean
-  refresh: (options?: { unreadOnly?: boolean }) => Promise<void>
+  refresh: (options?: { unreadOnly?: boolean; levels?: string[] | null }) => Promise<void>
   loadMore: () => Promise<void>
   hasMore: boolean
   unreadOnly: boolean
+  levelFilter: string[] | null
   markAsRead: (notificationId: string) => Promise<void>
   markAllAsRead: () => Promise<void>
   hideItem: (notificationId: string) => Promise<void>
@@ -101,16 +102,23 @@ export function GlobalNotificationsProvider({ children }: GlobalNotificationsPro
   const [totalCount, setTotalCount] = useState(0)
   const [loading, setLoading] = useState(true)
   const [unreadOnly, setUnreadOnly] = useState(false)
+  const [levelFilter, setLevelFilter] = useState<string[] | null>(null)
   const [offset, setOffset] = useState(0)
   const seenRef = useRef<Set<string>>(new Set())
   const groupedRef = useRef<Map<string, BufferedGroup>>(new Map())
 
-  const refresh = useCallback(async (options?: { unreadOnly?: boolean }) => {
+  const refresh = useCallback(async (options?: { unreadOnly?: boolean; levels?: string[] | null }) => {
     const nextUnreadOnly = options?.unreadOnly ?? unreadOnly
+    const nextLevels = options?.levels ?? levelFilter
     setLoading(true)
     try {
       const [notifications, unread] = await Promise.all([
-        fetchNotifications({ limit: PAGE_SIZE, offset: 0, unreadOnly: nextUnreadOnly }),
+        fetchNotifications({
+          limit: PAGE_SIZE,
+          offset: 0,
+          unreadOnly: nextUnreadOnly,
+          levels: nextLevels ?? undefined,
+        }),
         fetchNotificationsUnreadCount(),
       ])
       setItems(notifications.items ?? [])
@@ -118,6 +126,7 @@ export function GlobalNotificationsProvider({ children }: GlobalNotificationsPro
       setUnreadCount(unread)
       setOffset((notifications.items ?? []).length)
       setUnreadOnly(nextUnreadOnly)
+      setLevelFilter(nextLevels ?? null)
       const nextSeen = new Set<string>()
       for (const item of notifications.items ?? []) {
         const dedupeKey = (item.dedupe_key ?? "").trim()
@@ -129,7 +138,7 @@ export function GlobalNotificationsProvider({ children }: GlobalNotificationsPro
     } finally {
       setLoading(false)
     }
-  }, [unreadOnly])
+  }, [unreadOnly, levelFilter])
 
   const loadMore = useCallback(async () => {
     if (loading) return
@@ -139,6 +148,7 @@ export function GlobalNotificationsProvider({ children }: GlobalNotificationsPro
         limit: PAGE_SIZE,
         offset,
         unreadOnly,
+        levels: levelFilter ?? undefined,
       })
       const nextItems = notifications.items ?? []
       setItems((prev) => {
@@ -155,7 +165,7 @@ export function GlobalNotificationsProvider({ children }: GlobalNotificationsPro
     } finally {
       setLoading(false)
     }
-  }, [loading, offset, unreadOnly])
+  }, [loading, offset, unreadOnly, levelFilter])
 
   const markAsRead = useCallback(async (notificationId: string) => {
     const updated = await markNotificationRead(notificationId)
@@ -384,6 +394,7 @@ export function GlobalNotificationsProvider({ children }: GlobalNotificationsPro
       loadMore,
       hasMore: offset < totalCount,
       unreadOnly,
+      levelFilter,
       markAsRead,
       markAllAsRead,
       hideItem,
@@ -400,6 +411,7 @@ export function GlobalNotificationsProvider({ children }: GlobalNotificationsPro
       totalCount,
       offset,
       unreadOnly,
+      levelFilter,
     ]
   )
 

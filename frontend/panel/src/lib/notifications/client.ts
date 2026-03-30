@@ -53,11 +53,17 @@ export async function fetchNotifications(params?: {
   limit?: number
   offset?: number
   unreadOnly?: boolean
+  levels?: string[] | null
 }): Promise<NotificationsListResponse> {
   const search = new URLSearchParams()
   if (typeof params?.limit === "number") search.set("limit", String(params.limit))
   if (typeof params?.offset === "number") search.set("offset", String(params.offset))
   if (params?.unreadOnly) search.set("unread_only", "true")
+  if (params?.levels && params.levels.length) {
+    for (const level of params.levels) {
+      if (level) search.append("level", level)
+    }
+  }
   const suffix = search.size ? `?${search.toString()}` : ""
   const response = await fetch(`/api/notifications${suffix}`, {
     method: "GET",
