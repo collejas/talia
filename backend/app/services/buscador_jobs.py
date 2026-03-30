@@ -18,6 +18,7 @@ from app.services.buscador_runner import (
     BuscadorRunResult,
     run_buscador,
 )
+from app.services.ui_realtime_hub import prospectos_topic_for_org, ui_realtime_hub
 
 logger = get_logger(__name__)
 
@@ -34,6 +35,7 @@ class QueuedBuscadorJob:
     id: UUID
     organizacion_id: UUID | None
     params: BuscadorParams
+    metadata: dict[str, Any]
 
 
 @dataclass(slots=True)
@@ -60,7 +62,13 @@ class BuscadorJobManager:
             logger.error("buscador.invalid_job_id", extra={"job_id": job_row.get("id")})
             return
         organizacion_id = _safe_uuid(job_row.get("organizacion_id"))
-        job = QueuedBuscadorJob(id=job_id, organizacion_id=organizacion_id, params=params)
+        metadata = job_row.get("metadata") if isinstance(job_row.get("metadata"), dict) else {}
+        job = QueuedBuscadorJob(
+            id=job_id,
+            organizacion_id=organizacion_id,
+            params=params,
+            metadata=metadata,
+        )
         control = BuscadorJobControl()
         task = asyncio.create_task(self._run_job(repo, job, control), name=f"buscador-job-{job_id}")
         self._jobs[job_id] = ManagedBuscadorJob(task=task, control=control)
@@ -107,16 +115,16 @@ class BuscadorJobManager:
         try:
             result = await run_buscador(job.params, control=control)
         except BuscadorRunnerError as exc:
-            await self._mark_job_failed(repo, job.id, str(exc))
+            await self._mark_job_failed(repo, job, str(exc))
             return
         except Exception as exc:  # pragma: no cover - error inesperado
-            await self._mark_job_failed(repo, job.id, str(exc))
+            await self._mark_job_failed(repo, job, str(exc))
             return
 
         try:
             await self._store_results(repo, job, result)
         except CRMRepositoryError as exc:  # pragma: no cover - red externa
-            await self._mark_job_failed(repo, job.id, f"store_results_failed:{exc}")
+            await self._mark_job_failed(repo, job, f"store_results_failed:{exc}")
             return
 
         finish_iso = datetime.now(timezone.utc).isoformat()
@@ -142,16 +150,50 @@ class BuscadorJobManager:
                 "buscador.job_complete_update_failed",
                 extra={"job_id": str(job.id), "error": str(exc)},
             )
+        await self._publish_job_event(job=job, status=final_status, result=result)
 
-    async def _mark_job_failed(self, repo: CRMRepository, job_id: UUID, error: str) -> None:
+    async def _mark_job_failed(self, repo: CRMRepository, job: QueuedBuscadorJob, error: str) -> None:
         finish_iso = datetime.now(timezone.utc).isoformat()
         try:
             await repo.worker_update_buscador_job(
-                job_id=job_id,
+                job_id=job.id,
                 payload={"status": "failed", "error": error, "finished_at": finish_iso},
             )
         except CRMRepositoryError:  # pragma: no cover - red externa
-            logger.exception("buscador.job_fail_update_failed", extra={"job_id": str(job_id), "error": error})
+            logger.exception("buscador.job_fail_update_failed", extra={"job_id": str(job.id), "error": error})
+        await self._publish_job_event(job=job, status="failed", error=error)
+
+    async def _publish_job_event(
+        self,
+        *,
+        job: QueuedBuscadorJob,
+        status: str,
+        result: BuscadorRunResult | None = None,
+        error: str | None = None,
+    ) -> None:
+        if not job.organizacion_id:
+            return
+        fuente = str(job.metadata.get("fuente") or "").strip().lower()
+        if fuente != "checklist_scraper":
+            return
+        payload: dict[str, Any] = {
+            "job_id": str(job.id),
+            "status": status,
+            "prospecto_id": str(job.metadata.get("prospecto_id") or "").strip() or None,
+            "emails_total": len(result.results) if result is not None else 0,
+        }
+        if error:
+            payload["error"] = error
+        await ui_realtime_hub.publish(
+            prospectos_topic_for_org(organizacion_id=str(job.organizacion_id)),
+            {
+                "type": "prospectos_checklist_scraper_finished",
+                "scope": "prospeccion_prospectos",
+                "organizacion_id": str(job.organizacion_id),
+                "at": datetime.now(timezone.utc).isoformat(),
+                "payload": payload,
+            },
+        )
 
     async def _store_results(
         self,
