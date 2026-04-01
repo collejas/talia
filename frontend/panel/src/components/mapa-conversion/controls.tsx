@@ -385,6 +385,10 @@ export function DemografiaControls({
           </div>
         </div>
 
+        <div className="flex w-full items-center gap-2 pt-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          Tráfico web
+        </div>
+
         <div className="space-y-1">
           <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
             Origen de visita
@@ -410,7 +414,7 @@ export function DemografiaControls({
 
         <div className="space-y-1">
           <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-            Origen de campana (utm_source)
+            Fuente de campaña
           </p>
           <Select
             value={utmSource ?? "all"}
@@ -419,7 +423,7 @@ export function DemografiaControls({
             }}
           >
             <SelectTrigger className="w-[220px]">
-              <SelectValue placeholder="Origen de campaña" />
+              <SelectValue placeholder="Fuente de campaña" />
             </SelectTrigger>
             <SelectContent className="z-50">
               <SelectItem value="all">Todos</SelectItem>
@@ -437,7 +441,7 @@ export function DemografiaControls({
 
         <div className="space-y-1">
           <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-            Tipo de medio (utm_medium)
+            Medio de campaña
           </p>
           <Select
             value={utmMedium ?? "all"}
@@ -446,7 +450,7 @@ export function DemografiaControls({
             }}
           >
             <SelectTrigger className="w-[220px]">
-              <SelectValue placeholder="Tipo de medio" />
+              <SelectValue placeholder="Medio de campaña" />
             </SelectTrigger>
             <SelectContent className="z-50">
               <SelectItem value="all">Todos</SelectItem>
@@ -464,7 +468,7 @@ export function DemografiaControls({
 
         <div className="space-y-1">
           <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-            Nombre de campana (utm_campaign)
+            Nombre de campaña web
           </p>
           <Select
             value={utmCampaign ?? "all"}
@@ -473,7 +477,7 @@ export function DemografiaControls({
             }}
           >
             <SelectTrigger className="w-[220px]">
-              <SelectValue placeholder="Nombre de campaña" />
+              <SelectValue placeholder="Nombre de campaña web" />
             </SelectTrigger>
             <SelectContent className="z-50">
               <SelectItem value="all">Todos</SelectItem>
@@ -487,6 +491,10 @@ export function DemografiaControls({
               ))}
             </SelectContent>
           </Select>
+        </div>
+
+        <div className="flex w-full items-center gap-2 pt-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          Conversaciones
         </div>
 
         <div className="space-y-1">
@@ -518,7 +526,7 @@ export function DemografiaControls({
 
         <div className="space-y-1">
           <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-            Campaña
+            Campaña de prospección
           </p>
           <Select
             value={campanaId ?? "all"}
@@ -527,7 +535,7 @@ export function DemografiaControls({
             }}
           >
             <SelectTrigger className="w-[240px]">
-              <SelectValue placeholder="Campaña" />
+              <SelectValue placeholder="Campaña de prospección" />
             </SelectTrigger>
             <SelectContent className="z-50">
               <SelectItem value="all">Todas</SelectItem>
