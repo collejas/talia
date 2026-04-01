@@ -960,6 +960,11 @@ export function InboxSplitView({
     [sourceFilter, channelFilter, estadoFilter, batchFilter, campanaFilter, dateFilter],
   );
 
+  const shouldEnrichThreads = React.useMemo(() => {
+    const normalizedSource = sourceFilter ? sourceFilter.toLowerCase() : "";
+    return normalizedSource === "publicidad_whatsapp";
+  }, [sourceFilter]);
+
   const buildThreadDetailParams = React.useCallback(
     ({ threadOffset }: { threadOffset: number }) => {
       const params = new URLSearchParams({
@@ -1009,6 +1014,9 @@ export function InboxSplitView({
         typeof detail.campana_publicitaria === "string" ? detail.campana_publicitaria.trim() : "";
       return !(reglaNombre || canalPublicitario || campanaPublicitaria);
     }
+    if (!normalizedSource && (thread.canal ?? "").toLowerCase() === "whatsapp") {
+      return true;
+    }
     if (isProspeccionSource(normalizedSource)) {
       return !(thread.templateLabel || thread.batchLabel || thread.campanaLabel);
     }
@@ -1020,7 +1028,7 @@ export function InboxSplitView({
     if (threadsRefreshingRef.current) return;
     threadsRefreshingRef.current = true;
     try {
-      const params = buildThreadsParams({ offset: 0, enrich: false });
+      const params = buildThreadsParams({ offset: 0, enrich: shouldEnrichThreads });
       params.set("include_summary", "false");
       params.set("include_filter_options", "false");
       const response = await fetch(`/api/inbox/bootstrap?${params.toString()}`, {
@@ -1056,7 +1064,7 @@ export function InboxSplitView({
     } finally {
       threadsRefreshingRef.current = false;
     }
-  }, [buildThreadsParams]);
+  }, [buildThreadsParams, shouldEnrichThreads]);
 
   React.useEffect(() => {
     let cancelled = false;
@@ -1132,7 +1140,7 @@ export function InboxSplitView({
     try {
       const params = buildThreadsParams({
         offset: Math.max(0, threadItems.length),
-        enrich: false,
+        enrich: shouldEnrichThreads,
       });
       const response = await fetch(`/api/inbox/threads?${params.toString()}`, {
         cache: "no-store",
@@ -1157,6 +1165,7 @@ export function InboxSplitView({
     threadItems.length,
     totalThreads,
     buildThreadsParams,
+    shouldEnrichThreads,
   ]);
 
   React.useEffect(() => {

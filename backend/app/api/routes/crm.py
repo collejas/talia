@@ -12184,6 +12184,52 @@ async def get_inbox_threads(
         )
 
     if not effective_enrich:
+        conversation_ids = [
+            _clean_text(row.get("conversacion_id"))
+            for row in rows
+            if _clean_text(row.get("conversacion_id"))
+        ]
+        if conversation_ids:
+            try:
+                wa_atribucion_rows = await repo.worker_list_whatsapp_atribucion_events_by_conversations(
+                    organizacion_id=organizacion_id,
+                    conversation_ids=conversation_ids,
+                )
+            except CRMRepositoryError:
+                wa_atribucion_rows = []
+            wa_atribucion_by_conversation: dict[str, dict[str, Any]] = {}
+            for event_row in wa_atribucion_rows:
+                conversation_id_value = _clean_text(event_row.get("conversacion_id"))
+                if not conversation_id_value or conversation_id_value in wa_atribucion_by_conversation:
+                    continue
+                wa_atribucion_by_conversation[conversation_id_value] = event_row
+            if wa_atribucion_by_conversation:
+                for row in rows:
+                    conversacion_value = _clean_text(row.get("conversacion_id"))
+                    if not conversacion_value:
+                        continue
+                    conversation_attribution = wa_atribucion_by_conversation.get(conversacion_value)
+                    if not isinstance(conversation_attribution, dict):
+                        continue
+                    current_source = _clean_text(row.get("source"))
+                    if not current_source or current_source in {
+                        "prospeccion",
+                        "prospeccion_whatsapp",
+                        "whatsapp",
+                        "assistant",
+                        "whatsapp_inbound",
+                    }:
+                        row["source"] = "publicidad_whatsapp"
+                    row["source_detail"] = {
+                        "canal_publicitario": _clean_text(conversation_attribution.get("canal_publicitario")),
+                        "campana_publicitaria": _clean_text(
+                            conversation_attribution.get("campana_publicitaria")
+                        ),
+                        "adset": _clean_text(conversation_attribution.get("adset")),
+                        "anuncio": _clean_text(conversation_attribution.get("anuncio")),
+                        "regla_id": _clean_text(conversation_attribution.get("regla_id")),
+                        "atribuido_en": _clean_text(conversation_attribution.get("creado_en")),
+                    }
         validate_start = time.perf_counter()
         result_threads = [CRMInboxThread.model_validate(row) for row in rows]
         stage_timings["model_validate_ms"] = round((time.perf_counter() - validate_start) * 1000, 2)

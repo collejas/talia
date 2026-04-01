@@ -11745,6 +11745,59 @@ class CRMRepository:
             raise CRMRepositoryError(f"whatsapp_atribucion_events_by_conversation_invalid:{data!r}")
         return [row for row in data if isinstance(row, dict)]
 
+    async def worker_get_message_by_id(
+        self,
+        *,
+        organizacion_id: UUID,
+        message_id: str,
+    ) -> dict[str, Any] | None:
+        message_key = str(message_id or "").strip()
+        if not message_key:
+            return None
+        resp = await self._request_service_role(
+            "GET",
+            "/rest/v1/mensajes",
+            params={
+                "select": "id,datos,conversacion_id",
+                "id": f"eq.{message_key}",
+                "limit": "1",
+            },
+            organizacion_id=organizacion_id,
+        )
+        data = resp.json() or []
+        if not isinstance(data, list) or not data:
+            return None
+        row = data[0]
+        if not isinstance(row, dict):
+            raise CRMRepositoryError(f"message_by_id_invalid:{row!r}")
+        return row
+
+    async def worker_update_message_datos(
+        self,
+        *,
+        organizacion_id: UUID,
+        message_id: str,
+        datos: dict[str, Any],
+    ) -> dict[str, Any] | None:
+        message_key = str(message_id or "").strip()
+        if not message_key:
+            return None
+        resp = await self._request_service_role(
+            "PATCH",
+            "/rest/v1/mensajes",
+            params={"id": f"eq.{message_key}"},
+            json={"datos": datos},
+            prefer="return=representation",
+            organizacion_id=organizacion_id,
+        )
+        data = resp.json() or []
+        if not isinstance(data, list) or not data:
+            return None
+        row = data[0]
+        if not isinstance(row, dict):
+            raise CRMRepositoryError(f"message_update_invalid:{row!r}")
+        return row
+
     async def list_whatsapp_atribucion_eventos_for_metrics(
         self,
         *,

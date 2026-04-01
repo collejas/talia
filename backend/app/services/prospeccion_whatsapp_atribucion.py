@@ -16,7 +16,8 @@ def normalize_whatsapp_phrase(value: Any) -> str:
     folded = unicodedata.normalize("NFKD", raw)
     no_accents = "".join(ch for ch in folded if not unicodedata.combining(ch))
     lowered = no_accents.strip().lower()
-    return " ".join(lowered.split())
+    cleaned = "".join(ch if (ch.isalnum() or ch.isspace()) else " " for ch in lowered)
+    return " ".join(cleaned.split())
 
 
 def _safe_text(value: Any) -> str:
@@ -58,6 +59,8 @@ def match_phrase_against_rule(
     try:
         pattern_raw = re.compile(phrase_target, flags=re.IGNORECASE)
     except re.error:
+        if target_normalized and target_normalized in incoming_normalized:
+            return True, "contiene"
         return False, "regex"
     if pattern_raw.search(str(incoming_raw or "")):
         return True, "regex"
@@ -65,12 +68,20 @@ def match_phrase_against_rule(
         _safe_text(rule.get("frase_normalizada")) or phrase_target
     )
     if not pattern_normalized_source:
+        if target_normalized and target_normalized in incoming_normalized:
+            return True, "contiene"
         return False, "regex"
     try:
         pattern_normalized = re.compile(pattern_normalized_source, flags=re.IGNORECASE)
     except re.error:
+        if target_normalized and target_normalized in incoming_normalized:
+            return True, "contiene"
         return False, "regex"
-    return bool(pattern_normalized.search(incoming_normalized)), "regex"
+    if pattern_normalized.search(incoming_normalized):
+        return True, "regex"
+    if target_normalized and target_normalized in incoming_normalized:
+        return True, "contiene"
+    return False, "regex"
 
 
 def resolve_first_matching_rule(
