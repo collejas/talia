@@ -185,6 +185,9 @@ type VisitsFilters = {
   utmMedium?: string | null;
   utmCampaign?: string | null;
   templateId?: string | null;
+  waCanalPublicitario?: string | null;
+  waCampanaPublicitaria?: string | null;
+  waReglaId?: string | null;
   rango?: string | null;
   desde?: string | null;
   hasta?: string | null;
@@ -758,6 +761,9 @@ function matchesVisitsFilters(row: VisitDetailRaw, filters: VisitsFilters): bool
   const utmMediumFilter = (filters.utmMedium || "").trim().toLowerCase();
   const utmCampaignFilter = (filters.utmCampaign || "").trim().toLowerCase();
   const templateIdFilter = (filters.templateId || "").trim().toLowerCase();
+  const waCanalFilter = (filters.waCanalPublicitario || "").trim().toLowerCase();
+  const waCampanaFilter = (filters.waCampanaPublicitaria || "").trim().toLowerCase();
+  const waReglaFilter = (filters.waReglaId || "").trim().toLowerCase();
 
   if (sourceClass && resolveSourceClass(row) !== sourceClass) return false;
   if (utmSourceFilter && (normalizeTrackingValue(row.utm_source ?? null) || "") !== utmSourceFilter) return false;
@@ -767,6 +773,18 @@ function matchesVisitsFilters(row: VisitDetailRaw, filters: VisitsFilters): bool
     const templateIdValue = normalizeTrackingValue(row.template_id ?? null) || "";
     const templateSlugValue = normalizeTrackingValue(row.template_slug ?? null) || "";
     if (templateIdValue !== templateIdFilter && templateSlugValue !== templateIdFilter) return false;
+  }
+  if (waCanalFilter) {
+    const value = (row.wa_canal_publicitario || "").trim().toLowerCase();
+    if (value !== waCanalFilter) return false;
+  }
+  if (waCampanaFilter) {
+    const value = (row.wa_campana_publicitaria || "").trim().toLowerCase();
+    if (value !== waCampanaFilter) return false;
+  }
+  if (waReglaFilter) {
+    const value = (row.wa_regla_id || "").trim().toLowerCase();
+    if (value !== waReglaFilter) return false;
   }
   return true;
 }
