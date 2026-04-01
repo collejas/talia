@@ -15,6 +15,7 @@ type MapKpisProps = {
   sesionesWebchatTotales: number
   conversacionesWhatsapp: number
   conversacionesVoz: number
+  whatsappCampaignsTotal: number
   topLocationName: string
   topLocationLeads: number
   topLocationVisits: number
@@ -38,6 +39,7 @@ export function MapKpis({
   sesionesWebchatTotales,
   conversacionesWhatsapp,
   conversacionesVoz,
+  whatsappCampaignsTotal,
   topLocationName,
   topLocationLeads,
   topLocationVisits,
@@ -62,6 +64,12 @@ export function MapKpis({
       icon: IconWorld,
     },
     {
+      title: "WhatsApp campañas",
+      value: formatDisplayNumber(whatsappCampaignsTotal),
+      helper: `Conversaciones atribuidas por campaña`,
+      icon: IconRoute,
+    },
+    {
       title: "Origen principal",
       value: topSource
         ? `${formatSourceClassLabel(topSource)} (${formatDisplayNumber(topSourceValue)})`
@@ -82,7 +90,7 @@ export function MapKpis({
   ]
 
   return (
-    <div className="grid grid-cols-1 gap-4 px-4 sm:grid-cols-2 lg:grid-cols-4">
+    <div className="grid grid-cols-1 gap-4 px-4 sm:grid-cols-2 lg:grid-cols-5">
       {cards.map((config) => (
         <Card key={config.title} className="@container/card">
           <CardHeader>

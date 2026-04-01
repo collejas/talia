@@ -124,11 +124,17 @@ export type DemografiaSummaryResponse = {
       sesiones_sin_chat_webchat?: number;
       conversaciones_whatsapp?: number;
       conversaciones_voz?: number;
+      wa_atribucion_total?: number;
       fuentes_top?: Array<{ source: string; total: number }>;
       utm_top?: Array<{
         utm_source: string;
         utm_medium: string;
         utm_campaign: string;
+        total: number;
+      }>;
+      wa_atribucion_top?: Array<{
+        canal_publicitario: string;
+        campana_publicitaria: string;
         total: number;
       }>;
       has_data: boolean;
@@ -143,6 +149,7 @@ export type DemografiaSummaryResponse = {
       sesiones_webchat_total?: number;
       conversaciones_whatsapp?: number;
       conversaciones_voz?: number;
+      wa_atribucion_total?: number;
     };
   };
 };

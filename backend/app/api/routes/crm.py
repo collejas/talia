@@ -24620,6 +24620,11 @@ async def demografia_mapa_v2(
             "fuentes_top": fuentes_top,
             "utm_top": utm_top,
         }
+        row["whatsapp_atribucion"] = {
+            "top": visitor_row.get("wa_atribucion_top")
+            if isinstance(visitor_row.get("wa_atribucion_top"), list)
+            else [],
+        }
         row["conversation_channels"] = {
             "sesiones_webchat_total": int(visitor_row.get("sesiones_webchat_total") or 0),
             "sesiones_con_chat_webchat": int(visitor_row.get("sesiones_con_chat_webchat") or 0),

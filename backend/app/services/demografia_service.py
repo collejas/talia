@@ -372,6 +372,7 @@ async def fetch_visitantes_resumen_v2(
         sesiones_sin_chat_webchat = _to_number(row.get("sesiones_sin_chat_webchat"))
         conversaciones_whatsapp = _to_number(row.get("conversaciones_whatsapp"))
         conversaciones_voz = _to_number(row.get("conversaciones_voz"))
+        wa_atribucion_total = _to_number(row.get("wa_atribucion_total"))
 
         fuentes_top = row.get("fuentes_top")
         if not isinstance(fuentes_top, list):
@@ -379,6 +380,9 @@ async def fetch_visitantes_resumen_v2(
         utm_top = row.get("utm_top")
         if not isinstance(utm_top, list):
             utm_top = []
+        wa_atribucion_top = row.get("wa_atribucion_top")
+        if not isinstance(wa_atribucion_top, list):
+            wa_atribucion_top = []
 
         item = {
             "level": str(row.get("location_level") or nivel),
@@ -400,6 +404,8 @@ async def fetch_visitantes_resumen_v2(
             "conversaciones_voz": conversaciones_voz,
             "fuentes_top": fuentes_top,
             "utm_top": utm_top,
+            "wa_atribucion_top": wa_atribucion_top,
+            "wa_atribucion_total": wa_atribucion_total,
             "has_data": bool(row.get("has_data")),
         }
         items.append(item)
@@ -415,6 +421,7 @@ async def fetch_visitantes_resumen_v2(
         totals["sesiones_webchat_total"] += sesiones_webchat_total
         totals["conversaciones_whatsapp"] += conversaciones_whatsapp
         totals["conversaciones_voz"] += conversaciones_voz
+        totals["wa_atribucion_total"] = totals.get("wa_atribucion_total", 0) + wa_atribucion_total
 
     return {
         "items": items,

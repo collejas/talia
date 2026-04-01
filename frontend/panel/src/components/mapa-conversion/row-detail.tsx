@@ -81,6 +81,7 @@ export function MapaConversionRowDetail({ row, nivel, summary }: Props) {
   const metrics = (entry.metrics as Record<string, unknown>) ?? {};
   const canalMeta = (entry.canal_meta as Record<string, unknown>) ?? {};
   const trafficWeb = (entry.traffic_web as Record<string, unknown>) ?? {};
+  const whatsappAttribution = (entry.whatsapp_atribucion as Record<string, unknown>) ?? {};
 
   const totalVisitas = sanitizeNumber(metrics.visitantes_total ?? entry.total_visitas);
   const leadsTotal = sanitizeNumber(metrics.leads_total ?? entry.leads_total);
@@ -291,6 +292,35 @@ export function MapaConversionRowDetail({ row, nivel, summary }: Props) {
             ))
           ) : (
             <p className="text-muted-foreground text-sm">Sin campañas top en este filtro.</p>
+          )}
+        </div>
+      </section>
+
+      <section className="grid gap-3">
+        <h4 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+          Atribución WhatsApp
+        </h4>
+        <div className="grid gap-2">
+          {(Array.isArray(whatsappAttribution.top) ? whatsappAttribution.top : []).length ? (
+            (whatsappAttribution.top as Array<Record<string, unknown>>).slice(0, 5).map((item, index) => (
+              <div
+                key={`wa-attrib-${index}`}
+                className="bg-muted/50 flex items-center justify-between rounded-lg px-3 py-2 text-sm"
+              >
+                <span className="text-muted-foreground">
+                  {`${typeof item.canal_publicitario === "string" ? item.canal_publicitario : "sin canal"} · ${
+                    typeof item.campana_publicitaria === "string"
+                      ? item.campana_publicitaria
+                      : "sin campaña"
+                  }`}
+                </span>
+                <span className="font-medium">{formatNumber(sanitizeNumber(item.total))}</span>
+              </div>
+            ))
+          ) : (
+            <p className="text-muted-foreground text-sm">
+              Sin atribución WhatsApp en este filtro.
+            </p>
           )}
         </div>
       </section>
