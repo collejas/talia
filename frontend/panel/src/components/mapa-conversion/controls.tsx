@@ -33,6 +33,7 @@ const CHANNEL_OPTIONS = [
   { value: "webchat", label: "Webchat" },
   { value: "whatsapp", label: "WhatsApp" },
   { value: "voz", label: "Voz" },
+  { value: "correo", label: "Correo" },
 ];
 
 const DEFAULT_CHANNELS = CHANNEL_OPTIONS.map((item) => item.value);
@@ -55,10 +56,14 @@ type DemografiaControlsProps = {
   utmSource: string | null;
   utmMedium: string | null;
   utmCampaign: string | null;
+  campanaId: string | null;
+  campanaTipo: string | null;
   templateId: string | null;
   utmSourceOptions: string[];
   utmMediumOptions: string[];
   utmCampaignOptions: Array<{ value: string; label: string }>;
+  campanaOptions: Array<{ value: string; label: string; canal?: string | null }>;
+  campanaTipoOptions: string[];
   templateOptions: Array<{ value: string; label: string }>;
   rango: string | null;
   desde: string | null;
@@ -74,10 +79,14 @@ export function DemografiaControls({
   utmSource,
   utmMedium,
   utmCampaign,
+  campanaId,
+  campanaTipo,
   templateId,
   utmSourceOptions,
   utmMediumOptions,
   utmCampaignOptions,
+  campanaOptions,
+  campanaTipoOptions,
   templateOptions,
   rango,
   desde,
@@ -112,6 +121,23 @@ export function DemografiaControls({
   React.useEffect(() => {
     setHastaDraft(hasta ?? "");
   }, [hasta]);
+
+  const filteredCampanaOptions = React.useMemo(() => {
+    if (!campanaTipo) return campanaOptions;
+    const target = campanaTipo.trim().toLowerCase();
+    return campanaOptions.filter((option) => {
+      const canal = (option.canal || "").trim().toLowerCase();
+      return canal === target || !canal;
+    });
+  }, [campanaOptions, campanaTipo]);
+
+  const formatCampanaTipoLabel = React.useCallback((value: string) => {
+    const normalized = value.trim().toLowerCase();
+    if (normalized === "whatsapp") return "WhatsApp";
+    if (normalized === "correo") return "Correo";
+    if (normalized === "llamada" || normalized === "voz") return "Llamada";
+    return value;
+  }, []);
 
   const normalizedStages = React.useMemo(() => {
     if (!etapas.length) return new Set(DEFAULT_STAGES);
@@ -203,6 +229,8 @@ export function DemografiaControls({
       utm_source: null,
       utm_medium: null,
       utm_campaign: null,
+      campana_id: null,
+      campana_tipo: null,
       template_id: null,
     });
   }
@@ -454,6 +482,60 @@ export function DemografiaControls({
               ) : null}
               {utmCampaignOptions.map((option) => (
                 <SelectItem key={`utm-campaign-${option.value}`} value={option.value}>
+                  {option.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="space-y-1">
+          <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+            Tipo de campaña
+          </p>
+          <Select
+            value={campanaTipo ?? "all"}
+            onValueChange={(value) => {
+              updateParams({ campana_tipo: value === "all" ? null : value, campana_id: null });
+            }}
+          >
+            <SelectTrigger className="w-[220px]">
+              <SelectValue placeholder="Tipo de campaña" />
+            </SelectTrigger>
+            <SelectContent className="z-50">
+              <SelectItem value="all">Todos</SelectItem>
+              {campanaTipo && !campanaTipoOptions.includes(campanaTipo) ? (
+                <SelectItem value={campanaTipo}>{formatCampanaTipoLabel(campanaTipo)}</SelectItem>
+              ) : null}
+              {campanaTipoOptions.map((option) => (
+                <SelectItem key={`campana-tipo-${option}`} value={option}>
+                  {formatCampanaTipoLabel(option)}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="space-y-1">
+          <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+            Campaña
+          </p>
+          <Select
+            value={campanaId ?? "all"}
+            onValueChange={(value) => {
+              updateParams({ campana_id: value === "all" ? null : value });
+            }}
+          >
+            <SelectTrigger className="w-[240px]">
+              <SelectValue placeholder="Campaña" />
+            </SelectTrigger>
+            <SelectContent className="z-50">
+              <SelectItem value="all">Todas</SelectItem>
+              {campanaId && !campanaOptions.some((option) => option.value === campanaId) ? (
+                <SelectItem value={campanaId}>{campanaId}</SelectItem>
+              ) : null}
+              {filteredCampanaOptions.map((option) => (
+                <SelectItem key={`campana-${option.value}`} value={option.value}>
                   {option.label}
                 </SelectItem>
               ))}

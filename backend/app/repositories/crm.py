@@ -2262,6 +2262,7 @@ class CRMRepository:
         utm_source: str | None = None,
         utm_medium: str | None = None,
         utm_campaign: str | None = None,
+        campaign_ids: Sequence[UUID] | None = None,
         template_id: UUID | None = None,
         limit: int = 5000,
     ) -> list[dict[str, Any]]:
@@ -2286,6 +2287,8 @@ class CRMRepository:
             params["utm_medium"] = f"eq.{utm_medium}"
         if utm_campaign:
             params["utm_campaign"] = f"eq.{utm_campaign}"
+        if campaign_ids:
+            params["cid"] = _postgrest_in_clause([str(value) for value in campaign_ids])
         if template_id:
             params["tid"] = f"eq.{template_id}"
 

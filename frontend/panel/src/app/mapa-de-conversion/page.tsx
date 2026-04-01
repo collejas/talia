@@ -27,7 +27,7 @@ export const dynamic = "force-dynamic";
 
 type DemografiaDataset = Awaited<ReturnType<typeof loadDemografiaData>>["map"]["dataset"];
 
-const DEFAULT_CHANNELS = ["webchat", "whatsapp", "voz"] as const;
+const DEFAULT_CHANNELS = ["webchat", "whatsapp", "voz", "correo"] as const;
 type ChannelKey = (typeof DEFAULT_CHANNELS)[number];
 type ColorMode = "sequential" | "channel";
 
@@ -241,13 +241,17 @@ export default async function Page({
   const utmSourceParam = typeof params.utm_source === "string" ? params.utm_source.trim().toLowerCase() : "";
   const utmMediumParam = typeof params.utm_medium === "string" ? params.utm_medium.trim().toLowerCase() : "";
   const utmCampaignParam = typeof params.utm_campaign === "string" ? params.utm_campaign.trim().toLowerCase() : "";
+  const campanaIdParam = typeof params.campana_id === "string" ? params.campana_id.trim() : "";
+  const campanaTipoParam = typeof params.campana_tipo === "string" ? params.campana_tipo.trim().toLowerCase() : "";
   const templateIdParam = typeof params.template_id === "string" ? params.template_id.trim() : "";
   const utmSource = utmSourceParam.length ? utmSourceParam : null;
   const utmMedium = utmMediumParam.length ? utmMediumParam : null;
   const utmCampaign = utmCampaignParam.length ? utmCampaignParam : null;
+  const campanaId = campanaIdParam.length ? campanaIdParam : null;
+  const campanaTipo = campanaTipoParam.length ? campanaTipoParam : null;
   const templateId = templateIdParam.length ? templateIdParam : null;
   const attributionFilterActive = Boolean(
-    sourceClass || utmSource || utmMedium || utmCampaign || templateId,
+    sourceClass || utmSource || utmMedium || utmCampaign || campanaId || campanaTipo || templateId,
   );
   const rangoParam = typeof params.rango === "string" ? params.rango.trim().toLowerCase() : "";
   const rango = rangoParam.length ? rangoParam : "mes";
@@ -269,6 +273,8 @@ export default async function Page({
       utmSource,
       utmMedium,
       utmCampaign,
+      campanaId,
+      campanaTipo,
       templateId,
       rango,
       desde,
@@ -347,6 +353,8 @@ export default async function Page({
   const conversacionesWhatsapp =
     demografiaResponse?.summary.visitantes.totals.conversaciones_whatsapp ?? 0;
   const conversacionesVoz = demografiaResponse?.summary.visitantes.totals.conversaciones_voz ?? 0;
+  const conversacionesCorreo =
+    demografiaResponse?.summary.visitantes.totals.conversaciones_correo ?? 0;
   const whatsappCampaignsTotal =
     demografiaResponse?.summary.visitantes.totals.wa_atribucion_total ?? 0;
   const topLocation = demografiaResponse ? selectTopLocation(demografiaResponse.map.dataset) : null;
@@ -398,12 +406,18 @@ export default async function Page({
       demografiaResponse?.summary.attribution_catalog?.utm_campaign_labels ?? {};
     const templateOptionsRaw =
       demografiaResponse?.summary.attribution_catalog?.template_options ?? [];
+    const campanaOptionsRaw =
+      demografiaResponse?.summary.attribution_catalog?.campana_options ?? [];
+    const campanaTipoOptionsRaw =
+      demografiaResponse?.summary.attribution_catalog?.campana_tipo_options ?? [];
     if (!demografiaResponse) {
       return {
         sources: [] as string[],
         media: [] as string[],
         campaigns: [] as Array<{ value: string; label: string }>,
         templates: [] as Array<{ value: string; label: string }>,
+        campanas: [] as Array<{ value: string; label: string; canal?: string | null }>,
+        campanaTipos: [] as string[],
       };
     }
     const pushValue = (set: Set<string>, value: string | null | undefined) => {
@@ -441,6 +455,16 @@ export default async function Page({
           label: String(item.label || item.value || "").trim(),
         }))
         .filter((item) => item.value.length > 0),
+      campanas: campanaOptionsRaw
+        .map((item) => ({
+          value: String(item.value || "").trim(),
+          label: String(item.label || item.value || "").trim(),
+          canal: item.canal ?? null,
+        }))
+        .filter((item) => item.value.length > 0),
+      campanaTipos: campanaTipoOptionsRaw
+        .map((value) => String(value || "").trim().toLowerCase())
+        .filter((value) => value.length > 0),
     };
   })();
   const nivelLabel = nivel.charAt(0).toUpperCase() + nivel.slice(1);
@@ -451,6 +475,7 @@ export default async function Page({
     sesionesWebchatTotales,
     conversacionesWhatsapp,
     conversacionesVoz,
+    conversacionesCorreo,
     whatsappCampaignsTotal,
     topLocationName,
     topLocationLeads,
@@ -493,10 +518,14 @@ export default async function Page({
                 utmSource={utmSource}
                 utmMedium={utmMedium}
                 utmCampaign={utmCampaign}
+                campanaId={campanaId}
+                campanaTipo={campanaTipo}
                 templateId={templateId}
                 utmSourceOptions={utmOptions.sources}
                 utmMediumOptions={utmOptions.media}
                 utmCampaignOptions={utmOptions.campaigns}
+                campanaOptions={utmOptions.campanas}
+                campanaTipoOptions={utmOptions.campanaTipos}
                 templateOptions={utmOptions.templates}
                 rango={rango}
                 desde={desde}

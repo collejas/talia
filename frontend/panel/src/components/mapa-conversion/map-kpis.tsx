@@ -15,6 +15,7 @@ type MapKpisProps = {
   sesionesWebchatTotales: number
   conversacionesWhatsapp: number
   conversacionesVoz: number
+  conversacionesCorreo: number
   whatsappCampaignsTotal: number
   topLocationName: string
   topLocationLeads: number
@@ -39,6 +40,7 @@ export function MapKpis({
   sesionesWebchatTotales,
   conversacionesWhatsapp,
   conversacionesVoz,
+  conversacionesCorreo,
   whatsappCampaignsTotal,
   topLocationName,
   topLocationLeads,
@@ -80,11 +82,13 @@ export function MapKpis({
     {
       title: "Conversaciones",
       value: formatDisplayNumber(
-        sesionesWebchatTotales + conversacionesWhatsapp + conversacionesVoz,
+        sesionesWebchatTotales + conversacionesWhatsapp + conversacionesVoz + conversacionesCorreo,
       ),
       helper: `Webchat ${formatDisplayNumber(sesionesWebchatTotales)} · WA ${formatDisplayNumber(
         conversacionesWhatsapp,
-      )} · Voz ${formatDisplayNumber(conversacionesVoz)} · Etapa líder ${stageLeader || "N/A"} (${formatDisplayNumber(stageLeaderValue)})`,
+      )} · Voz ${formatDisplayNumber(conversacionesVoz)} · Correo ${formatDisplayNumber(
+        conversacionesCorreo,
+      )} · Etapa líder ${stageLeader || "N/A"} (${formatDisplayNumber(stageLeaderValue)})`,
       icon: IconMessageCircle,
     },
   ]

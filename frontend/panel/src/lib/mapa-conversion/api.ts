@@ -82,6 +82,7 @@ export type DemografiaMapDataset = {
     sesiones_sin_chat_webchat: number;
     conversaciones_whatsapp: number;
     conversaciones_voz: number;
+    conversaciones_correo?: number;
   };
 };
 
@@ -93,6 +94,12 @@ export type DemografiaSummaryResponse = {
   range: Record<string, unknown>;
   attribution_catalog?: {
     utm_campaign_labels?: Record<string, string>;
+    campana_options?: Array<{
+      value: string;
+      label: string;
+      canal?: string | null;
+    }>;
+    campana_tipo_options?: string[];
     template_options?: Array<{
       value: string;
       label: string;
@@ -124,7 +131,9 @@ export type DemografiaSummaryResponse = {
       sesiones_sin_chat_webchat?: number;
       conversaciones_whatsapp?: number;
       conversaciones_voz?: number;
+      conversaciones_correo?: number;
       wa_atribucion_total?: number;
+      correo_total?: number;
       fuentes_top?: Array<{ source: string; total: number }>;
       utm_top?: Array<{
         utm_source: string;
@@ -149,7 +158,9 @@ export type DemografiaSummaryResponse = {
       sesiones_webchat_total?: number;
       conversaciones_whatsapp?: number;
       conversaciones_voz?: number;
+      conversaciones_correo?: number;
       wa_atribucion_total?: number;
+      correo_total?: number;
     };
   };
 };
@@ -206,6 +217,8 @@ export async function loadDemografiaData(
     utmSource?: string | null;
     utmMedium?: string | null;
     utmCampaign?: string | null;
+    campanaId?: string | null;
+    campanaTipo?: string | null;
     templateId?: string | null;
     rango?: string | null;
     desde?: string | null;
@@ -244,6 +257,14 @@ export async function loadDemografiaData(
   if (options.utmCampaign) {
     resumenParams.utm_campaign = options.utmCampaign;
     mapaParams.utm_campaign = options.utmCampaign;
+  }
+  if (options.campanaId) {
+    resumenParams.campana_id = options.campanaId;
+    mapaParams.campana_id = options.campanaId;
+  }
+  if (options.campanaTipo) {
+    resumenParams.campana_tipo = options.campanaTipo;
+    mapaParams.campana_tipo = options.campanaTipo;
   }
   if (options.templateId) {
     resumenParams.template_id = options.templateId;

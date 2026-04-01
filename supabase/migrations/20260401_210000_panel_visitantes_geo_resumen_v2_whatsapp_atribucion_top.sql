@@ -1,4 +1,4 @@
-drop function if exists public.panel_visitantes_geo_resumen_v2(text,timestamp with time zone,timestamp with time zone,text,text,text,text,text,uuid);
+drop function if exists public.panel_visitantes_geo_resumen_v2(text,timestamp with time zone,timestamp with time zone,text,text,text,text,text,uuid,uuid,text);
 
 create or replace function public.panel_visitantes_geo_resumen_v2(
     p_nivel text default 'estado'::text,
@@ -9,7 +9,9 @@ create or replace function public.panel_visitantes_geo_resumen_v2(
     p_utm_source text default null::text,
     p_utm_medium text default null::text,
     p_utm_campaign text default null::text,
-    p_tid uuid default null::uuid
+    p_cid uuid default null::uuid,
+    p_tid uuid default null::uuid,
+    p_campaign_type text default null::text
 ) returns table(
     location_level text,
     location_key text,
@@ -20,6 +22,7 @@ create or replace function public.panel_visitantes_geo_resumen_v2(
     sesiones_sin_chat_webchat bigint,
     conversaciones_whatsapp bigint,
     conversaciones_voz bigint,
+    conversaciones_correo bigint,
     fuentes_top jsonb,
     utm_top jsonb,
     wa_atribucion_top jsonb,
@@ -32,6 +35,7 @@ create or replace function public.panel_visitantes_geo_resumen_v2(
     webchat_sin_chat bigint,
     whatsapp_total bigint,
     voz_total bigint,
+    correo_total bigint,
     has_data boolean
 ) language sql stable security definer
 set search_path to 'public'
@@ -85,13 +89,19 @@ web_sessions_raw AS (
         END AS cvegeo
     FROM public.web_sessions w
     JOIN tenant t ON w.organizacion_id = t.organizacion_id
+    LEFT JOIN public.campanas c ON c.id = w.cid AND c.organizacion_id = t.organizacion_id
     WHERE (p_from IS NULL OR COALESCE(w.last_seen_at, w.first_seen_at, now()) >= p_from)
       AND (p_to IS NULL OR COALESCE(w.last_seen_at, w.first_seen_at, now()) <= p_to)
       AND (p_source_class IS NULL OR lower(COALESCE(w.source_class, '')) = lower(p_source_class))
       AND (p_utm_source IS NULL OR lower(COALESCE(w.utm_source, '')) = lower(p_utm_source))
       AND (p_utm_medium IS NULL OR lower(COALESCE(w.utm_medium, '')) = lower(p_utm_medium))
       AND (p_utm_campaign IS NULL OR lower(COALESCE(w.utm_campaign, '')) = lower(p_utm_campaign))
+      AND (p_cid IS NULL OR w.cid = p_cid)
       AND (p_tid IS NULL OR w.tid = p_tid)
+      AND (
+            p_campaign_type IS NULL
+            OR lower(COALESCE(c.canal, '')) = lower(p_campaign_type)
+          )
 ),
 web_sessions_scoped AS (
     SELECT
@@ -323,6 +333,11 @@ wa_atribucion_raw AS (
     WHERE (p_from IS NULL OR e.creado_en >= p_from)
       AND (p_to IS NULL OR e.creado_en <= p_to)
       AND (p_source_class IS NULL OR lower(p_source_class) = 'campaign')
+      AND (p_cid IS NULL AND p_tid IS NULL)
+      AND (
+            p_campaign_type IS NULL
+            OR lower(p_campaign_type) = 'whatsapp'
+          )
 ),
 wa_atribucion_latest AS (
     SELECT DISTINCT ON (r.conversacion_id)
@@ -348,6 +363,12 @@ conversation_base AS (
     LEFT JOIN wa_atribucion_latest wal ON wal.conversacion_id = conv.id
     WHERE lower(COALESCE(conv.canal, '')) IN ('whatsapp', 'voz')
       AND public.puede_ver_contacto(ct.id)
+      AND (
+            p_campaign_type IS NULL
+            OR (lower(p_campaign_type) = 'whatsapp' AND lower(COALESCE(conv.canal, '')) = 'whatsapp')
+            OR (lower(p_campaign_type) IN ('voz', 'llamada') AND lower(COALESCE(conv.canal, '')) = 'voz')
+          )
+      AND (p_cid IS NULL AND p_tid IS NULL)
       AND (p_from IS NULL OR COALESCE(conv.ultimo_mensaje_en, conv.iniciada_en, now()) >= p_from)
       AND (p_to IS NULL OR COALESCE(conv.ultimo_mensaje_en, conv.iniciada_en, now()) <= p_to)
 ),
@@ -469,6 +490,167 @@ conversation_metrics AS (
     FROM conversation_filtered cs
     GROUP BY cs.nivel, cs.location_key, cs.location_name
 ),
+email_inbound_raw AS (
+    SELECT
+        m.conversacion_id,
+        m.creado_en,
+        m.datos,
+        conv.contacto_id,
+        ct.contacto_datos,
+        ct.telefono_e164,
+        CASE
+            WHEN (m.datos ->> 'campana_id') ~* '^[0-9a-f-]{36}$' THEN (m.datos ->> 'campana_id')::uuid
+            ELSE NULL
+        END AS campana_id,
+        CASE
+            WHEN (m.datos ->> 'template_id') ~* '^[0-9a-f-]{36}$' THEN (m.datos ->> 'template_id')::uuid
+            ELSE NULL
+        END AS template_id
+    FROM public.mensajes m
+    JOIN public.conversaciones conv ON conv.id = m.conversacion_id
+    JOIN tenant t ON conv.organizacion_id = t.organizacion_id
+    JOIN public.contactos ct ON ct.id = conv.contacto_id AND ct.organizacion_id = t.organizacion_id
+    LEFT JOIN public.campanas c ON c.id = (
+        CASE
+            WHEN (m.datos ->> 'campana_id') ~* '^[0-9a-f-]{36}$' THEN (m.datos ->> 'campana_id')::uuid
+            ELSE NULL
+        END
+    ) AND c.organizacion_id = t.organizacion_id
+    WHERE (p_from IS NULL OR m.creado_en >= p_from)
+      AND (p_to IS NULL OR m.creado_en <= p_to)
+      AND lower(COALESCE(m.datos ->> 'action', '')) = 'reply_inbound'
+      AND lower(COALESCE(m.datos ->> 'source', '')) = 'prospeccion'
+      AND lower(COALESCE(m.datos ->> 'channel', '')) = 'correo'
+      AND public.puede_ver_contacto(ct.id)
+      AND (p_cid IS NULL OR (
+            (m.datos ->> 'campana_id') ~* '^[0-9a-f-]{36}$'
+            AND (m.datos ->> 'campana_id')::uuid = p_cid
+          ))
+      AND (p_tid IS NULL OR (
+            (m.datos ->> 'template_id') ~* '^[0-9a-f-]{36}$'
+            AND (m.datos ->> 'template_id')::uuid = p_tid
+          ))
+      AND (
+            p_campaign_type IS NULL
+            OR lower(COALESCE(c.canal, '')) = lower(p_campaign_type)
+          )
+),
+email_geo AS (
+    SELECT
+        e.*,
+        COALESCE(
+            NULLIF(e.contacto_datos #>> '{ubicacion,country_code}', ''),
+            NULLIF(e.contacto_datos #>> '{country_code}', ''),
+            NULLIF(e.contacto_datos #>> '{ubicacion,pais_codigo}', ''),
+            NULLIF(e.contacto_datos #>> '{pais_codigo}', '')
+        ) AS raw_country_code,
+        COALESCE(
+            NULLIF(e.contacto_datos #>> '{ubicacion,country_name}', ''),
+            NULLIF(e.contacto_datos #>> '{country_name}', ''),
+            NULLIF(e.contacto_datos #>> '{ubicacion,pais_nombre}', ''),
+            NULLIF(e.contacto_datos #>> '{pais_nombre}', ''),
+            NULLIF(e.contacto_datos #>> '{ubicacion,pais}', ''),
+            NULLIF(e.contacto_datos #>> '{pais}', '')
+        ) AS raw_country_name,
+        COALESCE(
+            NULLIF(e.contacto_datos #>> '{ubicacion,cve_ent}', ''),
+            NULLIF(e.contacto_datos #>> '{cve_ent}', '')
+        ) AS raw_cve_ent,
+        COALESCE(
+            NULLIF(e.contacto_datos #>> '{ubicacion,nom_ent}', ''),
+            NULLIF(e.contacto_datos #>> '{nom_ent}', '')
+        ) AS raw_nom_ent,
+        COALESCE(
+            NULLIF(e.contacto_datos #>> '{ubicacion,cve_mun}', ''),
+            NULLIF(e.contacto_datos #>> '{cve_mun}', '')
+        ) AS raw_cve_mun,
+        COALESCE(
+            NULLIF(e.contacto_datos #>> '{ubicacion,nom_mun}', ''),
+            NULLIF(e.contacto_datos #>> '{nom_mun}', '')
+        ) AS raw_nom_mun,
+        COALESCE(
+            NULLIF(e.contacto_datos #>> '{ubicacion,cvegeo}', ''),
+            NULLIF(e.contacto_datos #>> '{cvegeo}', '')
+        ) AS raw_cvegeo,
+        regexp_replace(COALESCE(e.telefono_e164, ''), '\\D', '', 'g') AS telefono_digits
+    FROM email_inbound_raw e
+),
+email_normalized AS (
+    SELECT
+        eg.conversacion_id,
+        CASE
+            WHEN eg.raw_country_code IS NOT NULL AND eg.raw_country_code <> '' THEN
+                CASE
+                    WHEN length(eg.raw_country_code) = 2 THEN upper(eg.raw_country_code)
+                    WHEN length(eg.raw_country_code) = 3 AND eg.raw_country_code ~ '^[A-Za-z]{3}$'
+                        THEN upper(eg.raw_country_code)
+                    ELSE upper(substr(eg.raw_country_code, 1, 2))
+                END
+            WHEN eg.telefono_digits LIKE '52%' THEN 'MX'
+            ELSE 'UNK'
+        END AS country_code,
+        CASE
+            WHEN eg.raw_country_name IS NOT NULL AND eg.raw_country_name <> '' THEN eg.raw_country_name
+            WHEN eg.telefono_digits LIKE '52%' THEN 'México'
+            ELSE 'País desconocido'
+        END AS country_name,
+        CASE
+            WHEN eg.raw_cve_ent IS NOT NULL AND eg.raw_cve_ent <> '' THEN lpad(regexp_replace(eg.raw_cve_ent, '\\D', '', 'g'), 2, '0')
+            ELSE NULL
+        END AS cve_ent,
+        COALESCE(eg.raw_nom_ent, CASE WHEN eg.telefono_digits LIKE '52%' THEN 'Estado desconocido' END) AS nom_ent,
+        CASE
+            WHEN eg.raw_cve_mun IS NOT NULL AND eg.raw_cve_mun <> '' THEN lpad(regexp_replace(eg.raw_cve_mun, '\\D', '', 'g'), 3, '0')
+            ELSE NULL
+        END AS cve_mun,
+        eg.raw_nom_mun AS nom_mun,
+        CASE
+            WHEN eg.raw_cvegeo IS NOT NULL AND eg.raw_cvegeo <> '' THEN lpad(regexp_replace(eg.raw_cvegeo, '\\D', '', 'g'), 5, '0')
+            WHEN eg.raw_cve_ent IS NOT NULL AND eg.raw_cve_mun IS NOT NULL THEN
+                lpad(regexp_replace(eg.raw_cve_ent, '\\D', '', 'g'), 2, '0')
+                || lpad(regexp_replace(eg.raw_cve_mun, '\\D', '', 'g'), 3, '0')
+            ELSE NULL
+        END AS cvegeo
+    FROM email_geo eg
+),
+email_scoped AS (
+    SELECT
+        nl.nivel,
+        n.conversacion_id,
+        CASE
+            WHEN nl.nivel = 'pais' THEN COALESCE(NULLIF(n.country_code, ''), 'UNK')
+            WHEN nl.nivel = 'municipio' THEN COALESCE(NULLIF(n.cvegeo, ''), 'UNK')
+            ELSE COALESCE(NULLIF(n.cve_ent, ''), 'UNK')
+        END AS location_key,
+        CASE
+            WHEN nl.nivel = 'pais' THEN COALESCE(NULLIF(n.country_name, ''), 'País desconocido')
+            WHEN nl.nivel = 'municipio' THEN COALESCE(NULLIF(n.nom_mun, ''), COALESCE(NULLIF(n.cvegeo, ''), 'Municipio desconocido'))
+            ELSE COALESCE(NULLIF(n.nom_ent, ''), COALESCE(NULLIF(n.cve_ent, ''), 'Estado desconocido'))
+        END AS location_name,
+        n.cve_ent
+    FROM email_normalized n
+    CROSS JOIN normalized_level nl
+),
+email_filtered AS (
+    SELECT s.*
+    FROM email_scoped s
+    CROSS JOIN normalized_level nl
+    CROSS JOIN state_filter sf
+    WHERE (nl.nivel <> 'municipio' OR sf.estado IS NULL OR s.cve_ent = sf.estado)
+      AND (
+            p_campaign_type IS NULL
+            OR lower(p_campaign_type) = 'correo'
+          )
+),
+email_metrics AS (
+    SELECT
+        e.nivel AS location_level,
+        e.location_key,
+        e.location_name,
+        COUNT(DISTINCT e.conversacion_id)::bigint AS conversaciones_correo
+    FROM email_filtered e
+    GROUP BY e.nivel, e.location_key, e.location_name
+),
 wa_atribucion_scoped AS (
     SELECT
         cs.nivel AS location_level,
@@ -529,6 +711,8 @@ all_locations AS (
     UNION
     SELECT location_level, location_key, location_name FROM conversation_metrics
     UNION
+    SELECT location_level, location_key, location_name FROM email_metrics
+    UNION
     SELECT location_level, location_key, location_name FROM wa_atribucion_top
     UNION
     SELECT location_level, location_key, location_name FROM wa_atribucion_metrics
@@ -543,6 +727,7 @@ SELECT
     COALESCE(wc.sesiones_sin_chat_webchat, 0)::bigint AS sesiones_sin_chat_webchat,
     COALESCE(cv.conversaciones_whatsapp, 0)::bigint AS conversaciones_whatsapp,
     COALESCE(cv.conversaciones_voz, 0)::bigint AS conversaciones_voz,
+    COALESCE(em.conversaciones_correo, 0)::bigint AS conversaciones_correo,
     COALESCE(st.fuentes_top, '[]'::jsonb) AS fuentes_top,
     COALESCE(ut.utm_top, '[]'::jsonb) AS utm_top,
     COALESCE(wat.wa_atribucion_top, '[]'::jsonb) AS wa_atribucion_top,
@@ -555,11 +740,13 @@ SELECT
     COALESCE(wc.sesiones_sin_chat_webchat, 0)::bigint AS webchat_sin_chat,
     COALESCE(cv.conversaciones_whatsapp, 0)::bigint AS whatsapp_total,
     COALESCE(cv.conversaciones_voz, 0)::bigint AS voz_total,
+    COALESCE(em.conversaciones_correo, 0)::bigint AS correo_total,
     (
         COALESCE(ws.sesiones_web_total, 0)
         + COALESCE(wc.sesiones_webchat_total, 0)
         + COALESCE(cv.conversaciones_whatsapp, 0)
         + COALESCE(cv.conversaciones_voz, 0)
+        + COALESCE(em.conversaciones_correo, 0)
     ) > 0 AS has_data
 FROM all_locations l
 LEFT JOIN web_sessions_metrics ws
@@ -574,6 +761,10 @@ LEFT JOIN conversation_metrics cv
        ON cv.location_level = l.location_level
       AND cv.location_key = l.location_key
       AND cv.location_name = l.location_name
+LEFT JOIN email_metrics em
+       ON em.location_level = l.location_level
+      AND em.location_key = l.location_key
+      AND em.location_name = l.location_name
 LEFT JOIN source_top st
        ON st.location_level = l.location_level
       AND st.location_key = l.location_key

@@ -39,6 +39,7 @@ const CHANNEL_CONFIG: ChartConfig = {
   webchat: { label: "Webchat", color: "hsl(var(--chart-1))" },
   whatsapp: { label: "WhatsApp", color: "hsl(var(--chart-2))" },
   voz: { label: "Voz", color: "hsl(var(--chart-3))" },
+  correo: { label: "Correo", color: "hsl(var(--chart-4))" },
 };
 
 const STAGE_CONFIG: ChartConfig = {
@@ -94,7 +95,7 @@ export function MapaConversionRowDetail({ row, nivel, summary }: Props) {
   const conversion = totalVisitas > 0 ? (leadsTotal / totalVisitas) * 100 : 0;
   const chatRate = totalVisitas > 0 ? (visitasConChat / totalVisitas) * 100 : 0;
 
-  const channelData = (["webchat", "whatsapp", "voz"] as const).map((channel) => ({
+  const channelData = (["webchat", "whatsapp", "voz", "correo"] as const).map((channel) => ({
     channel,
     label: CHANNEL_CONFIG[channel]?.label ?? channel,
     total: sanitizeNumber(totalesPorCanal[channel]),

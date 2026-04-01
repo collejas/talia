@@ -24300,6 +24300,8 @@ async def demografia_resumen_v2(
     utm_source: str | None = Query(default=None),
     utm_medium: str | None = Query(default=None),
     utm_campaign: str | None = Query(default=None),
+    campana_id: str | None = Query(default=None),
+    campana_tipo: str | None = Query(default=None),
     template_id: str | None = Query(default=None),
     rango: str | None = Query(default=None),
     desde: str | None = Query(default=None),
@@ -24331,6 +24333,14 @@ async def demografia_resumen_v2(
     utm_source_value = (utm_source or "").strip().lower() or None
     utm_medium_value = (utm_medium or "").strip().lower() or None
     utm_campaign_value = (utm_campaign or "").strip().lower() or None
+    campana_tipo_value = (campana_tipo or "").strip().lower() or None
+    campana_id_raw = (campana_id or "").strip() or None
+    campana_uuid_value: UUID | None = None
+    if campana_id_raw:
+        try:
+            campana_uuid_value = UUID(campana_id_raw)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail="campana_id_invalid") from exc
     template_id_raw = (template_id or "").strip() or None
     template_uuid_value: UUID | None = None
     if template_id_raw:
@@ -24357,7 +24367,9 @@ async def demografia_resumen_v2(
             utm_source=utm_source_value,
             utm_medium=utm_medium_value,
             utm_campaign=utm_campaign_value,
+            campaign_id=str(campana_uuid_value) if campana_uuid_value else None,
             template_id=str(template_uuid_value) if template_uuid_value else None,
+            campaign_type=campana_tipo_value,
             jwt=effective_user_token,
         )
 
@@ -24385,17 +24397,41 @@ async def demografia_resumen_v2(
                     utm_campaign_values.append(campaign_key)
 
         utm_campaign_labels: dict[str, str] = {}
-        if utm_campaign_values:
-            campaign_rows = await repo.list_campaigns(organizacion_id=organizacion_id)
-            campaign_name_by_id: dict[str, str] = {}
-            for campaign_row in campaign_rows:
-                if not isinstance(campaign_row, dict):
+        campaign_rows = await repo.list_campaigns(organizacion_id=organizacion_id)
+        campaign_name_by_id: dict[str, str] = {}
+        campaign_options: list[dict[str, Any]] = []
+        campaign_type_options: list[str] = []
+        campaign_type_set: set[str] = set()
+        campaign_ids_for_type: list[UUID] = []
+        for campaign_row in campaign_rows:
+            if not isinstance(campaign_row, dict):
+                continue
+            metadata = campaign_row.get("metadata") if isinstance(campaign_row.get("metadata"), dict) else {}
+            if metadata.get("deleted") is True:
+                continue
+            campaign_id_value = str(campaign_row.get("id") or "").strip()
+            campaign_name = str(campaign_row.get("nombre") or "").strip()
+            campaign_canal = str(campaign_row.get("canal") or "").strip().lower()
+            if not campaign_id_value or not campaign_name:
+                continue
+            campaign_name_by_id[campaign_id_value] = campaign_name
+            if campaign_canal and campaign_canal not in campaign_type_set:
+                campaign_type_set.add(campaign_canal)
+                campaign_type_options.append(campaign_canal)
+            campaign_options.append(
+                {
+                    "value": campaign_id_value,
+                    "label": campaign_name,
+                    "canal": campaign_canal or None,
+                }
+            )
+            if campana_tipo_value and campaign_canal == campana_tipo_value:
+                try:
+                    campaign_ids_for_type.append(UUID(campaign_id_value))
+                except ValueError:
                     continue
-                campaign_id = str(campaign_row.get("id") or "").strip()
-                campaign_name = str(campaign_row.get("nombre") or "").strip()
-                if campaign_id and campaign_name:
-                    campaign_name_by_id[campaign_id] = campaign_name
 
+        if utm_campaign_values:
             link_rows = await repo.list_web_sessions_campaign_links(
                 organizacion_id=organizacion_id,
                 utm_campaigns=utm_campaign_values,
@@ -24418,6 +24454,12 @@ async def demografia_resumen_v2(
                     utm_campaign_labels[campaign_key] = campaign_name
 
         template_options: list[dict[str, Any]] = []
+        campaign_ids_filter: list[UUID] | None = None
+        if campana_uuid_value:
+            campaign_ids_filter = [campana_uuid_value]
+        elif campana_tipo_value and campaign_ids_for_type:
+            campaign_ids_filter = campaign_ids_for_type
+
         template_rows = await repo.list_web_sessions_template_links(
             organizacion_id=organizacion_id,
             date_from=date_from,
@@ -24427,6 +24469,7 @@ async def demografia_resumen_v2(
             utm_source=utm_source_value,
             utm_medium=utm_medium_value,
             utm_campaign=utm_campaign_value,
+            campaign_ids=campaign_ids_filter,
             template_id=None,
         )
         template_totals: dict[str, int] = {}
@@ -24485,10 +24528,14 @@ async def demografia_resumen_v2(
             "utm_source": utm_source_value,
             "utm_medium": utm_medium_value,
             "utm_campaign": utm_campaign_value,
+            "campana_id": str(campana_uuid_value) if campana_uuid_value else None,
+            "campana_tipo": campana_tipo_value,
             "template_id": str(template_uuid_value) if template_uuid_value else None,
         },
         "attribution_catalog": {
             "utm_campaign_labels": utm_campaign_labels,
+            "campana_options": campaign_options,
+            "campana_tipo_options": campaign_type_options,
             "template_options": template_options,
         },
         "leads": leads_payload,
@@ -24512,6 +24559,8 @@ async def demografia_mapa_v2(
     utm_source: str | None = Query(default=None),
     utm_medium: str | None = Query(default=None),
     utm_campaign: str | None = Query(default=None),
+    campana_id: str | None = Query(default=None),
+    campana_tipo: str | None = Query(default=None),
     template_id: str | None = Query(default=None),
     rango: str | None = Query(default=None),
     desde: str | None = Query(default=None),
@@ -24543,6 +24592,14 @@ async def demografia_mapa_v2(
     utm_source_value = (utm_source or "").strip().lower() or None
     utm_medium_value = (utm_medium or "").strip().lower() or None
     utm_campaign_value = (utm_campaign or "").strip().lower() or None
+    campana_tipo_value = (campana_tipo or "").strip().lower() or None
+    campana_id_raw = (campana_id or "").strip() or None
+    campana_uuid_value: UUID | None = None
+    if campana_id_raw:
+        try:
+            campana_uuid_value = UUID(campana_id_raw)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail="campana_id_invalid") from exc
     template_id_raw = (template_id or "").strip() or None
     template_uuid_value: UUID | None = None
     if template_id_raw:
@@ -24579,7 +24636,9 @@ async def demografia_mapa_v2(
             utm_source=utm_source_value,
             utm_medium=utm_medium_value,
             utm_campaign=utm_campaign_value,
+            campaign_id=str(campana_uuid_value) if campana_uuid_value else None,
             template_id=str(template_uuid_value) if template_uuid_value else None,
+            campaign_type=campana_tipo_value,
             jwt=effective_user_token,
         )
         dataset = demografia_service.build_map_dataset(
@@ -24631,6 +24690,7 @@ async def demografia_mapa_v2(
             "sesiones_sin_chat_webchat": int(visitor_row.get("sesiones_sin_chat_webchat") or 0),
             "conversaciones_whatsapp": int(visitor_row.get("conversaciones_whatsapp") or 0),
             "conversaciones_voz": int(visitor_row.get("conversaciones_voz") or 0),
+            "conversaciones_correo": int(visitor_row.get("conversaciones_correo") or 0),
         }
 
     try:
@@ -24658,6 +24718,8 @@ async def demografia_mapa_v2(
             "utm_source": utm_source_value,
             "utm_medium": utm_medium_value,
             "utm_campaign": utm_campaign_value,
+            "campana_id": str(campana_uuid_value) if campana_uuid_value else None,
+            "campana_tipo": campana_tipo_value,
         },
         "totales_leads": (leads_payload.get("totals") if isinstance(leads_payload, dict) else {}),
         "totales_visitantes": (

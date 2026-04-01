@@ -16,7 +16,7 @@ import {
 } from "@/lib/mapa-conversion/stages";
 import { cn } from "@/lib/utils";
 
-const CHANNEL_KEYS = ["webchat", "whatsapp", "voz"] as const;
+const CHANNEL_KEYS = ["webchat", "whatsapp", "voz", "correo"] as const;
 type ChannelKey = (typeof CHANNEL_KEYS)[number];
 
 export type LocationComparisonChartProps = {
@@ -78,12 +78,14 @@ const CHANNEL_COLORS: Record<ChannelKey, [number, number, number]> = {
   webchat: [59, 130, 246], // #3b82f6
   whatsapp: [34, 197, 94], // #22c55e
   voz: [249, 115, 22], // #f97316
+  correo: [14, 116, 144], // #0e7490
 };
 const DEFAULT_CHANNEL_COLOR: [number, number, number] = [148, 163, 184]; // slate
 const CHANNEL_LABELS: Record<ChannelKey, string> = {
   webchat: "Webchat",
   whatsapp: "WhatsApp",
   voz: "Voz",
+  correo: "Correo",
 };
 
 function normalizeChannelKey(value: string | null | undefined): ChannelKey | null {
@@ -132,8 +134,17 @@ function resolveEntryTotal(
   entry: DemografiaMapResponse["dataset"][number],
   allowLeadFallback: boolean = true,
 ): number {
-  const visits = entry.total_visitas ?? 0;
-  if (visits > 0) return visits;
+  const webVisits = entry.total_visitas ?? 0;
+  const channelTotals = entry.visitantes_totales_por_canal || {};
+  let channelSum = 0;
+  for (const channel of CHANNEL_KEYS) {
+    const value = channelTotals[channel];
+    if (typeof value === "number" && Number.isFinite(value)) {
+      channelSum += value;
+    }
+  }
+  const combined = webVisits + channelSum;
+  if (combined > 0) return combined;
   if (!allowLeadFallback) return 0;
   return entry.leads_total ?? 0;
 }
@@ -302,6 +313,7 @@ export function LocationComparisonChart({
         webchat: 0,
         whatsapp: 0,
         voz: 0,
+        correo: 0,
       },
       stages:
         attributionFilterActive
@@ -321,6 +333,7 @@ export function LocationComparisonChart({
       summary.channels.webchat += resolveChannelTotal(entry, "webchat", activeChannelSet);
       summary.channels.whatsapp += resolveChannelTotal(entry, "whatsapp", activeChannelSet);
       summary.channels.voz += resolveChannelTotal(entry, "voz", activeChannelSet);
+      summary.channels.correo += resolveChannelTotal(entry, "correo", activeChannelSet);
     }
 
     summary.stages =
@@ -334,7 +347,7 @@ export function LocationComparisonChart({
       data.length === 1
         ? "1 ubicación"
         : `${formatNumber(data.length)} ubicaciones`;
-    summary.subtitle = `${formatNumber(summary.totalVisitas)} visitas totales · ${locationSubtitle}`;
+    summary.subtitle = `${formatNumber(summary.totalVisitas)} interacciones · ${locationSubtitle}`;
     return summary;
   }, [activeChannelSet, aggregatedStages, allowLeadFallback, attributionFilterActive, data, globalStages, showConversationMetrics, stageKeys]);
 
@@ -356,7 +369,7 @@ export function LocationComparisonChart({
     return {
       scope: "location",
       title: activeEntry.name,
-      subtitle: `${NIVEL_LABELS[activeEntry.nivel as keyof typeof NIVEL_LABELS] ?? "Ubicación"} · ${formatNumber(resolveFilteredEntryTotal(activeEntry, activeChannelSet, allowLeadFallback))} visitas`,
+      subtitle: `${NIVEL_LABELS[activeEntry.nivel as keyof typeof NIVEL_LABELS] ?? "Ubicación"} · ${formatNumber(resolveFilteredEntryTotal(activeEntry, activeChannelSet, allowLeadFallback))} interacciones`,
       totalVisitas: resolveFilteredEntryTotal(activeEntry, activeChannelSet, allowLeadFallback),
       conversation: {
         con_conversacion: conversation.con_conversacion ?? 0,
@@ -366,6 +379,7 @@ export function LocationComparisonChart({
         webchat: resolveChannelTotal(activeEntry, "webchat", activeChannelSet),
         whatsapp: resolveChannelTotal(activeEntry, "whatsapp", activeChannelSet),
         voz: resolveChannelTotal(activeEntry, "voz", activeChannelSet),
+        correo: resolveChannelTotal(activeEntry, "correo", activeChannelSet),
       },
       stages: stageTotals,
     };
@@ -593,11 +607,11 @@ export function LocationComparisonChart({
           </span>
           <span className="text-base font-semibold leading-tight">{metrics.title}</span>
           <span className="text-xs text-muted-foreground">
-            {metrics.subtitle ?? `${formatNumber(metrics.totalVisitas)} visitas totales`}
+            {metrics.subtitle ?? `${formatNumber(metrics.totalVisitas)} interacciones`}
           </span>
           {nivel === "municipio" && unknownVisitsTotal > 0 ? (
             <span className="text-xs text-muted-foreground">
-              Incluye {formatNumber(unknownVisitsTotal)} visitas sin municipio mapeable.
+              Incluye {formatNumber(unknownVisitsTotal)} interacciones sin municipio mapeable.
             </span>
           ) : null}
         </div>

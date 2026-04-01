@@ -319,7 +319,9 @@ async def fetch_visitantes_resumen_v2(
     utm_source: str | None = None,
     utm_medium: str | None = None,
     utm_campaign: str | None = None,
+    campaign_id: str | None = None,
     template_id: str | None = None,
+    campaign_type: str | None = None,
     jwt: str | None = None,
 ) -> dict[str, Any]:
     payload: dict[str, Any] = {"p_nivel": nivel}
@@ -337,8 +339,12 @@ async def fetch_visitantes_resumen_v2(
         payload["p_utm_medium"] = utm_medium
     if utm_campaign:
         payload["p_utm_campaign"] = utm_campaign
+    if campaign_id:
+        payload["p_cid"] = campaign_id
     if template_id:
         payload["p_tid"] = template_id
+    if campaign_type:
+        payload["p_campaign_type"] = campaign_type
 
     # v3 agrega fallback de webchat cuando falta trafico web; para mapa de conversion
     # mantenemos separacion estricta entre landing (web_sessions) y webchat.
@@ -357,10 +363,12 @@ async def fetch_visitantes_resumen_v2(
         "webchat_sin_chat": 0,
         "whatsapp_total": 0,
         "voz_total": 0,
+        "correo_total": 0,
         "sesiones_web_total": 0,
         "sesiones_webchat_total": 0,
         "conversaciones_whatsapp": 0,
         "conversaciones_voz": 0,
+        "conversaciones_correo": 0,
     }
 
     for row in rows:
@@ -372,6 +380,7 @@ async def fetch_visitantes_resumen_v2(
         sesiones_sin_chat_webchat = _to_number(row.get("sesiones_sin_chat_webchat"))
         conversaciones_whatsapp = _to_number(row.get("conversaciones_whatsapp"))
         conversaciones_voz = _to_number(row.get("conversaciones_voz"))
+        conversaciones_correo = _to_number(row.get("conversaciones_correo"))
         wa_atribucion_total = _to_number(row.get("wa_atribucion_total"))
 
         fuentes_top = row.get("fuentes_top")
@@ -396,12 +405,14 @@ async def fetch_visitantes_resumen_v2(
             "webchat_sin_chat": _to_number(row.get("webchat_sin_chat")),
             "whatsapp_total": _to_number(row.get("whatsapp_total")),
             "voz_total": _to_number(row.get("voz_total")),
+            "correo_total": _to_number(row.get("correo_total")),
             "sesiones_web_total": sesiones_web_total,
             "sesiones_webchat_total": sesiones_webchat_total,
             "sesiones_con_chat_webchat": sesiones_con_chat_webchat,
             "sesiones_sin_chat_webchat": sesiones_sin_chat_webchat,
             "conversaciones_whatsapp": conversaciones_whatsapp,
             "conversaciones_voz": conversaciones_voz,
+            "conversaciones_correo": conversaciones_correo,
             "fuentes_top": fuentes_top,
             "utm_top": utm_top,
             "wa_atribucion_top": wa_atribucion_top,
@@ -417,10 +428,12 @@ async def fetch_visitantes_resumen_v2(
         totals["webchat_sin_chat"] += item["webchat_sin_chat"]
         totals["whatsapp_total"] += item["whatsapp_total"]
         totals["voz_total"] += item["voz_total"]
+        totals["correo_total"] = totals.get("correo_total", 0) + item["correo_total"]
         totals["sesiones_web_total"] += sesiones_web_total
         totals["sesiones_webchat_total"] += sesiones_webchat_total
         totals["conversaciones_whatsapp"] += conversaciones_whatsapp
         totals["conversaciones_voz"] += conversaciones_voz
+        totals["conversaciones_correo"] += conversaciones_correo
         totals["wa_atribucion_total"] = totals.get("wa_atribucion_total", 0) + wa_atribucion_total
 
     return {
@@ -611,6 +624,7 @@ def build_map_dataset(
         webchat_total = _to_number(row.get("webchat_total"))
         whatsapp_total = _to_number(row.get("whatsapp_total"))
         voz_total = _to_number(row.get("voz_total"))
+        correo_total = _to_number(row.get("correo_total"))
 
         entry["visitantes_total"] += total_visitas
         entry["visitantes_con_chat"] += _to_number(row.get("con_chat"))
@@ -629,6 +643,12 @@ def build_map_dataset(
             )
         if voz_total > 0:
             visitantes_channels["voz"] = visitantes_channels.get("voz", 0) + voz_total
+        if correo_total > 0:
+            visitantes_channels["correo"] = (
+                visitantes_channels.get("correo", 0) + correo_total
+            )
+        if webchat_total > 0 or whatsapp_total > 0 or voz_total > 0 or correo_total > 0:
+            entry["has_data"] = True
 
     result = []
     for entry in combined.values():
@@ -672,7 +692,10 @@ def build_map_dataset(
         }
         entry["total_visitas"] = visitantes_channels.get("web", 0)
         entry["has_data"] = (
-            entry["has_data"] or entry["total_visitas"] > 0 or entry["leads_total"] > 0
+            entry["has_data"]
+            or entry["total_visitas"] > 0
+            or entry["leads_total"] > 0
+            or any(value > 0 for value in visitantes_channels.values())
         )
         logger.info(
             "demografia.entry_aggregated",
@@ -698,7 +721,11 @@ def build_map_dataset(
             entry["next_level"] = None
         if not entry["has_data"]:
             entry["next_level"] = None
-        if entry["total_visitas"] <= 0 and entry["leads_total"] <= 0:
+        if (
+            entry["total_visitas"] <= 0
+            and entry["leads_total"] <= 0
+            and not any(value > 0 for value in entry["visitantes_totales_por_canal"].values())
+        ):
             continue
 
         normalized_entry = {
