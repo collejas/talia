@@ -122,6 +122,7 @@ web_sessions_raw AS (
             p_campaign_type IS NULL
             OR lower(COALESCE(c.canal, '')) = lower(p_campaign_type)
           )
+      AND (p_wa_canal_publicitario IS NULL AND p_wa_campana_publicitaria IS NULL AND p_wa_regla_id IS NULL)
 ),
 web_sessions_scoped AS (
     SELECT
@@ -253,6 +254,7 @@ webchat_visits AS (
     JOIN tenant t ON w.organizacion_id = t.organizacion_id
     WHERE (p_from IS NULL OR w.ultimo_evento_en >= p_from)
       AND (p_to IS NULL OR w.ultimo_evento_en <= p_to)
+      AND (p_wa_canal_publicitario IS NULL AND p_wa_campana_publicitaria IS NULL AND p_wa_regla_id IS NULL)
 ),
 webchat_geo AS (
     SELECT
@@ -575,6 +577,7 @@ email_inbound_raw AS (
             p_campaign_type IS NULL
             OR lower(COALESCE(c.canal, '')) = lower(p_campaign_type)
           )
+      AND (p_wa_canal_publicitario IS NULL AND p_wa_campana_publicitaria IS NULL AND p_wa_regla_id IS NULL)
 ),
 email_geo AS (
     SELECT
