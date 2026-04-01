@@ -421,6 +421,42 @@ export async function loadVisitsTableForConversionMap(
   return mapTable(filteredRows, lookup);
 }
 
+export async function loadConversationsTableForConversionMap(
+  filters: VisitsFilters = {},
+): Promise<VisitTableRow[]> {
+  const templatesResult = hasAttributionFilters(filters)
+    ? await callCrmApi<{ items?: ContactoTemplateRow[] }>("/crm/prospeccion/contacto/templates", {
+        withUserToken: true,
+      })
+    : null;
+  const webchat = await loadWebchatVisitRows(filters);
+  if (webchat.errors.length) {
+    throw new Error(webchat.errors[0]);
+  }
+  const whatsappResult = await callCrmApi<WhatsappConversationRow[]>(
+    "/crm/visitas/whatsapp/conversaciones",
+    {
+      withUserToken: true,
+      searchParams: {
+        rango: filters.rango || undefined,
+        desde: filters.desde || undefined,
+        hasta: filters.hasta || undefined,
+        limit: 500,
+      },
+    },
+  );
+  if (!whatsappResult.ok) {
+    throw new Error(whatsappResult.error);
+  }
+  const lookup = templatesResult?.ok ? buildTemplateLookup(templatesResult.data) : undefined;
+  const webchatChats = webchat.rows.filter((row) => row.tuvo_chat);
+  const whatsappRows = mapWhatsappRows(whatsappResult.data);
+  const merged = applyChannelFilter([...webchatChats, ...whatsappRows], filters);
+  const enriched = enrichVisitRows(merged, filters, lookup);
+  const filtered = enriched.filter((row) => matchesVisitsFilters(row, filters));
+  return mapTable(filtered, lookup);
+}
+
 export async function loadVisitsData(filters: VisitsFilters = {}): Promise<VisitsPayload> {
   const [kpisResult, webchatResult, whatsappVisitResult, whatsappDetailResult, templatesResult] = await Promise.all([
     callCrmApi<DashboardKpisResponse>("/crm/visitas/kpis", { withUserToken: true }),

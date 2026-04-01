@@ -20,7 +20,7 @@ import {
   createEmptyStageTotals,
   orderStageKeys,
 } from "@/lib/mapa-conversion/stages";
-import { loadVisitsTableForConversionMap } from "@/lib/visitas/data";
+import { loadConversationsTableForConversionMap, loadVisitsTableForConversionMap } from "@/lib/visitas/data";
 import { MapKpis } from "@/components/mapa-conversion/map-kpis";
 
 export const dynamic = "force-dynamic";
@@ -283,6 +283,7 @@ export default async function Page({
 
   let demografiaResponse: Awaited<ReturnType<typeof loadDemografiaData>> | null = null;
   let visitsTable: Awaited<ReturnType<typeof loadVisitsTableForConversionMap>> = [];
+  let conversationsTable: Awaited<ReturnType<typeof loadConversationsTableForConversionMap>> = [];
   const errores: string[] = [];
 
   try {
@@ -332,6 +333,27 @@ export default async function Page({
       error instanceof Error
         ? error.message
         : "No se pudieron cargar las visitas recientes."
+    );
+  }
+
+  try {
+    conversationsTable = await loadConversationsTableForConversionMap({
+      canales: canalesSelected,
+      estado: nivel === "municipio" ? normalizedEstado : null,
+      sourceClass,
+      utmSource,
+      utmMedium,
+      utmCampaign,
+      templateId,
+      rango,
+      desde,
+      hasta,
+    });
+  } catch (error) {
+    errores.push(
+      error instanceof Error
+        ? error.message
+        : "No se pudieron cargar las conversaciones recientes."
     );
   }
 
@@ -630,7 +652,18 @@ export default async function Page({
               ) : null}
               {visitsTable.length ? (
                 <div className="px-4 lg:px-6">
+                  <div className="mb-3 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+                    Sesiones web
+                  </div>
                   <VisitsDataTable data={visitsTable} />
+                </div>
+              ) : null}
+              {conversationsTable.length ? (
+                <div className="px-4 lg:px-6">
+                  <div className="mb-3 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+                    Conversaciones
+                  </div>
+                  <VisitsDataTable data={conversationsTable} />
                 </div>
               ) : null}
             </div>
