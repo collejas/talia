@@ -102,6 +102,10 @@ function renderValue(value: unknown, type: FieldType) {
 
 const VISIT_FIELDS: VisitField[] = [
   { id: "registrado_en", key: "registrado_en", label: "Creado", type: "datetime", defaultVisible: true },
+  { id: "wa_canal_publicitario", key: "wa_canal_publicitario", label: "Canal WA", type: "string", defaultVisible: true },
+  { id: "wa_campana_publicitaria", key: "wa_campana_publicitaria", label: "Campaña WA", type: "string", defaultVisible: true },
+  { id: "wa_regla_nombre", key: "wa_regla_nombre", label: "Regla WA", type: "string", defaultVisible: true },
+  { id: "wa_regla_frase", key: "wa_regla_frase", label: "Frase WA", type: "string" },
   { id: "ip", key: "ip", label: "IP", type: "string" },
   { id: "primera_visita_en", key: "primera_visita_en", label: "Primera visita", type: "datetime" },
   { id: "ultimo_evento_en", key: "ultimo_evento_en", label: "Último evento", type: "datetime" },

@@ -21,6 +21,16 @@ type WhatsappConversationRow = {
   canal: string | null;
   iniciada_en: string | null;
   ultimo_mensaje_en: string | null;
+  whatsapp_atribucion?: {
+    canal_publicitario?: string | null;
+    campana_publicitaria?: string | null;
+    regla_id?: string | null;
+    regla_nombre?: string | null;
+    regla_frase?: string | null;
+    adset?: string | null;
+    anuncio?: string | null;
+    creado_en?: string | null;
+  } | null;
   contacto: {
     nombre_completo?: string | null;
     correo?: string | null;
@@ -71,6 +81,11 @@ export type VisitDetailRaw = {
   eid?: string | null;
   oportunidad_id: string | null;
   canal?: string | null;
+  wa_canal_publicitario?: string | null;
+  wa_campana_publicitaria?: string | null;
+  wa_regla_id?: string | null;
+  wa_regla_nombre?: string | null;
+  wa_regla_frase?: string | null;
   ip: string | null;
   registrado_en: string | null;
   primera_visita_en: string | null;
@@ -867,10 +882,16 @@ function mapWhatsappRows(rows?: WhatsappConversationRow[] | null): VisitDetailRa
   if (!rows || !rows.length) return [];
   return rows.map((row) => {
     const location = inferPhoneLocation(row.contacto?.telefono_e164 || null);
+    const atribucion = row.whatsapp_atribucion ?? {};
     return {
       session_id: `whatsapp-${row.id}`,
       oportunidad_id: null,
       canal: "whatsapp",
+      wa_canal_publicitario: atribucion.canal_publicitario ?? null,
+      wa_campana_publicitaria: atribucion.campana_publicitaria ?? null,
+      wa_regla_id: atribucion.regla_id ?? null,
+      wa_regla_nombre: atribucion.regla_nombre ?? null,
+      wa_regla_frase: atribucion.regla_frase ?? null,
       ip: null,
       registrado_en: row.iniciada_en,
       primera_visita_en: row.iniciada_en,

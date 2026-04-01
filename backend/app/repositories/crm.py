@@ -11748,6 +11748,36 @@ class CRMRepository:
             raise CRMRepositoryError(f"whatsapp_atribucion_events_by_conversation_invalid:{data!r}")
         return [row for row in data if isinstance(row, dict)]
 
+    async def worker_list_whatsapp_atribucion_reglas_by_ids(
+        self,
+        *,
+        organizacion_id: UUID,
+        regla_ids: Sequence[str],
+    ) -> list[dict[str, Any]]:
+        """Consulta reglas de atribución por IDs."""
+
+        if not regla_ids:
+            return []
+        safe_ids = [value.strip() for value in regla_ids if isinstance(value, str) and value.strip()]
+        if not safe_ids:
+            return []
+        params = {
+            "select": "id,nombre_regla,frase_objetivo,canal_publicitario,campana_publicitaria",
+            "organizacion_id": f"eq.{organizacion_id}",
+            "id": _postgrest_in_clause(safe_ids),
+            "limit": str(min(len(safe_ids), 500)),
+        }
+        resp = await self._request_service_role(
+            "GET",
+            "/rest/v1/prospeccion_whatsapp_atribucion_reglas",
+            params=params,
+            organizacion_id=organizacion_id,
+        )
+        data = resp.json() or []
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"whatsapp_atribucion_reglas_by_ids_invalid:{data!r}")
+        return [row for row in data if isinstance(row, dict)]
+
     async def worker_get_message_by_id(
         self,
         *,

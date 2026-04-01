@@ -21871,6 +21871,56 @@ async def get_visits_whatsapp_conversations(
             date_from=date_from,
             date_to=date_to,
         )
+        conversation_ids = [
+            str(row.get("id") or "").strip()
+            for row in rows
+            if isinstance(row, dict) and str(row.get("id") or "").strip()
+        ]
+        wa_events = await repo.worker_list_whatsapp_atribucion_events_by_conversations(
+            organizacion_id=organizacion_id,
+            conversation_ids=conversation_ids,
+        )
+        wa_by_conversation: dict[str, dict[str, Any]] = {}
+        for event_row in wa_events:
+            conv_id = str(event_row.get("conversacion_id") or "").strip()
+            if not conv_id or conv_id in wa_by_conversation:
+                continue
+            wa_by_conversation[conv_id] = event_row
+        regla_ids = [
+            str(event_row.get("regla_id") or "").strip()
+            for event_row in wa_events
+            if str(event_row.get("regla_id") or "").strip()
+        ]
+        reglas_rows = await repo.worker_list_whatsapp_atribucion_reglas_by_ids(
+            organizacion_id=organizacion_id,
+            regla_ids=regla_ids,
+        )
+        regla_by_id = {
+            str(rule_row.get("id") or "").strip(): rule_row
+            for rule_row in reglas_rows
+            if isinstance(rule_row, dict) and str(rule_row.get("id") or "").strip()
+        }
+        enriched_rows: list[dict[str, Any]] = []
+        for row in rows:
+            if not isinstance(row, dict):
+                continue
+            conv_id = str(row.get("id") or "").strip()
+            event_row = wa_by_conversation.get(conv_id)
+            if event_row:
+                regla_id_value = str(event_row.get("regla_id") or "").strip()
+                regla_row = regla_by_id.get(regla_id_value, {})
+                row["whatsapp_atribucion"] = {
+                    "canal_publicitario": _clean_text(event_row.get("canal_publicitario")),
+                    "campana_publicitaria": _clean_text(event_row.get("campana_publicitaria")),
+                    "regla_id": regla_id_value or None,
+                    "regla_nombre": _clean_text(regla_row.get("nombre_regla")),
+                    "regla_frase": _clean_text(regla_row.get("frase_objetivo")),
+                    "adset": _clean_text(event_row.get("adset")),
+                    "anuncio": _clean_text(event_row.get("anuncio")),
+                    "creado_en": event_row.get("creado_en"),
+                }
+            enriched_rows.append(row)
+        rows = enriched_rows
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     return rows
