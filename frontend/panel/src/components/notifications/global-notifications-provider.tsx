@@ -115,7 +115,7 @@ export function GlobalNotificationsProvider({ children }: GlobalNotificationsPro
   const [unreadCount, setUnreadCount] = useState(0)
   const [totalCount, setTotalCount] = useState(0)
   const [loading, setLoading] = useState(true)
-  const [unreadOnly, setUnreadOnly] = useState(false)
+  const [unreadOnly, setUnreadOnly] = useState(true)
   const [levelFilter, setLevelFilter] = useState<string[] | null>(null)
   const [offset, setOffset] = useState(0)
   const seenRef = useRef<Set<string>>(new Set())
@@ -183,19 +183,27 @@ export function GlobalNotificationsProvider({ children }: GlobalNotificationsPro
 
   const markAsRead = useCallback(async (notificationId: string) => {
     const updated = await markNotificationRead(notificationId)
-    setItems((prev) =>
-      prev.map((item) => (item.id === notificationId ? { ...item, read_at: updated.read_at ?? new Date().toISOString() } : item))
-    )
+    setItems((prev) => {
+      const next = prev.map((item) =>
+        item.id === notificationId
+          ? { ...item, read_at: updated.read_at ?? new Date().toISOString() }
+          : item
+      )
+      return unreadOnly ? next.filter((item) => !item.read_at) : next
+    })
     setUnreadCount((prev) => Math.max(0, prev - 1))
-  }, [])
+  }, [unreadOnly])
 
   const markAllAsRead = useCallback(async () => {
     const updated = await markAllNotificationsRead()
     if (updated <= 0) return
     const now = new Date().toISOString()
-    setItems((prev) => prev.map((item) => ({ ...item, read_at: item.read_at ?? now })))
+    setItems((prev) => {
+      const next = prev.map((item) => ({ ...item, read_at: item.read_at ?? now }))
+      return unreadOnly ? next.filter((item) => !item.read_at) : next
+    })
     setUnreadCount(0)
-  }, [])
+  }, [unreadOnly])
 
   const hideItem = useCallback(async (notificationId: string) => {
     await hideNotification(notificationId)

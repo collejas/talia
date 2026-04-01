@@ -264,7 +264,7 @@ export function NotificationCenter() {
                 onClick={() => void refresh({ unreadOnly: !unreadOnly })}
                 disabled={loading}
               >
-                {unreadOnly ? "Mostrando no leidas" : "Solo no leidas"}
+                {unreadOnly ? "Mostrar leidas" : "Solo no leidas"}
               </Button>
               <Button
                 variant={levelFilter?.includes("error") ? "default" : "outline"}
