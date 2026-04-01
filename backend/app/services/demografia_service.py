@@ -322,6 +322,9 @@ async def fetch_visitantes_resumen_v2(
     campaign_id: str | None = None,
     template_id: str | None = None,
     campaign_type: str | None = None,
+    wa_canal_publicitario: str | None = None,
+    wa_campana_publicitaria: str | None = None,
+    wa_regla_id: str | None = None,
     jwt: str | None = None,
 ) -> dict[str, Any]:
     payload: dict[str, Any] = {"p_nivel": nivel}
@@ -345,6 +348,12 @@ async def fetch_visitantes_resumen_v2(
         payload["p_tid"] = template_id
     if campaign_type:
         payload["p_campaign_type"] = campaign_type
+    if wa_canal_publicitario:
+        payload["p_wa_canal_publicitario"] = wa_canal_publicitario
+    if wa_campana_publicitaria:
+        payload["p_wa_campana_publicitaria"] = wa_campana_publicitaria
+    if wa_regla_id:
+        payload["p_wa_regla_id"] = wa_regla_id
 
     # v3 agrega fallback de webchat cuando falta trafico web; para mapa de conversion
     # mantenemos separacion estricta entre landing (web_sessions) y webchat.

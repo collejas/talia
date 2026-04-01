@@ -244,14 +244,35 @@ export default async function Page({
   const campanaIdParam = typeof params.campana_id === "string" ? params.campana_id.trim() : "";
   const campanaTipoParam = typeof params.campana_tipo === "string" ? params.campana_tipo.trim().toLowerCase() : "";
   const templateIdParam = typeof params.template_id === "string" ? params.template_id.trim() : "";
+  const waCanalParam =
+    typeof params.wa_canal_publicitario === "string"
+      ? params.wa_canal_publicitario.trim()
+      : "";
+  const waCampanaParam =
+    typeof params.wa_campana_publicitaria === "string"
+      ? params.wa_campana_publicitaria.trim()
+      : "";
+  const waReglaParam = typeof params.wa_regla_id === "string" ? params.wa_regla_id.trim() : "";
   const utmSource = utmSourceParam.length ? utmSourceParam : null;
   const utmMedium = utmMediumParam.length ? utmMediumParam : null;
   const utmCampaign = utmCampaignParam.length ? utmCampaignParam : null;
   const campanaId = campanaIdParam.length ? campanaIdParam : null;
   const campanaTipo = campanaTipoParam.length ? campanaTipoParam : null;
   const templateId = templateIdParam.length ? templateIdParam : null;
+  const waCanalPublicitario = waCanalParam.length ? waCanalParam : null;
+  const waCampanaPublicitaria = waCampanaParam.length ? waCampanaParam : null;
+  const waReglaId = waReglaParam.length ? waReglaParam : null;
   const attributionFilterActive = Boolean(
-    sourceClass || utmSource || utmMedium || utmCampaign || campanaId || campanaTipo || templateId,
+    sourceClass ||
+      utmSource ||
+      utmMedium ||
+      utmCampaign ||
+      campanaId ||
+      campanaTipo ||
+      templateId ||
+      waCanalPublicitario ||
+      waCampanaPublicitaria ||
+      waReglaId,
   );
   const rangoParam = typeof params.rango === "string" ? params.rango.trim().toLowerCase() : "";
   const rango = rangoParam.length ? rangoParam : "mes";
@@ -276,6 +297,9 @@ export default async function Page({
       campanaId,
       campanaTipo,
       templateId,
+      waCanalPublicitario,
+      waCampanaPublicitaria,
+      waReglaId,
       rango,
       desde,
       hasta,
@@ -410,6 +434,12 @@ export default async function Page({
       demografiaResponse?.summary.attribution_catalog?.campana_options ?? [];
     const campanaTipoOptionsRaw =
       demografiaResponse?.summary.attribution_catalog?.campana_tipo_options ?? [];
+    const waCanalOptionsRaw =
+      demografiaResponse?.summary.attribution_catalog?.wa_canal_options ?? [];
+    const waCampanaOptionsRaw =
+      demografiaResponse?.summary.attribution_catalog?.wa_campana_options ?? [];
+    const waReglaOptionsRaw =
+      demografiaResponse?.summary.attribution_catalog?.wa_regla_options ?? [];
     if (!demografiaResponse) {
       return {
         sources: [] as string[],
@@ -418,6 +448,14 @@ export default async function Page({
         templates: [] as Array<{ value: string; label: string }>,
         campanas: [] as Array<{ value: string; label: string; canal?: string | null }>,
         campanaTipos: [] as string[],
+        waCanales: [] as string[],
+        waCampanas: [] as string[],
+        waReglas: [] as Array<{
+          value: string;
+          label: string;
+          canal_publicitario?: string | null;
+          campana_publicitaria?: string | null;
+        }>,
       };
     }
     const pushValue = (set: Set<string>, value: string | null | undefined) => {
@@ -465,6 +503,25 @@ export default async function Page({
       campanaTipos: campanaTipoOptionsRaw
         .map((value) => String(value || "").trim().toLowerCase())
         .filter((value) => value.length > 0),
+      waCanales: waCanalOptionsRaw
+        .map((value) => String(value || "").trim())
+        .filter((value) => value.length > 0),
+      waCampanas: waCampanaOptionsRaw
+        .map((value) => String(value || "").trim())
+        .filter((value) => value.length > 0),
+      waReglas: waReglaOptionsRaw
+        .map((item) => ({
+          value: String(item.value || "").trim(),
+          label: (() => {
+            const base = String(item.label || item.value || "").trim();
+            const canal = String(item.canal_publicitario || "").trim();
+            if (!canal) return base;
+            return `${base} · ${canal}`;
+          })(),
+          canal_publicitario: item.canal_publicitario ?? null,
+          campana_publicitaria: item.campana_publicitaria ?? null,
+        }))
+        .filter((item) => item.value.length > 0),
     };
   })();
   const nivelLabel = nivel.charAt(0).toUpperCase() + nivel.slice(1);
@@ -521,12 +578,18 @@ export default async function Page({
                 campanaId={campanaId}
                 campanaTipo={campanaTipo}
                 templateId={templateId}
+                waCanalPublicitario={waCanalPublicitario}
+                waCampanaPublicitaria={waCampanaPublicitaria}
+                waReglaId={waReglaId}
                 utmSourceOptions={utmOptions.sources}
                 utmMediumOptions={utmOptions.media}
                 utmCampaignOptions={utmOptions.campaigns}
                 campanaOptions={utmOptions.campanas}
                 campanaTipoOptions={utmOptions.campanaTipos}
                 templateOptions={utmOptions.templates}
+                waCanalOptions={utmOptions.waCanales}
+                waCampanaOptions={utmOptions.waCampanas}
+                waReglaOptions={utmOptions.waReglas}
                 rango={rango}
                 desde={desde}
                 hasta={hasta}

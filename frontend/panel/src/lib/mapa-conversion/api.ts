@@ -105,6 +105,14 @@ export type DemografiaSummaryResponse = {
       label: string;
       total?: number;
     }>;
+    wa_canal_options?: string[];
+    wa_campana_options?: string[];
+    wa_regla_options?: Array<{
+      value: string;
+      label: string;
+      canal_publicitario?: string | null;
+      campana_publicitaria?: string | null;
+    }>;
   };
   leads: {
     rows: DemografiaLeadsRow[];
@@ -220,6 +228,9 @@ export async function loadDemografiaData(
     campanaId?: string | null;
     campanaTipo?: string | null;
     templateId?: string | null;
+    waCanalPublicitario?: string | null;
+    waCampanaPublicitaria?: string | null;
+    waReglaId?: string | null;
     rango?: string | null;
     desde?: string | null;
     hasta?: string | null;
@@ -269,6 +280,18 @@ export async function loadDemografiaData(
   if (options.templateId) {
     resumenParams.template_id = options.templateId;
     mapaParams.template_id = options.templateId;
+  }
+  if (options.waCanalPublicitario) {
+    resumenParams.wa_canal_publicitario = options.waCanalPublicitario;
+    mapaParams.wa_canal_publicitario = options.waCanalPublicitario;
+  }
+  if (options.waCampanaPublicitaria) {
+    resumenParams.wa_campana_publicitaria = options.waCampanaPublicitaria;
+    mapaParams.wa_campana_publicitaria = options.waCampanaPublicitaria;
+  }
+  if (options.waReglaId) {
+    resumenParams.wa_regla_id = options.waReglaId;
+    mapaParams.wa_regla_id = options.waReglaId;
   }
   if (options.rango) {
     resumenParams.rango = options.rango;

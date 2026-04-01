@@ -59,12 +59,23 @@ type DemografiaControlsProps = {
   campanaId: string | null;
   campanaTipo: string | null;
   templateId: string | null;
+  waCanalPublicitario: string | null;
+  waCampanaPublicitaria: string | null;
+  waReglaId: string | null;
   utmSourceOptions: string[];
   utmMediumOptions: string[];
   utmCampaignOptions: Array<{ value: string; label: string }>;
   campanaOptions: Array<{ value: string; label: string; canal?: string | null }>;
   campanaTipoOptions: string[];
   templateOptions: Array<{ value: string; label: string }>;
+  waCanalOptions: string[];
+  waCampanaOptions: string[];
+  waReglaOptions: Array<{
+    value: string;
+    label: string;
+    canal_publicitario?: string | null;
+    campana_publicitaria?: string | null;
+  }>;
   rango: string | null;
   desde: string | null;
   hasta: string | null;
@@ -82,12 +93,18 @@ export function DemografiaControls({
   campanaId,
   campanaTipo,
   templateId,
+  waCanalPublicitario,
+  waCampanaPublicitaria,
+  waReglaId,
   utmSourceOptions,
   utmMediumOptions,
   utmCampaignOptions,
   campanaOptions,
   campanaTipoOptions,
   templateOptions,
+  waCanalOptions,
+  waCampanaOptions,
+  waReglaOptions,
   rango,
   desde,
   hasta,
@@ -130,6 +147,19 @@ export function DemografiaControls({
       return canal === target || !canal;
     });
   }, [campanaOptions, campanaTipo]);
+
+  const filteredWaReglaOptions = React.useMemo(() => {
+    if (!waCanalPublicitario && !waCampanaPublicitaria) return waReglaOptions;
+    const canalTarget = (waCanalPublicitario || "").trim().toLowerCase();
+    const campanaTarget = (waCampanaPublicitaria || "").trim().toLowerCase();
+    return waReglaOptions.filter((option) => {
+      const canal = (option.canal_publicitario || "").trim().toLowerCase();
+      const campana = (option.campana_publicitaria || "").trim().toLowerCase();
+      if (canalTarget && canal && canal !== canalTarget) return false;
+      if (campanaTarget && campana && campana !== campanaTarget) return false;
+      return true;
+    });
+  }, [waCanalPublicitario, waCampanaPublicitaria, waReglaOptions]);
 
   const formatCampanaTipoLabel = React.useCallback((value: string) => {
     const normalized = value.trim().toLowerCase();
@@ -232,6 +262,9 @@ export function DemografiaControls({
       campana_id: null,
       campana_tipo: null,
       template_id: null,
+      wa_canal_publicitario: null,
+      wa_campana_publicitaria: null,
+      wa_regla_id: null,
     });
   }
 
@@ -571,6 +604,91 @@ export function DemografiaControls({
               ) : null}
               {templateOptions.map((option) => (
                 <SelectItem key={`template-${option.value}`} value={option.value}>
+                  {option.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="flex w-full items-center gap-2 pt-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          Atribución WhatsApp
+        </div>
+
+        <div className="space-y-1">
+          <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+            Canal publicitario
+          </p>
+          <Select
+            value={waCanalPublicitario ?? "all"}
+            onValueChange={(value) => {
+              updateParams({ wa_canal_publicitario: value === "all" ? null : value });
+            }}
+          >
+            <SelectTrigger className="w-[220px]">
+              <SelectValue placeholder="Canal publicitario" />
+            </SelectTrigger>
+            <SelectContent className="z-50">
+              <SelectItem value="all">Todos</SelectItem>
+              {waCanalPublicitario && !waCanalOptions.includes(waCanalPublicitario) ? (
+                <SelectItem value={waCanalPublicitario}>{waCanalPublicitario}</SelectItem>
+              ) : null}
+              {waCanalOptions.map((option) => (
+                <SelectItem key={`wa-canal-${option}`} value={option}>
+                  {option}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="space-y-1">
+          <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+            Campaña publicitaria
+          </p>
+          <Select
+            value={waCampanaPublicitaria ?? "all"}
+            onValueChange={(value) => {
+              updateParams({ wa_campana_publicitaria: value === "all" ? null : value });
+            }}
+          >
+            <SelectTrigger className="w-[240px]">
+              <SelectValue placeholder="Campaña publicitaria" />
+            </SelectTrigger>
+            <SelectContent className="z-50">
+              <SelectItem value="all">Todas</SelectItem>
+              {waCampanaPublicitaria && !waCampanaOptions.includes(waCampanaPublicitaria) ? (
+                <SelectItem value={waCampanaPublicitaria}>{waCampanaPublicitaria}</SelectItem>
+              ) : null}
+              {waCampanaOptions.map((option) => (
+                <SelectItem key={`wa-campana-${option}`} value={option}>
+                  {option}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="space-y-1">
+          <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+            Regla de atribución
+          </p>
+          <Select
+            value={waReglaId ?? "all"}
+            onValueChange={(value) => {
+              updateParams({ wa_regla_id: value === "all" ? null : value });
+            }}
+          >
+            <SelectTrigger className="w-[260px]">
+              <SelectValue placeholder="Regla de atribución" />
+            </SelectTrigger>
+            <SelectContent className="z-50">
+              <SelectItem value="all">Todas</SelectItem>
+              {waReglaId && !waReglaOptions.some((option) => option.value === waReglaId) ? (
+                <SelectItem value={waReglaId}>{waReglaId}</SelectItem>
+              ) : null}
+              {filteredWaReglaOptions.map((option) => (
+                <SelectItem key={`wa-regla-${option.value}`} value={option.value}>
                   {option.label}
                 </SelectItem>
               ))}

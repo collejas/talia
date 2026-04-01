@@ -24303,6 +24303,9 @@ async def demografia_resumen_v2(
     campana_id: str | None = Query(default=None),
     campana_tipo: str | None = Query(default=None),
     template_id: str | None = Query(default=None),
+    wa_canal_publicitario: str | None = Query(default=None),
+    wa_campana_publicitaria: str | None = Query(default=None),
+    wa_regla_id: str | None = Query(default=None),
     rango: str | None = Query(default=None),
     desde: str | None = Query(default=None),
     hasta: str | None = Query(default=None),
@@ -24334,6 +24337,8 @@ async def demografia_resumen_v2(
     utm_medium_value = (utm_medium or "").strip().lower() or None
     utm_campaign_value = (utm_campaign or "").strip().lower() or None
     campana_tipo_value = (campana_tipo or "").strip().lower() or None
+    wa_canal_publicitario_value = (wa_canal_publicitario or "").strip().lower() or None
+    wa_campana_publicitaria_value = (wa_campana_publicitaria or "").strip().lower() or None
     campana_id_raw = (campana_id or "").strip() or None
     campana_uuid_value: UUID | None = None
     if campana_id_raw:
@@ -24348,6 +24353,13 @@ async def demografia_resumen_v2(
             template_uuid_value = UUID(template_id_raw)
         except ValueError as exc:
             raise HTTPException(status_code=400, detail="template_id_invalid") from exc
+    wa_regla_id_raw = (wa_regla_id or "").strip() or None
+    wa_regla_uuid_value: UUID | None = None
+    if wa_regla_id_raw:
+        try:
+            wa_regla_uuid_value = UUID(wa_regla_id_raw)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail="wa_regla_id_invalid") from exc
 
     try:
         leads_payload = await demografia_service.fetch_leads_resumen(
@@ -24370,6 +24382,9 @@ async def demografia_resumen_v2(
             campaign_id=str(campana_uuid_value) if campana_uuid_value else None,
             template_id=str(template_uuid_value) if template_uuid_value else None,
             campaign_type=campana_tipo_value,
+            wa_canal_publicitario=wa_canal_publicitario_value,
+            wa_campana_publicitaria=wa_campana_publicitaria_value,
+            wa_regla_id=str(wa_regla_uuid_value) if wa_regla_uuid_value else None,
             jwt=effective_user_token,
         )
 
@@ -24507,6 +24522,47 @@ async def demografia_resumen_v2(
             ],
             key=lambda item: (-int(item.get("total") or 0), str(item.get("label") or "")),
         )
+
+        wa_rules_rows, _ = await repo.list_whatsapp_atribucion_reglas(
+            usuario_token=effective_user_token,
+            limit=500,
+            offset=0,
+            activo=True,
+            include_historial=False,
+        )
+        wa_canal_options: list[str] = []
+        wa_campana_options: list[str] = []
+        wa_regla_options: list[dict[str, Any]] = []
+        wa_canal_set: set[str] = set()
+        wa_campana_set: set[str] = set()
+        for rule_row in wa_rules_rows:
+            if not isinstance(rule_row, dict):
+                continue
+            regla_id_value = str(rule_row.get("id") or "").strip()
+            if not regla_id_value:
+                continue
+            canal_value = str(rule_row.get("canal_publicitario") or "").strip()
+            campana_value = str(rule_row.get("campana_publicitaria") or "").strip()
+            if canal_value and canal_value not in wa_canal_set:
+                wa_canal_set.add(canal_value)
+                wa_canal_options.append(canal_value)
+            if campana_value and campana_value not in wa_campana_set:
+                wa_campana_set.add(campana_value)
+                wa_campana_options.append(campana_value)
+            nombre_value = str(rule_row.get("nombre_regla") or "").strip()
+            frase_value = str(rule_row.get("frase_objetivo") or "").strip()
+            label_value = nombre_value or frase_value or campana_value or f"Regla {regla_id_value[:8]}"
+            wa_regla_options.append(
+                {
+                    "value": regla_id_value,
+                    "label": label_value,
+                    "canal_publicitario": canal_value or None,
+                    "campana_publicitaria": campana_value or None,
+                }
+            )
+        wa_canal_options.sort()
+        wa_campana_options.sort()
+        wa_regla_options.sort(key=lambda item: str(item.get("label") or ""))
     except DemografiaServiceError as exc:
         logger.exception("crm.demografia.resumen_v2_failed")
         raise HTTPException(
@@ -24531,12 +24587,18 @@ async def demografia_resumen_v2(
             "campana_id": str(campana_uuid_value) if campana_uuid_value else None,
             "campana_tipo": campana_tipo_value,
             "template_id": str(template_uuid_value) if template_uuid_value else None,
+            "wa_canal_publicitario": wa_canal_publicitario_value,
+            "wa_campana_publicitaria": wa_campana_publicitaria_value,
+            "wa_regla_id": str(wa_regla_uuid_value) if wa_regla_uuid_value else None,
         },
         "attribution_catalog": {
             "utm_campaign_labels": utm_campaign_labels,
             "campana_options": campaign_options,
             "campana_tipo_options": campaign_type_options,
             "template_options": template_options,
+            "wa_canal_options": wa_canal_options,
+            "wa_campana_options": wa_campana_options,
+            "wa_regla_options": wa_regla_options,
         },
         "leads": leads_payload,
         "visitantes": visitantes_payload,
@@ -24562,6 +24624,9 @@ async def demografia_mapa_v2(
     campana_id: str | None = Query(default=None),
     campana_tipo: str | None = Query(default=None),
     template_id: str | None = Query(default=None),
+    wa_canal_publicitario: str | None = Query(default=None),
+    wa_campana_publicitaria: str | None = Query(default=None),
+    wa_regla_id: str | None = Query(default=None),
     rango: str | None = Query(default=None),
     desde: str | None = Query(default=None),
     hasta: str | None = Query(default=None),
@@ -24593,6 +24658,8 @@ async def demografia_mapa_v2(
     utm_medium_value = (utm_medium or "").strip().lower() or None
     utm_campaign_value = (utm_campaign or "").strip().lower() or None
     campana_tipo_value = (campana_tipo or "").strip().lower() or None
+    wa_canal_publicitario_value = (wa_canal_publicitario or "").strip().lower() or None
+    wa_campana_publicitaria_value = (wa_campana_publicitaria or "").strip().lower() or None
     campana_id_raw = (campana_id or "").strip() or None
     campana_uuid_value: UUID | None = None
     if campana_id_raw:
@@ -24607,6 +24674,13 @@ async def demografia_mapa_v2(
             template_uuid_value = UUID(template_id_raw)
         except ValueError as exc:
             raise HTTPException(status_code=400, detail="template_id_invalid") from exc
+    wa_regla_id_raw = (wa_regla_id or "").strip() or None
+    wa_regla_uuid_value: UUID | None = None
+    if wa_regla_id_raw:
+        try:
+            wa_regla_uuid_value = UUID(wa_regla_id_raw)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail="wa_regla_id_invalid") from exc
 
     try:
         leads_payload = await demografia_service.fetch_leads_resumen(
@@ -24639,6 +24713,9 @@ async def demografia_mapa_v2(
             campaign_id=str(campana_uuid_value) if campana_uuid_value else None,
             template_id=str(template_uuid_value) if template_uuid_value else None,
             campaign_type=campana_tipo_value,
+            wa_canal_publicitario=wa_canal_publicitario_value,
+            wa_campana_publicitaria=wa_campana_publicitaria_value,
+            wa_regla_id=str(wa_regla_uuid_value) if wa_regla_uuid_value else None,
             jwt=effective_user_token,
         )
         dataset = demografia_service.build_map_dataset(
