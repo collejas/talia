@@ -219,6 +219,14 @@ function hasAttributionFilters(filters: VisitsFilters): boolean {
   );
 }
 
+function hasWaAttributionFilters(filters: VisitsFilters): boolean {
+  return Boolean(
+    (filters.waCanalPublicitario || "").trim() ||
+      (filters.waCampanaPublicitaria || "").trim() ||
+      (filters.waReglaId || "").trim(),
+  );
+}
+
 function unwrapWebSessionsPayload(payload: unknown): {
   rows: WebSessionAttributionRow[];
   shape: "array" | "items" | "other" | "none";
@@ -442,6 +450,7 @@ export async function loadVisitsTableForConversionMap(
 export async function loadConversationsTableForConversionMap(
   filters: VisitsFilters = {},
 ): Promise<VisitTableRow[]> {
+  const waFilterActive = hasWaAttributionFilters(filters);
   const templatesResult = hasAttributionFilters(filters)
     ? await callCrmApi<{ items?: ContactoTemplateRow[] }>("/crm/prospeccion/contacto/templates", {
         withUserToken: true,
@@ -469,7 +478,8 @@ export async function loadConversationsTableForConversionMap(
   const lookup = templatesResult?.ok ? buildTemplateLookup(templatesResult.data) : undefined;
   const webchatChats = webchat.rows.filter((row) => row.tuvo_chat);
   const whatsappRows = mapWhatsappRows(whatsappResult.data);
-  const merged = applyChannelFilter([...webchatChats, ...whatsappRows], filters);
+  const baseRows = waFilterActive ? whatsappRows : [...webchatChats, ...whatsappRows];
+  const merged = applyChannelFilter(baseRows, filters);
   const enriched = enrichVisitRows(merged, filters, lookup);
   const filtered = enriched.filter((row) => matchesVisitsFilters(row, filters));
   return mapTable(filtered, lookup);

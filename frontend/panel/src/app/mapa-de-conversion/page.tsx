@@ -274,6 +274,9 @@ export default async function Page({
       waCampanaPublicitaria ||
       waReglaId,
   );
+  const waAttributionFilterActive = Boolean(
+    waCanalPublicitario || waCampanaPublicitaria || waReglaId,
+  );
   const rangoParam = typeof params.rango === "string" ? params.rango.trim().toLowerCase() : "";
   const rango = rangoParam.length ? rangoParam : "mes";
   const desdeParam = typeof params.desde === "string" ? params.desde.trim() : "";
@@ -313,11 +316,37 @@ export default async function Page({
     );
   }
 
+  if (!waAttributionFilterActive) {
+    try {
+      visitsTable = await loadVisitsTableForConversionMap({
+        canales: canalesSelected,
+        // Mantener el filtro de estado alineado con demografia:
+        // solo aplica cuando el usuario navega a nivel municipio.
+        estado: nivel === "municipio" ? normalizedEstado : null,
+        sourceClass,
+        utmSource,
+        utmMedium,
+        utmCampaign,
+        templateId,
+        waCanalPublicitario,
+        waCampanaPublicitaria,
+        waReglaId,
+        rango,
+        desde,
+        hasta,
+      });
+    } catch (error) {
+      errores.push(
+        error instanceof Error
+          ? error.message
+          : "No se pudieron cargar las visitas recientes."
+      );
+    }
+  }
+
   try {
-    visitsTable = await loadVisitsTableForConversionMap({
+    conversationsTable = await loadConversationsTableForConversionMap({
       canales: canalesSelected,
-      // Mantener el filtro de estado alineado con demografia:
-      // solo aplica cuando el usuario navega a nivel municipio.
       estado: nivel === "municipio" ? normalizedEstado : null,
       sourceClass,
       utmSource,
@@ -335,32 +364,22 @@ export default async function Page({
     errores.push(
       error instanceof Error
         ? error.message
-        : "No se pudieron cargar las visitas recientes."
-    );
-  }
-
-  try {
-    conversationsTable = await loadConversationsTableForConversionMap({
-      canales: canalesSelected,
-      estado: nivel === "municipio" ? normalizedEstado : null,
-      sourceClass,
-      utmSource,
-      utmMedium,
-      utmCampaign,
-      templateId,
-      rango,
-      desde,
-      hasta,
-    });
-  } catch (error) {
-    errores.push(
-      error instanceof Error
-        ? error.message
         : "No se pudieron cargar las conversaciones recientes."
     );
   }
 
-  const tableData = demografiaResponse ? buildTableData(demografiaResponse.map.dataset) : [];
+  const datasetForTables =
+    demografiaResponse && waAttributionFilterActive
+      ? demografiaResponse.map.dataset.filter((entry) => {
+          const whatsappTotal =
+            entry.conversation_channels?.conversaciones_whatsapp ??
+            entry.visitantes_totales_por_canal?.whatsapp ??
+            entry.totales_por_canal?.whatsapp ??
+            0;
+          return whatsappTotal > 0;
+        })
+      : demografiaResponse?.map.dataset ?? [];
+  const tableData = demografiaResponse ? buildTableData(datasetForTables) : [];
   const metricColumns = METRIC_COLUMNS;
   const metricColumnsVisibility = buildInitialVisibility(metricColumns);
   const mapDataset = demografiaResponse
@@ -653,7 +672,7 @@ export default async function Page({
                   />
                 </div>
               ) : null}
-              {visitsTable.length ? (
+              {!waAttributionFilterActive && visitsTable.length ? (
                 <div className="px-4 lg:px-6">
                   <div className="mb-3 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
                     Sesiones web
