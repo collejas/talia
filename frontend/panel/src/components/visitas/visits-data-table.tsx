@@ -7,6 +7,7 @@ import { IconChevronDown, IconChevronUp, IconArrowsUpDown } from "@tabler/icons-
 
 import { DataTable, schema } from "@/components/data-table";
 import type { VisitDetailRaw, VisitTableRow } from "@/lib/visitas/data";
+import { formatWaLabel } from "@/lib/visitas/formatting";
 
 type TableRow = z.infer<typeof schema>;
 
@@ -18,6 +19,7 @@ type VisitField = {
   label: string;
   type: FieldType;
   defaultVisible?: boolean;
+  format?: (value: unknown) => React.ReactNode;
 };
 
 const DATE_TIME_FORMATTER = new Intl.DateTimeFormat("es-MX", {
@@ -102,8 +104,22 @@ function renderValue(value: unknown, type: FieldType) {
 
 const VISIT_FIELDS: VisitField[] = [
   { id: "registrado_en", key: "registrado_en", label: "Creado", type: "datetime", defaultVisible: true },
-  { id: "wa_canal_publicitario", key: "wa_canal_publicitario", label: "Canal WA", type: "string", defaultVisible: true },
-  { id: "wa_campana_publicitaria", key: "wa_campana_publicitaria", label: "Campaña WA", type: "string", defaultVisible: true },
+  {
+    id: "wa_canal_publicitario",
+    key: "wa_canal_publicitario",
+    label: "Canal WA",
+    type: "string",
+    defaultVisible: true,
+    format: (value) => formatWaLabel(value) ?? DASH,
+  },
+  {
+    id: "wa_campana_publicitaria",
+    key: "wa_campana_publicitaria",
+    label: "Campaña WA",
+    type: "string",
+    defaultVisible: true,
+    format: (value) => formatWaLabel(value) ?? DASH,
+  },
   { id: "wa_regla_nombre", key: "wa_regla_nombre", label: "Regla WA", type: "string", defaultVisible: true },
   { id: "wa_regla_frase", key: "wa_regla_frase", label: "Frase WA", type: "string" },
   { id: "ip", key: "ip", label: "IP", type: "string" },
@@ -164,7 +180,7 @@ const visitExtraColumns: ColumnDef<TableRow>[] = VISIT_FIELDS.map((field) => {
       <VisitColumnHeader column={column as Column<TableRow, unknown>} label={field.label} />
     ),
     accessorFn: (row) => getRawValue(row, field.key),
-    cell: ({ getValue }) => renderValue(getValue(), field.type),
+    cell: ({ getValue }) => (field.format ? field.format(getValue()) : renderValue(getValue(), field.type)),
     enableSorting: field.type !== "json",
     enableHiding: true,
     meta: { label: field.label },

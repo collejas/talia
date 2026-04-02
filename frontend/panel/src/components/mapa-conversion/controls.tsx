@@ -28,6 +28,7 @@ import {
 } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { SOURCE_CLASS_OPTIONS } from "@/lib/mapa-conversion/source-class";
+import { formatWaLabel } from "@/lib/visitas/formatting";
 
 const CHANNEL_OPTIONS = [
   { value: "webchat", label: "Webchat" },
@@ -167,6 +168,9 @@ export function DemografiaControls({
     if (normalized === "correo") return "Correo";
     if (normalized === "llamada" || normalized === "voz") return "Llamada";
     return value;
+  }, []);
+  const formatWaOptionLabel = React.useCallback((value: string) => {
+    return formatWaLabel(value) ?? value;
   }, []);
 
   const normalizedStages = React.useMemo(() => {
@@ -631,11 +635,13 @@ export function DemografiaControls({
             <SelectContent className="z-50">
               <SelectItem value="all">Todos</SelectItem>
               {waCanalPublicitario && !waCanalOptions.includes(waCanalPublicitario) ? (
-                <SelectItem value={waCanalPublicitario}>{waCanalPublicitario}</SelectItem>
+                <SelectItem value={waCanalPublicitario}>
+                  {formatWaOptionLabel(waCanalPublicitario)}
+                </SelectItem>
               ) : null}
               {waCanalOptions.map((option) => (
                 <SelectItem key={`wa-canal-${option}`} value={option}>
-                  {option}
+                  {formatWaOptionLabel(option)}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -658,11 +664,13 @@ export function DemografiaControls({
             <SelectContent className="z-50">
               <SelectItem value="all">Todas</SelectItem>
               {waCampanaPublicitaria && !waCampanaOptions.includes(waCampanaPublicitaria) ? (
-                <SelectItem value={waCampanaPublicitaria}>{waCampanaPublicitaria}</SelectItem>
+                <SelectItem value={waCampanaPublicitaria}>
+                  {formatWaOptionLabel(waCampanaPublicitaria)}
+                </SelectItem>
               ) : null}
               {waCampanaOptions.map((option) => (
                 <SelectItem key={`wa-campana-${option}`} value={option}>
-                  {option}
+                  {formatWaOptionLabel(option)}
                 </SelectItem>
               ))}
             </SelectContent>

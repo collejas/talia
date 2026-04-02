@@ -27,9 +27,27 @@ type PhoneLocationResult = {
 
 let cachedLadaCatalog: LadaCatalog | null = null;
 let cachedLocalities: LadaLocalities | null = null;
+let cachedDataRoot: string | null = null;
+
+function resolveDataRoot(): string {
+  if (cachedDataRoot) return cachedDataRoot;
+  const candidates: string[] = [];
+  const envRoot = process.env.TALIA_ROOT;
+  if (envRoot) {
+    candidates.push(path.join(envRoot, "backend", "app", "data"));
+  }
+  const cwd = process.cwd();
+  candidates.push(path.join(cwd, "..", "..", "backend", "app", "data"));
+  candidates.push(path.join(cwd, "..", "backend", "app", "data"));
+  candidates.push(path.join(cwd, "..", "..", "..", "backend", "app", "data"));
+  candidates.push("/var/www/talia/backend/app/data");
+  const selected = candidates.find((candidate) => fs.existsSync(candidate));
+  cachedDataRoot = selected ?? candidates[0];
+  return cachedDataRoot;
+}
 
 function dataPath(...segments: string[]): string {
-  return path.join(process.cwd(), "..", "..", "backend", "app", "data", ...segments);
+  return path.join(resolveDataRoot(), ...segments);
 }
 
 function loadLadaCatalog(): LadaCatalog {

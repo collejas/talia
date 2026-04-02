@@ -22,6 +22,7 @@ import { Separator } from "@/components/ui/separator";
 import type { DataTableRow } from "@/components/data-table";
 import type { DemografiaSummaryResponse } from "@/lib/mapa-conversion/api";
 import { formatSourceClassLabel } from "@/lib/mapa-conversion/source-class";
+import { formatWaLabel } from "@/lib/visitas/formatting";
 
 type Props = {
   row: DataTableRow;
@@ -309,10 +310,8 @@ export function MapaConversionRowDetail({ row, nivel, summary }: Props) {
                 className="bg-muted/50 flex items-center justify-between rounded-lg px-3 py-2 text-sm"
               >
                 <span className="text-muted-foreground">
-                  {`${typeof item.canal_publicitario === "string" ? item.canal_publicitario : "sin canal"} · ${
-                    typeof item.campana_publicitaria === "string"
-                      ? item.campana_publicitaria
-                      : "sin campaña"
+                  {`${formatWaLabel(item.canal_publicitario) ?? "Sin canal"} · ${
+                    formatWaLabel(item.campana_publicitaria) ?? "Sin campaña"
                   }`}
                 </span>
                 <span className="font-medium">{formatNumber(sanitizeNumber(item.total))}</span>

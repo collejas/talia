@@ -7745,6 +7745,7 @@ class CRMRepository:
         self,
         *,
         usuario_token: str | None = None,
+        organizacion_id: UUID | None = None,
         limit: int = 200,
         date_from: datetime | None = None,
         date_to: datetime | None = None,
@@ -7758,6 +7759,8 @@ class CRMRepository:
             "order": "iniciada_en.desc",
             "limit": str(max(1, min(limit, 500))),
         }
+        if organizacion_id:
+            params["organizacion_id"] = f"eq.{organizacion_id}"
         if date_from and date_to:
             params["and"] = (
                 f"(iniciada_en.gte.{date_from.isoformat()},"
@@ -7767,19 +7770,13 @@ class CRMRepository:
             params["iniciada_en"] = f"gte.{date_from.isoformat()}"
         elif date_to:
             params["iniciada_en"] = f"lte.{date_to.isoformat()}"
-        if usuario_token:
-            resp = await self._request_with_user(
-                "GET",
-                "/rest/v1/conversaciones",
-                token=usuario_token,
-                params=params,
-            )
-        else:
-            resp = await self._request(
-                "GET",
-                "/rest/v1/conversaciones",
-                params=params,
-            )
+        # Usamos service role y filtramos por organizacion para evitar diferencias de RLS
+        # entre ambientes, manteniendo aislamiento por tenant.
+        resp = await self._request(
+            "GET",
+            "/rest/v1/conversaciones",
+            params=params,
+        )
         data = resp.json()
         if not isinstance(data, list):
             raise CRMRepositoryError(f"Respuesta inesperada en conversaciones: {data!r}")

@@ -21852,6 +21852,9 @@ async def get_visits_whatsapp_conversations(
     rango: str | None = Query(default=None),
     desde: str | None = Query(default=None),
     hasta: str | None = Query(default=None),
+    wa_canal_publicitario: str | None = Query(default=None),
+    wa_campana_publicitaria: str | None = Query(default=None),
+    wa_regla_id: str | None = Query(default=None),
 ) -> list[dict[str, Any]]:
     effective_timezone, _timezone_source = await _resolve_effective_timezone_name(
         repo=repo,
@@ -21864,9 +21867,24 @@ async def get_visits_whatsapp_conversations(
         hasta,
         timezone_name=effective_timezone,
     )
+    def _normalize_match(value: Any) -> str | None:
+        cleaned = _clean_text(value)
+        return cleaned.lower() if cleaned else None
+
+    wa_canal_value = _normalize_match(wa_canal_publicitario)
+    wa_campana_value = _normalize_match(wa_campana_publicitaria)
+    wa_regla_id_value = (wa_regla_id or "").strip() or None
+    wa_regla_uuid: UUID | None = None
+    if wa_regla_id_value:
+        try:
+            wa_regla_uuid = UUID(wa_regla_id_value)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail="wa_regla_id_invalid") from exc
+
     try:
         rows = await repo.visitas_whatsapp_conversaciones(
             usuario_token=_normalize_reports_user_token(user_token),
+            organizacion_id=organizacion_id,
             limit=limit,
             date_from=date_from,
             date_to=date_to,
@@ -21919,6 +21937,15 @@ async def get_visits_whatsapp_conversations(
                     "anuncio": _clean_text(event_row.get("anuncio")),
                     "creado_en": event_row.get("creado_en"),
                 }
+            if wa_canal_value or wa_campana_value or wa_regla_uuid:
+                if not event_row:
+                    continue
+                if wa_canal_value and _normalize_match(event_row.get("canal_publicitario")) != wa_canal_value:
+                    continue
+                if wa_campana_value and _normalize_match(event_row.get("campana_publicitaria")) != wa_campana_value:
+                    continue
+                if wa_regla_uuid and str(event_row.get("regla_id") or "").strip() != str(wa_regla_uuid):
+                    continue
             enriched_rows.append(row)
         rows = enriched_rows
     except CRMRepositoryError as exc:
