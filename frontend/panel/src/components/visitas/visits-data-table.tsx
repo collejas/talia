@@ -33,6 +33,12 @@ const DASH = <span className="text-muted-foreground">—</span>;
 function getRawValue(row: TableRow, key: keyof VisitDetailRaw) {
   const raw = row.raw as VisitDetailRaw | undefined;
   if (!raw) return null;
+  if (key === "state_name" && raw.canal === "whatsapp") {
+    const phoneLocation = raw.phone_location as { ok?: boolean | null } | null | undefined;
+    if (phoneLocation && phoneLocation.ok === false) {
+      return "Ubicación no resuelta";
+    }
+  }
   return raw[key] ?? null;
 }
 

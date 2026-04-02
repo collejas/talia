@@ -127,6 +127,15 @@ export type VisitDetailRaw = {
   cve_mun: string | null;
   nom_mun: string | null;
   cvegeo: string | null;
+  phone_location?: {
+    country_code?: string | null;
+    country_name?: string | null;
+    state_code?: string | null;
+    state_name?: string | null;
+    municipality_name?: string | null;
+    lada?: string | null;
+    ok?: boolean | null;
+  } | null;
   ubicacion_cache: Record<string, unknown> | null;
   device_type: string | null;
   dispositivo_cache: Record<string, unknown> | null;
