@@ -96,11 +96,7 @@ bash scripts/deploy_panel_atomic.sh
 
 qOmfDOWUq7L9l5Nlsgdgd#$VD^^#&*XFHh_g
 
-codex resume 019d2c55-a724-75f0-9d3e-2a546c2c6e1e
-
-codex resume 019d208c-9374-7ff2-b985-74660ba41182
-codex resume 019cfca0-2e86-7883-8756-0fb649f80b6d
-codex resume 019ced77-b0b4-70f2-8c03-3ba8c5813241
+metrica CTA codex resume 019d4fa4-5f0a-7ac3-bd74-b4e1218ecc0c
 
 sudo rsync -a landing/src/ /var/www/talia-landing/ 
 

@@ -5989,6 +5989,7 @@ def _build_prospecto_from_contactable(
     """Normaliza una fila de vista contactable hacia la tabla de prospectos."""
 
     phone_value = _clean_text(row.get("phone"))
+    fuente_resultado = _clean_text(row.get("fuente_resultado"))
     base_metadata: dict[str, Any] = {}
     busqueda_meta = row.get("busqueda_meta")
     if isinstance(busqueda_meta, dict):
@@ -6016,6 +6017,9 @@ def _build_prospecto_from_contactable(
         "distancia_m": row.get("distancia_m"),
         "metadata": base_metadata,
     }
+    external_id = row.get("external_id")
+    if fuente_resultado == "denue" and isinstance(external_id, str) and external_id.strip():
+        payload["external_id"] = external_id.strip()
     if segmento:
         payload["segmento"] = segmento
     return payload

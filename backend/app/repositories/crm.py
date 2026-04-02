@@ -9102,33 +9102,53 @@ class CRMRepository:
         # Evita recortes en algunos entornos PostgREST/Supabase cuando el payload masivo
         # supera los límites prácticos de request/response.
         chunk_size = 200
+        denue_items: list[dict[str, Any]] = []
+        fallback_items: list[dict[str, Any]] = []
+        for item in items:
+            if item.get("fuente") == "denue" and item.get("external_id"):
+                denue_items.append(item)
+            else:
+                fallback_items.append(item)
+
         upserted_by_resultado: dict[str, dict[str, Any]] = {}
-        for start in range(0, len(items), chunk_size):
-            chunk = items[start : start + chunk_size]
-            resp = await self._request_with_user(
-                "POST",
-                "/rest/v1/prospeccion_prospectos",
-                token=usuario_token,
-                params={"on_conflict": "resultado_id"},
-                json=chunk,
-                prefer="return=representation,resolution=merge-duplicates",
-            )
-            data = resp.json() or []
-            if not isinstance(data, list):
-                raise CRMRepositoryError(f"Respuesta inválida al upsert prospectos: {data!r}")
-            for row in data:
-                if not isinstance(row, dict):
-                    continue
-                resultado_id = row.get("resultado_id")
-                if resultado_id is None:
-                    continue
-                upserted_by_resultado[str(resultado_id)] = row
+        upserted_by_external: dict[str, dict[str, Any]] = {}
+
+        async def _run_upsert(batch: list[dict[str, Any]], *, on_conflict: str) -> None:
+            if not batch:
+                return
+            for start in range(0, len(batch), chunk_size):
+                chunk = batch[start : start + chunk_size]
+                resp = await self._request_with_user(
+                    "POST",
+                    "/rest/v1/prospeccion_prospectos",
+                    token=usuario_token,
+                    params={"on_conflict": on_conflict},
+                    json=chunk,
+                    prefer="return=representation,resolution=merge-duplicates",
+                )
+                data = resp.json() or []
+                if not isinstance(data, list):
+                    raise CRMRepositoryError(f"Respuesta inválida al upsert prospectos: {data!r}")
+                for row in data:
+                    if not isinstance(row, dict):
+                        continue
+                    resultado_id = row.get("resultado_id")
+                    if resultado_id is not None:
+                        upserted_by_resultado[str(resultado_id)] = row
+                    external_id = row.get("external_id")
+                    if isinstance(external_id, str) and external_id:
+                        upserted_by_external[external_id] = row
+
+        await _run_upsert(denue_items, on_conflict="organizacion_id,external_id")
+        await _run_upsert(fallback_items, on_conflict="resultado_id")
+
         ordered_rows: list[dict[str, Any]] = []
         for item in items:
-            resultado_id = item.get("resultado_id")
-            if resultado_id is None:
-                continue
-            row = upserted_by_resultado.get(str(resultado_id))
+            if item.get("fuente") == "denue" and item.get("external_id"):
+                row = upserted_by_external.get(str(item.get("external_id")))
+            else:
+                resultado_id = item.get("resultado_id")
+                row = upserted_by_resultado.get(str(resultado_id)) if resultado_id is not None else None
             if row:
                 ordered_rows.append(row)
         return ordered_rows
