@@ -21923,6 +21923,17 @@ async def get_visits_whatsapp_conversations(
             if not isinstance(row, dict):
                 continue
             conv_id = str(row.get("id") or "").strip()
+            contacto = row.get("contacto") if isinstance(row.get("contacto"), dict) else {}
+            telefono = str(contacto.get("telefono_e164") or "").strip() or None
+            location = leads_geo.phone_location_from_number(telefono)
+            row["phone_location"] = {
+                "country_code": location.country_code,
+                "country_name": location.country_name,
+                "state_code": location.estado_clave,
+                "state_name": location.estado_nombre,
+                "municipality_name": location.municipio_nombre,
+                "lada": location.lada,
+            }
             event_row = wa_by_conversation.get(conv_id)
             if event_row:
                 regla_id_value = str(event_row.get("regla_id") or "").strip()

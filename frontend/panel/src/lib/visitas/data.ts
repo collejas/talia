@@ -21,6 +21,14 @@ type WhatsappConversationRow = {
   canal: string | null;
   iniciada_en: string | null;
   ultimo_mensaje_en: string | null;
+  phone_location?: {
+    country_code?: string | null;
+    country_name?: string | null;
+    state_code?: string | null;
+    state_name?: string | null;
+    municipality_name?: string | null;
+    lada?: string | null;
+  } | null;
   whatsapp_atribucion?: {
     canal_publicitario?: string | null;
     campana_publicitaria?: string | null;
@@ -912,7 +920,17 @@ function extractTotal(
 function mapWhatsappRows(rows?: WhatsappConversationRow[] | null): VisitDetailRaw[] {
   if (!rows || !rows.length) return [];
   return rows.map((row) => {
-    const location = inferPhoneLocation(row.contacto?.telefono_e164 || null);
+    const apiLocation = row.phone_location ?? null;
+    const location = apiLocation
+      ? {
+          countryCode: apiLocation.country_code ?? null,
+          countryName: apiLocation.country_name ?? null,
+          lada: apiLocation.lada ?? null,
+          stateCode: apiLocation.state_code ?? null,
+          stateName: apiLocation.state_name ?? null,
+          municipalityName: apiLocation.municipality_name ?? null,
+        }
+      : inferPhoneLocation(row.contacto?.telefono_e164 || null);
     const atribucion = row.whatsapp_atribucion ?? {};
     return {
       session_id: `whatsapp-${row.id}`,
