@@ -2,9 +2,11 @@ const defaultConfig = {
   apiBaseUrl: '/api/crm',
   endpointPath: '/web/visit',
   storageSessionKey: 'talia-web-session',
+  storageSessionMetaKey: 'talia-web-session-meta',
   linkedSessionStorageKey: 'talia-webchat-session',
   browserGeoStorageKey: 'talia-browser-geo-v1',
   tenantAlias: null,
+  sessionTtlMs: 12 * 60 * 60 * 1000,
 };
 
 let config = { ...defaultConfig };
@@ -79,10 +81,31 @@ function writeStorageJson(key, payload) {
 
 function ensureSessionId() {
   if (sessionId) return sessionId;
+  const now = Date.now();
+  const ttl = Number(config.sessionTtlMs) || 0;
+  const meta = readStorageJson(config.storageSessionMetaKey) || {};
   const linkedStored = readStorageValue(config.linkedSessionStorageKey);
   const ownedStored = readStorageValue(config.storageSessionKey);
-  sessionId = linkedStored || ownedStored || generateSessionId();
+  let candidate = linkedStored || ownedStored || null;
+  let createdAt = typeof meta.created_at === 'number' ? meta.created_at : null;
+  if (!createdAt && typeof meta.createdAt === 'number') {
+    createdAt = meta.createdAt;
+  }
+  if (!candidate || meta.id !== candidate) {
+    createdAt = now;
+  }
+  const expired = Boolean(ttl && createdAt && now - createdAt > ttl);
+  if (!candidate || expired) {
+    candidate = generateSessionId();
+    createdAt = now;
+  }
+  sessionId = candidate;
   writeStorageValue(config.storageSessionKey, sessionId);
+  writeStorageJson(config.storageSessionMetaKey, {
+    id: sessionId,
+    created_at: createdAt,
+    linked_id: linkedStored || null,
+  });
   return sessionId;
 }
 
