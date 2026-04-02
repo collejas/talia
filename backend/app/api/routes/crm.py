@@ -21926,6 +21926,17 @@ async def get_visits_whatsapp_conversations(
             contacto = row.get("contacto") if isinstance(row.get("contacto"), dict) else {}
             telefono = str(contacto.get("telefono_e164") or "").strip() or None
             location = leads_geo.phone_location_from_number(telefono)
+            location_ok = bool(location.country_code or location.estado_clave or location.estado_nombre)
+            if not telefono:
+                logger.warning(
+                    "whatsapp.phone_location_missing_phone",
+                    extra={"conversation_id": conv_id, "organizacion_id": str(organizacion_id)},
+                )
+            elif not location_ok:
+                logger.warning(
+                    "whatsapp.phone_location_unresolved",
+                    extra={"conversation_id": conv_id, "telefono_e164": telefono},
+                )
             row["phone_location"] = {
                 "country_code": location.country_code,
                 "country_name": location.country_name,
@@ -21933,6 +21944,7 @@ async def get_visits_whatsapp_conversations(
                 "state_name": location.estado_nombre,
                 "municipality_name": location.municipio_nombre,
                 "lada": location.lada,
+                "ok": location_ok,
             }
             event_row = wa_by_conversation.get(conv_id)
             if event_row:

@@ -1,7 +1,6 @@
 "use server";
 
 import { callCrmApi } from "@/lib/api/crm";
-import { inferPhoneLocation } from "@/lib/visitas/phone-location";
 
 type DashboardKpisResponse = {
   visitantes?: number;
@@ -28,6 +27,7 @@ type WhatsappConversationRow = {
     state_name?: string | null;
     municipality_name?: string | null;
     lada?: string | null;
+    ok?: boolean | null;
   } | null;
   whatsapp_atribucion?: {
     canal_publicitario?: string | null;
@@ -686,13 +686,10 @@ function mapTable(
       : contactLabel
       ? `Webchat · ${contactLabel}`
       : row.session_id || `Sesión ${index + 1}`;
-    const phoneLocation = isWhatsapp ? inferPhoneLocation(row.contacto_telefono || null) : null;
     const type =
       row.state_name ||
       row.country_name ||
-      (isWhatsapp
-        ? phoneLocation?.stateName || phoneLocation?.countryName || "WhatsApp"
-        : "Webchat");
+      (isWhatsapp ? "WhatsApp" : "Webchat");
     const status = row.tuvo_chat || isWhatsapp ? "Done" : "In Process";
     const target = isWhatsapp ? "1" : toNumber(row.visit_count).toString();
     const reviewer = contactLabel || "Asignar contacto";
@@ -930,7 +927,14 @@ function mapWhatsappRows(rows?: WhatsappConversationRow[] | null): VisitDetailRa
           stateName: apiLocation.state_name ?? null,
           municipalityName: apiLocation.municipality_name ?? null,
         }
-      : inferPhoneLocation(row.contacto?.telefono_e164 || null);
+      : {
+          countryCode: null,
+          countryName: null,
+          lada: null,
+          stateCode: null,
+          stateName: null,
+          municipalityName: null,
+        };
     const atribucion = row.whatsapp_atribucion ?? {};
     return {
       session_id: `whatsapp-${row.id}`,
