@@ -31,6 +31,11 @@ async function bootstrapChat() {
   } catch (error) {
     console.warn('[main] No se pudo obtener configuración del webchat.', error);
   }
+  if (options.tenantAlias) {
+    try {
+      localStorage.setItem('talia-tenant-alias', options.tenantAlias);
+    } catch (_error) {}
+  }
   initialiseChat(options);
   initialiseVisitTracking({
     tenantAlias: options.tenantAlias ?? null,

@@ -3078,6 +3078,40 @@ class WebVisitPayload(BaseModel):
         return str(value).strip()
 
 
+class WebCtaClickPayload(BaseModel):
+    """Payload público para registrar clicks de CTAs web."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    session_id: str = Field(..., min_length=4, max_length=255)
+    tenant_alias: str | None = Field(default=None, max_length=120)
+    organizacion_id: UUID | None = None
+    event_type: str | None = Field(default="whatsapp_cta_click", max_length=120)
+    cta_id: str | None = Field(default=None, max_length=120)
+    hero_variant: str | None = Field(default=None, max_length=8)
+    location_href: str | None = Field(default=None, max_length=2048)
+    referrer: str | None = Field(default=None, max_length=2048)
+    user_agent: str | None = Field(default=None, max_length=1024)
+    metadata: dict[str, Any] | None = Field(default=None)
+
+    @field_validator(
+        "session_id",
+        "tenant_alias",
+        "event_type",
+        "cta_id",
+        "hero_variant",
+        "location_href",
+        "referrer",
+        "user_agent",
+        mode="before",
+    )
+    @classmethod
+    def _strip_text(cls, value: Any) -> Any:
+        if value is None:
+            return None
+        return str(value).strip()
+
+
 class PublicWebBookingAvailabilityPayload(BaseModel):
     """Payload público para consultar disponibilidad de agenda y registrar apertura."""
 
@@ -23718,6 +23752,98 @@ async def register_web_visit(
             extra={"session_id": session_id, "tenant_alias": tenant_alias, "error": str(exc)},
         )
         raise HTTPException(status_code=502, detail="web_visit_register_failed") from exc
+
+    return Response(status_code=204)
+
+
+@router.post(
+    "/web/cta-click",
+    status_code=204,
+    summary="Registra un click en CTA web (WhatsApp u otros).",
+)
+async def register_web_cta_click(
+    payload: WebCtaClickPayload,
+    request: Request,
+) -> Response:
+    session_id = (payload.session_id or "").strip()
+    if not session_id:
+        raise HTTPException(status_code=400, detail="session_id_required")
+
+    raw_metadata = payload.metadata if isinstance(payload.metadata, dict) else {}
+    metadata = dict(raw_metadata)
+
+    tenant_alias = (payload.tenant_alias or "").strip().lower()
+    if not tenant_alias:
+        meta_alias = raw_metadata.get("tenant_alias")
+        if isinstance(meta_alias, str) and meta_alias.strip():
+            tenant_alias = meta_alias.strip().lower()
+    if not tenant_alias:
+        header_alias = request.headers.get("x-tenant-alias")
+        if header_alias and header_alias.strip():
+            tenant_alias = header_alias.strip().lower()
+
+    organizacion_id: str | None = None
+    if payload.organizacion_id:
+        organizacion_id = str(payload.organizacion_id)
+    if not organizacion_id and tenant_alias:
+        organizacion_id = await resolve_organizacion_id(canal="webchat", clave=tenant_alias)
+    if not organizacion_id:
+        explicit_org = raw_metadata.get("organizacion_id")
+        if isinstance(explicit_org, str) and explicit_org.strip():
+            try:
+                organizacion_id = str(UUID(explicit_org.strip()))
+            except ValueError:
+                organizacion_id = None
+    if not organizacion_id:
+        organizacion_id = str(tenant_runtime.MASTER_ORGANIZACION_ID)
+
+    user_agent = (payload.user_agent or request.headers.get("user-agent") or "").strip() or None
+    referrer = (payload.referrer or request.headers.get("referer") or "").strip() or None
+    location_href = (payload.location_href or "").strip() or None
+
+    metadata.setdefault("tenant_alias", tenant_alias or None)
+    metadata.setdefault("request_ip", _request_ip(request))
+    metadata.setdefault(
+        "request_headers",
+        {
+            "x_forwarded_for": request.headers.get("x-forwarded-for"),
+            "x_real_ip": request.headers.get("x-real-ip"),
+            "cf_connecting_ip": request.headers.get("cf-connecting-ip"),
+            "cf_ipcountry": request.headers.get("cf-ipcountry"),
+            "referer": request.headers.get("referer"),
+            "origin": request.headers.get("origin"),
+            "accept_language": request.headers.get("accept-language"),
+            "sec_ch_ua": request.headers.get("sec-ch-ua"),
+            "sec_ch_ua_mobile": request.headers.get("sec-ch-ua-mobile"),
+            "sec_ch_ua_platform": request.headers.get("sec-ch-ua-platform"),
+        },
+    )
+
+    row_payload: dict[str, Any] = {
+        "organizacion_id": organizacion_id,
+        "session_id": session_id,
+        "event_type": (payload.event_type or "whatsapp_cta_click"),
+        "cta_id": payload.cta_id,
+        "hero_variant": payload.hero_variant,
+        "location_href": location_href,
+        "referrer": referrer,
+        "user_agent": user_agent,
+        "metadata": metadata,
+    }
+    row_payload = {key: value for key, value in row_payload.items() if value is not None}
+
+    repo = CRMRepository()
+    try:
+        await repo.create_web_session_event(
+            organizacion_id=UUID(organizacion_id),
+            payload=row_payload,
+        )
+    except CRMRepositoryError as exc:
+        logger.exception(
+            "crm.web.cta_click_failed",
+            extra={"session_id": session_id, "tenant_alias": tenant_alias, "error": str(exc)},
+        )
+        raise HTTPException(status_code=502, detail="web_cta_click_register_failed") from exc
 
     return Response(status_code=204)
 

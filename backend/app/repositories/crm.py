@@ -4797,6 +4797,29 @@ class CRMRepository:
                     return value.strip()
         return None
 
+    async def create_web_session_event(
+        self,
+        *,
+        organizacion_id: UUID,
+        payload: dict[str, Any],
+    ) -> dict[str, Any] | None:
+        resp = await self._request_service_role(
+            "POST",
+            "/rest/v1/web_session_events",
+            json=[payload],
+            prefer="return=representation",
+            organizacion_id=organizacion_id,
+        )
+        data = resp.json() or []
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"web_session_event_create_invalid:{data!r}")
+        if not data:
+            return None
+        row = data[0]
+        if not isinstance(row, dict):
+            raise CRMRepositoryError(f"web_session_event_create_invalid_row:{row!r}")
+        return row
+
     async def upsert_web_booking_session(
         self,
         *,
