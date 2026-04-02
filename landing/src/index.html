@@ -44,6 +44,83 @@
         body { font-family: 'Inter', sans-serif; }
         .glass { background: rgba(255, 255, 255, 0.8); backdrop-filter: blur(12px); }
         .material-symbols-outlined { font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24; }
+        .whatsapp-float {
+          position: fixed;
+          right: 18px;
+          bottom: 18px;
+          z-index: 60;
+          display: inline-flex;
+          align-items: center;
+          gap: 10px;
+          padding: 12px 16px;
+          border-radius: 9999px;
+          background: linear-gradient(135deg, #22c55e, #16a34a);
+          color: #ffffff;
+          font-weight: 800;
+          letter-spacing: 0.02em;
+          box-shadow: 0 18px 40px rgba(22, 163, 74, 0.35);
+          transition: transform 0.2s ease, box-shadow 0.2s ease, filter 0.2s ease;
+        }
+        .whatsapp-float:hover {
+          transform: translateY(-2px);
+          box-shadow: 0 22px 46px rgba(22, 163, 74, 0.45);
+          filter: brightness(1.02);
+        }
+        .whatsapp-float__icon {
+          width: 20px;
+          height: 20px;
+        }
+        .whatsapp-float__pulse {
+          position: absolute;
+          inset: -6px;
+          border-radius: 9999px;
+          background: rgba(34, 197, 94, 0.25);
+          animation: whatsappPulse 1.8s ease-out infinite;
+          z-index: -1;
+        }
+        @keyframes whatsappPulse {
+          0% { transform: scale(0.9); opacity: 0.8; }
+          70% { transform: scale(1.25); opacity: 0; }
+          100% { transform: scale(1.25); opacity: 0; }
+        }
+        @media (max-width: 640px) {
+          .whatsapp-float {
+            padding: 12px;
+          }
+          .whatsapp-float__label {
+            display: none;
+          }
+        }
+        .whatsapp-bar {
+          position: fixed;
+          left: 0;
+          right: 0;
+          bottom: 0;
+          z-index: 55;
+          padding: 12px 16px 16px;
+          background: rgba(255, 255, 255, 0.9);
+          backdrop-filter: blur(12px);
+          border-top: 1px solid rgba(15, 23, 42, 0.08);
+          display: none;
+        }
+        .whatsapp-bar__button {
+          width: 100%;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          gap: 8px;
+          padding: 14px 18px;
+          border-radius: 9999px;
+          background: linear-gradient(135deg, #22c55e, #16a34a);
+          color: #ffffff;
+          font-weight: 900;
+          letter-spacing: 0.02em;
+          box-shadow: 0 16px 32px rgba(22, 163, 74, 0.35);
+        }
+        @media (max-width: 768px) {
+          .whatsapp-bar { display: block; }
+          body { padding-bottom: 88px; }
+        }
     </style>
 <script type="application/ld+json">
 {
@@ -117,18 +194,15 @@
 <a class="text-sm font-medium hover:text-primary transition-colors" href="#agentes">Agentes</a>
 </div>
 <div class="flex items-center gap-4">
-<button class="bg-primary hover:bg-primary/90 text-white text-sm font-bold py-2.5 px-6 rounded-lg shadow-lg shadow-primary/20 transition-all" data-open-webchat>
-                    Ver en acción
-                </button>
-<a href="/demo.html?utm_source=landing&utm_medium=website&utm_campaign=demo_cta_nav&intent=demo_booking" class="hidden sm:inline-flex bg-white border border-slate-200 hover:border-primary text-slate-700 text-sm font-bold py-2.5 px-4 rounded-lg transition-all">
-                    Agendar demo
-                </a>
-<a class="hidden md:inline-flex items-center gap-2 rounded-lg border border-emerald-600 bg-emerald-500 px-3 py-2 text-sm font-bold text-white transition-colors hover:bg-emerald-600 hover:border-emerald-700" href="https://wa.me/5214443354450?text=Hola,%20quiero%20saber%20qué%20puedes%20hacer%20por%20mi%20negocio" target="_blank" rel="noopener noreferrer" aria-label="Contacto por WhatsApp">
+<a class="inline-flex items-center gap-2 rounded-lg border border-emerald-600 bg-emerald-500 px-3 py-2 text-sm font-bold text-white transition-colors hover:bg-emerald-600 hover:border-emerald-700" href="https://wa.me/5214443354450?text=Hola,%20quiero%20una%20demo%20rápida%20de%20Tal-IA%20por%20WhatsApp" target="_blank" rel="noopener noreferrer" aria-label="Contacto por WhatsApp">
 <svg aria-hidden="true" class="h-4 w-4" viewBox="0 0 16 16" fill="currentColor">
 <path d="M13.601 2.326A7.854 7.854 0 0 0 8.003 0a7.92 7.92 0 0 0-6.91 11.79L0 16l4.366-1.144A7.92 7.92 0 0 0 8.003 16a7.9 7.9 0 0 0 7.997-7.997 7.86 7.86 0 0 0-2.399-5.677Zm-5.598 12.33a6.58 6.58 0 0 1-3.35-.913l-.24-.142-2.588.68.692-2.525-.156-.26a6.57 6.57 0 0 1-1.01-3.493 6.65 6.65 0 0 1 6.652-6.652 6.6 6.6 0 0 1 4.71 1.953 6.6 6.6 0 0 1 1.942 4.699 6.65 6.65 0 0 1-6.652 6.653Zm3.647-4.98c-.2-.1-1.182-.584-1.365-.65-.182-.067-.315-.1-.448.1-.133.2-.514.65-.63.784-.116.133-.232.15-.432.05-.2-.1-.844-.31-1.608-.99-.594-.53-.995-1.184-1.11-1.384-.116-.2-.012-.308.088-.407.09-.09.2-.232.3-.348.1-.116.133-.2.2-.332.066-.133.033-.25-.017-.35-.05-.1-.448-1.082-.614-1.482-.162-.39-.326-.337-.448-.343l-.381-.007a.733.733 0 0 0-.531.249c-.182.2-.697.681-.697 1.662 0 .98.714 1.928.814 2.061.1.133 1.404 2.144 3.4 3.006.474.204.844.326 1.132.417.476.151.909.13 1.252.08.382-.057 1.182-.483 1.349-.95.166-.465.166-.865.116-.949-.05-.083-.183-.133-.383-.232Z"/>
 </svg>
-<span>Contacto</span>
+<span>WhatsApp ahora</span>
 </a>
+<a href="https://wa.me/5214443354450?text=Hola,%20quiero%20una%20demo%20rápida%20de%20Tal-IA%20por%20WhatsApp" class="hidden sm:inline-flex bg-primary hover:bg-primary/90 text-white text-sm font-bold py-2.5 px-6 rounded-lg shadow-lg shadow-primary/20 transition-all" target="_blank" rel="noopener noreferrer">
+                    Demo por WhatsApp
+                </a>
 </div>
 </div>
 </nav>
@@ -144,23 +218,24 @@
 <span class="text-xs font-bold text-primary uppercase tracking-wider italic">Nueva Era: AUTOMATIZACION E INTELIGENCIA ARTIFICIAL</span>
 </div>
 <h1 class="text-5xl lg:text-7xl font-black text-slate-900 leading-[1.1] mb-8 tracking-tight">
-                    IA para WhatsApp: CRM y asistente de IA para ventas y seguimiento
+                    Vende y responde por WhatsApp con Tal-IA
 </h1>
 <p class="text-lg text-slate-600 mb-10 max-w-xl leading-relaxed">
-                    IA de WhatsApp para ventas y soporte: Talia adapta atención, calificación, agenda y seguimiento a la lógica de tu negocio.
+                    Asistente de IA para WhatsApp que atiende, califica y agenda 24/7. Escríbenos y te mostramos tu demo real en minutos.
                 </p>
 <div class="flex flex-col sm:flex-row gap-4">
-<button class="bg-primary hover:bg-primary/90 text-white font-bold py-4 px-8 rounded-xl shadow-xl shadow-primary/30 transition-all text-lg flex items-center justify-center gap-2" data-open-webchat>
-                        Ver a Tal-IA en acción
-                        <span class="material-symbols-outlined">arrow_forward</span>
-</button>
-<a href="/demo.html?utm_source=landing&utm_medium=website&utm_campaign=demo_cta_hero&intent=demo_booking" class="bg-white border border-slate-200 hover:border-primary text-slate-700 font-bold py-4 px-8 rounded-xl transition-all text-lg flex items-center justify-center gap-2">
-                        Agendar demo
-                    </a>
-<a href="#agentes" class="bg-white border border-slate-200 hover:border-primary text-slate-700 font-bold py-4 px-8 rounded-xl transition-all text-lg flex items-center justify-center gap-2">
-                        Explorar Agentes
-                    </a>
+<a href="https://wa.me/5214443354450?text=Hola,%20quiero%20una%20demo%20rápida%20de%20Tal-IA%20por%20WhatsApp" class="bg-emerald-500 hover:bg-emerald-600 text-white font-black py-4 px-8 rounded-xl shadow-xl shadow-emerald-500/40 transition-all text-lg flex items-center justify-center gap-2" target="_blank" rel="noopener noreferrer">
+                        Hablar por WhatsApp ahora
+                        <span class="material-symbols-outlined">bolt</span>
+</a>
+<a href="https://wa.me/5214443354450?text=Hola,%20quiero%20ver%20un%20ejemplo%20rápido%20de%20Tal-IA" class="bg-white border border-slate-200 hover:border-primary text-slate-700 font-bold py-4 px-8 rounded-xl transition-all text-lg flex items-center justify-center gap-2" target="_blank" rel="noopener noreferrer">
+                        Ver ejemplo rápido
+                        <span class="material-symbols-outlined">play_arrow</span>
+</a>
 </div>
+<p class="mt-4 text-sm text-slate-500 font-semibold uppercase tracking-widest">
+                    Respuesta en minutos · Demo real por WhatsApp
+                </p>
 </div>
 <div class="relative lg:h-[600px] flex items-center justify-center">
 <!-- Abstract UI Representation -->
@@ -218,6 +293,20 @@ Tu navegador no soporta video HTML5.
 <div class="absolute -bottom-10 -left-10 size-80 bg-primary/5 rounded-full blur-3xl -z-10"></div>
 </div>
 </div>
+</section>
+<!-- WhatsApp Inline CTA -->
+<section class="py-16 bg-white">
+  <div class="max-w-5xl mx-auto px-6">
+    <div class="rounded-3xl border border-emerald-100 bg-emerald-50 px-6 py-10 text-center shadow-xl shadow-emerald-500/10">
+      <p class="text-sm font-bold uppercase tracking-[0.25em] text-emerald-700 mb-3">Atención inmediata</p>
+      <h3 class="text-3xl md:text-4xl font-black text-slate-900 mb-4">Cotiza y prueba Tal-IA por WhatsApp</h3>
+      <p class="text-slate-600 text-base md:text-lg mb-8">Envíanos tu caso y te mostramos cómo funciona en tu industria.</p>
+      <a href="https://wa.me/5214443354450?text=Hola,%20quiero%20ver%20cómo%20Tal-IA%20funciona%20en%20mi%20industria" class="inline-flex items-center gap-2 rounded-2xl bg-emerald-500 px-6 py-3 text-white text-base font-black shadow-lg shadow-emerald-500/30 hover:bg-emerald-600 transition-colors" target="_blank" rel="noopener noreferrer">
+        Empezar por WhatsApp
+        <span class="material-symbols-outlined text-base">chat</span>
+      </a>
+    </div>
+  </div>
 </section>
 <!-- Prediction Section -->
 <section class="py-24 relative overflow-hidden bg-slate-900 text-white">
@@ -646,13 +735,28 @@ Tu navegador no soporta video HTML5.
 <div class="absolute top-0 left-0 w-full h-full bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] opacity-10"></div>
 <h2 class="text-4xl lg:text-6xl font-black text-white mb-10 relative z-10">¿Listo para evolucionar?</h2>
 <div class="flex justify-center relative z-10">
-<a class="bg-white hover:bg-rose-50 text-primary border border-white/70 font-bold py-5 px-10 rounded-2xl transition-all text-xl shadow-lg shadow-black/10" href="https://wa.me/5214443354450?text=Hola,%20quiero%20saber%20qué%20puedes%20hacer%20por%20mi%20negocio" target="_blank" rel="noopener noreferrer">
-                        Hablar con un experto
+<a class="bg-white hover:bg-rose-50 text-primary border border-white/70 font-bold py-5 px-10 rounded-2xl transition-all text-xl shadow-lg shadow-black/10" href="https://wa.me/5214443354450?text=Hola,%20quiero%20hablar%20con%20un%20experto%20sobre%20Tal-IA" target="_blank" rel="noopener noreferrer">
+                        Hablar con un experto por WhatsApp
                     </a>
 </div>
 </div>
 </div>
 </section>
+<a class="whatsapp-float" href="https://wa.me/5214443354450?text=Hola,%20quiero%20una%20demo%20rápida%20de%20Tal-IA%20por%20WhatsApp" target="_blank" rel="noopener noreferrer" aria-label="WhatsApp Tal-IA">
+  <span class="whatsapp-float__pulse" aria-hidden="true"></span>
+  <svg aria-hidden="true" class="whatsapp-float__icon" viewBox="0 0 16 16" fill="currentColor">
+    <path d="M13.601 2.326A7.854 7.854 0 0 0 8.003 0a7.92 7.92 0 0 0-6.91 11.79L0 16l4.366-1.144A7.92 7.92 0 0 0 8.003 16a7.9 7.9 0 0 0 7.997-7.997 7.86 7.86 0 0 0-2.399-5.677Zm-5.598 12.33a6.58 6.58 0 0 1-3.35-.913l-.24-.142-2.588.68.692-2.525-.156-.26a6.57 6.57 0 0 1-1.01-3.493 6.65 6.65 0 0 1 6.652-6.652 6.6 6.6 0 0 1 4.71 1.953 6.6 6.6 0 0 1 1.942 4.699 6.65 6.65 0 0 1-6.652 6.653Zm3.647-4.98c-.2-.1-1.182-.584-1.365-.65-.182-.067-.315-.1-.448.1-.133.2-.514.65-.63.784-.116.133-.232.15-.432.05-.2-.1-.844-.31-1.608-.99-.594-.53-.995-1.184-1.11-1.384-.116-.2-.012-.308.088-.407.09-.09.2-.232.3-.348.1-.116.133-.2.2-.332.066-.133.033-.25-.017-.35-.05-.1-.448-1.082-.614-1.482-.162-.39-.326-.337-.448-.343l-.381-.007a.733.733 0 0 0-.531.249c-.182.2-.697.681-.697 1.662 0 .98.714 1.928.814 2.061.1.133 1.404 2.144 3.4 3.006.474.204.844.326 1.132.417.476.151.909.13 1.252.08.382-.057 1.182-.483 1.349-.95.166-.465.166-.865.116-.949-.05-.083-.183-.133-.383-.232Z"/>
+  </svg>
+  <span class="whatsapp-float__label">WhatsApp ahora</span>
+</a>
+<div class="whatsapp-bar">
+  <a class="whatsapp-bar__button" href="https://wa.me/5214443354450?text=Hola,%20quiero%20una%20demo%20rápida%20de%20Tal-IA%20por%20WhatsApp" target="_blank" rel="noopener noreferrer">
+    <svg aria-hidden="true" class="whatsapp-float__icon" viewBox="0 0 16 16" fill="currentColor">
+      <path d="M13.601 2.326A7.854 7.854 0 0 0 8.003 0a7.92 7.92 0 0 0-6.91 11.79L0 16l4.366-1.144A7.92 7.92 0 0 0 8.003 16a7.9 7.9 0 0 0 7.997-7.997 7.86 7.86 0 0 0-2.399-5.677Zm-5.598 12.33a6.58 6.58 0 0 1-3.35-.913l-.24-.142-2.588.68.692-2.525-.156-.26a6.57 6.57 0 0 1-1.01-3.493 6.65 6.65 0 0 1 6.652-6.652 6.6 6.6 0 0 1 4.71 1.953 6.6 6.6 0 0 1 1.942 4.699 6.65 6.65 0 0 1-6.652 6.653Zm3.647-4.98c-.2-.1-1.182-.584-1.365-.65-.182-.067-.315-.1-.448.1-.133.2-.514.65-.63.784-.116.133-.232.15-.432.05-.2-.1-.844-.31-1.608-.99-.594-.53-.995-1.184-1.11-1.384-.116-.2-.012-.308.088-.407.09-.09.2-.232.3-.348.1-.116.133-.2.2-.332.066-.133.033-.25-.017-.35-.05-.1-.448-1.082-.614-1.482-.162-.39-.326-.337-.448-.343l-.381-.007a.733.733 0 0 0-.531.249c-.182.2-.697.681-.697 1.662 0 .98.714 1.928.814 2.061.1.133 1.404 2.144 3.4 3.006.474.204.844.326 1.132.417.476.151.909.13 1.252.08.382-.057 1.182-.483 1.349-.95.166-.465.166-.865.116-.949-.05-.083-.183-.133-.383-.232Z"/>
+    </svg>
+    Empezar por WhatsApp
+  </a>
+</div>
 <!-- Footer -->
 <div class="webchat-widget" id="open-webchat" aria-live="polite" data-open="false">
     <button
