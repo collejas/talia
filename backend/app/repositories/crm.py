@@ -2178,9 +2178,14 @@ class CRMRepository:
                 "limit": str(max(1, min(limit, 5000))),
                 "offset": str(max(0, int(offset))),
             }
-            if date_from:
-                params["last_seen_at"] = f"gte.{date_from.isoformat()}"
-            if date_to:
+            if date_from and date_to:
+                params["and"] = (
+                    f"(first_seen_at.gte.{date_from.isoformat()},"
+                    f"first_seen_at.lte.{date_to.isoformat()})"
+                )
+            elif date_from:
+                params["first_seen_at"] = f"gte.{date_from.isoformat()}"
+            elif date_to:
                 params["first_seen_at"] = f"lte.{date_to.isoformat()}"
             if state_code:
                 params["cve_ent"] = f"eq.{state_code}"
