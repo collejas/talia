@@ -37,17 +37,17 @@ export function OpportunityCards({ data }: OpportunityCardsProps) {
             {formatNumber(total)}
           </CardTitle>
           <CardAction className="max-w-[160px]">
-            <Badge variant="outline" className="min-w-0 max-w-[160px] whitespace-normal text-xs leading-tight">
+            <Badge variant="outline" className={`${badgeClassName} min-w-0 max-w-[160px] whitespace-normal`}>
               <IconChartPie />
               {topStage ? topStage.label : "Sin etapa"}
             </Badge>
           </CardAction>
         </CardHeader>
         <CardFooter className="flex-col items-start gap-1.5 text-sm">
-          <div className="line-clamp-1 flex gap-2 font-medium">
+          <div className={footerTitleClassName}>
             Etapa dominante <IconChartPie className="size-4" />
           </div>
-          <div className="text-muted-foreground">
+          <div className={footerTextClassName}>
             {topStage ? `${formatNumber(topStage.count)} oportunidades` : "Sin datos de etapa"}
           </div>
         </CardFooter>
@@ -59,68 +59,68 @@ export function OpportunityCards({ data }: OpportunityCardsProps) {
             {formatCurrency(monto, currencies)}
           </CardTitle>
           <CardAction>
-            <Badge variant="outline">
+            <Badge variant="outline" className={badgeClassName}>
               <IconChartPie />
               {currencyBadge(currencies)}
             </Badge>
           </CardAction>
         </CardHeader>
         <CardFooter className="flex-col items-start gap-1.5 text-sm">
-          <div className="line-clamp-1 flex gap-2 font-medium">
+          <div className={footerTitleClassName}>
             Valor bruto del pipeline <IconChartPie className="size-4" />
           </div>
-          <div className="text-muted-foreground">
+          <div className={footerTextClassName}>
             Ponderado {formatCurrency(weightedAmount, currencies)}
           </div>
-          <div className="text-muted-foreground">
+          <div className={footerTextClassName}>
             {formatNumber(upcomingCloseCount)} cierres probables en 14 días
           </div>
         </CardFooter>
       </Card>
-      <Card className="@container/card">
+      <Card className="@container/card border-amber-300/50 shadow-sm">
         <CardHeader>
           <CardDescription>Oportunidades sin asignar</CardDescription>
           <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl">
             {formatNumber(unassigned)}
           </CardTitle>
           <CardAction>
-            <Badge variant="outline">
+            <Badge variant="outline" className={badgeClassName}>
               <IconAlertTriangle />
               {formatNumber(unassignedPct)}%
             </Badge>
           </CardAction>
         </CardHeader>
         <CardFooter className="flex-col items-start gap-1.5 text-sm">
-          <div className="line-clamp-1 flex gap-2 font-medium">
+          <div className={footerTitleClassName}>
             Requieren responsable <IconAlertTriangle className="size-4" />
           </div>
-          <div className="text-muted-foreground">
+          <div className={footerTextClassName}>
             {formatNumber(total - unassigned)} ya asignadas
           </div>
-          <div className="text-muted-foreground">Impactan seguimiento comercial</div>
+          <div className={footerTextClassName}>Impactan seguimiento comercial</div>
         </CardFooter>
       </Card>
-      <Card className="@container/card">
+      <Card className="@container/card border-amber-300/50 shadow-sm">
         <CardHeader>
           <CardDescription>Oportunidades estancadas</CardDescription>
           <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl">
             {formatNumber(stale)}
           </CardTitle>
           <CardAction>
-            <Badge variant="outline">
+            <Badge variant="outline" className={badgeClassName}>
               <IconClock />
               +14 días
             </Badge>
           </CardAction>
         </CardHeader>
         <CardFooter className="flex-col items-start gap-1.5 text-sm">
-          <div className="line-clamp-1 flex gap-2 font-medium">
+          <div className={footerTitleClassName}>
             Mayor atasco por etapa <IconClock className="size-4" />
           </div>
-          <div className="text-muted-foreground">
+          <div className={footerTextClassName}>
             {topStaleStage ? `${topStaleStage.label} (${formatNumber(topStaleStage.count)})` : "Sin etapa dominante"}
           </div>
-          <div className="text-muted-foreground">
+          <div className={footerTextClassName}>
             Edad promedio {formatNumber(avgAge)} días
           </div>
         </CardFooter>
@@ -154,3 +154,7 @@ function toNumber(value: number | null | undefined): number {
   if (!Number.isFinite(value ?? Number.NaN)) return 0;
   return Number(value);
 }
+
+const badgeClassName = "h-6 px-2.5 text-[11px] font-semibold tracking-[0.01em]"
+const footerTitleClassName = "line-clamp-1 flex gap-2 font-medium"
+const footerTextClassName = "text-muted-foreground text-sm"

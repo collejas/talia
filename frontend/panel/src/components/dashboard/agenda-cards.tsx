@@ -37,58 +37,58 @@ export function AgendaCards({ data }: AgendaCardsProps) {
             {formatNumber(total)}
           </CardTitle>
           <CardAction>
-            <Badge variant="outline">
+            <Badge variant="outline" className={badgeClassName}>
               <IconCalendar />
               Activas {formatNumber(activas)}
             </Badge>
           </CardAction>
         </CardHeader>
         <CardFooter className="flex-col items-start gap-1.5 text-sm">
-          <div className="line-clamp-1 flex gap-2 font-medium">
+          <div className={footerTitleClassName}>
             Carga inmediata <IconClock className="size-4" />
           </div>
-          <div className="text-muted-foreground">{formatNumber(proximas)} citas próximas</div>
-          <div className="text-muted-foreground">{formatNumber(realizadas)} realizadas en el periodo</div>
+          <div className={footerTextClassName}>{formatNumber(proximas)} citas próximas</div>
+          <div className={footerTextClassName}>{formatNumber(realizadas)} realizadas en el periodo</div>
         </CardFooter>
       </Card>
-      <Card className="@container/card">
+      <Card className="@container/card border-sky-300/50 shadow-sm">
         <CardHeader>
           <CardDescription>Ligadas a conversación</CardDescription>
           <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl">
             {formatNumber(linkedToConversation)}
           </CardTitle>
           <CardAction>
-            <Badge variant="outline">
+            <Badge variant="outline" className={badgeClassName}>
               <IconCalendar />
               {formatNumber(coveragePct)}%
             </Badge>
           </CardAction>
         </CardHeader>
         <CardFooter className="flex-col items-start gap-1.5 text-sm">
-          <div className="line-clamp-1 flex gap-2 font-medium">
+          <div className={footerTitleClassName}>
             Cobertura comercial <IconCalendar className="size-4" />
           </div>
-          <div className="text-muted-foreground">{formatNumber(linkedToContact)} también ligadas a contacto</div>
+          <div className={footerTextClassName}>{formatNumber(linkedToContact)} también ligadas a contacto</div>
         </CardFooter>
       </Card>
-      <Card className="@container/card">
+      <Card className="@container/card border-sky-300/50 shadow-sm">
         <CardHeader>
           <CardDescription>Sin asignar</CardDescription>
           <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl">
             {formatNumber(unassigned)}
           </CardTitle>
           <CardAction>
-            <Badge variant="outline">
+            <Badge variant="outline" className={badgeClassName}>
               <IconX />
               {formatNumber(canceladas)} canceladas
             </Badge>
           </CardAction>
         </CardHeader>
         <CardFooter className="flex-col items-start gap-1.5 text-sm">
-          <div className="line-clamp-1 flex gap-2 font-medium">
+          <div className={footerTitleClassName}>
             Requieren responsable <IconX className="size-4" />
           </div>
-          <div className="text-muted-foreground">Bookings sin responsable visible</div>
+          <div className={footerTextClassName}>Bookings sin responsable visible</div>
         </CardFooter>
       </Card>
       <Card className="@container/card">
@@ -98,17 +98,17 @@ export function AgendaCards({ data }: AgendaCardsProps) {
             {formatNumber(linkedToContact)}
           </CardTitle>
           <CardAction>
-            <Badge variant="outline">
+            <Badge variant="outline" className={badgeClassName}>
               <IconClock />
               {formatNumber(contactPct)}%
             </Badge>
           </CardAction>
         </CardHeader>
         <CardFooter className="flex-col items-start gap-1.5 text-sm">
-          <div className="line-clamp-1 flex gap-2 font-medium">
+          <div className={footerTitleClassName}>
             Base de seguimiento <IconClock className="size-4" />
           </div>
-          <div className="text-muted-foreground">{formatNumber(virtuales)} reuniones virtuales</div>
+          <div className={footerTextClassName}>{formatNumber(virtuales)} reuniones virtuales</div>
         </CardFooter>
       </Card>
     </div>
@@ -129,3 +129,7 @@ function percentage(part: number, total: number): number {
   if (!total) return 0;
   return Math.round((part / total) * 100);
 }
+
+const badgeClassName = "h-6 px-2.5 text-[11px] font-semibold tracking-[0.01em]"
+const footerTitleClassName = "line-clamp-1 flex gap-2 font-medium"
+const footerTextClassName = "text-muted-foreground text-sm"

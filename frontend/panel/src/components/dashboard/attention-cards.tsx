@@ -71,70 +71,70 @@ export function AttentionCards({ data }: AttentionCardsProps) {
             {formatNumber(conversacionesTotal)}
           </CardTitle>
           <CardAction>
-            <Badge variant="outline">
+            <Badge variant="outline" className={badgeClassName}>
               <IconMessageCircle />
               Webchat {formatNumber(webchatTotal)}
             </Badge>
           </CardAction>
         </CardHeader>
         <CardFooter className="flex-col items-start gap-1.5 text-sm">
-          <div className="line-clamp-1 flex gap-2 font-medium">
+          <div className={footerTitleClassName}>
             Distribución por canal <IconMessageCircle className="size-4" />
           </div>
-          <div className="text-muted-foreground">
+          <div className={footerTextClassName}>
             {formatNumber(canalesActivos)} canales con actividad
           </div>
-          <div className="text-muted-foreground">
+          <div className={footerTextClassName}>
             WhatsApp {formatNumber(whatsappTotal)} · Email {formatNumber(emailTotal)} · Voz {formatNumber(vozTotal)} · Otros {formatNumber(otrosTotal)}
           </div>
         </CardFooter>
       </Card>
-      <Card className="@container/card">
+      <Card className="@container/card border-secondary/30 shadow-sm">
         <CardHeader>
           <CardDescription>Sin respuesta</CardDescription>
           <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl">
             {formatNumber(sinRespuestaTotal)}
           </CardTitle>
           <CardAction>
-            <Badge variant="outline">
+            <Badge variant="outline" className={badgeClassName}>
               <IconMessageOff />
               {formatPercent(unansweredPct)}
             </Badge>
           </CardAction>
         </CardHeader>
         <CardFooter className="flex-col items-start gap-1.5 text-sm">
-          <div className="line-clamp-1 flex gap-2 font-medium">
+          <div className={footerTitleClassName}>
             Pendientes de atención <IconMessageOff className="size-4" />
           </div>
-          <div className="text-muted-foreground">
+          <div className={footerTextClassName}>
             WhatsApp {formatNumber(sinRespuestaWhatsapp)} · Email {formatNumber(sinRespuestaEmail)} · Voz {formatNumber(sinRespuestaVoz)}
           </div>
-          <div className="text-muted-foreground">
+          <div className={footerTextClassName}>
             {formatNumber(activas24h)} activas en 24h · {formatNumber(abiertasTotal)} abiertas
           </div>
         </CardFooter>
       </Card>
-      <Card className="@container/card">
+      <Card className="@container/card border-secondary/30 shadow-sm">
         <CardHeader>
           <CardDescription>Primera respuesta</CardDescription>
           <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl">
             {formatDuration(avgResponse)}
           </CardTitle>
           <CardAction>
-            <Badge variant="outline">
+            <Badge variant="outline" className={badgeClassName}>
               <IconClock />
               Max {formatDuration(maxResponse)}
             </Badge>
           </CardAction>
         </CardHeader>
         <CardFooter className="flex-col items-start gap-1.5 text-sm">
-          <div className="line-clamp-1 flex gap-2 font-medium">
+          <div className={footerTitleClassName}>
             Canal más ágil: {bestResponseChannel.label} <IconClock className="size-4" />
           </div>
-          <div className="text-muted-foreground">
+          <div className={footerTextClassName}>
             {formatDuration(bestResponseChannel.seconds)} promedio
           </div>
-          <div className="text-muted-foreground">
+          <div className={footerTextClassName}>
             Más lento: {slowestResponseChannel.label} · {formatDuration(slowestResponseChannel.seconds)}
           </div>
         </CardFooter>
@@ -146,20 +146,20 @@ export function AttentionCards({ data }: AttentionCardsProps) {
             {formatNumber(contactoCompletoTotal)}
           </CardTitle>
           <CardAction>
-            <Badge variant="outline">
+            <Badge variant="outline" className={badgeClassName}>
               <IconUserCheck />
               {formatPercent(conversionPct)}
             </Badge>
           </CardAction>
         </CardHeader>
         <CardFooter className="flex-col items-start gap-1.5 text-sm">
-          <div className="line-clamp-1 flex gap-2 font-medium">
+          <div className={footerTitleClassName}>
             {formatNumber(conContactoTotal)} con contacto creado <IconUserCheck className="size-4" />
           </div>
-          <div className="text-muted-foreground">
+          <div className={footerTextClassName}>
             Mejor canal: {bestConversionChannel.label}
           </div>
-          <div className="text-muted-foreground">
+          <div className={footerTextClassName}>
             {formatPercent(bestConversionChannel.rate)} de conversaciones completas
           </div>
         </CardFooter>
@@ -252,3 +252,7 @@ function pickBestConversionChannel(
   }
   return best;
 }
+
+const badgeClassName = "h-6 px-2.5 text-[11px] font-semibold tracking-[0.01em]"
+const footerTitleClassName = "line-clamp-1 flex gap-2 font-medium"
+const footerTextClassName = "text-muted-foreground text-sm"

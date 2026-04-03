@@ -49,44 +49,44 @@ export function SectionCards({ data = DEFAULT_LEAD_CARDS }: SectionCardsProps) {
             {formatNumber(nuevas)}
           </CardTitle>
           <CardAction>
-            <Badge variant="outline">
+            <Badge variant="outline" className={badgeClassName}>
               <IconTrendingUp />
               {formatPercent(nuevas, total)}%
             </Badge>
           </CardAction>
         </CardHeader>
         <CardFooter className="flex-col items-start gap-1.5 text-sm">
-          <div className="line-clamp-1 flex gap-2 font-medium">
+          <div className={footerTitleClassName}>
             Entrada del periodo <IconTrendingUp className="size-4" />
           </div>
-          <div className="text-muted-foreground">
+          <div className={footerTextClassName}>
             {formatNumber(abiertas)} siguen abiertos
           </div>
         </CardFooter>
       </Card>
-      <Card className="@container/card">
+      <Card className="@container/card border-primary/20 shadow-sm">
         <CardHeader>
           <CardDescription>Leads ganados</CardDescription>
           <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl">
             {formatNumber(ganadas)}
           </CardTitle>
           <CardAction>
-            <Badge variant="outline">
+            <Badge variant="outline" className={badgeClassName}>
               <IconTrendingUp />
               {conversion}%
             </Badge>
           </CardAction>
         </CardHeader>
         <CardFooter className="flex-col items-start gap-1.5 text-sm">
-          <div className="line-clamp-1 flex gap-2 font-medium">
+          <div className={footerTitleClassName}>
             Conversión del periodo <IconTrendingUp className="size-4" />
           </div>
-          <div className="text-muted-foreground">
+          <div className={footerTextClassName}>
             {formatNumber(perdidas)} perdidos · {formatNumber(diasPromedioCierre)} días a cierre
           </div>
         </CardFooter>
       </Card>
-      <Card className="@container/card">
+      <Card className="@container/card border-primary/20 shadow-sm">
         <CardHeader>
           <CardDescription>Valor ganado</CardDescription>
           <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl">
@@ -95,7 +95,7 @@ export function SectionCards({ data = DEFAULT_LEAD_CARDS }: SectionCardsProps) {
           <CardAction className="max-w-[140px]">
             <Badge
               variant="outline"
-              className="min-w-0 max-w-[140px] whitespace-normal text-xs leading-tight"
+              className={`${badgeClassName} min-w-0 max-w-[140px] whitespace-normal`}
             >
               <IconTrendingUp />
               Cotizaciones aceptadas
@@ -103,10 +103,10 @@ export function SectionCards({ data = DEFAULT_LEAD_CARDS }: SectionCardsProps) {
           </CardAction>
         </CardHeader>
         <CardFooter className="flex-col items-start gap-1.5 text-sm">
-          <div className="line-clamp-1 flex gap-2 font-medium">
+          <div className={footerTitleClassName}>
             Ingreso cerrado <IconTrendingUp className="size-4" />
           </div>
-          <div className="text-muted-foreground">
+          <div className={footerTextClassName}>
             Ticket promedio {formatCurrency(ticketPromedio)}
           </div>
         </CardFooter>
@@ -118,17 +118,17 @@ export function SectionCards({ data = DEFAULT_LEAD_CARDS }: SectionCardsProps) {
             {topVendedorLabel}
           </CardTitle>
           <CardAction>
-            <Badge variant="outline">
+            <Badge variant="outline" className={badgeClassName}>
               <IconTrendingUp />
               {formatNumber(total)} totales
             </Badge>
           </CardAction>
         </CardHeader>
         <CardFooter className="flex-col items-start gap-1.5 text-sm">
-          <div className="line-clamp-1 flex gap-2 font-medium">
+          <div className={footerTitleClassName}>
             Mayor volumen gestionado <IconTrendingUp className="size-4" />
           </div>
-          <div className="text-muted-foreground">
+          <div className={footerTextClassName}>
             {formatNumber(ganadas)} ganados · {formatCurrency(montoTotal)} cerrados
           </div>
         </CardFooter>
@@ -136,6 +136,10 @@ export function SectionCards({ data = DEFAULT_LEAD_CARDS }: SectionCardsProps) {
     </div>
   )
 }
+
+const badgeClassName = "h-6 px-2.5 text-[11px] font-semibold tracking-[0.01em]"
+const footerTitleClassName = "line-clamp-1 flex gap-2 font-medium"
+const footerTextClassName = "text-muted-foreground text-sm"
 
 function formatNumber(value: number | null | undefined): string {
   if (!value) return "0";
