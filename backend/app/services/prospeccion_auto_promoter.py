@@ -9,6 +9,7 @@ from uuid import UUID
 
 from app.core.logging import get_logger, log_event
 from app.repositories.crm import CRMRepository, CRMRepositoryError
+from app.services.phone_utils import normalize_phone
 
 logger = get_logger("prospeccion.auto_promoter")
 
@@ -137,7 +138,7 @@ async def _auto_promote_prospecto_locked(
 
     display_name = _clean_text(prospecto.get("display_name")) or "Prospecto sin nombre"
     correo = _clean_text(prospecto.get("email"))
-    telefono = _clean_text(prospecto.get("phone_e164") or prospecto.get("phone"))
+    telefono = normalize_phone(_clean_text(prospecto.get("phone_e164") or prospecto.get("phone")))
     segmento = _clean_text(prospecto.get("segmento"))
     notas_value = metadata.get("notas")
     notas = notas_value.strip() if isinstance(notas_value, str) else None
@@ -228,6 +229,22 @@ async def _auto_promote_prospecto_locked(
                     )
 
     if not contacto_id:
+        owner_user_id: str | None = None
+        try:
+            sales_candidate = await local_repo.assign_next_sales_rep(organizacion_id=org_uuid)
+        except CRMRepositoryError as exc:
+            log_event(
+                logger,
+                "prospeccion.auto_promote_round_robin_failed",
+                error=str(exc),
+                prospecto_id=str(prospecto_uuid),
+            )
+            sales_candidate = None
+        if isinstance(sales_candidate, dict):
+            owner_candidate = sales_candidate.get("usuario_id")
+            if owner_candidate:
+                owner_user_id = str(owner_candidate)
+
         contacto_datos = {
             "prospecto_id": str(prospecto_uuid),
             "prospeccion_fuente": source_label,
@@ -242,6 +259,7 @@ async def _auto_promote_prospecto_locked(
             "company_name": segmento,
             "notes": notas,
             "contacto_datos": contacto_datos,
+            "propietario_usuario_id": owner_user_id,
         }
         contacto_payload = {k: v for k, v in contacto_payload.items() if v}
         try:

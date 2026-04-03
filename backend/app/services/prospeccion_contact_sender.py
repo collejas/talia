@@ -21,6 +21,7 @@ from app.repositories.crm import CRMRepository, CRMRepositoryError
 from app.services.high_demand_mode import high_demand_controller
 from app.services import EmailSendError, send_email, storage, tenant_runtime
 from app.services.metrics import metrics
+from app.services.phone_utils import normalize_phone
 from app.services.prospeccion_auto_promoter import auto_promote_prospecto, is_promotable_estado
 from app.services.prospeccion_progress import progress_hub
 from app.services.storage import StorageError
@@ -556,26 +557,47 @@ async def _log_whatsapp_inbox_message(
     detalle: dict[str, Any],
     payload: dict[str, Any],
     result: ContactEnvioResult,
-) -> None:
-    contact_id = await _resolve_contact_id_for_prospecto(repo=repo, prospecto_id=envio.get("prospecto_id"))
-    if not contact_id:
-        return
-    conversation_id = await _ensure_whatsapp_conversation(repo=repo, contact_id=contact_id)
-    if not conversation_id:
-        return
-    telefono = _clean_text(detalle.get("phone"))
+) -> str | None:
+    telefono = normalize_phone(_clean_text(detalle.get("phone")))
     if not telefono:
-        return
+        return None
+    prospecto_id = envio.get("prospecto_id")
+    if prospecto_id:
+        try:
+            await auto_promote_prospecto(
+                prospecto_id=prospecto_id,
+                canal="whatsapp",
+                estado="respondido",
+                repo=repo,
+                force=True,
+            )
+        except Exception as exc:  # pragma: no cover - defensivo, no debe bloquear el log
+            log_event(
+                logger,
+                "prospeccion.sender_force_promote_failed",
+                prospecto_id=str(prospecto_id),
+                envio_id=str(envio.get("id")),
+                error=str(exc),
+            )
+
+    contact_id = await _resolve_contact_id_for_prospecto(repo=repo, prospecto_id=prospecto_id)
+    conversation_id = await _ensure_whatsapp_conversation(repo=repo, contact_id=contact_id) if contact_id else None
     detalle_meta = result.detalle if isinstance(result.detalle, dict) else {}
     body_preview = _clean_text(detalle_meta.get("body_preview"))
     if not body_preview:
         body_preview = _clean_text(payload.get("body"))
     if not body_preview and detalle_meta.get("template_sid"):
         body_preview = f"[Plantilla {detalle_meta.get('template_sid')}]"
+    payload_meta = payload.get("metadata") if isinstance(payload.get("metadata"), dict) else {}
     metadata_payload: dict[str, Any] = {
         "source": "prospeccion",
         "envio_id": str(envio.get("id")) if envio.get("id") else None,
         "batch_id": str(envio.get("batch_id")) if envio.get("batch_id") else None,
+        "campana_id": (
+            str(envio.get("campana_id"))
+            if envio.get("campana_id")
+            else _clean_text(payload_meta.get("campana_id"))
+        ),
         "delivery_status": detalle_meta.get("status"),
     }
     if detalle_meta.get("template_sid"):
@@ -585,13 +607,16 @@ async def _log_whatsapp_inbox_message(
     metadata_payload = {k: v for k, v in metadata_payload.items() if v not in (None, "", {})}
 
     contact_record: dict[str, Any] | None = None
-    try:
-        contact_record = await storage.fetch_contact(contact_id)
-    except StorageError:
-        contact_record = None
+    if contact_id:
+        try:
+            contact_record = await storage.fetch_contact(contact_id)
+        except StorageError:
+            contact_record = None
     organizacion_hint = await resolve_whatsapp_organizacion(contact=contact_record)
+    if not organizacion_hint:
+        organizacion_hint = _clean_text(envio.get("organizacion_id"))
     try:
-        await storage.register_whatsapp_message(
+        storage_result = await storage.register_whatsapp_message(
             direction="saliente",
             wa_id=None,
             phone_e164=telefono,
@@ -609,6 +634,18 @@ async def _log_whatsapp_inbox_message(
             envio_id=str(envio.get("id")),
             error=str(exc),
         )
+        return None
+
+    resolved_conversation_id = _clean_text(storage_result.get("conversation_id"))
+    if prospecto_id and resolved_conversation_id:
+        await _bind_prospecto_opportunity_conversation(
+            repo=repo,
+            prospecto_id=prospecto_id,
+            conversation_id=resolved_conversation_id,
+            batch_id=metadata_payload.get("batch_id"),
+            campana_id=metadata_payload.get("campana_id"),
+        )
+    return resolved_conversation_id
 
 
 async def _resolve_contact_id_for_prospecto(
@@ -666,6 +703,85 @@ async def _ensure_whatsapp_conversation(
         return None
     conversation_id = conversation.get("id") if isinstance(conversation, dict) else None
     return str(conversation_id) if conversation_id else None
+
+
+async def _bind_prospecto_opportunity_conversation(
+    *,
+    repo: CRMRepository,
+    prospecto_id: Any,
+    conversation_id: str,
+    batch_id: str | None = None,
+    campana_id: str | None = None,
+) -> None:
+    try:
+        prospecto_uuid = UUID(str(prospecto_id))
+    except (TypeError, ValueError):
+        return
+    try:
+        prospecto = await repo.worker_get_prospecto(prospecto_id=prospecto_uuid)
+    except CRMRepositoryError:
+        return
+    if not isinstance(prospecto, dict):
+        return
+    try:
+        org_uuid = UUID(str(prospecto.get("organizacion_id")))
+    except (TypeError, ValueError):
+        return
+
+    metadata = prospecto.get("metadata") if isinstance(prospecto.get("metadata"), dict) else {}
+    opportunity_id_value = metadata.get("crm_oportunidad_id")
+    opportunity: dict[str, Any] | None = None
+    if opportunity_id_value:
+        opportunity = {
+            "id": opportunity_id_value,
+            "organizacion_id": str(org_uuid),
+            "metadata": {},
+        }
+    else:
+        try:
+            opportunity = await repo.worker_find_opportunity_by_prospecto(
+                organizacion_id=org_uuid,
+                prospecto_id=prospecto_uuid,
+            )
+        except CRMRepositoryError:
+            opportunity = None
+    if not isinstance(opportunity, dict):
+        return
+    try:
+        opportunity_uuid = UUID(str(opportunity.get("id")))
+    except (TypeError, ValueError):
+        return
+    opportunity_metadata = (
+        opportunity.get("metadata") if isinstance(opportunity.get("metadata"), dict) else {}
+    )
+    existing_conversation_id = _clean_text(
+        opportunity_metadata.get("conversation_id") or opportunity_metadata.get("conversacion_id")
+    )
+    if existing_conversation_id == conversation_id:
+        return
+    patched_metadata = dict(opportunity_metadata)
+    patched_metadata["conversation_id"] = conversation_id
+    if "conversacion_id" in patched_metadata:
+        patched_metadata["conversacion_id"] = conversation_id
+    if batch_id and not _clean_text(patched_metadata.get("batch_id")):
+        patched_metadata["batch_id"] = batch_id
+    if campana_id and not _clean_text(patched_metadata.get("campana_id")):
+        patched_metadata["campana_id"] = campana_id
+    try:
+        await repo.update_opportunity(
+            organizacion_id=org_uuid,
+            oportunidad_id=opportunity_uuid,
+            payload={"metadata": patched_metadata},
+        )
+    except CRMRepositoryError as exc:
+        log_event(
+            logger,
+            "prospeccion.sender_bind_opportunity_conversation_failed",
+            prospecto_id=str(prospecto_uuid),
+            oportunidad_id=str(opportunity_uuid),
+            conversation_id=conversation_id,
+            error=str(exc),
+        )
 
 
 async def _broadcast_batch_event(batch_id: Any, payload: dict[str, Any]) -> None:
@@ -1168,7 +1284,7 @@ class ProspeccionContactSender:
                 canal=canal,
                 prospecto_id=prospecto_uuid,
                 email=_clean_text(detalle.get("email")),
-                phone_e164=_clean_text(detalle.get("phone")),
+                phone_e164=normalize_phone(_clean_text(detalle.get("phone"))),
             )
             if suppression:
                 result = ContactEnvioResult(
@@ -1252,6 +1368,14 @@ class ProspeccionContactSender:
         )
         await repo.worker_insert_contact_logs([log_entry])
 
+        if canal == "whatsapp" and result.mensaje_id:
+            await _log_whatsapp_inbox_message(
+                repo=repo,
+                envio=envio,
+                detalle=detalle,
+                payload=payload,
+                result=result,
+            )
         if is_promotable_estado(update_payload.get("estado")):
             await auto_promote_prospecto(
                 prospecto_id=envio.get("prospecto_id"),
@@ -1259,14 +1383,6 @@ class ProspeccionContactSender:
                 estado=update_payload.get("estado"),
                 repo=repo,
             )
-            if canal == "whatsapp" and result.mensaje_id:
-                await _log_whatsapp_inbox_message(
-                    repo=repo,
-                    envio=envio,
-                    detalle=detalle,
-                    payload=payload,
-                    result=result,
-                )
 
         batch_id = envio.get("batch_id")
         batch_state: str | None = None

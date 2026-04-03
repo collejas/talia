@@ -8273,6 +8273,9 @@ def _whatsapp_phone_lookup_candidates(phone_value: str | None) -> list[str]:
     normalized = _clean_text(phone_value)
     if not normalized:
         return []
+    lowered = normalized.lower()
+    if lowered.startswith("whatsapp"):
+        normalized = normalized[len("whatsapp"):].lstrip(":").strip()
     normalized = normalized.replace("whatsapp:", "").strip()
     candidates: list[str] = []
 
@@ -8288,6 +8291,22 @@ def _whatsapp_phone_lookup_candidates(phone_value: str | None) -> list[str]:
         _push("+52" + normalized[4:])
     if normalized.startswith("+52") and not normalized.startswith("+521") and len(normalized) > 3:
         _push("+521" + normalized[3:])
+
+    digits = re.sub(r"\D", "", normalized)
+    if digits:
+        _push(digits)
+    if len(digits) == 10:
+        _push("+52" + digits)
+        _push("+521" + digits)
+    elif len(digits) == 11 and digits.startswith("1"):
+        _push("+52" + digits[1:])
+        _push("+521" + digits[1:])
+    elif len(digits) == 12 and digits.startswith("52"):
+        _push("+52" + digits[2:])
+        _push("+521" + digits[2:])
+    elif len(digits) == 13 and digits.startswith("521"):
+        _push("+521" + digits[3:])
+        _push("+52" + digits[3:])
     return candidates
 
 
@@ -12305,7 +12324,9 @@ async def get_inbox_threads(
     ] = {}
     thread_channel_map: dict[str, str] = {}
     thread_phone_map: dict[str, str | None] = {}
+    thread_contact_map: dict[str, str | None] = {}
     missing_contact_name_ids: set[UUID] = set()
+    missing_contact_data_ids: set[UUID] = set()
 
     thread_scan_start = time.perf_counter()
     for row in rows:
@@ -12314,10 +12335,16 @@ async def get_inbox_threads(
             continue
         thread_channel_map[conversacion_id] = (_clean_text(row.get("canal")) or "").lower()
         thread_phone_map[conversacion_id] = _clean_text(row.get("contacto_telefono"))
+        thread_contact_map[conversacion_id] = _clean_text(row.get("contacto_id"))
         if not _clean_text(row.get("contacto_nombre")):
             contacto_uuid = _safe_uuid(row.get("contacto_id"))
             if contacto_uuid:
                 missing_contact_name_ids.add(contacto_uuid)
+                missing_contact_data_ids.add(contacto_uuid)
+        if not _clean_text(row.get("contacto_telefono")):
+            contacto_uuid = _safe_uuid(row.get("contacto_id"))
+            if contacto_uuid:
+                missing_contact_data_ids.add(contacto_uuid)
         batch_value = _clean_text(row.get("batch_id"))
         campana_value = _clean_text(row.get("campana_id"))
         (
@@ -12348,6 +12375,32 @@ async def get_inbox_threads(
             template_slugs.add(template_slug_hint)
     stage_timings["thread_scan_ms"] = round((time.perf_counter() - thread_scan_start) * 1000, 2)
 
+    contact_profile_name_map: dict[str, str] = {}
+    contact_phone_map: dict[str, str] = {}
+    contact_fallback_start = time.perf_counter()
+    if missing_contact_data_ids:
+        try:
+            contacts_rows = await repo.get_contacts_by_ids(
+                organizacion_id=organizacion_id,
+                contacto_ids=sorted(missing_contact_data_ids, key=str),
+            )
+        except CRMRepositoryError:
+            contacts_rows = []
+        for contact_row in contacts_rows:
+            contact_id_value = _clean_text(contact_row.get("id"))
+            if not contact_id_value:
+                continue
+            contact_data = _ensure_dict(contact_row.get("contacto_datos"), default={})
+            profile_name = _clean_text(contact_data.get("profile_name"))
+            if profile_name:
+                contact_profile_name_map[contact_id_value] = profile_name
+            phone_value = _clean_text(contact_row.get("telefono_e164"))
+            if phone_value:
+                contact_phone_map[contact_id_value] = phone_value
+    stage_timings["contact_fallback_ms"] = round(
+        (time.perf_counter() - contact_fallback_start) * 1000, 2
+    )
+
     # Fallback: cuando la conversación de WhatsApp no trae metadata prospección
     # en mensajes, intentamos enlazar con el envío más reciente por teléfono.
     whatsapp_phone_cache: dict[str, tuple[str | None, str | None, str | None, str | None, str | None]] = {}
@@ -12361,12 +12414,18 @@ async def get_inbox_threads(
         if thread_channel_map.get(conversacion_id) != "whatsapp":
             continue
         phone_value = thread_phone_map.get(conversacion_id)
+        if not phone_value:
+            contacto_id_value = thread_contact_map.get(conversacion_id)
+            if contacto_id_value:
+                phone_value = contact_phone_map.get(contacto_id_value)
         if phone_value:
             phones_needing_fallback.add(phone_value)
 
     phones_to_lookup: list[str] = []
     for phone_value in sorted(phones_needing_fallback):
         cached_hint = await _read_whatsapp_envio_hint_cache(phone_value)
+        if cached_hint is not None and not (any(cached_hint[:4]) or cached_hint[4]):
+            cached_hint = None
         if cached_hint is not None:
             whatsapp_phone_cache[phone_value] = cached_hint
         else:
@@ -12470,8 +12529,20 @@ async def get_inbox_threads(
             continue
         phone_value = thread_phone_map.get(conversacion_id)
         if not phone_value:
+            contacto_id_value = thread_contact_map.get(conversacion_id)
+            if contacto_id_value:
+                phone_value = contact_phone_map.get(contacto_id_value)
+        if not phone_value:
             continue
-        fallback_hints = whatsapp_phone_cache.get(phone_value) or (None, None, None, None, None)
+        fallback_hints = whatsapp_phone_cache.get(phone_value)
+        if not fallback_hints:
+            for candidate_phone in _whatsapp_phone_lookup_candidates(phone_value):
+                cached_hint = whatsapp_phone_cache.get(candidate_phone)
+                if cached_hint:
+                    fallback_hints = cached_hint
+                    break
+        if not fallback_hints:
+            fallback_hints = (None, None, None, None, None)
         merged_hints = (
             batch_hint or fallback_hints[0],
             campana_hint or fallback_hints[1],
@@ -12732,31 +12803,7 @@ async def get_inbox_threads(
         (time.perf_counter() - attribution_lookup_start) * 1000, 2
     )
 
-    contact_profile_name_map: dict[str, str] = {}
-    contact_phone_map: dict[str, str] = {}
-    contact_fallback_start = time.perf_counter()
-    if missing_contact_name_ids:
-        try:
-            contacts_rows = await repo.get_contacts_by_ids(
-                organizacion_id=organizacion_id,
-                contacto_ids=sorted(missing_contact_name_ids, key=str),
-            )
-        except CRMRepositoryError:
-            contacts_rows = []
-        for contact_row in contacts_rows:
-            contact_id_value = _clean_text(contact_row.get("id"))
-            if not contact_id_value:
-                continue
-            contact_data = _ensure_dict(contact_row.get("contacto_datos"), default={})
-            profile_name = _clean_text(contact_data.get("profile_name"))
-            if profile_name:
-                contact_profile_name_map[contact_id_value] = profile_name
-            phone_value = _clean_text(contact_row.get("telefono_e164"))
-            if phone_value:
-                contact_phone_map[contact_id_value] = phone_value
-    stage_timings["contact_fallback_ms"] = round(
-        (time.perf_counter() - contact_fallback_start) * 1000, 2
-    )
+    # contact_profile_name_map/contact_phone_map ya están listos
 
     row_enrichment_start = time.perf_counter()
     enriched_rows: list[dict[str, Any]] = []
@@ -23850,6 +23897,95 @@ async def register_web_cta_click(
         raise HTTPException(status_code=502, detail="web_cta_click_register_failed") from exc
 
     return Response(status_code=204)
+
+
+@router.get(
+    "/web/cta-events",
+    summary="Listado agregado de eventos CTA web (A/B/C).",
+)
+async def list_web_cta_events(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    user_token: str = Depends(require_user_token),
+    date_from: Annotated[str | None, Query(description="YYYY-MM-DD")] = None,
+    date_to: Annotated[str | None, Query(description="YYYY-MM-DD")] = None,
+    event_type: Annotated[str | None, Query(description="Tipo de evento")] = "whatsapp_cta_click",
+    limit: Annotated[int, Query(ge=1, le=10000)] = 5000,
+) -> dict[str, Any]:
+    def normalize_date(value: str | None) -> date | None:
+        if not value:
+            return None
+        try:
+            return date.fromisoformat(value)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="invalid_date_format") from None
+
+    start = normalize_date(date_from)
+    end = normalize_date(date_to)
+    end_exclusive: str | None = None
+    if end:
+        end_exclusive = (end + timedelta(days=1)).isoformat()
+
+    try:
+        rows = await repo.list_web_session_events(
+            usuario_token=user_token,
+            event_type=event_type,
+            date_from=start.isoformat() if start else None,
+            date_to=end_exclusive,
+            limit=limit,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    by_variant: dict[str, int] = {}
+    by_cta: dict[str, int] = {}
+    by_variant_cta: dict[tuple[str, str], int] = {}
+    by_day_variant: dict[tuple[str, str], int] = {}
+
+    for row in rows:
+        variant = str(row.get("hero_variant") or "unknown").upper()
+        cta_id = str(row.get("cta_id") or "unknown")
+        created_at = row.get("creado_en")
+        day_key = None
+        if isinstance(created_at, str) and len(created_at) >= 10:
+            day_key = created_at[:10]
+
+        by_variant[variant] = by_variant.get(variant, 0) + 1
+        by_cta[cta_id] = by_cta.get(cta_id, 0) + 1
+        by_variant_cta[(variant, cta_id)] = by_variant_cta.get((variant, cta_id), 0) + 1
+        if day_key:
+            by_day_variant[(day_key, variant)] = by_day_variant.get((day_key, variant), 0) + 1
+
+    total = sum(by_variant.values()) if by_variant else 0
+    by_variant_items = [
+        {
+            "variant": variant,
+            "clicks": clicks,
+            "share_pct": round((clicks / total) * 100, 2) if total else 0,
+        }
+        for variant, clicks in sorted(by_variant.items(), key=lambda item: item[0])
+    ]
+    by_cta_items = [
+        {"cta_id": cta_id, "clicks": clicks}
+        for cta_id, clicks in sorted(by_cta.items(), key=lambda item: item[1], reverse=True)
+    ]
+    by_variant_cta_items = [
+        {"variant": variant, "cta_id": cta_id, "clicks": clicks}
+        for (variant, cta_id), clicks in sorted(by_variant_cta.items(), key=lambda item: item[2], reverse=True)
+    ]
+    by_day_items = [
+        {"date": day, "variant": variant, "clicks": clicks}
+        for (day, variant), clicks in sorted(by_day_variant.items(), key=lambda item: (item[0][0], item[0][1]))
+    ]
+
+    return {
+        "ok": True,
+        "total": total,
+        "by_variant": by_variant_items,
+        "by_cta": by_cta_items,
+        "by_variant_cta": by_variant_cta_items,
+        "by_day": by_day_items,
+    }
 
 
 @router.post(

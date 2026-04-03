@@ -1437,6 +1437,38 @@ export type ProspeccionMetricasResponse = {
   }
 }
 
+export type LandingCtaVariantSummary = {
+  variant: string
+  clicks: number
+  share_pct: number
+}
+
+export type LandingCtaByCta = {
+  cta_id: string
+  clicks: number
+}
+
+export type LandingCtaByVariantCta = {
+  variant: string
+  cta_id: string
+  clicks: number
+}
+
+export type LandingCtaByDay = {
+  date: string
+  variant: string
+  clicks: number
+}
+
+export type LandingCtaEventsResponse = {
+  ok: boolean
+  total: number
+  by_variant: LandingCtaVariantSummary[]
+  by_cta: LandingCtaByCta[]
+  by_variant_cta: LandingCtaByVariantCta[]
+  by_day: LandingCtaByDay[]
+}
+
 export async function getContactoMetrics() {
   return requestJson<ContactoMetrics>("/api/prospeccion/contacto/metrics")
 }
@@ -1505,6 +1537,20 @@ export async function downloadProspeccionMetricasXlsx(params: {
   const match = disposition.match(/filename="?([^"]+)"?/)
   const filename = match?.[1] || `prospeccion_metricas_${Date.now()}.xlsx`
   return { blob, filename }
+}
+
+export async function getLandingCtaEvents(params: {
+  date_from?: string
+  date_to?: string
+  event_type?: string
+  limit?: number
+} = {}) {
+  const url = buildClientUrl("/api/crm/web/cta-events")
+  if (params.date_from) url.searchParams.set("date_from", params.date_from)
+  if (params.date_to) url.searchParams.set("date_to", params.date_to)
+  if (params.event_type) url.searchParams.set("event_type", params.event_type)
+  if (typeof params.limit === "number") url.searchParams.set("limit", String(params.limit))
+  return requestJson<LandingCtaEventsResponse>(url.toString())
 }
 
 function delay(ms: number) {

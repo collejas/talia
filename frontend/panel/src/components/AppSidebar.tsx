@@ -124,6 +124,7 @@ const NAVIGATION: {
         { title: "Contactos", url: "/prospeccion/contactos", permission: "contacts.read" },
         { title: "Campañas", url: "/prospeccion/campanas", permission: "campaigns.view" },
         { title: "Métricas", url: "/prospeccion/metricas", permission: "reports.view" },
+        { title: "Landing A/B/C", url: "/prospeccion/landing-ab", permission: "reports.view" },
         { title: "Atribución WhatsApp", url: "/prospeccion/whatsapp-atribucion", permission: "busquedas.run" },
         { title: "Mensajes automatizados", url: "/prospeccion/mensajes", permission: "messages.read" },
       ],

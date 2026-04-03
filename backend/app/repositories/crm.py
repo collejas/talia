@@ -20,6 +20,7 @@ import httpx
 from app.core.config import settings
 from app.core.logging import get_logger
 from app.data.geo.locations import get_municipality_name, get_state_name, list_states
+from app.services.phone_utils import normalize_phone, normalize_phone_digits
 
 
 class CRMRepositoryError(RuntimeError):
@@ -134,6 +135,43 @@ def _normalize_geo_text(value: Any) -> str:
 
 def _digits_only(value: Any) -> str:
     return "".join(ch for ch in str(value or "") if ch.isdigit())
+
+
+def _phone_lookup_variants(value: Any) -> list[str]:
+    trimmed = str(value or "").strip()
+    if not trimmed:
+        return []
+    variants: list[str] = []
+    seen: set[str] = set()
+
+    def _push(candidate: str | None) -> None:
+        text = str(candidate or "").strip()
+        if not text or text in seen:
+            return
+        seen.add(text)
+        variants.append(text)
+
+    _push(trimmed)
+    normalized = normalize_phone(trimmed)
+    normalized_digits = normalize_phone_digits(trimmed)
+    _push(normalized)
+    _push(normalized_digits)
+
+    digits_only = _digits_only(trimmed)
+    _push(digits_only)
+
+    if normalized_digits:
+        if normalized_digits.startswith("521") and len(normalized_digits) >= 13:
+            national = normalized_digits[3:]
+            alt_52 = f"52{national}"
+            _push(national)
+            _push(alt_52)
+            _push(f"+{alt_52}")
+        elif normalized_digits.startswith("52") and len(normalized_digits) >= 12:
+            national = normalized_digits[2:]
+            _push(national)
+            _push(f"+{normalized_digits}")
+    return variants
 
 
 def _extract_geo_values(container: Any, keys: Sequence[str]) -> list[str]:
@@ -4820,6 +4858,42 @@ class CRMRepository:
             raise CRMRepositoryError(f"web_session_event_create_invalid_row:{row!r}")
         return row
 
+    async def list_web_session_events(
+        self,
+        *,
+        usuario_token: str,
+        event_type: str | None = None,
+        date_from: str | None = None,
+        date_to: str | None = None,
+        limit: int = 5000,
+    ) -> list[dict[str, Any]]:
+        params: dict[str, str] = {
+            "select": "creado_en,event_type,cta_id,hero_variant,location_href,referrer,metadata",
+            "order": "creado_en.desc",
+            "limit": str(max(1, min(limit, 10000))),
+        }
+        if event_type:
+            literal = _postgrest_eq_literal(event_type.strip())
+            params["event_type"] = f"eq.{literal}"
+        clauses: list[str] = []
+        if date_from:
+            clauses.append(f"creado_en.gte.{date_from}T00:00:00Z")
+        if date_to:
+            clauses.append(f"creado_en.lt.{date_to}T00:00:00Z")
+        if clauses:
+            params["and"] = f"({','.join(clauses)})"
+
+        resp = await self._request_with_user(
+            "GET",
+            "/rest/v1/web_session_events",
+            token=usuario_token,
+            params=params,
+        )
+        data = resp.json() or []
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"web_session_events_invalid:{data!r}")
+        return [row for row in data if isinstance(row, dict)]
+
     async def upsert_web_booking_session(
         self,
         *,
@@ -5709,28 +5783,32 @@ class CRMRepository:
         phone_e164: str,
         organizacion_id: UUID | None = None,
     ) -> dict[str, Any] | None:
-        phone_key = str(phone_e164 or "").strip()
-        if not phone_key:
+        phone_candidates = _phone_lookup_variants(phone_e164)
+        if not phone_candidates:
             return None
-        params: dict[str, str] = {
-            "telefono_e164": f"eq.{phone_key}",
-            "limit": "1",
-            "select": (
-                "id,organizacion_id,nombre_completo,correo,telefono_e164,company_name,notes,"
-                "necesidad_proposito,contacto_datos"
-            ),
-        }
-        if organizacion_id:
-            params["organizacion_id"] = f"eq.{organizacion_id}"
-        resp = await self._request("GET", "/rest/v1/contactos", params=params)
-        data = resp.json() or []
-        if isinstance(data, list) and data:
-            row = data[0]
-        elif isinstance(data, dict):
-            row = data
-        else:
-            row = None
-        return row if isinstance(row, dict) else None
+        select_fields = (
+            "id,organizacion_id,nombre_completo,correo,telefono_e164,company_name,notes,"
+            "necesidad_proposito,contacto_datos"
+        )
+        for phone_key in phone_candidates:
+            params: dict[str, str] = {
+                "telefono_e164": f"eq.{phone_key}",
+                "limit": "1",
+                "select": select_fields,
+            }
+            if organizacion_id:
+                params["organizacion_id"] = f"eq.{organizacion_id}"
+            resp = await self._request("GET", "/rest/v1/contactos", params=params)
+            data = resp.json() or []
+            if isinstance(data, list) and data:
+                row = data[0]
+            elif isinstance(data, dict):
+                row = data
+            else:
+                row = None
+            if isinstance(row, dict):
+                return row
+        return None
 
     async def get_contact_by_email(
         self,
