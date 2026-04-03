@@ -27,8 +27,13 @@ const DEFAULT_LEAD_CARDS: LeadCards = {
 }
 
 export function SectionCards({ data = DEFAULT_LEAD_CARDS }: SectionCardsProps) {
+  const total = data.total ?? 0
+  const abiertas = data.abiertas ?? 0
+  const nuevas = data.nuevas ?? 0
+  const ganadas = data.ganadas ?? 0
   const conversion = data.total > 0 ? Math.round((data.ganadas / data.total) * 100) : 0
   const perdidas = data.perdidas ?? 0
+  const montoTotal = data.montoTotal ?? 0
   const ticketPromedio = data.ticketPromedioGanado ?? 0
   const diasPromedioCierre = data.diasPromedioCierre ?? 0
   const topVendedorLabel = data.topVendedor?.nombre
@@ -39,14 +44,14 @@ export function SectionCards({ data = DEFAULT_LEAD_CARDS }: SectionCardsProps) {
     <div className="*:data-[slot=card]:from-primary/5 *:data-[slot=card]:to-card dark:*:data-[slot=card]:bg-card grid grid-cols-1 gap-4 px-4 *:data-[slot=card]:bg-gradient-to-t *:data-[slot=card]:shadow-xs lg:px-6 @xl/main:grid-cols-2 @5xl/main:grid-cols-4">
       <Card className="@container/card">
         <CardHeader>
-          <CardDescription>Total de leads</CardDescription>
+          <CardDescription>Leads nuevos</CardDescription>
           <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl">
-            {formatNumber(data.total)}
+            {formatNumber(nuevas)}
           </CardTitle>
           <CardAction>
             <Badge variant="outline">
               <IconTrendingUp />
-              +{formatNumber(data.nuevas)} en rango
+              {formatPercent(nuevas, total)}%
             </Badge>
           </CardAction>
         </CardHeader>
@@ -55,29 +60,7 @@ export function SectionCards({ data = DEFAULT_LEAD_CARDS }: SectionCardsProps) {
             Leads creados en el periodo <IconTrendingUp className="size-4" />
           </div>
           <div className="text-muted-foreground">
-            Incluye todos los tableros visibles para ti
-          </div>
-        </CardFooter>
-      </Card>
-      <Card className="@container/card">
-        <CardHeader>
-          <CardDescription>Leads nuevos</CardDescription>
-          <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl">
-            {formatNumber(data.nuevas)}
-          </CardTitle>
-          <CardAction>
-            <Badge variant="outline">
-              <IconTrendingUp />
-              {formatPercent(data.nuevas, data.total)}%
-            </Badge>
-          </CardAction>
-        </CardHeader>
-        <CardFooter className="flex-col items-start gap-1.5 text-sm">
-          <div className="line-clamp-1 flex gap-2 font-medium">
-            Leads creados en el rango <IconTrendingUp className="size-4" />
-          </div>
-          <div className="text-muted-foreground">
-            {formatNumber(data.abiertas)} siguen abiertos
+            {formatNumber(abiertas)} siguen abiertos
           </div>
         </CardFooter>
       </Card>
@@ -85,7 +68,7 @@ export function SectionCards({ data = DEFAULT_LEAD_CARDS }: SectionCardsProps) {
         <CardHeader>
           <CardDescription>Leads ganados</CardDescription>
           <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl">
-            {formatNumber(data.ganadas)}
+            {formatNumber(ganadas)}
           </CardTitle>
           <CardAction>
             <Badge variant="outline">
@@ -107,7 +90,7 @@ export function SectionCards({ data = DEFAULT_LEAD_CARDS }: SectionCardsProps) {
         <CardHeader>
           <CardDescription>Valor ganado</CardDescription>
           <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl">
-            {formatNumber(data.montoTotal)}
+            {formatNumber(montoTotal)}
           </CardTitle>
           <CardAction className="max-w-[140px]">
             <Badge
@@ -121,10 +104,32 @@ export function SectionCards({ data = DEFAULT_LEAD_CARDS }: SectionCardsProps) {
         </CardHeader>
         <CardFooter className="flex-col items-start gap-1.5 text-sm">
           <div className="line-clamp-1 flex gap-2 font-medium">
-            {topVendedorLabel} <IconTrendingUp className="size-4" />
+            Monto cerrado <IconTrendingUp className="size-4" />
           </div>
           <div className="text-muted-foreground">
             Ticket promedio {formatCurrency(ticketPromedio)}
+          </div>
+        </CardFooter>
+      </Card>
+      <Card className="@container/card">
+        <CardHeader>
+          <CardDescription>Top vendedor</CardDescription>
+          <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl">
+            {topVendedorLabel}
+          </CardTitle>
+          <CardAction>
+            <Badge variant="outline">
+              <IconTrendingUp />
+              {formatNumber(total)} totales
+            </Badge>
+          </CardAction>
+        </CardHeader>
+        <CardFooter className="flex-col items-start gap-1.5 text-sm">
+          <div className="line-clamp-1 flex gap-2 font-medium">
+            Responsable con más oportunidades <IconTrendingUp className="size-4" />
+          </div>
+          <div className="text-muted-foreground">
+            {formatNumber(ganadas)} ganados · {formatCurrency(montoTotal)} cerrados
           </div>
         </CardFooter>
       </Card>
