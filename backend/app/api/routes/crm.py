@@ -24126,7 +24126,7 @@ async def list_web_cta_events(
     ]
     by_variant_cta_items = [
         {"variant": variant, "cta_id": cta_id, "clicks": clicks}
-        for (variant, cta_id), clicks in sorted(by_variant_cta.items(), key=lambda item: item[2], reverse=True)
+        for (variant, cta_id), clicks in sorted(by_variant_cta.items(), key=lambda item: item[1], reverse=True)
     ]
     by_day_items = [
         {"date": day, "variant": variant, "clicks": clicks}
@@ -25016,6 +25016,46 @@ async def demografia_resumen_v2(
             if not tid_value:
                 continue
             template_totals[tid_value] = template_totals.get(tid_value, 0) + 1
+
+        # Completa el catálogo con plantillas usadas en campañas/lotes de prospección
+        # (principalmente WhatsApp), ya que el select de "Plantilla captada" también
+        # se usa en la tabla de Conversaciones y no debe depender solo de web_sessions.
+        try:
+            batch_rows, _batch_total = await repo.list_contact_batches(
+                usuario_token=effective_user_token,
+                limit=1000,
+                offset=0,
+                campana_id=campana_uuid_value,
+                order="creado_en.desc,id.desc",
+            )
+        except CRMRepositoryError:
+            batch_rows = []
+        campaign_ids_for_type_set = {str(value) for value in campaign_ids_for_type}
+        for batch in batch_rows:
+            if not isinstance(batch, dict):
+                continue
+            batch_created_at = _parse_datetime(batch.get("creado_en"))
+            if date_from and batch_created_at and batch_created_at < date_from:
+                continue
+            if date_to and batch_created_at and batch_created_at >= date_to:
+                continue
+            batch_campaign_id = _clean_text(batch.get("campana_id"))
+            if campana_tipo_value and campaign_ids_for_type_set and batch_campaign_id not in campaign_ids_for_type_set:
+                continue
+
+            metadata = batch.get("metadata") if isinstance(batch.get("metadata"), dict) else {}
+            canales_config_meta = _ensure_dict(metadata.get("canales_config"), default={})
+            channel_cfg = _ensure_dict(canales_config_meta.get("whatsapp"), default={})
+            channel_meta = _ensure_dict(channel_cfg.get("metadata"), default={})
+            batch_template_id = _clean_text(
+                channel_meta.get("template_id")
+                or channel_cfg.get("template_id")
+                or metadata.get("template_id")
+                or metadata.get("contact_template_id")
+            )
+            if not batch_template_id:
+                continue
+            template_totals[batch_template_id] = template_totals.get(batch_template_id, 0) + 1
 
         template_labels: dict[str, str] = {}
         if template_totals:
