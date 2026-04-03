@@ -7,19 +7,43 @@ export type DashboardKpis = {
     total?: number;
     webchat_total?: number;
     canales_activos?: number;
+    sin_respuesta_total?: number;
+    abiertas_total?: number;
+    activas_24h?: number;
     por_estado?: Record<string, number>;
     por_canal?: Record<string, number>;
+    sin_respuesta_por_canal?: Record<string, number>;
   };
   contactos?: {
     total?: number;
     por_estado?: Record<string, number>;
     captura?: Record<string, number>;
+    desde_conversaciones?: {
+      con_contacto_total?: number;
+      contacto_completo_total?: number;
+      por_canal?: Record<
+        string,
+        {
+          conversaciones?: number;
+          con_contacto?: number;
+          contacto_completo?: number;
+        }
+      >;
+    };
   };
   visitantes?: number;
   visitas_totales?: number;
   tiempos_respuesta?: {
     promedio?: number | null;
     maximo?: number | null;
+    por_canal?: Record<
+      string,
+      {
+        con_respuesta?: number;
+        promedio?: number | null;
+        maximo?: number | null;
+      }
+    >;
   };
   webchat?: {
     visitas_sin_chat?: number;
