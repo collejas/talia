@@ -143,9 +143,16 @@ export type AgendaPayload = {
 const ACTIVE_STATES = new Set(["confirmada"]);
 const UPCOMING_WINDOW_MS = 24 * 60 * 60 * 1000;
 
-export async function loadAgendaData(): Promise<AgendaPayload> {
+export async function loadAgendaData(filters: { rango?: string; desde?: string; hasta?: string } = {}): Promise<AgendaPayload> {
   try {
-    const response = await callPanelAgendaEndpoint<AgendaBookingsResponse>("/agenda/bookings");
+    const response = await callPanelAgendaEndpoint<AgendaBookingsResponse>(
+      "/agenda/bookings",
+      {
+        rango: filters.rango || undefined,
+        from: filters.desde || undefined,
+        to: filters.hasta || undefined,
+      },
+    );
     const mapped = mapAgenda(response.items ?? []);
     const metrics = response.metrics ?? computeMetrics(mapped);
     return { items: mapped, metrics, errors: [] };

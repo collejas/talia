@@ -40,6 +40,8 @@ export type OpportunityKpis = {
 type LoadOpportunityKpisOptions = {
   limit?: number;
   staleDays?: number;
+  creadoDesde?: string | null;
+  creadoHasta?: string | null;
 };
 
 const DEFAULT_LIMIT = 500;
@@ -55,6 +57,8 @@ export async function fetchOpportunityKpis(
     searchParams: {
       limit: String(limit),
       offset: "0",
+      creado_desde: options.creadoDesde ?? undefined,
+      creado_hasta: options.creadoHasta ?? undefined,
     },
   });
 

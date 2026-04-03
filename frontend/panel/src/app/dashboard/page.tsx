@@ -11,17 +11,33 @@ import { AttentionCards } from '@/components/dashboard/attention-cards'
 import { MarketingCards } from '@/components/dashboard/marketing-cards'
 import { AgendaCards } from '@/components/dashboard/agenda-cards'
 import { OpportunityCards } from '@/components/dashboard/opportunity-cards'
+import { MarketingTimeseries } from '@/components/dashboard/marketing-timeseries'
+import { DashboardRangeControls } from '@/components/dashboard/range-controls'
 
 import { loadLeadsData } from "@/lib/leads/data"
 import { fetchDashboardKpis } from "@/lib/dashboard/kpis"
 import { fetchProspeccionMetricas } from "@/lib/dashboard/prospeccion-kpis"
 import { loadAgendaData } from "@/lib/agenda/data"
 import { fetchOpportunityKpis } from "@/lib/dashboard/opportunities-kpis"
+import { resolveDashboardRange } from "@/lib/dashboard/range"
 import { fetchCatalogPipelineKpi, fetchCatalogSalesKpi } from "./catalog-analytics"
 
-export default async function Page() {
-  const [leadsPayload, dashboardKpis, prospeccionKpis, agendaPayload, opportunityKpis, salesRows, pipelineRows] = await Promise.all([
-    loadLeadsData().catch(() => ({
+type DashboardPageProps = {
+  searchParams?: Promise<Record<string, string | string[] | undefined>> | Record<string, string | string[] | undefined>;
+};
+
+function isPromiseLike<T>(value: unknown): value is Promise<T> {
+  return Boolean(value) && typeof value === "object" && typeof (value as Promise<T>).then === "function";
+}
+
+export default async function Page({ searchParams }: DashboardPageProps) {
+  const resolvedParams = isPromiseLike<Record<string, string | string[] | undefined>>(searchParams)
+    ? await searchParams
+    : (searchParams ?? {});
+  const range = resolveDashboardRange(resolvedParams);
+
+  const [leadsPayload, dashboardKpis, prospeccionPayload, agendaPayload, opportunityKpis, salesRows, pipelineRows] = await Promise.all([
+    loadLeadsData({ days: range.days }).catch(() => ({
       cards: { total: 0, abiertas: 0, ganadas: 0, perdidas: 0, nuevas: 0, montoTotal: 0 },
       chart: [],
       table: [],
@@ -30,10 +46,10 @@ export default async function Page() {
       restartKpis: { reconversionRate: 0, avgDaysBetweenCycles: 0, avgAmountPerCycle: 0 },
       errors: ["No se pudieron cargar KPIs de leads."],
     })),
-    fetchDashboardKpis().catch(() => null),
-    fetchProspeccionMetricas().catch(() => null),
-    loadAgendaData().catch(() => ({ items: [], metrics: { total: 0, activas: 0, proximas24h: 0, canceladas: 0, realizadas: 0 }, errors: ["No se pudo cargar agenda."] })),
-    fetchOpportunityKpis().catch(() => null),
+    fetchDashboardKpis({ rango: range.rango ?? undefined, desde: range.desde ?? undefined, hasta: range.hasta ?? undefined }).catch(() => null),
+    fetchProspeccionMetricas({ date_from: range.dateFrom ?? undefined, date_to: range.dateTo ?? undefined }).catch(() => null),
+    loadAgendaData({ rango: range.rango ?? undefined, desde: range.desde ?? undefined, hasta: range.hasta ?? undefined }).catch(() => ({ items: [], metrics: { total: 0, activas: 0, proximas24h: 0, canceladas: 0, realizadas: 0 }, errors: ["No se pudo cargar agenda."] })),
+    fetchOpportunityKpis({ creadoDesde: range.dateFrom, creadoHasta: range.dateTo }).catch(() => null),
     fetchCatalogSalesKpi().catch(() => []),
     fetchCatalogPipelineKpi().catch(() => []),
   ])
@@ -53,13 +69,17 @@ export default async function Page() {
         <div className="flex flex-1 flex-col">
           <div className="@container/main flex flex-1 flex-col gap-2">
             <div className="flex flex-col gap-4 py-4 md:gap-6 md:py-6">
+              <DashboardRangeControls rango={range.rango} desde={range.desde} hasta={range.hasta} />
               <SectionCards data={leadsPayload.cards} />
               <AttentionCards data={dashboardKpis} />
               <OpportunityCards data={opportunityKpis} />
-              <MarketingCards data={prospeccionKpis} />
+              <MarketingCards data={prospeccionPayload?.summary ?? null} />
               <AgendaCards data={agendaPayload.metrics} />
               <div className="px-4 lg:px-6">
                 <ChartAreaInteractive data={leadsPayload.chart} />
+              </div>
+              <div className="px-4 lg:px-6">
+                <MarketingTimeseries data={prospeccionPayload?.timeseries ?? null} />
               </div>
               <div className="grid gap-4 px-4 lg:px-6 @[1000px]/main:grid-cols-2">
                 <CatalogSalesCard data={salesRows} />

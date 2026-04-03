@@ -27,9 +27,22 @@ type ProspeccionMetricasResponse = {
   ok?: boolean;
   campanas?: {
     summary?: ProspeccionMetricasSummary["campanas"];
+    timeseries?: Array<{
+      fecha: string;
+      envios_totales: number;
+      envios_enviados: number;
+      envios_entregados: number;
+      envios_respondidos: number;
+    }>;
   };
   frases_whatsapp?: {
     summary?: ProspeccionMetricasSummary["frases_whatsapp"];
+    timeseries?: Array<{
+      fecha: string;
+      conversaciones_atribuidas: number;
+      oportunidades_creadas: number;
+      monto_estimado_total: number;
+    }>;
   };
 };
 
@@ -43,9 +56,25 @@ type ProspeccionFilters = {
   limit?: number;
 };
 
+export type ProspeccionTimeseries = {
+  campanas: Array<{
+    fecha: string;
+    envios_totales: number;
+    envios_enviados: number;
+    envios_entregados: number;
+    envios_respondidos: number;
+  }>;
+  frases_whatsapp: Array<{
+    fecha: string;
+    conversaciones_atribuidas: number;
+    oportunidades_creadas: number;
+    monto_estimado_total: number;
+  }>;
+};
+
 export async function fetchProspeccionMetricas(
   filters: ProspeccionFilters = {},
-): Promise<ProspeccionMetricasSummary> {
+): Promise<{ summary: ProspeccionMetricasSummary; timeseries: ProspeccionTimeseries }> {
   const response = await callCrmApi<ProspeccionMetricasResponse>("/crm/prospeccion/metricas", {
     withUserToken: true,
     searchParams: {
@@ -64,8 +93,14 @@ export async function fetchProspeccionMetricas(
   }
 
   return {
-    campanas: response.data?.campanas?.summary ?? emptyCampanasSummary(),
-    frases_whatsapp: response.data?.frases_whatsapp?.summary ?? emptyFrasesSummary(),
+    summary: {
+      campanas: response.data?.campanas?.summary ?? emptyCampanasSummary(),
+      frases_whatsapp: response.data?.frases_whatsapp?.summary ?? emptyFrasesSummary(),
+    },
+    timeseries: {
+      campanas: response.data?.campanas?.timeseries ?? [],
+      frases_whatsapp: response.data?.frases_whatsapp?.timeseries ?? [],
+    },
   };
 }
 

@@ -4456,9 +4456,13 @@ DATE_RANGE_PRESETS: dict[str, timedelta] = {
     "ayer": timedelta(days=1),
     "semana": timedelta(days=7),
     "quincena": timedelta(days=15),
+    "15d": timedelta(days=15),
     "mes": timedelta(days=30),
     "7d": timedelta(days=7),
     "30d": timedelta(days=30),
+    "bimestre": timedelta(days=60),
+    "trimestre": timedelta(days=90),
+    "semestre": timedelta(days=180),
     "ano": timedelta(days=365),
 }
 

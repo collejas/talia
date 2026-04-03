@@ -103,11 +103,13 @@ const EMPTY_CARDS: LeadCards = {
   montoTotal: 0,
 };
 
-export async function loadLeadsData(): Promise<LeadsPayload> {
+export async function loadLeadsData(options: { days?: number } = {}): Promise<LeadsPayload> {
+  const days = Math.max(7, Math.min(90, options.days ?? 30));
   const [overviewResp, restartResp] = await Promise.all([
     callCrmApi<PipelineOverviewResponse>("/crm/pipeline/overview", {
       searchParams: {
         limit: String(DEFAULT_LIMIT),
+        days: String(days),
       },
     }),
     callCrmApi<CRMLeadRestartStat[]>("/crm/leads/restarts", {
