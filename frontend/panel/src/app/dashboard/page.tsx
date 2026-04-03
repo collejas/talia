@@ -8,13 +8,17 @@ import { ThemeToggle } from '@/components/ThemeToggle'
 import { CatalogSalesCard } from '@/components/dashboard/catalog-sales-card'
 import { CatalogPipelineCard } from '@/components/dashboard/catalog-pipeline-card'
 import { AttentionCards } from '@/components/dashboard/attention-cards'
+import { MarketingCards } from '@/components/dashboard/marketing-cards'
+import { AgendaCards } from '@/components/dashboard/agenda-cards'
 
 import { loadLeadsData } from "@/lib/leads/data"
 import { fetchDashboardKpis } from "@/lib/dashboard/kpis"
+import { fetchProspeccionMetricas } from "@/lib/dashboard/prospeccion-kpis"
+import { loadAgendaData } from "@/lib/agenda/data"
 import { fetchCatalogPipelineKpi, fetchCatalogSalesKpi } from "./catalog-analytics"
 
 export default async function Page() {
-  const [leadsPayload, dashboardKpis, salesRows, pipelineRows] = await Promise.all([
+  const [leadsPayload, dashboardKpis, prospeccionKpis, agendaPayload, salesRows, pipelineRows] = await Promise.all([
     loadLeadsData().catch(() => ({
       cards: { total: 0, abiertas: 0, ganadas: 0, perdidas: 0, nuevas: 0, montoTotal: 0 },
       chart: [],
@@ -25,6 +29,8 @@ export default async function Page() {
       errors: ["No se pudieron cargar KPIs de leads."],
     })),
     fetchDashboardKpis().catch(() => null),
+    fetchProspeccionMetricas().catch(() => null),
+    loadAgendaData().catch(() => ({ items: [], metrics: { total: 0, activas: 0, proximas24h: 0, canceladas: 0, realizadas: 0 }, errors: ["No se pudo cargar agenda."] })),
     fetchCatalogSalesKpi().catch(() => []),
     fetchCatalogPipelineKpi().catch(() => []),
   ])
@@ -46,6 +52,8 @@ export default async function Page() {
             <div className="flex flex-col gap-4 py-4 md:gap-6 md:py-6">
               <SectionCards data={leadsPayload.cards} />
               <AttentionCards data={dashboardKpis} />
+              <MarketingCards data={prospeccionKpis} />
+              <AgendaCards data={agendaPayload.metrics} />
               <div className="px-4 lg:px-6">
                 <ChartAreaInteractive data={leadsPayload.chart} />
               </div>
