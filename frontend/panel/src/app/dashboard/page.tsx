@@ -13,6 +13,8 @@ import { AgendaCards } from '@/components/dashboard/agenda-cards'
 import { OpportunityCards } from '@/components/dashboard/opportunity-cards'
 import { MarketingTimeseries } from '@/components/dashboard/marketing-timeseries'
 import { DashboardRangeControls } from '@/components/dashboard/range-controls'
+import { ConversationsChannelChart } from '@/components/dashboard/conversations-channel-chart'
+import { PipelineHealthChart } from '@/components/dashboard/pipeline-health-chart'
 
 import { loadLeadsData } from "@/lib/leads/data"
 import { fetchDashboardKpis } from "@/lib/dashboard/kpis"
@@ -106,8 +108,14 @@ export default async function Page({ searchParams }: DashboardPageProps) {
               <SectionCards data={leadsPayload.cards} />
               <SectionTitle label="Atención · Conversaciones" />
               <AttentionCards data={dashboardKpis} />
+              <div className="px-4 lg:px-6">
+                <ConversationsChannelChart data={dashboardKpis} />
+              </div>
               <SectionTitle label="Oportunidades · Pipeline" />
               <OpportunityCards data={opportunityKpis} />
+              <div className="px-4 lg:px-6">
+                <PipelineHealthChart data={opportunityKpis} />
+              </div>
               <SectionTitle label="Marketing · Prospección" />
               <MarketingCards
                 summary={prospeccionPayload?.summary ?? null}

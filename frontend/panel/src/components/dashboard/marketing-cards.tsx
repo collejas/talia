@@ -62,126 +62,126 @@ export function MarketingCards({ summary, items, byRule }: MarketingCardsProps) 
 
   return (
     <div className="*:data-[slot=card]:from-emerald-50/60 *:data-[slot=card]:to-card dark:*:data-[slot=card]:bg-card grid grid-cols-1 gap-4 px-4 *:data-[slot=card]:bg-gradient-to-t *:data-[slot=card]:shadow-xs lg:px-6 @xl/main:grid-cols-2 @5xl/main:grid-cols-3">
-      <Card className="@container/card">
+      <Card className="@container/card border-emerald-300/50 shadow-sm">
         <CardHeader>
-          <CardDescription>Mejor plantilla email por clicks</CardDescription>
+          <CardDescription>Email con más clicks</CardDescription>
           <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl">
             {formatNumber(bestEmailByClicks?.brevo_clicks ?? 0)}
           </CardTitle>
           <CardAction>
-            <Badge variant="outline" className="min-w-0 max-w-[160px] whitespace-normal text-xs leading-tight">
+            <Badge variant="outline" className={`${badgeClassName} min-w-0 max-w-[160px] whitespace-normal`}>
               <IconMail />
               {templateLabel(bestEmailByClicks)}
             </Badge>
           </CardAction>
         </CardHeader>
         <CardFooter className="flex-col items-start gap-1.5 text-sm">
-          <div className="line-clamp-1 flex gap-2 font-medium">
+          <div className={footerTitleClassName}>
             Aperturas {formatNumber(bestEmailByClicks?.brevo_aperturas ?? 0)} · Entregados {formatNumber(bestEmailByClicks?.envios_entregados ?? 0)}
           </div>
-          <div className="text-muted-foreground">{campaignLabel(bestEmailByClicks)}</div>
+          <div className={footerTextClassName}>{campaignLabel(bestEmailByClicks)}</div>
         </CardFooter>
       </Card>
       <Card className="@container/card">
         <CardHeader>
-          <CardDescription>Mejor email por open rate</CardDescription>
+          <CardDescription>Email con mejor apertura</CardDescription>
           <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl">
             {formatPercent(percentage(bestEmailByOpenRate?.brevo_aperturas ?? 0, bestEmailByOpenRate?.envios_entregados ?? 0))}
           </CardTitle>
           <CardAction>
-            <Badge variant="outline" className="min-w-0 max-w-[160px] whitespace-normal text-xs leading-tight">
+            <Badge variant="outline" className={`${badgeClassName} min-w-0 max-w-[160px] whitespace-normal`}>
               <IconChartBar />
               {templateLabel(bestEmailByOpenRate)}
             </Badge>
           </CardAction>
         </CardHeader>
         <CardFooter className="flex-col items-start gap-1.5 text-sm">
-          <div className="line-clamp-1 flex gap-2 font-medium">
+          <div className={footerTitleClassName}>
             Aperturas {formatNumber(bestEmailByOpenRate?.brevo_aperturas ?? 0)} de {formatNumber(bestEmailByOpenRate?.envios_entregados ?? 0)}
           </div>
-          <div className="text-muted-foreground">{campaignLabel(bestEmailByOpenRate)}</div>
+          <div className={footerTextClassName}>{campaignLabel(bestEmailByOpenRate)}</div>
         </CardFooter>
       </Card>
       <Card className="@container/card">
         <CardHeader>
-          <CardDescription>Riesgo de rebote email</CardDescription>
+          <CardDescription>Email con más rebotes</CardDescription>
           <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl">
             {formatNumber(emailBounceRisk?.envios_fallidos ?? 0)}
           </CardTitle>
           <CardAction>
-            <Badge variant="outline">
+            <Badge variant="outline" className={badgeClassName}>
               <IconAlertTriangle />
               Fallidos
             </Badge>
           </CardAction>
         </CardHeader>
         <CardFooter className="flex-col items-start gap-1.5 text-sm">
-          <div className="line-clamp-1 flex gap-2 font-medium">
+          <div className={footerTitleClassName}>
             {templateLabel(emailBounceRisk)}
           </div>
-          <div className="text-muted-foreground">{campaignLabel(emailBounceRisk)}</div>
+          <div className={footerTextClassName}>{campaignLabel(emailBounceRisk)}</div>
         </CardFooter>
       </Card>
-      <Card className="@container/card">
+      <Card className="@container/card border-emerald-300/50 shadow-sm">
         <CardHeader>
           <CardDescription>Mejor plantilla WhatsApp</CardDescription>
           <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl">
             {formatNumber(bestWhatsappByResponses?.envios_respondidos ?? 0)}
           </CardTitle>
           <CardAction>
-            <Badge variant="outline" className="min-w-0 max-w-[160px] whitespace-normal text-xs leading-tight">
+            <Badge variant="outline" className={`${badgeClassName} min-w-0 max-w-[160px] whitespace-normal`}>
               <IconPhoneCall />
               {formatPercent(percentage(bestWhatsappByResponses?.envios_respondidos ?? 0, bestWhatsappByResponses?.envios_entregados ?? 0))}
             </Badge>
           </CardAction>
         </CardHeader>
         <CardFooter className="flex-col items-start gap-1.5 text-sm">
-          <div className="line-clamp-1 flex gap-2 font-medium">
+          <div className={footerTitleClassName}>
             {templateLabel(bestWhatsappByResponses)}
           </div>
-          <div className="text-muted-foreground">{campaignLabel(bestWhatsappByResponses)}</div>
+          <div className={footerTextClassName}>{campaignLabel(bestWhatsappByResponses)}</div>
         </CardFooter>
       </Card>
       <Card className="@container/card">
         <CardHeader>
-          <CardDescription>Enlace WA con mayor alcance</CardDescription>
+          <CardDescription>Enlace WA con más conversaciones</CardDescription>
           <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl">
             {formatNumber(bestWhatsappLink?.conversaciones_atribuidas ?? 0)}
           </CardTitle>
           <CardAction>
-            <Badge variant="outline" className="min-w-0 max-w-[160px] whitespace-normal text-xs leading-tight">
+            <Badge variant="outline" className={`${badgeClassName} min-w-0 max-w-[160px] whitespace-normal`}>
               <IconMessageCircle />
               {bestWhatsappLink?.canal_publicitario ?? "Sin canal"}
             </Badge>
           </CardAction>
         </CardHeader>
         <CardFooter className="flex-col items-start gap-1.5 text-sm">
-          <div className="line-clamp-1 flex gap-2 font-medium">
+          <div className={footerTitleClassName}>
             {bestWhatsappLink?.regla_nombre || "Sin regla"}
           </div>
-          <div className="text-muted-foreground">
+          <div className={footerTextClassName}>
             Oportunidades {formatNumber(bestWhatsappLink?.oportunidades_creadas ?? 0)}
           </div>
         </CardFooter>
       </Card>
-      <Card className="@container/card">
+      <Card className="@container/card border-emerald-300/50 shadow-sm">
         <CardHeader>
-          <CardDescription>Enlace WA con mejor conversión</CardDescription>
+          <CardDescription>Enlace WA con más oportunidades</CardDescription>
           <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl">
             {formatNumber(bestWhatsappOpportunityRule?.oportunidades_creadas ?? 0)}
           </CardTitle>
           <CardAction>
-            <Badge variant="outline">
+            <Badge variant="outline" className={badgeClassName}>
               <IconTargetArrow />
               {clickToSessionPct}% click→session
             </Badge>
           </CardAction>
         </CardHeader>
         <CardFooter className="flex-col items-start gap-1.5 text-sm">
-          <div className="line-clamp-1 flex gap-2 font-medium">
+          <div className={footerTitleClassName}>
             {bestWhatsappOpportunityRule?.regla_nombre || "Sin regla"}
           </div>
-          <div className="text-muted-foreground">
+          <div className={footerTextClassName}>
             Monto estimado {formatCurrency(bestWhatsappOpportunityRule?.monto_estimado_total ?? 0)}
           </div>
         </CardFooter>
@@ -241,3 +241,7 @@ function campaignLabel(item: ProspeccionCampanaItem | null | undefined): string 
 function normalizeChannel(value: string | null | undefined): string {
   return (value || "").trim().toLowerCase();
 }
+
+const badgeClassName = "h-6 px-2.5 text-[11px] font-semibold tracking-[0.01em]"
+const footerTitleClassName = "line-clamp-1 flex gap-2 font-medium"
+const footerTextClassName = "text-muted-foreground text-sm"

@@ -131,7 +131,7 @@ export function MarketingTimeseries({ data, dateFrom, dateTo }: MarketingTimeser
       <CardHeader>
         <CardTitle>Rendimiento de campañas</CardTitle>
         <CardDescription>
-          Envíos, respuestas y conversaciones atribuidas por día
+          Entregas, respuestas y conversaciones atribuidas por día
         </CardDescription>
         <ToggleGroup
           type="single"
@@ -142,9 +142,9 @@ export function MarketingTimeseries({ data, dateFrom, dateTo }: MarketingTimeser
           variant="outline"
           className="hidden *:data-[slot=toggle-group-item]:!px-4 @[767px]/card:flex"
         >
-          <ToggleGroupItem value="envios">Envíos</ToggleGroupItem>
+          <ToggleGroupItem value="envios">Entregas</ToggleGroupItem>
           <ToggleGroupItem value="respuestas">Respuestas</ToggleGroupItem>
-          <ToggleGroupItem value="conversaciones">WhatsApp</ToggleGroupItem>
+          <ToggleGroupItem value="conversaciones">WA atribuido</ToggleGroupItem>
         </ToggleGroup>
       </CardHeader>
       <CardContent className="px-0 pb-0">
