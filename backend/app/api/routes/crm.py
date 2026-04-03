@@ -6018,7 +6018,7 @@ def _build_prospecto_from_contactable(
         "metadata": base_metadata,
     }
     external_id = row.get("external_id")
-    if fuente_resultado == "denue" and isinstance(external_id, str) and external_id.strip():
+    if isinstance(external_id, str) and external_id.strip():
         payload["external_id"] = external_id.strip()
     if segmento:
         payload["segmento"] = segmento

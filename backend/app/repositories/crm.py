@@ -9102,11 +9102,11 @@ class CRMRepository:
         # Evita recortes en algunos entornos PostgREST/Supabase cuando el payload masivo
         # supera los límites prácticos de request/response.
         chunk_size = 200
-        denue_items: list[dict[str, Any]] = []
+        external_items: list[dict[str, Any]] = []
         fallback_items: list[dict[str, Any]] = []
         for item in items:
-            if item.get("fuente") == "denue" and item.get("external_id"):
-                denue_items.append(item)
+            if item.get("fuente") in {"denue", "google_places"} and item.get("external_id"):
+                external_items.append(item)
             else:
                 fallback_items.append(item)
 
@@ -9139,12 +9139,12 @@ class CRMRepository:
                     if isinstance(external_id, str) and external_id:
                         upserted_by_external[external_id] = row
 
-        await _run_upsert(denue_items, on_conflict="organizacion_id,external_id")
+        await _run_upsert(external_items, on_conflict="organizacion_id,external_id")
         await _run_upsert(fallback_items, on_conflict="resultado_id")
 
         ordered_rows: list[dict[str, Any]] = []
         for item in items:
-            if item.get("fuente") == "denue" and item.get("external_id"):
+            if item.get("fuente") in {"denue", "google_places"} and item.get("external_id"):
                 row = upserted_by_external.get(str(item.get("external_id")))
             else:
                 resultado_id = item.get("resultado_id")
