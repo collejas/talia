@@ -24,6 +24,19 @@ export function AttentionCards({ data }: AttentionCardsProps) {
   const conversacionesTotal = toNumber(data?.conversaciones?.total);
   const webchatTotal = toNumber(data?.conversaciones?.webchat_total);
   const canalesActivos = toNumber(data?.conversaciones?.canales_activos);
+  const porCanal = data?.conversaciones?.por_canal ?? {};
+  const whatsappTotal = toNumber(porCanal.whatsapp);
+  const emailTotal = toNumber(porCanal.email ?? porCanal.correo ?? porCanal.manual);
+  const vozTotal = toNumber(
+    porCanal.voz ??
+      porCanal.voice ??
+      porCanal.llamada ??
+      porCanal.call,
+  );
+  const otrosTotal = Math.max(
+    0,
+    conversacionesTotal - webchatTotal - whatsappTotal - vozTotal - emailTotal,
+  );
   const avgResponse = toNumber(data?.tiempos_respuesta?.promedio);
   const maxResponse = toNumber(data?.tiempos_respuesta?.maximo);
   const webchatVisitas = toNumber(data?.webchat?.visitas_totales);
@@ -52,6 +65,9 @@ export function AttentionCards({ data }: AttentionCardsProps) {
           </div>
           <div className="text-muted-foreground">
             {formatNumber(canalesActivos)} canales con actividad
+          </div>
+          <div className="text-muted-foreground">
+            WhatsApp {formatNumber(whatsappTotal)} · Email {formatNumber(emailTotal)} · Voz {formatNumber(vozTotal)} · Otros {formatNumber(otrosTotal)}
           </div>
         </CardFooter>
       </Card>

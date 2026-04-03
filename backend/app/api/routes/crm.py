@@ -24675,6 +24675,7 @@ async def dashboard_kpis(
     try:
         payload = await repo.visitas_dashboard_kpis(
             usuario_token=user_token,
+            organizacion_id=organizacion_id,
             date_from=date_from,
             date_to=date_to,
         )

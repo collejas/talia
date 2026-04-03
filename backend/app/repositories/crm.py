@@ -7021,7 +7021,7 @@ class CRMRepository:
             body["p_from"] = date_from.isoformat()
         if date_to:
             body["p_to"] = date_to.isoformat()
-        if not usuario_token and organizacion_id:
+        if organizacion_id:
             body["p_organizacion"] = str(organizacion_id)
         if usuario_token:
             resp = await self._request_with_user(

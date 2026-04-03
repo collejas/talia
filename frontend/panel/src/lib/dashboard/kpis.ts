@@ -8,6 +8,7 @@ export type DashboardKpis = {
     webchat_total?: number;
     canales_activos?: number;
     por_estado?: Record<string, number>;
+    por_canal?: Record<string, number>;
   };
   contactos?: {
     total?: number;
