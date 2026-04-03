@@ -45,7 +45,7 @@ export function OpportunityCards({ data }: OpportunityCardsProps) {
         </CardHeader>
         <CardFooter className="flex-col items-start gap-1.5 text-sm">
           <div className="line-clamp-1 flex gap-2 font-medium">
-            Etapa principal <IconChartPie className="size-4" />
+            Etapa dominante <IconChartPie className="size-4" />
           </div>
           <div className="text-muted-foreground">
             {topStage ? `${formatNumber(topStage.count)} oportunidades` : "Sin datos de etapa"}
@@ -67,7 +67,7 @@ export function OpportunityCards({ data }: OpportunityCardsProps) {
         </CardHeader>
         <CardFooter className="flex-col items-start gap-1.5 text-sm">
           <div className="line-clamp-1 flex gap-2 font-medium">
-            Valor proyectado <IconChartPie className="size-4" />
+            Valor bruto del pipeline <IconChartPie className="size-4" />
           </div>
           <div className="text-muted-foreground">
             Ponderado {formatCurrency(weightedAmount, currencies)}
@@ -92,7 +92,7 @@ export function OpportunityCards({ data }: OpportunityCardsProps) {
         </CardHeader>
         <CardFooter className="flex-col items-start gap-1.5 text-sm">
           <div className="line-clamp-1 flex gap-2 font-medium">
-            Requieren dueño <IconAlertTriangle className="size-4" />
+            Requieren responsable <IconAlertTriangle className="size-4" />
           </div>
           <div className="text-muted-foreground">
             {formatNumber(total - unassigned)} ya asignadas
@@ -115,7 +115,7 @@ export function OpportunityCards({ data }: OpportunityCardsProps) {
         </CardHeader>
         <CardFooter className="flex-col items-start gap-1.5 text-sm">
           <div className="line-clamp-1 flex gap-2 font-medium">
-            Etapa con atasco <IconClock className="size-4" />
+            Mayor atasco por etapa <IconClock className="size-4" />
           </div>
           <div className="text-muted-foreground">
             {topStaleStage ? `${topStaleStage.label} (${formatNumber(topStaleStage.count)})` : "Sin etapa dominante"}

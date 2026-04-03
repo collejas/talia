@@ -57,7 +57,7 @@ export function SectionCards({ data = DEFAULT_LEAD_CARDS }: SectionCardsProps) {
         </CardHeader>
         <CardFooter className="flex-col items-start gap-1.5 text-sm">
           <div className="line-clamp-1 flex gap-2 font-medium">
-            Leads creados en el periodo <IconTrendingUp className="size-4" />
+            Entrada del periodo <IconTrendingUp className="size-4" />
           </div>
           <div className="text-muted-foreground">
             {formatNumber(abiertas)} siguen abiertos
@@ -79,7 +79,7 @@ export function SectionCards({ data = DEFAULT_LEAD_CARDS }: SectionCardsProps) {
         </CardHeader>
         <CardFooter className="flex-col items-start gap-1.5 text-sm">
           <div className="line-clamp-1 flex gap-2 font-medium">
-            Tasa de conversión <IconTrendingUp className="size-4" />
+            Conversión del periodo <IconTrendingUp className="size-4" />
           </div>
           <div className="text-muted-foreground">
             {formatNumber(perdidas)} perdidos · {formatNumber(diasPromedioCierre)} días a cierre
@@ -104,7 +104,7 @@ export function SectionCards({ data = DEFAULT_LEAD_CARDS }: SectionCardsProps) {
         </CardHeader>
         <CardFooter className="flex-col items-start gap-1.5 text-sm">
           <div className="line-clamp-1 flex gap-2 font-medium">
-            Monto cerrado <IconTrendingUp className="size-4" />
+            Ingreso cerrado <IconTrendingUp className="size-4" />
           </div>
           <div className="text-muted-foreground">
             Ticket promedio {formatCurrency(ticketPromedio)}
@@ -126,7 +126,7 @@ export function SectionCards({ data = DEFAULT_LEAD_CARDS }: SectionCardsProps) {
         </CardHeader>
         <CardFooter className="flex-col items-start gap-1.5 text-sm">
           <div className="line-clamp-1 flex gap-2 font-medium">
-            Responsable con más oportunidades <IconTrendingUp className="size-4" />
+            Mayor volumen gestionado <IconTrendingUp className="size-4" />
           </div>
           <div className="text-muted-foreground">
             {formatNumber(ganadas)} ganados · {formatCurrency(montoTotal)} cerrados

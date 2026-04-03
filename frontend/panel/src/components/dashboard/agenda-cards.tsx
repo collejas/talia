@@ -45,7 +45,7 @@ export function AgendaCards({ data }: AgendaCardsProps) {
         </CardHeader>
         <CardFooter className="flex-col items-start gap-1.5 text-sm">
           <div className="line-clamp-1 flex gap-2 font-medium">
-            Próximas 24h <IconClock className="size-4" />
+            Carga inmediata <IconClock className="size-4" />
           </div>
           <div className="text-muted-foreground">{formatNumber(proximas)} citas próximas</div>
           <div className="text-muted-foreground">{formatNumber(realizadas)} realizadas en el periodo</div>
@@ -66,7 +66,7 @@ export function AgendaCards({ data }: AgendaCardsProps) {
         </CardHeader>
         <CardFooter className="flex-col items-start gap-1.5 text-sm">
           <div className="line-clamp-1 flex gap-2 font-medium">
-            Cobertura operativa <IconCalendar className="size-4" />
+            Cobertura comercial <IconCalendar className="size-4" />
           </div>
           <div className="text-muted-foreground">{formatNumber(linkedToContact)} también ligadas a contacto</div>
         </CardFooter>
@@ -86,7 +86,7 @@ export function AgendaCards({ data }: AgendaCardsProps) {
         </CardHeader>
         <CardFooter className="flex-col items-start gap-1.5 text-sm">
           <div className="line-clamp-1 flex gap-2 font-medium">
-            Requieren dueño <IconX className="size-4" />
+            Requieren responsable <IconX className="size-4" />
           </div>
           <div className="text-muted-foreground">Bookings sin responsable visible</div>
         </CardFooter>
@@ -106,7 +106,7 @@ export function AgendaCards({ data }: AgendaCardsProps) {
         </CardHeader>
         <CardFooter className="flex-col items-start gap-1.5 text-sm">
           <div className="line-clamp-1 flex gap-2 font-medium">
-            Datos de seguimiento <IconClock className="size-4" />
+            Base de seguimiento <IconClock className="size-4" />
           </div>
           <div className="text-muted-foreground">{formatNumber(virtuales)} reuniones virtuales</div>
         </CardFooter>

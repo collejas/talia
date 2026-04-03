@@ -79,7 +79,7 @@ export function AttentionCards({ data }: AttentionCardsProps) {
         </CardHeader>
         <CardFooter className="flex-col items-start gap-1.5 text-sm">
           <div className="line-clamp-1 flex gap-2 font-medium">
-            Canales activos <IconMessageCircle className="size-4" />
+            Distribución por canal <IconMessageCircle className="size-4" />
           </div>
           <div className="text-muted-foreground">
             {formatNumber(canalesActivos)} canales con actividad
@@ -104,7 +104,7 @@ export function AttentionCards({ data }: AttentionCardsProps) {
         </CardHeader>
         <CardFooter className="flex-col items-start gap-1.5 text-sm">
           <div className="line-clamp-1 flex gap-2 font-medium">
-            Requieren seguimiento <IconMessageOff className="size-4" />
+            Pendientes de atención <IconMessageOff className="size-4" />
           </div>
           <div className="text-muted-foreground">
             WhatsApp {formatNumber(sinRespuestaWhatsapp)} · Email {formatNumber(sinRespuestaEmail)} · Voz {formatNumber(sinRespuestaVoz)}
@@ -129,13 +129,13 @@ export function AttentionCards({ data }: AttentionCardsProps) {
         </CardHeader>
         <CardFooter className="flex-col items-start gap-1.5 text-sm">
           <div className="line-clamp-1 flex gap-2 font-medium">
-            Mejor canal {bestResponseChannel.label} <IconClock className="size-4" />
+            Canal más ágil: {bestResponseChannel.label} <IconClock className="size-4" />
           </div>
           <div className="text-muted-foreground">
             {formatDuration(bestResponseChannel.seconds)} promedio
           </div>
           <div className="text-muted-foreground">
-            Más lento: {slowestResponseChannel.label} {formatDuration(slowestResponseChannel.seconds)}
+            Más lento: {slowestResponseChannel.label} · {formatDuration(slowestResponseChannel.seconds)}
           </div>
         </CardFooter>
       </Card>
@@ -154,13 +154,13 @@ export function AttentionCards({ data }: AttentionCardsProps) {
         </CardHeader>
         <CardFooter className="flex-col items-start gap-1.5 text-sm">
           <div className="line-clamp-1 flex gap-2 font-medium">
-            {formatNumber(conContactoTotal)} con contacto <IconUserCheck className="size-4" />
+            {formatNumber(conContactoTotal)} con contacto creado <IconUserCheck className="size-4" />
           </div>
           <div className="text-muted-foreground">
-            Mejor canal {bestConversionChannel.label}
+            Mejor canal: {bestConversionChannel.label}
           </div>
           <div className="text-muted-foreground">
-            {formatPercent(bestConversionChannel.rate)} completos en ese canal
+            {formatPercent(bestConversionChannel.rate)} de conversaciones completas
           </div>
         </CardFooter>
       </Card>
