@@ -4,9 +4,11 @@ import { useCallback, useEffect, useMemo, useState } from "react"
 import { IconLoader, IconRefresh } from "@tabler/icons-react"
 import {
   CartesianGrid,
+  ComposedChart,
   Legend,
   Line,
   LineChart,
+  Scatter,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -25,6 +27,7 @@ import {
 } from "@/lib/prospeccion/prospectos-client"
 
 const variantOrder = ["A", "B", "C", "UNKNOWN"]
+const weekdayLabels = ["Lun", "Mar", "Mie", "Jue", "Vie", "Sab", "Dom"]
 
 function formatPercent(value: number) {
   return `${value.toFixed(2)}%`
@@ -91,6 +94,115 @@ export default function LandingAbPageClient() {
     }
     return Array.from(map.values()).sort((a, b) => a.date.localeCompare(b.date))
   }, [data?.by_day])
+  const hourlySeries = useMemo(() => {
+    const map = new Map<number, { hour: number; A?: number; B?: number; C?: number; UNKNOWN?: number }>()
+    for (let hour = 0; hour < 24; hour += 1) {
+      map.set(hour, { hour })
+    }
+    for (const row of data?.by_hour ?? []) {
+      const hour = Number(row.hour)
+      if (!Number.isFinite(hour) || hour < 0 || hour > 23) continue
+      const entry = map.get(hour) || { hour }
+      const variantKey = (row.variant || "UNKNOWN").toUpperCase()
+      if (variantKey === "A" || variantKey === "B" || variantKey === "C" || variantKey === "UNKNOWN") {
+        entry[variantKey] = (entry[variantKey] ?? 0) + row.clicks
+      }
+      map.set(hour, entry)
+    }
+    return Array.from(map.values()).sort((a, b) => a.hour - b.hour)
+  }, [data?.by_hour])
+  const hourlyScatter = useMemo(() => {
+    const buckets: Record<string, Array<{ hour: number; value: number }>> = {
+      A: [],
+      B: [],
+      C: [],
+      UNKNOWN: [],
+    }
+    for (const row of hourlySeries) {
+      for (const key of ["A", "B", "C", "UNKNOWN"]) {
+        const value = Number(row[key as keyof typeof row] ?? 0)
+        if (Number.isFinite(value) && value > 0) {
+          buckets[key].push({ hour: row.hour, value })
+        }
+      }
+    }
+    return buckets
+  }, [hourlySeries])
+  const weekdaySeries = useMemo(() => {
+    const map = new Map<number, { weekday: number; A?: number; B?: number; C?: number; UNKNOWN?: number }>()
+    for (let day = 0; day < 7; day += 1) {
+      map.set(day, { weekday: day })
+    }
+    for (const row of data?.by_weekday ?? []) {
+      const day = Number(row.weekday)
+      if (!Number.isFinite(day) || day < 0 || day > 6) continue
+      const entry = map.get(day) || { weekday: day }
+      const variantKey = (row.variant || "UNKNOWN").toUpperCase()
+      if (variantKey === "A" || variantKey === "B" || variantKey === "C" || variantKey === "UNKNOWN") {
+        entry[variantKey] = (entry[variantKey] ?? 0) + row.clicks
+      }
+      map.set(day, entry)
+    }
+    return Array.from(map.values()).sort((a, b) => a.weekday - b.weekday)
+  }, [data?.by_weekday])
+  const countActivePoints = useCallback(
+    (rows: Array<Record<string, number | undefined>>, keys: string[]) =>
+      rows.reduce((total, row) => {
+        const hasValue = keys.some((key) => Number(row[key] ?? 0) > 0)
+        return total + (hasValue ? 1 : 0)
+      }, 0),
+    [],
+  )
+  const hourlyDots = countActivePoints(hourlySeries, ["A", "B", "C", "UNKNOWN"]) < 3
+  const weekdayDots = countActivePoints(weekdaySeries, ["A", "B", "C", "UNKNOWN"]) < 3
+  const alwaysShowDots = true
+  const conditionalDot = useCallback(
+    (props: { cx?: number; cy?: number; value?: number; stroke?: string; index?: number; dataKey?: string }) => {
+      const { cx, cy, value, stroke, index, dataKey } = props
+      const numeric = typeof value === "number" ? value : Number(value)
+      if (!Number.isFinite(numeric) || numeric <= 0 || typeof cx !== "number" || typeof cy !== "number") {
+        return null
+      }
+      const key = `dot-${dataKey ?? "series"}-${index ?? 0}`
+      return (
+        <circle
+          key={key}
+          cx={cx}
+          cy={cy}
+          r={4}
+          fill={stroke || "#0ea5e9"}
+          stroke="#ffffff"
+          strokeWidth={1}
+        />
+      )
+    },
+    [],
+  )
+  const formattedEvents = useMemo(() => {
+    const events = data?.events ?? []
+    const formatter = new Intl.DateTimeFormat("es-MX", {
+      dateStyle: "medium",
+      timeStyle: "short",
+    })
+    return events.map((event, index) => {
+      const rawDate = event.created_at_local || event.created_at
+      let label = rawDate ?? ""
+      if (rawDate) {
+        const parsed = new Date(rawDate)
+        if (!Number.isNaN(parsed.getTime())) {
+          label = formatter.format(parsed)
+        }
+      }
+      return {
+        id: `${event.created_at ?? "na"}-${event.cta_id ?? "cta"}-${event.variant ?? "v"}-${index}`,
+        timestamp: label || "—",
+        variant: (event.variant || "UNKNOWN").toUpperCase(),
+        cta_id: event.cta_id || "unknown",
+        location_href: event.location_href || "—",
+        referrer: event.referrer || "—",
+      }
+    })
+  }, [data?.events])
 
   return (
     <div className="space-y-4">
@@ -204,23 +316,83 @@ export default function LandingAbPageClient() {
         </Card>
       </div>
 
+      <div className="grid gap-4 lg:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <CardTitle>Clicks diarios por variante</CardTitle>
+          </CardHeader>
+          <CardContent className="h-[320px]">
+            {timeseries.length ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={timeseries} margin={{ top: 10, right: 24, left: 0, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="date" tickLine={false} />
+                  <YAxis allowDecimals={false} />
+                  <Tooltip />
+                  <Legend />
+                  <Line type="monotone" dataKey="A" stroke="#7c3aed" strokeWidth={2} dot={alwaysShowDots || hourlyDots ? conditionalDot : false} />
+                  <Line type="monotone" dataKey="B" stroke="#0ea5e9" strokeWidth={2} dot={alwaysShowDots || hourlyDots ? conditionalDot : false} />
+                  <Line type="monotone" dataKey="C" stroke="#22c55e" strokeWidth={2} dot={alwaysShowDots || hourlyDots ? conditionalDot : false} />
+                  <Line type="monotone" dataKey="UNKNOWN" stroke="#94a3b8" strokeWidth={2} dot={alwaysShowDots || hourlyDots ? conditionalDot : false} />
+                </LineChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
+                Sin datos suficientes para graficar.
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Clicks por hora (zona {data?.timezone || "local"})</CardTitle>
+          </CardHeader>
+          <CardContent className="h-[320px]">
+            {hourlySeries.length ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <ComposedChart data={hourlySeries} margin={{ top: 10, right: 24, left: 0, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="hour" tickLine={false} />
+                  <YAxis allowDecimals={false} />
+                  <Tooltip />
+                  <Legend />
+                  <Line type="monotone" dataKey="A" stroke="#7c3aed" strokeWidth={2} dot={false} />
+                  <Line type="monotone" dataKey="B" stroke="#0ea5e9" strokeWidth={2} dot={false} />
+                  <Line type="monotone" dataKey="C" stroke="#22c55e" strokeWidth={2} dot={false} />
+                  <Line type="monotone" dataKey="UNKNOWN" stroke="#94a3b8" strokeWidth={2} dot={false} />
+                  <Scatter data={hourlyScatter.A} dataKey="value" fill="#7c3aed" />
+                  <Scatter data={hourlyScatter.B} dataKey="value" fill="#0ea5e9" />
+                  <Scatter data={hourlyScatter.C} dataKey="value" fill="#22c55e" />
+                  <Scatter data={hourlyScatter.UNKNOWN} dataKey="value" fill="#94a3b8" />
+                </ComposedChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
+                Sin datos suficientes para graficar.
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
       <Card>
         <CardHeader>
-          <CardTitle>Clicks diarios por variante</CardTitle>
+          <CardTitle>Clicks por día de la semana</CardTitle>
         </CardHeader>
         <CardContent className="h-[320px]">
-          {timeseries.length ? (
+          {weekdaySeries.length ? (
             <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={timeseries} margin={{ top: 10, right: 24, left: 0, bottom: 0 }}>
+              <LineChart data={weekdaySeries} margin={{ top: 10, right: 24, left: 0, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="date" tickLine={false} />
+                <XAxis dataKey="weekday" tickLine={false} tickFormatter={(value) => weekdayLabels[value] ?? value} />
                 <YAxis allowDecimals={false} />
-                <Tooltip />
+                <Tooltip formatter={(value: number, name: string) => [value, name]} labelFormatter={(value) => weekdayLabels[Number(value)] ?? value} />
                 <Legend />
-                <Line type="monotone" dataKey="A" stroke="#7c3aed" strokeWidth={2} dot={false} />
-                <Line type="monotone" dataKey="B" stroke="#0ea5e9" strokeWidth={2} dot={false} />
-                <Line type="monotone" dataKey="C" stroke="#22c55e" strokeWidth={2} dot={false} />
-                <Line type="monotone" dataKey="UNKNOWN" stroke="#94a3b8" strokeWidth={2} dot={false} />
+                <Line type="monotone" dataKey="A" stroke="#7c3aed" strokeWidth={2} dot={alwaysShowDots || weekdayDots ? conditionalDot : false} />
+                <Line type="monotone" dataKey="B" stroke="#0ea5e9" strokeWidth={2} dot={alwaysShowDots || weekdayDots ? conditionalDot : false} />
+                <Line type="monotone" dataKey="C" stroke="#22c55e" strokeWidth={2} dot={alwaysShowDots || weekdayDots ? conditionalDot : false} />
+                <Line type="monotone" dataKey="UNKNOWN" stroke="#94a3b8" strokeWidth={2} dot={alwaysShowDots || weekdayDots ? conditionalDot : false} />
               </LineChart>
             </ResponsiveContainer>
           ) : (
@@ -228,6 +400,49 @@ export default function LandingAbPageClient() {
               Sin datos suficientes para graficar.
             </div>
           )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Listado de clicks</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b text-left text-xs uppercase tracking-wide text-muted-foreground">
+                  <th className="px-2 py-2">Fecha</th>
+                  <th className="px-2 py-2">Variante</th>
+                  <th className="px-2 py-2">CTA</th>
+                  <th className="px-2 py-2">URL</th>
+                  <th className="px-2 py-2">Referrer</th>
+                </tr>
+              </thead>
+              <tbody>
+                {formattedEvents.map((event) => (
+                  <tr key={event.id} className="border-b">
+                    <td className="px-2 py-2 whitespace-nowrap">{event.timestamp}</td>
+                    <td className="px-2 py-2 font-medium">{event.variant}</td>
+                    <td className="px-2 py-2">{event.cta_id}</td>
+                    <td className="px-2 py-2 max-w-[360px] truncate" title={event.location_href}>
+                      {event.location_href}
+                    </td>
+                    <td className="px-2 py-2 max-w-[260px] truncate" title={event.referrer}>
+                      {event.referrer}
+                    </td>
+                  </tr>
+                ))}
+                {!formattedEvents.length ? (
+                  <tr>
+                    <td className="px-2 py-6 text-center text-sm text-muted-foreground" colSpan={5}>
+                      Sin clicks registrados.
+                    </td>
+                  </tr>
+                ) : null}
+              </tbody>
+            </table>
+          </div>
         </CardContent>
       </Card>
     </div>

@@ -24062,6 +24062,8 @@ async def list_web_cta_events(
     *,
     repo: CRMRepository = Depends(get_repository),
     user_token: str = Depends(require_user_token),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    usuario_id: UUID | None = Depends(optional_usuario_id),
     date_from: Annotated[str | None, Query(description="YYYY-MM-DD")] = None,
     date_to: Annotated[str | None, Query(description="YYYY-MM-DD")] = None,
     event_type: Annotated[str | None, Query(description="Tipo de evento")] = "whatsapp_cta_click",
@@ -24081,6 +24083,16 @@ async def list_web_cta_events(
     if end:
         end_exclusive = (end + timedelta(days=1)).isoformat()
 
+    effective_timezone, _timezone_source = await _resolve_effective_timezone_name(
+        repo=repo,
+        organizacion_id=organizacion_id,
+        usuario_id=usuario_id,
+    )
+    try:
+        report_tz = ZoneInfo(effective_timezone)
+    except Exception:
+        report_tz = ZoneInfo("UTC")
+
     try:
         rows = await repo.list_web_session_events(
             usuario_token=user_token,
@@ -24096,13 +24108,26 @@ async def list_web_cta_events(
     by_cta: dict[str, int] = {}
     by_variant_cta: dict[tuple[str, str], int] = {}
     by_day_variant: dict[tuple[str, str], int] = {}
+    by_hour: dict[int, int] = {}
+    by_hour_variant: dict[tuple[int, str], int] = {}
+    by_weekday: dict[int, int] = {}
+    by_weekday_variant: dict[tuple[int, str], int] = {}
+    events: list[dict[str, Any]] = []
 
     for row in rows:
         variant = str(row.get("hero_variant") or "unknown").upper()
         cta_id = str(row.get("cta_id") or "unknown")
         created_at = row.get("creado_en")
         day_key = None
-        if isinstance(created_at, str) and len(created_at) >= 10:
+        hour_key = None
+        weekday_key = None
+        created_dt = _parse_datetime(created_at)
+        if created_dt:
+            local_dt = created_dt.astimezone(report_tz)
+            day_key = local_dt.date().isoformat()
+            hour_key = local_dt.hour
+            weekday_key = local_dt.weekday()
+        elif isinstance(created_at, str) and len(created_at) >= 10:
             day_key = created_at[:10]
 
         by_variant[variant] = by_variant.get(variant, 0) + 1
@@ -24110,6 +24135,23 @@ async def list_web_cta_events(
         by_variant_cta[(variant, cta_id)] = by_variant_cta.get((variant, cta_id), 0) + 1
         if day_key:
             by_day_variant[(day_key, variant)] = by_day_variant.get((day_key, variant), 0) + 1
+        if hour_key is not None:
+            by_hour[hour_key] = by_hour.get(hour_key, 0) + 1
+            by_hour_variant[(hour_key, variant)] = by_hour_variant.get((hour_key, variant), 0) + 1
+        if weekday_key is not None:
+            by_weekday[weekday_key] = by_weekday.get(weekday_key, 0) + 1
+            by_weekday_variant[(weekday_key, variant)] = by_weekday_variant.get((weekday_key, variant), 0) + 1
+
+        events.append(
+            {
+                "created_at": created_dt.isoformat() if created_dt else str(created_at) if created_at else None,
+                "created_at_local": local_dt.isoformat() if created_dt else None,
+                "variant": variant,
+                "cta_id": cta_id,
+                "location_href": row.get("location_href"),
+                "referrer": row.get("referrer"),
+            }
+        )
 
     total = sum(by_variant.values()) if by_variant else 0
     by_variant_items = [
@@ -24132,6 +24174,14 @@ async def list_web_cta_events(
         {"date": day, "variant": variant, "clicks": clicks}
         for (day, variant), clicks in sorted(by_day_variant.items(), key=lambda item: (item[0][0], item[0][1]))
     ]
+    by_hour_items = [
+        {"hour": hour, "variant": variant, "clicks": clicks}
+        for (hour, variant), clicks in sorted(by_hour_variant.items(), key=lambda item: (item[0][0], item[0][1]))
+    ]
+    by_weekday_items = [
+        {"weekday": weekday, "variant": variant, "clicks": clicks}
+        for (weekday, variant), clicks in sorted(by_weekday_variant.items(), key=lambda item: (item[0][0], item[0][1]))
+    ]
 
     return {
         "ok": True,
@@ -24140,6 +24190,10 @@ async def list_web_cta_events(
         "by_cta": by_cta_items,
         "by_variant_cta": by_variant_cta_items,
         "by_day": by_day_items,
+        "by_hour": by_hour_items,
+        "by_weekday": by_weekday_items,
+        "events": events,
+        "timezone": effective_timezone,
     }
 
 

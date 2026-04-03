@@ -59,6 +59,12 @@ function pluralize(count: number, singular: string, plural?: string) {
   return `${count} ${count === 1 ? singular : plural ?? `${singular}s`}`
 }
 
+function isAuthRequiredError(error: unknown): boolean {
+  if (!(error instanceof Error)) return false
+  const message = error.message.toLowerCase()
+  return message.includes("auth_required") || message.includes("authorization_invalid")
+}
+
 function summarizeGroupedNotifications(type: string, items: NotificationItem[]) {
   if (type === "scraper.finished") {
     const total = items.length
@@ -149,6 +155,17 @@ export function GlobalNotificationsProvider({ children }: GlobalNotificationsPro
         }
       }
       seenRef.current = nextSeen
+    } catch (error) {
+      if (isAuthRequiredError(error)) {
+        setItems([])
+        setTotalCount(0)
+        setUnreadCount(0)
+        setOffset(0)
+        setUnreadOnly(true)
+        setLevelFilter(null)
+        return
+      }
+      throw error
     } finally {
       setLoading(false)
     }
@@ -176,6 +193,17 @@ export function GlobalNotificationsProvider({ children }: GlobalNotificationsPro
       })
       setTotalCount(Number(notifications.total ?? 0))
       setOffset((prev) => prev + nextItems.length)
+    } catch (error) {
+      if (isAuthRequiredError(error)) {
+        setItems([])
+        setTotalCount(0)
+        setUnreadCount(0)
+        setOffset(0)
+        setUnreadOnly(true)
+        setLevelFilter(null)
+        return
+      }
+      throw error
     } finally {
       setLoading(false)
     }
