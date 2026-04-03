@@ -14,15 +14,21 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import type { ProspeccionMetricasSummary } from "@/lib/dashboard/prospeccion-kpis";
+import type { ProspeccionMetricasSummary, ProspeccionCampanaItem } from "@/lib/dashboard/prospeccion-kpis";
 
 type MarketingCardsProps = {
-  data?: ProspeccionMetricasSummary | null;
+  summary?: ProspeccionMetricasSummary | null;
+  items?: ProspeccionCampanaItem[] | null;
 };
 
-export function MarketingCards({ data }: MarketingCardsProps) {
-  const campanas = data?.campanas;
-  const frases = data?.frases_whatsapp;
+export function MarketingCards({ summary, items }: MarketingCardsProps) {
+  const campanas = summary?.campanas;
+  const frases = summary?.frases_whatsapp;
+
+  const canalTotals = aggregateByCanal(items ?? []);
+  const correoEntregados = canalTotals.correo.entregados;
+  const whatsappEntregados = canalTotals.whatsapp.entregados;
+  const vozEntregados = canalTotals.llamada.entregados;
 
   const enviosTotales = toNumber(campanas?.envios_totales);
   const enviosEntregados = toNumber(campanas?.envios_entregados);
@@ -31,6 +37,7 @@ export function MarketingCards({ data }: MarketingCardsProps) {
   const aperturas = toNumber(campanas?.brevo_aperturas);
   const clicks = toNumber(campanas?.brevo_clicks);
   const sesiones = toNumber(campanas?.sesiones_utm);
+  const clickToSession = clicks > 0 ? Math.round((sesiones / clicks) * 100) : 0;
 
   const conversaciones = toNumber(frases?.conversaciones_atribuidas);
   const oportunidades = toNumber(frases?.oportunidades_creadas);
@@ -83,6 +90,26 @@ export function MarketingCards({ data }: MarketingCardsProps) {
       </Card>
       <Card className="@container/card">
         <CardHeader>
+          <CardDescription>Entregados por canal</CardDescription>
+          <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl">
+            {formatNumber(correoEntregados)}
+          </CardTitle>
+          <CardAction>
+            <Badge variant="outline">
+              <IconMail />
+              Correo
+            </Badge>
+          </CardAction>
+        </CardHeader>
+        <CardFooter className="flex-col items-start gap-1.5 text-sm">
+          <div className="line-clamp-1 flex gap-2 font-medium">
+            WhatsApp {formatNumber(whatsappEntregados)} · Voz {formatNumber(vozEntregados)}
+          </div>
+          <div className="text-muted-foreground">Entregados por canal</div>
+        </CardFooter>
+      </Card>
+      <Card className="@container/card">
+        <CardHeader>
           <CardDescription>Sesiones UTM</CardDescription>
           <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl">
             {formatNumber(sesiones)}
@@ -90,7 +117,7 @@ export function MarketingCards({ data }: MarketingCardsProps) {
           <CardAction>
             <Badge variant="outline">
               <IconMouse />
-              Clicks {formatNumber(clicks)}
+              {clickToSession}% click→session
             </Badge>
           </CardAction>
         </CardHeader>
@@ -99,7 +126,7 @@ export function MarketingCards({ data }: MarketingCardsProps) {
             Atribución campañas <IconMouse className="size-4" />
           </div>
           <div className="text-muted-foreground">
-            Sesiones trazadas desde emails y WhatsApp
+            Clicks {formatNumber(clicks)} · Sesiones {formatNumber(sesiones)}
           </div>
         </CardFooter>
       </Card>
@@ -151,4 +178,25 @@ function toNumber(value: number | null | undefined): number {
 function toPercent(value: number | null | undefined): number {
   if (!Number.isFinite(value ?? Number.NaN)) return 0;
   return Math.round(Number(value));
+}
+
+function aggregateByCanal(items: ProspeccionCampanaItem[]) {
+  const totals = {
+    correo: { entregados: 0 },
+    whatsapp: { entregados: 0 },
+    llamada: { entregados: 0 },
+  };
+  for (const item of items) {
+    const canal = (item.canal || "").toLowerCase().trim();
+    const delivered = Number(item.envios_entregados ?? 0);
+    if (!Number.isFinite(delivered)) continue;
+    if (canal === "correo") {
+      totals.correo.entregados += delivered;
+    } else if (canal === "whatsapp") {
+      totals.whatsapp.entregados += delivered;
+    } else if (canal === "llamada" || canal === "voz") {
+      totals.llamada.entregados += delivered;
+    }
+  }
+  return totals;
 }

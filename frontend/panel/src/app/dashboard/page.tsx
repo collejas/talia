@@ -87,7 +87,10 @@ export default async function Page({ searchParams }: DashboardPageProps) {
               <SectionTitle label="Oportunidades · Pipeline" />
               <OpportunityCards data={opportunityKpis} />
               <SectionTitle label="Marketing · Prospección" />
-              <MarketingCards data={prospeccionPayload?.summary ?? null} />
+              <MarketingCards
+                summary={prospeccionPayload?.summary ?? null}
+                items={prospeccionPayload?.items ?? null}
+              />
               <SectionTitle label="Agenda · Citas" />
               <AgendaCards data={agendaPayload.metrics} />
               <SectionTitle label="Evolución de Leads" />
