@@ -1,4 +1,4 @@
-import { IconTrendingDown, IconTrendingUp } from "@tabler/icons-react"
+import { IconTrendingUp } from "@tabler/icons-react"
 
 import { Badge } from '@/components/ui/badge'
 import {
@@ -22,11 +22,15 @@ const DEFAULT_LEAD_CARDS: LeadCards = {
   perdidas: 0,
   nuevas: 0,
   montoTotal: 0,
+  ticketPromedioGanado: 0,
+  diasPromedioCierre: 0,
 }
 
 export function SectionCards({ data = DEFAULT_LEAD_CARDS }: SectionCardsProps) {
   const conversion = data.total > 0 ? Math.round((data.ganadas / data.total) * 100) : 0
   const perdidas = data.perdidas ?? 0
+  const ticketPromedio = data.ticketPromedioGanado ?? 0
+  const diasPromedioCierre = data.diasPromedioCierre ?? 0
   const topVendedorLabel = data.topVendedor?.nombre
     ? `${data.topVendedor.nombre} (${data.topVendedor.total ?? 0})`
     : "—"
@@ -42,7 +46,7 @@ export function SectionCards({ data = DEFAULT_LEAD_CARDS }: SectionCardsProps) {
           <CardAction>
             <Badge variant="outline">
               <IconTrendingUp />
-              +{formatNumber(data.nuevas)} hoy
+              +{formatNumber(data.nuevas)} en rango
             </Badge>
           </CardAction>
         </CardHeader>
@@ -57,23 +61,23 @@ export function SectionCards({ data = DEFAULT_LEAD_CARDS }: SectionCardsProps) {
       </Card>
       <Card className="@container/card">
         <CardHeader>
-          <CardDescription>Leads abiertos</CardDescription>
+          <CardDescription>Leads nuevos</CardDescription>
           <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl">
-            {formatNumber(data.abiertas)}
+            {formatNumber(data.nuevas)}
           </CardTitle>
           <CardAction>
             <Badge variant="outline">
-              <IconTrendingDown />
-              {formatPercent(data.abiertas, data.total)}%
+              <IconTrendingUp />
+              {formatPercent(data.nuevas, data.total)}%
             </Badge>
           </CardAction>
         </CardHeader>
         <CardFooter className="flex-col items-start gap-1.5 text-sm">
           <div className="line-clamp-1 flex gap-2 font-medium">
-            En seguimiento ahora <IconTrendingDown className="size-4" />
+            Leads creados en el rango <IconTrendingUp className="size-4" />
           </div>
           <div className="text-muted-foreground">
-            Leads en etapas activas sin cerrar
+            {formatNumber(data.abiertas)} siguen abiertos
           </div>
         </CardFooter>
       </Card>
@@ -94,7 +98,9 @@ export function SectionCards({ data = DEFAULT_LEAD_CARDS }: SectionCardsProps) {
           <div className="line-clamp-1 flex gap-2 font-medium">
             Tasa de conversión <IconTrendingUp className="size-4" />
           </div>
-          <div className="text-muted-foreground">{formatNumber(perdidas)} leads perdidos</div>
+          <div className="text-muted-foreground">
+            {formatNumber(perdidas)} perdidos · {formatNumber(diasPromedioCierre)} días a cierre
+          </div>
         </CardFooter>
       </Card>
       <Card className="@container/card">
@@ -117,7 +123,9 @@ export function SectionCards({ data = DEFAULT_LEAD_CARDS }: SectionCardsProps) {
           <div className="line-clamp-1 flex gap-2 font-medium">
             {topVendedorLabel} <IconTrendingUp className="size-4" />
           </div>
-          <div className="text-muted-foreground">Vendedor con más cierres</div>
+          <div className="text-muted-foreground">
+            Ticket promedio {formatCurrency(ticketPromedio)}
+          </div>
         </CardFooter>
       </Card>
     </div>
@@ -132,4 +140,13 @@ function formatNumber(value: number | null | undefined): string {
 function formatPercent(part: number | null | undefined, total: number | null | undefined): string {
   if (!part || !total) return "0";
   return Math.round((part / total) * 100).toString();
+}
+
+function formatCurrency(value: number | null | undefined): string {
+  if (!value) return "$0";
+  return new Intl.NumberFormat("es-MX", {
+    style: "currency",
+    currency: "MXN",
+    maximumFractionDigits: 0,
+  }).format(value);
 }

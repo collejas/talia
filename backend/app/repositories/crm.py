@@ -5367,6 +5367,7 @@ class CRMRepository:
         organizacion_id: UUID,
         limit: int = 500,
         created_from: datetime | None = None,
+        created_to: datetime | None = None,
         tablero_id: UUID | None = None,
         asignado_id: UUID | None = None,
         canal: str | None = None,
@@ -5385,7 +5386,9 @@ class CRMRepository:
         }
         and_filters: list[str] = []
         if created_from:
-            params["creado_en"] = f"gte.{created_from.isoformat()}"
+            and_filters.append(f"creado_en.gte.{created_from.isoformat()}")
+        if created_to:
+            and_filters.append(f"creado_en.lte.{created_to.isoformat()}")
         if tablero_id:
             tablero_filter = str(tablero_id)
             and_filters.append(

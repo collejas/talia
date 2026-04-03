@@ -209,11 +209,6 @@ function formatPercent(value: number | null | undefined): string {
   return `${Math.round(value)}%`;
 }
 
-function toNumber(value: number | null | undefined): number {
-  if (!Number.isFinite(value ?? Number.NaN)) return 0;
-  return Number(value);
-}
-
 function percentage(numerator: number, denominator: number): number {
   if (!denominator) return 0;
   return (numerator / denominator) * 100;

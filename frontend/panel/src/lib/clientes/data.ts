@@ -86,6 +86,8 @@ function mapCards(rows: ClienteRecord[]): LeadCards {
     perdidas: Math.max(total - completados - pendientes, 0),
     nuevas,
     montoTotal,
+    ticketPromedioGanado: 0,
+    diasPromedioCierre: 0,
     topVendedor: undefined,
   };
 }

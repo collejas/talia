@@ -41,8 +41,22 @@ export default async function Page({ searchParams }: DashboardPageProps) {
   const range = resolveDashboardRange(resolvedParams);
 
   const [leadsPayload, dashboardKpis, prospeccionPayload, agendaPayload, opportunityKpis, salesRows, pipelineRows] = await Promise.all([
-    loadLeadsData({ days: range.days }).catch(() => ({
-      cards: { total: 0, abiertas: 0, ganadas: 0, perdidas: 0, nuevas: 0, montoTotal: 0 },
+    loadLeadsData({
+      days: range.days,
+      rango: range.rango ?? undefined,
+      desde: range.desde ?? undefined,
+      hasta: range.hasta ?? undefined,
+    }).catch(() => ({
+      cards: {
+        total: 0,
+        abiertas: 0,
+        ganadas: 0,
+        perdidas: 0,
+        nuevas: 0,
+        montoTotal: 0,
+        ticketPromedioGanado: 0,
+        diasPromedioCierre: 0,
+      },
       chart: [],
       table: [],
       totalRows: 0,

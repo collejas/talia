@@ -8852,6 +8852,8 @@ class CRMPipelineCards(BaseModel):
     perdidas: int = 0
     nuevas: int = 0
     monto_total: float = 0
+    ticket_promedio_ganado: float = 0
+    dias_promedio_cierre: float = 0
     top_vendedor: CRMPipelineTopSeller | None = None
 
 
@@ -22890,22 +22892,44 @@ async def pipeline_overview(
     usuario_id: UUID | None = Depends(optional_usuario_id),
     limit: Annotated[int, Query(ge=10, le=500)] = 200,
     days: Annotated[int, Query(ge=7, le=90)] = 30,
+    rango: str | None = Query(default=None),
+    desde: str | None = Query(default=None),
+    hasta: str | None = Query(default=None),
 ) -> CRMPipelineOverview:
     effective_timezone, _timezone_source = await _resolve_effective_timezone_name(
         repo=repo,
         organizacion_id=organizacion_id,
         usuario_id=usuario_id,
     )
-    created_from = _resolve_recent_days_created_from_utc(
-        days=days,
-        timezone_name=effective_timezone,
-    )
+    created_from: datetime | None = None
+    created_to: datetime | None = None
+    days_range = days
+    if rango or desde or hasta:
+        created_from, created_to = _resolve_date_range(
+            rango,
+            desde,
+            hasta,
+            timezone_name=effective_timezone,
+        )
+        zone = ZoneInfo((effective_timezone or "UTC").strip() or "UTC")
+        range_end = (created_to or datetime.now(timezone.utc)).astimezone(zone).date()
+        range_start = (created_from or _resolve_recent_days_created_from_utc(
+            days=days,
+            timezone_name=effective_timezone,
+        )).astimezone(zone).date()
+        days_range = max(1, (range_end - range_start).days + 1)
+    else:
+        created_from = _resolve_recent_days_created_from_utc(
+            days=days,
+            timezone_name=effective_timezone,
+        )
     fetch_limit = max(limit, 500)
     try:
         rows, total_rows = await repo.list_pipeline_opportunities(
             organizacion_id=organizacion_id,
             limit=fetch_limit,
             created_from=created_from,
+            created_to=created_to,
         )
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
@@ -22913,7 +22937,7 @@ async def pipeline_overview(
         rows,
         total_rows,
         limit,
-        days,
+        days_range,
         timezone_name=effective_timezone,
     )
     return overview
@@ -27589,6 +27613,8 @@ def _build_pipeline_cards(
     nuevas_threshold = now - timedelta(days=1)
     abiertas = ganadas = perdidas = nuevas = 0
     monto_total = 0.0
+    won_amounts: list[float] = []
+    close_durations_days: list[float] = []
     top_counter: Counter[str] = Counter()
     top_names: dict[str, str] = {}
 
@@ -27611,6 +27637,13 @@ def _build_pipeline_cards(
             )
             if closed_amount is not None:
                 monto_total += closed_amount
+                won_amounts.append(closed_amount)
+            created_at_for_close = _parse_datetime(row.get("creado_en"))
+            closed_at = _parse_datetime(row.get("cerrado_en")) or _extract_closed_date_from_metadata(row)
+            if created_at_for_close and closed_at and closed_at >= created_at_for_close:
+                close_durations_days.append(
+                    (closed_at - created_at_for_close).total_seconds() / (24 * 60 * 60)
+                )
         created_at = _parse_datetime(row.get("creado_en"))
         if created_at and created_at >= nuevas_threshold:
             nuevas += 1
@@ -27639,6 +27672,14 @@ def _build_pipeline_cards(
         perdidas=perdidas,
         nuevas=nuevas,
         monto_total=monto_total,
+        ticket_promedio_ganado=(
+            round(sum(won_amounts) / len(won_amounts), 2) if won_amounts else 0
+        ),
+        dias_promedio_cierre=(
+            round(sum(close_durations_days) / len(close_durations_days), 2)
+            if close_durations_days
+            else 0
+        ),
         top_vendedor=top_vendedor,
     )
 
