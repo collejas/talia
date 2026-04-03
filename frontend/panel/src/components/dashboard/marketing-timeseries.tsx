@@ -26,6 +26,8 @@ type SeriesKey = "envios" | "respuestas" | "conversaciones";
 
 type MarketingTimeseriesProps = {
   data?: ProspeccionTimeseries | null;
+  dateFrom?: string | null;
+  dateTo?: string | null;
 };
 
 type NormalizedPoint = {
@@ -72,7 +74,11 @@ function parseToUTC(date: string): number {
   return Number.isNaN(fallback) ? Number.NaN : fallback;
 }
 
-function normalizeData(data?: ProspeccionTimeseries | null): NormalizedPoint[] {
+function normalizeData(
+  data?: ProspeccionTimeseries | null,
+  dateFrom?: string | null,
+  dateTo?: string | null,
+): NormalizedPoint[] {
   const campanas = data?.campanas ?? [];
   const frases = data?.frases_whatsapp ?? [];
   const frasesMap = new Map<string, number>();
@@ -81,27 +87,43 @@ function normalizeData(data?: ProspeccionTimeseries | null): NormalizedPoint[] {
     frasesMap.set(row.fecha, Number(row.conversaciones_atribuidas ?? 0));
   }
 
-  return campanas
-    .map((row) => {
-      const timestamp = parseToUTC(row.fecha);
-      return {
-        date: row.fecha,
-        displayDate: Number.isNaN(timestamp)
-          ? row.fecha
-          : DATE_LABEL.format(timestamp),
-        timestamp,
-        envios: Number(row.envios_entregados ?? 0),
-        respuestas: Number(row.envios_respondidos ?? 0),
-        conversaciones: Number(frasesMap.get(row.fecha) ?? 0),
-      };
-    })
-    .filter((item) => Number.isFinite(item.timestamp))
-    .sort((a, b) => a.timestamp - b.timestamp);
+  const campanaMap = new Map<string, { envios: number; respuestas: number }>();
+  for (const row of campanas) {
+    if (!row?.fecha) continue;
+    campanaMap.set(row.fecha, {
+      envios: Number(row.envios_entregados ?? 0),
+      respuestas: Number(row.envios_respondidos ?? 0),
+    });
+  }
+
+  const start = resolveStartDate(dateFrom, campanas);
+  const end = resolveEndDate(dateTo, campanas);
+  if (!start || !end) return [];
+
+  const series: NormalizedPoint[] = [];
+  for (const day of iterateDays(start, end)) {
+    const key = formatDate(day);
+    const timestamp = parseToUTC(key);
+    const camp = campanaMap.get(key);
+    series.push({
+      date: key,
+      displayDate: Number.isNaN(timestamp) ? key : DATE_LABEL.format(timestamp),
+      timestamp,
+      envios: camp?.envios ?? 0,
+      respuestas: camp?.respuestas ?? 0,
+      conversaciones: Number(frasesMap.get(key) ?? 0),
+    });
+  }
+
+  return series;
 }
 
-export function MarketingTimeseries({ data }: MarketingTimeseriesProps) {
+export function MarketingTimeseries({ data, dateFrom, dateTo }: MarketingTimeseriesProps) {
   const [series, setSeries] = React.useState<SeriesKey>("envios");
-  const normalized = React.useMemo(() => normalizeData(data), [data]);
+  const normalized = React.useMemo(
+    () => normalizeData(data, dateFrom, dateTo),
+    [data, dateFrom, dateTo],
+  );
   const hasData = normalized.length > 0;
 
   return (
@@ -194,4 +216,42 @@ export function MarketingTimeseries({ data }: MarketingTimeseriesProps) {
       </CardContent>
     </Card>
   );
+}
+
+function resolveStartDate(dateFrom: string | null | undefined, campanas: ProspeccionTimeseries["campanas"]): Date | null {
+  if (dateFrom) {
+    const parsed = Date.parse(dateFrom);
+    if (Number.isFinite(parsed)) return new Date(parsed);
+  }
+  const first = campanas.find((row) => row.fecha)?.fecha;
+  if (!first) return null;
+  const parsed = Date.parse(first);
+  return Number.isFinite(parsed) ? new Date(parsed) : null;
+}
+
+function resolveEndDate(dateTo: string | null | undefined, campanas: ProspeccionTimeseries["campanas"]): Date | null {
+  if (dateTo) {
+    const parsed = Date.parse(dateTo);
+    if (Number.isFinite(parsed)) return new Date(parsed);
+  }
+  const last = campanas.length ? campanas[campanas.length - 1]?.fecha : null;
+  if (!last) return null;
+  const parsed = Date.parse(last);
+  return Number.isFinite(parsed) ? new Date(parsed) : null;
+}
+
+function* iterateDays(start: Date, end: Date): Generator<Date> {
+  const current = new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth(), start.getUTCDate()));
+  const last = new Date(Date.UTC(end.getUTCFullYear(), end.getUTCMonth(), end.getUTCDate()));
+  while (current <= last) {
+    yield new Date(current);
+    current.setUTCDate(current.getUTCDate() + 1);
+  }
+}
+
+function formatDate(date: Date): string {
+  const year = date.getUTCFullYear();
+  const month = String(date.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(date.getUTCDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
 }

@@ -3,7 +3,6 @@
 import * as React from "react";
 import { Area, AreaChart, CartesianGrid, XAxis } from "recharts";
 
-import { useIsMobile } from "@/hooks/use-mobile";
 import type { LeadChartPoint } from "@/lib/leads/data";
 import {
   Card,
@@ -19,21 +18,7 @@ import {
   ChartTooltip,
   ChartTooltipContent,
 } from "@/components/ui/chart";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
-  ToggleGroup,
-  ToggleGroupItem,
-} from "@/components/ui/toggle-group";
-
 export const description = "Actividad diaria de los leads";
-
-type TimeRange = "90d" | "30d" | "7d";
 
 type NormalizedPoint = {
   date: string;
@@ -98,48 +83,12 @@ function normalizeData(data: LeadChartPoint[]): NormalizedPoint[] {
     .sort((a, b) => a.timestamp - b.timestamp);
 }
 
-function filterByRange(
-  data: NormalizedPoint[],
-  range: TimeRange,
-): NormalizedPoint[] {
-  if (!data.length) return data;
-
-  const lastTimestamp = data[data.length - 1]?.timestamp ?? Date.now();
-  let days = 90;
-  if (range === "30d") {
-    days = 30;
-  } else if (range === "7d") {
-    days = 7;
-  }
-  const rangeMs = days * 24 * 60 * 60 * 1000;
-  const start = lastTimestamp - rangeMs;
-
-  return data.filter((item) => item.timestamp >= start);
-}
-
 type ChartAreaInteractiveProps = {
   data?: LeadChartPoint[];
 };
 
 export function ChartAreaInteractive({ data = [] }: ChartAreaInteractiveProps) {
-  const isMobile = useIsMobile();
-  const [timeRange, setTimeRange] = React.useState<TimeRange>("90d");
-
-  React.useEffect(() => {
-    if (isMobile) {
-      setTimeRange("7d");
-    }
-  }, [isMobile]);
-
-  const normalizedData = React.useMemo(
-    () => normalizeData(data),
-    [data],
-  );
-
-  const filteredData = React.useMemo(
-    () => filterByRange(normalizedData, timeRange),
-    [normalizedData, timeRange],
-  );
+  const filteredData = React.useMemo(() => normalizeData(data), [data]);
 
   const hasData = filteredData.length > 0;
 
@@ -155,50 +104,7 @@ export function ChartAreaInteractive({ data = [] }: ChartAreaInteractiveProps) {
             Actividad en el periodo
           </span>
         </CardDescription>
-        <CardAction>
-          <ToggleGroup
-            type="single"
-            value={timeRange}
-            onValueChange={(value) => {
-              if (value) setTimeRange(value as TimeRange);
-            }}
-            variant="outline"
-            className="hidden *:data-[slot=toggle-group-item]:!px-4 @[767px]/card:flex"
-          >
-            <ToggleGroupItem value="90d">
-              Últimos 90 días
-            </ToggleGroupItem>
-            <ToggleGroupItem value="30d">
-              Últimos 30 días
-            </ToggleGroupItem>
-            <ToggleGroupItem value="7d">
-              Últimos 7 días
-            </ToggleGroupItem>
-          </ToggleGroup>
-          <Select
-            value={timeRange}
-            onValueChange={(value) => setTimeRange(value as TimeRange)}
-          >
-            <SelectTrigger
-              className="flex w-44 **:data-[slot=select-value]:block **:data-[slot=select-value]:truncate @[767px]/card:hidden"
-              size="sm"
-              aria-label="Selecciona un rango"
-            >
-              <SelectValue placeholder="Últimos 90 días" />
-            </SelectTrigger>
-            <SelectContent className="rounded-xl">
-              <SelectItem value="90d" className="rounded-lg">
-                Últimos 90 días
-              </SelectItem>
-              <SelectItem value="30d" className="rounded-lg">
-                Últimos 30 días
-              </SelectItem>
-              <SelectItem value="7d" className="rounded-lg">
-                Últimos 7 días
-              </SelectItem>
-            </SelectContent>
-          </Select>
-        </CardAction>
+        <CardAction />
       </CardHeader>
       <CardContent className="px-0 pb-0">
         <ChartContainer

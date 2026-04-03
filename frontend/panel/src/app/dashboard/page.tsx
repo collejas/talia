@@ -79,7 +79,11 @@ export default async function Page({ searchParams }: DashboardPageProps) {
                 <ChartAreaInteractive data={leadsPayload.chart} />
               </div>
               <div className="px-4 lg:px-6">
-                <MarketingTimeseries data={prospeccionPayload?.timeseries ?? null} />
+                <MarketingTimeseries
+                  data={prospeccionPayload?.timeseries ?? null}
+                  dateFrom={range.dateFrom}
+                  dateTo={range.dateTo}
+                />
               </div>
               <div className="grid gap-4 px-4 lg:px-6 @[1000px]/main:grid-cols-2">
                 <CatalogSalesCard data={salesRows} />
