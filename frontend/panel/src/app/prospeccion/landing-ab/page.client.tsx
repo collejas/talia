@@ -2,18 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { IconLoader, IconRefresh } from "@tabler/icons-react"
-import {
-  CartesianGrid,
-  ComposedChart,
-  Legend,
-  Line,
-  LineChart,
-  Scatter,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts"
+import { CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts"
 
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -111,22 +100,17 @@ export default function LandingAbPageClient() {
     }
     return Array.from(map.values()).sort((a, b) => a.hour - b.hour)
   }, [data?.by_hour])
-  const hourlyScatter = useMemo(() => {
-    const buckets: Record<string, Array<{ hour: number; value: number }>> = {
-      A: [],
-      B: [],
-      C: [],
-      UNKNOWN: [],
-    }
+  const hourlyDots = useMemo(() => {
+    let totalPoints = 0
     for (const row of hourlySeries) {
       for (const key of ["A", "B", "C", "UNKNOWN"]) {
         const value = Number(row[key as keyof typeof row] ?? 0)
         if (Number.isFinite(value) && value > 0) {
-          buckets[key].push({ hour: row.hour, value })
+          totalPoints += 1
         }
       }
     }
-    return buckets
+    return totalPoints > 0 && totalPoints < 3
   }, [hourlySeries])
   const weekdaySeries = useMemo(() => {
     const map = new Map<number, { weekday: number; A?: number; B?: number; C?: number; UNKNOWN?: number }>()
@@ -145,28 +129,27 @@ export default function LandingAbPageClient() {
     }
     return Array.from(map.values()).sort((a, b) => a.weekday - b.weekday)
   }, [data?.by_weekday])
-  const countActivePoints = useCallback(
-    (rows: Array<Record<string, number | undefined>>, keys: string[]) =>
-      rows.reduce((total, row) => {
-        const hasValue = keys.some((key) => Number(row[key] ?? 0) > 0)
-        return total + (hasValue ? 1 : 0)
-      }, 0),
-    [],
-  )
-  const hourlyDots = countActivePoints(hourlySeries, ["A", "B", "C", "UNKNOWN"]) < 3
-  const weekdayDots = countActivePoints(weekdaySeries, ["A", "B", "C", "UNKNOWN"]) < 3
-  const alwaysShowDots = true
+  const weekdayDots = useMemo(() => {
+    let totalPoints = 0
+    for (const row of weekdaySeries) {
+      for (const key of ["A", "B", "C", "UNKNOWN"]) {
+        const value = Number(row[key as keyof typeof row] ?? 0)
+        if (Number.isFinite(value) && value > 0) {
+          totalPoints += 1
+        }
+      }
+    }
+    return totalPoints > 0 && totalPoints < 3
+  }, [weekdaySeries])
   const conditionalDot = useCallback(
     (props: { cx?: number; cy?: number; value?: number; stroke?: string; index?: number; dataKey?: string }) => {
       const { cx, cy, value, stroke, index, dataKey } = props
-      const numeric = typeof value === "number" ? value : Number(value)
-      if (!Number.isFinite(numeric) || numeric <= 0 || typeof cx !== "number" || typeof cy !== "number") {
-        return null
+      if (!Number.isFinite(value) || Number(value) <= 0) {
+        return <g key={`${dataKey ?? "dot"}-${index ?? "0"}`} />
       }
-      const key = `dot-${dataKey ?? "series"}-${index ?? 0}`
       return (
         <circle
-          key={key}
+          key={`${dataKey ?? "dot"}-${index ?? "0"}`}
           cx={cx}
           cy={cy}
           r={4}
@@ -330,10 +313,10 @@ export default function LandingAbPageClient() {
                   <YAxis allowDecimals={false} />
                   <Tooltip />
                   <Legend />
-                  <Line type="monotone" dataKey="A" stroke="#7c3aed" strokeWidth={2} dot={alwaysShowDots || hourlyDots ? conditionalDot : false} />
-                  <Line type="monotone" dataKey="B" stroke="#0ea5e9" strokeWidth={2} dot={alwaysShowDots || hourlyDots ? conditionalDot : false} />
-                  <Line type="monotone" dataKey="C" stroke="#22c55e" strokeWidth={2} dot={alwaysShowDots || hourlyDots ? conditionalDot : false} />
-                  <Line type="monotone" dataKey="UNKNOWN" stroke="#94a3b8" strokeWidth={2} dot={alwaysShowDots || hourlyDots ? conditionalDot : false} />
+                  <Line type="monotone" dataKey="A" stroke="#7c3aed" strokeWidth={2} dot={false} />
+                  <Line type="monotone" dataKey="B" stroke="#0ea5e9" strokeWidth={2} dot={false} />
+                  <Line type="monotone" dataKey="C" stroke="#22c55e" strokeWidth={2} dot={false} />
+                  <Line type="monotone" dataKey="UNKNOWN" stroke="#94a3b8" strokeWidth={2} dot={false} />
                 </LineChart>
               </ResponsiveContainer>
             ) : (
@@ -351,21 +334,17 @@ export default function LandingAbPageClient() {
           <CardContent className="h-[320px]">
             {hourlySeries.length ? (
               <ResponsiveContainer width="100%" height="100%">
-                <ComposedChart data={hourlySeries} margin={{ top: 10, right: 24, left: 0, bottom: 0 }}>
+                <LineChart data={hourlySeries} margin={{ top: 10, right: 24, left: 0, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis dataKey="hour" tickLine={false} />
                   <YAxis allowDecimals={false} />
                   <Tooltip />
                   <Legend />
-                  <Line type="monotone" dataKey="A" stroke="#7c3aed" strokeWidth={2} dot={false} />
-                  <Line type="monotone" dataKey="B" stroke="#0ea5e9" strokeWidth={2} dot={false} />
-                  <Line type="monotone" dataKey="C" stroke="#22c55e" strokeWidth={2} dot={false} />
-                  <Line type="monotone" dataKey="UNKNOWN" stroke="#94a3b8" strokeWidth={2} dot={false} />
-                  <Scatter data={hourlyScatter.A} dataKey="value" fill="#7c3aed" />
-                  <Scatter data={hourlyScatter.B} dataKey="value" fill="#0ea5e9" />
-                  <Scatter data={hourlyScatter.C} dataKey="value" fill="#22c55e" />
-                  <Scatter data={hourlyScatter.UNKNOWN} dataKey="value" fill="#94a3b8" />
-                </ComposedChart>
+                  <Line type="monotone" dataKey="A" stroke="#7c3aed" strokeWidth={2} dot={hourlyDots ? conditionalDot : false} />
+                  <Line type="monotone" dataKey="B" stroke="#0ea5e9" strokeWidth={2} dot={hourlyDots ? conditionalDot : false} />
+                  <Line type="monotone" dataKey="C" stroke="#22c55e" strokeWidth={2} dot={hourlyDots ? conditionalDot : false} />
+                  <Line type="monotone" dataKey="UNKNOWN" stroke="#94a3b8" strokeWidth={2} dot={hourlyDots ? conditionalDot : false} />
+                </LineChart>
               </ResponsiveContainer>
             ) : (
               <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
@@ -389,10 +368,10 @@ export default function LandingAbPageClient() {
                 <YAxis allowDecimals={false} />
                 <Tooltip formatter={(value: number, name: string) => [value, name]} labelFormatter={(value) => weekdayLabels[Number(value)] ?? value} />
                 <Legend />
-                <Line type="monotone" dataKey="A" stroke="#7c3aed" strokeWidth={2} dot={alwaysShowDots || weekdayDots ? conditionalDot : false} />
-                <Line type="monotone" dataKey="B" stroke="#0ea5e9" strokeWidth={2} dot={alwaysShowDots || weekdayDots ? conditionalDot : false} />
-                <Line type="monotone" dataKey="C" stroke="#22c55e" strokeWidth={2} dot={alwaysShowDots || weekdayDots ? conditionalDot : false} />
-                <Line type="monotone" dataKey="UNKNOWN" stroke="#94a3b8" strokeWidth={2} dot={alwaysShowDots || weekdayDots ? conditionalDot : false} />
+                <Line type="monotone" dataKey="A" stroke="#7c3aed" strokeWidth={2} dot={weekdayDots ? conditionalDot : false} />
+                <Line type="monotone" dataKey="B" stroke="#0ea5e9" strokeWidth={2} dot={weekdayDots ? conditionalDot : false} />
+                <Line type="monotone" dataKey="C" stroke="#22c55e" strokeWidth={2} dot={weekdayDots ? conditionalDot : false} />
+                <Line type="monotone" dataKey="UNKNOWN" stroke="#94a3b8" strokeWidth={2} dot={weekdayDots ? conditionalDot : false} />
               </LineChart>
             </ResponsiveContainer>
           ) : (
