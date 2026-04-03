@@ -24716,6 +24716,600 @@ async def dashboard_kpis(
     }
 
 
+def _dashboard_overview_empty_leads() -> dict[str, Any]:
+    return {
+        "cards": {
+            "total": 0,
+            "abiertas": 0,
+            "ganadas": 0,
+            "perdidas": 0,
+            "nuevas": 0,
+            "montoTotal": 0,
+            "ticketPromedioGanado": 0,
+            "diasPromedioCierre": 0,
+        },
+        "chart": [],
+        "salesBySeller": [],
+        "table": [],
+        "totalRows": 0,
+    }
+
+
+def _dashboard_overview_empty_marketing() -> dict[str, Any]:
+    return {
+        "summary": {
+            "campanas": {
+                "envios_totales": 0,
+                "envios_enviados": 0,
+                "envios_entregados": 0,
+                "envios_respondidos": 0,
+                "brevo_aperturas": 0,
+                "brevo_clicks": 0,
+                "sesiones_utm": 0,
+                "tasa_entrega_pct": 0,
+                "tasa_respuesta_pct": 0,
+            },
+            "frases_whatsapp": {
+                "conversaciones_atribuidas": 0,
+                "contactos_unicos": 0,
+                "oportunidades_creadas": 0,
+                "tasa_conversacion_oportunidad_pct": 0,
+                "monto_estimado_total": 0,
+            },
+        },
+        "timeseries": {
+            "campanas": [],
+            "frases_whatsapp": [],
+        },
+        "items": [],
+        "byRule": [],
+    }
+
+
+def _dashboard_overview_empty_opportunity() -> dict[str, Any]:
+    return {
+        "total": 0,
+        "activeTotal": 0,
+        "montoTotal": 0,
+        "weightedAmount": 0,
+        "monedas": [],
+        "stale": 0,
+        "unassigned": 0,
+        "unassignedPct": 0,
+        "avgAgeDays": 0,
+        "topStage": None,
+        "topStaleStage": None,
+        "upcomingCloseCount": 0,
+    }
+
+
+def _dashboard_overview_empty_agenda() -> dict[str, Any]:
+    return {
+        "total": 0,
+        "activas": 0,
+        "proximas24h": 0,
+        "canceladas": 0,
+        "realizadas": 0,
+        "linkedToConversation": 0,
+        "linkedToContact": 0,
+        "virtuales": 0,
+        "unassigned": 0,
+    }
+
+
+def _dashboard_lead_category(row: Mapping[str, Any]) -> str:
+    etapa = row.get("etapa")
+    etapa_categoria = None
+    if isinstance(etapa, Mapping):
+        etapa_categoria = etapa.get("categoria")
+    return str(etapa_categoria or row.get("estado") or "abierta").strip().lower()
+
+
+def _dashboard_date_key(value: Any) -> str | None:
+    parsed = _parse_datetime(value)
+    if parsed is None:
+        return None
+    return parsed.astimezone(timezone.utc).date().isoformat()
+
+
+def _dashboard_format_currency(value: Any, currency: str = "MXN") -> str:
+    try:
+        amount = float(value or 0)
+    except (TypeError, ValueError):
+        amount = 0.0
+    if not math.isfinite(amount) or amount == 0:
+        return "$0"
+    rounded = int(round(amount))
+    return f"${rounded:,.0f}"
+
+
+def _dashboard_lead_label(row: Mapping[str, Any]) -> str:
+    titulo = str(row.get("titulo") or "").strip()
+    if titulo:
+        return titulo
+    contacto = row.get("contacto")
+    if isinstance(contacto, Mapping):
+        nombre = str(contacto.get("nombre_completo") or "").strip()
+        if nombre:
+            return nombre
+        company = str(contacto.get("company_name") or "").strip()
+        if company:
+            return company
+    cuenta = row.get("cuenta")
+    if isinstance(cuenta, Mapping):
+        nombre = str(cuenta.get("nombre") or "").strip()
+        if nombre:
+            return nombre
+    return "Oportunidad sin nombre"
+
+
+def _dashboard_lead_reviewer(row: Mapping[str, Any]) -> str:
+    asignado = row.get("asignado")
+    if isinstance(asignado, Mapping):
+        nombre = str(asignado.get("nombre_completo") or "").strip()
+        if nombre:
+            return nombre
+        correo = str(asignado.get("correo") or "").strip()
+        if correo:
+            return correo
+    return "Sin asignar"
+
+
+def _dashboard_build_leads_cards(
+    rows: Sequence[Mapping[str, Any]],
+    *,
+    days: int,
+) -> dict[str, Any]:
+    now = datetime.now(timezone.utc)
+    new_threshold = now - timedelta(days=max(1, days))
+    abiertas = 0
+    ganadas = 0
+    perdidas = 0
+    nuevas = 0
+    monto_total = 0.0
+    won_amounts: list[float] = []
+    close_durations: list[float] = []
+    seller_counts: dict[str, dict[str, Any]] = {}
+
+    for row in rows:
+        categoria = _dashboard_lead_category(row)
+        if categoria == "ganada":
+            ganadas += 1
+            try:
+                amount = float(row.get("monto_estimado") or 0)
+            except (TypeError, ValueError):
+                amount = 0.0
+            if math.isfinite(amount) and amount > 0:
+                monto_total += amount
+                won_amounts.append(amount)
+            created_at = _parse_datetime(row.get("creado_en"))
+            closed_at = _parse_datetime(row.get("cerrado_en")) or _parse_datetime(row.get("actualizado_en"))
+            if created_at and closed_at and closed_at >= created_at:
+                close_durations.append((closed_at - created_at).total_seconds() / 86400)
+        elif categoria == "perdida":
+            perdidas += 1
+        else:
+            abiertas += 1
+
+        created_at = _parse_datetime(row.get("creado_en"))
+        if created_at and created_at >= new_threshold:
+            nuevas += 1
+
+        asignado = row.get("asignado")
+        seller_id = None
+        seller_name = "Sin asignar"
+        if isinstance(asignado, Mapping):
+            seller_id = asignado.get("id") or row.get("asignado_a_usuario_id")
+            seller_name = (
+                str(asignado.get("nombre_completo") or "").strip()
+                or str(asignado.get("correo") or "").strip()
+                or "Sin asignar"
+            )
+        else:
+            seller_id = row.get("asignado_a_usuario_id")
+        if seller_id:
+            seller_key = str(seller_id)
+            seller = seller_counts.setdefault(seller_key, {"id": seller_key, "nombre": seller_name, "total": 0})
+            seller["total"] = int(seller.get("total") or 0) + 1
+
+    ticket_promedio = int(round(sum(won_amounts) / len(won_amounts))) if won_amounts else 0
+    dias_cierre = int(round(sum(close_durations) / len(close_durations))) if close_durations else 0
+    top_vendedor = None
+    if seller_counts:
+        top_vendedor = max(
+            seller_counts.values(),
+            key=lambda item: int(item.get("total") or 0),
+        )
+
+    return {
+        "total": len(rows),
+        "abiertas": abiertas,
+        "ganadas": ganadas,
+        "perdidas": perdidas,
+        "nuevas": nuevas,
+        "montoTotal": int(round(monto_total)),
+        "ticketPromedioGanado": ticket_promedio,
+        "diasPromedioCierre": dias_cierre,
+        "topVendedor": top_vendedor,
+    }
+
+
+def _dashboard_build_leads_chart(
+    rows: Sequence[Mapping[str, Any]],
+    *,
+    date_from: datetime | None,
+    date_to: datetime | None,
+) -> list[dict[str, Any]]:
+    if date_from and date_to:
+        start = date_from.astimezone(timezone.utc).date()
+        end = date_to.astimezone(timezone.utc).date()
+    else:
+        today = datetime.now(timezone.utc).date()
+        start = today - timedelta(days=29)
+        end = today
+
+    buckets: dict[str, dict[str, Any]] = {}
+    cursor = start
+    while cursor <= end:
+        key = cursor.isoformat()
+        buckets[key] = {
+            "date": key,
+            "nuevos": 0,
+            "ganados": 0,
+            "perdidos": 0,
+            "valorGanado": 0,
+        }
+        cursor += timedelta(days=1)
+
+    for row in rows:
+        created_key = _dashboard_date_key(row.get("creado_en"))
+        if created_key in buckets:
+            buckets[created_key]["nuevos"] += 1
+
+        closed_key = _dashboard_date_key(row.get("cerrado_en")) or _dashboard_date_key(row.get("actualizado_en"))
+        if closed_key not in buckets:
+            continue
+
+        categoria = _dashboard_lead_category(row)
+        if categoria == "ganada":
+            buckets[closed_key]["ganados"] += 1
+            try:
+                amount = float(row.get("monto_estimado") or 0)
+            except (TypeError, ValueError):
+                amount = 0.0
+            if math.isfinite(amount) and amount > 0:
+                buckets[closed_key]["valorGanado"] += int(round(amount))
+        elif categoria == "perdida":
+            buckets[closed_key]["perdidos"] += 1
+
+    return list(buckets.values())
+
+
+def _dashboard_build_sales_by_seller(rows: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
+    sellers: dict[str, dict[str, Any]] = {}
+    for row in rows:
+        if _dashboard_lead_category(row) != "ganada":
+            continue
+        asignado = row.get("asignado")
+        seller_id = None
+        seller_name = "Sin asignar"
+        if isinstance(asignado, Mapping):
+            seller_id = asignado.get("id") or row.get("asignado_a_usuario_id") or "sin-asignar"
+            seller_name = (
+                str(asignado.get("nombre_completo") or "").strip()
+                or str(asignado.get("correo") or "").strip()
+                or "Sin asignar"
+            )
+        else:
+            seller_id = row.get("asignado_a_usuario_id") or "sin-asignar"
+        try:
+            amount = float(row.get("monto_estimado") or 0)
+        except (TypeError, ValueError):
+            amount = 0.0
+        key = str(seller_id)
+        seller = sellers.setdefault(key, {"id": key, "nombre": seller_name, "ganados": 0, "valorGanado": 0})
+        seller["ganados"] = int(seller.get("ganados") or 0) + 1
+        if math.isfinite(amount) and amount > 0:
+            seller["valorGanado"] = int(seller.get("valorGanado") or 0) + int(round(amount))
+    return sorted(
+        sellers.values(),
+        key=lambda item: (-int(item.get("valorGanado") or 0), -int(item.get("ganados") or 0), str(item.get("nombre") or "")),
+    )[:6]
+
+
+def _dashboard_build_leads_table(rows: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
+    def _created_ts(row: Mapping[str, Any]) -> float:
+        created = _parse_datetime(row.get("creado_en"))
+        return created.timestamp() if created else 0.0
+
+    sorted_rows = sorted(rows, key=_created_ts, reverse=True)[:200]
+    table: list[dict[str, Any]] = []
+    for index, row in enumerate(sorted_rows, start=1):
+        etapa = row.get("etapa")
+        contacto = row.get("contacto")
+        table.append(
+            {
+                "id": index,
+                "header": _dashboard_lead_label(row),
+                "type": str(etapa.get("nombre") if isinstance(etapa, Mapping) else "") or "Sin etapa",
+                "status": _dashboard_lead_category(row),
+                "target": _dashboard_format_currency(row.get("monto_estimado"), str(row.get("moneda") or "MXN")),
+                "limit": str(contacto.get("correo") if isinstance(contacto, Mapping) else "") or "—",
+                "reviewer": _dashboard_lead_reviewer(row),
+                "raw": row,
+            }
+        )
+    return table
+
+
+def _dashboard_summarize_opportunities(rows: Sequence[Mapping[str, Any]], *, stale_days: int = 14) -> dict[str, Any]:
+    now = datetime.now(timezone.utc)
+    stage_counts: dict[str, int] = {}
+    stale_stage_counts: dict[str, int] = {}
+    total = len(rows)
+    active_total = 0
+    monto_total = 0.0
+    weighted_amount = 0.0
+    stale = 0
+    unassigned = 0
+    age_sum = 0.0
+    upcoming_close_count = 0
+    monedas: set[str] = set()
+
+    for row in rows:
+        categoria = _dashboard_lead_category(row)
+        is_active = categoria not in {"ganada", "perdida"}
+        if is_active:
+            active_total += 1
+
+        try:
+            amount = float(row.get("monto_estimado") or 0)
+        except (TypeError, ValueError):
+            amount = 0.0
+        if math.isfinite(amount):
+            monto_total += amount
+            try:
+                probability = float(row.get("probabilidad") or 0)
+            except (TypeError, ValueError):
+                probability = 0.0
+            if probability > 0:
+                weighted_amount += amount * (probability / 100)
+
+        moneda = str(row.get("moneda") or "").strip()
+        if moneda:
+            monedas.add(moneda)
+
+        etapa = row.get("etapa")
+        stage_label = (
+            str(etapa.get("nombre") or "").strip()
+            if isinstance(etapa, Mapping)
+            else ""
+        ) or f"Etapa {str(row.get('etapa_id') or '')[:8]}"
+
+        if is_active:
+            stage_counts[stage_label] = stage_counts.get(stage_label, 0) + 1
+
+        updated = _parse_datetime(row.get("actualizado_en"))
+        if is_active and updated:
+            days_without_movement = (now - updated).days
+            if days_without_movement >= stale_days:
+                stale += 1
+                stale_stage_counts[stage_label] = stale_stage_counts.get(stage_label, 0) + 1
+
+        created = _parse_datetime(row.get("creado_en"))
+        if is_active and created:
+            age_sum += max(0.0, (now - created).total_seconds() / 86400)
+
+        if is_active and not row.get("asignado_a_usuario_id"):
+            unassigned += 1
+
+        probable_close = _parse_datetime(row.get("fecha_cierre_probable"))
+        if is_active and probable_close:
+            days_until_close = math.ceil((probable_close - now).total_seconds() / 86400)
+            if 0 <= days_until_close <= 14:
+                upcoming_close_count += 1
+
+    top_stage = None
+    if stage_counts:
+        label, count = max(stage_counts.items(), key=lambda item: item[1])
+        top_stage = {"label": label, "count": count}
+
+    top_stale_stage = None
+    if stale_stage_counts:
+        label, count = max(stale_stage_counts.items(), key=lambda item: item[1])
+        top_stale_stage = {"label": label, "count": count}
+
+    return {
+        "total": total,
+        "activeTotal": active_total,
+        "montoTotal": int(round(monto_total)),
+        "weightedAmount": int(round(weighted_amount)),
+        "monedas": sorted(monedas),
+        "stale": stale,
+        "unassigned": unassigned,
+        "unassignedPct": int(round((unassigned / active_total) * 100)) if active_total > 0 else 0,
+        "avgAgeDays": int(round(age_sum / active_total)) if active_total > 0 else 0,
+        "topStage": top_stage,
+        "topStaleStage": top_stale_stage,
+        "upcomingCloseCount": upcoming_close_count,
+    }
+
+
+async def _dashboard_fetch_all_lead_rows(
+    *,
+    repo: CRMRepository,
+    organizacion_id: UUID,
+    date_from: datetime | None,
+    date_to: datetime | None,
+) -> list[dict[str, Any]]:
+    page_size = 200
+    offset = 0
+    rows: list[dict[str, Any]] = []
+    creado_desde = _format_utc(date_from) if date_from else None
+    creado_hasta = _format_utc(date_to) if date_to else None
+
+    while True:
+        page = await repo.list_opportunities(
+            organizacion_id=organizacion_id,
+            limit=page_size,
+            offset=offset,
+            creado_desde=creado_desde,
+            creado_hasta=creado_hasta,
+        )
+        filtered_page = [row for row in page if isinstance(row, dict)]
+        if not filtered_page:
+            break
+        rows.extend(filtered_page)
+        if len(filtered_page) < page_size:
+            break
+        offset += len(filtered_page)
+
+    return rows
+
+
+@router.get("/dashboard/overview")
+async def dashboard_overview(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("ver_panel")),
+    user_token: str = Depends(require_user_token),
+    usuario_id: UUID | None = Depends(optional_usuario_id),
+    rango: str | None = Query(default=None),
+    desde: str | None = Query(default=None),
+    hasta: str | None = Query(default=None),
+) -> dict[str, Any]:
+    effective_timezone, _timezone_source = await _resolve_effective_timezone_name(
+        repo=repo,
+        organizacion_id=organizacion_id,
+        usuario_id=usuario_id,
+    )
+    date_from, date_to = _resolve_date_range(
+        rango,
+        desde,
+        hasta,
+        timezone_name=effective_timezone,
+    )
+
+    if date_from and date_to:
+        range_days = max(1, (date_to.date() - date_from.date()).days + 1)
+    else:
+        range_days = 30
+
+    errors: dict[str, str] = {}
+
+    async def load_leads_section() -> dict[str, Any]:
+        try:
+            rows = await _dashboard_fetch_all_lead_rows(
+                repo=repo,
+                organizacion_id=organizacion_id,
+                date_from=date_from,
+                date_to=date_to,
+            )
+            return {
+                "cards": _dashboard_build_leads_cards(rows, days=range_days),
+                "chart": _dashboard_build_leads_chart(rows, date_from=date_from, date_to=date_to),
+                "salesBySeller": _dashboard_build_sales_by_seller(rows),
+                "table": _dashboard_build_leads_table(rows),
+                "totalRows": len(rows),
+            }
+        except Exception as exc:  # pragma: no cover - defensivo
+            errors["leads"] = str(exc)
+            return _dashboard_overview_empty_leads()
+
+    async def load_attention_section() -> dict[str, Any]:
+        try:
+            return await repo.visitas_dashboard_kpis(
+                usuario_token=user_token,
+                organizacion_id=organizacion_id,
+                date_from=date_from,
+                date_to=date_to,
+            )
+        except Exception as exc:  # pragma: no cover - defensivo
+            errors["attention"] = str(exc)
+            return {}
+
+    async def load_marketing_section() -> dict[str, Any]:
+        try:
+            payload = await prospeccion_metricas_dashboard(
+                repo=repo,
+                _="reports.view",
+                user_token=user_token,
+                organizacion_id=organizacion_id,
+                usuario_id=usuario_id,
+                params=ProspeccionMetricasQuery(
+                    date_from=date_from.date() if date_from else None,
+                    date_to=date_to.date() if date_to else None,
+                ),
+            )
+            return {
+                "summary": {
+                    "campanas": _ensure_dict(_ensure_dict(payload.get("campanas"), default={}).get("summary"), default={}),
+                    "frases_whatsapp": _ensure_dict(_ensure_dict(payload.get("frases_whatsapp"), default={}).get("summary"), default={}),
+                },
+                "timeseries": {
+                    "campanas": _ensure_list(_ensure_dict(payload.get("campanas"), default={}).get("timeseries"), default=[]),
+                    "frases_whatsapp": _ensure_list(_ensure_dict(payload.get("frases_whatsapp"), default={}).get("timeseries"), default=[]),
+                },
+                "items": _ensure_list(_ensure_dict(payload.get("campanas"), default={}).get("items"), default=[]),
+                "byRule": _ensure_list(_ensure_dict(payload.get("frases_whatsapp"), default={}).get("by_rule"), default=[]),
+            }
+        except Exception as exc:  # pragma: no cover - defensivo
+            errors["marketing"] = str(exc)
+            return _dashboard_overview_empty_marketing()
+
+    async def load_opportunity_section() -> dict[str, Any]:
+        try:
+            rows = await repo.list_opportunities(
+                organizacion_id=organizacion_id,
+                limit=200,
+                offset=0,
+            )
+            safe_rows = [row for row in rows if isinstance(row, dict)]
+            return _dashboard_summarize_opportunities(safe_rows)
+        except Exception as exc:  # pragma: no cover - defensivo
+            errors["opportunity"] = str(exc)
+            return _dashboard_overview_empty_opportunity()
+
+    async def load_agenda_section() -> dict[str, Any]:
+        try:
+            payload = await list_agenda_bookings(
+                repo=repo,
+                _="agenda.view",
+                user_token=user_token,
+                rango=rango,
+                fecha_desde=desde,
+                fecha_hasta=hasta,
+                limit=200,
+                cursor=0,
+            )
+            return _ensure_dict(payload.get("metrics"), default={})
+        except Exception as exc:  # pragma: no cover - defensivo
+            errors["agenda"] = str(exc)
+            return _dashboard_overview_empty_agenda()
+
+    leads_payload, attention_payload, marketing_payload, opportunity_payload, agenda_payload = await asyncio.gather(
+        load_leads_section(),
+        load_attention_section(),
+        load_marketing_section(),
+        load_opportunity_section(),
+        load_agenda_section(),
+    )
+
+    return {
+        "ok": True,
+        "range": _build_range_payload(rango, date_from, date_to),
+        "overview": {
+            "leads": leads_payload,
+            "attention": attention_payload,
+            "marketing": marketing_payload,
+            "opportunity": opportunity_payload,
+            "agenda": agenda_payload,
+        },
+        "errors": errors,
+    }
+
+
 @router.get("/demografia/resumen")
 async def demografia_resumen(
     *,
@@ -29249,6 +29843,12 @@ def _ensure_dict(value: Any, default: dict[str, Any]) -> dict[str, Any]:
     if isinstance(value, dict):
         return value
     return dict(default)
+
+
+def _ensure_list(value: Any, default: list[Any]) -> list[Any]:
+    if isinstance(value, list):
+        return value
+    return list(default)
 
 
 def _params_to_dict(params: BuscadorParams) -> dict[str, Any]:

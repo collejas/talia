@@ -23,12 +23,8 @@ import { SalesByOwnerChart } from '@/components/dashboard/sales-by-owner-chart'
 import { SalesConversionChart } from '@/components/dashboard/sales-conversion-chart'
 import { Skeleton } from '@/components/ui/skeleton'
 
-import { loadLeadsData } from "@/lib/leads/data"
-import { fetchDashboardKpis } from "@/lib/dashboard/kpis"
-import { fetchProspeccionMetricas } from "@/lib/dashboard/prospeccion-kpis"
-import { loadAgendaData } from "@/lib/agenda/data"
-import { fetchOpportunityKpis } from "@/lib/dashboard/opportunities-kpis"
 import { resolveDashboardRange, type DashboardRange } from "@/lib/dashboard/range"
+import { fetchDashboardOverview } from "@/lib/dashboard/overview"
 import { fetchCatalogPipelineKpi, fetchCatalogSalesKpi } from "./catalog-analytics"
 
 type DashboardPageProps = {
@@ -79,119 +75,69 @@ function SplitSectionSkeleton({ reverse = false }: { reverse?: boolean }) {
   )
 }
 
-async function LeadsSection({ range }: { range: DashboardRange }) {
-  const leadsPayload = await loadLeadsData({
-    days: range.days,
+async function DashboardOverviewSection({ range }: { range: DashboardRange }) {
+  const overview = await fetchDashboardOverview({
     rango: range.rango ?? undefined,
     desde: range.desde ?? undefined,
     hasta: range.hasta ?? undefined,
-    includeRestarts: false,
   }).catch(() => ({
-    cards: {
-      total: 0,
-      abiertas: 0,
-      ganadas: 0,
-      perdidas: 0,
-      nuevas: 0,
-      montoTotal: 0,
-      ticketPromedioGanado: 0,
-      diasPromedioCierre: 0,
+    leads: {
+      cards: {
+        total: 0,
+        abiertas: 0,
+        ganadas: 0,
+        perdidas: 0,
+        nuevas: 0,
+        montoTotal: 0,
+        ticketPromedioGanado: 0,
+        diasPromedioCierre: 0,
+      },
+      chart: [],
+      salesBySeller: [],
+      table: [],
+      totalRows: 0,
     },
-    chart: [],
-    salesBySeller: [],
-    table: [],
-    totalRows: 0,
-    restartTable: [],
-    restartKpis: { reconversionRate: 0, avgDaysBetweenCycles: 0, avgAmountPerCycle: 0 },
-    errors: ["No se pudieron cargar KPIs de leads."],
-  }))
-
-  return (
-    <>
-      <SectionTitle label="Ventas · Leads" />
-      <SectionCards data={leadsPayload.cards} />
-      <div className="grid gap-4 px-4 lg:px-6 xl:grid-cols-2 xl:items-stretch">
-        <SalesWonChart data={leadsPayload.chart} />
-        <SalesByOwnerChart data={leadsPayload.salesBySeller} />
-      </div>
-      <div className="px-4 lg:px-6">
-        <SalesConversionChart data={leadsPayload.cards} />
-      </div>
-      <SectionTitle label="Evolución de Leads" />
-      <div className="px-4 lg:px-6">
-        <ChartAreaInteractive data={leadsPayload.chart} />
-      </div>
-      <DataTable data={leadsPayload.table} />
-    </>
-  )
-}
-
-async function AttentionSection({ range }: { range: DashboardRange }) {
-  const dashboardKpis = await fetchDashboardKpis({
-    rango: range.rango ?? undefined,
-    desde: range.desde ?? undefined,
-    hasta: range.hasta ?? undefined,
-  }).catch(() => null)
-
-  return (
-    <>
-      <SectionTitle label="Atención · Conversaciones" />
-      <div className="grid gap-4 px-4 lg:px-6 xl:grid-cols-[minmax(0,1.15fr)_minmax(320px,0.85fr)] xl:items-stretch">
-        <AttentionCards data={dashboardKpis} />
-        <ConversationsChannelChart data={dashboardKpis} />
-      </div>
-    </>
-  )
-}
-
-async function OpportunitySection() {
-  const opportunityKpis = await fetchOpportunityKpis().catch(() => null)
-
-  return (
-    <>
-      <SectionTitle label="Oportunidades · Pipeline" />
-      <div className="grid gap-4 px-4 lg:px-6 xl:grid-cols-[minmax(320px,0.85fr)_minmax(0,1.15fr)] xl:items-stretch">
-        <PipelineHealthChart data={opportunityKpis} />
-        <OpportunityCards data={opportunityKpis} />
-      </div>
-    </>
-  )
-}
-
-async function MarketingSection({ range }: { range: DashboardRange }) {
-  const prospeccionPayload = await fetchProspeccionMetricas({
-    date_from: range.dateFrom ?? undefined,
-    date_to: range.dateTo ?? undefined,
-  }).catch(() => null)
-
-  return (
-    <>
-      <SectionTitle label="Marketing · Prospección" />
-      <MarketingCards
-        summary={prospeccionPayload?.summary ?? null}
-        items={prospeccionPayload?.items ?? null}
-        byRule={prospeccionPayload?.byRule ?? null}
-      />
-      <SectionTitle label="Rendimiento de Campañas" />
-      <div className="px-4 lg:px-6">
-        <MarketingTimeseries
-          data={prospeccionPayload?.timeseries ?? null}
-          dateFrom={range.dateFrom}
-          dateTo={range.dateTo}
-        />
-      </div>
-    </>
-  )
-}
-
-async function AgendaSection({ range }: { range: DashboardRange }) {
-  const agendaPayload = await loadAgendaData({
-    rango: range.rango ?? undefined,
-    desde: range.desde ?? undefined,
-    hasta: range.hasta ?? undefined,
-  }).catch(() => ({
-    items: [],
-    metrics: {
+    attention: {},
+    marketing: {
+      summary: {
+        campanas: {
+          envios_totales: 0,
+          envios_enviados: 0,
+          envios_entregados: 0,
+          envios_respondidos: 0,
+          brevo_aperturas: 0,
+          brevo_clicks: 0,
+          sesiones_utm: 0,
+          tasa_entrega_pct: 0,
+          tasa_respuesta_pct: 0,
+        },
+        frases_whatsapp: {
+          conversaciones_atribuidas: 0,
+          contactos_unicos: 0,
+          oportunidades_creadas: 0,
+          tasa_conversacion_oportunidad_pct: 0,
+          monto_estimado_total: 0,
+        },
+      },
+      timeseries: { campanas: [], frases_whatsapp: [] },
+      items: [],
+      byRule: [],
+    },
+    opportunity: {
+      total: 0,
+      activeTotal: 0,
+      montoTotal: 0,
+      weightedAmount: 0,
+      monedas: [],
+      stale: 0,
+      unassigned: 0,
+      unassignedPct: 0,
+      avgAgeDays: 0,
+      topStage: null,
+      topStaleStage: null,
+      upcomingCloseCount: 0,
+    },
+    agenda: {
       total: 0,
       activas: 0,
       proximas24h: 0,
@@ -202,13 +148,57 @@ async function AgendaSection({ range }: { range: DashboardRange }) {
       virtuales: 0,
       unassigned: 0,
     },
-    errors: ["No se pudo cargar agenda."],
   }))
 
   return (
     <>
+      <SectionTitle label="Ventas · Leads" />
+      <SectionCards data={overview.leads.cards} />
+      <div className="grid gap-4 px-4 lg:px-6 xl:grid-cols-2 xl:items-stretch">
+        <SalesWonChart data={overview.leads.chart} />
+        <SalesByOwnerChart data={overview.leads.salesBySeller} />
+      </div>
+      <div className="px-4 lg:px-6">
+        <SalesConversionChart data={overview.leads.cards} />
+      </div>
+
+      <SectionTitle label="Atención · Conversaciones" />
+      <div className="grid gap-4 px-4 lg:px-6 xl:grid-cols-[minmax(0,1.15fr)_minmax(320px,0.85fr)] xl:items-stretch">
+        <AttentionCards data={overview.attention} />
+        <ConversationsChannelChart data={overview.attention} />
+      </div>
+
+      <SectionTitle label="Oportunidades · Pipeline" />
+      <div className="grid gap-4 px-4 lg:px-6 xl:grid-cols-[minmax(320px,0.85fr)_minmax(0,1.15fr)] xl:items-stretch">
+        <PipelineHealthChart data={overview.opportunity} />
+        <OpportunityCards data={overview.opportunity} />
+      </div>
+
+      <SectionTitle label="Marketing · Prospección" />
+      <MarketingCards
+        summary={overview.marketing.summary}
+        items={overview.marketing.items}
+        byRule={overview.marketing.byRule}
+      />
+
       <SectionTitle label="Agenda · Citas" />
-      <AgendaCards data={agendaPayload.metrics} />
+      <AgendaCards data={overview.agenda} />
+
+      <SectionTitle label="Evolución de Leads" />
+      <div className="px-4 lg:px-6">
+        <ChartAreaInteractive data={overview.leads.chart} />
+      </div>
+
+      <SectionTitle label="Rendimiento de Campañas" />
+      <div className="px-4 lg:px-6">
+        <MarketingTimeseries
+          data={overview.marketing.timeseries}
+          dateFrom={range.dateFrom}
+          dateTo={range.dateTo}
+        />
+      </div>
+
+      <DataTable data={overview.leads.table} />
     </>
   )
 }
@@ -248,24 +238,8 @@ export default async function Page({ searchParams }: DashboardPageProps) {
             <div className="flex flex-col gap-4 py-4 md:gap-6 md:py-6">
               <DashboardRangeControls rango={range.rango} desde={range.desde} hasta={range.hasta} />
 
-              <Suspense fallback={<><SectionTitle label="Ventas · Leads" /><CardsSkeleton /><DualChartSkeleton /><SingleChartSkeleton /><SectionTitle label="Evolución de Leads" /><SingleChartSkeleton /><SingleChartSkeleton /></>}>
-                <LeadsSection range={range} />
-              </Suspense>
-
-              <Suspense fallback={<><SectionTitle label="Atención · Conversaciones" /><SplitSectionSkeleton /></>}>
-                <AttentionSection range={range} />
-              </Suspense>
-
-              <Suspense fallback={<><SectionTitle label="Oportunidades · Pipeline" /><SplitSectionSkeleton reverse /></>}>
-                <OpportunitySection />
-              </Suspense>
-
-              <Suspense fallback={<><SectionTitle label="Marketing · Prospección" /><CardsSkeleton /><SectionTitle label="Rendimiento de Campañas" /><SingleChartSkeleton /></>}>
-                <MarketingSection range={range} />
-              </Suspense>
-
-              <Suspense fallback={<><SectionTitle label="Agenda · Citas" /><CardsSkeleton /></>}>
-                <AgendaSection range={range} />
+              <Suspense fallback={<><SectionTitle label="Ventas · Leads" /><CardsSkeleton /><DualChartSkeleton /><SingleChartSkeleton /><SectionTitle label="Atención · Conversaciones" /><SplitSectionSkeleton /><SectionTitle label="Oportunidades · Pipeline" /><SplitSectionSkeleton reverse /><SectionTitle label="Marketing · Prospección" /><CardsSkeleton /><SectionTitle label="Agenda · Citas" /><CardsSkeleton /><SectionTitle label="Evolución de Leads" /><SingleChartSkeleton /><SectionTitle label="Rendimiento de Campañas" /><SingleChartSkeleton /><SingleChartSkeleton /></>}>
+                <DashboardOverviewSection range={range} />
               </Suspense>
 
               <Suspense fallback={<DualChartSkeleton />}>
