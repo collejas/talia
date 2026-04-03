@@ -7,12 +7,24 @@ import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar'
 import { ThemeToggle } from '@/components/ThemeToggle'
 import { CatalogSalesCard } from '@/components/dashboard/catalog-sales-card'
 import { CatalogPipelineCard } from '@/components/dashboard/catalog-pipeline-card'
+import { AttentionCards } from '@/components/dashboard/attention-cards'
 
-import data from "./data.json"
+import { loadLeadsData } from "@/lib/leads/data"
+import { fetchDashboardKpis } from "@/lib/dashboard/kpis"
 import { fetchCatalogPipelineKpi, fetchCatalogSalesKpi } from "./catalog-analytics"
 
 export default async function Page() {
-  const [salesRows, pipelineRows] = await Promise.all([
+  const [leadsPayload, dashboardKpis, salesRows, pipelineRows] = await Promise.all([
+    loadLeadsData().catch(() => ({
+      cards: { total: 0, abiertas: 0, ganadas: 0, perdidas: 0, nuevas: 0, montoTotal: 0 },
+      chart: [],
+      table: [],
+      totalRows: 0,
+      restartTable: [],
+      restartKpis: { reconversionRate: 0, avgDaysBetweenCycles: 0, avgAmountPerCycle: 0 },
+      errors: ["No se pudieron cargar KPIs de leads."],
+    })),
+    fetchDashboardKpis().catch(() => null),
     fetchCatalogSalesKpi().catch(() => []),
     fetchCatalogPipelineKpi().catch(() => []),
   ])
@@ -32,15 +44,16 @@ export default async function Page() {
         <div className="flex flex-1 flex-col">
           <div className="@container/main flex flex-1 flex-col gap-2">
             <div className="flex flex-col gap-4 py-4 md:gap-6 md:py-6">
-              <SectionCards />
+              <SectionCards data={leadsPayload.cards} />
+              <AttentionCards data={dashboardKpis} />
               <div className="px-4 lg:px-6">
-                <ChartAreaInteractive />
+                <ChartAreaInteractive data={leadsPayload.chart} />
               </div>
               <div className="grid gap-4 px-4 lg:px-6 @[1000px]/main:grid-cols-2">
                 <CatalogSalesCard data={salesRows} />
                 <CatalogPipelineCard data={pipelineRows} />
               </div>
-              <DataTable data={data} />
+              <DataTable data={leadsPayload.table} />
             </div>
           </div>
         </div>
