@@ -27,6 +27,10 @@ export type ProspeccionCampanaItem = {
   campana_id?: string | null;
   campana_nombre?: string | null;
   canal?: string | null;
+  template_id?: string | null;
+  template_slug?: string | null;
+  template_nombre?: string | null;
+  twilio_content_sid?: string | null;
   envios_totales: number;
   envios_enviados: number;
   envios_entregados: number;
@@ -56,6 +60,7 @@ type ProspeccionMetricasResponse = {
   };
   frases_whatsapp?: {
     summary?: ProspeccionMetricasSummary["frases_whatsapp"];
+    by_rule?: ProspeccionFraseByRule[];
     timeseries?: Array<{
       fecha: string;
       conversaciones_atribuidas: number;
@@ -91,9 +96,26 @@ export type ProspeccionTimeseries = {
   }>;
 };
 
+export type ProspeccionFraseByRule = {
+  regla_id?: string | null;
+  regla_nombre: string;
+  canal_publicitario: string;
+  campana_publicitaria?: string | null;
+  conversaciones_atribuidas: number;
+  contactos_unicos: number;
+  oportunidades_creadas: number;
+  tasa_conversacion_oportunidad_pct: number;
+  monto_estimado_total: number;
+};
+
 export async function fetchProspeccionMetricas(
   filters: ProspeccionFilters = {},
-): Promise<{ summary: ProspeccionMetricasSummary; timeseries: ProspeccionTimeseries; items: ProspeccionCampanaItem[] }> {
+): Promise<{
+  summary: ProspeccionMetricasSummary;
+  timeseries: ProspeccionTimeseries;
+  items: ProspeccionCampanaItem[];
+  byRule: ProspeccionFraseByRule[];
+}> {
   const response = await callCrmApi<ProspeccionMetricasResponse>("/crm/prospeccion/metricas", {
     withUserToken: true,
     searchParams: {
@@ -121,6 +143,7 @@ export async function fetchProspeccionMetricas(
       frases_whatsapp: response.data?.frases_whatsapp?.timeseries ?? [],
     },
     items: Array.isArray(response.data?.campanas?.items) ? response.data?.campanas?.items ?? [] : [],
+    byRule: Array.isArray(response.data?.frases_whatsapp?.by_rule) ? response.data?.frases_whatsapp?.by_rule ?? [] : [],
   };
 }
 

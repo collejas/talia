@@ -84,6 +84,7 @@ export default async function Page({ searchParams }: DashboardPageProps) {
               <MarketingCards
                 summary={prospeccionPayload?.summary ?? null}
                 items={prospeccionPayload?.items ?? null}
+                byRule={prospeccionPayload?.byRule ?? null}
               />
               <SectionTitle label="Agenda · Citas" />
               <AgendaCards data={agendaPayload.metrics} />

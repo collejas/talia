@@ -1,8 +1,10 @@
 import {
+  IconAlertTriangle,
   IconChartBar,
   IconMail,
   IconMessageCircle,
-  IconMouse,
+  IconPhoneCall,
+  IconTargetArrow,
 } from "@tabler/icons-react";
 
 import { Badge } from "@/components/ui/badge";
@@ -14,141 +16,173 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import type { ProspeccionMetricasSummary, ProspeccionCampanaItem } from "@/lib/dashboard/prospeccion-kpis";
+import type {
+  ProspeccionCampanaItem,
+  ProspeccionFraseByRule,
+  ProspeccionMetricasSummary,
+} from "@/lib/dashboard/prospeccion-kpis";
 
 type MarketingCardsProps = {
   summary?: ProspeccionMetricasSummary | null;
   items?: ProspeccionCampanaItem[] | null;
+  byRule?: ProspeccionFraseByRule[] | null;
 };
 
-export function MarketingCards({ summary, items }: MarketingCardsProps) {
-  const campanas = summary?.campanas;
-  const frases = summary?.frases_whatsapp;
+export function MarketingCards({ summary, items, byRule }: MarketingCardsProps) {
+  const allItems = items ?? [];
+  const allRules = byRule ?? [];
 
-  const canalTotals = aggregateByCanal(items ?? []);
-  const correoEntregados = canalTotals.correo.entregados;
-  const whatsappEntregados = canalTotals.whatsapp.entregados;
-  const vozEntregados = canalTotals.llamada.entregados;
+  const bestEmailByClicks = topBy(
+    allItems.filter((item) => normalizeChannel(item.canal) === "correo"),
+    (item) => item.brevo_clicks,
+  );
+  const bestEmailByOpenRate = topBy(
+    allItems.filter((item) => normalizeChannel(item.canal) === "correo" && item.envios_entregados > 0),
+    (item) => percentage(item.brevo_aperturas, item.envios_entregados),
+  );
+  const emailBounceRisk = topBy(
+    allItems.filter((item) => normalizeChannel(item.canal) === "correo"),
+    (item) => item.envios_fallidos,
+  );
+  const bestWhatsappByResponses = topBy(
+    allItems.filter((item) => normalizeChannel(item.canal) === "whatsapp"),
+    (item) => item.envios_respondidos,
+  );
+  const bestWhatsappLink = topBy(allRules, (item) => item.conversaciones_atribuidas);
+  const bestWhatsappOpportunityRule = topBy(
+    allRules,
+    (item) => item.oportunidades_creadas || item.monto_estimado_total,
+  );
 
-  const enviosTotales = toNumber(campanas?.envios_totales);
-  const enviosEntregados = toNumber(campanas?.envios_entregados);
-  const tasaEntrega = toPercent(campanas?.tasa_entrega_pct);
-  const tasaRespuesta = toPercent(campanas?.tasa_respuesta_pct);
-  const aperturas = toNumber(campanas?.brevo_aperturas);
-  const clicks = toNumber(campanas?.brevo_clicks);
-  const sesiones = toNumber(campanas?.sesiones_utm);
-  const clickToSession = clicks > 0 ? Math.round((sesiones / clicks) * 100) : 0;
-
-  const conversaciones = toNumber(frases?.conversaciones_atribuidas);
-  const oportunidades = toNumber(frases?.oportunidades_creadas);
-  const tasaConv = toPercent(frases?.tasa_conversacion_oportunidad_pct);
-  const montoEstimado = toNumber(frases?.monto_estimado_total);
+  const clickToSessionPct = Math.round(
+    summary?.campanas?.brevo_clicks
+      ? percentage(summary?.campanas?.sesiones_utm ?? 0, summary?.campanas?.brevo_clicks ?? 0)
+      : 0,
+  );
 
   return (
-    <div className="*:data-[slot=card]:from-emerald-50/60 *:data-[slot=card]:to-card dark:*:data-[slot=card]:bg-card grid grid-cols-1 gap-4 px-4 *:data-[slot=card]:bg-gradient-to-t *:data-[slot=card]:shadow-xs lg:px-6 @xl/main:grid-cols-2 @5xl/main:grid-cols-4">
+    <div className="*:data-[slot=card]:from-emerald-50/60 *:data-[slot=card]:to-card dark:*:data-[slot=card]:bg-card grid grid-cols-1 gap-4 px-4 *:data-[slot=card]:bg-gradient-to-t *:data-[slot=card]:shadow-xs lg:px-6 @xl/main:grid-cols-2 @5xl/main:grid-cols-3">
       <Card className="@container/card">
         <CardHeader>
-          <CardDescription>Envíos entregados</CardDescription>
+          <CardDescription>Mejor plantilla email por clicks</CardDescription>
           <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl">
-            {formatNumber(enviosEntregados)}
+            {formatNumber(bestEmailByClicks?.brevo_clicks ?? 0)}
           </CardTitle>
           <CardAction>
-            <Badge variant="outline">
+            <Badge variant="outline" className="min-w-0 max-w-[160px] whitespace-normal text-xs leading-tight">
               <IconMail />
-              {tasaEntrega}% entrega
+              {templateLabel(bestEmailByClicks)}
             </Badge>
           </CardAction>
         </CardHeader>
         <CardFooter className="flex-col items-start gap-1.5 text-sm">
           <div className="line-clamp-1 flex gap-2 font-medium">
-            Envíos totales <IconMail className="size-4" />
+            Aperturas {formatNumber(bestEmailByClicks?.brevo_aperturas ?? 0)} · Entregados {formatNumber(bestEmailByClicks?.envios_entregados ?? 0)}
           </div>
-          <div className="text-muted-foreground">{formatNumber(enviosTotales)} en el periodo</div>
+          <div className="text-muted-foreground">{campaignLabel(bestEmailByClicks)}</div>
         </CardFooter>
       </Card>
       <Card className="@container/card">
         <CardHeader>
-          <CardDescription>Respuestas de campaña</CardDescription>
+          <CardDescription>Mejor email por open rate</CardDescription>
           <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl">
-            {tasaRespuesta}%
+            {formatPercent(percentage(bestEmailByOpenRate?.brevo_aperturas ?? 0, bestEmailByOpenRate?.envios_entregados ?? 0))}
           </CardTitle>
           <CardAction>
-            <Badge variant="outline">
+            <Badge variant="outline" className="min-w-0 max-w-[160px] whitespace-normal text-xs leading-tight">
               <IconChartBar />
-              {formatNumber(campanas?.envios_respondidos ?? 0)} respuestas
+              {templateLabel(bestEmailByOpenRate)}
             </Badge>
           </CardAction>
         </CardHeader>
         <CardFooter className="flex-col items-start gap-1.5 text-sm">
           <div className="line-clamp-1 flex gap-2 font-medium">
-            Tasa de respuesta <IconChartBar className="size-4" />
+            Aperturas {formatNumber(bestEmailByOpenRate?.brevo_aperturas ?? 0)} de {formatNumber(bestEmailByOpenRate?.envios_entregados ?? 0)}
           </div>
-          <div className="text-muted-foreground">
-            Aperturas {formatNumber(aperturas)} · Clicks {formatNumber(clicks)}
-          </div>
+          <div className="text-muted-foreground">{campaignLabel(bestEmailByOpenRate)}</div>
         </CardFooter>
       </Card>
       <Card className="@container/card">
         <CardHeader>
-          <CardDescription>Entregados por canal</CardDescription>
+          <CardDescription>Riesgo de rebote email</CardDescription>
           <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl">
-            {formatNumber(correoEntregados)}
+            {formatNumber(emailBounceRisk?.envios_fallidos ?? 0)}
           </CardTitle>
           <CardAction>
             <Badge variant="outline">
-              <IconMail />
-              Correo
+              <IconAlertTriangle />
+              Fallidos
             </Badge>
           </CardAction>
         </CardHeader>
         <CardFooter className="flex-col items-start gap-1.5 text-sm">
           <div className="line-clamp-1 flex gap-2 font-medium">
-            WhatsApp {formatNumber(whatsappEntregados)} · Voz {formatNumber(vozEntregados)}
+            {templateLabel(emailBounceRisk)}
           </div>
-          <div className="text-muted-foreground">Entregados por canal</div>
+          <div className="text-muted-foreground">{campaignLabel(emailBounceRisk)}</div>
         </CardFooter>
       </Card>
       <Card className="@container/card">
         <CardHeader>
-          <CardDescription>Sesiones UTM</CardDescription>
+          <CardDescription>Mejor plantilla WhatsApp</CardDescription>
           <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl">
-            {formatNumber(sesiones)}
+            {formatNumber(bestWhatsappByResponses?.envios_respondidos ?? 0)}
           </CardTitle>
           <CardAction>
-            <Badge variant="outline">
-              <IconMouse />
-              {clickToSession}% click→session
+            <Badge variant="outline" className="min-w-0 max-w-[160px] whitespace-normal text-xs leading-tight">
+              <IconPhoneCall />
+              {formatPercent(percentage(bestWhatsappByResponses?.envios_respondidos ?? 0, bestWhatsappByResponses?.envios_entregados ?? 0))}
             </Badge>
           </CardAction>
         </CardHeader>
         <CardFooter className="flex-col items-start gap-1.5 text-sm">
           <div className="line-clamp-1 flex gap-2 font-medium">
-            Atribución campañas <IconMouse className="size-4" />
+            {templateLabel(bestWhatsappByResponses)}
           </div>
-          <div className="text-muted-foreground">
-            Clicks {formatNumber(clicks)} · Sesiones {formatNumber(sesiones)}
-          </div>
+          <div className="text-muted-foreground">{campaignLabel(bestWhatsappByResponses)}</div>
         </CardFooter>
       </Card>
       <Card className="@container/card">
         <CardHeader>
-          <CardDescription>WhatsApp atribuido</CardDescription>
+          <CardDescription>Enlace WA con mayor alcance</CardDescription>
           <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl">
-            {formatNumber(conversaciones)}
+            {formatNumber(bestWhatsappLink?.conversaciones_atribuidas ?? 0)}
           </CardTitle>
           <CardAction>
-            <Badge variant="outline">
+            <Badge variant="outline" className="min-w-0 max-w-[160px] whitespace-normal text-xs leading-tight">
               <IconMessageCircle />
-              {tasaConv}% conv.
+              {bestWhatsappLink?.canal_publicitario ?? "Sin canal"}
             </Badge>
           </CardAction>
         </CardHeader>
         <CardFooter className="flex-col items-start gap-1.5 text-sm">
           <div className="line-clamp-1 flex gap-2 font-medium">
-            Oportunidades {formatNumber(oportunidades)} <IconMessageCircle className="size-4" />
+            {bestWhatsappLink?.regla_nombre || "Sin regla"}
           </div>
           <div className="text-muted-foreground">
-            Monto estimado {formatCurrency(montoEstimado)}
+            Oportunidades {formatNumber(bestWhatsappLink?.oportunidades_creadas ?? 0)}
+          </div>
+        </CardFooter>
+      </Card>
+      <Card className="@container/card">
+        <CardHeader>
+          <CardDescription>Enlace WA con mejor conversión</CardDescription>
+          <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl">
+            {formatNumber(bestWhatsappOpportunityRule?.oportunidades_creadas ?? 0)}
+          </CardTitle>
+          <CardAction>
+            <Badge variant="outline">
+              <IconTargetArrow />
+              {clickToSessionPct}% click→session
+            </Badge>
+          </CardAction>
+        </CardHeader>
+        <CardFooter className="flex-col items-start gap-1.5 text-sm">
+          <div className="line-clamp-1 flex gap-2 font-medium">
+            {bestWhatsappOpportunityRule?.regla_nombre || "Sin regla"}
+          </div>
+          <div className="text-muted-foreground">
+            Monto estimado {formatCurrency(bestWhatsappOpportunityRule?.monto_estimado_total ?? 0)}
           </div>
         </CardFooter>
       </Card>
@@ -170,33 +204,45 @@ function formatCurrency(value: number | null | undefined): string {
   }).format(value);
 }
 
+function formatPercent(value: number | null | undefined): string {
+  if (!value) return "0%";
+  return `${Math.round(value)}%`;
+}
+
 function toNumber(value: number | null | undefined): number {
   if (!Number.isFinite(value ?? Number.NaN)) return 0;
   return Number(value);
 }
 
-function toPercent(value: number | null | undefined): number {
-  if (!Number.isFinite(value ?? Number.NaN)) return 0;
-  return Math.round(Number(value));
+function percentage(numerator: number, denominator: number): number {
+  if (!denominator) return 0;
+  return (numerator / denominator) * 100;
 }
 
-function aggregateByCanal(items: ProspeccionCampanaItem[]) {
-  const totals = {
-    correo: { entregados: 0 },
-    whatsapp: { entregados: 0 },
-    llamada: { entregados: 0 },
-  };
+function topBy<T>(items: T[], getValue: (item: T) => number): T | null {
+  if (!items.length) return null;
+  let best: T | null = null;
+  let bestValue = Number.NEGATIVE_INFINITY;
   for (const item of items) {
-    const canal = (item.canal || "").toLowerCase().trim();
-    const delivered = Number(item.envios_entregados ?? 0);
-    if (!Number.isFinite(delivered)) continue;
-    if (canal === "correo") {
-      totals.correo.entregados += delivered;
-    } else if (canal === "whatsapp") {
-      totals.whatsapp.entregados += delivered;
-    } else if (canal === "llamada" || canal === "voz") {
-      totals.llamada.entregados += delivered;
+    const value = getValue(item);
+    if (value > bestValue) {
+      best = item;
+      bestValue = value;
     }
   }
-  return totals;
+  return best;
+}
+
+function templateLabel(item: ProspeccionCampanaItem | null | undefined): string {
+  if (!item) return "Sin datos";
+  return item.template_nombre || item.template_slug || item.twilio_content_sid || "Sin plantilla";
+}
+
+function campaignLabel(item: ProspeccionCampanaItem | null | undefined): string {
+  if (!item) return "Sin campaña";
+  return item.campana_nombre || "Campaña sin nombre";
+}
+
+function normalizeChannel(value: string | null | undefined): string {
+  return (value || "").trim().toLowerCase();
 }
