@@ -44,13 +44,13 @@ type LoadOpportunityKpisOptions = {
   creadoHasta?: string | null;
 };
 
-const DEFAULT_LIMIT = 500;
+const DEFAULT_LIMIT = 200;
 const DEFAULT_STALE_DAYS = 14;
 
 export async function fetchOpportunityKpis(
   options: LoadOpportunityKpisOptions = {},
 ): Promise<OpportunityKpis> {
-  const limit = Math.max(1, options.limit ?? DEFAULT_LIMIT);
+  const limit = Math.max(1, Math.min(options.limit ?? DEFAULT_LIMIT, 200));
   const staleDays = Math.max(1, options.staleDays ?? DEFAULT_STALE_DAYS);
   const response = await callCrmApi<CRMOpportunitiesResponse>("/crm/oportunidades", {
     withUserToken: true,

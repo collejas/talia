@@ -59,7 +59,7 @@ export default async function Page({ searchParams }: DashboardPageProps) {
     fetchDashboardKpis({ rango: range.rango ?? undefined, desde: range.desde ?? undefined, hasta: range.hasta ?? undefined }).catch(() => null),
     fetchProspeccionMetricas({ date_from: range.dateFrom ?? undefined, date_to: range.dateTo ?? undefined }).catch(() => null),
     loadAgendaData({ rango: range.rango ?? undefined, desde: range.desde ?? undefined, hasta: range.hasta ?? undefined }).catch(() => ({ items: [], metrics: { total: 0, activas: 0, proximas24h: 0, canceladas: 0, realizadas: 0 }, errors: ["No se pudo cargar agenda."] })),
-    fetchOpportunityKpis({ creadoDesde: range.dateFrom, creadoHasta: range.dateTo }).catch(() => null),
+    fetchOpportunityKpis().catch(() => null),
     fetchCatalogSalesKpi().catch(() => []),
     fetchCatalogPipelineKpi().catch(() => []),
   ])

@@ -31,8 +31,8 @@ export function OpportunityCards({ data }: OpportunityCardsProps) {
           <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl">
             {formatNumber(total)}
           </CardTitle>
-          <CardAction>
-            <Badge variant="outline">
+          <CardAction className="max-w-[160px]">
+            <Badge variant="outline" className="min-w-0 max-w-[160px] whitespace-normal text-xs leading-tight">
               <IconChartPie />
               {topStage ? topStage.label : "Sin etapa"}
             </Badge>
