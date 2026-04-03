@@ -57,6 +57,7 @@ export async function fetchDashboardOverview(
       rango: filters.rango || undefined,
       desde: filters.desde || undefined,
       hasta: filters.hasta || undefined,
+      include_marketing: 'false',
     },
   });
 

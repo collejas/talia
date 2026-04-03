@@ -25178,6 +25178,7 @@ async def dashboard_overview(
     rango: str | None = Query(default=None),
     desde: str | None = Query(default=None),
     hasta: str | None = Query(default=None),
+    include_marketing: bool = Query(default=False),
 ) -> dict[str, Any]:
     effective_timezone, _timezone_source = await _resolve_effective_timezone_name(
         repo=repo,
@@ -25288,25 +25289,50 @@ async def dashboard_overview(
             errors["agenda"] = str(exc)
             return _dashboard_overview_empty_agenda()
 
-    leads_payload, attention_payload, marketing_payload, opportunity_payload, agenda_payload = await asyncio.gather(
-        load_leads_section(),
-        load_attention_section(),
-        load_marketing_section(),
-        load_opportunity_section(),
-        load_agenda_section(),
+    started_at = time.perf_counter()
+
+    async def _timed(name: str, loader: Callable[[], Awaitable[dict[str, Any]]]) -> tuple[str, dict[str, Any], float]:
+        step_started = time.perf_counter()
+        payload = await loader()
+        elapsed_ms = round((time.perf_counter() - step_started) * 1000, 2)
+        return name, payload, elapsed_ms
+
+    timed_tasks: list[Awaitable[tuple[str, dict[str, Any], float]]] = [
+        _timed("leads", load_leads_section),
+        _timed("attention", load_attention_section),
+        _timed("opportunity", load_opportunity_section),
+        _timed("agenda", load_agenda_section),
+    ]
+    if include_marketing:
+        timed_tasks.append(_timed("marketing", load_marketing_section))
+
+    timed_results = await asyncio.gather(*timed_tasks)
+
+    payloads = {name: payload for name, payload, _elapsed in timed_results}
+    timings_ms = {name: elapsed for name, _payload, elapsed in timed_results}
+    timings_ms["total"] = round((time.perf_counter() - started_at) * 1000, 2)
+
+    logger.info(
+        "crm.dashboard.overview_timing",
+        extra={
+            "organizacion_id": str(organizacion_id),
+            "timings_ms": timings_ms,
+            "range": _build_range_payload(rango, date_from, date_to),
+        },
     )
 
     return {
         "ok": True,
         "range": _build_range_payload(rango, date_from, date_to),
         "overview": {
-            "leads": leads_payload,
-            "attention": attention_payload,
-            "marketing": marketing_payload,
-            "opportunity": opportunity_payload,
-            "agenda": agenda_payload,
+            "leads": payloads.get("leads", _dashboard_overview_empty_leads()),
+            "attention": payloads.get("attention", {}),
+            "marketing": payloads.get("marketing", _dashboard_overview_empty_marketing()),
+            "opportunity": payloads.get("opportunity", _dashboard_overview_empty_opportunity()),
+            "agenda": payloads.get("agenda", _dashboard_overview_empty_agenda()),
         },
         "errors": errors,
+        "timings_ms": timings_ms,
     }
 
 

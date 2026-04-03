@@ -25,6 +25,8 @@ import { Skeleton } from '@/components/ui/skeleton'
 
 import { resolveDashboardRange, type DashboardRange } from "@/lib/dashboard/range"
 import { fetchDashboardOverview } from "@/lib/dashboard/overview"
+import { fetchProspeccionMetricas } from "@/lib/dashboard/prospeccion-kpis"
+import { loadLeadsData } from "@/lib/leads/data"
 import { fetchCatalogPipelineKpi, fetchCatalogSalesKpi } from "./catalog-analytics"
 
 type DashboardPageProps = {
@@ -174,13 +176,6 @@ async function DashboardOverviewSection({ range }: { range: DashboardRange }) {
         <OpportunityCards data={overview.opportunity} />
       </div>
 
-      <SectionTitle label="Marketing · Prospección" />
-      <MarketingCards
-        summary={overview.marketing.summary}
-        items={overview.marketing.items}
-        byRule={overview.marketing.byRule}
-      />
-
       <SectionTitle label="Agenda · Citas" />
       <AgendaCards data={overview.agenda} />
 
@@ -189,18 +184,48 @@ async function DashboardOverviewSection({ range }: { range: DashboardRange }) {
         <ChartAreaInteractive data={overview.leads.chart} />
       </div>
 
+    </>
+  )
+}
+
+
+
+async function MarketingSection({ range }: { range: DashboardRange }) {
+  const marketing = await fetchProspeccionMetricas({
+    date_from: range.dateFrom ?? undefined,
+    date_to: range.dateTo ?? undefined,
+  }).catch(() => null)
+
+  return (
+    <>
+      <SectionTitle label="Marketing · Prospección" />
+      <MarketingCards
+        summary={marketing?.summary ?? null}
+        items={marketing?.items ?? null}
+        byRule={marketing?.byRule ?? null}
+      />
       <SectionTitle label="Rendimiento de Campañas" />
       <div className="px-4 lg:px-6">
         <MarketingTimeseries
-          data={overview.marketing.timeseries}
+          data={marketing?.timeseries ?? null}
           dateFrom={range.dateFrom}
           dateTo={range.dateTo}
         />
       </div>
-
-      <DataTable data={overview.leads.table} />
     </>
   )
+}
+
+async function LeadsTableSection({ range }: { range: DashboardRange }) {
+  const leadsPayload = await loadLeadsData({
+    days: range.days,
+    rango: range.rango ?? undefined,
+    desde: range.desde ?? undefined,
+    hasta: range.hasta ?? undefined,
+    includeRestarts: false,
+  }).catch(() => ({ table: [] }))
+
+  return <DataTable data={leadsPayload.table ?? []} />
 }
 
 async function CatalogSection() {
@@ -238,12 +263,20 @@ export default async function Page({ searchParams }: DashboardPageProps) {
             <div className="flex flex-col gap-4 py-4 md:gap-6 md:py-6">
               <DashboardRangeControls rango={range.rango} desde={range.desde} hasta={range.hasta} />
 
-              <Suspense fallback={<><SectionTitle label="Ventas · Leads" /><CardsSkeleton /><DualChartSkeleton /><SingleChartSkeleton /><SectionTitle label="Atención · Conversaciones" /><SplitSectionSkeleton /><SectionTitle label="Oportunidades · Pipeline" /><SplitSectionSkeleton reverse /><SectionTitle label="Marketing · Prospección" /><CardsSkeleton /><SectionTitle label="Agenda · Citas" /><CardsSkeleton /><SectionTitle label="Evolución de Leads" /><SingleChartSkeleton /><SectionTitle label="Rendimiento de Campañas" /><SingleChartSkeleton /><SingleChartSkeleton /></>}>
+              <Suspense fallback={<><SectionTitle label="Ventas · Leads" /><CardsSkeleton /><DualChartSkeleton /><SingleChartSkeleton /><SectionTitle label="Atención · Conversaciones" /><SplitSectionSkeleton /><SectionTitle label="Oportunidades · Pipeline" /><SplitSectionSkeleton reverse /><SectionTitle label="Agenda · Citas" /><CardsSkeleton /><SectionTitle label="Evolución de Leads" /><SingleChartSkeleton /></>}>
                 <DashboardOverviewSection range={range} />
+              </Suspense>
+
+              <Suspense fallback={<><SectionTitle label="Marketing · Prospección" /><CardsSkeleton /><SectionTitle label="Rendimiento de Campañas" /><SingleChartSkeleton /></>}>
+                <MarketingSection range={range} />
               </Suspense>
 
               <Suspense fallback={<DualChartSkeleton />}>
                 <CatalogSection />
+              </Suspense>
+
+              <Suspense fallback={<SingleChartSkeleton />}>
+                <LeadsTableSection range={range} />
               </Suspense>
             </div>
           </div>
