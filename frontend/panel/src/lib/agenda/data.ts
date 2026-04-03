@@ -145,13 +145,13 @@ const UPCOMING_WINDOW_MS = 24 * 60 * 60 * 1000;
 
 export async function loadAgendaData(filters: { rango?: string; desde?: string; hasta?: string } = {}): Promise<AgendaPayload> {
   try {
+    const searchParams: Record<string, string> = {};
+    if (filters.rango) searchParams.rango = filters.rango;
+    if (filters.desde) searchParams.from = filters.desde;
+    if (filters.hasta) searchParams.to = filters.hasta;
     const response = await callPanelAgendaEndpoint<AgendaBookingsResponse>(
       "/agenda/bookings",
-      {
-        rango: filters.rango || undefined,
-        from: filters.desde || undefined,
-        to: filters.hasta || undefined,
-      },
+      searchParams,
     );
     const mapped = mapAgenda(response.items ?? []);
     const metrics = response.metrics ?? computeMetrics(mapped);

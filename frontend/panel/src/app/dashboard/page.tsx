@@ -23,12 +23,8 @@ import { resolveDashboardRange } from "@/lib/dashboard/range"
 import { fetchCatalogPipelineKpi, fetchCatalogSalesKpi } from "./catalog-analytics"
 
 type DashboardPageProps = {
-  searchParams?: Promise<Record<string, string | string[] | undefined>> | Record<string, string | string[] | undefined>;
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
 };
-
-function isPromiseLike<T>(value: unknown): value is Promise<T> {
-  return Boolean(value) && typeof value === "object" && typeof (value as Promise<T>).then === "function";
-}
 
 function SectionTitle({ label }: { label: string }) {
   return (
@@ -41,9 +37,7 @@ function SectionTitle({ label }: { label: string }) {
 }
 
 export default async function Page({ searchParams }: DashboardPageProps) {
-  const resolvedParams = isPromiseLike<Record<string, string | string[] | undefined>>(searchParams)
-    ? await searchParams
-    : (searchParams ?? {});
+  const resolvedParams = searchParams ? await searchParams : {};
   const range = resolveDashboardRange(resolvedParams);
 
   const [leadsPayload, dashboardKpis, prospeccionPayload, agendaPayload, opportunityKpis, salesRows, pipelineRows] = await Promise.all([
