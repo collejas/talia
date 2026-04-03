@@ -16,11 +16,16 @@ type OpportunityCardsProps = {
 };
 
 export function OpportunityCards({ data }: OpportunityCardsProps) {
-  const total = toNumber(data?.total);
+  const total = toNumber(data?.activeTotal ?? data?.total);
   const monto = toNumber(data?.montoTotal);
+  const weightedAmount = toNumber(data?.weightedAmount);
   const stale = toNumber(data?.stale);
   const avgAge = toNumber(data?.avgAgeDays);
+  const unassigned = toNumber(data?.unassigned);
+  const unassignedPct = toNumber(data?.unassignedPct);
+  const upcomingCloseCount = toNumber(data?.upcomingCloseCount);
   const topStage = data?.topStage;
+  const topStaleStage = data?.topStaleStage;
   const currencies = data?.monedas ?? [];
 
   return (
@@ -64,7 +69,35 @@ export function OpportunityCards({ data }: OpportunityCardsProps) {
           <div className="line-clamp-1 flex gap-2 font-medium">
             Valor proyectado <IconChartPie className="size-4" />
           </div>
-          <div className="text-muted-foreground">Suma de monto estimado</div>
+          <div className="text-muted-foreground">
+            Ponderado {formatCurrency(weightedAmount, currencies)}
+          </div>
+          <div className="text-muted-foreground">
+            {formatNumber(upcomingCloseCount)} cierres probables en 14 días
+          </div>
+        </CardFooter>
+      </Card>
+      <Card className="@container/card">
+        <CardHeader>
+          <CardDescription>Oportunidades sin asignar</CardDescription>
+          <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl">
+            {formatNumber(unassigned)}
+          </CardTitle>
+          <CardAction>
+            <Badge variant="outline">
+              <IconAlertTriangle />
+              {formatNumber(unassignedPct)}%
+            </Badge>
+          </CardAction>
+        </CardHeader>
+        <CardFooter className="flex-col items-start gap-1.5 text-sm">
+          <div className="line-clamp-1 flex gap-2 font-medium">
+            Requieren dueño <IconAlertTriangle className="size-4" />
+          </div>
+          <div className="text-muted-foreground">
+            {formatNumber(total - unassigned)} ya asignadas
+          </div>
+          <div className="text-muted-foreground">Impactan seguimiento comercial</div>
         </CardFooter>
       </Card>
       <Card className="@container/card">
@@ -75,36 +108,21 @@ export function OpportunityCards({ data }: OpportunityCardsProps) {
           </CardTitle>
           <CardAction>
             <Badge variant="outline">
-              <IconAlertTriangle />
+              <IconClock />
               +14 días
             </Badge>
           </CardAction>
         </CardHeader>
         <CardFooter className="flex-col items-start gap-1.5 text-sm">
           <div className="line-clamp-1 flex gap-2 font-medium">
-            Sin movimiento reciente <IconAlertTriangle className="size-4" />
+            Etapa con atasco <IconClock className="size-4" />
           </div>
-          <div className="text-muted-foreground">Requieren seguimiento</div>
-        </CardFooter>
-      </Card>
-      <Card className="@container/card">
-        <CardHeader>
-          <CardDescription>Antigüedad promedio</CardDescription>
-          <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl">
-            {formatNumber(avgAge)} días
-          </CardTitle>
-          <CardAction>
-            <Badge variant="outline">
-              <IconClock />
-              Edad promedio
-            </Badge>
-          </CardAction>
-        </CardHeader>
-        <CardFooter className="flex-col items-start gap-1.5 text-sm">
-          <div className="line-clamp-1 flex gap-2 font-medium">
-            Desde creación <IconClock className="size-4" />
+          <div className="text-muted-foreground">
+            {topStaleStage ? `${topStaleStage.label} (${formatNumber(topStaleStage.count)})` : "Sin etapa dominante"}
           </div>
-          <div className="text-muted-foreground">Promedio de tiempo abierto</div>
+          <div className="text-muted-foreground">
+            Edad promedio {formatNumber(avgAge)} días
+          </div>
         </CardFooter>
       </Card>
     </div>
