@@ -173,21 +173,24 @@ const EMPTY_CARDS: LeadCards = {
 };
 
 export async function loadLeadsData(
-  options: { days?: number; rango?: string; desde?: string; hasta?: string } = {},
+  options: { days?: number; rango?: string; desde?: string; hasta?: string; includeRestarts?: boolean } = {},
 ): Promise<LeadsPayload> {
   const days = Math.max(7, Math.min(90, options.days ?? 30));
+  const includeRestarts = options.includeRestarts ?? true;
   const [opportunitiesResp, restartResp] = await Promise.all([
     fetchAllOpportunities({
       days,
       desde: options.desde,
       hasta: options.hasta,
     }),
-    callCrmApi<CRMLeadRestartStat[]>("/crm/leads/restarts", {
-      searchParams: {
-        min_restart_sequence: String(DEFAULT_RESTART_MIN_SEQUENCE),
-        limit: String(DEFAULT_RESTART_LIMIT),
-      },
-    }),
+    includeRestarts
+      ? callCrmApi<CRMLeadRestartStat[]>("/crm/leads/restarts", {
+          searchParams: {
+            min_restart_sequence: String(DEFAULT_RESTART_MIN_SEQUENCE),
+            limit: String(DEFAULT_RESTART_LIMIT),
+          },
+        })
+      : Promise.resolve({ ok: true, data: [] as CRMLeadRestartStat[] } as CrmResult<CRMLeadRestartStat[]>),
   ]);
 
   const errors: string[] = [];
