@@ -24,6 +24,7 @@ export type LeadChartPoint = {
   nuevos: number;
   ganados: number;
   perdidos: number;
+  valorGanado: number;
 };
 
 export type LeadTableRow = {
@@ -37,9 +38,17 @@ export type LeadTableRow = {
   raw?: Record<string, unknown>;
 };
 
+export type LeadSellerPoint = {
+  id: string;
+  nombre: string;
+  ganados: number;
+  valorGanado: number;
+};
+
 export type LeadsPayload = {
   cards: LeadCards;
   chart: LeadChartPoint[];
+  salesBySeller: LeadSellerPoint[];
   table: LeadTableRow[];
   totalRows: number;
   restartTable: LeadTableRow[];
@@ -186,6 +195,7 @@ export async function loadLeadsData(
   let cards = EMPTY_CARDS;
   let chart: LeadChartPoint[] = [];
   let table: LeadTableRow[] = [];
+  let salesBySeller: LeadSellerPoint[] = [];
   let totalRows = 0;
   let restartKpis: RestartKpis = {
     reconversionRate: 0,
@@ -200,6 +210,7 @@ export async function loadLeadsData(
     cards = buildLeadCards(rows, days);
     chart = buildLeadChart(rows, options.desde, options.hasta, days);
     table = buildLeadTable(rows);
+    salesBySeller = buildSalesBySeller(rows);
     totalRows = rows.length;
   }
 
@@ -217,6 +228,7 @@ export async function loadLeadsData(
     cards,
     chart,
     table,
+    salesBySeller,
     totalRows,
     restartTable,
     restartKpis,
@@ -376,7 +388,7 @@ function buildLeadChart(
 
   for (let cursor = new Date(start.getTime()); cursor <= end; cursor.setUTCDate(cursor.getUTCDate() + 1)) {
     const date = cursor.toISOString().slice(0, 10);
-    buckets.set(date, { date, nuevos: 0, ganados: 0, perdidos: 0 });
+    buckets.set(date, { date, nuevos: 0, ganados: 0, perdidos: 0, valorGanado: 0 });
   }
 
   for (const row of rows) {
@@ -391,12 +403,39 @@ function buildLeadChart(
     const categoria = normalizeOpportunityCategory(row);
     if (categoria === "ganada") {
       closedBucket.ganados += 1;
+      const amount = Number(row.monto_estimado ?? 0);
+      if (Number.isFinite(amount) && amount > 0) {
+        closedBucket.valorGanado += amount;
+      }
     } else if (categoria === "perdida") {
       closedBucket.perdidos += 1;
     }
   }
 
   return Array.from(buckets.values());
+}
+
+
+function buildSalesBySeller(rows: CRMOpportunity[]): LeadSellerPoint[] {
+  const sellers = new Map<string, LeadSellerPoint>();
+
+  for (const row of rows) {
+    if (normalizeOpportunityCategory(row) !== "ganada") continue;
+
+    const id = row.asignado?.id ?? row.asignado_a_usuario_id ?? "sin-asignar";
+    const nombre = row.asignado?.nombre_completo?.trim() || row.asignado?.correo?.trim() || "Sin asignar";
+    const amount = Number(row.monto_estimado ?? 0);
+    const current = sellers.get(id) ?? { id, nombre, ganados: 0, valorGanado: 0 };
+    current.ganados += 1;
+    if (Number.isFinite(amount) && amount > 0) {
+      current.valorGanado += amount;
+    }
+    sellers.set(id, current);
+  }
+
+  return Array.from(sellers.values())
+    .sort((a, b) => (b.valorGanado - a.valorGanado) || (b.ganados - a.ganados) || a.nombre.localeCompare(b.nombre))
+    .slice(0, 6);
 }
 
 function buildLeadTable(rows: CRMOpportunity[]): LeadTableRow[] {

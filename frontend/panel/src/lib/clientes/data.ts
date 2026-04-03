@@ -98,7 +98,7 @@ function mapChart(rows: ClienteRecord[]): LeadChartPoint[] {
   const ensureBucket = (date: string | null | undefined) => {
     const normalized = normalizeDate(date);
     if (!buckets.has(normalized)) {
-      buckets.set(normalized, { date: normalized, nuevos: 0, ganados: 0, perdidos: 0 });
+      buckets.set(normalized, { date: normalized, nuevos: 0, ganados: 0, perdidos: 0, valorGanado: 0 });
     }
     return buckets.get(normalized)!;
   };
