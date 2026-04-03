@@ -11,6 +11,8 @@ type SalesByOwnerChartProps = {
   data?: LeadSellerPoint[];
 };
 
+const EMPTY_SELLERS: LeadSellerPoint[] = [];
+
 const chartConfig = {
   valorGanado: {
     label: "Valor ganado",
@@ -26,7 +28,13 @@ function formatCurrency(value: number): string {
   }).format(value);
 }
 
-export function SalesByOwnerChart({ data = [] }: SalesByOwnerChartProps) {
+function truncateLabel(value: string, max = 20): string {
+  if (!value) return "Sin asignar";
+  if (value.length <= max) return value;
+  return `${value.slice(0, max - 1)}…`;
+}
+
+export function SalesByOwnerChart({ data = EMPTY_SELLERS }: SalesByOwnerChartProps) {
   const chartData = React.useMemo(() => data.slice(0, 6), [data]);
   const hasData = chartData.length > 0;
 
@@ -47,9 +55,10 @@ export function SalesByOwnerChart({ data = [] }: SalesByOwnerChartProps) {
               <YAxis
                 dataKey="nombre"
                 type="category"
-                width={132}
+                width={144}
                 tickLine={false}
                 axisLine={false}
+                tickFormatter={(value: string) => truncateLabel(value)}
               />
               <ChartTooltip
                 cursor={{ fill: "hsl(var(--muted))" }}
@@ -57,9 +66,13 @@ export function SalesByOwnerChart({ data = [] }: SalesByOwnerChartProps) {
                 formatter={(value, name, item) => {
                   const payload = item.payload as LeadSellerPoint;
                   return [
-                    `${formatCurrency(Number(value ?? 0))} · ${payload.ganados} ganados`,
+                    `${formatCurrency(Number(value ?? 0))} · ${payload.ganados} cierres`,
                     name,
                   ];
+                }}
+                labelFormatter={(_, payload) => {
+                  const item = payload?.[0]?.payload as LeadSellerPoint | undefined;
+                  return item?.nombre || "Sin asignar";
                 }}
               />
               <Bar dataKey="valorGanado" name={chartConfig.valorGanado.label} fill="var(--color-valorGanado)" radius={[0, 4, 4, 0]}>

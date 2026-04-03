@@ -22,6 +22,8 @@ type SalesWonChartProps = {
   data?: LeadChartPoint[];
 };
 
+const EMPTY_POINTS: LeadChartPoint[] = [];
+
 type NormalizedPoint = {
   date: string;
   displayDate: string;
@@ -87,12 +89,12 @@ function formatCurrency(value: number): string {
   }).format(value);
 }
 
-export function SalesWonChart({ data = [] }: SalesWonChartProps) {
+export function SalesWonChart({ data = EMPTY_POINTS }: SalesWonChartProps) {
   const normalized = React.useMemo(() => normalizeData(data), [data]);
   const hasData = normalized.length > 0;
 
   return (
-    <Card className="@container/card">
+    <Card className="@container/card h-full">
       <CardHeader>
         <CardTitle>Ventas ganadas por periodo</CardTitle>
         <CardDescription>
@@ -134,7 +136,7 @@ export function SalesWonChart({ data = [] }: SalesWonChartProps) {
                 if (name === chartConfig.valorGanado.label) {
                   return [formatCurrency(Number(value ?? 0)), name];
                 }
-                return [String(value ?? 0), name];
+                return [`${Number(value ?? 0)} cierres`, name];
               }}
               content={<ChartTooltipContent indicator="dot" />}
             />

@@ -17,6 +17,7 @@ import { ConversationsChannelChart } from '@/components/dashboard/conversations-
 import { PipelineHealthChart } from '@/components/dashboard/pipeline-health-chart'
 import { SalesWonChart } from '@/components/dashboard/sales-won-chart'
 import { SalesByOwnerChart } from '@/components/dashboard/sales-by-owner-chart'
+import { SalesConversionChart } from '@/components/dashboard/sales-conversion-chart'
 
 import { loadLeadsData } from "@/lib/leads/data"
 import { fetchDashboardKpis } from "@/lib/dashboard/kpis"
@@ -112,6 +113,9 @@ export default async function Page({ searchParams }: DashboardPageProps) {
               <div className="grid gap-4 px-4 lg:px-6 xl:grid-cols-2 xl:items-stretch">
                 <SalesWonChart data={leadsPayload.chart} />
                 <SalesByOwnerChart data={leadsPayload.salesBySeller} />
+              </div>
+              <div className="px-4 lg:px-6">
+                <SalesConversionChart data={leadsPayload.cards} />
               </div>
               <SectionTitle label="Atención · Conversaciones" />
               <div className="grid gap-4 px-4 lg:px-6 xl:grid-cols-[minmax(0,1.15fr)_minmax(320px,0.85fr)] xl:items-stretch">
