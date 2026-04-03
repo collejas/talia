@@ -961,14 +961,8 @@ export function InboxSplitView({
   );
 
   const shouldEnrichThreads = React.useMemo(() => {
-    const normalizedSource = sourceFilter ? sourceFilter.toLowerCase() : "";
-    const normalizedChannel = (channelFilter ?? "").trim().toLowerCase();
-    return (
-      normalizedSource === "publicidad_whatsapp" ||
-      isProspeccionSource(normalizedSource) ||
-      normalizedChannel === "whatsapp"
-    );
-  }, [sourceFilter, channelFilter]);
+    return true;
+  }, []);
 
   const buildThreadDetailParams = React.useCallback(
     ({ threadOffset }: { threadOffset: number }) => {
@@ -2269,12 +2263,39 @@ function mergeThreadLists(current: InboxThread[], incoming: InboxThread[]): Inbo
     return current;
   }
   const currentMap = new Map(current.map((item) => [item.id, item]));
+  const isGenericContactName = (value: string | null | undefined): boolean => {
+    const normalized = (value ?? "").trim().toLowerCase();
+    return normalized === "contacto sin nombre";
+  };
   const preferIncomingString = (incomingValue: string | null, currentValue: string | null): string | null => {
     if (typeof incomingValue === "string" && incomingValue.trim().length) {
       return incomingValue;
     }
     if (typeof currentValue === "string" && currentValue.trim().length) {
       return currentValue;
+    }
+    return incomingValue ?? currentValue ?? null;
+  };
+  const preferIncomingSource = (incomingValue: string | null, currentValue: string | null): string | null => {
+    const normalizedIncoming = (incomingValue ?? "").trim().toLowerCase();
+    const normalizedCurrent = (currentValue ?? "").trim().toLowerCase();
+    if (normalizedIncoming === "whatsapp" && (normalizedCurrent === "publicidad_whatsapp" || isProspeccionSource(normalizedCurrent))) {
+      return currentValue;
+    }
+    if (!normalizedIncoming && normalizedCurrent) {
+      return currentValue;
+    }
+    return incomingValue ?? currentValue ?? null;
+  };
+  const preferIncomingContactName = (incomingValue: string | null, currentValue: string | null): string | null => {
+    if (typeof incomingValue === "string" && incomingValue.trim().length && !isGenericContactName(incomingValue)) {
+      return incomingValue;
+    }
+    if (typeof currentValue === "string" && currentValue.trim().length && !isGenericContactName(currentValue)) {
+      return currentValue;
+    }
+    if (typeof incomingValue === "string" && incomingValue.trim().length) {
+      return incomingValue;
     }
     return incomingValue ?? currentValue ?? null;
   };
@@ -2292,11 +2313,24 @@ function mergeThreadLists(current: InboxThread[], incoming: InboxThread[]): Inbo
       (existing.sourceDetail && Object.keys(existing.sourceDetail).length > 0 ? existing.sourceDetail : null);
     return {
       ...thread,
+      contactoId: preferIncomingString(thread.contactoId, existing.contactoId) ?? existing.contactoId,
+      contactoNombre: preferIncomingContactName(thread.contactoNombre, existing.contactoNombre) ?? "",
+      contactoProfileName: preferIncomingString(thread.contactoProfileName, existing.contactoProfileName),
+      contactoCorreo: preferIncomingString(thread.contactoCorreo, existing.contactoCorreo),
+      contactoTelefono: preferIncomingString(thread.contactoTelefono, existing.contactoTelefono),
+      canal: preferIncomingString(thread.canal, existing.canal) ?? existing.canal,
+      source: preferIncomingSource(thread.source, existing.source),
       sourceDetail: resolvedSourceDetail,
+      batchId: preferIncomingString(thread.batchId, existing.batchId),
       batchLabel: preferIncomingString(thread.batchLabel, existing.batchLabel),
+      campanaId: preferIncomingString(thread.campanaId, existing.campanaId),
       campanaLabel: preferIncomingString(thread.campanaLabel, existing.campanaLabel),
+      templateId: preferIncomingString(thread.templateId, existing.templateId),
       templateLabel: preferIncomingString(thread.templateLabel, existing.templateLabel),
       templateSlug: preferIncomingString(thread.templateSlug, existing.templateSlug),
+      asignadoId: preferIncomingString(thread.asignadoId, existing.asignadoId),
+      asignadoNombre: preferIncomingString(thread.asignadoNombre, existing.asignadoNombre),
+      tags: thread.tags.length ? thread.tags : existing.tags,
       messages,
       preview: thread.preview ?? lastMessage?.body?.[0] ?? existing.preview,
       previewAt: thread.previewAt ?? lastMessage?.timestamp ?? existing.previewAt,
