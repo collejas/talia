@@ -132,6 +132,10 @@ export type AgendaMetrics = {
   proximas24h: number;
   canceladas: number;
   realizadas: number;
+  linkedToConversation: number;
+  linkedToContact: number;
+  virtuales: number;
+  unassigned: number;
 };
 
 export type AgendaPayload = {
@@ -154,7 +158,7 @@ export async function loadAgendaData(filters: { rango?: string; desde?: string; 
       searchParams,
     );
     const mapped = mapAgenda(response.items ?? []);
-    const metrics = response.metrics ?? computeMetrics(mapped);
+    const metrics = mergeMetrics(response.metrics, computeMetrics(mapped));
     return { items: mapped, metrics, errors: [] };
   } catch (error) {
     const message = error instanceof Error ? error.message : "No se pudo cargar la agenda.";
@@ -260,6 +264,10 @@ function computeMetrics(items: AgendaItem[]): AgendaMetrics {
     metrics.total += 1;
     if (estado === "cancelada") metrics.canceladas += 1;
     if (estado === "realizada") metrics.realizadas += 1;
+    if (item.conversacionId) metrics.linkedToConversation += 1;
+    if (item.contactoId) metrics.linkedToContact += 1;
+    if (item.meetingUrl || item.externalJoinUrl) metrics.virtuales += 1;
+    if (!item.asignadoNombre) metrics.unassigned += 1;
     if (ACTIVE_STATES.has(estado)) {
       metrics.activas += 1;
       const start = Date.parse(item.startAt);
@@ -279,6 +287,24 @@ function emptyMetrics(): AgendaMetrics {
     proximas24h: 0,
     canceladas: 0,
     realizadas: 0,
+    linkedToConversation: 0,
+    linkedToContact: 0,
+    virtuales: 0,
+    unassigned: 0,
+  };
+}
+
+function mergeMetrics(base: AgendaApiMetrics | undefined, computed: AgendaMetrics): AgendaMetrics {
+  return {
+    total: Number.isFinite(base?.total) ? Number(base?.total) : computed.total,
+    activas: Number.isFinite(base?.activas) ? Number(base?.activas) : computed.activas,
+    proximas24h: Number.isFinite(base?.proximas24h) ? Number(base?.proximas24h) : computed.proximas24h,
+    canceladas: Number.isFinite(base?.canceladas) ? Number(base?.canceladas) : computed.canceladas,
+    realizadas: Number.isFinite(base?.realizadas) ? Number(base?.realizadas) : computed.realizadas,
+    linkedToConversation: computed.linkedToConversation,
+    linkedToContact: computed.linkedToContact,
+    virtuales: computed.virtuales,
+    unassigned: computed.unassigned,
   };
 }
 
