@@ -117,7 +117,9 @@ export async function loadInboxData(filters?: InboxThreadsFilters): Promise<Inbo
   };
   const normalizedEstado = filters?.estado?.trim();
   const normalizedSource = filters?.source?.trim();
+  const normalizedSourceLower = (normalizedSource ?? "").toLowerCase();
   const normalizedChannel = filters?.channel?.trim();
+  const normalizedChannelLower = (normalizedChannel ?? "").toLowerCase();
   const normalizedDate = filters?.date?.trim();
   const normalizedBatchId = filters?.batchId?.trim();
   const normalizedCampanaId = filters?.campanaId?.trim();
@@ -127,6 +129,13 @@ export async function loadInboxData(filters?: InboxThreadsFilters): Promise<Inbo
   if (normalizedDate) normalizedFilters.date = normalizedDate;
   if (normalizedBatchId) normalizedFilters.batch_id = normalizedBatchId;
   if (normalizedCampanaId) normalizedFilters.campana_id = normalizedCampanaId;
+  if (
+    normalizedSourceLower === "publicidad_whatsapp" ||
+    normalizedSourceLower.includes("prospeccion") ||
+    normalizedChannelLower === "whatsapp"
+  ) {
+    normalizedFilters.enrich = "true";
+  }
 
   const [bootstrap, tags] = await Promise.all([
     callCrmApi<InboxBootstrapResponse>("/crm/inbox/bootstrap", {

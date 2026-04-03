@@ -962,8 +962,13 @@ export function InboxSplitView({
 
   const shouldEnrichThreads = React.useMemo(() => {
     const normalizedSource = sourceFilter ? sourceFilter.toLowerCase() : "";
-    return normalizedSource === "publicidad_whatsapp";
-  }, [sourceFilter]);
+    const normalizedChannel = (channelFilter ?? "").trim().toLowerCase();
+    return (
+      normalizedSource === "publicidad_whatsapp" ||
+      isProspeccionSource(normalizedSource) ||
+      normalizedChannel === "whatsapp"
+    );
+  }, [sourceFilter, channelFilter]);
 
   const buildThreadDetailParams = React.useCallback(
     ({ threadOffset }: { threadOffset: number }) => {
@@ -1012,7 +1017,9 @@ export function InboxSplitView({
         typeof detail.canal_publicitario === "string" ? detail.canal_publicitario.trim() : "";
       const campanaPublicitaria =
         typeof detail.campana_publicitaria === "string" ? detail.campana_publicitaria.trim() : "";
-      return !(reglaNombre || canalPublicitario || campanaPublicitaria);
+      const missingProspeccion =
+        !(thread.templateLabel || thread.batchLabel || thread.campanaLabel);
+      return !(reglaNombre || canalPublicitario || campanaPublicitaria) || missingProspeccion;
     }
     if (!normalizedSource && (thread.canal ?? "").toLowerCase() === "whatsapp") {
       return true;

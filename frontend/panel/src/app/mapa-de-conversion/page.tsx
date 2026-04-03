@@ -352,6 +352,8 @@ export default async function Page({
       utmSource,
       utmMedium,
       utmCampaign,
+      campanaId,
+      campanaTipo,
       templateId,
       waCanalPublicitario,
       waCampanaPublicitaria,

@@ -110,6 +110,9 @@ function renderValue(value: unknown, type: FieldType) {
 
 const VISIT_FIELDS: VisitField[] = [
   { id: "registrado_en", key: "registrado_en", label: "Creado", type: "datetime", defaultVisible: true },
+  { id: "prospeccion_campana_nombre", key: "prospeccion_campana_nombre", label: "Campaña Prospección", type: "string", defaultVisible: true },
+  { id: "prospeccion_batch_label", key: "prospeccion_batch_label", label: "Lote Prospección", type: "string", defaultVisible: true },
+  { id: "prospeccion_campana_tipo", key: "prospeccion_campana_tipo", label: "Tipo Campaña", type: "string", defaultVisible: true },
   {
     id: "wa_canal_publicitario",
     key: "wa_canal_publicitario",
@@ -165,6 +168,8 @@ const VISIT_FIELDS: VisitField[] = [
   { id: "utm_medium", key: "utm_medium", label: "UTM Medium", type: "string", defaultVisible: true },
   { id: "utm_campaign", key: "utm_campaign", label: "UTM Campaign", type: "string", defaultVisible: true },
   { id: "template_nombre", key: "template_nombre", label: "Plantilla captada", type: "string", defaultVisible: true },
+  { id: "prospeccion_campana_id", key: "prospeccion_campana_id", label: "Campaña Prospección ID", type: "code" },
+  { id: "prospeccion_batch_id", key: "prospeccion_batch_id", label: "Lote Prospección ID", type: "code" },
   { id: "template_captada", key: "template_captada", label: "Tiene plantilla", type: "boolean", defaultVisible: true },
   { id: "template_id", key: "template_id", label: "Template ID", type: "code" },
   { id: "template_slug", key: "template_slug", label: "Template Slug", type: "string" },

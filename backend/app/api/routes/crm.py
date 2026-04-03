@@ -21940,6 +21940,9 @@ async def get_visits_whatsapp_conversations(
     wa_canal_publicitario: str | None = Query(default=None),
     wa_campana_publicitaria: str | None = Query(default=None),
     wa_regla_id: str | None = Query(default=None),
+    campana_id: str | None = Query(default=None),
+    campana_tipo: str | None = Query(default=None),
+    template_id: str | None = Query(default=None),
 ) -> list[dict[str, Any]]:
     effective_timezone, _timezone_source = await _resolve_effective_timezone_name(
         repo=repo,
@@ -21959,6 +21962,9 @@ async def get_visits_whatsapp_conversations(
     wa_canal_value = _normalize_match(wa_canal_publicitario)
     wa_campana_value = _normalize_match(wa_campana_publicitaria)
     wa_regla_id_value = (wa_regla_id or "").strip() or None
+    campana_id_value = (campana_id or "").strip() or None
+    campana_tipo_value = (campana_tipo or "").strip().lower() or None
+    template_id_value = (template_id or "").strip().lower() or None
     wa_regla_uuid: UUID | None = None
     if wa_regla_id_value:
         try:
@@ -22003,6 +22009,118 @@ async def get_visits_whatsapp_conversations(
             for rule_row in reglas_rows
             if isinstance(rule_row, dict) and str(rule_row.get("id") or "").strip()
         }
+        phone_candidates_map: dict[str, list[str]] = {}
+        all_lookup_candidates: set[str] = set()
+        for row in rows:
+            if not isinstance(row, dict):
+                continue
+            contacto = row.get("contacto") if isinstance(row.get("contacto"), dict) else {}
+            telefono = _clean_text(contacto.get("telefono_e164"))
+            if not telefono:
+                continue
+            candidates = _whatsapp_phone_lookup_candidates(telefono)
+            if not candidates:
+                continue
+            row_id = str(row.get("id") or "").strip()
+            if not row_id:
+                continue
+            phone_candidates_map[row_id] = candidates
+            all_lookup_candidates.update(candidates)
+
+        latest_envios_by_phone: dict[str, dict[str, Any]] = {}
+        if all_lookup_candidates:
+            latest_envios_by_phone = await repo.worker_get_latest_envios_by_phones(
+                phone_values=all_lookup_candidates,
+                canal="whatsapp",
+            )
+
+        hints_by_conversation: dict[str, tuple[str | None, str | None, str | None, str | None, str | None]] = {}
+        batch_ids: set[str] = set()
+        campana_ids: set[str] = set()
+        template_ids: set[str] = set()
+        template_slugs: set[str] = set()
+        for row in rows:
+            if not isinstance(row, dict):
+                continue
+            row_id = str(row.get("id") or "").strip()
+            if not row_id:
+                continue
+            hint: tuple[str | None, str | None, str | None, str | None, str | None] = (None, None, None, None, None)
+            for lookup_phone in phone_candidates_map.get(row_id, []):
+                envio_row = latest_envios_by_phone.get(lookup_phone)
+                candidate_hint = _extract_envio_prospeccion_hints(envio_row)
+                if any(candidate_hint[:4]) or candidate_hint[4]:
+                    hint = candidate_hint
+                    break
+            hints_by_conversation[row_id] = hint
+            if hint[0] and _safe_uuid(hint[0]):
+                batch_ids.add(hint[0])
+            if hint[1] and _safe_uuid(hint[1]):
+                campana_ids.add(hint[1])
+            if hint[2] and _safe_uuid(hint[2]):
+                template_ids.add(hint[2])
+            if hint[3]:
+                template_slugs.add(hint[3])
+
+        batch_label_map: dict[str, str] = {}
+        batch_template_hint_map: dict[str, tuple[str | None, str | None, str | None]] = {}
+        batch_campaign_map: dict[str, str | None] = {}
+        if batch_ids:
+            try:
+                batch_rows = await repo.list_contact_batches_by_ids(
+                    usuario_token=_normalize_reports_user_token(user_token),
+                    batch_ids=batch_ids,
+                )
+            except CRMRepositoryError:
+                batch_rows = []
+            for batch in batch_rows:
+                batch_id_row = _clean_text(batch.get("id"))
+                if not batch_id_row or batch_id_row not in batch_ids:
+                    continue
+                metadata = batch.get("metadata") if isinstance(batch.get("metadata"), dict) else {}
+                title = _clean_text(batch.get("titulo")) or _clean_text(metadata.get("campana_nombre")) or _clean_text(metadata.get("lista_nombre"))
+                if title:
+                    batch_label_map[batch_id_row] = title
+                batch_campaign_map[batch_id_row] = _clean_text(batch.get("campana_id"))
+                batch_template_id = _clean_text(metadata.get("template_id") or metadata.get("contact_template_id"))
+                batch_template_slug = _clean_text(metadata.get("template_slug") or metadata.get("kw"))
+                batch_template_name = _clean_text(metadata.get("template_nombre") or metadata.get("template_name"))
+                batch_template_hint_map[batch_id_row] = (
+                    batch_template_id,
+                    batch_template_slug.lower() if batch_template_slug else None,
+                    batch_template_name,
+                )
+                if batch_template_id and _safe_uuid(batch_template_id):
+                    template_ids.add(batch_template_id)
+                if batch_template_slug:
+                    template_slugs.add(batch_template_slug.lower())
+
+        campana_label_map: dict[str, str] = {}
+        campana_canal_map: dict[str, str | None] = {}
+        if campana_ids or campana_tipo_value:
+            campaign_rows = await repo.list_campaigns(organizacion_id=organizacion_id)
+            for campaign_row in campaign_rows:
+                campaign_id_row = _clean_text(campaign_row.get("id"))
+                if not campaign_id_row:
+                    continue
+                campana_canal_map[campaign_id_row] = _clean_text(campaign_row.get("canal"))
+                campaign_name = _clean_text(campaign_row.get("nombre"))
+                if campaign_name:
+                    campana_label_map[campaign_id_row] = campaign_name
+
+        template_label_by_id: dict[str, str] = {}
+        template_label_by_slug: dict[str, str] = {}
+        if template_ids or template_slugs:
+            templates = await repo.list_contact_templates(usuario_token=_normalize_reports_user_token(user_token))
+            for template_row in templates:
+                template_id_row = _clean_text(template_row.get("id"))
+                template_slug_row = _clean_text(template_row.get("slug"))
+                template_name = _clean_text(template_row.get("nombre"))
+                if template_id_row and template_name:
+                    template_label_by_id[template_id_row] = template_name
+                if template_slug_row and template_name:
+                    template_label_by_slug[template_slug_row.lower()] = template_name
+
         enriched_rows: list[dict[str, Any]] = []
         for row in rows:
             if not isinstance(row, dict):
@@ -22032,6 +22150,34 @@ async def get_visits_whatsapp_conversations(
                 "ok": location_ok,
             }
             event_row = wa_by_conversation.get(conv_id)
+            batch_hint, campana_hint, template_id_hint, template_slug_hint, template_label_hint = hints_by_conversation.get(
+                conv_id,
+                (None, None, None, None, None),
+            )
+            if batch_hint and not campana_hint:
+                campana_hint = batch_campaign_map.get(batch_hint)
+            batch_template_hint = batch_template_hint_map.get(batch_hint or "", (None, None, None))
+            resolved_template_id = template_id_hint or batch_template_hint[0]
+            resolved_template_slug = template_slug_hint or batch_template_hint[1]
+            resolved_template_label = (
+                template_label_by_id.get(resolved_template_id or "")
+                or template_label_by_slug.get((resolved_template_slug or "").lower())
+                or template_label_hint
+                or batch_template_hint[2]
+            )
+            resolved_campana_label = campana_label_map.get(campana_hint or "")
+            resolved_campana_canal = _clean_text(campana_canal_map.get(campana_hint or ""))
+            if batch_hint or campana_hint or resolved_template_id or resolved_template_slug or resolved_template_label:
+                row["whatsapp_prospeccion"] = {
+                    "batch_id": batch_hint,
+                    "batch_label": batch_label_map.get(batch_hint or ""),
+                    "campana_id": campana_hint,
+                    "campana_nombre": resolved_campana_label,
+                    "campana_tipo": resolved_campana_canal,
+                    "template_id": resolved_template_id,
+                    "template_slug": resolved_template_slug,
+                    "template_nombre": resolved_template_label,
+                }
             if event_row:
                 regla_id_value = str(event_row.get("regla_id") or "").strip()
                 regla_row = regla_by_id.get(regla_id_value, {})
@@ -22053,6 +22199,17 @@ async def get_visits_whatsapp_conversations(
                 if wa_campana_value and _normalize_match(event_row.get("campana_publicitaria")) != wa_campana_value:
                     continue
                 if wa_regla_uuid and str(event_row.get("regla_id") or "").strip() != str(wa_regla_uuid):
+                    continue
+            if campana_tipo_value:
+                if (resolved_campana_canal or "").strip().lower() != campana_tipo_value:
+                    continue
+            if campana_id_value:
+                if (campana_hint or "") != campana_id_value:
+                    continue
+            if template_id_value:
+                template_id_match = (resolved_template_id or "").strip().lower()
+                template_slug_match = (resolved_template_slug or "").strip().lower()
+                if template_id_match != template_id_value and template_slug_match != template_id_value:
                     continue
             enriched_rows.append(row)
         rows = enriched_rows

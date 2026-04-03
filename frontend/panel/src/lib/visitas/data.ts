@@ -35,9 +35,22 @@ type WhatsappConversationRow = {
     regla_id?: string | null;
     regla_nombre?: string | null;
     regla_frase?: string | null;
+    template_id?: string | null;
+    template_slug?: string | null;
+    template_nombre?: string | null;
     adset?: string | null;
     anuncio?: string | null;
     creado_en?: string | null;
+  } | null;
+  whatsapp_prospeccion?: {
+    batch_id?: string | null;
+    batch_label?: string | null;
+    campana_id?: string | null;
+    campana_nombre?: string | null;
+    campana_tipo?: string | null;
+    template_id?: string | null;
+    template_slug?: string | null;
+    template_nombre?: string | null;
   } | null;
   contacto: {
     nombre_completo?: string | null;
@@ -89,11 +102,18 @@ export type VisitDetailRaw = {
   eid?: string | null;
   oportunidad_id: string | null;
   canal?: string | null;
+  prospeccion_batch_id?: string | null;
+  prospeccion_batch_label?: string | null;
+  prospeccion_campana_id?: string | null;
+  prospeccion_campana_nombre?: string | null;
+  prospeccion_campana_tipo?: string | null;
   wa_canal_publicitario?: string | null;
   wa_campana_publicitaria?: string | null;
   wa_regla_id?: string | null;
   wa_regla_nombre?: string | null;
   wa_regla_frase?: string | null;
+  whatsapp_atribucion?: Record<string, unknown> | null;
+  whatsapp_prospeccion?: Record<string, unknown> | null;
   ip: string | null;
   registrado_en: string | null;
   primera_visita_en: string | null;
@@ -201,6 +221,8 @@ type VisitsFilters = {
   utmSource?: string | null;
   utmMedium?: string | null;
   utmCampaign?: string | null;
+  campanaId?: string | null;
+  campanaTipo?: string | null;
   templateId?: string | null;
   waCanalPublicitario?: string | null;
   waCampanaPublicitaria?: string | null;
@@ -232,6 +254,8 @@ function hasAttributionFilters(filters: VisitsFilters): boolean {
     (filters.utmSource || "").trim() ||
     (filters.utmMedium || "").trim() ||
     (filters.utmCampaign || "").trim() ||
+    (filters.campanaId || "").trim() ||
+    (filters.campanaTipo || "").trim() ||
     (filters.templateId || "").trim(),
   );
 }
@@ -488,6 +512,9 @@ export async function loadConversationsTableForConversionMap(
         wa_canal_publicitario: filters.waCanalPublicitario || undefined,
         wa_campana_publicitaria: filters.waCampanaPublicitaria || undefined,
         wa_regla_id: filters.waReglaId || undefined,
+        campana_id: filters.campanaId || undefined,
+        campana_tipo: filters.campanaTipo || undefined,
+        template_id: filters.templateId || undefined,
         limit: 500,
       },
     },
@@ -787,6 +814,8 @@ function matchesVisitsFilters(row: VisitDetailRaw, filters: VisitsFilters): bool
   const utmSourceFilter = (filters.utmSource || "").trim().toLowerCase();
   const utmMediumFilter = (filters.utmMedium || "").trim().toLowerCase();
   const utmCampaignFilter = (filters.utmCampaign || "").trim().toLowerCase();
+  const campanaIdFilter = (filters.campanaId || "").trim().toLowerCase();
+  const campanaTipoFilter = (filters.campanaTipo || "").trim().toLowerCase();
   const templateIdFilter = (filters.templateId || "").trim().toLowerCase();
   const waCanalFilter = (filters.waCanalPublicitario || "").trim().toLowerCase();
   const waCampanaFilter = (filters.waCampanaPublicitaria || "").trim().toLowerCase();
@@ -796,6 +825,14 @@ function matchesVisitsFilters(row: VisitDetailRaw, filters: VisitsFilters): bool
   if (utmSourceFilter && (normalizeTrackingValue(row.utm_source ?? null) || "") !== utmSourceFilter) return false;
   if (utmMediumFilter && (normalizeTrackingValue(row.utm_medium ?? null) || "") !== utmMediumFilter) return false;
   if (utmCampaignFilter && (normalizeTrackingValue(row.utm_campaign ?? null) || "") !== utmCampaignFilter) return false;
+  if (campanaTipoFilter) {
+    const value = (row.prospeccion_campana_tipo || row.canal || "").trim().toLowerCase();
+    if (value !== campanaTipoFilter) return false;
+  }
+  if (campanaIdFilter) {
+    const value = (row.prospeccion_campana_id || "").trim().toLowerCase();
+    if (value !== campanaIdFilter) return false;
+  }
   if (templateIdFilter) {
     const templateIdValue = normalizeTrackingValue(row.template_id ?? null) || "";
     const templateSlugValue = normalizeTrackingValue(row.template_slug ?? null) || "";
@@ -927,6 +964,7 @@ function mapWhatsappRows(rows?: WhatsappConversationRow[] | null): VisitDetailRa
   if (!rows || !rows.length) return [];
   return rows.map((row) => {
     const apiLocation = row.phone_location ?? null;
+    const prospeccion = row.whatsapp_prospeccion ?? {};
     const location = apiLocation
       ? {
           countryCode: apiLocation.country_code ?? null,
@@ -945,15 +983,40 @@ function mapWhatsappRows(rows?: WhatsappConversationRow[] | null): VisitDetailRa
           municipalityName: null,
         };
     const atribucion = row.whatsapp_atribucion ?? {};
+    const templateId =
+      atribucion.template_id ??
+      prospeccion.template_id ??
+      null;
+    const templateSlug =
+      atribucion.template_slug ??
+      prospeccion.template_slug ??
+      null;
+    const templateNombre =
+      atribucion.template_nombre ??
+      prospeccion.template_nombre ??
+      null;
+    const sourceClass =
+      atribucion.regla_id || atribucion.canal_publicitario || atribucion.campana_publicitaria
+        ? "publicidad_whatsapp"
+        : (prospeccion.campana_id || prospeccion.batch_id || prospeccion.template_id || prospeccion.template_slug)
+          ? "prospeccion_whatsapp"
+          : null;
     return {
       session_id: `whatsapp-${row.id}`,
       oportunidad_id: null,
       canal: "whatsapp",
+      prospeccion_batch_id: prospeccion.batch_id ?? null,
+      prospeccion_batch_label: prospeccion.batch_label ?? null,
+      prospeccion_campana_id: prospeccion.campana_id ?? null,
+      prospeccion_campana_nombre: prospeccion.campana_nombre ?? null,
+      prospeccion_campana_tipo: prospeccion.campana_tipo ?? null,
       wa_canal_publicitario: atribucion.canal_publicitario ?? null,
       wa_campana_publicitaria: atribucion.campana_publicitaria ?? null,
       wa_regla_id: atribucion.regla_id ?? null,
       wa_regla_nombre: atribucion.regla_nombre ?? null,
       wa_regla_frase: atribucion.regla_frase ?? null,
+      whatsapp_atribucion: row.whatsapp_atribucion ?? null,
+      whatsapp_prospeccion: row.whatsapp_prospeccion ?? null,
       ip: null,
       registrado_en: row.iniciada_en,
       primera_visita_en: row.iniciada_en,
@@ -997,6 +1060,16 @@ function mapWhatsappRows(rows?: WhatsappConversationRow[] | null): VisitDetailRa
       referrer: "WhatsApp",
       landing_url: null,
       trazabilidad_cache: null,
+      source_class: sourceClass,
+      utm_source: null,
+      utm_medium: null,
+      utm_campaign: null,
+      template_id: templateId,
+      template_slug: templateSlug,
+      template_nombre: templateNombre,
+      template_captada: Boolean(
+        templateId || templateSlug || templateNombre,
+      ),
       geo: null,
       total_rows: null,
       total_chat_rows: null,
