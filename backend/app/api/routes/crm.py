@@ -27593,15 +27593,17 @@ def _build_pipeline_cards(
 
     for row in rows:
         estado = (row.get("estado") or "").lower()
-        if estado == "ganada":
-            ganadas += 1
-        elif estado == "perdida":
-            perdidas += 1
-        else:
-            abiertas += 1
         monto = row.get("monto_estimado")
         etapa = row.get("etapa") or {}
         stage_category = (etapa.get("categoria") or row.get("estado") or "abierta").lower()
+        is_ganada = estado == "ganada" or stage_category == "ganada"
+        is_perdida = estado == "perdida" or stage_category == "perdida"
+        if is_ganada:
+            ganadas += 1
+        elif is_perdida:
+            perdidas += 1
+        else:
+            abiertas += 1
         if stage_category == "ganada" or estado == "ganada":
             closed_amount = _extract_contract_value_from_metadata(row) or (
                 float(monto) if isinstance(monto, (int, float)) else None

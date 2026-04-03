@@ -103,8 +103,11 @@ export function SectionCards({ data = DEFAULT_LEAD_CARDS }: SectionCardsProps) {
           <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl">
             {formatNumber(data.montoTotal)}
           </CardTitle>
-          <CardAction>
-            <Badge variant="outline">
+          <CardAction className="max-w-[140px]">
+            <Badge
+              variant="outline"
+              className="min-w-0 max-w-[140px] whitespace-normal text-xs leading-tight"
+            >
               <IconTrendingUp />
               Cotizaciones aceptadas
             </Badge>

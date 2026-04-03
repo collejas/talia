@@ -30,6 +30,16 @@ function isPromiseLike<T>(value: unknown): value is Promise<T> {
   return Boolean(value) && typeof value === "object" && typeof (value as Promise<T>).then === "function";
 }
 
+function SectionTitle({ label }: { label: string }) {
+  return (
+    <div className="px-4 lg:px-6">
+      <p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+        {label}
+      </p>
+    </div>
+  );
+}
+
 export default async function Page({ searchParams }: DashboardPageProps) {
   const resolvedParams = isPromiseLike<Record<string, string | string[] | undefined>>(searchParams)
     ? await searchParams
@@ -70,14 +80,21 @@ export default async function Page({ searchParams }: DashboardPageProps) {
           <div className="@container/main flex flex-1 flex-col gap-2">
             <div className="flex flex-col gap-4 py-4 md:gap-6 md:py-6">
               <DashboardRangeControls rango={range.rango} desde={range.desde} hasta={range.hasta} />
+              <SectionTitle label="Ventas · Leads" />
               <SectionCards data={leadsPayload.cards} />
+              <SectionTitle label="Atención · Conversaciones" />
               <AttentionCards data={dashboardKpis} />
+              <SectionTitle label="Oportunidades · Pipeline" />
               <OpportunityCards data={opportunityKpis} />
+              <SectionTitle label="Marketing · Prospección" />
               <MarketingCards data={prospeccionPayload?.summary ?? null} />
+              <SectionTitle label="Agenda · Citas" />
               <AgendaCards data={agendaPayload.metrics} />
+              <SectionTitle label="Evolución de Leads" />
               <div className="px-4 lg:px-6">
                 <ChartAreaInteractive data={leadsPayload.chart} />
               </div>
+              <SectionTitle label="Rendimiento de Campañas" />
               <div className="px-4 lg:px-6">
                 <MarketingTimeseries
                   data={prospeccionPayload?.timeseries ?? null}
