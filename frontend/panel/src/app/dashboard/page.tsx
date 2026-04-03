@@ -107,14 +107,14 @@ export default async function Page({ searchParams }: DashboardPageProps) {
               <SectionTitle label="Ventas · Leads" />
               <SectionCards data={leadsPayload.cards} />
               <SectionTitle label="Atención · Conversaciones" />
-              <AttentionCards data={dashboardKpis} />
-              <div className="px-4 lg:px-6">
+              <div className="grid gap-4 px-4 lg:px-6 xl:grid-cols-[minmax(0,1.15fr)_minmax(320px,0.85fr)] xl:items-stretch">
+                <AttentionCards data={dashboardKpis} />
                 <ConversationsChannelChart data={dashboardKpis} />
               </div>
               <SectionTitle label="Oportunidades · Pipeline" />
-              <OpportunityCards data={opportunityKpis} />
-              <div className="px-4 lg:px-6">
+              <div className="grid gap-4 px-4 lg:px-6 xl:grid-cols-[minmax(320px,0.85fr)_minmax(0,1.15fr)] xl:items-stretch">
                 <PipelineHealthChart data={opportunityKpis} />
+                <OpportunityCards data={opportunityKpis} />
               </div>
               <SectionTitle label="Marketing · Prospección" />
               <MarketingCards

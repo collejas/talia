@@ -36,15 +36,15 @@ export function ConversationsChannelChart({ data }: ConversationsChannelChartPro
   const rows = buildRows(data);
 
   return (
-    <Card className="@container/card">
+    <Card className="@container/card h-full">
       <CardHeader>
         <CardTitle>Conversaciones por canal</CardTitle>
         <CardDescription>
           Volumen y conversaciones pendientes de respuesta
         </CardDescription>
       </CardHeader>
-      <CardContent className="px-2 pb-2 sm:px-6">
-        <ChartContainer config={chartConfig} className="!h-[280px]">
+      <CardContent className="flex-1 min-h-0 px-2 pb-2 sm:px-6">
+        <ChartContainer config={chartConfig} className="!aspect-auto !h-full w-full">
           <BarChart data={rows} margin={{ left: 8, right: 16, top: 8 }}>
             <CartesianGrid vertical={false} />
             <XAxis

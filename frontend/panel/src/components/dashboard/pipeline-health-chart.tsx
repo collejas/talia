@@ -31,15 +31,15 @@ export function PipelineHealthChart({ data }: PipelineHealthChartProps) {
   const rows = buildRows(data);
 
   return (
-    <Card className="@container/card">
+    <Card className="@container/card h-full">
       <CardHeader>
         <CardTitle>Pipeline por salud</CardTitle>
         <CardDescription>
           Activas, sin asignar, estancadas y cierres probables
         </CardDescription>
       </CardHeader>
-      <CardContent className="px-2 pb-2 sm:px-6">
-        <ChartContainer config={chartConfig} className="!h-[280px]">
+      <CardContent className="flex-1 min-h-0 px-2 pb-2 sm:px-6">
+        <ChartContainer config={chartConfig} className="!aspect-auto !h-full w-full">
           <BarChart data={rows} margin={{ left: 8, right: 16, top: 8 }}>
             <CartesianGrid vertical={false} />
             <XAxis
