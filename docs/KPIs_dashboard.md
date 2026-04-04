@@ -1,7 +1,7 @@
 # KPIs Dashboard
 
 Fecha: 2026-04-03  
-Última actualización: 2026-04-03
+Última actualización: 2026-04-04
 
 ## Objetivo
 Documentar el estado real del dashboard KPI, las decisiones tomadas, los bloques implementados, las fuentes de datos usadas y los pendientes que siguen abiertos.
@@ -16,6 +16,9 @@ El criterio usado durante toda la iteración fue:
 ### Implementado
 - Dashboard conectado a datos reales.
 - Filtros globales por rango y fechas manuales.
+- Endpoint unificado `GET /crm/dashboard/overview` para el camino crítico principal.
+- Carga diferida de `Marketing · Prospección`, `Rendimiento de Campañas` y `Catalog`.
+- `Suspense` y skeletons por sección para mejorar la latencia percibida.
 - Rangos soportados:
   - `Hoy`
   - `Ayer`
@@ -42,11 +45,47 @@ El criterio usado durante toda la iteración fue:
 
 ### Gráficas implementadas
 - `Evolución de Leads`
+- `Ventas ganadas por periodo`
+- `Ventas por vendedor`
+- `Conversión comercial`
 - `Rendimiento de Campañas`
 - `Conversaciones por canal`
 - `Pipeline por salud`
 - `CatalogSalesCard`
 - `CatalogPipelineCard`
+
+## Arquitectura de carga y performance
+
+### Decisión actual
+El dashboard ya no carga toda la analítica en el primer render.
+
+Camino crítico inicial:
+- `Ventas · Leads`
+- `Atención · Conversaciones`
+- `Oportunidades · Pipeline`
+- `Agenda · Citas`
+- `Evolución de Leads`
+
+Carga diferida:
+- `Marketing · Prospección`
+- `Rendimiento de Campañas`
+- `Catalog`
+- tabla detallada de leads
+
+### Motivo
+La instrumentación del backend mostró:
+- `crm.dashboard.overview_timing.total`: ~`514 ms`
+- request `/api/crm/dashboard/overview`: ~`1.1 s`
+- `/api/crm/prospeccion/metricas`: ~`7.6 s` y en algunos intentos > `12 s`
+
+Conclusión:
+- el overview principal no era el cuello,
+- `Marketing · Prospección` sí lo era,
+- por eso marketing y catálogo se sacaron del camino crítico.
+
+### Resultado observado
+- entrada `login -> dashboard`: ~`3 s`
+- marketing sigue cargando después, pero ya no bloquea la primera vista útil
 
 ## Hallazgos importantes confirmados
 - En `conversaciones`, el canal `manual` corresponde en la práctica a correo y se normalizó como `email`.
@@ -55,6 +94,8 @@ El criterio usado durante toda la iteración fue:
 - El KPI de `Leads ganados` requería considerar `etapa.categoria = ganada`, no solo `estado = ganada`.
 - `Rendimiento de campañas` tuvo que rellenar días vacíos con `0` para no recortar visualmente el periodo.
 - En agenda, el dato real actual está mucho más orientado a bookings ligados a conversación/contacto que a una operación madura de citas por estado.
+- El cuello principal de latencia del dashboard era `Marketing · Prospección`, no el overview general.
+- Parte del ruido de requests `401` venía del sidebar al pedir datos antes de que la sesión del usuario quedara resuelta; esto se redujo retrasando esos fetches.
 
 ## Fuentes de datos usadas
 
@@ -112,6 +153,18 @@ Objetivo del bloque:
 2. `Leads ganados`
 3. `Valor ganado`
 4. `Top vendedor`
+
+#### Gráficas complementarias
+- `Ventas ganadas por periodo`
+  - barras: valor ganado
+  - línea: leads ganados
+- `Ventas por vendedor`
+  - ranking por monto
+  - contexto de cierres
+- `Conversión comercial`
+  - nuevos
+  - ganados
+  - perdidos
 
 #### Contexto mostrado en footers / badges
 - `% de nuevos sobre total`
@@ -259,6 +312,10 @@ El flujo real de prospección es:
 - ya permite identificar mejor plantilla o enlace,
 - ya traduce la data de prospección a comportamiento útil.
 
+#### Consideración de performance
+- este bloque ya no forma parte del render crítico inicial,
+- hoy carga de forma diferida porque `/crm/prospeccion/metricas` sigue siendo costoso.
+
 #### Pendientes potenciales
 - separar por canal con tabs o filtros,
 - ranking `Top 5` visible por plantilla/campaña,
@@ -307,6 +364,20 @@ Objetivo del bloque:
 - muestra días vacíos,
 - sirve para lectura temporal de entrada/cierre.
 
+### Ventas ganadas por periodo
+- conecta cierres con dinero,
+- deja ver si hubo actividad comercial real dentro del periodo.
+
+### Ventas por vendedor
+- hace visible quién está cerrando y con qué monto,
+- complementa el KPI de `Top vendedor`.
+
+### Conversión comercial
+- resume eficiencia del periodo:
+  - nuevos
+  - ganados
+  - perdidos
+
 ### Rendimiento de Campañas
 - respeta el rango global,
 - muestra días vacíos,
@@ -330,6 +401,9 @@ Objetivo del bloque:
 - `manual/correo/email` se normalizó como `email`.
 - `voz/voice/llamada/call` se normalizó como `voz`.
 - `Ventas · Leads` se reconstruyó desde `/crm/oportunidades` para evitar inconsistencias con ventanas amplias.
+- se creó `GET /crm/dashboard/overview` para concentrar la carga principal del dashboard.
+- `Marketing` y `Catalog` fueron movidos a carga diferida para no bloquear la entrada.
+- hooks del sidebar se retrasaron hasta tener la sesión del usuario, para reducir `401` tempranos.
 - se corrigieron overflows visuales de badges en tarjetas.
 - se alineó el comportamiento del gráfico de campañas al de leads para mostrar días sin datos.
 - se reordenaron secciones con layout combinado tarjetas + gráfica.
@@ -343,11 +417,19 @@ Objetivo del bloque:
 4. `Aging por etapa` más detallado.
 5. `Tasa de confirmación` y `tiempo lead → cita` en agenda.
 6. Mejor soporte de voz en marketing.
+7. `marketing-lite` para dashboard si se quiere bajar más la carga diferida.
 
 ### UX / visual
 1. Revisar en pantalla final el orden exacto de bloques si cambia prioridad operativa.
 2. Evaluar si `Agenda · Citas` merece mantener 4 tarjetas o reducirse mientras el dato madura.
 3. Considerar una tabla o ranking visible debajo de `Marketing · Prospección`.
+
+### Shell / auth
+1. Revisar si queda algún `401` temprano residual fuera del sidebar.
+2. Evaluar caché o carga más tardía para:
+   - `tenant/me/settings`
+   - `platform-admin/status`
+   - `pipeline/scoring/feature-status`
 
 ## Resultado actual
 El dashboard ya dejó de ser un resumen superficial. Hoy cada bloque principal responde mejor a una pregunta operativa concreta:

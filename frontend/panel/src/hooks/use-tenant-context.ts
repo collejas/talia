@@ -8,14 +8,20 @@ type TenantContextState = {
   loading: boolean
 }
 
-export function useTenantContext() {
+export function useTenantContext(options: { enabled?: boolean } = {}) {
+  const enabled = options.enabled ?? true
   const [state, setState] = useState<TenantContextState>({
     tenantId: null,
     tenantName: null,
-    loading: true,
+    loading: enabled,
   })
 
   const refresh = useCallback(async () => {
+    if (!enabled) {
+      setState({ tenantId: null, tenantName: null, loading: false })
+      return
+    }
+
     try {
       const response = await fetch("/api/platform-admin/tenant-context", { cache: "no-store" })
       if (!response.ok) {
@@ -34,12 +40,50 @@ export function useTenantContext() {
     } catch {
       setState({ tenantId: null, tenantName: null, loading: false })
     }
-  }, [])
+  }, [enabled])
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    void refresh()
-  }, [refresh])
+    if (!enabled) {
+      return
+    }
+
+    let mounted = true
+    void fetch("/api/platform-admin/tenant-context", { cache: "no-store" })
+      .then(async (response) => {
+        if (!response.ok) {
+          if (!mounted) return
+          setState({ tenantId: null, tenantName: null, loading: false })
+          return
+        }
+        const data = (await response.json()) as {
+          tenant_id?: string | null
+          tenant_name?: string | null
+        }
+        if (!mounted) return
+        setState({
+          tenantId: typeof data.tenant_id === "string" ? data.tenant_id : null,
+          tenantName: typeof data.tenant_name === "string" ? data.tenant_name : null,
+          loading: false,
+        })
+      })
+      .catch(() => {
+        if (!mounted) return
+        setState({ tenantId: null, tenantName: null, loading: false })
+      })
+
+    return () => {
+      mounted = false
+    }
+  }, [enabled])
+
+  if (!enabled) {
+    return {
+      tenantId: null,
+      tenantName: null,
+      loading: false,
+      refresh,
+    }
+  }
 
   return { ...state, refresh }
 }

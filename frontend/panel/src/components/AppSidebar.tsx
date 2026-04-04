@@ -212,10 +212,15 @@ export function AppSidebar({
   const { user, loading } = useCurrentUser()
   const { context: permissionContext, loading: permissionsLoading } = usePermissions()
   const [hydrated, setHydrated] = useState(false)
+  const sidebarApiEnabled = !loading && Boolean(user)
 
-  const { isPlatformAdmin } = usePlatformAdminStatus()
-  const { tenantId: activeTenantId, tenantName: activeTenantName, refresh: refreshTenantContext } = useTenantContext()
-  const { profilingEnabled } = useScoringFeatureStatus()
+  const { isPlatformAdmin } = usePlatformAdminStatus({ enabled: sidebarApiEnabled })
+  const {
+    tenantId: activeTenantId,
+    tenantName: activeTenantName,
+    refresh: refreshTenantContext,
+  } = useTenantContext({ enabled: sidebarApiEnabled })
+  const { profilingEnabled } = useScoringFeatureStatus({ enabled: sidebarApiEnabled })
   const settingsChildren = useMemo(() => {
     const base = SETTINGS_CHILDREN_TEMPLATE.map((child) => ({ ...child })).filter((child) =>
       child.url === "/settings/scoring" ? profilingEnabled : true,

@@ -7,13 +7,24 @@ type PlatformAdminStatus = {
   loading: boolean
 }
 
-export function usePlatformAdminStatus(): PlatformAdminStatus {
+type UsePlatformAdminStatusOptions = {
+  enabled?: boolean
+}
+
+export function usePlatformAdminStatus(
+  options: UsePlatformAdminStatusOptions = {},
+): PlatformAdminStatus {
+  const enabled = options.enabled ?? true
   const [status, setStatus] = useState<PlatformAdminStatus>({
     isPlatformAdmin: null,
-    loading: true,
+    loading: enabled,
   })
 
   useEffect(() => {
+    if (!enabled) {
+      return
+    }
+
     let mounted = true
     void fetch("/api/platform-admin/status", { cache: "no-store" })
       .then(async (response) => {
@@ -36,7 +47,11 @@ export function usePlatformAdminStatus(): PlatformAdminStatus {
     return () => {
       mounted = false
     }
-  }, [])
+  }, [enabled])
+
+  if (!enabled) {
+    return { isPlatformAdmin: null, loading: false }
+  }
 
   return status
 }

@@ -55,6 +55,8 @@ NPM_CACHE_DIR="${NPM_CACHE_DIR:-/var/www/talia/.npm-cache}"
 RUN_AS_USER="${RUN_AS_USER:-jorge}"
 PANEL_LOG_FILE="${PANEL_LOG_FILE:-/var/www/talia/logs/panel.log}"
 PANEL_ERROR_LOG_FILE="${PANEL_ERROR_LOG_FILE:-/var/www/talia/logs/panel-error.log}"
+API_HEALTH_URL="${API_HEALTH_URL:-http://127.0.0.1:8004/api/health}"
+API_HEALTH_TIMEOUT_SECONDS="${API_HEALTH_TIMEOUT_SECONDS:-45}"
 
 NOW_UTC="$(date -u +%Y%m%d_%H%M%S)"
 NEW_RELEASE="${PANEL_RELEASES_DIR}/${NOW_UTC}"
@@ -162,6 +164,20 @@ preflight_restart_permissions() {
   fi
 }
 
+wait_for_api_health() {
+  local deadline=$((SECONDS + API_HEALTH_TIMEOUT_SECONDS))
+  echo "[deploy] Esperando salud de API en ${API_HEALTH_URL} (timeout=${API_HEALTH_TIMEOUT_SECONDS}s)"
+  while (( SECONDS < deadline )); do
+    if curl -fsS --max-time 2 "${API_HEALTH_URL}" >/dev/null 2>&1; then
+      echo "[deploy] API saludable"
+      return 0
+    fi
+    sleep 1
+  done
+  echo "[deploy] ERROR API no reporto salud a tiempo: ${API_HEALTH_URL}"
+  return 1
+}
+
 echo "[deploy] Source:  ${PANEL_SOURCE_DIR}"
 echo "[deploy] Release: ${NEW_RELEASE}"
 echo "[deploy] Current: ${PANEL_CURRENT_LINK}"
@@ -235,6 +251,7 @@ else
     echo "[deploy] Reiniciando API + Panel"
     sudo systemctl restart "${API_SERVICE}"
     sudo systemctl is-active --quiet "${API_SERVICE}"
+    wait_for_api_health
   else
     echo "[deploy] Reiniciando solo Panel (API sin cambios)"
   fi

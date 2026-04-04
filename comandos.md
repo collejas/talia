@@ -92,7 +92,14 @@ sudo systemctl restart talia-panel.service
 # Permisos Git
 sudo chown -R jorge:jorge /var/www/talia/.git
 
-bash scripts/deploy_panel_atomic.sh
+# Reinicios: 
+  - Solo cambios de panel:
+
+  bash scripts/deploy_panel_atomic.sh
+
+  - Cambios de panel + backend:
+
+  RESTART_API=1 bash scripts/deploy_panel_atomic.sh
 
 qOmfDOWUq7L9l5Nlsgdgd#$VD^^#&*XFHh_g
 
