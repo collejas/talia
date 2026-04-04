@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useRef, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
 
 import { SessionPayload, SupabaseUser, TenantInfo } from "@/lib/auth/session"
@@ -9,8 +9,41 @@ type UseCurrentUserState = {
   user: SupabaseUser | null
   tenant: TenantInfo | null
   employeePosition: string | null
+  isPlatformAdmin: boolean
+  profilingEnabled: boolean
   loading: boolean
   error: string | null
+}
+
+let sessionCache: SessionPayload | null = null
+let sessionRequest: Promise<SessionPayload> | null = null
+
+async function fetchSessionPayload(): Promise<SessionPayload> {
+  if (sessionCache) {
+    return sessionCache
+  }
+  if (sessionRequest) {
+    return sessionRequest
+  }
+
+  sessionRequest = fetch("/api/session", {
+    method: "GET",
+    headers: { "Content-Type": "application/json" },
+  }).then(async (response) => {
+    if (response.status === 401) {
+      throw new Error("auth_required")
+    }
+    if (!response.ok) {
+      throw new Error(`auth_error_${response.status}`)
+    }
+    const data = (await response.json()) as SessionPayload
+    sessionCache = data
+    return data
+  }).finally(() => {
+    sessionRequest = null
+  })
+
+  return sessionRequest
 }
 
 export function useCurrentUser() {
@@ -19,21 +52,16 @@ export function useCurrentUser() {
     user: null,
     tenant: null,
     employeePosition: null,
+    isPlatformAdmin: false,
+    profilingEnabled: true,
     loading: true,
     error: null,
   })
   const redirectedRef = useRef(false)
 
-  async function fetchSession(signal?: AbortSignal) {
-    setState((prev) => ({ ...prev, loading: true }))
-    try {
-      const response = await fetch("/api/session", {
-        method: "GET",
-        headers: { "Content-Type": "application/json" },
-        signal,
-      })
-
-      if (response.status === 401) {
+  const resolveAuthErrorState = useCallback(
+    (error: unknown): Omit<UseCurrentUserState, "loading"> => {
+      if ((error as Error).message === "auth_required") {
         if (!redirectedRef.current) {
           redirectedRef.current = true
           if (typeof window !== "undefined") {
@@ -44,41 +72,90 @@ export function useCurrentUser() {
             router.replace("/auth/login")
           }
         }
-        setState({ user: null, tenant: null, employeePosition: null, loading: false, error: "auth_required" })
-        return
+        return {
+          user: null,
+          tenant: null,
+          employeePosition: null,
+          isPlatformAdmin: false,
+          profilingEnabled: true,
+          error: "auth_required",
+        }
       }
-
-      if (!response.ok) {
-        const message = `auth_error_${response.status}`
-        setState({ user: null, tenant: null, employeePosition: null, loading: false, error: message })
-        return
+      if ((error as Error).message.startsWith("auth_error_")) {
+        return {
+          user: null,
+          tenant: null,
+          employeePosition: null,
+          isPlatformAdmin: false,
+          profilingEnabled: true,
+          error: (error as Error).message,
+        }
       }
+      console.error("[auth] error fetching current user", error)
+      return {
+        user: null,
+        tenant: null,
+        employeePosition: null,
+        isPlatformAdmin: false,
+        profilingEnabled: true,
+        error: "auth_network_error",
+      }
+    },
+    [router],
+  )
 
-      const data = (await response.json()) as SessionPayload
+  const fetchSession = useCallback(async () => {
+    setState((prev) => ({ ...prev, loading: true }))
+    try {
+      const data = await fetchSessionPayload()
       setState({
         user: data.user ?? null,
         tenant: data.tenant ?? null,
         employeePosition: data.employeePosition ?? null,
+        isPlatformAdmin: Boolean(data.isPlatformAdmin),
+        profilingEnabled: data.profilingEnabled ?? true,
         loading: false,
         error: data.user ? null : "auth_invalid_payload",
       })
     } catch (error) {
-      if ((error as Error).name === "AbortError") return
-      console.error("[auth] error fetching current user", error)
-      setState({ user: null, tenant: null, employeePosition: null, loading: false, error: "auth_network_error" })
+      setState({
+        ...resolveAuthErrorState(error),
+        loading: false,
+      })
     }
-  }
+  }, [resolveAuthErrorState])
 
   useEffect(() => {
-    const controller = new AbortController()
-    fetchSession(controller.signal)
+    let mounted = true
+    void fetchSessionPayload()
+      .then((data) => {
+        if (!mounted) return
+        setState({
+          user: data.user ?? null,
+          tenant: data.tenant ?? null,
+          employeePosition: data.employeePosition ?? null,
+          isPlatformAdmin: Boolean(data.isPlatformAdmin),
+          profilingEnabled: data.profilingEnabled ?? true,
+          loading: false,
+          error: data.user ? null : "auth_invalid_payload",
+        })
+      })
+      .catch((error) => {
+        if (!mounted) return
+        setState({
+          ...resolveAuthErrorState(error),
+          loading: false,
+        })
+      })
+
     return () => {
-      controller.abort()
+      mounted = false
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [resolveAuthErrorState])
 
   const refresh = async () => {
+    sessionCache = null
+    sessionRequest = null
     await fetchSession()
   }
 

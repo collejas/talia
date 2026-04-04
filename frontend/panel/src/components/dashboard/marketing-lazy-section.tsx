@@ -19,9 +19,12 @@ type MarketingLazySectionProps = {
 
 type Payload = {
   summary: ProspeccionMetricasSummary;
-  timeseries: ProspeccionTimeseries;
   items: ProspeccionCampanaItem[];
   byRule: ProspeccionFraseByRule[];
+};
+
+type TimeseriesPayload = {
+  timeseries: ProspeccionTimeseries;
 };
 
 function SectionTitle({ label }: { label: string }) {
@@ -49,6 +52,76 @@ function MarketingFallback() {
   );
 }
 
+function MarketingChartFallback() {
+  return (
+    <>
+      <SectionTitle label="Rendimiento de Campañas" />
+      <Skeleton className="mx-4 h-[280px] rounded-xl lg:mx-6" />
+    </>
+  );
+}
+
+function MarketingTimeseriesLazy({
+  dateFrom,
+  dateTo,
+}: MarketingLazySectionProps) {
+  const [payload, setPayload] = React.useState<TimeseriesPayload | null>(null);
+
+  React.useEffect(() => {
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => {
+      const params = new URLSearchParams();
+      if (dateFrom) params.set("date_from", dateFrom);
+      if (dateTo) params.set("date_to", dateTo);
+      params.set("include_whatsapp_channels", "false");
+      const suffix = params.toString() ? `?${params.toString()}` : "";
+
+      fetch(`/api/prospeccion/metricas${suffix}`, {
+        method: "GET",
+        cache: "no-store",
+        signal: controller.signal,
+      })
+        .then(async (response) => {
+          if (!response.ok) throw new Error(`marketing_timeseries_${response.status}`);
+          return response.json();
+        })
+        .then((json) =>
+          setPayload({
+            timeseries: {
+              campanas: Array.isArray(json?.campanas?.timeseries) ? json.campanas.timeseries : [],
+              frases_whatsapp: Array.isArray(json?.frases_whatsapp?.timeseries) ? json.frases_whatsapp.timeseries : [],
+            },
+          }),
+        )
+        .catch(() => {
+          setPayload({ timeseries: { campanas: [], frases_whatsapp: [] } });
+        });
+    }, 1200);
+
+    return () => {
+      window.clearTimeout(timer);
+      controller.abort();
+    };
+  }, [dateFrom, dateTo]);
+
+  if (!payload) {
+    return <MarketingChartFallback />;
+  }
+
+  return (
+    <>
+      <SectionTitle label="Rendimiento de Campañas" />
+      <div className="px-4 lg:px-6">
+        <MarketingTimeseries
+          data={payload.timeseries}
+          dateFrom={dateFrom}
+          dateTo={dateTo}
+        />
+      </div>
+    </>
+  );
+}
+
 export function MarketingLazySection({ dateFrom, dateTo }: MarketingLazySectionProps) {
   const [payload, setPayload] = React.useState<Payload | null>(null);
 
@@ -58,6 +131,9 @@ export function MarketingLazySection({ dateFrom, dateTo }: MarketingLazySectionP
       const params = new URLSearchParams();
       if (dateFrom) params.set("date_from", dateFrom);
       if (dateTo) params.set("date_to", dateTo);
+      params.set("include_campaign_timeseries", "false");
+      params.set("include_whatsapp_timeseries", "false");
+      params.set("include_whatsapp_channels", "false");
       const suffix = params.toString() ? `?${params.toString()}` : "";
 
       fetch(`/api/prospeccion/metricas${suffix}`, {
@@ -93,10 +169,6 @@ export function MarketingLazySection({ dateFrom, dateTo }: MarketingLazySectionP
                 monto_estimado_total: 0,
               },
             },
-            timeseries: {
-              campanas: Array.isArray(json?.campanas?.timeseries) ? json.campanas.timeseries : [],
-              frases_whatsapp: Array.isArray(json?.frases_whatsapp?.timeseries) ? json.frases_whatsapp.timeseries : [],
-            },
             items: Array.isArray(json?.campanas?.items) ? json.campanas.items : [],
             byRule: Array.isArray(json?.frases_whatsapp?.by_rule) ? json.frases_whatsapp.by_rule : [],
           }),
@@ -123,7 +195,6 @@ export function MarketingLazySection({ dateFrom, dateTo }: MarketingLazySectionP
                 monto_estimado_total: 0,
               },
             },
-            timeseries: { campanas: [], frases_whatsapp: [] },
             items: [],
             byRule: [],
           });
@@ -148,14 +219,7 @@ export function MarketingLazySection({ dateFrom, dateTo }: MarketingLazySectionP
         items={payload.items}
         byRule={payload.byRule}
       />
-      <SectionTitle label="Rendimiento de Campañas" />
-      <div className="px-4 lg:px-6">
-        <MarketingTimeseries
-          data={payload.timeseries}
-          dateFrom={dateFrom}
-          dateTo={dateTo}
-        />
-      </div>
+      <MarketingTimeseriesLazy dateFrom={dateFrom} dateTo={dateTo} />
     </>
   );
 }

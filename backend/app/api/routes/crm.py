@@ -2411,6 +2411,9 @@ class ProspeccionMetricasQuery(BaseModel):
     campana_publicitaria: str | None = Field(default=None, max_length=200)
     regla_id: UUID | None = Field(default=None)
     limit: int = Field(default=500, ge=1, le=5000)
+    include_campaign_timeseries: bool = Field(default=True)
+    include_whatsapp_timeseries: bool = Field(default=True)
+    include_whatsapp_channels: bool = Field(default=True)
 
 
 class ProspeccionCampanaUpdatePayload(BaseModel):
@@ -19032,116 +19035,115 @@ async def prospeccion_metricas_dashboard(
         else 0.0,
         2,
     )
-    campaign_timeseries_raw: dict[str, dict[str, int]] = defaultdict(
-        lambda: {
-            "envios_totales": 0,
-            "envios_enviados": 0,
-            "envios_entregados": 0,
-            "envios_respondidos": 0,
-        }
-    )
-    batches_rows: list[dict[str, Any]] = []
-    try:
-        batch_page_size = 500
-        batch_offset = 0
-        while True:
-            batch_page, batch_total = await repo.list_contact_batches(
-                usuario_token=user_token,
-                limit=batch_page_size,
-                offset=batch_offset,
-                campana_id=params.campana_id,
-                order="creado_en.asc",
-            )
-            if not batch_page:
-                break
-            batches_rows.extend(batch_page)
-            batch_offset += len(batch_page)
-            if len(batch_page) < batch_page_size or batch_offset >= batch_total:
-                break
-    except CRMRepositoryError as exc:
-        logger.warning("prospeccion.metricas.batches_fetch_failed", extra={"error": str(exc)})
-        batches_rows = []
-    batch_ids_for_series: list[UUID] = []
-    for row in batches_rows:
-        raw_batch_id = row.get("id")
-        if not raw_batch_id:
-            continue
+    campaign_timeseries: list[dict[str, Any]] = []
+    if params.include_campaign_timeseries:
+        campaign_timeseries_raw: dict[str, dict[str, int]] = defaultdict(
+            lambda: {
+                "envios_totales": 0,
+                "envios_enviados": 0,
+                "envios_entregados": 0,
+                "envios_respondidos": 0,
+            }
+        )
+        batches_rows: list[dict[str, Any]] = []
         try:
-            batch_ids_for_series.append(UUID(str(raw_batch_id)))
-        except (TypeError, ValueError):
-            continue
-    if batch_ids_for_series:
-        envios_rows: list[dict[str, Any]] = []
-        try:
-            batch_chunk_size = 200
-            # PostgREST suele limitar páginas efectivas a ~1000 filas por request.
-            # Usar un page size mayor provoca cortes silenciosos al evaluar "len < page_size".
-            envios_page_size = 1000
-            for idx in range(0, len(batch_ids_for_series), batch_chunk_size):
-                batch_chunk = batch_ids_for_series[idx : idx + batch_chunk_size]
-                page_offset = 0
-                while True:
-                    chunk_rows = await repo.list_contact_envios_for_batches(
-                        usuario_token=user_token,
-                        batch_ids=batch_chunk,
-                        canal=None if params.canal == "todos" else params.canal,
-                        limit=envios_page_size,
-                        offset=page_offset,
-                    )
-                    if not chunk_rows:
-                        break
-                    envios_rows.extend(chunk_rows)
-                    if len(chunk_rows) < envios_page_size:
-                        break
-                    page_offset += len(chunk_rows)
-                if page_offset > 0:
-                    logger.info(
-                        "prospeccion.metricas.envios_series_chunk_paginated",
-                        extra={
-                            "chunk_index": int(idx / batch_chunk_size),
-                            "chunk_batch_count": len(batch_chunk),
-                            "pages_fetched": int(page_offset / envios_page_size) + 1,
-                        },
-                    )
+            batch_page_size = 500
+            batch_offset = 0
+            while True:
+                batch_page, batch_total = await repo.list_contact_batches(
+                    usuario_token=user_token,
+                    limit=batch_page_size,
+                    offset=batch_offset,
+                    campana_id=params.campana_id,
+                    order="creado_en.asc",
+                )
+                if not batch_page:
+                    break
+                batches_rows.extend(batch_page)
+                batch_offset += len(batch_page)
+                if len(batch_page) < batch_page_size or batch_offset >= batch_total:
+                    break
         except CRMRepositoryError as exc:
-            logger.warning("prospeccion.metricas.envios_series_fetch_failed", extra={"error": str(exc)})
-            envios_rows = []
-        # Deduplicación defensiva por id en caso de solapes inesperados.
-        unique_envios: dict[str, dict[str, Any]] = {}
-        for row in envios_rows:
-            envio_id_raw = row.get("id")
-            if envio_id_raw is None:
+            logger.warning("prospeccion.metricas.batches_fetch_failed", extra={"error": str(exc)})
+            batches_rows = []
+        batch_ids_for_series: list[UUID] = []
+        for row in batches_rows:
+            raw_batch_id = row.get("id")
+            if not raw_batch_id:
                 continue
-            unique_envios[str(envio_id_raw)] = row
-        envios_rows = list(unique_envios.values())
-        sent_states = {"enviado", "entregado", "leido", "completado", "respondido"}
-        delivered_states = {"entregado", "leido", "completado", "respondido"}
-        for envio in envios_rows:
-            event_ts = (
-                _parse_datetime(envio.get("procesado_en"))
-                or _parse_datetime(envio.get("creado_en"))
-                or _parse_datetime(envio.get("programado_en"))
-            )
-            if event_ts is None:
+            try:
+                batch_ids_for_series.append(UUID(str(raw_batch_id)))
+            except (TypeError, ValueError):
                 continue
-            if date_from_dt and event_ts < date_from_dt:
-                continue
-            if date_to_dt and event_ts > date_to_dt:
-                continue
-            day_key = event_ts.astimezone(report_zone).date().isoformat()
-            bucket = campaign_timeseries_raw[day_key]
-            bucket["envios_totales"] += 1
-            estado = (_clean_text(envio.get("estado")) or "").lower()
-            if estado in sent_states:
-                bucket["envios_enviados"] += 1
-            if estado in delivered_states:
-                bucket["envios_entregados"] += 1
-            if estado == "respondido":
-                bucket["envios_respondidos"] += 1
-    campaign_timeseries = [
-        {"fecha": day, **metrics}
-        for day, metrics in sorted(campaign_timeseries_raw.items(), key=lambda item: item[0])
-    ]
+        if batch_ids_for_series:
+            envios_rows: list[dict[str, Any]] = []
+            try:
+                batch_chunk_size = 200
+                envios_page_size = 1000
+                for idx in range(0, len(batch_ids_for_series), batch_chunk_size):
+                    batch_chunk = batch_ids_for_series[idx : idx + batch_chunk_size]
+                    page_offset = 0
+                    while True:
+                        chunk_rows = await repo.list_contact_envios_for_batches(
+                            usuario_token=user_token,
+                            batch_ids=batch_chunk,
+                            canal=None if params.canal == "todos" else params.canal,
+                            limit=envios_page_size,
+                            offset=page_offset,
+                        )
+                        if not chunk_rows:
+                            break
+                        envios_rows.extend(chunk_rows)
+                        if len(chunk_rows) < envios_page_size:
+                            break
+                        page_offset += len(chunk_rows)
+                    if page_offset > 0:
+                        logger.info(
+                            "prospeccion.metricas.envios_series_chunk_paginated",
+                            extra={
+                                "chunk_index": int(idx / batch_chunk_size),
+                                "chunk_batch_count": len(batch_chunk),
+                                "pages_fetched": int(page_offset / envios_page_size) + 1,
+                            },
+                        )
+            except CRMRepositoryError as exc:
+                logger.warning("prospeccion.metricas.envios_series_fetch_failed", extra={"error": str(exc)})
+                envios_rows = []
+            unique_envios: dict[str, dict[str, Any]] = {}
+            for row in envios_rows:
+                envio_id_raw = row.get("id")
+                if envio_id_raw is None:
+                    continue
+                unique_envios[str(envio_id_raw)] = row
+            envios_rows = list(unique_envios.values())
+            sent_states = {"enviado", "entregado", "leido", "completado", "respondido"}
+            delivered_states = {"entregado", "leido", "completado", "respondido"}
+            for envio in envios_rows:
+                event_ts = (
+                    _parse_datetime(envio.get("procesado_en"))
+                    or _parse_datetime(envio.get("creado_en"))
+                    or _parse_datetime(envio.get("programado_en"))
+                )
+                if event_ts is None:
+                    continue
+                if date_from_dt and event_ts < date_from_dt:
+                    continue
+                if date_to_dt and event_ts > date_to_dt:
+                    continue
+                day_key = event_ts.astimezone(report_zone).date().isoformat()
+                bucket = campaign_timeseries_raw[day_key]
+                bucket["envios_totales"] += 1
+                estado = (_clean_text(envio.get("estado")) or "").lower()
+                if estado in sent_states:
+                    bucket["envios_enviados"] += 1
+                if estado in delivered_states:
+                    bucket["envios_entregados"] += 1
+                if estado == "respondido":
+                    bucket["envios_respondidos"] += 1
+        campaign_timeseries = [
+            {"fecha": day, **metrics}
+            for day, metrics in sorted(campaign_timeseries_raw.items(), key=lambda item: item[0])
+        ]
 
     frase_events: list[dict[str, Any]] = []
     try:
@@ -19275,22 +19277,23 @@ async def prospeccion_metricas_dashboard(
             rule_bucket["monto_estimado_total"] += monto
 
     by_channel_items: list[dict[str, Any]] = []
-    for bucket in by_channel.values():
-        conversaciones = len(bucket["conversaciones"])
-        oportunidades_count = len(bucket["oportunidades"])
-        by_channel_items.append(
-            {
-                "canal_publicitario": bucket["canal_publicitario"],
-                "conversaciones_atribuidas": conversaciones,
-                "contactos_unicos": len(bucket["contactos"]),
-                "oportunidades_creadas": oportunidades_count,
-                "tasa_conversacion_oportunidad_pct": round(
-                    (oportunidades_count / conversaciones * 100) if conversaciones > 0 else 0.0,
-                    2,
-                ),
-                "monto_estimado_total": round(float(bucket["monto_estimado_total"]), 2),
-            }
-        )
+    if params.include_whatsapp_channels:
+        for bucket in by_channel.values():
+            conversaciones = len(bucket["conversaciones"])
+            oportunidades_count = len(bucket["oportunidades"])
+            by_channel_items.append(
+                {
+                    "canal_publicitario": bucket["canal_publicitario"],
+                    "conversaciones_atribuidas": conversaciones,
+                    "contactos_unicos": len(bucket["contactos"]),
+                    "oportunidades_creadas": oportunidades_count,
+                    "tasa_conversacion_oportunidad_pct": round(
+                        (oportunidades_count / conversaciones * 100) if conversaciones > 0 else 0.0,
+                        2,
+                    ),
+                    "monto_estimado_total": round(float(bucket["monto_estimado_total"]), 2),
+                }
+            )
 
     by_rule_items: list[dict[str, Any]] = []
     for bucket in by_rule.values():
@@ -19329,38 +19332,40 @@ async def prospeccion_metricas_dashboard(
         float(sum(float(item["monto_estimado_total"]) for item in by_channel_items)),
         2,
     )
-    frases_timeseries_raw: dict[str, dict[str, float]] = defaultdict(
-        lambda: {
-            "conversaciones_atribuidas": 0,
-            "oportunidades_creadas": 0,
-            "monto_estimado_total": 0.0,
-        }
-    )
-    for event in frase_events:
-        event_ts = _parse_datetime(event.get("creado_en"))
-        if event_ts is None:
-            continue
-        day_key = event_ts.astimezone(report_zone).date().isoformat()
-        bucket = frases_timeseries_raw[day_key]
-        bucket["conversaciones_atribuidas"] += 1
-        conversation_id_value = _clean_text(event.get("conversacion_id"))
-        if conversation_id_value and conversation_id_value in opp_by_conversation:
-            bucket["oportunidades_creadas"] += 1
-            try:
-                bucket["monto_estimado_total"] += float(
-                    opp_by_conversation[conversation_id_value].get("monto_estimado") or 0
-                )
-            except (TypeError, ValueError):
-                pass
-    frases_timeseries = [
-        {
-            "fecha": day,
-            "conversaciones_atribuidas": int(values["conversaciones_atribuidas"]),
-            "oportunidades_creadas": int(values["oportunidades_creadas"]),
-            "monto_estimado_total": round(float(values["monto_estimado_total"]), 2),
-        }
-        for day, values in sorted(frases_timeseries_raw.items(), key=lambda item: item[0])
-    ]
+    frases_timeseries: list[dict[str, Any]] = []
+    if params.include_whatsapp_timeseries:
+        frases_timeseries_raw: dict[str, dict[str, float]] = defaultdict(
+            lambda: {
+                "conversaciones_atribuidas": 0,
+                "oportunidades_creadas": 0,
+                "monto_estimado_total": 0.0,
+            }
+        )
+        for event in frase_events:
+            event_ts = _parse_datetime(event.get("creado_en"))
+            if event_ts is None:
+                continue
+            day_key = event_ts.astimezone(report_zone).date().isoformat()
+            bucket = frases_timeseries_raw[day_key]
+            bucket["conversaciones_atribuidas"] += 1
+            conversation_id_value = _clean_text(event.get("conversacion_id"))
+            if conversation_id_value and conversation_id_value in opp_by_conversation:
+                bucket["oportunidades_creadas"] += 1
+                try:
+                    bucket["monto_estimado_total"] += float(
+                        opp_by_conversation[conversation_id_value].get("monto_estimado") or 0
+                    )
+                except (TypeError, ValueError):
+                    pass
+        frases_timeseries = [
+            {
+                "fecha": day,
+                "conversaciones_atribuidas": int(values["conversaciones_atribuidas"]),
+                "oportunidades_creadas": int(values["oportunidades_creadas"]),
+                "monto_estimado_total": round(float(values["monto_estimado_total"]), 2),
+            }
+            for day, values in sorted(frases_timeseries_raw.items(), key=lambda item: item[0])
+        ]
 
     return {
         "ok": True,

@@ -34,8 +34,6 @@ import {
 
 import { useCurrentUser } from "@/hooks/use-current-user"
 import { usePermissions } from "@/hooks/use-permissions"
-import { usePlatformAdminStatus } from "@/hooks/use-platform-admin-status"
-import { useScoringFeatureStatus } from "@/hooks/use-scoring-feature-status"
 import { useTenantContext } from "@/hooks/use-tenant-context"
 import { NavDocuments } from '@/components/nav-documents'
 import { NavMain } from '@/components/nav-main'
@@ -209,18 +207,15 @@ export function AppSidebar({
   ...props
 }: React.ComponentProps<typeof Sidebar>) {
   const router = useRouter()
-  const { user, loading } = useCurrentUser()
+  const { user, loading, isPlatformAdmin, profilingEnabled } = useCurrentUser()
   const { context: permissionContext, loading: permissionsLoading } = usePermissions()
   const [hydrated, setHydrated] = useState(false)
   const sidebarApiEnabled = !loading && Boolean(user)
-
-  const { isPlatformAdmin } = usePlatformAdminStatus({ enabled: sidebarApiEnabled })
   const {
     tenantId: activeTenantId,
     tenantName: activeTenantName,
     refresh: refreshTenantContext,
-  } = useTenantContext({ enabled: sidebarApiEnabled })
-  const { profilingEnabled } = useScoringFeatureStatus({ enabled: sidebarApiEnabled })
+  } = useTenantContext({ enabled: sidebarApiEnabled && isPlatformAdmin })
   const settingsChildren = useMemo(() => {
     const base = SETTINGS_CHILDREN_TEMPLATE.map((child) => ({ ...child })).filter((child) =>
       child.url === "/settings/scoring" ? profilingEnabled : true,

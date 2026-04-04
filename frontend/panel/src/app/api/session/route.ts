@@ -25,6 +25,28 @@ type SupabaseEmployeeRow = {
   puesto?: { nombre?: string | null } | null
 }
 
+type ScoringFeatureStatus = {
+  profiling_enabled?: boolean
+}
+
+async function fetchPlatformAdminStatus(): Promise<boolean> {
+  const response = await callCrmApi<{ is_platform_admin: boolean }>("/admin/me/platform-admin", {
+    organizacionId: null,
+    withUserToken: true,
+  })
+  return Boolean(response.ok && response.data?.is_platform_admin)
+}
+
+async function fetchScoringFeatureStatus(): Promise<boolean> {
+  const response = await callCrmApi<ScoringFeatureStatus>("/crm/pipeline/scoring/feature-status", {
+    withUserToken: true,
+  })
+  if (!response.ok || !response.data) {
+    return true
+  }
+  return Boolean(response.data.profiling_enabled)
+}
+
 async function fetchSupabaseUser(
   config: { url: string; anonKey: string },
   accessToken: string,
@@ -95,14 +117,18 @@ async function fetchEmployeePosition(usuarioId: string | null): Promise<string |
 }
 
 async function buildSessionPayload(user: SupabaseUser): Promise<SessionPayload> {
-  const [tenant, employeePosition] = await Promise.all([
+  const [tenant, employeePosition, isPlatformAdmin, profilingEnabled] = await Promise.all([
     fetchTenantMetadata(),
     fetchEmployeePosition(user.id),
+    fetchPlatformAdminStatus(),
+    fetchScoringFeatureStatus(),
   ])
   return {
     user,
     tenant,
     employeePosition,
+    isPlatformAdmin,
+    profilingEnabled,
   }
 }
 

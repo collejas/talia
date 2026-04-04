@@ -15,4 +15,6 @@ export type SessionPayload = {
   user: SupabaseUser
   tenant?: TenantInfo | null
   employeePosition?: string | null
+  isPlatformAdmin?: boolean
+  profilingEnabled?: boolean
 }
