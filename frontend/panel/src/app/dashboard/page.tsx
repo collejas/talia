@@ -8,26 +8,22 @@ import { SectionCards } from '@/components/section-cards'
 import { SiteHeader } from '@/components/site-header'
 import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar'
 import { ThemeToggle } from '@/components/ThemeToggle'
-import { CatalogSalesCard } from '@/components/dashboard/catalog-sales-card'
-import { CatalogPipelineCard } from '@/components/dashboard/catalog-pipeline-card'
 import { AttentionCards } from '@/components/dashboard/attention-cards'
-import { MarketingCards } from '@/components/dashboard/marketing-cards'
 import { AgendaCards } from '@/components/dashboard/agenda-cards'
 import { OpportunityCards } from '@/components/dashboard/opportunity-cards'
-import { MarketingTimeseries } from '@/components/dashboard/marketing-timeseries'
 import { DashboardRangeControls } from '@/components/dashboard/range-controls'
 import { ConversationsChannelChart } from '@/components/dashboard/conversations-channel-chart'
 import { PipelineHealthChart } from '@/components/dashboard/pipeline-health-chart'
 import { SalesWonChart } from '@/components/dashboard/sales-won-chart'
 import { SalesByOwnerChart } from '@/components/dashboard/sales-by-owner-chart'
 import { SalesConversionChart } from '@/components/dashboard/sales-conversion-chart'
+import { MarketingLazySection } from '@/components/dashboard/marketing-lazy-section'
+import { CatalogLazySection } from '@/components/dashboard/catalog-lazy-section'
 import { Skeleton } from '@/components/ui/skeleton'
 
 import { resolveDashboardRange, type DashboardRange } from "@/lib/dashboard/range"
 import { fetchDashboardOverview } from "@/lib/dashboard/overview"
-import { fetchProspeccionMetricas } from "@/lib/dashboard/prospeccion-kpis"
 import { loadLeadsData } from "@/lib/leads/data"
-import { fetchCatalogPipelineKpi, fetchCatalogSalesKpi } from "./catalog-analytics"
 
 type DashboardPageProps = {
   searchParams?: Promise<Record<string, string | string[] | undefined>>;
@@ -188,34 +184,6 @@ async function DashboardOverviewSection({ range }: { range: DashboardRange }) {
   )
 }
 
-
-
-async function MarketingSection({ range }: { range: DashboardRange }) {
-  const marketing = await fetchProspeccionMetricas({
-    date_from: range.dateFrom ?? undefined,
-    date_to: range.dateTo ?? undefined,
-  }).catch(() => null)
-
-  return (
-    <>
-      <SectionTitle label="Marketing · Prospección" />
-      <MarketingCards
-        summary={marketing?.summary ?? null}
-        items={marketing?.items ?? null}
-        byRule={marketing?.byRule ?? null}
-      />
-      <SectionTitle label="Rendimiento de Campañas" />
-      <div className="px-4 lg:px-6">
-        <MarketingTimeseries
-          data={marketing?.timeseries ?? null}
-          dateFrom={range.dateFrom}
-          dateTo={range.dateTo}
-        />
-      </div>
-    </>
-  )
-}
-
 async function LeadsTableSection({ range }: { range: DashboardRange }) {
   const leadsPayload = await loadLeadsData({
     days: range.days,
@@ -226,20 +194,6 @@ async function LeadsTableSection({ range }: { range: DashboardRange }) {
   }).catch(() => ({ table: [] }))
 
   return <DataTable data={leadsPayload.table ?? []} />
-}
-
-async function CatalogSection() {
-  const [salesRows, pipelineRows] = await Promise.all([
-    fetchCatalogSalesKpi().catch(() => []),
-    fetchCatalogPipelineKpi().catch(() => []),
-  ])
-
-  return (
-    <div className="grid gap-4 px-4 lg:px-6 @[1000px]/main:grid-cols-2">
-      <CatalogSalesCard data={salesRows} />
-      <CatalogPipelineCard data={pipelineRows} />
-    </div>
-  )
 }
 
 export default async function Page({ searchParams }: DashboardPageProps) {
@@ -267,13 +221,12 @@ export default async function Page({ searchParams }: DashboardPageProps) {
                 <DashboardOverviewSection range={range} />
               </Suspense>
 
-              <Suspense fallback={<><SectionTitle label="Marketing · Prospección" /><CardsSkeleton /><SectionTitle label="Rendimiento de Campañas" /><SingleChartSkeleton /></>}>
-                <MarketingSection range={range} />
-              </Suspense>
+              <MarketingLazySection
+                dateFrom={range.dateFrom}
+                dateTo={range.dateTo}
+              />
 
-              <Suspense fallback={<DualChartSkeleton />}>
-                <CatalogSection />
-              </Suspense>
+              <CatalogLazySection />
 
               <Suspense fallback={<SingleChartSkeleton />}>
                 <LeadsTableSection range={range} />
