@@ -32,12 +32,15 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import {
   getProspeccionMetricas,
   getBrevoQuota,
+  listContactoTemplates,
   listCrmCampaigns,
   listWhatsAppAtribucionReglas,
   downloadProspeccionMetricasXlsx,
   type BrevoQuotaSnapshot,
+  type ContactoTemplate,
   type CrmCampaign,
   type ProspeccionMetricasResponse,
+  type ProspeccionCampanaAtribucionItem,
   type WhatsAppAtribucionRule,
 } from "@/lib/prospeccion/prospectos-client"
 
@@ -60,6 +63,17 @@ function getChannelIcon(canal?: string | null) {
   if (normalized === "correo") return IconMail
   if (normalized === "llamada") return IconPhoneCall
   return IconPhoneCall
+}
+
+function stripHtmlToText(value: string) {
+  return value.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim()
+}
+
+function getTemplateText(template: ContactoTemplate) {
+  const raw = template.cuerpo_texto?.trim() || template.cuerpo_html?.trim() || ""
+  if (!raw) return ""
+  const normalized = stripHtmlToText(raw)
+  return normalized.length > 600 ? `${normalized.slice(0, 600)}...` : normalized
 }
 
 function escapeCsvValue(value: string | number | null | undefined) {
@@ -105,6 +119,7 @@ export default function ProspeccionMetricasPageClient() {
 
   const [campaigns, setCampaigns] = useState<CrmCampaign[]>([])
   const [rules, setRules] = useState<WhatsAppAtribucionRule[]>([])
+  const [templates, setTemplates] = useState<ContactoTemplate[]>([])
 
   const [dateFrom, setDateFrom] = useState("")
   const [dateTo, setDateTo] = useState("")
@@ -131,16 +146,19 @@ export default function ProspeccionMetricasPageClient() {
     let cancelled = false
     const loadFilters = async () => {
       try {
-        const [crmCampaigns, reglasResponse] = await Promise.all([
+        const [crmCampaigns, templatesResponse, reglasResponse] = await Promise.all([
           listCrmCampaigns(),
+          listContactoTemplates(),
           listWhatsAppAtribucionReglas({ limit: 500, offset: 0 }),
         ])
         if (cancelled) return
         setCampaigns(crmCampaigns ?? [])
+        setTemplates(Array.isArray(templatesResponse.items) ? templatesResponse.items : [])
         setRules(Array.isArray(reglasResponse.items) ? reglasResponse.items : [])
       } catch {
         if (!cancelled) {
           setCampaigns([])
+          setTemplates([])
           setRules([])
         }
       }
@@ -150,6 +168,28 @@ export default function ProspeccionMetricasPageClient() {
       cancelled = true
     }
   }, [])
+
+  const templateTextByKey = useMemo(() => {
+    const map = new Map<string, string>()
+    for (const template of templates) {
+      const text = getTemplateText(template)
+      if (!text) continue
+      if (template.id) map.set(`id:${template.id}`, text)
+      if (template.slug) map.set(`slug:${template.slug.toLowerCase()}`, text)
+      if (template.nombre) map.set(`name:${template.nombre.toLowerCase()}`, text)
+    }
+    return map
+  }, [templates])
+
+  const resolveTemplateTooltip = useCallback(
+    (item: ProspeccionCampanaAtribucionItem) => {
+      const byId = item.template_id ? templateTextByKey.get(`id:${item.template_id}`) : null
+      const bySlug = item.template_slug ? templateTextByKey.get(`slug:${item.template_slug.toLowerCase()}`) : null
+      const byName = item.template_nombre ? templateTextByKey.get(`name:${item.template_nombre.toLowerCase()}`) : null
+      return byId || bySlug || byName || "Sin texto de plantilla disponible."
+    },
+    [templateTextByKey],
+  )
 
   const loadMetrics = useCallback(async () => {
     setLoading(true)
@@ -794,7 +834,12 @@ export default function ProspeccionMetricasPageClient() {
                 <ul className="space-y-1">
                   {topCampaigns.byOpenRate.map((item, idx) => (
                     <li key={`${item.template_id ?? item.template_slug ?? idx}`} className="flex items-center justify-between gap-2">
-                      <span className="truncate">{item.template_nombre ?? item.template_slug ?? "Sin plantilla"}</span>
+                      <span
+                        className="truncate"
+                        title={resolveTemplateTooltip(item)}
+                      >
+                        {item.template_nombre ?? item.template_slug ?? "Sin plantilla"}
+                      </span>
                       <Badge variant="outline">
                         {Math.round(((item.brevo_aperturas || 0) / (item.envios_entregados || 1)) * 100)}% open
                       </Badge>
@@ -812,7 +857,12 @@ export default function ProspeccionMetricasPageClient() {
                     <ul className="space-y-1">
                       {topCampaigns.byResponseRateCorreo.map((item, idx) => (
                         <li key={`correo-${item.template_id ?? item.template_slug ?? idx}`} className="flex items-center justify-between gap-2">
-                          <span className="truncate">{item.template_nombre ?? item.template_slug ?? "Sin plantilla"}</span>
+                          <span
+                            className="truncate"
+                            title={resolveTemplateTooltip(item)}
+                          >
+                            {item.template_nombre ?? item.template_slug ?? "Sin plantilla"}
+                          </span>
                           <Badge variant="outline">
                             {Math.round(((item.envios_respondidos || 0) / (item.envios_entregados || 1)) * 100)}% resp
                           </Badge>
@@ -825,7 +875,12 @@ export default function ProspeccionMetricasPageClient() {
                     <ul className="space-y-1">
                       {topCampaigns.byResponseRateWhatsapp.map((item, idx) => (
                         <li key={`wa-${item.template_id ?? item.template_slug ?? idx}`} className="flex items-center justify-between gap-2">
-                          <span className="truncate">{item.template_nombre ?? item.template_slug ?? "Sin plantilla"}</span>
+                          <span
+                            className="truncate"
+                            title={resolveTemplateTooltip(item)}
+                          >
+                            {item.template_nombre ?? item.template_slug ?? "Sin plantilla"}
+                          </span>
                           <Badge variant="outline">
                             {Math.round(((item.envios_respondidos || 0) / (item.envios_entregados || 1)) * 100)}% resp
                           </Badge>
@@ -843,7 +898,12 @@ export default function ProspeccionMetricasPageClient() {
                       key={`bounce-${idx}-${item.template_id ?? item.template_slug ?? item.twilio_content_sid ?? "row"}`}
                       className="flex items-center justify-between gap-2"
                     >
-                      <span className="truncate">{item.template_nombre ?? item.template_slug ?? "Sin plantilla"}</span>
+                      <span
+                        className="truncate"
+                        title={resolveTemplateTooltip(item)}
+                      >
+                        {item.template_nombre ?? item.template_slug ?? "Sin plantilla"}
+                      </span>
                       <Badge variant="destructive">
                         {Math.round(((item.envios_fallidos || 0) / (item.envios_totales || 1)) * 100)}% rebote
                       </Badge>
@@ -1208,7 +1268,9 @@ export default function ProspeccionMetricasPageClient() {
                       >
                         <td className="px-2 py-2">{item.campana_nombre ?? "-"}</td>
                         <td className="px-2 py-2"><Badge variant="secondary">{item.canal ?? "-"}</Badge></td>
-                        <td className="px-2 py-2">{item.template_nombre ?? item.template_slug ?? "-"}</td>
+                        <td className="max-w-[320px] truncate px-2 py-2" title={resolveTemplateTooltip(item)}>
+                          {item.template_nombre ?? item.template_slug ?? "-"}
+                        </td>
                         {(() => {
                           const effectiveTotal = item.envios_totales || 0
                           return (
