@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { IconDownload, IconFileSpreadsheet, IconLoader } from "@tabler/icons-react"
 import {
+  Bar,
+  BarChart,
   CartesianGrid,
   Legend,
   Line,
@@ -82,6 +84,10 @@ export default function ProspeccionMetricasPageClient() {
   const [campanaId, setCampanaId] = useState("todos")
   const [campanaPublicitaria, setCampanaPublicitaria] = useState("")
   const [reglaId, setReglaId] = useState("todos")
+  const [tableSort, setTableSort] = useState<{ key: string; dir: "asc" | "desc" }>({
+    key: "envios_totales",
+    dir: "desc",
+  })
 
   useEffect(() => {
     let cancelled = false
@@ -118,7 +124,11 @@ export default function ProspeccionMetricasPageClient() {
         campana_id: campanaId !== "todos" ? campanaId : undefined,
         campana_publicitaria: campanaPublicitaria.trim() || undefined,
         regla_id: reglaId !== "todos" ? reglaId : undefined,
-        limit: 2000,
+        limit: 500,
+        include_campaign_timeseries: true,
+        include_whatsapp_timeseries: false,
+        include_whatsapp_channels: true,
+        lite: false,
       })
       setData(response)
     } catch (err) {
@@ -171,6 +181,10 @@ export default function ProspeccionMetricasPageClient() {
 
   const topCards = useMemo(() => {
     const cards: Array<{ title: string; value: string; hint: string }> = []
+    const entregaPct = summaryCampaign?.tasa_entrega_pct ?? 0
+    const respuestaPct = summaryCampaign?.tasa_respuesta_pct ?? 0
+    const convOppPct = summaryPhrases?.tasa_conversacion_oportunidad_pct ?? 0
+
     cards.push({
       title: "Envíos totales",
       value: number.format(summaryCampaign?.envios_totales ?? 0),
@@ -179,7 +193,12 @@ export default function ProspeccionMetricasPageClient() {
     cards.push({
       title: "Entregados",
       value: number.format(summaryCampaign?.envios_entregados ?? 0),
-      hint: `${summaryCampaign?.tasa_entrega_pct ?? 0}% entrega`,
+      hint: `${entregaPct}% entrega`,
+    })
+    cards.push({
+      title: "Respuestas de campaña",
+      value: number.format(summaryCampaign?.envios_respondidos ?? 0),
+      hint: `${respuestaPct}% respuesta`,
     })
     cards.push({
       title: "Conversaciones atribuidas",
@@ -189,10 +208,251 @@ export default function ProspeccionMetricasPageClient() {
     cards.push({
       title: "Oportunidades atribuidas",
       value: number.format(summaryPhrases?.oportunidades_creadas ?? 0),
-      hint: `${summaryPhrases?.tasa_conversacion_oportunidad_pct ?? 0}% conv→opp`,
+      hint: `${convOppPct}% conv→opp`,
     })
     return cards
   }, [summaryCampaign, summaryPhrases])
+
+  const topCampaigns = useMemo(() => {
+    const items = data?.campanas.items ?? []
+    const campaignNameMap = new Map<string, string>()
+    campaigns.forEach((c) => {
+      if (c.id) campaignNameMap.set(c.id, c.nombre)
+    })
+    const normalize = (value: string | null | undefined) => (value || "").trim().toLowerCase()
+    // Agrupar por campaña para que el Top 5 muestre campañas únicas (no plantillas del mismo envío)
+    const byCampaignMap = new Map<
+      string,
+      { nombre: string; canal: string | null | undefined; envios_totales: number }
+    >()
+    items.forEach((item, idx) => {
+      const key =
+        item.campana_id ||
+        item.campana_nombre ||
+        item.template_id ||
+        item.template_slug ||
+        item.twilio_content_sid ||
+        `${item.canal ?? "canal"}-${idx}`
+      const prev = byCampaignMap.get(key)
+      const envios = item.envios_totales || 0
+      const bestName =
+        (item.campana_id ? campaignNameMap.get(item.campana_id) : undefined) ||
+        item.campana_nombre ||
+        item.template_nombre ||
+        item.template_slug ||
+        item.twilio_content_sid ||
+        key ||
+        `Campaña ${item.canal ?? "general"}`
+      if (prev) {
+        prev.envios_totales += envios
+        if (prev.nombre === "Sin nombre" && bestName !== "Sin nombre") {
+          prev.nombre = bestName
+        }
+      } else {
+        byCampaignMap.set(key, {
+          nombre: bestName,
+          canal: item.canal,
+          envios_totales: envios,
+        })
+      }
+    })
+    const byEnvios = [...byCampaignMap.values()]
+      .sort((a, b) => (b.envios_totales || 0) - (a.envios_totales || 0))
+      .slice(0, 5)
+    const byOpenRate = [...items]
+      .filter((item) => normalize(item.canal) === "correo" && (item.envios_entregados || 0) > 0)
+      .map((item) => ({
+        ...item,
+        open_rate: (item.brevo_aperturas || 0) / (item.envios_entregados || 1),
+      }))
+      .sort((a, b) => (b.open_rate || 0) - (a.open_rate || 0))
+      .slice(0, 5)
+    const byResponseRate = [...items]
+      .filter((item) => (item.envios_entregados || 0) > 0)
+      .map((item) => ({
+        ...item,
+        response_rate: (item.envios_respondidos || 0) / (item.envios_entregados || 1),
+      }))
+    const byBounce = [...items]
+      .filter((item) => (item.envios_totales || 0) > 0 && (item.envios_fallidos || 0) > 0)
+      .map((item) => ({
+        ...item,
+        bounce_rate: (item.envios_fallidos || 0) / (item.envios_totales || 1),
+      }))
+      .sort((a, b) => (b.bounce_rate || 0) - (a.bounce_rate || 0))
+      .slice(0, 5)
+    const byChannelTop = (rows: typeof byResponseRate, canal: "correo" | "whatsapp") =>
+      rows
+        .filter((item) => normalize(item.canal) === canal)
+        .sort((a, b) => (b.response_rate || 0) - (a.response_rate || 0))
+        .slice(0, 5)
+    const byChannelBounce = (rows: typeof byBounce, canal: "correo" | "whatsapp") =>
+      rows
+        .filter((item) => normalize(item.canal) === canal)
+        .sort((a, b) => (b.bounce_rate || 0) - (a.bounce_rate || 0))
+        .slice(0, 5)
+    return {
+      byEnvios,
+      byOpenRate,
+      byResponseRateCorreo: byChannelTop(byResponseRate, "correo"),
+      byResponseRateWhatsapp: byChannelTop(byResponseRate, "whatsapp"),
+      byBounceCorreo: byChannelBounce(byBounce, "correo"),
+      byBounceWhatsapp: byChannelBounce(byBounce, "whatsapp"),
+      byBounce,
+    }
+  }, [data?.campanas.items, campaigns])
+
+  const channelSummary = useMemo(() => {
+    const items = data?.campanas.items ?? []
+    const normalize = (value: string | null | undefined) => (value || "").trim().toLowerCase()
+    const channels: Array<"correo" | "whatsapp" | "llamada"> = ["correo", "whatsapp", "llamada"]
+    const labelMap: Record<typeof channels[number], string> = {
+      correo: "Correo",
+      whatsapp: "WhatsApp",
+      llamada: "Voz",
+    }
+    return channels.map((ch) => {
+      const rows = items.filter((item) => normalize(item.canal) === ch)
+      const envios_totales = rows.reduce((sum, r) => sum + (r.envios_totales || 0), 0)
+      const envios_enviados = rows.reduce((sum, r) => sum + (r.envios_enviados || 0), 0)
+      const envios_entregados = rows.reduce((sum, r) => sum + (r.envios_entregados || 0), 0)
+      const envios_respondidos = rows.reduce((sum, r) => sum + (r.envios_respondidos || 0), 0)
+      const envios_fallidos = rows.reduce((sum, r) => sum + (r.envios_fallidos || 0), 0)
+      const envios_omitidos = rows.reduce((sum, r) => sum + (r.envios_omitidos || 0), 0)
+      const envios_sin_respuesta = Math.max(0, envios_entregados - envios_respondidos)
+      const envios_enviados_puros = rows.reduce((sum, r) => sum + (r.envios_enviados_puros || 0), 0)
+      const envios_procesando = rows.reduce((sum, r) => sum + (r.envios_procesando || 0), 0)
+      const envios_pendientes = rows.reduce((sum, r) => sum + (r.envios_pendientes || 0), 0)
+      const brevo_aperturas = rows.reduce((sum, r) => sum + (r.brevo_aperturas || 0), 0)
+      const brevo_clicks = rows.reduce((sum, r) => sum + (r.brevo_clicks || 0), 0)
+      const entrega_pct = envios_totales > 0 ? Math.round((envios_entregados / envios_totales) * 100) : 0
+      const respuesta_pct = envios_totales > 0 ? Math.round((envios_respondidos / envios_totales) * 100) : 0
+      const click_rate = envios_entregados > 0 ? Math.round((brevo_clicks / envios_entregados) * 100) : 0
+      const open_rate = envios_entregados > 0 ? Math.round((brevo_aperturas / envios_entregados) * 100) : 0
+      return {
+        canal: ch,
+        canal_label: labelMap[ch],
+        envios_totales,
+        envios_enviados,
+        envios_entregados,
+        envios_respondidos,
+        envios_fallidos,
+        envios_omitidos,
+        envios_sin_respuesta,
+        envios_enviados_puros,
+        envios_procesando,
+        envios_pendientes,
+        entrega_pct,
+        respuesta_pct,
+        open_rate,
+        click_rate,
+      }
+    })
+  }, [data?.campanas.items])
+
+
+  const topWhatsappRules = useMemo(() => {
+    const rules = data?.frases_whatsapp.by_rule ?? []
+    const byConversations = [...rules].sort((a, b) => (b.conversaciones_atribuidas || 0) - (a.conversaciones_atribuidas || 0)).slice(0, 5)
+    const byOpportunities = [...rules].sort((a, b) => (b.oportunidades_creadas || 0) - (a.oportunidades_creadas || 0)).slice(0, 5)
+    const byAmount = [...rules].sort((a, b) => (b.monto_estimado_total || 0) - (a.monto_estimado_total || 0)).slice(0, 5)
+    return { byConversations, byOpportunities, byAmount }
+  }, [data?.frases_whatsapp.by_rule])
+
+  const sortedCampaignItems = useMemo(() => {
+    const items = [...(data?.campanas.items ?? [])]
+    const dir = tableSort.dir === "asc" ? 1 : -1
+    const key = tableSort.key
+    const getVal = (item: typeof items[number]) => {
+      switch (key) {
+        case "campana_nombre":
+          return item.campana_nombre ?? ""
+        case "canal":
+          return item.canal ?? ""
+        case "template_nombre":
+          return item.template_nombre ?? item.template_slug ?? ""
+        case "envios_totales":
+          return item.envios_totales || 0
+        case "envios_omitidos":
+          return item.envios_omitidos || 0
+        case "envios_entregados":
+          return item.envios_entregados || 0
+        case "envios_respondidos":
+          return item.envios_respondidos || 0
+        case "entregados_sin_resp":
+          return Math.max(0, (item.envios_entregados || 0) - (item.envios_respondidos || 0))
+        case "tasa_entrega_pct":
+          return item.tasa_entrega_pct || 0
+        case "tasa_respuesta_pct": {
+          if (item.envios_entregados > 0) {
+            return (item.envios_respondidos / item.envios_entregados) * 100
+          }
+          return 0
+        }
+        case "tasa_sin_respuesta_pct": {
+          if (item.envios_entregados > 0) {
+            return ((item.envios_entregados - item.envios_respondidos) / item.envios_entregados) * 100
+          }
+          return 0
+        }
+        case "brevo_aperturas":
+          return item.brevo_aperturas || 0
+        case "open_rate":
+          return item.envios_entregados > 0 ? (item.brevo_aperturas / item.envios_entregados) * 100 : 0
+        case "brevo_clicks":
+          return item.brevo_clicks || 0
+        case "click_rate":
+          return item.envios_entregados > 0 ? (item.brevo_clicks / item.envios_entregados) * 100 : 0
+        case "sesiones_utm":
+          return item.sesiones_utm || 0
+        default:
+          return item.envios_totales || 0
+      }
+    }
+    return items.sort((a, b) => {
+      const av = getVal(a)
+      const bv = getVal(b)
+      if (typeof av === "string" || typeof bv === "string") {
+        return String(av).localeCompare(String(bv)) * dir
+      }
+      return (Number(av) - Number(bv)) * dir
+    })
+  }, [data?.campanas.items, tableSort])
+
+  const campaignTotals = useMemo(() => {
+    const items = data?.campanas.items ?? []
+    const totals = items.reduce(
+      (acc, item) => {
+        acc.envios_totales += item.envios_totales || 0
+        acc.envios_omitidos += item.envios_omitidos || 0
+        acc.envios_entregados += item.envios_entregados || 0
+        acc.envios_respondidos += item.envios_respondidos || 0
+        acc.brevo_aperturas += item.brevo_aperturas || 0
+        acc.brevo_clicks += item.brevo_clicks || 0
+        acc.sesiones_utm += item.sesiones_utm || 0
+        return acc
+      },
+      {
+        envios_totales: 0,
+        envios_omitidos: 0,
+        envios_entregados: 0,
+        envios_respondidos: 0,
+        brevo_aperturas: 0,
+        brevo_clicks: 0,
+        sesiones_utm: 0,
+      },
+    )
+    return totals
+  }, [data?.campanas.items])
+
+  const toggleSort = useCallback((key: string) => {
+    setTableSort((prev) => {
+      if (prev.key === key) {
+        return { key, dir: prev.dir === "asc" ? "desc" : "asc" }
+      }
+      return { key, dir: "desc" }
+    })
+  }, [])
 
   const exportActiveCsv = useCallback(() => {
     if (!data) return
@@ -390,6 +650,251 @@ export default function ProspeccionMetricasPageClient() {
         ))}
       </div>
 
+      <div className="grid gap-3 xl:grid-cols-3">
+        <Card className="xl:col-span-2">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm">Campañas destacadas (Top 5)</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3 text-sm">
+            <div className="grid gap-2 lg:grid-cols-2">
+              <div>
+                <p className="text-xs font-semibold text-muted-foreground">Por volumen</p>
+                <ul className="space-y-1">
+                  {topCampaigns.byEnvios.map((item, idx) => (
+                    <li key={`${item.nombre}-${idx}`} className="flex items-center justify-between gap-2">
+                      <span className="truncate">{item.nombre}</span>
+                      <Badge variant="outline">{number.format(item.envios_totales)} envíos</Badge>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+              <div>
+                <p className="text-xs font-semibold text-muted-foreground" suppressHydrationWarning>
+                  Open rate (correo)
+                </p>
+                <ul className="space-y-1">
+                  {topCampaigns.byOpenRate.map((item, idx) => (
+                    <li key={`${item.template_id ?? item.template_slug ?? idx}`} className="flex items-center justify-between gap-2">
+                      <span className="truncate">{item.template_nombre ?? item.template_slug ?? "Sin plantilla"}</span>
+                      <Badge variant="outline">
+                        {Math.round(((item.brevo_aperturas || 0) / (item.envios_entregados || 1)) * 100)}% open
+                      </Badge>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+            <div className="grid gap-2 lg:grid-cols-2">
+              <div>
+                <p className="text-xs font-semibold text-muted-foreground">Por respuesta</p>
+                <div className="grid gap-2 md:grid-cols-2">
+                  <div className="min-w-0">
+                    <p className="text-xs text-muted-foreground">Correo</p>
+                    <ul className="space-y-1">
+                      {topCampaigns.byResponseRateCorreo.map((item, idx) => (
+                        <li key={`correo-${item.template_id ?? item.template_slug ?? idx}`} className="flex items-center justify-between gap-2">
+                          <span className="truncate">{item.template_nombre ?? item.template_slug ?? "Sin plantilla"}</span>
+                          <Badge variant="outline">
+                            {Math.round(((item.envios_respondidos || 0) / (item.envios_entregados || 1)) * 100)}% resp
+                          </Badge>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-xs text-muted-foreground">WhatsApp</p>
+                    <ul className="space-y-1">
+                      {topCampaigns.byResponseRateWhatsapp.map((item, idx) => (
+                        <li key={`wa-${item.template_id ?? item.template_slug ?? idx}`} className="flex items-center justify-between gap-2">
+                          <span className="truncate">{item.template_nombre ?? item.template_slug ?? "Sin plantilla"}</span>
+                          <Badge variant="outline">
+                            {Math.round(((item.envios_respondidos || 0) / (item.envios_entregados || 1)) * 100)}% resp
+                          </Badge>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                </div>
+              </div>
+              <div>
+                <p className="text-xs font-semibold text-muted-foreground">Mayor rebote (global)</p>
+                <ul className="space-y-1">
+                  {topCampaigns.byBounce.map((item, idx) => (
+                    <li
+                      key={`bounce-${idx}-${item.template_id ?? item.template_slug ?? item.twilio_content_sid ?? "row"}`}
+                      className="flex items-center justify-between gap-2"
+                    >
+                      <span className="truncate">{item.template_nombre ?? item.template_slug ?? "Sin plantilla"}</span>
+                      <Badge variant="destructive">
+                        {Math.round(((item.envios_fallidos || 0) / (item.envios_totales || 1)) * 100)}% rebote
+                      </Badge>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="xl:col-span-1">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm">Resumen por canal</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3 text-sm">
+            <div className="h-64 w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={channelSummary} barGap={-24} barCategoryGap="30%">
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="canal_label" tickMargin={8} />
+                  <YAxis allowDecimals={false} />
+                  <Tooltip
+                    content={({ active, payload, label }) => {
+                      if (!active || !payload || payload.length === 0) return null
+                      const row = payload[0]?.payload as typeof channelSummary[number]
+                      if (!row) return null
+                      const total = row.envios_totales || 0
+                      const entregados = row.envios_entregados || 0
+                      const pctTotal = (count: number) => (total > 0 ? Math.round((count / total) * 100) : 0)
+                      const pctEnt = (count: number) => (entregados > 0 ? Math.round((count / entregados) * 100) : 0)
+                      const swatch = (color: string) => (
+                        <span className="mr-2 inline-block h-2 w-2 rounded-sm" style={{ backgroundColor: color }} />
+                      )
+                      return (
+                        <div className="rounded-md border bg-background px-3 py-2 text-xs shadow-sm">
+                          <div className="mb-1 font-semibold">{label}</div>
+                          <div className="space-y-1">
+                            <div className="flex justify-between gap-3">
+                              <span className="flex items-center">{swatch("rgba(15,23,42,0.5)")}Envíos totales</span>
+                              <span>{number.format(total)} (100%)</span>
+                            </div>
+                            <div className="flex justify-between gap-3">
+                              <span className="flex items-center">{swatch("#f59e0b")}En tránsito</span>
+                              <span>{number.format(row.envios_enviados || 0)} ({pctTotal(row.envios_enviados || 0)}%)</span>
+                            </div>
+                            <div className="flex justify-between gap-3">
+                              <span className="flex items-center pl-3">{swatch("#60a5fa")}Sin respuesta</span>
+                              <span>{number.format(row.envios_sin_respuesta || 0)} ({pctEnt(row.envios_sin_respuesta || 0)}%)</span>
+                            </div>
+                            <div className="flex justify-between gap-3">
+                              <span className="flex items-center pl-3">{swatch("#22c55e")}Respondidos</span>
+                              <span>{number.format(row.envios_respondidos || 0)} ({pctEnt(row.envios_respondidos || 0)}%)</span>
+                            </div>
+                            <div className="flex justify-between gap-3">
+                              <span className="flex items-center">{swatch("#ef4444")}Fallidos</span>
+                              <span>{number.format(row.envios_fallidos || 0)} ({pctTotal(row.envios_fallidos || 0)}%)</span>
+                            </div>
+                            <div className="flex justify-between gap-3">
+                              <span className="flex items-center">{swatch("#9ca3af")}Omitidos</span>
+                              <span>{number.format(row.envios_omitidos || 0)} ({pctTotal(row.envios_omitidos || 0)}%)</span>
+                            </div>
+                            <div className="flex justify-between gap-3">
+                              <span className="flex items-center">{swatch("#f59e0b")}En tránsito</span>
+                              <span>{number.format(row.envios_enviados_puros || 0)} ({pctTotal(row.envios_enviados_puros || 0)}%)</span>
+                            </div>
+                            <div className="flex justify-between gap-3">
+                              <span className="flex items-center">{swatch("#8b5cf6")}Procesado</span>
+                              <span>{number.format(row.envios_procesando || 0)} ({pctTotal(row.envios_procesando || 0)}%)</span>
+                            </div>
+                            <div className="flex justify-between gap-3">
+                              <span className="flex items-center">{swatch("#94a3b8")}Pendiente</span>
+                              <span>{number.format(row.envios_pendientes || 0)} ({pctTotal(row.envios_pendientes || 0)}%)</span>
+                            </div>
+                          </div>
+                        </div>
+                      )
+                    }}
+                  />
+                  <Legend />
+                  <Bar
+                    dataKey="envios_entregados"
+                    fill="transparent"
+                    stroke="#16a34a"
+                    strokeWidth={2}
+                    barSize={26}
+                    name="Entregados"
+                    legendType="none"
+                  />
+                  <Bar dataKey="envios_sin_respuesta" stackId="breakdown" fill="#60a5fa" name="Sin respuesta" barSize={22} />
+                  <Bar dataKey="envios_respondidos" stackId="breakdown" fill="#22c55e" name="Respondidos" barSize={22} />
+                  <Bar dataKey="envios_fallidos" stackId="breakdown" fill="#ef4444" name="Fallidos" barSize={22} />
+                  <Bar dataKey="envios_omitidos" stackId="breakdown" fill="#9ca3af" name="Omitidos" barSize={22} />
+                  <Bar dataKey="envios_enviados_puros" stackId="breakdown" fill="#f59e0b" name="En tránsito" barSize={22} />
+                  <Bar dataKey="envios_procesando" stackId="breakdown" fill="#8b5cf6" name="Procesado" barSize={22} />
+                  <Bar dataKey="envios_pendientes" stackId="breakdown" fill="#94a3b8" name="Pendiente" barSize={22} />
+                  <Bar
+                    dataKey="envios_totales"
+                    fill="#0f172a"
+                    fillOpacity={0.12}
+                    stroke="#0f172a"
+                    strokeWidth={2}
+                    barSize={28}
+                    name="Envíos totales"
+                    legendType="none"
+                  />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+            <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+              <span className="inline-flex items-center gap-2">
+                <span className="h-2 w-4 rounded-sm border-2 border-slate-900 bg-slate-900/20" />
+                Envíos totales = Sin respuesta + Respondidos + Fallidos + Omitidos + En tránsito + Procesado + Pendiente
+              </span>
+            </div>
+            <div className="text-xs text-muted-foreground">
+              {channelSummary.find((row) => row.canal === "correo") ? (
+                <span>
+                  Correo: Open {channelSummary.find((row) => row.canal === "correo")?.open_rate ?? 0}% ·
+                  Click {channelSummary.find((row) => row.canal === "correo")?.click_rate ?? 0}%
+                </span>
+              ) : null}
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="xl:col-span-3">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm">Enlaces / reglas WA (Top 5)</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3 text-sm">
+            <div className="grid gap-2 lg:grid-cols-2">
+              <div>
+                <p className="text-xs font-semibold text-muted-foreground">Por conversaciones</p>
+                <ul className="space-y-1">
+                  {topWhatsappRules.byConversations.map((item, idx) => (
+                    <li key={`${item.regla_id ?? idx}`} className="flex items-center justify-between gap-2">
+                      <span className="truncate">{item.regla_nombre}</span>
+                      <Badge variant="outline">{number.format(item.conversaciones_atribuidas)} conv</Badge>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+              <div>
+                <p className="text-xs font-semibold text-muted-foreground">Por oportunidades</p>
+                <ul className="space-y-1">
+                  {topWhatsappRules.byOpportunities.map((item, idx) => (
+                    <li key={`${item.regla_id ?? idx}`} className="flex items-center justify-between gap-2">
+                      <span className="truncate">{item.regla_nombre}</span>
+                      <Badge variant="outline">{number.format(item.oportunidades_creadas)} opps</Badge>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+            <div>
+              <p className="text-xs font-semibold text-muted-foreground">Por monto estimado</p>
+              <ul className="space-y-1">
+                {topWhatsappRules.byAmount.map((item, idx) => (
+                  <li key={`${item.regla_id ?? idx}`} className="flex items-center justify-between gap-2">
+                    <span className="truncate">{item.regla_nombre}</span>
+                    <Badge variant="outline">{money.format(item.monto_estimado_total || 0)}</Badge>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
       <Card>
         <CardHeader className="pb-2">
           <CardTitle className="text-sm">Brevo hoy</CardTitle>
@@ -427,13 +932,13 @@ export default function ProspeccionMetricasPageClient() {
         <Button
           variant="outline"
           onClick={exportActiveCsv}
-          disabled={loading || !data}
+          disabled={Boolean(loading || !data)}
           className="ml-auto"
         >
           <IconDownload className="mr-2 h-4 w-4" />
           Exportar CSV ({activeTab === "campanas" ? "campañas" : "frases"})
         </Button>
-        <Button variant="outline" onClick={() => void exportXlsx()} disabled={loading || !data}>
+        <Button variant="outline" onClick={() => void exportXlsx()} disabled={Boolean(loading || !data)}>
           <IconFileSpreadsheet className="mr-2 h-4 w-4" />
           Exportar XLSX
         </Button>
@@ -475,36 +980,148 @@ export default function ProspeccionMetricasPageClient() {
             </CardHeader>
             <CardContent>
               <div className="overflow-x-auto">
-                <table className="w-full min-w-[960px] text-sm">
+                <table className="w-full min-w-[960px] text-sm" suppressHydrationWarning>
                   <thead>
                     <tr className="border-b text-left text-xs uppercase tracking-wide text-muted-foreground">
-                      <th className="px-2 py-2">Campaña</th>
-                      <th className="px-2 py-2">Canal</th>
-                      <th className="px-2 py-2">Plantilla</th>
-                      <th className="px-2 py-2">Twilio Content SID</th>
-                      <th className="px-2 py-2">Totales</th>
-                      <th className="px-2 py-2">Entregados</th>
-                      <th className="px-2 py-2">Respondidos</th>
-                      <th className="px-2 py-2">Aperturas</th>
-                      <th className="px-2 py-2">Clics</th>
-                      <th className="px-2 py-2">Sesiones</th>
+                      <th className="px-2 py-2">
+                        <button type="button" onClick={() => toggleSort("campana_nombre")}>Campaña</button>
+                      </th>
+                      <th className="px-2 py-2">
+                        <button type="button" onClick={() => toggleSort("canal")}>Canal</button>
+                      </th>
+                      <th className="px-2 py-2">
+                        <button type="button" onClick={() => toggleSort("template_nombre")}>Plantilla</button>
+                      </th>
+                      <th className="px-2 py-2">
+                        <button type="button" onClick={() => toggleSort("envios_totales")}>Totales</button>
+                      </th>
+                      <th className="px-2 py-2">
+                        <button type="button" onClick={() => toggleSort("envios_omitidos")}>Omitidos</button>
+                      </th>
+                      <th className="px-2 py-2">
+                        <button type="button" onClick={() => toggleSort("envios_entregados")}>Entregados</button>
+                      </th>
+                      <th className="px-2 py-2">
+                        <button type="button" onClick={() => toggleSort("envios_respondidos")}>Respondidos</button>
+                      </th>
+                      <th className="px-2 py-2">
+                        <button type="button" onClick={() => toggleSort("entregados_sin_resp")}>Sin respuesta</button>
+                      </th>
+                      <th className="px-2 py-2">
+                        <button type="button" onClick={() => toggleSort("tasa_entrega_pct")}>% Entrega</button>
+                      </th>
+                      <th className="px-2 py-2">
+                        <button type="button" onClick={() => toggleSort("tasa_respuesta_pct")}>% Respuesta</button>
+                      </th>
+                      <th className="px-2 py-2">
+                        <button type="button" onClick={() => toggleSort("tasa_sin_respuesta_pct")}>% Sin resp</button>
+                      </th>
+                      <th className="px-2 py-2">
+                        <button type="button" onClick={() => toggleSort("brevo_aperturas")}>Aperturas</button>
+                      </th>
+                      <th className="px-2 py-2">
+                        <button type="button" onClick={() => toggleSort("open_rate")}>% Open</button>
+                      </th>
+                      <th className="px-2 py-2">
+                        <button type="button" onClick={() => toggleSort("brevo_clicks")}>Clics</button>
+                      </th>
+                      <th className="px-2 py-2">
+                        <button type="button" onClick={() => toggleSort("click_rate")}>% Click</button>
+                      </th>
+                      <th className="px-2 py-2">
+                        <button type="button" onClick={() => toggleSort("sesiones_utm")}>Sesiones</button>
+                      </th>
                     </tr>
                   </thead>
                   <tbody>
-                    {(data?.campanas.items ?? []).map((item, idx) => (
-                      <tr key={`${item.template_id ?? item.template_slug ?? item.twilio_content_sid ?? idx}`} className="border-b">
+                    {sortedCampaignItems.map((item, idx) => (
+                      <tr
+                        key={`${item.campana_id ?? "camp"}-${item.template_id ?? item.template_slug ?? item.twilio_content_sid ?? "tpl"}-${idx}`}
+                        className="border-b"
+                      >
                         <td className="px-2 py-2">{item.campana_nombre ?? "-"}</td>
                         <td className="px-2 py-2"><Badge variant="secondary">{item.canal ?? "-"}</Badge></td>
                         <td className="px-2 py-2">{item.template_nombre ?? item.template_slug ?? "-"}</td>
-                        <td className="px-2 py-2 font-mono text-xs">{item.twilio_content_sid ?? "-"}</td>
-                        <td className="px-2 py-2">{number.format(item.envios_totales)}</td>
+                        {(() => {
+                          const effectiveTotal = item.envios_totales || 0
+                          return (
+                            <>
+                              <td className="px-2 py-2">{number.format(effectiveTotal)}</td>
+                              <td className="px-2 py-2">{number.format(item.envios_omitidos || 0)}</td>
+                            </>
+                          )
+                        })()}
                         <td className="px-2 py-2">{number.format(item.envios_entregados)}</td>
                         <td className="px-2 py-2">{number.format(item.envios_respondidos)}</td>
+                        <td className="px-2 py-2">{number.format(Math.max(0, item.envios_entregados - item.envios_respondidos))}</td>
+                        <td className="px-2 py-2">
+                          {(() => {
+                            const total = item.envios_totales || 0
+                            return total > 0
+                              ? `${Math.round((item.envios_entregados / total) * 100)}%`
+                              : "—"
+                          })()}
+                        </td>
+                        <td className="px-2 py-2">
+                          {item.envios_entregados > 0
+                            ? `${Math.round((item.envios_respondidos / item.envios_entregados) * 100)}%`
+                            : "—"}
+                        </td>
+                        <td className="px-2 py-2">
+                          {item.envios_entregados > 0
+                            ? `${Math.round(((item.envios_entregados - item.envios_respondidos) / item.envios_entregados) * 100)}%`
+                            : "—"}
+                        </td>
                         <td className="px-2 py-2">{number.format(item.brevo_aperturas)}</td>
+                        <td className="px-2 py-2">
+                          {item.canal === "correo" && item.envios_entregados > 0
+                            ? `${Math.round((item.brevo_aperturas / item.envios_entregados) * 100)}%`
+                            : "—"}
+                        </td>
                         <td className="px-2 py-2">{number.format(item.brevo_clicks)}</td>
+                        <td className="px-2 py-2">
+                          {item.canal === "correo" && item.envios_entregados > 0
+                            ? `${Math.round((item.brevo_clicks / item.envios_entregados) * 100)}%`
+                            : "—"}
+                        </td>
                         <td className="px-2 py-2">{number.format(item.sesiones_utm)}</td>
                       </tr>
                     ))}
+                    <tr className="border-t bg-muted/30 font-semibold">
+                      <td className="px-2 py-2" colSpan={3}>Totales</td>
+                      <td className="px-2 py-2">{number.format(campaignTotals.envios_totales)}</td>
+                      <td className="px-2 py-2">{number.format(campaignTotals.envios_omitidos)}</td>
+                      <td className="px-2 py-2">{number.format(campaignTotals.envios_entregados)}</td>
+                      <td className="px-2 py-2">{number.format(campaignTotals.envios_respondidos)}</td>
+                      <td className="px-2 py-2">
+                        {campaignTotals.envios_totales > 0
+                          ? `${Math.round((campaignTotals.envios_entregados / campaignTotals.envios_totales) * 100)}%`
+                          : "—"}
+                      </td>
+                      <td className="px-2 py-2">
+                        {campaignTotals.envios_entregados > 0
+                          ? `${Math.round((campaignTotals.envios_respondidos / campaignTotals.envios_entregados) * 100)}%`
+                          : "—"}
+                      </td>
+                      <td className="px-2 py-2">
+                        {campaignTotals.envios_entregados > 0
+                          ? `${Math.round(((campaignTotals.envios_entregados - campaignTotals.envios_respondidos) / campaignTotals.envios_entregados) * 100)}%`
+                          : "—"}
+                      </td>
+                      <td className="px-2 py-2">{number.format(campaignTotals.brevo_aperturas)}</td>
+                      <td className="px-2 py-2">
+                        {campaignTotals.envios_entregados > 0
+                          ? `${Math.round((campaignTotals.brevo_aperturas / campaignTotals.envios_entregados) * 100)}%`
+                          : "—"}
+                      </td>
+                      <td className="px-2 py-2">{number.format(campaignTotals.brevo_clicks)}</td>
+                      <td className="px-2 py-2">
+                        {campaignTotals.envios_entregados > 0
+                          ? `${Math.round((campaignTotals.brevo_clicks / campaignTotals.envios_entregados) * 100)}%`
+                          : "—"}
+                      </td>
+                      <td className="px-2 py-2">{number.format(campaignTotals.sesiones_utm)}</td>
+                    </tr>
                   </tbody>
                 </table>
               </div>

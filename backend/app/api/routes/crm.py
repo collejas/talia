@@ -2414,6 +2414,7 @@ class ProspeccionMetricasQuery(BaseModel):
     include_campaign_timeseries: bool = Field(default=True)
     include_whatsapp_timeseries: bool = Field(default=True)
     include_whatsapp_channels: bool = Field(default=True)
+    lite: bool = Field(default=False)
 
 
 class ProspeccionCampanaUpdatePayload(BaseModel):
@@ -18981,17 +18982,43 @@ async def prospeccion_metricas_dashboard(
             if not page_rows:
                 break
             campaign_rows.extend(page_rows)
+            if params.lite:
+                break
             if len(page_rows) < campaign_page_size:
                 break
             campaign_offset += len(page_rows)
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
+    campana_name_map: dict[str, str] = {}
+    campana_ids: set[str] = set()
+    for row in campaign_rows:
+        campana_id_raw = row.get("campana_id")
+        if campana_id_raw:
+            campana_ids.add(str(campana_id_raw))
+
+    if campana_ids:
+        try:
+            campanas = await repo.list_campaigns(organizacion_id=organizacion_id)
+        except CRMRepositoryError as exc:
+            raise HTTPException(status_code=502, detail=str(exc)) from exc
+        for campana in campanas:
+            campana_id = str(campana.get("id"))
+            if campana_id in campana_ids:
+                campana_name = _clean_text(campana.get("nombre"))
+                if campana_name:
+                    campana_name_map[campana_id] = campana_name
+
     campaign_items: list[dict[str, Any]] = []
     for row in campaign_rows:
+        campana_id_raw = row.get("campana_id")
+        campana_id_value = str(campana_id_raw) if campana_id_raw else None
+        campana_nombre = _clean_text(row.get("campana_nombre")) or (
+            campana_name_map.get(campana_id_value or "")
+        )
         item = {
-            "campana_id": row.get("campana_id"),
-            "campana_nombre": row.get("campana_nombre"),
+            "campana_id": campana_id_value,
+            "campana_nombre": campana_nombre,
             "canal": row.get("canal"),
             "template_id": row.get("template_id"),
             "template_slug": row.get("template_slug"),
@@ -19003,6 +19030,9 @@ async def prospeccion_metricas_dashboard(
             "envios_fallidos": int(row.get("envios_fallidos") or 0),
             "envios_omitidos": int(row.get("envios_omitidos") or 0),
             "envios_respondidos": int(row.get("envios_respondidos") or 0),
+            "envios_pendientes": int(row.get("envios_pendientes") or 0),
+            "envios_procesando": int(row.get("envios_procesando") or 0),
+            "envios_enviados_puros": int(row.get("envios_enviados_puros") or 0),
             "brevo_aperturas": int(row.get("brevo_aperturas") or 0),
             "brevo_clicks": int(row.get("brevo_clicks") or 0),
             "sesiones_utm": int(row.get("sesiones_utm") or 0),
@@ -19036,7 +19066,7 @@ async def prospeccion_metricas_dashboard(
         2,
     )
     campaign_timeseries: list[dict[str, Any]] = []
-    if params.include_campaign_timeseries:
+    if params.include_campaign_timeseries and not params.lite:
         campaign_timeseries_raw: dict[str, dict[str, int]] = defaultdict(
             lambda: {
                 "envios_totales": 0,
@@ -19162,6 +19192,8 @@ async def prospeccion_metricas_dashboard(
             if not page_rows:
                 break
             frase_events.extend(page_rows)
+            if params.lite:
+                break
             if len(page_rows) < frase_page_size:
                 break
             frase_offset += len(page_rows)
@@ -19172,7 +19204,7 @@ async def prospeccion_metricas_dashboard(
     try:
         rules_for_map, _ = await repo.list_whatsapp_atribucion_reglas(
             usuario_token=user_token,
-            limit=500,
+            limit=200 if params.lite else 500,
             offset=0,
             include_historial=True,
         )
@@ -19189,27 +19221,28 @@ async def prospeccion_metricas_dashboard(
         for row in frase_events
         if _clean_text(row.get("conversacion_id"))
     }
-    try:
-        opportunities: list[dict[str, Any]] = []
-        opportunity_page_size = 1000
-        opportunity_offset = 0
-        conversation_id_list = [value for value in conversation_ids if value]
-        while True:
-            page_rows = await repo.list_opportunities_by_conversation_ids(
-                organizacion_id=organizacion_id,
-                conversation_ids=conversation_id_list,
-                limit=opportunity_page_size,
-                offset=opportunity_offset,
-            )
-            if not page_rows:
-                break
-            opportunities.extend(page_rows)
-            if len(page_rows) < opportunity_page_size:
-                break
-            opportunity_offset += len(page_rows)
-    except CRMRepositoryError as exc:
-        logger.warning("prospeccion.metricas.opportunities_by_conversation_failed", extra={"error": str(exc)})
-        opportunities = []
+    opportunities: list[dict[str, Any]] = []
+    if not params.lite:
+        try:
+            opportunity_page_size = 1000
+            opportunity_offset = 0
+            conversation_id_list = [value for value in conversation_ids if value]
+            while True:
+                page_rows = await repo.list_opportunities_by_conversation_ids(
+                    organizacion_id=organizacion_id,
+                    conversation_ids=conversation_id_list,
+                    limit=opportunity_page_size,
+                    offset=opportunity_offset,
+                )
+                if not page_rows:
+                    break
+                opportunities.extend(page_rows)
+                if len(page_rows) < opportunity_page_size:
+                    break
+                opportunity_offset += len(page_rows)
+        except CRMRepositoryError as exc:
+            logger.warning("prospeccion.metricas.opportunities_by_conversation_failed", extra={"error": str(exc)})
+            opportunities = []
 
     opp_by_conversation: dict[str, dict[str, Any]] = {}
     for opportunity in opportunities:
@@ -19333,7 +19366,7 @@ async def prospeccion_metricas_dashboard(
         2,
     )
     frases_timeseries: list[dict[str, Any]] = []
-    if params.include_whatsapp_timeseries:
+    if params.include_whatsapp_timeseries and not params.lite:
         frases_timeseries_raw: dict[str, dict[str, float]] = defaultdict(
             lambda: {
                 "conversaciones_atribuidas": 0,
@@ -19341,22 +19374,22 @@ async def prospeccion_metricas_dashboard(
                 "monto_estimado_total": 0.0,
             }
         )
-        for event in frase_events:
-            event_ts = _parse_datetime(event.get("creado_en"))
-            if event_ts is None:
-                continue
-            day_key = event_ts.astimezone(report_zone).date().isoformat()
-            bucket = frases_timeseries_raw[day_key]
-            bucket["conversaciones_atribuidas"] += 1
-            conversation_id_value = _clean_text(event.get("conversacion_id"))
-            if conversation_id_value and conversation_id_value in opp_by_conversation:
-                bucket["oportunidades_creadas"] += 1
-                try:
-                    bucket["monto_estimado_total"] += float(
-                        opp_by_conversation[conversation_id_value].get("monto_estimado") or 0
-                    )
-                except (TypeError, ValueError):
-                    pass
+    for event in frase_events:
+        event_ts = _parse_datetime(event.get("creado_en"))
+        if event_ts is None:
+            continue
+        day_key = event_ts.astimezone(report_zone).date().isoformat()
+        bucket = frases_timeseries_raw[day_key]
+        bucket["conversaciones_atribuidas"] += 1
+        conversation_id_value = _clean_text(event.get("conversacion_id"))
+        if conversation_id_value and conversation_id_value in opp_by_conversation:
+            bucket["oportunidades_creadas"] += 1
+            try:
+                bucket["monto_estimado_total"] += float(
+                    opp_by_conversation[conversation_id_value].get("monto_estimado") or 0
+                )
+            except (TypeError, ValueError):
+                pass
         frases_timeseries = [
             {
                 "fecha": day,

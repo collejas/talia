@@ -122,6 +122,9 @@ export type ProspeccionCampanaAtribucionItem = {
   envios_fallidos: number
   envios_omitidos: number
   envios_respondidos: number
+  envios_pendientes?: number | null
+  envios_procesando?: number | null
+  envios_enviados_puros?: number | null
   brevo_aperturas: number
   brevo_clicks: number
   sesiones_utm: number
@@ -1508,6 +1511,10 @@ export async function getProspeccionMetricas(params: {
   campana_publicitaria?: string
   regla_id?: string
   limit?: number
+  include_campaign_timeseries?: boolean
+  include_whatsapp_timeseries?: boolean
+  include_whatsapp_channels?: boolean
+  lite?: boolean
 } = {}) {
   const url = buildClientUrl("/api/prospeccion/metricas")
   if (params.date_from) url.searchParams.set("date_from", params.date_from)
@@ -1517,6 +1524,11 @@ export async function getProspeccionMetricas(params: {
   if (params.campana_publicitaria) url.searchParams.set("campana_publicitaria", params.campana_publicitaria)
   if (params.regla_id) url.searchParams.set("regla_id", params.regla_id)
   if (typeof params.limit === "number") url.searchParams.set("limit", String(params.limit))
+   // flags de carga ligera
+  if (params.include_campaign_timeseries === false) url.searchParams.set("include_campaign_timeseries", "false")
+  if (params.include_whatsapp_timeseries === false) url.searchParams.set("include_whatsapp_timeseries", "false")
+  if (params.include_whatsapp_channels === false) url.searchParams.set("include_whatsapp_channels", "false")
+  if (params.lite) url.searchParams.set("lite", "true")
   return requestJson<ProspeccionMetricasResponse>(url.toString())
 }
 
