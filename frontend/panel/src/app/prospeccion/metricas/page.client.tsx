@@ -1,11 +1,19 @@
 "use client"
 
 import { useCallback, useEffect, useMemo, useState } from "react"
-import { IconDownload, IconFileSpreadsheet, IconLoader } from "@tabler/icons-react"
+import {
+  IconBrandWhatsapp,
+  IconDownload,
+  IconFileSpreadsheet,
+  IconLoader,
+  IconMail,
+  IconPhoneCall,
+} from "@tabler/icons-react"
 import {
   Bar,
   BarChart,
   CartesianGrid,
+  Cell,
   Legend,
   Line,
   LineChart,
@@ -36,6 +44,23 @@ import {
 const money = new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN", maximumFractionDigits: 0 })
 const number = new Intl.NumberFormat("es-MX")
 const shortDate = new Intl.DateTimeFormat("es-MX", { month: "short", day: "2-digit" })
+const CHANNEL_TOTAL_STYLE: Record<string, { fill: string; stroke: string; label: string }> = {
+  whatsapp: { fill: "#25D366", stroke: "#1FAF57", label: "WhatsApp" },
+  correo: { fill: "#2563EB", stroke: "#1D4ED8", label: "Correo" },
+  llamada: { fill: "#F59E0B", stroke: "#D97706", label: "Voz" },
+}
+
+function getChannelTotalStyle(canal?: string | null) {
+  return CHANNEL_TOTAL_STYLE[(canal || "").toLowerCase()] ?? { fill: "#0f172a", stroke: "#0f172a", label: "Canal" }
+}
+
+function getChannelIcon(canal?: string | null) {
+  const normalized = (canal || "").toLowerCase()
+  if (normalized === "whatsapp") return IconBrandWhatsapp
+  if (normalized === "correo") return IconMail
+  if (normalized === "llamada") return IconPhoneCall
+  return IconPhoneCall
+}
 
 function escapeCsvValue(value: string | number | null | undefined) {
   if (value === null || value === undefined) return ""
@@ -753,7 +778,26 @@ export default function ProspeccionMetricasPageClient() {
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={channelSummary} barGap={-26} barCategoryGap="30%">
                   <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="canal_label" tickMargin={8} />
+                  <XAxis
+                    dataKey="canal_label"
+                    tickLine={false}
+                    tick={({ x, y, payload }) => {
+                      const row = channelSummary.find((item) => item.canal_label === payload.value)
+                      const style = getChannelTotalStyle(row?.canal)
+                      const ChannelIcon = getChannelIcon(row?.canal)
+                      return (
+                        <g transform={`translate(${x},${y})`}>
+                          <foreignObject x={-54} y={8} width={120} height={24}>
+                            <div className="flex items-center gap-1 text-[11px] text-foreground">
+                              <span className="h-2 w-2 rounded-full" style={{ backgroundColor: style.fill }} />
+                              <ChannelIcon size={12} />
+                              <span>{payload.value}</span>
+                            </div>
+                          </foreignObject>
+                        </g>
+                      )
+                    }}
+                  />
                   <YAxis allowDecimals={false} />
                   <Tooltip
                     content={({ active, payload, label }) => {
@@ -772,7 +816,10 @@ export default function ProspeccionMetricasPageClient() {
                           <div className="mb-1 font-semibold">{label}</div>
                           <div className="space-y-1">
                             <div className="flex justify-between gap-3">
-                              <span className="flex items-center">{swatch("rgba(15,23,42,0.5)")}Envíos totales</span>
+                              <span className="flex items-center">
+                                {swatch(getChannelTotalStyle(row.canal).fill)}
+                                Envíos totales
+                              </span>
                               <span>{number.format(total)} (100%)</span>
                             </div>
                             <div className="flex justify-between gap-3">
@@ -837,7 +884,19 @@ export default function ProspeccionMetricasPageClient() {
                     barSize={30}
                     name="Envíos totales"
                     legendType="none"
-                  />
+                  >
+                    {channelSummary.map((row, idx) => {
+                      const style = getChannelTotalStyle(row.canal)
+                      return (
+                        <Cell
+                          key={`totales-${row.canal}-${idx}`}
+                          fill={style.fill}
+                          stroke={style.stroke}
+                          fillOpacity={0.18}
+                        />
+                      )
+                    })}
+                  </Bar>
                   <Bar dataKey="envios_enviados" stackId="breakdown" fill="#fbbf24" name="Enviados" barSize={22} />
                   <Bar dataKey="envios_fallidos" stackId="breakdown" fill="#ef4444" name="Fallidos" barSize={22} />
                   <Bar dataKey="envios_omitidos" stackId="breakdown" fill="#9ca3af" name="Omitidos" barSize={22} />
