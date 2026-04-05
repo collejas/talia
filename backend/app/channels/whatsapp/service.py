@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import re
 import time
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
@@ -217,13 +218,7 @@ async def _sync_inbound_to_prospeccion_log(
         return False
     envio: dict[str, Any] | None = None
     if not prospecto:
-        normalized_from = _normalize_phone_number(message.from_number)
-        candidates: list[str] = []
-        if normalized_from:
-            candidates.append(normalized_from)
-            if normalized_from.startswith("+"):
-                candidates.append(normalized_from[1:])
-        for phone_candidate in candidates:
+        for phone_candidate in _phone_lookup_candidates(message.from_number):
             try:
                 envio = await repo.worker_get_latest_envio_by_phone(
                     phone_e164=phone_candidate,
@@ -254,13 +249,7 @@ async def _sync_inbound_to_prospeccion_log(
             )
             break
     if not prospecto:
-        normalized_from = _normalize_phone_number(message.from_number)
-        phone_candidates: list[str] = []
-        if normalized_from:
-            phone_candidates.append(normalized_from)
-            if normalized_from.startswith("+"):
-                phone_candidates.append(normalized_from[1:])
-        for phone_candidate in phone_candidates:
+        for phone_candidate in _phone_lookup_candidates(message.from_number):
             try:
                 prospecto = await repo.worker_find_latest_prospecto_by_phone(phone=phone_candidate)
             except CRMRepositoryError as exc:
@@ -436,13 +425,10 @@ async def _resolve_prospeccion_prospecto_id(
             return UUID(str(prospecto_id))
         except (TypeError, ValueError):
             pass
-    normalized_from = _normalize_phone_number(message.from_number)
-    if not normalized_from:
+    phone_candidates = _phone_lookup_candidates(message.from_number)
+    if not phone_candidates:
         return None
-    candidates: list[str] = [normalized_from]
-    if normalized_from.startswith("+"):
-        candidates.append(normalized_from[1:])
-    for phone_candidate in candidates:
+    for phone_candidate in phone_candidates:
         try:
             by_phone = await repo.worker_find_latest_prospecto_by_phone(phone=phone_candidate)
         except CRMRepositoryError:
@@ -2712,6 +2698,37 @@ def _normalize_phone_number(value: str | None) -> str | None:
     if text.lower().startswith("whatsapp:"):
         return text.split(":", 1)[1]
     return text
+
+
+def _phone_lookup_candidates(value: str | None) -> list[str]:
+    normalized = _normalize_phone_number(value)
+    if not normalized:
+        return []
+    candidates: list[str] = []
+
+    def _push(raw: str | None) -> None:
+        text = _trim_text(raw)
+        if not text:
+            return
+        if text not in candidates:
+            candidates.append(text)
+
+    _push(normalized)
+    digits = re.sub(r"\D", "", normalized)
+    if digits:
+        _push(digits)
+    if len(digits) >= 10:
+        tail10 = digits[-10:]
+        _push(tail10)
+        _push("+52" + tail10)
+        _push("+521" + tail10)
+        _push("52" + tail10)
+        _push("521" + tail10)
+    if normalized.startswith("+521") and len(normalized) > 4:
+        _push("+52" + normalized[4:])
+    if normalized.startswith("+52") and not normalized.startswith("+521") and len(normalized) > 3:
+        _push("+521" + normalized[3:])
+    return candidates
 
 
 def _parse_iso_datetime(value: Any) -> datetime | None:

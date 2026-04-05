@@ -12747,22 +12747,33 @@ class CRMRepository:
         trimmed = phone.strip() if isinstance(phone, str) else ""
         if not trimmed:
             return None
-        resp = await self._request(
-            "GET",
-            "/rest/v1/prospeccion_prospectos",
-            params={
+        order_clause = "actualizado_en.desc.nullslast,creado_en.desc"
+        lookups: tuple[dict[str, str], ...] = (
+            {
                 "phone": f"eq.{trimmed}",
-                "order": "actualizado_en.desc.nullslast,creado_en.desc",
+                "order": order_clause,
+                "limit": "1",
+            },
+            {
+                "phone_e164": f"eq.{trimmed}",
+                "order": order_clause,
                 "limit": "1",
             },
         )
-        data = resp.json() or []
-        if not isinstance(data, list) or not data:
-            return None
-        row = data[0]
-        if not isinstance(row, dict):
-            raise CRMRepositoryError(f"worker_find_latest_prospecto_by_phone_invalid:{row!r}")
-        return row
+        for params in lookups:
+            resp = await self._request(
+                "GET",
+                "/rest/v1/prospeccion_prospectos",
+                params=params,
+            )
+            data = resp.json() or []
+            if not isinstance(data, list) or not data:
+                continue
+            row = data[0]
+            if not isinstance(row, dict):
+                raise CRMRepositoryError(f"worker_find_latest_prospecto_by_phone_invalid:{row!r}")
+            return row
+        return None
 
     async def worker_get_latest_envio_for_prospecto(
         self,

@@ -19107,7 +19107,7 @@ async def prospeccion_metricas_dashboard(
                 continue
         if batch_ids_for_series:
             envios_rows: list[dict[str, Any]] = []
-            responded_envio_ids: set[str] = set()
+            responded_envio_days: dict[str, str] = {}
             try:
                 batch_chunk_size = 200
                 envios_page_size = 1000
@@ -19162,8 +19162,18 @@ async def prospeccion_metricas_dashboard(
                             if action not in response_actions:
                                 continue
                             envio_id = _clean_text(log_row.get("envio_id"))
-                            if envio_id:
-                                responded_envio_ids.add(envio_id)
+                            if not envio_id:
+                                continue
+                            log_ts = _parse_datetime(log_row.get("creado_en"))
+                            if log_ts is None:
+                                continue
+                            if date_from_dt and log_ts < date_from_dt:
+                                continue
+                            if date_to_dt and log_ts > date_to_dt:
+                                continue
+                            # Conservar la primera respuesta del envio para series diarias.
+                            if envio_id not in responded_envio_days:
+                                responded_envio_days[envio_id] = log_ts.astimezone(report_zone).date().isoformat()
                         if len(log_rows) < logs_page_size:
                             break
                         page_offset += len(log_rows)
@@ -19199,8 +19209,11 @@ async def prospeccion_metricas_dashboard(
                 if estado in delivered_states:
                     bucket["envios_entregados"] += 1
                 envio_id_key = _clean_text(envio.get("id"))
-                if estado == "respondido" or (envio_id_key and envio_id_key in responded_envio_ids):
+                if estado == "respondido" and (not envio_id_key or envio_id_key not in responded_envio_days):
                     bucket["envios_respondidos"] += 1
+            # Si existe log de reply_inbound/respondido, usar fecha real de respuesta para la serie.
+            for day_key in responded_envio_days.values():
+                campaign_timeseries_raw[day_key]["envios_respondidos"] += 1
         campaign_timeseries = [
             {"fecha": day, **metrics}
             for day, metrics in sorted(campaign_timeseries_raw.items(), key=lambda item: item[0])
