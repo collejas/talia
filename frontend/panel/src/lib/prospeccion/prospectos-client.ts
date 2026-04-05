@@ -16,6 +16,9 @@ export type ProspectoItem = {
   email_lookup_error?: string | null
   email_lookup_checked_en?: string | null
   email_lookup_details?: Record<string, unknown> | null
+  email_quality_tier?: string | null
+  email_risk_score?: number | null
+  email_recommendation?: string | null
   website: string | null
   address: string | null
   fuente: "google_places" | "denue" | "usuario"
@@ -213,7 +216,13 @@ export type ProspectoLookupResponse = {
 export type ProspectoEmailLookupResponse = {
   ok: boolean
   procesados: number
-  detalles: Array<{ prospecto_id: string; email?: string | null; email_lookup_status?: string | null }>
+  detalles: Array<{
+    prospecto_id: string
+    email?: string | null
+    email_lookup_status?: string | null
+    email_risk_score?: number | null
+    email_recommendation?: string | null
+  }>
 }
 
 export type ChecklistLookupResponse = ProspectoLookupResponse & {

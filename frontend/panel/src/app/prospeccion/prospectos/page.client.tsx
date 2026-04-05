@@ -4617,13 +4617,26 @@ function ProspectosView() {
                                 const email = (prospecto.email || "").trim()
                                 const normalizedEmail = email ? email.toLowerCase() : ""
                                 const status = (prospecto.email_lookup_status || (normalizedEmail ? "pendiente" : "sin_email")) as string
+                                const score = typeof prospecto.email_risk_score === "number" ? prospecto.email_risk_score : null
+                                const recommendation = (prospecto.email_recommendation || "").trim()
                                 return (
                                   <TableCell key={columnId}>
                                     <div className="flex flex-col gap-1">
                                       <span className="block max-w-[160px] truncate text-[11px]" title={normalizedEmail || "—"}>
                                         {normalizedEmail || "—"}
                                       </span>
-                                      <EmailLookupStatusBadge status={status} className="text-[10px]" />
+                                      <div className="flex flex-wrap items-center gap-1">
+                                        <EmailLookupStatusBadge status={status} className="text-[10px]" />
+                                        {score !== null ? (
+                                          <Badge
+                                            variant="outline"
+                                            className="text-[10px]"
+                                            title={recommendation ? `Recomendación: ${recommendation}` : "Score de riesgo"}
+                                          >
+                                            Score {score}
+                                          </Badge>
+                                        ) : null}
+                                      </div>
                                     </div>
                                   </TableCell>
                                 )

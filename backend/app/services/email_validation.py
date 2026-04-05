@@ -22,6 +22,7 @@ from email_validator import EmailNotValidError, validate_email
 
 
 EmailLookupStatus = Literal["pendiente", "sin_email", "valido", "invalido", "dudoso", "error"]
+EmailQualityTier = Literal["alta", "media", "baja"]
 
 
 @dataclass(frozen=True)
@@ -58,6 +59,27 @@ ROLE_BASED_LOCAL_PARTS = {
     "rh",
     "jobs",
     "marketing",
+}
+
+LOW_QUALITY_ROLE_LOCAL_PARTS = {
+    "admin",
+    "support",
+    "soporte",
+    "billing",
+    "marketing",
+    "rh",
+    "jobs",
+}
+
+MEDIUM_QUALITY_ROLE_LOCAL_PARTS = {
+    "contacto",
+    "contact",
+    "ventas",
+    "sales",
+    "info",
+    "hello",
+    "servicio",
+    "atencion",
 }
 
 PLACEHOLDER_DOMAINS = {
@@ -111,6 +133,17 @@ def _canonicalize_local_part(value: str) -> str:
         if ch.isalnum():
             cleaned.append(ch)
     return "".join(cleaned)
+
+
+def _infer_quality_tier(*, canonical_local: str) -> EmailQualityTier:
+    if canonical_local in LOW_QUALITY_ROLE_LOCAL_PARTS:
+        return "baja"
+    if canonical_local in MEDIUM_QUALITY_ROLE_LOCAL_PARTS:
+        return "media"
+    if canonical_local in ROLE_BASED_LOCAL_PARTS:
+        # Default role-based.
+        return "media"
+    return "alta"
 
 
 def _build_dns_resolver() -> dns.resolver.Resolver:
@@ -256,11 +289,8 @@ async def validate_email_address(
         )
 
     # Role-based: suele funcionar, pero tiene menor tasa de respuesta / puede ser buzón general.
-    if canonical_local in ROLE_BASED_LOCAL_PARTS:
-        # No cortamos flujo por DNS/MX (para guardar los detalles), pero ya clasificamos.
-        role_based_reason = True
-    else:
-        role_based_reason = False
+    quality_tier: EmailQualityTier = _infer_quality_tier(canonical_local=canonical_local)
+    role_based_reason = canonical_local in ROLE_BASED_LOCAL_PARTS
 
     typo_suggestion = DOMAIN_TYPO_SUGGESTIONS.get(domain)
     typo_reason = bool(typo_suggestion)
@@ -280,6 +310,8 @@ async def validate_email_address(
     dns_details: dict[str, Any] = {
         "domain": domain,
         "local_part": local_part,
+        "quality_tier": quality_tier,
+        "role_based": role_based_reason,
         "mx": mx_records,
         "mx_error": mx_error,
         "a": bool(a_aaaa.get("a")),
@@ -326,9 +358,9 @@ async def validate_email_address(
     if not check_smtp:
         status: EmailLookupStatus = "valido"
         reason = "mx_present_smtp_skipped"
-        if role_based_reason or typo_reason:
+        if quality_tier != "alta" or typo_reason:
             status = "dudoso"
-            reason = "role_based" if role_based_reason else "domain_typo_suspected"
+            reason = "role_based" if quality_tier != "alta" else "domain_typo_suspected"
         return EmailLookupResult(
             status=status,
             normalized_email=normalized_email.lower(),
@@ -343,9 +375,9 @@ async def validate_email_address(
     if ok:
         status: EmailLookupStatus = "valido"
         reason = "smtp_ok"
-        if role_based_reason or typo_reason:
+        if quality_tier != "alta" or typo_reason:
             status = "dudoso"
-            reason = "role_based" if role_based_reason else "domain_typo_suspected"
+            reason = "role_based" if quality_tier != "alta" else "domain_typo_suspected"
         return EmailLookupResult(
             status=status,
             normalized_email=normalized_email.lower(),

@@ -5081,8 +5081,89 @@ async def _run_prospecto_email_lookup(
 ) -> list[dict[str, Any]]:
     """Valida correos de prospectos y persiste status + detalles."""
 
+    prospecto_ids: list[UUID] = []
+    for row in prospectos:
+        raw_id = row.get("id") if isinstance(row, Mapping) else None
+        if not raw_id:
+            continue
+        try:
+            prospecto_ids.append(UUID(str(raw_id)))
+        except (TypeError, ValueError):
+            continue
+
+    logs_by_prospecto: dict[str, list[dict[str, Any]]] = {}
+    if prospecto_ids:
+        try:
+            logs = await repo.list_contact_logs_for_prospectos(
+                usuario_token=user_token,
+                prospecto_ids=prospecto_ids,
+                canal="correo",
+                limit=20000,
+            )
+        except CRMRepositoryError:
+            logs = []
+        for entry in logs:
+            pid = str(entry.get("prospecto_id") or "").strip()
+            if not pid:
+                continue
+            logs_by_prospecto.setdefault(pid, []).append(entry)
+
     semaphore = asyncio.Semaphore(max(1, concurrency))
     processed: list[dict[str, Any]] = []
+
+    def _history_points_for(prospecto_id: str) -> tuple[int, dict[str, Any]]:
+        entries = logs_by_prospecto.get(prospecto_id) or []
+        has_sent = False
+        has_error = False
+        for item in entries:
+            estado = str(item.get("estado") or "").strip().lower()
+            if estado == "enviado":
+                has_sent = True
+            elif estado == "error":
+                has_error = True
+        if has_error:
+            return 0, {"has_error": True, "has_sent": has_sent, "total_logs": len(entries)}
+        if has_sent:
+            return 20, {"has_error": False, "has_sent": True, "total_logs": len(entries)}
+        # Sin historial (o puro omitido/pendiente) => neutral.
+        return 10, {"has_error": False, "has_sent": False, "total_logs": len(entries)}
+
+    def _compute_risk_score(*, lookup_status: str, details: dict[str, Any], smtp_ok: bool, smtp_skipped: bool, history_points: int) -> tuple[int, str]:
+        normalized_status = (lookup_status or "").strip().lower()
+        if normalized_status in {"sin_email"}:
+            return 0, "descartar"
+        if normalized_status in {"invalido"}:
+            return 0, "descartar"
+
+        score = 0
+        # Dominio válido (si llegamos aquí, no es placeholder/disposable/nxdomain).
+        score += 20
+        mx_records = details.get("mx")
+        if isinstance(mx_records, list) and mx_records:
+            score += 20
+        if smtp_ok:
+            score += 20
+        elif smtp_skipped:
+            score += 10
+
+        tier = str(details.get("quality_tier") or "").strip().lower()
+        if tier == "alta":
+            score += 20
+        elif tier == "media":
+            score += 10
+        else:
+            score += 0
+
+        score += max(0, min(20, int(history_points)))
+
+        recommendation: str
+        if score >= 80:
+            recommendation = "enviar"
+        elif score >= 50:
+            recommendation = "probar"
+        else:
+            recommendation = "descartar"
+        return score, recommendation
 
     async def _process_one(prospecto: Mapping[str, Any]) -> dict[str, Any] | None:
         prospecto_id = prospecto.get("id") or prospecto.get("prospecto_id")
@@ -5097,11 +5178,27 @@ async def _run_prospecto_email_lookup(
         async with semaphore:
             result = await validate_email_address(email=email_raw or "", check_smtp=check_smtp)
 
+        details = result.details or {}
+        smtp_info = details.get("smtp")
+        smtp_ok = bool(smtp_info.get("ok")) if isinstance(smtp_info, dict) else False
+        smtp_skipped = bool(smtp_info.get("skipped")) if isinstance(smtp_info, dict) else False
+        history_points, history_meta = _history_points_for(str(prospecto_id))
+        score, recommendation = _compute_risk_score(
+            lookup_status=result.status,
+            details=details,
+            smtp_ok=smtp_ok,
+            smtp_skipped=smtp_skipped,
+            history_points=history_points,
+        )
+
         updates: dict[str, Any] = {
             "email_lookup_status": result.status,
             "email_lookup_error": result.error,
-            "email_lookup_details": result.details or {},
+            "email_lookup_details": {**details, "history": history_meta},
             "email_lookup_checked_en": (result.checked_at.isoformat() if result.checked_at else None),
+            "email_quality_tier": details.get("quality_tier"),
+            "email_risk_score": score,
+            "email_recommendation": recommendation,
         }
         if result.normalized_email:
             updates["email"] = result.normalized_email
@@ -5115,6 +5212,8 @@ async def _run_prospecto_email_lookup(
             "prospecto_id": str(prospecto_id),
             "email": updated.get("email"),
             "email_lookup_status": updated.get("email_lookup_status"),
+            "email_risk_score": updated.get("email_risk_score"),
+            "email_recommendation": updated.get("email_recommendation"),
         }
 
     tasks = [_process_one(row) for row in prospectos]
