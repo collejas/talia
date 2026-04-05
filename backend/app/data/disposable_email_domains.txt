@@ -1,0 +1,11 @@
+# Lista (muy) básica de dominios de correo desechable / "basura".
+# Puedes ampliarla con tu lista preferida. Un dominio por línea.
+#
+# Fuentes típicas para expandir: "disposable email domains" lists.
+10minutemail.com
+10minutemail.net
+guerrillamail.com
+mailinator.com
+tempmail.com
+temp-mail.org
+yopmail.com

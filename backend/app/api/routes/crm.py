@@ -107,6 +107,7 @@ from app.services.google_trends import (
 )
 from app.services.openai_catalog_sync import sync_openai_catalogs
 from app.services.openai_reconciliation import sync_openai_cost_reconciliation
+from app.services.email_validation import validate_email_address
 from app.services.ui_realtime_hub import (
     inbox_topic_for_org,
     prospectos_topic_for_org,
@@ -2221,6 +2222,36 @@ class ProspectoLookupPayload(BaseModel):
     reintentar: bool = Field(
         default=False,
         description="Si es falso se omiten prospectos ya verificados o sin teléfono.",
+    )
+
+    @field_validator("prospecto_ids")
+    @classmethod
+    def _dedupe_prospecto_ids(cls, value: list[UUID]) -> list[UUID]:
+        unique: list[UUID] = []
+        seen: set[UUID] = set()
+        for item in value:
+            if item in seen:
+                continue
+            seen.add(item)
+            unique.append(item)
+        return unique
+
+
+class ProspectoEmailLookupPayload(BaseModel):
+    """Solicita validación de correos (formato + DNS/MX + SMTP opcional)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    prospecto_ids: list[UUID] = Field(
+        ..., min_length=1, max_length=200, description="Prospectos a verificar."
+    )
+    check_smtp: bool = Field(
+        default=True,
+        description="Si es true intenta conexión SMTP al MX (sin enviar correo).",
+    )
+    reintentar: bool = Field(
+        default=False,
+        description="Si es falso se omiten prospectos ya clasificados (valido/invalido/dudoso/sin_email).",
     )
 
     @field_validator("prospecto_ids")
@@ -5036,6 +5067,61 @@ async def _run_prospecto_lookup(
                 "whatsapp_permitido": updated.get("whatsapp_permitido"),
             }
         )
+    return processed
+
+
+async def _run_prospecto_email_lookup(
+    *,
+    repo: CRMRepository,
+    user_token: str,
+    prospectos: Sequence[Mapping[str, Any]],
+    reintentar: bool,
+    check_smtp: bool,
+    concurrency: int = 12,
+) -> list[dict[str, Any]]:
+    """Valida correos de prospectos y persiste status + detalles."""
+
+    semaphore = asyncio.Semaphore(max(1, concurrency))
+    processed: list[dict[str, Any]] = []
+
+    async def _process_one(prospecto: Mapping[str, Any]) -> dict[str, Any] | None:
+        prospecto_id = prospecto.get("id") or prospecto.get("prospecto_id")
+        if not prospecto_id:
+            return None
+
+        current_status = _clean_text(prospecto.get("email_lookup_status")) or ""
+        if not reintentar and current_status in {"valido", "invalido", "dudoso", "sin_email"}:
+            return None
+
+        email_raw = _clean_text(prospecto.get("email"))
+        async with semaphore:
+            result = await validate_email_address(email=email_raw or "", check_smtp=check_smtp)
+
+        updates: dict[str, Any] = {
+            "email_lookup_status": result.status,
+            "email_lookup_error": result.error,
+            "email_lookup_details": result.details or {},
+            "email_lookup_checked_en": (result.checked_at.isoformat() if result.checked_at else None),
+        }
+        if result.normalized_email:
+            updates["email"] = result.normalized_email
+
+        updated = await repo.update_prospecto(
+            usuario_token=user_token,
+            prospecto_id=UUID(str(prospecto_id)),
+            payload=updates,
+        )
+        return {
+            "prospecto_id": str(prospecto_id),
+            "email": updated.get("email"),
+            "email_lookup_status": updated.get("email_lookup_status"),
+        }
+
+    tasks = [_process_one(row) for row in prospectos]
+    for item in await asyncio.gather(*tasks):
+        if item:
+            processed.append(item)
+
     return processed
 
 
@@ -20809,6 +20895,46 @@ async def verificar_prospectos(
         payload={"procesados": len(processed)},
     )
 
+    return {"ok": True, "procesados": len(processed), "detalles": processed}
+
+
+@router.post("/prospeccion/prospectos/verificar-correos")
+async def verificar_correos_prospectos(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    _: str = Depends(require_permission("ejecutar_busquedas")),
+    user_token: str = Depends(require_user_token),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    payload: ProspectoEmailLookupPayload,
+) -> dict[str, Any]:
+    """Valida correos de prospectos (formato + DNS/MX + SMTP opcional) y persiste clasificación."""
+
+    try:
+        prospectos = await repo.list_prospectos_by_ids(
+            usuario_token=user_token,
+            prospecto_ids=payload.prospecto_ids,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    if not prospectos:
+        raise HTTPException(status_code=404, detail="prospectos_not_found")
+
+    try:
+        processed = await _run_prospecto_email_lookup(
+            repo=repo,
+            user_token=user_token,
+            prospectos=prospectos,
+            reintentar=payload.reintentar,
+            check_smtp=payload.check_smtp,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    await _publish_prospectos_ui_event(
+        organizacion_id=organizacion_id,
+        event_type="prospectos_email_lookup_updated",
+        payload={"procesados": len(processed)},
+    )
     return {"ok": True, "procesados": len(processed), "detalles": processed}
 
 

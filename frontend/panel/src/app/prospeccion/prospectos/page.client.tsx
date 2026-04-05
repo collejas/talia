@@ -97,6 +97,7 @@ import {
   saveProspectosTablePreferences,
   saveProspectosSavedViews,
   verificarProspectos,
+  verificarCorreosProspectos,
   listContactoBatches,
   type ContactoBatch,
 } from "@/lib/prospeccion/prospectos-client"
@@ -305,6 +306,15 @@ const LOOKUP_STATUS_LABELS: Record<string, string> = {
   error: "Error",
 }
 
+const EMAIL_LOOKUP_STATUS_LABELS: Record<string, string> = {
+  pendiente: "Pendiente",
+  sin_email: "Sin correo",
+  valido: "Válido",
+  invalido: "Inválido",
+  dudoso: "Dudoso",
+  error: "Error",
+}
+
 const RATING_FILTER_LABELS: Record<MinRatingFilter, string> = {
   "": "Todos",
   "3": "3+",
@@ -324,6 +334,15 @@ const LOOKUP_STATUS_VARIANTS: Record<string, "default" | "secondary" | "destruct
   pendiente: "secondary",
   verificado: "default",
   sin_numero: "outline",
+  error: "destructive",
+}
+
+const EMAIL_LOOKUP_STATUS_VARIANTS: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
+  pendiente: "secondary",
+  sin_email: "outline",
+  valido: "default",
+  invalido: "destructive",
+  dudoso: "secondary",
   error: "destructive",
 }
 
@@ -795,7 +814,7 @@ function ProspectosView() {
   const [error, setError] = useState<string | null>(null)
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [banner, setBanner] = useState<BannerState | null>(null)
-  const [action, setAction] = useState<"lookup" | "contact" | null>(null)
+  const [action, setAction] = useState<"lookup" | "email_lookup" | "contact" | null>(null)
   const [formDialogOpen, setFormDialogOpen] = useState(false)
   const [formMode, setFormMode] = useState<"create" | "edit">("create")
   const [formValues, setFormValues] = useState<ProspectoFormState>(initialProspectoForm)
@@ -2445,6 +2464,29 @@ function ProspectosView() {
       void fetchStageSummary()
     } catch (err) {
       const message = err instanceof Error ? err.message : "No se pudo verificar los teléfonos."
+      setBanner({ type: "error", message })
+    } finally {
+      setAction(null)
+    }
+  }, [fetchProspectos, fetchStageSummary, offset, selectedIds])
+
+  const handleVerifyEmails = useCallback(async () => {
+    if (!selectedIds.length) return
+    setAction("email_lookup")
+    setBanner(null)
+    try {
+      const response = await verificarCorreosProspectos({
+        prospecto_ids: selectedIds,
+        check_smtp: true,
+      })
+      setBanner({
+        type: "success",
+        message: `Se validaron ${response.procesados} correos.`,
+      })
+      await fetchProspectos(offset)
+      void fetchStageSummary()
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "No se pudieron validar los correos."
       setBanner({ type: "error", message })
     } finally {
       setAction(null)
@@ -4263,10 +4305,19 @@ function ProspectosView() {
                 variant="outline"
                 size="sm"
                 onClick={() => void handleVerify()}
-                disabled={!selectedCount || action === "lookup"}
+                disabled={!selectedCount || action !== null}
               >
                 <IconPhoneCheck className={cn("mr-1.5 size-4", action === "lookup" && "animate-spin")} />
                 Verificar teléfonos
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => void handleVerifyEmails()}
+                disabled={!selectedCount || action !== null}
+              >
+                <IconMail className={cn("mr-1.5 size-4", action === "email_lookup" && "animate-spin")} />
+                Validar correos
               </Button>
               <Button
                 variant="outline"
@@ -4565,11 +4616,15 @@ function ProspectosView() {
                               case "correo": {
                                 const email = (prospecto.email || "").trim()
                                 const normalizedEmail = email ? email.toLowerCase() : ""
+                                const status = (prospecto.email_lookup_status || (normalizedEmail ? "pendiente" : "sin_email")) as string
                                 return (
                                   <TableCell key={columnId}>
-                                    <span className="block max-w-[160px] truncate text-[11px]" title={normalizedEmail || "—"}>
-                                      {normalizedEmail || "—"}
-                                    </span>
+                                    <div className="flex flex-col gap-1">
+                                      <span className="block max-w-[160px] truncate text-[11px]" title={normalizedEmail || "—"}>
+                                        {normalizedEmail || "—"}
+                                      </span>
+                                      <EmailLookupStatusBadge status={status} className="text-[10px]" />
+                                    </div>
                                   </TableCell>
                                 )
                               }
@@ -5234,6 +5289,16 @@ function LookupStatusBadge({ status, className }: { status?: string | null; clas
   const normalized = status.toLowerCase()
   const label = LOOKUP_STATUS_LABELS[normalized] ?? status
   const variant = LOOKUP_STATUS_VARIANTS[normalized] ?? "secondary"
+  return <Badge variant={variant} className={className}>{label}</Badge>
+}
+
+function EmailLookupStatusBadge({ status, className }: { status?: string | null; className?: string }) {
+  if (!status) {
+    return <Badge variant="secondary" className={className}>Pendiente</Badge>
+  }
+  const normalized = status.toLowerCase()
+  const label = EMAIL_LOOKUP_STATUS_LABELS[normalized] ?? status
+  const variant = EMAIL_LOOKUP_STATUS_VARIANTS[normalized] ?? "secondary"
   return <Badge variant={variant} className={className}>{label}</Badge>
 }
 

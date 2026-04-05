@@ -12,6 +12,10 @@ export type ProspectoItem = {
   phone: string | null
   phone_e164?: string | null
   email: string | null
+  email_lookup_status?: string | null
+  email_lookup_error?: string | null
+  email_lookup_checked_en?: string | null
+  email_lookup_details?: Record<string, unknown> | null
   website: string | null
   address: string | null
   fuente: "google_places" | "denue" | "usuario"
@@ -204,6 +208,12 @@ export type ProspectoLookupResponse = {
   ok: boolean
   procesados: number
   detalles: Array<{ prospecto_id: string; lookup_status?: string | null; carrier_type?: string | null }>
+}
+
+export type ProspectoEmailLookupResponse = {
+  ok: boolean
+  procesados: number
+  detalles: Array<{ prospecto_id: string; email?: string | null; email_lookup_status?: string | null }>
 }
 
 export type ChecklistLookupResponse = ProspectoLookupResponse & {
@@ -830,6 +840,30 @@ export async function verificarProspectos(payload: {
     body: JSON.stringify({
       proveedor: payload.proveedor ?? "gratis",
       ...payload,
+      prospecto_ids: prospectoIds,
+    }),
+  })
+}
+
+/**
+ * Run email validation for the provided prospect IDs.
+ */
+export async function verificarCorreosProspectos(payload: {
+  prospecto_ids: string[]
+  reintentar?: boolean
+  check_smtp?: boolean
+}): Promise<ProspectoEmailLookupResponse> {
+  const prospectoIds = payload.prospecto_ids
+    .map((id) => (id || "").trim())
+    .filter((id) => UUID_RE.test(id))
+  if (!prospectoIds.length) {
+    throw new Error("No hay prospectos válidos para verificar.")
+  }
+  return requestJson<ProspectoEmailLookupResponse>("/api/prospeccion/prospectos/verificar-correos", {
+    method: "POST",
+    body: JSON.stringify({
+      ...payload,
+      check_smtp: payload.check_smtp ?? true,
       prospecto_ids: prospectoIds,
     }),
   })
