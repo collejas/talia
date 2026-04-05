@@ -9475,16 +9475,23 @@ class CRMRepository:
                 campana_id=campana_id,
                 canales=normalized_con_envio_canales or None,
             )
-        if campana_id is not None and con_envio is False:
-            return [], 0
-
-        if campana_id is not None or con_envio is True or normalized_con_envio_canales:
+        if campana_id is not None:
+            if con_envio is False:
+                return [], 0
+            if not envio_prospecto_ids:
+                return [], 0
+            include_ids = set(envio_prospecto_ids)
+        elif con_envio is True:
             if not envio_prospecto_ids:
                 return [], 0
             include_ids = set(envio_prospecto_ids)
         elif con_envio is False:
             if envio_prospecto_ids:
                 exclude_ids.update(envio_prospecto_ids)
+        elif normalized_con_envio_canales:
+            if not envio_prospecto_ids:
+                return [], 0
+            include_ids = set(envio_prospecto_ids)
 
         if con_scraper is not None:
             scraper_prospecto_ids = await self._list_prospecto_ids_with_scraper_jobs(
@@ -9996,33 +10003,21 @@ class CRMRepository:
             if not batch_ids_filter:
                 return ids
 
-        batch_chunks: list[list[str]]
-        if batch_ids_filter:
-            batch_values = sorted(batch_ids_filter)
-            chunk_size = 100
-            batch_chunks = [
-                batch_values[index : index + chunk_size]
-                for index in range(0, len(batch_values), chunk_size)
-            ]
-        else:
-            batch_chunks = [[]]
-
-        page_size = 5000
-        max_scan = 50000
-        for batch_chunk in batch_chunks:
+        if campana_id is None:
+            page_size = 5000
+            max_scan = 200000
             offset = 0
             while offset < max_scan:
                 params: dict[str, str] = {
-                    "select": "prospecto_id,canal",
+                    "select": "prospecto_id,canales,total_envios",
                     "limit": str(page_size),
                     "offset": str(offset),
-                    "estado": "neq.cancelado",
+                    "order": "prospecto_id.asc",
+                    "total_envios": "gt.0",
                 }
-                if batch_chunk:
-                    params["batch_id"] = _postgrest_in_clause(batch_chunk)
                 resp = await self._request_with_user(
                     "GET",
-                    "/rest/v1/prospeccion_contacto_envio",
+                    "/rest/v1/prospeccion_prospecto_contacto_stats",
                     token=usuario_token,
                     params=params,
                 )
@@ -10034,15 +10029,81 @@ class CRMRepository:
                 for row in data:
                     if not isinstance(row, dict):
                         continue
-                    if normalized_canales:
-                        row_canal = _normalize_envio_channel(row.get("canal"))
-                        if not row_canal or row_canal not in normalized_canales_set:
-                            continue
                     prospecto_id = row.get("prospecto_id")
                     if prospecto_id is None:
                         continue
+                    if normalized_canales:
+                        canales_raw = row.get("canales")
+                        if not isinstance(canales_raw, dict):
+                            continue
+                        matches_channel = False
+                        for canal_key, detail in canales_raw.items():
+                            canal_normalized = _normalize_envio_channel(canal_key)
+                            if not canal_normalized or canal_normalized not in normalized_canales_set:
+                                continue
+                            total_value = 0
+                            if isinstance(detail, dict):
+                                total_value = int(detail.get("total") or 0)
+                            elif isinstance(detail, (int, float, str)):
+                                try:
+                                    total_value = int(float(detail))
+                                except (TypeError, ValueError):
+                                    total_value = 0
+                            if total_value > 0:
+                                matches_channel = True
+                                break
+                        if not matches_channel:
+                            continue
                     ids.add(str(prospecto_id))
                 offset += len(data)
+        else:
+            batch_chunks: list[list[str]]
+            if batch_ids_filter:
+                batch_values = sorted(batch_ids_filter)
+                chunk_size = 100
+                batch_chunks = [
+                    batch_values[index : index + chunk_size]
+                    for index in range(0, len(batch_values), chunk_size)
+                ]
+            else:
+                batch_chunks = [[]]
+
+            page_size = 5000
+            max_scan = 50000
+            for batch_chunk in batch_chunks:
+                offset = 0
+                while offset < max_scan:
+                    params = {
+                        "select": "prospecto_id,canal",
+                        "limit": str(page_size),
+                        "offset": str(offset),
+                        "estado": "neq.cancelado",
+                    }
+                    if batch_chunk:
+                        params["batch_id"] = _postgrest_in_clause(batch_chunk)
+                    resp = await self._request_with_user(
+                        "GET",
+                        "/rest/v1/prospeccion_contacto_envio",
+                        token=usuario_token,
+                        params=params,
+                    )
+                    data = resp.json() or []
+                    if not isinstance(data, list):
+                        raise CRMRepositoryError(f"contact_envio_ids_invalid:{data!r}")
+                    if not data:
+                        break
+                    for row in data:
+                        if not isinstance(row, dict):
+                            continue
+                        if normalized_canales:
+                            row_canal = _normalize_envio_channel(row.get("canal"))
+                            if not row_canal or row_canal not in normalized_canales_set:
+                                continue
+                        prospecto_id = row.get("prospecto_id")
+                        if prospecto_id is None:
+                            continue
+                        ids.add(str(prospecto_id))
+                    offset += len(data)
         _write_prospectos_ids_cache(
             _PROSPECTOS_ENVIO_IDS_CACHE,
             key=cache_key,

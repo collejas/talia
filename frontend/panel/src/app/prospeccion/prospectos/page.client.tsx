@@ -36,6 +36,8 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuCheckboxItem,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import {
@@ -102,6 +104,7 @@ import {
 type FuenteFilter = "" | "google_places" | "denue" | "usuario"
 type LookupFilter = "" | "pendiente" | "verificado" | "sin_numero" | "error"
 type ConEnvioCanalFilter = "correo" | "whatsapp" | "llamada"
+type ConEnvioModoFilter = "" | "si" | "no"
 type ConScraperFilter = "" | "si" | "no"
 type MinRatingFilter = "" | "3" | "4" | "4.5"
 type EstratoGroupFilter = "" | "micro" | "pequena" | "mediana" | "grande"
@@ -128,6 +131,7 @@ type Filters = {
   fuente: FuenteFilter
   lookupStatus: LookupFilter
   campanaId: string
+  conEnvioModo: ConEnvioModoFilter
   conEnvioCanales: ConEnvioCanalFilter[]
   conScraper: ConScraperFilter
   segmento: string
@@ -204,6 +208,7 @@ const initialFilters: Filters = {
   fuente: "",
   lookupStatus: "",
   campanaId: "",
+  conEnvioModo: "",
   conEnvioCanales: [],
   conScraper: "",
   segmento: "",
@@ -591,6 +596,10 @@ function normalizeSavedViewState(raw: unknown): ProspectosSavedViewState | null 
         ? filtersObj["lookupStatus"]
         : "",
     campanaId: typeof filtersObj["campanaId"] === "string" ? filtersObj["campanaId"] : "",
+    conEnvioModo:
+      filtersObj["conEnvioModo"] === "si" || filtersObj["conEnvioModo"] === "no"
+        ? filtersObj["conEnvioModo"]
+        : "",
     conEnvioCanales: Array.isArray(filtersObj["conEnvioCanales"])
       ? (filtersObj["conEnvioCanales"] as unknown[]).filter(
           (value): value is ConEnvioCanalFilter =>
@@ -1340,9 +1349,12 @@ function ProspectosView() {
     if (filters.campanaId) {
       chips.push(`Campaña: ${campaignLabelMap.get(filters.campanaId) ?? filters.campanaId}`)
     }
-    if (filters.conEnvioCanales.length) {
-      const labels = filters.conEnvioCanales.map((canal) => envioCanalLabel[canal] ?? canal)
-      chips.push(`Con envío: ${labels.join(", ")}`)
+    if (filters.conEnvioCanales.length || filters.conEnvioModo) {
+      const labels = filters.conEnvioCanales.length
+        ? filters.conEnvioCanales.map((canal) => envioCanalLabel[canal] ?? canal)
+        : ["Todos los canales"]
+      const prefix = filters.conEnvioModo === "no" ? "Sin envío" : "Con envío"
+      chips.push(`${prefix}: ${labels.join(", ")}`)
     }
     if (filters.conScraper) {
       chips.push(`Con scraper: ${filters.conScraper === "si" ? "Sí" : "No"}`)
@@ -1398,7 +1410,7 @@ function ProspectosView() {
           fuente: filters.fuente || undefined,
           lookupStatus: filters.lookupStatus || undefined,
           campanaId: filters.campanaId || undefined,
-          conEnvio: filters.conEnvioCanales.length ? true : undefined,
+          conEnvio: resolveConEnvio(filters.conEnvioModo, filters.conEnvioCanales),
           conEnvioCanales: filters.conEnvioCanales.length ? filters.conEnvioCanales : undefined,
           conScraper:
             filters.conScraper === "si" ? true : filters.conScraper === "no" ? false : undefined,
@@ -1511,7 +1523,7 @@ function ProspectosView() {
           fuente: filters.fuente || undefined,
           lookupStatus: filters.lookupStatus || undefined,
           campanaId: filters.campanaId || undefined,
-          conEnvio: filters.conEnvioCanales.length ? true : undefined,
+          conEnvio: resolveConEnvio(filters.conEnvioModo, filters.conEnvioCanales),
           conEnvioCanales: filters.conEnvioCanales.length ? filters.conEnvioCanales : undefined,
           conScraper:
             filters.conScraper === "si" ? true : filters.conScraper === "no" ? false : undefined,
@@ -3466,15 +3478,39 @@ function ProspectosView() {
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="outline" className="w-[170px] justify-between">
-                    {filters.conEnvioCanales.length === 0
-                      ? "Todos"
-                      : `${filters.conEnvioCanales.length} canal${filters.conEnvioCanales.length > 1 ? "es" : ""}`}
+                    {filters.conEnvioModo === "no"
+                      ? `Sin envío${filters.conEnvioCanales.length ? ` · ${filters.conEnvioCanales.length} canal${filters.conEnvioCanales.length > 1 ? "es" : ""}` : ""}`
+                      : filters.conEnvioCanales.length === 0
+                        ? filters.conEnvioModo === "si"
+                          ? "Con envío"
+                          : "Todos"
+                        : `Con envío · ${filters.conEnvioCanales.length} canal${filters.conEnvioCanales.length > 1 ? "es" : ""}`}
                     <IconChevronDown className="size-4" />
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="start" className="w-56">
-                  <DropdownMenuItem onSelect={() => setFilters((prev) => ({ ...prev, conEnvioCanales: [] }))}>
-                    Todos
+                  <DropdownMenuRadioGroup
+                    value={filters.conEnvioModo || "all"}
+                    onValueChange={(value) =>
+                      setFilters((prev) => ({
+                        ...prev,
+                        conEnvioModo: value === "si" || value === "no" ? value : "",
+                      }))
+                    }
+                  >
+                    <DropdownMenuRadioItem value="all">Todos</DropdownMenuRadioItem>
+                    <DropdownMenuRadioItem value="si">Con envío</DropdownMenuRadioItem>
+                    <DropdownMenuRadioItem value="no">Sin envío</DropdownMenuRadioItem>
+                  </DropdownMenuRadioGroup>
+                  <DropdownMenuItem
+                    onSelect={() =>
+                      setFilters((prev) => ({
+                        ...prev,
+                        conEnvioCanales: [],
+                      }))
+                    }
+                  >
+                    Limpiar canales
                   </DropdownMenuItem>
                   {(["correo", "whatsapp", "llamada"] as const).map((canal) => {
                     const checked = filters.conEnvioCanales.includes(canal)
@@ -3487,7 +3523,12 @@ function ProspectosView() {
                             const next = new Set(prev.conEnvioCanales)
                             if (value) next.add(canal)
                             else next.delete(canal)
-                            return { ...prev, conEnvioCanales: Array.from(next) as ConEnvioCanalFilter[] }
+                            const nextCanales = Array.from(next) as ConEnvioCanalFilter[]
+                            return {
+                              ...prev,
+                              conEnvioCanales: nextCanales,
+                              conEnvioModo: value && prev.conEnvioModo === "" ? "si" : prev.conEnvioModo,
+                            }
                           })
                         }
                       >
@@ -5207,6 +5248,16 @@ function formatScraperStatus(value?: string | null) {
   const normalized = (value || "").toLowerCase()
   if (!normalized) return "Lanzado"
   return SCRAPER_STATUS_LABELS[normalized] ?? value ?? "Lanzado"
+}
+
+function resolveConEnvio(
+  modo: ConEnvioModoFilter,
+  canales: ConEnvioCanalFilter[]
+): boolean | undefined {
+  if (modo === "si") return true
+  if (modo === "no") return false
+  if (canales.length) return true
+  return undefined
 }
 
 function getProspectoEnvioCanales(
