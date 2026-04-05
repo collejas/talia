@@ -19107,6 +19107,7 @@ async def prospeccion_metricas_dashboard(
                 continue
         if batch_ids_for_series:
             envios_rows: list[dict[str, Any]] = []
+            responded_envio_ids: set[str] = set()
             try:
                 batch_chunk_size = 200
                 envios_page_size = 1000
@@ -19139,6 +19140,35 @@ async def prospeccion_metricas_dashboard(
             except CRMRepositoryError as exc:
                 logger.warning("prospeccion.metricas.envios_series_fetch_failed", extra={"error": str(exc)})
                 envios_rows = []
+            try:
+                batch_chunk_size = 200
+                logs_page_size = 1000
+                response_actions = {"reply_inbound", "respondido"}
+                for idx in range(0, len(batch_ids_for_series), batch_chunk_size):
+                    batch_chunk = batch_ids_for_series[idx : idx + batch_chunk_size]
+                    page_offset = 0
+                    while True:
+                        log_rows = await repo.list_contact_logs_for_batches(
+                            usuario_token=user_token,
+                            batch_ids=batch_chunk,
+                            canal=None if params.canal == "todos" else params.canal,
+                            limit=logs_page_size,
+                            offset=page_offset,
+                        )
+                        if not log_rows:
+                            break
+                        for log_row in log_rows:
+                            action = (_clean_text(log_row.get("accion")) or "").strip().lower()
+                            if action not in response_actions:
+                                continue
+                            envio_id = _clean_text(log_row.get("envio_id"))
+                            if envio_id:
+                                responded_envio_ids.add(envio_id)
+                        if len(log_rows) < logs_page_size:
+                            break
+                        page_offset += len(log_rows)
+            except CRMRepositoryError as exc:
+                logger.warning("prospeccion.metricas.logs_series_fetch_failed", extra={"error": str(exc)})
             unique_envios: dict[str, dict[str, Any]] = {}
             for row in envios_rows:
                 envio_id_raw = row.get("id")
@@ -19168,7 +19198,8 @@ async def prospeccion_metricas_dashboard(
                     bucket["envios_enviados"] += 1
                 if estado in delivered_states:
                     bucket["envios_entregados"] += 1
-                if estado == "respondido":
+                envio_id_key = _clean_text(envio.get("id"))
+                if estado == "respondido" or (envio_id_key and envio_id_key in responded_envio_ids):
                     bucket["envios_respondidos"] += 1
         campaign_timeseries = [
             {"fecha": day, **metrics}
