@@ -90,13 +90,11 @@ export default function ProspeccionMetricasPageClient() {
   })
   const legendItems = [
     { label: "Enviados", color: "#fbbf24", order: 0 },
-    { label: "Sin respuesta", color: "#60a5fa", order: 1 },
-    { label: "Respondidos", color: "#22c55e", order: 2 },
-    { label: "Fallidos", color: "#ef4444", order: 3 },
-    { label: "Omitidos", color: "#9ca3af", order: 4 },
-    { label: "En tránsito", color: "#f59e0b", order: 5 },
-    { label: "Procesado", color: "#8b5cf6", order: 6 },
-    { label: "Pendiente", color: "#94a3b8", order: 7 },
+    { label: "Fallidos", color: "#ef4444", order: 1 },
+    { label: "Omitidos", color: "#9ca3af", order: 2 },
+    { label: "En tránsito", color: "#f59e0b", order: 3 },
+    { label: "Procesado", color: "#8b5cf6", order: 4 },
+    { label: "Pendiente", color: "#94a3b8", order: 5 },
   ]
 
   useEffect(() => {
@@ -840,8 +838,7 @@ export default function ProspeccionMetricasPageClient() {
                     name="Envíos totales"
                     legendType="none"
                   />
-                  <Bar dataKey="envios_sin_respuesta" stackId="breakdown" fill="#60a5fa" name="Sin respuesta" barSize={22} />
-                  <Bar dataKey="envios_respondidos" stackId="breakdown" fill="#22c55e" name="Respondidos" barSize={22} />
+                  <Bar dataKey="envios_enviados" stackId="breakdown" fill="#fbbf24" name="Enviados" barSize={22} />
                   <Bar dataKey="envios_fallidos" stackId="breakdown" fill="#ef4444" name="Fallidos" barSize={22} />
                   <Bar dataKey="envios_omitidos" stackId="breakdown" fill="#9ca3af" name="Omitidos" barSize={22} />
                   <Bar dataKey="envios_enviados_puros" stackId="breakdown" fill="#f59e0b" name="En tránsito" barSize={22} />
@@ -856,7 +853,12 @@ export default function ProspeccionMetricasPageClient() {
                 Envíos totales = Enviados + Fallidos + Omitidos + En tránsito + Procesado + Pendiente
               </span>
               <span className="inline-flex items-center gap-2">
-                Enviados = Sin respuesta + Respondidos
+                <span className="h-2 w-4 rounded-sm" style={{ backgroundColor: "#fbbf24" }} />
+                Enviados = 
+                <span className="h-2 w-4 rounded-sm" style={{ backgroundColor: "#60a5fa" }} />
+                Sin respuesta + 
+                <span className="h-2 w-4 rounded-sm" style={{ backgroundColor: "#22c55e" }} />
+                Respondidos
               </span>
             </div>
             <div className="text-xs text-muted-foreground">
