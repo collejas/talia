@@ -753,7 +753,7 @@ export default function ProspeccionMetricasPageClient() {
           <CardContent className="space-y-3 text-sm">
             <div className="h-64 w-full">
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={channelSummary} barGap={-24} barCategoryGap="30%">
+                <BarChart data={channelSummary} barGap={-26} barCategoryGap="30%">
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis dataKey="canal_label" tickMargin={8} />
                   <YAxis allowDecimals={false} />
@@ -831,12 +831,13 @@ export default function ProspeccionMetricasPageClient() {
                     )}
                   />
                   <Bar
-                    dataKey="envios_entregados"
-                    fill="transparent"
-                    stroke="#16a34a"
-                    strokeWidth={2}
-                    barSize={26}
-                    name="Entregados"
+                    dataKey="envios_totales"
+                    fill="#0f172a"
+                    fillOpacity={0.18}
+                    stroke="#0f172a"
+                    strokeWidth={4}
+                    barSize={30}
+                    name="Envíos totales"
                     legendType="none"
                   />
                   <Bar dataKey="envios_sin_respuesta" stackId="breakdown" fill="#60a5fa" name="Sin respuesta" barSize={22} />
@@ -846,23 +847,16 @@ export default function ProspeccionMetricasPageClient() {
                   <Bar dataKey="envios_enviados_puros" stackId="breakdown" fill="#f59e0b" name="En tránsito" barSize={22} />
                   <Bar dataKey="envios_procesando" stackId="breakdown" fill="#8b5cf6" name="Procesado" barSize={22} />
                   <Bar dataKey="envios_pendientes" stackId="breakdown" fill="#94a3b8" name="Pendiente" barSize={22} />
-                  <Bar
-                    dataKey="envios_totales"
-                    fill="#0f172a"
-                    fillOpacity={0.12}
-                    stroke="#0f172a"
-                    strokeWidth={2}
-                    barSize={28}
-                    name="Envíos totales"
-                    legendType="none"
-                  />
                 </BarChart>
               </ResponsiveContainer>
             </div>
             <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
               <span className="inline-flex items-center gap-2">
-                <span className="h-2 w-4 rounded-sm border-2 border-slate-900 bg-slate-900/20" />
+                <span className="h-2 w-4 rounded-sm border-[3px] border-slate-900 bg-slate-900/20" />
                 Envíos totales = Enviados + Fallidos + Omitidos + En tránsito + Procesado + Pendiente
+              </span>
+              <span className="inline-flex items-center gap-2">
+                Enviados = Sin respuesta + Respondidos
               </span>
             </div>
             <div className="text-xs text-muted-foreground">
