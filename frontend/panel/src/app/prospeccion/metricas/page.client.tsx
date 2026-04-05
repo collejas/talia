@@ -117,11 +117,10 @@ export default function ProspeccionMetricasPageClient() {
     dir: "desc",
   })
   const legendItems = [
-    { label: "Sin respuesta", color: "#60a5fa", order: 0 },
-    { label: "Respondidos", color: "#22c55e", order: 1 },
-    { label: "Fallidos", color: "#ef4444", order: 2 },
-    { label: "Omitidos", color: "#9ca3af", order: 3 },
-    { label: "Otros estados", color: "#a78bfa", order: 4 },
+    { label: "Enviados", color: "#fbbf24", order: 0 },
+    { label: "Fallidos", color: "#ef4444", order: 1 },
+    { label: "Omitidos", color: "#9ca3af", order: 2 },
+    { label: "Otros estados", color: "#a78bfa", order: 3 },
   ]
 
   useEffect(() => {
@@ -977,8 +976,7 @@ export default function ProspeccionMetricasPageClient() {
                       )
                     })}
                   </Bar>
-                  <Bar dataKey="envios_sin_respuesta" stackId="breakdown" fill="#60a5fa" name="Sin respuesta" barSize={22} />
-                  <Bar dataKey="envios_respondidos" stackId="breakdown" fill="#22c55e" name="Respondidos" barSize={22} />
+                  <Bar dataKey="envios_enviados" stackId="breakdown" fill="#fbbf24" name="Enviados" barSize={22} />
                   <Bar dataKey="envios_fallidos" stackId="breakdown" fill="#ef4444" name="Fallidos" barSize={22} />
                   <Bar dataKey="envios_omitidos" stackId="breakdown" fill="#9ca3af" name="Omitidos" barSize={22} />
                   <Bar dataKey="envios_otros_estados" stackId="breakdown" fill="#a78bfa" name="Otros estados" barSize={22} />
