@@ -9315,6 +9315,7 @@ class CRMRepository:
         actividades: list[str] | None = None,
         campana_id: UUID | None = None,
         con_envio: bool | None = None,
+        con_envio_canales: Sequence[str] | None = None,
         con_scraper: bool | None = None,
         timezone_name: str | None = None,
     ) -> tuple[list[dict[str, Any]], int]:
@@ -9459,17 +9460,25 @@ class CRMRepository:
 
         include_ids: set[str] | None = None
         exclude_ids: set[str] = set()
+        normalized_con_envio_canales = sorted(
+            {
+                str(value or "").strip().lower()
+                for value in (con_envio_canales or [])
+                if str(value or "").strip().lower() in {"correo", "whatsapp", "llamada"}
+            }
+        )
 
         envio_prospecto_ids: set[str] | None = None
-        if campana_id is not None or con_envio is not None:
+        if campana_id is not None or con_envio is not None or normalized_con_envio_canales:
             envio_prospecto_ids = await self._list_prospecto_ids_with_contact_envios(
                 usuario_token=usuario_token,
                 campana_id=campana_id,
+                canales=normalized_con_envio_canales or None,
             )
         if campana_id is not None and con_envio is False:
             return [], 0
 
-        if campana_id is not None or con_envio is True:
+        if campana_id is not None or con_envio is True or normalized_con_envio_canales:
             if not envio_prospecto_ids:
                 return [], 0
             include_ids = set(envio_prospecto_ids)
@@ -9925,10 +9934,31 @@ class CRMRepository:
         *,
         usuario_token: str,
         campana_id: UUID | None = None,
+        canales: Sequence[str] | None = None,
     ) -> set[str]:
+        def _normalize_envio_channel(value: str | None) -> str | None:
+            normalized = str(value or "").strip().lower()
+            if not normalized:
+                return None
+            if "whatsapp" in normalized or "whastapp" in normalized or normalized == "wa":
+                return "whatsapp"
+            if "correo" in normalized or "email" in normalized or "mail" in normalized or normalized == "manual":
+                return "correo"
+            if "llamada" in normalized or "voz" in normalized or "call" in normalized or "phone" in normalized:
+                return "llamada"
+            return normalized
+
+        normalized_canales_set: set[str] = set()
+        for raw in canales or []:
+            value = _normalize_envio_channel(str(raw or ""))
+            if not value:
+                continue
+            normalized_canales_set.add(value)
+        normalized_canales = sorted(normalized_canales_set)
+        canales_key = ",".join(normalized_canales) if normalized_canales else "__all_canales__"
         cache_key = _build_prospectos_ids_cache_key(
             usuario_token=usuario_token,
-            suffix=f"envios:{str(campana_id) if campana_id else '__all__'}",
+            suffix=f"envios:{str(campana_id) if campana_id else '__all__'}:{canales_key}",
         )
         cached_ids = _read_prospectos_ids_cache(
             _PROSPECTOS_ENVIO_IDS_CACHE,
@@ -9983,7 +10013,7 @@ class CRMRepository:
             offset = 0
             while offset < max_scan:
                 params: dict[str, str] = {
-                    "select": "prospecto_id",
+                    "select": "prospecto_id,canal",
                     "limit": str(page_size),
                     "offset": str(offset),
                     "estado": "neq.cancelado",
@@ -10004,6 +10034,10 @@ class CRMRepository:
                 for row in data:
                     if not isinstance(row, dict):
                         continue
+                    if normalized_canales:
+                        row_canal = _normalize_envio_channel(row.get("canal"))
+                        if not row_canal or row_canal not in normalized_canales_set:
+                            continue
                     prospecto_id = row.get("prospecto_id")
                     if prospecto_id is None:
                         continue
@@ -12178,40 +12212,24 @@ class CRMRepository:
 
         if not prospecto_ids:
             return []
-        # Preferimos el RPC cacheado para evitar recalcular agregados pesados en cada request.
-        rpc_payload = {
-            "p_prospecto_ids": [str(value) for value in prospecto_ids],
-            "p_max_age_seconds": 120,
+        # Fuente de verdad para UI: vista materializada por query en tiempo real.
+        # Evitamos el RPC cacheado aquí porque puede quedar desfasado por canal.
+        ids_param = ",".join(str(value) for value in prospecto_ids)
+        params = {
+            "select": "prospecto_id,canales,total_envios,ultimo_contacto_en,total_respuestas,respondio,ultima_respuesta_en",
+            "prospecto_id": f"in.({ids_param})",
+            "order": "prospecto_id.asc",
         }
-        try:
-            resp = await self._request_with_user(
-                "POST",
-                "/rest/v1/rpc/prospeccion_contacto_indicadores_cached",
-                token=usuario_token,
-                json=rpc_payload,
-            )
-            data = resp.json() or []
-            if not isinstance(data, list):
-                raise CRMRepositoryError(f"contact_indicator_cached_list_invalid:{data!r}")
-            return data
-        except CRMRepositoryError:
-            # Fallback seguro: mantiene compatibilidad si el RPC no existe o falla.
-            ids_param = ",".join(str(value) for value in prospecto_ids)
-            params = {
-                "select": "prospecto_id,canales,total_envios,ultimo_contacto_en,total_respuestas,respondio,ultima_respuesta_en",
-                "prospecto_id": f"in.({ids_param})",
-                "order": "prospecto_id.asc",
-            }
-            resp = await self._request_with_user(
-                "GET",
-                "/rest/v1/prospeccion_prospecto_contacto_stats",
-                token=usuario_token,
-                params=params,
-            )
-            data = resp.json() or []
-            if not isinstance(data, list):
-                raise CRMRepositoryError(f"contact_indicator_list_invalid:{data!r}")
-            return data
+        resp = await self._request_with_user(
+            "GET",
+            "/rest/v1/prospeccion_prospecto_contacto_stats",
+            token=usuario_token,
+            params=params,
+        )
+        data = resp.json() or []
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"contact_indicator_list_invalid:{data!r}")
+        return data
 
     async def list_prospecto_audit(
         self,

@@ -377,6 +377,36 @@ async def _write_contact_indicators_cache(cache_key: str, rows: list[dict[str, A
             _CONTACT_INDICATORS_CACHE.pop(oldest_key, None)
 
 
+def _normalize_total_envios_without_cancelled(raw_rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    normalized: list[dict[str, Any]] = []
+    for row in raw_rows:
+        if not isinstance(row, dict):
+            continue
+        row_copy = dict(row)
+        canales = row_copy.get("canales")
+        if not isinstance(canales, dict):
+            normalized.append(row_copy)
+            continue
+        active_total = 0
+        for canal_data in canales.values():
+            if not isinstance(canal_data, dict):
+                continue
+            total_raw = canal_data.get("total")
+            cancelados_raw = canal_data.get("cancelados")
+            try:
+                total_value = int(total_raw or 0)
+            except (TypeError, ValueError):
+                total_value = 0
+            try:
+                cancelados_value = int(cancelados_raw or 0)
+            except (TypeError, ValueError):
+                cancelados_value = 0
+            active_total += max(total_value - cancelados_value, 0)
+        row_copy["total_envios"] = max(active_total, 0)
+        normalized.append(row_copy)
+    return normalized
+
+
 def _build_prospecto_queries_cache_key(payload: dict[str, Any]) -> str:
     raw = json.dumps(payload, sort_keys=True, default=str, separators=(",", ":"))
     return hashlib.sha1(raw.encode("utf-8")).hexdigest()
@@ -7193,6 +7223,19 @@ def _coerce_metadata(value: Any) -> dict[str, Any] | None:
             parsed["extra"] = json.loads(extra)
         except json.JSONDecodeError:
             parsed["extra"] = None
+    return parsed
+
+
+def _parse_con_envio_canales_param(raw: str | None) -> list[str]:
+    if not raw:
+        return []
+    parsed: list[str] = []
+    seen: set[str] = set()
+    for chunk in raw.split(","):
+        value = (chunk or "").strip().lower()
+        if value in {"correo", "whatsapp", "llamada"} and value not in seen:
+            seen.add(value)
+            parsed.append(value)
     return parsed
 
 
@@ -17108,6 +17151,11 @@ async def listar_prospectos(
     organizacion_id: UUID = Depends(require_organizacion_id),
     usuario_id: UUID | None = Depends(optional_usuario_id),
     params: ProspectoListQuery = Depends(),
+    con_envio_canal: Annotated[
+        list[Literal["correo", "whatsapp", "llamada"]] | None,
+        Query(alias="con_envio_canal"),
+    ] = None,
+    con_envio_canales: Annotated[str | None, Query(alias="con_envio_canales")] = None,
     metadata_query: Annotated[list[str] | None, Query(alias="metadata_query")] = None,
     actividad: Annotated[list[str] | None, Query(alias="actividad")] = None,
 ) -> dict[str, Any]:
@@ -17117,6 +17165,9 @@ async def listar_prospectos(
     rows: list[dict[str, Any]] = []
     total = 0
     request_failed = False
+    con_envio_canales_values = sorted(
+        set((con_envio_canal or []) + _parse_con_envio_canales_param(con_envio_canales))
+    )
     try:
         order_value = "display_name.asc.nullslast" if params.order == "nombre" else None
         effective_timezone, _timezone_source = await _resolve_effective_timezone_name(
@@ -17151,6 +17202,7 @@ async def listar_prospectos(
                 actividades=actividad,
                 campana_id=params.campana_id,
                 con_envio=params.con_envio,
+                con_envio_canales=con_envio_canales_values or None,
                 con_scraper=params.con_scraper,
                 timezone_name=effective_timezone,
             )
@@ -17159,6 +17211,30 @@ async def listar_prospectos(
 
         if rows:
             prospecto_ids = [str(row.get("id") or "").strip() for row in rows if str(row.get("id") or "").strip()]
+            contact_indicator_map: dict[str, dict[str, Any]] = {}
+            if prospecto_ids:
+                valid_ids: list[UUID] = []
+                for value in prospecto_ids:
+                    try:
+                        valid_ids.append(UUID(value))
+                    except (TypeError, ValueError):
+                        continue
+                if valid_ids:
+                    try:
+                        indicator_rows = await repo.list_prospecto_contact_indicators(
+                            usuario_token=user_token,
+                            prospecto_ids=valid_ids,
+                        )
+                    except CRMRepositoryError as exc:
+                        raise HTTPException(status_code=502, detail=str(exc)) from exc
+                    normalized_indicator_rows = _normalize_total_envios_without_cancelled(
+                        [row for row in indicator_rows if isinstance(row, dict)]
+                    )
+                    contact_indicator_map = {
+                        str(row.get("prospecto_id") or "").strip(): row
+                        for row in normalized_indicator_rows
+                        if str(row.get("prospecto_id") or "").strip()
+                    }
             scraper_status_map: dict[str, dict[str, Any]] = {}
             if params.include_scraper_status and prospecto_ids:
                 try:
@@ -17171,6 +17247,7 @@ async def listar_prospectos(
 
             for row in rows:
                 prospecto_id = str(row.get("id") or "").strip()
+                row["contact_indicators"] = contact_indicator_map.get(prospecto_id)
                 status_info = scraper_status_map.get(prospecto_id)
                 row["scraper_ejecutado"] = bool(status_info)
                 row["scraper_ultimo_en"] = status_info.get("ultimo_en") if status_info else None
@@ -17195,6 +17272,7 @@ async def listar_prospectos(
                 "include_scraper_status": bool(params.include_scraper_status),
                 "geo_filter": bool(params.geo_estado or params.geo_municipio),
                 "con_envio_filter": params.con_envio is not None,
+                "con_envio_canal_filter": bool(con_envio_canales_values),
                 "con_scraper_filter": params.con_scraper is not None,
                 "metadata_query_filter": bool(metadata_query),
                 "actividad_filter": bool(actividad),
@@ -17376,6 +17454,11 @@ async def listar_prospectos_bootstrap(
     organizacion_id: UUID = Depends(require_organizacion_id),
     usuario_id: UUID | None = Depends(optional_usuario_id),
     params: ProspectoListQuery = Depends(),
+    con_envio_canal: Annotated[
+        list[Literal["correo", "whatsapp", "llamada"]] | None,
+        Query(alias="con_envio_canal"),
+    ] = None,
+    con_envio_canales: Annotated[str | None, Query(alias="con_envio_canales")] = None,
     metadata_query: Annotated[list[str] | None, Query(alias="metadata_query")] = None,
     actividad: Annotated[list[str] | None, Query(alias="actividad")] = None,
     query: Annotated[list[str] | None, Query(alias="query")] = None,
@@ -17391,6 +17474,8 @@ async def listar_prospectos_bootstrap(
         organizacion_id=organizacion_id,
         usuario_id=usuario_id,
         params=params,
+        con_envio_canal=con_envio_canal,
+        con_envio_canales=con_envio_canales,
         metadata_query=metadata_query,
         actividad=actividad,
     )
@@ -17792,35 +17877,6 @@ async def listar_prospecto_contact_indicadores(
             extra={"rows": len(cached_rows), "requested_ids": len(normalized_ids)},
         )
         return {"ok": True, "items": cached_rows}
-    def _normalize_total_envios_without_cancelled(raw_rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
-        normalized: list[dict[str, Any]] = []
-        for row in raw_rows:
-            if not isinstance(row, dict):
-                continue
-            row_copy = dict(row)
-            canales = row_copy.get("canales")
-            if not isinstance(canales, dict):
-                normalized.append(row_copy)
-                continue
-            active_total = 0
-            for canal_data in canales.values():
-                if not isinstance(canal_data, dict):
-                    continue
-                total_raw = canal_data.get("total")
-                cancelados_raw = canal_data.get("cancelados")
-                try:
-                    total_value = int(total_raw or 0)
-                except (TypeError, ValueError):
-                    total_value = 0
-                try:
-                    cancelados_value = int(cancelados_raw or 0)
-                except (TypeError, ValueError):
-                    cancelados_value = 0
-                active_total += max(total_value - cancelados_value, 0)
-            row_copy["total_envios"] = max(active_total, 0)
-            normalized.append(row_copy)
-        return normalized
-
     try:
         rows = await repo.list_prospecto_contact_indicators(
             usuario_token=user_token,

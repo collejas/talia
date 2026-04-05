@@ -101,7 +101,7 @@ import {
 
 type FuenteFilter = "" | "google_places" | "denue" | "usuario"
 type LookupFilter = "" | "pendiente" | "verificado" | "sin_numero" | "error"
-type ConEnvioFilter = "" | "si" | "no"
+type ConEnvioCanalFilter = "correo" | "whatsapp" | "llamada"
 type ConScraperFilter = "" | "si" | "no"
 type MinRatingFilter = "" | "3" | "4" | "4.5"
 type EstratoGroupFilter = "" | "micro" | "pequena" | "mediana" | "grande"
@@ -128,7 +128,7 @@ type Filters = {
   fuente: FuenteFilter
   lookupStatus: LookupFilter
   campanaId: string
-  conEnvio: ConEnvioFilter
+  conEnvioCanales: ConEnvioCanalFilter[]
   conScraper: ConScraperFilter
   segmento: string
   geoEstado: string
@@ -165,6 +165,34 @@ const plannerCanalLabel: Record<"correo" | "whatsapp" | "llamada", string> = {
   whatsapp: "WhatsApp",
   llamada: "Llamada",
 }
+const envioCanalLabel: Record<string, string> = {
+  correo: "Correo",
+  whatsapp: "WhatsApp",
+  llamada: "Voz",
+}
+
+function normalizeEnvioCanal(raw?: string | null): ConEnvioCanalFilter | null {
+  const value = (raw || "").trim().toLowerCase()
+  if (!value) return null
+  if (value.includes("whatsapp") || value.includes("whastapp") || value === "wa") return "whatsapp"
+  if (
+    value.includes("correo") ||
+    value.includes("email") ||
+    value.includes("mail") ||
+    value === "manual"
+  ) {
+    return "correo"
+  }
+  if (
+    value.includes("llamada") ||
+    value.includes("voz") ||
+    value.includes("call") ||
+    value.includes("phone")
+  ) {
+    return "llamada"
+  }
+  return null
+}
 type ChecklistSummary = {
   telefonos_pendientes: number
   sin_email: number
@@ -176,7 +204,7 @@ const initialFilters: Filters = {
   fuente: "",
   lookupStatus: "",
   campanaId: "",
-  conEnvio: "",
+  conEnvioCanales: [],
   conScraper: "",
   segmento: "",
   geoEstado: "",
@@ -360,6 +388,7 @@ const DATE_RANGE_LABELS: Record<Exclude<DateRangeOption, "">, string> = DATE_RAN
 )
 
 const DATE_DISPLAY_FORMATTER = new Intl.DateTimeFormat("es-MX", { dateStyle: "medium" })
+const NUMBER_FORMATTER = new Intl.NumberFormat("es-MX")
 
 const toLocalIsoDate = (value: Date) => {
   const tzMs = value.getTimezoneOffset() * 60 * 1000
@@ -455,7 +484,6 @@ const FUENTE_LABELS: Record<string, string> = {
 const PROSPECTOS_TABLE_PREFS_KEY = "prospeccion_prospectos_table_prefs_v1"
 const PROSPECTOS_DEFAULT_LIMIT = 200
 const PROSPECTOS_METADATA_DEBOUNCE_MS = 350
-const PROSPECTOS_INDICATORS_MAX_IDS = 120
 const PROSPECTOS_STREAM_REFRESH_DEBOUNCE_MS = 500
 const DEFAULT_TABLE_COLUMN_ORDER: ProspectTableColumnId[] = [
   "prospecto",
@@ -487,7 +515,7 @@ const TABLE_COLUMN_META: Record<
   fuente: { label: "Fuente", widthClass: "w-[160px]" },
   tamano_rating: { label: "Tamaño/Rating", widthClass: "w-[130px]" },
   campana: { label: "Campaña", widthClass: "w-[140px]" },
-  con_envio: { label: "Con envío", widthClass: "w-[110px]" },
+  con_envio: { label: "Con envío", widthClass: "min-w-[220px]" },
   creado: { label: "Creado", widthClass: "w-[120px]" },
 }
 
@@ -563,10 +591,14 @@ function normalizeSavedViewState(raw: unknown): ProspectosSavedViewState | null 
         ? filtersObj["lookupStatus"]
         : "",
     campanaId: typeof filtersObj["campanaId"] === "string" ? filtersObj["campanaId"] : "",
-    conEnvio:
-      filtersObj["conEnvio"] === "si" || filtersObj["conEnvio"] === "no"
-        ? filtersObj["conEnvio"]
-        : "",
+    conEnvioCanales: Array.isArray(filtersObj["conEnvioCanales"])
+      ? (filtersObj["conEnvioCanales"] as unknown[]).filter(
+          (value): value is ConEnvioCanalFilter =>
+            value === "correo" || value === "whatsapp" || value === "llamada"
+        )
+      : filtersObj["conEnvio"] === "si"
+        ? ["correo", "whatsapp", "llamada"]
+        : [],
     conScraper:
       filtersObj["conScraper"] === "si" || filtersObj["conScraper"] === "no"
         ? filtersObj["conScraper"]
@@ -1308,8 +1340,9 @@ function ProspectosView() {
     if (filters.campanaId) {
       chips.push(`Campaña: ${campaignLabelMap.get(filters.campanaId) ?? filters.campanaId}`)
     }
-    if (filters.conEnvio) {
-      chips.push(`Con envío: ${filters.conEnvio === "si" ? "Sí" : "No"}`)
+    if (filters.conEnvioCanales.length) {
+      const labels = filters.conEnvioCanales.map((canal) => envioCanalLabel[canal] ?? canal)
+      chips.push(`Con envío: ${labels.join(", ")}`)
     }
     if (filters.conScraper) {
       chips.push(`Con scraper: ${filters.conScraper === "si" ? "Sí" : "No"}`)
@@ -1365,8 +1398,8 @@ function ProspectosView() {
           fuente: filters.fuente || undefined,
           lookupStatus: filters.lookupStatus || undefined,
           campanaId: filters.campanaId || undefined,
-          conEnvio:
-            filters.conEnvio === "si" ? true : filters.conEnvio === "no" ? false : undefined,
+          conEnvio: filters.conEnvioCanales.length ? true : undefined,
+          conEnvioCanales: filters.conEnvioCanales.length ? filters.conEnvioCanales : undefined,
           conScraper:
             filters.conScraper === "si" ? true : filters.conScraper === "no" ? false : undefined,
           includeScraperStatus: false,
@@ -1478,8 +1511,8 @@ function ProspectosView() {
           fuente: filters.fuente || undefined,
           lookupStatus: filters.lookupStatus || undefined,
           campanaId: filters.campanaId || undefined,
-          conEnvio:
-            filters.conEnvio === "si" ? true : filters.conEnvio === "no" ? false : undefined,
+          conEnvio: filters.conEnvioCanales.length ? true : undefined,
+          conEnvioCanales: filters.conEnvioCanales.length ? filters.conEnvioCanales : undefined,
           conScraper:
             filters.conScraper === "si" ? true : filters.conScraper === "no" ? false : undefined,
           includeScraperStatus: false,
@@ -2092,7 +2125,7 @@ function ProspectosView() {
       setContactIndicators({})
       return
     }
-    const candidateIds = currentIds.slice(0, PROSPECTOS_INDICATORS_MAX_IDS)
+    const candidateIds = [...currentIds]
     if (selectedIds.length) {
       const selectedSet = new Set(selectedIds)
       for (const id of currentIds) {
@@ -2100,9 +2133,6 @@ function ProspectosView() {
           continue
         }
         candidateIds.push(id)
-        if (candidateIds.length >= PROSPECTOS_INDICATORS_MAX_IDS) {
-          break
-        }
       }
     }
     let cancelled = false
@@ -3433,24 +3463,40 @@ function ProspectosView() {
             </div>
             <div className="space-y-1">
               <Label>Con envío</Label>
-              <Select
-                value={filters.conEnvio || "all"}
-                onValueChange={(value) =>
-                  setFilters((prev) => ({
-                    ...prev,
-                    conEnvio: value === "all" ? "" : (value as ConEnvioFilter),
-                  }))
-                }
-              >
-                <SelectTrigger className="w-[140px]">
-                  <SelectValue placeholder="Todos" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todos</SelectItem>
-                  <SelectItem value="si">Sí</SelectItem>
-                  <SelectItem value="no">No</SelectItem>
-                </SelectContent>
-              </Select>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" className="w-[170px] justify-between">
+                    {filters.conEnvioCanales.length === 0
+                      ? "Todos"
+                      : `${filters.conEnvioCanales.length} canal${filters.conEnvioCanales.length > 1 ? "es" : ""}`}
+                    <IconChevronDown className="size-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start" className="w-56">
+                  <DropdownMenuItem onSelect={() => setFilters((prev) => ({ ...prev, conEnvioCanales: [] }))}>
+                    Todos
+                  </DropdownMenuItem>
+                  {(["correo", "whatsapp", "llamada"] as const).map((canal) => {
+                    const checked = filters.conEnvioCanales.includes(canal)
+                    return (
+                      <DropdownMenuCheckboxItem
+                        key={canal}
+                        checked={checked}
+                        onCheckedChange={(value) =>
+                          setFilters((prev) => {
+                            const next = new Set(prev.conEnvioCanales)
+                            if (value) next.add(canal)
+                            else next.delete(canal)
+                            return { ...prev, conEnvioCanales: Array.from(next) as ConEnvioCanalFilter[] }
+                          })
+                        }
+                      >
+                        {envioCanalLabel[canal]}
+                      </DropdownMenuCheckboxItem>
+                    )
+                  })}
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
             <div className="space-y-1">
               <Label>Con scraper</Label>
@@ -4406,7 +4452,7 @@ function ProspectosView() {
                         prospecto.fuente_busqueda,
                         queryLabelMap
                       )
-                      const indicator = prospecto.id ? contactIndicators[prospecto.id] : undefined
+                      const indicator = prospecto.contact_indicators ?? (prospecto.id ? contactIndicators[prospecto.id] : undefined)
                       const hasEnvios = (indicator?.total_envios ?? 0) > 0
                       return (
                         <TableRow key={prospecto.id}>
@@ -4555,11 +4601,28 @@ function ProspectosView() {
                                   </TableCell>
                                 )
                               case "con_envio":
-                                return (
+                                {
+                                  const canales = getProspectoEnvioCanales(indicator, filters.conEnvioCanales)
+                                  const hasEnviosFiltered =
+                                    filters.conEnvioCanales.length > 0 ? canales.length > 0 : hasEnvios
+                                  return (
                                   <TableCell key={columnId}>
-                                    <span className="text-[11px]">{hasEnvios ? "Sí" : "No"}</span>
+                                    {!hasEnviosFiltered ? (
+                                      <span className="text-[11px]">No</span>
+                                    ) : canales.length ? (
+                                      <div className="flex min-w-[200px] flex-wrap gap-1 whitespace-normal">
+                                        {canales.map(({ canal, total }) => (
+                                          <Badge key={`${prospecto.id}-${canal}`} variant="secondary" className="text-[10px]">
+                                            {envioCanalLabel[canal] ?? canal} {NUMBER_FORMATTER.format(total)}
+                                          </Badge>
+                                        ))}
+                                      </div>
+                                    ) : (
+                                      <span className="text-[11px]">Sí</span>
+                                    )}
                                   </TableCell>
                                 )
+                                }
                               case "creado":
                                 return (
                                   <TableCell key={columnId} className="text-right text-xs text-muted-foreground">
@@ -5144,6 +5207,36 @@ function formatScraperStatus(value?: string | null) {
   const normalized = (value || "").toLowerCase()
   if (!normalized) return "Lanzado"
   return SCRAPER_STATUS_LABELS[normalized] ?? value ?? "Lanzado"
+}
+
+function getProspectoEnvioCanales(
+  indicator?: ProspectoContactIndicators,
+  allowedCanales?: ConEnvioCanalFilter[]
+) {
+  if (!indicator?.canales || typeof indicator.canales !== "object") return []
+  const order: Record<string, number> = { correo: 0, whatsapp: 1, llamada: 2 }
+  const allowed = new Set<ConEnvioCanalFilter>(
+    (allowedCanales ?? [])
+      .map((value) => normalizeEnvioCanal(value))
+      .filter((value): value is ConEnvioCanalFilter => value !== null)
+  )
+  const merged = new Map<ConEnvioCanalFilter, number>()
+  for (const [canal, raw] of Object.entries(indicator.canales)) {
+    const normalized = normalizeEnvioCanal(canal)
+    if (!normalized) continue
+    const total = Number(raw?.total ?? 0)
+    merged.set(normalized, (merged.get(normalized) ?? 0) + Math.max(0, total))
+  }
+  return Array.from(merged.entries())
+    .map(([canal, total]) => ({ canal, total }))
+    .filter((row) => (allowed.size > 0 ? allowed.has(row.canal) : true))
+    .filter((row) => row.total > 0)
+    .sort((a, b) => {
+      const ao = order[a.canal] ?? 99
+      const bo = order[b.canal] ?? 99
+      if (ao !== bo) return ao - bo
+      return b.total - a.total
+    })
 }
 
 function formatContactLogDetail(entry: ContactoLog) {

@@ -27,6 +27,7 @@ export type ProspectoItem = {
   scraper_ejecutado?: boolean | null
   scraper_ultimo_en?: string | null
   scraper_ultimo_estado?: string | null
+  contact_indicators?: ProspectoContactIndicators | null
   metadata?: Record<string, unknown> | null
 }
 
@@ -570,6 +571,7 @@ type ListProspectosParams = {
   estratoGroup?: "micro" | "pequena" | "mediana" | "grande"
   campanaId?: string
   conEnvio?: boolean
+  conEnvioCanales?: Array<"correo" | "whatsapp" | "llamada">
   conScraper?: boolean
   includeScraperStatus?: boolean
 }
@@ -623,6 +625,14 @@ function buildProspectosListUrl(basePath: string, params: ListProspectosParams =
   }
   if (typeof params.conEnvio === "boolean") {
     url.searchParams.set("con_envio", params.conEnvio ? "true" : "false")
+  }
+  if (params.conEnvioCanales?.length) {
+    url.searchParams.set("con_envio_canales", params.conEnvioCanales.join(","))
+    for (const canal of params.conEnvioCanales) {
+      if (canal === "correo" || canal === "whatsapp" || canal === "llamada") {
+        url.searchParams.append("con_envio_canal", canal)
+      }
+    }
   }
   if (typeof params.conScraper === "boolean") {
     url.searchParams.set("con_scraper", params.conScraper ? "true" : "false")
