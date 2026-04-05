@@ -88,6 +88,16 @@ export default function ProspeccionMetricasPageClient() {
     key: "envios_totales",
     dir: "desc",
   })
+  const legendItems = [
+    { label: "Enviados", color: "#fbbf24", order: 0 },
+    { label: "Sin respuesta", color: "#60a5fa", order: 1 },
+    { label: "Respondidos", color: "#22c55e", order: 2 },
+    { label: "Fallidos", color: "#ef4444", order: 3 },
+    { label: "Omitidos", color: "#9ca3af", order: 4 },
+    { label: "En tránsito", color: "#f59e0b", order: 5 },
+    { label: "Procesado", color: "#8b5cf6", order: 6 },
+    { label: "Pendiente", color: "#94a3b8", order: 7 },
+  ]
 
   useEffect(() => {
     let cancelled = false
@@ -768,7 +778,7 @@ export default function ProspeccionMetricasPageClient() {
                               <span>{number.format(total)} (100%)</span>
                             </div>
                             <div className="flex justify-between gap-3">
-                              <span className="flex items-center">{swatch("#f59e0b")}En tránsito</span>
+                              <span className="flex items-center">{swatch("#f59e0b")}Enviados</span>
                               <span>{number.format(row.envios_enviados || 0)} ({pctTotal(row.envios_enviados || 0)}%)</span>
                             </div>
                             <div className="flex justify-between gap-3">
@@ -804,7 +814,22 @@ export default function ProspeccionMetricasPageClient() {
                       )
                     }}
                   />
-                  <Legend />
+                  <Legend
+                    content={() => (
+                      <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
+                        {legendItems.map((item) => (
+                          <span
+                            key={item.label}
+                            className="inline-flex items-center gap-2"
+                            style={{ order: item.order }}
+                          >
+                            <span className="h-2 w-4 rounded-sm" style={{ backgroundColor: item.color }} />
+                            {item.label}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  />
                   <Bar
                     dataKey="envios_entregados"
                     fill="transparent"
@@ -834,10 +859,10 @@ export default function ProspeccionMetricasPageClient() {
                 </BarChart>
               </ResponsiveContainer>
             </div>
-            <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+            <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
               <span className="inline-flex items-center gap-2">
                 <span className="h-2 w-4 rounded-sm border-2 border-slate-900 bg-slate-900/20" />
-                Envíos totales = Sin respuesta + Respondidos + Fallidos + Omitidos + En tránsito + Procesado + Pendiente
+                Envíos totales = Enviados + Fallidos + Omitidos + En tránsito + Procesado + Pendiente
               </span>
             </div>
             <div className="text-xs text-muted-foreground">
