@@ -1408,6 +1408,8 @@ export type ProspeccionMetricasCampanaTimeseriesItem = {
   envios_enviados: number
   envios_entregados: number
   envios_respondidos: number
+  envios_fallidos: number
+  envios_omitidos: number
 }
 
 export type ProspeccionMetricasFrasesTimeseriesItem = {

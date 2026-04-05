@@ -98,6 +98,8 @@ export default function ProspeccionMetricasPageClient() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [data, setData] = useState<ProspeccionMetricasResponse | null>(null)
+  const [campaignTimeseries, setCampaignTimeseries] = useState<ProspeccionMetricasResponse["campanas"]["timeseries"]>([])
+  const [campaignTimeseriesLoading, setCampaignTimeseriesLoading] = useState(false)
   const [brevoQuota, setBrevoQuota] = useState<BrevoQuotaSnapshot | null>(null)
   const [brevoQuotaLoading, setBrevoQuotaLoading] = useState(false)
 
@@ -163,7 +165,7 @@ export default function ProspeccionMetricasPageClient() {
         campana_publicitaria: campanaPublicitaria.trim() || undefined,
         regla_id: reglaId !== "todos" ? reglaId : undefined,
         limit: 500,
-        include_campaign_timeseries: true,
+        include_campaign_timeseries: false,
         include_whatsapp_timeseries: false,
         include_whatsapp_channels: true,
         lite: false,
@@ -181,6 +183,35 @@ export default function ProspeccionMetricasPageClient() {
   useEffect(() => {
     void loadMetrics()
   }, [loadMetrics])
+
+  const loadCampaignTimeseries = useCallback(async () => {
+    setCampaignTimeseriesLoading(true)
+    try {
+      const response = await getProspeccionMetricas({
+        date_from: dateFrom || undefined,
+        date_to: dateTo || undefined,
+        canal,
+        campana_id: campanaId !== "todos" ? campanaId : undefined,
+        campana_publicitaria: campanaPublicitaria.trim() || undefined,
+        regla_id: reglaId !== "todos" ? reglaId : undefined,
+        limit: 500,
+        include_campaign_timeseries: true,
+        include_whatsapp_timeseries: false,
+        include_whatsapp_channels: false,
+        lite: false,
+      })
+      setCampaignTimeseries(response.campanas.timeseries ?? [])
+    } catch {
+      setCampaignTimeseries([])
+    } finally {
+      setCampaignTimeseriesLoading(false)
+    }
+  }, [dateFrom, dateTo, canal, campanaId, campanaPublicitaria, reglaId])
+
+  useEffect(() => {
+    setCampaignTimeseries([])
+    void loadCampaignTimeseries()
+  }, [loadCampaignTimeseries])
 
   const loadBrevoQuota = useCallback(async () => {
     setBrevoQuotaLoading(true)
@@ -202,11 +233,11 @@ export default function ProspeccionMetricasPageClient() {
   const summaryPhrases = data?.frases_whatsapp.summary
   const campaignChartData = useMemo(
     () =>
-      (data?.campanas.timeseries ?? []).map((item) => ({
+      (campaignTimeseries ?? []).map((item) => ({
         ...item,
         fecha_label: shortDate.format(new Date(`${item.fecha}T00:00:00`)),
       })),
-    [data?.campanas.timeseries],
+    [campaignTimeseries],
   )
   const phrasesChartData = useMemo(
     () =>
@@ -1083,7 +1114,12 @@ export default function ProspeccionMetricasPageClient() {
         <div className="space-y-4">
           <Card>
             <CardHeader>
-              <CardTitle>Tendencia diaria de campañas</CardTitle>
+              <CardTitle>
+                Tendencia diaria de campañas
+                {campaignTimeseriesLoading ? (
+                  <span className="ml-2 text-xs font-normal text-muted-foreground">cargando...</span>
+                ) : null}
+              </CardTitle>
             </CardHeader>
             <CardContent>
               <div className="h-72 w-full">
@@ -1097,6 +1133,8 @@ export default function ProspeccionMetricasPageClient() {
                     <Line type="monotone" dataKey="envios_totales" stroke="#0f766e" strokeWidth={2} dot={false} name="Envíos totales" />
                     <Line type="monotone" dataKey="envios_entregados" stroke="#2563eb" strokeWidth={2} dot={false} name="Entregados" />
                     <Line type="monotone" dataKey="envios_respondidos" stroke="#ea580c" strokeWidth={2} dot={false} name="Respondidos" />
+                    <Line type="monotone" dataKey="envios_fallidos" stroke="#dc2626" strokeWidth={2} dot={false} name="Fallidos" />
+                    <Line type="monotone" dataKey="envios_omitidos" stroke="#6b7280" strokeWidth={2} dot={false} name="Omitidos" />
                   </LineChart>
                 </ResponsiveContainer>
               </div>

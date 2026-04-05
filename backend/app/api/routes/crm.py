@@ -19073,6 +19073,8 @@ async def prospeccion_metricas_dashboard(
                 "envios_enviados": 0,
                 "envios_entregados": 0,
                 "envios_respondidos": 0,
+                "envios_fallidos": 0,
+                "envios_omitidos": 0,
             }
         )
         batches_rows: list[dict[str, Any]] = []
@@ -19188,6 +19190,8 @@ async def prospeccion_metricas_dashboard(
             envios_rows = list(unique_envios.values())
             sent_states = {"enviado", "entregado", "leido", "completado", "respondido"}
             delivered_states = {"entregado", "leido", "completado", "respondido"}
+            failed_states = {"fallido", "error", "failed"}
+            omitted_states = {"omitido", "skipped", "suprimido", "suppressed"}
             for envio in envios_rows:
                 event_ts = (
                     _parse_datetime(envio.get("procesado_en"))
@@ -19208,6 +19212,10 @@ async def prospeccion_metricas_dashboard(
                     bucket["envios_enviados"] += 1
                 if estado in delivered_states:
                     bucket["envios_entregados"] += 1
+                if estado in failed_states:
+                    bucket["envios_fallidos"] += 1
+                if estado in omitted_states:
+                    bucket["envios_omitidos"] += 1
                 envio_id_key = _clean_text(envio.get("id"))
                 if estado == "respondido" and (not envio_id_key or envio_id_key not in responded_envio_days):
                     bucket["envios_respondidos"] += 1
