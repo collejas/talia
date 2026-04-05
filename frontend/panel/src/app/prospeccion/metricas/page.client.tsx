@@ -435,16 +435,19 @@ export default function ProspeccionMetricasPageClient() {
       const envios_enviados_puros = rows.reduce((sum, r) => sum + (r.envios_enviados_puros || 0), 0)
       const envios_procesando = rows.reduce((sum, r) => sum + (r.envios_procesando || 0), 0)
       const envios_pendientes = rows.reduce((sum, r) => sum + (r.envios_pendientes || 0), 0)
+      const envios_totales_stack =
+        envios_enviados + envios_fallidos + envios_omitidos + envios_enviados_puros + envios_procesando + envios_pendientes
       const brevo_aperturas = rows.reduce((sum, r) => sum + (r.brevo_aperturas || 0), 0)
       const brevo_clicks = rows.reduce((sum, r) => sum + (r.brevo_clicks || 0), 0)
-      const entrega_pct = envios_totales > 0 ? Math.round((envios_entregados / envios_totales) * 100) : 0
-      const respuesta_pct = envios_totales > 0 ? Math.round((envios_respondidos / envios_totales) * 100) : 0
+      const entrega_pct = envios_totales_stack > 0 ? Math.round((envios_entregados / envios_totales_stack) * 100) : 0
+      const respuesta_pct = envios_totales_stack > 0 ? Math.round((envios_respondidos / envios_totales_stack) * 100) : 0
       const click_rate = envios_entregados > 0 ? Math.round((brevo_clicks / envios_entregados) * 100) : 0
       const open_rate = envios_entregados > 0 ? Math.round((brevo_aperturas / envios_entregados) * 100) : 0
       return {
         canal: ch,
         canal_label: labelMap[ch],
         envios_totales,
+        envios_totales_stack,
         envios_enviados,
         envios_entregados,
         envios_respondidos,
@@ -884,7 +887,7 @@ export default function ProspeccionMetricasPageClient() {
                       if (!active || !payload || payload.length === 0) return null
                       const row = payload[0]?.payload as typeof channelSummary[number]
                       if (!row) return null
-                      const total = row.envios_totales || 0
+                      const total = row.envios_totales_stack || 0
                       const entregados = row.envios_entregados || 0
                       const pctTotal = (count: number) => (total > 0 ? ((count / total) * 100).toFixed(2) : "0.00")
                       const pctEnt = (count: number) => (entregados > 0 ? ((count / entregados) * 100).toFixed(2) : "0.00")
@@ -956,7 +959,7 @@ export default function ProspeccionMetricasPageClient() {
                     )}
                   />
                   <Bar
-                    dataKey="envios_totales"
+                    dataKey="envios_totales_stack"
                     fill="#0f172a"
                     fillOpacity={0.18}
                     stroke="#0f172a"
