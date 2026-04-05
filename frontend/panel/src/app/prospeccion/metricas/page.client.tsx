@@ -117,12 +117,11 @@ export default function ProspeccionMetricasPageClient() {
     dir: "desc",
   })
   const legendItems = [
-    { label: "Enviados", color: "#fbbf24", order: 0 },
-    { label: "Fallidos", color: "#ef4444", order: 1 },
-    { label: "Omitidos", color: "#9ca3af", order: 2 },
-    { label: "En tránsito", color: "#f59e0b", order: 3 },
-    { label: "Procesado", color: "#8b5cf6", order: 4 },
-    { label: "Pendiente", color: "#94a3b8", order: 5 },
+    { label: "Sin respuesta", color: "#60a5fa", order: 0 },
+    { label: "Respondidos", color: "#22c55e", order: 1 },
+    { label: "Fallidos", color: "#ef4444", order: 2 },
+    { label: "Omitidos", color: "#9ca3af", order: 3 },
+    { label: "Otros estados", color: "#a78bfa", order: 4 },
   ]
 
   useEffect(() => {
@@ -426,17 +425,19 @@ export default function ProspeccionMetricasPageClient() {
     return channels.map((ch) => {
       const rows = items.filter((item) => normalize(item.canal) === ch)
       const envios_totales = rows.reduce((sum, r) => sum + (r.envios_totales || 0), 0)
-      const envios_enviados = rows.reduce((sum, r) => sum + (r.envios_enviados || 0), 0)
       const envios_entregados = rows.reduce((sum, r) => sum + (r.envios_entregados || 0), 0)
       const envios_respondidos = rows.reduce((sum, r) => sum + (r.envios_respondidos || 0), 0)
       const envios_fallidos = rows.reduce((sum, r) => sum + (r.envios_fallidos || 0), 0)
       const envios_omitidos = rows.reduce((sum, r) => sum + (r.envios_omitidos || 0), 0)
       const envios_sin_respuesta = Math.max(0, envios_entregados - envios_respondidos)
-      const envios_enviados_puros = rows.reduce((sum, r) => sum + (r.envios_enviados_puros || 0), 0)
-      const envios_procesando = rows.reduce((sum, r) => sum + (r.envios_procesando || 0), 0)
-      const envios_pendientes = rows.reduce((sum, r) => sum + (r.envios_pendientes || 0), 0)
-      const envios_totales_stack =
-        envios_enviados + envios_fallidos + envios_omitidos + envios_enviados_puros + envios_procesando + envios_pendientes
+      // En esta vista "Enviados" debe corresponder a entregados
+      // (Sin respuesta + Respondidos) para concordar con la tabla de detalle.
+      const envios_enviados = envios_entregados
+      const envios_otros_estados = Math.max(
+        0,
+        envios_totales - (envios_enviados + envios_fallidos + envios_omitidos),
+      )
+      const envios_totales_stack = envios_totales
       const brevo_aperturas = rows.reduce((sum, r) => sum + (r.brevo_aperturas || 0), 0)
       const brevo_clicks = rows.reduce((sum, r) => sum + (r.brevo_clicks || 0), 0)
       const entrega_pct = envios_totales_stack > 0 ? Math.round((envios_entregados / envios_totales_stack) * 100) : 0
@@ -454,9 +455,7 @@ export default function ProspeccionMetricasPageClient() {
         envios_fallidos,
         envios_omitidos,
         envios_sin_respuesta,
-        envios_enviados_puros,
-        envios_procesando,
-        envios_pendientes,
+        envios_otros_estados,
         entrega_pct,
         respuesta_pct,
         open_rate,
@@ -926,16 +925,8 @@ export default function ProspeccionMetricasPageClient() {
                               <span>{number.format(row.envios_omitidos || 0)} ({pctTotal(row.envios_omitidos || 0)}%)</span>
                             </div>
                             <div className="flex justify-between gap-3">
-                              <span className="flex items-center">{swatch("#f59e0b")}En tránsito</span>
-                              <span>{number.format(row.envios_enviados_puros || 0)} ({pctTotal(row.envios_enviados_puros || 0)}%)</span>
-                            </div>
-                            <div className="flex justify-between gap-3">
-                              <span className="flex items-center">{swatch("#8b5cf6")}Procesado</span>
-                              <span>{number.format(row.envios_procesando || 0)} ({pctTotal(row.envios_procesando || 0)}%)</span>
-                            </div>
-                            <div className="flex justify-between gap-3">
-                              <span className="flex items-center">{swatch("#94a3b8")}Pendiente</span>
-                              <span>{number.format(row.envios_pendientes || 0)} ({pctTotal(row.envios_pendientes || 0)}%)</span>
+                              <span className="flex items-center">{swatch("#a78bfa")}Otros estados</span>
+                              <span>{number.format(row.envios_otros_estados || 0)} ({pctTotal(row.envios_otros_estados || 0)}%)</span>
                             </div>
                           </div>
                         </div>
@@ -980,19 +971,18 @@ export default function ProspeccionMetricasPageClient() {
                       )
                     })}
                   </Bar>
-                  <Bar dataKey="envios_enviados" stackId="breakdown" fill="#fbbf24" name="Enviados" barSize={22} />
+                  <Bar dataKey="envios_sin_respuesta" stackId="breakdown" fill="#60a5fa" name="Sin respuesta" barSize={22} />
+                  <Bar dataKey="envios_respondidos" stackId="breakdown" fill="#22c55e" name="Respondidos" barSize={22} />
                   <Bar dataKey="envios_fallidos" stackId="breakdown" fill="#ef4444" name="Fallidos" barSize={22} />
                   <Bar dataKey="envios_omitidos" stackId="breakdown" fill="#9ca3af" name="Omitidos" barSize={22} />
-                  <Bar dataKey="envios_enviados_puros" stackId="breakdown" fill="#f59e0b" name="En tránsito" barSize={22} />
-                  <Bar dataKey="envios_procesando" stackId="breakdown" fill="#8b5cf6" name="Procesado" barSize={22} />
-                  <Bar dataKey="envios_pendientes" stackId="breakdown" fill="#94a3b8" name="Pendiente" barSize={22} />
+                  <Bar dataKey="envios_otros_estados" stackId="breakdown" fill="#a78bfa" name="Otros estados" barSize={22} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
             <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
               <span className="inline-flex items-center gap-2">
                 <span className="h-2 w-4 rounded-sm border-[3px] border-slate-900 bg-slate-900/20" />
-                Envíos totales = Enviados + Fallidos + Omitidos + En tránsito + Procesado + Pendiente
+                Envíos totales = Enviados + Fallidos + Omitidos + Otros estados
               </span>
               <span className="inline-flex items-center gap-2">
                 <span className="h-2 w-4 rounded-sm" style={{ backgroundColor: "#fbbf24" }} />
@@ -1263,6 +1253,9 @@ export default function ProspeccionMetricasPageClient() {
                       <td className="px-2 py-2">{number.format(campaignTotals.envios_omitidos)}</td>
                       <td className="px-2 py-2">{number.format(campaignTotals.envios_entregados)}</td>
                       <td className="px-2 py-2">{number.format(campaignTotals.envios_respondidos)}</td>
+                      <td className="px-2 py-2">
+                        {number.format(Math.max(0, campaignTotals.envios_entregados - campaignTotals.envios_respondidos))}
+                      </td>
                       <td className="px-2 py-2">
                         {campaignTotals.envios_totales > 0
                           ? `${Math.round((campaignTotals.envios_entregados / campaignTotals.envios_totales) * 100)}%`
