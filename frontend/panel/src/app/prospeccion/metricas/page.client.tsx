@@ -503,6 +503,12 @@ export default function ProspeccionMetricasPageClient() {
           }
           return 0
         }
+        case "tasa_respuesta_total_pct": {
+          if (item.envios_totales > 0) {
+            return (item.envios_respondidos / item.envios_totales) * 100
+          }
+          return 0
+        }
         case "tasa_sin_respuesta_pct": {
           if (item.envios_entregados > 0) {
             return ((item.envios_entregados - item.envios_respondidos) / item.envios_entregados) * 100
@@ -1144,52 +1150,55 @@ export default function ProspeccionMetricasPageClient() {
                   <thead>
                     <tr className="border-b text-left text-xs uppercase tracking-wide text-muted-foreground">
                       <th className="px-2 py-2">
-                        <button type="button" onClick={() => toggleSort("campana_nombre")}>Campaña</button>
+                        <button type="button" title="Nombre de la campaña de prospección." onClick={() => toggleSort("campana_nombre")}>Campaña</button>
                       </th>
                       <th className="px-2 py-2">
-                        <button type="button" onClick={() => toggleSort("canal")}>Canal</button>
+                        <button type="button" title="Canal del envío: correo, WhatsApp o voz." onClick={() => toggleSort("canal")}>Canal</button>
                       </th>
                       <th className="px-2 py-2">
-                        <button type="button" onClick={() => toggleSort("template_nombre")}>Plantilla</button>
+                        <button type="button" title="Plantilla o contenido usado en el envío." onClick={() => toggleSort("template_nombre")}>Plantilla</button>
                       </th>
                       <th className="px-2 py-2">
-                        <button type="button" onClick={() => toggleSort("envios_totales")}>Totales</button>
+                        <button type="button" title="Total de envíos generados para esa fila." onClick={() => toggleSort("envios_totales")}>Totales</button>
                       </th>
                       <th className="px-2 py-2">
-                        <button type="button" onClick={() => toggleSort("envios_omitidos")}>Omitidos</button>
+                        <button type="button" title="Envíos omitidos/suprimidos antes de salir." onClick={() => toggleSort("envios_omitidos")}>Omitidos</button>
                       </th>
                       <th className="px-2 py-2">
-                        <button type="button" onClick={() => toggleSort("envios_entregados")}>Entregados</button>
+                        <button type="button" title="Envíos con confirmación de entrega." onClick={() => toggleSort("envios_entregados")}>Entregados</button>
                       </th>
                       <th className="px-2 py-2">
-                        <button type="button" onClick={() => toggleSort("envios_respondidos")}>Respondidos</button>
+                        <button type="button" title="Envíos que recibieron respuesta del prospecto." onClick={() => toggleSort("envios_respondidos")}>Respondidos</button>
                       </th>
                       <th className="px-2 py-2">
-                        <button type="button" onClick={() => toggleSort("entregados_sin_resp")}>Sin respuesta</button>
+                        <button type="button" title="Entregados sin respuesta (Entregados - Respondidos)." onClick={() => toggleSort("entregados_sin_resp")}>Sin respuesta</button>
                       </th>
                       <th className="px-2 py-2">
-                        <button type="button" onClick={() => toggleSort("tasa_entrega_pct")}>% Entrega</button>
+                        <button type="button" title="Porcentaje de entrega sobre envíos totales." onClick={() => toggleSort("tasa_entrega_pct")}>% Entrega</button>
                       </th>
                       <th className="px-2 py-2">
-                        <button type="button" onClick={() => toggleSort("tasa_respuesta_pct")}>% Respuesta</button>
+                        <button type="button" title="% Respuesta = Respondidos / Entregados." onClick={() => toggleSort("tasa_respuesta_pct")}>% Respuesta</button>
                       </th>
                       <th className="px-2 py-2">
-                        <button type="button" onClick={() => toggleSort("tasa_sin_respuesta_pct")}>% Sin resp</button>
+                        <button type="button" title="Tasa resp. total = Respondidos / Totales." onClick={() => toggleSort("tasa_respuesta_total_pct")}>Tasa resp. total</button>
                       </th>
                       <th className="px-2 py-2">
-                        <button type="button" onClick={() => toggleSort("brevo_aperturas")}>Aperturas</button>
+                        <button type="button" title="% Sin respuesta = (Entregados - Respondidos) / Entregados." onClick={() => toggleSort("tasa_sin_respuesta_pct")}>% Sin resp</button>
                       </th>
                       <th className="px-2 py-2">
-                        <button type="button" onClick={() => toggleSort("open_rate")}>% Open</button>
+                        <button type="button" title="Aperturas registradas (solo correo)." onClick={() => toggleSort("brevo_aperturas")}>Aperturas</button>
                       </th>
                       <th className="px-2 py-2">
-                        <button type="button" onClick={() => toggleSort("brevo_clicks")}>Clics</button>
+                        <button type="button" title="% Open = Aperturas / Entregados (solo correo)." onClick={() => toggleSort("open_rate")}>% Open</button>
                       </th>
                       <th className="px-2 py-2">
-                        <button type="button" onClick={() => toggleSort("click_rate")}>% Click</button>
+                        <button type="button" title="Clics registrados (solo correo)." onClick={() => toggleSort("brevo_clicks")}>Clics</button>
                       </th>
                       <th className="px-2 py-2">
-                        <button type="button" onClick={() => toggleSort("sesiones_utm")}>Sesiones</button>
+                        <button type="button" title="% Click = Clics / Entregados (solo correo)." onClick={() => toggleSort("click_rate")}>% Click</button>
+                      </th>
+                      <th className="px-2 py-2">
+                        <button type="button" title="Sesiones web atribuidas por UTM." onClick={() => toggleSort("sesiones_utm")}>Sesiones</button>
                       </th>
                     </tr>
                   </thead>
@@ -1225,6 +1234,11 @@ export default function ProspeccionMetricasPageClient() {
                         <td className="px-2 py-2">
                           {item.envios_entregados > 0
                             ? `${Math.round((item.envios_respondidos / item.envios_entregados) * 100)}%`
+                            : "—"}
+                        </td>
+                        <td className="px-2 py-2">
+                          {item.envios_totales > 0
+                            ? `${Math.round((item.envios_respondidos / item.envios_totales) * 100)}%`
                             : "—"}
                         </td>
                         <td className="px-2 py-2">
@@ -1264,6 +1278,11 @@ export default function ProspeccionMetricasPageClient() {
                       <td className="px-2 py-2">
                         {campaignTotals.envios_entregados > 0
                           ? `${Math.round((campaignTotals.envios_respondidos / campaignTotals.envios_entregados) * 100)}%`
+                          : "—"}
+                      </td>
+                      <td className="px-2 py-2">
+                        {campaignTotals.envios_totales > 0
+                          ? `${Math.round((campaignTotals.envios_respondidos / campaignTotals.envios_totales) * 100)}%`
                           : "—"}
                       </td>
                       <td className="px-2 py-2">
