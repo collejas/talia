@@ -777,7 +777,6 @@ export default function ProspeccionMetricasPageClient() {
             <div className="h-64 w-full">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={channelSummary} barGap={-26} barCategoryGap="30%">
-                  <CartesianGrid strokeDasharray="3 3" />
                   <XAxis
                     dataKey="canal_label"
                     tickLine={false}
@@ -800,14 +799,16 @@ export default function ProspeccionMetricasPageClient() {
                   />
                   <YAxis allowDecimals={false} />
                   <Tooltip
+                    shared={false}
+                    cursor={false}
                     content={({ active, payload, label }) => {
                       if (!active || !payload || payload.length === 0) return null
                       const row = payload[0]?.payload as typeof channelSummary[number]
                       if (!row) return null
                       const total = row.envios_totales || 0
                       const entregados = row.envios_entregados || 0
-                      const pctTotal = (count: number) => (total > 0 ? Math.round((count / total) * 100) : 0)
-                      const pctEnt = (count: number) => (entregados > 0 ? Math.round((count / entregados) * 100) : 0)
+                      const pctTotal = (count: number) => (total > 0 ? ((count / total) * 100).toFixed(2) : "0.00")
+                      const pctEnt = (count: number) => (entregados > 0 ? ((count / entregados) * 100).toFixed(2) : "0.00")
                       const swatch = (color: string) => (
                         <span className="mr-2 inline-block h-2 w-2 rounded-sm" style={{ backgroundColor: color }} />
                       )
@@ -820,7 +821,7 @@ export default function ProspeccionMetricasPageClient() {
                                 {swatch(getChannelTotalStyle(row.canal).fill)}
                                 Envíos totales
                               </span>
-                              <span>{number.format(total)} (100%)</span>
+                              <span>{number.format(total)} (100.00%)</span>
                             </div>
                             <div className="flex justify-between gap-3">
                               <span className="flex items-center">{swatch("#f59e0b")}Enviados</span>
