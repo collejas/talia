@@ -94,6 +94,7 @@ function downloadBlob(filename: string, blob: Blob) {
 
 export default function ProspeccionMetricasPageClient() {
   const [activeTab, setActiveTab] = useState<"campanas" | "frases">("campanas")
+  const [hydrated, setHydrated] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [data, setData] = useState<ProspeccionMetricasResponse | null>(null)
@@ -121,6 +122,10 @@ export default function ProspeccionMetricasPageClient() {
     { label: "Procesado", color: "#8b5cf6", order: 4 },
     { label: "Pendiente", color: "#94a3b8", order: 5 },
   ]
+
+  useEffect(() => {
+    setHydrated(true)
+  }, [])
 
   useEffect(() => {
     let cancelled = false
@@ -217,21 +222,64 @@ export default function ProspeccionMetricasPageClient() {
     const entregaPct = summaryCampaign?.tasa_entrega_pct ?? 0
     const respuestaPct = summaryCampaign?.tasa_respuesta_pct ?? 0
     const convOppPct = summaryPhrases?.tasa_conversacion_oportunidad_pct ?? 0
+    const items = data?.campanas.items ?? []
+    const byChannel = items.reduce(
+      (acc, item) => {
+        const channel = (item.canal || "").trim().toLowerCase()
+        if (channel === "whatsapp") acc.whatsapp += item.envios_totales || 0
+        else if (channel === "correo") acc.correo += item.envios_totales || 0
+        else if (channel === "llamada") acc.llamada += item.envios_totales || 0
+        return acc
+      },
+      { whatsapp: 0, correo: 0, llamada: 0 },
+    )
+    const totalHint =
+      canal === "todos"
+        ? `WA ${number.format(byChannel.whatsapp)} · Correo ${number.format(byChannel.correo)} · Voz ${number.format(byChannel.llamada)}`
+        : "Bloque campañas"
+    const deliveredByChannel = items.reduce(
+      (acc, item) => {
+        const channel = (item.canal || "").trim().toLowerCase()
+        if (channel === "whatsapp") acc.whatsapp += item.envios_entregados || 0
+        else if (channel === "correo") acc.correo += item.envios_entregados || 0
+        else if (channel === "llamada") acc.llamada += item.envios_entregados || 0
+        return acc
+      },
+      { whatsapp: 0, correo: 0, llamada: 0 },
+    )
+    const responsesByChannel = items.reduce(
+      (acc, item) => {
+        const channel = (item.canal || "").trim().toLowerCase()
+        if (channel === "whatsapp") acc.whatsapp += item.envios_respondidos || 0
+        else if (channel === "correo") acc.correo += item.envios_respondidos || 0
+        else if (channel === "llamada") acc.llamada += item.envios_respondidos || 0
+        return acc
+      },
+      { whatsapp: 0, correo: 0, llamada: 0 },
+    )
+    const deliveredHint =
+      canal === "todos"
+        ? `WA ${number.format(deliveredByChannel.whatsapp)} · Correo ${number.format(deliveredByChannel.correo)} · Voz ${number.format(deliveredByChannel.llamada)}`
+        : `${entregaPct}% entrega`
+    const responsesHint =
+      canal === "todos"
+        ? `WA ${number.format(responsesByChannel.whatsapp)} · Correo ${number.format(responsesByChannel.correo)} · Voz ${number.format(responsesByChannel.llamada)}`
+        : `${respuestaPct}% respuesta`
 
     cards.push({
       title: "Envíos totales",
       value: number.format(summaryCampaign?.envios_totales ?? 0),
-      hint: "Bloque campañas",
+      hint: totalHint,
     })
     cards.push({
       title: "Entregados",
       value: number.format(summaryCampaign?.envios_entregados ?? 0),
-      hint: `${entregaPct}% entrega`,
+      hint: deliveredHint,
     })
     cards.push({
       title: "Respuestas de campaña",
       value: number.format(summaryCampaign?.envios_respondidos ?? 0),
-      hint: `${respuestaPct}% respuesta`,
+      hint: responsesHint,
     })
     cards.push({
       title: "Conversaciones atribuidas",
@@ -244,7 +292,7 @@ export default function ProspeccionMetricasPageClient() {
       hint: `${convOppPct}% conv→opp`,
     })
     return cards
-  }, [summaryCampaign, summaryPhrases])
+  }, [summaryCampaign, summaryPhrases, data?.campanas.items, canal])
 
   const topCampaigns = useMemo(() => {
     const items = data?.campanas.items ?? []
@@ -1013,13 +1061,13 @@ export default function ProspeccionMetricasPageClient() {
         <Button
           variant="outline"
           onClick={exportActiveCsv}
-          disabled={Boolean(loading || !data)}
+          disabled={Boolean(!hydrated || loading || !data)}
           className="ml-auto"
         >
           <IconDownload className="mr-2 h-4 w-4" />
           Exportar CSV ({activeTab === "campanas" ? "campañas" : "frases"})
         </Button>
-        <Button variant="outline" onClick={() => void exportXlsx()} disabled={Boolean(loading || !data)}>
+        <Button variant="outline" onClick={() => void exportXlsx()} disabled={Boolean(!hydrated || loading || !data)}>
           <IconFileSpreadsheet className="mr-2 h-4 w-4" />
           Exportar XLSX
         </Button>
