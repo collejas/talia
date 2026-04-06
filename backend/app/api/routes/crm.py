@@ -5128,7 +5128,14 @@ async def _run_prospecto_email_lookup(
         # Sin historial (o puro omitido/pendiente) => neutral.
         return 10, {"has_error": False, "has_sent": False, "total_logs": len(entries)}
 
-    def _compute_risk_score(*, lookup_status: str, details: dict[str, Any], smtp_ok: bool, smtp_skipped: bool, history_points: int) -> tuple[int, str]:
+    def _compute_risk_score(
+        *,
+        lookup_status: str,
+        details: dict[str, Any],
+        smtp_ok: bool,
+        smtp_skipped: bool,
+        history_points: int,
+    ) -> tuple[int, str]:
         normalized_status = (lookup_status or "").strip().lower()
         if normalized_status in {"sin_email"}:
             return 0, "descartar"
@@ -5137,7 +5144,11 @@ async def _run_prospecto_email_lookup(
 
         score = 0
         # Dominio válido (si llegamos aquí, no es placeholder/disposable/nxdomain).
-        score += 20
+        # Si hubo fallback DNS por inconsistencia, bajamos confianza.
+        if details.get("dns_inconsistent") is True:
+            score += 10
+        else:
+            score += 20
         mx_records = details.get("mx")
         if isinstance(mx_records, list) and mx_records:
             score += 20

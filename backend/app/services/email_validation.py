@@ -24,6 +24,8 @@ from email_validator import EmailNotValidError, validate_email
 EmailLookupStatus = Literal["pendiente", "sin_email", "valido", "invalido", "dudoso", "error"]
 EmailQualityTier = Literal["alta", "media", "baja"]
 
+PUBLIC_DNS_NAMESERVERS = ("1.1.1.1", "8.8.8.8")
+
 
 @dataclass(frozen=True)
 class EmailLookupResult:
@@ -154,8 +156,15 @@ def _build_dns_resolver() -> dns.resolver.Resolver:
     return resolver
 
 
-def _resolve_mx(domain: str) -> tuple[list[dict[str, Any]], str | None]:
-    resolver = _build_dns_resolver()
+def _build_public_dns_resolver() -> dns.resolver.Resolver:
+    resolver = dns.resolver.Resolver(configure=False)
+    resolver.nameservers = list(PUBLIC_DNS_NAMESERVERS)
+    resolver.timeout = 2.0
+    resolver.lifetime = 4.0
+    return resolver
+
+
+def _resolve_mx(domain: str, *, resolver: dns.resolver.Resolver) -> tuple[list[dict[str, Any]], str | None]:
     try:
         answers = resolver.resolve(domain, "MX")
     except (dns.resolver.NoAnswer, dns.resolver.NXDOMAIN) as exc:
@@ -178,8 +187,7 @@ def _resolve_mx(domain: str) -> tuple[list[dict[str, Any]], str | None]:
     return mx, None
 
 
-def _resolve_a_aaaa(domain: str) -> dict[str, Any]:
-    resolver = _build_dns_resolver()
+def _resolve_a_aaaa(domain: str, *, resolver: dns.resolver.Resolver) -> dict[str, Any]:
     result = {"a": False, "aaaa": False, "error": None}
     try:
         resolver.resolve(domain, "A")
@@ -198,6 +206,42 @@ def _resolve_a_aaaa(domain: str) -> dict[str, Any]:
     except (dns.exception.Timeout, dns.resolver.NoNameservers) as exc:
         result["error"] = exc.__class__.__name__
     return result
+
+
+def _resolve_dns_with_fallback(domain: str) -> tuple[list[dict[str, Any]], str | None, dict[str, Any], dict[str, Any]]:
+    """Resuelve MX y A/AAAA; si el resolver del sistema devuelve NXDOMAIN, reintenta con DNS públicos.
+
+    Esto reduce falsos negativos cuando el DNS del host está filtrando o fallando.
+    """
+
+    system_resolver = _build_dns_resolver()
+    mx_records, mx_error = _resolve_mx(domain, resolver=system_resolver)
+    a_aaaa = _resolve_a_aaaa(domain, resolver=system_resolver)
+
+    meta: dict[str, Any] = {
+        "dns_fallback_used": False,
+        "dns_inconsistent": False,
+        "system_mx_error": mx_error,
+        "system_a_aaaa_error": a_aaaa.get("error"),
+        "public_nameservers": list(PUBLIC_DNS_NAMESERVERS),
+    }
+
+    if mx_error == "NXDOMAIN":
+        meta["dns_fallback_used"] = True
+        public_resolver = _build_public_dns_resolver()
+        public_mx, public_mx_error = _resolve_mx(domain, resolver=public_resolver)
+        public_a_aaaa = _resolve_a_aaaa(domain, resolver=public_resolver)
+
+        meta["public_mx_error"] = public_mx_error
+        meta["public_a_aaaa_error"] = public_a_aaaa.get("error")
+
+        # Si DNS público contradice NXDOMAIN, marcamos inconsistencia y usamos el resultado público.
+        if public_mx_error != "NXDOMAIN" or public_mx or public_a_aaaa.get("a") or public_a_aaaa.get("aaaa"):
+            meta["dns_inconsistent"] = True
+            mx_records, mx_error = public_mx, public_mx_error
+            a_aaaa = public_a_aaaa
+
+    return mx_records, mx_error, a_aaaa, meta
 
 
 def _smtp_connect(host: str, port: int, timeout_seconds: float) -> tuple[bool, dict[str, Any]]:
@@ -305,8 +349,7 @@ async def validate_email_address(
             checked_at=checked_at,
         )
 
-    mx_records, mx_error = _resolve_mx(domain)
-    a_aaaa = _resolve_a_aaaa(domain)
+    mx_records, mx_error, a_aaaa, dns_meta = _resolve_dns_with_fallback(domain)
     dns_details: dict[str, Any] = {
         "domain": domain,
         "local_part": local_part,
@@ -318,6 +361,9 @@ async def validate_email_address(
         "aaaa": bool(a_aaaa.get("aaaa")),
         "a_aaaa_error": a_aaaa.get("error"),
         "typo_suggestion": typo_suggestion,
+        "dns_fallback_used": bool(dns_meta.get("dns_fallback_used")),
+        "dns_inconsistent": bool(dns_meta.get("dns_inconsistent")),
+        "dns_meta": dns_meta,
     }
 
     # Clasificación por DNS/MX:
@@ -358,9 +404,12 @@ async def validate_email_address(
     if not check_smtp:
         status: EmailLookupStatus = "valido"
         reason = "mx_present_smtp_skipped"
-        if quality_tier != "alta" or typo_reason:
+        if quality_tier != "alta" or typo_reason or dns_details.get("dns_inconsistent"):
             status = "dudoso"
-            reason = "role_based" if quality_tier != "alta" else "domain_typo_suspected"
+            if dns_details.get("dns_inconsistent"):
+                reason = "dns_inconsistent"
+            else:
+                reason = "role_based" if quality_tier != "alta" else "domain_typo_suspected"
         return EmailLookupResult(
             status=status,
             normalized_email=normalized_email.lower(),
@@ -375,9 +424,12 @@ async def validate_email_address(
     if ok:
         status: EmailLookupStatus = "valido"
         reason = "smtp_ok"
-        if quality_tier != "alta" or typo_reason:
+        if quality_tier != "alta" or typo_reason or dns_details.get("dns_inconsistent"):
             status = "dudoso"
-            reason = "role_based" if quality_tier != "alta" else "domain_typo_suspected"
+            if dns_details.get("dns_inconsistent"):
+                reason = "dns_inconsistent"
+            else:
+                reason = "role_based" if quality_tier != "alta" else "domain_typo_suspected"
         return EmailLookupResult(
             status=status,
             normalized_email=normalized_email.lower(),
