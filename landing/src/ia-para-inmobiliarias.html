@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<html lang="es" class="light scroll-smooth">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>IA para inmobiliarias por WhatsApp | Tal-IA</title>
+  <meta name="description" content="Automatiza leads inmobiliarios por WhatsApp con IA. Tal-IA responde en segundos, perfila prospectos, agenda citas y registra todo en un CRM inteligente." />
+  <link rel="canonical" href="https://talia.mx/ia-para-inmobiliarias" />
+
+  <meta property="og:type" content="website" />
+  <meta property="og:locale" content="es_MX" />
+  <meta property="og:site_name" content="Tal-IA" />
+  <meta property="og:title" content="IA para inmobiliarias por WhatsApp | Tal-IA" />
+  <meta property="og:description" content="Responde leads inmobiliarios, perfila compradores y agenda visitas automáticamente con Tal-IA." />
+  <meta property="og:url" content="https://talia.mx/ia-para-inmobiliarias" />
+  <meta property="og:image" content="https://talia.mx/android-chrome-512x512.png" />
+
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="IA para inmobiliarias por WhatsApp | Tal-IA" />
+  <meta name="twitter:description" content="Convierte más leads inmobiliarios con atención inmediata, perfilado automático y agenda de citas por WhatsApp." />
+  <meta name="twitter:image" content="https://talia.mx/android-chrome-512x512.png" />
+
+  <link rel="manifest" href="/site.webmanifest" />
+  <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet" />
+
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            primary: '#7f13ec',
+            'background-light': '#f7f6f8',
+            'background-dark': '#191022'
+          },
+          fontFamily: {
+            display: ['Inter', 'sans-serif']
+          },
+          borderRadius: {
+            DEFAULT: '0.25rem',
+            lg: '0.5rem',
+            xl: '0.75rem',
+            '2xl': '1rem',
+            full: '9999px'
+          }
+        }
+      }
+    }
+  </script>
+
+  <style>
+    body { font-family: 'Inter', sans-serif; }
+    .glass { background: rgba(255,255,255,0.82); backdrop-filter: blur(12px); }
+    .material-symbols-outlined { font-variation-settings: 'FILL' 0, 'wght' 500, 'GRAD' 0, 'opsz' 24; }
+    .whatsapp-float {
+      position: fixed;
+      right: 18px;
+      bottom: 18px;
+      z-index: 60;
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      padding: 12px 16px;
+      border-radius: 9999px;
+      background: linear-gradient(135deg, #22c55e, #16a34a);
+      color: #fff;
+      font-weight: 800;
+      letter-spacing: .02em;
+      box-shadow: 0 18px 40px rgba(22,163,74,.35);
+      transition: transform .2s ease, box-shadow .2s ease, filter .2s ease;
+    }
+    .whatsapp-float:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 22px 46px rgba(22,163,74,.45);
+      filter: brightness(1.02);
+    }
+    .whatsapp-float__icon { width: 20px; height: 20px; }
+    @media (max-width: 640px) {
+      .whatsapp-float { padding: 12px; }
+      .whatsapp-float__label { display: none; }
+    }
+  </style>
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "Organization",
+        "@id": "https://talia.mx/#organization",
+        "name": "Tal-IA",
+        "url": "https://talia.mx/",
+        "logo": "https://talia.mx/android-chrome-512x512.png",
+        "sameAs": ["https://wa.me/5214443354450"]
+      },
+      {
+        "@type": "WebPage",
+        "name": "IA para inmobiliarias por WhatsApp",
+        "url": "https://talia.mx/ia-para-inmobiliarias",
+        "description": "Página sobre IA para inmobiliarias con enfoque en WhatsApp, CRM y agenda de citas."
+      },
+      {
+        "@type": "FAQPage",
+        "mainEntity": [
+          {
+            "@type": "Question",
+            "name": "¿Cómo ayuda una IA a una inmobiliaria?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Tal-IA responde leads en segundos, perfila al prospecto, registra su interés, presupuesto y zona, y agenda citas automáticamente por WhatsApp."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "¿Tal-IA funciona con desarrollos, casas y terrenos?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Sí. Tal-IA puede configurarse para casas, departamentos, terrenos y distintos desarrollos inmobiliarios."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "¿Tal-IA reemplaza al asesor?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "No. Tal-IA gestiona la atención inicial, calificación y seguimiento para que el asesor se enfoque en cerrar y mostrar propiedades."
+            }
+          }
+        ]
+      }
+    ]
+  }
+  </script>
+</head>
+<body class="bg-background-light text-slate-900 selection:bg-primary/30">
+  <nav class="fixed top-0 w-full z-50 border-b border-primary/10 glass">
+    <div class="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <a class="flex items-center gap-2" href="/">
+          <img src="/assets/logos/Logo8.png" alt="Tal-IA" class="size-9 object-contain" />
+          <span class="text-xl font-bold tracking-tight text-slate-900">Tal-IA</span>
+        </a>
+      </div>
+      <div class="hidden md:flex items-center gap-8">
+        <a class="text-sm font-medium hover:text-primary transition-colors" href="#antes-despues">Antes vs después</a>
+        <a class="text-sm font-medium hover:text-primary transition-colors" href="#como-funciona">Cómo funciona</a>
+        <a class="text-sm font-medium hover:text-primary transition-colors" href="#faq">FAQ</a>
+      </div>
+      <a href="https://wa.me/5214443354450?text=Hola,%20tengo%20una%20inmobiliaria%20y%20quiero%20automatizar%20mis%20leads%20y%20citas%20por%20WhatsApp,%20%C2%BFc%C3%B3mo%20funciona%20Tal-IA?%20[SEO_INMO]" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-2 rounded-xl bg-emerald-500 px-4 py-2.5 text-sm font-black text-white shadow-lg shadow-emerald-500/30 hover:bg-emerald-600 transition-colors">
+        Demo por WhatsApp
+      </a>
+    </div>
+  </nav>
+
+  <section class="relative overflow-hidden pt-36 pb-24">
+    <div class="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(127,19,236,0.18),transparent_35%),radial-gradient(circle_at_bottom_left,rgba(34,197,94,0.16),transparent_30%)]"></div>
+    <div class="relative max-w-7xl mx-auto px-6 grid lg:grid-cols-2 gap-14 items-center">
+      <div>
+        <div class="inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/10 px-3 py-1 mb-6">
+          <span class="text-xs font-black uppercase tracking-[0.18em] text-primary">Bienes raíces + IA + WhatsApp</span>
+        </div>
+        <h1 class="text-5xl lg:text-7xl font-black leading-[1.03] tracking-tight mb-6">
+          IA para <span class="text-primary">inmobiliarias</span> que responde, perfila y agenda por WhatsApp
+        </h1>
+        <p class="text-lg text-slate-600 leading-relaxed max-w-2xl mb-8">
+          Tal-IA ayuda a desarrolladoras e inmobiliarias a responder leads en segundos, hacer preguntas clave, registrar cada oportunidad y agendar citas sin depender del seguimiento manual del asesor.
+        </p>
+        <div class="flex flex-col sm:flex-row gap-4 mb-5">
+          <a href="https://wa.me/5214443354450?text=Hola,%20tengo%20una%20inmobiliaria%20y%20quiero%20automatizar%20mis%20leads%20y%20citas%20por%20WhatsApp,%20%C2%BFc%C3%B3mo%20funciona%20Tal-IA?%20[SEO_INMO]" target="_blank" rel="noopener noreferrer" class="inline-flex items-center justify-center gap-2 rounded-2xl bg-emerald-500 px-8 py-4 text-lg font-black text-white shadow-xl shadow-emerald-500/30 hover:bg-emerald-600 transition-colors">
+            Quiero ver una demo
+            <span class="material-symbols-outlined">bolt</span>
+          </a>
+          <a href="#antes-despues" class="inline-flex items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-8 py-4 text-lg font-bold text-slate-700 hover:border-primary hover:text-primary transition-colors">
+            Ver el antes y después
+            <span class="material-symbols-outlined">south</span>
+          </a>
+        </div>
+        <p class="text-sm font-semibold uppercase tracking-[0.18em] text-slate-500">
+          Leads centralizados · Respuesta inmediata · Citas automatizadas
+        </p>
+      </div>
+
+      <div class="relative">
+        <a href="https://talia.mx" class="absolute -top-12 left-0 text-sm font-bold text-primary hover:underline">
+          ← Volver a talia.mx
+        </a>
+        <div class="rounded-[2rem] border border-slate-200 bg-white p-3 shadow-2xl shadow-slate-200/70 overflow-hidden">
+          <div class="absolute top-4 left-4 bg-emerald-500 text-white text-xs font-bold px-3 py-1 rounded-full shadow z-10">
+            Demo real
+          </div>
+          <video autoplay muted loop playsinline controls class="w-full rounded-[1.5rem] border border-slate-200 bg-black shadow-2xl" poster="/assets/logos/Logo8.png">
+            <source src="/assets/videos/landing-demo.webm" type="video/webm" />
+            Tu navegador no soporta video HTML5.
+          </video>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="antes-despues" class="py-24 bg-white">
+    <div class="max-w-7xl mx-auto px-6">
+      <div class="text-center max-w-3xl mx-auto mb-16">
+        <p class="text-xs font-black uppercase tracking-[0.24em] text-primary mb-3">Antes vs después</p>
+        <h2 class="text-4xl md:text-5xl font-black tracking-tight mb-5">Antes el lead dependía del asesor. Con Tal-IA depende de la empresa.</h2>
+        <p class="text-slate-600 text-lg leading-relaxed">Aquí está la diferencia que realmente importa en inmobiliarias: quién controla la velocidad, la información y el seguimiento.</p>
+      </div>
+
+      <div class="grid lg:grid-cols-2 gap-8">
+        <div class="rounded-[2rem] border border-rose-200 bg-gradient-to-br from-rose-50 to-white p-8">
+          <p class="text-xs font-black uppercase tracking-[0.18em] text-rose-600 mb-4">Antes</p>
+          <ul class="space-y-4 text-slate-700 leading-relaxed">
+            <li>La empresa genera leads y el asesor los maneja desde su celular.</li>
+            <li>El tiempo de respuesta depende de si alguien vio el mensaje.</li>
+            <li>El seguimiento es inconsistente y muchas oportunidades se enfrían.</li>
+            <li>La empresa no tiene visibilidad real del pipeline.</li>
+            <li>El cliente se termina relacionando más con el asesor que con la empresa.</li>
+          </ul>
+        </div>
+        <div class="rounded-[2rem] border border-emerald-200 bg-gradient-to-br from-emerald-50 to-white p-8">
+          <p class="text-xs font-black uppercase tracking-[0.18em] text-emerald-700 mb-4">Con Tal-IA</p>
+          <ul class="space-y-4 text-slate-700 leading-relaxed">
+            <li>La empresa concentra todos los leads en un solo número y flujo.</li>
+            <li>Tal-IA responde al instante y hace preguntas clave para perfilar.</li>
+            <li>La información queda estructurada y medible desde el primer contacto.</li>
+            <li>El asesor entra cuando ya hay contexto, interés y siguiente paso claro.</li>
+            <li>La empresa conserva control del lead, del proceso y del seguimiento.</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="como-funciona" class="py-24 bg-background-light">
+    <div class="max-w-7xl mx-auto px-6">
+      <div class="max-w-3xl mb-16">
+        <p class="text-xs font-black uppercase tracking-[0.24em] text-primary mb-3">Cómo funciona</p>
+        <h2 class="text-4xl md:text-5xl font-black tracking-tight mb-5">Tal-IA sigue el flujo inmobiliario que sí vende</h2>
+        <p class="text-slate-600 text-lg leading-relaxed">No se trata solo de contestar. Se trata de llevar al prospecto de interés a visita, de visita a seguimiento y de seguimiento a cierre.</p>
+      </div>
+
+      <div class="grid md:grid-cols-4 gap-6">
+        <article class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+          <div class="size-12 rounded-2xl bg-primary/10 text-primary flex items-center justify-center mb-5">
+            <span class="material-symbols-outlined">forum</span>
+          </div>
+          <p class="text-xs font-black uppercase tracking-[0.18em] text-slate-500 mb-2">Paso 1</p>
+          <h3 class="text-xl font-black mb-3">Captura inmediata</h3>
+          <p class="text-slate-600 text-sm leading-relaxed">Cada lead que entra por WhatsApp recibe respuesta en segundos, incluso fuera de horario.</p>
+        </article>
+
+        <article class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+          <div class="size-12 rounded-2xl bg-primary/10 text-primary flex items-center justify-center mb-5">
+            <span class="material-symbols-outlined">assignment_turned_in</span>
+          </div>
+          <p class="text-xs font-black uppercase tracking-[0.18em] text-slate-500 mb-2">Paso 2</p>
+          <h3 class="text-xl font-black mb-3">Perfilado del lead</h3>
+          <p class="text-slate-600 text-sm leading-relaxed">Tal-IA pregunta tipo de inmueble, presupuesto, zona, urgencia e interés real.</p>
+        </article>
+
+        <article class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+          <div class="size-12 rounded-2xl bg-primary/10 text-primary flex items-center justify-center mb-5">
+            <span class="material-symbols-outlined">database</span>
+          </div>
+          <p class="text-xs font-black uppercase tracking-[0.18em] text-slate-500 mb-2">Paso 3</p>
+          <h3 class="text-xl font-black mb-3">Registro en CRM</h3>
+          <p class="text-slate-600 text-sm leading-relaxed">La conversación queda estructurada en tu CRM o en el CRM de Tal-IA para seguimiento total.</p>
+        </article>
+
+        <article class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+          <div class="size-12 rounded-2xl bg-primary/10 text-primary flex items-center justify-center mb-5">
+            <span class="material-symbols-outlined">event_available</span>
+          </div>
+          <p class="text-xs font-black uppercase tracking-[0.18em] text-slate-500 mb-2">Paso 4</p>
+          <h3 class="text-xl font-black mb-3">Cita o visita</h3>
+          <p class="text-slate-600 text-sm leading-relaxed">Tal-IA propone siguiente acción, agenda visita o deja listo al asesor para cerrar.</p>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <section class="py-24 bg-white">
+    <div class="max-w-7xl mx-auto px-6">
+      <div class="text-center max-w-3xl mx-auto mb-16">
+        <p class="text-xs font-black uppercase tracking-[0.24em] text-primary mb-3">Qué resuelve</p>
+        <h2 class="text-4xl md:text-5xl font-black tracking-tight mb-5">Los dolores reales de una inmobiliaria</h2>
+        <p class="text-slate-600 text-lg leading-relaxed">Tal-IA está pensada para el punto exacto donde muchas inmobiliarias pierden dinero: la velocidad de respuesta y el seguimiento.</p>
+      </div>
+
+      <div class="grid md:grid-cols-2 xl:grid-cols-3 gap-6">
+        <article class="rounded-3xl border border-slate-200 p-7 bg-gradient-to-br from-violet-50 to-white">
+          <h3 class="text-2xl font-black mb-3">Leads perdidos por tardanza</h3>
+          <p class="text-slate-600 leading-relaxed">Si no respondes en minutos, el lead ya está hablando con otra inmobiliaria.</p>
+        </article>
+        <article class="rounded-3xl border border-slate-200 p-7 bg-gradient-to-br from-emerald-50 to-white">
+          <h3 class="text-2xl font-black mb-3">Dependencia del asesor</h3>
+          <p class="text-slate-600 leading-relaxed">El cliente no debe quedar amarrado al celular personal del asesor; debe quedar dentro del sistema de la empresa.</p>
+        </article>
+        <article class="rounded-3xl border border-slate-200 p-7 bg-gradient-to-br from-cyan-50 to-white">
+          <h3 class="text-2xl font-black mb-3">Seguimiento inconsistente</h3>
+          <p class="text-slate-600 leading-relaxed">Tal-IA puede continuar el seguimiento y mover al prospecto a la siguiente etapa sin olvidar conversaciones.</p>
+        </article>
+        <article class="rounded-3xl border border-slate-200 p-7 bg-gradient-to-br from-amber-50 to-white">
+          <h3 class="text-2xl font-black mb-3">Sin visibilidad del pipeline</h3>
+          <p class="text-slate-600 leading-relaxed">Todo queda medible: fuente, presupuesto, interés, cita, asesor y avance comercial.</p>
+        </article>
+        <article class="rounded-3xl border border-slate-200 p-7 bg-gradient-to-br from-rose-50 to-white">
+          <h3 class="text-2xl font-black mb-3">Citas tardías</h3>
+          <p class="text-slate-600 leading-relaxed">Cuando el prospecto está caliente, Tal-IA empuja la cita en el momento correcto.</p>
+        </article>
+        <article class="rounded-3xl border border-slate-200 p-7 bg-gradient-to-br from-slate-100 to-white">
+          <h3 class="text-2xl font-black mb-3">Falta de escala</h3>
+          <p class="text-slate-600 leading-relaxed">Puedes atender más desarrollos, más campañas y más leads sin crecer la carga operativa al mismo ritmo.</p>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <section class="py-24 bg-slate-950 text-white">
+    <div class="max-w-6xl mx-auto px-6 text-center">
+      <p class="text-xs font-black uppercase tracking-[0.24em] text-emerald-400 mb-3">Ideal para</p>
+      <h2 class="text-4xl md:text-5xl font-black tracking-tight mb-6">Desarrolladoras, inmobiliarias y equipos comerciales</h2>
+      <p class="max-w-3xl mx-auto text-slate-300 text-lg leading-relaxed mb-12">Tal-IA se adapta a desarrollos, casas, departamentos y terrenos. El objetivo es el mismo: responder primero, perfilar mejor y convertir más.</p>
+      <div class="grid md:grid-cols-3 gap-6 text-left">
+        <div class="rounded-3xl border border-white/10 bg-white/5 p-7">
+          <h3 class="text-2xl font-black mb-3">Desarrolladoras</h3>
+          <p class="text-slate-300 leading-relaxed">Centraliza campañas, inventario, prospectos y agenda de recorridos por proyecto.</p>
+        </div>
+        <div class="rounded-3xl border border-white/10 bg-white/5 p-7">
+          <h3 class="text-2xl font-black mb-3">Inmobiliarias</h3>
+          <p class="text-slate-300 leading-relaxed">Evita que el lead quede suelto entre asesores y gana control real del pipeline.</p>
+        </div>
+        <div class="rounded-3xl border border-white/10 bg-white/5 p-7">
+          <h3 class="text-2xl font-black mb-3">Ventas inmobiliarias</h3>
+          <p class="text-slate-300 leading-relaxed">Tal-IA prepara el terreno para que el asesor entre a cerrar, no a perseguir mensajes.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="faq" class="py-24 bg-white">
+    <div class="max-w-5xl mx-auto px-6">
+      <div class="text-center mb-14">
+        <p class="text-xs font-black uppercase tracking-[0.24em] text-primary mb-3">FAQ</p>
+        <h2 class="text-4xl font-black tracking-tight mb-4">Preguntas frecuentes</h2>
+        <p class="text-slate-600 text-lg">Respuestas claras para búsquedas con intención de compra.</p>
+      </div>
+      <div class="grid md:grid-cols-3 gap-6">
+        <article class="rounded-3xl border border-slate-200 p-6 bg-slate-50">
+          <h3 class="text-xl font-black mb-3">¿Cómo ayuda una IA a una inmobiliaria?</h3>
+          <p class="text-slate-600 leading-relaxed text-sm">Responde leads, perfila interés, registra datos, agenda citas y deja trazabilidad del proceso comercial.</p>
+        </article>
+        <article class="rounded-3xl border border-slate-200 p-6 bg-slate-50">
+          <h3 class="text-xl font-black mb-3">¿Funciona para casas, departamentos y terrenos?</h3>
+          <p class="text-slate-600 leading-relaxed text-sm">Sí. Tal-IA se adapta a distintos catálogos, desarrollos y reglas comerciales.</p>
+        </article>
+        <article class="rounded-3xl border border-slate-200 p-6 bg-slate-50">
+          <h3 class="text-xl font-black mb-3">¿Reemplaza al asesor?</h3>
+          <p class="text-slate-600 leading-relaxed text-sm">No. Le quita carga operativa y le entrega leads mejor perfilados para que se enfoque en vender.</p>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <section class="py-24">
+    <div class="max-w-6xl mx-auto px-6">
+      <div class="rounded-[2.5rem] bg-primary p-10 md:p-16 text-center shadow-2xl shadow-primary/30">
+        <p class="text-sm font-black uppercase tracking-[0.24em] text-white/75 mb-4">Siguiente paso</p>
+        <h2 class="text-4xl md:text-5xl font-black text-white tracking-tight mb-5">¿Quieres automatizar tus leads inmobiliarios por WhatsApp?</h2>
+        <p class="text-white/85 text-lg leading-relaxed max-w-3xl mx-auto mb-8">Escríbenos y te mostramos un flujo real de captura, perfilado y agenda para tu operación inmobiliaria.</p>
+        <a href="https://wa.me/5214443354450?text=Hola,%20tengo%20una%20inmobiliaria%20y%20quiero%20automatizar%20mis%20leads%20y%20citas%20por%20WhatsApp,%20%C2%BFc%C3%B3mo%20funciona%20Tal-IA?%20[SEO_INMO]" target="_blank" rel="noopener noreferrer" class="inline-flex items-center justify-center gap-2 rounded-2xl bg-white px-8 py-4 text-lg font-black text-primary hover:bg-slate-100 transition-colors">
+          Hablar con Tal-IA por WhatsApp
+          <span class="material-symbols-outlined">arrow_forward</span>
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <a class="whatsapp-float" href="https://wa.me/5214443354450?text=Hola,%20tengo%20una%20inmobiliaria%20y%20quiero%20automatizar%20mis%20leads%20y%20citas%20por%20WhatsApp,%20%C2%BFc%C3%B3mo%20funciona%20Tal-IA?%20[SEO_INMO]" target="_blank" rel="noopener noreferrer" aria-label="WhatsApp Tal-IA inmobiliarias">
+    <svg aria-hidden="true" class="whatsapp-float__icon" viewBox="0 0 16 16" fill="currentColor">
+      <path d="M13.601 2.326A7.854 7.854 0 0 0 8.003 0a7.92 7.92 0 0 0-6.91 11.79L0 16l4.366-1.144A7.92 7.92 0 0 0 8.003 16a7.9 7.9 0 0 0 7.997-7.997 7.86 7.86 0 0 0-2.399-5.677Zm-5.598 12.33a6.58 6.58 0 0 1-3.35-.913l-.24-.142-2.588.68.692-2.525-.156-.26a6.57 6.57 0 0 1-1.01-3.493 6.65 6.65 0 0 1 6.652-6.652 6.6 6.6 0 0 1 4.71 1.953 6.6 6.6 0 0 1 1.942 4.699 6.65 6.65 0 0 1-6.652 6.653Zm3.647-4.98c-.2-.1-1.182-.584-1.365-.65-.182-.067-.315-.1-.448.1-.133.2-.514.65-.63.784-.116.133-.232.15-.432.05-.2-.1-.844-.31-1.608-.99-.594-.53-.995-1.184-1.11-1.384-.116-.2-.012-.308.088-.407.09-.09.2-.232.3-.348.1-.116.133-.2.2-.332.066-.133.033-.25-.017-.35-.05-.1-.448-1.082-.614-1.482-.162-.39-.326-.337-.448-.343l-.381-.007a.733.733 0 0 0-.531.249c-.182.2-.697.681-.697 1.662 0 .98.714 1.928.814 2.061.1.133 1.404 2.144 3.4 3.006.474.204.844.326 1.132.417.476.151.909.13 1.252.08.382-.057 1.182-.483 1.349-.95.166-.465.166-.865.116-.949-.05-.083-.183-.133-.383-.232Z"/>
+    </svg>
+    <span class="whatsapp-float__label">Quiero más leads inmobiliarios</span>
+  </a>
+
+  <footer class="bg-white border-t border-slate-100 py-12">
+    <div class="max-w-7xl mx-auto px-6 flex flex-col md:flex-row justify-between items-center gap-4">
+      <div class="flex items-center gap-2">
+        <img src="/assets/logos/Logo8.png" alt="Tal-IA" class="size-8 object-contain" />
+        <span class="font-bold text-slate-900">Tal-IA</span>
+      </div>
+      <p class="text-sm text-slate-500 text-center">IA para inmobiliarias con atención inmediata, perfilado automático y agenda de citas por WhatsApp.</p>
+      <a href="/" class="text-sm font-bold text-primary hover:underline">Ir al inicio</a>
+    </div>
+  </footer>
+</body>
+</html>
