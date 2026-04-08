@@ -9242,7 +9242,7 @@ class CRMRepository:
                     if isinstance(external_id, str) and external_id:
                         upserted_by_external[external_id] = row
 
-        await _run_upsert(external_items, on_conflict="organizacion_id,external_id")
+        await _run_upsert(external_items, on_conflict="organizacion_id,fuente,external_id")
         await _run_upsert(fallback_items, on_conflict="resultado_id")
 
         ordered_rows: list[dict[str, Any]] = []
