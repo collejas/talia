@@ -8592,6 +8592,35 @@ def _collect_thread_template_external_keys(row: dict[str, Any]) -> list[str]:
     return keys
 
 
+def _apply_persisted_inbox_context(row: dict[str, Any]) -> None:
+    context = _ensure_dict(row.get("inbox_context"), default={})
+    if not context:
+        return
+
+    source_value = _clean_text(context.get("source"))
+    if source_value:
+        row["source"] = source_value
+
+    source_detail = context.get("source_detail")
+    if isinstance(source_detail, dict) and source_detail:
+        row["source_detail"] = source_detail
+
+    for field in (
+        "batch_id",
+        "batch_label",
+        "campana_id",
+        "campana_label",
+        "template_id",
+        "template_slug",
+        "template_label",
+    ):
+        value = context.get(field)
+        text_value = _clean_text(value)
+        if not text_value:
+            continue
+        row[field] = text_value.lower() if field == "template_slug" else text_value
+
+
 def _extract_thread_prospeccion_hints(
     row: dict[str, Any],
 ) -> tuple[str | None, str | None, str | None, str | None, str | None]:
@@ -12463,6 +12492,9 @@ async def get_inbox_threads(
         offset=offset,
         message_limit=message_limit,
     )
+    for row in rows:
+        if isinstance(row, dict):
+            _apply_persisted_inbox_context(row)
     duration_ms = (time.perf_counter() - start) * 1000
     stage_timings["rpc_threads_ms"] = round(duration_ms, 2)
     log_payload = {

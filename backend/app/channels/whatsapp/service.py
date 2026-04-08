@@ -658,6 +658,34 @@ async def _maybe_apply_publicidad_whatsapp_attribution(
                 error=str(exc),
             )
 
+    try:
+        await storage.merge_conversation_inbox_context(
+            conversation_id,
+            {
+                "source": "publicidad_whatsapp",
+                "source_detail": {
+                    "canal_publicitario": event_payload.get("canal_publicitario"),
+                    "campana_publicitaria": event_payload.get("campana_publicitaria"),
+                    "adset": event_payload.get("adset"),
+                    "anuncio": event_payload.get("anuncio"),
+                    "regla_id": _trim_text(created_event.get("regla_id")) or _trim_text(matched_rule.get("id")),
+                    "regla_nombre": _trim_text(matched_rule.get("nombre_regla")),
+                    "tipo_match": applied_match_type,
+                    "frase_normalizada": normalized_phrase,
+                    "atribuido_en": _trim_text(created_event.get("creado_en"))
+                    or datetime.now(timezone.utc).isoformat(),
+                },
+            },
+        )
+    except StorageError as exc:
+        log_event(
+            logger,
+            "whatsapp.publicidad_atribucion_conversation_snapshot_failed",
+            conversation_id=conversation_id,
+            contact_id=contact_id,
+            error=str(exc),
+        )
+
     log_event(
         logger,
         "whatsapp.publicidad_atribucion_applied",

@@ -73,6 +73,30 @@ def _ensure_dict(value: Any) -> dict[str, Any]:
     return {}
 
 
+def _deep_merge_dict(base: dict[str, Any], patch: dict[str, Any]) -> dict[str, Any]:
+    merged = dict(base)
+    for key, value in patch.items():
+        if value is None:
+            continue
+        if isinstance(value, dict):
+            existing = merged.get(key)
+            if isinstance(existing, dict):
+                nested = _deep_merge_dict(existing, value)
+                if nested:
+                    merged[key] = nested
+            elif value:
+                merged[key] = dict(value)
+            continue
+        if isinstance(value, str):
+            trimmed = value.strip()
+            if not trimmed:
+                continue
+            merged[key] = trimmed
+            continue
+        merged[key] = value
+    return merged
+
+
 def _normalize_manual_override(raw: Any) -> bool:
     """Normaliza diferentes formas de representar manual_override."""
     if isinstance(raw, bool):
@@ -1694,6 +1718,36 @@ async def update_conversation(conversation_id: str, patch: dict[str, Any]) -> di
     repo = CRMRepository()
     try:
         return await repo.update_conversation(conversation_id=conversation_id, patch=patch)
+    except CRMRepositoryError as exc:
+        raise StorageError(str(exc)) from exc
+
+
+async def merge_conversation_inbox_context(
+    conversation_id: str,
+    patch: dict[str, Any],
+) -> dict[str, Any]:
+    """Mezcla contexto persistente de inbox sin reemplazar campos no relacionados."""
+    repo = CRMRepository()
+    try:
+        row = await repo.get_conversation_inbox_context(conversation_id=conversation_id)
+        current_context = _ensure_dict(row.get("inbox_context"))
+        incoming_context = _ensure_dict(patch)
+        if not incoming_context:
+            return row
+        if (
+            str(current_context.get("source") or "").strip().lower() == "publicidad_whatsapp"
+            and str(incoming_context.get("source") or "").strip().lower() == "prospeccion"
+        ):
+            incoming_context = dict(incoming_context)
+            incoming_context.pop("source", None)
+            incoming_context.pop("source_detail", None)
+        merged_context = _deep_merge_dict(current_context, incoming_context)
+        if merged_context == current_context:
+            return row
+        return await repo.update_conversation(
+            conversation_id=conversation_id,
+            patch={"inbox_context": merged_context},
+        )
     except CRMRepositoryError as exc:
         raise StorageError(str(exc)) from exc
 

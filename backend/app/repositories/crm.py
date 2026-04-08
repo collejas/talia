@@ -3884,6 +3884,28 @@ class CRMRepository:
             raise CRMRepositoryError("conversation_not_found")
         return row
 
+    async def get_conversation_inbox_context(self, *, conversation_id: str) -> dict[str, Any]:
+        conversation_key = conversation_id.strip()
+        if not conversation_key:
+            raise CRMRepositoryError("conversation_id_required")
+        params = {
+            "id": f"eq.{conversation_key}",
+            "select": "id,organizacion_id,inbox_context",
+            "limit": "1",
+        }
+        resp = await self._request("GET", "/rest/v1/conversaciones", params=params)
+        data = resp.json() or []
+        row: Any
+        if isinstance(data, list) and data:
+            row = data[0]
+        elif isinstance(data, dict):
+            row = data
+        else:
+            row = None
+        if not isinstance(row, dict):
+            raise CRMRepositoryError("conversation_not_found")
+        return row
+
     async def get_latest_conversation_for_contact(
         self,
         *,

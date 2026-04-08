@@ -637,6 +637,32 @@ async def _log_whatsapp_inbox_message(
         return None
 
     resolved_conversation_id = _clean_text(storage_result.get("conversation_id"))
+    if resolved_conversation_id:
+        inbox_context_patch: dict[str, Any] = {
+            "source": "prospeccion",
+            "batch_id": metadata_payload.get("batch_id"),
+            "campana_id": metadata_payload.get("campana_id"),
+            "template_id": _clean_text(payload_meta.get("template_id")),
+            "template_slug": _clean_text(payload_meta.get("template_slug")),
+            "template_label": _clean_text(
+                payload_meta.get("template_label")
+                or payload_meta.get("template_nombre")
+                or payload_meta.get("template_name")
+            ),
+        }
+        try:
+            await storage.merge_conversation_inbox_context(
+                resolved_conversation_id,
+                inbox_context_patch,
+            )
+        except StorageError as exc:
+            log_event(
+                logger,
+                "prospeccion.sender_inbox_context_snapshot_failed",
+                envio_id=str(envio.get("id")),
+                conversation_id=resolved_conversation_id,
+                error=str(exc),
+            )
     if prospecto_id and resolved_conversation_id:
         await _bind_prospecto_opportunity_conversation(
             repo=repo,
