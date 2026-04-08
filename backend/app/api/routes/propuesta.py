@@ -5,7 +5,11 @@ from typing import Sequence
 from fastapi import APIRouter, HTTPException, Response
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
-from app.services.propuesta_pdf import PropuestaDocument, render_propuesta_pdf
+from app.services.propuesta_pdf import (
+    PropuestaDocument,
+    render_propuesta_ejecutiva_pdf,
+    render_propuesta_pdf,
+)
 from app.services import EmailSendError, send_email
 from app.services.tenant_runtime import MASTER_ORGANIZACION_ID, get_mail_runtime_settings
 
@@ -141,6 +145,110 @@ async def email_propuesta(payload: ProposalEmailPayload) -> dict[str, str]:
         message_id = send_email(
             subject=payload.subject,
             body_text=payload.message or "Adjunto encontrarás la propuesta Tal-IA.",
+            recipients=payload.recipients,
+            attachments=[
+                {
+                    "filename": document.filename,
+                    "content": document.content,
+                    "maintype": "application",
+                    "subtype": "pdf",
+                },
+            ],
+            mail_settings=mail_settings,
+        )
+    except EmailSendError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    return {"message_id": message_id}
+
+
+class ExecutiveCityPayload(BaseModel):
+    name: str
+    amount: int
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class ExecutiveProposalPayload(BaseModel):
+    proposal_title: str | None = Field(default=None, alias="proposalTitle")
+    strategic_intro_one: str | None = Field(default=None, alias="strategicIntroOne")
+    strategic_intro_two: str | None = Field(default=None, alias="strategicIntroTwo")
+    strategic_intro_three: str | None = Field(default=None, alias="strategicIntroThree")
+    corporate_items: list[str] | None = Field(default=None, alias="corporateItems")
+    corporate_investment: int | None = Field(default=None, alias="corporateInvestment")
+    city_items: list[str] | None = Field(default=None, alias="cityItems")
+    cities: list[ExecutiveCityPayload] | None = None
+    special_total: int | None = Field(default=None, alias="specialTotal")
+    special_conditions: list[str] | None = Field(default=None, alias="specialConditions")
+    monthly_base: int | None = Field(default=None, alias="monthlyBase")
+    monthly_additional: int | None = Field(default=None, alias="monthlyAdditional")
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+def _normalize_executive_payload(payload: ExecutiveProposalPayload | None) -> dict:
+    if not payload:
+        return {
+            "proposal_title": None,
+            "strategic_intro_one": None,
+            "strategic_intro_two": None,
+            "strategic_intro_three": None,
+            "corporate_items": None,
+            "corporate_investment": None,
+            "city_items": None,
+            "cities": None,
+            "special_total": None,
+            "special_conditions": None,
+            "monthly_base": None,
+            "monthly_additional": None,
+        }
+    return {
+        "proposal_title": payload.proposal_title,
+        "strategic_intro_one": payload.strategic_intro_one,
+        "strategic_intro_two": payload.strategic_intro_two,
+        "strategic_intro_three": payload.strategic_intro_three,
+        "corporate_items": payload.corporate_items,
+        "corporate_investment": payload.corporate_investment,
+        "city_items": payload.city_items,
+        "cities": [city.dict() for city in payload.cities] if payload.cities else None,
+        "special_total": payload.special_total,
+        "special_conditions": payload.special_conditions,
+        "monthly_base": payload.monthly_base,
+        "monthly_additional": payload.monthly_additional,
+    }
+
+
+@router.get("/ejecutiva/pdf", response_class=Response, include_in_schema=True)
+async def download_propuesta_ejecutiva_pdf() -> Response:
+    document = await render_propuesta_ejecutiva_pdf()
+    return _build_document_response(document)
+
+
+@router.post("/ejecutiva/pdf", response_class=Response, include_in_schema=True)
+async def download_propuesta_ejecutiva_pdf_with_data(
+    payload: ExecutiveProposalPayload | None = None,
+) -> Response:
+    document = await render_propuesta_ejecutiva_pdf(**_normalize_executive_payload(payload))
+    return _build_document_response(document)
+
+
+class ExecutiveProposalEmailPayload(BaseModel):
+    recipients: list[EmailStr]
+    subject: str = "Propuesta Ejecutiva Tal-IA"
+    message: str | None = None
+    proposal: ExecutiveProposalPayload | None = None
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+@router.post("/ejecutiva/email", include_in_schema=True)
+async def email_propuesta_ejecutiva(payload: ExecutiveProposalEmailPayload) -> dict[str, str]:
+    document = await render_propuesta_ejecutiva_pdf(**_normalize_executive_payload(payload.proposal))
+    mail_settings = await get_mail_runtime_settings(organizacion_id=MASTER_ORGANIZACION_ID)
+    try:
+        message_id = send_email(
+            subject=payload.subject,
+            body_text=payload.message or "Adjunto encontrarás la propuesta ejecutiva Tal-IA.",
             recipients=payload.recipients,
             attachments=[
                 {

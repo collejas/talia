@@ -86,6 +86,48 @@ DEFAULT_MVP_TIMELINE = (
     "información solicitada (flujos, contactos clave, contenidos y aprobaciones)."
 )
 DEFAULT_MVP_VALIDITY = "Vigencia de propuesta: 20 días naturales."
+DEFAULT_EXECUTIVE_TITLE = "🧾 PROPUESTA EJECUTIVA · Implementación Tal-IA · Operación Multi-Ciudad"
+DEFAULT_EXECUTIVE_INTRO_ONE = (
+    "La operación actual contempla múltiples ciudades con dinámicas comerciales independientes."
+)
+DEFAULT_EXECUTIVE_INTRO_TWO = (
+    "La implementación de Tal-IA se estructura para centralizar el control corporativo, "
+    "automatizar la atención por ciudad y estandarizar procesos sin perder flexibilidad local."
+)
+DEFAULT_EXECUTIVE_INTRO_THREE = (
+    "Cada ciudad se configura como una unidad de ventas autónoma, operando bajo un mismo sistema central."
+)
+DEFAULT_EXECUTIVE_CORPORATE_ITEMS = [
+    "CRM centralizado multi-ciudad",
+    "Dashboard ejecutivo consolidado",
+    "Control de usuarios, roles y permisos",
+    "Métricas y analítica global",
+    "Base de inteligencia del asistente IA",
+]
+DEFAULT_EXECUTIVE_CITY_ITEMS = [
+    "Configuración de desarrollos activos",
+    "Parametrización de flujos comerciales",
+    "Entrenamiento del asistente IA con inventario local",
+    "Asignación de asesores y reglas de operación",
+    "Integración con canales (WhatsApp / Web)",
+]
+DEFAULT_EXECUTIVE_SPECIAL_CONDITIONS = [
+    "Implementación de hasta 6 ciudades",
+    "Ejecución dentro de un periodo máximo de 90 días",
+    "Requiere disponibilidad de información, accesos y validaciones por parte del cliente",
+]
+DEFAULT_EXECUTIVE_CITIES = [
+    {"name": "Ciudad 1", "amount": 100_000},
+    {"name": "Ciudad 2", "amount": 80_000},
+    {"name": "Ciudad 3", "amount": 80_000},
+    {"name": "Ciudad 4", "amount": 60_000},
+    {"name": "Ciudad 5", "amount": 60_000},
+    {"name": "Ciudad 6", "amount": 60_000},
+]
+DEFAULT_EXECUTIVE_CORPORATE_INVESTMENT = 50_000
+DEFAULT_EXECUTIVE_SPECIAL_TOTAL = 380_000
+DEFAULT_EXECUTIVE_MONTHLY_BASE = 4_500
+DEFAULT_EXECUTIVE_MONTHLY_ADDITIONAL = 2_250
 
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -191,6 +233,14 @@ def _format_spanish_date(value: datetime) -> str:
         "diciembre",
     ]
     return f"{value.day:02d} de {months[value.month - 1]} de {value.year}"
+
+
+def _format_currency_mx(value: int | float) -> str:
+    amount = int(round(value))
+    sign = "-" if amount < 0 else ""
+    amount_abs = abs(amount)
+    formatted = f"{amount_abs:,}".replace(",", ",")
+    return f"{sign}${formatted} MXN"
 
 
 def _render_cards_from_payload(cards: Sequence[Mapping[str, str]] | None) -> str:
@@ -759,4 +809,303 @@ async def render_propuesta_pdf(
         return PropuestaDocument(filename=filename, content=pdf_bytes)
     except Exception as exc:
         logger.exception("propuesta_pdf_render_failed", exc_info=exc)
+        raise
+
+
+def _normalize_executive_cities(cities: Sequence[Mapping[str, object]] | None) -> list[dict[str, object]]:
+    source = list(cities) if cities else list(DEFAULT_EXECUTIVE_CITIES)
+    normalized: list[dict[str, object]] = []
+    for index, city in enumerate(source):
+        raw_name = city.get("name")
+        raw_amount = city.get("amount")
+        name = str(raw_name).strip() if raw_name is not None else ""
+        if not name:
+            name = f"Ciudad {index + 1}"
+        try:
+            amount = int(raw_amount) if raw_amount is not None else 0
+        except (TypeError, ValueError):
+            amount = 0
+        normalized.append({"name": name, "amount": max(amount, 0)})
+    if not normalized:
+        normalized = list(DEFAULT_EXECUTIVE_CITIES)
+    return normalized
+
+
+def _render_simple_list(items: Sequence[str]) -> str:
+    safe_items = [item.strip() for item in items if item and item.strip()]
+    return "".join(f"<li>{html_escape(item)}</li>" for item in safe_items)
+
+
+def _render_executive_cities_rows(cities: Sequence[Mapping[str, object]]) -> str:
+    rows: list[str] = []
+    for city in cities:
+        name = str(city.get("name", "")).strip() or "Ciudad"
+        amount = int(city.get("amount", 0))
+        rows.append(
+            f"<tr><td>{html_escape(name)}</td><td>{html_escape(_format_currency_mx(amount))}</td></tr>"
+        )
+    return "".join(rows)
+
+
+def _build_executive_html(
+    proposal_title: str,
+    strategic_intro_one: str,
+    strategic_intro_two: str,
+    strategic_intro_three: str,
+    corporate_items: Sequence[str],
+    corporate_investment: int,
+    city_items: Sequence[str],
+    cities: Sequence[Mapping[str, object]],
+    implementation_total: int,
+    special_total: int,
+    special_conditions: Sequence[str],
+    monthly_base: int,
+    monthly_additional: int,
+    monthly_for_current_cities: int,
+    generated_date: str,
+) -> str:
+    corporate_items_html = _render_simple_list(corporate_items)
+    city_items_html = _render_simple_list(city_items)
+    city_rows_html = _render_executive_cities_rows(cities)
+    special_conditions_html = _render_simple_list(special_conditions)
+    return f"""
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <title>Propuesta Ejecutiva Tal-IA</title>
+  <style>
+    @page {{
+      size: A4;
+      margin: 16mm;
+    }}
+    body {{
+      margin: 0;
+      color: #111827;
+      font-family: "Inter", "Helvetica Neue", Arial, sans-serif;
+      background: #ffffff;
+    }}
+    .title {{
+      font-size: 24px;
+      margin: 0;
+      line-height: 1.2;
+    }}
+    .subtitle {{
+      margin: 10px 0 0;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.24em;
+      color: #6b7280;
+    }}
+    .section {{
+      margin-top: 18px;
+      border: 1px solid #e5e7eb;
+      border-radius: 12px;
+      padding: 14px;
+      break-inside: avoid;
+      page-break-inside: avoid;
+    }}
+    .section-title {{
+      margin: 0 0 8px;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.2em;
+      font-weight: 700;
+    }}
+    .block-title {{
+      margin: 0 0 8px;
+      font-size: 11px;
+      font-weight: 700;
+    }}
+    p {{
+      margin: 0 0 8px;
+      font-size: 11px;
+      line-height: 1.45;
+      color: #4b5563;
+    }}
+    ul {{
+      margin: 0 0 8px 14px;
+      padding-left: 12px;
+    }}
+    li {{
+      font-size: 11px;
+      color: #4b5563;
+      margin-bottom: 3px;
+      line-height: 1.35;
+    }}
+    table {{
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 8px;
+      font-size: 11px;
+    }}
+    th, td {{
+      border-bottom: 1px solid #e5e7eb;
+      padding: 8px;
+      text-align: left;
+    }}
+    th {{
+      text-transform: uppercase;
+      letter-spacing: 0.2em;
+      color: #6b7280;
+      font-size: 9px;
+    }}
+    .kpi {{
+      margin-top: 8px;
+      font-size: 11px;
+      color: #374151;
+    }}
+    .kpi strong {{
+      color: #111827;
+    }}
+    .footer {{
+      margin-top: 18px;
+      font-size: 10px;
+      color: #6b7280;
+    }}
+  </style>
+</head>
+<body>
+  <h1 class="title">{html_escape(proposal_title)}</h1>
+  <p class="subtitle">Documento generado el {html_escape(generated_date)}</p>
+
+  <section class="section">
+    <p class="section-title">🧠 Enfoque estratégico</p>
+    <p>{html_escape(strategic_intro_one)}</p>
+    <p>{html_escape(strategic_intro_two)}</p>
+    <p><strong>👉 {html_escape(strategic_intro_three)}</strong></p>
+  </section>
+
+  <section class="section">
+    <p class="section-title">💼 Estructura de implementación</p>
+    <p class="block-title">🏢 Plataforma corporativa (única)</p>
+    <ul>{corporate_items_html}</ul>
+    <p class="kpi"><strong>Inversión única:</strong> {html_escape(_format_currency_mx(corporate_investment))} + IVA</p>
+
+    <p class="block-title" style="margin-top:12px;">🌎 Implementación por ciudad</p>
+    <ul>{city_items_html}</ul>
+    <table>
+      <thead>
+        <tr>
+          <th>Ciudad</th>
+          <th>Inversión</th>
+        </tr>
+      </thead>
+      <tbody>
+        {city_rows_html}
+      </tbody>
+    </table>
+    <p class="kpi"><strong>Total implementación sin ajuste:</strong> {html_escape(_format_currency_mx(implementation_total))} + IVA</p>
+  </section>
+
+  <section class="section">
+    <p class="section-title">🔥 Propuesta especial</p>
+    <p class="kpi"><strong>Inversión total cerrada:</strong> {html_escape(_format_currency_mx(special_total))} + IVA</p>
+    <p class="block-title" style="margin-top:8px;">Condiciones</p>
+    <ul>{special_conditions_html}</ul>
+  </section>
+
+  <section class="section">
+    <p class="section-title">💰 Renta mensual SaaS</p>
+    <p>Incluye uso de la plataforma, asistente IA multicanal, CRM operativo, automatizaciones y soporte continuo.</p>
+    <p class="kpi"><strong>{html_escape(_format_currency_mx(monthly_base))} / mes</strong> incluye 1 ciudad.</p>
+    <p class="kpi"><strong>{html_escape(_format_currency_mx(monthly_additional))} / mes</strong> por ciudad adicional.</p>
+    <p class="kpi"><strong>Total mensual estimado ({len(cities)} ciudades):</strong> {html_escape(_format_currency_mx(monthly_for_current_cities))} + IVA</p>
+  </section>
+
+  <p class="footer">Tal-IA · Geoactiv · Propuesta ejecutiva multi-ciudad.</p>
+</body>
+</html>
+"""
+
+
+async def render_propuesta_ejecutiva_pdf(
+    proposal_title: str | None = None,
+    strategic_intro_one: str | None = None,
+    strategic_intro_two: str | None = None,
+    strategic_intro_three: str | None = None,
+    corporate_items: Sequence[str] | None = None,
+    corporate_investment: int | None = None,
+    city_items: Sequence[str] | None = None,
+    cities: Sequence[Mapping[str, object]] | None = None,
+    special_total: int | None = None,
+    special_conditions: Sequence[str] | None = None,
+    monthly_base: int | None = None,
+    monthly_additional: int | None = None,
+) -> PropuestaDocument:
+    title = proposal_title.strip() if proposal_title and proposal_title.strip() else DEFAULT_EXECUTIVE_TITLE
+    intro_one = (
+        strategic_intro_one.strip()
+        if strategic_intro_one and strategic_intro_one.strip()
+        else DEFAULT_EXECUTIVE_INTRO_ONE
+    )
+    intro_two = (
+        strategic_intro_two.strip()
+        if strategic_intro_two and strategic_intro_two.strip()
+        else DEFAULT_EXECUTIVE_INTRO_TWO
+    )
+    intro_three = (
+        strategic_intro_three.strip()
+        if strategic_intro_three and strategic_intro_three.strip()
+        else DEFAULT_EXECUTIVE_INTRO_THREE
+    )
+    corporate_items_value = (
+        [item.strip() for item in corporate_items if item and item.strip()]
+        if corporate_items
+        else list(DEFAULT_EXECUTIVE_CORPORATE_ITEMS)
+    )
+    city_items_value = (
+        [item.strip() for item in city_items if item and item.strip()]
+        if city_items
+        else list(DEFAULT_EXECUTIVE_CITY_ITEMS)
+    )
+    special_conditions_value = (
+        [item.strip() for item in special_conditions if item and item.strip()]
+        if special_conditions
+        else list(DEFAULT_EXECUTIVE_SPECIAL_CONDITIONS)
+    )
+    cities_value = _normalize_executive_cities(cities)
+    corporate_investment_value = (
+        max(int(corporate_investment), 0)
+        if corporate_investment is not None
+        else DEFAULT_EXECUTIVE_CORPORATE_INVESTMENT
+    )
+    special_total_value = max(int(special_total), 0) if special_total is not None else DEFAULT_EXECUTIVE_SPECIAL_TOTAL
+    monthly_base_value = max(int(monthly_base), 0) if monthly_base is not None else DEFAULT_EXECUTIVE_MONTHLY_BASE
+    monthly_additional_value = (
+        max(int(monthly_additional), 0)
+        if monthly_additional is not None
+        else DEFAULT_EXECUTIVE_MONTHLY_ADDITIONAL
+    )
+    implementation_total = sum(int(city["amount"]) for city in cities_value)
+    monthly_for_current_cities = (
+        monthly_base_value
+        if len(cities_value) <= 1
+        else monthly_base_value + monthly_additional_value * (len(cities_value) - 1)
+    )
+    generated_date = _format_spanish_date(datetime.now(timezone.utc))
+
+    html = _build_executive_html(
+        proposal_title=title,
+        strategic_intro_one=intro_one,
+        strategic_intro_two=intro_two,
+        strategic_intro_three=intro_three,
+        corporate_items=corporate_items_value,
+        corporate_investment=corporate_investment_value,
+        city_items=city_items_value,
+        cities=cities_value,
+        implementation_total=implementation_total,
+        special_total=special_total_value,
+        special_conditions=special_conditions_value,
+        monthly_base=monthly_base_value,
+        monthly_additional=monthly_additional_value,
+        monthly_for_current_cities=monthly_for_current_cities,
+        generated_date=generated_date,
+    )
+    try:
+        pdf_bytes = await asyncio.to_thread(lambda: WeasyHTML(string=html).write_pdf())
+        filename = f"propuesta-ejecutiva-tal-ia-{datetime.now(timezone.utc):%Y%m%d}.pdf"
+        return PropuestaDocument(filename=filename, content=pdf_bytes)
+    except Exception as exc:
+        logger.exception("propuesta_ejecutiva_pdf_render_failed", exc_info=exc)
         raise

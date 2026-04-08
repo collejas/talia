@@ -178,6 +178,7 @@ const NAVIGATION: {
     },
     { title: "Proyectos", url: "#", icon: IconFolder },
     { title: "Propuesta", url: "/propuesta", icon: IconLayoutGrid, permission: "propuesta.view" },
+    { title: "Propuesta Ejecutiva", url: "/propuesta-ejecutiva", icon: IconLayoutGrid, permission: "propuesta.view" },
     { title: "Visita 2", url: "/vista-2", icon: IconLayoutKanban, permission: "reports.view" },
     { title: "Visitas", url: "/visitas", icon: IconMessageCircle, permission: "reports.view" },
   ],
