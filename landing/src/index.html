@@ -956,10 +956,22 @@ Bienes Raices
       const heroCarouselPrev = document.getElementById('hero-carousel-prev');
       const heroCarouselNext = document.getElementById('hero-carousel-next');
       const heroDemoCaption = document.getElementById('hero-demo-caption');
+      const supportsWebP = (() => {
+        try {
+          const canvas = document.createElement('canvas');
+          return canvas.toDataURL('image/webp').indexOf('data:image/webp') === 0;
+        } catch (_error) {
+          return false;
+        }
+      })();
+      const resolveImageAsset = (path) => {
+        if (!supportsWebP) return path;
+        return path.replace(/\.(png|jpe?g)(\?.*)?$/i, '.webp$2');
+      };
       const condoCarouselImages = [
-        '/assets/images/Condo%201.png',
-        '/assets/images/Condo%202.png',
-        '/assets/images/Condo%203.png',
+        resolveImageAsset('/assets/images/Condo%201.png'),
+        resolveImageAsset('/assets/images/Condo%202.png'),
+        resolveImageAsset('/assets/images/Condo%203.png'),
       ];
       let heroCarouselIndex = 0;
       let heroCarouselTimer = null;
@@ -1021,17 +1033,17 @@ Bienes Raices
       const applyHeroDemo = (demoKey) => {
         setHeroTabActive(demoKey);
         if (demoKey === 'ventas') {
-          setHeroMode('image', '/assets/images/ventas.png', 'Vista: Ventas');
+          setHeroMode('image', resolveImageAsset('/assets/images/ventas.png'), 'Vista: Ventas');
         } else if (demoKey === 'bienes') {
           return;
         } else if (demoKey === 'turismo') {
-          setHeroMode('image', '/assets/images/chat.png', 'Vista: Turismo');
+          setHeroMode('image', resolveImageAsset('/assets/images/chat.png'), 'Vista: Turismo');
         } else if (demoKey === 'soporte') {
-          setHeroMode('image', '/assets/images/chat.png', 'Vista: Soporte');
+          setHeroMode('image', resolveImageAsset('/assets/images/chat.png'), 'Vista: Soporte');
         } else if (demoKey === 'condominios') {
           setHeroMode('carousel', '', 'Vista: Condominios');
         } else if (demoKey === 'prospeccion') {
-          setHeroMode('image', '/assets/images/Busquedas.png', 'Vista: Prospeccion');
+          setHeroMode('image', resolveImageAsset('/assets/images/Busquedas.png'), 'Vista: Prospeccion');
         }
       };
 
