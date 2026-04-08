@@ -12375,10 +12375,16 @@ async def get_inbox_threads(
     source_requested = _clean_text(source)
     source_for_repo = None if source_requested == "publicidad_whatsapp" else source
     high_demand_mode = await high_demand_controller.current_mode() if enrich_requested else {"active": False}
-    # Inbox necesita consistencia visual: si el cliente pide enrich, respetarlo.
-    # Deferirlo en alta demanda hace que desaparezcan nombres y etiquetas
-    # (campaña/lote/plantilla) al alternar entre respuestas y refresh.
-    defer_enrichment_due_to_high_demand = False
+    # El enriquecimiento diferido solo aplica a listados interactivos. El detalle
+    # de un hilo visible y la vista filtrada de publicidad WhatsApp deben seguir
+    # resolviéndose con enrich completo para preservar contrato visual.
+    defer_enrichment_due_to_high_demand = bool(
+        enrich_requested
+        and limit > 1
+        and source_requested != "publicidad_whatsapp"
+        and bool(high_demand_mode.get("active"))
+        and bool(getattr(settings, "high_demand_inbox_enrichments_force_defer", True))
+    )
     effective_enrich = enrich_requested and not defer_enrichment_due_to_high_demand
     effective_timezone, timezone_source = await _resolve_effective_timezone_name(
         repo=repo,

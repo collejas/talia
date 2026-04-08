@@ -111,9 +111,10 @@ function gatherReengageTagsFromThreads(threads: InboxThread[]): string[] {
 }
 
 export async function loadInboxData(filters?: InboxThreadsFilters): Promise<InboxPayload> {
+  const sourceRequiresEnrichment = (filters?.source?.trim().toLowerCase() ?? "") === "publicidad_whatsapp";
   const normalizedFilters: Record<string, string> = {
     limit: "100",
-    message_limit: "20",
+    message_limit: "5",
   };
   const normalizedEstado = filters?.estado?.trim();
   const normalizedSource = filters?.source?.trim();
@@ -127,7 +128,7 @@ export async function loadInboxData(filters?: InboxThreadsFilters): Promise<Inbo
   if (normalizedDate) normalizedFilters.date = normalizedDate;
   if (normalizedBatchId) normalizedFilters.batch_id = normalizedBatchId;
   if (normalizedCampanaId) normalizedFilters.campana_id = normalizedCampanaId;
-  normalizedFilters.enrich = "true";
+  normalizedFilters.enrich = sourceRequiresEnrichment ? "true" : "false";
 
   const [bootstrap, tags] = await Promise.all([
     callCrmApi<InboxBootstrapResponse>("/crm/inbox/bootstrap", {

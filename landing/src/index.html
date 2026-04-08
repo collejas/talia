@@ -288,10 +288,6 @@ Bienes Raices
 <button type="button" data-hero-demo="condominios" class="hero-demo-tab inline-flex items-center rounded-full bg-white/90 border border-slate-200 px-3 py-1 text-[11px] font-semibold text-slate-600">Condominios</button>
 <button type="button" data-hero-demo="prospeccion" class="hero-demo-tab inline-flex items-center rounded-full bg-white/90 border border-slate-200 px-3 py-1 text-[11px] font-semibold text-slate-600">Prospeccion</button>
 </div>
-<video id="hero-demo-video" class="w-full rounded-[1.5rem] border border-slate-200 bg-black shadow-2xl" autoplay muted loop playsinline controls preload="metadata" poster="/assets/logos/Logo8.png">
-<source src="/assets/videos/landing-demo.webm" type="video/webm" />
-Tu navegador no soporta video HTML5.
-</video>
 <img id="hero-demo-image" class="hidden w-full rounded-[1.5rem] border border-slate-200 bg-white shadow-2xl object-cover" alt="Vista de demo de TalIA" src="/assets/images/ventas.png" />
 <div id="hero-demo-carousel" class="hidden relative">
 <img id="hero-demo-carousel-image" class="w-full rounded-[1.5rem] border border-slate-200 bg-white shadow-2xl object-cover" alt="Condominios demo" src="/assets/images/Condo%201.png" />
@@ -935,7 +931,7 @@ Tu navegador no soporta video HTML5.
       }
 
       const heroDemoTabs = document.querySelectorAll('.hero-demo-tab');
-      const heroDemoVideo = document.getElementById('hero-demo-video');
+      const heroDemoVideo = null;
       const heroDemoImage = document.getElementById('hero-demo-image');
       const heroDemoCarousel = document.getElementById('hero-demo-carousel');
       const heroDemoCarouselImage = document.getElementById('hero-demo-carousel-image');
@@ -984,21 +980,15 @@ Tu navegador no soporta video HTML5.
       };
 
       const setHeroMode = (mode, mediaSrc, caption) => {
-        if (!heroDemoVideo || !heroDemoImage || !heroDemoCarousel) return;
+        if (!heroDemoImage || !heroDemoCarousel) return;
         stopHeroCarousel();
-        heroDemoVideo.classList.add('hidden');
         heroDemoImage.classList.add('hidden');
         heroDemoCarousel.classList.add('hidden');
 
-        if (mode === 'video') {
-          heroDemoVideo.classList.remove('hidden');
-          heroDemoVideo.play().catch(() => {});
-        } else if (mode === 'image') {
-          heroDemoVideo.pause();
+        if (mode === 'image') {
           heroDemoImage.src = mediaSrc;
           heroDemoImage.classList.remove('hidden');
         } else if (mode === 'carousel') {
-          heroDemoVideo.pause();
           heroCarouselIndex = 0;
           renderHeroCarouselImage();
           heroDemoCarousel.classList.remove('hidden');
@@ -1015,7 +1005,7 @@ Tu navegador no soporta video HTML5.
         if (demoKey === 'ventas') {
           setHeroMode('image', '/assets/images/ventas.png', 'Vista: Ventas');
         } else if (demoKey === 'bienes') {
-          setHeroMode('video', '', 'Vista: Bienes Raices');
+          return;
         } else if (demoKey === 'turismo') {
           setHeroMode('image', '/assets/images/chat.png', 'Vista: Turismo');
         } else if (demoKey === 'soporte') {

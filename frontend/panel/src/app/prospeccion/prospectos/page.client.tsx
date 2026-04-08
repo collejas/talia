@@ -506,7 +506,7 @@ const FUENTE_LABELS: Record<string, string> = {
 }
 
 const PROSPECTOS_TABLE_PREFS_KEY = "prospeccion_prospectos_table_prefs_v1"
-const PROSPECTOS_DEFAULT_LIMIT = 200
+const PROSPECTOS_DEFAULT_LIMIT = 100
 const PROSPECTOS_METADATA_DEBOUNCE_MS = 350
 const PROSPECTOS_STREAM_REFRESH_DEBOUNCE_MS = 500
 const DEFAULT_TABLE_COLUMN_ORDER: ProspectTableColumnId[] = [

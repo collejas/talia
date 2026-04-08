@@ -32,6 +32,7 @@ const THREADS_REFRESH_INTERVAL_MS = 12000;
 const MESSAGES_POLL_INITIAL_MS = 3500;
 const MESSAGES_POLL_MAX_MS = 15000;
 const THREADS_PAGE_SIZE = 100;
+const THREADS_LIST_MESSAGE_LIMIT = 5;
 const INBOX_STREAM_REFRESH_DEBOUNCE_MS = 400;
 
 const CHANNEL_BADGE_STYLES: Record<string, string> = {
@@ -930,7 +931,7 @@ export function InboxSplitView({
       const params = new URLSearchParams({
         limit: String(THREADS_PAGE_SIZE),
         offset: String(Math.max(0, offset)),
-        message_limit: "20",
+        message_limit: String(THREADS_LIST_MESSAGE_LIMIT),
         enrich: enrich ? "true" : "false",
       });
       const normalizedSource = sourceFilter ? sourceFilter.toLowerCase() : "";
@@ -961,8 +962,8 @@ export function InboxSplitView({
   );
 
   const shouldEnrichThreads = React.useMemo(() => {
-    return true;
-  }, []);
+    return (sourceFilter ?? "").trim().toLowerCase() === "publicidad_whatsapp";
+  }, [sourceFilter]);
 
   const buildThreadDetailParams = React.useCallback(
     ({ threadOffset }: { threadOffset: number }) => {
