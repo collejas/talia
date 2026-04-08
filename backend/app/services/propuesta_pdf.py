@@ -86,6 +86,18 @@ DEFAULT_MVP_TIMELINE = (
     "información solicitada (flujos, contactos clave, contenidos y aprobaciones)."
 )
 DEFAULT_MVP_VALIDITY = "Vigencia de propuesta: 20 días naturales."
+DEFAULT_EXECUTIVE_EXPECTED_RESULT_ITEMS = [
+    "Todos los leads llegan a la empresa (no al asesor).",
+    "Atención inmediata 24/7.",
+    "Calificación automática de prospectos.",
+    "Asignación inteligente a asesores.",
+    "Seguimiento estructurado.",
+    "Visibilidad total del pipeline.",
+]
+DEFAULT_EXECUTIVE_EXPECTED_RESULT_CLOSING = (
+    "Tal-IA no es solo un sistema, es la infraestructura que permite operar múltiples ciudades "
+    "con control, velocidad y consistencia comercial desde un solo punto."
+)
 DEFAULT_EXECUTIVE_TITLE = "🧾 PROPUESTA EJECUTIVA · Implementación Tal-IA · Operación Multi-Ciudad"
 DEFAULT_EXECUTIVE_INTRO_ONE = (
     "La operación actual contempla múltiples ciudades con dinámicas comerciales independientes."
@@ -852,22 +864,55 @@ def _build_executive_html(
     strategic_intro_one: str,
     strategic_intro_two: str,
     strategic_intro_three: str,
+    cards_html: str,
     corporate_items: Sequence[str],
     corporate_investment: int,
     city_items: Sequence[str],
     cities: Sequence[Mapping[str, object]],
     implementation_total: int,
+    implementation_grand_total: int,
     special_total: int,
     special_conditions: Sequence[str],
     monthly_base: int,
     monthly_additional: int,
     monthly_for_current_cities: int,
+    mvp_title: str,
+    mvp_intro: str,
+    mvp_items: Sequence[str],
+    mvp_timeline: str,
+    mvp_validity: str,
+    expected_result_items: Sequence[str],
+    expected_result_closing: str,
+    secondary_contact_name: str | None,
+    secondary_contact_phone: str | None,
+    secondary_contact_email: str | None,
     generated_date: str,
 ) -> str:
     corporate_items_html = _render_simple_list(corporate_items)
     city_items_html = _render_simple_list(city_items)
     city_rows_html = _render_executive_cities_rows(cities)
     special_conditions_html = _render_simple_list(special_conditions)
+    mvp_items_html = _render_mvp_items(mvp_items)
+    expected_result_items_html = _render_mvp_items(expected_result_items)
+    qr_data_url = _load_qr_image_data_url()
+    qr_html = (
+        f'<div class="qr"><img src="{qr_data_url}" alt="QR Tal-IA" /></div>'
+        if qr_data_url
+        else ""
+    )
+    secondary_contact_html = ""
+    if secondary_contact_name or secondary_contact_phone or secondary_contact_email:
+        parts = ['<div class="secondary-contact">']
+        if secondary_contact_name:
+            parts.append(
+                f'<p class="secondary-contact-name">{html_escape(secondary_contact_name)}</p>'
+            )
+        if secondary_contact_phone:
+            parts.append(f"<p>Cel: {html_escape(secondary_contact_phone)}</p>")
+        if secondary_contact_email:
+            parts.append(f"<p>Email: {html_escape(secondary_contact_email)}</p>")
+        parts.append("</div>")
+        secondary_contact_html = "".join(parts)
     return f"""
 <!doctype html>
 <html lang="es">
@@ -904,6 +949,56 @@ def _build_executive_html(
       padding: 14px;
       break-inside: avoid;
       page-break-inside: avoid;
+    }}
+    .cards-wrapper {{
+      margin-top: 12px;
+    }}
+    .card-group {{
+      margin-top: 12px;
+      break-inside: avoid;
+      page-break-inside: avoid;
+    }}
+    .card-group-title {{
+      margin: 0 0 8px;
+      font-size: 11px;
+      letter-spacing: 0.22em;
+      text-transform: uppercase;
+      font-weight: 700;
+      color: #1f2937;
+    }}
+    .card-grid {{
+      display: grid;
+      grid-template-columns: repeat(3, minmax(120px, 1fr));
+      gap: 10px;
+      break-inside: avoid;
+      page-break-inside: avoid;
+    }}
+    .card {{
+      border: 1px solid #cbd5f5;
+      padding: 10px;
+      border-radius: 10px;
+      background: linear-gradient(135deg, #ecfdf5, #ffffff);
+      min-height: 94px;
+    }}
+    .card-caption {{
+      font-size: 8px;
+      letter-spacing: 0.16em;
+      color: #047857;
+      margin: 0 0 6px;
+      line-height: 1.75;
+      display: block;
+    }}
+    .card-title {{
+      font-size: 10px;
+      font-weight: 600;
+      margin: 7px 0 6px;
+      line-height: 1.55;
+    }}
+    .card-body {{
+      font-size: 9px;
+      color: #475467;
+      margin: 0;
+      line-height: 1.35;
     }}
     .section-title {{
       margin: 0 0 8px;
@@ -963,6 +1058,29 @@ def _build_executive_html(
       font-size: 10px;
       color: #6b7280;
     }}
+    .footer-content {{
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 24px;
+      margin-top: 8px;
+    }}
+    .qr {{
+      width: 86px;
+      flex-shrink: 0;
+    }}
+    .qr img {{
+      width: 100%;
+      display: block;
+    }}
+    .secondary-contact {{
+      margin-top: 8px;
+    }}
+    .secondary-contact-name {{
+      font-weight: 700;
+      color: #1f2937;
+      margin-bottom: 2px;
+    }}
   </style>
 </head>
 <body>
@@ -975,6 +1093,10 @@ def _build_executive_html(
     <p>{html_escape(strategic_intro_two)}</p>
     <p><strong>👉 {html_escape(strategic_intro_three)}</strong></p>
   </section>
+
+  <div class="cards-wrapper">
+    {cards_html}
+  </div>
 
   <section class="section">
     <p class="section-title">💼 Estructura de implementación</p>
@@ -995,7 +1117,8 @@ def _build_executive_html(
         {city_rows_html}
       </tbody>
     </table>
-    <p class="kpi"><strong>Total implementación sin ajuste:</strong> {html_escape(_format_currency_mx(implementation_total))} + IVA</p>
+    <p class="kpi"><strong>Subtotal implementación por ciudad:</strong> {html_escape(_format_currency_mx(implementation_total))} + IVA</p>
+    <p class="kpi"><strong>Total implementación (plataforma corporativa + ciudades):</strong> {html_escape(_format_currency_mx(implementation_grand_total))} + IVA</p>
   </section>
 
   <section class="section">
@@ -1013,7 +1136,38 @@ def _build_executive_html(
     <p class="kpi"><strong>Total mensual estimado ({len(cities)} ciudades):</strong> {html_escape(_format_currency_mx(monthly_for_current_cities))} + IVA</p>
   </section>
 
-  <p class="footer">Tal-IA · Geoactiv · Propuesta ejecutiva multi-ciudad.</p>
+  <section class="section">
+    <p class="section-title">{html_escape(mvp_title)}</p>
+    <p>{html_escape(mvp_intro)}</p>
+    <ul>{mvp_items_html}</ul>
+    <p>{html_escape(mvp_timeline)}</p>
+    <p><strong>{html_escape(mvp_validity)}</strong></p>
+  </section>
+
+  <section class="section">
+    <p class="section-title">🧠 RESULTADO ESPERADO</p>
+    <p>Con esta implementación:</p>
+    <ul>{expected_result_items_html}</ul>
+    <p><strong>{html_escape(expected_result_closing)}</strong></p>
+  </section>
+
+  <section class="section footer">
+    <p>Fecha: {html_escape(generated_date)}</p>
+    <p>Jorge Torre · Sistema Tal-IA*</p>
+    <div class="footer-content">
+      <div class="contact">
+        <p>Cel: 4443354450</p>
+        <p>Email: administracion@talia.mx</p>
+        {secondary_contact_html}
+        <p>Web: <a href="https://geoactiv.mx/">https://geoactiv.mx/</a></p>
+        <p>Web: <a href="https://talia.mx/">https://talia.mx/</a></p>
+      </div>
+      {qr_html}
+    </div>
+    <p style="margin-top:12px;">
+      *SaaS (Software como servicio): plataforma en la nube con actualizaciones y soporte continuo.
+    </p>
+  </section>
 </body>
 </html>
 """
@@ -1024,6 +1178,7 @@ async def render_propuesta_ejecutiva_pdf(
     strategic_intro_one: str | None = None,
     strategic_intro_two: str | None = None,
     strategic_intro_three: str | None = None,
+    hero_cards: Sequence[Mapping[str, str]] | None = None,
     corporate_items: Sequence[str] | None = None,
     corporate_investment: int | None = None,
     city_items: Sequence[str] | None = None,
@@ -1032,6 +1187,16 @@ async def render_propuesta_ejecutiva_pdf(
     special_conditions: Sequence[str] | None = None,
     monthly_base: int | None = None,
     monthly_additional: int | None = None,
+    mvp_title: str | None = None,
+    mvp_intro: str | None = None,
+    mvp_items: Sequence[str] | None = None,
+    mvp_timeline: str | None = None,
+    mvp_validity: str | None = None,
+    expected_result_items: Sequence[str] | None = None,
+    expected_result_closing: str | None = None,
+    secondary_contact_name: str | None = None,
+    secondary_contact_phone: str | None = None,
+    secondary_contact_email: str | None = None,
 ) -> PropuestaDocument:
     title = proposal_title.strip() if proposal_title and proposal_title.strip() else DEFAULT_EXECUTIVE_TITLE
     intro_one = (
@@ -1049,6 +1214,7 @@ async def render_propuesta_ejecutiva_pdf(
         if strategic_intro_three and strategic_intro_three.strip()
         else DEFAULT_EXECUTIVE_INTRO_THREE
     )
+    cards_html = _render_cards_from_payload(hero_cards)
     corporate_items_value = (
         [item.strip() for item in corporate_items if item and item.strip()]
         if corporate_items
@@ -1077,7 +1243,50 @@ async def render_propuesta_ejecutiva_pdf(
         if monthly_additional is not None
         else DEFAULT_EXECUTIVE_MONTHLY_ADDITIONAL
     )
+    mvp_title_value = mvp_title.strip() if mvp_title and mvp_title.strip() else DEFAULT_MVP_TITLE
+    mvp_intro_value = mvp_intro.strip() if mvp_intro and mvp_intro.strip() else DEFAULT_MVP_INTRO
+    mvp_items_value = (
+        [item.strip() for item in mvp_items if item and item.strip()]
+        if mvp_items
+        else list(DEFAULT_MVP_ITEMS)
+    )
+    if not mvp_items_value:
+        mvp_items_value = list(DEFAULT_MVP_ITEMS)
+    mvp_timeline_value = (
+        mvp_timeline.strip() if mvp_timeline and mvp_timeline.strip() else DEFAULT_MVP_TIMELINE
+    )
+    mvp_validity_value = (
+        mvp_validity.strip() if mvp_validity and mvp_validity.strip() else DEFAULT_MVP_VALIDITY
+    )
+    expected_result_items_value = (
+        [item.strip() for item in expected_result_items if item and item.strip()]
+        if expected_result_items
+        else list(DEFAULT_EXECUTIVE_EXPECTED_RESULT_ITEMS)
+    )
+    if not expected_result_items_value:
+        expected_result_items_value = list(DEFAULT_EXECUTIVE_EXPECTED_RESULT_ITEMS)
+    expected_result_closing_value = (
+        expected_result_closing.strip()
+        if expected_result_closing and expected_result_closing.strip()
+        else DEFAULT_EXECUTIVE_EXPECTED_RESULT_CLOSING
+    )
+    secondary_contact_name_value = (
+        secondary_contact_name.strip()
+        if secondary_contact_name and secondary_contact_name.strip()
+        else None
+    )
+    secondary_contact_phone_value = (
+        secondary_contact_phone.strip()
+        if secondary_contact_phone and secondary_contact_phone.strip()
+        else None
+    )
+    secondary_contact_email_value = (
+        secondary_contact_email.strip()
+        if secondary_contact_email and secondary_contact_email.strip()
+        else None
+    )
     implementation_total = sum(int(city["amount"]) for city in cities_value)
+    implementation_grand_total = implementation_total + corporate_investment_value
     monthly_for_current_cities = (
         monthly_base_value
         if len(cities_value) <= 1
@@ -1090,16 +1299,28 @@ async def render_propuesta_ejecutiva_pdf(
         strategic_intro_one=intro_one,
         strategic_intro_two=intro_two,
         strategic_intro_three=intro_three,
+        cards_html=cards_html,
         corporate_items=corporate_items_value,
         corporate_investment=corporate_investment_value,
         city_items=city_items_value,
         cities=cities_value,
         implementation_total=implementation_total,
+        implementation_grand_total=implementation_grand_total,
         special_total=special_total_value,
         special_conditions=special_conditions_value,
         monthly_base=monthly_base_value,
         monthly_additional=monthly_additional_value,
         monthly_for_current_cities=monthly_for_current_cities,
+        mvp_title=mvp_title_value,
+        mvp_intro=mvp_intro_value,
+        mvp_items=mvp_items_value,
+        mvp_timeline=mvp_timeline_value,
+        mvp_validity=mvp_validity_value,
+        expected_result_items=expected_result_items_value,
+        expected_result_closing=expected_result_closing_value,
+        secondary_contact_name=secondary_contact_name_value,
+        secondary_contact_phone=secondary_contact_phone_value,
+        secondary_contact_email=secondary_contact_email_value,
         generated_date=generated_date,
     )
     try:

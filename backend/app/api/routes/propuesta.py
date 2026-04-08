@@ -174,6 +174,7 @@ class ExecutiveProposalPayload(BaseModel):
     strategic_intro_one: str | None = Field(default=None, alias="strategicIntroOne")
     strategic_intro_two: str | None = Field(default=None, alias="strategicIntroTwo")
     strategic_intro_three: str | None = Field(default=None, alias="strategicIntroThree")
+    hero_cards: list[HeroCardPayload] | None = Field(default=None, alias="heroCards")
     corporate_items: list[str] | None = Field(default=None, alias="corporateItems")
     corporate_investment: int | None = Field(default=None, alias="corporateInvestment")
     city_items: list[str] | None = Field(default=None, alias="cityItems")
@@ -182,6 +183,14 @@ class ExecutiveProposalPayload(BaseModel):
     special_conditions: list[str] | None = Field(default=None, alias="specialConditions")
     monthly_base: int | None = Field(default=None, alias="monthlyBase")
     monthly_additional: int | None = Field(default=None, alias="monthlyAdditional")
+    mvp_title: str | None = Field(default=None, alias="mvpTitle")
+    mvp_intro: str | None = Field(default=None, alias="mvpIntro")
+    mvp_items: list[str] | None = Field(default=None, alias="mvpItems")
+    mvp_timeline: str | None = Field(default=None, alias="mvpTimeline")
+    mvp_validity: str | None = Field(default=None, alias="mvpValidity")
+    secondary_contact_name: str | None = Field(default=None, alias="secondaryContactName")
+    secondary_contact_phone: str | None = Field(default=None, alias="secondaryContactPhone")
+    secondary_contact_email: str | None = Field(default=None, alias="secondaryContactEmail")
 
     model_config = ConfigDict(populate_by_name=True)
 
@@ -193,6 +202,7 @@ def _normalize_executive_payload(payload: ExecutiveProposalPayload | None) -> di
             "strategic_intro_one": None,
             "strategic_intro_two": None,
             "strategic_intro_three": None,
+            "hero_cards": None,
             "corporate_items": None,
             "corporate_investment": None,
             "city_items": None,
@@ -201,12 +211,21 @@ def _normalize_executive_payload(payload: ExecutiveProposalPayload | None) -> di
             "special_conditions": None,
             "monthly_base": None,
             "monthly_additional": None,
+            "mvp_title": None,
+            "mvp_intro": None,
+            "mvp_items": None,
+            "mvp_timeline": None,
+            "mvp_validity": None,
+            "secondary_contact_name": None,
+            "secondary_contact_phone": None,
+            "secondary_contact_email": None,
         }
     return {
         "proposal_title": payload.proposal_title,
         "strategic_intro_one": payload.strategic_intro_one,
         "strategic_intro_two": payload.strategic_intro_two,
         "strategic_intro_three": payload.strategic_intro_three,
+        "hero_cards": [card.dict() for card in payload.hero_cards] if payload.hero_cards else None,
         "corporate_items": payload.corporate_items,
         "corporate_investment": payload.corporate_investment,
         "city_items": payload.city_items,
@@ -215,6 +234,14 @@ def _normalize_executive_payload(payload: ExecutiveProposalPayload | None) -> di
         "special_conditions": payload.special_conditions,
         "monthly_base": payload.monthly_base,
         "monthly_additional": payload.monthly_additional,
+        "mvp_title": payload.mvp_title,
+        "mvp_intro": payload.mvp_intro,
+        "mvp_items": payload.mvp_items,
+        "mvp_timeline": payload.mvp_timeline,
+        "mvp_validity": payload.mvp_validity,
+        "secondary_contact_name": payload.secondary_contact_name,
+        "secondary_contact_phone": payload.secondary_contact_phone,
+        "secondary_contact_email": payload.secondary_contact_email,
     }
 
 

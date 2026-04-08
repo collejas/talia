@@ -1,5 +1,6 @@
 "use client"
 
+import Image from "next/image"
 import { useCallback, useMemo, useState } from "react"
 
 import { AppViewLayout } from "@/components/layouts/app-view-layout"
@@ -8,6 +9,12 @@ type CityInvestment = {
   id: string
   name: string
   amount: number
+}
+
+type HeroCard = {
+  caption: string
+  title: string
+  description: string
 }
 
 const defaultCities: CityInvestment[] = [
@@ -41,6 +48,114 @@ const defaultSpecialConditions = [
   "Requiere disponibilidad de información, accesos y validaciones por parte del cliente",
 ]
 
+const defaultHeroCards: HeroCard[] = [
+  {
+    caption: "1️⃣ 🏢 INVENTARIO INMOBILIARIO 3D INTERACTIVO",
+    title: "Visualiza propiedades en plano digital 3D con estatus en tiempo real.",
+    description: "Una experiencia que acelera decisiones y eleva la percepción del proyecto.",
+  },
+  {
+    caption: "2️⃣ 🔁 MARKETING + REMARKETING INTELIGENTE",
+    title: "Activa campañas automáticas que convierten sin depender del equipo.",
+    description: "Segmenta, dispara y vuelve a impactar en el momento exacto.",
+  },
+  {
+    caption: "3️⃣ 🎯 CALIFICACION + ASIGNACION AUTOMATICA",
+    title: "Detecta intención real y asigna al asesor correcto con contexto completo.",
+    description: "Menos ruido. Mas cierres.",
+  },
+  {
+    caption: "4️⃣ 🤖 ASISTENTE IA MULTICANAL CON MEMORIA",
+    title: "WhatsApp y webchat con contexto unificado y perfil 360°.",
+    description: "Habla como tu mejor vendedor y recuerda cada interacción.",
+  },
+  {
+    caption: "5️⃣ 🧠 CRM PERSONALIZADO",
+    title: "Control total del embudo en un solo tablero.",
+    description: "Historial, métricas y reglas de negocio centralizadas.",
+  },
+  {
+    caption: "6️⃣ 🔄 SEGUIMIENTO + ALERTAS INTELIGENTES",
+    title: "Activa mensajes, recordatorios y avisos en tiempo real.",
+    description: "Detecta oportunidades antes que se enfríen.",
+  },
+  {
+    caption: "7️⃣ 📅 AGENDA Y CITAS",
+    title: "Coordina visitas y reuniones sin fricción.",
+    description: "Confirmaciones y cambios centralizados.",
+  },
+  {
+    caption: "8️⃣ 📈 ANALITICA COMERCIAL",
+    title: "KPIs claros y reportes accionables en tiempo real.",
+    description: "Decisiones basadas en datos, no en intuición.",
+  },
+  {
+    caption: "9️⃣ 📍 GEO-PROSPECCION",
+    title: "Genera prospectos por ubicación, giro y radio configurable.",
+    description: "Expande tu alcance con inteligencia territorial.",
+  },
+  {
+    caption: "🔟 🧾 CONTRATOS + PAPELERIA AUTOMATICA",
+    title: "Solicita documentos y completa contratos con datos validados.",
+    description: "Menos fricción legal. Más velocidad de firma.",
+  },
+  {
+    caption: "1️⃣1️⃣ 🏆 EXPERIENCIA DE CLIENTE DIFERENCIADA",
+    title: "Interacciones rápidas, personalizadas y profesionales.",
+    description: "Tu proyecto destaca frente a la competencia.",
+  },
+  {
+    caption: "1️⃣2️⃣ 💰 OPTIMIZACION DEL CICLO DE VENTA",
+    title: "Reduce tiempos desde el primer contacto hasta la firma.",
+    description: "Más velocidad significa mayor rotación de inventario.",
+  },
+  {
+    caption: "1️⃣3️⃣ 🔗 INTEGRACIONES + ESCALABILIDAD SAAS",
+    title: "Conecta tus herramientas actuales y crece sin infraestructura propia.",
+    description: "La plataforma evoluciona contigo sin fricción técnica.",
+  },
+  {
+    caption: "1️⃣4️⃣ 🛡️ SEGURIDAD + AUDITORIA",
+    title: "Roles, permisos y bitácora completa de acciones por usuario.",
+    description: "Control total y trazabilidad empresarial.",
+  },
+  {
+    caption: "1️⃣5️⃣ ⚡ IMPLEMENTACION EN 4 SEMANAS",
+    title: "Workshops, configuración y puesta en marcha estructurada.",
+    description: "De idea a operando sin fricción.",
+  },
+]
+
+const heroGroupTitles = [
+  "🔥 IMPACTO DIRECTO EN VENTAS",
+  "🤖 MOTOR OPERATIVO",
+  "📊 CONTROL Y EXPANSION",
+  "🧾 FORMALIZACION Y EXPERIENCIA",
+  "🏢 INFRAESTRUCTURA EMPRESARIAL",
+]
+
+const defaultMvpTitle = "🚀 MVP · DESPLIEGUE INICIAL"
+const defaultMvpIntro = "El MVP comprende las piezas mínimas para arrancar Tal-IA:"
+const defaultMvpItems = [
+  "Asistente multicanal: entrenamiento con esquemas de conversación, respuestas preaprobadas y conexión a WhatsApp + webchat.",
+  "Marketing multicanal: plantillas y automatizaciones para campañas activas + seguimiento automático de respuestas.",
+  "CRM personalizado: flujo de ventas, sincronización de contactos y seguimiento de oportunidades en un tablero único.",
+  "Cantidad de Usuarios 50.",
+]
+const defaultMvpTimeline =
+  "Tiempos de entrega aproximados: una vez que el cliente provea toda la información solicitada, estimamos un despliegue en 4 semanas."
+const defaultMvpValidity = "Vigencia de propuesta: 20 días naturales"
+const defaultExpectedResultItems = [
+  "Todos los leads llegan a la empresa (no al asesor).",
+  "Atención inmediata 24/7.",
+  "Calificación automática de prospectos.",
+  "Asignación inteligente a asesores.",
+  "Seguimiento estructurado.",
+  "Visibilidad total del pipeline.",
+]
+const defaultExpectedResultClosing =
+  "Tal-IA no es solo un sistema, es la infraestructura que permite operar múltiples ciudades con control, velocidad y consistencia comercial desde un solo punto."
+
 const currencyMx = new Intl.NumberFormat("es-MX", {
   style: "currency",
   currency: "MXN",
@@ -64,6 +179,7 @@ export default function PropuestaEjecutivaPage() {
   const [strategicIntroThree, setStrategicIntroThree] = useState(
     "Cada ciudad se configura como una unidad de ventas autónoma, operando bajo un mismo sistema central.",
   )
+  const [heroCards] = useState<HeroCard[]>(() => [...defaultHeroCards])
 
   const [corporateItems, setCorporateItems] = useState<string[]>([...defaultCorporateItems])
   const [corporateInvestment, setCorporateInvestment] = useState(50_000)
@@ -75,6 +191,19 @@ export default function PropuestaEjecutivaPage() {
   ])
   const [monthlyBase, setMonthlyBase] = useState(4_500)
   const [monthlyAdditional, setMonthlyAdditional] = useState(2_250)
+
+  const [mvpTitle, setMvpTitle] = useState(defaultMvpTitle)
+  const [mvpIntro, setMvpIntro] = useState(defaultMvpIntro)
+  const [mvpItems, setMvpItems] = useState<string[]>(() => [...defaultMvpItems])
+  const [mvpTimeline, setMvpTimeline] = useState(defaultMvpTimeline)
+  const [mvpValidity, setMvpValidity] = useState(defaultMvpValidity)
+  const [expectedResultItems] = useState<string[]>(() => [...defaultExpectedResultItems])
+  const [expectedResultClosing] = useState(defaultExpectedResultClosing)
+
+  const [secondaryContactName, setSecondaryContactName] = useState("")
+  const [secondaryContactPhone, setSecondaryContactPhone] = useState("")
+  const [secondaryContactEmail, setSecondaryContactEmail] = useState("")
+
   const [recipientEmail, setRecipientEmail] = useState("")
   const [messageBody, setMessageBody] = useState(
     "Adjunto encontrarás la propuesta ejecutiva Tal-IA.",
@@ -85,6 +214,10 @@ export default function PropuestaEjecutivaPage() {
   const implementationTotal = useMemo(
     () => cities.reduce((sum, city) => sum + (Number.isFinite(city.amount) ? city.amount : 0), 0),
     [cities],
+  )
+  const implementationGrandTotal = useMemo(
+    () => implementationTotal + (Number.isFinite(corporateInvestment) ? corporateInvestment : 0),
+    [implementationTotal, corporateInvestment],
   )
 
   const monthlyForCurrentCities = useMemo(() => {
@@ -97,12 +230,24 @@ export default function PropuestaEjecutivaPage() {
     return monthlyBase + monthlyAdditional * (cities.length - 1)
   }, [cities.length, monthlyAdditional, monthlyBase])
 
+  const today = useMemo(
+    () =>
+      new Date().toLocaleDateString("es-MX", {
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+        timeZone: "America/Mexico_City",
+      }),
+    [],
+  )
+
   const proposalPayload = useMemo(
     () => ({
       proposalTitle,
       strategicIntroOne,
       strategicIntroTwo,
       strategicIntroThree,
+      heroCards,
       corporateItems,
       corporateInvestment,
       cityItems,
@@ -114,12 +259,23 @@ export default function PropuestaEjecutivaPage() {
       specialConditions,
       monthlyBase,
       monthlyAdditional,
+      mvpTitle,
+      mvpIntro,
+      mvpItems,
+      mvpTimeline,
+      mvpValidity,
+      expectedResultItems,
+      expectedResultClosing,
+      secondaryContactName,
+      secondaryContactPhone,
+      secondaryContactEmail,
     }),
     [
       proposalTitle,
       strategicIntroOne,
       strategicIntroTwo,
       strategicIntroThree,
+      heroCards,
       corporateItems,
       corporateInvestment,
       cityItems,
@@ -128,6 +284,16 @@ export default function PropuestaEjecutivaPage() {
       specialConditions,
       monthlyBase,
       monthlyAdditional,
+      mvpTitle,
+      mvpIntro,
+      mvpItems,
+      mvpTimeline,
+      mvpValidity,
+      expectedResultItems,
+      expectedResultClosing,
+      secondaryContactName,
+      secondaryContactPhone,
+      secondaryContactEmail,
     ],
   )
 
@@ -211,7 +377,7 @@ export default function PropuestaEjecutivaPage() {
 
   return (
     <AppViewLayout title="Propuesta Ejecutiva" contentClassName="max-w-full">
-      <div className="space-y-6 px-4 pb-8 lg:px-6">
+      <div className="propuesta-print space-y-6 px-4 pb-8 lg:px-6">
         <section className="rounded-2xl border border-border/60 bg-surface-alt p-6 shadow-sm">
           <p className="text-[0.65rem] font-semibold uppercase tracking-[0.35em] text-muted-foreground">
             Encabezado estratégico
@@ -266,6 +432,37 @@ export default function PropuestaEjecutivaPage() {
             <p className="text-sm text-muted-foreground">{strategicIntroOne}</p>
             <p className="text-sm text-muted-foreground">{strategicIntroTwo}</p>
             <p className="text-sm font-medium text-foreground">👉 {strategicIntroThree}</p>
+          </div>
+
+          <div className="mt-6 space-y-5">
+            {heroGroupTitles.map((groupTitle, groupIndex) => {
+              const start = groupIndex * 3
+              const groupCards = heroCards.slice(start, start + 3)
+              if (!groupCards.length) {
+                return null
+              }
+              return (
+                <section key={`hero-group-${groupIndex}`} className="space-y-2">
+                  <p className="text-xs font-semibold uppercase tracking-[0.25em] text-foreground">
+                    {groupTitle}
+                  </p>
+                  <div className="grid gap-4 md:grid-cols-3">
+                    {groupCards.map((item, cardIndex) => (
+                      <article
+                        key={`hero-card-${start + cardIndex}-${item.title}`}
+                        className="rounded-2xl border border-border/50 bg-gradient-to-r from-emerald-50 via-white to-white/80 p-4 shadow-sm"
+                      >
+                        <p className="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-700">
+                          {item.caption}
+                        </p>
+                        <p className="mt-2 text-sm font-semibold text-foreground">{item.title}</p>
+                        <p className="mt-1 text-sm text-muted-foreground">{item.description}</p>
+                      </article>
+                    ))}
+                  </div>
+                </section>
+              )
+            })}
           </div>
 
           <div className="mt-8 space-y-4">
@@ -403,8 +600,12 @@ export default function PropuestaEjecutivaPage() {
               </div>
 
               <p className="mt-3 text-sm text-muted-foreground">
-                💵 Total implementación sin ajuste:{" "}
+                💵 Subtotal implementación por ciudad:{" "}
                 <strong className="text-foreground">{formatCurrency(implementationTotal)} + IVA</strong>
+              </p>
+              <p className="mt-1 text-sm text-foreground">
+                💵 Total implementación (plataforma corporativa + ciudades):{" "}
+                <strong>{formatCurrency(implementationGrandTotal)} + IVA</strong>
               </p>
             </div>
           </div>
@@ -493,6 +694,154 @@ export default function PropuestaEjecutivaPage() {
               </p>
             </div>
           </div>
+
+          <div className="mt-8 rounded-xl border border-border/50 bg-white p-4">
+            <label className="block space-y-1 text-[0.65rem] uppercase tracking-[0.3em] text-muted-foreground">
+              <span className="text-xs font-semibold text-foreground">Título MVP</span>
+              <input
+                type="text"
+                value={mvpTitle}
+                onChange={(event) => setMvpTitle(event.target.value)}
+                className="w-full rounded-md border border-border/50 bg-white px-3 py-2 text-sm text-foreground focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-200"
+              />
+            </label>
+            <label className="mt-3 block space-y-1 text-[0.65rem] uppercase tracking-[0.3em] text-muted-foreground">
+              <span className="text-xs font-semibold text-foreground">Introducción</span>
+              <textarea
+                rows={2}
+                value={mvpIntro}
+                onChange={(event) => setMvpIntro(event.target.value)}
+                className="w-full rounded-md border border-border/50 bg-white px-3 py-2 text-sm text-foreground focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-200"
+              />
+            </label>
+            <div className="mt-3 grid gap-2 md:grid-cols-2">
+              {mvpItems.map((item, index) => (
+                <textarea
+                  key={`mvp-item-${index}`}
+                  rows={2}
+                  value={item}
+                  onChange={(event) =>
+                    setMvpItems((prev) =>
+                      prev.map((current, itemIndex) =>
+                        itemIndex === index ? event.target.value : current,
+                      ),
+                    )
+                  }
+                  className="w-full rounded-md border border-border/50 bg-white px-3 py-2 text-sm text-foreground focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-200"
+                />
+              ))}
+            </div>
+            <label className="mt-3 block space-y-1 text-[0.65rem] uppercase tracking-[0.3em] text-muted-foreground">
+              <span className="text-xs font-semibold text-foreground">Timeline</span>
+              <textarea
+                rows={2}
+                value={mvpTimeline}
+                onChange={(event) => setMvpTimeline(event.target.value)}
+                className="w-full rounded-md border border-border/50 bg-white px-3 py-2 text-sm text-foreground focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-200"
+              />
+            </label>
+            <label className="mt-3 block space-y-1 text-[0.65rem] uppercase tracking-[0.3em] text-muted-foreground">
+              <span className="text-xs font-semibold text-foreground">Vigencia</span>
+              <input
+                type="text"
+                value={mvpValidity}
+                onChange={(event) => setMvpValidity(event.target.value)}
+                className="w-full rounded-md border border-border/50 bg-white px-3 py-2 text-sm text-foreground focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-200"
+              />
+            </label>
+          </div>
+
+          <section className="mt-8 rounded-xl border border-border/50 bg-white p-4">
+            <p className="text-sm font-semibold uppercase tracking-[0.2em] text-foreground">
+              🧠 RESULTADO ESPERADO
+            </p>
+            <p className="mt-2 text-sm text-muted-foreground">Con esta implementación:</p>
+            <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-muted-foreground">
+              {expectedResultItems.map((item, index) => (
+                <li key={`expected-result-${index}`}>{item}</li>
+              ))}
+            </ul>
+            <p className="mt-3 text-sm font-medium text-foreground">{expectedResultClosing}</p>
+          </section>
+
+          <section className="mt-8 border-t border-border/40 px-2 py-4 text-sm text-muted-foreground">
+            <div className="space-y-1">
+              <p>Fecha: {today}</p>
+              <p>Jorge Torre · Sistema Tal-IA*</p>
+            </div>
+            <div className="mt-4 flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
+              <div className="space-y-1 text-sm text-muted-foreground">
+                <p>Cel: 4443354450</p>
+                <p>Email: administracion@talia.mx</p>
+                {secondaryContactName.trim() ? (
+                  <p className="pt-2 font-semibold text-foreground">{secondaryContactName.trim()}</p>
+                ) : null}
+                {secondaryContactPhone.trim() ? <p>Cel: {secondaryContactPhone.trim()}</p> : null}
+                {secondaryContactEmail.trim() ? <p>Email: {secondaryContactEmail.trim()}</p> : null}
+                <p>
+                  Web:{" "}
+                  <a
+                    href="https://geoactiv.mx/"
+                    className="text-foreground underline"
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    https://geoactiv.mx/
+                  </a>
+                </p>
+              </div>
+              <div className="flex flex-row items-center justify-end gap-4">
+                <a
+                  href="https://talia.mx/"
+                  className="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-700"
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  Web: https://talia.mx/
+                </a>
+                <div className="relative h-[90px] w-[90px]">
+                  <Image
+                    src="/QR_Lia.png"
+                    alt="QR Tal-IA"
+                    fill
+                    sizes="90px"
+                    className="h-auto w-auto"
+                  />
+                </div>
+              </div>
+            </div>
+            <div className="mt-6 rounded-2xl border border-border/60 bg-surface p-4 text-sm">
+              <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
+                Contacto adicional (opcional)
+              </p>
+              <div className="mt-3 grid gap-2 md:grid-cols-3">
+                <input
+                  type="text"
+                  placeholder="Nombre"
+                  value={secondaryContactName}
+                  onChange={(event) => setSecondaryContactName(event.target.value)}
+                  className="rounded-2xl border border-border/50 bg-white/70 px-4 py-2 text-sm text-foreground outline-none focus:border-emerald-400"
+                />
+                <input
+                  type="text"
+                  placeholder="Teléfono"
+                  value={secondaryContactPhone}
+                  onChange={(event) => setSecondaryContactPhone(event.target.value)}
+                  className="rounded-2xl border border-border/50 bg-white/70 px-4 py-2 text-sm text-foreground outline-none focus:border-emerald-400"
+                />
+                <input
+                  type="email"
+                  placeholder="Correo"
+                  value={secondaryContactEmail}
+                  onChange={(event) => setSecondaryContactEmail(event.target.value)}
+                  className="rounded-2xl border border-border/50 bg-white/70 px-4 py-2 text-sm text-foreground outline-none focus:border-emerald-400"
+                />
+              </div>
+            </div>
+            <p className="mt-4 text-[0.6rem] uppercase tracking-[0.3em] text-muted-foreground">
+              *SaaS (Software como servicio): plataforma en la nube con actualizaciones y soporte continuo.
+            </p>
+          </section>
 
           <div className="mt-8 rounded-xl border border-border/50 bg-surface p-4 text-sm">
             <div className="flex flex-wrap items-center justify-end gap-3">
