@@ -2448,6 +2448,7 @@ class ProspectoListQuery(BaseModel):
     search: str | None = Field(default=None, max_length=120)
     fuente: Literal["google_places", "denue", "usuario", ""] | None = Field(default=None)
     lookup_status: str | None = Field(default=None, max_length=60)
+    email_lookup_status: str | None = Field(default=None, max_length=60)
     segmento: str | None = Field(default=None, max_length=120)
     carrier_type: Literal["mobile", "landline", "voip", ""] | None = Field(default=None)
     order: Literal["creado", "nombre"] | None = Field(default=None)
@@ -2477,6 +2478,7 @@ class ProspectoFiltroPayload(BaseModel):
     search: str | None = Field(default=None, max_length=120)
     fuente: Literal["google_places", "denue", "usuario", ""] | None = Field(default=None)
     lookup_status: str | None = Field(default=None, max_length=60)
+    email_lookup_status: str | None = Field(default=None, max_length=60)
     segmento: str | None = Field(default=None, max_length=120)
     carrier_type: Literal["mobile", "landline", "voip", ""] | None = Field(default=None)
     stage: Literal["discover", "enrich", "prepare", "launch", "evaluate", ""] | None = Field(default=None)
@@ -6649,6 +6651,7 @@ def _prospecto_filters_to_kwargs(filters: ProspectoFiltroPayload) -> dict[str, A
         "search": filters.search,
         "fuente": filters.fuente or None,
         "lookup_status": filters.lookup_status,
+        "email_lookup_status": filters.email_lookup_status,
         "segmento": filters.segmento,
         "carrier_type": filters.carrier_type or None,
         "stage": filters.stage or None,
@@ -17813,6 +17816,7 @@ async def listar_prospectos(
                 search=params.search,
                 fuente=params.fuente or None,
                 lookup_status=params.lookup_status,
+                email_lookup_status=params.email_lookup_status,
                 segmento=params.segmento,
                 carrier_type=params.carrier_type or None,
                 order=order_value,

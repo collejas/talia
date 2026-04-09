@@ -9394,6 +9394,7 @@ class CRMRepository:
         search: str | None = None,
         fuente: str | None = None,
         lookup_status: str | None = None,
+        email_lookup_status: str | None = None,
         segmento: str | None = None,
         carrier_type: str | None = None,
         order: str | None = None,
@@ -9431,6 +9432,8 @@ class CRMRepository:
             params["fuente"] = f"eq.{fuente}"
         if lookup_status:
             params["lookup_status"] = f"eq.{lookup_status}"
+        if email_lookup_status:
+            params["email_lookup_status"] = f"eq.{email_lookup_status}"
         if segmento:
             params["segmento"] = f"eq.{segmento}"
         if carrier_type:

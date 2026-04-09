@@ -88,6 +88,7 @@ npm run build
 sudo systemctl restart talia-api.service
 sudo systemctl restart talia-panel.service
 
+codex resume 019d728d-d5a0-73a2-86d5-80f062d30b14
 
 # Permisos Git
 sudo chown -R jorge:jorge /var/www/talia/.git

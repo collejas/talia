@@ -66,6 +66,7 @@ export type ProspectoFiltroInput = {
   search?: string | null
   fuente?: "google_places" | "denue" | "usuario" | ""
   lookup_status?: string | null
+  email_lookup_status?: string | null
   segmento?: string | null
   carrier_type?: "mobile" | "landline" | "voip" | ""
   stage?: "discover" | "enrich" | "prepare" | "launch" | "evaluate" | ""
@@ -571,6 +572,7 @@ type ListProspectosParams = {
   search?: string
   fuente?: "google_places" | "denue" | "usuario"
   lookupStatus?: string
+  emailLookupStatus?: string
   segmento?: string
   carrierType?: "mobile" | "landline" | "voip"
   order?: "creado" | "nombre"
@@ -602,6 +604,9 @@ function buildProspectosListUrl(basePath: string, params: ListProspectosParams =
   if (params.search?.trim().length) url.searchParams.set("search", params.search.trim())
   if (params.fuente) url.searchParams.set("fuente", params.fuente)
   if (params.lookupStatus?.trim().length) url.searchParams.set("lookup_status", params.lookupStatus.trim())
+  if (params.emailLookupStatus?.trim().length) {
+    url.searchParams.set("email_lookup_status", params.emailLookupStatus.trim())
+  }
   if (params.segmento?.trim().length) url.searchParams.set("segmento", params.segmento.trim())
   if (params.carrierType) url.searchParams.set("carrier_type", params.carrierType)
   if (params.order) url.searchParams.set("order", params.order)

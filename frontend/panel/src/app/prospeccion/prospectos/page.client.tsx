@@ -104,6 +104,7 @@ import {
 
 type FuenteFilter = "" | "google_places" | "denue" | "usuario"
 type LookupFilter = "" | "pendiente" | "verificado" | "sin_numero" | "error"
+type EmailLookupFilter = "" | "pendiente" | "sin_email" | "valido" | "invalido" | "dudoso" | "error"
 type ConEnvioCanalFilter = "correo" | "whatsapp" | "llamada"
 type ConEnvioModoFilter = "" | "si" | "no"
 type ConScraperFilter = "" | "si" | "no"
@@ -131,6 +132,7 @@ type Filters = {
   search: string
   fuente: FuenteFilter
   lookupStatus: LookupFilter
+  emailLookupStatus: EmailLookupFilter
   campanaId: string
   conEnvioModo: ConEnvioModoFilter
   conEnvioCanales: ConEnvioCanalFilter[]
@@ -208,6 +210,7 @@ const initialFilters: Filters = {
   search: "",
   fuente: "",
   lookupStatus: "",
+  emailLookupStatus: "",
   campanaId: "",
   conEnvioModo: "",
   conEnvioCanales: [],
@@ -613,6 +616,15 @@ function normalizeSavedViewState(raw: unknown): ProspectosSavedViewState | null 
       filtersObj["lookupStatus"] === "sin_numero" ||
       filtersObj["lookupStatus"] === "error"
         ? filtersObj["lookupStatus"]
+        : "",
+    emailLookupStatus:
+      filtersObj["emailLookupStatus"] === "pendiente" ||
+      filtersObj["emailLookupStatus"] === "sin_email" ||
+      filtersObj["emailLookupStatus"] === "valido" ||
+      filtersObj["emailLookupStatus"] === "invalido" ||
+      filtersObj["emailLookupStatus"] === "dudoso" ||
+      filtersObj["emailLookupStatus"] === "error"
+        ? filtersObj["emailLookupStatus"]
         : "",
     campanaId: typeof filtersObj["campanaId"] === "string" ? filtersObj["campanaId"] : "",
     conEnvioModo:
@@ -1363,7 +1375,12 @@ function ProspectosView() {
       chips.push(`Tamaño: ${ESTRATO_GROUP_LABELS[filters.estratoGroup]}`)
     }
     if (filters.lookupStatus) {
-      chips.push(`Verificación: ${LOOKUP_STATUS_LABELS[filters.lookupStatus] ?? filters.lookupStatus}`)
+      chips.push(`Verificación teléfono: ${LOOKUP_STATUS_LABELS[filters.lookupStatus] ?? filters.lookupStatus}`)
+    }
+    if (filters.emailLookupStatus) {
+      chips.push(
+        `Verificación correo: ${EMAIL_LOOKUP_STATUS_LABELS[filters.emailLookupStatus] ?? filters.emailLookupStatus}`
+      )
     }
     if (filters.campanaId) {
       chips.push(`Campaña: ${campaignLabelMap.get(filters.campanaId) ?? filters.campanaId}`)
@@ -1428,6 +1445,7 @@ function ProspectosView() {
           search: filters.search || undefined,
           fuente: filters.fuente || undefined,
           lookupStatus: filters.lookupStatus || undefined,
+          emailLookupStatus: filters.emailLookupStatus || undefined,
           campanaId: filters.campanaId || undefined,
           conEnvio: resolveConEnvio(filters.conEnvioModo, filters.conEnvioCanales),
           conEnvioCanales: filters.conEnvioCanales.length ? filters.conEnvioCanales : undefined,
@@ -1541,6 +1559,7 @@ function ProspectosView() {
           search: filters.search || undefined,
           fuente: filters.fuente || undefined,
           lookupStatus: filters.lookupStatus || undefined,
+          emailLookupStatus: filters.emailLookupStatus || undefined,
           campanaId: filters.campanaId || undefined,
           conEnvio: resolveConEnvio(filters.conEnvioModo, filters.conEnvioCanales),
           conEnvioCanales: filters.conEnvioCanales.length ? filters.conEnvioCanales : undefined,
@@ -3467,7 +3486,7 @@ function ProspectosView() {
               </Select>
             </div>
             <div className="space-y-1">
-              <Label>Estado de verificación</Label>
+              <Label>Estado verificación teléfono</Label>
               <Select
                 value={filters.lookupStatus || "all"}
                 onValueChange={(value) =>
@@ -3485,6 +3504,31 @@ function ProspectosView() {
                   <SelectItem value="pendiente">Pendiente</SelectItem>
                   <SelectItem value="verificado">Verificado</SelectItem>
                   <SelectItem value="sin_numero">Sin número</SelectItem>
+                  <SelectItem value="error">Error</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1">
+              <Label>Estado verificación correo</Label>
+              <Select
+                value={filters.emailLookupStatus || "all"}
+                onValueChange={(value) =>
+                  setFilters((prev) => ({
+                    ...prev,
+                    emailLookupStatus: value === "all" ? "" : (value as EmailLookupFilter),
+                  }))
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Todos los estados" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos</SelectItem>
+                  <SelectItem value="pendiente">Pendiente</SelectItem>
+                  <SelectItem value="sin_email">Sin correo</SelectItem>
+                  <SelectItem value="valido">Válido</SelectItem>
+                  <SelectItem value="invalido">Inválido</SelectItem>
+                  <SelectItem value="dudoso">Dudoso</SelectItem>
                   <SelectItem value="error">Error</SelectItem>
                 </SelectContent>
               </Select>
