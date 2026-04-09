@@ -291,11 +291,82 @@ server {
 }
 
 server {
+    # Redirecciona www -> no-www (HTTPS) para tal-ia.mx
+    server_name www.tal-ia.mx;
+
+    return 301 https://tal-ia.mx$request_uri;
+
+    listen [::]:443 ssl;
+    listen 443 ssl;
+    ssl_certificate /etc/letsencrypt/live/tal-ia.mx/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/tal-ia.mx/privkey.pem;
+    include /etc/letsencrypt/options-ssl-nginx.conf;
+    ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem;
+}
+
+server {
+    server_name tal-ia.mx;
+
+    root /var/www/talia-landing;
+    index tal-ia-home.html;
+
+    add_header X-Content-Type-Options "nosniff";
+
+    location = / {
+        try_files /tal-ia-home.html =404;
+    }
+
+    location = /plataforma-tal-ia {
+        try_files /plataforma-tal-ia.html =404;
+    }
+
+    location = /metodologia-tal-ia {
+        try_files /metodologia-tal-ia.html =404;
+    }
+
+    location = /tal-ia-para-empresas {
+        try_files /tal-ia-para-empresas.html =404;
+    }
+
+    location = /robots.txt {
+        try_files /robots-tal-ia.txt =404;
+    }
+
+    location = /sitemap.xml {
+        try_files /sitemap-tal-ia.xml =404;
+    }
+
+    location ~* \.(css|js|mjs|png|jpg|jpeg|gif|ico|svg|webp|woff|woff2|ttf|otf)$ {
+        try_files $uri =404;
+        add_header Cache-Control "public, max-age=86400";
+    }
+
+    location / {
+        try_files $uri $uri/ /tal-ia-home.html;
+    }
+
+    listen [::]:443 ssl;
+    listen 443 ssl;
+    ssl_certificate /etc/letsencrypt/live/tal-ia.mx/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/tal-ia.mx/privkey.pem;
+    include /etc/letsencrypt/options-ssl-nginx.conf;
+    ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem;
+}
+
+server {
     listen 80;
     listen [::]:80;
-    server_name tal-ia.mx www.tal-ia.mx;
+    server_name tal-ia.mx;
 
-    return 301 http://talia.mx$request_uri;
+    return 301 https://tal-ia.mx$request_uri;
+}
+
+server {
+    listen 80;
+    listen [::]:80;
+    server_name www.tal-ia.mx;
+
+    return 301 https://tal-ia.mx$request_uri;
 }
 
 server {
