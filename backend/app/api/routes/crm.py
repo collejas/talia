@@ -18,7 +18,7 @@ from datetime import date, datetime, time as dt_time, timedelta, timezone
 from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 from enum import Enum
 from pathlib import Path
-from typing import Annotated, Any, Awaitable, Callable, Literal, Mapping, Sequence
+from typing import Annotated, Any, Awaitable, Callable, Literal, Mapping, Sequence, TypeVar
 from uuid import UUID, uuid4
 from urllib.parse import parse_qs, urlparse
 from urllib.error import HTTPError, URLError
@@ -127,6 +127,7 @@ import_debug_logger = get_logger("app.api.crm.import")
 sale_logger = get_logger("app.api.crm.sales")
 tenant_access_logger = get_logger("app.api.crm.tenant_access")
 UTC = timezone.utc
+_T = TypeVar("_T")
 TIMEZONE_CACHE_TTL_SECONDS = 300
 _USER_TIMEZONE_CACHE: dict[str, tuple[str | None, float]] = {}
 
@@ -138,6 +139,53 @@ DEFAULT_SALE_LOG_LIMIT = 20
 INBOX_THREADS_METRICS_LOG_FILE = resolve_log_path("inbox-threads-metrics.log")
 INBOX_THREADS_METRICS_LOG_TAIL_BYTES = 256 * 1024
 DEFAULT_INBOX_THREADS_METRICS_HISTORY_LIMIT = 100
+
+
+def _is_transient_supabase_error(value: Any) -> bool:
+    message = str(value or "").lower()
+    transient_markers = (
+        "error de red al llamar supabase",
+        "no address associated with hostname",
+        "temporary failure in name resolution",
+        "name or service not known",
+        "connecttimeout",
+        "connect timeout",
+        "timed out",
+        "timeout",
+        "connection reset",
+        "temporarily unavailable",
+    )
+    return any(marker in message for marker in transient_markers)
+
+
+async def _retry_transient_repo_error(
+    *,
+    operation: str,
+    func: Callable[[], Awaitable[_T]],
+    retries: int = 1,
+    delay_seconds: float = 0.35,
+) -> _T:
+    last_exc: CRMRepositoryError | None = None
+    for attempt in range(retries + 1):
+        try:
+            return await func()
+        except CRMRepositoryError as exc:
+            last_exc = exc
+            should_retry = attempt < retries and _is_transient_supabase_error(exc)
+            if should_retry:
+                logger.warning(
+                    "crm.retry_transient_repo_error",
+                    extra={
+                        "operation": operation,
+                        "attempt": attempt + 1,
+                        "next_attempt": attempt + 2,
+                        "error": str(exc),
+                    },
+                )
+                await asyncio.sleep(delay_seconds)
+                continue
+            raise
+    raise last_exc or CRMRepositoryError(f"Operacion fallida: {operation}")
 
 LEAD_SALES_READY_STAGES = frozenset({"etapa_3", "etapa_4"})
 OPPORTUNITY_SALE_STAGE_TOKENS = frozenset(
@@ -6572,9 +6620,13 @@ async def _fetch_contact_templates(
 ) -> dict[str, dict[str, Any]]:
     template_map: dict[str, dict[str, Any]] = {}
     for template_id in template_ids:
-        template = await repo.get_contact_template(
-            usuario_token=user_token,
-            template_id=template_id,
+        template = await _retry_transient_repo_error(
+            operation="get_contact_template",
+            func=lambda template_id=template_id: repo.get_contact_template(
+                usuario_token=user_token,
+                template_id=template_id,
+            ),
+            retries=1,
         )
         if not template:
             raise HTTPException(status_code=404, detail="contact_template_not_found")
@@ -18172,39 +18224,56 @@ async def listar_prospectos_bootstrap(
     """BFF agregador para Prospección: lista + metadatos + preferencias."""
 
     started = time.perf_counter()
-    list_task = listar_prospectos(
-        repo=repo,
-        _="",
-        user_token=user_token,
-        organizacion_id=organizacion_id,
-        usuario_id=usuario_id,
-        params=params,
-        con_envio_canal=con_envio_canal,
-        con_envio_canales=con_envio_canales,
-        metadata_query=metadata_query,
-        actividad=actividad,
-    )
-    query_task = listar_prospectos_query_metadata(
-        repo=repo,
-        _="",
-        user_token=user_token,
-        organizacion_id=organizacion_id,
-        usuario_id=usuario_id,
-        query=query,
-        fuente=params.fuente,
-        date_from=params.date_from,
-        date_to=params.date_to,
-    )
-    tasks: list[Awaitable[Any]] = [list_task, query_task]
-    if include_preferences:
-        tasks.append(
-            obtener_preferencias_tabla_prospectos(
-                repo=repo,
-                _="",
-                user_token=user_token,
-            )
+    results: list[Any] = []
+    for attempt in range(2):
+        list_task = listar_prospectos(
+            repo=repo,
+            _="",
+            user_token=user_token,
+            organizacion_id=organizacion_id,
+            usuario_id=usuario_id,
+            params=params,
+            con_envio_canal=con_envio_canal,
+            con_envio_canales=con_envio_canales,
+            metadata_query=metadata_query,
+            actividad=actividad,
         )
-    results = await asyncio.gather(*tasks)
+        query_task = listar_prospectos_query_metadata(
+            repo=repo,
+            _="",
+            user_token=user_token,
+            organizacion_id=organizacion_id,
+            usuario_id=usuario_id,
+            query=query,
+            fuente=params.fuente,
+            date_from=params.date_from,
+            date_to=params.date_to,
+        )
+        tasks: list[Awaitable[Any]] = [list_task, query_task]
+        if include_preferences:
+            tasks.append(
+                obtener_preferencias_tabla_prospectos(
+                    repo=repo,
+                    _="",
+                    user_token=user_token,
+                )
+            )
+        try:
+            results = await asyncio.gather(*tasks)
+            break
+        except HTTPException as exc:
+            should_retry = (
+                attempt == 0
+                and int(exc.status_code) == 502
+                and _is_transient_supabase_error(exc.detail)
+            )
+            if not should_retry:
+                raise
+            logger.warning(
+                "crm.prospectos.bootstrap.retry_transient",
+                extra={"attempt": attempt + 1, "error": str(exc.detail)},
+            )
+            await asyncio.sleep(0.35)
     list_payload = results[0] if isinstance(results[0], dict) else {"ok": False}
     query_payload = results[1] if isinstance(results[1], dict) else {"ok": False}
     preferences_payload = (
@@ -18583,11 +18652,24 @@ async def listar_prospecto_contact_indicadores(
         )
         return {"ok": True, "items": cached_rows}
     try:
-        rows = await repo.list_prospecto_contact_indicators(
-            usuario_token=user_token,
-            prospecto_ids=normalized_ids,
+        rows = await _retry_transient_repo_error(
+            operation="list_prospecto_contact_indicators",
+            func=lambda: repo.list_prospecto_contact_indicators(
+                usuario_token=user_token,
+                prospecto_ids=normalized_ids,
+            ),
+            retries=1,
         )
     except CRMRepositoryError as exc:
+        if _is_transient_supabase_error(exc):
+            logger.warning(
+                "crm.prospectos.contact_indicadores.degraded_empty",
+                extra={
+                    "requested_ids": len(normalized_ids),
+                    "error": str(exc),
+                },
+            )
+            return {"ok": True, "items": [], "degraded": True}
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     serializable_rows = _normalize_total_envios_without_cancelled(
         [row for row in rows if isinstance(row, dict)]
@@ -19050,9 +19132,13 @@ async def listar_contacto_templates(
     """Lista plantillas disponibles para envíos."""
 
     try:
-        items = await repo.list_contact_templates(
-            usuario_token=user_token,
-            canal=params.canal or None,
+        items = await _retry_transient_repo_error(
+            operation="list_contact_templates",
+            func=lambda: repo.list_contact_templates(
+                usuario_token=user_token,
+                canal=params.canal or None,
+            ),
+            retries=1,
         )
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
@@ -21764,11 +21850,14 @@ async def contactar_prospectos(
     if payload.canales:
         template_ids = {config.template_id for config in payload.canales if config.template_id}
         if template_ids:
-            template_map = await _fetch_contact_templates(
-                repo=repo,
-                user_token=user_token,
-                template_ids=template_ids,
-            )
+            try:
+                template_map = await _fetch_contact_templates(
+                    repo=repo,
+                    user_token=user_token,
+                    template_ids=template_ids,
+                )
+            except CRMRepositoryError as exc:
+                raise HTTPException(status_code=502, detail=str(exc)) from exc
             campana_key = str(payload.campana_id)
             for template_id, template in template_map.items():
                 metadata = template.get("metadata") if isinstance(template.get("metadata"), dict) else {}
@@ -21806,7 +21895,11 @@ async def contactar_prospectos(
     omitidos: list[dict[str, Any]] = []
     if payload.lista_id:
         try:
-            lista_row = await repo.get_contact_list(usuario_token=user_token, lista_id=payload.lista_id)
+            lista_row = await _retry_transient_repo_error(
+                operation="get_contact_list",
+                func=lambda: repo.get_contact_list(usuario_token=user_token, lista_id=payload.lista_id),
+                retries=1,
+            )
         except CRMRepositoryError as exc:
             raise HTTPException(status_code=502, detail=str(exc)) from exc
         if not lista_row:
@@ -21830,9 +21923,13 @@ async def contactar_prospectos(
 
     if payload.prospecto_ids:
         try:
-            prospectos = await repo.list_prospectos_by_ids(
-                usuario_token=user_token,
-                prospecto_ids=payload.prospecto_ids,
+            prospectos = await _retry_transient_repo_error(
+                operation="list_prospectos_by_ids",
+                func=lambda: repo.list_prospectos_by_ids(
+                    usuario_token=user_token,
+                    prospecto_ids=payload.prospecto_ids,
+                ),
+                retries=1,
             )
         except CRMRepositoryError as exc:
             raise HTTPException(status_code=502, detail=str(exc)) from exc
@@ -21845,12 +21942,16 @@ async def contactar_prospectos(
             raise HTTPException(status_code=400, detail="prospecto_selector_required")
         try:
             repo_kwargs = _prospecto_filters_to_kwargs(filtros_fuente)
-            prospectos, total = await repo.list_prospectos(
-                usuario_token=user_token,
-                limit=MAX_PROSPECCION_BATCH,
-                offset=0,
-                order="creado_en.desc",
-                **repo_kwargs,
+            prospectos, total = await _retry_transient_repo_error(
+                operation="list_prospectos_for_contactar",
+                func=lambda: repo.list_prospectos(
+                    usuario_token=user_token,
+                    limit=MAX_PROSPECCION_BATCH,
+                    offset=0,
+                    order="creado_en.desc",
+                    **repo_kwargs,
+                ),
+                retries=1,
             )
         except CRMRepositoryError as exc:
             raise HTTPException(status_code=502, detail=str(exc)) from exc
@@ -21883,11 +21984,18 @@ async def contactar_prospectos(
                 prospecto_uuid_ids.append(UUID(str(raw_id)))
         except (TypeError, ValueError):
             continue
-    suppressions = await repo.list_active_contact_suppressions_for_prospectos(
-        usuario_token=user_token,
-        prospecto_ids=prospecto_uuid_ids,
-        canales=list(canales_config.keys()),
-    )
+    try:
+        suppressions = await _retry_transient_repo_error(
+            operation="list_active_contact_suppressions_for_prospectos",
+            func=lambda: repo.list_active_contact_suppressions_for_prospectos(
+                usuario_token=user_token,
+                prospecto_ids=prospecto_uuid_ids,
+                canales=list(canales_config.keys()),
+            ),
+            retries=1,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
     suppression_map = _build_suppression_channel_map(suppressions)
     prospectos = _attach_suppressions_to_prospectos(prospectos, suppression_map)
     preview_entries, _preview_suppressed = _build_contact_envios_entries(
@@ -21918,10 +22026,14 @@ async def contactar_prospectos(
                 day_end_utc_exclusive = day_start_utc + timedelta(days=1)
                 scheduled_for_day = 0
                 try:
-                    scheduled_for_day = await repo.count_pending_email_envios_for_local_day(
-                        usuario_token=user_token,
-                        start_utc=day_start_utc,
-                        end_utc_exclusive=day_end_utc_exclusive,
+                    scheduled_for_day = await _retry_transient_repo_error(
+                        operation="count_pending_email_envios_for_local_day",
+                        func=lambda day_start_utc=day_start_utc, day_end_utc_exclusive=day_end_utc_exclusive: repo.count_pending_email_envios_for_local_day(
+                            usuario_token=user_token,
+                            start_utc=day_start_utc,
+                            end_utc_exclusive=day_end_utc_exclusive,
+                        ),
+                        retries=1,
                     )
                 except CRMRepositoryError as exc:
                     logger.warning(
@@ -21953,17 +22065,21 @@ async def contactar_prospectos(
                     )
 
     try:
-        batch = await repo.create_contact_batch(
-            usuario_token=user_token,
-            payload=_build_contact_batch_payload(
-                canales=list(canales_config.keys()),
-                total=total_prospectos,
-                payload=payload,
-                usuario_id=usuario_id,
-                filtros=selector_filtros,
-                programacion=programacion,
-                metadata_extra=metadata_extra,
+        batch = await _retry_transient_repo_error(
+            operation="create_contact_batch",
+            func=lambda: repo.create_contact_batch(
+                usuario_token=user_token,
+                payload=_build_contact_batch_payload(
+                    canales=list(canales_config.keys()),
+                    total=total_prospectos,
+                    payload=payload,
+                    usuario_id=usuario_id,
+                    filtros=selector_filtros,
+                    programacion=programacion,
+                    metadata_extra=metadata_extra,
+                ),
             ),
+            retries=1,
         )
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
@@ -21991,15 +22107,26 @@ async def contactar_prospectos(
         batch_meta["suppressions_bloqueados"] = {
             canal: len(ids) for canal, ids in suppressed_by_channel.items()
         }
-        await repo.update_contact_batch(
-            usuario_token=user_token,
-            batch_id=UUID(str(batch_id)),
-            payload={"metadata": batch_meta},
-        )
+        try:
+            await _retry_transient_repo_error(
+                operation="update_contact_batch",
+                func=lambda: repo.update_contact_batch(
+                    usuario_token=user_token,
+                    batch_id=UUID(str(batch_id)),
+                    payload={"metadata": batch_meta},
+                ),
+                retries=1,
+            )
+        except CRMRepositoryError as exc:
+            raise HTTPException(status_code=502, detail=str(exc)) from exc
     try:
-        envios = await repo.insert_contact_envios(
-            usuario_token=user_token,
-            entries=envios_entries,
+        envios = await _retry_transient_repo_error(
+            operation="insert_contact_envios",
+            func=lambda: repo.insert_contact_envios(
+                usuario_token=user_token,
+                entries=envios_entries,
+            ),
+            retries=1,
         )
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
