@@ -1789,7 +1789,7 @@ class CRMAccount(BaseModel):
     tipo_establecimiento: str | None = None
     latitud: float | None = None
     longitud: float | None = None
-    fecha_incorporacion: date | None = None
+    fecha_incorporacion: datetime | None = None
     propietario_usuario_id: UUID | None = None
     metadata: dict | None = None
     creado_en: str
@@ -1846,7 +1846,7 @@ class CRMAccountCreate(BaseModel):
     tipo_establecimiento: str | None = Field(default=None, max_length=120)
     latitud: float | None = None
     longitud: float | None = None
-    fecha_incorporacion: date | None = None
+    fecha_incorporacion: datetime | None = None
     propietario_usuario_id: UUID | None = None
     metadata: dict | None = Field(default_factory=dict)
 
@@ -1897,7 +1897,7 @@ class CRMAccountUpdate(BaseModel):
     tipo_establecimiento: str | None = Field(default=None, max_length=120)
     latitud: float | None = None
     longitud: float | None = None
-    fecha_incorporacion: date | None = None
+    fecha_incorporacion: datetime | None = None
     propietario_usuario_id: UUID | None = None
     metadata: dict | None = None
 
@@ -8106,7 +8106,7 @@ class CRMContact(BaseModel):
     tipo_establecimiento: str | None = None
     latitud: float | None = None
     longitud: float | None = None
-    fecha_incorporacion: date | None = None
+    fecha_incorporacion: datetime | None = None
     company_name: str | None = None
     notes: str | None = None
     notas: str | None = None
@@ -8168,7 +8168,7 @@ class CRMContactCreate(BaseModel):
     tipo_establecimiento: str | None = Field(default=None, max_length=120)
     latitud: float | None = None
     longitud: float | None = None
-    fecha_incorporacion: date | None = None
+    fecha_incorporacion: datetime | None = None
     company_name: str | None = Field(default=None, max_length=160)
     notes: str | None = Field(default=None, max_length=2000)
     notas: str | None = Field(default=None, max_length=2000)
@@ -8228,7 +8228,7 @@ class CRMContactUpdate(BaseModel):
     tipo_establecimiento: str | None = Field(default=None, max_length=120)
     latitud: float | None = None
     longitud: float | None = None
-    fecha_incorporacion: date | None = None
+    fecha_incorporacion: datetime | None = None
     company_name: str | None = Field(default=None, max_length=160)
     notes: str | None = Field(default=None, max_length=2000)
     notas: str | None = Field(default=None, max_length=2000)
@@ -8680,6 +8680,8 @@ class CRMContactTimelineEntry(BaseModel):
 
 class CRMContactListRow(BaseModel):
     contacto_id: UUID
+    codigo_contacto: str | None = None
+    codigo_cuenta: str | None = None
     nombre: str | None = None
     correo: str | None = None
     telefono: str | None = None
@@ -8694,7 +8696,17 @@ class CRMContactListRow(BaseModel):
     ultimo_contacto_en: datetime | None = None
     conversaciones: int | None = None
     notes: str | None = None
-    metadata: dict[str, Any] | None = None
+    rfc: str | None = None
+    puesto: str | None = None
+    area: str | None = None
+    rol_decision: str | None = None
+    codigo_postal: str | None = None
+    entidad: str | None = None
+    municipio: str | None = None
+    pais: str | None = None
+    website: str | None = None
+    tipo_establecimiento: str | None = None
+    fecha_incorporacion: datetime | None = None
     total_rows: int | None = None
 
 

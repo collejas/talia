@@ -41,10 +41,7 @@ const ACCOUNT_KEYS = [
   "sitio_web",
   "telefono",
   "correo",
-  "direccion",
   "propietario_usuario_id",
-  "metadata",
-  "codigo_cuenta",
   "razon_social",
   "rfc",
   "uso_cfdi",
@@ -80,12 +77,10 @@ const ACCOUNT_KEYS = [
   "tipo_establecimiento",
   "latitud",
   "longitud",
-  "fecha_incorporacion",
 ] as const
 
 const CONTACT_KEYS = [
   "cuenta_id",
-  "codigo_contacto",
   "nombre_nombres",
   "apellido_paterno",
   "apellido_materno",
@@ -131,7 +126,6 @@ const CONTACT_KEYS = [
   "tipo_establecimiento",
   "latitud",
   "longitud",
-  "fecha_incorporacion",
   "company_name",
   "notes",
   "notas",
@@ -139,8 +133,6 @@ const CONTACT_KEYS = [
   "estado",
   "propietario_usuario_id",
   "origen",
-  "metadata",
-  "contacto_datos",
 ] as const
 
 export async function POST(request: NextRequest) {

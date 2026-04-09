@@ -22,6 +22,8 @@ type CrmContactTimelineRow = {
 
 type CrmContactListRow = {
   contacto_id: string;
+  codigo_contacto: string | null;
+  codigo_cuenta: string | null;
   nombre: string | null;
   correo: string | null;
   telefono: string | null;
@@ -36,7 +38,17 @@ type CrmContactListRow = {
   ultimo_contacto_en: string | null;
   conversaciones: number | null;
   notes: string | null;
-  metadata: Record<string, unknown> | null;
+  rfc: string | null;
+  puesto: string | null;
+  area: string | null;
+  rol_decision: string | null;
+  codigo_postal: string | null;
+  entidad: string | null;
+  municipio: string | null;
+  pais: string | null;
+  website: string | null;
+  tipo_establecimiento: string | null;
+  fecha_incorporacion: string | null;
   total_rows: number;
 };
 
@@ -156,6 +168,8 @@ function mapTable(payload?: CrmContactListRow[] | null): ContactTableRow[] {
       reviewer: row.propietario_nombre || "Sin asignar",
       raw: {
         contacto_id: row.contacto_id,
+        codigo_contacto: row.codigo_contacto,
+        codigo_cuenta: row.codigo_cuenta,
         correo: row.correo,
         telefono: row.telefono,
         estado: row.estado,
@@ -169,7 +183,17 @@ function mapTable(payload?: CrmContactListRow[] | null): ContactTableRow[] {
         ultimo_contacto_en: row.ultimo_contacto_en,
         conversaciones: conversations,
         notes: row.notes,
-        metadata: row.metadata,
+        rfc: row.rfc,
+        puesto: row.puesto,
+        area: row.area,
+        rol_decision: row.rol_decision,
+        codigo_postal: row.codigo_postal,
+        entidad: row.entidad,
+        municipio: row.municipio,
+        pais: row.pais,
+        website: row.website,
+        tipo_establecimiento: row.tipo_establecimiento,
+        fecha_incorporacion: row.fecha_incorporacion,
         status_meta: {
           label: captureDone ? "Completo" : "Incompleto",
           variant: captureDone ? "default" : "outline",

@@ -29,6 +29,8 @@ import type { ContactTableRow } from "@/lib/contactos/data";
 type TableRow = z.infer<typeof schema>;
 
 type ContactField =
+  | "codigo_contacto"
+  | "codigo_cuenta"
   | "correo"
   | "telefono"
   | "origen"
@@ -37,7 +39,11 @@ type ContactField =
   | "company_name"
   | "ultimo_contacto_en"
   | "conversaciones"
-  | "notes";
+  | "notes"
+  | "rfc"
+  | "puesto"
+  | "rol_decision"
+  | "codigo_postal";
 
 type SalesRepOption = {
   id: string;
@@ -47,12 +53,11 @@ type SalesRepOption = {
   label: string;
 };
 
-type CreateContactForm = {
+type ContactDraft = {
   nombre_nombres: string;
   apellido_paterno: string;
   apellido_materno: string;
   nombre_completo: string;
-  codigo_contacto: string;
   persona_fisica_moral: string;
   correo: string;
   telefono_e164: string;
@@ -69,36 +74,51 @@ type CreateContactForm = {
   metodo_pago: string;
   forma_pago: string;
   email_facturacion: string;
-  fecha_incorporacion: string;
-  contacto_extra_json: string;
-};
-
-type CreateAccountForm = {
-  nombre: string;
-  codigo_cuenta: string;
-  razon_social: string;
-  rfc: string;
   tipo_industria: string;
   tamano: string;
-  email: string;
-  telefono: string;
+  tipo_vialidad: string;
+  nombre_vialidad: string;
+  numero_exterior: string;
+  numero_interior: string;
+  codigo_postal: string;
+  entidad: string;
+  municipio: string;
+  pais: string;
   website: string;
+  tipo_establecimiento: string;
+};
+
+type AccountDraft = {
+  nombre: string;
+  razon_social: string;
+  rfc: string;
   uso_cfdi: string;
   metodo_pago: string;
   forma_pago: string;
   email_facturacion: string;
+  tipo_industria: string;
+  tamano: string;
   notas: string;
   necesidad_proposito: string;
-  fecha_incorporacion: string;
-  cuenta_extra_json: string;
+  telefono: string;
+  email: string;
+  website: string;
+  tipo_vialidad: string;
+  nombre_vialidad: string;
+  numero_exterior: string;
+  numero_interior: string;
+  codigo_postal: string;
+  entidad: string;
+  municipio: string;
+  pais: string;
+  tipo_establecimiento: string;
 };
 
-const EMPTY_CONTACT_FORM: CreateContactForm = {
+const EMPTY_CONTACT: ContactDraft = {
   nombre_nombres: "",
   apellido_paterno: "",
   apellido_materno: "",
   nombre_completo: "",
-  codigo_contacto: "",
   persona_fisica_moral: "",
   correo: "",
   telefono_e164: "",
@@ -115,28 +135,44 @@ const EMPTY_CONTACT_FORM: CreateContactForm = {
   metodo_pago: "",
   forma_pago: "",
   email_facturacion: "",
-  fecha_incorporacion: "",
-  contacto_extra_json: "",
-};
-
-const EMPTY_ACCOUNT_FORM: CreateAccountForm = {
-  nombre: "",
-  codigo_cuenta: "",
-  razon_social: "",
-  rfc: "",
   tipo_industria: "",
   tamano: "",
-  email: "",
-  telefono: "",
+  tipo_vialidad: "",
+  nombre_vialidad: "",
+  numero_exterior: "",
+  numero_interior: "",
+  codigo_postal: "",
+  entidad: "",
+  municipio: "",
+  pais: "",
   website: "",
+  tipo_establecimiento: "",
+};
+
+const EMPTY_ACCOUNT: AccountDraft = {
+  nombre: "",
+  razon_social: "",
+  rfc: "",
   uso_cfdi: "",
   metodo_pago: "",
   forma_pago: "",
   email_facturacion: "",
+  tipo_industria: "",
+  tamano: "",
   notas: "",
   necesidad_proposito: "",
-  fecha_incorporacion: "",
-  cuenta_extra_json: "",
+  telefono: "",
+  email: "",
+  website: "",
+  tipo_vialidad: "",
+  nombre_vialidad: "",
+  numero_exterior: "",
+  numero_interior: "",
+  codigo_postal: "",
+  entidad: "",
+  municipio: "",
+  pais: "",
+  tipo_establecimiento: "",
 };
 
 const DATE_FORMATTER = new Intl.DateTimeFormat("es-MX", {
@@ -172,19 +208,13 @@ function renderField(row: TableRow, key: ContactField): React.ReactNode {
   switch (key) {
     case "correo":
       return (
-        <a
-          href={`mailto:${value}`}
-          className="text-primary underline-offset-2 hover:underline"
-        >
+        <a href={`mailto:${value}`} className="text-primary underline-offset-2 hover:underline">
           {String(value)}
         </a>
       );
     case "telefono":
       return (
-        <a
-          href={`tel:${value}`}
-          className="text-primary underline-offset-2 hover:underline"
-        >
+        <a href={`tel:${value}`} className="text-primary underline-offset-2 hover:underline">
           {String(value)}
         </a>
       );
@@ -217,61 +247,58 @@ function extractString(raw: Record<string, unknown> | undefined, path: string[])
   return null;
 }
 
+function buildContactPayload(input: ContactDraft): Record<string, unknown> {
+  const payload: Record<string, unknown> = {};
+  const entries = Object.entries(input);
+  for (const [key, value] of entries) {
+    const trimmed = value.trim();
+    if (!trimmed) continue;
+    payload[key] = trimmed;
+  }
+
+  const fullName =
+    (typeof payload.nombre_completo === "string" && payload.nombre_completo.trim()) ||
+    [input.nombre_nombres.trim(), input.apellido_paterno.trim(), input.apellido_materno.trim()]
+      .filter(Boolean)
+      .join(" ")
+      .trim();
+
+  if (fullName) payload.nombre_completo = fullName;
+  return payload;
+}
+
+function buildAccountPayload(input: AccountDraft): Record<string, unknown> {
+  const payload: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(input)) {
+    const trimmed = value.trim();
+    if (!trimmed) continue;
+    payload[key] = trimmed;
+  }
+  if (!payload.nombre && payload.razon_social) payload.nombre = payload.razon_social;
+  return payload;
+}
+
 const CONTACT_COLUMNS: Array<{
   id: string;
   label: string;
   accessor: (row: TableRow) => React.ReactNode;
   defaultVisible?: boolean;
 }> = [
-  {
-    id: "contact_correo",
-    label: "Correo",
-    accessor: (row) => renderField(row, "correo"),
-    defaultVisible: true,
-  },
-  {
-    id: "contact_telefono",
-    label: "Teléfono",
-    accessor: (row) => renderField(row, "telefono"),
-    defaultVisible: true,
-  },
-  {
-    id: "contact_origen",
-    label: "Origen",
-    accessor: (row) => renderField(row, "origen"),
-    defaultVisible: true,
-  },
-  {
-    id: "contact_estado",
-    label: "Estado",
-    accessor: (row) => renderField(row, "estado"),
-  },
-  {
-    id: "contact_captura",
-    label: "Captura",
-    accessor: (row) => renderField(row, "captura_estado"),
-  },
-  {
-    id: "contact_company",
-    label: "Empresa",
-    accessor: (row) => renderField(row, "company_name"),
-  },
-  {
-    id: "contact_ultimo",
-    label: "Último contacto",
-    accessor: (row) => renderField(row, "ultimo_contacto_en"),
-    defaultVisible: true,
-  },
-  {
-    id: "contact_conversaciones",
-    label: "Conversaciones",
-    accessor: (row) => renderField(row, "conversaciones"),
-  },
-  {
-    id: "contact_notes",
-    label: "Notas",
-    accessor: (row) => renderField(row, "notes"),
-  },
+  { id: "contact_codigo", label: "Código contacto", accessor: (row) => renderField(row, "codigo_contacto"), defaultVisible: true },
+  { id: "account_codigo", label: "Código empresa", accessor: (row) => renderField(row, "codigo_cuenta"), defaultVisible: true },
+  { id: "contact_correo", label: "Correo", accessor: (row) => renderField(row, "correo"), defaultVisible: true },
+  { id: "contact_telefono", label: "Teléfono", accessor: (row) => renderField(row, "telefono"), defaultVisible: true },
+  { id: "contact_rfc", label: "RFC", accessor: (row) => renderField(row, "rfc"), defaultVisible: true },
+  { id: "contact_puesto", label: "Puesto", accessor: (row) => renderField(row, "puesto"), defaultVisible: true },
+  { id: "contact_rol", label: "Rol decisión", accessor: (row) => renderField(row, "rol_decision"), defaultVisible: true },
+  { id: "contact_cp", label: "C.P.", accessor: (row) => renderField(row, "codigo_postal"), defaultVisible: true },
+  { id: "contact_origen", label: "Origen", accessor: (row) => renderField(row, "origen"), defaultVisible: true },
+  { id: "contact_estado", label: "Estado", accessor: (row) => renderField(row, "estado") },
+  { id: "contact_captura", label: "Captura", accessor: (row) => renderField(row, "captura_estado") },
+  { id: "contact_company", label: "Empresa", accessor: (row) => renderField(row, "company_name") },
+  { id: "contact_ultimo", label: "Último contacto", accessor: (row) => renderField(row, "ultimo_contacto_en"), defaultVisible: true },
+  { id: "contact_conversaciones", label: "Conversaciones", accessor: (row) => renderField(row, "conversaciones") },
+  { id: "contact_notes", label: "Notas", accessor: (row) => renderField(row, "notes") },
 ];
 
 const contactExtraColumns: ColumnDef<TableRow>[] = CONTACT_COLUMNS.map((column) => ({
@@ -284,13 +311,113 @@ const contactExtraColumns: ColumnDef<TableRow>[] = CONTACT_COLUMNS.map((column) 
   meta: { label: column.label },
 }));
 
-const contactColumnVisibility: VisibilityState = CONTACT_COLUMNS.reduce<VisibilityState>(
-  (visibility, column) => {
-    visibility[column.id] = column.defaultVisible ?? false;
-    return visibility;
-  },
-  {},
-);
+const contactColumnVisibility: VisibilityState = CONTACT_COLUMNS.reduce<VisibilityState>((visibility, column) => {
+  visibility[column.id] = column.defaultVisible ?? false;
+  return visibility;
+}, {});
+
+function ContactForm({
+  value,
+  onChange,
+}: {
+  value: ContactDraft;
+  onChange: React.Dispatch<React.SetStateAction<ContactDraft>>;
+}) {
+  const set = (field: keyof ContactDraft, next: string) => onChange((prev) => ({ ...prev, [field]: next }));
+
+  return (
+    <div className="space-y-3">
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+        <Select value={value.persona_fisica_moral || undefined} onValueChange={(v) => set("persona_fisica_moral", v)}>
+          <SelectTrigger><SelectValue placeholder="Persona física / moral" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="fisica">Física</SelectItem>
+            <SelectItem value="moral">Moral</SelectItem>
+          </SelectContent>
+        </Select>
+        <Input placeholder="Nombres" value={value.nombre_nombres} onChange={(e) => set("nombre_nombres", e.target.value)} />
+        <Input placeholder="Apellido paterno" value={value.apellido_paterno} onChange={(e) => set("apellido_paterno", e.target.value)} />
+        <Input placeholder="Apellido materno" value={value.apellido_materno} onChange={(e) => set("apellido_materno", e.target.value)} />
+        <Input placeholder="Nombre completo" value={value.nombre_completo} onChange={(e) => set("nombre_completo", e.target.value)} />
+        <Input placeholder="Correo" value={value.correo} onChange={(e) => set("correo", e.target.value)} />
+        <Input placeholder="Teléfono (E.164)" value={value.telefono_e164} onChange={(e) => set("telefono_e164", e.target.value)} />
+        <Input placeholder="Puesto" value={value.puesto} onChange={(e) => set("puesto", e.target.value)} />
+        <Input placeholder="Área" value={value.area} onChange={(e) => set("area", e.target.value)} />
+        <Input placeholder="Rol decisión" value={value.rol_decision} onChange={(e) => set("rol_decision", e.target.value)} />
+        <Input placeholder="Origen" value={value.origen} onChange={(e) => set("origen", e.target.value)} />
+        <Input placeholder="Empresa" value={value.company_name} onChange={(e) => set("company_name", e.target.value)} />
+        <Input placeholder="RFC" value={value.rfc} onChange={(e) => set("rfc", e.target.value)} />
+        <Input placeholder="Razón social" value={value.razon_social} onChange={(e) => set("razon_social", e.target.value)} />
+        <Input placeholder="Uso CFDI" value={value.uso_cfdi} onChange={(e) => set("uso_cfdi", e.target.value)} />
+        <Input placeholder="Método pago" value={value.metodo_pago} onChange={(e) => set("metodo_pago", e.target.value)} />
+        <Input placeholder="Forma pago" value={value.forma_pago} onChange={(e) => set("forma_pago", e.target.value)} />
+        <Input placeholder="Email facturación" value={value.email_facturacion} onChange={(e) => set("email_facturacion", e.target.value)} />
+        <Input placeholder="Industria" value={value.tipo_industria} onChange={(e) => set("tipo_industria", e.target.value)} />
+        <Input placeholder="Tamaño" value={value.tamano} onChange={(e) => set("tamano", e.target.value)} />
+        <Input placeholder="Tipo vialidad" value={value.tipo_vialidad} onChange={(e) => set("tipo_vialidad", e.target.value)} />
+        <Input placeholder="Nombre vialidad" value={value.nombre_vialidad} onChange={(e) => set("nombre_vialidad", e.target.value)} />
+        <Input placeholder="Número exterior" value={value.numero_exterior} onChange={(e) => set("numero_exterior", e.target.value)} />
+        <Input placeholder="Número interior" value={value.numero_interior} onChange={(e) => set("numero_interior", e.target.value)} />
+        <Input placeholder="Código postal" value={value.codigo_postal} onChange={(e) => set("codigo_postal", e.target.value)} />
+        <Input placeholder="Entidad" value={value.entidad} onChange={(e) => set("entidad", e.target.value)} />
+        <Input placeholder="Municipio" value={value.municipio} onChange={(e) => set("municipio", e.target.value)} />
+        <Input placeholder="País" value={value.pais} onChange={(e) => set("pais", e.target.value)} />
+        <Input placeholder="Website" value={value.website} onChange={(e) => set("website", e.target.value)} />
+        <Input placeholder="Tipo establecimiento" value={value.tipo_establecimiento} onChange={(e) => set("tipo_establecimiento", e.target.value)} />
+      </div>
+      <Textarea placeholder="Notas" value={value.notes} onChange={(e) => set("notes", e.target.value)} />
+      <Textarea
+        placeholder="Necesidad / propósito"
+        value={value.necesidad_proposito}
+        onChange={(e) => set("necesidad_proposito", e.target.value)}
+      />
+    </div>
+  );
+}
+
+function AccountForm({
+  value,
+  onChange,
+}: {
+  value: AccountDraft;
+  onChange: React.Dispatch<React.SetStateAction<AccountDraft>>;
+}) {
+  const set = (field: keyof AccountDraft, next: string) => onChange((prev) => ({ ...prev, [field]: next }));
+
+  return (
+    <div className="space-y-3 rounded-md border p-3">
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+        <Input placeholder="Nombre empresa" value={value.nombre} onChange={(e) => set("nombre", e.target.value)} />
+        <Input placeholder="Razón social" value={value.razon_social} onChange={(e) => set("razon_social", e.target.value)} />
+        <Input placeholder="RFC" value={value.rfc} onChange={(e) => set("rfc", e.target.value)} />
+        <Input placeholder="Uso CFDI" value={value.uso_cfdi} onChange={(e) => set("uso_cfdi", e.target.value)} />
+        <Input placeholder="Método pago" value={value.metodo_pago} onChange={(e) => set("metodo_pago", e.target.value)} />
+        <Input placeholder="Forma pago" value={value.forma_pago} onChange={(e) => set("forma_pago", e.target.value)} />
+        <Input placeholder="Email facturación" value={value.email_facturacion} onChange={(e) => set("email_facturacion", e.target.value)} />
+        <Input placeholder="Industria" value={value.tipo_industria} onChange={(e) => set("tipo_industria", e.target.value)} />
+        <Input placeholder="Tamaño" value={value.tamano} onChange={(e) => set("tamano", e.target.value)} />
+        <Input placeholder="Teléfono" value={value.telefono} onChange={(e) => set("telefono", e.target.value)} />
+        <Input placeholder="Email" value={value.email} onChange={(e) => set("email", e.target.value)} />
+        <Input placeholder="Website" value={value.website} onChange={(e) => set("website", e.target.value)} />
+        <Input placeholder="Tipo vialidad" value={value.tipo_vialidad} onChange={(e) => set("tipo_vialidad", e.target.value)} />
+        <Input placeholder="Nombre vialidad" value={value.nombre_vialidad} onChange={(e) => set("nombre_vialidad", e.target.value)} />
+        <Input placeholder="Número exterior" value={value.numero_exterior} onChange={(e) => set("numero_exterior", e.target.value)} />
+        <Input placeholder="Número interior" value={value.numero_interior} onChange={(e) => set("numero_interior", e.target.value)} />
+        <Input placeholder="Código postal" value={value.codigo_postal} onChange={(e) => set("codigo_postal", e.target.value)} />
+        <Input placeholder="Entidad" value={value.entidad} onChange={(e) => set("entidad", e.target.value)} />
+        <Input placeholder="Municipio" value={value.municipio} onChange={(e) => set("municipio", e.target.value)} />
+        <Input placeholder="País" value={value.pais} onChange={(e) => set("pais", e.target.value)} />
+        <Input placeholder="Tipo establecimiento" value={value.tipo_establecimiento} onChange={(e) => set("tipo_establecimiento", e.target.value)} />
+      </div>
+      <Textarea placeholder="Notas" value={value.notas} onChange={(e) => set("notas", e.target.value)} />
+      <Textarea
+        placeholder="Necesidad / propósito"
+        value={value.necesidad_proposito}
+        onChange={(e) => set("necesidad_proposito", e.target.value)}
+      />
+    </div>
+  );
+}
 
 export function ContactsDataTable({ data }: { data: ContactTableRow[] }) {
   const { context: permissionContext, loading: permissionsLoading } = usePermissions();
@@ -298,6 +425,9 @@ export function ContactsDataTable({ data }: { data: ContactTableRow[] }) {
     () => (permissionContext.permisos ?? []).map((perm) => perm.toLowerCase()),
     [permissionContext.permisos],
   );
+
+  const canWrite =
+    permissionContext.es_admin || permissionContext.es_owner || normalizedPerms.includes("contacts.write");
   const canReassignAny =
     permissionContext.es_admin ||
     permissionContext.es_owner ||
@@ -307,34 +437,31 @@ export function ContactsDataTable({ data }: { data: ContactTableRow[] }) {
     permissionContext.es_owner ||
     normalizedPerms.includes("contacts.reassign.team");
   const canReassign = canReassignAny || canReassignTeam;
-  const canCreate =
-    permissionContext.es_admin ||
-    permissionContext.es_owner ||
-    normalizedPerms.includes("contacts.write");
 
   const [reassignOpen, setReassignOpen] = React.useState(false);
+  const [editOpen, setEditOpen] = React.useState(false);
+  const [createOpen, setCreateOpen] = React.useState(false);
+  const [deleteOpen, setDeleteOpen] = React.useState(false);
+
   const [activeRow, setActiveRow] = React.useState<TableRow | null>(null);
+  const [contactForm, setContactForm] = React.useState<ContactDraft>({ ...EMPTY_CONTACT });
+  const [accountForm, setAccountForm] = React.useState<AccountDraft>({ ...EMPTY_ACCOUNT });
+  const [createWithAccount, setCreateWithAccount] = React.useState(false);
+
   const [selectedVendorId, setSelectedVendorId] = React.useState("");
   const [vendorOptions, setVendorOptions] = React.useState<SalesRepOption[]>([]);
   const [vendorLoading, setVendorLoading] = React.useState(false);
   const [vendorError, setVendorError] = React.useState<string | null>(null);
-  const [reassignPending, setReassignPending] = React.useState(false);
-  const [reassignError, setReassignError] = React.useState<string | null>(null);
-  const [reassignSuccess, setReassignSuccess] = React.useState<string | null>(null);
-  const [createOpen, setCreateOpen] = React.useState(false);
-  const [createPending, setCreatePending] = React.useState(false);
-  const [createError, setCreateError] = React.useState<string | null>(null);
-  const [createSuccess, setCreateSuccess] = React.useState<string | null>(null);
-  const [shouldCreateAccount, setShouldCreateAccount] = React.useState(false);
-  const [contactForm, setContactForm] = React.useState<CreateContactForm>({ ...EMPTY_CONTACT_FORM });
-  const [accountForm, setAccountForm] = React.useState<CreateAccountForm>({ ...EMPTY_ACCOUNT_FORM });
+
+  const [pending, setPending] = React.useState(false);
+  const [error, setError] = React.useState<string | null>(null);
+  const [success, setSuccess] = React.useState<string | null>(null);
 
   React.useEffect(() => {
-    if (!reassignOpen || permissionsLoading || !canReassign) {
-      return;
-    }
+    if (!reassignOpen || permissionsLoading || !canReassign) return;
     const controller = new AbortController();
-    const fetchVendors = async () => {
+
+    const run = async () => {
       setVendorLoading(true);
       setVendorError(null);
       try {
@@ -349,6 +476,7 @@ export function ContactsDataTable({ data }: { data: ContactTableRow[] }) {
           setVendorOptions([]);
           return;
         }
+
         const body = (await response.json()) as { vendedores?: Array<Record<string, unknown>> };
         const vendors = Array.isArray(body?.vendedores) ? body.vendedores : [];
         const options: SalesRepOption[] = vendors
@@ -362,63 +490,176 @@ export function ContactsDataTable({ data }: { data: ContactTableRow[] }) {
             const label = nombre?.trim() || correo?.trim() || telefono?.trim() || "Sin nombre";
             return { id, nombre_completo: nombre ?? null, correo: correo ?? null, telefono_e164: telefono ?? null, label };
           })
-          .filter((entry): entry is SalesRepOption => entry !== null);
+          .filter((item): item is SalesRepOption => item !== null);
+
         setVendorOptions(options);
       } catch (err) {
-        if ((err as Error).name === "AbortError") return;
-        setVendorError("No se pudo cargar la lista de vendedores.");
-        setVendorOptions([]);
+        if ((err as Error).name !== "AbortError") {
+          setVendorError("No se pudo cargar la lista de vendedores.");
+        }
       } finally {
         setVendorLoading(false);
       }
     };
-    fetchVendors();
+
+    run();
     return () => controller.abort();
   }, [reassignOpen, permissionsLoading, canReassign, canReassignAny]);
 
-  const extraColumns = React.useMemo(() => {
-    if (!canReassign) return contactExtraColumns;
+  const activeRaw = (activeRow?.raw ?? {}) as Record<string, unknown>;
+  const activeContactoId = extractString(activeRaw, ["contacto_id"]);
+  const activePropietarioId = extractString(activeRaw, ["propietario_id"]);
+
+  const openEdit = (row: TableRow) => {
+    const raw = (row.raw ?? {}) as Record<string, unknown>;
+    setActiveRow(row);
+    setContactForm({
+      ...EMPTY_CONTACT,
+      nombre_completo: row.header || "",
+      correo: extractString(raw, ["correo"]) ?? "",
+      telefono_e164: extractString(raw, ["telefono"]) ?? "",
+      origen: extractString(raw, ["origen"]) ?? EMPTY_CONTACT.origen,
+      company_name: extractString(raw, ["company_name"]) ?? "",
+      notes: extractString(raw, ["notes"]) ?? "",
+      necesidad_proposito: extractString(raw, ["necesidad_proposito"]) ?? "",
+      rfc: extractString(raw, ["rfc"]) ?? "",
+      razon_social: extractString(raw, ["razon_social"]) ?? "",
+      puesto: extractString(raw, ["puesto"]) ?? "",
+      area: extractString(raw, ["area"]) ?? "",
+      rol_decision: extractString(raw, ["rol_decision"]) ?? "",
+      codigo_postal: extractString(raw, ["codigo_postal"]) ?? "",
+      entidad: extractString(raw, ["entidad"]) ?? "",
+      municipio: extractString(raw, ["municipio"]) ?? "",
+      pais: extractString(raw, ["pais"]) ?? "",
+      website: extractString(raw, ["website"]) ?? "",
+      tipo_establecimiento: extractString(raw, ["tipo_establecimiento"]) ?? "",
+    });
+    setError(null);
+    setSuccess(null);
+    setEditOpen(true);
+  };
+
+  const extraColumns = React.useMemo<ColumnDef<TableRow>[]>(() => {
+    if (!canWrite && !canReassign) return contactExtraColumns;
+
     return [
       ...contactExtraColumns,
       {
         id: "acciones",
         header: "Acciones",
         cell: ({ row }: { row: { original: TableRow } }) => (
-          <div className="flex justify-end">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => {
-                setActiveRow(row.original);
-                const ownerId = extractString(row.original.raw as Record<string, unknown> | undefined, [
-                  "propietario_id",
-                ]);
-                setSelectedVendorId(ownerId ?? "");
-                setReassignError(null);
-                setReassignSuccess(null);
-                setReassignOpen(true);
-              }}
-            >
-              Reasignar
-            </Button>
+          <div className="flex justify-end gap-1">
+            {canWrite ? (
+              <Button variant="ghost" size="sm" onClick={() => openEdit(row.original)}>
+                Editar
+              </Button>
+            ) : null}
+            {canReassign ? (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  setActiveRow(row.original);
+                  const ownerId = extractString(row.original.raw as Record<string, unknown> | undefined, ["propietario_id"]);
+                  setSelectedVendorId(ownerId ?? "");
+                  setError(null);
+                  setSuccess(null);
+                  setReassignOpen(true);
+                }}
+              >
+                Reasignar
+              </Button>
+            ) : null}
+            {canWrite ? (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  setActiveRow(row.original);
+                  setError(null);
+                  setSuccess(null);
+                  setDeleteOpen(true);
+                }}
+              >
+                Eliminar
+              </Button>
+            ) : null}
           </div>
         ),
         enableSorting: false,
         meta: { label: "Acciones", reorderable: false },
-      } as ColumnDef<TableRow>,
+      },
     ];
-  }, [canReassign]);
+  }, [canWrite, canReassign]);
 
-  const activeRaw = (activeRow?.raw ?? {}) as Record<string, unknown>;
-  const activeContactoId = extractString(activeRaw, ["contacto_id"]);
-  const activePropietarioId = extractString(activeRaw, ["propietario_id"]);
+  const runAndReload = async (fn: () => Promise<void>) => {
+    setPending(true);
+    setError(null);
+    setSuccess(null);
+    try {
+      await fn();
+      setSuccess("Operación realizada.");
+      setTimeout(() => window.location.reload(), 500);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Operación fallida.");
+    } finally {
+      setPending(false);
+    }
+  };
+
+  const handleCreate = async () => {
+    await runAndReload(async () => {
+      const contacto = buildContactPayload(contactForm);
+      const payload: Record<string, unknown> = {
+        crear_cuenta: createWithAccount,
+        contacto,
+      };
+      if (createWithAccount) payload.cuenta = buildAccountPayload(accountForm);
+
+      const response = await fetch("/api/contactos/create", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const body = (await response.json().catch(() => ({}))) as { error?: string };
+      if (!response.ok) throw new Error(body.error || `Error ${response.status}`);
+    });
+  };
+
+  const handleEdit = async () => {
+    if (!activeContactoId) {
+      setError("No se encontró el contacto a editar.");
+      return;
+    }
+    await runAndReload(async () => {
+      const payload = buildContactPayload(contactForm);
+      const response = await fetch(`/api/contactos/${activeContactoId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const body = (await response.json().catch(() => ({}))) as { error?: string };
+      if (!response.ok) throw new Error(body.error || `Error ${response.status}`);
+    });
+  };
+
+  const handleDelete = async () => {
+    if (!activeContactoId) {
+      setError("No se encontró el contacto a eliminar.");
+      return;
+    }
+    await runAndReload(async () => {
+      const response = await fetch(`/api/contactos/${activeContactoId}`, {
+        method: "DELETE",
+      });
+      const body = (await response.json().catch(() => ({}))) as { error?: string };
+      if (!response.ok) throw new Error(body.error || `Error ${response.status}`);
+    });
+  };
 
   const handleReassign = async () => {
     if (!activeContactoId || !selectedVendorId) return;
-    setReassignPending(true);
-    setReassignError(null);
-    setReassignSuccess(null);
-    try {
+    await runAndReload(async () => {
       const response = await fetch(`/api/contactos/${activeContactoId}/reassign`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -428,98 +669,21 @@ export function ContactsDataTable({ data }: { data: ContactTableRow[] }) {
           alinear_conversacion: true,
         }),
       });
-      const body = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        setReassignError(body?.error || `Error ${response.status}`);
-        return;
-      }
-      setReassignSuccess("Vendedor reasignado.");
-    } catch {
-      setReassignError("No se pudo reasignar el vendedor.");
-    } finally {
-      setReassignPending(false);
-    }
-  };
-
-  const buildPayload = (
-    form: Record<string, string>,
-    excludeKeys: string[],
-  ): Record<string, unknown> => {
-    const payload: Record<string, unknown> = {};
-    for (const [key, value] of Object.entries(form)) {
-      if (excludeKeys.includes(key)) continue;
-      const trimmed = value.trim();
-      if (!trimmed.length) continue;
-      payload[key] = trimmed;
-    }
-    return payload;
-  };
-
-  const parseJsonObject = (raw: string, fieldLabel: string): Record<string, unknown> => {
-    const trimmed = raw.trim();
-    if (!trimmed.length) return {};
-    const parsed = JSON.parse(trimmed) as unknown;
-    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-      throw new Error(`${fieldLabel} debe ser un objeto JSON.`);
-    }
-    return parsed as Record<string, unknown>;
-  };
-
-  const resetCreateDialog = () => {
-    setContactForm({ ...EMPTY_CONTACT_FORM });
-    setAccountForm({ ...EMPTY_ACCOUNT_FORM });
-    setShouldCreateAccount(false);
-    setCreateError(null);
-    setCreateSuccess(null);
-  };
-
-  const handleCreateContact = async () => {
-    setCreatePending(true);
-    setCreateError(null);
-    setCreateSuccess(null);
-    try {
-      const contacto = buildPayload(contactForm, ["contacto_extra_json"]);
-      const contactoExtras = parseJsonObject(contactForm.contacto_extra_json, "Campos avanzados de contacto");
-      Object.assign(contacto, contactoExtras);
-
-      let cuenta: Record<string, unknown> | undefined;
-      if (shouldCreateAccount) {
-        cuenta = buildPayload(accountForm, ["cuenta_extra_json"]);
-        const cuentaExtras = parseJsonObject(accountForm.cuenta_extra_json, "Campos avanzados de empresa");
-        Object.assign(cuenta, cuentaExtras);
-      }
-
-      const response = await fetch("/api/contactos/create", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          crear_cuenta: shouldCreateAccount,
-          cuenta,
-          contacto,
-        }),
-      });
       const body = (await response.json().catch(() => ({}))) as { error?: string };
-      if (!response.ok) {
-        setCreateError(body.error || `Error ${response.status}`);
-        return;
-      }
-      setCreateSuccess("Contacto creado correctamente.");
-      setTimeout(() => {
-        window.location.reload();
-      }, 600);
-    } catch (error) {
-      setCreateError(error instanceof Error ? error.message : "No se pudo crear el contacto.");
-    } finally {
-      setCreatePending(false);
-    }
+      if (!response.ok) throw new Error(body.error || `Error ${response.status}`);
+    });
   };
 
-  const toolbarActions = canCreate ? (
+  const toolbarActions = canWrite ? (
     <Button
       type="button"
       size="sm"
       onClick={() => {
-        resetCreateDialog();
+        setContactForm({ ...EMPTY_CONTACT });
+        setAccountForm({ ...EMPTY_ACCOUNT });
+        setCreateWithAccount(false);
+        setError(null);
+        setSuccess(null);
         setCreateOpen(true);
       }}
     >
@@ -536,26 +700,82 @@ export function ContactsDataTable({ data }: { data: ContactTableRow[] }) {
         storageKey="contacts-table-column-order"
         toolbarActions={toolbarActions}
       />
-      <Dialog
-        open={reassignOpen}
-        onOpenChange={(open) => {
-          setReassignOpen(open);
-        }}
-      >
+
+      <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-4xl">
+          <DialogHeader>
+            <DialogTitle>Crear contacto</DialogTitle>
+            <DialogDescription>Alta de contacto por columnas. Sin campos JSON.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <ContactForm value={contactForm} onChange={setContactForm} />
+            <div className="flex items-center space-x-2">
+              <Checkbox id="create-account" checked={createWithAccount} onCheckedChange={(v) => setCreateWithAccount(Boolean(v))} />
+              <label htmlFor="create-account" className="text-sm text-muted-foreground">
+                Crear empresa y vincularla
+              </label>
+            </div>
+            {createWithAccount ? <AccountForm value={accountForm} onChange={setAccountForm} /> : null}
+            {error ? <p className="text-xs text-destructive">{error}</p> : null}
+            {success ? <p className="text-xs text-emerald-600">{success}</p> : null}
+            <div className="flex gap-2">
+              <Button type="button" disabled={pending} onClick={handleCreate}>{pending ? "Guardando..." : "Crear"}</Button>
+              <Button type="button" variant="outline" disabled={pending} onClick={() => setCreateOpen(false)}>Cancelar</Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={editOpen} onOpenChange={setEditOpen}>
+        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-4xl">
+          <DialogHeader>
+            <DialogTitle>Editar contacto</DialogTitle>
+            <DialogDescription>Actualiza los datos del contacto por columnas.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <ContactForm value={contactForm} onChange={setContactForm} />
+            {error ? <p className="text-xs text-destructive">{error}</p> : null}
+            {success ? <p className="text-xs text-emerald-600">{success}</p> : null}
+            <div className="flex gap-2">
+              <Button type="button" disabled={pending} onClick={handleEdit}>{pending ? "Guardando..." : "Guardar cambios"}</Button>
+              <Button type="button" variant="outline" disabled={pending} onClick={() => setEditOpen(false)}>Cancelar</Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Eliminar contacto</DialogTitle>
+            <DialogDescription>
+              Esta acción elimina el contacto y no se puede deshacer.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <p className="text-sm text-muted-foreground">{activeRow?.header ?? "Contacto"}</p>
+            {error ? <p className="text-xs text-destructive">{error}</p> : null}
+            <div className="flex gap-2">
+              <Button type="button" variant="destructive" disabled={pending} onClick={handleDelete}>
+                {pending ? "Eliminando..." : "Eliminar"}
+              </Button>
+              <Button type="button" variant="outline" disabled={pending} onClick={() => setDeleteOpen(false)}>
+                Cancelar
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={reassignOpen} onOpenChange={setReassignOpen}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Cambiar vendedor</DialogTitle>
             <DialogDescription>Selecciona el vendedor destino para este contacto.</DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
-            <div className="text-sm text-muted-foreground">
-              {activeRow?.header ?? "Contacto"}
-            </div>
-            <Select
-              value={selectedVendorId || undefined}
-              onValueChange={setSelectedVendorId}
-              disabled={vendorLoading || reassignPending}
-            >
+            <div className="text-sm text-muted-foreground">{activeRow?.header ?? "Contacto"}</div>
+            <Select value={selectedVendorId || undefined} onValueChange={setSelectedVendorId} disabled={vendorLoading || pending}>
               <SelectTrigger>
                 <SelectValue placeholder={vendorLoading ? "Cargando..." : "Selecciona vendedor"} />
               </SelectTrigger>
@@ -568,231 +788,20 @@ export function ContactsDataTable({ data }: { data: ContactTableRow[] }) {
               </SelectContent>
             </Select>
             {vendorError ? <p className="text-xs text-destructive">{vendorError}</p> : null}
+            {error ? <p className="text-xs text-destructive">{error}</p> : null}
+            {success ? <p className="text-xs text-emerald-600">{success}</p> : null}
             <div className="flex flex-wrap items-center gap-2">
               <Button
                 type="button"
                 onClick={handleReassign}
                 disabled={
-                  reassignPending ||
+                  pending ||
                   vendorLoading ||
                   !selectedVendorId ||
                   (Boolean(activePropietarioId) && selectedVendorId === activePropietarioId)
                 }
               >
-                {reassignPending ? "Reasignando..." : "Reasignar"}
-              </Button>
-              {reassignSuccess ? (
-                <span className="text-xs text-emerald-600">{reassignSuccess}</span>
-              ) : null}
-              {reassignError ? (
-                <span className="text-xs text-destructive">{reassignError}</span>
-              ) : null}
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
-      <Dialog open={createOpen} onOpenChange={setCreateOpen}>
-        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-3xl">
-          <DialogHeader>
-            <DialogTitle>Crear contacto</DialogTitle>
-            <DialogDescription>
-              Registra un contacto nuevo y, opcionalmente, crea su empresa en el mismo flujo.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-              <Input
-                placeholder="Nombres"
-                value={contactForm.nombre_nombres}
-                onChange={(event) => setContactForm((prev) => ({ ...prev, nombre_nombres: event.target.value }))}
-              />
-              <Input
-                placeholder="Apellido paterno"
-                value={contactForm.apellido_paterno}
-                onChange={(event) => setContactForm((prev) => ({ ...prev, apellido_paterno: event.target.value }))}
-              />
-              <Input
-                placeholder="Apellido materno"
-                value={contactForm.apellido_materno}
-                onChange={(event) => setContactForm((prev) => ({ ...prev, apellido_materno: event.target.value }))}
-              />
-              <Input
-                placeholder="Nombre completo (opcional)"
-                value={contactForm.nombre_completo}
-                onChange={(event) => setContactForm((prev) => ({ ...prev, nombre_completo: event.target.value }))}
-              />
-              <Input
-                placeholder="Correo"
-                value={contactForm.correo}
-                onChange={(event) => setContactForm((prev) => ({ ...prev, correo: event.target.value }))}
-              />
-              <Input
-                placeholder="Teléfono (E.164 recomendado)"
-                value={contactForm.telefono_e164}
-                onChange={(event) => setContactForm((prev) => ({ ...prev, telefono_e164: event.target.value }))}
-              />
-              <Input
-                placeholder="Código contacto (opcional)"
-                value={contactForm.codigo_contacto}
-                onChange={(event) => setContactForm((prev) => ({ ...prev, codigo_contacto: event.target.value }))}
-              />
-              <Select
-                value={contactForm.persona_fisica_moral || undefined}
-                onValueChange={(value) => setContactForm((prev) => ({ ...prev, persona_fisica_moral: value }))}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Persona física / moral" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="fisica">Física</SelectItem>
-                  <SelectItem value="moral">Moral</SelectItem>
-                </SelectContent>
-              </Select>
-              <Input
-                placeholder="Puesto"
-                value={contactForm.puesto}
-                onChange={(event) => setContactForm((prev) => ({ ...prev, puesto: event.target.value }))}
-              />
-              <Input
-                placeholder="Área"
-                value={contactForm.area}
-                onChange={(event) => setContactForm((prev) => ({ ...prev, area: event.target.value }))}
-              />
-              <Input
-                placeholder="Rol de decisión"
-                value={contactForm.rol_decision}
-                onChange={(event) => setContactForm((prev) => ({ ...prev, rol_decision: event.target.value }))}
-              />
-              <Input
-                placeholder="Origen"
-                value={contactForm.origen}
-                onChange={(event) => setContactForm((prev) => ({ ...prev, origen: event.target.value }))}
-              />
-              <Input
-                placeholder="Empresa (texto)"
-                value={contactForm.company_name}
-                onChange={(event) => setContactForm((prev) => ({ ...prev, company_name: event.target.value }))}
-              />
-              <Input
-                placeholder="RFC contacto"
-                value={contactForm.rfc}
-                onChange={(event) => setContactForm((prev) => ({ ...prev, rfc: event.target.value }))}
-              />
-              <Input
-                placeholder="Razón social contacto"
-                value={contactForm.razon_social}
-                onChange={(event) => setContactForm((prev) => ({ ...prev, razon_social: event.target.value }))}
-              />
-              <Input
-                placeholder="Fecha incorporación (YYYY-MM-DD)"
-                value={contactForm.fecha_incorporacion}
-                onChange={(event) => setContactForm((prev) => ({ ...prev, fecha_incorporacion: event.target.value }))}
-              />
-            </div>
-            <Textarea
-              placeholder="Notas"
-              value={contactForm.notes}
-              onChange={(event) => setContactForm((prev) => ({ ...prev, notes: event.target.value }))}
-            />
-            <Textarea
-              placeholder="Necesidad / propósito"
-              value={contactForm.necesidad_proposito}
-              onChange={(event) => setContactForm((prev) => ({ ...prev, necesidad_proposito: event.target.value }))}
-            />
-            <Textarea
-              placeholder='Campos avanzados contacto (JSON objeto), ej: {"tipo_vialidad":"Calle","codigo_postal":"78000"}'
-              value={contactForm.contacto_extra_json}
-              onChange={(event) => setContactForm((prev) => ({ ...prev, contacto_extra_json: event.target.value }))}
-              className="font-mono text-xs"
-            />
-
-            <div className="flex items-center space-x-2">
-              <Checkbox
-                id="crear-cuenta"
-                checked={shouldCreateAccount}
-                onCheckedChange={(value) => setShouldCreateAccount(Boolean(value))}
-              />
-              <label htmlFor="crear-cuenta" className="text-sm text-muted-foreground">
-                Crear empresa y vincularla al contacto
-              </label>
-            </div>
-
-            {shouldCreateAccount ? (
-              <div className="space-y-3 rounded-md border p-3">
-                <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-                  <Input
-                    placeholder="Nombre empresa"
-                    value={accountForm.nombre}
-                    onChange={(event) => setAccountForm((prev) => ({ ...prev, nombre: event.target.value }))}
-                  />
-                  <Input
-                    placeholder="Código empresa (opcional)"
-                    value={accountForm.codigo_cuenta}
-                    onChange={(event) => setAccountForm((prev) => ({ ...prev, codigo_cuenta: event.target.value }))}
-                  />
-                  <Input
-                    placeholder="Razón social"
-                    value={accountForm.razon_social}
-                    onChange={(event) => setAccountForm((prev) => ({ ...prev, razon_social: event.target.value }))}
-                  />
-                  <Input
-                    placeholder="RFC"
-                    value={accountForm.rfc}
-                    onChange={(event) => setAccountForm((prev) => ({ ...prev, rfc: event.target.value }))}
-                  />
-                  <Input
-                    placeholder="Industria"
-                    value={accountForm.tipo_industria}
-                    onChange={(event) => setAccountForm((prev) => ({ ...prev, tipo_industria: event.target.value }))}
-                  />
-                  <Input
-                    placeholder="Tamaño"
-                    value={accountForm.tamano}
-                    onChange={(event) => setAccountForm((prev) => ({ ...prev, tamano: event.target.value }))}
-                  />
-                  <Input
-                    placeholder="Correo"
-                    value={accountForm.email}
-                    onChange={(event) => setAccountForm((prev) => ({ ...prev, email: event.target.value }))}
-                  />
-                  <Input
-                    placeholder="Teléfono"
-                    value={accountForm.telefono}
-                    onChange={(event) => setAccountForm((prev) => ({ ...prev, telefono: event.target.value }))}
-                  />
-                  <Input
-                    placeholder="Website"
-                    value={accountForm.website}
-                    onChange={(event) => setAccountForm((prev) => ({ ...prev, website: event.target.value }))}
-                  />
-                  <Input
-                    placeholder="Fecha incorporación (YYYY-MM-DD)"
-                    value={accountForm.fecha_incorporacion}
-                    onChange={(event) => setAccountForm((prev) => ({ ...prev, fecha_incorporacion: event.target.value }))}
-                  />
-                </div>
-                <Textarea
-                  placeholder="Notas empresa"
-                  value={accountForm.notas}
-                  onChange={(event) => setAccountForm((prev) => ({ ...prev, notas: event.target.value }))}
-                />
-                <Textarea
-                  placeholder='Campos avanzados empresa (JSON objeto), ej: {"tipo_vialidad":"Av","codigo_postal":"01234"}'
-                  value={accountForm.cuenta_extra_json}
-                  onChange={(event) => setAccountForm((prev) => ({ ...prev, cuenta_extra_json: event.target.value }))}
-                  className="font-mono text-xs"
-                />
-              </div>
-            ) : null}
-
-            {createError ? <p className="text-xs text-destructive">{createError}</p> : null}
-            {createSuccess ? <p className="text-xs text-emerald-600">{createSuccess}</p> : null}
-            <div className="flex items-center gap-2">
-              <Button type="button" onClick={handleCreateContact} disabled={createPending}>
-                {createPending ? "Creando..." : "Crear contacto"}
-              </Button>
-              <Button type="button" variant="outline" onClick={() => setCreateOpen(false)} disabled={createPending}>
-                Cancelar
+                {pending ? "Reasignando..." : "Reasignar"}
               </Button>
             </div>
           </div>
