@@ -9440,7 +9440,7 @@ class CRMRepository:
         if carrier_type:
             params["carrier_type"] = f"eq.{carrier_type}"
         if stage:
-            params["metadata->>stage"] = f"eq.{stage}"
+            params["stage"] = f"eq.{stage}"
         if whatsapp_permitido is not None:
             params["whatsapp_permitido"] = f"eq.{str(whatsapp_permitido).lower()}"
         if llamada_permitida is not None:
@@ -9526,16 +9526,8 @@ class CRMRepository:
                     continue
                 seen_queries.add(candidate)
                 unique_queries.append(candidate)
-            metadata_conditions: list[str] = []
-            for value in unique_queries:
-                literal = _postgrest_eq_literal(value)
-                # PostgREST JSON path syntax does not use SQL quotes around keys.
-                metadata_conditions.append(f"metadata->>busqueda_id.eq.{literal}")
-                metadata_conditions.append(f"metadata->>query.eq.{literal}")
-                metadata_conditions.append(f"metadata->>busqueda_query.eq.{literal}")
-                metadata_conditions.append(f"metadata->busqueda_meta->>query.eq.{literal}")
-            if metadata_conditions:
-                and_filters.append(f"or({','.join(metadata_conditions)})")
+            if unique_queries:
+                params["busqueda_ref"] = _postgrest_in_clause(unique_queries)
 
         if actividades:
             unique_activities = []
@@ -10432,9 +10424,9 @@ class CRMRepository:
             pass
 
         params: dict[str, str] = {
-            "select": "id,actividad,segmento,metadata,creado_en",
+            "select": "id,actividad,segmento,metadata,creado_en,busqueda_ref",
             # Orden estable para paginación con offset: evita duplicados/saltos entre páginas.
-            "order": "metadata->>query.asc,actividad.asc,id.asc",
+            "order": "query_sort.asc,actividad.asc,id.asc",
         }
         if fuente:
             params["fuente"] = f"eq.{fuente}"
@@ -10527,6 +10519,7 @@ class CRMRepository:
             state_label: str | None = None
             municipality_label: str | None = None
             if isinstance(metadata, dict):
+                busqueda_ref = row.get("busqueda_ref")
                 busqueda_id = metadata.get("busqueda_id")
                 busqueda_id_value = None
                 if isinstance(busqueda_id, str) and busqueda_id.strip():
@@ -10607,7 +10600,9 @@ class CRMRepository:
 
                 busqueda_query = metadata.get("busqueda_query")
                 raw_query = metadata.get("query") if isinstance(metadata.get("query"), str) else None
-                if busqueda_id_value:
+                if isinstance(busqueda_ref, str) and busqueda_ref.strip():
+                    value = busqueda_ref.strip()
+                elif busqueda_id_value:
                     value = busqueda_id_value
                 elif isinstance(busqueda_query, str) and busqueda_query.strip():
                     value = busqueda_query.strip()
