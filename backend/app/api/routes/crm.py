@@ -18225,6 +18225,7 @@ async def listar_prospectos_bootstrap(
 
     started = time.perf_counter()
     results: list[Any] = []
+    degraded = False
     for attempt in range(2):
         list_task = listar_prospectos(
             repo=repo,
@@ -18268,6 +18269,25 @@ async def listar_prospectos_bootstrap(
                 and _is_transient_supabase_error(exc.detail)
             )
             if not should_retry:
+                if int(exc.status_code) == 502 and _is_transient_supabase_error(exc.detail):
+                    logger.warning(
+                        "crm.prospectos.bootstrap.degraded_fallback",
+                        extra={"attempt": attempt + 1, "error": str(exc.detail)},
+                    )
+                    degraded = True
+                    results = [
+                        {
+                            "ok": True,
+                            "items": [],
+                            "total": 0,
+                            "limit": params.limit,
+                            "offset": params.offset,
+                        },
+                        {"ok": True, "queries": [], "activities": [], "segmentos": []},
+                    ]
+                    if include_preferences:
+                        results.append({"ok": True, "preferences": None})
+                    break
                 raise
             logger.warning(
                 "crm.prospectos.bootstrap.retry_transient",
@@ -18295,6 +18315,7 @@ async def listar_prospectos_bootstrap(
     )
     return {
         "ok": True,
+        "degraded": degraded,
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "prospectos": list_payload,
         "metadata": query_payload,
@@ -22159,11 +22180,25 @@ async def obtener_contacto_batch(
 ) -> dict[str, Any]:
     """Devuelve un lote específico con resumen de sus envíos."""
 
-    batch = await repo.get_contact_batch(usuario_token=user_token, batch_id=batch_id)
+    try:
+        batch = await _retry_transient_repo_error(
+            operation="get_contact_batch",
+            func=lambda: repo.get_contact_batch(usuario_token=user_token, batch_id=batch_id),
+            retries=1,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
     if not batch:
         raise HTTPException(status_code=404, detail="contact_batch_not_found")
 
-    resumen_rows = await repo.summarize_contact_batch(usuario_token=user_token, batch_id=batch_id)
+    try:
+        resumen_rows = await _retry_transient_repo_error(
+            operation="summarize_contact_batch",
+            func=lambda: repo.summarize_contact_batch(usuario_token=user_token, batch_id=batch_id),
+            retries=1,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
     totales: dict[str, int] = {}
     total_envios = 0
     for row in resumen_rows:
@@ -30930,6 +30965,12 @@ async def prospeccion_stage_resumen(
     try:
         summary = await repo.get_prospeccion_stage_summary(usuario_token=user_token)
     except CRMRepositoryError as exc:
+        if _is_transient_supabase_error(exc):
+            logger.warning(
+                "crm.prospeccion.stage_resumen.degraded_fallback",
+                extra={"error": str(exc)},
+            )
+            return {"stages": [], "degraded": True}
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     return {"stages": summary}
 
@@ -30943,6 +30984,12 @@ async def prospeccion_prospectos_checklist(
     try:
         resumen = await repo.get_prospeccion_enriquecimiento_resumen(usuario_token=user_token)
     except CRMRepositoryError as exc:
+        if _is_transient_supabase_error(exc):
+            logger.warning(
+                "crm.prospeccion.checklist.degraded_fallback",
+                extra={"error": str(exc)},
+            )
+            return {"checklist": {}, "degraded": True}
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     return {"checklist": resumen}
 
