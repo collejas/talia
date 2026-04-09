@@ -1753,6 +1753,43 @@ class CRMAccount(BaseModel):
     telefono: str | None = None
     correo: str | None = None
     direccion: dict | None = Field(default=None)
+    codigo_cuenta: str | None = None
+    razon_social: str | None = None
+    rfc: str | None = None
+    uso_cfdi: str | None = None
+    metodo_pago: str | None = None
+    forma_pago: str | None = None
+    email_facturacion: str | None = None
+    tipo_industria: str | None = None
+    notas: str | None = None
+    necesidad_proposito: str | None = None
+    tipo_vialidad: str | None = None
+    nombre_vialidad: str | None = None
+    numero_exterior: str | None = None
+    letra_exterior: str | None = None
+    edificio: str | None = None
+    edificio_piso: str | None = None
+    numero_interior: str | None = None
+    letra_interior: str | None = None
+    tipo_asentamiento: str | None = None
+    nombre_asentamiento: str | None = None
+    tipo_centro_comercial: str | None = None
+    corredor_industrial: str | None = None
+    numero_local: str | None = None
+    codigo_postal: str | None = None
+    clave_entidad: str | None = None
+    entidad: str | None = None
+    clave_municipio: str | None = None
+    municipio: str | None = None
+    clave_localidad: str | None = None
+    localidad: str | None = None
+    pais: str | None = None
+    email: str | None = None
+    website: str | None = None
+    tipo_establecimiento: str | None = None
+    latitud: float | None = None
+    longitud: float | None = None
+    fecha_incorporacion: date | None = None
     propietario_usuario_id: UUID | None = None
     metadata: dict | None = None
     creado_en: str
@@ -1773,8 +1810,96 @@ class CRMAccountCreate(BaseModel):
     telefono: str | None = Field(default=None, max_length=64)
     correo: str | None = Field(default=None, max_length=320)
     direccion: dict | None = Field(default=None)
+    codigo_cuenta: str | None = Field(default=None, max_length=64)
+    razon_social: str | None = Field(default=None, max_length=255)
+    rfc: str | None = Field(default=None, max_length=64)
+    uso_cfdi: str | None = Field(default=None, max_length=120)
+    metodo_pago: str | None = Field(default=None, max_length=120)
+    forma_pago: str | None = Field(default=None, max_length=120)
+    email_facturacion: str | None = Field(default=None, max_length=320)
+    tipo_industria: str | None = Field(default=None, max_length=120)
+    notas: str | None = Field(default=None, max_length=4000)
+    necesidad_proposito: str | None = Field(default=None, max_length=4000)
+    tipo_vialidad: str | None = Field(default=None, max_length=120)
+    nombre_vialidad: str | None = Field(default=None, max_length=255)
+    numero_exterior: str | None = Field(default=None, max_length=64)
+    letra_exterior: str | None = Field(default=None, max_length=16)
+    edificio: str | None = Field(default=None, max_length=255)
+    edificio_piso: str | None = Field(default=None, max_length=64)
+    numero_interior: str | None = Field(default=None, max_length=64)
+    letra_interior: str | None = Field(default=None, max_length=16)
+    tipo_asentamiento: str | None = Field(default=None, max_length=120)
+    nombre_asentamiento: str | None = Field(default=None, max_length=255)
+    tipo_centro_comercial: str | None = Field(default=None, max_length=120)
+    corredor_industrial: str | None = Field(default=None, max_length=255)
+    numero_local: str | None = Field(default=None, max_length=64)
+    codigo_postal: str | None = Field(default=None, max_length=16)
+    clave_entidad: str | None = Field(default=None, max_length=16)
+    entidad: str | None = Field(default=None, max_length=120)
+    clave_municipio: str | None = Field(default=None, max_length=16)
+    municipio: str | None = Field(default=None, max_length=120)
+    clave_localidad: str | None = Field(default=None, max_length=16)
+    localidad: str | None = Field(default=None, max_length=120)
+    pais: str | None = Field(default=None, max_length=120)
+    email: str | None = Field(default=None, max_length=320)
+    website: str | None = Field(default=None, max_length=255)
+    tipo_establecimiento: str | None = Field(default=None, max_length=120)
+    latitud: float | None = None
+    longitud: float | None = None
+    fecha_incorporacion: date | None = None
     propietario_usuario_id: UUID | None = None
     metadata: dict | None = Field(default_factory=dict)
+
+
+class CRMAccountUpdate(BaseModel):
+    nombre: str | None = Field(default=None, max_length=255)
+    alias: str | None = Field(default=None, max_length=255)
+    tipo: str | None = Field(default=None, max_length=120)
+    industria: str | None = Field(default=None, max_length=120)
+    tamano: str | None = Field(default=None, max_length=120)
+    sitio_web: str | None = Field(default=None, max_length=255)
+    telefono: str | None = Field(default=None, max_length=64)
+    correo: str | None = Field(default=None, max_length=320)
+    direccion: dict | None = Field(default=None)
+    codigo_cuenta: str | None = Field(default=None, max_length=64)
+    razon_social: str | None = Field(default=None, max_length=255)
+    rfc: str | None = Field(default=None, max_length=64)
+    uso_cfdi: str | None = Field(default=None, max_length=120)
+    metodo_pago: str | None = Field(default=None, max_length=120)
+    forma_pago: str | None = Field(default=None, max_length=120)
+    email_facturacion: str | None = Field(default=None, max_length=320)
+    tipo_industria: str | None = Field(default=None, max_length=120)
+    notas: str | None = Field(default=None, max_length=4000)
+    necesidad_proposito: str | None = Field(default=None, max_length=4000)
+    tipo_vialidad: str | None = Field(default=None, max_length=120)
+    nombre_vialidad: str | None = Field(default=None, max_length=255)
+    numero_exterior: str | None = Field(default=None, max_length=64)
+    letra_exterior: str | None = Field(default=None, max_length=16)
+    edificio: str | None = Field(default=None, max_length=255)
+    edificio_piso: str | None = Field(default=None, max_length=64)
+    numero_interior: str | None = Field(default=None, max_length=64)
+    letra_interior: str | None = Field(default=None, max_length=16)
+    tipo_asentamiento: str | None = Field(default=None, max_length=120)
+    nombre_asentamiento: str | None = Field(default=None, max_length=255)
+    tipo_centro_comercial: str | None = Field(default=None, max_length=120)
+    corredor_industrial: str | None = Field(default=None, max_length=255)
+    numero_local: str | None = Field(default=None, max_length=64)
+    codigo_postal: str | None = Field(default=None, max_length=16)
+    clave_entidad: str | None = Field(default=None, max_length=16)
+    entidad: str | None = Field(default=None, max_length=120)
+    clave_municipio: str | None = Field(default=None, max_length=16)
+    municipio: str | None = Field(default=None, max_length=120)
+    clave_localidad: str | None = Field(default=None, max_length=16)
+    localidad: str | None = Field(default=None, max_length=120)
+    pais: str | None = Field(default=None, max_length=120)
+    email: str | None = Field(default=None, max_length=320)
+    website: str | None = Field(default=None, max_length=255)
+    tipo_establecimiento: str | None = Field(default=None, max_length=120)
+    latitud: float | None = None
+    longitud: float | None = None
+    fecha_incorporacion: date | None = None
+    propietario_usuario_id: UUID | None = None
+    metadata: dict | None = None
 
 
 class CRMAccountsResponse(BaseModel):
@@ -7934,39 +8059,185 @@ class CRMOpportunitiesResponse(BaseModel):
 class CRMContact(BaseModel):
     id: UUID
     organizacion_id: UUID
+    cuenta_id: UUID | None = None
+    codigo_contacto: str | None = None
+    nombre_nombres: str | None = None
+    apellido_paterno: str | None = None
+    apellido_materno: str | None = None
     nombre_completo: str | None = None
+    persona_fisica_moral: str | None = None
+    razon_social: str | None = None
+    rfc: str | None = None
+    uso_cfdi: str | None = None
+    metodo_pago: str | None = None
+    forma_pago: str | None = None
+    email_facturacion: str | None = None
+    tipo_industria: str | None = None
+    tamano: str | None = None
+    puesto: str | None = None
+    area: str | None = None
+    rol_decision: str | None = None
     correo: str | None = None
+    email: str | None = None
     telefono_e164: str | None = None
+    telefono: str | None = None
+    tipo_vialidad: str | None = None
+    nombre_vialidad: str | None = None
+    numero_exterior: str | None = None
+    letra_exterior: str | None = None
+    edificio: str | None = None
+    edificio_piso: str | None = None
+    numero_interior: str | None = None
+    letra_interior: str | None = None
+    tipo_asentamiento: str | None = None
+    nombre_asentamiento: str | None = None
+    tipo_centro_comercial: str | None = None
+    corredor_industrial: str | None = None
+    numero_local: str | None = None
+    codigo_postal: str | None = None
+    clave_entidad: str | None = None
+    entidad: str | None = None
+    clave_municipio: str | None = None
+    municipio: str | None = None
+    clave_localidad: str | None = None
+    localidad: str | None = None
+    pais: str | None = None
+    website: str | None = None
+    tipo_establecimiento: str | None = None
+    latitud: float | None = None
+    longitud: float | None = None
+    fecha_incorporacion: date | None = None
     company_name: str | None = None
     notes: str | None = None
+    notas: str | None = None
     necesidad_proposito: str | None = None
     estado: str | None = None
     origen: str | None = None
+    propietario_usuario_id: UUID | None = None
     metadata: dict[str, Any] | None = None
+    contacto_datos: dict[str, Any] | None = None
+    creado_en: datetime | None = None
     actualizado_en: datetime | None = None
 
 
 class CRMContactCreate(BaseModel):
+    cuenta_id: UUID | None = None
+    codigo_contacto: str | None = Field(default=None, max_length=64)
+    nombre_nombres: str | None = Field(default=None, max_length=160)
+    apellido_paterno: str | None = Field(default=None, max_length=160)
+    apellido_materno: str | None = Field(default=None, max_length=160)
     nombre_completo: str | None = Field(default=None, max_length=160)
+    persona_fisica_moral: str | None = Field(default=None, max_length=20)
+    razon_social: str | None = Field(default=None, max_length=255)
+    rfc: str | None = Field(default=None, max_length=64)
+    uso_cfdi: str | None = Field(default=None, max_length=120)
+    metodo_pago: str | None = Field(default=None, max_length=120)
+    forma_pago: str | None = Field(default=None, max_length=120)
+    email_facturacion: str | None = Field(default=None, max_length=320)
+    tipo_industria: str | None = Field(default=None, max_length=120)
+    tamano: str | None = Field(default=None, max_length=120)
+    puesto: str | None = Field(default=None, max_length=120)
+    area: str | None = Field(default=None, max_length=120)
+    rol_decision: str | None = Field(default=None, max_length=120)
     correo: str | None = Field(default=None, max_length=255)
+    email: str | None = Field(default=None, max_length=255)
     telefono_e164: str | None = Field(default=None, max_length=32)
+    telefono: str | None = Field(default=None, max_length=64)
+    tipo_vialidad: str | None = Field(default=None, max_length=120)
+    nombre_vialidad: str | None = Field(default=None, max_length=255)
+    numero_exterior: str | None = Field(default=None, max_length=64)
+    letra_exterior: str | None = Field(default=None, max_length=16)
+    edificio: str | None = Field(default=None, max_length=255)
+    edificio_piso: str | None = Field(default=None, max_length=64)
+    numero_interior: str | None = Field(default=None, max_length=64)
+    letra_interior: str | None = Field(default=None, max_length=16)
+    tipo_asentamiento: str | None = Field(default=None, max_length=120)
+    nombre_asentamiento: str | None = Field(default=None, max_length=255)
+    tipo_centro_comercial: str | None = Field(default=None, max_length=120)
+    corredor_industrial: str | None = Field(default=None, max_length=255)
+    numero_local: str | None = Field(default=None, max_length=64)
+    codigo_postal: str | None = Field(default=None, max_length=16)
+    clave_entidad: str | None = Field(default=None, max_length=16)
+    entidad: str | None = Field(default=None, max_length=120)
+    clave_municipio: str | None = Field(default=None, max_length=16)
+    municipio: str | None = Field(default=None, max_length=120)
+    clave_localidad: str | None = Field(default=None, max_length=16)
+    localidad: str | None = Field(default=None, max_length=120)
+    pais: str | None = Field(default=None, max_length=120)
+    website: str | None = Field(default=None, max_length=255)
+    tipo_establecimiento: str | None = Field(default=None, max_length=120)
+    latitud: float | None = None
+    longitud: float | None = None
+    fecha_incorporacion: date | None = None
     company_name: str | None = Field(default=None, max_length=160)
     notes: str | None = Field(default=None, max_length=2000)
+    notas: str | None = Field(default=None, max_length=2000)
     necesidad_proposito: str | None = Field(default=None, max_length=2000)
     estado: str | None = Field(default=None, max_length=80)
     propietario_usuario_id: UUID | None = None
     origen: str | None = Field(default=None, max_length=80)
     metadata: dict[str, Any] | None = None
+    contacto_datos: dict[str, Any] | None = None
 
 
 class CRMContactUpdate(BaseModel):
+    cuenta_id: UUID | None = None
+    codigo_contacto: str | None = Field(default=None, max_length=64)
+    nombre_nombres: str | None = Field(default=None, max_length=160)
+    apellido_paterno: str | None = Field(default=None, max_length=160)
+    apellido_materno: str | None = Field(default=None, max_length=160)
     nombre_completo: str | None = Field(default=None, max_length=160)
+    persona_fisica_moral: str | None = Field(default=None, max_length=20)
+    razon_social: str | None = Field(default=None, max_length=255)
+    rfc: str | None = Field(default=None, max_length=64)
+    uso_cfdi: str | None = Field(default=None, max_length=120)
+    metodo_pago: str | None = Field(default=None, max_length=120)
+    forma_pago: str | None = Field(default=None, max_length=120)
+    email_facturacion: str | None = Field(default=None, max_length=320)
+    tipo_industria: str | None = Field(default=None, max_length=120)
+    tamano: str | None = Field(default=None, max_length=120)
+    puesto: str | None = Field(default=None, max_length=120)
+    area: str | None = Field(default=None, max_length=120)
+    rol_decision: str | None = Field(default=None, max_length=120)
     correo: str | None = Field(default=None, max_length=255)
+    email: str | None = Field(default=None, max_length=255)
     telefono_e164: str | None = Field(default=None, max_length=32)
+    telefono: str | None = Field(default=None, max_length=64)
+    tipo_vialidad: str | None = Field(default=None, max_length=120)
+    nombre_vialidad: str | None = Field(default=None, max_length=255)
+    numero_exterior: str | None = Field(default=None, max_length=64)
+    letra_exterior: str | None = Field(default=None, max_length=16)
+    edificio: str | None = Field(default=None, max_length=255)
+    edificio_piso: str | None = Field(default=None, max_length=64)
+    numero_interior: str | None = Field(default=None, max_length=64)
+    letra_interior: str | None = Field(default=None, max_length=16)
+    tipo_asentamiento: str | None = Field(default=None, max_length=120)
+    nombre_asentamiento: str | None = Field(default=None, max_length=255)
+    tipo_centro_comercial: str | None = Field(default=None, max_length=120)
+    corredor_industrial: str | None = Field(default=None, max_length=255)
+    numero_local: str | None = Field(default=None, max_length=64)
+    codigo_postal: str | None = Field(default=None, max_length=16)
+    clave_entidad: str | None = Field(default=None, max_length=16)
+    entidad: str | None = Field(default=None, max_length=120)
+    clave_municipio: str | None = Field(default=None, max_length=16)
+    municipio: str | None = Field(default=None, max_length=120)
+    clave_localidad: str | None = Field(default=None, max_length=16)
+    localidad: str | None = Field(default=None, max_length=120)
+    pais: str | None = Field(default=None, max_length=120)
+    website: str | None = Field(default=None, max_length=255)
+    tipo_establecimiento: str | None = Field(default=None, max_length=120)
+    latitud: float | None = None
+    longitud: float | None = None
+    fecha_incorporacion: date | None = None
     company_name: str | None = Field(default=None, max_length=160)
     notes: str | None = Field(default=None, max_length=2000)
+    notas: str | None = Field(default=None, max_length=2000)
     necesidad_proposito: str | None = Field(default=None, max_length=2000)
     estado: str | None = Field(default=None, max_length=80)
+    origen: str | None = Field(default=None, max_length=80)
+    propietario_usuario_id: UUID | None = None
+    metadata: dict[str, Any] | None = None
+    contacto_datos: dict[str, Any] | None = None
 
 
 class CRMContactSearchItem(BaseModel):
@@ -9481,6 +9752,29 @@ async def get_account(
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     if not row:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="cuenta_no_encontrada")
+    return CRMAccount.model_validate(row)
+
+
+@router.patch("/cuentas/{cuenta_id}", response_model=CRMAccount)
+async def update_account(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("contacts.write")),
+    cuenta_id: UUID,
+    payload: CRMAccountUpdate,
+) -> CRMAccount:
+    body = payload.model_dump(mode="json", exclude_unset=True)
+    try:
+        row = await repo.update_account(
+            organizacion_id=organizacion_id,
+            account_id=cuenta_id,
+            payload=body,
+        )
+    except CRMRepositoryError as exc:
+        if "cuenta_no_encontrada" in str(exc):
+            raise HTTPException(status_code=404, detail="cuenta_no_encontrada") from exc
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
     return CRMAccount.model_validate(row)
 
 

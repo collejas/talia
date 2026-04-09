@@ -1211,6 +1211,38 @@ class CRMRepository:
             raise CRMRepositoryError(f"Respuesta inválida al crear cuenta: {row!r}")
         return row
 
+    async def update_account(
+        self,
+        *,
+        organizacion_id: UUID,
+        account_id: UUID,
+        payload: dict[str, Any],
+    ) -> dict[str, Any]:
+        if not payload:
+            existing = await self.get_account(organizacion_id=organizacion_id, account_id=account_id)
+            if existing is None:
+                raise CRMRepositoryError("cuenta_no_encontrada")
+            return existing
+
+        params = {
+            "organizacion_id": f"eq.{organizacion_id}",
+            "id": f"eq.{account_id}",
+        }
+        resp = await self._request(
+            "PATCH",
+            "/rest/v1/cuentas",
+            params=params,
+            json=payload,
+            prefer="return=representation",
+        )
+        data = resp.json()
+        if not isinstance(data, list) or not data:
+            raise CRMRepositoryError("cuenta_no_encontrada")
+        row = data[0]
+        if not isinstance(row, dict):
+            raise CRMRepositoryError(f"Respuesta inválida al actualizar cuenta: {row!r}")
+        return row
+
     async def list_pipelines(
         self,
         *,
