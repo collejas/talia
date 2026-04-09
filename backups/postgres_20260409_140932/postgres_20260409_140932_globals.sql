@@ -2,7 +2,7 @@
 -- PostgreSQL database cluster dump
 --
 
-\restrict NhK1kNOwglhuKegzQgLN5wspUHcf5J9nT3Jmwb9BH4ZfcsnhjzQlcCSOOgq6UH4
+\restrict IugcGqSzb6L5OBvaPNXP3nJbo0sHEcGTN2f2VgDzu2AMrN20UkkwhRyEGm9udIu
 
 SET default_transaction_read_only = off;
 
@@ -33,6 +33,8 @@ CREATE ROLE supabase_auth_admin;
 ALTER ROLE supabase_auth_admin WITH NOSUPERUSER NOINHERIT CREATEROLE NOCREATEDB LOGIN NOREPLICATION NOBYPASSRLS PASSWORD 'SCRAM-SHA-256$4096:+t+px5ioabw5xT/g79JaDg==$uz0cQXv0PR3NcKvxK7+W+8t0+NqKXNACRLW7LpOFs68=:7aDderK8QqHX3ovCOLJFP7USYbnvK5AnX2vlwCd1OHI=';
 CREATE ROLE supabase_etl_admin;
 ALTER ROLE supabase_etl_admin WITH NOSUPERUSER INHERIT NOCREATEROLE NOCREATEDB LOGIN REPLICATION BYPASSRLS PASSWORD 'SCRAM-SHA-256$4096:dYTVob3knSDBlIm9pmlWAg==$EsbHwwmu2UtEgxzTbjOmnFLw70/Daa7bS2bZ+loCHKk=:QfFZUMCX8GvMkix6KB1TG/ePlrls+zS7KEIvFbmtVw8=';
+CREATE ROLE supabase_privileged_role;
+ALTER ROLE supabase_privileged_role WITH NOSUPERUSER INHERIT NOCREATEROLE NOCREATEDB NOLOGIN NOREPLICATION NOBYPASSRLS;
 CREATE ROLE supabase_read_only_user;
 ALTER ROLE supabase_read_only_user WITH NOSUPERUSER INHERIT NOCREATEROLE NOCREATEDB LOGIN NOREPLICATION BYPASSRLS PASSWORD 'SCRAM-SHA-256$4096:kvd/+TnfyH/VTY9gMF3mZg==$a7IoilCQMP/BFCIfRIY54z+RTGXxodlN1OmudN/VTkk=:J9ba5v6E9jZC2n7MFqHfc1zb/ZD1/RKQXdcsoLrIEpY=';
 CREATE ROLE supabase_realtime_admin;
@@ -121,6 +123,8 @@ GRANT pg_read_all_data TO supabase_read_only_user WITH INHERIT TRUE GRANTED BY s
 GRANT pg_signal_backend TO postgres WITH ADMIN OPTION, INHERIT TRUE GRANTED BY supabase_admin;
 GRANT service_role TO authenticator WITH INHERIT FALSE GRANTED BY supabase_admin;
 GRANT service_role TO postgres WITH ADMIN OPTION, INHERIT TRUE GRANTED BY supabase_admin;
+GRANT supabase_privileged_role TO postgres WITH INHERIT TRUE GRANTED BY supabase_admin;
+GRANT supabase_privileged_role TO supabase_etl_admin WITH INHERIT TRUE GRANTED BY supabase_admin;
 GRANT supabase_realtime_admin TO postgres WITH INHERIT TRUE GRANTED BY supabase_admin;
 
 
@@ -128,7 +132,7 @@ GRANT supabase_realtime_admin TO postgres WITH INHERIT TRUE GRANTED BY supabase_
 
 
 
-\unrestrict NhK1kNOwglhuKegzQgLN5wspUHcf5J9nT3Jmwb9BH4ZfcsnhjzQlcCSOOgq6UH4
+\unrestrict IugcGqSzb6L5OBvaPNXP3nJbo0sHEcGTN2f2VgDzu2AMrN20UkkwhRyEGm9udIu
 
 --
 -- PostgreSQL database cluster dump complete
