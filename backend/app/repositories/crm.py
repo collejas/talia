@@ -5726,6 +5726,50 @@ class CRMRepository:
             raise CRMRepositoryError(f"Respuesta inesperada al buscar contactos: {data!r}")
         return data
 
+    async def list_geo_countries(self) -> list[dict[str, Any]]:
+        params = {
+            "select": "codigo_iso2,nombre,nombre_largo",
+            "activo": "eq.true",
+            "order": "nombre.asc",
+            "limit": "300",
+        }
+        resp = await self._request("GET", "/rest/v1/geo_paises", params=params)
+        data = resp.json()
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"Respuesta inesperada al listar países: {data!r}")
+        return [row for row in data if isinstance(row, dict)]
+
+    async def list_geo_mex_states(self) -> list[dict[str, Any]]:
+        params = {
+            "select": "clave_entidad,nombre",
+            "activo": "eq.true",
+            "pais_codigo": "eq.MX",
+            "order": "nombre.asc",
+            "limit": "64",
+        }
+        resp = await self._request("GET", "/rest/v1/geo_estados_mexico", params=params)
+        data = resp.json()
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"Respuesta inesperada al listar estados MX: {data!r}")
+        return [row for row in data if isinstance(row, dict)]
+
+    async def list_geo_mex_municipalities(self, *, state_code: str) -> list[dict[str, Any]]:
+        normalized_state = "".join(ch for ch in str(state_code or "") if ch.isdigit()).zfill(2)
+        if len(normalized_state) != 2:
+            return []
+        params = {
+            "select": "clave_entidad,clave_municipio,cvegeo,nombre",
+            "activo": "eq.true",
+            "clave_entidad": f"eq.{normalized_state}",
+            "order": "nombre.asc",
+            "limit": "3000",
+        }
+        resp = await self._request("GET", "/rest/v1/geo_municipios_mexico", params=params)
+        data = resp.json()
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"Respuesta inesperada al listar municipios MX: {data!r}")
+        return [row for row in data if isinstance(row, dict)]
+
     async def get_contact(
         self,
         *,

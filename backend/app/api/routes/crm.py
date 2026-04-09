@@ -8710,6 +8710,24 @@ class CRMContactListRow(BaseModel):
     total_rows: int | None = None
 
 
+class CRMGeoCountryItem(BaseModel):
+    code: str
+    name: str
+    name_long: str | None = None
+
+
+class CRMGeoStateItem(BaseModel):
+    code: str
+    name: str
+
+
+class CRMGeoMunicipalityItem(BaseModel):
+    state_code: str
+    code: str
+    cvegeo: str | None = None
+    name: str
+
+
 class CRMInboxFolder(BaseModel):
     id: str
     label: str | None = None
@@ -12536,6 +12554,78 @@ async def get_contacts_list(
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     return [CRMContactListRow.model_validate(row) for row in rows]
+
+
+@router.get("/contactos/catalogos/paises", response_model=list[CRMGeoCountryItem])
+async def get_contactos_catalogo_paises(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    _: str = Depends(require_permission("contacts.read")),
+) -> list[CRMGeoCountryItem]:
+    try:
+        rows = await repo.list_geo_countries()
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return [
+        CRMGeoCountryItem(
+            code=str(row.get("codigo_iso2") or "").upper(),
+            name=str(row.get("nombre") or "").strip(),
+            name_long=str(row.get("nombre_largo") or "").strip() or None,
+        )
+        for row in rows
+        if str(row.get("codigo_iso2") or "").strip() and str(row.get("nombre") or "").strip()
+    ]
+
+
+@router.get("/contactos/catalogos/estados", response_model=list[CRMGeoStateItem])
+async def get_contactos_catalogo_estados(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    _: str = Depends(require_permission("contacts.read")),
+    pais: str = Query(default="MX"),
+) -> list[CRMGeoStateItem]:
+    if (pais or "").strip().upper() != "MX":
+        return []
+    try:
+        rows = await repo.list_geo_mex_states()
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return [
+        CRMGeoStateItem(
+            code=str(row.get("clave_entidad") or "").zfill(2),
+            name=str(row.get("nombre") or "").strip(),
+        )
+        for row in rows
+        if str(row.get("clave_entidad") or "").strip() and str(row.get("nombre") or "").strip()
+    ]
+
+
+@router.get("/contactos/catalogos/municipios", response_model=list[CRMGeoMunicipalityItem])
+async def get_contactos_catalogo_municipios(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    _: str = Depends(require_permission("contacts.read")),
+    pais: str = Query(default="MX"),
+    estado: str = Query(..., min_length=1),
+) -> list[CRMGeoMunicipalityItem]:
+    if (pais or "").strip().upper() != "MX":
+        return []
+    try:
+        rows = await repo.list_geo_mex_municipalities(state_code=estado)
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return [
+        CRMGeoMunicipalityItem(
+            state_code=str(row.get("clave_entidad") or "").zfill(2),
+            code=str(row.get("clave_municipio") or "").zfill(3),
+            cvegeo=str(row.get("cvegeo") or "").strip() or None,
+            name=str(row.get("nombre") or "").strip(),
+        )
+        for row in rows
+        if str(row.get("clave_entidad") or "").strip()
+        and str(row.get("clave_municipio") or "").strip()
+        and str(row.get("nombre") or "").strip()
+    ]
 
 
 @router.post("/contactos/{contacto_id}/reasignar", response_model=CRMReassignContactResponse)

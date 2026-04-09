@@ -81,7 +81,9 @@ type ContactDraft = {
   numero_exterior: string;
   numero_interior: string;
   codigo_postal: string;
+  clave_entidad: string;
   entidad: string;
+  clave_municipio: string;
   municipio: string;
   pais: string;
   website: string;
@@ -108,10 +110,30 @@ type AccountDraft = {
   numero_exterior: string;
   numero_interior: string;
   codigo_postal: string;
+  clave_entidad: string;
   entidad: string;
+  clave_municipio: string;
   municipio: string;
   pais: string;
   tipo_establecimiento: string;
+};
+
+type GeoCountryOption = {
+  code: string;
+  name: string;
+  name_long?: string | null;
+};
+
+type GeoStateOption = {
+  code: string;
+  name: string;
+};
+
+type GeoMunicipalityOption = {
+  state_code: string;
+  code: string;
+  cvegeo?: string | null;
+  name: string;
 };
 
 const EMPTY_CONTACT: ContactDraft = {
@@ -142,9 +164,11 @@ const EMPTY_CONTACT: ContactDraft = {
   numero_exterior: "",
   numero_interior: "",
   codigo_postal: "",
+  clave_entidad: "",
   entidad: "",
+  clave_municipio: "",
   municipio: "",
-  pais: "",
+  pais: "MX",
   website: "",
   tipo_establecimiento: "",
 };
@@ -169,9 +193,11 @@ const EMPTY_ACCOUNT: AccountDraft = {
   numero_exterior: "",
   numero_interior: "",
   codigo_postal: "",
+  clave_entidad: "",
   entidad: "",
+  clave_municipio: "",
   municipio: "",
-  pais: "",
+  pais: "MX",
   tipo_establecimiento: "",
 };
 
@@ -247,6 +273,19 @@ function extractString(raw: Record<string, unknown> | undefined, path: string[])
   return null;
 }
 
+function normalizeGeoText(value: string): string {
+  return value
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .trim()
+    .toLowerCase();
+}
+
+function isMexicoCountry(value: string): boolean {
+  const normalized = normalizeGeoText(value);
+  return normalized === "mx" || normalized === "mexico" || normalized === "mex";
+}
+
 function buildContactPayload(input: ContactDraft): Record<string, unknown> {
   const payload: Record<string, unknown> = {};
   const entries = Object.entries(input);
@@ -319,11 +358,30 @@ const contactColumnVisibility: VisibilityState = CONTACT_COLUMNS.reduce<Visibili
 function ContactForm({
   value,
   onChange,
+  geoCountries,
+  geoStates,
+  geoMunicipalities,
+  geoLoading,
 }: {
   value: ContactDraft;
   onChange: React.Dispatch<React.SetStateAction<ContactDraft>>;
+  geoCountries: GeoCountryOption[];
+  geoStates: GeoStateOption[];
+  geoMunicipalities: GeoMunicipalityOption[];
+  geoLoading: boolean;
 }) {
   const set = (field: keyof ContactDraft, next: string) => onChange((prev) => ({ ...prev, [field]: next }));
+  const mexico = isMexicoCountry(value.pais);
+  const selectedStateCode = React.useMemo(() => {
+    if (value.clave_entidad.trim()) return value.clave_entidad.trim().padStart(2, "0");
+    const byName = geoStates.find((item) => normalizeGeoText(item.name) === normalizeGeoText(value.entidad));
+    return byName?.code ?? "";
+  }, [geoStates, value.clave_entidad, value.entidad]);
+  const selectedMunicipalityCode = React.useMemo(() => {
+    if (value.clave_municipio.trim()) return value.clave_municipio.trim().padStart(3, "0");
+    const byName = geoMunicipalities.find((item) => normalizeGeoText(item.name) === normalizeGeoText(value.municipio));
+    return byName?.code ?? "";
+  }, [geoMunicipalities, value.clave_municipio, value.municipio]);
 
   return (
     <div className="space-y-3">
@@ -359,9 +417,101 @@ function ContactForm({
         <Input placeholder="Número exterior" value={value.numero_exterior} onChange={(e) => set("numero_exterior", e.target.value)} />
         <Input placeholder="Número interior" value={value.numero_interior} onChange={(e) => set("numero_interior", e.target.value)} />
         <Input placeholder="Código postal" value={value.codigo_postal} onChange={(e) => set("codigo_postal", e.target.value)} />
-        <Input placeholder="Entidad" value={value.entidad} onChange={(e) => set("entidad", e.target.value)} />
-        <Input placeholder="Municipio" value={value.municipio} onChange={(e) => set("municipio", e.target.value)} />
-        <Input placeholder="País" value={value.pais} onChange={(e) => set("pais", e.target.value)} />
+        <Select
+          value={value.pais || undefined}
+          onValueChange={(nextCountry) => {
+            onChange((prev) => {
+              const next: ContactDraft = { ...prev, pais: nextCountry };
+              if (!isMexicoCountry(nextCountry)) {
+                next.clave_entidad = "";
+                next.clave_municipio = "";
+              }
+              return next;
+            });
+          }}
+        >
+          <SelectTrigger><SelectValue placeholder={geoLoading ? "Cargando países..." : "País"} /></SelectTrigger>
+          <SelectContent>
+            {geoCountries.map((country) => (
+              <SelectItem key={country.code} value={country.code}>
+                {country.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        {mexico ? (
+          <>
+            <Select
+              value={selectedStateCode || undefined}
+              onValueChange={(stateCode) => {
+                const state = geoStates.find((item) => item.code === stateCode);
+                onChange((prev) => ({
+                  ...prev,
+                  clave_entidad: stateCode,
+                  entidad: state?.name ?? prev.entidad,
+                  clave_municipio: "",
+                  municipio: "",
+                }));
+              }}
+            >
+              <SelectTrigger><SelectValue placeholder={geoLoading ? "Cargando estados..." : "Estado (México)"} /></SelectTrigger>
+              <SelectContent>
+                {geoStates.map((state) => (
+                  <SelectItem key={state.code} value={state.code}>
+                    {state.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select
+              value={selectedMunicipalityCode || undefined}
+              onValueChange={(municipalityCode) => {
+                const municipality = geoMunicipalities.find((item) => item.code === municipalityCode);
+                onChange((prev) => ({
+                  ...prev,
+                  clave_municipio: municipalityCode,
+                  municipio: municipality?.name ?? prev.municipio,
+                }));
+              }}
+              disabled={!selectedStateCode}
+            >
+              <SelectTrigger><SelectValue placeholder={!selectedStateCode ? "Selecciona estado primero" : "Municipio (México)"} /></SelectTrigger>
+              <SelectContent>
+                {geoMunicipalities.map((municipality) => (
+                  <SelectItem key={`${municipality.state_code}-${municipality.code}`} value={municipality.code}>
+                    {municipality.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </>
+        ) : (
+          <>
+            <Input
+              placeholder="Entidad / estado"
+              value={value.entidad}
+              onChange={(e) =>
+                onChange((prev) => ({
+                  ...prev,
+                  entidad: e.target.value,
+                  clave_entidad: "",
+                  clave_municipio: "",
+                }))
+              }
+            />
+            <Input
+              placeholder="Municipio / ciudad"
+              value={value.municipio}
+              onChange={(e) =>
+                onChange((prev) => ({
+                  ...prev,
+                  municipio: e.target.value,
+                  clave_municipio: "",
+                }))
+              }
+            />
+          </>
+        )}
         <Input placeholder="Website" value={value.website} onChange={(e) => set("website", e.target.value)} />
         <Input placeholder="Tipo establecimiento" value={value.tipo_establecimiento} onChange={(e) => set("tipo_establecimiento", e.target.value)} />
       </div>
@@ -378,11 +528,30 @@ function ContactForm({
 function AccountForm({
   value,
   onChange,
+  geoCountries,
+  geoStates,
+  geoMunicipalities,
+  geoLoading,
 }: {
   value: AccountDraft;
   onChange: React.Dispatch<React.SetStateAction<AccountDraft>>;
+  geoCountries: GeoCountryOption[];
+  geoStates: GeoStateOption[];
+  geoMunicipalities: GeoMunicipalityOption[];
+  geoLoading: boolean;
 }) {
   const set = (field: keyof AccountDraft, next: string) => onChange((prev) => ({ ...prev, [field]: next }));
+  const mexico = isMexicoCountry(value.pais);
+  const selectedStateCode = React.useMemo(() => {
+    if (value.clave_entidad.trim()) return value.clave_entidad.trim().padStart(2, "0");
+    const byName = geoStates.find((item) => normalizeGeoText(item.name) === normalizeGeoText(value.entidad));
+    return byName?.code ?? "";
+  }, [geoStates, value.clave_entidad, value.entidad]);
+  const selectedMunicipalityCode = React.useMemo(() => {
+    if (value.clave_municipio.trim()) return value.clave_municipio.trim().padStart(3, "0");
+    const byName = geoMunicipalities.find((item) => normalizeGeoText(item.name) === normalizeGeoText(value.municipio));
+    return byName?.code ?? "";
+  }, [geoMunicipalities, value.clave_municipio, value.municipio]);
 
   return (
     <div className="space-y-3 rounded-md border p-3">
@@ -404,9 +573,101 @@ function AccountForm({
         <Input placeholder="Número exterior" value={value.numero_exterior} onChange={(e) => set("numero_exterior", e.target.value)} />
         <Input placeholder="Número interior" value={value.numero_interior} onChange={(e) => set("numero_interior", e.target.value)} />
         <Input placeholder="Código postal" value={value.codigo_postal} onChange={(e) => set("codigo_postal", e.target.value)} />
-        <Input placeholder="Entidad" value={value.entidad} onChange={(e) => set("entidad", e.target.value)} />
-        <Input placeholder="Municipio" value={value.municipio} onChange={(e) => set("municipio", e.target.value)} />
-        <Input placeholder="País" value={value.pais} onChange={(e) => set("pais", e.target.value)} />
+        <Select
+          value={value.pais || undefined}
+          onValueChange={(nextCountry) => {
+            onChange((prev) => {
+              const next: AccountDraft = { ...prev, pais: nextCountry };
+              if (!isMexicoCountry(nextCountry)) {
+                next.clave_entidad = "";
+                next.clave_municipio = "";
+              }
+              return next;
+            });
+          }}
+        >
+          <SelectTrigger><SelectValue placeholder={geoLoading ? "Cargando países..." : "País"} /></SelectTrigger>
+          <SelectContent>
+            {geoCountries.map((country) => (
+              <SelectItem key={country.code} value={country.code}>
+                {country.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        {mexico ? (
+          <>
+            <Select
+              value={selectedStateCode || undefined}
+              onValueChange={(stateCode) => {
+                const state = geoStates.find((item) => item.code === stateCode);
+                onChange((prev) => ({
+                  ...prev,
+                  clave_entidad: stateCode,
+                  entidad: state?.name ?? prev.entidad,
+                  clave_municipio: "",
+                  municipio: "",
+                }));
+              }}
+            >
+              <SelectTrigger><SelectValue placeholder={geoLoading ? "Cargando estados..." : "Estado (México)"} /></SelectTrigger>
+              <SelectContent>
+                {geoStates.map((state) => (
+                  <SelectItem key={state.code} value={state.code}>
+                    {state.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select
+              value={selectedMunicipalityCode || undefined}
+              onValueChange={(municipalityCode) => {
+                const municipality = geoMunicipalities.find((item) => item.code === municipalityCode);
+                onChange((prev) => ({
+                  ...prev,
+                  clave_municipio: municipalityCode,
+                  municipio: municipality?.name ?? prev.municipio,
+                }));
+              }}
+              disabled={!selectedStateCode}
+            >
+              <SelectTrigger><SelectValue placeholder={!selectedStateCode ? "Selecciona estado primero" : "Municipio (México)"} /></SelectTrigger>
+              <SelectContent>
+                {geoMunicipalities.map((municipality) => (
+                  <SelectItem key={`${municipality.state_code}-${municipality.code}`} value={municipality.code}>
+                    {municipality.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </>
+        ) : (
+          <>
+            <Input
+              placeholder="Entidad / estado"
+              value={value.entidad}
+              onChange={(e) =>
+                onChange((prev) => ({
+                  ...prev,
+                  entidad: e.target.value,
+                  clave_entidad: "",
+                  clave_municipio: "",
+                }))
+              }
+            />
+            <Input
+              placeholder="Municipio / ciudad"
+              value={value.municipio}
+              onChange={(e) =>
+                onChange((prev) => ({
+                  ...prev,
+                  municipio: e.target.value,
+                  clave_municipio: "",
+                }))
+              }
+            />
+          </>
+        )}
         <Input placeholder="Tipo establecimiento" value={value.tipo_establecimiento} onChange={(e) => set("tipo_establecimiento", e.target.value)} />
       </div>
       <Textarea placeholder="Notas" value={value.notas} onChange={(e) => set("notas", e.target.value)} />
@@ -456,6 +717,11 @@ export function ContactsDataTable({ data }: { data: ContactTableRow[] }) {
   const [pending, setPending] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [success, setSuccess] = React.useState<string | null>(null);
+  const [geoCountries, setGeoCountries] = React.useState<GeoCountryOption[]>([]);
+  const [geoStates, setGeoStates] = React.useState<GeoStateOption[]>([]);
+  const [geoMunicipalitiesContact, setGeoMunicipalitiesContact] = React.useState<GeoMunicipalityOption[]>([]);
+  const [geoMunicipalitiesAccount, setGeoMunicipalitiesAccount] = React.useState<GeoMunicipalityOption[]>([]);
+  const [geoLoading, setGeoLoading] = React.useState(false);
 
   React.useEffect(() => {
     if (!reassignOpen || permissionsLoading || !canReassign) return;
@@ -506,6 +772,107 @@ export function ContactsDataTable({ data }: { data: ContactTableRow[] }) {
     return () => controller.abort();
   }, [reassignOpen, permissionsLoading, canReassign, canReassignAny]);
 
+  const contactStateCode = React.useMemo(() => {
+    const explicit = contactForm.clave_entidad.trim();
+    if (explicit) return explicit.padStart(2, "0");
+    const byName = geoStates.find((item) => normalizeGeoText(item.name) === normalizeGeoText(contactForm.entidad));
+    return byName?.code ?? "";
+  }, [contactForm.clave_entidad, contactForm.entidad, geoStates]);
+
+  const accountStateCode = React.useMemo(() => {
+    const explicit = accountForm.clave_entidad.trim();
+    if (explicit) return explicit.padStart(2, "0");
+    const byName = geoStates.find((item) => normalizeGeoText(item.name) === normalizeGeoText(accountForm.entidad));
+    return byName?.code ?? "";
+  }, [accountForm.clave_entidad, accountForm.entidad, geoStates]);
+
+  React.useEffect(() => {
+    const controller = new AbortController();
+    const loadGeoBaseCatalogs = async () => {
+      setGeoLoading(true);
+      try {
+        const [countriesRes, statesRes] = await Promise.all([
+          fetch("/api/contactos/catalogos/paises", { cache: "no-store", signal: controller.signal }),
+          fetch("/api/contactos/catalogos/estados?pais=MX", { cache: "no-store", signal: controller.signal }),
+        ]);
+        if (countriesRes.ok) {
+          const countriesBody = (await countriesRes.json()) as { items?: GeoCountryOption[] };
+          setGeoCountries(Array.isArray(countriesBody.items) ? countriesBody.items : []);
+        }
+        if (statesRes.ok) {
+          const statesBody = (await statesRes.json()) as { items?: GeoStateOption[] };
+          setGeoStates(Array.isArray(statesBody.items) ? statesBody.items : []);
+        }
+      } catch (err) {
+        if ((err as Error).name !== "AbortError") {
+          setGeoCountries([]);
+          setGeoStates([]);
+        }
+      } finally {
+        setGeoLoading(false);
+      }
+    };
+
+    loadGeoBaseCatalogs();
+    return () => controller.abort();
+  }, []);
+
+  React.useEffect(() => {
+    if (!isMexicoCountry(contactForm.pais) || !contactStateCode) {
+      setGeoMunicipalitiesContact([]);
+      return;
+    }
+    const controller = new AbortController();
+    const loadMunicipalities = async () => {
+      try {
+        const res = await fetch(
+          `/api/contactos/catalogos/municipios?pais=MX&estado=${encodeURIComponent(contactStateCode)}`,
+          { cache: "no-store", signal: controller.signal },
+        );
+        if (!res.ok) {
+          setGeoMunicipalitiesContact([]);
+          return;
+        }
+        const body = (await res.json()) as { items?: GeoMunicipalityOption[] };
+        setGeoMunicipalitiesContact(Array.isArray(body.items) ? body.items : []);
+      } catch (err) {
+        if ((err as Error).name !== "AbortError") {
+          setGeoMunicipalitiesContact([]);
+        }
+      }
+    };
+    loadMunicipalities();
+    return () => controller.abort();
+  }, [contactForm.pais, contactStateCode]);
+
+  React.useEffect(() => {
+    if (!isMexicoCountry(accountForm.pais) || !accountStateCode) {
+      setGeoMunicipalitiesAccount([]);
+      return;
+    }
+    const controller = new AbortController();
+    const loadMunicipalities = async () => {
+      try {
+        const res = await fetch(
+          `/api/contactos/catalogos/municipios?pais=MX&estado=${encodeURIComponent(accountStateCode)}`,
+          { cache: "no-store", signal: controller.signal },
+        );
+        if (!res.ok) {
+          setGeoMunicipalitiesAccount([]);
+          return;
+        }
+        const body = (await res.json()) as { items?: GeoMunicipalityOption[] };
+        setGeoMunicipalitiesAccount(Array.isArray(body.items) ? body.items : []);
+      } catch (err) {
+        if ((err as Error).name !== "AbortError") {
+          setGeoMunicipalitiesAccount([]);
+        }
+      }
+    };
+    loadMunicipalities();
+    return () => controller.abort();
+  }, [accountForm.pais, accountStateCode]);
+
   const activeRaw = (activeRow?.raw ?? {}) as Record<string, unknown>;
   const activeContactoId = extractString(activeRaw, ["contacto_id"]);
   const activePropietarioId = extractString(activeRaw, ["propietario_id"]);
@@ -528,7 +895,9 @@ export function ContactsDataTable({ data }: { data: ContactTableRow[] }) {
       area: extractString(raw, ["area"]) ?? "",
       rol_decision: extractString(raw, ["rol_decision"]) ?? "",
       codigo_postal: extractString(raw, ["codigo_postal"]) ?? "",
+      clave_entidad: extractString(raw, ["clave_entidad"]) ?? "",
       entidad: extractString(raw, ["entidad"]) ?? "",
+      clave_municipio: extractString(raw, ["clave_municipio"]) ?? "",
       municipio: extractString(raw, ["municipio"]) ?? "",
       pais: extractString(raw, ["pais"]) ?? "",
       website: extractString(raw, ["website"]) ?? "",
@@ -708,14 +1077,30 @@ export function ContactsDataTable({ data }: { data: ContactTableRow[] }) {
             <DialogDescription>Alta de contacto por columnas. Sin campos JSON.</DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
-            <ContactForm value={contactForm} onChange={setContactForm} />
+            <ContactForm
+              value={contactForm}
+              onChange={setContactForm}
+              geoCountries={geoCountries}
+              geoStates={geoStates}
+              geoMunicipalities={geoMunicipalitiesContact}
+              geoLoading={geoLoading}
+            />
             <div className="flex items-center space-x-2">
               <Checkbox id="create-account" checked={createWithAccount} onCheckedChange={(v) => setCreateWithAccount(Boolean(v))} />
               <label htmlFor="create-account" className="text-sm text-muted-foreground">
                 Crear empresa y vincularla
               </label>
             </div>
-            {createWithAccount ? <AccountForm value={accountForm} onChange={setAccountForm} /> : null}
+            {createWithAccount ? (
+              <AccountForm
+                value={accountForm}
+                onChange={setAccountForm}
+                geoCountries={geoCountries}
+                geoStates={geoStates}
+                geoMunicipalities={geoMunicipalitiesAccount}
+                geoLoading={geoLoading}
+              />
+            ) : null}
             {error ? <p className="text-xs text-destructive">{error}</p> : null}
             {success ? <p className="text-xs text-emerald-600">{success}</p> : null}
             <div className="flex gap-2">
@@ -733,7 +1118,14 @@ export function ContactsDataTable({ data }: { data: ContactTableRow[] }) {
             <DialogDescription>Actualiza los datos del contacto por columnas.</DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
-            <ContactForm value={contactForm} onChange={setContactForm} />
+            <ContactForm
+              value={contactForm}
+              onChange={setContactForm}
+              geoCountries={geoCountries}
+              geoStates={geoStates}
+              geoMunicipalities={geoMunicipalitiesContact}
+              geoLoading={geoLoading}
+            />
             {error ? <p className="text-xs text-destructive">{error}</p> : null}
             {success ? <p className="text-xs text-emerald-600">{success}</p> : null}
             <div className="flex gap-2">
