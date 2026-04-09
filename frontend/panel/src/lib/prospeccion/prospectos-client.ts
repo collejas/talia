@@ -476,6 +476,8 @@ export type ProspectoManualInput = {
 
 export type ProspectoUpdateInput = Partial<ProspectoManualInput>
 
+export const PROSPECTO_IDS_MAX_BATCH = 200
+
 /**
  * Build an absolute URL when the code runs on the client, otherwise fall back to env origin.
  */
@@ -530,7 +532,9 @@ async function requestJson<T>(input: string, init?: RequestInit, retryAuth = tru
       await delay(400)
       return requestJson<T>(input, init, retryAuth, false)
     }
+    const friendlyValidationMessage = extractValidationErrorMessage(data, response.status)
     const detail =
+      friendlyValidationMessage ||
       extractStringField(data, "detail") ||
       extractStringField(data, "error") ||
       extractStringField(data, "message") ||
@@ -849,6 +853,11 @@ export async function verificarProspectos(payload: {
   if (!prospectoIds.length) {
     throw new Error("No hay prospectos válidos para verificar.")
   }
+  if (prospectoIds.length > PROSPECTO_IDS_MAX_BATCH) {
+    throw new Error(
+      `Seleccionaste ${prospectoIds.length} prospectos. El máximo por validación de teléfonos es ${PROSPECTO_IDS_MAX_BATCH}. Divide el envío en lotes.`
+    )
+  }
   return requestJson<ProspectoLookupResponse>("/api/prospeccion/prospectos/verificar-telefonos", {
     method: "POST",
     body: JSON.stringify({
@@ -872,6 +881,11 @@ export async function verificarCorreosProspectos(payload: {
     .filter((id) => UUID_RE.test(id))
   if (!prospectoIds.length) {
     throw new Error("No hay prospectos válidos para verificar.")
+  }
+  if (prospectoIds.length > PROSPECTO_IDS_MAX_BATCH) {
+    throw new Error(
+      `Seleccionaste ${prospectoIds.length} prospectos. El máximo por validación de correos es ${PROSPECTO_IDS_MAX_BATCH}. Divide el envío en lotes.`
+    )
   }
   return requestJson<ProspectoEmailLookupResponse>("/api/prospeccion/prospectos/verificar-correos", {
     method: "POST",
@@ -931,6 +945,14 @@ export async function ejecutarChecklistScraper(payload: {
     body.max_runtime = payload.maxRuntime
   }
   if (Array.isArray(payload.prospectoIds)) {
+    const candidateIds = payload.prospectoIds
+      .map((id) => (id || "").trim())
+      .filter((id) => UUID_RE.test(id))
+    if (candidateIds.length > PROSPECTO_IDS_MAX_BATCH) {
+      throw new Error(
+        `Seleccionaste ${candidateIds.length} prospectos. El máximo por corrida de scraper es ${PROSPECTO_IDS_MAX_BATCH}.`
+      )
+    }
     for (const id of payload.prospectoIds) {
       const trimmed = (id || "").trim()
       if (UUID_RE.test(trimmed)) {
@@ -1689,6 +1711,38 @@ function extractStringField(payload: unknown, key: string): string | undefined {
   const container = payload as Record<string, unknown>
   const value = container[key]
   return typeof value === "string" ? value : undefined
+}
+
+function extractValidationErrorMessage(payload: unknown, status: number): string | undefined {
+  if (status !== 422 || !payload || typeof payload !== "object") {
+    return undefined
+  }
+  const detail = (payload as Record<string, unknown>)["detail"]
+  if (!Array.isArray(detail)) {
+    return undefined
+  }
+
+  for (const item of detail) {
+    if (!item || typeof item !== "object") continue
+    const err = item as Record<string, unknown>
+    const type = typeof err.type === "string" ? err.type : ""
+    const loc = Array.isArray(err.loc) ? err.loc.map((part) => String(part)) : []
+    const ctx = err.ctx && typeof err.ctx === "object" ? (err.ctx as Record<string, unknown>) : {}
+    const maxLength = Number(ctx.max_length)
+    const actualLength = Number(ctx.actual_length)
+
+    if (type === "too_long" && Number.isFinite(maxLength) && Number.isFinite(actualLength)) {
+      if (loc.includes("prospecto_ids")) {
+        return `Seleccionaste ${actualLength} prospectos y el máximo permitido es ${maxLength}. Divide el proceso en lotes.`
+      }
+      if (loc.includes("limit")) {
+        return `El límite solicitado excede el máximo permitido (${maxLength}).`
+      }
+      return `La solicitud excede el máximo permitido (${maxLength} elementos).`
+    }
+  }
+
+  return undefined
 }
 
 /**

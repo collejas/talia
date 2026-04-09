@@ -918,6 +918,10 @@ function ProspectosView() {
   })
   const [convertError, setConvertError] = useState<string | null>(null)
   const [convertSubmitting, setConvertSubmitting] = useState(false)
+  const [limitErrorDialog, setLimitErrorDialog] = useState<{ open: boolean; message: string }>({
+    open: false,
+    message: "",
+  })
   const queryFiltersInitialEffect = useRef(true)
   const lastQueryScopeRef = useRef("")
   const lastActivitiesScopeRef = useRef("")
@@ -2066,6 +2070,9 @@ function ProspectosView() {
       await refreshChecklist()
     } catch (err) {
       const message = err instanceof Error ? err.message : "No se pudo lanzar el scraper."
+      if (isFriendlyLimitError(message)) {
+        setLimitErrorDialog({ open: true, message })
+      }
       setBanner({ type: "error", message })
     } finally {
       setChecklistAction(null)
@@ -2111,6 +2118,9 @@ function ProspectosView() {
       await refreshChecklist()
     } catch (err) {
       const message = err instanceof Error ? err.message : "No se pudo lanzar el scraper."
+      if (isFriendlyLimitError(message)) {
+        setLimitErrorDialog({ open: true, message })
+      }
       setBanner({ type: "error", message })
     } finally {
       setChecklistAction(null)
@@ -2483,6 +2493,9 @@ function ProspectosView() {
       void fetchStageSummary()
     } catch (err) {
       const message = err instanceof Error ? err.message : "No se pudo verificar los teléfonos."
+      if (isFriendlyLimitError(message)) {
+        setLimitErrorDialog({ open: true, message })
+      }
       setBanner({ type: "error", message })
     } finally {
       setAction(null)
@@ -2506,6 +2519,9 @@ function ProspectosView() {
       void fetchStageSummary()
     } catch (err) {
       const message = err instanceof Error ? err.message : "No se pudieron validar los correos."
+      if (isFriendlyLimitError(message)) {
+        setLimitErrorDialog({ open: true, message })
+      }
       setBanner({ type: "error", message })
     } finally {
       setAction(null)
@@ -5329,6 +5345,33 @@ function ProspectosView() {
         </DialogContent>
       </Dialog>
 
+      <Dialog
+        open={limitErrorDialog.open}
+        onOpenChange={(open) => {
+          if (!open) {
+            setLimitErrorDialog({ open: false, message: "" })
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Límite excedido</DialogTitle>
+            <DialogDescription>
+              {limitErrorDialog.message ||
+                "La operación supera el límite permitido. Divide la selección en lotes más pequeños e inténtalo de nuevo."}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="sm:justify-center">
+            <Button
+              onClick={() => setLimitErrorDialog({ open: false, message: "" })}
+              className="min-w-32"
+            >
+              Entendido
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <ProspeccionContactDrawer
         open={contactDrawerOpen && Boolean(contactDrawerData)}
         onOpenChange={handleContactDrawerOpenChange}
@@ -5347,6 +5390,17 @@ function LookupStatusBadge({ status, className }: { status?: string | null; clas
   const label = LOOKUP_STATUS_LABELS[normalized] ?? status
   const variant = LOOKUP_STATUS_VARIANTS[normalized] ?? "secondary"
   return <Badge variant={variant} className={className}>{label}</Badge>
+}
+
+function isFriendlyLimitError(message: string) {
+  const normalized = message.toLowerCase()
+  return (
+    normalized.includes("máximo") ||
+    normalized.includes("maximo") ||
+    normalized.includes("límite") ||
+    normalized.includes("limite") ||
+    normalized.includes("divide el proceso en lotes")
+  )
 }
 
 function EmailLookupStatusBadge({ status, className }: { status?: string | null; className?: string }) {
