@@ -70,6 +70,9 @@ export default function LandingAbPageClient() {
 
   const topCtas = data?.by_cta ?? []
   const variantCtas = data?.by_variant_cta ?? []
+  const byPath = data?.by_path ?? []
+  const byPathVariant = data?.by_path_variant ?? []
+  const byAbQuery = data?.by_ab_query ?? []
   const timeseries = useMemo(() => {
     const map = new Map<string, { date: string; A?: number; B?: number; C?: number; UNKNOWN?: number }>()
     for (const row of data?.by_day ?? []) {
@@ -180,7 +183,9 @@ export default function LandingAbPageClient() {
         id: `${event.created_at ?? "na"}-${event.cta_id ?? "cta"}-${event.variant ?? "v"}-${index}`,
         timestamp: label || "—",
         variant: (event.variant || "UNKNOWN").toUpperCase(),
+        ab_query: (event.ab_query || "UNKNOWN").toUpperCase(),
         cta_id: event.cta_id || "unknown",
+        path: event.path || "—",
         location_href: event.location_href || "—",
         referrer: event.referrer || "—",
       }
@@ -227,6 +232,78 @@ export default function LandingAbPageClient() {
             </CardContent>
           </Card>
         ))}
+      </div>
+
+      <div className="grid gap-4 lg:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <CardTitle>Clicks por URL de landing</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b text-left text-xs uppercase tracking-wide text-muted-foreground">
+                    <th className="px-2 py-2">Path</th>
+                    <th className="px-2 py-2 text-right">Clicks</th>
+                    <th className="px-2 py-2 text-right">Share</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {byPath.map((row) => (
+                    <tr key={row.path} className="border-b">
+                      <td className="px-2 py-2 font-medium">{row.path}</td>
+                      <td className="px-2 py-2 text-right">{row.clicks}</td>
+                      <td className="px-2 py-2 text-right">{formatPercent(row.share_pct)}</td>
+                    </tr>
+                  ))}
+                  {!byPath.length ? (
+                    <tr>
+                      <td className="px-2 py-6 text-center text-sm text-muted-foreground" colSpan={3}>
+                        Sin clicks registrados.
+                      </td>
+                    </tr>
+                  ) : null}
+                </tbody>
+              </table>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Distribución por query `ab`</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b text-left text-xs uppercase tracking-wide text-muted-foreground">
+                    <th className="px-2 py-2">ab</th>
+                    <th className="px-2 py-2 text-right">Clicks</th>
+                    <th className="px-2 py-2 text-right">Share</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {byAbQuery.map((row) => (
+                    <tr key={row.ab_query} className="border-b">
+                      <td className="px-2 py-2 font-medium">{row.ab_query}</td>
+                      <td className="px-2 py-2 text-right">{row.clicks}</td>
+                      <td className="px-2 py-2 text-right">{formatPercent(row.share_pct)}</td>
+                    </tr>
+                  ))}
+                  {!byAbQuery.length ? (
+                    <tr>
+                      <td className="px-2 py-6 text-center text-sm text-muted-foreground" colSpan={3}>
+                        Sin clicks registrados.
+                      </td>
+                    </tr>
+                  ) : null}
+                </tbody>
+              </table>
+            </div>
+          </CardContent>
+        </Card>
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
@@ -298,6 +375,41 @@ export default function LandingAbPageClient() {
           </CardContent>
         </Card>
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Clicks por URL + Variante</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b text-left text-xs uppercase tracking-wide text-muted-foreground">
+                  <th className="px-2 py-2">Path</th>
+                  <th className="px-2 py-2">Variante</th>
+                  <th className="px-2 py-2 text-right">Clicks</th>
+                </tr>
+              </thead>
+              <tbody>
+                {byPathVariant.map((row) => (
+                  <tr key={`${row.path}-${row.variant}`} className="border-b">
+                    <td className="px-2 py-2 font-medium">{row.path}</td>
+                    <td className="px-2 py-2">{row.variant}</td>
+                    <td className="px-2 py-2 text-right">{row.clicks}</td>
+                  </tr>
+                ))}
+                {!byPathVariant.length ? (
+                  <tr>
+                    <td className="px-2 py-6 text-center text-sm text-muted-foreground" colSpan={3}>
+                      Sin clicks registrados.
+                    </td>
+                  </tr>
+                ) : null}
+              </tbody>
+            </table>
+          </div>
+        </CardContent>
+      </Card>
 
       <div className="grid gap-4 lg:grid-cols-2">
         <Card>
@@ -392,7 +504,9 @@ export default function LandingAbPageClient() {
               <thead>
                 <tr className="border-b text-left text-xs uppercase tracking-wide text-muted-foreground">
                   <th className="px-2 py-2">Fecha</th>
+                  <th className="px-2 py-2">ab</th>
                   <th className="px-2 py-2">Variante</th>
+                  <th className="px-2 py-2">Path</th>
                   <th className="px-2 py-2">CTA</th>
                   <th className="px-2 py-2">URL</th>
                   <th className="px-2 py-2">Referrer</th>
@@ -402,7 +516,9 @@ export default function LandingAbPageClient() {
                 {formattedEvents.map((event) => (
                   <tr key={event.id} className="border-b">
                     <td className="px-2 py-2 whitespace-nowrap">{event.timestamp}</td>
+                    <td className="px-2 py-2">{event.ab_query}</td>
                     <td className="px-2 py-2 font-medium">{event.variant}</td>
+                    <td className="px-2 py-2">{event.path}</td>
                     <td className="px-2 py-2">{event.cta_id}</td>
                     <td className="px-2 py-2 max-w-[360px] truncate" title={event.location_href}>
                       {event.location_href}
@@ -414,7 +530,7 @@ export default function LandingAbPageClient() {
                 ))}
                 {!formattedEvents.length ? (
                   <tr>
-                    <td className="px-2 py-6 text-center text-sm text-muted-foreground" colSpan={5}>
+                    <td className="px-2 py-6 text-center text-sm text-muted-foreground" colSpan={7}>
                       Sin clicks registrados.
                     </td>
                   </tr>

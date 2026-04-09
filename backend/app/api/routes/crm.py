@@ -20,7 +20,7 @@ from enum import Enum
 from pathlib import Path
 from typing import Annotated, Any, Awaitable, Callable, Literal, Mapping, Sequence
 from uuid import UUID, uuid4
-from urllib.parse import urlparse
+from urllib.parse import parse_qs, urlparse
 from urllib.error import HTTPError, URLError
 from urllib.request import Request as UrlRequest, urlopen
 import time
@@ -24560,11 +24560,32 @@ async def list_web_cta_events(
     by_hour_variant: dict[tuple[int, str], int] = {}
     by_weekday: dict[int, int] = {}
     by_weekday_variant: dict[tuple[int, str], int] = {}
+    by_path: dict[str, int] = {}
+    by_path_variant: dict[tuple[str, str], int] = {}
+    by_path_cta: dict[tuple[str, str], int] = {}
+    by_ab_query: dict[str, int] = {}
     events: list[dict[str, Any]] = []
+
+    def normalize_path_and_ab(location_href: Any) -> tuple[str, str]:
+        raw = (str(location_href or "")).strip()
+        if not raw:
+            return ("UNKNOWN", "UNKNOWN")
+        parsed = urlparse(raw)
+        if not parsed.path and not parsed.netloc:
+            parsed = urlparse(raw if raw.startswith("/") else f"/{raw}")
+        path = (parsed.path or "/").strip() or "/"
+        if len(path) > 1 and path.endswith("/"):
+            path = path.rstrip("/")
+        query_values = parse_qs(parsed.query or "", keep_blank_values=False)
+        ab_value = (query_values.get("ab") or ["UNKNOWN"])[0]
+        ab = str(ab_value or "UNKNOWN").strip().upper() or "UNKNOWN"
+        return (path, ab)
 
     for row in rows:
         variant = str(row.get("hero_variant") or "unknown").upper()
         cta_id = str(row.get("cta_id") or "unknown")
+        location_href = row.get("location_href")
+        path, ab_query = normalize_path_and_ab(location_href)
         created_at = row.get("creado_en")
         day_key = None
         hour_key = None
@@ -24589,14 +24610,20 @@ async def list_web_cta_events(
         if weekday_key is not None:
             by_weekday[weekday_key] = by_weekday.get(weekday_key, 0) + 1
             by_weekday_variant[(weekday_key, variant)] = by_weekday_variant.get((weekday_key, variant), 0) + 1
+        by_path[path] = by_path.get(path, 0) + 1
+        by_path_variant[(path, variant)] = by_path_variant.get((path, variant), 0) + 1
+        by_path_cta[(path, cta_id)] = by_path_cta.get((path, cta_id), 0) + 1
+        by_ab_query[ab_query] = by_ab_query.get(ab_query, 0) + 1
 
         events.append(
             {
                 "created_at": created_dt.isoformat() if created_dt else str(created_at) if created_at else None,
                 "created_at_local": local_dt.isoformat() if created_dt else None,
                 "variant": variant,
+                "ab_query": ab_query,
                 "cta_id": cta_id,
-                "location_href": row.get("location_href"),
+                "location_href": location_href,
+                "path": path,
                 "referrer": row.get("referrer"),
             }
         )
@@ -24630,6 +24657,30 @@ async def list_web_cta_events(
         {"weekday": weekday, "variant": variant, "clicks": clicks}
         for (weekday, variant), clicks in sorted(by_weekday_variant.items(), key=lambda item: (item[0][0], item[0][1]))
     ]
+    by_path_items = [
+        {
+            "path": path,
+            "clicks": clicks,
+            "share_pct": round((clicks / total) * 100, 2) if total else 0,
+        }
+        for path, clicks in sorted(by_path.items(), key=lambda item: item[1], reverse=True)
+    ]
+    by_path_variant_items = [
+        {"path": path, "variant": variant, "clicks": clicks}
+        for (path, variant), clicks in sorted(by_path_variant.items(), key=lambda item: item[1], reverse=True)
+    ]
+    by_path_cta_items = [
+        {"path": path, "cta_id": cta_id, "clicks": clicks}
+        for (path, cta_id), clicks in sorted(by_path_cta.items(), key=lambda item: item[1], reverse=True)
+    ]
+    by_ab_query_items = [
+        {
+            "ab_query": ab_query,
+            "clicks": clicks,
+            "share_pct": round((clicks / total) * 100, 2) if total else 0,
+        }
+        for ab_query, clicks in sorted(by_ab_query.items(), key=lambda item: item[1], reverse=True)
+    ]
 
     return {
         "ok": True,
@@ -24640,6 +24691,10 @@ async def list_web_cta_events(
         "by_day": by_day_items,
         "by_hour": by_hour_items,
         "by_weekday": by_weekday_items,
+        "by_path": by_path_items,
+        "by_path_variant": by_path_variant_items,
+        "by_path_cta": by_path_cta_items,
+        "by_ab_query": by_ab_query_items,
         "events": events,
         "timezone": effective_timezone,
     }

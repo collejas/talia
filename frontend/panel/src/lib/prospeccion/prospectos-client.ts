@@ -1530,6 +1530,30 @@ export type LandingCtaByWeekday = {
   clicks: number
 }
 
+export type LandingCtaByPath = {
+  path: string
+  clicks: number
+  share_pct: number
+}
+
+export type LandingCtaByPathVariant = {
+  path: string
+  variant: string
+  clicks: number
+}
+
+export type LandingCtaByPathCta = {
+  path: string
+  cta_id: string
+  clicks: number
+}
+
+export type LandingCtaByAbQuery = {
+  ab_query: string
+  clicks: number
+  share_pct: number
+}
+
 export type LandingCtaEventsResponse = {
   ok: boolean
   total: number
@@ -1537,17 +1561,23 @@ export type LandingCtaEventsResponse = {
   by_cta: LandingCtaByCta[]
   by_variant_cta: LandingCtaByVariantCta[]
   by_day: LandingCtaByDay[]
+  by_hour?: LandingCtaByHour[]
+  by_weekday?: LandingCtaByWeekday[]
+  by_path?: LandingCtaByPath[]
+  by_path_variant?: LandingCtaByPathVariant[]
+  by_path_cta?: LandingCtaByPathCta[]
+  by_ab_query?: LandingCtaByAbQuery[]
+  timezone?: string
   events?: Array<{
     created_at?: string | null
     created_at_local?: string | null
     variant?: string | null
+    ab_query?: string | null
     cta_id?: string | null
     location_href?: string | null
+    path?: string | null
     referrer?: string | null
   }>
-  by_hour?: LandingCtaByHour[]
-  by_weekday?: LandingCtaByWeekday[]
-  timezone?: string
 }
 
 export async function getContactoMetrics() {
