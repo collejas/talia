@@ -5205,7 +5205,7 @@ async def _run_prospecto_email_lookup(
     reintentar: bool,
     check_smtp: bool,
     concurrency: int = 12,
-) -> list[dict[str, Any]]:
+) -> dict[str, list[dict[str, Any]]]:
     """Valida correos de prospectos y persiste status + detalles."""
 
     prospecto_ids: list[UUID] = []
@@ -5237,6 +5237,21 @@ async def _run_prospecto_email_lookup(
 
     semaphore = asyncio.Semaphore(max(1, concurrency))
     processed: list[dict[str, Any]] = []
+    failed: list[dict[str, Any]] = []
+
+    def _is_transient_repo_error(exc: Exception) -> bool:
+        message = str(exc).lower()
+        transient_markers = (
+            "error de red al llamar supabase",
+            "no address associated with hostname",
+            "temporary failure in name resolution",
+            "name or service not known",
+            "connecterror",
+            "connection reset",
+            "timeout",
+            "timed out",
+        )
+        return any(marker in message for marker in transient_markers)
 
     def _history_points_for(prospecto_id: str) -> tuple[int, dict[str, Any]]:
         entries = logs_by_prospecto.get(prospecto_id) or []
@@ -5303,18 +5318,29 @@ async def _run_prospecto_email_lookup(
             recommendation = "descartar"
         return score, recommendation
 
-    async def _process_one(prospecto: Mapping[str, Any]) -> dict[str, Any] | None:
+    async def _process_one(prospecto: Mapping[str, Any]) -> dict[str, Any]:
         prospecto_id = prospecto.get("id") or prospecto.get("prospecto_id")
         if not prospecto_id:
-            return None
+            return {"kind": "skipped"}
 
         current_status = _clean_text(prospecto.get("email_lookup_status")) or ""
         if not reintentar and current_status in {"valido", "invalido", "dudoso", "sin_email"}:
-            return None
+            return {"kind": "skipped", "prospecto_id": str(prospecto_id)}
 
         email_raw = _clean_text(prospecto.get("email"))
-        async with semaphore:
-            result = await validate_email_address(email=email_raw or "", check_smtp=check_smtp)
+        try:
+            async with semaphore:
+                result = await validate_email_address(email=email_raw or "", check_smtp=check_smtp)
+        except Exception as exc:  # pragma: no cover - depende de proveedor/red
+            logger.exception(
+                "prospeccion.email_lookup.validate_failed",
+                extra={"prospecto_id": str(prospecto_id), "email": email_raw or ""},
+            )
+            return {
+                "kind": "failed",
+                "prospecto_id": str(prospecto_id),
+                "error": f"validate_failed: {exc}",
+            }
 
         details = result.details or {}
         smtp_info = details.get("smtp")
@@ -5341,12 +5367,37 @@ async def _run_prospecto_email_lookup(
         if result.normalized_email:
             updates["email"] = result.normalized_email
 
-        updated = await repo.update_prospecto(
-            usuario_token=user_token,
-            prospecto_id=UUID(str(prospecto_id)),
-            payload=updates,
-        )
+        try:
+            updated: dict[str, Any] | None = None
+            last_error: CRMRepositoryError | None = None
+            for attempt in range(2):
+                try:
+                    updated = await repo.update_prospecto(
+                        usuario_token=user_token,
+                        prospecto_id=UUID(str(prospecto_id)),
+                        payload=updates,
+                    )
+                    break
+                except CRMRepositoryError as exc:
+                    last_error = exc
+                    if attempt == 0 and _is_transient_repo_error(exc):
+                        await asyncio.sleep(0.35)
+                        continue
+                    raise
+            if updated is None:
+                raise last_error or CRMRepositoryError("update_failed")
+        except Exception as exc:  # pragma: no cover - depende de red/BD
+            logger.exception(
+                "prospeccion.email_lookup.persist_failed",
+                extra={"prospecto_id": str(prospecto_id), "email": email_raw or ""},
+            )
+            return {
+                "kind": "failed",
+                "prospecto_id": str(prospecto_id),
+                "error": f"persist_failed: {exc}",
+            }
         return {
+            "kind": "processed",
             "prospecto_id": str(prospecto_id),
             "email": updated.get("email"),
             "email_lookup_status": updated.get("email_lookup_status"),
@@ -5355,11 +5406,31 @@ async def _run_prospecto_email_lookup(
         }
 
     tasks = [_process_one(row) for row in prospectos]
-    for item in await asyncio.gather(*tasks):
-        if item:
-            processed.append(item)
+    for item in await asyncio.gather(*tasks, return_exceptions=True):
+        if isinstance(item, Exception):
+            logger.exception("prospeccion.email_lookup.task_failed", exc_info=item)
+            failed.append({"error": f"task_failed: {item}"})
+            continue
+        kind = str(item.get("kind") or "").lower()
+        if kind == "processed":
+            processed.append(
+                {
+                    "prospecto_id": item.get("prospecto_id"),
+                    "email": item.get("email"),
+                    "email_lookup_status": item.get("email_lookup_status"),
+                    "email_risk_score": item.get("email_risk_score"),
+                    "email_recommendation": item.get("email_recommendation"),
+                }
+            )
+        elif kind == "failed":
+            failed.append(
+                {
+                    "prospecto_id": item.get("prospecto_id"),
+                    "error": item.get("error"),
+                }
+            )
 
-    return processed
+    return {"processed": processed, "failed": failed}
 
 
 def _normalize_scraper_target(value: Any) -> tuple[str, str] | None:
@@ -21468,7 +21539,7 @@ async def verificar_correos_prospectos(
         raise HTTPException(status_code=404, detail="prospectos_not_found")
 
     try:
-        processed = await _run_prospecto_email_lookup(
+        email_lookup_result = await _run_prospecto_email_lookup(
             repo=repo,
             user_token=user_token,
             prospectos=prospectos,
@@ -21478,12 +21549,21 @@ async def verificar_correos_prospectos(
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
+    processed = email_lookup_result.get("processed") or []
+    failed = email_lookup_result.get("failed") or []
     await _publish_prospectos_ui_event(
         organizacion_id=organizacion_id,
         event_type="prospectos_email_lookup_updated",
-        payload={"procesados": len(processed)},
+        payload={"procesados": len(processed), "fallidos": len(failed)},
     )
-    return {"ok": True, "procesados": len(processed), "detalles": processed}
+    return {
+        "ok": len(failed) == 0,
+        "parcial": len(failed) > 0,
+        "procesados": len(processed),
+        "fallidos": len(failed),
+        "detalles": processed,
+        "errores": failed[:50],
+    }
 
 
 @router.post("/prospeccion/prospectos/checklist/lookup")

@@ -14012,32 +14012,76 @@ class CRMRepository:
         *,
         usuario_token: str,
     ) -> dict[str, Any]:
-        resp = await self._request_with_user(
-            "POST",
-            "/rest/v1/rpc/prospeccion_stage_resumen",
-            token=usuario_token,
-            json={},
-        )
-        data = resp.json()
-        if not isinstance(data, dict):
-            raise CRMRepositoryError(f"stage_summary_invalid:{data!r}")
-        return data
+        last_exc: CRMRepositoryError | None = None
+        for attempt in range(3):
+            try:
+                resp = await self._request_with_user(
+                    "POST",
+                    "/rest/v1/rpc/prospeccion_stage_resumen",
+                    token=usuario_token,
+                    json={},
+                )
+                data = resp.json()
+                if not isinstance(data, dict):
+                    raise CRMRepositoryError(f"stage_summary_invalid:{data!r}")
+                return data
+            except CRMRepositoryError as exc:
+                last_exc = exc
+                error_message = str(exc)
+                retryable = (
+                    "Error de red al llamar Supabase" in error_message
+                    or "Supabase respondió error 502" in error_message
+                    or "Supabase respondió error 503" in error_message
+                    or "Supabase respondió error 504" in error_message
+                )
+                if not retryable or attempt >= 2:
+                    raise
+                logger.warning(
+                    "crm.stage_summary_retry",
+                    extra={"attempt": attempt + 1, "error": error_message},
+                )
+                await asyncio.sleep(0.2 * (attempt + 1))
+        if last_exc:
+            raise last_exc
+        raise CRMRepositoryError("stage_summary_retry_exhausted")
 
     async def get_prospeccion_enriquecimiento_resumen(
         self,
         *,
         usuario_token: str,
     ) -> dict[str, Any]:
-        resp = await self._request_with_user(
-            "POST",
-            "/rest/v1/rpc/prospeccion_enriquecimiento_resumen",
-            token=usuario_token,
-            json={},
-        )
-        data = resp.json()
-        if not isinstance(data, dict):
-            raise CRMRepositoryError(f"enriquecimiento_resumen_invalid:{data!r}")
-        return data
+        last_exc: CRMRepositoryError | None = None
+        for attempt in range(3):
+            try:
+                resp = await self._request_with_user(
+                    "POST",
+                    "/rest/v1/rpc/prospeccion_enriquecimiento_resumen",
+                    token=usuario_token,
+                    json={},
+                )
+                data = resp.json()
+                if not isinstance(data, dict):
+                    raise CRMRepositoryError(f"enriquecimiento_resumen_invalid:{data!r}")
+                return data
+            except CRMRepositoryError as exc:
+                last_exc = exc
+                error_message = str(exc)
+                retryable = (
+                    "Error de red al llamar Supabase" in error_message
+                    or "Supabase respondió error 502" in error_message
+                    or "Supabase respondió error 503" in error_message
+                    or "Supabase respondió error 504" in error_message
+                )
+                if not retryable or attempt >= 2:
+                    raise
+                logger.warning(
+                    "crm.enriquecimiento_resumen_retry",
+                    extra={"attempt": attempt + 1, "error": error_message},
+                )
+                await asyncio.sleep(0.2 * (attempt + 1))
+        if last_exc:
+            raise last_exc
+        raise CRMRepositoryError("enriquecimiento_resumen_retry_exhausted")
 
     async def get_email_template(
         self,
