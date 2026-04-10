@@ -12,6 +12,8 @@ import math
 import os
 import re
 import secrets
+import socket
+import ssl
 import unicodedata
 from collections import Counter, defaultdict, deque
 from datetime import date, datetime, time as dt_time, timedelta, timezone
@@ -2643,6 +2645,32 @@ class ProspectoEmailLookupPayload(BaseModel):
         return unique
 
 
+class ProspectoWebsiteLookupPayload(BaseModel):
+    """Solicita validación de sitio web (DNS + HTTP + TLS básico)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    prospecto_ids: list[UUID] = Field(
+        ..., min_length=1, max_length=200, description="Prospectos a verificar."
+    )
+    reintentar: bool = Field(
+        default=False,
+        description="Si es falso se omiten prospectos con verificación web terminal (valido/invalido/sin_sitio).",
+    )
+
+    @field_validator("prospecto_ids")
+    @classmethod
+    def _dedupe_prospecto_ids(cls, value: list[UUID]) -> list[UUID]:
+        unique: list[UUID] = []
+        seen: set[UUID] = set()
+        for item in value:
+            if item in seen:
+                continue
+            seen.add(item)
+            unique.append(item)
+        return unique
+
+
 class ProspectoChecklistLookupPayload(BaseModel):
     """Configura la acción rápida para validar teléfonos desde el checklist."""
 
@@ -2700,6 +2728,7 @@ class ProspectoListQuery(BaseModel):
     fuente: Literal["google_places", "denue", "usuario", ""] | None = Field(default=None)
     lookup_status: str | None = Field(default=None, max_length=60)
     email_lookup_status: str | None = Field(default=None, max_length=60)
+    website_lookup_status: str | None = Field(default=None, max_length=60)
     segmento: str | None = Field(default=None, max_length=120)
     carrier_type: Literal["mobile", "landline", "voip", ""] | None = Field(default=None)
     order: Literal["creado", "nombre"] | None = Field(default=None)
@@ -2730,6 +2759,7 @@ class ProspectoFiltroPayload(BaseModel):
     fuente: Literal["google_places", "denue", "usuario", ""] | None = Field(default=None)
     lookup_status: str | None = Field(default=None, max_length=60)
     email_lookup_status: str | None = Field(default=None, max_length=60)
+    website_lookup_status: str | None = Field(default=None, max_length=60)
     segmento: str | None = Field(default=None, max_length=120)
     carrier_type: Literal["mobile", "landline", "voip", ""] | None = Field(default=None)
     stage: Literal["discover", "enrich", "prepare", "launch", "evaluate", ""] | None = Field(default=None)
@@ -5684,6 +5714,274 @@ async def _run_prospecto_email_lookup(
     return {"processed": processed, "failed": failed}
 
 
+def _inspect_tls_certificate(host: str, *, timeout: float = 6.0) -> dict[str, Any]:
+    """Inspecciona certificado TLS del host y devuelve estado básico."""
+
+    context = ssl.create_default_context()
+    with socket.create_connection((host, 443), timeout=timeout) as sock:
+        with context.wrap_socket(sock, server_hostname=host) as secure_sock:
+            cert = secure_sock.getpeercert()
+
+    not_before = cert.get("notBefore")
+    not_after = cert.get("notAfter")
+    now = datetime.now(UTC)
+    valid_from_iso: str | None = None
+    valid_to_iso: str | None = None
+    is_valid = True
+
+    if isinstance(not_before, str) and not_before.strip():
+        try:
+            valid_from_dt = datetime.fromtimestamp(ssl.cert_time_to_seconds(not_before), tz=UTC)
+            valid_from_iso = valid_from_dt.isoformat()
+            if now < valid_from_dt:
+                is_valid = False
+        except ValueError:
+            valid_from_iso = None
+            is_valid = False
+
+    if isinstance(not_after, str) and not_after.strip():
+        try:
+            valid_to_dt = datetime.fromtimestamp(ssl.cert_time_to_seconds(not_after), tz=UTC)
+            valid_to_iso = valid_to_dt.isoformat()
+            if now > valid_to_dt:
+                is_valid = False
+        except ValueError:
+            valid_to_iso = None
+            is_valid = False
+
+    return {
+        "ok": bool(is_valid),
+        "issuer": cert.get("issuer"),
+        "subject": cert.get("subject"),
+        "valid_from": valid_from_iso,
+        "valid_to": valid_to_iso,
+    }
+
+
+def _probe_website_http(url: str, *, timeout: float = 8.0) -> dict[str, Any]:
+    """Verifica respuesta HTTP de la URL y clasifica accesibilidad."""
+
+    req = UrlRequest(
+        url,
+        headers={
+            "User-Agent": "TalIA-ProspectionVerifier/1.0",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        },
+        method="GET",
+    )
+    try:
+        with urlopen(req, timeout=timeout) as response:  # noqa: S310 - outbound needed
+            status_code = int(response.getcode() or 0)
+            final_url = str(response.geturl() or url)
+        return {
+            "ok": True,
+            "status_code": status_code,
+            "final_url": final_url,
+            "reachable": True,
+            "functional": 200 <= status_code < 400,
+            "error": None,
+        }
+    except HTTPError as exc:
+        status_code = int(getattr(exc, "code", 0) or 0)
+        final_url = str(getattr(exc, "url", url) or url)
+        reachable = status_code in {401, 403, 404, 405, 429} or (500 > status_code >= 400)
+        return {
+            "ok": False,
+            "status_code": status_code,
+            "final_url": final_url,
+            "reachable": reachable,
+            "functional": False,
+            "error": f"http_error:{status_code}",
+        }
+    except (URLError, TimeoutError, OSError) as exc:
+        return {
+            "ok": False,
+            "status_code": None,
+            "final_url": url,
+            "reachable": False,
+            "functional": False,
+            "error": str(exc),
+        }
+
+
+async def _run_prospecto_website_lookup(
+    *,
+    repo: CRMRepository,
+    user_token: str,
+    prospectos: Sequence[Mapping[str, Any]],
+    reintentar: bool,
+    concurrency: int = 10,
+) -> dict[str, list[dict[str, Any]]]:
+    """Valida sitio web de prospectos (DNS + HTTP + TLS) y persiste resultado en columnas dedicadas."""
+
+    semaphore = asyncio.Semaphore(max(1, concurrency))
+    processed: list[dict[str, Any]] = []
+    failed: list[dict[str, Any]] = []
+
+    async def _process_one(prospecto: Mapping[str, Any]) -> dict[str, Any]:
+        prospecto_id = prospecto.get("id") or prospecto.get("prospecto_id")
+        if not prospecto_id:
+            return {"kind": "skipped"}
+
+        current_status = str(prospecto.get("website_lookup_status") or "").strip().lower()
+        if not reintentar and current_status in {"valido", "invalido", "sin_sitio", "dudoso"}:
+            return {"kind": "skipped", "prospecto_id": str(prospecto_id)}
+
+        raw_website = _clean_text(prospecto.get("website"))
+        normalized_target = _normalize_scraper_target(raw_website)
+        checked_at = datetime.now(UTC).isoformat()
+        if not normalized_target:
+            updates = {
+                "website_lookup_status": "sin_sitio",
+                "website_lookup_error": None,
+                "website_lookup_checked_en": checked_at,
+                "website_http_status": None,
+                "website_final_url": None,
+                "website_dns_ok": None,
+                "website_reachable": None,
+                "website_functional": None,
+                "website_tls_ok": None,
+            }
+            updated = await repo.update_prospecto(
+                usuario_token=user_token,
+                prospecto_id=UUID(str(prospecto_id)),
+                payload=updates,
+            )
+            return {
+                "kind": "processed",
+                "prospecto_id": str(prospecto_id),
+                "website": raw_website,
+                "website_lookup_status": updated.get("website_lookup_status") or "sin_sitio",
+            }
+
+        base_url, host = normalized_target
+        https_url = f"https://{host}"
+        http_url = f"http://{host}"
+        probe_order = [https_url, http_url] if base_url.startswith("https://") else [base_url, https_url, http_url]
+
+        async with semaphore:
+            dns_ok = False
+            dns_error: str | None = None
+            dns_records: list[str] = []
+            try:
+                addr_infos = await asyncio.to_thread(socket.getaddrinfo, host, None)
+                for info in addr_infos:
+                    sockaddr = info[4] if len(info) > 4 else None
+                    if isinstance(sockaddr, tuple) and sockaddr:
+                        ip = str(sockaddr[0]).strip()
+                        if ip and ip not in dns_records:
+                            dns_records.append(ip)
+                dns_ok = bool(dns_records)
+            except OSError as exc:
+                dns_ok = False
+                dns_error = str(exc)
+
+            best_http: dict[str, Any] | None = None
+            for candidate in probe_order:
+                http_result = await asyncio.to_thread(_probe_website_http, candidate)
+                best_http = http_result
+                if http_result.get("reachable"):
+                    break
+
+            tls_result: dict[str, Any] | None = None
+            if any(str(value).startswith("https://") for value in probe_order):
+                try:
+                    tls_result = await asyncio.to_thread(_inspect_tls_certificate, host)
+                except (ssl.SSLError, OSError, ValueError) as exc:
+                    tls_result = {"ok": False, "error": str(exc)}
+
+        reachable = bool(best_http and best_http.get("reachable"))
+        functional = bool(best_http and best_http.get("functional"))
+        tls_ok = bool(tls_result and tls_result.get("ok"))
+        if not raw_website:
+            status = "sin_sitio"
+        elif functional and dns_ok:
+            status = "valido" if tls_ok or not str((best_http or {}).get("final_url") or "").startswith("https://") else "dudoso"
+        elif reachable and dns_ok:
+            status = "dudoso"
+        else:
+            status = "invalido"
+
+        http_status = (
+            int(best_http.get("status_code"))
+            if isinstance(best_http, dict) and best_http.get("status_code") is not None
+            else None
+        )
+        final_url = str(best_http.get("final_url") or "").strip() if isinstance(best_http, dict) else ""
+        error_parts: list[str] = []
+        if dns_error:
+            error_parts.append(f"dns:{dns_error}")
+        http_error = str((best_http or {}).get("error") or "").strip()
+        if http_error:
+            error_parts.append(f"http:{http_error}")
+        tls_error = str((tls_result or {}).get("error") or "").strip()
+        if tls_error:
+            error_parts.append(f"tls:{tls_error}")
+        error_value = "; ".join(error_parts)[:500] if error_parts else None
+
+        try:
+            updated = await repo.update_prospecto(
+                usuario_token=user_token,
+                prospecto_id=UUID(str(prospecto_id)),
+                payload={
+                    "website_lookup_status": status,
+                    "website_lookup_error": error_value,
+                    "website_lookup_checked_en": checked_at,
+                    "website_http_status": http_status,
+                    "website_final_url": final_url or None,
+                    "website_dns_ok": dns_ok,
+                    "website_reachable": reachable,
+                    "website_functional": functional,
+                    "website_tls_ok": tls_ok if final_url.startswith("https://") else None,
+                },
+            )
+        except Exception as exc:  # pragma: no cover - depende de red/BD
+            logger.exception(
+                "prospeccion.website_lookup.persist_failed",
+                extra={"prospecto_id": str(prospecto_id), "website": raw_website or ""},
+            )
+            return {
+                "kind": "failed",
+                "prospecto_id": str(prospecto_id),
+                "error": f"persist_failed: {exc}",
+            }
+
+        return {
+            "kind": "processed",
+            "prospecto_id": str(prospecto_id),
+            "website": raw_website,
+            "website_lookup_status": updated.get("website_lookup_status"),
+            "website_http_status": updated.get("website_http_status"),
+            "website_final_url": updated.get("website_final_url"),
+        }
+
+    tasks = [_process_one(row) for row in prospectos]
+    for item in await asyncio.gather(*tasks, return_exceptions=True):
+        if isinstance(item, Exception):
+            logger.exception("prospeccion.website_lookup.task_failed", exc_info=item)
+            failed.append({"error": f"task_failed: {item}"})
+            continue
+        kind = str(item.get("kind") or "").lower()
+        if kind == "processed":
+            processed.append(
+                {
+                    "prospecto_id": item.get("prospecto_id"),
+                    "website": item.get("website"),
+                    "website_lookup_status": item.get("website_lookup_status"),
+                    "website_http_status": item.get("website_http_status"),
+                    "website_final_url": item.get("website_final_url"),
+                }
+            )
+        elif kind == "failed":
+            failed.append(
+                {
+                    "prospecto_id": item.get("prospecto_id"),
+                    "error": item.get("error"),
+                }
+            )
+    return {"processed": processed, "failed": failed}
+
+
 def _normalize_scraper_target(value: Any) -> tuple[str, str] | None:
     """Normaliza una URL de sitio web para lanzar el scraper devolviendo URL base y host."""
 
@@ -6978,6 +7276,7 @@ def _prospecto_filters_to_kwargs(filters: ProspectoFiltroPayload) -> dict[str, A
         "fuente": filters.fuente or None,
         "lookup_status": filters.lookup_status,
         "email_lookup_status": filters.email_lookup_status,
+        "website_lookup_status": filters.website_lookup_status,
         "segmento": filters.segmento,
         "carrier_type": filters.carrier_type or None,
         "stage": filters.stage or None,
@@ -18282,6 +18581,7 @@ async def listar_prospectos(
                 fuente=params.fuente or None,
                 lookup_status=params.lookup_status,
                 email_lookup_status=params.email_lookup_status,
+                website_lookup_status=params.website_lookup_status,
                 segmento=params.segmento,
                 carrier_type=params.carrier_type or None,
                 order=order_value,
@@ -22012,6 +22312,54 @@ async def verificar_correos_prospectos(
     await _publish_prospectos_ui_event(
         organizacion_id=organizacion_id,
         event_type="prospectos_email_lookup_updated",
+        payload={"procesados": len(processed), "fallidos": len(failed)},
+    )
+    return {
+        "ok": len(failed) == 0,
+        "parcial": len(failed) > 0,
+        "procesados": len(processed),
+        "fallidos": len(failed),
+        "detalles": processed,
+        "errores": failed[:50],
+    }
+
+
+@router.post("/prospeccion/prospectos/verificar-sitios-web")
+async def verificar_sitios_web_prospectos(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    _: str = Depends(require_permission("ejecutar_busquedas")),
+    user_token: str = Depends(require_user_token),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    payload: ProspectoWebsiteLookupPayload,
+) -> dict[str, Any]:
+    """Valida sitios web de prospectos y persiste resultado en columnas website_lookup_*."""
+
+    try:
+        prospectos = await repo.list_prospectos_by_ids(
+            usuario_token=user_token,
+            prospecto_ids=payload.prospecto_ids,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    if not prospectos:
+        raise HTTPException(status_code=404, detail="prospectos_not_found")
+
+    try:
+        website_lookup_result = await _run_prospecto_website_lookup(
+            repo=repo,
+            user_token=user_token,
+            prospectos=prospectos,
+            reintentar=payload.reintentar,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    processed = website_lookup_result.get("processed") or []
+    failed = website_lookup_result.get("failed") or []
+    await _publish_prospectos_ui_event(
+        organizacion_id=organizacion_id,
+        event_type="prospectos_website_lookup_updated",
         payload={"procesados": len(processed), "fallidos": len(failed)},
     )
     return {

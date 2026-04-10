@@ -98,6 +98,7 @@ import {
   saveProspectosSavedViews,
   verificarProspectos,
   verificarCorreosProspectos,
+  verificarSitiosWebProspectos,
   listContactoBatches,
   type ContactoBatch,
 } from "@/lib/prospeccion/prospectos-client"
@@ -105,6 +106,7 @@ import {
 type FuenteFilter = "" | "google_places" | "denue" | "usuario"
 type LookupFilter = "" | "pendiente" | "verificado" | "sin_numero" | "error"
 type EmailLookupFilter = "" | "pendiente" | "sin_email" | "valido" | "invalido" | "dudoso" | "error"
+type WebsiteLookupFilter = "" | "pendiente" | "sin_sitio" | "valido" | "invalido" | "dudoso" | "error"
 type ConEnvioCanalFilter = "correo" | "whatsapp" | "llamada"
 type ConEnvioModoFilter = "" | "si" | "no"
 type ConScraperFilter = "" | "si" | "no"
@@ -116,6 +118,7 @@ type ProspectosSortKey =
   | "prospecto"
   | "correo"
   | "sitio_web"
+  | "sitio_verificado"
   | "telefono"
   | "tipo_linea"
   | "telefono_verificado"
@@ -133,6 +136,7 @@ type Filters = {
   fuente: FuenteFilter
   lookupStatus: LookupFilter
   emailLookupStatus: EmailLookupFilter
+  websiteLookupStatus: WebsiteLookupFilter
   campanaId: string
   conEnvioModo: ConEnvioModoFilter
   conEnvioCanales: ConEnvioCanalFilter[]
@@ -211,6 +215,7 @@ const initialFilters: Filters = {
   fuente: "",
   lookupStatus: "",
   emailLookupStatus: "",
+  websiteLookupStatus: "",
   campanaId: "",
   conEnvioModo: "",
   conEnvioCanales: [],
@@ -318,6 +323,15 @@ const EMAIL_LOOKUP_STATUS_LABELS: Record<string, string> = {
   error: "Error",
 }
 
+const WEBSITE_LOOKUP_STATUS_LABELS: Record<string, string> = {
+  pendiente: "Pendiente",
+  sin_sitio: "Sin sitio",
+  valido: "Válido",
+  invalido: "Inválido",
+  dudoso: "Dudoso",
+  error: "Error",
+}
+
 const RATING_FILTER_LABELS: Record<MinRatingFilter, string> = {
   "": "Todos",
   "3": "3+",
@@ -343,6 +357,15 @@ const LOOKUP_STATUS_VARIANTS: Record<string, "default" | "secondary" | "destruct
 const EMAIL_LOOKUP_STATUS_VARIANTS: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
   pendiente: "secondary",
   sin_email: "outline",
+  valido: "default",
+  invalido: "destructive",
+  dudoso: "secondary",
+  error: "destructive",
+}
+
+const WEBSITE_LOOKUP_STATUS_VARIANTS: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
+  pendiente: "secondary",
+  sin_sitio: "outline",
   valido: "default",
   invalido: "destructive",
   dudoso: "secondary",
@@ -516,6 +539,7 @@ const DEFAULT_TABLE_COLUMN_ORDER: ProspectTableColumnId[] = [
   "prospecto",
   "correo",
   "sitio_web",
+  "sitio_verificado",
   "telefono",
   "tipo_linea",
   "telefono_verificado",
@@ -536,6 +560,7 @@ const TABLE_COLUMN_META: Record<
   prospecto: { label: "Prospecto", widthClass: "w-[260px]" },
   correo: { label: "Correo", widthClass: "w-[180px]" },
   sitio_web: { label: "Sitio web", widthClass: "w-[180px]" },
+  sitio_verificado: { label: "Sitio verificado", widthClass: "w-[140px]" },
   telefono: { label: "Teléfono", widthClass: "w-[140px]" },
   tipo_linea: { label: "Tipo de línea", widthClass: "w-[120px]" },
   telefono_verificado: { label: "Teléfono verificado", widthClass: "w-[130px]" },
@@ -571,6 +596,7 @@ function normalizeProspectosTablePrefs(raw: unknown): ProspectosTablePrefsState 
     prospecto: true,
     correo: true,
     sitio_web: true,
+    sitio_verificado: true,
     telefono: true,
     tipo_linea: true,
     telefono_verificado: true,
@@ -625,6 +651,15 @@ function normalizeSavedViewState(raw: unknown): ProspectosSavedViewState | null 
       filtersObj["emailLookupStatus"] === "dudoso" ||
       filtersObj["emailLookupStatus"] === "error"
         ? filtersObj["emailLookupStatus"]
+        : "",
+    websiteLookupStatus:
+      filtersObj["websiteLookupStatus"] === "pendiente" ||
+      filtersObj["websiteLookupStatus"] === "sin_sitio" ||
+      filtersObj["websiteLookupStatus"] === "valido" ||
+      filtersObj["websiteLookupStatus"] === "invalido" ||
+      filtersObj["websiteLookupStatus"] === "dudoso" ||
+      filtersObj["websiteLookupStatus"] === "error"
+        ? filtersObj["websiteLookupStatus"]
         : "",
     campanaId: typeof filtersObj["campanaId"] === "string" ? filtersObj["campanaId"] : "",
     conEnvioModo:
@@ -696,6 +731,7 @@ function normalizeSavedViewState(raw: unknown): ProspectosSavedViewState | null 
     key === "prospecto" ||
     key === "correo" ||
     key === "sitio_web" ||
+    key === "sitio_verificado" ||
     key === "telefono" ||
     key === "tipo_linea" ||
     key === "telefono_verificado" ||
@@ -795,6 +831,7 @@ function ProspectosView() {
     prospecto: true,
     correo: true,
     sitio_web: true,
+    sitio_verificado: true,
     telefono: true,
     tipo_linea: true,
     telefono_verificado: true,
@@ -826,7 +863,7 @@ function ProspectosView() {
   const [error, setError] = useState<string | null>(null)
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [banner, setBanner] = useState<BannerState | null>(null)
-  const [action, setAction] = useState<"lookup" | "email_lookup" | "contact" | null>(null)
+  const [action, setAction] = useState<"lookup" | "email_lookup" | "website_lookup" | "contact" | null>(null)
   const [formDialogOpen, setFormDialogOpen] = useState(false)
   const [formMode, setFormMode] = useState<"create" | "edit">("create")
   const [formValues, setFormValues] = useState<ProspectoFormState>(initialProspectoForm)
@@ -1097,6 +1134,8 @@ function ProspectosView() {
       const bEmail = (b.email || "").trim().toLowerCase()
       const aWebsite = (a.website || "").trim().toLowerCase()
       const bWebsite = (b.website || "").trim().toLowerCase()
+      const aWebsiteLookup = (a.website_lookup_status || "").trim().toLowerCase()
+      const bWebsiteLookup = (b.website_lookup_status || "").trim().toLowerCase()
       const aPhone = (a.phone_e164 || a.phone || "").trim()
       const bPhone = (b.phone_e164 || b.phone || "").trim()
       const aCarrier = carrierLabel(a.carrier_type).toLowerCase()
@@ -1126,6 +1165,9 @@ function ProspectosView() {
           break
         case "sitio_web":
           base = aWebsite.localeCompare(bWebsite, "es", { sensitivity: "base" })
+          break
+        case "sitio_verificado":
+          base = aWebsiteLookup.localeCompare(bWebsiteLookup, "es", { sensitivity: "base" })
           break
         case "telefono":
           base = aPhone.localeCompare(bPhone, "es", { sensitivity: "base" })
@@ -1386,6 +1428,13 @@ function ProspectosView() {
         `Verificación correo: ${EMAIL_LOOKUP_STATUS_LABELS[filters.emailLookupStatus] ?? filters.emailLookupStatus}`
       )
     }
+    if (filters.websiteLookupStatus) {
+      chips.push(
+        `Verificación sitio web: ${
+          WEBSITE_LOOKUP_STATUS_LABELS[filters.websiteLookupStatus] ?? filters.websiteLookupStatus
+        }`
+      )
+    }
     if (filters.campanaId) {
       chips.push(`Campaña: ${campaignLabelMap.get(filters.campanaId) ?? filters.campanaId}`)
     }
@@ -1450,6 +1499,7 @@ function ProspectosView() {
           fuente: filters.fuente || undefined,
           lookupStatus: filters.lookupStatus || undefined,
           emailLookupStatus: filters.emailLookupStatus || undefined,
+          websiteLookupStatus: filters.websiteLookupStatus || undefined,
           campanaId: filters.campanaId || undefined,
           conEnvio: resolveConEnvio(filters.conEnvioModo, filters.conEnvioCanales),
           conEnvioCanales: filters.conEnvioCanales.length ? filters.conEnvioCanales : undefined,
@@ -1564,6 +1614,7 @@ function ProspectosView() {
           fuente: filters.fuente || undefined,
           lookupStatus: filters.lookupStatus || undefined,
           emailLookupStatus: filters.emailLookupStatus || undefined,
+          websiteLookupStatus: filters.websiteLookupStatus || undefined,
           campanaId: filters.campanaId || undefined,
           conEnvio: resolveConEnvio(filters.conEnvioModo, filters.conEnvioCanales),
           conEnvioCanales: filters.conEnvioCanales.length ? filters.conEnvioCanales : undefined,
@@ -2519,6 +2570,31 @@ function ProspectosView() {
       void fetchStageSummary()
     } catch (err) {
       const message = err instanceof Error ? err.message : "No se pudieron validar los correos."
+      if (isFriendlyLimitError(message)) {
+        setLimitErrorDialog({ open: true, message })
+      }
+      setBanner({ type: "error", message })
+    } finally {
+      setAction(null)
+    }
+  }, [fetchProspectos, fetchStageSummary, offset, selectedIds])
+
+  const handleVerifyWebsites = useCallback(async () => {
+    if (!selectedIds.length) return
+    setAction("website_lookup")
+    setBanner(null)
+    try {
+      const response = await verificarSitiosWebProspectos({
+        prospecto_ids: selectedIds,
+      })
+      setBanner({
+        type: "success",
+        message: `Se validaron ${response.procesados} sitios web.`,
+      })
+      await fetchProspectos(offset)
+      void fetchStageSummary()
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "No se pudieron validar los sitios web."
       if (isFriendlyLimitError(message)) {
         setLimitErrorDialog({ open: true, message })
       }
@@ -3550,6 +3626,31 @@ function ProspectosView() {
               </Select>
             </div>
             <div className="space-y-1">
+              <Label>Estado verificación sitio web</Label>
+              <Select
+                value={filters.websiteLookupStatus || "all"}
+                onValueChange={(value) =>
+                  setFilters((prev) => ({
+                    ...prev,
+                    websiteLookupStatus: value === "all" ? "" : (value as WebsiteLookupFilter),
+                  }))
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Todos los estados" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos</SelectItem>
+                  <SelectItem value="pendiente">Pendiente</SelectItem>
+                  <SelectItem value="sin_sitio">Sin sitio</SelectItem>
+                  <SelectItem value="valido">Válido</SelectItem>
+                  <SelectItem value="dudoso">Dudoso</SelectItem>
+                  <SelectItem value="invalido">Inválido</SelectItem>
+                  <SelectItem value="error">Error</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1">
               <Label>Campaña</Label>
               <Select
                 value={filters.campanaId || "all"}
@@ -4382,6 +4483,15 @@ function ProspectosView() {
               <Button
                 variant="outline"
                 size="sm"
+                onClick={() => void handleVerifyWebsites()}
+                disabled={!selectedCount || action !== null}
+              >
+                <IconWorldSearch className={cn("mr-1.5 size-4", action === "website_lookup" && "animate-spin")} />
+                Verificar sitio web
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
                 onClick={() => void handleScraperSelected()}
                 disabled={!selectedCount || checklistAction === "scraper"}
               >
@@ -4723,6 +4833,19 @@ function ProspectosView() {
                                   </TableCell>
                                 )
                               }
+                              case "sitio_verificado":
+                                return (
+                                  <TableCell key={columnId}>
+                                    <div className="flex flex-wrap items-center gap-1">
+                                      <WebsiteLookupStatusBadge status={prospecto.website_lookup_status} className="text-[10px]" />
+                                      {typeof prospecto.website_http_status === "number" ? (
+                                        <Badge variant="outline" className="text-[10px]">
+                                          HTTP {prospecto.website_http_status}
+                                        </Badge>
+                                      ) : null}
+                                    </div>
+                                  </TableCell>
+                                )
                               case "telefono":
                                 return (
                                   <TableCell key={columnId}>
@@ -5410,6 +5533,16 @@ function EmailLookupStatusBadge({ status, className }: { status?: string | null;
   const normalized = status.toLowerCase()
   const label = EMAIL_LOOKUP_STATUS_LABELS[normalized] ?? status
   const variant = EMAIL_LOOKUP_STATUS_VARIANTS[normalized] ?? "secondary"
+  return <Badge variant={variant} className={className}>{label}</Badge>
+}
+
+function WebsiteLookupStatusBadge({ status, className }: { status?: string | null; className?: string }) {
+  if (!status) {
+    return <Badge variant="secondary" className={className}>Pendiente</Badge>
+  }
+  const normalized = status.toLowerCase()
+  const label = WEBSITE_LOOKUP_STATUS_LABELS[normalized] ?? status
+  const variant = WEBSITE_LOOKUP_STATUS_VARIANTS[normalized] ?? "secondary"
   return <Badge variant={variant} className={className}>{label}</Badge>
 }
 

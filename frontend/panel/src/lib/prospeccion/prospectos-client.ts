@@ -19,6 +19,15 @@ export type ProspectoItem = {
   email_quality_tier?: string | null
   email_risk_score?: number | null
   email_recommendation?: string | null
+  website_lookup_status?: string | null
+  website_lookup_error?: string | null
+  website_lookup_checked_en?: string | null
+  website_http_status?: number | null
+  website_final_url?: string | null
+  website_dns_ok?: boolean | null
+  website_reachable?: boolean | null
+  website_functional?: boolean | null
+  website_tls_ok?: boolean | null
   website: string | null
   address: string | null
   fuente: "google_places" | "denue" | "usuario"
@@ -42,6 +51,7 @@ export type ProspectosTableColumnPreference =
   | "prospecto"
   | "correo"
   | "sitio_web"
+  | "sitio_verificado"
   | "telefono"
   | "tipo_linea"
   | "telefono_verificado"
@@ -223,6 +233,18 @@ export type ProspectoEmailLookupResponse = {
     email_lookup_status?: string | null
     email_risk_score?: number | null
     email_recommendation?: string | null
+  }>
+}
+
+export type ProspectoWebsiteLookupResponse = {
+  ok: boolean
+  procesados: number
+  detalles: Array<{
+    prospecto_id: string
+    website?: string | null
+    website_lookup_status?: string | null
+    website_http_status?: number | null
+    website_final_url?: string | null
   }>
 }
 
@@ -577,6 +599,7 @@ type ListProspectosParams = {
   fuente?: "google_places" | "denue" | "usuario"
   lookupStatus?: string
   emailLookupStatus?: string
+  websiteLookupStatus?: string
   segmento?: string
   carrierType?: "mobile" | "landline" | "voip"
   order?: "creado" | "nombre"
@@ -610,6 +633,9 @@ function buildProspectosListUrl(basePath: string, params: ListProspectosParams =
   if (params.lookupStatus?.trim().length) url.searchParams.set("lookup_status", params.lookupStatus.trim())
   if (params.emailLookupStatus?.trim().length) {
     url.searchParams.set("email_lookup_status", params.emailLookupStatus.trim())
+  }
+  if (params.websiteLookupStatus?.trim().length) {
+    url.searchParams.set("website_lookup_status", params.websiteLookupStatus.trim())
   }
   if (params.segmento?.trim().length) url.searchParams.set("segmento", params.segmento.trim())
   if (params.carrierType) url.searchParams.set("carrier_type", params.carrierType)
@@ -892,6 +918,33 @@ export async function verificarCorreosProspectos(payload: {
     body: JSON.stringify({
       ...payload,
       check_smtp: payload.check_smtp ?? true,
+      prospecto_ids: prospectoIds,
+    }),
+  })
+}
+
+/**
+ * Run website validation for the provided prospect IDs.
+ */
+export async function verificarSitiosWebProspectos(payload: {
+  prospecto_ids: string[]
+  reintentar?: boolean
+}): Promise<ProspectoWebsiteLookupResponse> {
+  const prospectoIds = payload.prospecto_ids
+    .map((id) => (id || "").trim())
+    .filter((id) => UUID_RE.test(id))
+  if (!prospectoIds.length) {
+    throw new Error("No hay prospectos válidos para verificar.")
+  }
+  if (prospectoIds.length > PROSPECTO_IDS_MAX_BATCH) {
+    throw new Error(
+      `Seleccionaste ${prospectoIds.length} prospectos. El máximo por validación de sitios web es ${PROSPECTO_IDS_MAX_BATCH}. Divide el envío en lotes.`
+    )
+  }
+  return requestJson<ProspectoWebsiteLookupResponse>("/api/prospeccion/prospectos/verificar-sitios-web", {
+    method: "POST",
+    body: JSON.stringify({
+      ...payload,
       prospecto_ids: prospectoIds,
     }),
   })
