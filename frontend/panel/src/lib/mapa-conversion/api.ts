@@ -215,6 +215,138 @@ async function callDemografiaEndpoint<T>(
   return response.data;
 }
 
+function mergeMapWithSummaryVisitors(
+  map: DemografiaMapResponse,
+  summary: DemografiaSummaryResponse,
+): DemografiaMapResponse {
+  const summaryItems = Array.isArray(summary.visitantes?.items) ? summary.visitantes.items : [];
+  const byKey = new Map(summaryItems.map((item) => [item.key, item]));
+  const mergedKeys = new Set<string>();
+
+  const mergedDataset = (Array.isArray(map.dataset) ? map.dataset : []).map((entry) => {
+    const visitor = byKey.get(entry.key);
+    if (!visitor) return entry;
+    mergedKeys.add(entry.key);
+
+    const visitantesPorCanal = {
+      ...(entry.visitantes_totales_por_canal || {}),
+      web: visitor.total ?? 0,
+      webchat: visitor.webchat_total ?? 0,
+      whatsapp: visitor.whatsapp_total ?? 0,
+      voz: visitor.voz_total ?? 0,
+      correo: visitor.correo_total ?? 0,
+    };
+
+    return {
+      ...entry,
+      visitantes_total: visitor.total ?? 0,
+      visitantes_con_chat: visitor.con_chat ?? 0,
+      visitantes_sin_chat: visitor.sin_chat ?? 0,
+      visitantes_totales_por_canal: visitantesPorCanal,
+      totales_por_canal: Object.fromEntries(
+        Object.entries(visitantesPorCanal).filter(([, value]) => (value ?? 0) > 0),
+      ),
+      conversacion_totales: {
+        con_conversacion: visitor.con_chat ?? 0,
+        sin_conversacion: visitor.sin_chat ?? 0,
+      },
+      total_visitas: visitor.total ?? 0,
+      traffic_web: {
+        sesiones_web_total: visitor.sesiones_web_total ?? 0,
+        fuentes_top: visitor.fuentes_top ?? [],
+        utm_top: visitor.utm_top ?? [],
+      },
+      conversation_channels: {
+        sesiones_webchat_total: visitor.sesiones_webchat_total ?? 0,
+        sesiones_con_chat_webchat: visitor.sesiones_con_chat_webchat ?? 0,
+        sesiones_sin_chat_webchat: visitor.sesiones_sin_chat_webchat ?? 0,
+        conversaciones_whatsapp: visitor.conversaciones_whatsapp ?? 0,
+        conversaciones_voz: visitor.conversaciones_voz ?? 0,
+        conversaciones_correo: visitor.conversaciones_correo ?? 0,
+      },
+      has_data: Boolean(
+        entry.leads_total > 0 ||
+          (visitor.total ?? 0) > 0 ||
+          (visitor.webchat_total ?? 0) > 0 ||
+          (visitor.whatsapp_total ?? 0) > 0 ||
+          (visitor.voz_total ?? 0) > 0 ||
+          (visitor.correo_total ?? 0) > 0,
+      ),
+    };
+  });
+
+  for (const visitor of summaryItems) {
+    if (mergedKeys.has(visitor.key)) continue;
+    mergedDataset.push({
+      key: visitor.key,
+      name: visitor.name,
+      nivel: map.nivel,
+      leads_total: 0,
+      leads_totales_por_canal: {},
+      totales_por_canal: Object.fromEntries(
+        [
+          ["web", visitor.total ?? 0],
+          ["webchat", visitor.webchat_total ?? 0],
+          ["whatsapp", visitor.whatsapp_total ?? 0],
+          ["voz", visitor.voz_total ?? 0],
+          ["correo", visitor.correo_total ?? 0],
+        ].filter(([, value]) => Number(value ?? 0) > 0),
+      ),
+      visitantes_totales_por_canal: {
+        web: visitor.total ?? 0,
+        webchat: visitor.webchat_total ?? 0,
+        whatsapp: visitor.whatsapp_total ?? 0,
+        voz: visitor.voz_total ?? 0,
+        correo: visitor.correo_total ?? 0,
+      },
+      conversacion_totales: {
+        con_conversacion: visitor.con_chat ?? 0,
+        sin_conversacion: visitor.sin_chat ?? 0,
+      },
+      etapas_totales: {
+        captado: 0,
+        precalificado: 0,
+        negociacion: 0,
+        ganado: 0,
+        perdido: 0,
+      },
+      visitantes_total: visitor.total ?? 0,
+      visitantes_con_chat: visitor.con_chat ?? 0,
+      visitantes_sin_chat: visitor.sin_chat ?? 0,
+      total_visitas: visitor.total ?? 0,
+      has_data: Boolean((visitor.total ?? 0) > 0),
+      next_level:
+        map.nivel === "pais"
+          ? visitor.key === "MX"
+            ? "estado"
+            : null
+          : map.nivel === "estado"
+            ? "municipio"
+            : null,
+      parent_state: map.nivel === "municipio" ? visitor.key.slice(0, 2) : null,
+      traffic_web: {
+        sesiones_web_total: visitor.sesiones_web_total ?? 0,
+        fuentes_top: visitor.fuentes_top ?? [],
+        utm_top: visitor.utm_top ?? [],
+      },
+      conversation_channels: {
+        sesiones_webchat_total: visitor.sesiones_webchat_total ?? 0,
+        sesiones_con_chat_webchat: visitor.sesiones_con_chat_webchat ?? 0,
+        sesiones_sin_chat_webchat: visitor.sesiones_sin_chat_webchat ?? 0,
+        conversaciones_whatsapp: visitor.conversaciones_whatsapp ?? 0,
+        conversaciones_voz: visitor.conversaciones_voz ?? 0,
+        conversaciones_correo: visitor.conversaciones_correo ?? 0,
+      },
+    });
+  }
+
+  mergedDataset.sort((a, b) => (b.total_visitas ?? 0) - (a.total_visitas ?? 0));
+  return {
+    ...map,
+    dataset: mergedDataset,
+  };
+}
+
 export async function loadDemografiaData(
   nivel: "pais" | "estado" | "municipio" = "estado",
   options: {
@@ -305,11 +437,11 @@ export async function loadDemografiaData(
     resumenParams.hasta = options.hasta;
     mapaParams.hasta = options.hasta;
   }
+  mapaParams.skip_visitantes = true;
 
   const [summary, map] = await Promise.all([
     callDemografiaEndpoint<DemografiaSummaryResponse>("resumen-v2", resumenParams),
     callDemografiaEndpoint<DemografiaMapResponse>("mapa-v2", mapaParams),
   ]);
-
-  return { summary, map };
+  return { summary, map: mergeMapWithSummaryVisitors(map, summary) };
 }

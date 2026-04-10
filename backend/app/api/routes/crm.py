@@ -27011,6 +27011,7 @@ async def demografia_mapa_v2(
     rango: str | None = Query(default=None),
     desde: str | None = Query(default=None),
     hasta: str | None = Query(default=None),
+    skip_visitantes: bool = Query(default=False),
 ) -> dict[str, Any]:
     effective_user_token = _normalize_reports_user_token(user_token)
     nivel_normalizado = (nivel or "estado").strip().lower() or "estado"
@@ -27082,23 +27083,26 @@ async def demografia_mapa_v2(
                 date_to=date_to,
                 jwt=effective_user_token,
             )
-        visitantes_payload = await demografia_service.fetch_visitantes_resumen_v2(
-            nivel=nivel_normalizado,
-            date_from=date_from,
-            date_to=date_to,
-            state_code=state_code,
-            source_class=source_class_value,
-            utm_source=utm_source_value,
-            utm_medium=utm_medium_value,
-            utm_campaign=utm_campaign_value,
-            campaign_id=str(campana_uuid_value) if campana_uuid_value else None,
-            template_id=str(template_uuid_value) if template_uuid_value else None,
-            campaign_type=campana_tipo_value,
-            wa_canal_publicitario=wa_canal_publicitario_value,
-            wa_campana_publicitaria=wa_campana_publicitaria_value,
-            wa_regla_id=str(wa_regla_uuid_value) if wa_regla_uuid_value else None,
-            jwt=effective_user_token,
-        )
+        if skip_visitantes:
+            visitantes_payload = {"items": [], "totals": {}}
+        else:
+            visitantes_payload = await demografia_service.fetch_visitantes_resumen_v2(
+                nivel=nivel_normalizado,
+                date_from=date_from,
+                date_to=date_to,
+                state_code=state_code,
+                source_class=source_class_value,
+                utm_source=utm_source_value,
+                utm_medium=utm_medium_value,
+                utm_campaign=utm_campaign_value,
+                campaign_id=str(campana_uuid_value) if campana_uuid_value else None,
+                template_id=str(template_uuid_value) if template_uuid_value else None,
+                campaign_type=campana_tipo_value,
+                wa_canal_publicitario=wa_canal_publicitario_value,
+                wa_campana_publicitaria=wa_campana_publicitaria_value,
+                wa_regla_id=str(wa_regla_uuid_value) if wa_regla_uuid_value else None,
+                jwt=effective_user_token,
+            )
         dataset = demografia_service.build_map_dataset(
             nivel=nivel_normalizado,
             leads_payload=leads_payload,
