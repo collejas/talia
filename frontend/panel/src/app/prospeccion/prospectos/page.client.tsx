@@ -5526,7 +5526,11 @@ function isFriendlyLimitError(message: string) {
     normalized.includes("maximo") ||
     normalized.includes("límite") ||
     normalized.includes("limite") ||
-    normalized.includes("divide el proceso en lotes")
+    normalized.includes("divide el proceso en lotes") ||
+    normalized.includes("maximum") ||
+    normalized.includes("at most") ||
+    normalized.includes("too_long") ||
+    normalized.includes("too long")
   )
 }
 

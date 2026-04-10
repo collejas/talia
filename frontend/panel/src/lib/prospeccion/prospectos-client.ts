@@ -1795,6 +1795,21 @@ function extractValidationErrorMessage(payload: unknown, status: number): string
     }
   }
 
+  const detailText = extractStringField(payload, "detail")
+  if (detailText && /at most\s+\d+/i.test(detailText)) {
+    const maxMatch = detailText.match(/at most\s+(\d+)/i)
+    const actualMatch = detailText.match(/not\s+(\d+)/i)
+    const maxLength = maxMatch ? Number(maxMatch[1]) : NaN
+    const actualLength = actualMatch ? Number(actualMatch[1]) : NaN
+    if (Number.isFinite(maxLength) && Number.isFinite(actualLength)) {
+      return `Seleccionaste ${actualLength} prospectos y el máximo permitido es ${maxLength}. Divide el proceso en lotes.`
+    }
+    if (Number.isFinite(maxLength)) {
+      return `La solicitud excede el máximo permitido (${maxLength} elementos).`
+    }
+    return "La solicitud excede el máximo permitido. Divide el proceso en lotes."
+  }
+
   return undefined
 }
 
