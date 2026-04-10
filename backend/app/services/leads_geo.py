@@ -196,6 +196,32 @@ async def _fetch_geojson_collection(
     raise RuntimeError(f"supabase_geo_unexpected_payload:{table}")
 
 
+@lru_cache(maxsize=1)
+def _load_ladas_from_db() -> list[dict[str, Any]]:
+    if not settings.supabase_url or not settings.supabase_service_role:
+        raise RuntimeError("supabase_not_configured")
+    url = f"{settings.supabase_url.rstrip('/')}/rest/v1/geo_ladas_mexico"
+    headers = {
+        "apikey": settings.supabase_service_role,
+        "Authorization": f"Bearer {settings.supabase_service_role}",
+        "Accept": "application/json",
+    }
+    params = {
+        "select": "lada,clave_entidad,entidad,localidad",
+        "activo": "eq.true",
+        "order": "lada.asc,clave_entidad.asc,localidad.asc",
+        "limit": "50000",
+    }
+    with httpx.Client(timeout=20.0) as client:
+        resp = client.get(url, headers=headers, params=params)
+    if resp.status_code >= 400:
+        raise RuntimeError(f"supabase_ladas_error:{resp.status_code}")
+    payload = resp.json()
+    if not isinstance(payload, list):
+        raise RuntimeError("supabase_ladas_invalid_payload")
+    return [row for row in payload if isinstance(row, dict)]
+
+
 @lru_cache(maxsize=None)
 def _load_json(relative_path: str) -> Any:
     """Carga un archivo JSON ubicado en `backend/app/data`."""
@@ -214,8 +240,22 @@ def _load_json(relative_path: str) -> Any:
 @lru_cache(maxsize=1)
 def _lada_states() -> dict[str, dict[str, str]]:
     """Retorna mapping de LADA → {cve_ent: nombre}."""
-    catalog = _load_json("ladas/ladas_by_lada.json")
     mapping: dict[str, dict[str, str]] = {}
+    try:
+        rows = _load_ladas_from_db()
+        for row in rows:
+            lada_key = str(row.get("lada") or "").strip()
+            cve_ent = str(row.get("clave_entidad") or "").zfill(2)
+            nom_ent = str(row.get("entidad") or "").strip()
+            if not lada_key or not cve_ent or not nom_ent:
+                continue
+            mapping.setdefault(lada_key, {})[cve_ent] = nom_ent
+        if mapping:
+            return mapping
+    except Exception as exc:
+        logger.warning("leads_geo.ladas_states_db_fallback_file", extra={"error": str(exc)})
+
+    catalog = _load_json("ladas/ladas_by_lada.json")
     if isinstance(catalog, dict):
         for lada, rows in catalog.items():
             lada_key = str(lada)
@@ -495,8 +535,26 @@ def _lada_from_phone(phone_e164: str | None) -> str | None:
 
 @lru_cache(maxsize=1)
 def _lada_localities() -> dict[str, list[dict[str, Any]]]:
-    catalog = _load_json("ladas/ladas_clean.json")
     mapping: dict[str, list[dict[str, Any]]] = {}
+    try:
+        rows = _load_ladas_from_db()
+        for row in rows:
+            lada = str(row.get("lada") or "").strip()
+            if not lada:
+                continue
+            mapped_row = {
+                "lada": lada,
+                "cve_ent": str(row.get("clave_entidad") or "").zfill(2),
+                "nom_ent": str(row.get("entidad") or "").strip(),
+                "localidad": str(row.get("localidad") or "").strip(),
+            }
+            mapping.setdefault(lada, []).append(mapped_row)
+        if mapping:
+            return mapping
+    except Exception as exc:
+        logger.warning("leads_geo.ladas_localities_db_fallback_file", extra={"error": str(exc)})
+
+    catalog = _load_json("ladas/ladas_clean.json")
     if isinstance(catalog, list):
         for row in catalog:
             if not isinstance(row, dict):

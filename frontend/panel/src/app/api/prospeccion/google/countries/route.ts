@@ -1,9 +1,5 @@
 import { NextResponse } from "next/server";
-import { promises as fs } from "node:fs";
-import path from "node:path";
-
-import { getPanelApiBaseUrl } from "@/lib/api/panel";
-import { resolveServerAccessToken } from "@/lib/auth/server-session";
+import { callCrmApi } from "@/lib/api/crm";
 
 type CountryItem = { code: string; name: string };
 
@@ -29,65 +25,28 @@ function parseCountriesFromGeojson(raw: unknown): CountryItem[] {
   return mx ? [mx, ...items.filter((item) => item.code !== "MX")] : items;
 }
 
-async function loadLocalCountriesFallback(): Promise<CountryItem[]> {
-  const filePath = path.join(process.cwd(), "..", "..", "backend", "app", "data", "geo", "world.geojson");
-  const text = await fs.readFile(filePath, "utf-8");
-  const parsed = JSON.parse(text) as unknown;
-  return parseCountriesFromGeojson(parsed);
-}
-
 export async function GET() {
-  const token = await resolveServerAccessToken({ minTtlSeconds: 300 });
-  if (!token) {
-    return NextResponse.json({ error: "auth_required" }, { status: 401 });
+  const trendsResponse = await callCrmApi<{ ok: boolean; items: CountryItem[] }>(
+    "/crm/prospeccion/google/countries",
+    { withUserToken: true },
+  );
+  if (trendsResponse.ok) {
+    return NextResponse.json(trendsResponse.data);
   }
 
-  let targetUrl: string;
-  try {
-    targetUrl = `${getPanelApiBaseUrl()}/crm/prospeccion/google/countries`;
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "backend_not_configured";
-    return NextResponse.json({ error: message }, { status: 500 });
+  const geoResponse = await callCrmApi<{ ok: boolean; geojson: unknown }>(
+    "/crm/demografia/geo/paises",
+    { withUserToken: true },
+  );
+  if (geoResponse.ok) {
+    const items = parseCountriesFromGeojson(geoResponse.data?.geojson);
+    return NextResponse.json({ ok: true, items });
   }
 
-  let backendResponse: Response;
-  try {
-    backendResponse = await fetch(targetUrl, {
-      method: "GET",
-      headers: {
-        Accept: "application/json",
-        Authorization: `Bearer ${token}`,
-      },
-      cache: "no-store",
-    });
-  } catch (error) {
-    try {
-      const items = await loadLocalCountriesFallback();
-      return NextResponse.json({ ok: true, items });
-    } catch {
-      const message = error instanceof Error ? error.message : "backend_unreachable";
-      return NextResponse.json({ error: message }, { status: 502 });
-    }
-  }
-
-  if (!backendResponse.ok) {
-    try {
-      const items = await loadLocalCountriesFallback();
-      return NextResponse.json({ ok: true, items });
-    } catch {
-      const text = await backendResponse.text();
-      const contentType = backendResponse.headers.get("content-type") ?? "application/json";
-      return new NextResponse(text || null, {
-        status: backendResponse.status,
-        headers: { "content-type": contentType },
-      });
-    }
-  }
-
-  const text = await backendResponse.text();
-  const contentType = backendResponse.headers.get("content-type") ?? "application/json";
-  return new NextResponse(text || null, {
-    status: backendResponse.status,
-    headers: { "content-type": contentType },
-  });
+  return NextResponse.json(
+    {
+      error: trendsResponse.error || geoResponse.error || "google_countries_unavailable",
+    },
+    { status: trendsResponse.status || geoResponse.status || 502 },
+  );
 }

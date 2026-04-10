@@ -10,6 +10,9 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any, Literal
 
+import httpx
+
+from app.core.config import settings
 from app.core.logging import get_logger
 
 logger = get_logger("app.services.google_trends")
@@ -37,42 +40,82 @@ class GoogleTrendsServiceError(RuntimeError):
 
 @lru_cache(maxsize=1)
 def _load_google_trends_countries() -> list[dict[str, str]]:
-    if not WORLD_GEOJSON_PATH.exists():
-        raise GoogleTrendsServiceError(
-            "google_trends_countries_catalog_not_found",
-            status_code=500,
-        )
-    try:
-        with WORLD_GEOJSON_PATH.open("r", encoding="utf-8") as fh:
-            data = json.load(fh)
-    except Exception as exc:  # pragma: no cover
-        raise GoogleTrendsServiceError(
-            f"google_trends_countries_catalog_invalid: {exc}",
-            status_code=500,
-        ) from exc
-
-    features = data.get("features") if isinstance(data, dict) else None
-    if not isinstance(features, list):
-        raise GoogleTrendsServiceError(
-            "google_trends_countries_catalog_invalid",
-            status_code=500,
-        )
-
     countries_by_code: dict[str, str] = {}
-    for feature in features:
-        if not isinstance(feature, dict):
-            continue
-        props = feature.get("properties")
-        if not isinstance(props, dict):
-            continue
-        code = str(props.get("ISO_A2") or "").strip().upper()
-        if len(code) != 2 or code == "-99":
-            continue
-        name_raw = props.get("NAME_ES") or props.get("NAME") or props.get("NAME_EN") or code
-        name = str(name_raw).strip()
-        if not name:
-            continue
-        countries_by_code.setdefault(code, name)
+    db_error: Exception | None = None
+
+    if settings.supabase_url and settings.supabase_service_role:
+        try:
+            url = f"{settings.supabase_url.rstrip('/')}/rest/v1/geo_paises"
+            headers = {
+                "apikey": settings.supabase_service_role,
+                "Authorization": f"Bearer {settings.supabase_service_role}",
+                "Accept": "application/json",
+            }
+            params = {
+                "select": "codigo_iso2,nombre,nombre_largo",
+                "activo": "eq.true",
+                "order": "nombre.asc",
+                "limit": "400",
+            }
+            with httpx.Client(timeout=20.0) as client:
+                resp = client.get(url, headers=headers, params=params)
+            if resp.status_code >= 400:
+                raise GoogleTrendsServiceError(
+                    f"google_trends_countries_db_error:{resp.status_code}",
+                    status_code=502,
+                )
+            payload = resp.json()
+            if isinstance(payload, list):
+                for row in payload:
+                    if not isinstance(row, dict):
+                        continue
+                    code = str(row.get("codigo_iso2") or "").strip().upper()
+                    if len(code) != 2:
+                        continue
+                    name = str(row.get("nombre_largo") or row.get("nombre") or code).strip()
+                    if name:
+                        countries_by_code.setdefault(code, name)
+        except Exception as exc:  # pragma: no cover
+            db_error = exc
+
+    if not countries_by_code:
+        if not WORLD_GEOJSON_PATH.exists():
+            raise GoogleTrendsServiceError(
+                "google_trends_countries_catalog_not_found",
+                status_code=500,
+            )
+        try:
+            with WORLD_GEOJSON_PATH.open("r", encoding="utf-8") as fh:
+                data = json.load(fh)
+        except Exception as exc:  # pragma: no cover
+            raise GoogleTrendsServiceError(
+                f"google_trends_countries_catalog_invalid: {exc}",
+                status_code=500,
+            ) from exc
+
+        features = data.get("features") if isinstance(data, dict) else None
+        if not isinstance(features, list):
+            raise GoogleTrendsServiceError(
+                "google_trends_countries_catalog_invalid",
+                status_code=500,
+            )
+
+        for feature in features:
+            if not isinstance(feature, dict):
+                continue
+            props = feature.get("properties")
+            if not isinstance(props, dict):
+                continue
+            code = str(props.get("ISO_A2") or "").strip().upper()
+            if len(code) != 2 or code == "-99":
+                continue
+            name_raw = props.get("NAME_ES") or props.get("NAME") or props.get("NAME_EN") or code
+            name = str(name_raw).strip()
+            if not name:
+                continue
+            countries_by_code.setdefault(code, name)
+        if db_error is not None:
+            logger.warning("google_trends.countries_db_fallback_file", extra={"error": str(db_error)})
 
     items = [
         {"code": code, "name": name}

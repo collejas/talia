@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 from datetime import datetime
-from pathlib import Path
 from typing import Any
 
 import httpx
@@ -17,9 +16,49 @@ COUNTRY_NAME_MAP: dict[str, str] = {}
 
 
 def _load_country_name_map() -> dict[str, str]:
+    # DB-first: catálogo ya migrado a geo_paises.
+    if settings.supabase_url and settings.supabase_service_role:
+        try:
+            url = f"{settings.supabase_url.rstrip('/')}/rest/v1/geo_paises"
+            headers = {
+                "apikey": settings.supabase_service_role,
+                "Authorization": f"Bearer {settings.supabase_service_role}",
+                "Accept": "application/json",
+            }
+            params = {
+                "select": "codigo_iso2,codigo_iso3,nombre,nombre_largo",
+                "activo": "eq.true",
+                "order": "nombre.asc",
+                "limit": "400",
+            }
+            with httpx.Client(timeout=20.0) as client:
+                resp = client.get(url, headers=headers, params=params)
+            if resp.status_code < 400:
+                payload = resp.json()
+                if isinstance(payload, list):
+                    mapping: dict[str, str] = {}
+                    for row in payload:
+                        if not isinstance(row, dict):
+                            continue
+                        name = str(row.get("nombre_largo") or row.get("nombre") or "").strip()
+                        if not name:
+                            continue
+                        iso2 = str(row.get("codigo_iso2") or "").strip().upper()
+                        iso3 = str(row.get("codigo_iso3") or "").strip().upper()
+                        if len(iso2) == 2:
+                            mapping[iso2] = name
+                        if len(iso3) == 3:
+                            mapping[iso3] = name
+                    if mapping:
+                        return mapping
+        except Exception as exc:
+            logger.warning("demografia.country_map_db_fallback_file", extra={"error": str(exc)})
+
+    # Fallback a archivo local.
     try:
-        geo_path = Path(__file__).resolve().parent.parent / "data/geo/world.geojson"
-        with geo_path.open("r", encoding="utf-8") as file:
+        from app.data import data_path
+
+        with data_path("geo", "world.geojson").open("r", encoding="utf-8") as file:
             payload = json.load(file)
     except Exception:
         return {}

@@ -18,7 +18,10 @@ from typing import Any, Literal
 
 import dns.exception
 import dns.resolver
+import httpx
 from email_validator import EmailNotValidError, validate_email
+
+from app.core.config import settings
 
 
 EmailLookupStatus = Literal["pendiente", "sin_email", "valido", "invalido", "dudoso", "error"]
@@ -108,6 +111,36 @@ DOMAIN_TYPO_SUGGESTIONS = {
 
 @lru_cache(maxsize=1)
 def _load_disposable_domains() -> set[str]:
+    if settings.supabase_url and settings.supabase_service_role:
+        try:
+            url = f"{settings.supabase_url.rstrip('/')}/rest/v1/disposable_email_domains"
+            headers = {
+                "apikey": settings.supabase_service_role,
+                "Authorization": f"Bearer {settings.supabase_service_role}",
+                "Accept": "application/json",
+            }
+            params = {
+                "select": "domain",
+                "activo": "eq.true",
+                "limit": "50000",
+            }
+            with httpx.Client(timeout=20.0) as client:
+                resp = client.get(url, headers=headers, params=params)
+            if resp.status_code < 400:
+                payload = resp.json()
+                if isinstance(payload, list):
+                    db_domains = {
+                        str(row.get("domain") or "").strip().lower()
+                        for row in payload
+                        if isinstance(row, dict)
+                    }
+                    db_domains = {d for d in db_domains if d and " " not in d}
+                    if db_domains:
+                        return db_domains
+        except Exception:
+            # Fallback local best-effort.
+            pass
+
     domains: set[str] = set()
     try:
         if DISPOSABLE_DOMAINS_PATH.exists():
