@@ -7,9 +7,15 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any, Mapping
 
+import httpx
+
+from app.core.config import settings
+from app.core.logging import get_logger
+
 BASE_DIR = Path(__file__).resolve().parent
 MUNICIPIOS_DIR = BASE_DIR / "municipios"
 MANIFEST_PATH = MUNICIPIOS_DIR / "manifest.json"
+logger = get_logger("app.data.geo.locations")
 
 try:
     _MANIFEST: Mapping[str, Mapping[str, str]] | None
@@ -17,6 +23,96 @@ try:
         _MANIFEST = json.load(handle)
 except Exception:  # pragma: no cover - debe existir el manifiesto
     _MANIFEST = {}
+
+
+def _has_supabase() -> bool:
+    return bool(settings.supabase_url and settings.supabase_service_role)
+
+
+def _supabase_headers() -> dict[str, str]:
+    token = settings.supabase_service_role or ""
+    return {
+        "apikey": token,
+        "Authorization": f"Bearer {token}",
+        "Accept": "application/json",
+    }
+
+
+@lru_cache(maxsize=1)
+def _load_states_from_db() -> dict[str, str]:
+    if not _has_supabase():
+        return {}
+    try:
+        url = f"{settings.supabase_url.rstrip('/')}/rest/v1/geo_estados_mexico"
+        params = {
+            "select": "clave_entidad,nombre",
+            "activo": "eq.true",
+            "pais_codigo": "eq.MX",
+            "order": "clave_entidad.asc",
+            "limit": "64",
+        }
+        with httpx.Client(timeout=20.0) as client:
+            resp = client.get(url, headers=_supabase_headers(), params=params)
+        if resp.status_code >= 400:
+            logger.warning(
+                "geo.locations.states_db_error",
+                extra={"status_code": resp.status_code},
+            )
+            return {}
+        payload = resp.json()
+        if not isinstance(payload, list):
+            return {}
+        mapping: dict[str, str] = {}
+        for row in payload:
+            if not isinstance(row, dict):
+                continue
+            code = str(row.get("clave_entidad") or "").strip().zfill(2)
+            name = str(row.get("nombre") or "").strip()
+            if code and name:
+                mapping[code] = name
+        return mapping
+    except Exception as exc:  # pragma: no cover
+        logger.warning("geo.locations.states_db_fallback_file", extra={"error": str(exc)})
+        return {}
+
+
+@lru_cache(maxsize=1)
+def _load_municipalities_from_db() -> dict[str, dict[str, str]]:
+    if not _has_supabase():
+        return {}
+    try:
+        url = f"{settings.supabase_url.rstrip('/')}/rest/v1/geo_municipios_mexico"
+        params = {
+            "select": "clave_entidad,clave_municipio,nombre",
+            "activo": "eq.true",
+            "order": "clave_entidad.asc,clave_municipio.asc",
+            "limit": "5000",
+        }
+        with httpx.Client(timeout=30.0) as client:
+            resp = client.get(url, headers=_supabase_headers(), params=params)
+        if resp.status_code >= 400:
+            logger.warning(
+                "geo.locations.municipalities_db_error",
+                extra={"status_code": resp.status_code},
+            )
+            return {}
+        payload = resp.json()
+        if not isinstance(payload, list):
+            return {}
+        mapping: dict[str, dict[str, str]] = {}
+        for row in payload:
+            if not isinstance(row, dict):
+                continue
+            state_code = str(row.get("clave_entidad") or "").strip().zfill(2)
+            municipality_code = str(row.get("clave_municipio") or "").strip().zfill(3)
+            name = str(row.get("nombre") or "").strip()
+            if not state_code or not municipality_code or not name:
+                continue
+            mapping.setdefault(state_code, {})[municipality_code] = name
+        return mapping
+    except Exception as exc:  # pragma: no cover
+        logger.warning("geo.locations.municipalities_db_fallback_file", extra={"error": str(exc)})
+        return {}
 
 
 def _normalize_state_code(value: str | None) -> str:
@@ -33,7 +129,14 @@ def _normalize_municipality_code(value: str | None) -> str:
 
 def get_state_name(state_code: str | None) -> str | None:
     code = _normalize_state_code(state_code)
-    if not code or not _MANIFEST:
+    if not code:
+        return None
+    db_states = _load_states_from_db()
+    if db_states:
+        from_db = db_states.get(code)
+        if from_db:
+            return from_db
+    if not _MANIFEST:
         return None
     entry = _MANIFEST.get(code)
     return entry.get("name") if entry else None
@@ -41,6 +144,11 @@ def get_state_name(state_code: str | None) -> str | None:
 
 @lru_cache(maxsize=None)
 def _load_municipalities_for_state(state_code: str) -> Mapping[str, str]:
+    db_municipalities = _load_municipalities_from_db()
+    if db_municipalities:
+        by_state = db_municipalities.get(state_code)
+        if by_state:
+            return by_state
     if not _MANIFEST:
         return {}
     entry = _MANIFEST.get(state_code)
@@ -77,6 +185,9 @@ def get_municipality_name(state_code: str | None, municipality_code: str | None)
 def list_states() -> list[dict[str, str]]:
     """Lista los estados disponibles con clave de dos dígitos y nombre."""
 
+    db_states = _load_states_from_db()
+    if db_states:
+        return [{"code": code, "name": db_states[code]} for code in sorted(db_states.keys())]
     if not _MANIFEST:
         return []
     result: list[dict[str, str]] = []
