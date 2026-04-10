@@ -14834,8 +14834,8 @@ class CRMRepository:
                 "organizacion_id": str(organizacion_id) if organizacion_id else None,
             },
         )
-        retries = 1
-        delay_seconds = 0.35
+        retries = 2
+        delay_seconds = 0.5
         last_exc: httpx.RequestError | None = None
         resp: httpx.Response | None = None
         for attempt in range(retries + 1):
@@ -15017,8 +15017,8 @@ class CRMRepository:
                 "crm.rpc_payload",
                 extra={"function": function_name, "payload": payload},
             )
-        retries = 1
-        delay_seconds = 0.35
+        retries = 2
+        delay_seconds = 0.5
         last_exc: httpx.RequestError | None = None
         resp: httpx.Response | None = None
         for attempt in range(retries + 1):
@@ -15112,8 +15112,8 @@ class CRMRepository:
             headers["X-Organizacion-Id"] = str(organizacion_id)
         if prefer:
             headers["Prefer"] = prefer
-        retries = 1
-        delay_seconds = 0.35
+        retries = 2
+        delay_seconds = 0.5
         last_exc: httpx.RequestError | None = None
         resp: httpx.Response | None = None
         for attempt in range(retries + 1):

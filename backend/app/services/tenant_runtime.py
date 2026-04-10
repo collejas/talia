@@ -136,8 +136,8 @@ async def _supabase_get(path: str, *, params: dict[str, str]) -> Any:
         "apikey": service_role,
         "Authorization": f"Bearer {service_role}",
     }
-    retries = 1
-    retry_delay_seconds = 0.35
+    retries = 2
+    retry_delay_seconds = 0.5
     resp: httpx.Response | None = None
     for attempt in range(1, retries + 2):
         try:
