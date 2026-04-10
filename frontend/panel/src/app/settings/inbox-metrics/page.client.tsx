@@ -270,6 +270,8 @@ export function InboxMetricsOwnerClient() {
   const processEndpoints = current?.process_metrics?.endpoints ?? {};
   const prospectListMetrics = processEndpoints["prospeccion.prospectos.list"];
   const prospectQueriesMetrics = processEndpoints["prospeccion.prospectos.queries"];
+  const demografiaResumenMetrics = processEndpoints["demografia.resumen_v2"];
+  const demografiaMapaMetrics = processEndpoints["demografia.mapa_v2"];
   const chartPoints = React.useMemo(() => buildChartPoints(history), [history]);
   const p95Polyline = React.useMemo(
     () => buildPolyline(chartPoints.map((point) => point.p95), 100, 32),
@@ -294,6 +296,22 @@ export function InboxMetricsOwnerClient() {
   const prospectQueriesP95Polyline = React.useMemo(
     () => buildPolyline(prospectQueriesChartPoints.map((point) => point.p95), 100, 32),
     [prospectQueriesChartPoints],
+  );
+  const demografiaResumenChartPoints = React.useMemo(
+    () => buildProcessChartPoints(history, "demografia.resumen_v2"),
+    [history],
+  );
+  const demografiaResumenP95Polyline = React.useMemo(
+    () => buildPolyline(demografiaResumenChartPoints.map((point) => point.p95), 100, 32),
+    [demografiaResumenChartPoints],
+  );
+  const demografiaMapaChartPoints = React.useMemo(
+    () => buildProcessChartPoints(history, "demografia.mapa_v2"),
+    [history],
+  );
+  const demografiaMapaP95Polyline = React.useMemo(
+    () => buildPolyline(demografiaMapaChartPoints.map((point) => point.p95), 100, 32),
+    [demografiaMapaChartPoints],
   );
 
   return (
@@ -398,9 +416,9 @@ export function InboxMetricsOwnerClient() {
 
       <Card>
         <CardHeader className="pb-2">
-          <CardTitle>Métricas de Proceso (Prospección)</CardTitle>
+          <CardTitle>Métricas de Proceso</CardTitle>
         </CardHeader>
-        <CardContent className="grid gap-4 md:grid-cols-2">
+        <CardContent className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           <div className="rounded-lg border border-border/60 p-3">
             <p className="text-sm font-medium">/prospeccion/prospectos</p>
             <div className="mt-2 text-sm text-muted-foreground">
@@ -419,6 +437,28 @@ export function InboxMetricsOwnerClient() {
               slow &gt; 3s: {prospectQueriesMetrics?.slow_queries_over_3000ms ?? 0}
             </div>
           </div>
+          <div className="rounded-lg border border-border/60 p-3">
+            <p className="text-sm font-medium">/demografia/resumen-v2</p>
+            <div className="mt-2 text-sm text-muted-foreground">
+              req: {demografiaResumenMetrics?.request_count ?? 0} · p95: {formatMetric(demografiaResumenMetrics?.latency_ms?.p95)} ms
+            </div>
+            <div className="text-sm text-muted-foreground">
+              cache hit: {Math.trunc(Number(demografiaResumenMetrics?.flags?.cache_hit ?? 0))}
+              {" · "}
+              miss: {Math.trunc(Number(demografiaResumenMetrics?.flags?.cache_miss ?? 0))}
+            </div>
+          </div>
+          <div className="rounded-lg border border-border/60 p-3">
+            <p className="text-sm font-medium">/demografia/mapa-v2</p>
+            <div className="mt-2 text-sm text-muted-foreground">
+              req: {demografiaMapaMetrics?.request_count ?? 0} · p95: {formatMetric(demografiaMapaMetrics?.latency_ms?.p95)} ms
+            </div>
+            <div className="text-sm text-muted-foreground">
+              cache hit: {Math.trunc(Number(demografiaMapaMetrics?.flags?.cache_hit ?? 0))}
+              {" · "}
+              miss: {Math.trunc(Number(demografiaMapaMetrics?.flags?.cache_miss ?? 0))}
+            </div>
+          </div>
         </CardContent>
       </Card>
 
@@ -426,7 +466,7 @@ export function InboxMetricsOwnerClient() {
         <CardHeader className="pb-2">
           <CardTitle>Mini gráfica (últimos 24 snapshots)</CardTitle>
         </CardHeader>
-        <CardContent className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <CardContent className="grid gap-4 md:grid-cols-2 xl:grid-cols-6">
           <div className="rounded-lg border border-border/60 p-3">
             <p className="mb-2 text-xs font-medium text-muted-foreground">p95 (ms)</p>
             {p95Polyline ? (
@@ -491,6 +531,38 @@ export function InboxMetricsOwnerClient() {
               <p className="text-sm text-muted-foreground">Aún no hay suficientes snapshots.</p>
             )}
           </div>
+          <div className="rounded-lg border border-border/60 p-3">
+            <p className="mb-2 text-xs font-medium text-muted-foreground">Demografía resumen p95 (ms)</p>
+            {demografiaResumenP95Polyline ? (
+              <svg viewBox="0 0 100 32" className="h-24 w-full">
+                <polyline
+                  points={demografiaResumenP95Polyline}
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.5"
+                  className="text-rose-600"
+                />
+              </svg>
+            ) : (
+              <p className="text-sm text-muted-foreground">Aún no hay suficientes snapshots.</p>
+            )}
+          </div>
+          <div className="rounded-lg border border-border/60 p-3">
+            <p className="mb-2 text-xs font-medium text-muted-foreground">Demografía mapa p95 (ms)</p>
+            {demografiaMapaP95Polyline ? (
+              <svg viewBox="0 0 100 32" className="h-24 w-full">
+                <polyline
+                  points={demografiaMapaP95Polyline}
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.5"
+                  className="text-cyan-600"
+                />
+              </svg>
+            ) : (
+              <p className="text-sm text-muted-foreground">Aún no hay suficientes snapshots.</p>
+            )}
+          </div>
         </CardContent>
       </Card>
 
@@ -513,6 +585,8 @@ export function InboxMetricsOwnerClient() {
                   <TableHead>Slow &gt;3s</TableHead>
                   <TableHead>Prospectos p95</TableHead>
                   <TableHead>Queries p95</TableHead>
+                  <TableHead>Resumen v2 p95</TableHead>
+                  <TableHead>Mapa v2 p95</TableHead>
                   <TableHead>Samples</TableHead>
                   <TableHead>Actor</TableHead>
                 </TableRow>
@@ -534,6 +608,12 @@ export function InboxMetricsOwnerClient() {
                         <TableCell>
                           {snapshot.process_metrics?.endpoints?.["prospeccion.prospectos.queries"]?.latency_ms?.p95 ?? "—"}
                         </TableCell>
+                        <TableCell>
+                          {snapshot.process_metrics?.endpoints?.["demografia.resumen_v2"]?.latency_ms?.p95 ?? "—"}
+                        </TableCell>
+                        <TableCell>
+                          {snapshot.process_metrics?.endpoints?.["demografia.mapa_v2"]?.latency_ms?.p95 ?? "—"}
+                        </TableCell>
                         <TableCell>{snapshot.sample_count ?? "—"}</TableCell>
                         <TableCell className="font-mono text-xs">
                           {item.actor_user_id ?? "—"}
@@ -543,7 +623,7 @@ export function InboxMetricsOwnerClient() {
                   })
                 ) : (
                   <TableRow>
-                    <TableCell colSpan={9} className="text-center text-sm text-muted-foreground">
+                    <TableCell colSpan={11} className="text-center text-sm text-muted-foreground">
                       No hay snapshots guardados todavía.
                     </TableCell>
                   </TableRow>

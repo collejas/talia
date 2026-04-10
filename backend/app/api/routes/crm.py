@@ -139,23 +139,142 @@ DEFAULT_SALE_LOG_LIMIT = 20
 INBOX_THREADS_METRICS_LOG_FILE = resolve_log_path("inbox-threads-metrics.log")
 INBOX_THREADS_METRICS_LOG_TAIL_BYTES = 256 * 1024
 DEFAULT_INBOX_THREADS_METRICS_HISTORY_LIMIT = 100
+SUPABASE_CONNECTIVITY_LOG_FILE = resolve_log_path("supabase-connectivity.log")
+SUPABASE_CONNECTIVITY_LOG_TAIL_BYTES = 512 * 1024
+DEFAULT_SUPABASE_CONNECTIVITY_HISTORY_LIMIT = 200
+SUPABASE_TRANSIENT_MARKERS = (
+    "error de red al llamar supabase",
+    "no address associated with hostname",
+    "temporary failure in name resolution",
+    "name or service not known",
+    "connecttimeout",
+    "connect timeout",
+    "timed out",
+    "timeout",
+    "connection reset",
+    "temporarily unavailable",
+)
 
 
 def _is_transient_supabase_error(value: Any) -> bool:
     message = str(value or "").lower()
-    transient_markers = (
-        "error de red al llamar supabase",
-        "no address associated with hostname",
-        "temporary failure in name resolution",
-        "name or service not known",
-        "connecttimeout",
-        "connect timeout",
-        "timed out",
-        "timeout",
-        "connection reset",
-        "temporarily unavailable",
+    return any(marker in message for marker in SUPABASE_TRANSIENT_MARKERS)
+
+
+def _append_supabase_connectivity_event(entry: dict[str, Any]) -> None:
+    try:
+        MAPBOX_LOG_DIR.mkdir(parents=True, exist_ok=True)
+        with SUPABASE_CONNECTIVITY_LOG_FILE.open("a", encoding="utf-8") as handle:
+            handle.write(f"{json.dumps(entry, default=str)}\n")
+    except Exception as exc:  # pragma: no cover - best-effort logging
+        logger.warning("crm.supabase_connectivity.log_failed", extra={"error": str(exc)})
+
+
+def _read_supabase_connectivity_events(
+    limit: int = DEFAULT_SUPABASE_CONNECTIVITY_HISTORY_LIMIT,
+) -> list[dict[str, Any]]:
+    if limit <= 0:
+        return []
+    if not SUPABASE_CONNECTIVITY_LOG_FILE.exists():
+        return []
+    try:
+        file_stats = SUPABASE_CONNECTIVITY_LOG_FILE.stat()
+    except OSError:
+        return []
+    chunk_size = (
+        min(file_stats.st_size, SUPABASE_CONNECTIVITY_LOG_TAIL_BYTES)
+        if file_stats.st_size > 0
+        else 0
     )
-    return any(marker in message for marker in transient_markers)
+    if chunk_size <= 0:
+        return []
+    start_position = max(0, file_stats.st_size - chunk_size)
+    try:
+        with SUPABASE_CONNECTIVITY_LOG_FILE.open("rb") as handle:
+            handle.seek(start_position)
+            buffer = handle.read(chunk_size)
+    except OSError:
+        return []
+    text = buffer.decode("utf-8", errors="ignore")
+    lines = text.splitlines()
+    if start_position > 0 and lines:
+        lines = lines[1:]
+    lines = [line for line in lines if line.strip()]
+    if not lines:
+        return []
+    selected_lines = lines[-limit:] if limit < len(lines) else lines[:]
+    selected_lines.reverse()
+    entries: list[dict[str, Any]] = []
+    for line in selected_lines:
+        try:
+            parsed = json.loads(line)
+            if isinstance(parsed, dict):
+                entries.append(parsed)
+        except json.JSONDecodeError:
+            continue
+    return entries
+
+
+def _parse_supabase_event_dt(value: Any) -> datetime | None:
+    if not isinstance(value, str):
+        return None
+    candidate = value.strip()
+    if not candidate:
+        return None
+    normalized = candidate.replace("Z", "+00:00")
+    try:
+        parsed = datetime.fromisoformat(normalized)
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        return parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
+
+
+def _snapshot_supabase_connectivity_metrics(
+    *,
+    window_seconds: int,
+    limit: int,
+) -> dict[str, Any]:
+    now = datetime.now(timezone.utc)
+    cutoff = now - timedelta(seconds=window_seconds)
+    events = _read_supabase_connectivity_events(limit=limit)
+    window_events = [
+        event
+        for event in events
+        if (_parse_supabase_event_dt(event.get("captured_at")) or now) >= cutoff
+    ]
+
+    counts_by_type = dict(
+        Counter(
+            str(event.get("event_type") or "unknown")
+            for event in window_events
+        )
+    )
+    counts_by_operation = dict(
+        Counter(
+            str(event.get("operation") or "unknown")
+            for event in window_events
+        )
+    )
+    unique_operations = sorted({name for name in counts_by_operation.keys() if name != "unknown"})
+
+    return {
+        "captured_at": now.isoformat(),
+        "window_seconds": window_seconds,
+        "loaded_events": len(events),
+        "events_in_window": len(window_events),
+        "summary": {
+            "transient_retries": int(counts_by_type.get("transient_retry_scheduled", 0)),
+            "transient_failures": int(counts_by_type.get("transient_failure", 0)),
+            "transient_recovered": int(counts_by_type.get("transient_recovered", 0)),
+            "unknown": int(counts_by_type.get("unknown", 0)),
+            "unique_operations": len(unique_operations),
+        },
+        "counts_by_type": counts_by_type,
+        "counts_by_operation": counts_by_operation,
+        "recent_events": window_events,
+    }
 
 
 async def _retry_transient_repo_error(
@@ -168,11 +287,33 @@ async def _retry_transient_repo_error(
     last_exc: CRMRepositoryError | None = None
     for attempt in range(retries + 1):
         try:
-            return await func()
+            result = await func()
+            if attempt > 0:
+                _append_supabase_connectivity_event(
+                    {
+                        "captured_at": datetime.now(timezone.utc).isoformat(),
+                        "event_type": "transient_recovered",
+                        "operation": operation,
+                        "attempt": attempt + 1,
+                        "retries_configured": retries,
+                    }
+                )
+            return result
         except CRMRepositoryError as exc:
             last_exc = exc
             should_retry = attempt < retries and _is_transient_supabase_error(exc)
             if should_retry:
+                _append_supabase_connectivity_event(
+                    {
+                        "captured_at": datetime.now(timezone.utc).isoformat(),
+                        "event_type": "transient_retry_scheduled",
+                        "operation": operation,
+                        "attempt": attempt + 1,
+                        "next_attempt": attempt + 2,
+                        "retries_configured": retries,
+                        "error": str(exc),
+                    }
+                )
                 logger.warning(
                     "crm.retry_transient_repo_error",
                     extra={
@@ -184,6 +325,17 @@ async def _retry_transient_repo_error(
                 )
                 await asyncio.sleep(delay_seconds)
                 continue
+            if _is_transient_supabase_error(exc):
+                _append_supabase_connectivity_event(
+                    {
+                        "captured_at": datetime.now(timezone.utc).isoformat(),
+                        "event_type": "transient_failure",
+                        "operation": operation,
+                        "attempt": attempt + 1,
+                        "retries_configured": retries,
+                        "error": str(exc),
+                    }
+                )
             raise
     raise last_exc or CRMRepositoryError(f"Operacion fallida: {operation}")
 
@@ -251,6 +403,10 @@ _PROSPECTO_QUERIES_CACHE: dict[str, tuple[float, dict[str, Any]]] = {}
 _PROSPECTO_QUERIES_CACHE_LOCK = asyncio.Lock()
 _PROSPECTO_QUERIES_INFLIGHT_LOCK = asyncio.Lock()
 _PROSPECTO_QUERIES_INFLIGHT: dict[str, asyncio.Future[dict[str, Any]]] = {}
+DEMOGRAFIA_RESPONSE_CACHE_TTL_SECONDS = 30.0
+DEMOGRAFIA_RESPONSE_CACHE_MAX_ENTRIES = 256
+_DEMOGRAFIA_RESPONSE_CACHE: dict[str, tuple[float, dict[str, Any]]] = {}
+_DEMOGRAFIA_RESPONSE_CACHE_LOCK = asyncio.Lock()
 GOOGLE_TRENDS_ALLOWED_ORGANIZACION_ID = UUID("00000000-0000-0000-0000-000000000001")
 
 
@@ -356,6 +512,53 @@ async def _write_inbox_catalog_cache(cache_key: str, rows: list[dict[str, Any]])
             if not oldest_key:
                 break
             _INBOX_CATALOG_CACHE.pop(oldest_key, None)
+
+
+def _demografia_token_fingerprint(value: str | None) -> str:
+    raw = str(value or "").strip()
+    if not raw:
+        return ""
+    return hashlib.sha1(raw.encode("utf-8")).hexdigest()[:16]
+
+
+def _build_demografia_response_cache_key(endpoint: str, payload: dict[str, Any]) -> str:
+    raw = json.dumps(
+        {"endpoint": endpoint, **payload},
+        sort_keys=True,
+        default=str,
+        separators=(",", ":"),
+    )
+    return hashlib.sha1(raw.encode("utf-8")).hexdigest()
+
+
+async def _read_demografia_response_cache(cache_key: str) -> dict[str, Any] | None:
+    now = time.monotonic()
+    async with _DEMOGRAFIA_RESPONSE_CACHE_LOCK:
+        entry = _DEMOGRAFIA_RESPONSE_CACHE.get(cache_key)
+        if not entry:
+            return None
+        expires_at, cached_value = entry
+        if expires_at <= now:
+            _DEMOGRAFIA_RESPONSE_CACHE.pop(cache_key, None)
+            return None
+        # deep-copy defensivo para evitar mutaciones entre requests
+        return json.loads(json.dumps(cached_value, default=str))
+
+
+async def _write_demografia_response_cache(cache_key: str, payload: dict[str, Any]) -> None:
+    now = time.monotonic()
+    expires_at = now + DEMOGRAFIA_RESPONSE_CACHE_TTL_SECONDS
+    safe_payload = json.loads(json.dumps(payload, default=str))
+    async with _DEMOGRAFIA_RESPONSE_CACHE_LOCK:
+        expired = [key for key, (ttl, _) in _DEMOGRAFIA_RESPONSE_CACHE.items() if ttl <= now]
+        for key in expired:
+            _DEMOGRAFIA_RESPONSE_CACHE.pop(key, None)
+        _DEMOGRAFIA_RESPONSE_CACHE[cache_key] = (expires_at, safe_payload)
+        while len(_DEMOGRAFIA_RESPONSE_CACHE) > DEMOGRAFIA_RESPONSE_CACHE_MAX_ENTRIES:
+            oldest_key = next(iter(_DEMOGRAFIA_RESPONSE_CACHE), None)
+            if not oldest_key:
+                break
+            _DEMOGRAFIA_RESPONSE_CACHE.pop(oldest_key, None)
 
 
 async def _read_whatsapp_envio_hint_cache(
@@ -13978,6 +14181,20 @@ async def get_high_demand_mode_status(
     return {"ok": True, "snapshot": snapshot, "mode": mode}
 
 
+@router.get("/ops/supabase-connectivity")
+async def get_supabase_connectivity_metrics(
+    *,
+    _: str = Depends(require_owner_only()),
+    window_seconds: Annotated[int, Query(ge=60, le=86400)] = 3600,
+    limit: Annotated[int, Query(ge=1, le=500)] = DEFAULT_SUPABASE_CONNECTIVITY_HISTORY_LIMIT,
+) -> dict[str, Any]:
+    snapshot = _snapshot_supabase_connectivity_metrics(
+        window_seconds=window_seconds,
+        limit=limit,
+    )
+    return {"ok": True, **snapshot}
+
+
 @router.get("/inbox/runtime-profile")
 async def get_inbox_runtime_profile(
     *,
@@ -26651,6 +26868,7 @@ async def demografia_resumen_v2(
     desde: str | None = Query(default=None),
     hasta: str | None = Query(default=None),
 ) -> dict[str, Any]:
+    request_started = time.perf_counter()
     effective_user_token = _normalize_reports_user_token(user_token)
     nivel_normalizado = (nivel or "estado").strip().lower() or "estado"
     state_code: str | None = None
@@ -26701,6 +26919,45 @@ async def demografia_resumen_v2(
             wa_regla_uuid_value = UUID(wa_regla_id_raw)
         except ValueError as exc:
             raise HTTPException(status_code=400, detail="wa_regla_id_invalid") from exc
+
+    resumen_cache_key = _build_demografia_response_cache_key(
+        "resumen-v2",
+        {
+            "organizacion_id": str(organizacion_id),
+            "usuario_id": str(usuario_id) if usuario_id else None,
+            "token_fp": _demografia_token_fingerprint(effective_user_token),
+            "nivel": nivel_normalizado,
+            "estado": state_code,
+            "canales": channel_values,
+            "etapas": stage_values,
+            "source_class": source_class_value,
+            "utm_source": utm_source_value,
+            "utm_medium": utm_medium_value,
+            "utm_campaign": utm_campaign_value,
+            "campana_id": str(campana_uuid_value) if campana_uuid_value else None,
+            "campana_tipo": campana_tipo_value,
+            "template_id": str(template_uuid_value) if template_uuid_value else None,
+            "wa_canal_publicitario": wa_canal_publicitario_value,
+            "wa_campana_publicitaria": wa_campana_publicitaria_value,
+            "wa_regla_id": str(wa_regla_uuid_value) if wa_regla_uuid_value else None,
+            "from": date_from.isoformat() if date_from else None,
+            "to": date_to.isoformat() if date_to else None,
+            "timezone": effective_timezone,
+        },
+    )
+    cached_resumen = await _read_demografia_response_cache(resumen_cache_key)
+    if cached_resumen is not None:
+        duration_ms = (time.perf_counter() - request_started) * 1000
+        await _record_prospectos_process_metrics(
+            endpoint="demografia.resumen_v2",
+            duration_ms=duration_ms,
+            flags={"cache_hit": True},
+        )
+        logger.info(
+            "crm.demografia.resumen_v2.cache_hit",
+            extra={"duration_ms": round(duration_ms, 2), "nivel": nivel_normalizado, "estado": state_code},
+        )
+        return cached_resumen
 
     try:
         leads_payload = await demografia_service.fetch_leads_resumen(
@@ -26953,7 +27210,7 @@ async def demografia_resumen_v2(
         logger.exception("crm.demografia.resumen_v2_catalog_failed")
         raise HTTPException(status_code=502, detail=str(exc) or "Error de catálogo de atribución") from exc
 
-    return {
+    response_payload = {
         "ok": True,
         "nivel": nivel_normalizado,
         "estado": state_code,
@@ -26984,6 +27241,18 @@ async def demografia_resumen_v2(
         "leads": leads_payload,
         "visitantes": visitantes_payload,
     }
+    await _write_demografia_response_cache(resumen_cache_key, response_payload)
+    duration_ms = (time.perf_counter() - request_started) * 1000
+    await _record_prospectos_process_metrics(
+        endpoint="demografia.resumen_v2",
+        duration_ms=duration_ms,
+        flags={"cache_miss": True},
+    )
+    logger.info(
+        "crm.demografia.resumen_v2.cache_miss",
+        extra={"duration_ms": round(duration_ms, 2), "nivel": nivel_normalizado, "estado": state_code},
+    )
+    return response_payload
 
 
 @router.get("/demografia/mapa-v2")
@@ -27013,6 +27282,7 @@ async def demografia_mapa_v2(
     hasta: str | None = Query(default=None),
     skip_visitantes: bool = Query(default=False),
 ) -> dict[str, Any]:
+    request_started = time.perf_counter()
     effective_user_token = _normalize_reports_user_token(user_token)
     nivel_normalizado = (nivel or "estado").strip().lower() or "estado"
     state_code: str | None = None
@@ -27063,6 +27333,58 @@ async def demografia_mapa_v2(
             wa_regla_uuid_value = UUID(wa_regla_id_raw)
         except ValueError as exc:
             raise HTTPException(status_code=400, detail="wa_regla_id_invalid") from exc
+
+    mapa_cache_key = _build_demografia_response_cache_key(
+        "mapa-v2",
+        {
+            "organizacion_id": str(organizacion_id),
+            "usuario_id": str(usuario_id) if usuario_id else None,
+            "token_fp": _demografia_token_fingerprint(effective_user_token),
+            "nivel": nivel_normalizado,
+            "estado": state_code,
+            "canales": channel_values,
+            "etapas": stage_values,
+            "source_class": source_class_value,
+            "utm_source": utm_source_value,
+            "utm_medium": utm_medium_value,
+            "utm_campaign": utm_campaign_value,
+            "campana_id": str(campana_uuid_value) if campana_uuid_value else None,
+            "campana_tipo": campana_tipo_value,
+            "template_id": str(template_uuid_value) if template_uuid_value else None,
+            "wa_canal_publicitario": wa_canal_publicitario_value,
+            "wa_campana_publicitaria": wa_campana_publicitaria_value,
+            "wa_regla_id": str(wa_regla_uuid_value) if wa_regla_uuid_value else None,
+            "skip_visitantes": bool(skip_visitantes),
+            "from": date_from.isoformat() if date_from else None,
+            "to": date_to.isoformat() if date_to else None,
+            "timezone": effective_timezone,
+        },
+    )
+    cached_mapa = await _read_demografia_response_cache(mapa_cache_key)
+    if cached_mapa is not None:
+        try:
+            if nivel_normalizado == "pais":
+                geojson = await leads_geo.load_world_countries_geojson_db_first()
+            elif nivel_normalizado == "estado":
+                geojson = await leads_geo.load_full_states_geojson_db_first()
+            else:
+                geojson = await leads_geo.load_state_municipalities_geojson_db_first(state_code or "00")
+        except FileNotFoundError as exc:  # pragma: no cover - depende del despliegue
+            logger.exception("crm.demografia.geo_missing")
+            raise HTTPException(status_code=500, detail="geojson_missing") from exc
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail="estado_not_found") from exc
+        duration_ms = (time.perf_counter() - request_started) * 1000
+        await _record_prospectos_process_metrics(
+            endpoint="demografia.mapa_v2",
+            duration_ms=duration_ms,
+            flags={"cache_hit": True},
+        )
+        logger.info(
+            "crm.demografia.mapa_v2.cache_hit",
+            extra={"duration_ms": round(duration_ms, 2), "nivel": nivel_normalizado, "estado": state_code},
+        )
+        return {**cached_mapa, "geojson": geojson}
 
     try:
         leads_payload = await demografia_service.fetch_leads_resumen(
@@ -27168,7 +27490,7 @@ async def demografia_mapa_v2(
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="estado_not_found") from exc
 
-    return {
+    response_payload = {
         "ok": True,
         "nivel": nivel_normalizado,
         "estado": state_code,
@@ -27196,6 +27518,20 @@ async def demografia_mapa_v2(
         "dataset": dataset,
         "geojson": geojson,
     }
+    cached_payload = dict(response_payload)
+    cached_payload.pop("geojson", None)
+    await _write_demografia_response_cache(mapa_cache_key, cached_payload)
+    duration_ms = (time.perf_counter() - request_started) * 1000
+    await _record_prospectos_process_metrics(
+        endpoint="demografia.mapa_v2",
+        duration_ms=duration_ms,
+        flags={"cache_miss": True},
+    )
+    logger.info(
+        "crm.demografia.mapa_v2.cache_miss",
+        extra={"duration_ms": round(duration_ms, 2), "nivel": nivel_normalizado, "estado": state_code},
+    )
+    return response_payload
 
 
 @router.get("/demografia/geo/estados")

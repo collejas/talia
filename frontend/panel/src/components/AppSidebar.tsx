@@ -167,6 +167,12 @@ const NAVIGATION: {
           permission: "settings.manage",
         },
         {
+          title: "Supabase Connectivity",
+          url: "/settings/supabase-connectivity",
+          icon: IconDatabase,
+          permission: "settings.manage",
+        },
+        {
           title: "Costos OpenAI",
           url: "/settings/openai-costs",
           icon: IconDatabase,
