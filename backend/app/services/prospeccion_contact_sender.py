@@ -1394,14 +1394,8 @@ class ProspeccionContactSender:
         )
         await repo.worker_insert_contact_logs([log_entry])
 
-        if canal == "whatsapp" and result.mensaje_id:
-            await _log_whatsapp_inbox_message(
-                repo=repo,
-                envio=envio,
-                detalle=detalle,
-                payload=payload,
-                result=result,
-            )
+        # Flujo prospección WhatsApp (outbound): no crear inbox/conversación/oportunidad
+        # hasta que exista interacción inbound real del prospecto.
         if is_promotable_estado(update_payload.get("estado")):
             await auto_promote_prospecto(
                 prospecto_id=envio.get("prospecto_id"),

@@ -3840,7 +3840,7 @@ class CRMRepository:
         cutoff = inactive_since.astimezone(timezone.utc).isoformat()
         params = {
             "select": (
-                "id,contacto_id,organizacion_id,estado,ultimo_saliente_en,ultimo_entrante_en,"
+                "id,contacto_id,organizacion_id,estado,ultimo_saliente_en,ultimo_entrante_en,inbox_context,"
                 "conversaciones_controles(manual_override)"
             ),
             "canal": "eq.whatsapp",

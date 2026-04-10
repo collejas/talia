@@ -172,3 +172,60 @@ def test_should_skip_reengage_when_opportunity_closed():
         "etapa": {"codigo": "cerrado_perdido", "categoria": "perdida"},
     }
     assert whatsapp_followups._should_skip_reengage_for_business_rules(opportunity)
+
+
+@pytest.mark.asyncio
+async def test_run_followups_skips_outbound_prospeccion_without_reply(monkeypatch):
+    now = datetime(2025, 1, 1, 12, 0, tzinfo=timezone.utc)
+    convo = {
+        "id": "conv-3",
+        "contacto_id": "contact-3",
+        "organizacion_id": str(uuid4()),
+        "ultimo_saliente_en": (now - timedelta(minutes=40)).isoformat(),
+        "ultimo_entrante_en": None,
+        "inbox_context": {"source": "prospeccion"},
+        "conversaciones_controles": [],
+    }
+    repo = DummyRepo([convo])
+    monkeypatch.setattr(whatsapp_followups, "CRMRepository", lambda: repo)
+
+    called = {
+        "fetch_contact": 0,
+        "ensure_opportunity": 0,
+        "send_manual": 0,
+        "notify_sales": 0,
+    }
+
+    async def fake_fetch_contact(contact_id):
+        called["fetch_contact"] += 1
+        return {
+            "id": contact_id,
+            "organizacion_id": convo["organizacion_id"],
+            "telefono_e164": "+5219998887777",
+        }
+
+    async def fake_ensure_conversation_opportunity(**kwargs):
+        called["ensure_opportunity"] += 1
+        return str(uuid4())
+
+    async def fake_send_manual_message(**kwargs):
+        called["send_manual"] += 1
+        return None
+
+    async def fake_notify_sales_rep(**kwargs):
+        called["notify_sales"] += 1
+        return None
+
+    monkeypatch.setattr(whatsapp_followups.storage, "fetch_contact", fake_fetch_contact)
+    monkeypatch.setattr(
+        whatsapp_followups.storage, "ensure_conversation_opportunity", fake_ensure_conversation_opportunity
+    )
+    monkeypatch.setattr(whatsapp_followups.whatsapp_service, "send_manual_message", fake_send_manual_message)
+    monkeypatch.setattr(whatsapp_followups.whatsapp_tools, "_notify_sales_rep", fake_notify_sales_rep)
+
+    await whatsapp_followups.run_followups(now=now)
+
+    assert called["fetch_contact"] == 0
+    assert called["ensure_opportunity"] == 0
+    assert called["send_manual"] == 0
+    assert called["notify_sales"] == 0
