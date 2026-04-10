@@ -21025,6 +21025,21 @@ async def prospeccion_metricas_export_xlsx(
     camp_summary = _ensure_dict(_ensure_dict(payload.get("campanas"), default={}).get("summary"), default={})
     frases_summary = _ensure_dict(_ensure_dict(payload.get("frases_whatsapp"), default={}).get("summary"), default={})
     filters_summary = _ensure_dict(payload.get("filters"), default={})
+    website_status_counts: dict[str, int] = {}
+
+    for website_status in ("pendiente", "sin_sitio", "valido", "dudoso", "invalido", "error"):
+        try:
+            _, website_total = await repo.list_prospectos(
+                usuario_token=user_token,
+                limit=1,
+                offset=0,
+                website_lookup_status=website_status,
+                date_from=params.date_from,
+                date_to=params.date_to,
+            )
+        except CRMRepositoryError:
+            website_total = 0
+        website_status_counts[website_status] = int(website_total or 0)
 
     for key in ("date_from", "date_to", "campana_id", "canal", "campana_publicitaria", "regla_id"):
         summary_sheet.append(["filtros", key, filters_summary.get(key)])
@@ -21050,6 +21065,9 @@ async def prospeccion_metricas_export_xlsx(
         "monto_estimado_total",
     ):
         summary_sheet.append(["frases_whatsapp", key, frases_summary.get(key)])
+
+    for status in ("pendiente", "sin_sitio", "valido", "dudoso", "invalido", "error"):
+        summary_sheet.append(["sitios_web", f"website_lookup_{status}", website_status_counts.get(status, 0)])
 
     campanas_sheet = workbook.create_sheet("Campanas")
     campanas_sheet.append(

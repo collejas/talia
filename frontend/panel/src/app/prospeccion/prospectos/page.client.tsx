@@ -347,29 +347,29 @@ const ESTRATO_GROUP_LABELS: Record<EstratoGroupFilter, string> = {
   grande: "Grande (250+)",
 }
 
-const LOOKUP_STATUS_VARIANTS: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
-  pendiente: "secondary",
-  verificado: "default",
-  sin_numero: "outline",
-  error: "destructive",
+const LOOKUP_STATUS_CLASSNAMES: Record<string, string> = {
+  pendiente: "border-slate-200 bg-slate-50 text-slate-700",
+  verificado: "border-emerald-200 bg-emerald-50 text-emerald-700",
+  sin_numero: "border-slate-200 bg-slate-50 text-slate-700",
+  error: "border-rose-200 bg-rose-50 text-rose-700",
 }
 
-const EMAIL_LOOKUP_STATUS_VARIANTS: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
-  pendiente: "secondary",
-  sin_email: "outline",
-  valido: "default",
-  invalido: "destructive",
-  dudoso: "secondary",
-  error: "destructive",
+const EMAIL_LOOKUP_STATUS_CLASSNAMES: Record<string, string> = {
+  pendiente: "border-slate-200 bg-slate-50 text-slate-700",
+  sin_email: "border-slate-200 bg-slate-50 text-slate-700",
+  valido: "border-emerald-200 bg-emerald-50 text-emerald-700",
+  dudoso: "border-amber-200 bg-amber-50 text-amber-700",
+  invalido: "border-rose-200 bg-rose-50 text-rose-700",
+  error: "border-rose-200 bg-rose-50 text-rose-700",
 }
 
-const WEBSITE_LOOKUP_STATUS_VARIANTS: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
-  pendiente: "secondary",
-  sin_sitio: "outline",
-  valido: "default",
-  invalido: "destructive",
-  dudoso: "secondary",
-  error: "destructive",
+const WEBSITE_LOOKUP_STATUS_CLASSNAMES: Record<string, string> = {
+  pendiente: "border-slate-200 bg-slate-50 text-slate-700",
+  sin_sitio: "border-slate-200 bg-slate-50 text-slate-700",
+  valido: "border-emerald-200 bg-emerald-50 text-emerald-700",
+  dudoso: "border-amber-200 bg-amber-50 text-amber-700",
+  invalido: "border-rose-200 bg-rose-50 text-rose-700",
+  error: "border-rose-200 bg-rose-50 text-rose-700",
 }
 
 const SCRAPER_STATUS_LABELS: Record<string, string> = {
@@ -5507,12 +5507,16 @@ function ProspectosView() {
 
 function LookupStatusBadge({ status, className }: { status?: string | null; className?: string }) {
   if (!status) {
-    return <Badge variant="secondary" className={className}>Pendiente</Badge>
+    return (
+      <Badge variant="outline" className={cn(LOOKUP_STATUS_CLASSNAMES.pendiente, className)}>
+        Pendiente
+      </Badge>
+    )
   }
   const normalized = status.toLowerCase()
   const label = LOOKUP_STATUS_LABELS[normalized] ?? status
-  const variant = LOOKUP_STATUS_VARIANTS[normalized] ?? "secondary"
-  return <Badge variant={variant} className={className}>{label}</Badge>
+  const tone = LOOKUP_STATUS_CLASSNAMES[normalized] ?? LOOKUP_STATUS_CLASSNAMES.pendiente
+  return <Badge variant="outline" className={cn(tone, className)}>{label}</Badge>
 }
 
 function isFriendlyLimitError(message: string) {
@@ -5528,22 +5532,30 @@ function isFriendlyLimitError(message: string) {
 
 function EmailLookupStatusBadge({ status, className }: { status?: string | null; className?: string }) {
   if (!status) {
-    return <Badge variant="secondary" className={className}>Pendiente</Badge>
+    return (
+      <Badge variant="outline" className={cn(EMAIL_LOOKUP_STATUS_CLASSNAMES.pendiente, className)}>
+        Pendiente
+      </Badge>
+    )
   }
   const normalized = status.toLowerCase()
   const label = EMAIL_LOOKUP_STATUS_LABELS[normalized] ?? status
-  const variant = EMAIL_LOOKUP_STATUS_VARIANTS[normalized] ?? "secondary"
-  return <Badge variant={variant} className={className}>{label}</Badge>
+  const tone = EMAIL_LOOKUP_STATUS_CLASSNAMES[normalized] ?? EMAIL_LOOKUP_STATUS_CLASSNAMES.pendiente
+  return <Badge variant="outline" className={cn(tone, className)}>{label}</Badge>
 }
 
 function WebsiteLookupStatusBadge({ status, className }: { status?: string | null; className?: string }) {
   if (!status) {
-    return <Badge variant="secondary" className={className}>Pendiente</Badge>
+    return (
+      <Badge variant="outline" className={cn(WEBSITE_LOOKUP_STATUS_CLASSNAMES.pendiente, className)}>
+        Pendiente
+      </Badge>
+    )
   }
   const normalized = status.toLowerCase()
   const label = WEBSITE_LOOKUP_STATUS_LABELS[normalized] ?? status
-  const variant = WEBSITE_LOOKUP_STATUS_VARIANTS[normalized] ?? "secondary"
-  return <Badge variant={variant} className={className}>{label}</Badge>
+  const tone = WEBSITE_LOOKUP_STATUS_CLASSNAMES[normalized] ?? WEBSITE_LOOKUP_STATUS_CLASSNAMES.pendiente
+  return <Badge variant="outline" className={cn(tone, className)}>{label}</Badge>
 }
 
 function formatDate(value?: string | null) {
