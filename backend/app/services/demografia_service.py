@@ -13,9 +13,10 @@ from app.core.logging import get_logger
 
 logger = get_logger(__name__)
 COUNTRY_NAME_MAP: dict[str, str] = {}
+COUNTRY_CODE_ALIAS_MAP: dict[str, str] = {}
 
 
-def _load_country_name_map() -> dict[str, str]:
+def _load_country_geo_maps() -> tuple[dict[str, str], dict[str, str]]:
     # DB-first: catálogo ya migrado a geo_paises.
     if settings.supabase_url and settings.supabase_service_role:
         try:
@@ -36,21 +37,25 @@ def _load_country_name_map() -> dict[str, str]:
             if resp.status_code < 400:
                 payload = resp.json()
                 if isinstance(payload, list):
-                    mapping: dict[str, str] = {}
+                    name_mapping: dict[str, str] = {}
+                    alias_mapping: dict[str, str] = {}
                     for row in payload:
                         if not isinstance(row, dict):
                             continue
                         name = str(row.get("nombre_largo") or row.get("nombre") or "").strip()
-                        if not name:
-                            continue
                         iso2 = str(row.get("codigo_iso2") or "").strip().upper()
                         iso3 = str(row.get("codigo_iso3") or "").strip().upper()
                         if len(iso2) == 2:
-                            mapping[iso2] = name
+                            if name:
+                                name_mapping[iso2] = name
+                            alias_mapping[iso2] = iso2
                         if len(iso3) == 3:
-                            mapping[iso3] = name
-                    if mapping:
-                        return mapping
+                            if name:
+                                name_mapping[iso3] = name
+                            if len(iso2) == 2:
+                                alias_mapping[iso3] = iso2
+                    if name_mapping:
+                        return name_mapping, alias_mapping
         except Exception as exc:
             logger.warning("demografia.country_map_db_fallback_file", extra={"error": str(exc)})
 
@@ -61,12 +66,13 @@ def _load_country_name_map() -> dict[str, str]:
         with data_path("geo", "world.geojson").open("r", encoding="utf-8") as file:
             payload = json.load(file)
     except Exception:
-        return {}
+        return {}, {}
 
     mapping: dict[str, str] = {}
+    alias_mapping: dict[str, str] = {}
     features = payload.get("features")
     if not isinstance(features, list):
-        return mapping
+        return mapping, alias_mapping
 
     for feature in features:
         if not isinstance(feature, dict):
@@ -84,13 +90,80 @@ def _load_country_name_map() -> dict[str, str]:
             properties.get("WB_A2"),
             properties.get("WB_A3"),
         }
+        iso2 = str(properties.get("ISO_A2") or "").strip().upper()
+        iso3 = str(properties.get("ISO_A3") or "").strip().upper()
+        if len(iso2) == 2:
+            alias_mapping[iso2] = iso2
+            if len(iso3) == 3:
+                alias_mapping[iso3] = iso2
         for code in codes:
             if isinstance(code, str) and code and code != "-99":
                 mapping[code.upper()] = name
-    return mapping
+    return mapping, alias_mapping
 
 
-COUNTRY_NAME_MAP = _load_country_name_map()
+COUNTRY_NAME_MAP, COUNTRY_CODE_ALIAS_MAP = _load_country_geo_maps()
+
+
+def _canonical_country_code(value: str | None) -> str:
+    raw = str(value or "").strip().upper()
+    if not raw:
+        return "UNK"
+    return COUNTRY_CODE_ALIAS_MAP.get(raw, raw)
+
+
+def _aggregate_top_sources(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    totals: dict[str, int] = {}
+    for item in items:
+        key = str(item.get("source") or "").strip().lower()
+        if not key:
+            continue
+        totals[key] = totals.get(key, 0) + _to_number(item.get("total"))
+    return [
+        {"source": source, "total": total}
+        for source, total in sorted(totals.items(), key=lambda kv: (-kv[1], kv[0]))[:5]
+    ]
+
+
+def _aggregate_top_utm(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    totals: dict[tuple[str, str, str], int] = {}
+    for item in items:
+        utm_source = str(item.get("utm_source") or "(none)").strip().lower() or "(none)"
+        utm_medium = str(item.get("utm_medium") or "(none)").strip().lower() or "(none)"
+        utm_campaign = str(item.get("utm_campaign") or "(none)").strip().lower() or "(none)"
+        key = (utm_source, utm_medium, utm_campaign)
+        totals[key] = totals.get(key, 0) + _to_number(item.get("total"))
+    return [
+        {
+            "utm_source": source,
+            "utm_medium": medium,
+            "utm_campaign": campaign,
+            "total": total,
+        }
+        for (source, medium, campaign), total in sorted(
+            totals.items(),
+            key=lambda kv: (-kv[1], kv[0][0], kv[0][1], kv[0][2]),
+        )[:5]
+    ]
+
+
+def _aggregate_top_wa(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    totals: dict[tuple[str, str], int] = {}
+    for item in items:
+        canal = str(item.get("canal_publicitario") or "sin_canal").strip().lower() or "sin_canal"
+        campana = (
+            str(item.get("campana_publicitaria") or "sin_campana").strip().lower() or "sin_campana"
+        )
+        key = (canal, campana)
+        totals[key] = totals.get(key, 0) + _to_number(item.get("total"))
+    return [
+        {
+            "canal_publicitario": canal,
+            "campana_publicitaria": campana,
+            "total": total,
+        }
+        for (canal, campana), total in sorted(totals.items(), key=lambda kv: (-kv[1], kv[0][0], kv[0][1]))[:5]
+    ]
 
 
 class DemografiaServiceError(RuntimeError):
@@ -211,6 +284,9 @@ async def fetch_leads_resumen(
         level = str(raw.get("location_level") or nivel)
         key = str(raw.get("location_key") or "UNK")
         name = str(raw.get("location_name") or "Desconocido")
+        if level == "pais":
+            key = _canonical_country_code(key)
+            name = COUNTRY_NAME_MAP.get(key) or COUNTRY_NAME_MAP.get(str(raw.get("location_key") or "").upper()) or name
         stage_code = str(raw.get("etapa_codigo") or "").strip().lower()
         stage_category = str(raw.get("etapa_categoria") or "").strip().lower()
         stage_order = _to_number(raw.get("etapa_orden"))
@@ -403,6 +479,7 @@ async def fetch_visitantes_resumen_v2(
         )
 
     items: list[dict[str, Any]] = []
+    grouped_by_key: dict[str, dict[str, Any]] = {}
     totals = {
         "total": 0,
         "con_chat": 0,
@@ -467,7 +544,48 @@ async def fetch_visitantes_resumen_v2(
             "wa_atribucion_total": wa_atribucion_total,
             "has_data": bool(row.get("has_data")),
         }
-        items.append(item)
+
+        if item["level"] == "pais":
+            original_key = item["key"]
+            canonical_key = _canonical_country_code(original_key)
+            item["key"] = canonical_key
+            item["name"] = COUNTRY_NAME_MAP.get(canonical_key) or COUNTRY_NAME_MAP.get(str(original_key).upper()) or item["name"]
+
+            existing = grouped_by_key.get(canonical_key)
+            if existing is None:
+                grouped_by_key[canonical_key] = {
+                    **item,
+                    "_fuentes_buffer": list(item["fuentes_top"]),
+                    "_utm_buffer": list(item["utm_top"]),
+                    "_wa_buffer": list(item["wa_atribucion_top"]),
+                }
+            else:
+                for field in (
+                    "total",
+                    "con_chat",
+                    "sin_chat",
+                    "webchat_total",
+                    "webchat_con_chat",
+                    "webchat_sin_chat",
+                    "whatsapp_total",
+                    "voz_total",
+                    "correo_total",
+                    "sesiones_web_total",
+                    "sesiones_webchat_total",
+                    "sesiones_con_chat_webchat",
+                    "sesiones_sin_chat_webchat",
+                    "conversaciones_whatsapp",
+                    "conversaciones_voz",
+                    "conversaciones_correo",
+                    "wa_atribucion_total",
+                ):
+                    existing[field] = _to_number(existing.get(field)) + _to_number(item.get(field))
+                existing["has_data"] = bool(existing.get("has_data") or item.get("has_data"))
+                existing["_fuentes_buffer"].extend(item["fuentes_top"])
+                existing["_utm_buffer"].extend(item["utm_top"])
+                existing["_wa_buffer"].extend(item["wa_atribucion_top"])
+        else:
+            items.append(item)
 
         totals["total"] += sesiones_web_total
         totals["con_chat"] += item["con_chat"]
@@ -483,6 +601,14 @@ async def fetch_visitantes_resumen_v2(
         totals["conversaciones_voz"] += conversaciones_voz
         totals["conversaciones_correo"] += conversaciones_correo
         totals["wa_atribucion_total"] = totals.get("wa_atribucion_total", 0) + wa_atribucion_total
+
+    if grouped_by_key:
+        for grouped in grouped_by_key.values():
+            grouped["fuentes_top"] = _aggregate_top_sources(grouped.pop("_fuentes_buffer", []))
+            grouped["utm_top"] = _aggregate_top_utm(grouped.pop("_utm_buffer", []))
+            grouped["wa_atribucion_top"] = _aggregate_top_wa(grouped.pop("_wa_buffer", []))
+            items.append(grouped)
+        items.sort(key=lambda row: (_to_number(row.get("total")), str(row.get("name") or "")), reverse=True)
 
     return {
         "items": items,

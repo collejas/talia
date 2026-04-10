@@ -56,8 +56,15 @@ type MetricsPayload = {
 };
 
 function resolveFeatureKey(feature: Feature): string {
+  const candidates = resolveFeatureCandidates(feature);
+  const value = candidates.find((candidate) => typeof candidate === "string" && candidate.length);
+  if (!value) return "UNK";
+  return value.toString().trim();
+}
+
+function resolveFeatureCandidates(feature: Feature): string[] {
   const props = feature.properties || {};
-  const candidates = [
+  const rawCandidates = [
     props.dataset_key,
     props.cvegeo,
     props.cve_ent,
@@ -69,9 +76,21 @@ function resolveFeatureKey(feature: Feature): string {
     props.id,
     props.name,
   ];
-  const value = candidates.find((candidate) => typeof candidate === "string" && candidate.length);
-  if (!value) return "UNK";
-  return value.toString().trim();
+  const variants = new Set<string>();
+  for (const candidate of rawCandidates) {
+    if (typeof candidate !== "string") continue;
+    const value = candidate.trim();
+    if (!value) continue;
+    variants.add(value);
+    variants.add(value.toUpperCase());
+    variants.add(value.toLowerCase());
+    if (/^\d+$/.test(value)) {
+      variants.add(value.padStart(2, "0"));
+      variants.add(value.padStart(3, "0"));
+      variants.add(value.padStart(5, "0"));
+    }
+  }
+  return Array.from(variants);
 }
 
 const CHANNEL_COLORS: Record<ChannelKey, [number, number, number]> = {
@@ -422,16 +441,22 @@ export function LocationComparisonChart({
 
   const style = useCallback(
     (feature?: Feature) => {
-      const key = resolveFeatureKey(feature ?? ({} as Feature));
-      const entry =
-        datasetMap.get(key) ||
-        datasetMap.get(key.padStart(2, "0")) ||
-        datasetMap.get(key.toUpperCase());
-      const total = entry ? resolveFilteredEntryTotal(entry, activeChannelSet, allowLeadFallback) : 0;
-      const isSelected = entry?.key && selectedKey && entry.key === selectedKey;
-      const isHovered = entry?.key && hoveredKey && entry.key === hoveredKey;
+      const entries = feature ? findEntriesForFeature(datasetMap, feature) : [];
+      const primaryEntry = entries[0];
+      const total = entries.reduce(
+        (acc, current) =>
+          acc + resolveFilteredEntryTotal(current, activeChannelSet, allowLeadFallback),
+        0,
+      );
+      const hasData = entries.some((current) => Boolean(current.has_data));
+      const isSelected = entries.some(
+        (current) => current?.key && selectedKey && current.key === selectedKey,
+      );
+      const isHovered = entries.some(
+        (current) => current?.key && hoveredKey && current.key === hoveredKey,
+      );
 
-      if (!entry || !entry.has_data || maxTotal <= 0 || total <= 0) {
+      if (!primaryEntry || !hasData || maxTotal <= 0 || total <= 0) {
         return {
           color: isSelected || isHovered ? "hsl(var(--primary)/0.4)" : "hsl(var(--foreground)/0.1)",
           weight: isSelected || isHovered ? 1.75 : 1,
@@ -443,7 +468,7 @@ export function LocationComparisonChart({
       const intensity = Math.min(1, total / maxTotal);
       if (colorMode === "channel") {
         const { fillColor, fillOpacity } = resolveChannelStyle(
-          entry,
+          primaryEntry,
           intensity,
           Boolean(isSelected || isHovered),
           activeChannelSet,
@@ -471,7 +496,6 @@ export function LocationComparisonChart({
 
   const onEachFeature = useCallback(
     (feature: Feature, layer: LeafletLayer) => {
-      const key = resolveFeatureKey(feature);
       const pathLayer = layer as LeafletPath;
       const interactiveLayer = pathLayer as unknown as {
         on?: (event: string, handler: (...args: unknown[]) => void) => void;
@@ -481,17 +505,15 @@ export function LocationComparisonChart({
       interactiveLayer.off?.("mouseover");
       interactiveLayer.off?.("mouseout");
 
-      const entry =
-        datasetMap.get(key) ||
-        datasetMap.get(key.padStart(2, "0")) ||
-        datasetMap.get(key.toUpperCase());
+      const entries = findEntriesForFeature(datasetMap, feature);
+      const entry = entries[0];
 
       const tooltipLayer = pathLayer as unknown as {
         bindTooltip?: (content: string, options?: LeafletTooltipOptions) => void;
         unbindTooltip?: () => void;
       };
 
-      if (!entry) {
+      if (!entry || !entries.length) {
         tooltipLayer.unbindTooltip?.();
         return;
       }
@@ -506,17 +528,49 @@ export function LocationComparisonChart({
 
       if (typeof tooltipLayer.bindTooltip !== "function") return;
 
-      const conversation = resolveFilteredConversation(entry, activeChannelSet);
+      const aggregateTotal = entries.reduce(
+        (acc, current) =>
+          acc + resolveFilteredEntryTotal(current, activeChannelSet, allowLeadFallback),
+        0,
+      );
+      const aggregateByChannel = {
+        webchat: entries.reduce(
+          (acc, current) => acc + resolveChannelTotal(current, "webchat", activeChannelSet),
+          0,
+        ),
+        whatsapp: entries.reduce(
+          (acc, current) => acc + resolveChannelTotal(current, "whatsapp", activeChannelSet),
+          0,
+        ),
+        voz: entries.reduce(
+          (acc, current) => acc + resolveChannelTotal(current, "voz", activeChannelSet),
+          0,
+        ),
+        correo: entries.reduce(
+          (acc, current) => acc + resolveChannelTotal(current, "correo", activeChannelSet),
+          0,
+        ),
+      };
+      const conversation = entries.reduce(
+        (acc, current) => {
+          const currentConversation = resolveFilteredConversation(current, activeChannelSet);
+          return {
+            con_conversacion: acc.con_conversacion + (currentConversation.con_conversacion ?? 0),
+            sin_conversacion: acc.sin_conversacion + (currentConversation.sin_conversacion ?? 0),
+          };
+        },
+        { con_conversacion: 0, sin_conversacion: 0 },
+      );
       const rows: MapTooltipRow[] = [
         {
           key: "total",
           label: "Visitas totales",
-          value: formatNumber(resolveFilteredEntryTotal(entry, activeChannelSet, allowLeadFallback)),
+          value: formatNumber(aggregateTotal),
           color: "var(--chart-1)",
         },
       ];
       for (const channel of displayedChannelKeys) {
-        const total = resolveChannelTotal(entry, channel, activeChannelSet);
+        const total = aggregateByChannel[channel];
         rows.push({
           key: `channel-${channel}`,
           label: `Total ${CHANNEL_LABELS[channel]}`,
@@ -815,6 +869,22 @@ function matchesFeatureKey(candidate: string, target: string): boolean {
     candidate.padStart(2, "0").toUpperCase(),
   ];
   return variants.some((value) => value === normalizedTarget || value === normalizedTarget.toUpperCase());
+}
+
+function findEntriesForFeature(
+  datasetMap: Map<string, DemografiaMapResponse["dataset"][number]>,
+  feature: Feature,
+): DemografiaMapResponse["dataset"][number][] {
+  const candidates = resolveFeatureCandidates(feature);
+  const seen = new Set<string>();
+  const entries: DemografiaMapResponse["dataset"][number][] = [];
+  for (const key of candidates) {
+    const match = datasetMap.get(key);
+    if (!match || seen.has(match.key)) continue;
+    seen.add(match.key);
+    entries.push(match);
+  }
+  return entries;
 }
 type LeafletTooltipOptions = Parameters<NonNullable<LeafletPath["bindTooltip"]>>[1];
 type ExtendedLeafletTooltipOptions = LeafletTooltipOptions & { className?: string };
