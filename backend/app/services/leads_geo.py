@@ -4,14 +4,22 @@ from __future__ import annotations
 
 import json
 import unicodedata
+from time import monotonic
 from dataclasses import dataclass
 from functools import lru_cache
 from typing import Any, Iterable, Sequence
 
+import httpx
+
+from app.core.config import settings
 from app.core.logging import get_logger
 from app.data import data_path
 
 logger = get_logger(__name__)
+_GEO_DB_CACHE_TTL_SECONDS = 900.0
+_GEO_COUNTRIES_CACHE: tuple[float, dict[str, Any]] | None = None
+_GEO_STATES_CACHE: tuple[float, dict[str, Any]] | None = None
+_GEO_MUNICIPALITIES_CACHE: dict[str, tuple[float, dict[str, Any]]] = {}
 
 try:  # pragma: no cover - dependemos del entorno de ejecución
     import phonenumbers
@@ -33,6 +41,159 @@ def _digits_only(value: str | None) -> str:
     if not value:
         return ""
     return "".join(ch for ch in str(value) if ch.isdigit())
+
+
+def _cache_get(entry: tuple[float, dict[str, Any]] | None) -> dict[str, Any] | None:
+    if not entry:
+        return None
+    ts, payload = entry
+    if monotonic() - ts > _GEO_DB_CACHE_TTL_SECONDS:
+        return None
+    return payload
+
+
+def _cache_set(payload: dict[str, Any]) -> tuple[float, dict[str, Any]]:
+    return (monotonic(), payload)
+
+
+def _as_geojson_dict(value: Any) -> dict[str, Any] | None:
+    if isinstance(value, dict):
+        return value
+    if isinstance(value, str):
+        try:
+            parsed = json.loads(value)
+        except json.JSONDecodeError:
+            return None
+        if isinstance(parsed, dict):
+            return parsed
+    return None
+
+
+def _feature_collection_from_rows(rows: list[Any]) -> dict[str, Any]:
+    features: list[dict[str, Any]] = []
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        geometry = _as_geojson_dict(row.get("geom"))
+        if not geometry:
+            continue
+        props = {k: v for k, v in row.items() if k != "geom"}
+        features.append(
+            {
+                "type": "Feature",
+                "geometry": geometry,
+                "properties": props,
+            }
+        )
+    return {"type": "FeatureCollection", "features": features}
+
+
+def _normalize_countries_feature_collection(payload: dict[str, Any]) -> dict[str, Any]:
+    features = payload.get("features")
+    if not isinstance(features, list):
+        return payload
+    normalized: list[dict[str, Any]] = []
+    for feature in features:
+        if not isinstance(feature, dict):
+            continue
+        properties = feature.get("properties")
+        if not isinstance(properties, dict):
+            properties = {}
+        iso2 = str(properties.get("codigo_iso2") or "").strip().upper()
+        iso3 = str(properties.get("codigo_iso3") or "").strip().upper()
+        nombre = str(properties.get("nombre") or "").strip()
+        properties["ISO_A2"] = iso2 or properties.get("ISO_A2")
+        properties["ISO_A3"] = iso3 or properties.get("ISO_A3")
+        properties["NAME"] = nombre or properties.get("NAME")
+        properties["ADMIN"] = (
+            str(properties.get("nombre_largo") or "").strip()
+            or nombre
+            or properties.get("ADMIN")
+        )
+        normalized.append({**feature, "properties": properties})
+    return {"type": "FeatureCollection", "features": normalized}
+
+
+def _normalize_states_feature_collection(payload: dict[str, Any]) -> dict[str, Any]:
+    features = payload.get("features")
+    if not isinstance(features, list):
+        return payload
+    normalized: list[dict[str, Any]] = []
+    for feature in features:
+        if not isinstance(feature, dict):
+            continue
+        properties = feature.get("properties")
+        if not isinstance(properties, dict):
+            properties = {}
+        state_code = str(properties.get("clave_entidad") or "").strip().zfill(2)
+        state_name = str(properties.get("nombre") or "").strip()
+        properties["cve_ent"] = state_code or properties.get("cve_ent")
+        properties["cve_entidad"] = state_code or properties.get("cve_entidad")
+        properties["nom_ent"] = state_name or properties.get("nom_ent")
+        normalized.append({**feature, "properties": properties})
+    return {"type": "FeatureCollection", "features": normalized}
+
+
+def _normalize_municipalities_feature_collection(payload: dict[str, Any]) -> dict[str, Any]:
+    features = payload.get("features")
+    if not isinstance(features, list):
+        return payload
+    normalized: list[dict[str, Any]] = []
+    for feature in features:
+        if not isinstance(feature, dict):
+            continue
+        properties = feature.get("properties")
+        if not isinstance(properties, dict):
+            properties = {}
+        ent = str(properties.get("clave_entidad") or "").strip().zfill(2)
+        mun = str(properties.get("clave_municipio") or "").strip().zfill(3)
+        cvegeo = str(properties.get("cvegeo") or "").strip() or f"{ent}{mun}"
+        name = str(properties.get("nombre") or "").strip()
+        properties["cve_ent"] = ent or properties.get("cve_ent")
+        properties["cve_entidad"] = ent or properties.get("cve_entidad")
+        properties["cve_mun"] = mun or properties.get("cve_mun")
+        properties["nom_mun"] = name or properties.get("nom_mun")
+        properties["cvegeo"] = cvegeo or properties.get("cvegeo")
+        normalized.append({**feature, "properties": properties})
+    return {"type": "FeatureCollection", "features": normalized}
+
+
+async def _fetch_geojson_collection(
+    *,
+    table: str,
+    select: str,
+    filters: dict[str, str],
+    order: str | None = None,
+    limit: int | None = None,
+) -> dict[str, Any]:
+    if not settings.supabase_url or not settings.supabase_service_role:
+        raise RuntimeError("supabase_not_configured")
+    url = f"{settings.supabase_url.rstrip('/')}/rest/v1/{table}"
+    params = dict(filters)
+    params["select"] = select
+    if order:
+        params["order"] = order
+    if limit is not None:
+        params["limit"] = str(limit)
+    token = settings.supabase_service_role
+    headers = {
+        "apikey": token,
+        "Authorization": f"Bearer {token}",
+        "Accept": "application/geo+json",
+    }
+    async with httpx.AsyncClient(timeout=20.0) as client:
+        resp = await client.get(url, params=params, headers=headers)
+    if resp.status_code >= 400:
+        raise RuntimeError(f"supabase_geo_error:{resp.status_code}:{table}")
+    try:
+        payload = resp.json()
+    except ValueError as exc:
+        raise RuntimeError(f"supabase_geo_invalid_json:{table}") from exc
+    if isinstance(payload, list):
+        return _feature_collection_from_rows(payload)
+    if isinstance(payload, dict) and payload.get("type") == "FeatureCollection":
+        return payload
+    raise RuntimeError(f"supabase_geo_unexpected_payload:{table}")
 
 
 @lru_cache(maxsize=None)
@@ -178,6 +339,92 @@ def load_state_municipalities_geojson(cve_ent: str) -> dict[str, Any]:
     if not path:
         raise KeyError(state_code)
     return _load_json(f"geo/municipios/{path}")
+
+
+async def load_world_countries_geojson_db_first() -> dict[str, Any]:
+    global _GEO_COUNTRIES_CACHE
+    cached = _cache_get(_GEO_COUNTRIES_CACHE)
+    if cached is not None:
+        return cached
+    try:
+        payload = await _fetch_geojson_collection(
+            table="geo_paises",
+            select="codigo_iso2,codigo_iso3,nombre,nombre_largo,geom",
+            filters={"activo": "eq.true", "geom": "not.is.null"},
+            order="nombre.asc",
+            limit=400,
+        )
+        payload = _normalize_countries_feature_collection(payload)
+        if isinstance(payload.get("features"), list) and payload["features"]:
+            _GEO_COUNTRIES_CACHE = _cache_set(payload)
+            return payload
+    except Exception as exc:
+        logger.warning("leads_geo.countries_db_fallback_file", extra={"error": str(exc)})
+    fallback = load_world_countries_geojson()
+    _GEO_COUNTRIES_CACHE = _cache_set(fallback)
+    return fallback
+
+
+async def load_full_states_geojson_db_first() -> dict[str, Any]:
+    global _GEO_STATES_CACHE
+    cached = _cache_get(_GEO_STATES_CACHE)
+    if cached is not None:
+        return cached
+    try:
+        payload = await _fetch_geojson_collection(
+            table="geo_estados_mexico",
+            select="clave_entidad,nombre,pais_codigo,geom",
+            filters={"activo": "eq.true", "pais_codigo": "eq.MX", "geom": "not.is.null"},
+            order="clave_entidad.asc",
+            limit=64,
+        )
+        payload = _normalize_states_feature_collection(payload)
+        if isinstance(payload.get("features"), list) and payload["features"]:
+            _GEO_STATES_CACHE = _cache_set(payload)
+            return payload
+    except Exception as exc:
+        logger.warning("leads_geo.states_db_fallback_file", extra={"error": str(exc)})
+    fallback = load_full_states_geojson()
+    _GEO_STATES_CACHE = _cache_set(fallback)
+    return fallback
+
+
+async def load_states_geojson_db_first() -> dict[str, Any]:
+    return await load_full_states_geojson_db_first()
+
+
+async def load_state_municipalities_geojson_db_first(cve_ent: str) -> dict[str, Any]:
+    state_code = str(cve_ent).zfill(2)
+    cached = _cache_get(_GEO_MUNICIPALITIES_CACHE.get(state_code))
+    if cached is not None:
+        return cached
+    try:
+        payload = await _fetch_geojson_collection(
+            table="geo_municipios_mexico",
+            select="clave_entidad,clave_municipio,cvegeo,nombre,geom",
+            filters={
+                "activo": "eq.true",
+                "clave_entidad": f"eq.{state_code}",
+                "geom": "not.is.null",
+            },
+            order="clave_municipio.asc",
+            limit=3000,
+        )
+        payload = _normalize_municipalities_feature_collection(payload)
+        if isinstance(payload.get("features"), list) and payload["features"]:
+            _GEO_MUNICIPALITIES_CACHE[state_code] = _cache_set(payload)
+            return payload
+        raise KeyError(state_code)
+    except KeyError:
+        raise
+    except Exception as exc:
+        logger.warning(
+            "leads_geo.municipalities_db_fallback_file",
+            extra={"state_code": state_code, "error": str(exc)},
+        )
+    fallback = load_state_municipalities_geojson(state_code)
+    _GEO_MUNICIPALITIES_CACHE[state_code] = _cache_set(fallback)
+    return fallback
 
 
 def state_display_name(cve_ent: str) -> str | None:

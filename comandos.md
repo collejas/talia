@@ -89,7 +89,7 @@ sudo systemctl restart talia-api.service
 sudo systemctl restart talia-panel.service
 
 codex resume 019d728d-d5a0-73a2-86d5-80f062d30b14
-
+codex resume 019d6e91-34da-7c31-ab6c-154d5827b9f7
 # Permisos Git
 sudo chown -R jorge:jorge /var/www/talia/.git
 

@@ -26592,11 +26592,11 @@ async def demografia_mapa(
 
     try:
         if nivel_normalizado == "pais":
-            geojson = leads_geo.load_world_countries_geojson()
+            geojson = await leads_geo.load_world_countries_geojson_db_first()
         elif nivel_normalizado == "estado":
-            geojson = leads_geo.load_full_states_geojson()
+            geojson = await leads_geo.load_full_states_geojson_db_first()
         else:
-            geojson = leads_geo.load_state_municipalities_geojson(state_code or "00")
+            geojson = await leads_geo.load_state_municipalities_geojson_db_first(state_code or "00")
     except FileNotFoundError as exc:  # pragma: no cover - depende del despliegue
         logger.exception("crm.demografia.geo_missing")
         raise HTTPException(status_code=500, detail="geojson_missing") from exc
@@ -27153,11 +27153,11 @@ async def demografia_mapa_v2(
 
     try:
         if nivel_normalizado == "pais":
-            geojson = leads_geo.load_world_countries_geojson()
+            geojson = await leads_geo.load_world_countries_geojson_db_first()
         elif nivel_normalizado == "estado":
-            geojson = leads_geo.load_full_states_geojson()
+            geojson = await leads_geo.load_full_states_geojson_db_first()
         else:
-            geojson = leads_geo.load_state_municipalities_geojson(state_code or "00")
+            geojson = await leads_geo.load_state_municipalities_geojson_db_first(state_code or "00")
     except FileNotFoundError as exc:  # pragma: no cover - depende del despliegue
         logger.exception("crm.demografia.geo_missing")
         raise HTTPException(status_code=500, detail="geojson_missing") from exc
@@ -27201,7 +27201,7 @@ async def demografia_geo_estados(
     _: str = Depends(require_permission("reports.view")),
 ) -> dict[str, Any]:
     try:
-        geojson = leads_geo.load_states_geojson()
+        geojson = await leads_geo.load_states_geojson_db_first()
     except FileNotFoundError as exc:  # pragma: no cover - depende del despliegue
         logger.exception("crm.demografia.geo.states_missing")
         raise HTTPException(status_code=500, detail="geojson_missing") from exc
@@ -27217,7 +27217,7 @@ async def demografia_geo_municipios(
 ) -> dict[str, Any]:
     code = _ensure_state_code(estado)
     try:
-        geojson = leads_geo.load_state_municipalities_geojson(code)
+        geojson = await leads_geo.load_state_municipalities_geojson_db_first(code)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="estado_not_found") from exc
     return {"ok": True, "geojson": geojson}
@@ -27230,7 +27230,7 @@ async def demografia_geo_paises(
     _: str = Depends(require_permission("reports.view")),
 ) -> dict[str, Any]:
     try:
-        geojson = leads_geo.load_world_countries_geojson()
+        geojson = await leads_geo.load_world_countries_geojson_db_first()
     except FileNotFoundError as exc:  # pragma: no cover - depende del despliegue
         logger.exception("crm.demografia.geo.world_missing")
         raise HTTPException(status_code=500, detail="geojson_missing") from exc
