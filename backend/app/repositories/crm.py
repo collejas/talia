@@ -6,6 +6,7 @@ import asyncio
 import json
 import re
 import unicodedata
+from pathlib import Path
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 from functools import lru_cache
@@ -18,7 +19,7 @@ from zoneinfo import ZoneInfo
 
 import httpx
 
-from app.core.config import settings
+from app.core.config import resolve_log_path, settings
 from app.core.logging import get_logger
 from app.data.geo.locations import get_municipality_name, get_state_name, list_states
 from app.services.phone_utils import normalize_phone, normalize_phone_digits
@@ -35,6 +36,34 @@ PROSPECTOS_SCRAPER_IDS_CACHE_TTL_SECONDS = 30.0
 PROSPECTOS_IDS_CACHE_MAX_ENTRIES = 256
 _PROSPECTOS_ENVIO_IDS_CACHE: dict[str, tuple[float, set[str]]] = {}
 _PROSPECTOS_SCRAPER_IDS_CACHE: dict[str, tuple[float, set[str]]] = {}
+SUPABASE_CONNECTIVITY_LOG_FILE = resolve_log_path("supabase-connectivity.log")
+SUPABASE_TRANSIENT_MARKERS = (
+    "error de red al llamar supabase",
+    "no address associated with hostname",
+    "temporary failure in name resolution",
+    "name or service not known",
+    "connecttimeout",
+    "connect timeout",
+    "timed out",
+    "timeout",
+    "connection reset",
+    "temporarily unavailable",
+)
+
+
+def _is_transient_supabase_error_message(value: Any) -> bool:
+    message = str(value or "").lower()
+    return any(marker in message for marker in SUPABASE_TRANSIENT_MARKERS)
+
+
+def _append_supabase_connectivity_event(entry: dict[str, Any]) -> None:
+    try:
+        Path(SUPABASE_CONNECTIVITY_LOG_FILE).parent.mkdir(parents=True, exist_ok=True)
+        with SUPABASE_CONNECTIVITY_LOG_FILE.open("a", encoding="utf-8") as handle:
+            handle.write(f"{json.dumps(entry, default=str)}\n")
+    except Exception:
+        # Best-effort: nunca romper flujo principal por falla de observabilidad.
+        pass
 
 
 def _coerce_uuid(value: Any, *, field: str) -> UUID:
@@ -14805,11 +14834,55 @@ class CRMRepository:
                 "organizacion_id": str(organizacion_id) if organizacion_id else None,
             },
         )
-        try:
-            async with httpx.AsyncClient(timeout=self._timeout) as client:
-                resp = await client.request(method, url, params=params, json=json_payload, headers=headers)
-        except httpx.RequestError as exc:  # pragma: no cover - red de terceros
-            raise CRMRepositoryError(f"Error de red al llamar Supabase: {exc}") from exc
+        retries = 1
+        delay_seconds = 0.35
+        last_exc: httpx.RequestError | None = None
+        resp: httpx.Response | None = None
+        for attempt in range(retries + 1):
+            try:
+                async with httpx.AsyncClient(timeout=self._timeout) as client:
+                    resp = await client.request(method, url, params=params, json=json_payload, headers=headers)
+                if attempt > 0:
+                    _append_supabase_connectivity_event(
+                        {
+                            "captured_at": datetime.now(timezone.utc).isoformat(),
+                            "event_type": "transient_recovered",
+                            "operation": f"{method} {path}",
+                            "attempt": attempt + 1,
+                            "retries_configured": retries,
+                        }
+                    )
+                break
+            except httpx.RequestError as exc:  # pragma: no cover - red de terceros
+                last_exc = exc
+                if attempt < retries and _is_transient_supabase_error_message(exc):
+                    _append_supabase_connectivity_event(
+                        {
+                            "captured_at": datetime.now(timezone.utc).isoformat(),
+                            "event_type": "transient_retry_scheduled",
+                            "operation": f"{method} {path}",
+                            "attempt": attempt + 1,
+                            "next_attempt": attempt + 2,
+                            "retries_configured": retries,
+                            "error": str(exc),
+                        }
+                    )
+                    await asyncio.sleep(delay_seconds)
+                    continue
+                if _is_transient_supabase_error_message(exc):
+                    _append_supabase_connectivity_event(
+                        {
+                            "captured_at": datetime.now(timezone.utc).isoformat(),
+                            "event_type": "transient_failure",
+                            "operation": f"{method} {path}",
+                            "attempt": attempt + 1,
+                            "retries_configured": retries,
+                            "error": str(exc),
+                        }
+                    )
+                raise CRMRepositoryError(f"Error de red al llamar Supabase: {exc}") from exc
+        if resp is None and last_exc is not None:
+            raise CRMRepositoryError(f"Error de red al llamar Supabase: {last_exc}") from last_exc
         logger.info(
             "crm_request_response",
             extra={"method": method, "path": path, "status": resp.status_code},
@@ -14944,11 +15017,55 @@ class CRMRepository:
                 "crm.rpc_payload",
                 extra={"function": function_name, "payload": payload},
             )
-        try:
-            async with httpx.AsyncClient(timeout=self._timeout) as client:
-                resp = await client.post(url, json=payload, headers=headers)
-        except httpx.RequestError as exc:
-            raise CRMRepositoryError(f"Error de red al invocar RPC {function_name}: {exc}") from exc
+        retries = 1
+        delay_seconds = 0.35
+        last_exc: httpx.RequestError | None = None
+        resp: httpx.Response | None = None
+        for attempt in range(retries + 1):
+            try:
+                async with httpx.AsyncClient(timeout=self._timeout) as client:
+                    resp = await client.post(url, json=payload, headers=headers)
+                if attempt > 0:
+                    _append_supabase_connectivity_event(
+                        {
+                            "captured_at": datetime.now(timezone.utc).isoformat(),
+                            "event_type": "transient_recovered",
+                            "operation": f"RPC {function_name}",
+                            "attempt": attempt + 1,
+                            "retries_configured": retries,
+                        }
+                    )
+                break
+            except httpx.RequestError as exc:
+                last_exc = exc
+                if attempt < retries and _is_transient_supabase_error_message(exc):
+                    _append_supabase_connectivity_event(
+                        {
+                            "captured_at": datetime.now(timezone.utc).isoformat(),
+                            "event_type": "transient_retry_scheduled",
+                            "operation": f"RPC {function_name}",
+                            "attempt": attempt + 1,
+                            "next_attempt": attempt + 2,
+                            "retries_configured": retries,
+                            "error": str(exc),
+                        }
+                    )
+                    await asyncio.sleep(delay_seconds)
+                    continue
+                if _is_transient_supabase_error_message(exc):
+                    _append_supabase_connectivity_event(
+                        {
+                            "captured_at": datetime.now(timezone.utc).isoformat(),
+                            "event_type": "transient_failure",
+                            "operation": f"RPC {function_name}",
+                            "attempt": attempt + 1,
+                            "retries_configured": retries,
+                            "error": str(exc),
+                        }
+                    )
+                raise CRMRepositoryError(f"Error de red al invocar RPC {function_name}: {exc}") from exc
+        if resp is None and last_exc is not None:
+            raise CRMRepositoryError(f"Error de red al invocar RPC {function_name}: {last_exc}") from last_exc
         if resp.status_code >= 400:
             raise CRMRepositoryError(
                 f"Supabase respondió error {resp.status_code} en RPC {function_name}: {resp.text}"
@@ -14995,11 +15112,55 @@ class CRMRepository:
             headers["X-Organizacion-Id"] = str(organizacion_id)
         if prefer:
             headers["Prefer"] = prefer
-        try:
-            async with httpx.AsyncClient(timeout=self._timeout) as client:
-                resp = await client.request(method, url, params=params, json=json, headers=headers)
-        except httpx.RequestError as exc:
-            raise CRMRepositoryError(f"Error de red al llamar Supabase (user): {exc}") from exc
+        retries = 1
+        delay_seconds = 0.35
+        last_exc: httpx.RequestError | None = None
+        resp: httpx.Response | None = None
+        for attempt in range(retries + 1):
+            try:
+                async with httpx.AsyncClient(timeout=self._timeout) as client:
+                    resp = await client.request(method, url, params=params, json=json, headers=headers)
+                if attempt > 0:
+                    _append_supabase_connectivity_event(
+                        {
+                            "captured_at": datetime.now(timezone.utc).isoformat(),
+                            "event_type": "transient_recovered",
+                            "operation": f"{method} {path} (user)",
+                            "attempt": attempt + 1,
+                            "retries_configured": retries,
+                        }
+                    )
+                break
+            except httpx.RequestError as exc:
+                last_exc = exc
+                if attempt < retries and _is_transient_supabase_error_message(exc):
+                    _append_supabase_connectivity_event(
+                        {
+                            "captured_at": datetime.now(timezone.utc).isoformat(),
+                            "event_type": "transient_retry_scheduled",
+                            "operation": f"{method} {path} (user)",
+                            "attempt": attempt + 1,
+                            "next_attempt": attempt + 2,
+                            "retries_configured": retries,
+                            "error": str(exc),
+                        }
+                    )
+                    await asyncio.sleep(delay_seconds)
+                    continue
+                if _is_transient_supabase_error_message(exc):
+                    _append_supabase_connectivity_event(
+                        {
+                            "captured_at": datetime.now(timezone.utc).isoformat(),
+                            "event_type": "transient_failure",
+                            "operation": f"{method} {path} (user)",
+                            "attempt": attempt + 1,
+                            "retries_configured": retries,
+                            "error": str(exc),
+                        }
+                    )
+                raise CRMRepositoryError(f"Error de red al llamar Supabase (user): {exc}") from exc
+        if resp is None and last_exc is not None:
+            raise CRMRepositoryError(f"Error de red al llamar Supabase (user): {last_exc}") from last_exc
         if resp.status_code >= 400:
             raise CRMRepositoryError(
                 f"Supabase respondió error {resp.status_code} en {path}: {resp.text}"

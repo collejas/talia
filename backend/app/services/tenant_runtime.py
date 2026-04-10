@@ -9,14 +9,17 @@ con fallback a valores globales de `.env` mientras migramos.
 
 from __future__ import annotations
 
+import asyncio
+import json
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 from typing import Any, Literal
 from uuid import UUID
 
 import httpx
 
-from app.core.config import settings
+from app.core.config import resolve_log_path, settings
 from app.core.logging import get_logger
 from app.core.secrets_crypto import SecretsCryptoError, decrypt_secret
 
@@ -31,6 +34,15 @@ _SECRET_CACHE_EXPIRES: dict[str, datetime] = {}
 
 CONFIG_TTL_SECONDS = 60
 SECRET_TTL_SECONDS = 60
+SUPABASE_CONNECTIVITY_LOG_FILE = resolve_log_path("supabase-connectivity.log")
+_TRANSIENT_SUPABASE_ERROR_MARKERS = (
+    "No address associated with hostname",
+    "[Errno -5]",
+    "Temporary failure in name resolution",
+    "ConnectError",
+    "ReadTimeout",
+    "PoolTimeout",
+)
 
 
 class TenantRuntimeError(RuntimeError):
@@ -101,6 +113,21 @@ def _require_supabase() -> tuple[str, str]:
     return settings.supabase_url.rstrip("/"), settings.supabase_service_role
 
 
+def _is_transient_supabase_error_message(value: Any) -> bool:
+    text = str(value or "")
+    return any(marker in text for marker in _TRANSIENT_SUPABASE_ERROR_MARKERS)
+
+
+def _append_supabase_connectivity_event(entry: dict[str, Any]) -> None:
+    try:
+        Path(SUPABASE_CONNECTIVITY_LOG_FILE).parent.mkdir(parents=True, exist_ok=True)
+        with SUPABASE_CONNECTIVITY_LOG_FILE.open("a", encoding="utf-8") as handle:
+            handle.write(json.dumps(entry, ensure_ascii=False))
+            handle.write("\n")
+    except Exception:
+        logger.debug("tenant_runtime.supabase_connectivity_log_write_failed", exc_info=True)
+
+
 async def _supabase_get(path: str, *, params: dict[str, str]) -> Any:
     base_url, service_role = _require_supabase()
     url = f"{base_url}{path}"
@@ -109,8 +136,53 @@ async def _supabase_get(path: str, *, params: dict[str, str]) -> Any:
         "apikey": service_role,
         "Authorization": f"Bearer {service_role}",
     }
-    async with httpx.AsyncClient(timeout=10.0) as client:
-        resp = await client.get(url, params=params, headers=headers)
+    retries = 1
+    retry_delay_seconds = 0.35
+    resp: httpx.Response | None = None
+    for attempt in range(1, retries + 2):
+        try:
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                resp = await client.get(url, params=params, headers=headers)
+            if attempt > 1:
+                _append_supabase_connectivity_event(
+                    {
+                        "captured_at": datetime.now(timezone.utc).isoformat(),
+                        "event_type": "transient_recovered",
+                        "operation": f"tenant_runtime GET {path}",
+                        "attempt": attempt,
+                        "retries_configured": retries,
+                    }
+                )
+            break
+        except httpx.RequestError as exc:
+            if attempt < retries + 1 and _is_transient_supabase_error_message(exc):
+                _append_supabase_connectivity_event(
+                    {
+                        "captured_at": datetime.now(timezone.utc).isoformat(),
+                        "event_type": "transient_retry_scheduled",
+                        "operation": f"tenant_runtime GET {path}",
+                        "attempt": attempt,
+                        "next_attempt": attempt + 1,
+                        "retries_configured": retries,
+                        "error": str(exc),
+                    }
+                )
+                await asyncio.sleep(retry_delay_seconds)
+                continue
+            if _is_transient_supabase_error_message(exc):
+                _append_supabase_connectivity_event(
+                    {
+                        "captured_at": datetime.now(timezone.utc).isoformat(),
+                        "event_type": "transient_failure",
+                        "operation": f"tenant_runtime GET {path}",
+                        "attempt": attempt,
+                        "retries_configured": retries,
+                        "error": str(exc),
+                    }
+                )
+            raise
+    if resp is None:
+        raise TenantRuntimeError(f"supabase_error:request_failed:{path}")
     if resp.status_code >= 400:
         body = resp.text
         logger.warning(
