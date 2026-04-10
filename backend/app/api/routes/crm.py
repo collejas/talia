@@ -7242,6 +7242,131 @@ async def _list_batch_envios_all(
     return items
 
 
+async def _list_contact_batches_by_estado_all(
+    *,
+    repo: CRMRepository,
+    user_token: str,
+    campana_id: UUID,
+    estado: str,
+) -> list[dict[str, Any]]:
+    """Obtiene todos los lotes de una campaña para un estado específico."""
+
+    items: list[dict[str, Any]] = []
+    offset = 0
+    page = 200
+    while True:
+        rows, total = await repo.list_contact_batches(
+            usuario_token=user_token,
+            limit=page,
+            offset=offset,
+            campana_id=campana_id,
+            estado=estado,
+            order="creado_en.desc",
+        )
+        if not rows:
+            break
+        items.extend(row for row in rows if isinstance(row, dict))
+        offset += len(rows)
+        if len(rows) < page or offset >= total:
+            break
+    return items
+
+
+async def _align_programacion_with_active_campaign_schedule(
+    *,
+    repo: CRMRepository,
+    user_token: str,
+    campana_id: UUID,
+    canales: set[str],
+    programacion: dict[str, str] | None,
+    separacion_segundos: int | None,
+    exclude_batch_id: UUID | None = None,
+) -> dict[str, str]:
+    """Alinea programación para respetar separación global entre lotes activos de una campaña.
+
+    Regla:
+    - Para cada canal, el nuevo lote inicia después del último `programado_en` activo
+      (`pendiente`/`procesando`) de la campaña + `separacion_segundos`.
+    - Si el usuario definió una hora manual posterior, se respeta la mayor.
+    """
+
+    if not canales:
+        return dict(programacion or {})
+
+    separacion_val = max(
+        MIN_PROSPECCION_SEPARACION_SEGUNDOS,
+        int(separacion_segundos or MIN_PROSPECCION_SEPARACION_SEGUNDOS),
+    )
+    now_utc = datetime.now(UTC)
+    active_batches: list[dict[str, Any]] = []
+    for estado in ("pendiente", "en_proceso"):
+        active_batches.extend(
+            await _list_contact_batches_by_estado_all(
+                repo=repo,
+                user_token=user_token,
+                campana_id=campana_id,
+                estado=estado,
+            )
+        )
+
+    batch_ids: list[UUID] = []
+    for row in active_batches:
+        raw_id = row.get("id")
+        if not raw_id:
+            continue
+        try:
+            batch_uuid = UUID(str(raw_id))
+        except (TypeError, ValueError):
+            continue
+        if exclude_batch_id and batch_uuid == exclude_batch_id:
+            continue
+        batch_ids.append(batch_uuid)
+
+    latest_by_canal: dict[str, datetime] = {}
+    if batch_ids:
+        offset = 0
+        page = 10000
+        while True:
+            rows = await repo.list_contact_envios_for_batches(
+                usuario_token=user_token,
+                batch_ids=batch_ids,
+                limit=page,
+                offset=offset,
+            )
+            if not rows:
+                break
+            for row in rows:
+                estado = (_clean_text(row.get("estado")) or "").lower()
+                if estado not in {"pendiente", "procesando"}:
+                    continue
+                canal = (_clean_text(row.get("canal")) or "").lower()
+                if canal not in canales:
+                    continue
+                scheduled = _parse_iso_datetime(row.get("programado_en"))
+                if scheduled is None:
+                    continue
+                if scheduled.tzinfo is None:
+                    scheduled = scheduled.replace(tzinfo=UTC)
+                else:
+                    scheduled = scheduled.astimezone(UTC)
+                current = latest_by_canal.get(canal)
+                if current is None or scheduled > current:
+                    latest_by_canal[canal] = scheduled
+            if len(rows) < page:
+                break
+            offset += len(rows)
+
+    resolved: dict[str, str] = dict(programacion or {})
+    for canal in canales:
+        requested = _parse_iso_datetime((programacion or {}).get(canal))
+        requested_dt = requested.astimezone(UTC) if requested else now_utc
+        latest = latest_by_canal.get(canal)
+        floor_dt = (latest + timedelta(seconds=separacion_val)) if latest else now_utc
+        start_dt = max(requested_dt, floor_dt)
+        resolved[canal] = start_dt.isoformat()
+    return resolved
+
+
 def _sse_payload(data: dict[str, Any]) -> str:
     return f"data: {json.dumps(data)}\n\n"
 
@@ -20976,6 +21101,15 @@ async def prospeccion_campana_update(
         existing_canales = _ensure_dict(existing_meta.get("canales_config"), default={})
         canales_config = {k: v for k, v in existing_canales.items() if isinstance(v, dict)}
         programacion = _ensure_dict(target_batch.get("programacion"), default={})
+    programacion = await _align_programacion_with_active_campaign_schedule(
+        repo=repo,
+        user_token=user_token,
+        campana_id=campana_id,
+        canales=set(canales_config.keys()),
+        programacion=programacion,
+        separacion_segundos=payload.separacion_segundos,
+        exclude_batch_id=batch_id,
+    )
     await _apply_default_whatsapp_runtime_template(
         canales_config=canales_config,
         organizacion_id=organizacion_id,
@@ -22114,6 +22248,14 @@ async def contactar_prospectos(
     canales_config, programacion = _resolve_contact_channels(
         payload,
         template_map=template_map,
+    )
+    programacion = await _align_programacion_with_active_campaign_schedule(
+        repo=repo,
+        user_token=user_token,
+        campana_id=payload.campana_id,
+        canales=set(canales_config.keys()),
+        programacion=programacion,
+        separacion_segundos=payload.separacion_segundos,
     )
     await _apply_default_whatsapp_runtime_template(
         canales_config=canales_config,
