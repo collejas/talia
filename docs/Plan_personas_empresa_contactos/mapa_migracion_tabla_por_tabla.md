@@ -424,6 +424,13 @@ Ejemplos:
 - migrar cuentas que ya existan
 - generar relaciones pivote
 
+Primera pasada sugerida:
+
+- una fila en `personas` por cada `contacto`
+- trazabilidad completa en `metadata`
+- `cuenta_personas` solo si `contactos.cuenta_id` existe
+- deduplicación final en una fase posterior
+
 ### Paso 6. Cambiar frontend y backend a leer el nuevo modelo
 
 ### Paso 7. Retirar columnas duplicadas

@@ -324,6 +324,13 @@ Backfill de registros existentes:
 - `direcciones` -> `direcciones`
 - `contactos.cuenta_id` -> `cuenta_personas`
 
+Primera pasada recomendada:
+
+- conservar una fila por contacto legacy
+- guardar la trazabilidad completa en `metadata`
+- no fusionar duplicados todavía
+- dejar la deduplicación para la fase de limpieza controlada
+
 Objetivo:
 
 - Llevar el histórico al modelo nuevo.
