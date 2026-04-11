@@ -63,6 +63,7 @@ Responsabilidad:
 - Guardar quién es la persona.
 - Guardar su información de contacto humana.
 - Guardar notas y origen.
+- `nombre_completo` debe tratarse como campo derivado o materializado.
 
 No debería guardar:
 
@@ -107,6 +108,8 @@ Responsabilidad:
 - Guardar la entidad con la que se hace negocio.
 - Guardar datos fiscales y comerciales.
 - Guardar datos de facturación y dirección de la empresa.
+- `tipo_persona` vive aquí, no en `personas`.
+- La relación con múltiples ubicaciones se resolverá más adelante con `cuenta_direcciones`.
 
 ### 3.3 `cuenta_personas`
 
@@ -119,6 +122,7 @@ Campos sugeridos:
 - `cuenta_id`
 - `persona_id`
 - `rol_en_cuenta`
+- `rol_catalogo_id` opcional a futuro
 - `puesto`
 - `es_contacto_principal`
 - `es_contacto_facturacion`
@@ -134,6 +138,8 @@ Responsabilidad:
 - Representar que una persona participa en una cuenta con un rol.
 - Permitir que una persona esté en varias cuentas.
 - Permitir que una cuenta tenga varias personas.
+- `rol_en_cuenta` debe ser flexible, no un catálogo cerrado por `check`.
+- `puesto` aquí es el puesto específico de la persona en esa cuenta.
 
 ### 3.4 `direcciones`
 
@@ -163,6 +169,8 @@ Campos sugeridos:
 - `longitud`
 - `metadata`
 - `creado_en`
+
+Esta tabla es la base reusable. Más adelante conviene conectar cuentas y direcciones con una pivote `cuenta_direcciones`, en lugar de limitar `cuentas` a dos campos fijos.
 
 ## 4. Regla de negocio por tipo de persona
 
@@ -301,6 +309,17 @@ Cuando todo esté estable:
 - reducir campos duplicados en `contactos`
 - mover lógica de empresa/fiscal a `cuentas`
 - dejar `contactos` o renombrarlo a `personas` según convenga
+
+Antes del backfill hay que definir reglas de deduplicación:
+
+- Personas:
+  - match fuerte por teléfono
+  - match fuerte por correo
+  - match débil por nombre + organización
+- Cuentas:
+  - match fuerte por RFC
+  - match medio por razón social
+  - match débil por nombre comercial
 
 Objetivo:
 
@@ -447,4 +466,3 @@ Si este plan te convence, el siguiente documento debe ser:
 - qué columnas se van a `personas`
 - qué columnas se van a `cuentas`
 - y cómo se crea `cuenta_personas`
-

@@ -21,7 +21,8 @@ La intención es que este documento se pueda convertir casi directo en migracion
 - Las llaves primarias son `uuid`.
 - Los campos libres usan `text`.
 - Los metadatos extensibles usan `jsonb`.
-- Los responsables usan `propietario_usuario_id`.
+- Los responsables usan FK compuesta por organización:
+  - `(organizacion_id, propietario_usuario_id) references public.usuarios (organizacion_id, id)`
 
 ## 3. Tabla `personas`
 
@@ -46,7 +47,7 @@ Representa a la persona humana real.
 - `origen text`
 - `notas text`
 - `metadata jsonb not null default '{}'::jsonb`
-- `propietario_usuario_id uuid references public.usuarios(id) on delete set null`
+- `propietario_usuario_id uuid`
 - `creado_en timestamptz not null default now()`
 - `actualizado_en timestamptz not null default now()`
 
@@ -55,6 +56,7 @@ Representa a la persona humana real.
 - `check (estado in ('lead', 'activo', 'inactivo', 'bloqueado'))`
 - `check (nombre <> '')`
 - `check (nombre_completo <> '')`
+- `foreign key (organizacion_id, propietario_usuario_id) references public.usuarios (organizacion_id, id) on delete set null`
 
 ### 3.4 Índices sugeridos
 
@@ -66,7 +68,8 @@ Representa a la persona humana real.
 ### 3.5 Regla de uso
 
 - Aquí no deben vivir datos fiscales ni de empresa.
-- `nombre_completo` se mantiene almacenado para búsqueda y compatibilidad.
+- `nombre_completo` se mantiene almacenado para búsqueda y compatibilidad, pero debe considerarse derivado de `nombre`, `apellido_paterno` y `apellido_materno`.
+- `puesto` en `personas` representa el puesto general o más habitual de la persona.
 
 ## 4. Tabla `cuentas`
 
@@ -91,9 +94,7 @@ Representa la entidad comercial o fiscal.
 - `sitio_web text`
 - `telefono_principal text`
 - `correo_principal text`
-- `direccion_fiscal_id uuid references public.direcciones(id) on delete set null`
-- `direccion_operativa_id uuid references public.direcciones(id) on delete set null`
-- `propietario_usuario_id uuid references public.usuarios(id) on delete set null`
+- `propietario_usuario_id uuid`
 - `estado text not null default 'activo'`
 - `notas text`
 - `metadata jsonb not null default '{}'::jsonb`
@@ -105,6 +106,7 @@ Representa la entidad comercial o fiscal.
 - `check (tipo_persona in ('fisica', 'moral'))`
 - `check (tipo_cuenta in ('empresa', 'persona_fisica_actividad_empresarial', 'gobierno', 'proveedor', 'partner', 'cliente', 'prospecto', 'otro'))`
 - `check (estado in ('lead', 'activo', 'inactivo', 'bloqueado'))`
+- `foreign key (organizacion_id, propietario_usuario_id) references public.usuarios (organizacion_id, id) on delete set null`
 
 ### 4.4 Índices sugeridos
 
@@ -119,6 +121,7 @@ Representa la entidad comercial o fiscal.
 - La empresa vive aquí, no en `personas`.
 - `tipo_persona` describe la naturaleza fiscal/comercial de la cuenta.
 - `tipo_cuenta` describe el rol comercial dentro del CRM.
+- La tabla no debe asumir solo una o dos direcciones; eso se resolverá con `cuenta_direcciones`.
 
 ## 5. Tabla `cuenta_personas`
 
@@ -133,6 +136,7 @@ Resuelve la relación real entre una persona y una cuenta.
 - `cuenta_id uuid not null references public.cuentas(id) on delete cascade`
 - `persona_id uuid not null references public.personas(id) on delete cascade`
 - `rol_en_cuenta text not null`
+- `rol_catalogo_id uuid`
 - `puesto text`
 - `es_contacto_principal boolean not null default false`
 - `es_contacto_facturacion boolean not null default false`
@@ -147,7 +151,6 @@ Resuelve la relación real entre una persona y una cuenta.
 
 ### 5.3 Restricciones sugeridas
 
-- `check (rol_en_cuenta in ('dueno', 'representante_legal', 'director', 'compras', 'facturacion', 'operacion', 'contacto_principal', 'asistente', 'otro'))`
 - `check (fecha_fin is null or fecha_inicio is null or fecha_fin >= fecha_inicio)`
 
 ### 5.4 Índices sugeridos
@@ -164,6 +167,8 @@ Resuelve la relación real entre una persona y una cuenta.
   - una cuenta con varios contactos
   - personas físicas con actividad empresarial
   - cambios de empresa con historial
+- `rol_en_cuenta` debe ser flexible y no cerrar la puerta a nuevos valores sin migración SQL.
+- `puesto` aquí es el puesto específico de esa persona en esa cuenta.
 
 ## 6. Tabla `direcciones`
 
@@ -215,39 +220,76 @@ Guarda direcciones reutilizables para personas o cuentas.
 
 ### 6.5 Regla de uso
 
-- `cuentas.direccion_fiscal_id` y `cuentas.direccion_operativa_id` apuntan aquí.
-- Si más adelante se necesita dirección principal en personas, se puede agregar otra FK sin cambiar la tabla base.
+- No conviene limitar `cuentas` a solo `direccion_fiscal_id` y `direccion_operativa_id` porque eso se queda corto para sucursales, domicilios históricos y múltiples ubicaciones.
+- La relación correcta a futuro es una pivote:
+  - `cuenta_direcciones`
+  - `cuenta_id`
+  - `direccion_id`
+  - `tipo_relacion`
+  - `es_principal`
+- `direcciones` debe ser la tabla base reutilizable.
 
-## 7. Reglas de unicidad recomendadas
+## 7. Tabla futura `cuenta_direcciones`
 
-### 7.1 `personas`
+### 7.1 Responsabilidad
+
+Resolver múltiples direcciones por cuenta sin acoplar la cuenta a dos campos fijos.
+
+### 7.2 Columnas sugeridas
+
+- `id uuid primary key default gen_random_uuid()`
+- `organizacion_id uuid not null references public.organizaciones(id) on delete cascade`
+- `cuenta_id uuid not null references public.cuentas(id) on delete cascade`
+- `direccion_id uuid not null references public.direcciones(id) on delete cascade`
+- `tipo_relacion text not null`
+- `es_principal boolean not null default false`
+- `activo boolean not null default true`
+- `notas text`
+- `metadata jsonb not null default '{}'::jsonb`
+- `creado_en timestamptz not null default now()`
+- `actualizado_en timestamptz not null default now()`
+
+### 7.3 Restricciones sugeridas
+
+- `check (tipo_relacion in ('fiscal', 'operativa', 'envio', 'sucursal', 'historial', 'otro'))`
+- `unique (cuenta_id, direccion_id, tipo_relacion)`
+
+### 7.4 Regla de uso
+
+- Esta tabla no es obligatoria para la primera migración.
+- Se deja prevista desde el diseño para no quedar atrapados con dos direcciones fijas.
+
+## 8. Reglas de unicidad recomendadas
+
+### 8.1 `personas`
 
 Opcionales, según negocio:
 
 - evitar duplicar correo principal por organización
 - evitar duplicar teléfono principal por organización
 
-### 7.2 `cuentas`
+### 8.2 `cuentas`
 
 Opcionales:
 
 - `unique (organizacion_id, rfc)` cuando `rfc` no sea nulo ni vacío
 - `unique (organizacion_id, nombre_comercial)` no lo recomiendo al inicio porque puede ser demasiado restrictivo
 
-### 7.3 `cuenta_personas`
+### 8.3 `cuenta_personas`
 
 - una misma persona puede repetir en varias cuentas
 - en una misma cuenta, el mismo rol puede repetirse solo si el negocio lo permite
 
-## 8. Orden de creación recomendado
+## 9. Orden de creación recomendado
 
 1. Crear `direcciones`.
 2. Crear `personas`.
 3. Crear `cuentas` ajustada al nuevo modelo.
 4. Crear `cuenta_personas`.
 5. Agregar triggers/vistas de compatibilidad con `contactos`.
+6. Más adelante agregar `cuenta_direcciones` cuando el negocio requiera múltiples ubicaciones.
 
-## 9. Decisiones tomadas
+## 10. Decisiones tomadas
 
 ### 9.1 `persona_fisica_moral`
 
@@ -258,6 +300,7 @@ Se modela en `cuentas.tipo_persona`.
 ### 9.2 `nombre_completo`
 
 Se conserva en `personas` como columna materializada para búsquedas y compatibilidad.
+Debe considerarse derivada de los campos atómicos de nombre.
 
 ### 9.3 `company_name`
 
@@ -265,7 +308,33 @@ No se mantiene como fuente de verdad.
 
 Debe derivarse de `cuentas.nombre_comercial` o `cuentas.razon_social` según el caso.
 
-## 10. Pendientes para la migración SQL
+## 11. Estrategia de deduplicación previa al backfill
+
+Antes de copiar datos históricos a las tablas nuevas, hay que decidir cómo resolver duplicados.
+
+### 11.1 `personas`
+
+Reglas sugeridas:
+
+- match fuerte por `telefono_principal_e164`
+- match fuerte por `correo_principal`
+- match débil por `nombre_completo + organizacion_id`
+
+### 11.2 `cuentas`
+
+Reglas sugeridas:
+
+- match fuerte por `rfc`
+- match medio por `razon_social`
+- match débil por `nombre_comercial`
+
+### 11.3 Criterio práctico
+
+- Si hay coincidencia fuerte, unir.
+- Si hay coincidencia débil, revisar manualmente o marcar como candidato.
+- Si hay conflicto entre correo/teléfono y nombre, conservar registros separados hasta validación humana.
+
+## 12. Pendientes para la migración SQL
 
 Cuando se convierta este esquema en migraciones, faltará definir:
 
@@ -273,4 +342,4 @@ Cuando se convierta este esquema en migraciones, faltará definir:
 - backfill desde `contactos`
 - vistas de compatibilidad
 - estrategia de corte final de columnas viejas
-
+- deduplicación previa a backfill

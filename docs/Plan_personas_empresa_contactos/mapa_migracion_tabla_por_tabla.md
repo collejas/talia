@@ -105,6 +105,8 @@ Estas columnas deben vivir en `personas`:
 ### Regla
 
 La persona no debe cargar datos fiscales ni datos de cuenta.
+- `nombre_completo` debe seguir existiendo, pero como campo derivado o materializado.
+- `puesto` en `personas` representa el puesto general o habitual de la persona.
 
 ## 5.2 `contactos` -> `cuentas`
 
@@ -150,6 +152,8 @@ Estas columnas deben vivir en `cuentas`:
 ### Regla
 
 Todo lo fiscal/comercial debe vivir en la cuenta, no en la persona.
+- `persona_fisica_moral` no debe quedarse en `personas`; pertenece a la clasificación de la cuenta.
+- La dirección no debe quedar anclada solo a dos columnas fijas; el diseño final debe ir hacia `cuenta_direcciones`.
 
 ## 5.3 `contactos.cuenta_id` -> `cuenta_personas`
 
@@ -165,6 +169,7 @@ La relación actual no desaparece, se transforma.
 - `cuenta_id`
 - `persona_id`
 - `rol_en_cuenta`
+- `rol_catalogo_id`
 - `puesto`
 - `es_contacto_principal`
 - `es_contacto_facturacion`
@@ -173,6 +178,11 @@ La relación actual no desaparece, se transforma.
 - `fecha_inicio`
 - `fecha_fin`
 - `notas`
+
+Regla:
+
+- `rol_en_cuenta` debe ser texto flexible, no un `check` rígido.
+- `puesto` aquí es el puesto específico de esa persona dentro de esa cuenta.
 
 ## 5.4 `contactos` -> campos derivados o calculados
 
@@ -331,6 +341,8 @@ Normalizar direcciones para persona o cuenta sin repetir columnas en múltiples 
 - `metadata`
 - `creado_en`
 
+Esta tabla es la base reusable. La limitación a `direccion_fiscal_id` y `direccion_operativa_id` en `cuentas` solo sería temporal.
+
 ## 10. Reglas de migración por caso
 
 ## 10.1 Contacto existente con empresa clara
@@ -395,11 +407,25 @@ Ejemplos:
 - migrar cuentas que ya existan
 - generar relaciones pivote
 
+## 12. Estrategia de deduplicación antes del backfill
+
+### 12.1 `personas`
+
+- match fuerte por teléfono
+- match fuerte por correo
+- match débil por nombre + organización
+
+### 12.2 `cuentas`
+
+- match fuerte por RFC
+- match medio por razón social
+- match débil por nombre comercial
+
 ### Paso 5. Cambiar frontend y backend a leer el nuevo modelo
 
 ### Paso 6. Retirar columnas duplicadas
 
-## 12. Compatibilidad temporal
+## 13. Compatibilidad temporal
 
 Durante la transición:
 
@@ -415,7 +441,7 @@ Esto evita romper:
 - reportes
 - permisos
 
-## 13. Riesgos
+## 14. Riesgos
 
 ### Riesgo 1. Duplicar datos
 
@@ -464,4 +490,3 @@ El siguiente paso debe ser un plan de migración técnica con:
 - backfill
 - validaciones
 - plan de rollback
-
