@@ -13420,6 +13420,26 @@ async def get_contacts_list(
     return [CRMContactListRow.model_validate(row) for row in rows]
 
 
+@router.get("/contacts/{contacto_id}", response_model=CRMContact)
+async def get_contact(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("contacts.read")),
+    contacto_id: UUID,
+) -> CRMContact:
+    try:
+        row = await repo.get_contact(
+            organizacion_id=organizacion_id,
+            contacto_id=contacto_id,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    if row is None:
+        raise HTTPException(status_code=404, detail="contacto_no_encontrado")
+    return CRMContact.model_validate(row)
+
+
 @router.get("/contactos/catalogos/paises", response_model=list[CRMGeoCountryItem])
 async def get_contactos_catalogo_paises(
     *,
