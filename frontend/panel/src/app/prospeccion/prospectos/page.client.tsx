@@ -2112,6 +2112,12 @@ function ProspectosView() {
   const handleChecklistLookup = useCallback(async () => {
     setChecklistAction("lookup")
     setBanner(null)
+    setVerificationDialog({
+      open: true,
+      status: "loading",
+      title: "Procesando solicitud",
+      message: "Verificando teléfonos pendientes...",
+    })
     const pending = checklist?.telefonos_pendientes ?? 0
     const targetLimit = pending > 0 ? Math.min(200, pending) : 200
     try {
@@ -2121,16 +2127,31 @@ function ProspectosView() {
         proveedor: "gratis",
       })
       if (!response.procesados) {
-        setBanner({ type: "success", message: "No hay teléfonos pendientes de validar." })
+        setVerificationDialog({
+          open: true,
+          status: "success",
+          title: "Operación completada",
+          message: "No hay teléfonos pendientes de validar.",
+        })
       } else {
-        setBanner({ type: "success", message: `Se validaron ${response.procesados} prospectos.` })
+        setVerificationDialog({
+          open: true,
+          status: "success",
+          title: "Operación completada",
+          message: `Se validaron ${response.procesados} prospectos.`,
+        })
         await fetchProspectos(offset)
       }
       await refreshChecklist()
     } catch (err) {
       const message =
         err instanceof Error ? err.message : "No se pudo ejecutar la verificación automática de teléfonos."
-      setBanner({ type: "error", message })
+      setVerificationDialog({
+        open: true,
+        status: "error",
+        title: "Operación con error",
+        message,
+      })
     } finally {
       setChecklistAction(null)
     }
@@ -2139,9 +2160,20 @@ function ProspectosView() {
   const handleChecklistScraper = useCallback(async () => {
     setChecklistAction("scraper")
     setBanner(null)
+    setVerificationDialog({
+      open: true,
+      status: "loading",
+      title: "Procesando solicitud",
+      message: "Lanzando scraper automático...",
+    })
     const pending = checklist?.sin_email ?? 0
     if (pending <= 0) {
-      setBanner({ type: "success", message: "No hay prospectos pendientes de correo." })
+      setVerificationDialog({
+        open: true,
+        status: "success",
+        title: "Operación completada",
+        message: "No hay prospectos pendientes de correo.",
+      })
       setChecklistAction(null)
       return
     }
@@ -2151,13 +2183,17 @@ function ProspectosView() {
         mode: "auto",
       })
       if (!response.programados) {
-        setBanner({
-          type: "error",
+        setVerificationDialog({
+          open: true,
+          status: "error",
+          title: "Operación con error",
           message: "No encontramos sitios web válidos para lanzar el scraper automático.",
         })
       } else {
-        setBanner({
-          type: "success",
+        setVerificationDialog({
+          open: true,
+          status: "success",
+          title: "Operación completada",
           message: `Se lanzaron ${response.programados} scrapers. Puedes revisar el progreso en el historial del buscador.`,
         })
       }
@@ -2167,7 +2203,12 @@ function ProspectosView() {
       if (isFriendlyLimitError(message)) {
         setLimitErrorDialog({ open: true, message })
       }
-      setBanner({ type: "error", message })
+      setVerificationDialog({
+        open: true,
+        status: "error",
+        title: "Operación con error",
+        message,
+      })
     } finally {
       setChecklistAction(null)
     }
@@ -2177,13 +2218,21 @@ function ProspectosView() {
     if (!selectedIds.length) return
     setChecklistAction("scraper")
     setBanner(null)
+    setVerificationDialog({
+      open: true,
+      status: "loading",
+      title: "Procesando solicitud",
+      message: "Lanzando scraper para prospectos seleccionados...",
+    })
     const cappedIds = selectedIds
       .map((id) => id.trim())
       .filter((id) => UUID_RE.test(id))
       .slice(0, 200)
     if (!cappedIds.length) {
-      setBanner({
-        type: "error",
+      setVerificationDialog({
+        open: true,
+        status: "error",
+        title: "Operación con error",
         message: "La selección actual no contiene IDs válidos para lanzar el scraper.",
       })
       setChecklistAction(null)
@@ -2199,13 +2248,17 @@ function ProspectosView() {
         prospectoIds: cappedIds,
       })
       if (!response.programados) {
-        setBanner({
-          type: "error",
+        setVerificationDialog({
+          open: true,
+          status: "error",
+          title: "Operación con error",
           message: "Los prospectos seleccionados no tienen sitio web válido para lanzar el scraper.",
         })
       } else {
-        setBanner({
-          type: "success",
+        setVerificationDialog({
+          open: true,
+          status: "success",
+          title: "Operación completada",
           message: `Scraper lanzado para ${response.programados} prospectos seleccionados.`,
         })
       }
@@ -2215,7 +2268,12 @@ function ProspectosView() {
       if (isFriendlyLimitError(message)) {
         setLimitErrorDialog({ open: true, message })
       }
-      setBanner({ type: "error", message })
+      setVerificationDialog({
+        open: true,
+        status: "error",
+        title: "Operación con error",
+        message,
+      })
     } finally {
       setChecklistAction(null)
     }
