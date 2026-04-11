@@ -2216,6 +2216,15 @@ function ProspectosView() {
 
   const handleScraperSelected = useCallback(async () => {
     if (!selectedIds.length) return
+    if (selectedIds.length > 20) {
+      setVerificationDialog({
+        open: true,
+        status: "error",
+        title: "Operación con error",
+        message: "Solo puedes ejecutar scraper sobre 20 prospectos a la vez. Reduce la selección e inténtalo de nuevo.",
+      })
+      return
+    }
     setChecklistAction("scraper")
     setBanner(null)
     setVerificationDialog({
