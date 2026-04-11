@@ -431,6 +431,13 @@ Primera pasada sugerida:
 - `cuenta_personas` solo si `contactos.cuenta_id` existe
 - deduplicación final en una fase posterior
 
+Segunda pasada sugerida:
+
+- crear cuentas desde las personas legacy marcadas como empresa
+- enlazar cada cuenta con su persona legacy
+- conservar el origen en `metadata`
+- no forzar direcciones mientras no existan datos reales
+
 ### Paso 6. Cambiar frontend y backend a leer el nuevo modelo
 
 ### Paso 7. Retirar columnas duplicadas

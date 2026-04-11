@@ -331,6 +331,13 @@ Primera pasada recomendada:
 - no fusionar duplicados todavía
 - dejar la deduplicación para la fase de limpieza controlada
 
+Segunda pasada recomendada:
+
+- crear cuentas desde las personas legacy marcadas como empresa
+- vincular cada cuenta creada con su persona legacy en `cuenta_personas`
+- usar `metadata` para conservar el origen completo
+- dejar `cuenta_direcciones` vacía hasta que existan domicilios reales que mapear
+
 Objetivo:
 
 - Llevar el histórico al modelo nuevo.
