@@ -143,12 +143,7 @@ def get_state_name(state_code: str | None) -> str | None:
 
 
 @lru_cache(maxsize=None)
-def _load_municipalities_for_state(state_code: str) -> Mapping[str, str]:
-    db_municipalities = _load_municipalities_from_db()
-    if db_municipalities:
-        by_state = db_municipalities.get(state_code)
-        if by_state:
-            return by_state
+def _load_municipalities_from_file(state_code: str) -> Mapping[str, str]:
     if not _MANIFEST:
         return {}
     entry = _MANIFEST.get(state_code)
@@ -171,6 +166,21 @@ def _load_municipalities_for_state(state_code: str) -> Mapping[str, str]:
         if code and name:
             municipios[code] = name
     return municipios
+
+
+@lru_cache(maxsize=None)
+def _load_municipalities_for_state(state_code: str) -> Mapping[str, str]:
+    file_municipalities = dict(_load_municipalities_from_file(state_code))
+    db_municipalities = _load_municipalities_from_db()
+    if db_municipalities:
+        by_state = db_municipalities.get(state_code)
+        if by_state:
+            if not file_municipalities:
+                return by_state
+            merged = dict(file_municipalities)
+            merged.update(by_state)
+            return merged
+    return file_municipalities
 
 
 def get_municipality_name(state_code: str | None, municipality_code: str | None) -> str | None:
