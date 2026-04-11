@@ -19,6 +19,7 @@ export type ProspectoItem = {
   email_quality_tier?: string | null
   email_risk_score?: number | null
   email_recommendation?: string | null
+  email_domain_relation?: string | null
   website_lookup_status?: string | null
   website_lookup_error?: string | null
   website_lookup_checked_en?: string | null
@@ -77,6 +78,7 @@ export type ProspectoFiltroInput = {
   fuente?: "google_places" | "denue" | "usuario" | ""
   lookup_status?: string | null
   email_lookup_status?: string | null
+  email_domain_relation?: "same_as_website" | "different_from_website" | "no_website" | "no_email" | ""
   segmento?: string | null
   carrier_type?: "mobile" | "landline" | "voip" | ""
   stage?: "discover" | "enrich" | "prepare" | "launch" | "evaluate" | ""
@@ -234,6 +236,39 @@ export type ProspectoEmailLookupResponse = {
     email_risk_score?: number | null
     email_recommendation?: string | null
   }>
+}
+
+export type ProspectoFullLookupResponse = {
+  ok: boolean
+  parcial?: boolean
+  telefonos: {
+    procesados: number
+    detalles: Array<{ prospecto_id: string; lookup_status?: string | null; carrier_type?: string | null }>
+  }
+  sitios_web: {
+    procesados: number
+    fallidos: number
+    detalles: Array<{
+      prospecto_id: string
+      website?: string | null
+      website_lookup_status?: string | null
+      website_http_status?: number | null
+      website_final_url?: string | null
+    }>
+    errores?: Array<{ prospecto_id?: string | null; error?: string | null }>
+  }
+  correos: {
+    procesados: number
+    fallidos: number
+    detalles: Array<{
+      prospecto_id: string
+      email?: string | null
+      email_lookup_status?: string | null
+      email_risk_score?: number | null
+      email_recommendation?: string | null
+    }>
+    errores?: Array<{ prospecto_id?: string | null; error?: string | null }>
+  }
 }
 
 export type ProspectoWebsiteLookupResponse = {
@@ -499,6 +534,7 @@ export type ProspectoManualInput = {
 export type ProspectoUpdateInput = Partial<ProspectoManualInput>
 
 export const PROSPECTO_IDS_MAX_BATCH = 200
+export const PROSPECTO_IDS_MAX_BATCH_FULL_VALIDATION = 100
 
 /**
  * Build an absolute URL when the code runs on the client, otherwise fall back to env origin.
@@ -600,6 +636,7 @@ type ListProspectosParams = {
   lookupStatus?: string
   emailLookupStatus?: string
   websiteLookupStatus?: string
+  emailDomainRelation?: "same_as_website" | "different_from_website" | "no_website" | "no_email"
   segmento?: string
   carrierType?: "mobile" | "landline" | "voip"
   order?: "creado" | "nombre"
@@ -636,6 +673,9 @@ function buildProspectosListUrl(basePath: string, params: ListProspectosParams =
   }
   if (params.websiteLookupStatus?.trim().length) {
     url.searchParams.set("website_lookup_status", params.websiteLookupStatus.trim())
+  }
+  if (params.emailDomainRelation?.trim().length) {
+    url.searchParams.set("email_domain_relation", params.emailDomainRelation.trim())
   }
   if (params.segmento?.trim().length) url.searchParams.set("segmento", params.segmento.trim())
   if (params.carrierType) url.searchParams.set("carrier_type", params.carrierType)
@@ -944,6 +984,38 @@ export async function verificarSitiosWebProspectos(payload: {
   return requestJson<ProspectoWebsiteLookupResponse>("/api/prospeccion/prospectos/verificar-sitios-web", {
     method: "POST",
     body: JSON.stringify({
+      ...payload,
+      prospecto_ids: prospectoIds,
+    }),
+  })
+}
+
+/**
+ * Run full validation (phone + website + email) for provided prospect IDs.
+ */
+export async function verificarCompletoProspectos(payload: {
+  prospecto_ids: string[]
+  country_code?: string
+  proveedor?: "gratis" | "twilio"
+  check_smtp?: boolean
+  reintentar?: boolean
+}): Promise<ProspectoFullLookupResponse> {
+  const prospectoIds = payload.prospecto_ids
+    .map((id) => (id || "").trim())
+    .filter((id) => UUID_RE.test(id))
+  if (!prospectoIds.length) {
+    throw new Error("No hay prospectos válidos para verificar.")
+  }
+  if (prospectoIds.length > PROSPECTO_IDS_MAX_BATCH_FULL_VALIDATION) {
+    throw new Error(
+      `Seleccionaste ${prospectoIds.length} prospectos. El máximo por validación completa es ${PROSPECTO_IDS_MAX_BATCH_FULL_VALIDATION}. Divide el proceso en lotes.`
+    )
+  }
+  return requestJson<ProspectoFullLookupResponse>("/api/prospeccion/prospectos/verificar-completo", {
+    method: "POST",
+    body: JSON.stringify({
+      proveedor: payload.proveedor ?? "gratis",
+      check_smtp: payload.check_smtp ?? true,
       ...payload,
       prospecto_ids: prospectoIds,
     }),

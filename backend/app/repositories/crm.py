@@ -9426,6 +9426,7 @@ class CRMRepository:
         lookup_status: str | None = None,
         email_lookup_status: str | None = None,
         website_lookup_status: str | None = None,
+        email_domain_relation: str | None = None,
         segmento: str | None = None,
         carrier_type: str | None = None,
         order: str | None = None,
@@ -9467,6 +9468,8 @@ class CRMRepository:
             params["email_lookup_status"] = f"eq.{email_lookup_status}"
         if website_lookup_status:
             params["website_lookup_status"] = f"eq.{website_lookup_status}"
+        if email_domain_relation:
+            params["email_domain_relation"] = f"eq.{email_domain_relation}"
         if segmento:
             params["segmento"] = f"eq.{segmento}"
         if carrier_type:

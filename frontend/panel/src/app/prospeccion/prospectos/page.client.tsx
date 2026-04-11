@@ -99,14 +99,16 @@ import {
   verificarProspectos,
   verificarCorreosProspectos,
   verificarSitiosWebProspectos,
+  verificarCompletoProspectos,
   listContactoBatches,
   type ContactoBatch,
 } from "@/lib/prospeccion/prospectos-client"
 
 type FuenteFilter = "" | "google_places" | "denue" | "usuario"
 type LookupFilter = "" | "pendiente" | "verificado" | "sin_numero" | "error"
-type EmailLookupFilter = "" | "pendiente" | "sin_email" | "valido" | "invalido" | "dudoso" | "error"
+type EmailLookupFilter = "" | "pendiente" | "sin_email" | "valido" | "invalido" | "dudoso" | "error" | "omitido_por_sitio"
 type WebsiteLookupFilter = "" | "pendiente" | "sin_sitio" | "valido" | "invalido" | "dudoso" | "error"
+type EmailDomainRelationFilter = "" | "same_as_website" | "different_from_website" | "no_website" | "no_email"
 type ConEnvioCanalFilter = "correo" | "whatsapp" | "llamada"
 type ConEnvioModoFilter = "" | "si" | "no"
 type ConScraperFilter = "" | "si" | "no"
@@ -137,6 +139,7 @@ type Filters = {
   lookupStatus: LookupFilter
   emailLookupStatus: EmailLookupFilter
   websiteLookupStatus: WebsiteLookupFilter
+  emailDomainRelation: EmailDomainRelationFilter
   campanaId: string
   conEnvioModo: ConEnvioModoFilter
   conEnvioCanales: ConEnvioCanalFilter[]
@@ -158,6 +161,13 @@ type Filters = {
 
 type BannerState = {
   type: "success" | "error"
+  message: string
+}
+
+type VerificationFeedbackState = {
+  open: boolean
+  status: "loading" | "success" | "error"
+  title: string
   message: string
 }
 
@@ -216,6 +226,7 @@ const initialFilters: Filters = {
   lookupStatus: "",
   emailLookupStatus: "",
   websiteLookupStatus: "",
+  emailDomainRelation: "",
   campanaId: "",
   conEnvioModo: "",
   conEnvioCanales: [],
@@ -321,6 +332,7 @@ const EMAIL_LOOKUP_STATUS_LABELS: Record<string, string> = {
   invalido: "Inválido",
   dudoso: "Dudoso",
   error: "Error",
+  omitido_por_sitio: "Omitido por sitio",
 }
 
 const WEBSITE_LOOKUP_STATUS_LABELS: Record<string, string> = {
@@ -330,6 +342,13 @@ const WEBSITE_LOOKUP_STATUS_LABELS: Record<string, string> = {
   invalido: "Inválido",
   dudoso: "Dudoso",
   error: "Error",
+}
+
+const EMAIL_DOMAIN_RELATION_LABELS: Record<Exclude<EmailDomainRelationFilter, "">, string> = {
+  same_as_website: "Igual al sitio web",
+  different_from_website: "Diferente al sitio web",
+  no_website: "Sin sitio web",
+  no_email: "Sin correo",
 }
 
 const RATING_FILTER_LABELS: Record<MinRatingFilter, string> = {
@@ -361,6 +380,7 @@ const EMAIL_LOOKUP_STATUS_CLASSNAMES: Record<string, string> = {
   dudoso: "border-amber-200 bg-amber-50 text-amber-700",
   invalido: "border-rose-200 bg-rose-50 text-rose-700",
   error: "border-rose-200 bg-rose-50 text-rose-700",
+  omitido_por_sitio: "border-amber-200 bg-amber-50 text-amber-700",
 }
 
 const WEBSITE_LOOKUP_STATUS_CLASSNAMES: Record<string, string> = {
@@ -649,7 +669,8 @@ function normalizeSavedViewState(raw: unknown): ProspectosSavedViewState | null 
       filtersObj["emailLookupStatus"] === "valido" ||
       filtersObj["emailLookupStatus"] === "invalido" ||
       filtersObj["emailLookupStatus"] === "dudoso" ||
-      filtersObj["emailLookupStatus"] === "error"
+      filtersObj["emailLookupStatus"] === "error" ||
+      filtersObj["emailLookupStatus"] === "omitido_por_sitio"
         ? filtersObj["emailLookupStatus"]
         : "",
     websiteLookupStatus:
@@ -660,6 +681,13 @@ function normalizeSavedViewState(raw: unknown): ProspectosSavedViewState | null 
       filtersObj["websiteLookupStatus"] === "dudoso" ||
       filtersObj["websiteLookupStatus"] === "error"
         ? filtersObj["websiteLookupStatus"]
+        : "",
+    emailDomainRelation:
+      filtersObj["emailDomainRelation"] === "same_as_website" ||
+      filtersObj["emailDomainRelation"] === "different_from_website" ||
+      filtersObj["emailDomainRelation"] === "no_website" ||
+      filtersObj["emailDomainRelation"] === "no_email"
+        ? filtersObj["emailDomainRelation"]
         : "",
     campanaId: typeof filtersObj["campanaId"] === "string" ? filtersObj["campanaId"] : "",
     conEnvioModo:
@@ -863,7 +891,7 @@ function ProspectosView() {
   const [error, setError] = useState<string | null>(null)
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [banner, setBanner] = useState<BannerState | null>(null)
-  const [action, setAction] = useState<"lookup" | "email_lookup" | "website_lookup" | "contact" | null>(null)
+  const [action, setAction] = useState<"lookup" | "email_lookup" | "website_lookup" | "full_lookup" | "contact" | null>(null)
   const [formDialogOpen, setFormDialogOpen] = useState(false)
   const [formMode, setFormMode] = useState<"create" | "edit">("create")
   const [formValues, setFormValues] = useState<ProspectoFormState>(initialProspectoForm)
@@ -957,6 +985,12 @@ function ProspectosView() {
   const [convertSubmitting, setConvertSubmitting] = useState(false)
   const [limitErrorDialog, setLimitErrorDialog] = useState<{ open: boolean; message: string }>({
     open: false,
+    message: "",
+  })
+  const [verificationDialog, setVerificationDialog] = useState<VerificationFeedbackState>({
+    open: false,
+    status: "loading",
+    title: "",
     message: "",
   })
   const queryFiltersInitialEffect = useRef(true)
@@ -1435,6 +1469,13 @@ function ProspectosView() {
         }`
       )
     }
+    if (filters.emailDomainRelation) {
+      chips.push(
+        `Relación dominio correo/sitio: ${
+          EMAIL_DOMAIN_RELATION_LABELS[filters.emailDomainRelation] ?? filters.emailDomainRelation
+        }`
+      )
+    }
     if (filters.campanaId) {
       chips.push(`Campaña: ${campaignLabelMap.get(filters.campanaId) ?? filters.campanaId}`)
     }
@@ -1512,6 +1553,7 @@ function ProspectosView() {
           minRating: filters.minRating ? Number(filters.minRating) : undefined,
           estratoGroup: filters.estratoGroup || undefined,
           carrierType: filters.carrierType || undefined,
+          emailDomainRelation: filters.emailDomainRelation || undefined,
           order: filters.order,
           phonePresent,
           emailPresent,
@@ -1627,6 +1669,7 @@ function ProspectosView() {
           minRating: filters.minRating ? Number(filters.minRating) : undefined,
           estratoGroup: filters.estratoGroup || undefined,
           carrierType: filters.carrierType || undefined,
+          emailDomainRelation: filters.emailDomainRelation || undefined,
           order: filters.order,
           phonePresent,
           emailPresent,
@@ -2531,23 +2574,33 @@ function ProspectosView() {
     if (!selectedIds.length) return
     setAction("lookup")
     setBanner(null)
+    setVerificationDialog({
+      open: true,
+      status: "loading",
+      title: "Verificando teléfonos",
+      message: `Procesando ${selectedIds.length} prospectos...`,
+    })
     try {
       const response = await verificarProspectos({
         prospecto_ids: selectedIds,
         proveedor: "gratis",
       })
-      setBanner({
-        type: "success",
+      setVerificationDialog({
+        open: true,
+        status: "success",
+        title: "Verificación de teléfonos completada",
         message: `Se actualizaron ${response.procesados} prospectos.`,
       })
       await fetchProspectos(offset)
       void fetchStageSummary()
     } catch (err) {
       const message = err instanceof Error ? err.message : "No se pudo verificar los teléfonos."
-      if (isFriendlyLimitError(message)) {
-        setLimitErrorDialog({ open: true, message })
-      }
-      setBanner({ type: "error", message })
+      setVerificationDialog({
+        open: true,
+        status: "error",
+        title: "Verificación de teléfonos",
+        message,
+      })
     } finally {
       setAction(null)
     }
@@ -2557,23 +2610,33 @@ function ProspectosView() {
     if (!selectedIds.length) return
     setAction("email_lookup")
     setBanner(null)
+    setVerificationDialog({
+      open: true,
+      status: "loading",
+      title: "Validando correos",
+      message: `Procesando ${selectedIds.length} prospectos...`,
+    })
     try {
       const response = await verificarCorreosProspectos({
         prospecto_ids: selectedIds,
         check_smtp: true,
       })
-      setBanner({
-        type: "success",
+      setVerificationDialog({
+        open: true,
+        status: "success",
+        title: "Validación de correos completada",
         message: `Se validaron ${response.procesados} correos.`,
       })
       await fetchProspectos(offset)
       void fetchStageSummary()
     } catch (err) {
       const message = err instanceof Error ? err.message : "No se pudieron validar los correos."
-      if (isFriendlyLimitError(message)) {
-        setLimitErrorDialog({ open: true, message })
-      }
-      setBanner({ type: "error", message })
+      setVerificationDialog({
+        open: true,
+        status: "error",
+        title: "Validación de correos",
+        message,
+      })
     } finally {
       setAction(null)
     }
@@ -2583,22 +2646,73 @@ function ProspectosView() {
     if (!selectedIds.length) return
     setAction("website_lookup")
     setBanner(null)
+    setVerificationDialog({
+      open: true,
+      status: "loading",
+      title: "Verificando sitios web",
+      message: `Procesando ${selectedIds.length} prospectos...`,
+    })
     try {
       const response = await verificarSitiosWebProspectos({
         prospecto_ids: selectedIds,
       })
-      setBanner({
-        type: "success",
+      setVerificationDialog({
+        open: true,
+        status: "success",
+        title: "Verificación de sitios web completada",
         message: `Se validaron ${response.procesados} sitios web.`,
       })
       await fetchProspectos(offset)
       void fetchStageSummary()
     } catch (err) {
       const message = err instanceof Error ? err.message : "No se pudieron validar los sitios web."
-      if (isFriendlyLimitError(message)) {
-        setLimitErrorDialog({ open: true, message })
-      }
-      setBanner({ type: "error", message })
+      setVerificationDialog({
+        open: true,
+        status: "error",
+        title: "Verificación de sitios web",
+        message,
+      })
+    } finally {
+      setAction(null)
+    }
+  }, [fetchProspectos, fetchStageSummary, offset, selectedIds])
+
+  const handleVerifyFull = useCallback(async () => {
+    if (!selectedIds.length) return
+    setAction("full_lookup")
+    setBanner(null)
+    setVerificationDialog({
+      open: true,
+      status: "loading",
+      title: "Ejecutando validación completa",
+      message: `Procesando ${selectedIds.length} prospectos...`,
+    })
+    try {
+      const response = await verificarCompletoProspectos({
+        prospecto_ids: selectedIds,
+        proveedor: "gratis",
+        check_smtp: true,
+      })
+      const phones = response.telefonos?.procesados ?? 0
+      const websites = response.sitios_web?.procesados ?? 0
+      const emails = response.correos?.procesados ?? 0
+      const prefix = response.parcial ? "Validación parcial." : "Validación completa."
+      setVerificationDialog({
+        open: true,
+        status: response.parcial ? "error" : "success",
+        title: "Validación completa finalizada",
+        message: `${prefix} Teléfonos: ${phones}, Sitios: ${websites}, Correos: ${emails}.`,
+      })
+      await fetchProspectos(offset)
+      void fetchStageSummary()
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "No se pudo ejecutar la validación completa."
+      setVerificationDialog({
+        open: true,
+        status: "error",
+        title: "Validación completa",
+        message,
+      })
     } finally {
       setAction(null)
     }
@@ -3621,6 +3735,7 @@ function ProspectosView() {
                   <SelectItem value="valido">Válido</SelectItem>
                   <SelectItem value="invalido">Inválido</SelectItem>
                   <SelectItem value="dudoso">Dudoso</SelectItem>
+                  <SelectItem value="omitido_por_sitio">Omitido por sitio</SelectItem>
                   <SelectItem value="error">Error</SelectItem>
                 </SelectContent>
               </Select>
@@ -3782,6 +3897,29 @@ function ProspectosView() {
                   <SelectItem value="mobile">Móvil</SelectItem>
                   <SelectItem value="landline">Línea fija</SelectItem>
                   <SelectItem value="voip">VoIP</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1">
+              <Label>Dominio correo/sitio</Label>
+              <Select
+                value={filters.emailDomainRelation || "all"}
+                onValueChange={(value) =>
+                  setFilters((prev) => ({
+                    ...prev,
+                    emailDomainRelation: value === "all" ? "" : (value as EmailDomainRelationFilter),
+                  }))
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Todos" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos</SelectItem>
+                  <SelectItem value="same_as_website">Igual al sitio web</SelectItem>
+                  <SelectItem value="different_from_website">Diferente al sitio web</SelectItem>
+                  <SelectItem value="no_website">Sin sitio web</SelectItem>
+                  <SelectItem value="no_email">Sin correo</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -4488,6 +4626,15 @@ function ProspectosView() {
               >
                 <IconWorldSearch className={cn("mr-1.5 size-4", action === "website_lookup" && "animate-spin")} />
                 Verificar sitio web
+              </Button>
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => void handleVerifyFull()}
+                disabled={!selectedCount || action !== null}
+              >
+                <IconSparkles className={cn("mr-1.5 size-4", action === "full_lookup" && "animate-spin")} />
+                Validación completa
               </Button>
               <Button
                 variant="outline"
@@ -5490,6 +5637,55 @@ function ProspectosView() {
               className="min-w-32"
             >
               Entendido
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={verificationDialog.open}
+        onOpenChange={(open) => {
+          if (verificationDialog.status === "loading") return
+          if (!open) {
+            setVerificationDialog((prev) => ({ ...prev, open: false }))
+          }
+        }}
+      >
+        <DialogContent
+          className="sm:max-w-md"
+          onEscapeKeyDown={(event) => {
+            if (verificationDialog.status === "loading") {
+              event.preventDefault()
+            }
+          }}
+          onPointerDownOutside={(event) => {
+            if (verificationDialog.status === "loading") {
+              event.preventDefault()
+            }
+          }}
+        >
+          <DialogHeader>
+            <div className="mx-auto mb-2 flex size-14 items-center justify-center rounded-full border bg-muted/40">
+              {verificationDialog.status === "loading" ? (
+                <IconLoader className="size-7 animate-spin text-muted-foreground" />
+              ) : verificationDialog.status === "success" ? (
+                <IconCircleCheck className="size-7 text-emerald-600" />
+              ) : (
+                <IconAlertTriangle className="size-7 text-amber-600" />
+              )}
+            </div>
+            <DialogTitle className="text-center">{verificationDialog.title}</DialogTitle>
+            <DialogDescription className="text-center">
+              {verificationDialog.message || "Procesando solicitud..."}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="sm:justify-center">
+            <Button
+              onClick={() => setVerificationDialog((prev) => ({ ...prev, open: false }))}
+              className="min-w-32"
+              disabled={verificationDialog.status === "loading"}
+            >
+              {verificationDialog.status === "loading" ? "Procesando..." : "Entendido"}
             </Button>
           </DialogFooter>
         </DialogContent>

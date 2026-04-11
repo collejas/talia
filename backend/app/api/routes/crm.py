@@ -2671,6 +2671,32 @@ class ProspectoWebsiteLookupPayload(BaseModel):
         return unique
 
 
+class ProspectoFullLookupPayload(BaseModel):
+    """Solicita validación combinada (teléfono + sitio + correo) en un solo flujo."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    prospecto_ids: list[UUID] = Field(
+        ..., min_length=1, max_length=100, description="Prospectos a verificar en lote combinado."
+    )
+    country_code: str | None = Field(default="MX")
+    proveedor: Literal["gratis", "twilio"] = Field(default="gratis")
+    check_smtp: bool = Field(default=True)
+    reintentar: bool = Field(default=False)
+
+    @field_validator("prospecto_ids")
+    @classmethod
+    def _dedupe_prospecto_ids(cls, value: list[UUID]) -> list[UUID]:
+        unique: list[UUID] = []
+        seen: set[UUID] = set()
+        for item in value:
+            if item in seen:
+                continue
+            seen.add(item)
+            unique.append(item)
+        return unique
+
+
 class ProspectoChecklistLookupPayload(BaseModel):
     """Configura la acción rápida para validar teléfonos desde el checklist."""
 
@@ -2729,6 +2755,7 @@ class ProspectoListQuery(BaseModel):
     lookup_status: str | None = Field(default=None, max_length=60)
     email_lookup_status: str | None = Field(default=None, max_length=60)
     website_lookup_status: str | None = Field(default=None, max_length=60)
+    email_domain_relation: Literal["same_as_website", "different_from_website", "no_website", "no_email", ""] | None = Field(default=None)
     segmento: str | None = Field(default=None, max_length=120)
     carrier_type: Literal["mobile", "landline", "voip", ""] | None = Field(default=None)
     order: Literal["creado", "nombre"] | None = Field(default=None)
@@ -2760,6 +2787,7 @@ class ProspectoFiltroPayload(BaseModel):
     lookup_status: str | None = Field(default=None, max_length=60)
     email_lookup_status: str | None = Field(default=None, max_length=60)
     website_lookup_status: str | None = Field(default=None, max_length=60)
+    email_domain_relation: Literal["same_as_website", "different_from_website", "no_website", "no_email", ""] | None = Field(default=None)
     segmento: str | None = Field(default=None, max_length=120)
     carrier_type: Literal["mobile", "landline", "voip", ""] | None = Field(default=None)
     stage: Literal["discover", "enrich", "prepare", "launch", "evaluate", ""] | None = Field(default=None)
@@ -5485,6 +5513,7 @@ async def _run_prospecto_email_lookup(
     prospectos: Sequence[Mapping[str, Any]],
     reintentar: bool,
     check_smtp: bool,
+    enforce_same_domain_website_gate: bool = False,
     concurrency: int = 12,
 ) -> dict[str, list[dict[str, Any]]]:
     """Valida correos de prospectos y persiste status + detalles."""
@@ -5599,6 +5628,20 @@ async def _run_prospecto_email_lookup(
             recommendation = "descartar"
         return score, recommendation
 
+    def _extract_email_domain(value: Any) -> str | None:
+        email = _clean_text(value)
+        if not email or "@" not in email:
+            return None
+        domain = email.split("@", 1)[1].strip().lower()
+        return domain or None
+
+    def _extract_website_domain(value: Any) -> str | None:
+        normalized = _normalize_scraper_target(value)
+        if not normalized:
+            return None
+        _url, host = normalized
+        return host.strip().lower() or None
+
     async def _process_one(prospecto: Mapping[str, Any]) -> dict[str, Any]:
         prospecto_id = prospecto.get("id") or prospecto.get("prospecto_id")
         if not prospecto_id:
@@ -5609,6 +5652,64 @@ async def _run_prospecto_email_lookup(
             return {"kind": "skipped", "prospecto_id": str(prospecto_id)}
 
         email_raw = _clean_text(prospecto.get("email"))
+        email_domain = _extract_email_domain(email_raw)
+        website_domain = _extract_website_domain(prospecto.get("website"))
+        if not email_domain:
+            domain_relation = "no_email"
+        elif not website_domain:
+            domain_relation = "no_website"
+        elif email_domain == website_domain:
+            domain_relation = "same_as_website"
+        else:
+            domain_relation = "different_from_website"
+
+        website_lookup_status = str(prospecto.get("website_lookup_status") or "").strip().lower()
+        if (
+            enforce_same_domain_website_gate
+            and domain_relation == "same_as_website"
+            and website_lookup_status != "valido"
+        ):
+            updates_skip: dict[str, Any] = {
+                "email_lookup_status": "omitido_por_sitio",
+                "email_lookup_error": "website_invalid_same_domain",
+                "email_lookup_details": {
+                    "reason": "website_invalid_same_domain",
+                    "domain_relation": domain_relation,
+                    "email_domain": email_domain,
+                    "website_domain": website_domain,
+                    "website_lookup_status": website_lookup_status or "pendiente",
+                },
+                "email_lookup_checked_en": datetime.now(UTC).isoformat(),
+                "email_quality_tier": None,
+                "email_risk_score": 0,
+                "email_recommendation": "descartar",
+                "email_domain_relation": domain_relation,
+            }
+            try:
+                updated_skip = await repo.update_prospecto(
+                    usuario_token=user_token,
+                    prospecto_id=UUID(str(prospecto_id)),
+                    payload=updates_skip,
+                )
+            except Exception as exc:  # pragma: no cover - depende de red/BD
+                logger.exception(
+                    "prospeccion.email_lookup.skip_by_website.persist_failed",
+                    extra={"prospecto_id": str(prospecto_id), "email": email_raw or ""},
+                )
+                return {
+                    "kind": "failed",
+                    "prospecto_id": str(prospecto_id),
+                    "error": f"persist_failed: {exc}",
+                }
+            return {
+                "kind": "processed",
+                "prospecto_id": str(prospecto_id),
+                "email": updated_skip.get("email"),
+                "email_lookup_status": updated_skip.get("email_lookup_status"),
+                "email_risk_score": updated_skip.get("email_risk_score"),
+                "email_recommendation": updated_skip.get("email_recommendation"),
+            }
+
         try:
             async with semaphore:
                 result = await validate_email_address(email=email_raw or "", check_smtp=check_smtp)
@@ -5639,11 +5740,19 @@ async def _run_prospecto_email_lookup(
         updates: dict[str, Any] = {
             "email_lookup_status": result.status,
             "email_lookup_error": result.error,
-            "email_lookup_details": {**details, "history": history_meta},
+            "email_lookup_details": {
+                **details,
+                "history": history_meta,
+                "domain_relation": domain_relation,
+                "email_domain": email_domain,
+                "website_domain": website_domain,
+                "website_lookup_status": website_lookup_status or None,
+            },
             "email_lookup_checked_en": (result.checked_at.isoformat() if result.checked_at else None),
             "email_quality_tier": details.get("quality_tier"),
             "email_risk_score": score,
             "email_recommendation": recommendation,
+            "email_domain_relation": domain_relation,
         }
         if result.normalized_email:
             updates["email"] = result.normalized_email
@@ -7277,6 +7386,7 @@ def _prospecto_filters_to_kwargs(filters: ProspectoFiltroPayload) -> dict[str, A
         "lookup_status": filters.lookup_status,
         "email_lookup_status": filters.email_lookup_status,
         "website_lookup_status": filters.website_lookup_status,
+        "email_domain_relation": filters.email_domain_relation or None,
         "segmento": filters.segmento,
         "carrier_type": filters.carrier_type or None,
         "stage": filters.stage or None,
@@ -18582,6 +18692,7 @@ async def listar_prospectos(
                 lookup_status=params.lookup_status,
                 email_lookup_status=params.email_lookup_status,
                 website_lookup_status=params.website_lookup_status,
+                email_domain_relation=params.email_domain_relation or None,
                 segmento=params.segmento,
                 carrier_type=params.carrier_type or None,
                 order=order_value,
@@ -22387,6 +22498,115 @@ async def verificar_sitios_web_prospectos(
         "fallidos": len(failed),
         "detalles": processed,
         "errores": failed[:50],
+    }
+
+
+@router.post("/prospeccion/prospectos/verificar-completo")
+async def verificar_completo_prospectos(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    _: str = Depends(require_permission("ejecutar_busquedas")),
+    user_token: str = Depends(require_user_token),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    payload: ProspectoFullLookupPayload,
+) -> dict[str, Any]:
+    """Ejecuta validación completa: teléfono -> sitio web -> correo con reglas de dominio."""
+
+    tenant_organizacion_id: UUID | None = None
+    user_sub = _jwt_verify_and_sub(user_token)
+    if user_sub:
+        try:
+            user_uuid = UUID(user_sub)
+        except (TypeError, ValueError):
+            user_uuid = None
+        if user_uuid:
+            tenant_organizacion_id = await repo.get_usuario_organizacion_id(usuario_id=user_uuid)
+
+    twilio_runtime = None
+    if payload.proveedor == "twilio":
+        twilio_runtime = await tenant_runtime.get_twilio_runtime_settings(
+            organizacion_id=tenant_organizacion_id
+        )
+        if not twilio_runtime.account_sid or not twilio_runtime.auth_token:
+            raise HTTPException(status_code=503, detail="twilio_not_configured")
+
+    try:
+        prospectos = await repo.list_prospectos_by_ids(
+            usuario_token=user_token,
+            prospecto_ids=payload.prospecto_ids,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    if not prospectos:
+        raise HTTPException(status_code=404, detail="prospectos_not_found")
+
+    try:
+        phone_processed = await _run_prospecto_lookup(
+            repo=repo,
+            user_token=user_token,
+            prospectos=prospectos,
+            country_code=payload.country_code,
+            reintentar=payload.reintentar,
+            proveedor=payload.proveedor,
+            twilio_account_sid=(twilio_runtime.account_sid if twilio_runtime else None),
+            twilio_auth_token=(twilio_runtime.auth_token if twilio_runtime else None),
+        )
+        website_lookup_result = await _run_prospecto_website_lookup(
+            repo=repo,
+            user_token=user_token,
+            prospectos=prospectos,
+            reintentar=payload.reintentar,
+        )
+        refreshed_prospectos = await repo.list_prospectos_by_ids(
+            usuario_token=user_token,
+            prospecto_ids=payload.prospecto_ids,
+        )
+        email_lookup_result = await _run_prospecto_email_lookup(
+            repo=repo,
+            user_token=user_token,
+            prospectos=refreshed_prospectos,
+            reintentar=payload.reintentar,
+            check_smtp=payload.check_smtp,
+            enforce_same_domain_website_gate=True,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    website_processed = website_lookup_result.get("processed") or []
+    website_failed = website_lookup_result.get("failed") or []
+    email_processed = email_lookup_result.get("processed") or []
+    email_failed = email_lookup_result.get("failed") or []
+
+    await _publish_prospectos_ui_event(
+        organizacion_id=organizacion_id,
+        event_type="prospectos_full_lookup_updated",
+        payload={
+            "telefonos": len(phone_processed),
+            "sitios": len(website_processed),
+            "correos": len(email_processed),
+            "errores_sitio": len(website_failed),
+            "errores_correo": len(email_failed),
+        },
+    )
+    return {
+        "ok": len(website_failed) == 0 and len(email_failed) == 0,
+        "parcial": len(website_failed) > 0 or len(email_failed) > 0,
+        "telefonos": {
+            "procesados": len(phone_processed),
+            "detalles": phone_processed,
+        },
+        "sitios_web": {
+            "procesados": len(website_processed),
+            "fallidos": len(website_failed),
+            "detalles": website_processed,
+            "errores": website_failed[:50],
+        },
+        "correos": {
+            "procesados": len(email_processed),
+            "fallidos": len(email_failed),
+            "detalles": email_processed,
+            "errores": email_failed[:50],
+        },
     }
 
 
