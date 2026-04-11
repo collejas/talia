@@ -109,7 +109,7 @@ Responsabilidad:
 - Guardar datos fiscales y comerciales.
 - Guardar datos de facturación y dirección de la empresa.
 - `tipo_persona` vive aquí, no en `personas`.
-- La relación con múltiples ubicaciones se resolverá más adelante con `cuenta_direcciones`.
+- La relación con múltiples ubicaciones ya queda preparada con `cuenta_direcciones`.
 
 ### 3.3 `cuenta_personas`
 
@@ -170,7 +170,31 @@ Campos sugeridos:
 - `metadata`
 - `creado_en`
 
-Esta tabla es la base reusable. Más adelante conviene conectar cuentas y direcciones con una pivote `cuenta_direcciones`, en lugar de limitar `cuentas` a dos campos fijos.
+Esta tabla es la base reusable. Se conecta con cuentas a través de `cuenta_direcciones`.
+
+### 3.5 `cuenta_direcciones`
+
+Pivote entre cuentas y direcciones.
+
+Campos sugeridos:
+
+- `id`
+- `organizacion_id`
+- `cuenta_id`
+- `direccion_id`
+- `tipo_relacion`
+- `es_principal`
+- `activo`
+- `notas`
+- `metadata`
+- `creado_en`
+- `actualizado_en`
+
+Responsabilidad:
+
+- Permitir varias direcciones por cuenta.
+- Evitar que `cuentas` quede limitada a dos domicilios fijos.
+- Soportar sucursales, envíos e historial.
 
 ## 4. Regla de negocio por tipo de persona
 
@@ -252,6 +276,7 @@ No conviene hacer un big-bang sin compatibilidad. La migración debería ser por
 Crear:
 
 - `personas`
+- `cuenta_direcciones`
 - `cuenta_personas`
 - `direcciones`
 
@@ -296,6 +321,7 @@ Backfill de registros existentes:
 
 - `contactos` -> `personas`
 - `cuentas` -> `cuentas`
+- `direcciones` -> `direcciones`
 - `contactos.cuenta_id` -> `cuenta_personas`
 
 Objetivo:

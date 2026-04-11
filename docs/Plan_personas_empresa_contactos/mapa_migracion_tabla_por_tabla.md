@@ -8,6 +8,7 @@ Estado: Borrador técnico
 Definir la migración gradual desde el modelo actual hacia una estructura separada de:
 
 - `personas`
+- `cuenta_direcciones`
 - `cuentas`
 - `cuenta_personas`
 - `direcciones`
@@ -73,6 +74,10 @@ Relación entre personas y cuentas.
 ### 4.4 `direcciones`
 
 Entidad reutilizable para no repetir direcciones.
+
+### 4.5 `cuenta_direcciones`
+
+Relación entre cuentas y direcciones.
 
 ## 5. Mapeo de columnas actual -> destino
 
@@ -385,6 +390,7 @@ Migración:
 ### Paso 1. Crear nuevas tablas
 
 - `personas`
+- `cuenta_direcciones`
 - `cuenta_personas`
 - `direcciones`
 
@@ -401,29 +407,26 @@ Ejemplos:
 - `v_contactos_compat`
 - `v_cuentas_compat`
 
-### Paso 4. Backfill histórico
+### Paso 4. Definir deduplicación antes del backfill
+
+- Personas:
+  - match fuerte por teléfono
+  - match fuerte por correo
+  - match débil por nombre + organización
+- Cuentas:
+  - match fuerte por RFC
+  - match medio por razón social
+  - match débil por nombre comercial
+
+### Paso 5. Backfill histórico
 
 - migrar contactos existentes
 - migrar cuentas que ya existan
 - generar relaciones pivote
 
-## 12. Estrategia de deduplicación antes del backfill
+### Paso 6. Cambiar frontend y backend a leer el nuevo modelo
 
-### 12.1 `personas`
-
-- match fuerte por teléfono
-- match fuerte por correo
-- match débil por nombre + organización
-
-### 12.2 `cuentas`
-
-- match fuerte por RFC
-- match medio por razón social
-- match débil por nombre comercial
-
-### Paso 5. Cambiar frontend y backend a leer el nuevo modelo
-
-### Paso 6. Retirar columnas duplicadas
+### Paso 7. Retirar columnas duplicadas
 
 ## 13. Compatibilidad temporal
 

@@ -221,7 +221,7 @@ Guarda direcciones reutilizables para personas o cuentas.
 ### 6.5 Regla de uso
 
 - No conviene limitar `cuentas` a solo `direccion_fiscal_id` y `direccion_operativa_id` porque eso se queda corto para sucursales, domicilios históricos y múltiples ubicaciones.
-- La relación correcta a futuro es una pivote:
+- La relación correcta es una pivote:
   - `cuenta_direcciones`
   - `cuenta_id`
   - `direccion_id`
@@ -229,7 +229,7 @@ Guarda direcciones reutilizables para personas o cuentas.
   - `es_principal`
 - `direcciones` debe ser la tabla base reutilizable.
 
-## 7. Tabla futura `cuenta_direcciones`
+## 7. Tabla `cuenta_direcciones`
 
 ### 7.1 Responsabilidad
 
@@ -256,8 +256,8 @@ Resolver múltiples direcciones por cuenta sin acoplar la cuenta a dos campos fi
 
 ### 7.4 Regla de uso
 
-- Esta tabla no es obligatoria para la primera migración.
-- Se deja prevista desde el diseño para no quedar atrapados con dos direcciones fijas.
+- Esta tabla forma parte de la primera base del nuevo modelo.
+- Evita quedar atrapados con solo dos direcciones fijas por cuenta.
 
 ## 8. Reglas de unicidad recomendadas
 
@@ -284,10 +284,10 @@ Opcionales:
 
 1. Crear `direcciones`.
 2. Crear `personas`.
-3. Crear `cuentas` ajustada al nuevo modelo.
+3. Crear `cuenta_direcciones`.
 4. Crear `cuenta_personas`.
 5. Agregar triggers/vistas de compatibilidad con `contactos`.
-6. Más adelante agregar `cuenta_direcciones` cuando el negocio requiera múltiples ubicaciones.
+6. Más adelante ajustar `cuentas` al nuevo modelo cuando toque la fase de corte.
 
 ## 10. Decisiones tomadas
 
