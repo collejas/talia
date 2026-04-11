@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Select,
   SelectContent,
@@ -173,6 +174,31 @@ function Field({
       <Label htmlFor={htmlFor}>{label}</Label>
       {hint ? <p className="text-xs text-muted-foreground">{hint}</p> : null}
       {children}
+    </div>
+  );
+}
+
+function DialogSummary({
+  contactName,
+  companyName,
+}: {
+  contactName: string;
+  companyName?: string;
+}) {
+  if (!contactName && !companyName) return null;
+
+  return (
+    <div className="flex flex-wrap gap-2">
+      {contactName ? (
+        <span className="rounded-full border border-border/60 bg-background px-3 py-1 text-xs font-medium text-foreground">
+          Contacto: {contactName}
+        </span>
+      ) : null}
+      {companyName ? (
+        <span className="rounded-full border border-border/60 bg-background px-3 py-1 text-xs font-medium text-foreground">
+          Empresa: {companyName}
+        </span>
+      ) : null}
     </div>
   );
 }
@@ -347,12 +373,38 @@ function buildContactPayload(input: ContactDraft): Record<string, unknown> {
   return payload;
 }
 
-function buildAccountPayload(input: AccountDraft): Record<string, unknown> {
+function buildContactDisplayName(input: Partial<ContactDraft> & { nombre_completo?: string | null } | null | undefined): string {
+  if (!input) return "";
+  const fullName = input.nombre_completo?.trim();
+  if (fullName) return fullName;
+  const names = [input.nombre_nombres?.trim(), input.apellido_paterno?.trim(), input.apellido_materno?.trim()].filter(Boolean);
+  if (names.length) return names.join(" ");
+  return "";
+}
+
+function buildAccountDisplayName(contact: ContactDraft, account: AccountDraft): string {
+  const contactIsPhysical = normalizeGeoText(contact.persona_fisica_moral) === "fisica";
+  if (contactIsPhysical) {
+    const derived = buildContactDisplayName(contact);
+    if (derived) return derived;
+  }
+  const accountName = account.nombre.trim();
+  if (accountName) return accountName;
+  if (account.razon_social.trim()) return account.razon_social.trim();
+  return "";
+}
+
+function buildAccountPayload(input: AccountDraft, contact?: ContactDraft): Record<string, unknown> {
   const payload: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(input)) {
     const trimmed = value.trim();
     if (!trimmed) continue;
     payload[key] = trimmed;
+  }
+  const contactIsPhysical = contact ? normalizeGeoText(contact.persona_fisica_moral) === "fisica" : false;
+  if (contactIsPhysical && contact) {
+    const derived = buildContactDisplayName(contact);
+    if (derived) payload.nombre = derived;
   }
   if (!payload.nombre && payload.razon_social) payload.nombre = payload.razon_social;
   return payload;
@@ -427,237 +479,276 @@ function ContactForm({
   }, [geoMunicipalities, value.clave_municipio, value.municipio]);
 
   return (
-    <div className="space-y-4">
-      <FormSection
-        title="Datos del contacto"
-        description="Los campos muestran su nombre arriba para que el formulario siga siendo claro aunque ya esté lleno."
-      >
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-          <Field label="Tipo de persona" htmlFor={fieldId("persona_fisica_moral")}>
-            <Select value={value.persona_fisica_moral || undefined} onValueChange={(v) => set("persona_fisica_moral", v)}>
-              <SelectTrigger id={fieldId("persona_fisica_moral")}>
-                <SelectValue placeholder="Selecciona una opción" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="fisica">Física</SelectItem>
-                <SelectItem value="moral">Moral</SelectItem>
-              </SelectContent>
-            </Select>
-          </Field>
-          <Field label="Origen" hint="Fuente o canal por el que llegó el contacto." htmlFor={fieldId("origen")}>
-            <Input id={fieldId("origen")} placeholder="manual_panel_contactos" value={value.origen} onChange={(e) => set("origen", e.target.value)} />
-          </Field>
-          <Field label="Nombres" htmlFor={fieldId("nombre_nombres")}>
-            <Input id={fieldId("nombre_nombres")} placeholder="Nombres" value={value.nombre_nombres} onChange={(e) => set("nombre_nombres", e.target.value)} />
-          </Field>
-          <Field label="Apellido paterno" htmlFor={fieldId("apellido_paterno")}>
-            <Input id={fieldId("apellido_paterno")} placeholder="Apellido paterno" value={value.apellido_paterno} onChange={(e) => set("apellido_paterno", e.target.value)} />
-          </Field>
-          <Field label="Apellido materno" htmlFor={fieldId("apellido_materno")}>
-            <Input id={fieldId("apellido_materno")} placeholder="Apellido materno" value={value.apellido_materno} onChange={(e) => set("apellido_materno", e.target.value)} />
-          </Field>
-          <Field label="Nombre completo" htmlFor={fieldId("nombre_completo")} hint="Usa este campo si ya tienes el nombre consolidado.">
-            <Input id={fieldId("nombre_completo")} placeholder="Nombre completo" value={value.nombre_completo} onChange={(e) => set("nombre_completo", e.target.value)} />
-          </Field>
-          <Field label="Correo" htmlFor={fieldId("correo")}>
-            <Input id={fieldId("correo")} placeholder="correo@ejemplo.com" value={value.correo} onChange={(e) => set("correo", e.target.value)} />
-          </Field>
-          <Field label="Teléfono" htmlFor={fieldId("telefono_e164")} hint="Formato recomendado E.164, por ejemplo +5215555555555.">
-            <Input id={fieldId("telefono_e164")} placeholder="+5215555555555" value={value.telefono_e164} onChange={(e) => set("telefono_e164", e.target.value)} />
-          </Field>
-          <Field label="Puesto" htmlFor={fieldId("puesto")}>
-            <Input id={fieldId("puesto")} placeholder="Puesto" value={value.puesto} onChange={(e) => set("puesto", e.target.value)} />
-          </Field>
-          <Field label="Área" htmlFor={fieldId("area")}>
-            <Input id={fieldId("area")} placeholder="Área" value={value.area} onChange={(e) => set("area", e.target.value)} />
-          </Field>
-          <Field label="Rol de decisión" htmlFor={fieldId("rol_decision")}>
-            <Input id={fieldId("rol_decision")} placeholder="Rol de decisión" value={value.rol_decision} onChange={(e) => set("rol_decision", e.target.value)} />
-          </Field>
-          <Field label="Sitio web" htmlFor={fieldId("website")}>
-            <Input id={fieldId("website")} placeholder="https://..." value={value.website} onChange={(e) => set("website", e.target.value)} />
-          </Field>
-          <Field label="Tipo de establecimiento" htmlFor={fieldId("tipo_establecimiento")}>
-            <Input id={fieldId("tipo_establecimiento")} placeholder="Tipo de establecimiento" value={value.tipo_establecimiento} onChange={(e) => set("tipo_establecimiento", e.target.value)} />
-          </Field>
-        </div>
-      </FormSection>
+    <Tabs defaultValue="contacto" className="w-full">
+      <div className="flex flex-col gap-3">
+        <p className="text-xs text-muted-foreground">
+          Todos los campos originales siguen disponibles. Solo están agrupados por tema para hacer el formulario más legible.
+        </p>
+        <TabsList className="grid h-auto w-full grid-cols-2 gap-2 bg-transparent p-0 md:grid-cols-4">
+          <TabsTrigger value="contacto">Contacto</TabsTrigger>
+          <TabsTrigger value="empresa">Empresa</TabsTrigger>
+          <TabsTrigger value="ubicacion">Ubicación</TabsTrigger>
+          <TabsTrigger value="notas">Notas</TabsTrigger>
+        </TabsList>
+      </div>
 
-      <FormSection
-        title="Empresa y datos fiscales"
-        description="Este bloque se usa cuando el contacto también representa a una empresa o una razón social."
-      >
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-          <Field label="Empresa" htmlFor={fieldId("company_name")}>
-            <Input id={fieldId("company_name")} placeholder="Empresa" value={value.company_name} onChange={(e) => set("company_name", e.target.value)} />
-          </Field>
-          <Field label="Razón social" htmlFor={fieldId("razon_social")}>
-            <Input id={fieldId("razon_social")} placeholder="Razón social" value={value.razon_social} onChange={(e) => set("razon_social", e.target.value)} />
-          </Field>
-          <Field label="RFC" htmlFor={fieldId("rfc")}>
-            <Input id={fieldId("rfc")} placeholder="RFC" value={value.rfc} onChange={(e) => set("rfc", e.target.value)} />
-          </Field>
-          <Field label="Uso CFDI" htmlFor={fieldId("uso_cfdi")}>
-            <Input id={fieldId("uso_cfdi")} placeholder="Uso CFDI" value={value.uso_cfdi} onChange={(e) => set("uso_cfdi", e.target.value)} />
-          </Field>
-          <Field label="Método de pago" htmlFor={fieldId("metodo_pago")}>
-            <Input id={fieldId("metodo_pago")} placeholder="Método de pago" value={value.metodo_pago} onChange={(e) => set("metodo_pago", e.target.value)} />
-          </Field>
-          <Field label="Forma de pago" htmlFor={fieldId("forma_pago")}>
-            <Input id={fieldId("forma_pago")} placeholder="Forma de pago" value={value.forma_pago} onChange={(e) => set("forma_pago", e.target.value)} />
-          </Field>
-          <Field label="Email de facturación" htmlFor={fieldId("email_facturacion")}>
-            <Input id={fieldId("email_facturacion")} placeholder="facturacion@ejemplo.com" value={value.email_facturacion} onChange={(e) => set("email_facturacion", e.target.value)} />
-          </Field>
-          <Field label="Industria" htmlFor={fieldId("tipo_industria")}>
-            <Input id={fieldId("tipo_industria")} placeholder="Industria" value={value.tipo_industria} onChange={(e) => set("tipo_industria", e.target.value)} />
-          </Field>
-          <Field label="Tamaño" htmlFor={fieldId("tamano")}>
-            <Input id={fieldId("tamano")} placeholder="Tamaño" value={value.tamano} onChange={(e) => set("tamano", e.target.value)} />
-          </Field>
-        </div>
-      </FormSection>
+      <TabsContent value="contacto" className="mt-4 space-y-4">
+        <FormSection
+          title="Datos del contacto"
+          description="Identidad y datos personales del contacto."
+        >
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <Field label="Tipo de persona" htmlFor={fieldId("persona_fisica_moral")}>
+              <Select value={value.persona_fisica_moral || undefined} onValueChange={(v) => set("persona_fisica_moral", v)}>
+                <SelectTrigger id={fieldId("persona_fisica_moral")}>
+                  <SelectValue placeholder="Selecciona una opción" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="fisica">Física</SelectItem>
+                  <SelectItem value="moral">Moral</SelectItem>
+                </SelectContent>
+              </Select>
+            </Field>
+            <Field label="Origen" hint="Fuente o canal por el que llegó el contacto." htmlFor={fieldId("origen")}>
+              <Input id={fieldId("origen")} placeholder="manual_panel_contactos" value={value.origen} onChange={(e) => set("origen", e.target.value)} />
+            </Field>
+            <Field label="Nombres" htmlFor={fieldId("nombre_nombres")}>
+              <Input id={fieldId("nombre_nombres")} placeholder="Nombres" value={value.nombre_nombres} onChange={(e) => set("nombre_nombres", e.target.value)} />
+            </Field>
+            <Field label="Apellido paterno" htmlFor={fieldId("apellido_paterno")}>
+              <Input id={fieldId("apellido_paterno")} placeholder="Apellido paterno" value={value.apellido_paterno} onChange={(e) => set("apellido_paterno", e.target.value)} />
+            </Field>
+            <Field label="Apellido materno" htmlFor={fieldId("apellido_materno")}>
+              <Input id={fieldId("apellido_materno")} placeholder="Apellido materno" value={value.apellido_materno} onChange={(e) => set("apellido_materno", e.target.value)} />
+            </Field>
+            <Field label="Nombre completo" htmlFor={fieldId("nombre_completo")} hint="Usa este campo si ya tienes el nombre consolidado.">
+              <Input id={fieldId("nombre_completo")} placeholder="Nombre completo" value={value.nombre_completo} onChange={(e) => set("nombre_completo", e.target.value)} />
+            </Field>
+            <Field label="Correo" htmlFor={fieldId("correo")}>
+              <Input id={fieldId("correo")} placeholder="correo@ejemplo.com" value={value.correo} onChange={(e) => set("correo", e.target.value)} />
+            </Field>
+            <Field label="Teléfono" htmlFor={fieldId("telefono_e164")} hint="Formato recomendado E.164, por ejemplo +5215555555555.">
+              <Input id={fieldId("telefono_e164")} placeholder="+5215555555555" value={value.telefono_e164} onChange={(e) => set("telefono_e164", e.target.value)} />
+            </Field>
+            <Field label="Puesto" htmlFor={fieldId("puesto")}>
+              <Input id={fieldId("puesto")} placeholder="Puesto" value={value.puesto} onChange={(e) => set("puesto", e.target.value)} />
+            </Field>
+            <Field label="Área" htmlFor={fieldId("area")}>
+              <Input id={fieldId("area")} placeholder="Área" value={value.area} onChange={(e) => set("area", e.target.value)} />
+            </Field>
+            <Field label="Rol de decisión" htmlFor={fieldId("rol_decision")}>
+              <Input id={fieldId("rol_decision")} placeholder="Rol de decisión" value={value.rol_decision} onChange={(e) => set("rol_decision", e.target.value)} />
+            </Field>
+          </div>
+        </FormSection>
+      </TabsContent>
 
-      <FormSection title="Ubicación y notas" description="Aquí se concentran los datos de dirección y contexto operativo.">
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-          <Field label="País" htmlFor={fieldId("pais")}>
-            <Select
-              value={value.pais || undefined}
-              onValueChange={(nextCountry) => {
-                onChange((prev) => {
-                  const next: ContactDraft = { ...prev, pais: nextCountry };
-                  if (!isMexicoCountry(nextCountry)) {
-                    next.clave_entidad = "";
-                    next.clave_municipio = "";
-                  }
-                  return next;
-                });
-              }}
-            >
-              <SelectTrigger id={fieldId("pais")}>
-                <SelectValue placeholder={geoLoading ? "Cargando países..." : "Selecciona un país"} />
-              </SelectTrigger>
-              <SelectContent>
-                {geoCountries.map((country) => (
-                  <SelectItem key={country.code} value={country.code}>
-                    {country.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </Field>
-          {mexico ? (
-            <>
-              <Field label="Estado (México)" htmlFor={fieldId("clave_entidad")}>
-                <Select
-                  value={selectedStateCode || undefined}
-                  onValueChange={(stateCode) => {
-                    const state = geoStates.find((item) => item.code === stateCode);
-                    onChange((prev) => ({
-                      ...prev,
-                      clave_entidad: stateCode,
-                      entidad: state?.name ?? prev.entidad,
-                      clave_municipio: "",
-                      municipio: "",
-                    }));
-                  }}
-                >
-                  <SelectTrigger id={fieldId("clave_entidad")}>
-                    <SelectValue placeholder={geoLoading ? "Cargando estados..." : "Selecciona un estado"} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {geoStates.map((state) => (
-                      <SelectItem key={state.code} value={state.code}>
-                        {state.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </Field>
-              <Field label="Municipio (México)" htmlFor={fieldId("clave_municipio")}>
-                <Select
-                  value={selectedMunicipalityCode || undefined}
-                  onValueChange={(municipalityCode) => {
-                    const municipality = geoMunicipalities.find((item) => item.code === municipalityCode);
-                    onChange((prev) => ({
-                      ...prev,
-                      clave_municipio: municipalityCode,
-                      municipio: municipality?.name ?? prev.municipio,
-                    }));
-                  }}
-                  disabled={!selectedStateCode}
-                >
-                  <SelectTrigger id={fieldId("clave_municipio")}>
-                    <SelectValue placeholder={!selectedStateCode ? "Selecciona estado primero" : "Selecciona un municipio"} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {geoMunicipalities.map((municipality) => (
-                      <SelectItem key={`${municipality.state_code}-${municipality.code}`} value={municipality.code}>
-                        {municipality.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </Field>
-            </>
-          ) : (
-            <>
-              <Field label="Entidad / estado" htmlFor={fieldId("entidad")}>
-                <Input
-                  id={fieldId("entidad")}
-                  placeholder="Entidad / estado"
-                  value={value.entidad}
-                  onChange={(e) =>
-                    onChange((prev) => ({
-                      ...prev,
-                      entidad: e.target.value,
-                      clave_entidad: "",
-                      clave_municipio: "",
-                    }))
-                  }
-                />
-              </Field>
-              <Field label="Municipio / ciudad" htmlFor={fieldId("municipio")}>
-                <Input
-                  id={fieldId("municipio")}
-                  placeholder="Municipio / ciudad"
-                  value={value.municipio}
-                  onChange={(e) =>
-                    onChange((prev) => ({
-                      ...prev,
-                      municipio: e.target.value,
-                      clave_municipio: "",
-                    }))
-                  }
-                />
-              </Field>
-            </>
-          )}
-          <Field label="Código postal" htmlFor={fieldId("codigo_postal")}>
-            <Input id={fieldId("codigo_postal")} placeholder="Código postal" value={value.codigo_postal} onChange={(e) => set("codigo_postal", e.target.value)} />
-          </Field>
-        </div>
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-          <Field label="Notas internas" htmlFor={fieldId("notes")}>
-            <Textarea id={fieldId("notes")} placeholder="Notas" value={value.notes} onChange={(e) => set("notes", e.target.value)} />
-          </Field>
-          <Field label="Necesidad / propósito" htmlFor={fieldId("necesidad_proposito")}>
-            <Textarea
-              id={fieldId("necesidad_proposito")}
-              placeholder="Necesidad / propósito"
-              value={value.necesidad_proposito}
-              onChange={(e) => set("necesidad_proposito", e.target.value)}
-            />
-          </Field>
-        </div>
-      </FormSection>
-    </div>
+      <TabsContent value="empresa" className="mt-4 space-y-4">
+        <FormSection
+          title="Empresa y datos fiscales"
+          description="Datos comerciales y fiscales relacionados con el contacto."
+        >
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <Field label="Empresa" htmlFor={fieldId("company_name")}>
+              <Input id={fieldId("company_name")} placeholder="Empresa" value={value.company_name} onChange={(e) => set("company_name", e.target.value)} />
+            </Field>
+            <Field label="Razón social" htmlFor={fieldId("razon_social")}>
+              <Input id={fieldId("razon_social")} placeholder="Razón social" value={value.razon_social} onChange={(e) => set("razon_social", e.target.value)} />
+            </Field>
+            <Field label="RFC" htmlFor={fieldId("rfc")}>
+              <Input id={fieldId("rfc")} placeholder="RFC" value={value.rfc} onChange={(e) => set("rfc", e.target.value)} />
+            </Field>
+            <Field label="Uso CFDI" htmlFor={fieldId("uso_cfdi")}>
+              <Input id={fieldId("uso_cfdi")} placeholder="Uso CFDI" value={value.uso_cfdi} onChange={(e) => set("uso_cfdi", e.target.value)} />
+            </Field>
+            <Field label="Método de pago" htmlFor={fieldId("metodo_pago")}>
+              <Input id={fieldId("metodo_pago")} placeholder="Método de pago" value={value.metodo_pago} onChange={(e) => set("metodo_pago", e.target.value)} />
+            </Field>
+            <Field label="Forma de pago" htmlFor={fieldId("forma_pago")}>
+              <Input id={fieldId("forma_pago")} placeholder="Forma de pago" value={value.forma_pago} onChange={(e) => set("forma_pago", e.target.value)} />
+            </Field>
+            <Field label="Email de facturación" htmlFor={fieldId("email_facturacion")}>
+              <Input id={fieldId("email_facturacion")} placeholder="facturacion@ejemplo.com" value={value.email_facturacion} onChange={(e) => set("email_facturacion", e.target.value)} />
+            </Field>
+            <Field label="Industria" htmlFor={fieldId("tipo_industria")}>
+              <Input id={fieldId("tipo_industria")} placeholder="Industria" value={value.tipo_industria} onChange={(e) => set("tipo_industria", e.target.value)} />
+            </Field>
+            <Field label="Tamaño" htmlFor={fieldId("tamano")}>
+              <Input id={fieldId("tamano")} placeholder="Tamaño" value={value.tamano} onChange={(e) => set("tamano", e.target.value)} />
+            </Field>
+            <Field label="Sitio web" htmlFor={fieldId("website")}>
+              <Input id={fieldId("website")} placeholder="https://..." value={value.website} onChange={(e) => set("website", e.target.value)} />
+            </Field>
+            <Field label="Tipo de establecimiento" htmlFor={fieldId("tipo_establecimiento")}>
+              <Input id={fieldId("tipo_establecimiento")} placeholder="Tipo de establecimiento" value={value.tipo_establecimiento} onChange={(e) => set("tipo_establecimiento", e.target.value)} />
+            </Field>
+          </div>
+        </FormSection>
+      </TabsContent>
+
+      <TabsContent value="ubicacion" className="mt-4 space-y-4">
+        <FormSection
+          title="Ubicación"
+          description="Datos de país, estado, municipio y dirección postal."
+        >
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <Field label="País" htmlFor={fieldId("pais")}>
+              <Select
+                value={value.pais || undefined}
+                onValueChange={(nextCountry) => {
+                  onChange((prev) => {
+                    const next: ContactDraft = { ...prev, pais: nextCountry };
+                    if (!isMexicoCountry(nextCountry)) {
+                      next.clave_entidad = "";
+                      next.clave_municipio = "";
+                    }
+                    return next;
+                  });
+                }}
+              >
+                <SelectTrigger id={fieldId("pais")}>
+                  <SelectValue placeholder={geoLoading ? "Cargando países..." : "Selecciona un país"} />
+                </SelectTrigger>
+                <SelectContent>
+                  {geoCountries.map((country) => (
+                    <SelectItem key={country.code} value={country.code}>
+                      {country.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </Field>
+            {mexico ? (
+              <>
+                <Field label="Estado (México)" htmlFor={fieldId("clave_entidad")}>
+                  <Select
+                    value={selectedStateCode || undefined}
+                    onValueChange={(stateCode) => {
+                      const state = geoStates.find((item) => item.code === stateCode);
+                      onChange((prev) => ({
+                        ...prev,
+                        clave_entidad: stateCode,
+                        entidad: state?.name ?? prev.entidad,
+                        clave_municipio: "",
+                        municipio: "",
+                      }));
+                    }}
+                  >
+                    <SelectTrigger id={fieldId("clave_entidad")}>
+                      <SelectValue placeholder={geoLoading ? "Cargando estados..." : "Selecciona un estado"} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {geoStates.map((state) => (
+                        <SelectItem key={state.code} value={state.code}>
+                          {state.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </Field>
+                <Field label="Municipio (México)" htmlFor={fieldId("clave_municipio")}>
+                  <Select
+                    value={selectedMunicipalityCode || undefined}
+                    onValueChange={(municipalityCode) => {
+                      const municipality = geoMunicipalities.find((item) => item.code === municipalityCode);
+                      onChange((prev) => ({
+                        ...prev,
+                        clave_municipio: municipalityCode,
+                        municipio: municipality?.name ?? prev.municipio,
+                      }));
+                    }}
+                    disabled={!selectedStateCode}
+                  >
+                    <SelectTrigger id={fieldId("clave_municipio")}>
+                      <SelectValue placeholder={!selectedStateCode ? "Selecciona estado primero" : "Selecciona un municipio"} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {geoMunicipalities.map((municipality) => (
+                        <SelectItem key={`${municipality.state_code}-${municipality.code}`} value={municipality.code}>
+                          {municipality.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </Field>
+              </>
+            ) : (
+              <>
+                <Field label="Entidad / estado" htmlFor={fieldId("entidad")}>
+                  <Input
+                    id={fieldId("entidad")}
+                    placeholder="Entidad / estado"
+                    value={value.entidad}
+                    onChange={(e) =>
+                      onChange((prev) => ({
+                        ...prev,
+                        entidad: e.target.value,
+                        clave_entidad: "",
+                        clave_municipio: "",
+                      }))
+                    }
+                  />
+                </Field>
+                <Field label="Municipio / ciudad" htmlFor={fieldId("municipio")}>
+                  <Input
+                    id={fieldId("municipio")}
+                    placeholder="Municipio / ciudad"
+                    value={value.municipio}
+                    onChange={(e) =>
+                      onChange((prev) => ({
+                        ...prev,
+                        municipio: e.target.value,
+                        clave_municipio: "",
+                      }))
+                    }
+                  />
+                </Field>
+              </>
+            )}
+            <Field label="Código postal" htmlFor={fieldId("codigo_postal")}>
+              <Input id={fieldId("codigo_postal")} placeholder="Código postal" value={value.codigo_postal} onChange={(e) => set("codigo_postal", e.target.value)} />
+            </Field>
+            <Field label="Tipo de vialidad" htmlFor={fieldId("tipo_vialidad")}>
+              <Input id={fieldId("tipo_vialidad")} placeholder="Tipo de vialidad" value={value.tipo_vialidad} onChange={(e) => set("tipo_vialidad", e.target.value)} />
+            </Field>
+            <Field label="Nombre de vialidad" htmlFor={fieldId("nombre_vialidad")}>
+              <Input id={fieldId("nombre_vialidad")} placeholder="Nombre de vialidad" value={value.nombre_vialidad} onChange={(e) => set("nombre_vialidad", e.target.value)} />
+            </Field>
+            <Field label="Número exterior" htmlFor={fieldId("numero_exterior")}>
+              <Input id={fieldId("numero_exterior")} placeholder="Número exterior" value={value.numero_exterior} onChange={(e) => set("numero_exterior", e.target.value)} />
+            </Field>
+            <Field label="Número interior" htmlFor={fieldId("numero_interior")}>
+              <Input id={fieldId("numero_interior")} placeholder="Número interior" value={value.numero_interior} onChange={(e) => set("numero_interior", e.target.value)} />
+            </Field>
+          </div>
+        </FormSection>
+      </TabsContent>
+
+      <TabsContent value="notas" className="mt-4 space-y-4">
+        <FormSection title="Notas" description="Contexto interno y necesidad principal.">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <Field label="Notas internas" htmlFor={fieldId("notes")}>
+              <Textarea id={fieldId("notes")} placeholder="Notas" value={value.notes} onChange={(e) => set("notes", e.target.value)} />
+            </Field>
+            <Field label="Necesidad / propósito" htmlFor={fieldId("necesidad_proposito")}>
+              <Textarea
+                id={fieldId("necesidad_proposito")}
+                placeholder="Necesidad / propósito"
+                value={value.necesidad_proposito}
+                onChange={(e) => set("necesidad_proposito", e.target.value)}
+              />
+            </Field>
+          </div>
+        </FormSection>
+      </TabsContent>
+    </Tabs>
   );
 }
 
 function AccountForm({
   value,
   onChange,
+  contact,
   geoCountries,
   geoStates,
   geoMunicipalities,
@@ -665,6 +756,7 @@ function AccountForm({
 }: {
   value: AccountDraft;
   onChange: React.Dispatch<React.SetStateAction<AccountDraft>>;
+  contact: ContactDraft;
   geoCountries: GeoCountryOption[];
   geoStates: GeoStateOption[];
   geoMunicipalities: GeoMunicipalityOption[];
@@ -673,6 +765,8 @@ function AccountForm({
   const set = (field: keyof AccountDraft, next: string) => onChange((prev) => ({ ...prev, [field]: next }));
   const uid = React.useId();
   const fieldId = (name: string) => `${uid}-${name}`;
+  const contactIsPhysical = normalizeGeoText(contact.persona_fisica_moral) === "fisica";
+  const derivedCompanyName = React.useMemo(() => buildContactDisplayName(contact), [contact]);
   const mexico = isMexicoCountry(value.pais);
   const selectedStateCode = React.useMemo(() => {
     if (value.clave_entidad.trim()) return value.clave_entidad.trim().padStart(2, "0");
@@ -686,200 +780,229 @@ function AccountForm({
   }, [geoMunicipalities, value.clave_municipio, value.municipio]);
 
   return (
-    <div className="space-y-4">
-      <FormSection title="Empresa y facturación" description="Agrupa los datos que normalmente se usan para identificar la cuenta y facturarla.">
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-          <Field label="Nombre empresa" htmlFor={fieldId("nombre")}>
-            <Input id={fieldId("nombre")} placeholder="Nombre empresa" value={value.nombre} onChange={(e) => set("nombre", e.target.value)} />
-          </Field>
-          <Field label="Razón social" htmlFor={fieldId("razon_social")}>
-            <Input id={fieldId("razon_social")} placeholder="Razón social" value={value.razon_social} onChange={(e) => set("razon_social", e.target.value)} />
-          </Field>
-          <Field label="RFC" htmlFor={fieldId("rfc")}>
-            <Input id={fieldId("rfc")} placeholder="RFC" value={value.rfc} onChange={(e) => set("rfc", e.target.value)} />
-          </Field>
-          <Field label="Uso CFDI" htmlFor={fieldId("uso_cfdi")}>
-            <Input id={fieldId("uso_cfdi")} placeholder="Uso CFDI" value={value.uso_cfdi} onChange={(e) => set("uso_cfdi", e.target.value)} />
-          </Field>
-          <Field label="Método de pago" htmlFor={fieldId("metodo_pago")}>
-            <Input id={fieldId("metodo_pago")} placeholder="Método de pago" value={value.metodo_pago} onChange={(e) => set("metodo_pago", e.target.value)} />
-          </Field>
-          <Field label="Forma de pago" htmlFor={fieldId("forma_pago")}>
-            <Input id={fieldId("forma_pago")} placeholder="Forma de pago" value={value.forma_pago} onChange={(e) => set("forma_pago", e.target.value)} />
-          </Field>
-          <Field label="Email de facturación" htmlFor={fieldId("email_facturacion")}>
-            <Input id={fieldId("email_facturacion")} placeholder="facturacion@ejemplo.com" value={value.email_facturacion} onChange={(e) => set("email_facturacion", e.target.value)} />
-          </Field>
-          <Field label="Industria" htmlFor={fieldId("tipo_industria")}>
-            <Input id={fieldId("tipo_industria")} placeholder="Industria" value={value.tipo_industria} onChange={(e) => set("tipo_industria", e.target.value)} />
-          </Field>
-          <Field label="Tamaño" htmlFor={fieldId("tamano")}>
-            <Input id={fieldId("tamano")} placeholder="Tamaño" value={value.tamano} onChange={(e) => set("tamano", e.target.value)} />
-          </Field>
-          <Field label="Teléfono" htmlFor={fieldId("telefono")}>
-            <Input id={fieldId("telefono")} placeholder="Teléfono" value={value.telefono} onChange={(e) => set("telefono", e.target.value)} />
-          </Field>
-          <Field label="Email" htmlFor={fieldId("email")}>
-            <Input id={fieldId("email")} placeholder="Email" value={value.email} onChange={(e) => set("email", e.target.value)} />
-          </Field>
-          <Field label="Website" htmlFor={fieldId("website")}>
-            <Input id={fieldId("website")} placeholder="https://..." value={value.website} onChange={(e) => set("website", e.target.value)} />
-          </Field>
-          <Field label="Tipo de establecimiento" htmlFor={fieldId("tipo_establecimiento")}>
-            <Input id={fieldId("tipo_establecimiento")} placeholder="Tipo de establecimiento" value={value.tipo_establecimiento} onChange={(e) => set("tipo_establecimiento", e.target.value)} />
-          </Field>
-        </div>
-      </FormSection>
+    <Tabs defaultValue="empresa" className="w-full">
+      <div className="flex flex-col gap-3">
+        <p className="text-xs text-muted-foreground">
+          Todos los campos originales siguen disponibles. Solo están agrupados por tema para hacer el formulario más legible.
+        </p>
+        <TabsList className="grid h-auto w-full grid-cols-3 gap-2 bg-transparent p-0">
+          <TabsTrigger value="empresa">Empresa</TabsTrigger>
+          <TabsTrigger value="ubicacion">Ubicación</TabsTrigger>
+          <TabsTrigger value="notas">Notas</TabsTrigger>
+        </TabsList>
+      </div>
 
-      <FormSection title="Ubicación" description="Si el país es México, el estado y municipio se eligen de catálogo.">
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-          <Field label="País" htmlFor={fieldId("pais")}>
-            <Select
-              value={value.pais || undefined}
-              onValueChange={(nextCountry) => {
-                onChange((prev) => {
-                  const next: AccountDraft = { ...prev, pais: nextCountry };
-                  if (!isMexicoCountry(nextCountry)) {
-                    next.clave_entidad = "";
-                    next.clave_municipio = "";
-                  }
-                  return next;
-                });
-              }}
+      <TabsContent value="empresa" className="mt-4 space-y-4">
+        <FormSection title="Empresa y facturación" description="Datos comerciales, fiscales y de contacto de la cuenta.">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <Field
+              label="Nombre empresa"
+              htmlFor={fieldId("nombre")}
+              hint={contactIsPhysical ? "Bloqueado: en persona física se toma del contacto." : undefined}
             >
-              <SelectTrigger id={fieldId("pais")}>
-                <SelectValue placeholder={geoLoading ? "Cargando países..." : "Selecciona un país"} />
-              </SelectTrigger>
-              <SelectContent>
-                {geoCountries.map((country) => (
-                  <SelectItem key={country.code} value={country.code}>
-                    {country.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </Field>
-          {mexico ? (
-            <>
-              <Field label="Estado (México)" htmlFor={fieldId("clave_entidad")}>
-                <Select
-                  value={selectedStateCode || undefined}
-                  onValueChange={(stateCode) => {
-                    const state = geoStates.find((item) => item.code === stateCode);
-                    onChange((prev) => ({
-                      ...prev,
-                      clave_entidad: stateCode,
-                      entidad: state?.name ?? prev.entidad,
-                      clave_municipio: "",
-                      municipio: "",
-                    }));
-                  }}
-                >
-                  <SelectTrigger id={fieldId("clave_entidad")}>
-                    <SelectValue placeholder={geoLoading ? "Cargando estados..." : "Selecciona un estado"} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {geoStates.map((state) => (
-                      <SelectItem key={state.code} value={state.code}>
-                        {state.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </Field>
-              <Field label="Municipio (México)" htmlFor={fieldId("clave_municipio")}>
-                <Select
-                  value={selectedMunicipalityCode || undefined}
-                  onValueChange={(municipalityCode) => {
-                    const municipality = geoMunicipalities.find((item) => item.code === municipalityCode);
-                    onChange((prev) => ({
-                      ...prev,
-                      clave_municipio: municipalityCode,
-                      municipio: municipality?.name ?? prev.municipio,
-                    }));
-                  }}
-                  disabled={!selectedStateCode}
-                >
-                  <SelectTrigger id={fieldId("clave_municipio")}>
-                    <SelectValue placeholder={!selectedStateCode ? "Selecciona estado primero" : "Selecciona un municipio"} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {geoMunicipalities.map((municipality) => (
-                      <SelectItem key={`${municipality.state_code}-${municipality.code}`} value={municipality.code}>
-                        {municipality.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </Field>
-            </>
-          ) : (
-            <>
-              <Field label="Entidad / estado" htmlFor={fieldId("entidad")}>
-                <Input
-                  id={fieldId("entidad")}
-                  placeholder="Entidad / estado"
-                  value={value.entidad}
-                  onChange={(e) =>
-                    onChange((prev) => ({
-                      ...prev,
-                      entidad: e.target.value,
-                      clave_entidad: "",
-                      clave_municipio: "",
-                    }))
-                  }
-                />
-              </Field>
-              <Field label="Municipio / ciudad" htmlFor={fieldId("municipio")}>
-                <Input
-                  id={fieldId("municipio")}
-                  placeholder="Municipio / ciudad"
-                  value={value.municipio}
-                  onChange={(e) =>
-                    onChange((prev) => ({
-                      ...prev,
-                      municipio: e.target.value,
-                      clave_municipio: "",
-                    }))
-                  }
-                />
-              </Field>
-            </>
-          )}
-          <Field label="Código postal" htmlFor={fieldId("codigo_postal")}>
-            <Input id={fieldId("codigo_postal")} placeholder="Código postal" value={value.codigo_postal} onChange={(e) => set("codigo_postal", e.target.value)} />
-          </Field>
-          <Field label="Tipo de vialidad" htmlFor={fieldId("tipo_vialidad")}>
-            <Input id={fieldId("tipo_vialidad")} placeholder="Tipo de vialidad" value={value.tipo_vialidad} onChange={(e) => set("tipo_vialidad", e.target.value)} />
-          </Field>
-          <Field label="Nombre de vialidad" htmlFor={fieldId("nombre_vialidad")}>
-            <Input id={fieldId("nombre_vialidad")} placeholder="Nombre de vialidad" value={value.nombre_vialidad} onChange={(e) => set("nombre_vialidad", e.target.value)} />
-          </Field>
-          <Field label="Número exterior" htmlFor={fieldId("numero_exterior")}>
-            <Input id={fieldId("numero_exterior")} placeholder="Número exterior" value={value.numero_exterior} onChange={(e) => set("numero_exterior", e.target.value)} />
-          </Field>
-          <Field label="Número interior" htmlFor={fieldId("numero_interior")}>
-            <Input id={fieldId("numero_interior")} placeholder="Número interior" value={value.numero_interior} onChange={(e) => set("numero_interior", e.target.value)} />
-          </Field>
-        </div>
-      </FormSection>
+              <Input
+                id={fieldId("nombre")}
+                placeholder={contactIsPhysical ? "Se toma del contacto" : "Nombre empresa"}
+                value={contactIsPhysical ? derivedCompanyName : value.nombre}
+                onChange={(e) => {
+                  if (!contactIsPhysical) set("nombre", e.target.value);
+                }}
+                disabled={contactIsPhysical}
+              />
+            </Field>
+            <Field label="Razón social" htmlFor={fieldId("razon_social")}>
+              <Input id={fieldId("razon_social")} placeholder="Razón social" value={value.razon_social} onChange={(e) => set("razon_social", e.target.value)} />
+            </Field>
+            <Field label="RFC" htmlFor={fieldId("rfc")}>
+              <Input id={fieldId("rfc")} placeholder="RFC" value={value.rfc} onChange={(e) => set("rfc", e.target.value)} />
+            </Field>
+            <Field label="Uso CFDI" htmlFor={fieldId("uso_cfdi")}>
+              <Input id={fieldId("uso_cfdi")} placeholder="Uso CFDI" value={value.uso_cfdi} onChange={(e) => set("uso_cfdi", e.target.value)} />
+            </Field>
+            <Field label="Método de pago" htmlFor={fieldId("metodo_pago")}>
+              <Input id={fieldId("metodo_pago")} placeholder="Método de pago" value={value.metodo_pago} onChange={(e) => set("metodo_pago", e.target.value)} />
+            </Field>
+            <Field label="Forma de pago" htmlFor={fieldId("forma_pago")}>
+              <Input id={fieldId("forma_pago")} placeholder="Forma de pago" value={value.forma_pago} onChange={(e) => set("forma_pago", e.target.value)} />
+            </Field>
+            <Field label="Email de facturación" htmlFor={fieldId("email_facturacion")}>
+              <Input id={fieldId("email_facturacion")} placeholder="facturacion@ejemplo.com" value={value.email_facturacion} onChange={(e) => set("email_facturacion", e.target.value)} />
+            </Field>
+            <Field label="Industria" htmlFor={fieldId("tipo_industria")}>
+              <Input id={fieldId("tipo_industria")} placeholder="Industria" value={value.tipo_industria} onChange={(e) => set("tipo_industria", e.target.value)} />
+            </Field>
+            <Field label="Tamaño" htmlFor={fieldId("tamano")}>
+              <Input id={fieldId("tamano")} placeholder="Tamaño" value={value.tamano} onChange={(e) => set("tamano", e.target.value)} />
+            </Field>
+            <Field label="Teléfono" htmlFor={fieldId("telefono")}>
+              <Input id={fieldId("telefono")} placeholder="Teléfono" value={value.telefono} onChange={(e) => set("telefono", e.target.value)} />
+            </Field>
+            <Field label="Email" htmlFor={fieldId("email")}>
+              <Input id={fieldId("email")} placeholder="Email" value={value.email} onChange={(e) => set("email", e.target.value)} />
+            </Field>
+            <Field label="Sitio web" htmlFor={fieldId("website")}>
+              <Input id={fieldId("website")} placeholder="https://..." value={value.website} onChange={(e) => set("website", e.target.value)} />
+            </Field>
+            <Field label="Tipo de establecimiento" htmlFor={fieldId("tipo_establecimiento")}>
+              <Input id={fieldId("tipo_establecimiento")} placeholder="Tipo de establecimiento" value={value.tipo_establecimiento} onChange={(e) => set("tipo_establecimiento", e.target.value)} />
+            </Field>
+          </div>
+        </FormSection>
+      </TabsContent>
 
-      <FormSection title="Notas" description="Espacio libre para contexto comercial o administrativo.">
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-          <Field label="Notas internas" htmlFor={fieldId("notas")}>
-            <Textarea id={fieldId("notas")} placeholder="Notas" value={value.notas} onChange={(e) => set("notas", e.target.value)} />
-          </Field>
-          <Field label="Necesidad / propósito" htmlFor={fieldId("necesidad_proposito")}>
-            <Textarea
-              id={fieldId("necesidad_proposito")}
-              placeholder="Necesidad / propósito"
-              value={value.necesidad_proposito}
-              onChange={(e) => set("necesidad_proposito", e.target.value)}
-            />
-          </Field>
-        </div>
-      </FormSection>
-    </div>
+      <TabsContent value="ubicacion" className="mt-4 space-y-4">
+        <FormSection title="Ubicación" description="Datos de país, estado, municipio y dirección postal.">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <Field label="País" htmlFor={fieldId("pais")}>
+              <Select
+                value={value.pais || undefined}
+                onValueChange={(nextCountry) => {
+                  onChange((prev) => {
+                    const next: AccountDraft = { ...prev, pais: nextCountry };
+                    if (!isMexicoCountry(nextCountry)) {
+                      next.clave_entidad = "";
+                      next.clave_municipio = "";
+                    }
+                    return next;
+                  });
+                }}
+              >
+                <SelectTrigger id={fieldId("pais")}>
+                  <SelectValue placeholder={geoLoading ? "Cargando países..." : "Selecciona un país"} />
+                </SelectTrigger>
+                <SelectContent>
+                  {geoCountries.map((country) => (
+                    <SelectItem key={country.code} value={country.code}>
+                      {country.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </Field>
+            {mexico ? (
+              <>
+                <Field label="Estado (México)" htmlFor={fieldId("clave_entidad")}>
+                  <Select
+                    value={selectedStateCode || undefined}
+                    onValueChange={(stateCode) => {
+                      const state = geoStates.find((item) => item.code === stateCode);
+                      onChange((prev) => ({
+                        ...prev,
+                        clave_entidad: stateCode,
+                        entidad: state?.name ?? prev.entidad,
+                        clave_municipio: "",
+                        municipio: "",
+                      }));
+                    }}
+                  >
+                    <SelectTrigger id={fieldId("clave_entidad")}>
+                      <SelectValue placeholder={geoLoading ? "Cargando estados..." : "Selecciona un estado"} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {geoStates.map((state) => (
+                        <SelectItem key={state.code} value={state.code}>
+                          {state.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </Field>
+                <Field label="Municipio (México)" htmlFor={fieldId("clave_municipio")}>
+                  <Select
+                    value={selectedMunicipalityCode || undefined}
+                    onValueChange={(municipalityCode) => {
+                      const municipality = geoMunicipalities.find((item) => item.code === municipalityCode);
+                      onChange((prev) => ({
+                        ...prev,
+                        clave_municipio: municipalityCode,
+                        municipio: municipality?.name ?? prev.municipio,
+                      }));
+                    }}
+                    disabled={!selectedStateCode}
+                  >
+                    <SelectTrigger id={fieldId("clave_municipio")}>
+                      <SelectValue placeholder={!selectedStateCode ? "Selecciona estado primero" : "Selecciona un municipio"} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {geoMunicipalities.map((municipality) => (
+                        <SelectItem key={`${municipality.state_code}-${municipality.code}`} value={municipality.code}>
+                          {municipality.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </Field>
+              </>
+            ) : (
+              <>
+                <Field label="Entidad / estado" htmlFor={fieldId("entidad")}>
+                  <Input
+                    id={fieldId("entidad")}
+                    placeholder="Entidad / estado"
+                    value={value.entidad}
+                    onChange={(e) =>
+                      onChange((prev) => ({
+                        ...prev,
+                        entidad: e.target.value,
+                        clave_entidad: "",
+                        clave_municipio: "",
+                      }))
+                    }
+                  />
+                </Field>
+                <Field label="Municipio / ciudad" htmlFor={fieldId("municipio")}>
+                  <Input
+                    id={fieldId("municipio")}
+                    placeholder="Municipio / ciudad"
+                    value={value.municipio}
+                    onChange={(e) =>
+                      onChange((prev) => ({
+                        ...prev,
+                        municipio: e.target.value,
+                        clave_municipio: "",
+                      }))
+                    }
+                  />
+                </Field>
+              </>
+            )}
+            <Field label="Código postal" htmlFor={fieldId("codigo_postal")}>
+              <Input id={fieldId("codigo_postal")} placeholder="Código postal" value={value.codigo_postal} onChange={(e) => set("codigo_postal", e.target.value)} />
+            </Field>
+            <Field label="Tipo de vialidad" htmlFor={fieldId("tipo_vialidad")}>
+              <Input id={fieldId("tipo_vialidad")} placeholder="Tipo de vialidad" value={value.tipo_vialidad} onChange={(e) => set("tipo_vialidad", e.target.value)} />
+            </Field>
+            <Field label="Nombre de vialidad" htmlFor={fieldId("nombre_vialidad")}>
+              <Input id={fieldId("nombre_vialidad")} placeholder="Nombre de vialidad" value={value.nombre_vialidad} onChange={(e) => set("nombre_vialidad", e.target.value)} />
+            </Field>
+            <Field label="Número exterior" htmlFor={fieldId("numero_exterior")}>
+              <Input id={fieldId("numero_exterior")} placeholder="Número exterior" value={value.numero_exterior} onChange={(e) => set("numero_exterior", e.target.value)} />
+            </Field>
+            <Field label="Número interior" htmlFor={fieldId("numero_interior")}>
+              <Input id={fieldId("numero_interior")} placeholder="Número interior" value={value.numero_interior} onChange={(e) => set("numero_interior", e.target.value)} />
+            </Field>
+          </div>
+        </FormSection>
+      </TabsContent>
+
+      <TabsContent value="notas" className="mt-4 space-y-4">
+        <FormSection title="Notas" description="Contexto interno y necesidad principal.">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <Field label="Notas internas" htmlFor={fieldId("notes")}>
+              <Textarea id={fieldId("notes")} placeholder="Notas" value={value.notas} onChange={(e) => set("notas", e.target.value)} />
+            </Field>
+            <Field label="Necesidad / propósito" htmlFor={fieldId("necesidad_proposito")}>
+              <Textarea
+                id={fieldId("necesidad_proposito")}
+                placeholder="Necesidad / propósito"
+                value={value.necesidad_proposito}
+                onChange={(e) => set("necesidad_proposito", e.target.value)}
+              />
+            </Field>
+          </div>
+        </FormSection>
+      </TabsContent>
+    </Tabs>
   );
 }
 
@@ -1076,9 +1199,19 @@ export function ContactsDataTable({ data }: { data: ContactTableRow[] }) {
     return () => controller.abort();
   }, [accountForm.pais, accountStateCode]);
 
-  const activeRaw = (activeRow?.raw ?? {}) as Record<string, unknown>;
+  const activeRaw = React.useMemo(() => (activeRow?.raw ?? {}) as Record<string, unknown>, [activeRow?.raw]);
   const activeContactoId = extractString(activeRaw, ["contacto_id"]);
   const activePropietarioId = extractString(activeRaw, ["propietario_id"]);
+  const contactDialogName = React.useMemo(() => buildContactDisplayName(contactForm) || activeRow?.header || "", [contactForm, activeRow?.header]);
+  const contactDialogCompany = React.useMemo(() => {
+    const directCompany = contactForm.company_name.trim();
+    if (directCompany) return directCompany;
+    return extractString(activeRaw, ["company_name"]) ?? "";
+  }, [activeRaw, contactForm.company_name]);
+  const accountDialogCompany = React.useMemo(
+    () => buildAccountDisplayName(contactForm, accountForm),
+    [accountForm, contactForm],
+  );
 
   const openEdit = (row: TableRow) => {
     const raw = (row.raw ?? {}) as Record<string, unknown>;
@@ -1186,7 +1319,7 @@ export function ContactsDataTable({ data }: { data: ContactTableRow[] }) {
         crear_cuenta: createWithAccount,
         contacto,
       };
-      if (createWithAccount) payload.cuenta = buildAccountPayload(accountForm);
+      if (createWithAccount) payload.cuenta = buildAccountPayload(accountForm, contactForm);
 
       const response = await fetch("/api/contactos/create", {
         method: "POST",
@@ -1278,9 +1411,10 @@ export function ContactsDataTable({ data }: { data: ContactTableRow[] }) {
           <DialogHeader className="space-y-2">
             <DialogTitle>Crear contacto</DialogTitle>
             <DialogDescription>
-              Formulario dividido por bloques para que cada campo sea fácil de reconocer y editar.
+              Formulario dividido por pestañas. Todos los campos anteriores siguen disponibles, solo están agrupados por tema.
             </DialogDescription>
           </DialogHeader>
+          <DialogSummary contactName={contactDialogName} companyName={createWithAccount ? accountDialogCompany || contactDialogCompany : contactDialogCompany} />
           <div className="space-y-5">
             <ContactForm
               value={contactForm}
@@ -1302,6 +1436,7 @@ export function ContactsDataTable({ data }: { data: ContactTableRow[] }) {
               <AccountForm
                 value={accountForm}
                 onChange={setAccountForm}
+                contact={contactForm}
                 geoCountries={geoCountries}
                 geoStates={geoStates}
                 geoMunicipalities={geoMunicipalitiesAccount}
@@ -1323,9 +1458,10 @@ export function ContactsDataTable({ data }: { data: ContactTableRow[] }) {
           <DialogHeader className="space-y-2">
             <DialogTitle>Editar contacto</DialogTitle>
             <DialogDescription>
-              Cada campo tiene su etiqueta visible para identificarlo con claridad incluso cuando ya está lleno.
+              Todos los campos anteriores siguen disponibles. Ahora están organizados por pestañas para facilitar lectura y edición.
             </DialogDescription>
           </DialogHeader>
+          <DialogSummary contactName={contactDialogName} companyName={contactDialogCompany} />
           <div className="space-y-5">
             <ContactForm
               value={contactForm}
