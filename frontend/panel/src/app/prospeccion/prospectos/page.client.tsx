@@ -2577,7 +2577,7 @@ function ProspectosView() {
     setVerificationDialog({
       open: true,
       status: "loading",
-      title: "Verificando teléfonos",
+      title: "Procesando solicitud",
       message: `Procesando ${selectedIds.length} prospectos...`,
     })
     try {
@@ -2588,8 +2588,8 @@ function ProspectosView() {
       setVerificationDialog({
         open: true,
         status: "success",
-        title: "Verificación de teléfonos completada",
-        message: `Se actualizaron ${response.procesados} prospectos.`,
+        title: "Operación completada",
+        message: `Verificación de teléfonos: se actualizaron ${response.procesados} prospectos.`,
       })
       await fetchProspectos(offset)
       void fetchStageSummary()
@@ -2598,7 +2598,7 @@ function ProspectosView() {
       setVerificationDialog({
         open: true,
         status: "error",
-        title: "Verificación de teléfonos",
+        title: "Operación con error",
         message,
       })
     } finally {
@@ -2613,7 +2613,7 @@ function ProspectosView() {
     setVerificationDialog({
       open: true,
       status: "loading",
-      title: "Validando correos",
+      title: "Procesando solicitud",
       message: `Procesando ${selectedIds.length} prospectos...`,
     })
     try {
@@ -2624,8 +2624,8 @@ function ProspectosView() {
       setVerificationDialog({
         open: true,
         status: "success",
-        title: "Validación de correos completada",
-        message: `Se validaron ${response.procesados} correos.`,
+        title: "Operación completada",
+        message: `Validación de correos: se validaron ${response.procesados} registros.`,
       })
       await fetchProspectos(offset)
       void fetchStageSummary()
@@ -2634,7 +2634,7 @@ function ProspectosView() {
       setVerificationDialog({
         open: true,
         status: "error",
-        title: "Validación de correos",
+        title: "Operación con error",
         message,
       })
     } finally {
@@ -2649,7 +2649,7 @@ function ProspectosView() {
     setVerificationDialog({
       open: true,
       status: "loading",
-      title: "Verificando sitios web",
+      title: "Procesando solicitud",
       message: `Procesando ${selectedIds.length} prospectos...`,
     })
     try {
@@ -2659,8 +2659,8 @@ function ProspectosView() {
       setVerificationDialog({
         open: true,
         status: "success",
-        title: "Verificación de sitios web completada",
-        message: `Se validaron ${response.procesados} sitios web.`,
+        title: "Operación completada",
+        message: `Verificación de sitios web: se validaron ${response.procesados} registros.`,
       })
       await fetchProspectos(offset)
       void fetchStageSummary()
@@ -2669,7 +2669,7 @@ function ProspectosView() {
       setVerificationDialog({
         open: true,
         status: "error",
-        title: "Verificación de sitios web",
+        title: "Operación con error",
         message,
       })
     } finally {
@@ -2684,7 +2684,7 @@ function ProspectosView() {
     setVerificationDialog({
       open: true,
       status: "loading",
-      title: "Ejecutando validación completa",
+      title: "Procesando solicitud",
       message: `Procesando ${selectedIds.length} prospectos...`,
     })
     try {
@@ -2700,7 +2700,7 @@ function ProspectosView() {
       setVerificationDialog({
         open: true,
         status: response.parcial ? "error" : "success",
-        title: "Validación completa finalizada",
+        title: response.parcial ? "Operación con error" : "Operación completada",
         message: `${prefix} Teléfonos: ${phones}, Sitios: ${websites}, Correos: ${emails}.`,
       })
       await fetchProspectos(offset)
@@ -2710,7 +2710,7 @@ function ProspectosView() {
       setVerificationDialog({
         open: true,
         status: "error",
-        title: "Validación completa",
+        title: "Operación con error",
         message,
       })
     } finally {

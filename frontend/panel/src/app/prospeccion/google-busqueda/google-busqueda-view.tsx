@@ -3,8 +3,11 @@
 import dynamic from "next/dynamic"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  AlertTriangle,
   ArrowUpRight,
+  CheckCircle2,
   Globe,
+  Info,
   ListChecks,
   Mail,
   MapPin,
@@ -68,6 +71,14 @@ import {
 } from "@/components/ui/drawer";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
   Table,
   TableBody,
   TableCell,
@@ -119,6 +130,13 @@ type FeedbackState = {
   message: string;
 } | null;
 
+type FeedbackDialogState = {
+  open: boolean;
+  status: "loading" | "success" | "error" | "info";
+  title: string;
+  message: string;
+};
+
 export function GoogleBusquedaView() {
   const { context } = usePermissions();
   const canRunBusquedas = (context.es_admin || context.es_owner) || context.permisos.includes("busquedas.run");
@@ -135,6 +153,12 @@ export function GoogleBusquedaView() {
   region_code: "MX",
 });
   const [feedback, setFeedback] = useState<FeedbackState>(null);
+  const [feedbackDialog, setFeedbackDialog] = useState<FeedbackDialogState>({
+    open: false,
+    status: "info",
+    title: "",
+    message: "",
+  });
   const [isSearching, setIsSearching] = useState(false);
   const [busquedas, setBusquedas] = useState<GoogleBusquedaItem[]>([]);
   const busquedasRef = useRef<GoogleBusquedaItem[]>([]);
@@ -183,6 +207,22 @@ export function GoogleBusquedaView() {
   const updateFormValue = useCallback(<K extends keyof FormValues>(key: K, value: FormValues[K]) => {
     setFormValues((prev) => ({ ...prev, [key]: value }));
   }, []);
+
+  useEffect(() => {
+    if (!feedback) return;
+    const title =
+      feedback.type === "success"
+        ? "Operación completada"
+        : feedback.type === "error"
+          ? "Operación con error"
+          : "Aviso";
+    setFeedbackDialog({
+      open: true,
+      status: feedback.type,
+      title,
+      message: feedback.message,
+    });
+  }, [feedback]);
 
   const loadBusquedas = useCallback(async () => {
     setIsLoadingBusquedas(true);
@@ -1010,6 +1050,12 @@ export function GoogleBusquedaView() {
 
   const runBusqueda = useCallback(async () => {
     setFeedback(null);
+    setFeedbackDialog({
+      open: true,
+      status: "loading",
+      title: "Procesando solicitud",
+      message: "Procesando solicitud...",
+    });
     const includedTypes = formValues.includedTypesText
       .split(",")
       .map((value) => value.trim())
@@ -1207,19 +1253,6 @@ export function GoogleBusquedaView() {
 
   return (
     <div className="space-y-6">
-      {feedback ? (
-        <div
-          className={cn(
-            "rounded-lg border px-4 py-3 text-sm",
-            feedback.type === "error" && "border-destructive/70 bg-destructive/10 text-destructive",
-            feedback.type === "success" && "border-emerald-500/60 bg-emerald-500/10 text-emerald-900 dark:text-emerald-200",
-            feedback.type === "info" && "border-primary/40 bg-primary/5 text-primary",
-          )}
-        >
-          {feedback.message}
-        </div>
-      ) : null}
-
       <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-base">
@@ -2027,6 +2060,53 @@ export function GoogleBusquedaView() {
           )}
         </CardContent>
       </Card>
+      <Dialog
+        open={feedbackDialog.open}
+        onOpenChange={(open) => {
+          if (feedbackDialog.status === "loading") return;
+          if (!open) {
+            setFeedbackDialog((prev) => ({ ...prev, open: false }));
+          }
+        }}
+      >
+        <DialogContent
+          className="sm:max-w-md"
+          onEscapeKeyDown={(event) => {
+            if (feedbackDialog.status === "loading") event.preventDefault();
+          }}
+          onPointerDownOutside={(event) => {
+            if (feedbackDialog.status === "loading") event.preventDefault();
+          }}
+        >
+          <DialogHeader>
+            <div className="mx-auto mb-2 flex size-14 items-center justify-center rounded-full border bg-muted/40">
+              {feedbackDialog.status === "loading" ? (
+                <RefreshCw className="size-7 animate-spin text-muted-foreground" />
+              ) : feedbackDialog.status === "success" ? (
+                <CheckCircle2 className="size-7 text-emerald-600" />
+              ) : feedbackDialog.status === "error" ? (
+                <AlertTriangle className="size-7 text-amber-600" />
+              ) : (
+                <Info className="size-7 text-primary" />
+              )}
+            </div>
+            <DialogTitle className="text-center">{feedbackDialog.title || "Estado del proceso"}</DialogTitle>
+            <DialogDescription className="text-center">
+              {feedbackDialog.message || "Procesando solicitud..."}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="sm:justify-center">
+            <Button
+              type="button"
+              onClick={() => setFeedbackDialog((prev) => ({ ...prev, open: false }))}
+              className="min-w-32"
+              disabled={feedbackDialog.status === "loading"}
+            >
+              {feedbackDialog.status === "loading" ? "Procesando..." : "Entendido"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
