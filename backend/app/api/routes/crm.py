@@ -76,6 +76,7 @@ from app.services import (
     tenant_runtime,
 )
 from app.services.high_demand_mode import high_demand_controller
+from app.services.non_critical_job_gate import should_defer_non_critical_jobs
 from app.services.channel_routing import resolve_organizacion_id
 from app.services import calendar as calendar_service
 from app.services import quotes as quotes_service
@@ -22708,6 +22709,22 @@ async def prospeccion_checklist_scraper(
 ) -> dict[str, Any]:
     """Dispara jobs del buscador web para prospectos sin correo pero con sitio web."""
 
+    defer_scraper, defer_details = await should_defer_non_critical_jobs(job_name="prospectos_checklist_scraper")
+    if defer_scraper:
+        backlog = defer_details.get("backlog")
+        threshold = defer_details.get("threshold")
+        reason = str(defer_details.get("reason") or "high_load")
+        extra_hint = ""
+        if isinstance(backlog, int) and isinstance(threshold, int):
+            extra_hint = f" (backlog {backlog}/{threshold})"
+        raise HTTPException(
+            status_code=429,
+            detail=(
+                "El servidor está en alta carga y el scraper se difirió para proteger WhatsApp e Inbox. "
+                f"Intenta nuevamente en 2-5 minutos{extra_hint}. Motivo: {reason}."
+            ),
+        )
+
     candidatos: list[dict[str, Any]] = []
     if payload.prospecto_ids:
         try:
@@ -22730,6 +22747,11 @@ async def prospeccion_checklist_scraper(
     jobs: list[BuscadorJobResponse] = []
     seen_hosts: set[str] = set()
     job_cap = payload.limit if payload.limit else 1
+    safe_max_pages = max(10, min(payload.max_pages, int(settings.checklist_scraper_max_pages)))
+    safe_max_depth = max(1, min(payload.max_depth, int(settings.checklist_scraper_max_depth)))
+    payload_runtime = payload.max_runtime if payload.max_runtime is not None else int(settings.checklist_scraper_max_runtime)
+    safe_max_runtime = max(60, min(int(payload_runtime), int(settings.checklist_scraper_max_runtime)))
+    safe_max_workers = max(1, min(int(settings.checklist_scraper_max_workers), 5))
 
     for candidato in candidatos:
         if len(jobs) >= job_cap:
@@ -22746,9 +22768,10 @@ async def prospeccion_checklist_scraper(
             sitio="domain",
             url=url,
             mode=payload.mode,
-            max_pages=payload.max_pages,
-            max_depth=payload.max_depth,
-            max_runtime=payload.max_runtime,
+            max_pages=safe_max_pages,
+            max_depth=safe_max_depth,
+            max_workers=safe_max_workers,
+            max_runtime=safe_max_runtime,
         )
 
         metadata = {

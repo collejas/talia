@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import asyncio
+import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, Literal
 from urllib.parse import urlparse
 from uuid import UUID
 
+from app.core.config import settings
 from app.core.logging import get_logger
 from app.repositories.crm import CRMRepository, CRMRepositoryError
 from app.services.buscador_control import BuscadorJobControl
@@ -55,6 +57,8 @@ class BuscadorJobManager:
 
     def __init__(self) -> None:
         self._jobs: dict[UUID, ManagedBuscadorJob] = {}
+        self._max_concurrency = max(1, min(int(settings.buscador_jobs_max_concurrency), 10))
+        self._run_slots = asyncio.Semaphore(self._max_concurrency)
 
     def schedule_job(
         self,
@@ -110,55 +114,68 @@ class BuscadorJobManager:
         job: QueuedBuscadorJob,
         control: BuscadorJobControl,
     ) -> None:
-        start_iso = datetime.now(timezone.utc).isoformat()
-        try:
-            await repo.worker_update_buscador_job(
-                job_id=job.id,
-                payload={"status": "running", "started_at": start_iso, "error": None},
-            )
-        except CRMRepositoryError as exc:  # pragma: no cover - red externa
-            logger.exception("buscador.job_start_update_failed", extra={"job_id": str(job.id), "error": str(exc)})
-            return
+        wait_start = time.monotonic()
+        async with self._run_slots:
+            wait_ms = int((time.monotonic() - wait_start) * 1000)
+            if wait_ms > 50:
+                logger.info(
+                    "buscador.job_waited_for_slot",
+                    extra={
+                        "job_id": str(job.id),
+                        "wait_ms": wait_ms,
+                        "max_concurrency": self._max_concurrency,
+                    },
+                )
 
-        try:
-            result = await run_buscador(job.params, control=control)
-        except BuscadorRunnerError as exc:
-            await self._mark_job_failed(repo, job, str(exc))
-            return
-        except Exception as exc:  # pragma: no cover - error inesperado
-            await self._mark_job_failed(repo, job, str(exc))
-            return
+            start_iso = datetime.now(timezone.utc).isoformat()
+            try:
+                await repo.worker_update_buscador_job(
+                    job_id=job.id,
+                    payload={"status": "running", "started_at": start_iso, "error": None},
+                )
+            except CRMRepositoryError as exc:  # pragma: no cover - red externa
+                logger.exception("buscador.job_start_update_failed", extra={"job_id": str(job.id), "error": str(exc)})
+                return
 
-        try:
-            await self._store_results(repo, job, result)
-        except CRMRepositoryError as exc:  # pragma: no cover - red externa
-            await self._mark_job_failed(repo, job, f"store_results_failed:{exc}")
-            return
+            try:
+                result = await run_buscador(job.params, control=control)
+            except BuscadorRunnerError as exc:
+                await self._mark_job_failed(repo, job, str(exc))
+                return
+            except Exception as exc:  # pragma: no cover - error inesperado
+                await self._mark_job_failed(repo, job, str(exc))
+                return
 
-        finish_iso = datetime.now(timezone.utc).isoformat()
-        stop_reason = result.stop_reason or control.stop_reason
-        final_status = "completed"
-        if stop_reason == "paused":
-            final_status = "paused"
-        elif stop_reason == "canceled":
-            final_status = "canceled"
-        try:
-            await repo.worker_update_buscador_job(
-                job_id=job.id,
-                payload={
-                    "status": final_status,
-                    "finished_at": finish_iso,
-                    "duration_ms": result.duration_ms,
-                    "total": len(result.results),
-                    "stats": result.stats,
-                },
-            )
-        except CRMRepositoryError as exc:  # pragma: no cover - red externa
-            logger.exception(
-                "buscador.job_complete_update_failed",
-                extra={"job_id": str(job.id), "error": str(exc)},
-            )
-        await self._publish_job_event(repo=repo, job=job, status=final_status, result=result)
+            try:
+                await self._store_results(repo, job, result)
+            except CRMRepositoryError as exc:  # pragma: no cover - red externa
+                await self._mark_job_failed(repo, job, f"store_results_failed:{exc}")
+                return
+
+            finish_iso = datetime.now(timezone.utc).isoformat()
+            stop_reason = result.stop_reason or control.stop_reason
+            final_status = "completed"
+            if stop_reason == "paused":
+                final_status = "paused"
+            elif stop_reason == "canceled":
+                final_status = "canceled"
+            try:
+                await repo.worker_update_buscador_job(
+                    job_id=job.id,
+                    payload={
+                        "status": final_status,
+                        "finished_at": finish_iso,
+                        "duration_ms": result.duration_ms,
+                        "total": len(result.results),
+                        "stats": result.stats,
+                    },
+                )
+            except CRMRepositoryError as exc:  # pragma: no cover - red externa
+                logger.exception(
+                    "buscador.job_complete_update_failed",
+                    extra={"job_id": str(job.id), "error": str(exc)},
+                )
+            await self._publish_job_event(repo=repo, job=job, status=final_status, result=result)
 
     async def _mark_job_failed(self, repo: CRMRepository, job: QueuedBuscadorJob, error: str) -> None:
         finish_iso = datetime.now(timezone.utc).isoformat()

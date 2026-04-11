@@ -444,6 +444,56 @@ class Settings(BaseSettings):
             "TALIA_NON_CRITICAL_JOBS_GATE_CACHE_SECONDS",
         ),
     )
+    buscador_jobs_max_concurrency: int = Field(
+        default=2,
+        ge=1,
+        le=10,
+        description="Concurrencia máxima de jobs de scraper web (Buscador) ejecutándose al mismo tiempo.",
+        validation_alias=AliasChoices(
+            "BUSCADOR_JOBS_MAX_CONCURRENCY",
+            "TALIA_BUSCADOR_JOBS_MAX_CONCURRENCY",
+        ),
+    )
+    checklist_scraper_max_pages: int = Field(
+        default=200,
+        ge=10,
+        le=2000,
+        description="Techo de páginas por job cuando se dispara scraper desde checklist de prospectos.",
+        validation_alias=AliasChoices(
+            "CHECKLIST_SCRAPER_MAX_PAGES",
+            "TALIA_CHECKLIST_SCRAPER_MAX_PAGES",
+        ),
+    )
+    checklist_scraper_max_depth: int = Field(
+        default=5,
+        ge=1,
+        le=20,
+        description="Techo de profundidad por job cuando se dispara scraper desde checklist de prospectos.",
+        validation_alias=AliasChoices(
+            "CHECKLIST_SCRAPER_MAX_DEPTH",
+            "TALIA_CHECKLIST_SCRAPER_MAX_DEPTH",
+        ),
+    )
+    checklist_scraper_max_runtime: int = Field(
+        default=600,
+        ge=60,
+        le=3600,
+        description="Techo de runtime (segundos) por job cuando se dispara scraper desde checklist de prospectos.",
+        validation_alias=AliasChoices(
+            "CHECKLIST_SCRAPER_MAX_RUNTIME",
+            "TALIA_CHECKLIST_SCRAPER_MAX_RUNTIME",
+        ),
+    )
+    checklist_scraper_max_workers: int = Field(
+        default=2,
+        ge=1,
+        le=5,
+        description="Workers internos por job para scraper desde checklist (reduce presión en servidores pequeños).",
+        validation_alias=AliasChoices(
+            "CHECKLIST_SCRAPER_MAX_WORKERS",
+            "TALIA_CHECKLIST_SCRAPER_MAX_WORKERS",
+        ),
+    )
     high_demand_mode_enabled: bool = Field(
         default=True,
         description="Activa el modo automático de alta demanda.",

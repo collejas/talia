@@ -1313,21 +1313,112 @@ async def handle_incoming_message(
     final_reply_text = assistant_reply.text
     if not final_reply_text:
         final_reply_text = DEFAULT_FALLBACK
-    final_reply_text = await _guard_booking_confirmation_claim(
-        conversation_id=conversation_id,
-        reply_text=final_reply_text,
-        contact=contact_record,
-        opportunity_id=opportunity_ref,
-    )
+    try:
+        final_reply_text = await _guard_booking_confirmation_claim(
+            conversation_id=conversation_id,
+            reply_text=final_reply_text,
+            contact=contact_record,
+            opportunity_id=opportunity_ref,
+        )
+    except Exception as exc:
+        logger.exception(
+            "whatsapp.reply_guard_failed",
+            extra={"conversation_id": conversation_id, "error": str(exc)},
+        )
+        log_event(
+            logger,
+            "whatsapp.reply_guard_failed",
+            conversation_id=conversation_id,
+            inbound_message_id=inbound_message_id,
+            error=str(exc),
+        )
     final_reply_text = _compact_whatsapp_reply(final_reply_text, _DEFAULT_WHATSAPP_MAX_CHARS)
 
-    twilio_send_started = time.perf_counter()
-    send_result = await _send_whatsapp_reply(
-        to_number=message.from_number,
-        body=final_reply_text,
-        organizacion_id=org_uuid,
-    )
-    _record_stage_timing(stage_timings, "twilio_send_ms", twilio_send_started)
+    try:
+        twilio_send_started = time.perf_counter()
+        send_result = await _send_whatsapp_reply(
+            to_number=message.from_number,
+            body=final_reply_text,
+            organizacion_id=org_uuid,
+        )
+        _record_stage_timing(stage_timings, "twilio_send_ms", twilio_send_started)
+    except asyncio.CancelledError:
+        log_event(
+            logger,
+            "whatsapp.reply_dispatch_cancelled",
+            conversation_id=conversation_id,
+            inbound_message_id=inbound_message_id,
+            stage="before_dispatched_log",
+        )
+        _log_trace_stage(
+            stage="dispatch_cancelled",
+            conversation_id=conversation_id,
+            contact_id=contact_id,
+            inbound_message_id=inbound_message_id,
+        )
+        _log_turn_timing(
+            trace_id=trace_id,
+            conversation_id=conversation_id,
+            contact_id=contact_id,
+            inbound_message_id=inbound_message_id,
+            total_started_at=turn_started,
+            stage_timings=stage_timings,
+            extra={
+                "source": source,
+                "fallback_used": final_reply_text == DEFAULT_FALLBACK,
+                "assistant_response_id": assistant_reply.response_id,
+                "openai_conversation_id": assistant_reply.openai_conversation_id,
+                "message_sid": _trim_text(message.message_sid),
+                "delivery_status": "cancelled",
+            },
+        )
+        raise
+    except Exception as exc:
+        error_meta = classify_runtime_error(exc)
+        logger.exception(
+            "whatsapp.reply_dispatch_failed",
+            extra={
+                "conversation_id": conversation_id,
+                "inbound_message_id": inbound_message_id,
+                "error": str(exc),
+                "error_type": error_meta.get("error_type"),
+                "status_code": error_meta.get("status_code"),
+                "retryable": bool(error_meta.get("retryable")),
+            },
+        )
+        log_event(
+            logger,
+            "whatsapp.send_skipped_unexpected",
+            conversation_id=conversation_id,
+            inbound_message_id=inbound_message_id,
+            error=str(exc),
+            error_type=error_meta.get("error_type"),
+            status_code=error_meta.get("status_code"),
+            retryable=bool(error_meta.get("retryable")),
+        )
+        await high_demand_controller.record_twilio_attempt(error_code="dispatch_exception")
+        await high_demand_controller.record_assistant_latency(
+            channel="whatsapp",
+            latency_ms=(time.perf_counter() - turn_started) * 1000,
+        )
+        _log_turn_timing(
+            trace_id=trace_id,
+            conversation_id=conversation_id,
+            contact_id=contact_id,
+            inbound_message_id=inbound_message_id,
+            total_started_at=turn_started,
+            stage_timings=stage_timings,
+            extra={
+                "source": source,
+                "fallback_used": final_reply_text == DEFAULT_FALLBACK,
+                "assistant_response_id": assistant_reply.response_id,
+                "openai_conversation_id": assistant_reply.openai_conversation_id,
+                "message_sid": _trim_text(message.message_sid),
+                "delivery_status": "dispatch_failed",
+            },
+        )
+        return
+
     log_event(
         logger,
         "whatsapp.reply_dispatched",
