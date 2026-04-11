@@ -27,7 +27,7 @@ set -euo pipefail
 #   CF_API_TOKEN=...
 #   CF_PURGE_URLS='https://talia.mx/inbox,https://talia.mx/_next/static/chunks/app/inbox/page-xxxx.js'
 #   CF_FULL_PURGE=0|1
-#   KEEP_RELEASES=5
+#   KEEP_RELEASES=2
 #   MIN_FREE_GB=4
 #   CLEAN_TMP_ON_FAIL=1
 #   NPM_CACHE_DIR=/var/www/talia/.npm-cache
@@ -48,7 +48,7 @@ RUN_NPM_CI="${RUN_NPM_CI:-0}"
 SKIP_RESTART="${SKIP_RESTART:-0}"
 RESTART_API="${RESTART_API:-0}"
 CF_FULL_PURGE="${CF_FULL_PURGE:-0}"
-KEEP_RELEASES="${KEEP_RELEASES:-5}"
+KEEP_RELEASES="${KEEP_RELEASES:-2}"
 MIN_FREE_GB="${MIN_FREE_GB:-4}"
 CLEAN_TMP_ON_FAIL="${CLEAN_TMP_ON_FAIL:-1}"
 NPM_CACHE_DIR="${NPM_CACHE_DIR:-/var/www/talia/.npm-cache}"

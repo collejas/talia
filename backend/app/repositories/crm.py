@@ -6212,7 +6212,6 @@ class CRMRepository:
             "estado": self._pick_text(merged, "estado") or "lead",
             "origen": self._pick_text(merged, "origen"),
             "propietario_usuario_id": merged.get("propietario_usuario_id"),
-            "metadata": legacy_metadata,
             "contacto_datos": legacy_contacto_datos,
         }
         legacy_body = {key: value for key, value in legacy_body.items() if value not in (None, "", {}, [])}
@@ -6510,6 +6509,14 @@ class CRMRepository:
             )
 
         legacy_body["cuenta_id"] = current_account_id
+        legacy_contacto_datos = _ensure_metadata(legacy_body.get("contacto_datos"))
+        legacy_contacto_datos.update(
+            {
+                "legacy_contacto_id": str(contacto_id),
+                "source": "contact_update",
+            }
+        )
+        legacy_body["contacto_datos"] = legacy_contacto_datos
         legacy_body["actualizado_en"] = datetime.now(timezone.utc).isoformat()
         try:
             legacy_resp = await self._request(
@@ -6947,10 +6954,14 @@ class CRMRepository:
                 )
 
         legacy_body["id"] = str(contacto_id)
-        legacy_body["metadata"] = {
-            **_ensure_metadata(legacy_body.get("metadata")),
-            "legacy_contacto_id": str(contacto_id),
-        }
+        legacy_contacto_datos = _ensure_metadata(legacy_body.get("contacto_datos"))
+        legacy_contacto_datos.update(
+            {
+                "legacy_contacto_id": str(contacto_id),
+                "source": "contact_create",
+            }
+        )
+        legacy_body["contacto_datos"] = legacy_contacto_datos
         try:
             await self._request(
                 "POST",
