@@ -14,7 +14,7 @@ from hashlib import sha1
 from time import monotonic
 from typing import Any, Iterable, Literal, Sequence
 from urllib.parse import quote as urlquote
-from uuid import UUID
+from uuid import UUID, uuid4
 from zoneinfo import ZoneInfo
 
 import httpx
@@ -5899,6 +5899,7 @@ class CRMRepository:
         return {
             "id": legacy_contacto_id,
             "organizacion_id": persona.get("organizacion_id"),
+            "cuenta_id": account.get("id") if isinstance(account, dict) else persona.get("cuenta_id"),
             "nombre_completo": persona.get("nombre_completo"),
             "nombre": persona.get("nombre_completo"),
             "correo": persona.get("correo_principal"),
@@ -5936,9 +5937,318 @@ class CRMRepository:
             "estado": persona.get("estado"),
             "origen": persona.get("origen"),
             "propietario_usuario_id": persona.get("propietario_usuario_id"),
+            "metadata": metadata,
             "creado_en": persona.get("creado_en"),
             "actualizado_en": persona.get("actualizado_en"),
         }
+
+    @staticmethod
+    def _text_value(value: Any) -> str | None:
+        text = str(value or "").strip()
+        return text or None
+
+    @classmethod
+    def _pick_text(cls, payload: dict[str, Any], *keys: str) -> str | None:
+        for key in keys:
+            if key not in payload:
+                continue
+            value = cls._text_value(payload.get(key))
+            if value:
+                return value
+        return None
+
+    def _build_contact_write_parts(
+        self,
+        *,
+        organizacion_id: UUID,
+        contact_id: UUID,
+        payload: dict[str, Any],
+        existing: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        merged: dict[str, Any] = {}
+        if isinstance(existing, dict):
+            merged.update(existing)
+        merged.update(payload)
+
+        full_name = self._pick_text(merged, "nombre_completo")
+        if not full_name:
+            full_name = " ".join(
+                part
+                for part in (
+                    self._pick_text(merged, "nombre_nombres"),
+                    self._pick_text(merged, "apellido_paterno"),
+                    self._pick_text(merged, "apellido_materno"),
+                )
+                if part
+            ).strip()
+        contact_kind_raw = self._pick_text(merged, "persona_fisica_moral")
+        contact_kind = contact_kind_raw.casefold() if contact_kind_raw else ""
+        contact_is_physical = contact_kind == "fisica"
+
+        company_name = self._pick_text(merged, "company_name")
+        reason_name = self._pick_text(merged, "razon_social")
+        account_name = company_name or reason_name or (full_name if contact_is_physical else None)
+
+        has_account_fields = any(
+            self._pick_text(merged, key)
+            for key in (
+                "company_name",
+                "razon_social",
+                "rfc",
+                "uso_cfdi",
+                "metodo_pago",
+                "forma_pago",
+                "email_facturacion",
+                "tipo_industria",
+                "tamano",
+                "website",
+                "sitio_web",
+                "tipo_establecimiento",
+                "tipo_vialidad",
+                "nombre_vialidad",
+                "numero_exterior",
+                "numero_interior",
+                "codigo_postal",
+                "entidad",
+                "municipio",
+                "pais",
+                "clave_entidad",
+                "clave_municipio",
+                "clave_localidad",
+                "localidad",
+            )
+        )
+        should_create_account = bool(contact_is_physical or account_name or has_account_fields or merged.get("cuenta_id"))
+
+        legacy_metadata = _ensure_metadata(merged.get("metadata"))
+        legacy_contacto_datos = _ensure_metadata(merged.get("contacto_datos"))
+        legacy_contacto_datos.update(
+            {
+                "legacy_contacto_id": str(contact_id),
+                "legacy_contacto_tipo": "persona_fisica" if contact_is_physical else ("empresa" if should_create_account else "persona"),
+            }
+        )
+
+        now_value = datetime.now(timezone.utc)
+        persona_metadata = dict(legacy_metadata)
+        persona_metadata.update(
+            {
+                "legacy_contacto_id": str(contact_id),
+                "legacy_contacto_tipo": "persona_fisica" if contact_is_physical else ("empresa" if should_create_account else "persona"),
+                "legacy_contacto_datos": legacy_contacto_datos,
+                "legacy_company_name": company_name,
+                "legacy_razon_social": reason_name,
+                "legacy_rfc": self._pick_text(merged, "rfc"),
+                "legacy_uso_cfdi": self._pick_text(merged, "uso_cfdi"),
+                "legacy_metodo_pago": self._pick_text(merged, "metodo_pago"),
+                "legacy_forma_pago": self._pick_text(merged, "forma_pago"),
+                "legacy_email_facturacion": self._pick_text(merged, "email_facturacion"),
+                "legacy_tipo_industria": self._pick_text(merged, "tipo_industria"),
+                "legacy_tamano": self._pick_text(merged, "tamano"),
+                "legacy_website": self._pick_text(merged, "website", "sitio_web"),
+            }
+        )
+        legacy_metadata = {key: value for key, value in persona_metadata.items() if value not in (None, "", {}, [])}
+
+        persona_body: dict[str, Any] = {
+            "id": str(contact_id),
+            "organizacion_id": str(organizacion_id),
+            "nombre": full_name,
+            "apellido_paterno": self._pick_text(merged, "apellido_paterno"),
+            "apellido_materno": self._pick_text(merged, "apellido_materno"),
+            "nombre_completo": full_name,
+            "correo_principal": self._pick_text(merged, "correo", "email"),
+            "telefono_principal_e164": self._pick_text(merged, "telefono_e164", "telefono"),
+            "puesto": self._pick_text(merged, "puesto"),
+            "area": self._pick_text(merged, "area"),
+            "rol_decision": self._pick_text(merged, "rol_decision"),
+            "estado": self._pick_text(merged, "estado") or "lead",
+            "origen": self._pick_text(merged, "origen"),
+            "notas": self._pick_text(merged, "notas", "notes"),
+            "metadata": legacy_metadata,
+            "propietario_usuario_id": merged.get("propietario_usuario_id"),
+            "creado_en": merged.get("creado_en") or merged.get("fecha_incorporacion") or now_value.isoformat(),
+            "actualizado_en": merged.get("actualizado_en") or now_value.isoformat(),
+        }
+
+        address_payload: dict[str, Any] = {
+            key: merged.get(key)
+            for key in (
+                "tipo_vialidad",
+                "nombre_vialidad",
+                "numero_exterior",
+                "letra_exterior",
+                "edificio",
+                "edificio_piso",
+                "numero_interior",
+                "letra_interior",
+                "tipo_asentamiento",
+                "nombre_asentamiento",
+                "tipo_centro_comercial",
+                "corredor_industrial",
+                "numero_local",
+                "codigo_postal",
+                "clave_entidad",
+                "entidad",
+                "clave_municipio",
+                "municipio",
+                "clave_localidad",
+                "localidad",
+                "pais",
+                "latitud",
+                "longitud",
+            )
+            if merged.get(key) not in (None, "")
+        }
+
+        account_body: dict[str, Any] | None = None
+        if should_create_account:
+            account_body = {
+                "nombre": account_name or full_name or "Cuenta sin nombre",
+                "alias": company_name or reason_name,
+                "tipo": "persona_fisica_actividad_empresarial" if contact_is_physical else "empresa",
+                "industria": self._pick_text(merged, "tipo_industria"),
+                "tamano": self._pick_text(merged, "tamano"),
+                "sitio_web": self._pick_text(merged, "sitio_web", "website"),
+                "telefono": self._pick_text(merged, "telefono_e164", "telefono"),
+                "correo": self._pick_text(merged, "correo", "email"),
+                "codigo_cuenta": self._pick_text(merged, "codigo_cuenta"),
+                "razon_social": reason_name,
+                "rfc": self._pick_text(merged, "rfc"),
+                "uso_cfdi": self._pick_text(merged, "uso_cfdi"),
+                "metodo_pago": self._pick_text(merged, "metodo_pago"),
+                "forma_pago": self._pick_text(merged, "forma_pago"),
+                "email_facturacion": self._pick_text(merged, "email_facturacion"),
+                "tipo_industria": self._pick_text(merged, "tipo_industria"),
+                "notas": self._pick_text(merged, "notas", "notes"),
+                "necesidad_proposito": self._pick_text(merged, "necesidad_proposito"),
+                "direccion": address_payload or {},
+                "tipo_vialidad": self._pick_text(merged, "tipo_vialidad"),
+                "nombre_vialidad": self._pick_text(merged, "nombre_vialidad"),
+                "numero_exterior": self._pick_text(merged, "numero_exterior"),
+                "letra_exterior": self._pick_text(merged, "letra_exterior"),
+                "edificio": self._pick_text(merged, "edificio"),
+                "edificio_piso": self._pick_text(merged, "edificio_piso"),
+                "numero_interior": self._pick_text(merged, "numero_interior"),
+                "letra_interior": self._pick_text(merged, "letra_interior"),
+                "tipo_asentamiento": self._pick_text(merged, "tipo_asentamiento"),
+                "nombre_asentamiento": self._pick_text(merged, "nombre_asentamiento"),
+                "tipo_centro_comercial": self._pick_text(merged, "tipo_centro_comercial"),
+                "corredor_industrial": self._pick_text(merged, "corredor_industrial"),
+                "numero_local": self._pick_text(merged, "numero_local"),
+                "codigo_postal": self._pick_text(merged, "codigo_postal"),
+                "clave_entidad": self._pick_text(merged, "clave_entidad"),
+                "entidad": self._pick_text(merged, "entidad"),
+                "clave_municipio": self._pick_text(merged, "clave_municipio"),
+                "municipio": self._pick_text(merged, "municipio"),
+                "clave_localidad": self._pick_text(merged, "clave_localidad"),
+                "localidad": self._pick_text(merged, "localidad"),
+                "pais": self._pick_text(merged, "pais"),
+                "website": self._pick_text(merged, "website"),
+                "tipo_establecimiento": self._pick_text(merged, "tipo_establecimiento"),
+                "latitud": merged.get("latitud"),
+                "longitud": merged.get("longitud"),
+                "fecha_incorporacion": merged.get("fecha_incorporacion"),
+                "propietario_usuario_id": merged.get("propietario_usuario_id"),
+                "metadata": legacy_metadata,
+            }
+            account_body = {key: value for key, value in account_body.items() if value not in (None, "", {}, [])}
+
+        legacy_body: dict[str, Any] = {
+            "id": str(contact_id),
+            "organizacion_id": str(organizacion_id),
+            "cuenta_id": merged.get("cuenta_id"),
+            "codigo_contacto": self._pick_text(merged, "codigo_contacto"),
+            "nombre_nombres": self._pick_text(merged, "nombre_nombres"),
+            "apellido_paterno": self._pick_text(merged, "apellido_paterno"),
+            "apellido_materno": self._pick_text(merged, "apellido_materno"),
+            "nombre_completo": full_name,
+            "persona_fisica_moral": contact_kind_raw,
+            "razon_social": reason_name,
+            "rfc": self._pick_text(merged, "rfc"),
+            "uso_cfdi": self._pick_text(merged, "uso_cfdi"),
+            "metodo_pago": self._pick_text(merged, "metodo_pago"),
+            "forma_pago": self._pick_text(merged, "forma_pago"),
+            "email_facturacion": self._pick_text(merged, "email_facturacion"),
+            "tipo_industria": self._pick_text(merged, "tipo_industria"),
+            "tamano": self._pick_text(merged, "tamano"),
+            "puesto": self._pick_text(merged, "puesto"),
+            "area": self._pick_text(merged, "area"),
+            "rol_decision": self._pick_text(merged, "rol_decision"),
+            "correo": self._pick_text(merged, "correo", "email"),
+            "email": self._pick_text(merged, "correo", "email"),
+            "telefono_e164": self._pick_text(merged, "telefono_e164", "telefono"),
+            "telefono": self._pick_text(merged, "telefono_e164", "telefono"),
+            "tipo_vialidad": self._pick_text(merged, "tipo_vialidad"),
+            "nombre_vialidad": self._pick_text(merged, "nombre_vialidad"),
+            "numero_exterior": self._pick_text(merged, "numero_exterior"),
+            "letra_exterior": self._pick_text(merged, "letra_exterior"),
+            "edificio": self._pick_text(merged, "edificio"),
+            "edificio_piso": self._pick_text(merged, "edificio_piso"),
+            "numero_interior": self._pick_text(merged, "numero_interior"),
+            "letra_interior": self._pick_text(merged, "letra_interior"),
+            "tipo_asentamiento": self._pick_text(merged, "tipo_asentamiento"),
+            "nombre_asentamiento": self._pick_text(merged, "nombre_asentamiento"),
+            "tipo_centro_comercial": self._pick_text(merged, "tipo_centro_comercial"),
+            "corredor_industrial": self._pick_text(merged, "corredor_industrial"),
+            "numero_local": self._pick_text(merged, "numero_local"),
+            "codigo_postal": self._pick_text(merged, "codigo_postal"),
+            "clave_entidad": self._pick_text(merged, "clave_entidad"),
+            "entidad": self._pick_text(merged, "entidad"),
+            "clave_municipio": self._pick_text(merged, "clave_municipio"),
+            "municipio": self._pick_text(merged, "municipio"),
+            "clave_localidad": self._pick_text(merged, "clave_localidad"),
+            "localidad": self._pick_text(merged, "localidad"),
+            "pais": self._pick_text(merged, "pais"),
+            "website": self._pick_text(merged, "website", "sitio_web"),
+            "tipo_establecimiento": self._pick_text(merged, "tipo_establecimiento"),
+            "latitud": merged.get("latitud"),
+            "longitud": merged.get("longitud"),
+            "fecha_incorporacion": merged.get("fecha_incorporacion"),
+            "company_name": account_name,
+            "notes": self._pick_text(merged, "notes", "notas"),
+            "notas": self._pick_text(merged, "notas", "notes"),
+            "necesidad_proposito": self._pick_text(merged, "necesidad_proposito"),
+            "estado": self._pick_text(merged, "estado") or "lead",
+            "origen": self._pick_text(merged, "origen"),
+            "propietario_usuario_id": merged.get("propietario_usuario_id"),
+            "metadata": legacy_metadata,
+            "contacto_datos": legacy_contacto_datos,
+        }
+        legacy_body = {key: value for key, value in legacy_body.items() if value not in (None, "", {}, [])}
+
+        return {
+            "persona_body": persona_body,
+            "account_body": account_body,
+            "legacy_body": legacy_body,
+            "contact_is_physical": contact_is_physical,
+            "should_create_account": should_create_account,
+        }
+
+    async def _get_persona_by_legacy_contact_id(
+        self,
+        *,
+        organizacion_id: UUID,
+        contacto_id: UUID,
+    ) -> dict[str, Any] | None:
+        params = {
+            "organizacion_id": f"eq.{organizacion_id}",
+            "metadata->>legacy_contacto_id": f"eq.{contacto_id}",
+            "limit": "1",
+            "select": (
+                "id,organizacion_id,nombre,apellido_paterno,apellido_materno,nombre_completo,"
+                "correo_principal,telefono_principal_e164,puesto,area,rol_decision,estado,"
+                "origen,notas,metadata,propietario_usuario_id,creado_en,actualizado_en"
+            ),
+        }
+        resp = await self._request("GET", "/rest/v1/personas", params=params)
+        data = resp.json()
+        if not isinstance(data, list) or not data:
+            return None
+        row = data[0]
+        if not isinstance(row, dict):
+            return None
+        return row
 
     async def get_contact(
         self,
@@ -6038,24 +6348,203 @@ class CRMRepository:
             if existing is None:
                 raise CRMRepositoryError("contacto_no_encontrado")
             return existing
-        params = {
+        existing_contact = await self.get_contact(
+            organizacion_id=organizacion_id,
+            contacto_id=contacto_id,
+        )
+        if existing_contact is None:
+            raise CRMRepositoryError("contacto_no_encontrado")
+        existing_persona = await self._get_persona_by_legacy_contact_id(
+            organizacion_id=organizacion_id,
+            contacto_id=contacto_id,
+        )
+        merged_contact = dict(existing_contact)
+        merged_contact.update(payload)
+        parts = self._build_contact_write_parts(
+            organizacion_id=organizacion_id,
+            contact_id=contacto_id,
+            payload=merged_contact,
+            existing=existing_contact,
+        )
+        persona_body = dict(parts["persona_body"])
+        account_body = parts["account_body"]
+        legacy_body = dict(parts["legacy_body"])
+        persona_body.pop("id", None)
+        persona_body.pop("organizacion_id", None)
+        persona_body.pop("creado_en", None)
+        persona_id = existing_persona.get("id") if isinstance(existing_persona, dict) else None
+        if not persona_id:
+            persona_id = contacto_id
+        persona_params = {
             "organizacion_id": f"eq.{organizacion_id}",
-            "id": f"eq.{contacto_id}",
+            "id": f"eq.{persona_id}",
         }
-        resp = await self._request(
+        if persona_body.get("propietario_usuario_id") is None:
+            persona_body.pop("propietario_usuario_id", None)
+        persona_resp = await self._request(
             "PATCH",
-            "/rest/v1/contactos",
-            params=params,
-            json=payload,
+            "/rest/v1/personas",
+            params=persona_params,
+            json=persona_body,
             prefer="return=representation",
         )
-        data = resp.json()
-        if not isinstance(data, list) or not data:
-            raise CRMRepositoryError("Supabase no devolvió el contacto actualizado")
-        row = data[0]
-        if not isinstance(row, dict):
-            raise CRMRepositoryError(f"Respuesta inválida al actualizar contacto: {row!r}")
-        return row
+        persona_data = persona_resp.json()
+        if not isinstance(persona_data, list) or not persona_data:
+            raise CRMRepositoryError("contacto_update_failed")
+        persona_row = persona_data[0]
+        if not isinstance(persona_row, dict):
+            raise CRMRepositoryError(f"Respuesta inválida al actualizar persona: {persona_row!r}")
+
+        current_account_id = merged_contact.get("cuenta_id")
+        if isinstance(current_account_id, str):
+            current_account_id = current_account_id.strip() or None
+        created_account_row: dict[str, Any] | None = None
+        if account_body:
+            if current_account_id:
+                try:
+                    current_account_uuid = _coerce_uuid(str(current_account_id), field="cuenta_id")
+                except Exception:
+                    current_account_uuid = None
+                if current_account_uuid:
+                    try:
+                        account_resp = await self._request(
+                            "PATCH",
+                            "/rest/v1/cuentas",
+                            params={
+                                "organizacion_id": f"eq.{organizacion_id}",
+                                "id": f"eq.{current_account_uuid}",
+                            },
+                            json=account_body,
+                            prefer="return=representation",
+                        )
+                    except CRMRepositoryError as exc:
+                        if "propietario_usuario_id" in str(exc).lower() or "violates foreign key" in str(exc).lower():
+                            fallback_account = dict(account_body)
+                            fallback_account.pop("propietario_usuario_id", None)
+                            account_resp = await self._request(
+                                "PATCH",
+                                "/rest/v1/cuentas",
+                                params={
+                                    "organizacion_id": f"eq.{organizacion_id}",
+                                    "id": f"eq.{current_account_uuid}",
+                                },
+                                json=fallback_account,
+                                prefer="return=representation",
+                            )
+                        else:
+                            raise
+                    account_data = account_resp.json()
+                    if isinstance(account_data, list) and account_data and isinstance(account_data[0], dict):
+                        created_account_row = account_data[0]
+                else:
+                    current_account_id = None
+
+            if not current_account_id:
+                try:
+                    created_account_row = await self.create_account(
+                        organizacion_id=organizacion_id,
+                        payload=account_body,
+                    )
+                except CRMRepositoryError as exc:
+                    if "propietario_usuario_id" in str(exc).lower() or "violates foreign key" in str(exc).lower():
+                        fallback_account = dict(account_body)
+                        fallback_account.pop("propietario_usuario_id", None)
+                        created_account_row = await self.create_account(
+                            organizacion_id=organizacion_id,
+                            payload=fallback_account,
+                        )
+                    else:
+                        raise
+                account_id_value = created_account_row.get("id") if isinstance(created_account_row, dict) else None
+                if account_id_value:
+                    current_account_id = str(account_id_value)
+
+        if current_account_id:
+            try:
+                account_uuid = _coerce_uuid(str(current_account_id), field="cuenta_id")
+            except Exception:
+                account_uuid = None
+            if account_uuid:
+                await self._request(
+                    "DELETE",
+                    "/rest/v1/cuenta_personas",
+                    params={
+                        "organizacion_id": f"eq.{organizacion_id}",
+                        "persona_id": f"eq.{persona_row.get('id')}",
+                    },
+                    prefer="return=representation",
+                )
+                relation_role = "dueno" if parts["contact_is_physical"] else "contacto_principal"
+                relation_payload = {
+                    "organizacion_id": str(organizacion_id),
+                    "cuenta_id": str(account_uuid),
+                    "persona_id": str(persona_row.get("id")),
+                    "rol_en_cuenta": relation_role,
+                    "puesto": persona_row.get("puesto"),
+                    "es_contacto_principal": True,
+                    "es_contacto_facturacion": False,
+                    "es_representante_legal": bool(parts["contact_is_physical"]),
+                    "activo": True,
+                    "fecha_inicio": persona_row.get("creado_en") or datetime.now(timezone.utc).date().isoformat(),
+                    "notas": persona_row.get("notas"),
+                    "metadata": {
+                        "legacy_contacto_id": str(contacto_id),
+                        "source": "contact_update",
+                    },
+                }
+                await self._request(
+                    "POST",
+                    "/rest/v1/cuenta_personas",
+                    json=relation_payload,
+                    prefer="return=representation,resolution=merge-duplicates",
+                )
+        else:
+            await self._request(
+                "DELETE",
+                "/rest/v1/cuenta_personas",
+                params={
+                    "organizacion_id": f"eq.{organizacion_id}",
+                    "persona_id": f"eq.{persona_row.get('id')}",
+                },
+                prefer="return=representation",
+            )
+
+        legacy_body["cuenta_id"] = current_account_id
+        legacy_body["actualizado_en"] = datetime.now(timezone.utc).isoformat()
+        try:
+            legacy_resp = await self._request(
+                "PATCH",
+                "/rest/v1/contactos",
+                params={
+                    "organizacion_id": f"eq.{organizacion_id}",
+                    "id": f"eq.{contacto_id}",
+                },
+                json=legacy_body,
+                prefer="return=representation",
+            )
+            legacy_data = legacy_resp.json()
+            if isinstance(legacy_data, list) and legacy_data and isinstance(legacy_data[0], dict):
+                legacy_row = legacy_data[0]
+            else:
+                legacy_row = None
+        except CRMRepositoryError:
+            legacy_row = None
+
+        if legacy_row and isinstance(legacy_row, dict):
+            try:
+                legacy_contact = await self.get_contact(
+                    organizacion_id=organizacion_id,
+                    contacto_id=contacto_id,
+                )
+                if legacy_contact:
+                    return legacy_contact
+            except CRMRepositoryError:
+                pass
+
+        return await self.get_contact(
+            organizacion_id=organizacion_id,
+            contacto_id=contacto_id,
+        ) or persona_row
 
     async def get_contact_by_id(self, *, contact_id: str) -> dict[str, Any] | None:
         contact_key = contact_id.strip()
@@ -6139,47 +6628,47 @@ class CRMRepository:
                 params["organizacion_id"] = f"eq.{organizacion_id}"
             resp = await self._request("GET", "/rest/v1/personas", params=params)
             data = resp.json() or []
-        if isinstance(data, list) and data:
-            row = data[0]
-        elif isinstance(data, dict):
-            row = data
-        else:
-            row = None
-        if isinstance(row, dict):
-            org_value = row.get("organizacion_id")
-            if not org_value:
-                legacy_resp = await self._request(
-                    "GET",
-                    "/rest/v1/contactos",
-                    params={
-                        "telefono_e164": f"eq.{phone_key}",
-                        "limit": "1",
-                    },
-                )
-                legacy_data = legacy_resp.json() or []
-                if isinstance(legacy_data, list) and legacy_data:
-                    legacy_row = legacy_data[0]
-                    if isinstance(legacy_row, dict):
-                        return legacy_row
-                return row
-            try:
-                org_uuid = _coerce_uuid(str(org_value), field="organizacion_id")
-            except ValueError:
-                legacy_resp = await self._request(
-                    "GET",
-                    "/rest/v1/contactos",
-                    params={
-                        "telefono_e164": f"eq.{phone_key}",
-                        "limit": "1",
-                    },
-                )
-                legacy_data = legacy_resp.json() or []
-                if isinstance(legacy_data, list) and legacy_data:
-                    legacy_row = legacy_data[0]
-                    if isinstance(legacy_row, dict):
-                        return legacy_row
-                return row
-            return await self._persona_to_contact_row(persona=row, organizacion_id=org_uuid)
+            if isinstance(data, list) and data:
+                row = data[0]
+            elif isinstance(data, dict):
+                row = data
+            else:
+                row = None
+            if isinstance(row, dict):
+                org_value = row.get("organizacion_id")
+                if not org_value:
+                    legacy_resp = await self._request(
+                        "GET",
+                        "/rest/v1/contactos",
+                        params={
+                            "telefono_e164": f"eq.{phone_key}",
+                            "limit": "1",
+                        },
+                    )
+                    legacy_data = legacy_resp.json() or []
+                    if isinstance(legacy_data, list) and legacy_data:
+                        legacy_row = legacy_data[0]
+                        if isinstance(legacy_row, dict):
+                            return legacy_row
+                    return row
+                try:
+                    org_uuid = _coerce_uuid(str(org_value), field="organizacion_id")
+                except ValueError:
+                    legacy_resp = await self._request(
+                        "GET",
+                        "/rest/v1/contactos",
+                        params={
+                            "telefono_e164": f"eq.{phone_key}",
+                            "limit": "1",
+                        },
+                    )
+                    legacy_data = legacy_resp.json() or []
+                    if isinstance(legacy_data, list) and legacy_data:
+                        legacy_row = legacy_data[0]
+                        if isinstance(legacy_row, dict):
+                            return legacy_row
+                    return row
+                return await self._persona_to_contact_row(persona=row, organizacion_id=org_uuid)
         legacy_params: dict[str, str] = {"telefono_e164": f"in.({','.join(phone_candidates)})", "limit": "1"}
         if organizacion_id:
             legacy_params["organizacion_id"] = f"eq.{organizacion_id}"
@@ -6362,20 +6851,132 @@ class CRMRepository:
         organizacion_id: UUID,
         payload: dict[str, Any],
     ) -> dict[str, Any]:
-        body = {"organizacion_id": str(organizacion_id), **payload}
-        resp = await self._request(
-            "POST",
-            "/rest/v1/contactos",
-            json=body,
-            prefer="return=representation",
+        contacto_id = uuid4()
+        parts = self._build_contact_write_parts(
+            organizacion_id=organizacion_id,
+            contact_id=contacto_id,
+            payload=payload,
         )
-        data = resp.json()
-        if not isinstance(data, list) or not data:
+        persona_body = dict(parts["persona_body"])
+        account_body = parts["account_body"]
+        legacy_body = dict(parts["legacy_body"])
+        account_row: dict[str, Any] | None = None
+        if account_body and not payload.get("cuenta_id"):
+            try:
+                account_row = await self.create_account(
+                    organizacion_id=organizacion_id,
+                    payload=account_body,
+                )
+            except CRMRepositoryError as exc:
+                if "propietario_usuario_id" in str(exc).lower() or "violates foreign key" in str(exc).lower():
+                    fallback_account = dict(account_body)
+                    fallback_account.pop("propietario_usuario_id", None)
+                    account_row = await self.create_account(
+                        organizacion_id=organizacion_id,
+                        payload=fallback_account,
+                    )
+                else:
+                    raise
+            account_id_value = account_row.get("id") if isinstance(account_row, dict) else None
+            if account_id_value:
+                legacy_body["cuenta_id"] = str(account_id_value)
+        elif payload.get("cuenta_id"):
+            legacy_body["cuenta_id"] = str(payload.get("cuenta_id"))
+
+        if legacy_body.get("cuenta_id"):
+            persona_body["metadata"] = {
+                **_ensure_metadata(persona_body.get("metadata")),
+                "legacy_cuenta_id": str(legacy_body["cuenta_id"]),
+            }
+
+        try:
+            persona_resp = await self._request(
+                "POST",
+                "/rest/v1/personas",
+                json=persona_body,
+                prefer="return=representation",
+            )
+        except CRMRepositoryError as exc:
+            if "propietario_usuario_id" in str(exc).lower() or "violates foreign key" in str(exc).lower():
+                persona_body.pop("propietario_usuario_id", None)
+                persona_resp = await self._request(
+                    "POST",
+                    "/rest/v1/personas",
+                    json=persona_body,
+                    prefer="return=representation",
+                )
+            else:
+                raise
+        persona_data = persona_resp.json()
+        if not isinstance(persona_data, list) or not persona_data:
             raise CRMRepositoryError("Supabase no devolvió el contacto creado")
-        row = data[0]
-        if not isinstance(row, dict):
-            raise CRMRepositoryError(f"Respuesta inválida al crear contacto: {row!r}")
-        return row
+        persona_row = persona_data[0]
+        if not isinstance(persona_row, dict):
+            raise CRMRepositoryError(f"Respuesta inválida al crear persona: {persona_row!r}")
+
+        current_account_id = legacy_body.get("cuenta_id")
+        if current_account_id:
+            try:
+                account_uuid = _coerce_uuid(str(current_account_id), field="cuenta_id")
+            except Exception:
+                account_uuid = None
+            if account_uuid:
+                relation_role = "dueno" if parts["contact_is_physical"] else "contacto_principal"
+                relation_payload = {
+                    "organizacion_id": str(organizacion_id),
+                    "cuenta_id": str(account_uuid),
+                    "persona_id": str(persona_row.get("id")),
+                    "rol_en_cuenta": relation_role,
+                    "puesto": persona_row.get("puesto"),
+                    "es_contacto_principal": True,
+                    "es_contacto_facturacion": False,
+                    "es_representante_legal": bool(parts["contact_is_physical"]),
+                    "activo": True,
+                    "fecha_inicio": persona_row.get("creado_en") or datetime.now(timezone.utc).date().isoformat(),
+                    "notas": persona_row.get("notas"),
+                    "metadata": {
+                        "legacy_contacto_id": str(contacto_id),
+                        "source": "contact_create",
+                    },
+                }
+                await self._request(
+                    "POST",
+                    "/rest/v1/cuenta_personas",
+                    json=relation_payload,
+                    prefer="return=representation,resolution=merge-duplicates",
+                )
+
+        legacy_body["id"] = str(contacto_id)
+        legacy_body["metadata"] = {
+            **_ensure_metadata(legacy_body.get("metadata")),
+            "legacy_contacto_id": str(contacto_id),
+        }
+        try:
+            await self._request(
+                "POST",
+                "/rest/v1/contactos",
+                json=legacy_body,
+                prefer="return=representation",
+            )
+        except CRMRepositoryError as exc:
+            if "propietario_usuario_id" in str(exc).lower() or "violates foreign key" in str(exc).lower():
+                legacy_body.pop("propietario_usuario_id", None)
+                await self._request(
+                    "POST",
+                    "/rest/v1/contactos",
+                    json=legacy_body,
+                    prefer="return=representation",
+                )
+            else:
+                raise
+
+        contact_row = await self.get_contact(
+            organizacion_id=organizacion_id,
+            contacto_id=contacto_id,
+        )
+        if not contact_row:
+            raise CRMRepositoryError("Supabase no devolvió el contacto creado")
+        return contact_row
 
     async def fetch_user_profile(self, usuario_id: UUID) -> dict[str, Any] | None:
         params = {
@@ -6397,6 +6998,30 @@ class CRMRepository:
         organizacion_id: UUID,
         contacto_id: UUID,
     ) -> None:
+        persona_row = await self._get_persona_by_legacy_contact_id(
+            organizacion_id=organizacion_id,
+            contacto_id=contacto_id,
+        )
+        if persona_row and persona_row.get("id"):
+            persona_id = str(persona_row.get("id"))
+            await self._request(
+                "DELETE",
+                "/rest/v1/cuenta_personas",
+                params={
+                    "organizacion_id": f"eq.{organizacion_id}",
+                    "persona_id": f"eq.{persona_id}",
+                },
+                prefer="return=representation",
+            )
+            await self._request(
+                "DELETE",
+                "/rest/v1/personas",
+                params={
+                    "organizacion_id": f"eq.{organizacion_id}",
+                    "id": f"eq.{persona_id}",
+                },
+                prefer="return=representation",
+            )
         params = {
             "organizacion_id": f"eq.{organizacion_id}",
             "id": f"eq.{contacto_id}",
