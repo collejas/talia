@@ -6,7 +6,6 @@ import { z } from "zod";
 
 import { DataTable, schema } from "@/components/data-table";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
@@ -436,18 +435,6 @@ function buildContactDisplayName(input: Partial<ContactDraft> & { nombre_complet
   return "";
 }
 
-function buildAccountDisplayName(contact: ContactDraft, account: AccountDraft): string {
-  const contactIsPhysical = normalizeGeoText(contact.persona_fisica_moral) === "fisica";
-  if (contactIsPhysical) {
-    const derived = buildContactDisplayName(contact);
-    if (derived) return derived;
-  }
-  const accountName = account.nombre.trim();
-  if (accountName) return accountName;
-  if (account.razon_social.trim()) return account.razon_social.trim();
-  return "";
-}
-
 function buildAccountPayload(input: AccountDraft, contact?: ContactDraft): Record<string, unknown> {
   const payload: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(input)) {
@@ -520,6 +507,8 @@ function ContactForm({
   const set = (field: keyof ContactDraft, next: string) => onChange((prev) => ({ ...prev, [field]: next }));
   const uid = React.useId();
   const fieldId = (name: string) => `${uid}-${name}`;
+  const contactIsPhysical = normalizeGeoText(value.persona_fisica_moral) === "fisica";
+  const derivedCompanyName = React.useMemo(() => buildContactDisplayName(value), [value]);
   const mexico = isMexicoCountry(value.pais);
   const selectedStateCode = React.useMemo(() => {
     if (value.clave_entidad.trim()) return value.clave_entidad.trim().padStart(2, "0");
@@ -603,8 +592,20 @@ function ContactForm({
           description="Datos comerciales y fiscales relacionados con el contacto."
         >
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-            <Field label="Empresa" htmlFor={fieldId("company_name")}>
-              <Input id={fieldId("company_name")} placeholder="Empresa" value={value.company_name} onChange={(e) => set("company_name", e.target.value)} />
+            <Field
+              label="Empresa"
+              htmlFor={fieldId("company_name")}
+              hint={contactIsPhysical ? "Bloqueado: para persona física se toma del nombre del contacto." : undefined}
+            >
+              <Input
+                id={fieldId("company_name")}
+                placeholder={contactIsPhysical ? "Se toma del contacto" : "Empresa"}
+                value={contactIsPhysical ? derivedCompanyName : value.company_name}
+                onChange={(e) => {
+                  if (!contactIsPhysical) set("company_name", e.target.value);
+                }}
+                disabled={contactIsPhysical}
+              />
             </Field>
             <Field label="Razón social" htmlFor={fieldId("razon_social")}>
               <Input id={fieldId("razon_social")} placeholder="Razón social" value={value.razon_social} onChange={(e) => set("razon_social", e.target.value)} />
@@ -1087,7 +1088,7 @@ export function ContactsDataTable({ data }: { data: ContactTableRow[] }) {
   const [activeRow, setActiveRow] = React.useState<TableRow | null>(null);
   const [contactForm, setContactForm] = React.useState<ContactDraft>({ ...EMPTY_CONTACT });
   const [accountForm, setAccountForm] = React.useState<AccountDraft>({ ...EMPTY_ACCOUNT });
-  const [createWithAccount, setCreateWithAccount] = React.useState(false);
+  const [separateCompanyOpen, setSeparateCompanyOpen] = React.useState(false);
 
   const [selectedVendorId, setSelectedVendorId] = React.useState("");
   const [vendorOptions, setVendorOptions] = React.useState<SalesRepOption[]>([]);
@@ -1259,15 +1260,15 @@ export function ContactsDataTable({ data }: { data: ContactTableRow[] }) {
   const activePropietarioId = extractString(activeRaw, ["propietario_id"]);
   const contactDialogName = React.useMemo(() => buildContactDisplayName(contactForm) || activeRow?.header || "", [contactForm, activeRow?.header]);
   const contactDialogCompany = React.useMemo(() => {
+    const contactIsPhysical = normalizeGeoText(contactForm.persona_fisica_moral) === "fisica";
+    if (contactIsPhysical) {
+      const derived = buildContactDisplayName(contactForm);
+      if (derived) return derived;
+    }
     const directCompany = contactForm.company_name.trim();
     if (directCompany) return directCompany;
     return extractString(activeRaw, ["company_name"]) ?? "";
-  }, [activeRaw, contactForm.company_name]);
-  const accountDialogCompany = React.useMemo(
-    () => buildAccountDisplayName(contactForm, accountForm),
-    [accountForm, contactForm],
-  );
-
+  }, [activeRaw, contactForm]);
   const openEdit = async (row: TableRow) => {
     const raw = (row.raw ?? {}) as Record<string, unknown>;
     const contactoId = extractString(raw, ["contacto_id"]);
@@ -1375,10 +1376,10 @@ export function ContactsDataTable({ data }: { data: ContactTableRow[] }) {
     await runAndReload(async () => {
       const contacto = buildContactPayload(contactForm);
       const payload: Record<string, unknown> = {
-        crear_cuenta: createWithAccount,
+        crear_cuenta: separateCompanyOpen && normalizeGeoText(contactForm.persona_fisica_moral) !== "fisica",
         contacto,
       };
-      if (createWithAccount) payload.cuenta = buildAccountPayload(accountForm, contactForm);
+      if (Boolean(payload.crear_cuenta)) payload.cuenta = buildAccountPayload(accountForm, contactForm);
 
       const response = await fetch("/api/contactos/create", {
         method: "POST",
@@ -1442,10 +1443,10 @@ export function ContactsDataTable({ data }: { data: ContactTableRow[] }) {
     <Button
       type="button"
       size="sm"
-      onClick={() => {
+    onClick={() => {
         setContactForm({ ...EMPTY_CONTACT });
         setAccountForm({ ...EMPTY_ACCOUNT });
-        setCreateWithAccount(false);
+        setSeparateCompanyOpen(false);
         setError(null);
         setSuccess(null);
         setCreateOpen(true);
@@ -1473,7 +1474,7 @@ export function ContactsDataTable({ data }: { data: ContactTableRow[] }) {
               Formulario dividido por pestañas. Todos los campos anteriores siguen disponibles, solo están agrupados por tema.
             </DialogDescription>
           </DialogHeader>
-          <DialogSummary contactName={contactDialogName} companyName={createWithAccount ? accountDialogCompany || contactDialogCompany : contactDialogCompany} />
+          <DialogSummary contactName={contactDialogName} companyName={contactDialogCompany} />
           <div className="space-y-5">
             <ContactForm
               value={contactForm}
@@ -1483,25 +1484,48 @@ export function ContactsDataTable({ data }: { data: ContactTableRow[] }) {
               geoMunicipalities={geoMunicipalitiesContact}
               geoLoading={geoLoading}
             />
-            <div className="rounded-xl border border-border/60 bg-muted/20 px-4 py-3">
-              <div className="flex items-center space-x-2">
-                <Checkbox id="create-account" checked={createWithAccount} onCheckedChange={(v) => setCreateWithAccount(Boolean(v))} />
-                <label htmlFor="create-account" className="text-sm text-muted-foreground">
-                  Crear empresa y vincularla
-                </label>
+            <div className="rounded-xl border border-border/60 bg-muted/20 px-4 py-4">
+              <div className="flex flex-col gap-3">
+                <div className="space-y-1">
+                  <p className="text-sm font-medium text-foreground">
+                    {normalizeGeoText(contactForm.persona_fisica_moral) === "fisica"
+                      ? "Empresa derivada del contacto"
+                      : "Empresa separada"}
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    {normalizeGeoText(contactForm.persona_fisica_moral) === "fisica"
+                      ? "Si este contacto es persona física, su empresa se toma del nombre del contacto y no hace falta capturarla otra vez."
+                      : "Si este contacto pertenece a una empresa distinta, puedes crearla y vincularla desde aquí. Mantén esta sección cerrada si no hace falta."}
+                  </p>
+                </div>
+                {normalizeGeoText(contactForm.persona_fisica_moral) !== "fisica" ? (
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setSeparateCompanyOpen((prev) => !prev)}
+                    >
+                      {separateCompanyOpen ? "Ocultar empresa separada" : "Crear empresa separada"}
+                    </Button>
+                    <span className="text-xs text-muted-foreground">
+                      Se crea solo si necesitas una cuenta distinta al contacto.
+                    </span>
+                  </div>
+                ) : null}
+                {separateCompanyOpen && normalizeGeoText(contactForm.persona_fisica_moral) !== "fisica" ? (
+                  <AccountForm
+                    value={accountForm}
+                    onChange={setAccountForm}
+                    contact={contactForm}
+                    geoCountries={geoCountries}
+                    geoStates={geoStates}
+                    geoMunicipalities={geoMunicipalitiesAccount}
+                    geoLoading={geoLoading}
+                  />
+                ) : null}
               </div>
             </div>
-            {createWithAccount ? (
-              <AccountForm
-                value={accountForm}
-                onChange={setAccountForm}
-                contact={contactForm}
-                geoCountries={geoCountries}
-                geoStates={geoStates}
-                geoMunicipalities={geoMunicipalitiesAccount}
-                geoLoading={geoLoading}
-              />
-            ) : null}
             {error ? <p className="text-xs text-destructive">{error}</p> : null}
             {success ? <p className="text-xs text-emerald-600">{success}</p> : null}
             <div className="flex gap-2">
