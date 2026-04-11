@@ -82,6 +82,30 @@ const CONTACT_UPDATE_KEYS = [
   "origen",
 ] as const
 
+export async function GET(
+  _request: NextRequest,
+  { params }: { params: Promise<{ contactoId: string }> },
+) {
+  const { contactoId } = await params
+  if (!contactoId) {
+    return NextResponse.json({ error: "contacto_id_required" }, { status: 400 })
+  }
+
+  const response = await callCrmApi(`/crm/contacts/${contactoId}`, {
+    method: "GET",
+    withUserToken: true,
+  })
+
+  if (!response.ok) {
+    return NextResponse.json(
+      { error: response.error || "contact_detail_failed" },
+      { status: response.status ?? 502 },
+    )
+  }
+
+  return NextResponse.json(response.data)
+}
+
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ contactoId: string }> },

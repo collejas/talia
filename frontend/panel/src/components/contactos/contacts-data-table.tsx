@@ -340,6 +340,16 @@ function extractString(raw: Record<string, unknown> | undefined, path: string[])
   return null;
 }
 
+function readFirstString(sources: Array<Record<string, unknown> | undefined>, keys: string[]): string {
+  for (const source of sources) {
+    for (const key of keys) {
+      const value = extractString(source, [key]);
+      if (value) return value;
+    }
+  }
+  return "";
+}
+
 function normalizeGeoText(value: string): string {
   return value
     .normalize("NFD")
@@ -371,6 +381,50 @@ function buildContactPayload(input: ContactDraft): Record<string, unknown> {
 
   if (fullName) payload.nombre_completo = fullName;
   return payload;
+}
+
+function buildContactDraftFromSources(
+  detail: Record<string, unknown> | undefined,
+  fallback: Record<string, unknown> | undefined,
+  header?: string,
+): ContactDraft {
+  return {
+    ...EMPTY_CONTACT,
+    nombre_nombres: readFirstString([detail, fallback], ["nombre_nombres"]),
+    apellido_paterno: readFirstString([detail, fallback], ["apellido_paterno"]),
+    apellido_materno: readFirstString([detail, fallback], ["apellido_materno"]),
+    nombre_completo: readFirstString([detail, fallback], ["nombre_completo"]) || (header ?? ""),
+    persona_fisica_moral: readFirstString([detail, fallback], ["persona_fisica_moral"]),
+    correo: readFirstString([detail, fallback], ["correo", "email"]),
+    telefono_e164: readFirstString([detail, fallback], ["telefono_e164", "telefono"]),
+    puesto: readFirstString([detail, fallback], ["puesto"]),
+    area: readFirstString([detail, fallback], ["area"]),
+    rol_decision: readFirstString([detail, fallback], ["rol_decision"]),
+    origen: readFirstString([detail, fallback], ["origen"]) || EMPTY_CONTACT.origen,
+    company_name: readFirstString([detail, fallback], ["company_name"]),
+    notes: readFirstString([detail, fallback], ["notes", "notas"]),
+    necesidad_proposito: readFirstString([detail, fallback], ["necesidad_proposito"]),
+    rfc: readFirstString([detail, fallback], ["rfc"]),
+    razon_social: readFirstString([detail, fallback], ["razon_social"]),
+    uso_cfdi: readFirstString([detail, fallback], ["uso_cfdi"]),
+    metodo_pago: readFirstString([detail, fallback], ["metodo_pago"]),
+    forma_pago: readFirstString([detail, fallback], ["forma_pago"]),
+    email_facturacion: readFirstString([detail, fallback], ["email_facturacion"]),
+    tipo_industria: readFirstString([detail, fallback], ["tipo_industria"]),
+    tamano: readFirstString([detail, fallback], ["tamano"]),
+    tipo_vialidad: readFirstString([detail, fallback], ["tipo_vialidad"]),
+    nombre_vialidad: readFirstString([detail, fallback], ["nombre_vialidad"]),
+    numero_exterior: readFirstString([detail, fallback], ["numero_exterior"]),
+    numero_interior: readFirstString([detail, fallback], ["numero_interior"]),
+    codigo_postal: readFirstString([detail, fallback], ["codigo_postal"]),
+    clave_entidad: readFirstString([detail, fallback], ["clave_entidad"]),
+    entidad: readFirstString([detail, fallback], ["entidad"]),
+    clave_municipio: readFirstString([detail, fallback], ["clave_municipio"]),
+    municipio: readFirstString([detail, fallback], ["municipio"]),
+    pais: readFirstString([detail, fallback], ["pais"]) || EMPTY_CONTACT.pais,
+    website: readFirstString([detail, fallback], ["website"]),
+    tipo_establecimiento: readFirstString([detail, fallback], ["tipo_establecimiento"]),
+  };
 }
 
 function buildContactDisplayName(input: Partial<ContactDraft> & { nombre_completo?: string | null } | null | undefined): string {
@@ -1039,6 +1093,7 @@ export function ContactsDataTable({ data }: { data: ContactTableRow[] }) {
   const [vendorOptions, setVendorOptions] = React.useState<SalesRepOption[]>([]);
   const [vendorLoading, setVendorLoading] = React.useState(false);
   const [vendorError, setVendorError] = React.useState<string | null>(null);
+  const [detailLoading, setDetailLoading] = React.useState(false);
 
   const [pending, setPending] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
@@ -1213,35 +1268,39 @@ export function ContactsDataTable({ data }: { data: ContactTableRow[] }) {
     [accountForm, contactForm],
   );
 
-  const openEdit = (row: TableRow) => {
+  const openEdit = async (row: TableRow) => {
     const raw = (row.raw ?? {}) as Record<string, unknown>;
+    const contactoId = extractString(raw, ["contacto_id"]);
     setActiveRow(row);
-    setContactForm({
-      ...EMPTY_CONTACT,
-      nombre_completo: row.header || "",
-      correo: extractString(raw, ["correo"]) ?? "",
-      telefono_e164: extractString(raw, ["telefono"]) ?? "",
-      origen: extractString(raw, ["origen"]) ?? EMPTY_CONTACT.origen,
-      company_name: extractString(raw, ["company_name"]) ?? "",
-      notes: extractString(raw, ["notes"]) ?? "",
-      necesidad_proposito: extractString(raw, ["necesidad_proposito"]) ?? "",
-      rfc: extractString(raw, ["rfc"]) ?? "",
-      razon_social: extractString(raw, ["razon_social"]) ?? "",
-      puesto: extractString(raw, ["puesto"]) ?? "",
-      area: extractString(raw, ["area"]) ?? "",
-      rol_decision: extractString(raw, ["rol_decision"]) ?? "",
-      codigo_postal: extractString(raw, ["codigo_postal"]) ?? "",
-      clave_entidad: extractString(raw, ["clave_entidad"]) ?? "",
-      entidad: extractString(raw, ["entidad"]) ?? "",
-      clave_municipio: extractString(raw, ["clave_municipio"]) ?? "",
-      municipio: extractString(raw, ["municipio"]) ?? "",
-      pais: extractString(raw, ["pais"]) ?? "",
-      website: extractString(raw, ["website"]) ?? "",
-      tipo_establecimiento: extractString(raw, ["tipo_establecimiento"]) ?? "",
-    });
     setError(null);
     setSuccess(null);
-    setEditOpen(true);
+    setDetailLoading(true);
+
+    try {
+      let detailRecord: Record<string, unknown> | undefined;
+      if (contactoId) {
+        const response = await fetch(`/api/contactos/${contactoId}`, { cache: "no-store" });
+        if (response.ok) {
+          const body = (await response.json()) as unknown;
+          if (body && typeof body === "object") {
+            const record = body as Record<string, unknown>;
+            if (record.contacto && typeof record.contacto === "object") {
+              detailRecord = record.contacto as Record<string, unknown>;
+            } else {
+              detailRecord = record;
+            }
+          }
+        }
+      }
+
+      setContactForm(buildContactDraftFromSources(detailRecord, raw, row.header || ""));
+      setEditOpen(true);
+    } catch {
+      setContactForm(buildContactDraftFromSources(undefined, raw, row.header || ""));
+      setEditOpen(true);
+    } finally {
+      setDetailLoading(false);
+    }
   };
 
   const extraColumns = React.useMemo<ColumnDef<TableRow>[]>(() => {
@@ -1255,7 +1314,7 @@ export function ContactsDataTable({ data }: { data: ContactTableRow[] }) {
         cell: ({ row }: { row: { original: TableRow } }) => (
           <div className="flex justify-end gap-1">
             {canWrite ? (
-              <Button variant="ghost" size="sm" onClick={() => openEdit(row.original)}>
+              <Button variant="ghost" size="sm" onClick={() => void openEdit(row.original)}>
                 Editar
               </Button>
             ) : null}
@@ -1463,6 +1522,11 @@ export function ContactsDataTable({ data }: { data: ContactTableRow[] }) {
           </DialogHeader>
           <DialogSummary contactName={contactDialogName} companyName={contactDialogCompany} />
           <div className="space-y-5">
+            {detailLoading ? (
+              <div className="rounded-xl border border-border/60 bg-muted/20 px-4 py-3 text-sm text-muted-foreground">
+                Cargando datos completos del contacto...
+              </div>
+            ) : null}
             <ContactForm
               value={contactForm}
               onChange={setContactForm}
