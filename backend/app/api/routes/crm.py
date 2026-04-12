@@ -9195,6 +9195,8 @@ class CRMPersonaAltaRequest(BaseModel):
 
 
 class CRMCuentaPersonaRelacion(BaseModel):
+    id: UUID | None = None
+    organizacion_id: UUID | None = None
     cuenta_id: UUID
     persona_id: UUID
     rol_en_cuenta: str
@@ -9204,8 +9206,43 @@ class CRMCuentaPersonaRelacion(BaseModel):
     es_representante_legal: bool = False
     activo: bool = True
     fecha_inicio: date | None = None
+    fecha_fin: date | None = None
     notas: str | None = None
     metadata: dict[str, Any] | None = None
+    creado_en: datetime | None = None
+    actualizado_en: datetime | None = None
+
+
+class CRMCuentaPersonaRelacionCreate(BaseModel):
+    cuenta_id: UUID
+    rol_en_cuenta: str | None = Field(default=None, max_length=120)
+    puesto: str | None = Field(default=None, max_length=120)
+    es_contacto_principal: bool = False
+    es_contacto_facturacion: bool = False
+    es_representante_legal: bool = False
+    activo: bool = True
+    fecha_inicio: date | None = None
+    fecha_fin: date | None = None
+    notas: str | None = Field(default=None, max_length=4000)
+    metadata: dict[str, Any] | None = None
+
+
+class CRMCuentaPersonaRelacionUpdate(BaseModel):
+    cuenta_id: UUID | None = None
+    rol_en_cuenta: str | None = Field(default=None, max_length=120)
+    puesto: str | None = Field(default=None, max_length=120)
+    es_contacto_principal: bool | None = None
+    es_contacto_facturacion: bool | None = None
+    es_representante_legal: bool | None = None
+    activo: bool | None = None
+    fecha_inicio: date | None = None
+    fecha_fin: date | None = None
+    notas: str | None = Field(default=None, max_length=4000)
+    metadata: dict[str, Any] | None = None
+
+
+class CRMCuentaPersonaRelacionStatusUpdate(BaseModel):
+    activo: bool
 
 
 class CRMPersonaAltaResponse(BaseModel):
@@ -13574,6 +13611,140 @@ async def update_persona(
             "cuenta_id": str(persona_out.cuenta_id) if persona_out.cuenta_id else None,
         },
     )
+
+
+@router.get("/personas/{contacto_id}/relaciones", response_model=list[CRMCuentaPersonaRelacion])
+async def list_persona_relaciones(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("contacts.read")),
+    contacto_id: UUID,
+    activo: bool | None = Query(default=None),
+) -> list[CRMCuentaPersonaRelacion]:
+    try:
+        rows = await repo.list_contact_account_relations(
+            organizacion_id=organizacion_id,
+            contacto_id=contacto_id,
+            activo=activo,
+        )
+    except CRMRepositoryError as exc:
+        if "persona_no_encontrada_para_relacion" in str(exc):
+            raise HTTPException(status_code=404, detail="persona_no_encontrada_para_relacion") from exc
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return [CRMCuentaPersonaRelacion.model_validate(row) for row in rows]
+
+
+@router.post(
+    "/personas/{contacto_id}/relaciones",
+    response_model=CRMCuentaPersonaRelacion,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_persona_relacion(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("contacts.write")),
+    contacto_id: UUID,
+    payload: CRMCuentaPersonaRelacionCreate,
+) -> CRMCuentaPersonaRelacion:
+    try:
+        row = await repo.create_contact_account_relation(
+            organizacion_id=organizacion_id,
+            contacto_id=contacto_id,
+            payload=payload.model_dump(mode="json", exclude_unset=True),
+        )
+    except CRMRepositoryError as exc:
+        if "persona_no_encontrada_para_relacion" in str(exc):
+            raise HTTPException(status_code=404, detail="persona_no_encontrada_para_relacion") from exc
+        if "cuenta_id_required" in str(exc):
+            raise HTTPException(status_code=400, detail="cuenta_id_required") from exc
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return CRMCuentaPersonaRelacion.model_validate(row)
+
+
+@router.patch(
+    "/personas/{contacto_id}/relaciones/{relacion_id}",
+    response_model=CRMCuentaPersonaRelacion,
+)
+async def update_persona_relacion(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("contacts.write")),
+    contacto_id: UUID,
+    relacion_id: UUID,
+    payload: CRMCuentaPersonaRelacionUpdate,
+) -> CRMCuentaPersonaRelacion:
+    try:
+        row = await repo.update_contact_account_relation(
+            organizacion_id=organizacion_id,
+            contacto_id=contacto_id,
+            relacion_id=relacion_id,
+            payload=payload.model_dump(mode="json", exclude_unset=True),
+        )
+    except CRMRepositoryError as exc:
+        if "persona_no_encontrada_para_relacion" in str(exc):
+            raise HTTPException(status_code=404, detail="persona_no_encontrada_para_relacion") from exc
+        if "cuenta_persona_no_encontrada" in str(exc):
+            raise HTTPException(status_code=404, detail="cuenta_persona_no_encontrada") from exc
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return CRMCuentaPersonaRelacion.model_validate(row)
+
+
+@router.patch(
+    "/personas/{contacto_id}/relaciones/{relacion_id}/estado",
+    response_model=CRMCuentaPersonaRelacion,
+)
+async def update_persona_relacion_estado(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("contacts.write")),
+    contacto_id: UUID,
+    relacion_id: UUID,
+    payload: CRMCuentaPersonaRelacionStatusUpdate,
+) -> CRMCuentaPersonaRelacion:
+    try:
+        row = await repo.update_contact_account_relation(
+            organizacion_id=organizacion_id,
+            contacto_id=contacto_id,
+            relacion_id=relacion_id,
+            payload={"activo": payload.activo},
+        )
+    except CRMRepositoryError as exc:
+        if "persona_no_encontrada_para_relacion" in str(exc):
+            raise HTTPException(status_code=404, detail="persona_no_encontrada_para_relacion") from exc
+        if "cuenta_persona_no_encontrada" in str(exc):
+            raise HTTPException(status_code=404, detail="cuenta_persona_no_encontrada") from exc
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return CRMCuentaPersonaRelacion.model_validate(row)
+
+
+@router.delete(
+    "/personas/{contacto_id}/relaciones/{relacion_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    response_class=Response,
+)
+async def delete_persona_relacion(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("contacts.write")),
+    contacto_id: UUID,
+    relacion_id: UUID,
+) -> Response:
+    try:
+        await repo.delete_contact_account_relation(
+            organizacion_id=organizacion_id,
+            contacto_id=contacto_id,
+            relacion_id=relacion_id,
+        )
+    except CRMRepositoryError as exc:
+        if "persona_no_encontrada_para_relacion" in str(exc):
+            raise HTTPException(status_code=404, detail="persona_no_encontrada_para_relacion") from exc
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.post("/contacts", response_model=CRMContact, status_code=status.HTTP_201_CREATED)

@@ -41,6 +41,12 @@ Notas:
   - `PATCH /crm/personas/{contacto_id}` en `backend/app/api/routes/crm.py`
 - Relación explícita:
   - `upsert_contact_account_relation(...)` en `backend/app/repositories/crm.py`
+- CRUD nativo de `cuenta_personas`:
+  - `GET /crm/personas/{contacto_id}/relaciones`
+  - `POST /crm/personas/{contacto_id}/relaciones`
+  - `PATCH /crm/personas/{contacto_id}/relaciones/{relacion_id}`
+  - `PATCH /crm/personas/{contacto_id}/relaciones/{relacion_id}/estado`
+  - `DELETE /crm/personas/{contacto_id}/relaciones/{relacion_id}`
 - Lectura enriquecida para UI:
   - `GET /crm/contacts/{id}` ahora expone `rol_en_cuenta`, flags y `cuenta_tipo` (mapeado desde `cuenta_personas` y `cuentas`).
 
@@ -56,6 +62,10 @@ Notas:
   - `frontend/panel/src/components/contactos/contact-edit-flow.tsx`
   - Endpoint panel (proxy):
     - `frontend/panel/src/app/api/personas/[contactoId]/route.ts` -> `PATCH /crm/personas/{contacto_id}`
+- Proxies listos para relaciones:
+  - `frontend/panel/src/app/api/personas/[contactoId]/relaciones/route.ts`
+  - `frontend/panel/src/app/api/personas/[contactoId]/relaciones/[relacionId]/route.ts`
+  - `frontend/panel/src/app/api/personas/[contactoId]/relaciones/[relacionId]/estado/route.ts`
 - Integración en la vista de Contactos:
   - `frontend/panel/src/components/contactos/contacts-data-table.tsx`
   - `Nuevo contacto` abre el flujo nuevo.
@@ -84,4 +94,3 @@ Notas:
   - lecturas: dejar solo fallback en casos antiguos
   - escrituras: eventualmente apagar shadow write
 - Luego limpiar campos duplicados en `cuentas`/`contactos` cuando ya no haya consumidores.
-
