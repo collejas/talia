@@ -111,6 +111,7 @@ from app.services.google_trends import (
 from app.services.openai_catalog_sync import sync_openai_catalogs
 from app.services.openai_reconciliation import sync_openai_cost_reconciliation
 from app.services.email_validation import validate_email_address
+from app.services.phone_utils import normalize_phone
 from app.services.ui_realtime_hub import (
     inbox_topic_for_org,
     prospectos_topic_for_org,
@@ -9274,26 +9275,162 @@ class CRMContactSearchResponse(BaseModel):
     offset: int
 
 
-def _persona_alta_clean_text(value: str | None) -> str | None:
+def _persona_alta_clean_text(value: str | None, *, compact_spaces: bool = False) -> str | None:
     if value is None:
         return None
     trimmed = str(value).strip()
+    if compact_spaces:
+        trimmed = " ".join(trimmed.split())
     return trimmed or None
 
 
+def _persona_alta_normalize_email(value: str | None) -> str | None:
+    cleaned = _persona_alta_clean_text(value)
+    return cleaned.lower() if cleaned else None
+
+
+def _persona_alta_normalize_phone(value: str | None) -> str | None:
+    cleaned = _persona_alta_clean_text(value)
+    if not cleaned:
+        return None
+    return normalize_phone(cleaned) or cleaned
+
+
+def _persona_alta_normalize_persona(payload: CRMPersonaAltaPersona) -> CRMPersonaAltaPersona:
+    return payload.model_copy(
+        update={
+            "nombre": _persona_alta_clean_text(payload.nombre, compact_spaces=True),
+            "apellido_paterno": _persona_alta_clean_text(payload.apellido_paterno, compact_spaces=True),
+            "apellido_materno": _persona_alta_clean_text(payload.apellido_materno, compact_spaces=True),
+            "nombre_completo": _persona_alta_clean_text(payload.nombre_completo, compact_spaces=True),
+            "correo_principal": _persona_alta_normalize_email(payload.correo_principal),
+            "telefono_principal_e164": _persona_alta_normalize_phone(payload.telefono_principal_e164),
+            "puesto": _persona_alta_clean_text(payload.puesto, compact_spaces=True),
+            "area": _persona_alta_clean_text(payload.area, compact_spaces=True),
+            "rol_decision": _persona_alta_clean_text(payload.rol_decision, compact_spaces=True),
+            "origen": _persona_alta_clean_text(payload.origen),
+            "notas": _persona_alta_clean_text(payload.notas),
+        }
+    )
+
+
+def _persona_alta_normalize_cuenta(payload: CRMPersonaAltaCuenta | None) -> CRMPersonaAltaCuenta | None:
+    if payload is None:
+        return None
+    return payload.model_copy(
+        update={
+            "nombre_comercial": _persona_alta_clean_text(payload.nombre_comercial, compact_spaces=True),
+            "razon_social": _persona_alta_clean_text(payload.razon_social, compact_spaces=True),
+            "tipo_cuenta": _persona_alta_clean_text(payload.tipo_cuenta),
+            "rfc": _persona_alta_clean_text(payload.rfc, compact_spaces=True),
+            "industria": _persona_alta_clean_text(payload.industria, compact_spaces=True),
+            "segmento": _persona_alta_clean_text(payload.segmento, compact_spaces=True),
+            "sitio_web": _persona_alta_clean_text(payload.sitio_web),
+            "correo_principal": _persona_alta_normalize_email(payload.correo_principal),
+            "telefono_principal": _persona_alta_normalize_phone(payload.telefono_principal),
+            "notas": _persona_alta_clean_text(payload.notas),
+        }
+    )
+
+
+def _persona_alta_normalize_extras(payload: CRMPersonaAltaExtras | None) -> CRMPersonaAltaExtras | None:
+    if payload is None:
+        return None
+    fiscales = payload.fiscales
+    direccion = payload.direccion
+    fiscales_norm = (
+        fiscales.model_copy(
+            update={
+                "uso_cfdi": _persona_alta_clean_text(fiscales.uso_cfdi),
+                "forma_pago": _persona_alta_clean_text(fiscales.forma_pago),
+                "metodo_pago": _persona_alta_clean_text(fiscales.metodo_pago),
+                "email_facturacion": _persona_alta_normalize_email(fiscales.email_facturacion),
+            }
+        )
+        if fiscales
+        else None
+    )
+    direccion_norm = (
+        direccion.model_copy(
+            update={
+                "pais": _persona_alta_clean_text(direccion.pais, compact_spaces=True),
+                "entidad": _persona_alta_clean_text(direccion.entidad, compact_spaces=True),
+                "municipio": _persona_alta_clean_text(direccion.municipio, compact_spaces=True),
+                "tipo_vialidad": _persona_alta_clean_text(direccion.tipo_vialidad, compact_spaces=True),
+                "nombre_vialidad": _persona_alta_clean_text(direccion.nombre_vialidad, compact_spaces=True),
+                "numero_exterior": _persona_alta_clean_text(direccion.numero_exterior, compact_spaces=True),
+                "numero_interior": _persona_alta_clean_text(direccion.numero_interior, compact_spaces=True),
+                "codigo_postal": _persona_alta_clean_text(direccion.codigo_postal, compact_spaces=True),
+            }
+        )
+        if direccion
+        else None
+    )
+    return payload.model_copy(update={"fiscales": fiscales_norm, "direccion": direccion_norm})
+
+
+def _persona_alta_match_key(value: str | None) -> str:
+    text = _persona_alta_clean_text(value, compact_spaces=True)
+    if not text:
+        return ""
+    normalized = unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode("ascii")
+    return normalized.lower()
+
+
+def _persona_alta_match_rfc(value: str | None) -> str:
+    text = _persona_alta_clean_text(value, compact_spaces=True)
+    if not text:
+        return ""
+    return re.sub(r"\s+", "", text).upper()
+
+
+async def _persona_alta_find_existing_account(
+    *,
+    repo: CRMRepository,
+    organizacion_id: UUID,
+    cuenta: CRMPersonaAltaCuenta | None,
+) -> CRMAccount | None:
+    if not cuenta:
+        return None
+    rfc_key = _persona_alta_match_rfc(cuenta.rfc)
+    razon_key = _persona_alta_match_key(cuenta.razon_social)
+    nombre_key = _persona_alta_match_key(cuenta.nombre_comercial)
+    if not rfc_key and not razon_key and not nombre_key:
+        return None
+    try:
+        rows = await repo.list_accounts(organizacion_id=organizacion_id, limit=200, offset=0)
+    except CRMRepositoryError:
+        return None
+    accounts = [CRMAccount.model_validate(row) for row in rows]
+    if rfc_key:
+        for account in accounts:
+            if _persona_alta_match_rfc(account.rfc) == rfc_key:
+                return account
+    if razon_key:
+        for account in accounts:
+            if _persona_alta_match_key(account.razon_social) == razon_key:
+                return account
+    if nombre_key:
+        for account in accounts:
+            if _persona_alta_match_key(account.nombre) == nombre_key or _persona_alta_match_key(account.alias) == nombre_key:
+                return account
+    return None
+
+
 def _persona_alta_full_name(payload: CRMPersonaAltaPersona) -> str:
-    explicit = _persona_alta_clean_text(payload.nombre_completo)
-    if explicit:
-        return explicit
-    return " ".join(
+    derived = " ".join(
         part
         for part in [
-            _persona_alta_clean_text(payload.nombre),
-            _persona_alta_clean_text(payload.apellido_paterno),
-            _persona_alta_clean_text(payload.apellido_materno),
+            _persona_alta_clean_text(payload.nombre, compact_spaces=True),
+            _persona_alta_clean_text(payload.apellido_paterno, compact_spaces=True),
+            _persona_alta_clean_text(payload.apellido_materno, compact_spaces=True),
         ]
         if part
     ).strip()
+    if derived:
+        return derived
+    explicit = _persona_alta_clean_text(payload.nombre_completo, compact_spaces=True)
+    return explicit or ""
 
 
 def _persona_alta_to_contact_payload(
@@ -13377,11 +13514,11 @@ async def create_persona_alta(
     _: str = Depends(require_permission("contacts.write")),
     payload: CRMPersonaAltaRequest,
 ) -> CRMPersonaAltaResponse:
-    persona = payload.persona
+    persona = _persona_alta_normalize_persona(payload.persona)
     contexto = payload.contexto_comercial
-    cuenta = payload.cuenta
+    cuenta = _persona_alta_normalize_cuenta(payload.cuenta)
     relacion = payload.relacion
-    extras = payload.extras
+    extras = _persona_alta_normalize_extras(payload.extras)
 
     if not _persona_alta_clean_text(persona.nombre) or not _persona_alta_clean_text(persona.apellido_paterno):
         raise HTTPException(status_code=400, detail="persona_incompleta")
@@ -13389,6 +13526,7 @@ async def create_persona_alta(
         raise HTTPException(status_code=400, detail="medio_contacto_required")
 
     existing_account: CRMAccount | None = None
+    reused_account_id: UUID | None = None
     if contexto.modo == "empresa_existente":
         if not cuenta or not cuenta.cuenta_id:
             raise HTTPException(status_code=400, detail="cuenta_id_required")
@@ -13399,6 +13537,15 @@ async def create_persona_alta(
         if not account_row:
             raise HTTPException(status_code=404, detail="cuenta_no_encontrada")
         existing_account = CRMAccount.model_validate(account_row)
+    elif contexto.modo in {"empresa_nueva", "persona_fisica_actividad_empresarial"} and cuenta and not cuenta.cuenta_id:
+        existing_account = await _persona_alta_find_existing_account(
+            repo=repo,
+            organizacion_id=organizacion_id,
+            cuenta=cuenta,
+        )
+        if existing_account:
+            cuenta = cuenta.model_copy(update={"cuenta_id": existing_account.id})
+            reused_account_id = existing_account.id
 
     contact_payload = _persona_alta_to_contact_payload(
         persona=persona,
@@ -13408,11 +13555,37 @@ async def create_persona_alta(
         existing_account=existing_account,
     )
 
+    dedupe_contacto_id: UUID | None = None
+    telefono_key = _persona_alta_normalize_phone(persona.telefono_principal_e164)
+    correo_key = _persona_alta_normalize_email(persona.correo_principal)
     try:
-        contact_row = await repo.create_contact(
-            organizacion_id=organizacion_id,
-            payload={key: value for key, value in contact_payload.items() if value is not None},
-        )
+        if telefono_key:
+            existing_phone = await repo.get_contact_by_phone_e164(
+                phone_e164=telefono_key,
+                organizacion_id=organizacion_id,
+            )
+            dedupe_contacto_id = _safe_uuid(existing_phone.get("id")) if existing_phone else None
+        if not dedupe_contacto_id and correo_key:
+            existing_email = await repo.get_contact_by_email(
+                email=correo_key,
+                organizacion_id=organizacion_id,
+            )
+            dedupe_contacto_id = _safe_uuid(existing_email.get("id")) if existing_email else None
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    try:
+        if dedupe_contacto_id:
+            contact_row = await repo.update_contact(
+                organizacion_id=organizacion_id,
+                contacto_id=dedupe_contacto_id,
+                payload={key: value for key, value in contact_payload.items() if value is not None},
+            )
+        else:
+            contact_row = await repo.create_contact(
+                organizacion_id=organizacion_id,
+                payload={key: value for key, value in contact_payload.items() if value is not None},
+            )
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
@@ -13483,6 +13656,9 @@ async def create_persona_alta(
             "modo": contexto.modo,
             "persona_id": str(persona_out.id),
             "cuenta_id": str(persona_out.cuenta_id) if persona_out.cuenta_id else None,
+            "deduplicado": bool(dedupe_contacto_id),
+            "contacto_reutilizado_id": str(dedupe_contacto_id) if dedupe_contacto_id else None,
+            "cuenta_reutilizada_id": str(reused_account_id) if reused_account_id else None,
         },
     )
 
@@ -13496,11 +13672,11 @@ async def update_persona(
     contacto_id: UUID,
     payload: CRMPersonaEditRequest,
 ) -> CRMPersonaAltaResponse:
-    persona = payload.persona
+    persona = _persona_alta_normalize_persona(payload.persona)
     contexto = payload.contexto_comercial
-    cuenta = payload.cuenta
+    cuenta = _persona_alta_normalize_cuenta(payload.cuenta)
     relacion = payload.relacion
-    extras = payload.extras
+    extras = _persona_alta_normalize_extras(payload.extras)
 
     if not _persona_alta_clean_text(persona.nombre) or not _persona_alta_clean_text(persona.apellido_paterno):
         raise HTTPException(status_code=400, detail="persona_incompleta")
@@ -13508,6 +13684,7 @@ async def update_persona(
         raise HTTPException(status_code=400, detail="medio_contacto_required")
 
     existing_account: CRMAccount | None = None
+    reused_account_id: UUID | None = None
     if contexto.modo == "empresa_existente":
         if not cuenta or not cuenta.cuenta_id:
             raise HTTPException(status_code=400, detail="cuenta_id_required")
@@ -13518,6 +13695,15 @@ async def update_persona(
         if not account_row:
             raise HTTPException(status_code=404, detail="cuenta_no_encontrada")
         existing_account = CRMAccount.model_validate(account_row)
+    elif contexto.modo in {"empresa_nueva", "persona_fisica_actividad_empresarial"} and cuenta and not cuenta.cuenta_id:
+        existing_account = await _persona_alta_find_existing_account(
+            repo=repo,
+            organizacion_id=organizacion_id,
+            cuenta=cuenta,
+        )
+        if existing_account:
+            cuenta = cuenta.model_copy(update={"cuenta_id": existing_account.id})
+            reused_account_id = existing_account.id
 
     contact_payload = _persona_alta_to_contact_payload(
         persona=persona,
@@ -13609,6 +13795,7 @@ async def update_persona(
             "modo": contexto.modo,
             "persona_id": str(persona_out.id),
             "cuenta_id": str(persona_out.cuenta_id) if persona_out.cuenta_id else None,
+            "cuenta_reutilizada_id": str(reused_account_id) if reused_account_id else None,
         },
     )
 

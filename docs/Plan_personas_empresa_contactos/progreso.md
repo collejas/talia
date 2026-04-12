@@ -49,6 +49,14 @@ Notas:
   - `DELETE /crm/personas/{contacto_id}/relaciones/{relacion_id}`
 - Lectura enriquecida para UI:
   - `GET /crm/contacts/{id}` ahora expone `rol_en_cuenta`, flags y `cuenta_tipo` (mapeado desde `cuenta_personas` y `cuentas`).
+- Normalización y deduplicación inicial del flujo nuevo:
+  - `POST /crm/personas/alta` y `PATCH /crm/personas/{contacto_id}` normalizan entrada (texto, correo en minúsculas y teléfono).
+  - `POST /crm/personas/alta` intenta dedupe por teléfono/correo en la misma organización antes de crear:
+    - si encuentra contacto existente, reutiliza el registro vía `update_contact`.
+    - expone en `resumen` los flags `deduplicado` y `contacto_reutilizado_id`.
+  - `POST/PATCH /crm/personas/*` intenta dedupe de cuenta cuando el flujo viene como cuenta nueva:
+    - prioridad de match: `RFC` > `razon_social` > `nombre_comercial`.
+    - si encuentra coincidencia, reutiliza `cuenta_id` para no duplicar empresa.
 
 ### 3) Panel (Frontend)
 
