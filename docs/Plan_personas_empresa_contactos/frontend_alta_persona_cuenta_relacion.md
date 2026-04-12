@@ -514,6 +514,7 @@ Diseñar el nuevo modal o pantalla de alta por bloques.
 El contrato tecnico del alta entre frontend y backend quedó en:
 
 - `docs/Plan_personas_empresa_contactos/contrato_payload_alta_frontend_backend.md`
+- `docs/Plan_personas_empresa_contactos/maqueta_tecnica_frontend_alta.md`
 
 ### Fase 2
 

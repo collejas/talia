@@ -428,6 +428,12 @@ Pero esa traduccion debe existir solo como capa transitoria.
 
 Definir typescript types del payload nuevo en frontend.
 
+### Documento de maqueta tecnica asociado
+
+La maqueta tecnica del frontend de alta quedó en:
+
+- `docs/Plan_personas_empresa_contactos/maqueta_tecnica_frontend_alta.md`
+
 ### Fase 2
 
 Crear endpoint de fachada en panel:
