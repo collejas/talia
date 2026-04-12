@@ -519,6 +519,11 @@ function Field({
 export function ContactEditFlow({ open, onOpenChange, contactoId, onSaved }: ContactEditFlowProps) {
   const [state, dispatch] = React.useReducer(reducer, INITIAL_STATE);
   const deferredAccountQuery = React.useDeferredValue(state.accountQuery);
+  const [relationAccountQuery, setRelationAccountQuery] = React.useState("");
+  const deferredRelationAccountQuery = React.useDeferredValue(relationAccountQuery);
+  const [relationAccountResults, setRelationAccountResults] = React.useState<AccountOption[]>([]);
+  const [relationAccountLoading, setRelationAccountLoading] = React.useState(false);
+  const [relationAccountError, setRelationAccountError] = React.useState<string | null>(null);
   const [relations, setRelations] = React.useState<AccountRelation[]>([]);
   const [relationsLoading, setRelationsLoading] = React.useState(false);
   const [relationBusyId, setRelationBusyId] = React.useState<string | null>(null);
@@ -597,6 +602,44 @@ export function ContactEditFlow({ open, onOpenChange, contactoId, onSaved }: Con
     run();
     return () => controller.abort();
   }, [deferredAccountQuery, state.mode]);
+
+  React.useEffect(() => {
+    const query = deferredRelationAccountQuery.trim();
+    if (query.length < 2) {
+      setRelationAccountLoading(false);
+      setRelationAccountResults([]);
+      setRelationAccountError(null);
+      return;
+    }
+    const controller = new AbortController();
+    const run = async () => {
+      setRelationAccountLoading(true);
+      setRelationAccountError(null);
+      try {
+        const response = await fetch(`/api/personas/cuentas?q=${encodeURIComponent(query)}`, {
+          cache: "no-store",
+          signal: controller.signal,
+        });
+        const body = (await response.json().catch(() => ({}))) as {
+          items?: AccountOption[];
+          error?: string;
+        };
+        if (!response.ok) {
+          setRelationAccountError(body.error || "No se pudieron buscar cuentas.");
+          return;
+        }
+        setRelationAccountResults(Array.isArray(body.items) ? body.items : []);
+      } catch (error) {
+        if ((error as Error).name !== "AbortError") {
+          setRelationAccountError("No se pudieron buscar cuentas.");
+        }
+      } finally {
+        setRelationAccountLoading(false);
+      }
+    };
+    run();
+    return () => controller.abort();
+  }, [deferredRelationAccountQuery]);
 
   const loadRelations = React.useCallback(async () => {
     if (!contactoId) return;
@@ -742,6 +785,8 @@ export function ContactEditFlow({ open, onOpenChange, contactoId, onSaved }: Con
         es_representante_legal: false,
         activo: true,
       });
+      setRelationAccountQuery("");
+      setRelationAccountResults([]);
       await loadRelations();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "No se pudo crear la relacion.");
@@ -1066,11 +1111,11 @@ export function ContactEditFlow({ open, onOpenChange, contactoId, onSaved }: Con
               <div className="mt-4 rounded-lg border border-dashed border-border/70 p-3">
                 <div className="mb-2 text-sm font-medium">Agregar relación</div>
                 <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-                  <Field label="cuenta_id">
+                  <Field label="Buscar cuenta">
                     <Input
-                      value={newRelation.cuenta_id}
-                      onChange={(e) => setNewRelation((prev) => ({ ...prev, cuenta_id: e.target.value }))}
-                      placeholder="UUID de cuenta"
+                      value={relationAccountQuery}
+                      onChange={(e) => setRelationAccountQuery(e.target.value)}
+                      placeholder="Nombre, RFC, correo o teléfono"
                     />
                   </Field>
                   <Field label="Rol en cuenta">
@@ -1086,6 +1131,38 @@ export function ContactEditFlow({ open, onOpenChange, contactoId, onSaved }: Con
                     />
                   </Field>
                 </div>
+                {relationAccountLoading ? (
+                  <p className="mt-2 text-xs text-muted-foreground">Buscando cuentas...</p>
+                ) : null}
+                {relationAccountError ? (
+                  <p className="mt-2 text-xs text-destructive">{relationAccountError}</p>
+                ) : null}
+                {relationAccountResults.length ? (
+                  <div className="mt-2 space-y-2">
+                    {relationAccountResults.map((account) => {
+                      const selected = newRelation.cuenta_id === account.id;
+                      return (
+                        <button
+                          key={account.id}
+                          type="button"
+                          className={`w-full rounded-xl border px-4 py-3 text-left ${selected ? "border-foreground bg-muted/40" : "border-border/60 bg-background"}`}
+                          onClick={() =>
+                            setNewRelation((prev) => ({ ...prev, cuenta_id: account.id }))
+                          }
+                        >
+                          <div className="text-sm font-medium">{account.nombre}</div>
+                          <div className="text-xs text-muted-foreground">
+                            {[account.alias, account.correo, account.telefono].filter(Boolean).join(" · ") || "Sin datos adicionales"}
+                          </div>
+                          <div className="text-[11px] text-muted-foreground">id: {account.id}</div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                ) : null}
+                {newRelation.cuenta_id ? (
+                  <p className="mt-2 text-xs text-muted-foreground">Cuenta seleccionada: {newRelation.cuenta_id}</p>
+                ) : null}
                 <div className="mt-2 grid grid-cols-1 gap-2 md:grid-cols-3">
                   <label className="flex items-center gap-2 text-sm">
                     <Checkbox
