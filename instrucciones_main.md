@@ -112,8 +112,14 @@ tail -n 120 /var/www/talia/logs/api.log
 tail -n 120 /var/www/talia/logs/request.log
 
 9) Troubleshooting útil
-Si falta espacio o quieres mantenimiento de disco:
+* Si falta espacio o quieres mantenimiento de disco:
 sudo bash scripts/cleanup_disk.sh
+
+* Para limpieza más profunda manual
+sudo RUN_VSCODE_CACHE_CLEAN=1 RUN_EXTRA_PROJECTS_CLEAN=1 bash scripts/cleanup_disk.sh
+
+* Para limpieza fuerte cuando no estés desarrollando panel en el server
+sudo RUN_SOURCE_BUILD_CACHE_CLEAN=1 RUN_VSCODE_CACHE_CLEAN=1 bash scripts/cleanup_disk.sh
 
 Si hiciste cambios en unit files de systemd:
 sudo systemctl daemon-reload

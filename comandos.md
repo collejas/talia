@@ -145,6 +145,58 @@ sudo rsync -a landing/src/ /var/www/talia-landing/
 sudo cat /proc/$(pgrep -f "next start")/environ | tr '\0' '\n' | grep -E 'SUPABASE|PANEL'
 
 
+# VER USO DE RAM
+df -h
+du -sh /var/www/talia
+free -m
+
+# DIAGNOSTICO DE CPU
+
+echo "========== LOAD =========="
+uptime
+
+echo
+echo "========== MEM =========="
+free -m
+
+echo
+echo "========== VMSTAT =========="
+vmstat 1 5
+
+echo
+echo "========== DISCO =========="
+df -h
+
+echo
+echo "========== IOSTAT =========="
+iostat -xz 1 3 2>/dev/null || echo "iostat no instalado"
+
+echo
+echo "========== TOP MEM =========="
+ps -eo pid,ppid,cmd,%mem,%cpu --sort=-%mem | head -n 15
+
+echo
+echo "========== TOP CPU =========="
+ps -eo pid,ppid,cmd,%mem,%cpu --sort=-%cpu | head -n 15
+
+echo
+echo "========== PANEL =========="
+sudo systemctl status talia-panel.service --no-pager -l | sed -n '1,20p'
+
+echo
+echo "========== API =========="
+sudo systemctl status talia-api.service --no-pager -l | sed -n '1,20p'
+
+echo
+echo "========== MONITOR =========="
+tail -n 20 /var/www/talia/logs/maintenance/resource_health.log
+
+echo
+echo "========== RELEASES PANEL =========="
+du -sh /var/www/talia/releases/panel/*
+readlink -f /var/www/talia/current/panel
+du -shL /var/www/talia/current/panel
+
 # EJECUTAR LIMPIEZA DE MI TELEFONO:
   select public.cleanup_test_phone_whatsapp(
     '+5214441302811',
