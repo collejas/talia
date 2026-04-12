@@ -32,6 +32,23 @@ function cleanObject(input: UnknownRecord, allowedKeys: string[]): UnknownRecord
   return out
 }
 
+function stripSurnameSuffix(givenName: string, apellidoPaterno: string, apellidoMaterno: string): string {
+  const name = givenName.trim()
+  if (!name) return ""
+
+  const paternal = apellidoPaterno.trim()
+  const maternal = apellidoMaterno.trim()
+  if (!paternal) return name
+
+  const candidates = maternal ? [` ${paternal} ${maternal}`, ` ${paternal}`] : [` ${paternal}`]
+  for (const suffix of candidates) {
+    if (suffix && name.toLowerCase().endsWith(suffix.toLowerCase())) {
+      return name.slice(0, -suffix.length).trim()
+    }
+  }
+  return name
+}
+
 const ACCOUNT_KEYS = [
   "nombre",
   "alias",
@@ -146,12 +163,19 @@ export async function POST(request: NextRequest) {
   const rawContact = payload?.contacto && typeof payload.contacto === "object" ? payload.contacto : {}
   const contactBody = cleanObject(rawContact as UnknownRecord, [...CONTACT_KEYS])
 
-  const nombre = cleanString(contactBody.nombre_completo)
-    ?? [
-      cleanString(contactBody.nombre_nombres),
-      cleanString(contactBody.apellido_paterno),
-      cleanString(contactBody.apellido_materno),
-    ].filter(Boolean).join(" ").trim()
+  const nombreNombres = cleanString(contactBody.nombre_nombres) ?? ""
+  const apellidoPaterno = cleanString(contactBody.apellido_paterno) ?? ""
+  const apellidoMaterno = cleanString(contactBody.apellido_materno) ?? ""
+  const nombreNombresLimpio = stripSurnameSuffix(nombreNombres, apellidoPaterno, apellidoMaterno)
+  if (nombreNombresLimpio) {
+    contactBody.nombre_nombres = nombreNombresLimpio
+  }
+
+  const nombreEstructurado = [nombreNombresLimpio, apellidoPaterno, apellidoMaterno]
+    .filter(Boolean)
+    .join(" ")
+    .trim()
+  const nombre = nombreEstructurado || cleanString(contactBody.nombre_completo)
 
   if (!nombre) {
     return NextResponse.json({ error: "nombre_contacto_required" }, { status: 400 })

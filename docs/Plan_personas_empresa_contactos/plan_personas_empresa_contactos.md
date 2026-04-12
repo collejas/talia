@@ -448,6 +448,12 @@ La UI debería seguir esta secuencia:
 - Mostrar cuenta por otro.
 - Mostrar la relación en un bloque aparte si hace falta.
 
+### Documento funcional asociado
+
+La especificación funcional detallada del nuevo frontend de alta quedó en:
+
+- `docs/Plan_personas_empresa_contactos/frontend_alta_persona_cuenta_relacion.md`
+
 ## 10. Riesgos
 
 ### Riesgo 1. Duplicar datos durante la transición

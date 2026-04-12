@@ -362,23 +362,51 @@ function isMexicoCountry(value: string): boolean {
   return normalized === "mx" || normalized === "mexico" || normalized === "mex";
 }
 
+function stripSurnameSuffix(givenName: string, apellidoPaterno: string, apellidoMaterno: string): string {
+  const name = givenName.trim();
+  if (!name) return "";
+
+  const paternal = apellidoPaterno.trim();
+  const maternal = apellidoMaterno.trim();
+  if (!paternal) return name;
+
+  const candidates = maternal
+    ? [` ${paternal} ${maternal}`, ` ${paternal}`]
+    : [` ${paternal}`];
+
+  for (const suffix of candidates) {
+    if (suffix && name.toLowerCase().endsWith(suffix.toLowerCase())) {
+      return name.slice(0, -suffix.length).trim();
+    }
+  }
+
+  return name;
+}
+
+function normalizeContactDraftNames(input: ContactDraft): ContactDraft {
+  const cleanedGivenName = stripSurnameSuffix(input.nombre_nombres, input.apellido_paterno, input.apellido_materno);
+  const structuredName = [cleanedGivenName, input.apellido_paterno.trim(), input.apellido_materno.trim()]
+    .filter(Boolean)
+    .join(" ")
+    .trim();
+
+  return {
+    ...input,
+    nombre_nombres: cleanedGivenName,
+    nombre_completo: structuredName || input.nombre_completo.trim(),
+  };
+}
+
 function buildContactPayload(input: ContactDraft): Record<string, unknown> {
+  const normalized = normalizeContactDraftNames(input);
   const payload: Record<string, unknown> = {};
-  const entries = Object.entries(input);
+  const entries = Object.entries(normalized);
   for (const [key, value] of entries) {
     const trimmed = value.trim();
     if (!trimmed) continue;
     payload[key] = trimmed;
   }
 
-  const fullName =
-    (typeof payload.nombre_completo === "string" && payload.nombre_completo.trim()) ||
-    [input.nombre_nombres.trim(), input.apellido_paterno.trim(), input.apellido_materno.trim()]
-      .filter(Boolean)
-      .join(" ")
-      .trim();
-
-  if (fullName) payload.nombre_completo = fullName;
   return payload;
 }
 
@@ -387,12 +415,17 @@ function buildContactDraftFromSources(
   fallback: Record<string, unknown> | undefined,
   header?: string,
 ): ContactDraft {
+  const nombreNombres = readFirstString([detail, fallback], ["nombre_nombres"]);
+  const apellidoPaterno = readFirstString([detail, fallback], ["apellido_paterno"]);
+  const apellidoMaterno = readFirstString([detail, fallback], ["apellido_materno"]);
+  const normalizedGivenName = stripSurnameSuffix(nombreNombres, apellidoPaterno, apellidoMaterno);
+  const structuredName = [normalizedGivenName, apellidoPaterno, apellidoMaterno].filter(Boolean).join(" ").trim();
   return {
     ...EMPTY_CONTACT,
-    nombre_nombres: readFirstString([detail, fallback], ["nombre_nombres"]),
-    apellido_paterno: readFirstString([detail, fallback], ["apellido_paterno"]),
-    apellido_materno: readFirstString([detail, fallback], ["apellido_materno"]),
-    nombre_completo: readFirstString([detail, fallback], ["nombre_completo"]) || (header ?? ""),
+    nombre_nombres: normalizedGivenName,
+    apellido_paterno: apellidoPaterno,
+    apellido_materno: apellidoMaterno,
+    nombre_completo: readFirstString([detail, fallback], ["nombre_completo"]) || structuredName || (header ?? ""),
     persona_fisica_moral: readFirstString([detail, fallback], ["persona_fisica_moral"]),
     correo: readFirstString([detail, fallback], ["correo", "email"]),
     telefono_e164: readFirstString([detail, fallback], ["telefono_e164", "telefono"]),
@@ -428,9 +461,16 @@ function buildContactDraftFromSources(
 
 function buildContactDisplayName(input: Partial<ContactDraft> & { nombre_completo?: string | null } | null | undefined): string {
   if (!input) return "";
+  const givenName = stripSurnameSuffix(
+    input.nombre_nombres?.trim() ?? "",
+    input.apellido_paterno?.trim() ?? "",
+    input.apellido_materno?.trim() ?? "",
+  );
+  const names = [givenName, input.apellido_paterno?.trim(), input.apellido_materno?.trim()].filter(Boolean);
+  const structuredName = names.join(" ").trim();
+  if (structuredName) return structuredName;
   const fullName = input.nombre_completo?.trim();
   if (fullName) return fullName;
-  const names = [input.nombre_nombres?.trim(), input.apellido_paterno?.trim(), input.apellido_materno?.trim()].filter(Boolean);
   if (names.length) return names.join(" ");
   return "";
 }

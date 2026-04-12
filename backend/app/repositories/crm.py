@@ -5981,13 +5981,30 @@ class CRMRepository:
                 )
                 if part
             ).strip()
+
+        apellido_paterno = self._pick_text(merged, "apellido_paterno")
+        apellido_materno = self._pick_text(merged, "apellido_materno")
+        given_name = self._pick_text(merged, "nombre_nombres")
+        if given_name:
+            suffix_candidates = []
+            if apellido_paterno and apellido_materno:
+                suffix_candidates.append(f" {apellido_paterno} {apellido_materno}")
+            if apellido_paterno:
+                suffix_candidates.append(f" {apellido_paterno}")
+            for suffix in suffix_candidates:
+                if suffix and given_name.casefold().endswith(suffix.casefold()):
+                    given_name = given_name[: -len(suffix)].strip()
+                    break
+        if not given_name:
+            given_name = full_name
         contact_kind_raw = self._pick_text(merged, "persona_fisica_moral")
         contact_kind = contact_kind_raw.casefold() if contact_kind_raw else ""
         contact_is_physical = contact_kind == "fisica"
+        contact_is_moral = contact_kind == "moral"
 
         company_name = self._pick_text(merged, "company_name")
         reason_name = self._pick_text(merged, "razon_social")
-        account_name = company_name or reason_name or (full_name if contact_is_physical else None)
+        account_name = company_name or reason_name or (full_name if contact_is_physical or contact_is_moral else None)
 
         has_account_fields = any(
             self._pick_text(merged, key)
@@ -6004,28 +6021,28 @@ class CRMRepository:
                 "website",
                 "sitio_web",
                 "tipo_establecimiento",
-                "tipo_vialidad",
-                "nombre_vialidad",
-                "numero_exterior",
-                "numero_interior",
-                "codigo_postal",
-                "entidad",
-                "municipio",
-                "pais",
-                "clave_entidad",
-                "clave_municipio",
-                "clave_localidad",
-                "localidad",
             )
         )
-        should_create_account = bool(contact_is_physical or account_name or has_account_fields or merged.get("cuenta_id"))
+        should_create_account = bool(
+            contact_is_physical
+            or contact_is_moral
+            or account_name
+            or has_account_fields
+            or merged.get("cuenta_id")
+        )
 
         legacy_metadata = _ensure_metadata(merged.get("metadata"))
         legacy_contacto_datos = _ensure_metadata(merged.get("contacto_datos"))
         legacy_contacto_datos.update(
             {
                 "legacy_contacto_id": str(contact_id),
-                "legacy_contacto_tipo": "persona_fisica" if contact_is_physical else ("empresa" if should_create_account else "persona"),
+                "legacy_contacto_tipo": (
+                    "persona_fisica"
+                    if contact_is_physical
+                    else "empresa"
+                    if should_create_account
+                    else "persona"
+                ),
             }
         )
 
@@ -6034,7 +6051,13 @@ class CRMRepository:
         persona_metadata.update(
             {
                 "legacy_contacto_id": str(contact_id),
-                "legacy_contacto_tipo": "persona_fisica" if contact_is_physical else ("empresa" if should_create_account else "persona"),
+                "legacy_contacto_tipo": (
+                    "persona_fisica"
+                    if contact_is_physical
+                    else "empresa"
+                    if should_create_account
+                    else "persona"
+                ),
                 "legacy_contacto_datos": legacy_contacto_datos,
                 "legacy_company_name": company_name,
                 "legacy_razon_social": reason_name,
@@ -6053,7 +6076,7 @@ class CRMRepository:
         persona_body: dict[str, Any] = {
             "id": str(contact_id),
             "organizacion_id": str(organizacion_id),
-            "nombre": full_name,
+            "nombre": given_name,
             "apellido_paterno": self._pick_text(merged, "apellido_paterno"),
             "apellido_materno": self._pick_text(merged, "apellido_materno"),
             "nombre_completo": full_name,
