@@ -26,6 +26,7 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { usePermissions } from "@/hooks/use-permissions";
 import type { ContactTableRow } from "@/lib/contactos/data";
+import { ContactCreateFlow } from "@/components/contactos/contact-create-flow";
 
 type TableRow = z.infer<typeof schema>;
 
@@ -88,34 +89,6 @@ type ContactDraft = {
   municipio: string;
   pais: string;
   website: string;
-  tipo_establecimiento: string;
-};
-
-type AccountDraft = {
-  nombre: string;
-  razon_social: string;
-  rfc: string;
-  uso_cfdi: string;
-  metodo_pago: string;
-  forma_pago: string;
-  email_facturacion: string;
-  tipo_industria: string;
-  tamano: string;
-  notas: string;
-  necesidad_proposito: string;
-  telefono: string;
-  email: string;
-  website: string;
-  tipo_vialidad: string;
-  nombre_vialidad: string;
-  numero_exterior: string;
-  numero_interior: string;
-  codigo_postal: string;
-  clave_entidad: string;
-  entidad: string;
-  clave_municipio: string;
-  municipio: string;
-  pais: string;
   tipo_establecimiento: string;
 };
 
@@ -236,34 +209,6 @@ const EMPTY_CONTACT: ContactDraft = {
   municipio: "",
   pais: "MX",
   website: "",
-  tipo_establecimiento: "",
-};
-
-const EMPTY_ACCOUNT: AccountDraft = {
-  nombre: "",
-  razon_social: "",
-  rfc: "",
-  uso_cfdi: "",
-  metodo_pago: "",
-  forma_pago: "",
-  email_facturacion: "",
-  tipo_industria: "",
-  tamano: "",
-  notas: "",
-  necesidad_proposito: "",
-  telefono: "",
-  email: "",
-  website: "",
-  tipo_vialidad: "",
-  nombre_vialidad: "",
-  numero_exterior: "",
-  numero_interior: "",
-  codigo_postal: "",
-  clave_entidad: "",
-  entidad: "",
-  clave_municipio: "",
-  municipio: "",
-  pais: "MX",
   tipo_establecimiento: "",
 };
 
@@ -473,22 +418,6 @@ function buildContactDisplayName(input: Partial<ContactDraft> & { nombre_complet
   if (fullName) return fullName;
   if (names.length) return names.join(" ");
   return "";
-}
-
-function buildAccountPayload(input: AccountDraft, contact?: ContactDraft): Record<string, unknown> {
-  const payload: Record<string, unknown> = {};
-  for (const [key, value] of Object.entries(input)) {
-    const trimmed = value.trim();
-    if (!trimmed) continue;
-    payload[key] = trimmed;
-  }
-  const contactIsPhysical = contact ? normalizeGeoText(contact.persona_fisica_moral) === "fisica" : false;
-  if (contactIsPhysical && contact) {
-    const derived = buildContactDisplayName(contact);
-    if (derived) payload.nombre = derived;
-  }
-  if (!payload.nombre && payload.razon_social) payload.nombre = payload.razon_social;
-  return payload;
 }
 
 const CONTACT_COLUMNS: Array<{
@@ -840,267 +769,6 @@ function ContactForm({
   );
 }
 
-function AccountForm({
-  value,
-  onChange,
-  contact,
-  geoCountries,
-  geoStates,
-  geoMunicipalities,
-  geoLoading,
-}: {
-  value: AccountDraft;
-  onChange: React.Dispatch<React.SetStateAction<AccountDraft>>;
-  contact: ContactDraft;
-  geoCountries: GeoCountryOption[];
-  geoStates: GeoStateOption[];
-  geoMunicipalities: GeoMunicipalityOption[];
-  geoLoading: boolean;
-}) {
-  const set = (field: keyof AccountDraft, next: string) => onChange((prev) => ({ ...prev, [field]: next }));
-  const uid = React.useId();
-  const fieldId = (name: string) => `${uid}-${name}`;
-  const contactIsPhysical = normalizeGeoText(contact.persona_fisica_moral) === "fisica";
-  const derivedCompanyName = React.useMemo(() => buildContactDisplayName(contact), [contact]);
-  const mexico = isMexicoCountry(value.pais);
-  const selectedStateCode = React.useMemo(() => {
-    if (value.clave_entidad.trim()) return value.clave_entidad.trim().padStart(2, "0");
-    const byName = geoStates.find((item) => normalizeGeoText(item.name) === normalizeGeoText(value.entidad));
-    return byName?.code ?? "";
-  }, [geoStates, value.clave_entidad, value.entidad]);
-  const selectedMunicipalityCode = React.useMemo(() => {
-    if (value.clave_municipio.trim()) return value.clave_municipio.trim().padStart(3, "0");
-    const byName = geoMunicipalities.find((item) => normalizeGeoText(item.name) === normalizeGeoText(value.municipio));
-    return byName?.code ?? "";
-  }, [geoMunicipalities, value.clave_municipio, value.municipio]);
-
-  return (
-    <Tabs defaultValue="empresa" className="w-full">
-      <div className="flex flex-col gap-3">
-        <p className="text-xs text-muted-foreground">
-          Todos los campos originales siguen disponibles. Solo están agrupados por tema para hacer el formulario más legible.
-        </p>
-        <TabsList className="grid h-auto w-full grid-cols-3 gap-2 bg-transparent p-0">
-          <TabsTrigger value="empresa">Empresa</TabsTrigger>
-          <TabsTrigger value="ubicacion">Ubicación</TabsTrigger>
-          <TabsTrigger value="notas">Notas</TabsTrigger>
-        </TabsList>
-      </div>
-
-      <TabsContent value="empresa" className="mt-4 space-y-4">
-        <FormSection title="Empresa y facturación" description="Datos comerciales, fiscales y de contacto de la cuenta.">
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-            <Field
-              label="Nombre empresa"
-              htmlFor={fieldId("nombre")}
-              hint={contactIsPhysical ? "Bloqueado: en persona física se toma del contacto." : undefined}
-            >
-              <Input
-                id={fieldId("nombre")}
-                placeholder={contactIsPhysical ? "Se toma del contacto" : "Nombre empresa"}
-                value={contactIsPhysical ? derivedCompanyName : value.nombre}
-                onChange={(e) => {
-                  if (!contactIsPhysical) set("nombre", e.target.value);
-                }}
-                disabled={contactIsPhysical}
-              />
-            </Field>
-            <Field label="Razón social" htmlFor={fieldId("razon_social")}>
-              <Input id={fieldId("razon_social")} placeholder="Razón social" value={value.razon_social} onChange={(e) => set("razon_social", e.target.value)} />
-            </Field>
-            <Field label="RFC" htmlFor={fieldId("rfc")}>
-              <Input id={fieldId("rfc")} placeholder="RFC" value={value.rfc} onChange={(e) => set("rfc", e.target.value)} />
-            </Field>
-            <Field label="Uso CFDI" htmlFor={fieldId("uso_cfdi")}>
-              <Input id={fieldId("uso_cfdi")} placeholder="Uso CFDI" value={value.uso_cfdi} onChange={(e) => set("uso_cfdi", e.target.value)} />
-            </Field>
-            <Field label="Método de pago" htmlFor={fieldId("metodo_pago")}>
-              <Input id={fieldId("metodo_pago")} placeholder="Método de pago" value={value.metodo_pago} onChange={(e) => set("metodo_pago", e.target.value)} />
-            </Field>
-            <Field label="Forma de pago" htmlFor={fieldId("forma_pago")}>
-              <Input id={fieldId("forma_pago")} placeholder="Forma de pago" value={value.forma_pago} onChange={(e) => set("forma_pago", e.target.value)} />
-            </Field>
-            <Field label="Email de facturación" htmlFor={fieldId("email_facturacion")}>
-              <Input id={fieldId("email_facturacion")} placeholder="facturacion@ejemplo.com" value={value.email_facturacion} onChange={(e) => set("email_facturacion", e.target.value)} />
-            </Field>
-            <Field label="Industria" htmlFor={fieldId("tipo_industria")}>
-              <Input id={fieldId("tipo_industria")} placeholder="Industria" value={value.tipo_industria} onChange={(e) => set("tipo_industria", e.target.value)} />
-            </Field>
-            <Field label="Tamaño" htmlFor={fieldId("tamano")}>
-              <Input id={fieldId("tamano")} placeholder="Tamaño" value={value.tamano} onChange={(e) => set("tamano", e.target.value)} />
-            </Field>
-            <Field label="Teléfono" htmlFor={fieldId("telefono")}>
-              <Input id={fieldId("telefono")} placeholder="Teléfono" value={value.telefono} onChange={(e) => set("telefono", e.target.value)} />
-            </Field>
-            <Field label="Email" htmlFor={fieldId("email")}>
-              <Input id={fieldId("email")} placeholder="Email" value={value.email} onChange={(e) => set("email", e.target.value)} />
-            </Field>
-            <Field label="Sitio web" htmlFor={fieldId("website")}>
-              <Input id={fieldId("website")} placeholder="https://..." value={value.website} onChange={(e) => set("website", e.target.value)} />
-            </Field>
-            <Field label="Tipo de establecimiento" htmlFor={fieldId("tipo_establecimiento")}>
-              <Input id={fieldId("tipo_establecimiento")} placeholder="Tipo de establecimiento" value={value.tipo_establecimiento} onChange={(e) => set("tipo_establecimiento", e.target.value)} />
-            </Field>
-          </div>
-        </FormSection>
-      </TabsContent>
-
-      <TabsContent value="ubicacion" className="mt-4 space-y-4">
-        <FormSection title="Ubicación" description="Datos de país, estado, municipio y dirección postal.">
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-            <Field label="País" htmlFor={fieldId("pais")}>
-              <Select
-                value={value.pais || undefined}
-                onValueChange={(nextCountry) => {
-                  onChange((prev) => {
-                    const next: AccountDraft = { ...prev, pais: nextCountry };
-                    if (!isMexicoCountry(nextCountry)) {
-                      next.clave_entidad = "";
-                      next.clave_municipio = "";
-                    }
-                    return next;
-                  });
-                }}
-              >
-                <SelectTrigger id={fieldId("pais")}>
-                  <SelectValue placeholder={geoLoading ? "Cargando países..." : "Selecciona un país"} />
-                </SelectTrigger>
-                <SelectContent>
-                  {geoCountries.map((country) => (
-                    <SelectItem key={country.code} value={country.code}>
-                      {country.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </Field>
-            {mexico ? (
-              <>
-                <Field label="Estado (México)" htmlFor={fieldId("clave_entidad")}>
-                  <Select
-                    value={selectedStateCode || undefined}
-                    onValueChange={(stateCode) => {
-                      const state = geoStates.find((item) => item.code === stateCode);
-                      onChange((prev) => ({
-                        ...prev,
-                        clave_entidad: stateCode,
-                        entidad: state?.name ?? prev.entidad,
-                        clave_municipio: "",
-                        municipio: "",
-                      }));
-                    }}
-                  >
-                    <SelectTrigger id={fieldId("clave_entidad")}>
-                      <SelectValue placeholder={geoLoading ? "Cargando estados..." : "Selecciona un estado"} />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {geoStates.map((state) => (
-                        <SelectItem key={state.code} value={state.code}>
-                          {state.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </Field>
-                <Field label="Municipio (México)" htmlFor={fieldId("clave_municipio")}>
-                  <Select
-                    value={selectedMunicipalityCode || undefined}
-                    onValueChange={(municipalityCode) => {
-                      const municipality = geoMunicipalities.find((item) => item.code === municipalityCode);
-                      onChange((prev) => ({
-                        ...prev,
-                        clave_municipio: municipalityCode,
-                        municipio: municipality?.name ?? prev.municipio,
-                      }));
-                    }}
-                    disabled={!selectedStateCode}
-                  >
-                    <SelectTrigger id={fieldId("clave_municipio")}>
-                      <SelectValue placeholder={!selectedStateCode ? "Selecciona estado primero" : "Selecciona un municipio"} />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {geoMunicipalities.map((municipality) => (
-                        <SelectItem key={`${municipality.state_code}-${municipality.code}`} value={municipality.code}>
-                          {municipality.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </Field>
-              </>
-            ) : (
-              <>
-                <Field label="Entidad / estado" htmlFor={fieldId("entidad")}>
-                  <Input
-                    id={fieldId("entidad")}
-                    placeholder="Entidad / estado"
-                    value={value.entidad}
-                    onChange={(e) =>
-                      onChange((prev) => ({
-                        ...prev,
-                        entidad: e.target.value,
-                        clave_entidad: "",
-                        clave_municipio: "",
-                      }))
-                    }
-                  />
-                </Field>
-                <Field label="Municipio / ciudad" htmlFor={fieldId("municipio")}>
-                  <Input
-                    id={fieldId("municipio")}
-                    placeholder="Municipio / ciudad"
-                    value={value.municipio}
-                    onChange={(e) =>
-                      onChange((prev) => ({
-                        ...prev,
-                        municipio: e.target.value,
-                        clave_municipio: "",
-                      }))
-                    }
-                  />
-                </Field>
-              </>
-            )}
-            <Field label="Código postal" htmlFor={fieldId("codigo_postal")}>
-              <Input id={fieldId("codigo_postal")} placeholder="Código postal" value={value.codigo_postal} onChange={(e) => set("codigo_postal", e.target.value)} />
-            </Field>
-            <Field label="Tipo de vialidad" htmlFor={fieldId("tipo_vialidad")}>
-              <Input id={fieldId("tipo_vialidad")} placeholder="Tipo de vialidad" value={value.tipo_vialidad} onChange={(e) => set("tipo_vialidad", e.target.value)} />
-            </Field>
-            <Field label="Nombre de vialidad" htmlFor={fieldId("nombre_vialidad")}>
-              <Input id={fieldId("nombre_vialidad")} placeholder="Nombre de vialidad" value={value.nombre_vialidad} onChange={(e) => set("nombre_vialidad", e.target.value)} />
-            </Field>
-            <Field label="Número exterior" htmlFor={fieldId("numero_exterior")}>
-              <Input id={fieldId("numero_exterior")} placeholder="Número exterior" value={value.numero_exterior} onChange={(e) => set("numero_exterior", e.target.value)} />
-            </Field>
-            <Field label="Número interior" htmlFor={fieldId("numero_interior")}>
-              <Input id={fieldId("numero_interior")} placeholder="Número interior" value={value.numero_interior} onChange={(e) => set("numero_interior", e.target.value)} />
-            </Field>
-          </div>
-        </FormSection>
-      </TabsContent>
-
-      <TabsContent value="notas" className="mt-4 space-y-4">
-        <FormSection title="Notas" description="Contexto interno y necesidad principal.">
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-            <Field label="Notas internas" htmlFor={fieldId("notes")}>
-              <Textarea id={fieldId("notes")} placeholder="Notas" value={value.notas} onChange={(e) => set("notas", e.target.value)} />
-            </Field>
-            <Field label="Necesidad / propósito" htmlFor={fieldId("necesidad_proposito")}>
-              <Textarea
-                id={fieldId("necesidad_proposito")}
-                placeholder="Necesidad / propósito"
-                value={value.necesidad_proposito}
-                onChange={(e) => set("necesidad_proposito", e.target.value)}
-              />
-            </Field>
-          </div>
-        </FormSection>
-      </TabsContent>
-    </Tabs>
-  );
-}
-
 export function ContactsDataTable({ data }: { data: ContactTableRow[] }) {
   const { context: permissionContext, loading: permissionsLoading } = usePermissions();
   const normalizedPerms = React.useMemo(
@@ -1127,8 +795,6 @@ export function ContactsDataTable({ data }: { data: ContactTableRow[] }) {
 
   const [activeRow, setActiveRow] = React.useState<TableRow | null>(null);
   const [contactForm, setContactForm] = React.useState<ContactDraft>({ ...EMPTY_CONTACT });
-  const [accountForm, setAccountForm] = React.useState<AccountDraft>({ ...EMPTY_ACCOUNT });
-  const [separateCompanyOpen, setSeparateCompanyOpen] = React.useState(false);
 
   const [selectedVendorId, setSelectedVendorId] = React.useState("");
   const [vendorOptions, setVendorOptions] = React.useState<SalesRepOption[]>([]);
@@ -1142,7 +808,6 @@ export function ContactsDataTable({ data }: { data: ContactTableRow[] }) {
   const [geoCountries, setGeoCountries] = React.useState<GeoCountryOption[]>([]);
   const [geoStates, setGeoStates] = React.useState<GeoStateOption[]>([]);
   const [geoMunicipalitiesContact, setGeoMunicipalitiesContact] = React.useState<GeoMunicipalityOption[]>([]);
-  const [geoMunicipalitiesAccount, setGeoMunicipalitiesAccount] = React.useState<GeoMunicipalityOption[]>([]);
   const [geoLoading, setGeoLoading] = React.useState(false);
 
   React.useEffect(() => {
@@ -1200,13 +865,6 @@ export function ContactsDataTable({ data }: { data: ContactTableRow[] }) {
     const byName = geoStates.find((item) => normalizeGeoText(item.name) === normalizeGeoText(contactForm.entidad));
     return byName?.code ?? "";
   }, [contactForm.clave_entidad, contactForm.entidad, geoStates]);
-
-  const accountStateCode = React.useMemo(() => {
-    const explicit = accountForm.clave_entidad.trim();
-    if (explicit) return explicit.padStart(2, "0");
-    const byName = geoStates.find((item) => normalizeGeoText(item.name) === normalizeGeoText(accountForm.entidad));
-    return byName?.code ?? "";
-  }, [accountForm.clave_entidad, accountForm.entidad, geoStates]);
 
   React.useEffect(() => {
     const controller = new AbortController();
@@ -1266,34 +924,6 @@ export function ContactsDataTable({ data }: { data: ContactTableRow[] }) {
     loadMunicipalities();
     return () => controller.abort();
   }, [contactForm.pais, contactStateCode]);
-
-  React.useEffect(() => {
-    if (!isMexicoCountry(accountForm.pais) || !accountStateCode) {
-      setGeoMunicipalitiesAccount([]);
-      return;
-    }
-    const controller = new AbortController();
-    const loadMunicipalities = async () => {
-      try {
-        const res = await fetch(
-          `/api/contactos/catalogos/municipios?pais=MX&estado=${encodeURIComponent(accountStateCode)}`,
-          { cache: "no-store", signal: controller.signal },
-        );
-        if (!res.ok) {
-          setGeoMunicipalitiesAccount([]);
-          return;
-        }
-        const body = (await res.json()) as { items?: GeoMunicipalityOption[] };
-        setGeoMunicipalitiesAccount(Array.isArray(body.items) ? body.items : []);
-      } catch (err) {
-        if ((err as Error).name !== "AbortError") {
-          setGeoMunicipalitiesAccount([]);
-        }
-      }
-    };
-    loadMunicipalities();
-    return () => controller.abort();
-  }, [accountForm.pais, accountStateCode]);
 
   const activeRaw = React.useMemo(() => (activeRow?.raw ?? {}) as Record<string, unknown>, [activeRow?.raw]);
   const activeContactoId = extractString(activeRaw, ["contacto_id"]);
@@ -1412,25 +1042,6 @@ export function ContactsDataTable({ data }: { data: ContactTableRow[] }) {
     }
   };
 
-  const handleCreate = async () => {
-    await runAndReload(async () => {
-      const contacto = buildContactPayload(contactForm);
-      const payload: Record<string, unknown> = {
-        crear_cuenta: separateCompanyOpen && normalizeGeoText(contactForm.persona_fisica_moral) !== "fisica",
-        contacto,
-      };
-      if (Boolean(payload.crear_cuenta)) payload.cuenta = buildAccountPayload(accountForm, contactForm);
-
-      const response = await fetch("/api/contactos/create", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-      const body = (await response.json().catch(() => ({}))) as { error?: string };
-      if (!response.ok) throw new Error(body.error || `Error ${response.status}`);
-    });
-  };
-
   const handleEdit = async () => {
     if (!activeContactoId) {
       setError("No se encontró el contacto a editar.");
@@ -1483,10 +1094,7 @@ export function ContactsDataTable({ data }: { data: ContactTableRow[] }) {
     <Button
       type="button"
       size="sm"
-    onClick={() => {
-        setContactForm({ ...EMPTY_CONTACT });
-        setAccountForm({ ...EMPTY_ACCOUNT });
-        setSeparateCompanyOpen(false);
+      onClick={() => {
         setError(null);
         setSuccess(null);
         setCreateOpen(true);
@@ -1506,75 +1114,11 @@ export function ContactsDataTable({ data }: { data: ContactTableRow[] }) {
         toolbarActions={toolbarActions}
       />
 
-      <Dialog open={createOpen} onOpenChange={setCreateOpen}>
-        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-6xl">
-          <DialogHeader className="space-y-2">
-            <DialogTitle>Crear contacto</DialogTitle>
-            <DialogDescription>
-              Formulario dividido por pestañas. Todos los campos anteriores siguen disponibles, solo están agrupados por tema.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogSummary contactName={contactDialogName} companyName={contactDialogCompany} />
-          <div className="space-y-5">
-            <ContactForm
-              value={contactForm}
-              onChange={setContactForm}
-              geoCountries={geoCountries}
-              geoStates={geoStates}
-              geoMunicipalities={geoMunicipalitiesContact}
-              geoLoading={geoLoading}
-            />
-            <div className="rounded-xl border border-border/60 bg-muted/20 px-4 py-4">
-              <div className="flex flex-col gap-3">
-                <div className="space-y-1">
-                  <p className="text-sm font-medium text-foreground">
-                    {normalizeGeoText(contactForm.persona_fisica_moral) === "fisica"
-                      ? "Empresa derivada del contacto"
-                      : "Empresa separada"}
-                  </p>
-                  <p className="text-sm text-muted-foreground">
-                    {normalizeGeoText(contactForm.persona_fisica_moral) === "fisica"
-                      ? "Si este contacto es persona física, su empresa se toma del nombre del contacto y no hace falta capturarla otra vez."
-                      : "Si este contacto pertenece a una empresa distinta, puedes crearla y vincularla desde aquí. Mantén esta sección cerrada si no hace falta."}
-                  </p>
-                </div>
-                {normalizeGeoText(contactForm.persona_fisica_moral) !== "fisica" ? (
-                  <div className="flex flex-wrap items-center gap-2">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setSeparateCompanyOpen((prev) => !prev)}
-                    >
-                      {separateCompanyOpen ? "Ocultar empresa separada" : "Crear empresa separada"}
-                    </Button>
-                    <span className="text-xs text-muted-foreground">
-                      Se crea solo si necesitas una cuenta distinta al contacto.
-                    </span>
-                  </div>
-                ) : null}
-                {separateCompanyOpen && normalizeGeoText(contactForm.persona_fisica_moral) !== "fisica" ? (
-                  <AccountForm
-                    value={accountForm}
-                    onChange={setAccountForm}
-                    contact={contactForm}
-                    geoCountries={geoCountries}
-                    geoStates={geoStates}
-                    geoMunicipalities={geoMunicipalitiesAccount}
-                    geoLoading={geoLoading}
-                  />
-                ) : null}
-              </div>
-            </div>
-            {error ? <p className="text-xs text-destructive">{error}</p> : null}
-            {success ? <p className="text-xs text-emerald-600">{success}</p> : null}
-            <div className="flex gap-2">
-              <Button type="button" disabled={pending} onClick={handleCreate}>{pending ? "Guardando..." : "Crear"}</Button>
-              <Button type="button" variant="outline" disabled={pending} onClick={() => setCreateOpen(false)}>Cancelar</Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
+      <ContactCreateFlow
+        open={createOpen}
+        onOpenChange={setCreateOpen}
+        onCreated={() => window.location.reload()}
+      />
 
       <Dialog open={editOpen} onOpenChange={setEditOpen}>
         <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-6xl">
