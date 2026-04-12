@@ -8978,6 +8978,12 @@ class CRMContact(BaseModel):
     estado: str | None = None
     origen: str | None = None
     propietario_usuario_id: UUID | None = None
+    rol_en_cuenta: str | None = None
+    es_contacto_principal: bool | None = None
+    es_contacto_facturacion: bool | None = None
+    es_representante_legal: bool | None = None
+    relacion_activa: bool | None = None
+    cuenta_tipo: str | None = None
     metadata: dict[str, Any] | None = None
     contacto_datos: dict[str, Any] | None = None
     creado_en: datetime | None = None
@@ -9207,6 +9213,14 @@ class CRMPersonaAltaResponse(BaseModel):
     cuenta: CRMAccount | None = None
     relacion: CRMCuentaPersonaRelacion | None = None
     resumen: dict[str, Any] = Field(default_factory=dict)
+
+
+class CRMPersonaEditRequest(BaseModel):
+    persona: CRMPersonaAltaPersona
+    contexto_comercial: CRMPersonaAltaContexto
+    cuenta: CRMPersonaAltaCuenta | None = None
+    relacion: CRMPersonaAltaRelacion | None = None
+    extras: CRMPersonaAltaExtras | None = None
 
 
 class CRMContactSearchItem(BaseModel):
@@ -13417,6 +13431,132 @@ async def create_persona_alta(
             relation_row = await repo.upsert_contact_account_relation(
                 organizacion_id=organizacion_id,
                 contacto_id=persona_out.id,
+                cuenta_id=persona_out.cuenta_id,
+                payload=relation_defaults,
+            )
+        except CRMRepositoryError as exc:
+            raise HTTPException(status_code=502, detail=str(exc)) from exc
+        relation_out = CRMCuentaPersonaRelacion.model_validate(relation_row)
+
+    return CRMPersonaAltaResponse(
+        persona=persona_out,
+        cuenta=account_out,
+        relacion=relation_out,
+        resumen={
+            "modo": contexto.modo,
+            "persona_id": str(persona_out.id),
+            "cuenta_id": str(persona_out.cuenta_id) if persona_out.cuenta_id else None,
+        },
+    )
+
+
+@router.patch("/personas/{contacto_id}", response_model=CRMPersonaAltaResponse)
+async def update_persona(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("contacts.write")),
+    contacto_id: UUID,
+    payload: CRMPersonaEditRequest,
+) -> CRMPersonaAltaResponse:
+    persona = payload.persona
+    contexto = payload.contexto_comercial
+    cuenta = payload.cuenta
+    relacion = payload.relacion
+    extras = payload.extras
+
+    if not _persona_alta_clean_text(persona.nombre) or not _persona_alta_clean_text(persona.apellido_paterno):
+        raise HTTPException(status_code=400, detail="persona_incompleta")
+    if not _persona_alta_clean_text(persona.correo_principal) and not _persona_alta_clean_text(persona.telefono_principal_e164):
+        raise HTTPException(status_code=400, detail="medio_contacto_required")
+
+    existing_account: CRMAccount | None = None
+    if contexto.modo == "empresa_existente":
+        if not cuenta or not cuenta.cuenta_id:
+            raise HTTPException(status_code=400, detail="cuenta_id_required")
+        try:
+            account_row = await repo.get_account(organizacion_id=organizacion_id, account_id=cuenta.cuenta_id)
+        except CRMRepositoryError as exc:
+            raise HTTPException(status_code=502, detail=str(exc)) from exc
+        if not account_row:
+            raise HTTPException(status_code=404, detail="cuenta_no_encontrada")
+        existing_account = CRMAccount.model_validate(account_row)
+
+    contact_payload = _persona_alta_to_contact_payload(
+        persona=persona,
+        contexto=contexto,
+        cuenta=cuenta,
+        extras=extras,
+        existing_account=existing_account,
+    )
+    if contexto.modo == "solo_persona":
+        contact_payload["cuenta_id"] = None
+        contact_payload["company_name"] = None
+
+    try:
+        contact_row = await repo.update_contact(
+            organizacion_id=organizacion_id,
+            contacto_id=contacto_id,
+            payload={key: value for key, value in contact_payload.items() if value is not None},
+        )
+    except CRMRepositoryError as exc:
+        if "contacto_no_encontrado" in str(exc):
+            raise HTTPException(status_code=404, detail="contacto_no_encontrado") from exc
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    persona_out = CRMContact.model_validate(contact_row)
+    account_out: CRMAccount | None = None
+    relation_out: CRMCuentaPersonaRelacion | None = None
+
+    if persona_out.cuenta_id:
+        # Si la UI mandó datos de cuenta (para cuenta nueva / PFAE) los aplicamos.
+        if cuenta and contexto.modo in {"empresa_nueva", "persona_fisica_actividad_empresarial"}:
+            account_patch = {
+                key: value
+                for key, value in _persona_alta_to_account_payload(
+                    persona=persona,
+                    contexto=contexto,
+                    cuenta=cuenta,
+                    extras=extras,
+                ).items()
+                if value not in (None, "", {}, [])
+            }
+            if account_patch:
+                try:
+                    await repo.update_account(
+                        organizacion_id=organizacion_id,
+                        account_id=persona_out.cuenta_id,
+                        payload=account_patch,
+                    )
+                except CRMRepositoryError as exc:
+                    raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+        try:
+            account_row = await repo.get_account(organizacion_id=organizacion_id, account_id=persona_out.cuenta_id)
+        except CRMRepositoryError as exc:
+            raise HTTPException(status_code=502, detail=str(exc)) from exc
+        if account_row:
+            account_out = CRMAccount.model_validate(account_row)
+
+        relation_defaults = {
+            "rol_en_cuenta": (
+                relacion.rol_en_cuenta
+                if relacion and _persona_alta_clean_text(relacion.rol_en_cuenta)
+                else ("dueno" if contexto.modo == "persona_fisica_actividad_empresarial" else "contacto_principal")
+            ),
+            "puesto": relacion.puesto if relacion else persona.puesto,
+            "es_contacto_principal": True if contexto.modo == "persona_fisica_actividad_empresarial" else (relacion.es_contacto_principal if relacion else True),
+            "es_contacto_facturacion": relacion.es_contacto_facturacion if relacion else False,
+            "es_representante_legal": True if contexto.modo == "persona_fisica_actividad_empresarial" else (relacion.es_representante_legal if relacion else False),
+            "activo": relacion.activo if relacion else True,
+            "fecha_inicio": relacion.fecha_inicio.isoformat() if relacion and relacion.fecha_inicio else None,
+            "notas": relacion.notas if relacion else None,
+            "metadata": {"contexto_modo": contexto.modo},
+        }
+        try:
+            relation_row = await repo.upsert_contact_account_relation(
+                organizacion_id=organizacion_id,
+                contacto_id=contacto_id,
                 cuenta_id=persona_out.cuenta_id,
                 payload=relation_defaults,
             )

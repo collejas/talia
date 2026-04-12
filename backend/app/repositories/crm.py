@@ -5833,7 +5833,7 @@ class CRMRepository:
                 "id": f"eq.{account_uuid}",
                 "limit": "1",
                 "select": (
-                    "id,nombre,alias,codigo_cuenta,razon_social,rfc,uso_cfdi,metodo_pago,forma_pago,"
+                    "id,nombre,alias,tipo,codigo_cuenta,razon_social,rfc,uso_cfdi,metodo_pago,forma_pago,"
                     "email_facturacion,tipo_industria,tamano,sitio_web,website,telefono,correo,"
                     "tipo_establecimiento,latitud,longitud,pais,clave_entidad,entidad,clave_municipio,"
                     "municipio,clave_localidad,localidad,codigo_postal,notas,necesidad_proposito,"
@@ -5926,6 +5926,12 @@ class CRMRepository:
             "tipo_industria": account.get("tipo_industria") if isinstance(account, dict) else metadata.get("legacy_tipo_industria"),
             "tamano": account.get("tamano") if isinstance(account, dict) else metadata.get("legacy_tamano"),
             "puesto": relation.get("puesto") if isinstance(relation, dict) and relation.get("puesto") else persona.get("puesto"),
+            "rol_en_cuenta": relation.get("rol_en_cuenta") if isinstance(relation, dict) else None,
+            "es_contacto_principal": relation.get("es_contacto_principal") if isinstance(relation, dict) else None,
+            "es_contacto_facturacion": relation.get("es_contacto_facturacion") if isinstance(relation, dict) else None,
+            "es_representante_legal": relation.get("es_representante_legal") if isinstance(relation, dict) else None,
+            "relacion_activa": relation.get("activo") if isinstance(relation, dict) else None,
+            "cuenta_tipo": account.get("tipo") if isinstance(account, dict) else None,
             "area": persona.get("area"),
             "rol_decision": persona.get("rol_decision"),
             "codigo_postal": account.get("codigo_postal") if isinstance(account, dict) else direccion.get("codigo_postal"),

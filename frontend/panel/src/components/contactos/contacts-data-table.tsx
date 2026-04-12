@@ -13,9 +13,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Select,
   SelectContent,
@@ -23,10 +20,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Textarea } from "@/components/ui/textarea";
 import { usePermissions } from "@/hooks/use-permissions";
 import type { ContactTableRow } from "@/lib/contactos/data";
 import { ContactCreateFlow } from "@/components/contactos/contact-create-flow";
+import { ContactEditFlow } from "@/components/contactos/contact-edit-flow";
 
 type TableRow = z.infer<typeof schema>;
 
@@ -53,163 +50,6 @@ type SalesRepOption = {
   correo: string | null;
   telefono_e164: string | null;
   label: string;
-};
-
-type ContactDraft = {
-  nombre_nombres: string;
-  apellido_paterno: string;
-  apellido_materno: string;
-  nombre_completo: string;
-  persona_fisica_moral: string;
-  correo: string;
-  telefono_e164: string;
-  puesto: string;
-  area: string;
-  rol_decision: string;
-  origen: string;
-  company_name: string;
-  notes: string;
-  necesidad_proposito: string;
-  rfc: string;
-  razon_social: string;
-  uso_cfdi: string;
-  metodo_pago: string;
-  forma_pago: string;
-  email_facturacion: string;
-  tipo_industria: string;
-  tamano: string;
-  tipo_vialidad: string;
-  nombre_vialidad: string;
-  numero_exterior: string;
-  numero_interior: string;
-  codigo_postal: string;
-  clave_entidad: string;
-  entidad: string;
-  clave_municipio: string;
-  municipio: string;
-  pais: string;
-  website: string;
-  tipo_establecimiento: string;
-};
-
-type GeoCountryOption = {
-  code: string;
-  name: string;
-  name_long?: string | null;
-};
-
-type GeoStateOption = {
-  code: string;
-  name: string;
-};
-
-type GeoMunicipalityOption = {
-  state_code: string;
-  code: string;
-  cvegeo?: string | null;
-  name: string;
-};
-
-function FormSection({
-  title,
-  description,
-  children,
-}: {
-  title: string;
-  description?: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <section className="space-y-4 rounded-xl border border-border/60 bg-muted/20 p-4 shadow-sm">
-      <div className="space-y-1">
-        <h3 className="text-sm font-semibold leading-none">{title}</h3>
-        {description ? <p className="text-xs text-muted-foreground">{description}</p> : null}
-      </div>
-      {children}
-    </section>
-  );
-}
-
-function Field({
-  label,
-  hint,
-  htmlFor,
-  children,
-}: {
-  label: string;
-  hint?: string;
-  htmlFor?: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="space-y-1.5">
-      <Label htmlFor={htmlFor}>{label}</Label>
-      {hint ? <p className="text-xs text-muted-foreground">{hint}</p> : null}
-      {children}
-    </div>
-  );
-}
-
-function DialogSummary({
-  contactName,
-  companyName,
-}: {
-  contactName: string;
-  companyName?: string;
-}) {
-  if (!contactName && !companyName) return null;
-
-  return (
-    <div className="flex flex-wrap gap-2">
-      {contactName ? (
-        <span className="rounded-full border border-border/60 bg-background px-3 py-1 text-xs font-medium text-foreground">
-          Contacto: {contactName}
-        </span>
-      ) : null}
-      {companyName ? (
-        <span className="rounded-full border border-border/60 bg-background px-3 py-1 text-xs font-medium text-foreground">
-          Empresa: {companyName}
-        </span>
-      ) : null}
-    </div>
-  );
-}
-
-const EMPTY_CONTACT: ContactDraft = {
-  nombre_nombres: "",
-  apellido_paterno: "",
-  apellido_materno: "",
-  nombre_completo: "",
-  persona_fisica_moral: "",
-  correo: "",
-  telefono_e164: "",
-  puesto: "",
-  area: "",
-  rol_decision: "",
-  origen: "manual_panel_contactos",
-  company_name: "",
-  notes: "",
-  necesidad_proposito: "",
-  rfc: "",
-  razon_social: "",
-  uso_cfdi: "",
-  metodo_pago: "",
-  forma_pago: "",
-  email_facturacion: "",
-  tipo_industria: "",
-  tamano: "",
-  tipo_vialidad: "",
-  nombre_vialidad: "",
-  numero_exterior: "",
-  numero_interior: "",
-  codigo_postal: "",
-  clave_entidad: "",
-  entidad: "",
-  clave_municipio: "",
-  municipio: "",
-  pais: "MX",
-  website: "",
-  tipo_establecimiento: "",
 };
 
 const DATE_FORMATTER = new Intl.DateTimeFormat("es-MX", {
@@ -284,142 +124,6 @@ function extractString(raw: Record<string, unknown> | undefined, path: string[])
   return null;
 }
 
-function readFirstString(sources: Array<Record<string, unknown> | undefined>, keys: string[]): string {
-  for (const source of sources) {
-    for (const key of keys) {
-      const value = extractString(source, [key]);
-      if (value) return value;
-    }
-  }
-  return "";
-}
-
-function normalizeGeoText(value: string): string {
-  return value
-    .normalize("NFD")
-    .replace(/\p{Diacritic}/gu, "")
-    .trim()
-    .toLowerCase();
-}
-
-function isMexicoCountry(value: string): boolean {
-  const normalized = normalizeGeoText(value);
-  return normalized === "mx" || normalized === "mexico" || normalized === "mex";
-}
-
-function stripSurnameSuffix(givenName: string, apellidoPaterno: string, apellidoMaterno: string): string {
-  const name = givenName.trim();
-  if (!name) return "";
-
-  const paternal = apellidoPaterno.trim();
-  const maternal = apellidoMaterno.trim();
-  if (!paternal) return name;
-
-  const candidates = maternal
-    ? [` ${paternal} ${maternal}`, ` ${paternal}`]
-    : [` ${paternal}`];
-
-  for (const suffix of candidates) {
-    if (suffix && name.toLowerCase().endsWith(suffix.toLowerCase())) {
-      return name.slice(0, -suffix.length).trim();
-    }
-  }
-
-  return name;
-}
-
-function normalizeContactDraftNames(input: ContactDraft): ContactDraft {
-  const cleanedGivenName = stripSurnameSuffix(input.nombre_nombres, input.apellido_paterno, input.apellido_materno);
-  const structuredName = [cleanedGivenName, input.apellido_paterno.trim(), input.apellido_materno.trim()]
-    .filter(Boolean)
-    .join(" ")
-    .trim();
-
-  return {
-    ...input,
-    nombre_nombres: cleanedGivenName,
-    nombre_completo: structuredName || input.nombre_completo.trim(),
-  };
-}
-
-function buildContactPayload(input: ContactDraft): Record<string, unknown> {
-  const normalized = normalizeContactDraftNames(input);
-  const payload: Record<string, unknown> = {};
-  const entries = Object.entries(normalized);
-  for (const [key, value] of entries) {
-    const trimmed = value.trim();
-    if (!trimmed) continue;
-    payload[key] = trimmed;
-  }
-
-  return payload;
-}
-
-function buildContactDraftFromSources(
-  detail: Record<string, unknown> | undefined,
-  fallback: Record<string, unknown> | undefined,
-  header?: string,
-): ContactDraft {
-  const nombreNombres = readFirstString([detail, fallback], ["nombre_nombres"]);
-  const apellidoPaterno = readFirstString([detail, fallback], ["apellido_paterno"]);
-  const apellidoMaterno = readFirstString([detail, fallback], ["apellido_materno"]);
-  const normalizedGivenName = stripSurnameSuffix(nombreNombres, apellidoPaterno, apellidoMaterno);
-  const structuredName = [normalizedGivenName, apellidoPaterno, apellidoMaterno].filter(Boolean).join(" ").trim();
-  return {
-    ...EMPTY_CONTACT,
-    nombre_nombres: normalizedGivenName,
-    apellido_paterno: apellidoPaterno,
-    apellido_materno: apellidoMaterno,
-    nombre_completo: readFirstString([detail, fallback], ["nombre_completo"]) || structuredName || (header ?? ""),
-    persona_fisica_moral: readFirstString([detail, fallback], ["persona_fisica_moral"]),
-    correo: readFirstString([detail, fallback], ["correo", "email"]),
-    telefono_e164: readFirstString([detail, fallback], ["telefono_e164", "telefono"]),
-    puesto: readFirstString([detail, fallback], ["puesto"]),
-    area: readFirstString([detail, fallback], ["area"]),
-    rol_decision: readFirstString([detail, fallback], ["rol_decision"]),
-    origen: readFirstString([detail, fallback], ["origen"]) || EMPTY_CONTACT.origen,
-    company_name: readFirstString([detail, fallback], ["company_name"]),
-    notes: readFirstString([detail, fallback], ["notes", "notas"]),
-    necesidad_proposito: readFirstString([detail, fallback], ["necesidad_proposito"]),
-    rfc: readFirstString([detail, fallback], ["rfc"]),
-    razon_social: readFirstString([detail, fallback], ["razon_social"]),
-    uso_cfdi: readFirstString([detail, fallback], ["uso_cfdi"]),
-    metodo_pago: readFirstString([detail, fallback], ["metodo_pago"]),
-    forma_pago: readFirstString([detail, fallback], ["forma_pago"]),
-    email_facturacion: readFirstString([detail, fallback], ["email_facturacion"]),
-    tipo_industria: readFirstString([detail, fallback], ["tipo_industria"]),
-    tamano: readFirstString([detail, fallback], ["tamano"]),
-    tipo_vialidad: readFirstString([detail, fallback], ["tipo_vialidad"]),
-    nombre_vialidad: readFirstString([detail, fallback], ["nombre_vialidad"]),
-    numero_exterior: readFirstString([detail, fallback], ["numero_exterior"]),
-    numero_interior: readFirstString([detail, fallback], ["numero_interior"]),
-    codigo_postal: readFirstString([detail, fallback], ["codigo_postal"]),
-    clave_entidad: readFirstString([detail, fallback], ["clave_entidad"]),
-    entidad: readFirstString([detail, fallback], ["entidad"]),
-    clave_municipio: readFirstString([detail, fallback], ["clave_municipio"]),
-    municipio: readFirstString([detail, fallback], ["municipio"]),
-    pais: readFirstString([detail, fallback], ["pais"]) || EMPTY_CONTACT.pais,
-    website: readFirstString([detail, fallback], ["website"]),
-    tipo_establecimiento: readFirstString([detail, fallback], ["tipo_establecimiento"]),
-  };
-}
-
-function buildContactDisplayName(input: Partial<ContactDraft> & { nombre_completo?: string | null } | null | undefined): string {
-  if (!input) return "";
-  const givenName = stripSurnameSuffix(
-    input.nombre_nombres?.trim() ?? "",
-    input.apellido_paterno?.trim() ?? "",
-    input.apellido_materno?.trim() ?? "",
-  );
-  const names = [givenName, input.apellido_paterno?.trim(), input.apellido_materno?.trim()].filter(Boolean);
-  const structuredName = names.join(" ").trim();
-  if (structuredName) return structuredName;
-  const fullName = input.nombre_completo?.trim();
-  if (fullName) return fullName;
-  if (names.length) return names.join(" ");
-  return "";
-}
-
 const CONTACT_COLUMNS: Array<{
   id: string;
   label: string;
@@ -458,317 +162,6 @@ const contactColumnVisibility: VisibilityState = CONTACT_COLUMNS.reduce<Visibili
   return visibility;
 }, {});
 
-function ContactForm({
-  value,
-  onChange,
-  geoCountries,
-  geoStates,
-  geoMunicipalities,
-  geoLoading,
-}: {
-  value: ContactDraft;
-  onChange: React.Dispatch<React.SetStateAction<ContactDraft>>;
-  geoCountries: GeoCountryOption[];
-  geoStates: GeoStateOption[];
-  geoMunicipalities: GeoMunicipalityOption[];
-  geoLoading: boolean;
-}) {
-  const set = (field: keyof ContactDraft, next: string) => onChange((prev) => ({ ...prev, [field]: next }));
-  const uid = React.useId();
-  const fieldId = (name: string) => `${uid}-${name}`;
-  const contactIsPhysical = normalizeGeoText(value.persona_fisica_moral) === "fisica";
-  const derivedCompanyName = React.useMemo(() => buildContactDisplayName(value), [value]);
-  const mexico = isMexicoCountry(value.pais);
-  const selectedStateCode = React.useMemo(() => {
-    if (value.clave_entidad.trim()) return value.clave_entidad.trim().padStart(2, "0");
-    const byName = geoStates.find((item) => normalizeGeoText(item.name) === normalizeGeoText(value.entidad));
-    return byName?.code ?? "";
-  }, [geoStates, value.clave_entidad, value.entidad]);
-  const selectedMunicipalityCode = React.useMemo(() => {
-    if (value.clave_municipio.trim()) return value.clave_municipio.trim().padStart(3, "0");
-    const byName = geoMunicipalities.find((item) => normalizeGeoText(item.name) === normalizeGeoText(value.municipio));
-    return byName?.code ?? "";
-  }, [geoMunicipalities, value.clave_municipio, value.municipio]);
-
-  return (
-    <Tabs defaultValue="contacto" className="w-full">
-      <div className="flex flex-col gap-3">
-        <p className="text-xs text-muted-foreground">
-          Todos los campos originales siguen disponibles. Solo están agrupados por tema para hacer el formulario más legible.
-        </p>
-        <TabsList className="grid h-auto w-full grid-cols-2 gap-2 bg-transparent p-0 md:grid-cols-4">
-          <TabsTrigger value="contacto">Contacto</TabsTrigger>
-          <TabsTrigger value="empresa">Empresa</TabsTrigger>
-          <TabsTrigger value="ubicacion">Ubicación</TabsTrigger>
-          <TabsTrigger value="notas">Notas</TabsTrigger>
-        </TabsList>
-      </div>
-
-      <TabsContent value="contacto" className="mt-4 space-y-4">
-        <FormSection
-          title="Datos del contacto"
-          description="Identidad y datos personales del contacto."
-        >
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-            <Field label="Tipo de persona" htmlFor={fieldId("persona_fisica_moral")}>
-              <Select value={value.persona_fisica_moral || undefined} onValueChange={(v) => set("persona_fisica_moral", v)}>
-                <SelectTrigger id={fieldId("persona_fisica_moral")}>
-                  <SelectValue placeholder="Selecciona una opción" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="fisica">Física</SelectItem>
-                  <SelectItem value="moral">Moral</SelectItem>
-                </SelectContent>
-              </Select>
-            </Field>
-            <Field label="Origen" hint="Fuente o canal por el que llegó el contacto." htmlFor={fieldId("origen")}>
-              <Input id={fieldId("origen")} placeholder="manual_panel_contactos" value={value.origen} onChange={(e) => set("origen", e.target.value)} />
-            </Field>
-            <Field label="Nombres" htmlFor={fieldId("nombre_nombres")}>
-              <Input id={fieldId("nombre_nombres")} placeholder="Nombres" value={value.nombre_nombres} onChange={(e) => set("nombre_nombres", e.target.value)} />
-            </Field>
-            <Field label="Apellido paterno" htmlFor={fieldId("apellido_paterno")}>
-              <Input id={fieldId("apellido_paterno")} placeholder="Apellido paterno" value={value.apellido_paterno} onChange={(e) => set("apellido_paterno", e.target.value)} />
-            </Field>
-            <Field label="Apellido materno" htmlFor={fieldId("apellido_materno")}>
-              <Input id={fieldId("apellido_materno")} placeholder="Apellido materno" value={value.apellido_materno} onChange={(e) => set("apellido_materno", e.target.value)} />
-            </Field>
-            <Field label="Nombre completo" htmlFor={fieldId("nombre_completo")} hint="Usa este campo si ya tienes el nombre consolidado.">
-              <Input id={fieldId("nombre_completo")} placeholder="Nombre completo" value={value.nombre_completo} onChange={(e) => set("nombre_completo", e.target.value)} />
-            </Field>
-            <Field label="Correo" htmlFor={fieldId("correo")}>
-              <Input id={fieldId("correo")} placeholder="correo@ejemplo.com" value={value.correo} onChange={(e) => set("correo", e.target.value)} />
-            </Field>
-            <Field label="Teléfono" htmlFor={fieldId("telefono_e164")} hint="Formato recomendado E.164, por ejemplo +5215555555555.">
-              <Input id={fieldId("telefono_e164")} placeholder="+5215555555555" value={value.telefono_e164} onChange={(e) => set("telefono_e164", e.target.value)} />
-            </Field>
-            <Field label="Puesto" htmlFor={fieldId("puesto")}>
-              <Input id={fieldId("puesto")} placeholder="Puesto" value={value.puesto} onChange={(e) => set("puesto", e.target.value)} />
-            </Field>
-            <Field label="Área" htmlFor={fieldId("area")}>
-              <Input id={fieldId("area")} placeholder="Área" value={value.area} onChange={(e) => set("area", e.target.value)} />
-            </Field>
-            <Field label="Rol de decisión" htmlFor={fieldId("rol_decision")}>
-              <Input id={fieldId("rol_decision")} placeholder="Rol de decisión" value={value.rol_decision} onChange={(e) => set("rol_decision", e.target.value)} />
-            </Field>
-          </div>
-        </FormSection>
-      </TabsContent>
-
-      <TabsContent value="empresa" className="mt-4 space-y-4">
-        <FormSection
-          title="Empresa y datos fiscales"
-          description="Datos comerciales y fiscales relacionados con el contacto."
-        >
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-            <Field
-              label="Empresa"
-              htmlFor={fieldId("company_name")}
-              hint={contactIsPhysical ? "Bloqueado: para persona física se toma del nombre del contacto." : undefined}
-            >
-              <Input
-                id={fieldId("company_name")}
-                placeholder={contactIsPhysical ? "Se toma del contacto" : "Empresa"}
-                value={contactIsPhysical ? derivedCompanyName : value.company_name}
-                onChange={(e) => {
-                  if (!contactIsPhysical) set("company_name", e.target.value);
-                }}
-                disabled={contactIsPhysical}
-              />
-            </Field>
-            <Field label="Razón social" htmlFor={fieldId("razon_social")}>
-              <Input id={fieldId("razon_social")} placeholder="Razón social" value={value.razon_social} onChange={(e) => set("razon_social", e.target.value)} />
-            </Field>
-            <Field label="RFC" htmlFor={fieldId("rfc")}>
-              <Input id={fieldId("rfc")} placeholder="RFC" value={value.rfc} onChange={(e) => set("rfc", e.target.value)} />
-            </Field>
-            <Field label="Uso CFDI" htmlFor={fieldId("uso_cfdi")}>
-              <Input id={fieldId("uso_cfdi")} placeholder="Uso CFDI" value={value.uso_cfdi} onChange={(e) => set("uso_cfdi", e.target.value)} />
-            </Field>
-            <Field label="Método de pago" htmlFor={fieldId("metodo_pago")}>
-              <Input id={fieldId("metodo_pago")} placeholder="Método de pago" value={value.metodo_pago} onChange={(e) => set("metodo_pago", e.target.value)} />
-            </Field>
-            <Field label="Forma de pago" htmlFor={fieldId("forma_pago")}>
-              <Input id={fieldId("forma_pago")} placeholder="Forma de pago" value={value.forma_pago} onChange={(e) => set("forma_pago", e.target.value)} />
-            </Field>
-            <Field label="Email de facturación" htmlFor={fieldId("email_facturacion")}>
-              <Input id={fieldId("email_facturacion")} placeholder="facturacion@ejemplo.com" value={value.email_facturacion} onChange={(e) => set("email_facturacion", e.target.value)} />
-            </Field>
-            <Field label="Industria" htmlFor={fieldId("tipo_industria")}>
-              <Input id={fieldId("tipo_industria")} placeholder="Industria" value={value.tipo_industria} onChange={(e) => set("tipo_industria", e.target.value)} />
-            </Field>
-            <Field label="Tamaño" htmlFor={fieldId("tamano")}>
-              <Input id={fieldId("tamano")} placeholder="Tamaño" value={value.tamano} onChange={(e) => set("tamano", e.target.value)} />
-            </Field>
-            <Field label="Sitio web" htmlFor={fieldId("website")}>
-              <Input id={fieldId("website")} placeholder="https://..." value={value.website} onChange={(e) => set("website", e.target.value)} />
-            </Field>
-            <Field label="Tipo de establecimiento" htmlFor={fieldId("tipo_establecimiento")}>
-              <Input id={fieldId("tipo_establecimiento")} placeholder="Tipo de establecimiento" value={value.tipo_establecimiento} onChange={(e) => set("tipo_establecimiento", e.target.value)} />
-            </Field>
-          </div>
-        </FormSection>
-      </TabsContent>
-
-      <TabsContent value="ubicacion" className="mt-4 space-y-4">
-        <FormSection
-          title="Ubicación"
-          description="Datos de país, estado, municipio y dirección postal."
-        >
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-            <Field label="País" htmlFor={fieldId("pais")}>
-              <Select
-                value={value.pais || undefined}
-                onValueChange={(nextCountry) => {
-                  onChange((prev) => {
-                    const next: ContactDraft = { ...prev, pais: nextCountry };
-                    if (!isMexicoCountry(nextCountry)) {
-                      next.clave_entidad = "";
-                      next.clave_municipio = "";
-                    }
-                    return next;
-                  });
-                }}
-              >
-                <SelectTrigger id={fieldId("pais")}>
-                  <SelectValue placeholder={geoLoading ? "Cargando países..." : "Selecciona un país"} />
-                </SelectTrigger>
-                <SelectContent>
-                  {geoCountries.map((country) => (
-                    <SelectItem key={country.code} value={country.code}>
-                      {country.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </Field>
-            {mexico ? (
-              <>
-                <Field label="Estado (México)" htmlFor={fieldId("clave_entidad")}>
-                  <Select
-                    value={selectedStateCode || undefined}
-                    onValueChange={(stateCode) => {
-                      const state = geoStates.find((item) => item.code === stateCode);
-                      onChange((prev) => ({
-                        ...prev,
-                        clave_entidad: stateCode,
-                        entidad: state?.name ?? prev.entidad,
-                        clave_municipio: "",
-                        municipio: "",
-                      }));
-                    }}
-                  >
-                    <SelectTrigger id={fieldId("clave_entidad")}>
-                      <SelectValue placeholder={geoLoading ? "Cargando estados..." : "Selecciona un estado"} />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {geoStates.map((state) => (
-                        <SelectItem key={state.code} value={state.code}>
-                          {state.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </Field>
-                <Field label="Municipio (México)" htmlFor={fieldId("clave_municipio")}>
-                  <Select
-                    value={selectedMunicipalityCode || undefined}
-                    onValueChange={(municipalityCode) => {
-                      const municipality = geoMunicipalities.find((item) => item.code === municipalityCode);
-                      onChange((prev) => ({
-                        ...prev,
-                        clave_municipio: municipalityCode,
-                        municipio: municipality?.name ?? prev.municipio,
-                      }));
-                    }}
-                    disabled={!selectedStateCode}
-                  >
-                    <SelectTrigger id={fieldId("clave_municipio")}>
-                      <SelectValue placeholder={!selectedStateCode ? "Selecciona estado primero" : "Selecciona un municipio"} />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {geoMunicipalities.map((municipality) => (
-                        <SelectItem key={`${municipality.state_code}-${municipality.code}`} value={municipality.code}>
-                          {municipality.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </Field>
-              </>
-            ) : (
-              <>
-                <Field label="Entidad / estado" htmlFor={fieldId("entidad")}>
-                  <Input
-                    id={fieldId("entidad")}
-                    placeholder="Entidad / estado"
-                    value={value.entidad}
-                    onChange={(e) =>
-                      onChange((prev) => ({
-                        ...prev,
-                        entidad: e.target.value,
-                        clave_entidad: "",
-                        clave_municipio: "",
-                      }))
-                    }
-                  />
-                </Field>
-                <Field label="Municipio / ciudad" htmlFor={fieldId("municipio")}>
-                  <Input
-                    id={fieldId("municipio")}
-                    placeholder="Municipio / ciudad"
-                    value={value.municipio}
-                    onChange={(e) =>
-                      onChange((prev) => ({
-                        ...prev,
-                        municipio: e.target.value,
-                        clave_municipio: "",
-                      }))
-                    }
-                  />
-                </Field>
-              </>
-            )}
-            <Field label="Código postal" htmlFor={fieldId("codigo_postal")}>
-              <Input id={fieldId("codigo_postal")} placeholder="Código postal" value={value.codigo_postal} onChange={(e) => set("codigo_postal", e.target.value)} />
-            </Field>
-            <Field label="Tipo de vialidad" htmlFor={fieldId("tipo_vialidad")}>
-              <Input id={fieldId("tipo_vialidad")} placeholder="Tipo de vialidad" value={value.tipo_vialidad} onChange={(e) => set("tipo_vialidad", e.target.value)} />
-            </Field>
-            <Field label="Nombre de vialidad" htmlFor={fieldId("nombre_vialidad")}>
-              <Input id={fieldId("nombre_vialidad")} placeholder="Nombre de vialidad" value={value.nombre_vialidad} onChange={(e) => set("nombre_vialidad", e.target.value)} />
-            </Field>
-            <Field label="Número exterior" htmlFor={fieldId("numero_exterior")}>
-              <Input id={fieldId("numero_exterior")} placeholder="Número exterior" value={value.numero_exterior} onChange={(e) => set("numero_exterior", e.target.value)} />
-            </Field>
-            <Field label="Número interior" htmlFor={fieldId("numero_interior")}>
-              <Input id={fieldId("numero_interior")} placeholder="Número interior" value={value.numero_interior} onChange={(e) => set("numero_interior", e.target.value)} />
-            </Field>
-          </div>
-        </FormSection>
-      </TabsContent>
-
-      <TabsContent value="notas" className="mt-4 space-y-4">
-        <FormSection title="Notas" description="Contexto interno y necesidad principal.">
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-            <Field label="Notas internas" htmlFor={fieldId("notes")}>
-              <Textarea id={fieldId("notes")} placeholder="Notas" value={value.notes} onChange={(e) => set("notes", e.target.value)} />
-            </Field>
-            <Field label="Necesidad / propósito" htmlFor={fieldId("necesidad_proposito")}>
-              <Textarea
-                id={fieldId("necesidad_proposito")}
-                placeholder="Necesidad / propósito"
-                value={value.necesidad_proposito}
-                onChange={(e) => set("necesidad_proposito", e.target.value)}
-              />
-            </Field>
-          </div>
-        </FormSection>
-      </TabsContent>
-    </Tabs>
-  );
-}
-
 export function ContactsDataTable({ data }: { data: ContactTableRow[] }) {
   const { context: permissionContext, loading: permissionsLoading } = usePermissions();
   const normalizedPerms = React.useMemo(
@@ -794,21 +187,15 @@ export function ContactsDataTable({ data }: { data: ContactTableRow[] }) {
   const [deleteOpen, setDeleteOpen] = React.useState(false);
 
   const [activeRow, setActiveRow] = React.useState<TableRow | null>(null);
-  const [contactForm, setContactForm] = React.useState<ContactDraft>({ ...EMPTY_CONTACT });
 
   const [selectedVendorId, setSelectedVendorId] = React.useState("");
   const [vendorOptions, setVendorOptions] = React.useState<SalesRepOption[]>([]);
   const [vendorLoading, setVendorLoading] = React.useState(false);
   const [vendorError, setVendorError] = React.useState<string | null>(null);
-  const [detailLoading, setDetailLoading] = React.useState(false);
 
   const [pending, setPending] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [success, setSuccess] = React.useState<string | null>(null);
-  const [geoCountries, setGeoCountries] = React.useState<GeoCountryOption[]>([]);
-  const [geoStates, setGeoStates] = React.useState<GeoStateOption[]>([]);
-  const [geoMunicipalitiesContact, setGeoMunicipalitiesContact] = React.useState<GeoMunicipalityOption[]>([]);
-  const [geoLoading, setGeoLoading] = React.useState(false);
 
   React.useEffect(() => {
     if (!reassignOpen || permissionsLoading || !canReassign) return;
@@ -859,119 +246,19 @@ export function ContactsDataTable({ data }: { data: ContactTableRow[] }) {
     return () => controller.abort();
   }, [reassignOpen, permissionsLoading, canReassign, canReassignAny]);
 
-  const contactStateCode = React.useMemo(() => {
-    const explicit = contactForm.clave_entidad.trim();
-    if (explicit) return explicit.padStart(2, "0");
-    const byName = geoStates.find((item) => normalizeGeoText(item.name) === normalizeGeoText(contactForm.entidad));
-    return byName?.code ?? "";
-  }, [contactForm.clave_entidad, contactForm.entidad, geoStates]);
-
-  React.useEffect(() => {
-    const controller = new AbortController();
-    const loadGeoBaseCatalogs = async () => {
-      setGeoLoading(true);
-      try {
-        const [countriesRes, statesRes] = await Promise.all([
-          fetch("/api/contactos/catalogos/paises", { cache: "no-store", signal: controller.signal }),
-          fetch("/api/contactos/catalogos/estados?pais=MX", { cache: "no-store", signal: controller.signal }),
-        ]);
-        if (countriesRes.ok) {
-          const countriesBody = (await countriesRes.json()) as { items?: GeoCountryOption[] };
-          setGeoCountries(Array.isArray(countriesBody.items) ? countriesBody.items : []);
-        }
-        if (statesRes.ok) {
-          const statesBody = (await statesRes.json()) as { items?: GeoStateOption[] };
-          setGeoStates(Array.isArray(statesBody.items) ? statesBody.items : []);
-        }
-      } catch (err) {
-        if ((err as Error).name !== "AbortError") {
-          setGeoCountries([]);
-          setGeoStates([]);
-        }
-      } finally {
-        setGeoLoading(false);
-      }
-    };
-
-    loadGeoBaseCatalogs();
-    return () => controller.abort();
-  }, []);
-
-  React.useEffect(() => {
-    if (!isMexicoCountry(contactForm.pais) || !contactStateCode) {
-      setGeoMunicipalitiesContact([]);
-      return;
-    }
-    const controller = new AbortController();
-    const loadMunicipalities = async () => {
-      try {
-        const res = await fetch(
-          `/api/contactos/catalogos/municipios?pais=MX&estado=${encodeURIComponent(contactStateCode)}`,
-          { cache: "no-store", signal: controller.signal },
-        );
-        if (!res.ok) {
-          setGeoMunicipalitiesContact([]);
-          return;
-        }
-        const body = (await res.json()) as { items?: GeoMunicipalityOption[] };
-        setGeoMunicipalitiesContact(Array.isArray(body.items) ? body.items : []);
-      } catch (err) {
-        if ((err as Error).name !== "AbortError") {
-          setGeoMunicipalitiesContact([]);
-        }
-      }
-    };
-    loadMunicipalities();
-    return () => controller.abort();
-  }, [contactForm.pais, contactStateCode]);
-
+  const [editContactoId, setEditContactoId] = React.useState<string | null>(null);
   const activeRaw = React.useMemo(() => (activeRow?.raw ?? {}) as Record<string, unknown>, [activeRow?.raw]);
-  const activeContactoId = extractString(activeRaw, ["contacto_id"]);
+  const activeContactoId = extractString(activeRaw, ["contacto_id"]) ?? extractString(activeRaw, ["id"]);
   const activePropietarioId = extractString(activeRaw, ["propietario_id"]);
-  const contactDialogName = React.useMemo(() => buildContactDisplayName(contactForm) || activeRow?.header || "", [contactForm, activeRow?.header]);
-  const contactDialogCompany = React.useMemo(() => {
-    const contactIsPhysical = normalizeGeoText(contactForm.persona_fisica_moral) === "fisica";
-    if (contactIsPhysical) {
-      const derived = buildContactDisplayName(contactForm);
-      if (derived) return derived;
-    }
-    const directCompany = contactForm.company_name.trim();
-    if (directCompany) return directCompany;
-    return extractString(activeRaw, ["company_name"]) ?? "";
-  }, [activeRaw, contactForm]);
-  const openEdit = async (row: TableRow) => {
+
+  const openEdit = (row: TableRow) => {
     const raw = (row.raw ?? {}) as Record<string, unknown>;
-    const contactoId = extractString(raw, ["contacto_id"]);
+    const contactoId = extractString(raw, ["contacto_id"]) ?? extractString(raw, ["id"]);
     setActiveRow(row);
+    setEditContactoId(contactoId);
     setError(null);
     setSuccess(null);
-    setDetailLoading(true);
-
-    try {
-      let detailRecord: Record<string, unknown> | undefined;
-      if (contactoId) {
-        const response = await fetch(`/api/contactos/${contactoId}`, { cache: "no-store" });
-        if (response.ok) {
-          const body = (await response.json()) as unknown;
-          if (body && typeof body === "object") {
-            const record = body as Record<string, unknown>;
-            if (record.contacto && typeof record.contacto === "object") {
-              detailRecord = record.contacto as Record<string, unknown>;
-            } else {
-              detailRecord = record;
-            }
-          }
-        }
-      }
-
-      setContactForm(buildContactDraftFromSources(detailRecord, raw, row.header || ""));
-      setEditOpen(true);
-    } catch {
-      setContactForm(buildContactDraftFromSources(undefined, raw, row.header || ""));
-      setEditOpen(true);
-    } finally {
-      setDetailLoading(false);
-    }
+    setEditOpen(true);
   };
 
   const extraColumns = React.useMemo<ColumnDef<TableRow>[]>(() => {
@@ -1042,23 +329,6 @@ export function ContactsDataTable({ data }: { data: ContactTableRow[] }) {
     }
   };
 
-  const handleEdit = async () => {
-    if (!activeContactoId) {
-      setError("No se encontró el contacto a editar.");
-      return;
-    }
-    await runAndReload(async () => {
-      const payload = buildContactPayload(contactForm);
-      const response = await fetch(`/api/contactos/${activeContactoId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-      const body = (await response.json().catch(() => ({}))) as { error?: string };
-      if (!response.ok) throw new Error(body.error || `Error ${response.status}`);
-    });
-  };
-
   const handleDelete = async () => {
     if (!activeContactoId) {
       setError("No se encontró el contacto a eliminar.");
@@ -1120,38 +390,12 @@ export function ContactsDataTable({ data }: { data: ContactTableRow[] }) {
         onCreated={() => window.location.reload()}
       />
 
-      <Dialog open={editOpen} onOpenChange={setEditOpen}>
-        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-6xl">
-          <DialogHeader className="space-y-2">
-            <DialogTitle>Editar contacto</DialogTitle>
-            <DialogDescription>
-              Todos los campos anteriores siguen disponibles. Ahora están organizados por pestañas para facilitar lectura y edición.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogSummary contactName={contactDialogName} companyName={contactDialogCompany} />
-          <div className="space-y-5">
-            {detailLoading ? (
-              <div className="rounded-xl border border-border/60 bg-muted/20 px-4 py-3 text-sm text-muted-foreground">
-                Cargando datos completos del contacto...
-              </div>
-            ) : null}
-            <ContactForm
-              value={contactForm}
-              onChange={setContactForm}
-              geoCountries={geoCountries}
-              geoStates={geoStates}
-              geoMunicipalities={geoMunicipalitiesContact}
-              geoLoading={geoLoading}
-            />
-            {error ? <p className="text-xs text-destructive">{error}</p> : null}
-            {success ? <p className="text-xs text-emerald-600">{success}</p> : null}
-            <div className="flex gap-2">
-              <Button type="button" disabled={pending} onClick={handleEdit}>{pending ? "Guardando..." : "Guardar cambios"}</Button>
-              <Button type="button" variant="outline" disabled={pending} onClick={() => setEditOpen(false)}>Cancelar</Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
+      <ContactEditFlow
+        open={editOpen}
+        onOpenChange={setEditOpen}
+        contactoId={editContactoId}
+        onSaved={() => window.location.reload()}
+      />
 
       <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
         <DialogContent>
