@@ -509,6 +509,12 @@ Aunque temporalmente el backend todavia mantenga compatibilidad con rutas legacy
 
 Diseñar el nuevo modal o pantalla de alta por bloques.
 
+### Documento tecnico asociado
+
+El contrato tecnico del alta entre frontend y backend quedó en:
+
+- `docs/Plan_personas_empresa_contactos/contrato_payload_alta_frontend_backend.md`
+
 ### Fase 2
 
 Definir payload final del alta:
