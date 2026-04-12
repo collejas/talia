@@ -9274,6 +9274,7 @@ class CRMPersonaEditRequest(BaseModel):
     cuenta: CRMPersonaAltaCuenta | None = None
     relacion: CRMPersonaAltaRelacion | None = None
     extras: CRMPersonaAltaExtras | None = None
+    dedupe: CRMPersonaAltaDedupeDecision | None = None
 
 
 class CRMContactSearchItem(BaseModel):
@@ -9445,6 +9446,7 @@ async def _persona_alta_find_existing_account(
     repo: CRMRepository,
     organizacion_id: UUID,
     cuenta: CRMPersonaAltaCuenta | None,
+    exclude_account_id: UUID | None = None,
 ) -> tuple[CRMAccount | None, list[dict[str, Any]]]:
     if not cuenta:
         return None, []
@@ -9462,6 +9464,8 @@ async def _persona_alta_find_existing_account(
     selected: CRMAccount | None = None
     selected_level = "debil"
     for account in accounts:
+        if exclude_account_id and account.id == exclude_account_id:
+            continue
         level = ""
         reason = ""
         if rfc_key and _persona_alta_match_rfc(account.rfc) == rfc_key:
@@ -9506,6 +9510,7 @@ async def _persona_alta_find_persona_candidates(
     organizacion_id: UUID,
     persona: CRMPersonaAltaPersona,
     cuenta: CRMPersonaAltaCuenta | None,
+    exclude_contacto_id: UUID | None = None,
 ) -> list[dict[str, Any]]:
     candidates: list[dict[str, Any]] = []
     telefono_key = _persona_alta_normalize_phone(persona.telefono_principal_e164)
@@ -9524,6 +9529,9 @@ async def _persona_alta_find_persona_candidates(
             )
         except CRMRepositoryError:
             by_phone = None
+        if by_phone:
+            if exclude_contacto_id and _safe_uuid(by_phone.get("id")) == exclude_contacto_id:
+                by_phone = None
         if by_phone:
             candidates = _merge_dedupe_candidates(
                 candidates,
@@ -9545,6 +9553,9 @@ async def _persona_alta_find_persona_candidates(
             )
         except CRMRepositoryError:
             by_email = None
+        if by_email:
+            if exclude_contacto_id and _safe_uuid(by_email.get("id")) == exclude_contacto_id:
+                by_email = None
         if by_email:
             candidates = _merge_dedupe_candidates(
                 candidates,
@@ -9572,6 +9583,8 @@ async def _persona_alta_find_persona_candidates(
             by_name = []
         for row in by_name:
             if not isinstance(row, dict):
+                continue
+            if exclude_contacto_id and _safe_uuid(row.get("id")) == exclude_contacto_id:
                 continue
             row_name_key = _persona_alta_match_name(row.get("nombre_completo"))
             if not row_name_key or row_name_key != nombre_key:
@@ -9617,12 +9630,15 @@ async def _persona_alta_build_dedupe_preview(
     persona: CRMPersonaAltaPersona,
     cuenta: CRMPersonaAltaCuenta | None,
     dedupe: CRMPersonaAltaDedupeDecision | None,
+    exclude_contacto_id: UUID | None = None,
+    exclude_account_id: UUID | None = None,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]], UUID | None, UUID | None, bool]:
     persona_candidates = await _persona_alta_find_persona_candidates(
         repo=repo,
         organizacion_id=organizacion_id,
         persona=persona,
         cuenta=cuenta,
+        exclude_contacto_id=exclude_contacto_id,
     )
     suggested_persona_id = _pick_first_strong_persona_candidate(persona_candidates)
 
@@ -9637,6 +9653,7 @@ async def _persona_alta_build_dedupe_preview(
             repo=repo,
             organizacion_id=organizacion_id,
             cuenta=cuenta,
+            exclude_account_id=exclude_account_id,
         )
         suggested_account_id = reused_account.id if reused_account else None
 
@@ -13807,6 +13824,7 @@ async def create_persona_alta(
     relacion = payload.relacion
     extras = _persona_alta_normalize_extras(payload.extras)
     dedupe = payload.dedupe
+    dedupe = payload.dedupe
 
     if not _persona_alta_clean_text(persona.nombre) or not _persona_alta_clean_text(persona.apellido_paterno):
         raise HTTPException(status_code=400, detail="persona_incompleta")
@@ -13840,6 +13858,12 @@ async def create_persona_alta(
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
+    force_create_new = bool(dedupe and dedupe.confirmar_creacion)
+    if force_create_new:
+        suggested_persona_id = None
+        suggested_account_id = None
+        dedupe_contacto_id = None
+
     if requires_confirmation:
         raise HTTPException(
             status_code=409,
@@ -13853,7 +13877,7 @@ async def create_persona_alta(
             },
         )
 
-    if not dedupe_contacto_id:
+    if not dedupe_contacto_id and not force_create_new:
         dedupe_contacto_id = suggested_persona_id
 
     if contexto.modo == "empresa_existente":
@@ -13875,7 +13899,7 @@ async def create_persona_alta(
             raise HTTPException(status_code=404, detail="cuenta_no_encontrada")
         existing_account = CRMAccount.model_validate(account_row)
         reused_account_id = existing_account.id
-    elif suggested_account_id and cuenta:
+    elif suggested_account_id and cuenta and not force_create_new:
         cuenta = cuenta.model_copy(update={"cuenta_id": suggested_account_id})
         reused_account_id = suggested_account_id
         try:
@@ -14005,8 +14029,57 @@ async def update_persona(
         raise HTTPException(status_code=400, detail="medio_contacto_required")
 
     existing_account: CRMAccount | None = None
+    persona_candidates: list[dict[str, Any]] = []
     account_candidates: list[dict[str, Any]] = []
     reused_account_id: UUID | None = None
+    dedupe_contacto_id: UUID | None = dedupe.persona_reutilizar_id if dedupe else None
+
+    if dedupe and dedupe.cuenta_reutilizar_id and cuenta:
+      cuenta = cuenta.model_copy(update={"cuenta_id": dedupe.cuenta_reutilizar_id})
+
+    exclude_account_id = cuenta.cuenta_id if cuenta and cuenta.cuenta_id else None
+    try:
+        (
+            persona_candidates,
+            account_candidates,
+            suggested_persona_id,
+            suggested_account_id,
+            requires_confirmation,
+        ) = await _persona_alta_build_dedupe_preview(
+            repo=repo,
+            organizacion_id=organizacion_id,
+            contexto=contexto,
+            persona=persona,
+            cuenta=cuenta,
+            dedupe=dedupe,
+            exclude_contacto_id=contacto_id,
+            exclude_account_id=exclude_account_id,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    force_create_new = bool(dedupe and dedupe.confirmar_creacion)
+    if force_create_new:
+        suggested_persona_id = None
+        suggested_account_id = None
+        dedupe_contacto_id = None
+
+    if requires_confirmation:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "dedupe_confirmation_required",
+                "message": "Se detectaron posibles duplicados. Confirma si deseas reutilizar o crear uno nuevo.",
+                "candidatos_persona": persona_candidates,
+                "candidatos_cuenta": account_candidates,
+                "sugerencia_persona_reutilizar_id": str(suggested_persona_id) if suggested_persona_id else None,
+                "sugerencia_cuenta_reutilizar_id": str(suggested_account_id) if suggested_account_id else None,
+            },
+        )
+
+    if not dedupe_contacto_id and not force_create_new:
+        dedupe_contacto_id = suggested_persona_id
+
     if contexto.modo == "empresa_existente":
         if not cuenta or not cuenta.cuenta_id:
             raise HTTPException(status_code=400, detail="cuenta_id_required")
@@ -14017,21 +14090,24 @@ async def update_persona(
         if not account_row:
             raise HTTPException(status_code=404, detail="cuenta_no_encontrada")
         existing_account = CRMAccount.model_validate(account_row)
-    elif contexto.modo in {"empresa_nueva", "persona_fisica_actividad_empresarial"} and cuenta and not cuenta.cuenta_id:
-        existing_account, account_candidates = await _persona_alta_find_existing_account(
-            repo=repo,
-            organizacion_id=organizacion_id,
-            cuenta=cuenta,
-        )
-        if existing_account:
-            cuenta = cuenta.model_copy(update={"cuenta_id": existing_account.id})
-            reused_account_id = existing_account.id
-    elif cuenta:
-        _, account_candidates = await _persona_alta_find_existing_account(
-            repo=repo,
-            organizacion_id=organizacion_id,
-            cuenta=cuenta,
-        )
+    elif cuenta and cuenta.cuenta_id:
+        try:
+            account_row = await repo.get_account(organizacion_id=organizacion_id, account_id=cuenta.cuenta_id)
+        except CRMRepositoryError as exc:
+            raise HTTPException(status_code=502, detail=str(exc)) from exc
+        if not account_row:
+            raise HTTPException(status_code=404, detail="cuenta_no_encontrada")
+        existing_account = CRMAccount.model_validate(account_row)
+        reused_account_id = existing_account.id
+    elif suggested_account_id and cuenta and not force_create_new:
+        cuenta = cuenta.model_copy(update={"cuenta_id": suggested_account_id})
+        reused_account_id = suggested_account_id
+        try:
+            account_row = await repo.get_account(organizacion_id=organizacion_id, account_id=suggested_account_id)
+        except CRMRepositoryError as exc:
+            raise HTTPException(status_code=502, detail=str(exc)) from exc
+        if account_row:
+            existing_account = CRMAccount.model_validate(account_row)
 
     contact_payload = _persona_alta_to_contact_payload(
         persona=persona,
@@ -14123,9 +14199,54 @@ async def update_persona(
             "modo": contexto.modo,
             "persona_id": str(persona_out.id),
             "cuenta_id": str(persona_out.cuenta_id) if persona_out.cuenta_id else None,
+            "deduplicado": bool(dedupe_contacto_id),
+            "contacto_reutilizado_id": str(dedupe_contacto_id) if dedupe_contacto_id else None,
             "cuenta_reutilizada_id": str(reused_account_id) if reused_account_id else None,
+            "candidatos_persona": persona_candidates,
             "candidatos_cuenta": account_candidates,
         },
+    )
+
+
+@router.post("/personas/{contacto_id}/validar", response_model=CRMPersonaAltaValidationResponse)
+async def validate_persona_update(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("contacts.write")),
+    contacto_id: UUID,
+    payload: CRMPersonaEditRequest,
+) -> CRMPersonaAltaValidationResponse:
+    persona = _persona_alta_normalize_persona(payload.persona)
+    contexto = payload.contexto_comercial
+    cuenta = _persona_alta_normalize_cuenta(payload.cuenta)
+    dedupe = payload.dedupe
+
+    if not _persona_alta_clean_text(persona.nombre) or not _persona_alta_clean_text(persona.apellido_paterno):
+        raise HTTPException(status_code=400, detail="persona_incompleta")
+    if not _persona_alta_clean_text(persona.correo_principal) and not _persona_alta_clean_text(persona.telefono_principal_e164):
+        raise HTTPException(status_code=400, detail="medio_contacto_required")
+
+    exclude_account_id = cuenta.cuenta_id if cuenta and cuenta.cuenta_id else None
+    persona_candidates, account_candidates, suggested_persona_id, suggested_account_id, requires_confirmation = (
+        await _persona_alta_build_dedupe_preview(
+            repo=repo,
+            organizacion_id=organizacion_id,
+            contexto=contexto,
+            persona=persona,
+            cuenta=cuenta,
+            dedupe=dedupe,
+            exclude_contacto_id=contacto_id,
+            exclude_account_id=exclude_account_id,
+        )
+    )
+
+    return CRMPersonaAltaValidationResponse(
+        requiere_confirmacion=requires_confirmation,
+        candidatos_persona=persona_candidates,
+        candidatos_cuenta=account_candidates,
+        sugerencia_persona_reutilizar_id=suggested_persona_id,
+        sugerencia_cuenta_reutilizar_id=suggested_account_id,
     )
 
 

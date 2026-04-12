@@ -87,6 +87,43 @@ type AccountOption = {
   telefono?: string | null;
 };
 
+type DedupeCandidate = {
+  id: string;
+  nombre?: string | null;
+  alias?: string | null;
+  empresa?: string | null;
+  correo?: string | null;
+  telefono?: string | null;
+  rfc?: string | null;
+  nivel?: "fuerte" | "medio" | "debil" | string;
+  motivo?: string | null;
+};
+
+type PersonaResponseResumen = {
+  deduplicado?: boolean;
+  contacto_reutilizado_id?: string | null;
+  cuenta_reutilizada_id?: string | null;
+};
+
+type PersonaMutationResponse = {
+  resumen?: PersonaResponseResumen;
+  error?: string;
+};
+
+type PersonaValidationResponse = {
+  requiere_confirmacion: boolean;
+  candidatos_persona: DedupeCandidate[];
+  candidatos_cuenta: DedupeCandidate[];
+  sugerencia_persona_reutilizar_id?: string | null;
+  sugerencia_cuenta_reutilizar_id?: string | null;
+};
+
+type DedupeDecision = {
+  confirmar_creacion?: boolean;
+  persona_reutilizar_id?: string;
+  cuenta_reutilizar_id?: string;
+};
+
 type ContactDetail = Record<string, unknown>;
 type AccountRelation = {
   id: string;
@@ -257,7 +294,7 @@ function cleanObject<T extends Record<string, unknown>>(input: T): Partial<T> {
   return next as Partial<T>;
 }
 
-function buildPayload(state: ContactEditState) {
+function buildPayload(state: ContactEditState, dedupe?: DedupeDecision) {
   const nombreCompleto = buildFullName(state.persona);
   const persona = cleanObject({
     ...state.persona,
@@ -333,6 +370,13 @@ function buildPayload(state: ContactEditState) {
     cuenta: state.mode === "solo_persona" ? null : cuentaBase,
     relacion,
     extras,
+    dedupe: dedupe
+      ? cleanObject({
+          confirmar_creacion: dedupe.confirmar_creacion ?? false,
+          persona_reutilizar_id: dedupe.persona_reutilizar_id ?? "",
+          cuenta_reutilizar_id: dedupe.cuenta_reutilizar_id ?? "",
+        })
+      : undefined,
   };
 }
 
@@ -519,6 +563,9 @@ function Field({
 export function ContactEditFlow({ open, onOpenChange, contactoId, onSaved }: ContactEditFlowProps) {
   const [state, dispatch] = React.useReducer(reducer, INITIAL_STATE);
   const deferredAccountQuery = React.useDeferredValue(state.accountQuery);
+  const [pendingDedupe, setPendingDedupe] = React.useState<PersonaValidationResponse | null>(null);
+  const [selectedPersonaReuseId, setSelectedPersonaReuseId] = React.useState("");
+  const [selectedCuentaReuseId, setSelectedCuentaReuseId] = React.useState("");
   const [relationAccountQuery, setRelationAccountQuery] = React.useState("");
   const deferredRelationAccountQuery = React.useDeferredValue(relationAccountQuery);
   const [relationAccountResults, setRelationAccountResults] = React.useState<AccountOption[]>([]);
@@ -571,6 +618,13 @@ export function ContactEditFlow({ open, onOpenChange, contactoId, onSaved }: Con
     run();
     return () => controller.abort();
   }, [open, contactoId, state.loadedId]);
+
+  React.useEffect(() => {
+    if (open) return;
+    setPendingDedupe(null);
+    setSelectedPersonaReuseId("");
+    setSelectedCuentaReuseId("");
+  }, [open]);
 
   React.useEffect(() => {
     if (state.mode !== "empresa_existente") return;
@@ -795,7 +849,7 @@ export function ContactEditFlow({ open, onOpenChange, contactoId, onSaved }: Con
     }
   };
 
-  const submit = async () => {
+  const submit = async (dedupeDecision?: DedupeDecision) => {
     if (!contactoId) return;
     const validationError = validateState(state);
     if (validationError) {
@@ -806,13 +860,45 @@ export function ContactEditFlow({ open, onOpenChange, contactoId, onSaved }: Con
     dispatch({ type: "saving/set", value: true });
     dispatch({ type: "error/set", value: null });
     try {
+      const payload = buildPayload(state, dedupeDecision);
+      if (!dedupeDecision) {
+        const previewResponse = await fetch(`/api/personas/${encodeURIComponent(contactoId)}/validar`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        const previewBody = (await previewResponse.json().catch(() => ({}))) as
+          | PersonaValidationResponse
+          | { error?: string };
+        if (!previewResponse.ok) {
+          throw new Error((previewBody as { error?: string }).error || `Error ${previewResponse.status}`);
+        }
+        const preview = previewBody as PersonaValidationResponse;
+        if (preview.requiere_confirmacion) {
+          setPendingDedupe(preview);
+          setSelectedPersonaReuseId(preview.sugerencia_persona_reutilizar_id ?? "");
+          setSelectedCuentaReuseId(preview.sugerencia_cuenta_reutilizar_id ?? "");
+          toast.warning("Se detectaron posibles duplicados. Confirma cómo continuar.");
+          return;
+        }
+      }
+
       const response = await fetch(`/api/personas/${encodeURIComponent(contactoId)}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(buildPayload(state)),
+        body: JSON.stringify(payload),
       });
-      const body = (await response.json().catch(() => ({}))) as { error?: string };
+      const body = (await response.json().catch(() => ({}))) as PersonaMutationResponse;
       if (!response.ok) throw new Error(body.error || `Error ${response.status}`);
+      setPendingDedupe(null);
+      setSelectedPersonaReuseId("");
+      setSelectedCuentaReuseId("");
+      if (body.resumen?.deduplicado && body.resumen.contacto_reutilizado_id) {
+        toast.info(`Se reutilizo contacto existente (${body.resumen.contacto_reutilizado_id}).`);
+      }
+      if (body.resumen?.cuenta_reutilizada_id) {
+        toast.info(`Se reutilizo cuenta existente (${body.resumen.cuenta_reutilizada_id}).`);
+      }
       toast.success("Cambios guardados.");
       onOpenChange(false);
       onSaved?.();
@@ -1239,13 +1325,106 @@ export function ContactEditFlow({ open, onOpenChange, contactoId, onSaved }: Con
               </div>
             ) : null}
           </FormSection>
+
+          {pendingDedupe ? (
+            <FormSection
+              title="Posibles duplicados detectados"
+              description="Selecciona registros existentes para reutilizar o crea nuevos."
+            >
+              {pendingDedupe.candidatos_persona.length ? (
+                <div className="space-y-2">
+                  <div className="text-sm font-medium">Personas candidatas</div>
+                  {pendingDedupe.candidatos_persona.map((candidate) => {
+                    const selected = selectedPersonaReuseId === candidate.id;
+                    return (
+                      <button
+                        key={`edit-persona-${candidate.id}`}
+                        type="button"
+                        className={`w-full rounded-xl border px-4 py-3 text-left ${selected ? "border-foreground bg-muted/40" : "border-border/60 bg-background"}`}
+                        onClick={() => setSelectedPersonaReuseId(candidate.id)}
+                      >
+                        <div className="text-sm font-medium">
+                          {candidate.nombre || "Sin nombre"}{" "}
+                          <span className="text-xs text-muted-foreground">({candidate.nivel || "debil"})</span>
+                        </div>
+                        <div className="text-xs text-muted-foreground">
+                          {[candidate.correo, candidate.telefono, candidate.empresa].filter(Boolean).join(" · ") || "Sin datos adicionales"}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : null}
+
+              {pendingDedupe.candidatos_cuenta.length ? (
+                <div className="mt-3 space-y-2">
+                  <div className="text-sm font-medium">Cuentas candidatas</div>
+                  {pendingDedupe.candidatos_cuenta.map((candidate) => {
+                    const selected = selectedCuentaReuseId === candidate.id;
+                    return (
+                      <button
+                        key={`edit-cuenta-${candidate.id}`}
+                        type="button"
+                        className={`w-full rounded-xl border px-4 py-3 text-left ${selected ? "border-foreground bg-muted/40" : "border-border/60 bg-background"}`}
+                        onClick={() => setSelectedCuentaReuseId(candidate.id)}
+                      >
+                        <div className="text-sm font-medium">
+                          {candidate.nombre || "Sin nombre"}{" "}
+                          <span className="text-xs text-muted-foreground">({candidate.nivel || "debil"})</span>
+                        </div>
+                        <div className="text-xs text-muted-foreground">
+                          {[candidate.rfc, candidate.correo, candidate.telefono, candidate.alias].filter(Boolean).join(" · ") || "Sin datos adicionales"}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : null}
+
+              <div className="mt-3 flex flex-wrap gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={state.saving}
+                  onClick={() =>
+                    void submit({
+                      persona_reutilizar_id: selectedPersonaReuseId || undefined,
+                      cuenta_reutilizar_id: selectedCuentaReuseId || undefined,
+                    })
+                  }
+                >
+                  Reutilizar seleccionados y guardar
+                </Button>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  disabled={state.saving}
+                  onClick={() => void submit({ confirmar_creacion: true })}
+                >
+                  Crear nuevos de todos modos
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  disabled={state.saving}
+                  onClick={() => {
+                    setPendingDedupe(null);
+                    setSelectedPersonaReuseId("");
+                    setSelectedCuentaReuseId("");
+                  }}
+                >
+                  Cerrar revision
+                </Button>
+              </div>
+            </FormSection>
+          ) : null}
         </div>
 
         <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
             Cancelar
           </Button>
-          <Button type="button" onClick={submit} disabled={state.saving || state.loading || !contactoId}>
+          <Button type="button" onClick={() => void submit()} disabled={state.saving || state.loading || !contactoId}>
             {state.saving ? "Guardando..." : "Guardar cambios"}
           </Button>
         </div>

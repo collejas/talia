@@ -40,6 +40,7 @@ Notas:
   - Crea/une `persona + cuenta + relación` y mantiene sombra legacy cuando aplica.
 - Edición estructurada:
   - `PATCH /crm/personas/{contacto_id}` en `backend/app/api/routes/crm.py`
+  - `POST /crm/personas/{contacto_id}/validar` en `backend/app/api/routes/crm.py`
 - Relación explícita:
   - `upsert_contact_account_relation(...)` en `backend/app/repositories/crm.py`
 - CRUD nativo de `cuenta_personas`:
@@ -80,6 +81,7 @@ Notas:
   - `frontend/panel/src/components/contactos/contact-edit-flow.tsx`
   - Endpoint panel (proxy):
     - `frontend/panel/src/app/api/personas/[contactoId]/route.ts` -> `PATCH /crm/personas/{contacto_id}`
+    - `frontend/panel/src/app/api/personas/[contactoId]/validar/route.ts` -> `POST /crm/personas/{contacto_id}/validar`
 - Proxies listos para relaciones:
   - `frontend/panel/src/app/api/personas/[contactoId]/relaciones/route.ts`
   - `frontend/panel/src/app/api/personas/[contactoId]/relaciones/[relacionId]/route.ts`
@@ -88,6 +90,7 @@ Notas:
   - `frontend/panel/src/components/contactos/contacts-data-table.tsx`
   - `Nuevo contacto` abre el flujo nuevo.
   - `Editar` abre el flujo nuevo.
+  - Alta y edición ahora piden confirmación explícita cuando el dedupe detecta candidatos `medio/debil`.
 
 ## Pendiente (siguiente fase sugerida)
 
