@@ -1,0 +1,11 @@
+[Unit]
+Description=Run Tal-IA resource health probe every 5 minutes
+
+[Timer]
+OnBootSec=2m
+OnUnitActiveSec=5m
+AccuracySec=15s
+Unit=talia-resource-health.service
+
+[Install]
+WantedBy=timers.target

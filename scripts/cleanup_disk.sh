@@ -12,6 +12,8 @@ RUN_NPM_CACHE_CLEAN="${RUN_NPM_CACHE_CLEAN:-1}"
 RUN_GIT_GC="${RUN_GIT_GC:-1}"
 RUN_TOOL_CACHE_CLEAN="${RUN_TOOL_CACHE_CLEAN:-1}"
 RUN_NEXT_CACHE_CLEAN="${RUN_NEXT_CACHE_CLEAN:-1}"
+RUN_RELEASE_ARTIFACT_CLEAN="${RUN_RELEASE_ARTIFACT_CLEAN:-1}"
+RUN_LOCAL_PACKAGE_CACHE_CLEAN="${RUN_LOCAL_PACKAGE_CACHE_CLEAN:-1}"
 
 LOG_DIR="${ROOT_DIR}/logs/maintenance"
 mkdir -p "${LOG_DIR}" 2>/dev/null || true
@@ -135,6 +137,10 @@ cleanup_tool_caches() {
   run_rm_rf "${ROOT_DIR}/backend/.pytest_cache"
   run_rm_rf "${ROOT_DIR}/backend/.ruff_cache"
   run_rm_rf "${ROOT_DIR}/frontend/panel/.next/cache"
+  run_rm_rf "${ROOT_DIR}/frontend/panel/node_modules/.cache"
+  run_rm_rf "${ROOT_DIR}/frontend/panel/.turbo"
+  run_rm_rf "${ROOT_DIR}/.mypy_cache"
+  run_rm_rf "${ROOT_DIR}/.pytest_cache"
 }
 
 cleanup_next_cache_in_releases() {
@@ -151,6 +157,33 @@ cleanup_next_cache_in_releases() {
     find "$rel" -type d -path "*/.next/cache" -prune -exec rm -rf {} + 2>/dev/null || true
     log "next cache cleaned in ${rel}"
   done
+}
+
+cleanup_release_artifacts() {
+  if [[ "${RUN_RELEASE_ARTIFACT_CLEAN}" != "1" ]]; then
+    return 0
+  fi
+  local rel
+  for rel in "${ROOT_DIR}/releases/panel" "${ROOT_DIR}/releases/panel-staging"; do
+    [[ -d "$rel" ]] || continue
+    if [[ "${DRY_RUN}" == "1" ]]; then
+      log "DRY_RUN find ${rel} -type d \\( -name coverage -o -name .pytest_cache -o -name .ruff_cache -o -name .turbo -o -path '*/node_modules/.cache' \\) -prune -exec rm -rf {} +"
+      continue
+    fi
+    find "$rel" -type d \
+      \( -name coverage -o -name .pytest_cache -o -name .ruff_cache -o -name .turbo -o -path "*/node_modules/.cache" \) \
+      -prune -exec rm -rf {} + 2>/dev/null || true
+    log "release artifacts cleaned in ${rel}"
+  done
+}
+
+cleanup_local_package_caches() {
+  if [[ "${RUN_LOCAL_PACKAGE_CACHE_CLEAN}" != "1" ]]; then
+    return 0
+  fi
+  run_rm_rf "${ROOT_DIR}/.npm-cache/_logs"
+  run_rm_rf "${ROOT_DIR}/.npm-cache/_npx"
+  run_rm_rf "${ROOT_DIR}/frontend/panel/.npm-cache"
 }
 
 cleanup_npm_cache() {
@@ -215,6 +248,8 @@ main() {
   cleanup_old_logs
   cleanup_tool_caches
   cleanup_next_cache_in_releases
+  cleanup_release_artifacts
+  cleanup_local_package_caches
   cleanup_npm_cache
   cleanup_git_objects
   cleanup_system_logs

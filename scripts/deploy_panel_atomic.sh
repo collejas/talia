@@ -1,12 +1,18 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Deploy atomico para frontend panel en PRODUCCION (Next.js):
-# 1) copia codigo a release nuevo
-# 2) valida TypeScript + lint + build en release nuevo
-# 3) swap atomico del symlink "current"
-# 4) reinicio de servicios de produccion
-# 5) purge opcional de Cloudflare
+# Deploy atomico para frontend panel en PRODUCCION (Next.js standalone):
+# 1) copia codigo a release temporal
+# 2) valida TypeScript + lint + build en release temporal
+# 3) empaqueta release minimo standalone
+# 4) swap atomico del symlink "current"
+# 5) reinicio de servicios de produccion
+# 6) purge opcional de Cloudflare
+#
+# Requisitos:
+# - next.config.ts debe tener: output: "standalone"
+# - talia-panel.service debe arrancar con:
+#     node /var/www/talia/current/panel/.next/standalone/server.js
 #
 # Uso:
 #   bash scripts/deploy_panel_atomic.sh
@@ -61,6 +67,7 @@ API_HEALTH_TIMEOUT_SECONDS="${API_HEALTH_TIMEOUT_SECONDS:-45}"
 NOW_UTC="$(date -u +%Y%m%d_%H%M%S)"
 NEW_RELEASE="${PANEL_RELEASES_DIR}/${NOW_UTC}"
 TMP_RELEASE="${NEW_RELEASE}.tmp"
+PACKED_RELEASE="${NEW_RELEASE}.standalone"
 
 SWAPPED=0
 PREV_RELEASE=""
@@ -70,9 +77,12 @@ fi
 
 rollback_if_needed() {
   local exit_code=$?
+
   if [[ ${exit_code} -ne 0 && "${CLEAN_TMP_ON_FAIL}" == "1" ]]; then
     rm -rf "${TMP_RELEASE}" || true
+    rm -rf "${PACKED_RELEASE}" || true
   fi
+
   if [[ ${exit_code} -ne 0 && ${SWAPPED} -eq 1 && -n "${PREV_RELEASE}" ]]; then
     echo "[rollback] Fallo despues de swap. Revirtiendo symlink a: ${PREV_RELEASE}"
     ln -sfn "${PREV_RELEASE}" "${PANEL_CURRENT_LINK}" || true
@@ -82,6 +92,7 @@ rollback_if_needed() {
     fi
     sudo systemctl restart "${PANEL_SERVICE}" || true
   fi
+
   exit ${exit_code}
 }
 trap rollback_if_needed EXIT
@@ -91,16 +102,16 @@ cleanup_old_releases() {
   if command -v sudo >/dev/null 2>&1; then
     sudo -n chown -R "${RUN_AS_USER}:${RUN_AS_USER}" "${PANEL_RELEASES_DIR}" >/dev/null 2>&1 || true
   fi
-  # 1) limpiar temporales fallidos
-  find "${PANEL_RELEASES_DIR}" -mindepth 1 -maxdepth 1 -type d -name "*.tmp" -print0 | xargs -0r rm -rf --
 
-  # 2) conservar release activo + N recientes validos
+  find "${PANEL_RELEASES_DIR}" -mindepth 1 -maxdepth 1 -type d -name "*.tmp" -print0 | xargs -0r rm -rf --
+  find "${PANEL_RELEASES_DIR}" -mindepth 1 -maxdepth 1 -type d -name "*.standalone" -print0 | xargs -0r rm -rf --
+
   local current_target=""
   if [[ -L "${PANEL_CURRENT_LINK}" ]]; then
     current_target="$(readlink -f "${PANEL_CURRENT_LINK}" || true)"
   fi
 
-  mapfile -t valid_releases < <(ls -1dt "${PANEL_RELEASES_DIR}"/* 2>/dev/null | grep -v '\.tmp$' || true)
+  mapfile -t valid_releases < <(ls -1dt "${PANEL_RELEASES_DIR}"/* 2>/dev/null | grep -Ev '\.(tmp|standalone)$' || true)
   if [[ "${KEEP_RELEASES}" =~ ^[0-9]+$ ]] && [[ "${#valid_releases[@]}" -gt 0 ]]; then
     declare -A preserve=()
     local count=0
@@ -132,7 +143,7 @@ ensure_free_space() {
   fi
   if (( avail_gb < MIN_FREE_GB )); then
     echo "[deploy] ERROR espacio insuficiente: ${avail_gb}G libres, minimo requerido=${MIN_FREE_GB}G."
-    echo "[deploy] Ejecuta scripts/cleanup_disk.sh o reduce KEEP_RELEASES/KEEP_BACKUPS antes de continuar."
+    echo "[deploy] Ejecuta scripts/cleanup_disk.sh o reduce KEEP_RELEASES antes de continuar."
     return 1
   fi
   echo "[deploy] Espacio libre OK: ${avail_gb}G"
@@ -142,6 +153,7 @@ preflight_restart_permissions() {
   if [[ "${SKIP_RESTART}" == "1" ]]; then
     return 0
   fi
+
   local required_checks=()
   required_checks+=("sudo -n systemctl status ${PANEL_SERVICE}")
   if [[ "${RESTART_API}" == "1" ]]; then
@@ -178,6 +190,45 @@ wait_for_api_health() {
   return 1
 }
 
+assert_standalone_output() {
+  if [[ ! -f "${TMP_RELEASE}/.next/standalone/server.js" ]]; then
+    echo "[deploy] ERROR no existe .next/standalone/server.js"
+    echo "[deploy] Verifica que next.config.ts tenga output: \"standalone\""
+    return 1
+  fi
+
+  if [[ ! -d "${TMP_RELEASE}/.next/static" ]]; then
+    echo "[deploy] ERROR no existe .next/static"
+    return 1
+  fi
+}
+
+package_standalone_release() {
+  echo "[deploy] Empaquetando release standalone minimo"
+
+  rm -rf "${PACKED_RELEASE}"
+  mkdir -p "${PACKED_RELEASE}/.next"
+
+  cp -R "${TMP_RELEASE}/.next/standalone/." "${PACKED_RELEASE}/"
+  cp -R "${TMP_RELEASE}/.next/static" "${PACKED_RELEASE}/.next/"
+
+  if [[ -d "${TMP_RELEASE}/public" ]]; then
+    cp -R "${TMP_RELEASE}/public" "${PACKED_RELEASE}/"
+  fi
+
+  if [[ -f "${TMP_RELEASE}/.env.production" ]]; then
+    cp "${TMP_RELEASE}/.env.production" "${PACKED_RELEASE}/.env.production"
+  fi
+
+  if [[ -f "${TMP_RELEASE}/package.json" ]]; then
+    cp "${TMP_RELEASE}/package.json" "${PACKED_RELEASE}/package.json"
+  fi
+
+  if command -v sudo >/dev/null 2>&1; then
+    sudo -n chown -R "${RUN_AS_USER}:${RUN_AS_USER}" "${PACKED_RELEASE}" >/dev/null 2>&1 || true
+  fi
+}
+
 echo "[deploy] Source:  ${PANEL_SOURCE_DIR}"
 echo "[deploy] Release: ${NEW_RELEASE}"
 echo "[deploy] Current: ${PANEL_CURRENT_LINK}"
@@ -187,13 +238,16 @@ mkdir -p "${PANEL_RELEASES_DIR}"
 mkdir -p "${NPM_CACHE_DIR}"
 mkdir -p "$(dirname "${PANEL_LOG_FILE}")"
 touch "${PANEL_LOG_FILE}" "${PANEL_ERROR_LOG_FILE}"
+
 if command -v sudo >/dev/null 2>&1; then
   sudo -n chown "${RUN_AS_USER}:${RUN_AS_USER}" "${PANEL_LOG_FILE}" "${PANEL_ERROR_LOG_FILE}" >/dev/null 2>&1 || true
 fi
+
 cleanup_old_releases
 ensure_free_space
 preflight_restart_permissions
-rm -rf "${TMP_RELEASE}"
+
+rm -rf "${TMP_RELEASE}" "${PACKED_RELEASE}"
 mkdir -p "${TMP_RELEASE}"
 
 echo "[deploy] Copiando codigo a release temporal"
@@ -233,11 +287,19 @@ if [[ "${SKIP_BUILD}" != "1" ]]; then
   npm run build
 fi
 
-echo "[deploy] Promoviendo release temporal a release final"
-mv "${TMP_RELEASE}" "${NEW_RELEASE}"
+assert_standalone_output
+package_standalone_release
+
+echo "[deploy] Promoviendo release standalone a release final"
+rm -rf "${TMP_RELEASE}"
+mv "${PACKED_RELEASE}" "${NEW_RELEASE}"
+
 if command -v sudo >/dev/null 2>&1; then
   sudo -n chown -R "${RUN_AS_USER}:${RUN_AS_USER}" "${NEW_RELEASE}" >/dev/null 2>&1 || true
 fi
+
+echo "[deploy] Tamano release final:"
+du -sh "${NEW_RELEASE}" || true
 
 mkdir -p "$(dirname "${PANEL_CURRENT_LINK}")"
 echo "[deploy] Swap atomico: ${PANEL_CURRENT_LINK} -> ${NEW_RELEASE}"
@@ -290,7 +352,9 @@ fi
 echo "[deploy] Limpieza de releases viejos (keep=${KEEP_RELEASES})"
 if [[ "${KEEP_RELEASES}" =~ ^[0-9]+$ ]]; then
   find "${PANEL_RELEASES_DIR}" -mindepth 1 -maxdepth 1 -type d -name "*.tmp" -print0 | xargs -0r rm -rf -- || true
-  old_releases="$(ls -1dt "${PANEL_RELEASES_DIR}"/* 2>/dev/null | grep -v '\.tmp$' | tail -n +"$((KEEP_RELEASES + 1))" || true)"
+  find "${PANEL_RELEASES_DIR}" -mindepth 1 -maxdepth 1 -type d -name "*.standalone" -print0 | xargs -0r rm -rf -- || true
+
+  old_releases="$(ls -1dt "${PANEL_RELEASES_DIR}"/* 2>/dev/null | grep -Ev '\.(tmp|standalone)$' | tail -n +"$((KEEP_RELEASES + 1))" || true)"
   if [[ -n "${old_releases}" ]]; then
     if ! printf '%s\n' "${old_releases}" | xargs -r rm -rf -- 2>/dev/null; then
       if ! printf '%s\n' "${old_releases}" | xargs -r sudo -n rm -rf -- 2>/dev/null; then

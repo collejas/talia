@@ -23,32 +23,30 @@ WantedBy=multi-user.target
 # systemd/system/talia-panel.service
 
 [Unit]
-Description=Tal-IA Panel (Next.js)
+Description=Tal-IA Panel (Next.js Standalone)
 After=network-online.target
 Wants=network-online.target
 
 [Service]
 Type=simple
-WorkingDirectory=/var/www/talia/frontend/panel
+WorkingDirectory=/var/www/talia/current/panel
 
-# Variables de entorno
+User=jorge
+Group=jorge
+
 Environment=NODE_ENV=production
+Environment=PORT=3001
+Environment=HOSTNAME=0.0.0.0
 Environment=NODE_OPTIONS=--max-old-space-size=384
 Environment=PANEL_API_URL=http://127.0.0.1:8004/api
-EnvironmentFile=/var/www/talia/frontend/panel/.env.local
-# Nota: si `PANEL_API_URL` también existe en `.env.local`, systemd tomará el valor del archivo
-# (por eso conviene que ambos coincidan).
+EnvironmentFile=/var/www/talia/current/panel/.env.production
 
-# Crear carpeta de logs
 ExecStartPre=/usr/bin/mkdir -p /var/www/talia/logs
 
-# El shell abre los logs como el usuario del servicio y evita que queden root:root.
-ExecStart=/bin/bash -lc '/usr/bin/npm run start -- -p 3001 >> /var/www/talia/logs/panel.log 2>> /var/www/talia/logs/panel-error.log'
+ExecStart=/bin/bash -lc '/usr/bin/node /var/www/talia/current/panel/.next/standalone/server.js >> /var/www/talia/logs/panel.log 2>> /var/www/talia/logs/panel-error.log'
 
 Restart=on-failure
 RestartSec=5
-User=jorge
-Group=jorge
 
 [Install]
 WantedBy=multi-user.target

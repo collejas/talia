@@ -1,0 +1,14 @@
+[Unit]
+Description=Tal-IA resource health probe
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/var/www/talia
+EnvironmentFile=-/var/www/talia/.env.resource_health
+ExecStart=/usr/bin/bash /var/www/talia/scripts/monitor_resource_health.sh
+User=root
+
+[Install]
+WantedBy=multi-user.target
