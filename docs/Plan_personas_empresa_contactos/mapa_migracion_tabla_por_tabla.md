@@ -3,6 +3,17 @@
 Fecha: 2026-04-11 (UTC)
 Estado: Borrador técnico
 
+## Estado actual (2026-04-12)
+
+Ya se ejecutaron las fases:
+
+- Crear nuevo modelo base (`personas`, `cuentas` existente, `cuenta_personas`, `direcciones`, `cuenta_direcciones`)
+- Backfill inicial hacia `personas` y generación/vinculación inicial de `cuentas`
+- Transición de frontend: alta y edición del panel ya operan con payload estructurado
+
+Detalle y archivos específicos:
+- `docs/Plan_personas_empresa_contactos/progreso.md`
+
 ## 1. Objetivo
 
 Definir la migración gradual desde el modelo actual hacia una estructura separada de:

@@ -3,6 +3,13 @@
 Fecha: 2026-04-11 (UTC)
 Estado: Borrador técnico
 
+## Estado actual (2026-04-12)
+
+Se completó la transición operativa de **alta** y **edición** del panel hacia el modelo nuevo (con compatibilidad temporal con el legado).
+
+Ver progreso detallado en:
+- `docs/Plan_personas_empresa_contactos/progreso.md`
+
 ## 1. Objetivo
 
 Reestructurar el dominio CRM de Tal-IA para separar con claridad:
