@@ -9193,6 +9193,21 @@ class CRMPersonaAltaRequest(BaseModel):
     cuenta: CRMPersonaAltaCuenta | None = None
     relacion: CRMPersonaAltaRelacion | None = None
     extras: CRMPersonaAltaExtras | None = None
+    dedupe: "CRMPersonaAltaDedupeDecision | None" = None
+
+
+class CRMPersonaAltaDedupeDecision(BaseModel):
+    confirmar_creacion: bool = False
+    persona_reutilizar_id: UUID | None = None
+    cuenta_reutilizar_id: UUID | None = None
+
+
+class CRMPersonaAltaValidationResponse(BaseModel):
+    requiere_confirmacion: bool
+    candidatos_persona: list[dict[str, Any]] = Field(default_factory=list)
+    candidatos_cuenta: list[dict[str, Any]] = Field(default_factory=list)
+    sugerencia_persona_reutilizar_id: UUID | None = None
+    sugerencia_cuenta_reutilizar_id: UUID | None = None
 
 
 class CRMCuentaPersonaRelacion(BaseModel):
@@ -9384,37 +9399,271 @@ def _persona_alta_match_rfc(value: str | None) -> str:
     return re.sub(r"\s+", "", text).upper()
 
 
+def _persona_alta_match_name(value: str | None) -> str:
+    text = _persona_alta_clean_text(value, compact_spaces=True)
+    if not text:
+        return ""
+    normalized = unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode("ascii")
+    lowered = normalized.lower()
+    lowered = re.sub(r"[^a-z0-9 ]+", " ", lowered)
+    return " ".join(lowered.split())
+
+
+def _dedupe_level_rank(level: str) -> int:
+    if level == "fuerte":
+        return 3
+    if level == "medio":
+        return 2
+    return 1
+
+
+def _merge_dedupe_candidates(
+    current: list[dict[str, Any]],
+    candidate: dict[str, Any],
+) -> list[dict[str, Any]]:
+    candidate_id = str(candidate.get("id") or "").strip()
+    if not candidate_id:
+        return current
+    found_index = -1
+    for index, item in enumerate(current):
+        if str(item.get("id") or "").strip() == candidate_id:
+            found_index = index
+            break
+    if found_index == -1:
+        current.append(candidate)
+        return current
+    existing = current[found_index]
+    existing_level = str(existing.get("nivel") or "debil")
+    candidate_level = str(candidate.get("nivel") or "debil")
+    if _dedupe_level_rank(candidate_level) > _dedupe_level_rank(existing_level):
+        current[found_index] = candidate
+    return current
+
+
 async def _persona_alta_find_existing_account(
     *,
     repo: CRMRepository,
     organizacion_id: UUID,
     cuenta: CRMPersonaAltaCuenta | None,
-) -> CRMAccount | None:
+) -> tuple[CRMAccount | None, list[dict[str, Any]]]:
     if not cuenta:
-        return None
+        return None, []
     rfc_key = _persona_alta_match_rfc(cuenta.rfc)
     razon_key = _persona_alta_match_key(cuenta.razon_social)
     nombre_key = _persona_alta_match_key(cuenta.nombre_comercial)
     if not rfc_key and not razon_key and not nombre_key:
-        return None
+        return None, []
     try:
         rows = await repo.list_accounts(organizacion_id=organizacion_id, limit=200, offset=0)
     except CRMRepositoryError:
-        return None
+        return None, []
     accounts = [CRMAccount.model_validate(row) for row in rows]
-    if rfc_key:
-        for account in accounts:
-            if _persona_alta_match_rfc(account.rfc) == rfc_key:
-                return account
-    if razon_key:
-        for account in accounts:
-            if _persona_alta_match_key(account.razon_social) == razon_key:
-                return account
-    if nombre_key:
-        for account in accounts:
-            if _persona_alta_match_key(account.nombre) == nombre_key or _persona_alta_match_key(account.alias) == nombre_key:
-                return account
+    candidates: list[dict[str, Any]] = []
+    selected: CRMAccount | None = None
+    selected_level = "debil"
+    for account in accounts:
+        level = ""
+        reason = ""
+        if rfc_key and _persona_alta_match_rfc(account.rfc) == rfc_key:
+            level = "fuerte"
+            reason = "rfc"
+        elif razon_key and _persona_alta_match_key(account.razon_social) == razon_key:
+            level = "medio"
+            reason = "razon_social"
+        elif nombre_key and (
+            _persona_alta_match_key(account.nombre) == nombre_key
+            or _persona_alta_match_key(account.alias) == nombre_key
+        ):
+            level = "debil"
+            reason = "nombre_comercial"
+        if not level:
+            continue
+        candidates = _merge_dedupe_candidates(
+            candidates,
+            {
+                "id": str(account.id),
+                "nombre": account.nombre,
+                "alias": account.alias,
+                "rfc": account.rfc,
+                "correo": account.correo,
+                "telefono": account.telefono,
+                "nivel": level,
+                "motivo": reason,
+            },
+        )
+        if selected is None or _dedupe_level_rank(level) > _dedupe_level_rank(selected_level):
+            selected = account
+            selected_level = level
+    # Auto-reuso solo en fuerte. Medio/debil quedan para confirmación explícita en UI.
+    if selected and selected_level == "fuerte":
+        return selected, candidates[:10]
+    return None, candidates[:10]
+
+
+async def _persona_alta_find_persona_candidates(
+    *,
+    repo: CRMRepository,
+    organizacion_id: UUID,
+    persona: CRMPersonaAltaPersona,
+    cuenta: CRMPersonaAltaCuenta | None,
+) -> list[dict[str, Any]]:
+    candidates: list[dict[str, Any]] = []
+    telefono_key = _persona_alta_normalize_phone(persona.telefono_principal_e164)
+    correo_key = _persona_alta_normalize_email(persona.correo_principal)
+    nombre_key = _persona_alta_match_name(_persona_alta_full_name(persona))
+    empresa_key = _persona_alta_match_name(
+        _persona_alta_clean_text(cuenta.nombre_comercial if cuenta else None)
+        or _persona_alta_clean_text(cuenta.razon_social if cuenta else None)
+    )
+
+    if telefono_key:
+        try:
+            by_phone = await repo.get_contact_by_phone_e164(
+                phone_e164=telefono_key,
+                organizacion_id=organizacion_id,
+            )
+        except CRMRepositoryError:
+            by_phone = None
+        if by_phone:
+            candidates = _merge_dedupe_candidates(
+                candidates,
+                {
+                    "id": str(by_phone.get("id")),
+                    "nombre": by_phone.get("nombre_completo"),
+                    "correo": by_phone.get("correo"),
+                    "telefono": by_phone.get("telefono_e164"),
+                    "empresa": by_phone.get("company_name"),
+                    "nivel": "fuerte",
+                    "motivo": "telefono",
+                },
+            )
+    if correo_key:
+        try:
+            by_email = await repo.get_contact_by_email(
+                email=correo_key,
+                organizacion_id=organizacion_id,
+            )
+        except CRMRepositoryError:
+            by_email = None
+        if by_email:
+            candidates = _merge_dedupe_candidates(
+                candidates,
+                {
+                    "id": str(by_email.get("id")),
+                    "nombre": by_email.get("nombre_completo"),
+                    "correo": by_email.get("correo"),
+                    "telefono": by_email.get("telefono_e164"),
+                    "empresa": by_email.get("company_name"),
+                    "nivel": "fuerte",
+                    "motivo": "correo",
+                },
+            )
+
+    full_name = _persona_alta_full_name(persona)
+    if full_name:
+        try:
+            by_name = await repo.search_contacts(
+                organizacion_id=organizacion_id,
+                query=full_name,
+                limit=20,
+                offset=0,
+            )
+        except CRMRepositoryError:
+            by_name = []
+        for row in by_name:
+            if not isinstance(row, dict):
+                continue
+            row_name_key = _persona_alta_match_name(row.get("nombre_completo"))
+            if not row_name_key or row_name_key != nombre_key:
+                continue
+            row_company_key = _persona_alta_match_name(row.get("company_name"))
+            level = "debil"
+            reason = "nombre_completo"
+            if empresa_key and row_company_key and empresa_key == row_company_key:
+                level = "medio"
+                reason = "nombre_completo_y_empresa"
+            candidates = _merge_dedupe_candidates(
+                candidates,
+                {
+                    "id": str(row.get("id")),
+                    "nombre": row.get("nombre_completo"),
+                    "correo": row.get("correo"),
+                    "telefono": row.get("telefono_e164"),
+                    "empresa": row.get("company_name"),
+                    "nivel": level,
+                    "motivo": reason,
+                },
+            )
+
+    candidates.sort(key=lambda item: _dedupe_level_rank(str(item.get("nivel") or "debil")), reverse=True)
+    return candidates[:10]
+
+
+def _pick_first_strong_persona_candidate(candidates: list[dict[str, Any]]) -> UUID | None:
+    for item in candidates:
+        if str(item.get("nivel") or "") != "fuerte":
+            continue
+        candidate_id = _safe_uuid(item.get("id"))
+        if candidate_id:
+            return candidate_id
     return None
+
+
+async def _persona_alta_build_dedupe_preview(
+    *,
+    repo: CRMRepository,
+    organizacion_id: UUID,
+    contexto: CRMPersonaAltaContexto,
+    persona: CRMPersonaAltaPersona,
+    cuenta: CRMPersonaAltaCuenta | None,
+    dedupe: CRMPersonaAltaDedupeDecision | None,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]], UUID | None, UUID | None, bool]:
+    persona_candidates = await _persona_alta_find_persona_candidates(
+        repo=repo,
+        organizacion_id=organizacion_id,
+        persona=persona,
+        cuenta=cuenta,
+    )
+    suggested_persona_id = _pick_first_strong_persona_candidate(persona_candidates)
+
+    reused_account: CRMAccount | None = None
+    account_candidates: list[dict[str, Any]] = []
+    suggested_account_id: UUID | None = None
+    if cuenta and not cuenta.cuenta_id and contexto.modo in {
+        "empresa_nueva",
+        "persona_fisica_actividad_empresarial",
+    }:
+        reused_account, account_candidates = await _persona_alta_find_existing_account(
+            repo=repo,
+            organizacion_id=organizacion_id,
+            cuenta=cuenta,
+        )
+        suggested_account_id = reused_account.id if reused_account else None
+
+    persona_pending = [
+        item for item in persona_candidates if str(item.get("nivel") or "") in {"medio", "debil"}
+    ]
+    cuenta_pending = [
+        item for item in account_candidates if str(item.get("nivel") or "") in {"medio", "debil"}
+    ]
+    requires_confirmation = bool(persona_pending or cuenta_pending)
+
+    if dedupe and dedupe.confirmar_creacion:
+        requires_confirmation = False
+    if dedupe and dedupe.persona_reutilizar_id:
+        requires_confirmation = bool(cuenta_pending)
+    if dedupe and dedupe.cuenta_reutilizar_id:
+        requires_confirmation = bool(persona_pending)
+    if dedupe and dedupe.persona_reutilizar_id and dedupe.cuenta_reutilizar_id:
+        requires_confirmation = False
+
+    return (
+        persona_candidates,
+        account_candidates,
+        suggested_persona_id,
+        suggested_account_id,
+        requires_confirmation,
+    )
 
 
 def _persona_alta_full_name(payload: CRMPersonaAltaPersona) -> str:
@@ -13506,6 +13755,44 @@ async def search_contacts(
     return CRMContactSearchResponse(items=items, limit=limit, offset=offset)
 
 
+@router.post("/personas/alta/validar", response_model=CRMPersonaAltaValidationResponse)
+async def validate_persona_alta(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("contacts.write")),
+    payload: CRMPersonaAltaRequest,
+) -> CRMPersonaAltaValidationResponse:
+    persona = _persona_alta_normalize_persona(payload.persona)
+    contexto = payload.contexto_comercial
+    cuenta = _persona_alta_normalize_cuenta(payload.cuenta)
+    dedupe = payload.dedupe
+
+    if not _persona_alta_clean_text(persona.nombre) or not _persona_alta_clean_text(persona.apellido_paterno):
+        raise HTTPException(status_code=400, detail="persona_incompleta")
+    if not _persona_alta_clean_text(persona.correo_principal) and not _persona_alta_clean_text(persona.telefono_principal_e164):
+        raise HTTPException(status_code=400, detail="medio_contacto_required")
+
+    persona_candidates, account_candidates, suggested_persona_id, suggested_account_id, requires_confirmation = (
+        await _persona_alta_build_dedupe_preview(
+            repo=repo,
+            organizacion_id=organizacion_id,
+            contexto=contexto,
+            persona=persona,
+            cuenta=cuenta,
+            dedupe=dedupe,
+        )
+    )
+
+    return CRMPersonaAltaValidationResponse(
+        requiere_confirmacion=requires_confirmation,
+        candidatos_persona=persona_candidates,
+        candidatos_cuenta=account_candidates,
+        sugerencia_persona_reutilizar_id=suggested_persona_id,
+        sugerencia_cuenta_reutilizar_id=suggested_account_id,
+    )
+
+
 @router.post("/personas/alta", response_model=CRMPersonaAltaResponse, status_code=status.HTTP_201_CREATED)
 async def create_persona_alta(
     *,
@@ -13519,6 +13806,7 @@ async def create_persona_alta(
     cuenta = _persona_alta_normalize_cuenta(payload.cuenta)
     relacion = payload.relacion
     extras = _persona_alta_normalize_extras(payload.extras)
+    dedupe = payload.dedupe
 
     if not _persona_alta_clean_text(persona.nombre) or not _persona_alta_clean_text(persona.apellido_paterno):
         raise HTTPException(status_code=400, detail="persona_incompleta")
@@ -13526,7 +13814,48 @@ async def create_persona_alta(
         raise HTTPException(status_code=400, detail="medio_contacto_required")
 
     existing_account: CRMAccount | None = None
+    persona_candidates: list[dict[str, Any]] = []
+    account_candidates: list[dict[str, Any]] = []
     reused_account_id: UUID | None = None
+    dedupe_contacto_id: UUID | None = dedupe.persona_reutilizar_id if dedupe else None
+
+    if dedupe and dedupe.cuenta_reutilizar_id and cuenta:
+        cuenta = cuenta.model_copy(update={"cuenta_id": dedupe.cuenta_reutilizar_id})
+
+    try:
+        (
+            persona_candidates,
+            account_candidates,
+            suggested_persona_id,
+            suggested_account_id,
+            requires_confirmation,
+        ) = await _persona_alta_build_dedupe_preview(
+            repo=repo,
+            organizacion_id=organizacion_id,
+            contexto=contexto,
+            persona=persona,
+            cuenta=cuenta,
+            dedupe=dedupe,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    if requires_confirmation:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "dedupe_confirmation_required",
+                "message": "Se detectaron posibles duplicados. Confirma si deseas reutilizar o crear uno nuevo.",
+                "candidatos_persona": persona_candidates,
+                "candidatos_cuenta": account_candidates,
+                "sugerencia_persona_reutilizar_id": str(suggested_persona_id) if suggested_persona_id else None,
+                "sugerencia_cuenta_reutilizar_id": str(suggested_account_id) if suggested_account_id else None,
+            },
+        )
+
+    if not dedupe_contacto_id:
+        dedupe_contacto_id = suggested_persona_id
+
     if contexto.modo == "empresa_existente":
         if not cuenta or not cuenta.cuenta_id:
             raise HTTPException(status_code=400, detail="cuenta_id_required")
@@ -13537,15 +13866,24 @@ async def create_persona_alta(
         if not account_row:
             raise HTTPException(status_code=404, detail="cuenta_no_encontrada")
         existing_account = CRMAccount.model_validate(account_row)
-    elif contexto.modo in {"empresa_nueva", "persona_fisica_actividad_empresarial"} and cuenta and not cuenta.cuenta_id:
-        existing_account = await _persona_alta_find_existing_account(
-            repo=repo,
-            organizacion_id=organizacion_id,
-            cuenta=cuenta,
-        )
-        if existing_account:
-            cuenta = cuenta.model_copy(update={"cuenta_id": existing_account.id})
-            reused_account_id = existing_account.id
+    elif cuenta and cuenta.cuenta_id:
+        try:
+            account_row = await repo.get_account(organizacion_id=organizacion_id, account_id=cuenta.cuenta_id)
+        except CRMRepositoryError as exc:
+            raise HTTPException(status_code=502, detail=str(exc)) from exc
+        if not account_row:
+            raise HTTPException(status_code=404, detail="cuenta_no_encontrada")
+        existing_account = CRMAccount.model_validate(account_row)
+        reused_account_id = existing_account.id
+    elif suggested_account_id and cuenta:
+        cuenta = cuenta.model_copy(update={"cuenta_id": suggested_account_id})
+        reused_account_id = suggested_account_id
+        try:
+            account_row = await repo.get_account(organizacion_id=organizacion_id, account_id=suggested_account_id)
+        except CRMRepositoryError as exc:
+            raise HTTPException(status_code=502, detail=str(exc)) from exc
+        if account_row:
+            existing_account = CRMAccount.model_validate(account_row)
 
     contact_payload = _persona_alta_to_contact_payload(
         persona=persona,
@@ -13554,25 +13892,6 @@ async def create_persona_alta(
         extras=extras,
         existing_account=existing_account,
     )
-
-    dedupe_contacto_id: UUID | None = None
-    telefono_key = _persona_alta_normalize_phone(persona.telefono_principal_e164)
-    correo_key = _persona_alta_normalize_email(persona.correo_principal)
-    try:
-        if telefono_key:
-            existing_phone = await repo.get_contact_by_phone_e164(
-                phone_e164=telefono_key,
-                organizacion_id=organizacion_id,
-            )
-            dedupe_contacto_id = _safe_uuid(existing_phone.get("id")) if existing_phone else None
-        if not dedupe_contacto_id and correo_key:
-            existing_email = await repo.get_contact_by_email(
-                email=correo_key,
-                organizacion_id=organizacion_id,
-            )
-            dedupe_contacto_id = _safe_uuid(existing_email.get("id")) if existing_email else None
-    except CRMRepositoryError as exc:
-        raise HTTPException(status_code=502, detail=str(exc)) from exc
 
     try:
         if dedupe_contacto_id:
@@ -13659,6 +13978,8 @@ async def create_persona_alta(
             "deduplicado": bool(dedupe_contacto_id),
             "contacto_reutilizado_id": str(dedupe_contacto_id) if dedupe_contacto_id else None,
             "cuenta_reutilizada_id": str(reused_account_id) if reused_account_id else None,
+            "candidatos_persona": persona_candidates,
+            "candidatos_cuenta": account_candidates,
         },
     )
 
@@ -13684,6 +14005,7 @@ async def update_persona(
         raise HTTPException(status_code=400, detail="medio_contacto_required")
 
     existing_account: CRMAccount | None = None
+    account_candidates: list[dict[str, Any]] = []
     reused_account_id: UUID | None = None
     if contexto.modo == "empresa_existente":
         if not cuenta or not cuenta.cuenta_id:
@@ -13696,7 +14018,7 @@ async def update_persona(
             raise HTTPException(status_code=404, detail="cuenta_no_encontrada")
         existing_account = CRMAccount.model_validate(account_row)
     elif contexto.modo in {"empresa_nueva", "persona_fisica_actividad_empresarial"} and cuenta and not cuenta.cuenta_id:
-        existing_account = await _persona_alta_find_existing_account(
+        existing_account, account_candidates = await _persona_alta_find_existing_account(
             repo=repo,
             organizacion_id=organizacion_id,
             cuenta=cuenta,
@@ -13704,6 +14026,12 @@ async def update_persona(
         if existing_account:
             cuenta = cuenta.model_copy(update={"cuenta_id": existing_account.id})
             reused_account_id = existing_account.id
+    elif cuenta:
+        _, account_candidates = await _persona_alta_find_existing_account(
+            repo=repo,
+            organizacion_id=organizacion_id,
+            cuenta=cuenta,
+        )
 
     contact_payload = _persona_alta_to_contact_payload(
         persona=persona,
@@ -13796,6 +14124,7 @@ async def update_persona(
             "persona_id": str(persona_out.id),
             "cuenta_id": str(persona_out.cuenta_id) if persona_out.cuenta_id else None,
             "cuenta_reutilizada_id": str(reused_account_id) if reused_account_id else None,
+            "candidatos_cuenta": account_candidates,
         },
     )
 

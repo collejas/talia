@@ -36,6 +36,7 @@ Notas:
 
 - Alta estructurada:
   - `POST /crm/personas/alta` en `backend/app/api/routes/crm.py`
+  - `POST /crm/personas/alta/validar` en `backend/app/api/routes/crm.py`
   - Crea/une `persona + cuenta + relación` y mantiene sombra legacy cuando aplica.
 - Edición estructurada:
   - `PATCH /crm/personas/{contacto_id}` en `backend/app/api/routes/crm.py`
@@ -57,6 +58,14 @@ Notas:
   - `POST/PATCH /crm/personas/*` intenta dedupe de cuenta cuando el flujo viene como cuenta nueva:
     - prioridad de match: `RFC` > `razon_social` > `nombre_comercial`.
     - si encuentra coincidencia, reutiliza `cuenta_id` para no duplicar empresa.
+  - Dedupe por niveles (fuerte/medio/debil) en alta:
+    - persona: fuerte por teléfono/correo; medio/debil por nombre y empresa (se reportan candidatos).
+    - cuenta: fuerte por RFC, medio por razón social, débil por nombre comercial/alias.
+    - auto-reuso solo con confianza alta:
+      - persona: solo `fuerte`.
+      - cuenta: solo `fuerte`.
+    - candidatos `medio/debil` requieren confirmación explícita en UI (`reutilizar` o `crear nuevo`).
+    - `resumen` ahora incluye `candidatos_persona` y `candidatos_cuenta` para soporte de confirmación UI.
 
 ### 3) Panel (Frontend)
 
@@ -64,6 +73,7 @@ Notas:
   - `frontend/panel/src/components/contactos/contact-create-flow.tsx`
   - Endpoint panel (proxy):
     - `frontend/panel/src/app/api/personas/alta/route.ts` -> `POST /crm/personas/alta`
+    - `frontend/panel/src/app/api/personas/alta/validar/route.ts` -> `POST /crm/personas/alta/validar`
   - Búsqueda de cuentas para “cuenta existente”:
     - `frontend/panel/src/app/api/personas/cuentas/route.ts`
 - Edición (nuevo flujo completo, sin modal legacy):

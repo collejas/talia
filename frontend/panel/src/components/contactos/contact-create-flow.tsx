@@ -87,6 +87,42 @@ type AccountOption = {
   telefono?: string | null;
 };
 
+type PersonaAltaResumen = {
+  deduplicado?: boolean;
+  contacto_reutilizado_id?: string | null;
+  cuenta_reutilizada_id?: string | null;
+};
+
+type PersonaAltaResponse = {
+  resumen?: PersonaAltaResumen;
+};
+
+type DedupeCandidate = {
+  id: string;
+  nombre?: string | null;
+  alias?: string | null;
+  empresa?: string | null;
+  correo?: string | null;
+  telefono?: string | null;
+  rfc?: string | null;
+  nivel?: "fuerte" | "medio" | "debil" | string;
+  motivo?: string | null;
+};
+
+type PersonaAltaValidationResponse = {
+  requiere_confirmacion: boolean;
+  candidatos_persona: DedupeCandidate[];
+  candidatos_cuenta: DedupeCandidate[];
+  sugerencia_persona_reutilizar_id?: string | null;
+  sugerencia_cuenta_reutilizar_id?: string | null;
+};
+
+type DedupeDecision = {
+  confirmar_creacion?: boolean;
+  persona_reutilizar_id?: string;
+  cuenta_reutilizar_id?: string;
+};
+
 type ContactCreateState = {
   mode: CreateMode;
   persona: PersonaDraft;
@@ -349,7 +385,7 @@ function cleanObject<T extends Record<string, unknown>>(input: T): Partial<T> {
   return next as Partial<T>;
 }
 
-function buildPayload(state: ContactCreateState) {
+function buildPayload(state: ContactCreateState, dedupe?: DedupeDecision) {
   const nombreCompleto = buildFullName(state.persona);
   const persona = cleanObject({
     ...state.persona,
@@ -425,6 +461,13 @@ function buildPayload(state: ContactCreateState) {
     cuenta: state.mode === "solo_persona" ? null : cuentaBase,
     relacion,
     extras,
+    dedupe: dedupe
+      ? cleanObject({
+          confirmar_creacion: dedupe.confirmar_creacion ?? false,
+          persona_reutilizar_id: dedupe.persona_reutilizar_id ?? "",
+          cuenta_reutilizar_id: dedupe.cuenta_reutilizar_id ?? "",
+        })
+      : undefined,
   };
 }
 
@@ -497,10 +540,16 @@ function Field({
 export function ContactCreateFlow({ open, onOpenChange, onCreated }: ContactCreateFlowProps) {
   const [state, dispatch] = React.useReducer(createReducer, INITIAL_STATE);
   const deferredAccountQuery = React.useDeferredValue(state.accountQuery);
+  const [pendingDedupe, setPendingDedupe] = React.useState<PersonaAltaValidationResponse | null>(null);
+  const [selectedPersonaReuseId, setSelectedPersonaReuseId] = React.useState("");
+  const [selectedCuentaReuseId, setSelectedCuentaReuseId] = React.useState("");
 
   React.useEffect(() => {
     if (!open) {
       dispatch({ type: "reset" });
+      setPendingDedupe(null);
+      setSelectedPersonaReuseId("");
+      setSelectedCuentaReuseId("");
       return;
     }
   }, [open]);
@@ -563,7 +612,7 @@ export function ContactCreateFlow({ open, onOpenChange, onCreated }: ContactCrea
     };
   }, [state]);
 
-  const submit = async () => {
+  const submit = async (dedupeDecision?: DedupeDecision) => {
     const validationError = validateState(state);
     if (validationError) {
       dispatch({ type: "error/set", value: validationError });
@@ -574,14 +623,47 @@ export function ContactCreateFlow({ open, onOpenChange, onCreated }: ContactCrea
     dispatch({ type: "saving/set", value: true });
     dispatch({ type: "error/set", value: null });
     try {
+      const payload = buildPayload(state, dedupeDecision);
+      if (!dedupeDecision) {
+        const previewResponse = await fetch("/api/personas/alta/validar", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        const previewBody = (await previewResponse.json().catch(() => ({}))) as
+          | PersonaAltaValidationResponse
+          | { error?: string };
+        if (!previewResponse.ok) {
+          throw new Error((previewBody as { error?: string }).error || `Error ${previewResponse.status}`);
+        }
+        const preview = previewBody as PersonaAltaValidationResponse;
+        if (preview.requiere_confirmacion) {
+          setPendingDedupe(preview);
+          setSelectedPersonaReuseId(preview.sugerencia_persona_reutilizar_id ?? "");
+          setSelectedCuentaReuseId(preview.sugerencia_cuenta_reutilizar_id ?? "");
+          toast.warning("Se detectaron posibles duplicados. Confirma cómo continuar.");
+          return;
+        }
+      }
+
       const response = await fetch("/api/personas/alta", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(buildPayload(state)),
+        body: JSON.stringify(payload),
       });
-      const body = (await response.json().catch(() => ({}))) as { error?: string };
+      const body = (await response.json().catch(() => ({}))) as PersonaAltaResponse & { error?: string };
       if (!response.ok) {
         throw new Error(body.error || `Error ${response.status}`);
+      }
+      setPendingDedupe(null);
+      setSelectedPersonaReuseId("");
+      setSelectedCuentaReuseId("");
+      const resumen = body.resumen ?? {};
+      if (resumen.deduplicado && resumen.contacto_reutilizado_id) {
+        toast.info(`Se reutilizó contacto existente (${resumen.contacto_reutilizado_id}).`);
+      }
+      if (resumen.cuenta_reutilizada_id) {
+        toast.info(`Se reutilizó cuenta existente (${resumen.cuenta_reutilizada_id}).`);
       }
       toast.success("Alta creada.");
       onOpenChange(false);
@@ -862,10 +944,103 @@ export function ContactCreateFlow({ open, onOpenChange, onCreated }: ContactCrea
             </div>
           </FormSection>
 
+          {pendingDedupe ? (
+            <FormSection
+              title="Posibles duplicados detectados"
+              description="Selecciona registros existentes para reutilizar o crea nuevos."
+            >
+              {pendingDedupe.candidatos_persona.length ? (
+                <div className="space-y-2">
+                  <div className="text-sm font-medium">Personas candidatas</div>
+                  {pendingDedupe.candidatos_persona.map((candidate) => {
+                    const selected = selectedPersonaReuseId === candidate.id;
+                    return (
+                      <button
+                        key={`persona-${candidate.id}`}
+                        type="button"
+                        className={`w-full rounded-xl border px-4 py-3 text-left ${selected ? "border-foreground bg-muted/40" : "border-border/60 bg-background"}`}
+                        onClick={() => setSelectedPersonaReuseId(candidate.id)}
+                      >
+                        <div className="text-sm font-medium">
+                          {candidate.nombre || "Sin nombre"}{" "}
+                          <span className="text-xs text-muted-foreground">({candidate.nivel || "debil"})</span>
+                        </div>
+                        <div className="text-xs text-muted-foreground">
+                          {[candidate.correo, candidate.telefono, candidate.empresa].filter(Boolean).join(" · ") || "Sin datos adicionales"}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : null}
+
+              {pendingDedupe.candidatos_cuenta.length ? (
+                <div className="mt-3 space-y-2">
+                  <div className="text-sm font-medium">Cuentas candidatas</div>
+                  {pendingDedupe.candidatos_cuenta.map((candidate) => {
+                    const selected = selectedCuentaReuseId === candidate.id;
+                    return (
+                      <button
+                        key={`cuenta-${candidate.id}`}
+                        type="button"
+                        className={`w-full rounded-xl border px-4 py-3 text-left ${selected ? "border-foreground bg-muted/40" : "border-border/60 bg-background"}`}
+                        onClick={() => setSelectedCuentaReuseId(candidate.id)}
+                      >
+                        <div className="text-sm font-medium">
+                          {candidate.nombre || "Sin nombre"}{" "}
+                          <span className="text-xs text-muted-foreground">({candidate.nivel || "debil"})</span>
+                        </div>
+                        <div className="text-xs text-muted-foreground">
+                          {[candidate.rfc, candidate.correo, candidate.telefono, candidate.alias].filter(Boolean).join(" · ") || "Sin datos adicionales"}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : null}
+
+              <div className="mt-3 flex flex-wrap gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={state.saving}
+                  onClick={() =>
+                    void submit({
+                      persona_reutilizar_id: selectedPersonaReuseId || undefined,
+                      cuenta_reutilizar_id: selectedCuentaReuseId || undefined,
+                    })
+                  }
+                >
+                  Reutilizar seleccionados y guardar
+                </Button>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  disabled={state.saving}
+                  onClick={() => void submit({ confirmar_creacion: true })}
+                >
+                  Crear nuevos de todos modos
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  disabled={state.saving}
+                  onClick={() => {
+                    setPendingDedupe(null);
+                    setSelectedPersonaReuseId("");
+                    setSelectedCuentaReuseId("");
+                  }}
+                >
+                  Cerrar revisión
+                </Button>
+              </div>
+            </FormSection>
+          ) : null}
+
           {state.error ? <p className="text-xs text-destructive">{state.error}</p> : null}
 
           <div className="flex flex-wrap gap-2">
-            <Button type="button" disabled={state.saving} onClick={submit}>
+            <Button type="button" disabled={state.saving} onClick={() => void submit()}>
               {state.saving ? "Guardando..." : state.mode === "solo_persona" ? "Guardar solo persona" : "Guardar alta"}
             </Button>
             <Button type="button" variant="outline" disabled={state.saving} onClick={() => onOpenChange(false)}>
