@@ -9104,6 +9104,111 @@ class CRMContactUpdate(BaseModel):
     contacto_datos: dict[str, Any] | None = None
 
 
+class CRMPersonaAltaPersona(BaseModel):
+    nombre: str = Field(..., max_length=160)
+    apellido_paterno: str = Field(..., max_length=160)
+    apellido_materno: str | None = Field(default=None, max_length=160)
+    nombre_completo: str | None = Field(default=None, max_length=255)
+    correo_principal: str | None = Field(default=None, max_length=255)
+    telefono_principal_e164: str | None = Field(default=None, max_length=32)
+    puesto: str | None = Field(default=None, max_length=120)
+    area: str | None = Field(default=None, max_length=120)
+    rol_decision: str | None = Field(default=None, max_length=120)
+    origen: str | None = Field(default=None, max_length=80)
+    notas: str | None = Field(default=None, max_length=4000)
+    propietario_usuario_id: UUID | None = None
+
+
+class CRMPersonaAltaContexto(BaseModel):
+    modo: Literal[
+        "solo_persona",
+        "empresa_existente",
+        "empresa_nueva",
+        "persona_fisica_actividad_empresarial",
+    ]
+    usar_cuenta_existente: bool = False
+    crear_cuenta_nueva: bool = False
+    es_persona_fisica_actividad_empresarial: bool = False
+
+
+class CRMPersonaAltaCuenta(BaseModel):
+    cuenta_id: UUID | None = None
+    nombre_comercial: str | None = Field(default=None, max_length=255)
+    razon_social: str | None = Field(default=None, max_length=255)
+    tipo_persona: Literal["fisica", "moral"] | None = None
+    tipo_cuenta: str | None = Field(default=None, max_length=120)
+    rfc: str | None = Field(default=None, max_length=64)
+    industria: str | None = Field(default=None, max_length=120)
+    segmento: str | None = Field(default=None, max_length=120)
+    sitio_web: str | None = Field(default=None, max_length=255)
+    correo_principal: str | None = Field(default=None, max_length=320)
+    telefono_principal: str | None = Field(default=None, max_length=64)
+    notas: str | None = Field(default=None, max_length=4000)
+
+
+class CRMPersonaAltaRelacion(BaseModel):
+    rol_en_cuenta: str | None = Field(default=None, max_length=120)
+    puesto: str | None = Field(default=None, max_length=120)
+    es_contacto_principal: bool = True
+    es_contacto_facturacion: bool = False
+    es_representante_legal: bool = False
+    activo: bool = True
+    fecha_inicio: date | None = None
+    notas: str | None = Field(default=None, max_length=4000)
+
+
+class CRMPersonaAltaExtrasFiscales(BaseModel):
+    uso_cfdi: str | None = Field(default=None, max_length=120)
+    forma_pago: str | None = Field(default=None, max_length=120)
+    metodo_pago: str | None = Field(default=None, max_length=120)
+    email_facturacion: str | None = Field(default=None, max_length=320)
+
+
+class CRMPersonaAltaExtrasDireccion(BaseModel):
+    pais: str | None = Field(default=None, max_length=120)
+    entidad: str | None = Field(default=None, max_length=120)
+    municipio: str | None = Field(default=None, max_length=120)
+    tipo_vialidad: str | None = Field(default=None, max_length=120)
+    nombre_vialidad: str | None = Field(default=None, max_length=255)
+    numero_exterior: str | None = Field(default=None, max_length=64)
+    numero_interior: str | None = Field(default=None, max_length=64)
+    codigo_postal: str | None = Field(default=None, max_length=16)
+
+
+class CRMPersonaAltaExtras(BaseModel):
+    fiscales: CRMPersonaAltaExtrasFiscales | None = None
+    direccion: CRMPersonaAltaExtrasDireccion | None = None
+
+
+class CRMPersonaAltaRequest(BaseModel):
+    persona: CRMPersonaAltaPersona
+    contexto_comercial: CRMPersonaAltaContexto
+    cuenta: CRMPersonaAltaCuenta | None = None
+    relacion: CRMPersonaAltaRelacion | None = None
+    extras: CRMPersonaAltaExtras | None = None
+
+
+class CRMCuentaPersonaRelacion(BaseModel):
+    cuenta_id: UUID
+    persona_id: UUID
+    rol_en_cuenta: str
+    puesto: str | None = None
+    es_contacto_principal: bool = False
+    es_contacto_facturacion: bool = False
+    es_representante_legal: bool = False
+    activo: bool = True
+    fecha_inicio: date | None = None
+    notas: str | None = None
+    metadata: dict[str, Any] | None = None
+
+
+class CRMPersonaAltaResponse(BaseModel):
+    persona: CRMContact
+    cuenta: CRMAccount | None = None
+    relacion: CRMCuentaPersonaRelacion | None = None
+    resumen: dict[str, Any] = Field(default_factory=dict)
+
+
 class CRMContactSearchItem(BaseModel):
     id: UUID
     nombre: str | None = None
@@ -9116,6 +9221,155 @@ class CRMContactSearchResponse(BaseModel):
     items: list[CRMContactSearchItem]
     limit: int
     offset: int
+
+
+def _persona_alta_clean_text(value: str | None) -> str | None:
+    if value is None:
+        return None
+    trimmed = str(value).strip()
+    return trimmed or None
+
+
+def _persona_alta_full_name(payload: CRMPersonaAltaPersona) -> str:
+    explicit = _persona_alta_clean_text(payload.nombre_completo)
+    if explicit:
+        return explicit
+    return " ".join(
+        part
+        for part in [
+            _persona_alta_clean_text(payload.nombre),
+            _persona_alta_clean_text(payload.apellido_paterno),
+            _persona_alta_clean_text(payload.apellido_materno),
+        ]
+        if part
+    ).strip()
+
+
+def _persona_alta_to_contact_payload(
+    *,
+    persona: CRMPersonaAltaPersona,
+    contexto: CRMPersonaAltaContexto,
+    cuenta: CRMPersonaAltaCuenta | None,
+    extras: CRMPersonaAltaExtras | None,
+    existing_account: CRMAccount | None,
+) -> dict[str, Any]:
+    direccion = extras.direccion if extras else None
+    fiscales = extras.fiscales if extras else None
+    account_name = (
+        _persona_alta_clean_text(cuenta.nombre_comercial if cuenta else None)
+        or _persona_alta_clean_text(cuenta.razon_social if cuenta else None)
+        or (existing_account.nombre if existing_account else None)
+        or (existing_account.razon_social if existing_account else None)
+    )
+    persona_fisica_moral = (
+        "fisica"
+        if contexto.modo == "persona_fisica_actividad_empresarial"
+        else _persona_alta_clean_text(cuenta.tipo_persona if cuenta else None)
+    )
+    return {
+        "cuenta_id": str(cuenta.cuenta_id) if cuenta and cuenta.cuenta_id else None,
+        "nombre_nombres": _persona_alta_clean_text(persona.nombre),
+        "apellido_paterno": _persona_alta_clean_text(persona.apellido_paterno),
+        "apellido_materno": _persona_alta_clean_text(persona.apellido_materno),
+        "nombre_completo": _persona_alta_full_name(persona),
+        "correo": _persona_alta_clean_text(persona.correo_principal),
+        "telefono_e164": _persona_alta_clean_text(persona.telefono_principal_e164),
+        "puesto": _persona_alta_clean_text(persona.puesto),
+        "area": _persona_alta_clean_text(persona.area),
+        "rol_decision": _persona_alta_clean_text(persona.rol_decision),
+        "origen": _persona_alta_clean_text(persona.origen),
+        "notes": _persona_alta_clean_text(persona.notas),
+        "propietario_usuario_id": str(persona.propietario_usuario_id) if persona.propietario_usuario_id else None,
+        "company_name": account_name if contexto.modo != "solo_persona" else None,
+        "persona_fisica_moral": persona_fisica_moral,
+        "razon_social": _persona_alta_clean_text(cuenta.razon_social if cuenta else None) or (existing_account.razon_social if existing_account else None),
+        "rfc": _persona_alta_clean_text(cuenta.rfc if cuenta else None) or (existing_account.rfc if existing_account else None),
+        "tipo_industria": _persona_alta_clean_text(cuenta.industria if cuenta else None) or (existing_account.industria if existing_account else None),
+        "website": _persona_alta_clean_text(cuenta.sitio_web if cuenta else None) or (existing_account.sitio_web if existing_account else None),
+        "email_facturacion": _persona_alta_clean_text(fiscales.email_facturacion if fiscales else None),
+        "uso_cfdi": _persona_alta_clean_text(fiscales.uso_cfdi if fiscales else None),
+        "forma_pago": _persona_alta_clean_text(fiscales.forma_pago if fiscales else None),
+        "metodo_pago": _persona_alta_clean_text(fiscales.metodo_pago if fiscales else None),
+        "pais": _persona_alta_clean_text(direccion.pais if direccion else None),
+        "entidad": _persona_alta_clean_text(direccion.entidad if direccion else None),
+        "municipio": _persona_alta_clean_text(direccion.municipio if direccion else None),
+        "tipo_vialidad": _persona_alta_clean_text(direccion.tipo_vialidad if direccion else None),
+        "nombre_vialidad": _persona_alta_clean_text(direccion.nombre_vialidad if direccion else None),
+        "numero_exterior": _persona_alta_clean_text(direccion.numero_exterior if direccion else None),
+        "numero_interior": _persona_alta_clean_text(direccion.numero_interior if direccion else None),
+        "codigo_postal": _persona_alta_clean_text(direccion.codigo_postal if direccion else None),
+        "contacto_datos": {
+            "source": "personas_alta",
+            "contexto_modo": contexto.modo,
+        },
+    }
+
+
+def _persona_alta_to_account_payload(
+    *,
+    persona: CRMPersonaAltaPersona,
+    contexto: CRMPersonaAltaContexto,
+    cuenta: CRMPersonaAltaCuenta,
+    extras: CRMPersonaAltaExtras | None,
+) -> dict[str, Any]:
+    fiscales = extras.fiscales if extras else None
+    direccion = extras.direccion if extras else None
+    full_name = _persona_alta_full_name(persona)
+    nombre = (
+        _persona_alta_clean_text(cuenta.nombre_comercial)
+        or _persona_alta_clean_text(cuenta.razon_social)
+        or full_name
+        or "Cuenta sin nombre"
+    )
+    return {
+        "nombre": nombre,
+        "alias": _persona_alta_clean_text(cuenta.nombre_comercial),
+        "tipo": (
+            "persona_fisica_actividad_empresarial"
+            if contexto.modo == "persona_fisica_actividad_empresarial"
+            else (_persona_alta_clean_text(cuenta.tipo_cuenta) or "empresa")
+        ),
+        "industria": _persona_alta_clean_text(cuenta.industria),
+        "sitio_web": _persona_alta_clean_text(cuenta.sitio_web),
+        "telefono": _persona_alta_clean_text(cuenta.telefono_principal),
+        "correo": _persona_alta_clean_text(cuenta.correo_principal),
+        "razon_social": _persona_alta_clean_text(cuenta.razon_social)
+        or (full_name if contexto.modo == "persona_fisica_actividad_empresarial" else None),
+        "rfc": _persona_alta_clean_text(cuenta.rfc),
+        "uso_cfdi": _persona_alta_clean_text(fiscales.uso_cfdi if fiscales else None),
+        "metodo_pago": _persona_alta_clean_text(fiscales.metodo_pago if fiscales else None),
+        "forma_pago": _persona_alta_clean_text(fiscales.forma_pago if fiscales else None),
+        "email_facturacion": _persona_alta_clean_text(fiscales.email_facturacion if fiscales else None),
+        "tipo_industria": _persona_alta_clean_text(cuenta.industria),
+        "notas": _persona_alta_clean_text(cuenta.notas),
+        "direccion": {
+            key: value
+            for key, value in {
+                "pais": _persona_alta_clean_text(direccion.pais if direccion else None),
+                "entidad": _persona_alta_clean_text(direccion.entidad if direccion else None),
+                "municipio": _persona_alta_clean_text(direccion.municipio if direccion else None),
+                "tipo_vialidad": _persona_alta_clean_text(direccion.tipo_vialidad if direccion else None),
+                "nombre_vialidad": _persona_alta_clean_text(direccion.nombre_vialidad if direccion else None),
+                "numero_exterior": _persona_alta_clean_text(direccion.numero_exterior if direccion else None),
+                "numero_interior": _persona_alta_clean_text(direccion.numero_interior if direccion else None),
+                "codigo_postal": _persona_alta_clean_text(direccion.codigo_postal if direccion else None),
+            }.items()
+            if value is not None
+        },
+        "tipo_vialidad": _persona_alta_clean_text(direccion.tipo_vialidad if direccion else None),
+        "nombre_vialidad": _persona_alta_clean_text(direccion.nombre_vialidad if direccion else None),
+        "numero_exterior": _persona_alta_clean_text(direccion.numero_exterior if direccion else None),
+        "numero_interior": _persona_alta_clean_text(direccion.numero_interior if direccion else None),
+        "codigo_postal": _persona_alta_clean_text(direccion.codigo_postal if direccion else None),
+        "entidad": _persona_alta_clean_text(direccion.entidad if direccion else None),
+        "municipio": _persona_alta_clean_text(direccion.municipio if direccion else None),
+        "pais": _persona_alta_clean_text(direccion.pais if direccion else None),
+        "metadata": {
+            "segmento": _persona_alta_clean_text(cuenta.segmento),
+            "tipo_persona": _persona_alta_clean_text(cuenta.tipo_persona),
+            "source": "personas_alta",
+        },
+    }
 
 
 class EmailTemplateResource(BaseModel):
@@ -13062,6 +13316,124 @@ async def search_contacts(
             )
         )
     return CRMContactSearchResponse(items=items, limit=limit, offset=offset)
+
+
+@router.post("/personas/alta", response_model=CRMPersonaAltaResponse, status_code=status.HTTP_201_CREATED)
+async def create_persona_alta(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("contacts.write")),
+    payload: CRMPersonaAltaRequest,
+) -> CRMPersonaAltaResponse:
+    persona = payload.persona
+    contexto = payload.contexto_comercial
+    cuenta = payload.cuenta
+    relacion = payload.relacion
+    extras = payload.extras
+
+    if not _persona_alta_clean_text(persona.nombre) or not _persona_alta_clean_text(persona.apellido_paterno):
+        raise HTTPException(status_code=400, detail="persona_incompleta")
+    if not _persona_alta_clean_text(persona.correo_principal) and not _persona_alta_clean_text(persona.telefono_principal_e164):
+        raise HTTPException(status_code=400, detail="medio_contacto_required")
+
+    existing_account: CRMAccount | None = None
+    if contexto.modo == "empresa_existente":
+        if not cuenta or not cuenta.cuenta_id:
+            raise HTTPException(status_code=400, detail="cuenta_id_required")
+        try:
+            account_row = await repo.get_account(organizacion_id=organizacion_id, account_id=cuenta.cuenta_id)
+        except CRMRepositoryError as exc:
+            raise HTTPException(status_code=502, detail=str(exc)) from exc
+        if not account_row:
+            raise HTTPException(status_code=404, detail="cuenta_no_encontrada")
+        existing_account = CRMAccount.model_validate(account_row)
+
+    contact_payload = _persona_alta_to_contact_payload(
+        persona=persona,
+        contexto=contexto,
+        cuenta=cuenta,
+        extras=extras,
+        existing_account=existing_account,
+    )
+
+    try:
+        contact_row = await repo.create_contact(
+            organizacion_id=organizacion_id,
+            payload={key: value for key, value in contact_payload.items() if value is not None},
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    persona_out = CRMContact.model_validate(contact_row)
+    account_out: CRMAccount | None = None
+    relation_out: CRMCuentaPersonaRelacion | None = None
+
+    if persona_out.cuenta_id:
+        if cuenta and contexto.modo in {"empresa_nueva", "persona_fisica_actividad_empresarial"}:
+            account_patch = {
+                key: value
+                for key, value in _persona_alta_to_account_payload(
+                    persona=persona,
+                    contexto=contexto,
+                    cuenta=cuenta,
+                    extras=extras,
+                ).items()
+                if value not in (None, "", {}, [])
+            }
+            if account_patch:
+                try:
+                    await repo.update_account(
+                        organizacion_id=organizacion_id,
+                        account_id=persona_out.cuenta_id,
+                        payload=account_patch,
+                    )
+                except CRMRepositoryError as exc:
+                    raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+        try:
+            account_row = await repo.get_account(organizacion_id=organizacion_id, account_id=persona_out.cuenta_id)
+        except CRMRepositoryError as exc:
+            raise HTTPException(status_code=502, detail=str(exc)) from exc
+        if account_row:
+            account_out = CRMAccount.model_validate(account_row)
+
+        relation_defaults = {
+            "rol_en_cuenta": (
+                relacion.rol_en_cuenta
+                if relacion and _persona_alta_clean_text(relacion.rol_en_cuenta)
+                else ("dueno" if contexto.modo == "persona_fisica_actividad_empresarial" else "contacto_principal")
+            ),
+            "puesto": relacion.puesto if relacion else persona.puesto,
+            "es_contacto_principal": True if contexto.modo == "persona_fisica_actividad_empresarial" else (relacion.es_contacto_principal if relacion else True),
+            "es_contacto_facturacion": relacion.es_contacto_facturacion if relacion else False,
+            "es_representante_legal": True if contexto.modo == "persona_fisica_actividad_empresarial" else (relacion.es_representante_legal if relacion else False),
+            "activo": relacion.activo if relacion else True,
+            "fecha_inicio": relacion.fecha_inicio.isoformat() if relacion and relacion.fecha_inicio else None,
+            "notas": relacion.notas if relacion else None,
+            "metadata": {"contexto_modo": contexto.modo},
+        }
+        try:
+            relation_row = await repo.upsert_contact_account_relation(
+                organizacion_id=organizacion_id,
+                contacto_id=persona_out.id,
+                cuenta_id=persona_out.cuenta_id,
+                payload=relation_defaults,
+            )
+        except CRMRepositoryError as exc:
+            raise HTTPException(status_code=502, detail=str(exc)) from exc
+        relation_out = CRMCuentaPersonaRelacion.model_validate(relation_row)
+
+    return CRMPersonaAltaResponse(
+        persona=persona_out,
+        cuenta=account_out,
+        relacion=relation_out,
+        resumen={
+            "modo": contexto.modo,
+            "persona_id": str(persona_out.id),
+            "cuenta_id": str(persona_out.cuenta_id) if persona_out.cuenta_id else None,
+        },
+    )
 
 
 @router.post("/contacts", response_model=CRMContact, status_code=status.HTTP_201_CREATED)

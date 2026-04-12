@@ -7012,6 +7012,77 @@ class CRMRepository:
             raise CRMRepositoryError("Supabase no devolvió el contacto creado")
         return contact_row
 
+    async def upsert_contact_account_relation(
+        self,
+        *,
+        organizacion_id: UUID,
+        contacto_id: UUID,
+        cuenta_id: UUID,
+        payload: dict[str, Any],
+    ) -> dict[str, Any]:
+        persona_row = await self._get_persona_by_legacy_contact_id(
+            organizacion_id=organizacion_id,
+            contacto_id=contacto_id,
+        )
+        if not isinstance(persona_row, dict) or not persona_row.get("id"):
+            raise CRMRepositoryError("persona_no_encontrada_para_relacion")
+
+        persona_id = str(persona_row["id"])
+        role = str(payload.get("rol_en_cuenta") or "").strip() or "contacto_principal"
+        relation_body = {
+            "organizacion_id": str(organizacion_id),
+            "cuenta_id": str(cuenta_id),
+            "persona_id": persona_id,
+            "rol_en_cuenta": role,
+            "puesto": payload.get("puesto") or persona_row.get("puesto"),
+            "es_contacto_principal": bool(payload.get("es_contacto_principal", True)),
+            "es_contacto_facturacion": bool(payload.get("es_contacto_facturacion", False)),
+            "es_representante_legal": bool(payload.get("es_representante_legal", False)),
+            "activo": bool(payload.get("activo", True)),
+            "fecha_inicio": payload.get("fecha_inicio") or datetime.now(timezone.utc).date().isoformat(),
+            "notas": payload.get("notas") or persona_row.get("notas"),
+            "metadata": {
+                **_ensure_metadata(payload.get("metadata")),
+                "legacy_contacto_id": str(contacto_id),
+                "source": "persona_alta",
+            },
+        }
+
+        relation_params = {
+            "organizacion_id": f"eq.{organizacion_id}",
+            "persona_id": f"eq.{persona_id}",
+            "cuenta_id": f"eq.{cuenta_id}",
+            "limit": "1",
+        }
+        existing_resp = await self._request("GET", "/rest/v1/cuenta_personas", params=relation_params)
+        existing_data = existing_resp.json()
+        existing_row = existing_data[0] if isinstance(existing_data, list) and existing_data else None
+
+        if isinstance(existing_row, dict):
+            resp = await self._request(
+                "PATCH",
+                "/rest/v1/cuenta_personas",
+                params={
+                    "organizacion_id": f"eq.{organizacion_id}",
+                    "persona_id": f"eq.{persona_id}",
+                    "cuenta_id": f"eq.{cuenta_id}",
+                },
+                json=relation_body,
+                prefer="return=representation",
+            )
+        else:
+            resp = await self._request(
+                "POST",
+                "/rest/v1/cuenta_personas",
+                json=relation_body,
+                prefer="return=representation",
+            )
+
+        data = resp.json()
+        if not isinstance(data, list) or not data or not isinstance(data[0], dict):
+            raise CRMRepositoryError("cuenta_persona_upsert_failed")
+        return data[0]
+
     async def fetch_user_profile(self, usuario_id: UUID) -> dict[str, Any] | None:
         params = {
             "id": f"eq.{usuario_id}",
