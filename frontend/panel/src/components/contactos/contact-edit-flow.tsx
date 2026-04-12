@@ -88,6 +88,26 @@ type AccountOption = {
 };
 
 type ContactDetail = Record<string, unknown>;
+type AccountRelation = {
+  id: string;
+  cuenta_id: string;
+  persona_id: string;
+  rol_en_cuenta: string;
+  puesto: string | null;
+  es_contacto_principal: boolean;
+  es_contacto_facturacion: boolean;
+  es_representante_legal: boolean;
+  activo: boolean;
+};
+type NewRelationDraft = {
+  cuenta_id: string;
+  rol_en_cuenta: string;
+  puesto: string;
+  es_contacto_principal: boolean;
+  es_contacto_facturacion: boolean;
+  es_representante_legal: boolean;
+  activo: boolean;
+};
 
 type ContactEditState = {
   mode: CreateMode;
@@ -499,6 +519,18 @@ function Field({
 export function ContactEditFlow({ open, onOpenChange, contactoId, onSaved }: ContactEditFlowProps) {
   const [state, dispatch] = React.useReducer(reducer, INITIAL_STATE);
   const deferredAccountQuery = React.useDeferredValue(state.accountQuery);
+  const [relations, setRelations] = React.useState<AccountRelation[]>([]);
+  const [relationsLoading, setRelationsLoading] = React.useState(false);
+  const [relationBusyId, setRelationBusyId] = React.useState<string | null>(null);
+  const [newRelation, setNewRelation] = React.useState<NewRelationDraft>({
+    cuenta_id: "",
+    rol_en_cuenta: "contacto_principal",
+    puesto: "",
+    es_contacto_principal: false,
+    es_contacto_facturacion: false,
+    es_representante_legal: false,
+    activo: true,
+  });
 
   React.useEffect(() => {
     if (!open) return;
@@ -565,6 +597,158 @@ export function ContactEditFlow({ open, onOpenChange, contactoId, onSaved }: Con
     run();
     return () => controller.abort();
   }, [deferredAccountQuery, state.mode]);
+
+  const loadRelations = React.useCallback(async () => {
+    if (!contactoId) return;
+    setRelationsLoading(true);
+    try {
+      const response = await fetch(`/api/personas/${encodeURIComponent(contactoId)}/relaciones`, {
+        cache: "no-store",
+      });
+      const body = (await response.json().catch(() => ({}))) as {
+        items?: Array<Record<string, unknown>>;
+        error?: string;
+      };
+      if (!response.ok) {
+        throw new Error(body.error || `Error ${response.status}`);
+      }
+      const items = Array.isArray(body.items) ? body.items : [];
+      const mapped: AccountRelation[] = items
+        .map((item) => {
+          const id = typeof item.id === "string" ? item.id : "";
+          const cuenta_id = typeof item.cuenta_id === "string" ? item.cuenta_id : "";
+          const persona_id = typeof item.persona_id === "string" ? item.persona_id : "";
+          if (!id || !cuenta_id || !persona_id) return null;
+          return {
+            id,
+            cuenta_id,
+            persona_id,
+            rol_en_cuenta: typeof item.rol_en_cuenta === "string" ? item.rol_en_cuenta : "contacto_principal",
+            puesto: typeof item.puesto === "string" ? item.puesto : null,
+            es_contacto_principal: Boolean(item.es_contacto_principal),
+            es_contacto_facturacion: Boolean(item.es_contacto_facturacion),
+            es_representante_legal: Boolean(item.es_representante_legal),
+            activo: item.activo === false ? false : true,
+          };
+        })
+        .filter((item): item is AccountRelation => item !== null);
+      setRelations(mapped);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "No se pudieron cargar las relaciones.");
+      setRelations([]);
+    } finally {
+      setRelationsLoading(false);
+    }
+  }, [contactoId]);
+
+  React.useEffect(() => {
+    if (!open || !contactoId) return;
+    void loadRelations();
+  }, [open, contactoId, loadRelations]);
+
+  const patchRelation = async (relationId: string, payload: Record<string, unknown>) => {
+    if (!contactoId) return;
+    setRelationBusyId(relationId);
+    try {
+      const response = await fetch(
+        `/api/personas/${encodeURIComponent(contactoId)}/relaciones/${encodeURIComponent(relationId)}`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        },
+      );
+      const body = (await response.json().catch(() => ({}))) as { error?: string };
+      if (!response.ok) throw new Error(body.error || `Error ${response.status}`);
+      await loadRelations();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "No se pudo actualizar la relacion.");
+    } finally {
+      setRelationBusyId(null);
+    }
+  };
+
+  const toggleRelationStatus = async (relationId: string, activo: boolean) => {
+    if (!contactoId) return;
+    setRelationBusyId(relationId);
+    try {
+      const response = await fetch(
+        `/api/personas/${encodeURIComponent(contactoId)}/relaciones/${encodeURIComponent(relationId)}/estado`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ activo }),
+        },
+      );
+      const body = (await response.json().catch(() => ({}))) as { error?: string };
+      if (!response.ok) throw new Error(body.error || `Error ${response.status}`);
+      await loadRelations();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "No se pudo cambiar el estado.");
+    } finally {
+      setRelationBusyId(null);
+    }
+  };
+
+  const deleteRelation = async (relationId: string) => {
+    if (!contactoId) return;
+    setRelationBusyId(relationId);
+    try {
+      const response = await fetch(
+        `/api/personas/${encodeURIComponent(contactoId)}/relaciones/${encodeURIComponent(relationId)}`,
+        {
+          method: "DELETE",
+        },
+      );
+      const body = (await response.json().catch(() => ({}))) as { error?: string };
+      if (!response.ok) throw new Error(body.error || `Error ${response.status}`);
+      await loadRelations();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "No se pudo eliminar la relacion.");
+    } finally {
+      setRelationBusyId(null);
+    }
+  };
+
+  const createRelation = async () => {
+    if (!contactoId) return;
+    if (!newRelation.cuenta_id.trim()) {
+      toast.error("Debes indicar cuenta_id para crear la relacion.");
+      return;
+    }
+    setRelationBusyId("new");
+    try {
+      const response = await fetch(`/api/personas/${encodeURIComponent(contactoId)}/relaciones`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          cuenta_id: newRelation.cuenta_id.trim(),
+          rol_en_cuenta: newRelation.rol_en_cuenta.trim() || "contacto_principal",
+          puesto: newRelation.puesto.trim() || null,
+          es_contacto_principal: newRelation.es_contacto_principal,
+          es_contacto_facturacion: newRelation.es_contacto_facturacion,
+          es_representante_legal: newRelation.es_representante_legal,
+          activo: newRelation.activo,
+        }),
+      });
+      const body = (await response.json().catch(() => ({}))) as { error?: string };
+      if (!response.ok) throw new Error(body.error || `Error ${response.status}`);
+      setNewRelation({
+        cuenta_id: "",
+        rol_en_cuenta: "contacto_principal",
+        puesto: "",
+        es_contacto_principal: false,
+        es_contacto_facturacion: false,
+        es_representante_legal: false,
+        activo: true,
+      });
+      await loadRelations();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "No se pudo crear la relacion.");
+    } finally {
+      setRelationBusyId(null);
+    }
+  };
 
   const submit = async () => {
     if (!contactoId) return;
@@ -759,6 +943,187 @@ export function ContactEditFlow({ open, onOpenChange, contactoId, onSaved }: Con
             </FormSection>
           ) : null}
 
+          {contactoId ? (
+            <FormSection title="Relaciones existentes" description="Administra todas las relaciones de esta persona con cuentas.">
+              {relationsLoading ? <p className="text-xs text-muted-foreground">Cargando relaciones...</p> : null}
+              {!relationsLoading && !relations.length ? (
+                <p className="text-xs text-muted-foreground">No hay relaciones registradas.</p>
+              ) : null}
+              <div className="space-y-3">
+                {relations.map((relation) => (
+                  <div key={relation.id} className="rounded-lg border border-border/60 p-3">
+                    <div className="mb-2 text-xs text-muted-foreground">
+                      cuenta_id: {relation.cuenta_id}
+                    </div>
+                    <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                      <Field label="Rol">
+                        <Input
+                          value={relation.rol_en_cuenta}
+                          onChange={(e) =>
+                            setRelations((prev) =>
+                              prev.map((item) =>
+                                item.id === relation.id ? { ...item, rol_en_cuenta: e.target.value } : item,
+                              ),
+                            )
+                          }
+                        />
+                      </Field>
+                      <Field label="Puesto">
+                        <Input
+                          value={relation.puesto ?? ""}
+                          onChange={(e) =>
+                            setRelations((prev) =>
+                              prev.map((item) =>
+                                item.id === relation.id ? { ...item, puesto: e.target.value } : item,
+                              ),
+                            )
+                          }
+                        />
+                      </Field>
+                    </div>
+                    <div className="mt-2 grid grid-cols-1 gap-2 md:grid-cols-3">
+                      <label className="flex items-center gap-2 text-sm">
+                        <Checkbox
+                          checked={relation.es_contacto_principal}
+                          onCheckedChange={(v) =>
+                            setRelations((prev) =>
+                              prev.map((item) =>
+                                item.id === relation.id ? { ...item, es_contacto_principal: Boolean(v) } : item,
+                              ),
+                            )
+                          }
+                        />
+                        Contacto principal
+                      </label>
+                      <label className="flex items-center gap-2 text-sm">
+                        <Checkbox
+                          checked={relation.es_contacto_facturacion}
+                          onCheckedChange={(v) =>
+                            setRelations((prev) =>
+                              prev.map((item) =>
+                                item.id === relation.id ? { ...item, es_contacto_facturacion: Boolean(v) } : item,
+                              ),
+                            )
+                          }
+                        />
+                        Facturación
+                      </label>
+                      <label className="flex items-center gap-2 text-sm">
+                        <Checkbox
+                          checked={relation.es_representante_legal}
+                          onCheckedChange={(v) =>
+                            setRelations((prev) =>
+                              prev.map((item) =>
+                                item.id === relation.id ? { ...item, es_representante_legal: Boolean(v) } : item,
+                              ),
+                            )
+                          }
+                        />
+                        Representante legal
+                      </label>
+                    </div>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <Button
+                        type="button"
+                        size="sm"
+                        disabled={relationBusyId === relation.id}
+                        onClick={() =>
+                          void patchRelation(relation.id, {
+                            rol_en_cuenta: relation.rol_en_cuenta,
+                            puesto: relation.puesto,
+                            es_contacto_principal: relation.es_contacto_principal,
+                            es_contacto_facturacion: relation.es_contacto_facturacion,
+                            es_representante_legal: relation.es_representante_legal,
+                            activo: relation.activo,
+                          })
+                        }
+                      >
+                        Guardar relación
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        disabled={relationBusyId === relation.id}
+                        onClick={() => void toggleRelationStatus(relation.id, !relation.activo)}
+                      >
+                        {relation.activo ? "Desactivar" : "Activar"}
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="destructive"
+                        disabled={relationBusyId === relation.id}
+                        onClick={() => void deleteRelation(relation.id)}
+                      >
+                        Eliminar
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="mt-4 rounded-lg border border-dashed border-border/70 p-3">
+                <div className="mb-2 text-sm font-medium">Agregar relación</div>
+                <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+                  <Field label="cuenta_id">
+                    <Input
+                      value={newRelation.cuenta_id}
+                      onChange={(e) => setNewRelation((prev) => ({ ...prev, cuenta_id: e.target.value }))}
+                      placeholder="UUID de cuenta"
+                    />
+                  </Field>
+                  <Field label="Rol en cuenta">
+                    <Input
+                      value={newRelation.rol_en_cuenta}
+                      onChange={(e) => setNewRelation((prev) => ({ ...prev, rol_en_cuenta: e.target.value }))}
+                    />
+                  </Field>
+                  <Field label="Puesto">
+                    <Input
+                      value={newRelation.puesto}
+                      onChange={(e) => setNewRelation((prev) => ({ ...prev, puesto: e.target.value }))}
+                    />
+                  </Field>
+                </div>
+                <div className="mt-2 grid grid-cols-1 gap-2 md:grid-cols-3">
+                  <label className="flex items-center gap-2 text-sm">
+                    <Checkbox
+                      checked={newRelation.es_contacto_principal}
+                      onCheckedChange={(v) =>
+                        setNewRelation((prev) => ({ ...prev, es_contacto_principal: Boolean(v) }))
+                      }
+                    />
+                    Contacto principal
+                  </label>
+                  <label className="flex items-center gap-2 text-sm">
+                    <Checkbox
+                      checked={newRelation.es_contacto_facturacion}
+                      onCheckedChange={(v) =>
+                        setNewRelation((prev) => ({ ...prev, es_contacto_facturacion: Boolean(v) }))
+                      }
+                    />
+                    Facturación
+                  </label>
+                  <label className="flex items-center gap-2 text-sm">
+                    <Checkbox
+                      checked={newRelation.es_representante_legal}
+                      onCheckedChange={(v) =>
+                        setNewRelation((prev) => ({ ...prev, es_representante_legal: Boolean(v) }))
+                      }
+                    />
+                    Representante legal
+                  </label>
+                </div>
+                <div className="mt-3">
+                  <Button type="button" size="sm" disabled={relationBusyId === "new"} onClick={() => void createRelation()}>
+                    {relationBusyId === "new" ? "Creando..." : "Agregar relación"}
+                  </Button>
+                </div>
+              </div>
+            </FormSection>
+          ) : null}
+
           <FormSection title="Extras" description="Completa ahora o deja para después.">
             <label className="flex items-center gap-2 text-sm">
               <Checkbox checked={state.extrasOpen} onCheckedChange={(v) => dispatch({ type: "extras/toggle", value: Boolean(v) })} />
@@ -811,4 +1176,3 @@ export function ContactEditFlow({ open, onOpenChange, contactoId, onSaved }: Con
     </Dialog>
   );
 }
-
