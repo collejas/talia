@@ -196,6 +196,7 @@ def _trim_text(value: Any) -> str | None:
 async def _sync_inbound_to_prospeccion_log(
     *,
     repo: CRMRepository,
+    conversation_id: str | None = None,
     contact_id: str,
     message: schemas.WhatsAppIncomingMessage,
 ) -> bool:
@@ -217,11 +218,13 @@ async def _sync_inbound_to_prospeccion_log(
         )
         return False
     envio: dict[str, Any] | None = None
+    phone_candidates = _phone_lookup_candidates(message.from_number)
     if not prospecto:
-        for phone_candidate in _phone_lookup_candidates(message.from_number):
+        latest_envios_by_phone: dict[str, dict[str, Any]] = {}
+        if phone_candidates:
             try:
-                envio = await repo.worker_get_latest_envio_by_phone(
-                    phone_e164=phone_candidate,
+                latest_envios_by_phone = await repo.worker_get_latest_envios_by_phones(
+                    phone_values=set(phone_candidates),
                     canal="whatsapp",
                 )
             except CRMRepositoryError as exc:
@@ -229,10 +232,11 @@ async def _sync_inbound_to_prospeccion_log(
                     logger,
                     "whatsapp.prospeccion_reply_envio_phone_lookup_failed",
                     contact_id=contact_id,
-                    phone=phone_candidate,
+                    phone=",".join(phone_candidates),
                     error=str(exc),
                 )
-                continue
+        for phone_candidate in phone_candidates:
+            envio = latest_envios_by_phone.get(phone_candidate)
             if not envio:
                 continue
             envio_prospecto_id = envio.get("prospecto_id")
@@ -249,18 +253,22 @@ async def _sync_inbound_to_prospeccion_log(
             )
             break
     if not prospecto:
-        for phone_candidate in _phone_lookup_candidates(message.from_number):
+        latest_prospectos_by_phone: dict[str, dict[str, Any]] = {}
+        if phone_candidates:
             try:
-                prospecto = await repo.worker_find_latest_prospecto_by_phone(phone=phone_candidate)
+                latest_prospectos_by_phone = await repo.worker_get_latest_prospectos_by_phones(
+                    phone_values=set(phone_candidates)
+                )
             except CRMRepositoryError as exc:
                 log_event(
                     logger,
                     "whatsapp.prospeccion_reply_prospect_phone_lookup_failed",
                     contact_id=contact_id,
-                    phone=phone_candidate,
+                    phone=",".join(phone_candidates),
                     error=str(exc),
                 )
-                continue
+        for phone_candidate in phone_candidates:
+            prospecto = latest_prospectos_by_phone.get(phone_candidate)
             if not prospecto:
                 continue
             log_event(
@@ -332,6 +340,19 @@ async def _sync_inbound_to_prospeccion_log(
                         envio_id=str(envio_uuid),
                         error=str(exc),
                     )
+
+    if conversation_id:
+        inbox_context_patch = _build_prospeccion_inbox_context_patch(envio)
+        try:
+            await storage.merge_conversation_inbox_context(conversation_id, inbox_context_patch)
+        except StorageError as exc:
+            log_event(
+                logger,
+                "whatsapp.prospeccion_reply_inbox_context_failed",
+                conversation_id=conversation_id,
+                prospecto_id=str(prospecto_uuid),
+                error=str(exc),
+            )
 
     log_entry: dict[str, Any] = {
         "prospecto_id": str(prospecto_uuid),
@@ -428,11 +449,14 @@ async def _resolve_prospeccion_prospecto_id(
     phone_candidates = _phone_lookup_candidates(message.from_number)
     if not phone_candidates:
         return None
+    try:
+        latest_prospectos_by_phone = await repo.worker_get_latest_prospectos_by_phones(
+            phone_values=set(phone_candidates)
+        )
+    except CRMRepositoryError:
+        latest_prospectos_by_phone = {}
     for phone_candidate in phone_candidates:
-        try:
-            by_phone = await repo.worker_find_latest_prospecto_by_phone(phone=phone_candidate)
-        except CRMRepositoryError:
-            continue
+        by_phone = latest_prospectos_by_phone.get(phone_candidate)
         prospecto_id = (by_phone or {}).get("id") if isinstance(by_phone, dict) else None
         try:
             return UUID(str(prospecto_id))
@@ -1042,6 +1066,7 @@ async def handle_incoming_message(
         prospeccion_sync_started = time.perf_counter()
         is_prospeccion_context = await _sync_inbound_to_prospeccion_log(
             repo=repo,
+            conversation_id=conversation_id,
             contact_id=contact_id,
             message=message,
         )
@@ -1062,6 +1087,20 @@ async def handle_incoming_message(
         else "general_whatsapp"
     )
     is_prospeccion_mode = is_prospeccion_context or bool(publicidad_atribucion_event)
+    if origin_type == "general_whatsapp":
+        try:
+            await storage.merge_conversation_inbox_context(
+                conversation_id,
+                {
+                    "source": "general_whatsapp",
+                    "source_detail": {"channel": "whatsapp", "mode": "assistant"},
+                },
+            )
+        except StorageError as exc:
+            logger.warning(
+                "whatsapp.general_inbox_context_failed",
+                extra={"conversation_id": conversation_id, "error": str(exc)},
+            )
 
     restart_context: dict[str, Any] | None = None
     opportunity_ref: str | None = None
@@ -2848,6 +2887,56 @@ def _phone_lookup_candidates(value: str | None) -> list[str]:
     if normalized.startswith("+52") and not normalized.startswith("+521") and len(normalized) > 3:
         _push("+521" + normalized[3:])
     return candidates
+
+
+def _build_prospeccion_inbox_context_patch(
+    envio: dict[str, Any] | None,
+) -> dict[str, Any]:
+    patch: dict[str, Any] = {"source": "prospeccion"}
+    if not isinstance(envio, dict):
+        return patch
+
+    payload = envio.get("payload") if isinstance(envio.get("payload"), dict) else {}
+    payload_meta = payload.get("metadata") if isinstance(payload.get("metadata"), dict) else {}
+    detalle = envio.get("detalle") if isinstance(envio.get("detalle"), dict) else {}
+
+    batch_id = _trim_text(envio.get("batch_id"))
+    campana_id = _trim_text(envio.get("campana_id")) or _trim_text(payload_meta.get("campana_id"))
+    template_id = _trim_text(
+        payload.get("template_id")
+        or payload_meta.get("template_id")
+        or payload_meta.get("template_id_snapshot")
+    )
+    template_slug = _trim_text(
+        payload.get("template_slug")
+        or payload_meta.get("template_slug")
+        or payload_meta.get("template_slug_snapshot")
+        or payload_meta.get("kw")
+        or payload_meta.get("twilio_content_sid")
+        or detalle.get("template_sid")
+        or payload_meta.get("template_sid_snapshot")
+    )
+    template_label = _trim_text(
+        payload.get("template_label")
+        or payload_meta.get("template_label")
+        or payload_meta.get("template_nombre")
+        or payload_meta.get("template_name")
+        or payload_meta.get("template_nombre_snapshot")
+        or payload_meta.get("template_name_snapshot")
+        or payload_meta.get("template_label_snapshot")
+    )
+
+    if batch_id:
+        patch["batch_id"] = batch_id
+    if campana_id:
+        patch["campana_id"] = campana_id
+    if template_id:
+        patch["template_id"] = template_id
+    if template_slug:
+        patch["template_slug"] = template_slug.lower()
+    if template_label:
+        patch["template_label"] = template_label
+    return patch
 
 
 def _parse_iso_datetime(value: Any) -> datetime | None:

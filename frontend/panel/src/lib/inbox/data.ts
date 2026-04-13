@@ -113,8 +113,8 @@ function gatherReengageTagsFromThreads(threads: InboxThread[]): string[] {
 export async function loadInboxData(filters?: InboxThreadsFilters): Promise<InboxPayload> {
   const sourceRequiresEnrichment = (filters?.source?.trim().toLowerCase() ?? "") === "publicidad_whatsapp";
   const normalizedFilters: Record<string, string> = {
-    limit: "100",
-    message_limit: "5",
+    limit: "40",
+    message_limit: "1",
   };
   const normalizedEstado = filters?.estado?.trim();
   const normalizedSource = filters?.source?.trim();

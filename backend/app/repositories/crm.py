@@ -14218,6 +14218,57 @@ class CRMRepository:
             return row
         return None
 
+    async def worker_get_latest_prospectos_by_phones(
+        self,
+        *,
+        phone_values: set[str],
+    ) -> dict[str, dict[str, Any]]:
+        """Obtiene el prospecto más reciente para un conjunto de telefonos."""
+
+        normalized_phones = sorted(
+            {
+                str(value or "").strip()
+                for value in phone_values
+                if str(value or "").strip()
+            }
+        )
+        if not normalized_phones:
+            return {}
+
+        resolved: dict[str, dict[str, Any]] = {}
+        chunk_size = 100
+        order_clause = "actualizado_en.desc.nullslast,creado_en.desc"
+        select_clause = "id,organizacion_id,phone,phone_e164,actualizado_en,creado_en"
+
+        for start in range(0, len(normalized_phones), chunk_size):
+            chunk = normalized_phones[start : start + chunk_size]
+            for field_name in ("phone", "phone_e164"):
+                params: dict[str, str] = {
+                    "select": select_clause,
+                    field_name: _postgrest_in_clause(chunk),
+                    "order": order_clause,
+                    "limit": str(max(200, min(1000, len(chunk) * 6))),
+                }
+                resp = await self._request(
+                    "GET",
+                    "/rest/v1/prospeccion_prospectos",
+                    params=params,
+                )
+                data = resp.json() or []
+                if not isinstance(data, list):
+                    raise CRMRepositoryError(
+                        f"worker_get_latest_prospectos_by_phones_invalid:{data!r}"
+                    )
+                for row in data:
+                    if not isinstance(row, dict):
+                        continue
+                    for candidate_field in ("phone", "phone_e164"):
+                        candidate = str(row.get(candidate_field) or "").strip()
+                        if not candidate or candidate not in chunk or candidate in resolved:
+                            continue
+                        resolved[candidate] = row
+        return resolved
+
     async def worker_get_latest_envio_for_prospecto(
         self,
         *,

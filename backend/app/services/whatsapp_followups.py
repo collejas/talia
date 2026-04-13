@@ -177,7 +177,11 @@ async def _process_conversation(
     if _is_outbound_prospeccion_without_reply(conversation):
         logger.info(
             "whatsapp.followup.skip_outbound_prospeccion",
-            extra={"conversation_id": convo_id, "contact_id": contact_id},
+            extra={
+                "conversation_id": convo_id,
+                "contact_id": contact_id,
+                "source": _ensure_dict(conversation.get("inbox_context")).get("source"),
+            },
         )
         return
 
@@ -638,10 +642,13 @@ def _ensure_dict(value: Any) -> dict[str, Any]:
 
 
 def _is_outbound_prospeccion_without_reply(conversation: dict[str, Any]) -> bool:
-    """Evita followups de campañas de prospección sin respuesta inbound."""
+    """Evita reenganches de prospección mientras el prospecto no haya respondido."""
     context = _ensure_dict(conversation.get("inbox_context"))
     source = str(context.get("source") or "").strip().lower()
-    return source == "prospeccion"
+    if source != "prospeccion":
+        return False
+    last_in = _parse_ts(conversation.get("ultimo_entrante_en"))
+    return last_in is None
 
 
 def _should_skip_reengage_for_business_rules(opportunity: dict[str, Any]) -> bool:

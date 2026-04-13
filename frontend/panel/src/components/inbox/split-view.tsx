@@ -31,8 +31,8 @@ import { matchesReengageFilter } from "@/lib/inbox/reengage-filter";
 const THREADS_REFRESH_INTERVAL_MS = 12000;
 const MESSAGES_POLL_INITIAL_MS = 3500;
 const MESSAGES_POLL_MAX_MS = 15000;
-const THREADS_PAGE_SIZE = 100;
-const THREADS_LIST_MESSAGE_LIMIT = 5;
+const THREADS_PAGE_SIZE = 40;
+const THREADS_LIST_MESSAGE_LIMIT = 1;
 const INBOX_STREAM_REFRESH_DEBOUNCE_MS = 400;
 
 const CHANNEL_BADGE_STYLES: Record<string, string> = {

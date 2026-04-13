@@ -15204,6 +15204,10 @@ async def get_inbox_threads(
     campana_ids: set[str] = set()
     template_ids: set[str] = set()
     template_slugs: set[str] = set()
+    should_resolve_whatsapp_hints = bool(
+        limit <= 1
+        or source_requested in {"publicidad_whatsapp", "prospeccion", "prospeccion_whatsapp"}
+    )
     thread_prospeccion_hints: dict[
         str, tuple[str | None, str | None, str | None, str | None, str | None]
     ] = {}
@@ -15286,25 +15290,27 @@ async def get_inbox_threads(
         (time.perf_counter() - contact_fallback_start) * 1000, 2
     )
 
-    # Fallback: cuando la conversación de WhatsApp no trae metadata prospección
-    # en mensajes, intentamos enlazar con el envío más reciente por teléfono.
+    # Fallback costoso: solo se resuelve en detalle de hilo o vistas enfocadas en
+    # prospección/publicidad. En el listado general priorizamos latencia y
+    # confiamos en inbox_context / snapshot persistidos.
     whatsapp_phone_cache: dict[str, tuple[str | None, str | None, str | None, str | None, str | None]] = {}
     phones_needing_fallback: set[str] = set()
-    for conversacion_id, hints in list(thread_prospeccion_hints.items()):
-        batch_hint, campana_hint, template_id_hint, template_slug_hint, _template_label_hint = hints
-        # Aunque exista template_id, seguimos buscando fallback por telefono cuando
-        # no hay slug/campana/lote; el id puede ser historico y no resoluble.
-        if batch_hint or campana_hint or template_slug_hint:
-            continue
-        if thread_channel_map.get(conversacion_id) != "whatsapp":
-            continue
-        phone_value = thread_phone_map.get(conversacion_id)
-        if not phone_value:
-            contacto_id_value = thread_contact_map.get(conversacion_id)
-            if contacto_id_value:
-                phone_value = contact_phone_map.get(contacto_id_value)
-        if phone_value:
-            phones_needing_fallback.add(phone_value)
+    if should_resolve_whatsapp_hints:
+        for conversacion_id, hints in list(thread_prospeccion_hints.items()):
+            batch_hint, campana_hint, template_id_hint, template_slug_hint, _template_label_hint = hints
+            # Aunque exista template_id, seguimos buscando fallback por telefono cuando
+            # no hay slug/campana/lote; el id puede ser historico y no resoluble.
+            if batch_hint or campana_hint or template_slug_hint:
+                continue
+            if thread_channel_map.get(conversacion_id) != "whatsapp":
+                continue
+            phone_value = thread_phone_map.get(conversacion_id)
+            if not phone_value:
+                contacto_id_value = thread_contact_map.get(conversacion_id)
+                if contacto_id_value:
+                    phone_value = contact_phone_map.get(contacto_id_value)
+            if phone_value:
+                phones_needing_fallback.add(phone_value)
 
     phones_to_lookup: list[str] = []
     for phone_value in sorted(phones_needing_fallback):
@@ -15317,7 +15323,7 @@ async def get_inbox_threads(
             phones_to_lookup.append(phone_value)
 
     fallback_lookup_start = time.perf_counter()
-    if phones_to_lookup:
+    if should_resolve_whatsapp_hints and phones_to_lookup:
         phone_candidates_map = {
             phone_value: _whatsapp_phone_lookup_candidates(phone_value)
             for phone_value in phones_to_lookup
@@ -15406,44 +15412,45 @@ async def get_inbox_threads(
         (time.perf_counter() - fallback_lookup_start) * 1000, 2
     )
 
-    for conversacion_id, hints in list(thread_prospeccion_hints.items()):
-        batch_hint, campana_hint, template_id_hint, template_slug_hint, template_label_hint = hints
-        if batch_hint or campana_hint or template_slug_hint:
-            continue
-        if thread_channel_map.get(conversacion_id) != "whatsapp":
-            continue
-        phone_value = thread_phone_map.get(conversacion_id)
-        if not phone_value:
-            contacto_id_value = thread_contact_map.get(conversacion_id)
-            if contacto_id_value:
-                phone_value = contact_phone_map.get(contacto_id_value)
-        if not phone_value:
-            continue
-        fallback_hints = whatsapp_phone_cache.get(phone_value)
-        if not fallback_hints:
-            for candidate_phone in _whatsapp_phone_lookup_candidates(phone_value):
-                cached_hint = whatsapp_phone_cache.get(candidate_phone)
-                if cached_hint:
-                    fallback_hints = cached_hint
-                    break
-        if not fallback_hints:
-            fallback_hints = (None, None, None, None, None)
-        merged_hints = (
-            batch_hint or fallback_hints[0],
-            campana_hint or fallback_hints[1],
-            template_id_hint or fallback_hints[2],
-            template_slug_hint or fallback_hints[3],
-            template_label_hint or fallback_hints[4],
-        )
-        thread_prospeccion_hints[conversacion_id] = merged_hints
-        if merged_hints[0] and _safe_uuid(merged_hints[0]):
-            batch_ids.add(merged_hints[0])
-        if merged_hints[1] and _safe_uuid(merged_hints[1]):
-            campana_ids.add(merged_hints[1])
-        if merged_hints[2] and _safe_uuid(merged_hints[2]):
-            template_ids.add(merged_hints[2])
-        if merged_hints[3]:
-            template_slugs.add(merged_hints[3])
+    if should_resolve_whatsapp_hints:
+        for conversacion_id, hints in list(thread_prospeccion_hints.items()):
+            batch_hint, campana_hint, template_id_hint, template_slug_hint, template_label_hint = hints
+            if batch_hint or campana_hint or template_slug_hint:
+                continue
+            if thread_channel_map.get(conversacion_id) != "whatsapp":
+                continue
+            phone_value = thread_phone_map.get(conversacion_id)
+            if not phone_value:
+                contacto_id_value = thread_contact_map.get(conversacion_id)
+                if contacto_id_value:
+                    phone_value = contact_phone_map.get(contacto_id_value)
+            if not phone_value:
+                continue
+            fallback_hints = whatsapp_phone_cache.get(phone_value)
+            if not fallback_hints:
+                for candidate_phone in _whatsapp_phone_lookup_candidates(phone_value):
+                    cached_hint = whatsapp_phone_cache.get(candidate_phone)
+                    if cached_hint:
+                        fallback_hints = cached_hint
+                        break
+            if not fallback_hints:
+                fallback_hints = (None, None, None, None, None)
+            merged_hints = (
+                batch_hint or fallback_hints[0],
+                campana_hint or fallback_hints[1],
+                template_id_hint or fallback_hints[2],
+                template_slug_hint or fallback_hints[3],
+                template_label_hint or fallback_hints[4],
+            )
+            thread_prospeccion_hints[conversacion_id] = merged_hints
+            if merged_hints[0] and _safe_uuid(merged_hints[0]):
+                batch_ids.add(merged_hints[0])
+            if merged_hints[1] and _safe_uuid(merged_hints[1]):
+                campana_ids.add(merged_hints[1])
+            if merged_hints[2] and _safe_uuid(merged_hints[2]):
+                template_ids.add(merged_hints[2])
+            if merged_hints[3]:
+                template_slugs.add(merged_hints[3])
 
     batch_label_map: dict[str, str] = {}
     batch_number_map: dict[str, int] = {}
@@ -15633,7 +15640,7 @@ async def get_inbox_threads(
     wa_atribucion_by_conversation: dict[str, dict[str, Any]] = {}
     wa_rule_ids: set[str] = set()
     attribution_lookup_start = time.perf_counter()
-    if conversation_ids:
+    if should_resolve_whatsapp_hints and conversation_ids:
         try:
             wa_atribucion_rows = await repo.worker_list_whatsapp_atribucion_events_by_conversations(
                 organizacion_id=organizacion_id,
