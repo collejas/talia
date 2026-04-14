@@ -197,6 +197,7 @@ async def _sync_inbound_to_prospeccion_log(
     *,
     repo: CRMRepository,
     conversation_id: str | None = None,
+    organizacion_id: UUID | None = None,
     contact_id: str,
     message: schemas.WhatsAppIncomingMessage,
 ) -> bool:
@@ -374,6 +375,8 @@ async def _sync_inbound_to_prospeccion_log(
         organizacion_id_value = envio.get("organizacion_id")
     elif isinstance(prospecto, dict) and prospecto.get("organizacion_id"):
         organizacion_id_value = prospecto.get("organizacion_id")
+    elif organizacion_id:
+        organizacion_id_value = str(organizacion_id)
     if organizacion_id_value:
         log_entry["organizacion_id"] = str(organizacion_id_value)
     if envio_id_value:
@@ -1067,6 +1070,7 @@ async def handle_incoming_message(
         is_prospeccion_context = await _sync_inbound_to_prospeccion_log(
             repo=repo,
             conversation_id=conversation_id,
+            organizacion_id=org_uuid,
             contact_id=contact_id,
             message=message,
         )
@@ -2344,88 +2348,95 @@ async def _generate_assistant_reply(
             "whatsapp.reply_quality_low",
             extra={"conversation_id": conversation_id, "reason": quality_reason},
         )
-        guard_retry_kwargs: dict[str, Any] = {
-            "input": [
-                {
-                    "role": "developer",
-                    "content": [
-                        {
-                            "type": "input_text",
-                            "text": (
-                                "Regenera SOLO un mensaje final de WhatsApp completo y autocontenido. "
-                                "1-3 frases, máximo 500 caracteres. "
-                                "No termines con puntos suspensivos, comas ni conectores sueltos."
-                            ),
-                        }
-                    ],
-                }
-            ],
-            "store": True,
-            "max_output_tokens": 180,
-            "temperature": 0.2,
-            "metadata": metadata_payload,
-            "tool_choice": "none",
-        }
-        guard_retry_kwargs.update(_build_request_template(include_tools=False))
-        if assistant.is_prompt:
-            guard_retry_kwargs.pop("temperature", None)
-        if final_conversation_id:
-            guard_retry_kwargs["conversation"] = final_conversation_id
-        elif final_response_id:
-            guard_retry_kwargs["previous_response_id"] = final_response_id
-        try:
-            quality_retry_started = time.perf_counter()
-            retry_response = await client.responses.create(**guard_retry_kwargs)
-            debug_timings["quality_retry_ms"] = round((time.perf_counter() - quality_retry_started) * 1000, 2)
-            retry_payload = retry_response.model_dump()
-            await openai_usage_ledger.record_response_usage(
-                organizacion_id=organizacion_id,
-                channel="whatsapp",
-                feature="sales_chat",
-                assistant=assistant,
-                response_payload=retry_payload,
-                request_purpose="quality_retry",
-                latency_ms=int(round(debug_timings["quality_retry_ms"])),
-                api_key=whatsapp_settings.voice_api_key,
-                request_metadata={"conversation_id": conversation_id},
-                conversation_id=conversation_id,
-                contact_id=contact_id,
-                quality_retry_used=True,
-                project_id=assistant.project_id,
+        if quality_reason == "empty":
+            final_text = None
+            logger.info(
+                "whatsapp.reply_quality_skip_retry",
+                extra={"conversation_id": conversation_id, "reason": quality_reason},
             )
-            retry_text = _extract_text_from_response(retry_payload)
-            retry_ok, retry_reason = evaluate_reply_quality(retry_text)
-            if retry_ok:
-                final_text = retry_text
-                final_response_id = retry_payload.get("id") or final_response_id
-                final_conversation_id = (
-                    (retry_payload.get("conversation") or {}).get("id")
-                    or final_conversation_id
+        else:
+            guard_retry_kwargs: dict[str, Any] = {
+                "input": [
+                    {
+                        "role": "developer",
+                        "content": [
+                            {
+                                "type": "input_text",
+                                "text": (
+                                    "Regenera SOLO un mensaje final de WhatsApp completo y autocontenido. "
+                                    "1-3 frases, máximo 500 caracteres. "
+                                    "No termines con puntos suspensivos, comas ni conectores sueltos."
+                                ),
+                            }
+                        ],
+                    }
+                ],
+                "store": True,
+                "max_output_tokens": 180,
+                "temperature": 0.2,
+                "metadata": metadata_payload,
+                "tool_choice": "none",
+            }
+            guard_retry_kwargs.update(_build_request_template(include_tools=False))
+            if assistant.is_prompt:
+                guard_retry_kwargs.pop("temperature", None)
+            if final_conversation_id:
+                guard_retry_kwargs["conversation"] = final_conversation_id
+            elif final_response_id:
+                guard_retry_kwargs["previous_response_id"] = final_response_id
+            try:
+                quality_retry_started = time.perf_counter()
+                retry_response = await client.responses.create(**guard_retry_kwargs)
+                debug_timings["quality_retry_ms"] = round((time.perf_counter() - quality_retry_started) * 1000, 2)
+                retry_payload = retry_response.model_dump()
+                await openai_usage_ledger.record_response_usage(
+                    organizacion_id=organizacion_id,
+                    channel="whatsapp",
+                    feature="sales_chat",
+                    assistant=assistant,
+                    response_payload=retry_payload,
+                    request_purpose="quality_retry",
+                    latency_ms=int(round(debug_timings["quality_retry_ms"])),
+                    api_key=whatsapp_settings.voice_api_key,
+                    request_metadata={"conversation_id": conversation_id},
+                    conversation_id=conversation_id,
+                    contact_id=contact_id,
+                    quality_retry_used=True,
+                    project_id=assistant.project_id,
                 )
-                logger.info(
-                    "whatsapp.reply_quality_recovered",
-                    extra={"conversation_id": conversation_id, "previous_reason": quality_reason},
-                )
-            else:
+                retry_text = _extract_text_from_response(retry_payload)
+                retry_ok, retry_reason = evaluate_reply_quality(retry_text)
+                if retry_ok:
+                    final_text = retry_text
+                    final_response_id = retry_payload.get("id") or final_response_id
+                    final_conversation_id = (
+                        (retry_payload.get("conversation") or {}).get("id")
+                        or final_conversation_id
+                    )
+                    logger.info(
+                        "whatsapp.reply_quality_recovered",
+                        extra={"conversation_id": conversation_id, "previous_reason": quality_reason},
+                    )
+                else:
+                    final_text = None
+                    logger.warning(
+                        "whatsapp.reply_quality_retry_failed",
+                        extra={
+                            "conversation_id": conversation_id,
+                            "previous_reason": quality_reason,
+                            "retry_reason": retry_reason,
+                        },
+                    )
+            except Exception as exc:  # pragma: no cover
                 final_text = None
                 logger.warning(
-                    "whatsapp.reply_quality_retry_failed",
+                    "whatsapp.reply_quality_retry_exception",
                     extra={
                         "conversation_id": conversation_id,
                         "previous_reason": quality_reason,
-                        "retry_reason": retry_reason,
+                        "error": str(exc),
                     },
                 )
-        except Exception as exc:  # pragma: no cover
-            final_text = None
-            logger.warning(
-                "whatsapp.reply_quality_retry_exception",
-                extra={
-                    "conversation_id": conversation_id,
-                    "previous_reason": quality_reason,
-                    "error": str(exc),
-                },
-            )
 
     if conversation_id:
         asyncio.create_task(

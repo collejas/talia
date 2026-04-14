@@ -14022,6 +14022,7 @@ async def update_persona(
     cuenta = _persona_alta_normalize_cuenta(payload.cuenta)
     relacion = payload.relacion
     extras = _persona_alta_normalize_extras(payload.extras)
+    dedupe = payload.dedupe
 
     if not _persona_alta_clean_text(persona.nombre) or not _persona_alta_clean_text(persona.apellido_paterno):
         raise HTTPException(status_code=400, detail="persona_incompleta")
@@ -14035,7 +14036,7 @@ async def update_persona(
     dedupe_contacto_id: UUID | None = dedupe.persona_reutilizar_id if dedupe else None
 
     if dedupe and dedupe.cuenta_reutilizar_id and cuenta:
-      cuenta = cuenta.model_copy(update={"cuenta_id": dedupe.cuenta_reutilizar_id})
+        cuenta = cuenta.model_copy(update={"cuenta_id": dedupe.cuenta_reutilizar_id})
 
     exclude_account_id = cuenta.cuenta_id if cuenta and cuenta.cuenta_id else None
     try:
