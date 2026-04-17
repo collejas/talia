@@ -237,6 +237,66 @@ async def test_has_minimum_profile_for_case_a_uses_profiling_status_fallback(
     )
 
 
+@pytest.mark.asyncio
+async def test_has_prefilter_for_schedule_uses_contact_scoring_answers_fallback(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def fake_is_profiling_enabled(**_: object) -> bool:
+        return True
+
+    async def fake_load_required_case_a_questions(**_: object) -> tuple[list[str], dict[str, str]]:
+        return (
+            [
+                "financing_type",
+                "budget_range",
+                "purchase_timeline",
+                "decision_authority",
+            ],
+            {},
+        )
+
+    class DummyRepo:
+        async def get_pipeline_opportunity(self, **_: object) -> dict[str, Any]:
+            return {"metadata": {"lead_scoring": {"answers": {}}}}
+
+    monkeypatch.setattr(
+        tools.tenant_runtime,
+        "is_profiling_enabled",
+        fake_is_profiling_enabled,
+    )
+    monkeypatch.setattr(
+        tools,
+        "_load_required_case_a_questions",
+        fake_load_required_case_a_questions,
+    )
+    monkeypatch.setattr(tools, "CRMRepository", lambda: DummyRepo())
+
+    contact = {
+        "organizacion_id": "00000000-0000-0000-0000-000000000111",
+        "notes": "Cliente interesado",
+        "necesidad_proposito": "Compra de vivienda",
+        "contacto_datos": {
+            "lead_scoring": {
+                "answers": {
+                    "financing_type": "credito",
+                    "budget_range": "1.5 millones",
+                    "purchase_timeline": "3-6m",
+                    "decision_authority": "full",
+                }
+            }
+        },
+    }
+
+    status = await tools._has_prefilter_for_schedule(
+        contact=contact,
+        opportunity_id="00000000-0000-0000-0000-000000000222",
+        conversation_id="conv-123",
+    )
+
+    assert status["ready"] is True
+    assert status["missing_fields"] == []
+
+
 def test_sanitize_profiling_statuses_preserves_assistant_statuses() -> None:
     statuses = {
         "financing_type": "answered",

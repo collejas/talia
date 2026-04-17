@@ -782,9 +782,12 @@ async def _has_prefilter_for_schedule(
     if required_from_metadata:
         required_fields = required_from_metadata
     scoring = _ensure_dict(metadata.get("lead_scoring"))
-    answers = _ensure_dict(scoring.get("answers"))
+    answers = _extract_scoring_answers(contact=contact, opportunity_metadata=metadata)
     required_fields = shared_normalize_required_fields_for_answers(required_fields, answers)
-    profiling_questions = _extract_profiling_questions(opportunity_metadata=metadata)
+    profiling_questions = _extract_profiling_questions(
+        opportunity_metadata=metadata,
+        channel=channel,
+    )
 
     def _is_completed(field: str, value: Any) -> bool:
         if value is None:
@@ -2097,8 +2100,9 @@ async def _handle_schedule_demo(
                 missing_fields=missing_fields,
             )
             if inferred_answers:
+                scoring_result: dict[str, Any] | None = None
                 try:
-                    await storage.apply_lead_scoring(
+                    scoring_result = await storage.apply_lead_scoring(
                         conversation_id=context.conversation_id,
                         contact_id=context.contact_id,
                         opportunity_id=str(tarjeta_id),
@@ -2110,13 +2114,30 @@ async def _handle_schedule_demo(
                         },
                         source="schedule_demo_prefilter_infer",
                     )
+                except StorageError as exc:
+                    logger.warning(
+                        "whatsapp.schedule_demo.prefilter_infer_failed",
+                        extra={
+                            "conversation_id": context.conversation_id,
+                            "opportunity_id": str(tarjeta_id),
+                            "error": str(exc),
+                        },
+                    )
+                else:
+                    scored_missing = [
+                        str(item).strip()
+                        for item in ((scoring_result or {}).get("missing_fields") or [])
+                        if str(item).strip()
+                    ]
+                    if not scored_missing:
+                        prefilter_status = {"ready": True, "missing_fields": [], "questions": {}}
+                if not bool(prefilter_status.get("ready")):
+                    contact = await _resolve_contact(context.contact_id)
                     prefilter_status = await _has_prefilter_for_schedule(
                         contact=contact,
                         opportunity_id=tarjeta_id,
                         conversation_id=context.conversation_id,
                     )
-                except StorageError:
-                    pass
         if not bool(prefilter_status.get("ready")):
             missing_fields = [
                 str(item)
