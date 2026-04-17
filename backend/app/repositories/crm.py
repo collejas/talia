@@ -5909,7 +5909,10 @@ class CRMRepository:
             "phone_e164": persona.get("telefono_principal_e164"),
             "company_name": account_name or metadata.get("legacy_company_name") or metadata.get("legacy_razon_social"),
             "notes": persona.get("notas"),
-            "necesidad_proposito": metadata.get("legacy_necesidad_proposito"),
+            "necesidad_proposito": (
+                metadata.get("legacy_necesidad_proposito")
+                or (account.get("necesidad_proposito") if isinstance(account, dict) else None)
+            ),
             "contacto_datos": legacy_datos,
             "codigo_contacto": metadata.get("legacy_contacto_codigo"),
             "codigo_cuenta": account.get("codigo_cuenta") if isinstance(account, dict) else metadata.get("legacy_codigo_cuenta"),
@@ -5991,6 +5994,15 @@ class CRMRepository:
         apellido_paterno = self._pick_text(merged, "apellido_paterno")
         apellido_materno = self._pick_text(merged, "apellido_materno")
         given_name = self._pick_text(merged, "nombre_nombres")
+        full_name_was_explicitly_updated = (
+            isinstance(payload, dict)
+            and "nombre_completo" in payload
+            and "nombre_nombres" not in payload
+        )
+        if full_name_was_explicitly_updated and full_name:
+            # Si sólo llega nombre_completo (ej. set_full_name en WhatsApp),
+            # priorizamos ese valor para evitar quedarnos con el profile_name legado.
+            given_name = full_name
         if given_name:
             suffix_candidates = []
             if apellido_paterno and apellido_materno:
@@ -6075,6 +6087,8 @@ class CRMRepository:
                 "legacy_tipo_industria": self._pick_text(merged, "tipo_industria"),
                 "legacy_tamano": self._pick_text(merged, "tamano"),
                 "legacy_website": self._pick_text(merged, "website", "sitio_web"),
+                "legacy_notas": self._pick_text(merged, "notas", "notes"),
+                "legacy_necesidad_proposito": self._pick_text(merged, "necesidad_proposito"),
             }
         )
         legacy_metadata = {key: value for key, value in persona_metadata.items() if value not in (None, "", {}, [])}
@@ -6188,7 +6202,11 @@ class CRMRepository:
             "organizacion_id": str(organizacion_id),
             "cuenta_id": merged.get("cuenta_id"),
             "codigo_contacto": self._pick_text(merged, "codigo_contacto"),
-            "nombre_nombres": self._pick_text(merged, "nombre_nombres"),
+            "nombre_nombres": (
+                given_name
+                if full_name_was_explicitly_updated and given_name
+                else self._pick_text(merged, "nombre_nombres")
+            ),
             "apellido_paterno": self._pick_text(merged, "apellido_paterno"),
             "apellido_materno": self._pick_text(merged, "apellido_materno"),
             "nombre_completo": full_name,
@@ -6546,7 +6564,11 @@ class CRMRepository:
             }
         )
         legacy_body["contacto_datos"] = legacy_contacto_datos
-        legacy_body["actualizado_en"] = datetime.now(timezone.utc).isoformat()
+        legacy_patch = dict(legacy_body)
+        # PATCH de legacy_contactos: evita columnas no existentes/inmutables.
+        legacy_patch.pop("id", None)
+        legacy_patch.pop("organizacion_id", None)
+        legacy_patch.pop("creado_en", None)
         try:
             legacy_resp = await self._request(
                 "PATCH",
@@ -6555,7 +6577,7 @@ class CRMRepository:
                     "organizacion_id": f"eq.{organizacion_id}",
                     "id": f"eq.{contacto_id}",
                 },
-                json=legacy_body,
+                json=legacy_patch,
                 prefer="return=representation",
             )
             legacy_data = legacy_resp.json()
@@ -6563,8 +6585,51 @@ class CRMRepository:
                 legacy_row = legacy_data[0]
             else:
                 legacy_row = None
-        except CRMRepositoryError:
-            legacy_row = None
+        except CRMRepositoryError as exc:
+            # Si falla por FK de propietario, reintenta sin ese campo.
+            if "propietario_usuario_id" in str(exc).lower() or "violates foreign key" in str(exc).lower():
+                fallback_patch = dict(legacy_patch)
+                fallback_patch.pop("propietario_usuario_id", None)
+                try:
+                    legacy_resp = await self._request(
+                        "PATCH",
+                        "/rest/v1/contactos",
+                        params={
+                            "organizacion_id": f"eq.{organizacion_id}",
+                            "id": f"eq.{contacto_id}",
+                        },
+                        json=fallback_patch,
+                        prefer="return=representation",
+                    )
+                    legacy_data = legacy_resp.json()
+                    if (
+                        isinstance(legacy_data, list)
+                        and legacy_data
+                        and isinstance(legacy_data[0], dict)
+                    ):
+                        legacy_row = legacy_data[0]
+                    else:
+                        legacy_row = None
+                except CRMRepositoryError as fallback_exc:
+                    logger.warning(
+                        "crm.contact_legacy_sync_failed",
+                        extra={
+                            "contacto_id": str(contacto_id),
+                            "organizacion_id": str(organizacion_id),
+                            "error": str(fallback_exc),
+                        },
+                    )
+                    legacy_row = None
+            else:
+                logger.warning(
+                    "crm.contact_legacy_sync_failed",
+                    extra={
+                        "contacto_id": str(contacto_id),
+                        "organizacion_id": str(organizacion_id),
+                        "error": str(exc),
+                    },
+                )
+                legacy_row = None
 
         if legacy_row and isinstance(legacy_row, dict):
             try:

@@ -11,7 +11,29 @@ from app.core.config import settings
 
 
 def _contact_name(contact: Mapping[str, Any]) -> str:
-    return str(contact.get("nombre_completo") or "").strip() or "No dio nombre"
+    full_name = str(contact.get("nombre_completo") or "").strip()
+    if full_name:
+        return full_name
+    parts = [
+        str(contact.get("nombre_nombres") or "").strip(),
+        str(contact.get("apellido_paterno") or "").strip(),
+        str(contact.get("apellido_materno") or "").strip(),
+    ]
+    combined = " ".join(part for part in parts if part).strip()
+    return combined or "No dio nombre"
+
+
+def _contact_email(contact: Mapping[str, Any], *, override: str | None = None) -> str:
+    for candidate in (
+        override,
+        contact.get("correo"),
+        contact.get("email"),
+        contact.get("correo_principal"),
+    ):
+        value = str(candidate or "").strip()
+        if value:
+            return value
+    return ""
 
 
 def _extract_contact_location(contact: Mapping[str, Any]) -> str:
@@ -89,7 +111,7 @@ def compose_sales_notification_message(
 ) -> str:
     company = str(contact.get("company_name") or "").strip()
     phone = str(contact.get("telefono_e164") or contact.get("telefono") or "").strip()
-    correo = str(email or contact.get("correo") or "").strip()
+    correo = _contact_email(contact, override=email)
 
     lines = [
         "🚀 Tal-IA tiene un lead listo para seguimiento.",
@@ -149,7 +171,7 @@ def build_sales_template_variables(
     next_action = str((extra or {}).get("siguiente_accion") or "").strip()
     phone = str(contact.get("telefono_e164") or contact.get("telefono") or "").strip()
     company = str(contact.get("company_name") or "").strip()
-    email_value = str(email or contact.get("correo") or "").strip()
+    email_value = _contact_email(contact, override=email)
     return {
         "1": seller_name,
         "2": _contact_name(contact),

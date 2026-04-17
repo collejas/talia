@@ -777,7 +777,7 @@ async def _send_booking_confirmation_email(
     date_label = start_local.strftime("%d/%m/%Y")
     time_label = start_local.strftime("%H:%M")
 
-    contact_name = contact.get("nombre_completo") if contact else None
+    contact_name = _extract_contact_name(contact)
     greeting = f"Geoactiv - Tal-IA {contact_name}," if contact_name else "Hola,"
     end_label = end_local.strftime("%H:%M")
 
@@ -1051,7 +1051,7 @@ async def _send_booking_cancellation_email(
     date_label = start_local.strftime("%d/%m/%Y")
     time_label = start_local.strftime("%H:%M")
 
-    contact_name = contact.get("nombre_completo")
+    contact_name = _extract_contact_name(contact)
     greeting = f"Hola {contact_name}," if contact_name else "Hola,"
 
     body_lines = [
@@ -2180,11 +2180,29 @@ def _normalize_required_fields_for_context(
 def _extract_contact_email(contact: dict[str, Any] | None) -> str | None:
     if not contact:
         return None
-    value = contact.get("correo")
-    if not isinstance(value, str):
+    for key in ("correo", "email", "correo_principal"):
+        value = contact.get(key)
+        if not isinstance(value, str):
+            continue
+        trimmed = value.strip()
+        if trimmed:
+            return trimmed
+    return None
+
+
+def _extract_contact_name(contact: dict[str, Any] | None) -> str | None:
+    if not contact:
         return None
-    trimmed = value.strip()
-    return trimmed or None
+    full_name = str(contact.get("nombre_completo") or "").strip()
+    if full_name:
+        return full_name
+    parts = [
+        str(contact.get("nombre_nombres") or "").strip(),
+        str(contact.get("apellido_paterno") or "").strip(),
+        str(contact.get("apellido_materno") or "").strip(),
+    ]
+    combined = " ".join(part for part in parts if part).strip()
+    return combined or None
 
 
 def _extract_contact_org(contact: dict[str, Any] | None) -> str | None:

@@ -1701,7 +1701,12 @@ async def _retry_failed_sales_notification(
 
     resumen = str(contact.get("necesidad_proposito") or "").strip() or None
     notes = str(contact.get("notes") or "").strip() or None
-    email = str(contact.get("correo") or "").strip() or None
+    email = (
+        str(contact.get("correo") or "").strip()
+        or str(contact.get("email") or "").strip()
+        or str(contact.get("correo_principal") or "").strip()
+        or None
+    )
     extra_reason = assignment_metadata.get("reason")
     extra: dict[str, Any] = dict(extra_reason) if isinstance(extra_reason, dict) else {}
     extra["retry_of_sid"] = sid

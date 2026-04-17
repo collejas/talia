@@ -256,8 +256,11 @@ def _get_primary_notification_by_channel(
 def _extract_contact_email(contact: dict[str, Any] | None) -> str | None:
     if not contact:
         return None
-    email = str(contact.get("correo") or "").strip()
-    return email or None
+    for key in ("correo", "email", "correo_principal"):
+        email = str(contact.get(key) or "").strip()
+        if email:
+            return email
+    return None
 
 
 def _build_profile_summary_text(opportunity_metadata: Mapping[str, Any]) -> str | None:

@@ -124,7 +124,11 @@ async def test_notify_sales_rep_sends_message(monkeypatch: pytest.MonkeyPatch) -
 async def test_notify_sales_rep_skips_when_already_sent(monkeypatch: pytest.MonkeyPatch) -> None:
     metadata = {
         "sales_primary_notifications": {
-            "whatsapp": {"sent_at": "2024-01-01T00:00:00Z"},
+            "whatsapp": {
+                "sent_at": "2024-01-01T00:00:00Z",
+                "trigger": "booking_confirmed",
+                "reason": "case_a_booking_profile",
+            },
         },
         "lead_scoring": {
             "answers": {
@@ -517,7 +521,7 @@ async def test_handle_close_lead_triggers_notification(
 
     result = await tools._handle_close_lead(arguments, context)
     assert result["status"] == "ok"
-    assert notified == []
+    assert notified == ["close_lead"]
     assert scored.get("called") is True
     assert scored["payload"]["profiling_statuses"]["purchase_timeline"] == "unknown"
     assert scored["payload"]["profiling_reprompt_counts"]["financing_type"] == 1

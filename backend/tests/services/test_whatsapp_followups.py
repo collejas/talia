@@ -174,6 +174,39 @@ def test_should_skip_reengage_when_opportunity_closed():
     assert whatsapp_followups._should_skip_reengage_for_business_rules(opportunity)
 
 
+def test_should_skip_reengage_when_sales_primary_notification_exists():
+    opportunity = {
+        "estado": "abierta",
+        "etapa": {"codigo": "captado", "categoria": "activa"},
+        "metadata": {
+            "sales_primary_notifications": {
+                "whatsapp": {
+                    "trigger": "close_lead",
+                    "reason": "case_a_close_lead_profile",
+                    "sent_at": "2026-04-17T15:18:28.176364+00:00",
+                }
+            }
+        },
+    }
+    assert whatsapp_followups._should_skip_reengage_for_business_rules(opportunity)
+
+
+def test_should_skip_reengage_when_close_lead_notification_exists():
+    opportunity = {
+        "estado": "abierta",
+        "etapa": {"codigo": "captado", "categoria": "activa"},
+        "metadata": {
+            "sales_notifications": {
+                "close_lead": {
+                    "sent_at": "2026-04-17T15:18:28.176358+00:00",
+                    "notification_sid": "MM5865785c9dd1b22fc59a807556da247b",
+                }
+            }
+        },
+    }
+    assert whatsapp_followups._should_skip_reengage_for_business_rules(opportunity)
+
+
 @pytest.mark.asyncio
 async def test_run_followups_skips_outbound_prospeccion_without_reply(monkeypatch):
     now = datetime(2025, 1, 1, 12, 0, tzinfo=timezone.utc)

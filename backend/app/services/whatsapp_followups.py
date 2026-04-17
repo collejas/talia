@@ -674,6 +674,20 @@ def _should_skip_reengage_for_business_rules(opportunity: dict[str, Any]) -> boo
 
     metadata = _ensure_dict(opportunity.get("metadata"))
     sales_notifications = _ensure_dict(metadata.get("sales_notifications"))
+    # Si ya hubo handoff comercial por WhatsApp, no volver a reenganchar al prospecto.
+    primary_by_channel = _ensure_dict(metadata.get("sales_primary_notifications"))
+    primary_whatsapp = _ensure_dict(primary_by_channel.get("whatsapp"))
+    if primary_whatsapp:
+        return True
+
+    for trigger in ("close_lead", "booking_confirmed", "booking_canceled", "followup_escalate"):
+        notification_payload = sales_notifications.get(trigger)
+        if isinstance(notification_payload, dict):
+            if str(notification_payload.get("sent_at") or "").strip():
+                return True
+        elif notification_payload:
+            return True
+
     booking_confirmed_at = (
         sales_notifications.get("booking_confirmed_at")
         or sales_notifications.get("booking_confirmed")

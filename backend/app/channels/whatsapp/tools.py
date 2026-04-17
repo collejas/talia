@@ -1916,6 +1916,32 @@ async def _handle_close_lead(
                 "whatsapp.close_lead.auto_name_failed",
                 extra={"conversation_id": context.conversation_id, "error": str(exc)},
             )
+    if tarjeta_id:
+        notify_contact = contact
+        try:
+            notify_contact = await _resolve_contact(context.contact_id)
+        except Exception:
+            notify_contact = contact
+        try:
+            await _notify_sales_rep(
+                context=context,
+                trigger="close_lead",
+                contact=notify_contact,
+                opportunity_id=tarjeta_id,
+                resumen=necesidad,
+                notes=notes,
+                email=webchat_service._extract_contact_email(notify_contact),
+                extra={"siguiente_accion": siguiente_accion},
+            )
+        except Exception:
+            logger.warning(
+                "whatsapp.close_lead.notify_failed",
+                extra={
+                    "conversation_id": context.conversation_id,
+                    "contact_id": context.contact_id,
+                    "opportunity_id": str(tarjeta_id),
+                },
+            )
 
     return {
         "status": "ok",
@@ -2221,6 +2247,16 @@ async def _handle_schedule_demo(
             resolved_contact_id = str(opportunity_contact.get("id") or "").strip()
             if resolved_contact_id:
                 opportunity_contact_id = resolved_contact_id
+            current_email = webchat_service._extract_contact_email(contact_record)
+            fallback_email = webchat_service._extract_contact_email(opportunity_contact)
+            current_name = webchat_service._extract_contact_name(contact_record)
+            fallback_name = webchat_service._extract_contact_name(opportunity_contact)
+            should_prefer_fallback = (
+                (not current_email and fallback_email)
+                or (not current_name and fallback_name)
+                or (not contact_record)
+            )
+            if should_prefer_fallback:
                 contact_record = opportunity_contact
 
     await webchat_service._sync_booking_with_opportunity(
@@ -2423,7 +2459,7 @@ async def _handle_schedule_demo(
                 f"Cita confirmada para {booking_response.start_at.isoformat()} "
                 f"(booking {booking_response.booking_id})."
             ),
-            email=contact_record.get("correo"),
+            email=webchat_service._extract_contact_email(contact_record),
             extra={
                 "booking_id": booking_response.booking_id,
                 "slot_start": booking_response.start_at.isoformat(),
@@ -2511,7 +2547,7 @@ async def _handle_reschedule_demo(
             opportunity_id=booking_response.tarjeta_id,
             resumen="Cita agendada",
             notes=f"Cita confirmada para {booking_response.start_at.isoformat()} (booking {booking_response.booking_id}).",
-            email=contact.get("correo"),
+            email=webchat_service._extract_contact_email(contact),
             extra={
                 "booking_id": booking_response.booking_id,
                 "slot_start": booking_response.start_at.isoformat(),
@@ -2569,7 +2605,7 @@ async def _handle_cancel_demo(arguments: dict[str, Any], context: ToolRuntimeCon
             opportunity_id=None,
             resumen="Cita cancelada",
             notes=reason,
-            email=contact_record.get("correo") if contact_record else None,
+            email=webchat_service._extract_contact_email(contact_record),
             extra={
                 "booking_id": booking_response.booking_id,
                 "slot_start": booking_response.start_at.isoformat(),
@@ -2716,7 +2752,7 @@ async def _notify_sales_rep(
         extra = dict(extra or {})
         extra.setdefault("profile_summary", profile_summary)
     notifications = _ensure_dict(metadata.get("sales_notifications"))
-    if trigger in {"information_email", "close_lead"}:
+    if trigger in {"information_email"}:
         logger.info(
             "whatsapp.notify_sales.skip_legacy_trigger",
             extra={"conversation_id": context.conversation_id, "trigger": trigger},
@@ -2748,6 +2784,29 @@ async def _notify_sales_rep(
                 )
                 return
             primary_reason = "case_a_booking_profile"
+    elif trigger == "close_lead":
+        if not _has_base_fields_for_case_a(contact_record):
+            logger.info(
+                "whatsapp.notify_sales.skip_case_a_base_missing",
+                extra={"conversation_id": context.conversation_id, "trigger": trigger},
+            )
+            return
+        if is_prospeccion:
+            primary_reason = "case_a_close_lead_prospeccion"
+        else:
+            if not await _has_minimum_profile_for_case_a(
+                contact=contact_record,
+                opportunity_metadata=metadata,
+                repo=repo,
+                organizacion_id=org_uuid,
+                channel=channel_key,
+            ):
+                logger.info(
+                    "whatsapp.notify_sales.skip_case_a_profile_missing",
+                    extra={"conversation_id": context.conversation_id, "trigger": trigger},
+                )
+                return
+            primary_reason = "case_a_close_lead_profile"
     elif trigger in {"followup_escalate", "webchat_escalate"}:
         if not _has_base_fields_for_case_b(contact_record):
             logger.info(
@@ -2771,16 +2830,25 @@ async def _notify_sales_rep(
         primary_reason = "case_b_reengage_exhausted"
 
     primary_by_channel = _get_primary_notification_by_channel(metadata)
-    if primary_reason and primary_by_channel.get(channel_key) and not force_retry:
-        logger.info(
-            "whatsapp.notify_sales.primary_already_sent",
-            extra={
-                "conversation_id": context.conversation_id,
-                "trigger": trigger,
-                "channel": channel_key,
-            },
+    existing_primary = _ensure_dict(primary_by_channel.get(channel_key))
+    if primary_reason and existing_primary and not force_retry:
+        existing_reason = str(existing_primary.get("reason") or "").strip()
+        existing_trigger = str(existing_primary.get("trigger") or "").strip()
+        same_primary_event = (
+            (existing_reason and existing_reason == primary_reason)
+            or (existing_trigger and existing_trigger == trigger)
         )
-        return
+        if same_primary_event:
+            logger.info(
+                "whatsapp.notify_sales.primary_already_sent",
+                extra={
+                    "conversation_id": context.conversation_id,
+                    "trigger": trigger,
+                    "channel": channel_key,
+                    "reason": primary_reason,
+                },
+            )
+            return
 
     if notifications.get(trigger) and not force_retry:
         logger.info(
