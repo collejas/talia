@@ -101,7 +101,7 @@ const formSchema = z.object({
       const parsed = Number(value);
       return !Number.isNaN(parsed) && parsed >= 0 && parsed <= 100;
     }, { message: "La probabilidad debe estar entre 0 y 100." }),
-  notas: z.string().trim().max(1000).optional().or(z.literal("")),
+  notas: z.string().trim().optional().or(z.literal("")),
   necesidadProposito: z.string().trim().max(2000).optional().or(z.literal("")),
   proyectoNombre: z.string().trim().max(160).optional().or(z.literal("")),
   proyectoNecesidades: z.string().trim().max(2000).optional().or(z.literal("")),
