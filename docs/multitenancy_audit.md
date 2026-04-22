@@ -95,7 +95,7 @@ where t.organizacion_id <> cu.organizacion_id;
   - Eliminé todos los defaults de organizacion_id (evita que algo caiga “por accidente” en 000...001) y aseguré triggers BEFORE
     INSERT en todas las tablas tenant-scoped para completar organizacion_id cuando viene NULL (y si no se puede inferir, ahora falla
     en vez de contaminar).
-  - Forcé RLS en todas las tablas public que sí son propiedad de la app. `public.spatial_ref_sys` quedó como excepción documentada porque es una tabla de metadatos de PostGIS y no puede endurecerse desde nuestras migraciones normales.
+  - Forcé RLS en todas las tablas public que sí son propiedad de la app. `public.spatial_ref_sys` quedó como excepción documentada porque es una tabla de metadatos de PostGIS, no un objeto de negocio de la app, y no puede endurecerse desde nuestras migraciones normales.
 
   Migrations nuevas en el repo (ya aplicadas):
 

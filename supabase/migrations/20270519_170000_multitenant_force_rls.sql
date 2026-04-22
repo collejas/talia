@@ -11,6 +11,7 @@ BEGIN
         JOIN pg_namespace n ON n.oid=c.relnamespace
         WHERE n.nspname='public'
           AND c.relkind='r'
+          -- PostGIS metadata table; owned by the extension, documented as an exception.
           AND c.relname not in ('spatial_ref_sys')
           AND c.relrowsecurity = true
     LOOP
@@ -20,4 +21,3 @@ END
 $$;
 
 COMMIT;
-
