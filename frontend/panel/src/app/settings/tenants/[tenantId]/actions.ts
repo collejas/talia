@@ -783,6 +783,7 @@ export async function updateWhatsAppSettingsAction(_: CrudActionState, formData:
   try {
     const tenantId = requireTenantId(formData)
 
+    const providerRaw = getText(formData, "whatsapp_provider")
     const promptId = getText(formData, "whatsapp_prompt_id")
     const promptVersion = getText(formData, "whatsapp_prompt_version")
     const assistantId = getText(formData, "whatsapp_assistant_id")
@@ -790,6 +791,14 @@ export async function updateWhatsAppSettingsAction(_: CrudActionState, formData:
     const reengageMinutesRaw = getText(formData, "whatsapp_reengage_minutes")
     const reengageMaxAttemptsRaw = getText(formData, "whatsapp_reengage_max_attempts")
     const escalateMinutesRaw = getText(formData, "whatsapp_escalate_minutes")
+    const twilioPhoneNumber = getText(formData, "whatsapp_twilio_phone_number")
+    const twilioPhoneNumberSid = getText(formData, "whatsapp_twilio_phone_number_sid")
+    const twilioValidateSignatures = formData.get("whatsapp_twilio_validate_signatures") === "on"
+    const metaPhoneNumberId = getText(formData, "whatsapp_meta_phone_number_id")
+    const metaGraphApiVersion = getText(formData, "whatsapp_meta_graph_api_version")
+    const metaPageAccessToken = getText(formData, "whatsapp_meta_page_access_token")
+    const metaVerifyToken = getText(formData, "whatsapp_meta_verify_token")
+    const metaAppSecret = getText(formData, "whatsapp_meta_app_secret")
     const templateSales = getText(formData, "whatsapp_template_sales")
     const templateAppointment = getText(formData, "whatsapp_template_appointment")
     const templateCancel = getText(formData, "whatsapp_template_cancel")
@@ -798,6 +807,10 @@ export async function updateWhatsAppSettingsAction(_: CrudActionState, formData:
     const prospeccionPromptVersion = getText(formData, "whatsapp_prospeccion_prompt_version")
 
     const whatsappPatch: Record<string, unknown> = {}
+    const provider = providerRaw?.trim().toLowerCase()
+    if (provider === "meta" || provider === "twilio") {
+      whatsappPatch.provider = provider
+    }
     if (promptId) whatsappPatch.prompt_id = promptId
     if (promptVersion) whatsappPatch.prompt_version = promptVersion
     if (assistantId) whatsappPatch.assistant_id = assistantId
@@ -826,8 +839,19 @@ export async function updateWhatsAppSettingsAction(_: CrudActionState, formData:
       whatsappPatch.prospeccion = prospeccionPatch
     }
 
-    if (!Object.keys(whatsappPatch).length) {
-      throw new Error("Debes completar al menos un campo de la configuración de WhatsApp.")
+    const twilioPatch: Record<string, unknown> = {}
+    if (twilioPhoneNumber) twilioPatch.phone_number = twilioPhoneNumber
+    if (twilioPhoneNumberSid) twilioPatch.phone_number_sid = twilioPhoneNumberSid
+    twilioPatch.validate_signatures = twilioValidateSignatures
+    if (Object.keys(twilioPatch).length) {
+      whatsappPatch.twilio = twilioPatch
+    }
+
+    const metaPatch: Record<string, unknown> = {}
+    if (metaPhoneNumberId) metaPatch.phone_number_id = metaPhoneNumberId
+    if (metaGraphApiVersion) metaPatch.graph_api_version = metaGraphApiVersion
+    if (Object.keys(metaPatch).length) {
+      whatsappPatch.meta = metaPatch
     }
 
     const getResp = await callCrmApi<{ ok: boolean; config: Record<string, unknown> }>(`/admin/tenants/${tenantId}/config`, {
@@ -848,6 +872,16 @@ export async function updateWhatsAppSettingsAction(_: CrudActionState, formData:
       body: { config: merged },
     })
     if (!putResp.ok) throw new Error(putResp.error)
+
+    if (metaPageAccessToken) {
+      await upsertTenantSecret(tenantId, "meta.whatsapp.page_access_token", metaPageAccessToken, "B")
+    }
+    if (metaVerifyToken) {
+      await upsertTenantSecret(tenantId, "meta.whatsapp.verify_token", metaVerifyToken, "A")
+    }
+    if (metaAppSecret) {
+      await upsertTenantSecret(tenantId, "meta.whatsapp.app_secret", metaAppSecret, "B")
+    }
 
     revalidatePath(`/settings/tenants/${tenantId}`)
     return success("Configuración de WhatsApp guardada.")

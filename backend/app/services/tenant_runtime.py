@@ -797,15 +797,24 @@ async def get_twilio_runtime_settings(
     if organizacion_id:
         config = await get_org_config(organizacion_id=organizacion_id)
         twilio_cfg = _as_dict(config.get("twilio")) or {}
+        whatsapp_cfg = _as_dict(config.get("whatsapp")) or {}
+        whatsapp_twilio_cfg = _as_dict(whatsapp_cfg.get("twilio")) or {}
         voice_cfg = _as_dict(config.get("voice")) or {}
 
-        twilio_phone = twilio_cfg.get("phone_number")
+        twilio_phone = whatsapp_twilio_cfg.get("phone_number")
+        if not isinstance(twilio_phone, str) or not twilio_phone.strip():
+            twilio_phone = twilio_cfg.get("phone_number")
         if isinstance(twilio_phone, str) and twilio_phone.strip():
             phone_number = twilio_phone.strip()
-        twilio_phone_sid = twilio_cfg.get("phone_number_sid")
+        twilio_phone_sid = whatsapp_twilio_cfg.get("phone_number_sid")
+        if not isinstance(twilio_phone_sid, str) or not twilio_phone_sid.strip():
+            twilio_phone_sid = twilio_cfg.get("phone_number_sid")
         if isinstance(twilio_phone_sid, str) and twilio_phone_sid.strip():
             phone_number_sid = twilio_phone_sid.strip()
-        validate_signatures = _coerce_bool(twilio_cfg.get("validate_signatures"), validate_signatures)
+        validate_signatures = _coerce_bool(
+            whatsapp_twilio_cfg.get("validate_signatures"),
+            _coerce_bool(twilio_cfg.get("validate_signatures"), validate_signatures),
+        )
 
         webhook_value = voice_cfg.get("webhook_path")
         if isinstance(webhook_value, str) and webhook_value.strip():
@@ -900,6 +909,7 @@ def _coerce_float(value: Any, default: float) -> float:
 
 @dataclass(slots=True)
 class WhatsappRuntimeSettings:
+    provider: str
     assistant_id: str | None
     prompt_id: str | None
     prompt_version: str | None
@@ -918,10 +928,21 @@ class WhatsappRuntimeSettings:
     voice_max_tokens: int | None
     voice_stt_model: str | None
     voice_api_key: str | None
+    twilio_phone_number: str | None
+    twilio_phone_number_sid: str | None
+    twilio_validate_signatures: bool
+    twilio_account_sid: str | None
+    twilio_auth_token: str | None
+    meta_phone_number_id: str | None
+    meta_page_access_token: str | None
+    meta_verify_token: str | None
+    meta_app_secret: str | None
+    meta_graph_api_version: str | None
 
     @staticmethod
     def from_settings() -> "WhatsappRuntimeSettings":
         return WhatsappRuntimeSettings(
+            provider="twilio",
             assistant_id=settings.whatsapp_assistant_id,
             prompt_id=settings.whatsapp_prompt_id,
             prompt_version=settings.whatsapp_prompt_version or settings.openai_prompt_version,
@@ -940,6 +961,16 @@ class WhatsappRuntimeSettings:
             voice_max_tokens=settings.openai_max_tokens,
             voice_stt_model=settings.openai_stt_model,
             voice_api_key=settings.openai_api_key,
+            twilio_phone_number=settings.twilio_phone_number,
+            twilio_phone_number_sid=settings.twilio_phone_number_sid,
+            twilio_validate_signatures=settings.twilio_validate_signatures,
+            twilio_account_sid=settings.twilio_account_sid,
+            twilio_auth_token=settings.twilio_auth_token,
+            meta_phone_number_id=None,
+            meta_page_access_token=None,
+            meta_verify_token=None,
+            meta_app_secret=None,
+            meta_graph_api_version="v21.0",
         )
 
 
@@ -953,9 +984,15 @@ async def get_whatsapp_runtime_settings(
 
     config = await get_org_config(organizacion_id=organizacion_id)
     whatsapp_cfg = _as_dict(config.get("whatsapp")) or {}
+    whatsapp_twilio_cfg = _as_dict(whatsapp_cfg.get("twilio")) or {}
+    whatsapp_meta_cfg = _as_dict(whatsapp_cfg.get("meta")) or {}
     openai_cfg = _as_dict(config.get("openai")) or {}
     general_cfg = _as_dict(openai_cfg.get("general")) or {}
     voice_cfg = _as_dict(openai_cfg.get("voice")) or {}
+
+    provider_value = _coerce_str_or_none(whatsapp_cfg.get("provider"))
+    if provider_value is not None:
+        settings_payload.provider = provider_value.lower()
 
     assistant_id = _coerce_str_or_none(voice_cfg.get("assistant_id"))
     if assistant_id is None:
@@ -1044,6 +1081,64 @@ async def get_whatsapp_runtime_settings(
         settings_payload.voice_stt_model = stt_value
 
     settings_payload.voice_api_key = await get_openai_api_key(organizacion_id=organizacion_id)
+
+    twilio_phone_number = _coerce_str_or_none(whatsapp_twilio_cfg.get("phone_number"))
+    if twilio_phone_number is not None:
+        settings_payload.twilio_phone_number = twilio_phone_number
+    elif settings_payload.twilio_phone_number is None:
+        settings_payload.twilio_phone_number = settings.twilio_phone_number
+
+    twilio_phone_number_sid = _coerce_str_or_none(whatsapp_twilio_cfg.get("phone_number_sid"))
+    if twilio_phone_number_sid is not None:
+        settings_payload.twilio_phone_number_sid = twilio_phone_number_sid
+    elif settings_payload.twilio_phone_number_sid is None:
+        settings_payload.twilio_phone_number_sid = settings.twilio_phone_number_sid
+
+    settings_payload.twilio_validate_signatures = _coerce_bool(
+        whatsapp_twilio_cfg.get("validate_signatures"),
+        settings_payload.twilio_validate_signatures,
+    )
+
+    twilio_account_sid = await get_secret_plaintext(organizacion_id=organizacion_id, clave="twilio.account_sid")
+    if twilio_account_sid is not None:
+        settings_payload.twilio_account_sid = twilio_account_sid
+    elif settings_payload.twilio_account_sid is None:
+        settings_payload.twilio_account_sid = settings.twilio_account_sid
+
+    twilio_auth_token = await get_secret_plaintext(organizacion_id=organizacion_id, clave="twilio.auth_token")
+    if twilio_auth_token is not None:
+        settings_payload.twilio_auth_token = twilio_auth_token
+    elif settings_payload.twilio_auth_token is None:
+        settings_payload.twilio_auth_token = settings.twilio_auth_token
+
+    meta_phone_number_id = _coerce_str_or_none(whatsapp_meta_cfg.get("phone_number_id"))
+    if meta_phone_number_id is not None:
+        settings_payload.meta_phone_number_id = meta_phone_number_id
+
+    meta_page_access_token = await get_secret_plaintext(
+        organizacion_id=organizacion_id,
+        clave="meta.whatsapp.page_access_token",
+    )
+    if meta_page_access_token is not None:
+        settings_payload.meta_page_access_token = meta_page_access_token
+
+    meta_verify_token = await get_secret_plaintext(
+        organizacion_id=organizacion_id,
+        clave="meta.whatsapp.verify_token",
+    )
+    if meta_verify_token is not None:
+        settings_payload.meta_verify_token = meta_verify_token
+
+    meta_app_secret = await get_secret_plaintext(
+        organizacion_id=organizacion_id,
+        clave="meta.whatsapp.app_secret",
+    )
+    if meta_app_secret is not None:
+        settings_payload.meta_app_secret = meta_app_secret
+
+    meta_graph_api_version = _coerce_str_or_none(whatsapp_meta_cfg.get("graph_api_version"))
+    if meta_graph_api_version is not None:
+        settings_payload.meta_graph_api_version = meta_graph_api_version
 
     return settings_payload
 

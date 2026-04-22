@@ -626,9 +626,15 @@ def _build_default_tenant_config(*, calendar_resource_id: str) -> dict[str, Any]
     if prompt_version:
         webchat_cfg["prompt_version"] = prompt_version
 
+    whatsapp_cfg: dict[str, Any] = {
+        "provider": "meta",
+        "templates": {},
+    }
+
     config: dict[str, Any] = {
         "features": {"webchat": {"enabled": True}},
         "webchat": webchat_cfg,
+        "whatsapp": whatsapp_cfg,
     }
     calendar_cfg: dict[str, Any] = {}
     if settings.calendar_provider:
@@ -1801,7 +1807,9 @@ def build_validation_report(
         "messenger.assistant_id",
         "messenger.inactivity_hours",
     ]
+    whatsapp_provider = str(_get_config_value(config, "whatsapp.provider") or "twilio").strip().lower()
     whatsapp_config_keys = [
+        "whatsapp.provider",
         "whatsapp.prompt_id",
         "whatsapp.prompt_version",
         "whatsapp.assistant_id",
@@ -1813,15 +1821,27 @@ def build_validation_report(
         "whatsapp.templates.appointment",
         "whatsapp.templates.cancel",
     ]
+    whatsapp_twilio_keys = [
+        "whatsapp.twilio.phone_number",
+        "whatsapp.twilio.phone_number_sid",
+        "whatsapp.twilio.validate_signatures",
+    ]
+    whatsapp_meta_keys = [
+        "whatsapp.meta.phone_number_id",
+        "whatsapp.meta.graph_api_version",
+    ]
+    whatsapp_provider_config_keys = whatsapp_twilio_keys if whatsapp_provider != "meta" else whatsapp_meta_keys
+    whatsapp_config_keys.extend(whatsapp_provider_config_keys)
 
     if scope == "full":
+        whatsapp_full_config_keys = list(whatsapp_config_keys)
         required_config = (
             webchat_config_keys
             + calendar_config_keys
             + mail_config_keys
-            + twilio_config_keys
+            + (twilio_config_keys if whatsapp_provider != "meta" else [])
             + voice_config_keys
-            + whatsapp_config_keys
+            + whatsapp_full_config_keys
             + messenger_config_keys
         )
     elif scope == "calendar":
@@ -1838,10 +1858,18 @@ def build_validation_report(
         required_config = webchat_config_keys
 
     if scope == "full":
+        whatsapp_full_secrets = (
+            ["twilio.account_sid", "twilio.auth_token"]
+            if whatsapp_provider != "meta"
+            else [
+                "meta.whatsapp.page_access_token",
+                "meta.whatsapp.verify_token",
+                "meta.whatsapp.app_secret",
+            ]
+        )
         required_secrets = [
             "openai.api_key",
-            "twilio.account_sid",
-            "twilio.auth_token",
+            *whatsapp_full_secrets,
             "meta.messenger.page_access_token",
             "meta.messenger.app_secret",
             "meta.messenger.verify_token",
@@ -1860,7 +1888,15 @@ def build_validation_report(
     elif scope == "twilio":
         required_secrets = ["twilio.account_sid", "twilio.auth_token", "voice.stream_jwt_secret"]
     elif scope == "whatsapp":
-        required_secrets = []
+        required_secrets = (
+            ["twilio.account_sid", "twilio.auth_token"]
+            if whatsapp_provider != "meta"
+            else [
+                "meta.whatsapp.page_access_token",
+                "meta.whatsapp.verify_token",
+                "meta.whatsapp.app_secret",
+            ]
+        )
     elif scope == "messenger":
         required_secrets = [
             "meta.messenger.page_access_token",

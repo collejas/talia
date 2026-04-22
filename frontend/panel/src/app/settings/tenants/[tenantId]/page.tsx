@@ -25,6 +25,7 @@ import {
   type RouteItem,
   type SecretItem,
   type TenantOrganizationInfo,
+  type WhatsAppInitialValues,
 } from "./tenant-forms"
 
 export const metadata: Metadata = {
@@ -156,9 +157,12 @@ export default async function TenantDetailSettingsPage({ params }: { params: Pro
     voice_debug_energy_every_n: getNestedNumber(voiceConfig, "energy_every_n"),
   }
   const whatsappConfig = getNestedRecord(config, "whatsapp") ?? {}
+  const whatsappTwilioConfig = getNestedRecord(whatsappConfig, "twilio") ?? {}
+  const whatsappMetaConfig = getNestedRecord(whatsappConfig, "meta") ?? {}
   const whatsappTemplates = getNestedRecord(whatsappConfig, "templates") ?? {}
   const whatsappProspeccionConfig = getNestedRecord(whatsappConfig, "prospeccion") ?? {}
-  const whatsappInitialValues = {
+  const whatsappInitialValues: WhatsAppInitialValues = {
+    whatsapp_provider: (getNestedString(whatsappConfig, "provider") ?? "meta") as "twilio" | "meta",
     whatsapp_prompt_id: getNestedString(whatsappConfig, "prompt_id"),
     whatsapp_prompt_version: getNestedString(whatsappConfig, "prompt_version"),
     whatsapp_assistant_id: getNestedString(whatsappConfig, "assistant_id"),
@@ -166,6 +170,11 @@ export default async function TenantDetailSettingsPage({ params }: { params: Pro
     whatsapp_reengage_minutes: getNestedNumber(whatsappConfig, "reengage_minutes"),
     whatsapp_reengage_max_attempts: getNestedNumber(whatsappConfig, "reengage_max_attempts"),
     whatsapp_escalate_minutes: getNestedNumber(whatsappConfig, "escalate_minutes"),
+    whatsapp_twilio_phone_number: getNestedString(whatsappTwilioConfig, "phone_number"),
+    whatsapp_twilio_phone_number_sid: getNestedString(whatsappTwilioConfig, "phone_number_sid"),
+    whatsapp_twilio_validate_signatures: getNestedBoolean(whatsappTwilioConfig, "validate_signatures") ?? true,
+    whatsapp_meta_phone_number_id: getNestedString(whatsappMetaConfig, "phone_number_id"),
+    whatsapp_meta_graph_api_version: getNestedString(whatsappMetaConfig, "graph_api_version") ?? "v21.0",
     whatsapp_template_sales: getNestedString(whatsappTemplates, "sales"),
     whatsapp_template_appointment: getNestedString(whatsappTemplates, "appointment"),
     whatsapp_template_cancel: getNestedString(whatsappTemplates, "cancel"),

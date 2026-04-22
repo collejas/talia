@@ -12,6 +12,7 @@ import { createTenantWithAdmin, TenantCreationResponse, TenantWithAdminPayload }
 type FormState = {
   name: string
   alias: string
+  whatsappProvider: "twilio" | "meta"
   active: boolean
   onboarding: string
   razonSocial: string
@@ -32,6 +33,7 @@ export function TenantCreationPanel() {
   const [form, setForm] = useState<FormState>({
     name: "",
     alias: "",
+    whatsappProvider: "meta",
     active: true,
     onboarding: "pendiente",
     razonSocial: "",
@@ -76,6 +78,11 @@ export function TenantCreationPanel() {
       tenant: {
         nombre: form.name,
         webchat_alias: form.alias || undefined,
+        config: {
+          whatsapp: {
+            provider: form.whatsappProvider,
+          },
+        },
         pais: form.country || undefined,
         estado: form.state || undefined,
         ciudad: form.city || undefined,
@@ -107,6 +114,7 @@ export function TenantCreationPanel() {
         ...prev,
         name: "",
         alias: "",
+        whatsappProvider: "meta",
         razonSocial: "",
         dominio: "",
         rfc: "",
@@ -158,6 +166,21 @@ export function TenantCreationPanel() {
                 onChange={(event) => handleChange("alias", event.target.value)}
                 placeholder="alias-del-cliente"
               />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="tenant-whatsapp-provider">Provider WhatsApp</Label>
+              <select
+                id="tenant-whatsapp-provider"
+                value={form.whatsappProvider}
+                onChange={(event) => handleChange("whatsappProvider", event.target.value as "twilio" | "meta")}
+                className="mt-1 block w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+              >
+                <option value="meta">Meta WhatsApp Cloud API</option>
+                <option value="twilio">Twilio</option>
+              </select>
+              <p className="text-xs text-muted-foreground">
+                Los tenants nuevos nacen con Meta por defecto, pero puedes dejar Twilio para compatibilidad.
+              </p>
             </div>
             <div className="space-y-2">
               <Label htmlFor="tenant-razon">Razón social</Label>

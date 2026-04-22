@@ -394,7 +394,8 @@ type TwilioInitialValues = {
   voice_debug_energy_every_n?: number
 }
 
-type WhatsAppInitialValues = {
+export type WhatsAppInitialValues = {
+  whatsapp_provider?: "twilio" | "meta"
   whatsapp_prompt_id?: string
   whatsapp_prompt_version?: string
   whatsapp_assistant_id?: string
@@ -402,6 +403,11 @@ type WhatsAppInitialValues = {
   whatsapp_reengage_minutes?: number
   whatsapp_reengage_max_attempts?: number
   whatsapp_escalate_minutes?: number
+  whatsapp_twilio_phone_number?: string
+  whatsapp_twilio_phone_number_sid?: string
+  whatsapp_twilio_validate_signatures?: boolean
+  whatsapp_meta_phone_number_id?: string
+  whatsapp_meta_graph_api_version?: string
   whatsapp_template_sales?: string
   whatsapp_template_appointment?: string
   whatsapp_template_cancel?: string
@@ -1568,6 +1574,7 @@ export function TenantWhatsAppSettings({
   const { formAction: deleteRouteAction } = useCrudForm(actions.deleteTenantRouteAction)
   const [validateState, validateAction] = useActionState(actions.validateTenantAction, INITIAL_CRUD_STATE)
   const channelRoutes = routes.filter((route) => route.canal === "whatsapp")
+  const provider = initialValues.whatsapp_provider ?? "meta"
 
   return (
     <div className="space-y-6">
@@ -1575,6 +1582,21 @@ export function TenantWhatsAppSettings({
         <input type="hidden" name="tenant_id" value={tenantId} />
 
         <div className="grid gap-4 md:grid-cols-2">
+          <div className="space-y-2">
+            <Label htmlFor="whatsapp_provider">whatsapp.provider</Label>
+            <select
+              id="whatsapp_provider"
+              name="whatsapp_provider"
+              defaultValue={provider}
+              className="rounded-md border border-border bg-background px-3 py-2 text-sm"
+            >
+              <option value="meta">Meta WhatsApp Cloud API</option>
+              <option value="twilio">Twilio</option>
+            </select>
+            <p className="text-xs text-muted-foreground">
+              Define qué adapter usará el backend para este tenant.
+            </p>
+          </div>
           <div className="space-y-2">
             <Label htmlFor="whatsapp_prompt_id">whatsapp.prompt_id</Label>
             <Input
@@ -1646,6 +1668,106 @@ export function TenantWhatsAppSettings({
           </div>
         </div>
 
+        <div className="rounded-lg border border-border/60 p-4 space-y-4">
+          <div className="space-y-1">
+            <p className="text-sm font-medium">Twilio</p>
+            <p className="text-xs text-muted-foreground">
+              Se conserva para tenants existentes o como fallback operativo.
+            </p>
+          </div>
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="space-y-2">
+              <Label htmlFor="whatsapp_twilio_phone_number">whatsapp.twilio.phone_number</Label>
+              <Input
+                id="whatsapp_twilio_phone_number"
+                name="whatsapp_twilio_phone_number"
+                placeholder="+5214443354450"
+                defaultValue={initialValues.whatsapp_twilio_phone_number ?? ""}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="whatsapp_twilio_phone_number_sid">whatsapp.twilio.phone_number_sid</Label>
+              <Input
+                id="whatsapp_twilio_phone_number_sid"
+                name="whatsapp_twilio_phone_number_sid"
+                placeholder="PNXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
+                defaultValue={initialValues.whatsapp_twilio_phone_number_sid ?? ""}
+              />
+            </div>
+            <div className="flex items-center gap-3 md:col-span-2">
+              <input
+                id="whatsapp_twilio_validate_signatures"
+                name="whatsapp_twilio_validate_signatures"
+                type="checkbox"
+                className="size-4"
+                defaultChecked={Boolean(initialValues.whatsapp_twilio_validate_signatures ?? true)}
+              />
+              <Label htmlFor="whatsapp_twilio_validate_signatures">
+                whatsapp.twilio.validate_signatures
+              </Label>
+            </div>
+          </div>
+        </div>
+
+        <div className="rounded-lg border border-border/60 p-4 space-y-4">
+          <div className="space-y-1">
+            <p className="text-sm font-medium">Meta WhatsApp Cloud API</p>
+            <p className="text-xs text-muted-foreground">
+              Este bloque prepara el provider nuevo que correrá en paralelo a Twilio.
+            </p>
+          </div>
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="space-y-2">
+              <Label htmlFor="whatsapp_meta_phone_number_id">whatsapp.meta.phone_number_id</Label>
+              <Input
+                id="whatsapp_meta_phone_number_id"
+                name="whatsapp_meta_phone_number_id"
+                placeholder="Phone Number ID"
+                defaultValue={initialValues.whatsapp_meta_phone_number_id ?? ""}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="whatsapp_meta_graph_api_version">whatsapp.meta.graph_api_version</Label>
+              <Input
+                id="whatsapp_meta_graph_api_version"
+                name="whatsapp_meta_graph_api_version"
+                placeholder="v21.0"
+                defaultValue={initialValues.whatsapp_meta_graph_api_version ?? "v21.0"}
+              />
+            </div>
+            <div className="space-y-2 md:col-span-2">
+              <Label htmlFor="whatsapp_meta_page_access_token">meta.whatsapp.page_access_token (tier B)</Label>
+              <Input
+                id="whatsapp_meta_page_access_token"
+                name="whatsapp_meta_page_access_token"
+                type="password"
+                placeholder="Pega el access token"
+                defaultValue=""
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="whatsapp_meta_verify_token">meta.whatsapp.verify_token (tier A)</Label>
+              <Input
+                id="whatsapp_meta_verify_token"
+                name="whatsapp_meta_verify_token"
+                type="password"
+                placeholder="Pega el verify token"
+                defaultValue=""
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="whatsapp_meta_app_secret">meta.whatsapp.app_secret (tier B)</Label>
+              <Input
+                id="whatsapp_meta_app_secret"
+                name="whatsapp_meta_app_secret"
+                type="password"
+                placeholder="Pega el app secret"
+                defaultValue=""
+              />
+            </div>
+          </div>
+        </div>
+
         <div className="grid gap-4 md:grid-cols-2">
           <div className="space-y-2">
             <Label htmlFor="whatsapp_template_sales">whatsapp.templates.sales</Label>
@@ -1677,7 +1799,8 @@ export function TenantWhatsAppSettings({
         </div>
 
         <p className="text-xs text-muted-foreground">
-          Esta sección guarda la configuración no sensible bajo <code>organizaciones.config.whatsapp</code>.
+          La sección guarda la configuración no sensible bajo <code>organizaciones.config.whatsapp</code> y los
+          secretos de Meta quedan en <code>secretos.clave</code>.
         </p>
 
         <div className="flex items-center justify-between gap-3">
