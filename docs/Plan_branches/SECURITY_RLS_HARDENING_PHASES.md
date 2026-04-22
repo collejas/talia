@@ -84,7 +84,7 @@ Estado actual (security):
     - `public.prospeccion_query_daily_mv`
     (acceso directo revocado para `anon/authenticated`, queda `service_role`).
 - pendientes técnicos/operativos:
-  - `public.spatial_ref_sys` (`rls_disabled_in_public`) como excepción esperada de PostGIS.
+  - `public.spatial_ref_sys` (`rls_disabled_in_public`) como excepción documentada de PostGIS.
   - `extension_in_public` para `btree_gist`, `pg_trgm`, `postgis`, `unaccent`, `vector`:
     - Se mantienen instaladas en `public` por compatibilidad con el esquema actual y porque varias rutas dependen de ellas.
   - `auth_leaked_password_protection` (setting de Auth en dashboard).
@@ -93,7 +93,7 @@ Estado actual (security):
 Fecha de registro: 2026-03-28
 
 - `public.spatial_ref_sys`:
-  - Motivo: tabla de metadatos de PostGIS. La app consume la extensión, pero no es dueña del objeto ni puede aplicar `ALTER TABLE ... ENABLE ROW LEVEL SECURITY` desde el flujo normal de migraciones.
+  - Motivo: tabla de metadatos de PostGIS, no un objeto de negocio de la app. La app consume la extensión, pero no es dueña del objeto ni puede aplicar `ALTER TABLE ... ENABLE ROW LEVEL SECURITY` desde el flujo normal de migraciones.
   - Decisión: excepción aceptada. Se documenta como warning esperado del advisor, no como deuda funcional de multitenancy.
   - Nota: no afecta datos de negocio; solo acompaña a las geometrías y funciones de PostGIS.
 
