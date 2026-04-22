@@ -85,7 +85,8 @@ Estado actual (security):
     (acceso directo revocado para `anon/authenticated`, queda `service_role`).
 - pendientes técnicos/operativos:
   - `public.spatial_ref_sys` (`rls_disabled_in_public`) como excepción esperada de PostGIS.
-  - `extension_in_public` para `btree_gist`, `pg_trgm`, `postgis`, `unaccent`, `vector`.
+  - `extension_in_public` para `btree_gist`, `pg_trgm`, `postgis`, `unaccent`, `vector`:
+    - Se mantienen instaladas en `public` por compatibilidad con el esquema actual y porque varias rutas dependen de ellas.
   - `auth_leaked_password_protection` (setting de Auth en dashboard).
 
 ## Excepciones Operativas Aceptadas
@@ -97,7 +98,7 @@ Fecha de registro: 2026-03-28
   - Nota: no afecta datos de negocio; solo acompaña a las geometrías y funciones de PostGIS.
 
 - `extension_in_public` (`btree_gist`, `pg_trgm`, `postgis`, `unaccent`, `vector`):
-  - Motivo: mover extensiones fuera de `public` requiere refactor y validación amplia.
+  - Motivo: mover extensiones fuera de `public` requiere refactor y validación amplia. `postgis` en particular está ligado a geometrías y funciones geoespaciales ya usadas por la app.
   - Decisión: excepción aceptada temporalmente; no mover en esta fase para evitar regresiones.
 
 ## Regla operativa
