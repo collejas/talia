@@ -60,7 +60,7 @@ Estado:
   - `public.asignaciones_vendedores`
   - `public.producto_metadata_schemes`
 - pendiente técnico en tabla de extensión:
-  - `public.spatial_ref_sys` (PostGIS, ownership no editable desde rol actual de migración).
+  - `public.spatial_ref_sys` (tabla de metadatos de PostGIS; no es un objeto de negocio de la app y no puede endurecerse desde nuestras migraciones normales).
 
 ## Fase 4 (implementada parcialmente en migraciones)
 Migraciones:
@@ -84,7 +84,7 @@ Estado actual (security):
     - `public.prospeccion_query_daily_mv`
     (acceso directo revocado para `anon/authenticated`, queda `service_role`).
 - pendientes técnicos/operativos:
-  - `public.spatial_ref_sys` (`rls_disabled_in_public`) por ownership de extensión.
+  - `public.spatial_ref_sys` (`rls_disabled_in_public`) como excepción esperada de PostGIS.
   - `extension_in_public` para `btree_gist`, `pg_trgm`, `postgis`, `unaccent`, `vector`.
   - `auth_leaked_password_protection` (setting de Auth en dashboard).
 
