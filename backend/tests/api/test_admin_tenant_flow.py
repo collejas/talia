@@ -80,6 +80,13 @@ class DummyRepo:
     async def list_role_permissions(self, *, organizacion_id: UUID, rol_id: UUID) -> list[dict[str, Any]]:
         return []
 
+    async def list_tenant_bootstrap_catalog(self, *, tipo: str) -> list[str]:
+        if tipo == "departamento":
+            return ["Administración"]
+        if tipo == "puesto":
+            return ["Admin CRM"]
+        return []
+
     async def create_department(self, *, organizacion_id: UUID, nombre: str) -> dict[str, Any]:
         return {"id": str(self.department_id), "nombre": nombre}
 

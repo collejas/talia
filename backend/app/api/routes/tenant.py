@@ -25,12 +25,14 @@ from app.api.routes.admin import (
     get_platform_repo,
     require_user_token,
 )
+from app.core.logging import get_logger
 from app.core.secrets_crypto import SecretsCryptoError, encrypt_secret
 from app.repositories.crm import CRMRepository, CRMRepositoryError
 from app.repositories.platform_admin import PlatformRepository, PlatformRepositoryError
 from app.services import channel_routing
 
 router = APIRouter(prefix="/tenant", tags=["tenant"])
+logger = get_logger("app.api.tenant")
 
 
 class TenantContext(BaseModel):
@@ -78,9 +80,19 @@ async def require_tenant_context(
     except (TypeError, ValueError) as exc:
         raise HTTPException(status_code=401, detail="auth_user_invalid") from exc
 
-    organizacion_id = _extract_organizacion_id_from_metadata(user)
-    if not organizacion_id:
-        organizacion_id = await crm_repo.get_usuario_organizacion_id(usuario_id=user_id)
+    organizacion_id_from_db = await crm_repo.get_usuario_organizacion_id(usuario_id=user_id)
+    organizacion_id_from_metadata = _extract_organizacion_id_from_metadata(user)
+    if organizacion_id_from_db and organizacion_id_from_metadata and organizacion_id_from_db != organizacion_id_from_metadata:
+        logger.warning(
+            "tenant_context_metadata_mismatch",
+            extra={
+                "user_id": str(user_id),
+                "metadata_organizacion_id": str(organizacion_id_from_metadata),
+                "db_organizacion_id": str(organizacion_id_from_db),
+            },
+        )
+
+    organizacion_id = organizacion_id_from_db or organizacion_id_from_metadata
     if not organizacion_id:
         raise HTTPException(status_code=403, detail="organizacion_not_found")
 
