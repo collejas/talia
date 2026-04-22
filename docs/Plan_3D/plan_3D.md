@@ -1,16 +1,16 @@
 # Plan Maestro 3D Leaflet + Mapbox detalle
 
 ## Objetivo
-Desplegar una experiencia geoespacial jerárquica donde Leaflet controle la navegación país → estado → municipio → desarrollo y Mapbox se active exclusivamente al seleccionar un marcados para mostrar el volumen 3D. Cada polígono debe reflejar el `status` (disponible/apartado/vendido) con una escala de colores consistente y los datos del cliente inmobiliario (10 desarrollos por ubicación, 30 en total) deben poder seguirse desde la vista nacional hasta el nivel de propiedad.
+Desplegar una experiencia geoespacial jerárquica donde Leaflet controle la navegación país → estado → municipio → desarrollo y Mapbox se active exclusivamente al seleccionar un marcador para mostrar el volumen 3D. Cada polígono debe reflejar el `status` (disponible/apartado/vendido) con una escala de colores consistente y los datos del cliente inmobiliario (10 desarrollos por ubicación, 30 en total) deben poder seguirse desde la vista nacional hasta el nivel de propiedad.
 
 - ## Modelo de datos espacial
-- * **Tabla `propiedad_desarrollos`**: representa cada desarrollo completo y almacena su nombre, tipo de desarrollo (`horizontal`/`vertical`), referencias jerárquicas (país/estado/municipio) y `geom` del plano general.
+- * **Tabla `propiedad_desarrollos`**: representa cada desarrollo completo y almacena su nombre, tipo de desarrollo (`horizontal`/`vertical`), referencias jerárquicas (país/estado/municipio) y su geometría principal en PostGIS (`geom`).
 - * **Tabla `propiedades`**: ahora actúa como la ficha específica (inventario) que apunta al desarrollo, a la capa (nivel/manzana) y a la unidad correspondiente. Sigue guardando atributos como `tipo_id`, `status`, `precio`, `height`, `min_height`, `levels` y `geom`.
-- * **Tabla `propiedad_capas`**: representa el plano intermedio (manzana o nivel) y se vincula a `propiedad_desarrollos` con su propio `geom`, `nivel`, `altura` y `metadata`.
+- * **Tabla `propiedad_capas`**: representa el plano intermedio (manzana o nivel) y se vincula a `propiedad_desarrollos` con su propia geometría en PostGIS (`geom`), `nivel`, `altura` y `metadata`.
 - * **Tabla `propiedad_unidades`**: guarda cada lote/casa/departamento (plano 3) con su `status`, `precio`, `area_m2`, `metadata` y una referencia al nivel superior (`nivel_id`).
 - **Catálogos auxiliares**: mantener las tablas de líneas, familias y modelos existentes para ofrecer plantillas a las propiedades, pero el módulo inmobiliario debe permanecer separado de `/settings/productos` para respetar una arquitectura multi-negocio (las propiedades son “productos” con atributos especiales, pero no se mezclan las tablas de inventario tradicionales con los mapas).
 - **Estados y RLS**: crear `propiedad_status` enum (`disponible`, `apartado`, `vendido`, `reservado`) y políticas de RLS basadas en `organizacion_id` y `status`. `propiedades`, `propiedad_capas` y `propiedad_unidades` deben tener filtros activos por tenant.
-- **RPC/Endpoint GeoJSON**: `crm_propiedades_geojson(p_organizacion uuid, p_estado_cve text DEFAULT NULL, p_municipio_cve text DEFAULT NULL, p_tipo uuid DEFAULT NULL)` devuelve `FeatureCollection` con `properties` extendidas (`status`, `tipo_nombre`, `color`, `height`, `min_height`, `levels`, `linea_nombre`, `familia_nombre`, `modelo_nombre`, `resumen`). Solo expone la geometría de los estados/municipios que tienen desarrollos activos.
+- **RPC/Endpoint GeoJSON**: `crm_propiedades_geojson(p_organizacion uuid, p_estado_cve text DEFAULT NULL, p_municipio_cve text DEFAULT NULL, p_tipo uuid DEFAULT NULL)` devuelve `FeatureCollection` con `properties` extendidas (`status`, `tipo_nombre`, `color`, `height`, `min_height`, `levels`, `linea_nombre`, `familia_nombre`, `modelo_nombre`, `resumen`). Solo expone las geometrías de los estados/municipios que tienen desarrollos activos.
 - **Catálogo asociado**: cada unidad geoespacial se refleja automáticamente como un `catalog_item` (`tipo = producto`) cuyos metadatos incluyen `propiedad_id`, `unidad_id`, `catalog_item_id` y los atributos volumétricos liberados en `metadatos_extra`. `_ensure_catalog_item_for_unidad` se ejecuta tanto desde el importador CSV como desde `/crm/propiedades` y registra en `logs/mapbox-debug.log` cada sincronización para que el panel Mapbox pueda verificar qué `catalog_item_id` le toca a cada feature.
 
 ## Leaflet jerárquico (México → estados → municipios → marcadores)
@@ -46,7 +46,7 @@ Desplegar una experiencia geoespacial jerárquica donde Leaflet controle la nave
 ## Riesgos y consideraciones
 - Leaflet es la vista ortogonal nacional; la sensación 3D solo se logra con Mapbox así que debe haber indicadores (mensajes, loaders) que comuniquen la transición al usuario.
 - Mapbox tiene límite gratuito de tiles, por lo tanto el uso debe concentrarse en las zonas con desarrollos y destruir la instancia cuando no se use. Considerar cache/capacidad de tiles si el tráfico aumenta.
-- Validar los polígonos creados para evitar vertices innecesarios, mantener índices GiST actualizados y usar `ST_Simplify` cuando haya geometrías complejas.
+- Validar los polígonos creados para evitar vértices innecesarios, mantener índices GiST actualizados y usar `ST_Simplify` cuando haya geometrías complejas.
 - El módulo inmobiliario debe filtrar solo los estados/municipios con desarrollos; los demás se muestran en gris para evitar colorear países o estados sin datos, y se deben recalcular los totales al actualizar un estado.
 
 ## Validación del flujo jerárquico

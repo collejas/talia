@@ -47,14 +47,14 @@ unidad,Mirador,LOTE-1,,disponible,,,"0",LOTE-1,lote,"POLYGON((-109.7383 23.0022,
 
 ### Notas
 
-- La fila `desarrollo` crea el proyecto y registra su polígono en `propiedad_poligonos` con `target_type = desarrollo`.\
-- Cada fila `capa` crea un nivel asociado mediante el `nivel` numérico y puede incluir un polígono (`target_type = capa`).\
-- Las filas `unidad` vinculan la unidad al nivel correspondiente (`capa_nivel`) y permiten definir su tipo, precio y polígono (`target_type = unidad`).\
+- La fila `desarrollo` crea el proyecto y registra su geometría en `propiedad_poligonos` con `target_type = desarrollo`.\
+- Cada fila `capa` crea un nivel asociado mediante el `nivel` numérico y puede incluir una geometría (`target_type = capa`).\
+- Las filas `unidad` vinculan la unidad al nivel correspondiente (`capa_nivel`) y permiten definir su tipo, precio y geometría (`target_type = unidad`).\
 - Si necesitas mezclar horizontales y verticales en un mismo contenedor, puedes importar primero los desarrollos hijas y luego registrar sus relaciones manualmente (el importador CSV no crea registros `mixto` directamente).
 
 ## Uso del archivo `colo.csv`
 
-El CSV `colo.csv` contiene geometrías exportadas (columna `geometry` con GeoJSON). Puedes renombrar esa columna a `poligono`, duplicar los valores de `nombre`/`grupo` y agregar el resto de columnas mínimas descritas arriba para cargar directamente esos polígonos en el importador. También puedes reutilizar la línea de comandos:
+El CSV `colo.csv` contiene geometrías exportadas (columna `geometry` con GeoJSON). Puedes renombrar esa columna a `poligono`, duplicar los valores de `nombre`/`grupo` y agregar el resto de columnas mínimas descritas arriba para cargar directamente esas geometrías en el importador. También puedes reutilizar la línea de comandos:
 
 ```bash
 ogr2ogr -f CSV desarrollo.csv colo.csv -oo "GEOM_POSSIBLE_NAMES=geometry" -lco RFC7946=YES
