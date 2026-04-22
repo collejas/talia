@@ -29,7 +29,7 @@ WITH normalized_level AS (
     END AS nivel
 ),
 tenant AS (
-    SELECT COALESCE(public.usuario_organizacion_id(auth.uid()), '00000000-0000-0000-0000-000000000001'::uuid) AS organizacion_id
+    SELECT public.usuario_organizacion_id(auth.uid()) AS organizacion_id
 ),
 webchat_visits AS (
     SELECT

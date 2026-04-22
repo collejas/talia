@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict jDPhgvyqUfiILPK4CILT1wsIKKQMEV2nmqL7DiVlIMxRPTaicXFXgeRYqXkszQR
+\restrict a8LfO07gFvd52RlV1s4YNbHNwwGTyzH8nc18VNDodMRue5uInbmwfs680XfNpTm
 
 -- Dumped from database version 17.6
 -- Dumped by pg_dump version 18.3 (Ubuntu 18.3-1.pgdg24.04+1)
@@ -1176,6 +1176,21 @@ $$;
 --
 
 COMMENT ON FUNCTION public._contacto_captura_estado(p_nombre text, p_correo text, p_telefono text, p_notes text, p_necesidad text) IS 'Determina si un contacto tiene todos los campos de captura completados.';
+
+
+--
+-- Name: _contacto_legacy_uuid(jsonb, uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public._contacto_legacy_uuid(p_metadata jsonb, p_fallback uuid) RETURNS uuid
+    LANGUAGE sql STABLE
+    AS $_$
+    SELECT CASE
+        WHEN COALESCE(p_metadata->>'legacy_contacto_id', '') ~* '^[0-9a-f-]{36}$'
+            THEN (p_metadata->>'legacy_contacto_id')::uuid
+        ELSE p_fallback
+    END;
+$_$;
 
 
 --
@@ -5832,6 +5847,60 @@ COMMENT ON FUNCTION public.fn_calendar_sync_tarjeta_stage(p_tarjeta_id uuid, p_s
 
 
 --
+-- Name: gen_codigo_contacto(uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.gen_codigo_contacto(p_organizacion_id uuid) RETURNS text
+    LANGUAGE plpgsql
+    AS $_$
+DECLARE
+  v_next bigint;
+BEGIN
+  IF p_organizacion_id IS NULL THEN
+    RETURN NULL;
+  END IF;
+
+  PERFORM pg_advisory_xact_lock(hashtext('contactos_codigo_' || p_organizacion_id::text));
+
+  SELECT COALESCE(MAX(substring(c.codigo_contacto FROM '^Con([0-9]+)$')::bigint), 0) + 1
+    INTO v_next
+  FROM public.contactos c
+  WHERE c.organizacion_id = p_organizacion_id
+    AND c.codigo_contacto ~ '^Con[0-9]+$';
+
+  RETURN 'Con' || v_next::text;
+END;
+$_$;
+
+
+--
+-- Name: gen_codigo_cuenta(uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.gen_codigo_cuenta(p_organizacion_id uuid) RETURNS text
+    LANGUAGE plpgsql
+    AS $_$
+DECLARE
+  v_next bigint;
+BEGIN
+  IF p_organizacion_id IS NULL THEN
+    RETURN NULL;
+  END IF;
+
+  PERFORM pg_advisory_xact_lock(hashtext('cuentas_codigo_' || p_organizacion_id::text));
+
+  SELECT COALESCE(MAX(substring(c.codigo_cuenta FROM '^Emp([0-9]+)$')::bigint), 0) + 1
+    INTO v_next
+  FROM public.cuentas c
+  WHERE c.organizacion_id = p_organizacion_id
+    AND c.codigo_cuenta ~ '^Emp[0-9]+$';
+
+  RETURN 'Emp' || v_next::text;
+END;
+$_$;
+
+
+--
 -- Name: google_resultados_bounds(uuid, text, boolean, boolean, numeric, text[]); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -6242,14 +6311,41 @@ CREATE FUNCTION public.next_vendedor_round_robin() RETURNS uuid
     SET search_path TO 'public'
     AS $$
 DECLARE
+    v_org uuid := NULLIF(current_setting('app.current_organizacion_id', true), '')::uuid;
+BEGIN
+    RETURN public.next_vendedor_round_robin(v_org);
+END;
+$$;
+
+
+--
+-- Name: FUNCTION next_vendedor_round_robin(); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.next_vendedor_round_robin() IS 'Regresa el siguiente vendedor disponible usando un round robin simple y actualiza su marca temporal.';
+
+
+--
+-- Name: next_vendedor_round_robin(uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.next_vendedor_round_robin(p_organizacion_id uuid) RETURNS uuid
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+DECLARE
     v_usuario uuid;
 BEGIN
-    SELECT usuario_id
+    SELECT e.usuario_id
       INTO v_usuario
-      FROM public.empleados
-     WHERE es_vendedor = TRUE
-     ORDER BY COALESCE(ultimo_lead_asignado_en, to_timestamp(0)), creado_en, usuario_id
-     FOR UPDATE SKIP LOCKED
+      FROM public.empleados e
+      JOIN public.usuarios u
+        ON u.id = e.usuario_id
+       AND u.organizacion_id = e.organizacion_id
+     WHERE e.es_vendedor = TRUE
+       AND (p_organizacion_id IS NULL OR e.organizacion_id = p_organizacion_id)
+     ORDER BY COALESCE(e.ultimo_lead_asignado_en, to_timestamp(0)), e.creado_en, e.usuario_id
+     FOR UPDATE OF e SKIP LOCKED
      LIMIT 1;
 
     IF NOT FOUND THEN
@@ -6266,52 +6362,86 @@ $$;
 
 
 --
--- Name: FUNCTION next_vendedor_round_robin(); Type: COMMENT; Schema: public; Owner: -
---
-
-COMMENT ON FUNCTION public.next_vendedor_round_robin() IS 'Regresa el siguiente vendedor disponible usando un round robin simple y actualiza su marca temporal.';
-
-
---
 -- Name: panel_contactos_list(text, text, text, uuid, timestamp with time zone, timestamp with time zone, text, text, text, integer, integer); Type: FUNCTION; Schema: public; Owner: -
 --
 
-CREATE FUNCTION public.panel_contactos_list(p_estado text DEFAULT NULL::text, p_captura text DEFAULT NULL::text, p_origen text DEFAULT NULL::text, p_propietario uuid DEFAULT NULL::uuid, p_from timestamp with time zone DEFAULT NULL::timestamp with time zone, p_to timestamp with time zone DEFAULT NULL::timestamp with time zone, p_search text DEFAULT NULL::text, p_order_by text DEFAULT 'creado_en'::text, p_order_dir text DEFAULT 'desc'::text, p_limit integer DEFAULT 100, p_offset integer DEFAULT 0) RETURNS TABLE(contacto_id uuid, nombre text, correo text, telefono text, estado text, captura_estado text, origen text, creado_en timestamp with time zone, actualizado_en timestamp with time zone, company_name text, propietario_id uuid, propietario_nombre text, ultimo_contacto_en timestamp with time zone, conversaciones integer, notas text, metadata jsonb, total_rows bigint)
+CREATE FUNCTION public.panel_contactos_list(p_estado text DEFAULT NULL::text, p_captura text DEFAULT NULL::text, p_origen text DEFAULT NULL::text, p_propietario uuid DEFAULT NULL::uuid, p_from timestamp with time zone DEFAULT NULL::timestamp with time zone, p_to timestamp with time zone DEFAULT NULL::timestamp with time zone, p_search text DEFAULT NULL::text, p_order_by text DEFAULT 'creado_en'::text, p_order_dir text DEFAULT 'desc'::text, p_limit integer DEFAULT 100, p_offset integer DEFAULT 0) RETURNS TABLE(contacto_id uuid, codigo_contacto text, codigo_cuenta text, nombre text, correo text, telefono text, estado text, captura_estado text, origen text, creado_en timestamp with time zone, actualizado_en timestamp with time zone, company_name text, propietario_id uuid, propietario_nombre text, ultimo_contacto_en timestamp with time zone, conversaciones integer, notes text, rfc text, puesto text, area text, rol_decision text, codigo_postal text, entidad text, municipio text, pais text, website text, tipo_establecimiento text, fecha_incorporacion timestamp with time zone, total_rows bigint)
     LANGUAGE sql STABLE SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
-WITH base AS (
+WITH person_accounts AS (
     SELECT
-        c.id AS contacto_id,
-        COALESCE(NULLIF(c.nombre_completo, ''), 'Sin nombre') AS nombre,
-        NULLIF(c.correo, '') AS correo,
-        NULLIF(c.telefono_e164, '') AS telefono,
-        COALESCE(NULLIF(c.estado, ''), 'desconocido') AS estado,
-        COALESCE(NULLIF(c.captura_estado, ''), 'incompleto') AS captura_estado,
-        COALESCE(NULLIF(c.origen, ''), 'otro') AS origen,
-        c.creado_en,
-        NULLIF(c.company_name, '') AS company_name,
-        c.propietario_usuario_id AS propietario_id,
+        p.id AS persona_id,
+        p.organizacion_id,
+        p.nombre_completo,
+        p.correo_principal,
+        p.telefono_principal_e164,
+        p.estado,
+        COALESCE(NULLIF(lower(p.metadata->>'legacy_captura_estado'), ''), 'incompleto') AS captura_estado,
+        COALESCE(NULLIF(lower(p.origen), ''), 'otro') AS origen,
+        p.creado_en,
+        p.actualizado_en,
+        p.propietario_usuario_id,
         owner.nombre_completo AS propietario_nombre,
-        c.notes,
-        c.contacto_datos AS metadata
-    FROM public.contactos c
-    LEFT JOIN public.usuarios owner ON owner.id = c.propietario_usuario_id
-    WHERE (p_estado IS NULL OR lower(c.estado) = lower(p_estado))
-      AND (p_captura IS NULL OR lower(c.captura_estado) = lower(p_captura))
-      AND (p_origen IS NULL OR lower(c.origen) = lower(p_origen))
-      AND (p_propietario IS NULL OR c.propietario_usuario_id = p_propietario)
-      AND (p_from IS NULL OR c.creado_en >= p_from)
-      AND (p_to IS NULL OR c.creado_en <= p_to)
+        p.notas,
+        p.puesto,
+        p.area,
+        p.rol_decision,
+        p.metadata,
+        relation.rol_en_cuenta,
+        relation.es_contacto_principal,
+        relation.es_representante_legal,
+        relation.cuenta_id,
+        account.codigo_cuenta,
+        account.nombre AS account_nombre,
+        account.razon_social,
+        account.rfc,
+        account.sitio_web,
+        account.website,
+        account.tipo_establecimiento,
+        account.codigo_postal,
+        account.entidad,
+        account.municipio,
+        account.pais,
+        account.email_facturacion,
+        account.necesidad_proposito,
+        account.fecha_incorporacion,
+        account.tipo_industria,
+        row_number() OVER (
+            PARTITION BY p.id
+            ORDER BY relation.es_contacto_principal DESC, relation.es_representante_legal DESC, relation.activo DESC, relation.creado_en ASC
+        ) AS rn
+    FROM public.personas p
+    LEFT JOIN public.usuarios owner ON owner.id = p.propietario_usuario_id
+    LEFT JOIN public.cuenta_personas relation
+      ON relation.persona_id = p.id
+     AND relation.organizacion_id = p.organizacion_id
+    LEFT JOIN public.cuentas account
+      ON account.id = relation.cuenta_id
+     AND account.organizacion_id = p.organizacion_id
+    WHERE (
+        public.es_admin(auth.uid())
+        OR p.organizacion_id = public.usuario_organizacion_id(auth.uid())
+    )
+      AND (p_estado IS NULL OR lower(p.estado) = lower(p_estado))
+      AND (p_captura IS NULL OR lower(COALESCE(p.metadata->>'legacy_captura_estado', 'incompleto')) = lower(p_captura))
+      AND (p_origen IS NULL OR lower(p.origen) = lower(p_origen))
+      AND (p_propietario IS NULL OR p.propietario_usuario_id = p_propietario)
+      AND (p_from IS NULL OR p.creado_en >= p_from)
+      AND (p_to IS NULL OR p.creado_en <= p_to)
       AND (
         p_search IS NULL OR p_search = '' OR
-        c.nombre_completo ILIKE '%' || p_search || '%' OR
-        c.correo ILIKE '%' || p_search || '%' OR
-        c.telefono_e164 ILIKE '%' || p_search || '%' OR
-        c.company_name ILIKE '%' || p_search || '%' OR
-        c.notes ILIKE '%' || p_search || '%'
+        p.nombre_completo ILIKE '%' || p_search || '%' OR
+        p.correo_principal ILIKE '%' || p_search || '%' OR
+        p.telefono_principal_e164 ILIKE '%' || p_search || '%' OR
+        p.notas ILIKE '%' || p_search || '%' OR
+        COALESCE(account.nombre, account.razon_social, '') ILIKE '%' || p_search || '%' OR
+        COALESCE(account.rfc, '') ILIKE '%' || p_search || '%' OR
+        COALESCE(p.metadata->>'legacy_contacto_codigo', '') ILIKE '%' || p_search || '%'
       )
-      AND public.puede_ver_contacto(c.id)
+),
+primary_rows AS (
+    SELECT * FROM person_accounts WHERE rn = 1
 ),
 conversation_stats AS (
     SELECT
@@ -6319,51 +6449,64 @@ conversation_stats AS (
         COUNT(*) AS conversaciones,
         MAX(conv.ultimo_mensaje_en) AS ultimo_contacto_en
     FROM public.conversaciones conv
-    WHERE conv.contacto_id IS NOT NULL
     GROUP BY conv.contacto_id
 ),
 annotated AS (
     SELECT
-        b.*,
-        COALESCE(cs.ultimo_contacto_en, b.creado_en) AS actualizado_en,
+        pr.*,
+        COALESCE(cs.ultimo_contacto_en, pr.creado_en) AS display_actualizado_en,
         cs.conversaciones,
         cs.ultimo_contacto_en,
-        COUNT(*) OVER () AS total_rows
-    FROM base b
-    LEFT JOIN conversation_stats cs ON cs.contacto_id = b.contacto_id
+        COUNT(*) OVER () AS total_rows,
+        public._contacto_legacy_uuid(pr.metadata, pr.persona_id) AS legacy_contacto_id
+    FROM primary_rows pr
+    LEFT JOIN conversation_stats cs
+      ON cs.contacto_id = public._contacto_legacy_uuid(pr.metadata, pr.persona_id)
 ),
 ordered AS (
     SELECT *
     FROM annotated
     ORDER BY
-        CASE WHEN lower(p_order_by) = 'actualizado_en' AND lower(p_order_dir) = 'asc' THEN actualizado_en END ASC,
-        CASE WHEN lower(p_order_by) = 'actualizado_en' AND lower(p_order_dir) <> 'asc' THEN actualizado_en END DESC,
+        CASE WHEN lower(p_order_by) = 'actualizado_en' AND lower(p_order_dir) = 'asc' THEN display_actualizado_en END ASC,
+        CASE WHEN lower(p_order_by) = 'actualizado_en' AND lower(p_order_dir) <> 'asc' THEN display_actualizado_en END DESC,
         CASE WHEN lower(p_order_by) = 'ultimo_contacto_en' AND lower(p_order_dir) = 'asc' THEN ultimo_contacto_en END ASC,
         CASE WHEN lower(p_order_by) = 'ultimo_contacto_en' AND lower(p_order_dir) <> 'asc' THEN ultimo_contacto_en END DESC,
-        CASE WHEN lower(p_order_by) = 'nombre' AND lower(p_order_dir) = 'asc' THEN nombre END ASC,
-        CASE WHEN lower(p_order_by) = 'nombre' AND lower(p_order_dir) <> 'asc' THEN nombre END DESC,
+        CASE WHEN lower(p_order_by) = 'nombre' AND lower(p_order_dir) = 'asc' THEN nombre_completo END ASC,
+        CASE WHEN lower(p_order_by) = 'nombre' AND lower(p_order_dir) <> 'asc' THEN nombre_completo END DESC,
         CASE WHEN lower(p_order_by) = 'creado_en' AND lower(p_order_dir) = 'asc' THEN creado_en END ASC,
         CASE WHEN lower(p_order_by) = 'creado_en' AND lower(p_order_dir) <> 'asc' THEN creado_en END DESC,
         creado_en DESC,
-        contacto_id
+        legacy_contacto_id
 )
 SELECT
-    contacto_id,
-    nombre,
-    correo,
-    telefono,
-    estado,
-    captura_estado,
-    origen,
+    legacy_contacto_id AS contacto_id,
+    NULLIF(metadata->>'legacy_contacto_codigo', '') AS codigo_contacto,
+    codigo_cuenta,
+    COALESCE(NULLIF(btrim(nombre_completo), ''), 'Sin nombre') AS nombre,
+    NULLIF(correo_principal, '') AS correo,
+    NULLIF(telefono_principal_e164, '') AS telefono,
+    COALESCE(NULLIF(estado, ''), 'desconocido') AS estado,
+    COALESCE(NULLIF(captura_estado, ''), 'incompleto') AS captura_estado,
+    COALESCE(NULLIF(origen, ''), 'otro') AS origen,
     creado_en,
-    actualizado_en,
-    company_name,
-    propietario_id,
+    display_actualizado_en AS actualizado_en,
+    COALESCE(NULLIF(account_nombre, ''), NULLIF(razon_social, ''), NULLIF(metadata->>'legacy_company_name', '')) AS company_name,
+    propietario_usuario_id AS propietario_id,
     propietario_nombre,
     ultimo_contacto_en,
-    COALESCE(conversaciones, 0) AS conversaciones,
-    notes,
-    metadata,
+    COALESCE(conversaciones, 0)::integer AS conversaciones,
+    notas AS notes,
+    COALESCE(NULLIF(rfc, ''), metadata->>'legacy_rfc') AS rfc,
+    puesto,
+    area,
+    rol_decision,
+    codigo_postal,
+    entidad,
+    municipio,
+    pais,
+    COALESCE(NULLIF(website, ''), NULLIF(sitio_web, ''), metadata->>'legacy_website') AS website,
+    tipo_establecimiento,
+    fecha_incorporacion,
     total_rows
 FROM ordered
 LIMIT COALESCE(NULLIF(p_limit, 0), 100)
@@ -6381,18 +6524,21 @@ CREATE FUNCTION public.panel_contactos_resumen(p_from timestamp with time zone D
     AS $$
 WITH base AS (
     SELECT
-        c.id,
-        COALESCE(NULLIF(lower(c.estado), ''), 'desconocido') AS estado,
-        COALESCE(NULLIF(lower(c.captura_estado), ''), 'incompleto') AS captura_estado,
-        COALESCE(NULLIF(lower(c.origen), ''), 'otro') AS origen,
-        c.propietario_usuario_id,
-        c.creado_en
-    FROM public.contactos c
-    WHERE (p_from IS NULL OR c.creado_en >= p_from)
-      AND (p_to IS NULL OR c.creado_en <= p_to)
-      AND (p_propietario IS NULL OR c.propietario_usuario_id = p_propietario)
-      AND (p_origen IS NULL OR lower(c.origen) = lower(p_origen))
-      AND public.puede_ver_contacto(c.id)
+        p.id,
+        p.estado,
+        COALESCE(NULLIF(lower(p.metadata->>'legacy_captura_estado'), ''), 'incompleto') AS captura_estado,
+        COALESCE(NULLIF(lower(p.origen), ''), 'otro') AS origen,
+        p.propietario_usuario_id,
+        p.creado_en
+    FROM public.personas p
+    WHERE (p_from IS NULL OR p.creado_en >= p_from)
+      AND (p_to IS NULL OR p.creado_en <= p_to)
+      AND (p_propietario IS NULL OR p.propietario_usuario_id = p_propietario)
+      AND (p_origen IS NULL OR lower(p.origen) = lower(p_origen))
+      AND (
+        public.es_admin(auth.uid())
+        OR p.organizacion_id = public.usuario_organizacion_id(auth.uid())
+      )
 ),
 counts AS (
     SELECT
@@ -6441,16 +6587,18 @@ series AS (
 ),
 base AS (
     SELECT
-        c.id,
-        c.creado_en::date AS creado_date,
-        COALESCE(NULLIF(lower(c.captura_estado), ''), 'incompleto') AS captura_estado,
-        COALESCE(NULLIF(lower(c.origen), ''), 'otro') AS origen
-    FROM public.contactos c
-    WHERE (p_from IS NULL OR c.creado_en >= p_from)
-      AND (p_to IS NULL OR c.creado_en <= p_to)
-      AND (p_propietario IS NULL OR c.propietario_usuario_id = p_propietario)
-      AND (p_origen IS NULL OR lower(c.origen) = lower(p_origen))
-      AND public.puede_ver_contacto(c.id)
+        p.creado_en::date AS creado_date,
+        COALESCE(NULLIF(lower(p.metadata->>'legacy_captura_estado'), ''), 'incompleto') AS captura_estado,
+        COALESCE(NULLIF(lower(p.origen), ''), 'otro') AS origen
+    FROM public.personas p
+    WHERE (p_from IS NULL OR p.creado_en >= p_from)
+      AND (p_to IS NULL OR p.creado_en <= p_to)
+      AND (p_propietario IS NULL OR p.propietario_usuario_id = p_propietario)
+      AND (p_origen IS NULL OR lower(p.origen) = lower(p_origen))
+      AND (
+        public.es_admin(auth.uid())
+        OR p.organizacion_id = public.usuario_organizacion_id(auth.uid())
+      )
 ),
 agg_new AS (
     SELECT creado_date AS bucket_date, COUNT(*) AS nuevos
@@ -6841,6 +6989,13 @@ annotated as (
         count(*) over () as total_rows
     from filtered f
 ),
+paged as (
+    select *
+    from annotated
+    order by sort_key desc
+    limit coalesce(nullif(p_limit, 0), 50)
+    offset greatest(p_offset, 0)
+),
 messages_by_thread as (
     select
         a.conversacion_id,
@@ -6877,7 +7032,7 @@ messages_by_thread as (
             )
             order by msg.creado_en
         ) filter (where msg.id is not null) as items
-    from annotated a
+    from paged a
     left join lateral (
         select m.*
         from public.mensajes m
@@ -6916,11 +7071,9 @@ select
     a.total_rows,
     a.reengage_attempts,
     a.inbox_context
-from annotated a
+from paged a
 left join messages_by_thread messages on messages.conversacion_id = a.conversacion_id
-order by a.sort_key desc
-limit coalesce(nullif(p_limit, 0), 50)
-offset greatest(p_offset, 0);
+order by a.sort_key desc;
 $_$;
 
 
@@ -8761,7 +8914,11 @@ conversation_base AS (
         conv.id,
         lower(COALESCE(conv.canal, '')) AS canal,
         COALESCE(conv.ultimo_mensaje_en, conv.iniciada_en, now()) AS activity_at,
-        ct.contacto_datos,
+        ct.pais,
+        ct.clave_entidad,
+        ct.entidad,
+        ct.clave_municipio,
+        ct.municipio,
         ct.telefono_e164,
         CASE
             WHEN lower(COALESCE(conv.canal, '')) = 'whatsapp' AND wal.conversacion_id IS NOT NULL THEN 'campaign'
@@ -8785,40 +8942,19 @@ conversation_base AS (
 conversation_geo AS (
     SELECT
         cb.*,
-        COALESCE(
-            NULLIF(cb.contacto_datos #>> '{ubicacion,country_code}', ''),
-            NULLIF(cb.contacto_datos #>> '{country_code}', ''),
-            NULLIF(cb.contacto_datos #>> '{ubicacion,pais_codigo}', ''),
-            NULLIF(cb.contacto_datos #>> '{pais_codigo}', '')
-        ) AS raw_country_code,
-        COALESCE(
-            NULLIF(cb.contacto_datos #>> '{ubicacion,country_name}', ''),
-            NULLIF(cb.contacto_datos #>> '{country_name}', ''),
-            NULLIF(cb.contacto_datos #>> '{ubicacion,pais_nombre}', ''),
-            NULLIF(cb.contacto_datos #>> '{pais_nombre}', ''),
-            NULLIF(cb.contacto_datos #>> '{ubicacion,pais}', ''),
-            NULLIF(cb.contacto_datos #>> '{pais}', '')
-        ) AS raw_country_name,
-        COALESCE(
-            NULLIF(cb.contacto_datos #>> '{ubicacion,cve_ent}', ''),
-            NULLIF(cb.contacto_datos #>> '{cve_ent}', '')
-        ) AS raw_cve_ent,
-        COALESCE(
-            NULLIF(cb.contacto_datos #>> '{ubicacion,nom_ent}', ''),
-            NULLIF(cb.contacto_datos #>> '{nom_ent}', '')
-        ) AS raw_nom_ent,
-        COALESCE(
-            NULLIF(cb.contacto_datos #>> '{ubicacion,cve_mun}', ''),
-            NULLIF(cb.contacto_datos #>> '{cve_mun}', '')
-        ) AS raw_cve_mun,
-        COALESCE(
-            NULLIF(cb.contacto_datos #>> '{ubicacion,nom_mun}', ''),
-            NULLIF(cb.contacto_datos #>> '{nom_mun}', '')
-        ) AS raw_nom_mun,
-        COALESCE(
-            NULLIF(cb.contacto_datos #>> '{ubicacion,cvegeo}', ''),
-            NULLIF(cb.contacto_datos #>> '{cvegeo}', '')
-        ) AS raw_cvegeo,
+        NULLIF(upper(btrim(COALESCE(cb.pais, ''))), '') AS raw_country_code,
+        NULLIF(btrim(COALESCE(cb.pais, '')), '') AS raw_country_name,
+        NULLIF(btrim(COALESCE(cb.clave_entidad, '')), '') AS raw_cve_ent,
+        NULLIF(btrim(COALESCE(cb.entidad, '')), '') AS raw_nom_ent,
+        NULLIF(btrim(COALESCE(cb.clave_municipio, '')), '') AS raw_cve_mun,
+        NULLIF(btrim(COALESCE(cb.municipio, '')), '') AS raw_nom_mun,
+        CASE
+            WHEN NULLIF(btrim(COALESCE(cb.clave_entidad, '')), '') IS NOT NULL
+             AND NULLIF(btrim(COALESCE(cb.clave_municipio, '')), '') IS NOT NULL
+            THEN lpad(regexp_replace(btrim(cb.clave_entidad), '\\D', '', 'g'), 2, '0')
+                 || lpad(regexp_replace(btrim(cb.clave_municipio), '\\D', '', 'g'), 3, '0')
+            ELSE NULL
+        END AS raw_cvegeo,
         regexp_replace(COALESCE(cb.telefono_e164, ''), '\\D', '', 'g') AS telefono_digits
     FROM conversation_base cb
 ),
@@ -8830,6 +8966,7 @@ conversation_normalized AS (
         CASE
             WHEN cg.raw_country_code IS NOT NULL AND cg.raw_country_code <> '' THEN
                 CASE
+                    WHEN cg.raw_country_code IN ('MX','MEX') OR lower(cg.raw_country_name) IN ('méxico','mexico') THEN 'MX'
                     WHEN length(cg.raw_country_code) = 2 THEN upper(cg.raw_country_code)
                     WHEN length(cg.raw_country_code) = 3 AND cg.raw_country_code ~ '^[A-Za-z]{3}$'
                         THEN upper(cg.raw_country_code)
@@ -8917,7 +9054,11 @@ email_inbound_raw AS (
         m.creado_en,
         m.datos,
         conv.contacto_id,
-        ct.contacto_datos,
+        ct.pais,
+        ct.clave_entidad,
+        ct.entidad,
+        ct.clave_municipio,
+        ct.municipio,
         ct.telefono_e164,
         CASE
             WHEN (m.datos ->> 'campana_id') ~* '^[0-9a-f-]{36}$' THEN (m.datos ->> 'campana_id')::uuid
@@ -8960,40 +9101,19 @@ email_inbound_raw AS (
 email_geo AS (
     SELECT
         e.*,
-        COALESCE(
-            NULLIF(e.contacto_datos #>> '{ubicacion,country_code}', ''),
-            NULLIF(e.contacto_datos #>> '{country_code}', ''),
-            NULLIF(e.contacto_datos #>> '{ubicacion,pais_codigo}', ''),
-            NULLIF(e.contacto_datos #>> '{pais_codigo}', '')
-        ) AS raw_country_code,
-        COALESCE(
-            NULLIF(e.contacto_datos #>> '{ubicacion,country_name}', ''),
-            NULLIF(e.contacto_datos #>> '{country_name}', ''),
-            NULLIF(e.contacto_datos #>> '{ubicacion,pais_nombre}', ''),
-            NULLIF(e.contacto_datos #>> '{pais_nombre}', ''),
-            NULLIF(e.contacto_datos #>> '{ubicacion,pais}', ''),
-            NULLIF(e.contacto_datos #>> '{pais}', '')
-        ) AS raw_country_name,
-        COALESCE(
-            NULLIF(e.contacto_datos #>> '{ubicacion,cve_ent}', ''),
-            NULLIF(e.contacto_datos #>> '{cve_ent}', '')
-        ) AS raw_cve_ent,
-        COALESCE(
-            NULLIF(e.contacto_datos #>> '{ubicacion,nom_ent}', ''),
-            NULLIF(e.contacto_datos #>> '{nom_ent}', '')
-        ) AS raw_nom_ent,
-        COALESCE(
-            NULLIF(e.contacto_datos #>> '{ubicacion,cve_mun}', ''),
-            NULLIF(e.contacto_datos #>> '{cve_mun}', '')
-        ) AS raw_cve_mun,
-        COALESCE(
-            NULLIF(e.contacto_datos #>> '{ubicacion,nom_mun}', ''),
-            NULLIF(e.contacto_datos #>> '{nom_mun}', '')
-        ) AS raw_nom_mun,
-        COALESCE(
-            NULLIF(e.contacto_datos #>> '{ubicacion,cvegeo}', ''),
-            NULLIF(e.contacto_datos #>> '{cvegeo}', '')
-        ) AS raw_cvegeo,
+        NULLIF(upper(btrim(COALESCE(e.pais, ''))), '') AS raw_country_code,
+        NULLIF(btrim(COALESCE(e.pais, '')), '') AS raw_country_name,
+        NULLIF(btrim(COALESCE(e.clave_entidad, '')), '') AS raw_cve_ent,
+        NULLIF(btrim(COALESCE(e.entidad, '')), '') AS raw_nom_ent,
+        NULLIF(btrim(COALESCE(e.clave_municipio, '')), '') AS raw_cve_mun,
+        NULLIF(btrim(COALESCE(e.municipio, '')), '') AS raw_nom_mun,
+        CASE
+            WHEN NULLIF(btrim(COALESCE(e.clave_entidad, '')), '') IS NOT NULL
+             AND NULLIF(btrim(COALESCE(e.clave_municipio, '')), '') IS NOT NULL
+            THEN lpad(regexp_replace(btrim(e.clave_entidad), '\\D', '', 'g'), 2, '0')
+                 || lpad(regexp_replace(btrim(e.clave_municipio), '\\D', '', 'g'), 3, '0')
+            ELSE NULL
+        END AS raw_cvegeo,
         regexp_replace(COALESCE(e.telefono_e164, ''), '\\D', '', 'g') AS telefono_digits
     FROM email_inbound_raw e
 ),
@@ -9003,6 +9123,7 @@ email_normalized AS (
         CASE
             WHEN eg.raw_country_code IS NOT NULL AND eg.raw_country_code <> '' THEN
                 CASE
+                    WHEN eg.raw_country_code IN ('MX','MEX') OR lower(eg.raw_country_name) IN ('méxico','mexico') THEN 'MX'
                     WHEN length(eg.raw_country_code) = 2 THEN upper(eg.raw_country_code)
                     WHEN length(eg.raw_country_code) = 3 AND eg.raw_country_code ~ '^[A-Za-z]{3}$'
                         THEN upper(eg.raw_country_code)
@@ -14114,6 +14235,37 @@ $$;
 
 
 --
+-- Name: sync_prospeccion_prospectos_derived_cols(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.sync_prospeccion_prospectos_derived_cols() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+    NEW.stage := NULLIF(BTRIM(COALESCE(NEW.metadata->>'stage', '')), '');
+
+    NEW.busqueda_ref := COALESCE(
+        NULLIF(BTRIM(COALESCE(NEW.busqueda_id::text, '')), ''),
+        NULLIF(BTRIM(COALESCE(NEW.metadata->>'busqueda_id', '')), ''),
+        NULLIF(BTRIM(COALESCE(NEW.metadata->>'busqueda_query', '')), ''),
+        NULLIF(BTRIM(COALESCE(NEW.metadata->>'query', '')), ''),
+        NULLIF(BTRIM(COALESCE((NEW.metadata->'busqueda_meta'->>'query'), '')), '')
+    );
+
+    NEW.query_sort := COALESCE(
+        NULLIF(BTRIM(COALESCE(NEW.metadata->>'query', '')), ''),
+        NULLIF(BTRIM(COALESCE(NEW.metadata->>'busqueda_query', '')), ''),
+        NULLIF(BTRIM(COALESCE((NEW.metadata->'busqueda_meta'->>'query'), '')), ''),
+        NULLIF(BTRIM(COALESCE(NEW.metadata->>'busqueda_id', '')), ''),
+        NULLIF(BTRIM(COALESCE(NEW.busqueda_id::text, '')), '')
+    );
+
+    RETURN NEW;
+END;
+$$;
+
+
+--
 -- Name: t_set_actualizado_en(); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -14185,13 +14337,34 @@ DECLARE
     v_tienen_datos boolean := FALSE;
     v_vendedor uuid;
     v_owner uuid;
+    v_org uuid;
+    v_creator uuid;
+    v_creator_es_vendedor boolean := FALSE;
+    v_owner_valido boolean := FALSE;
     v_lead_existe boolean;
     legacy_cards boolean := (to_regclass('public.lead_tarjetas') IS NOT NULL);
 BEGIN
-    -- Si el contacto proviene de WhatsApp, la tarjeta se crea desde el backend;
-    -- no debemos duplicarla desde este trigger pensado para webchat/landing.
     IF COALESCE(NEW.origen, '') = 'whatsapp' THEN
         RETURN NEW;
+    END IF;
+
+    v_org := NEW.organizacion_id;
+    IF v_org IS NULL THEN
+        v_org := NULLIF(current_setting('app.current_organizacion_id', true), '')::uuid;
+    END IF;
+
+    v_creator := auth.uid();
+    IF v_creator IS NOT NULL AND v_org IS NOT NULL AND TG_OP = 'INSERT' THEN
+        SELECT EXISTS (
+            SELECT 1
+              FROM public.empleados e
+              JOIN public.usuarios u
+                ON u.id = e.usuario_id
+               AND u.organizacion_id = e.organizacion_id
+             WHERE e.usuario_id = v_creator
+               AND e.organizacion_id = v_org
+               AND COALESCE(e.es_vendedor, false)
+        ) INTO v_creator_es_vendedor;
     END IF;
 
     v_tienen_datos :=
@@ -14211,13 +14384,29 @@ BEGIN
         END IF;
     END IF;
 
-    SELECT public.next_vendedor_round_robin() INTO v_vendedor;
-    IF v_vendedor IS NULL THEN
-        RETURN NEW;
+    IF TG_OP = 'INSERT' AND v_creator_es_vendedor THEN
+        NEW.propietario_usuario_id := v_creator;
+    END IF;
+
+    IF NEW.propietario_usuario_id IS NOT NULL AND v_org IS NOT NULL THEN
+        SELECT EXISTS (
+            SELECT 1
+              FROM public.usuarios u
+             WHERE u.id = NEW.propietario_usuario_id
+               AND u.organizacion_id = v_org
+        ) INTO v_owner_valido;
+
+        IF NOT v_owner_valido THEN
+            NEW.propietario_usuario_id := NULL;
+        END IF;
     END IF;
 
     IF NEW.propietario_usuario_id IS NULL THEN
-        NEW.propietario_usuario_id := v_vendedor;
+        IF v_creator_es_vendedor THEN
+            NEW.propietario_usuario_id := v_creator;
+        ELSE
+            NEW.propietario_usuario_id := public.next_vendedor_round_robin(v_org);
+        END IF;
     END IF;
     v_owner := NEW.propietario_usuario_id;
 
@@ -14241,16 +14430,16 @@ BEGIN
         )
         VALUES (
             NEW.id,
-            COALESCE(v_owner, v_vendedor),
-            v_vendedor,
+            COALESCE(v_owner, NEW.propietario_usuario_id),
+            v_owner,
             'contacto_auto',
             jsonb_build_object('auto', true, 'motivo', 'contacto_datos_capturados')
         )
         ON CONFLICT DO NOTHING;
     ELSE
         UPDATE public.lead_tarjetas
-           SET asignado_a_usuario_id = COALESCE(asignado_a_usuario_id, v_vendedor),
-               propietario_usuario_id = COALESCE(propietario_usuario_id, v_owner, v_vendedor)
+           SET asignado_a_usuario_id = COALESCE(asignado_a_usuario_id, v_owner),
+               propietario_usuario_id = COALESCE(propietario_usuario_id, v_owner)
          WHERE contacto_id = NEW.id
            AND (asignado_a_usuario_id IS NULL OR propietario_usuario_id IS NULL);
     END IF;
@@ -14320,6 +14509,130 @@ $$;
 --
 
 COMMENT ON FUNCTION public.tg_contactos_captura_estado() IS 'Actualiza captura_estado en contactos al detectar cambios relevantes.';
+
+
+--
+-- Name: tg_contactos_codigo_y_sync(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.tg_contactos_codigo_y_sync() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+DECLARE
+  v_email text;
+  v_correo text;
+  v_old_email text;
+  v_old_correo text;
+  v_email_changed boolean := false;
+  v_correo_changed boolean := false;
+  v_resolved_email text;
+
+  v_tel text;
+  v_tel_e164 text;
+  v_old_tel text;
+  v_old_tel_e164 text;
+  v_tel_changed boolean := false;
+  v_tel_e164_changed boolean := false;
+  v_resolved_tel text;
+
+  v_notas text;
+  v_notes text;
+  v_old_notas text;
+  v_old_notes text;
+  v_notas_changed boolean := false;
+  v_notes_changed boolean := false;
+  v_resolved_notas text;
+BEGIN
+  IF TG_OP = 'INSERT' THEN
+    NEW.codigo_contacto := public.gen_codigo_contacto(NEW.organizacion_id);
+  ELSIF COALESCE(NULLIF(btrim(NEW.codigo_contacto), ''), NULL) IS NULL THEN
+    NEW.codigo_contacto := public.gen_codigo_contacto(NEW.organizacion_id);
+  ELSE
+    NEW.codigo_contacto := btrim(NEW.codigo_contacto);
+  END IF;
+
+  IF NEW.fecha_incorporacion IS NULL THEN
+    NEW.fecha_incorporacion := now();
+  END IF;
+
+  v_email := NULLIF(btrim(COALESCE(NEW.email, '')), '');
+  v_correo := NULLIF(btrim(COALESCE(NEW.correo, '')), '');
+
+  IF TG_OP = 'UPDATE' THEN
+    v_old_email := NULLIF(btrim(COALESCE(OLD.email, '')), '');
+    v_old_correo := NULLIF(btrim(COALESCE(OLD.correo, '')), '');
+    v_email_changed := v_email IS DISTINCT FROM v_old_email;
+    v_correo_changed := v_correo IS DISTINCT FROM v_old_correo;
+
+    IF v_email_changed AND NOT v_correo_changed THEN
+      v_resolved_email := v_email;
+    ELSIF v_correo_changed AND NOT v_email_changed THEN
+      v_resolved_email := v_correo;
+    ELSIF v_email_changed AND v_correo_changed THEN
+      v_resolved_email := COALESCE(v_email, v_correo);
+    ELSE
+      v_resolved_email := COALESCE(v_email, v_correo, v_old_email, v_old_correo);
+    END IF;
+  ELSE
+    v_resolved_email := COALESCE(v_email, v_correo);
+  END IF;
+
+  NEW.email := v_resolved_email;
+  NEW.correo := v_resolved_email;
+
+  v_tel := NULLIF(btrim(COALESCE(NEW.telefono, '')), '');
+  v_tel_e164 := NULLIF(btrim(COALESCE(NEW.telefono_e164, '')), '');
+
+  IF TG_OP = 'UPDATE' THEN
+    v_old_tel := NULLIF(btrim(COALESCE(OLD.telefono, '')), '');
+    v_old_tel_e164 := NULLIF(btrim(COALESCE(OLD.telefono_e164, '')), '');
+    v_tel_changed := v_tel IS DISTINCT FROM v_old_tel;
+    v_tel_e164_changed := v_tel_e164 IS DISTINCT FROM v_old_tel_e164;
+
+    IF v_tel_changed AND NOT v_tel_e164_changed THEN
+      v_resolved_tel := v_tel;
+    ELSIF v_tel_e164_changed AND NOT v_tel_changed THEN
+      v_resolved_tel := v_tel_e164;
+    ELSIF v_tel_changed AND v_tel_e164_changed THEN
+      v_resolved_tel := COALESCE(v_tel_e164, v_tel);
+    ELSE
+      v_resolved_tel := COALESCE(v_tel_e164, v_tel, v_old_tel_e164, v_old_tel);
+    END IF;
+  ELSE
+    v_resolved_tel := COALESCE(v_tel_e164, v_tel);
+  END IF;
+
+  NEW.telefono := v_resolved_tel;
+  NEW.telefono_e164 := v_resolved_tel;
+
+  v_notas := NULLIF(btrim(COALESCE(NEW.notas, '')), '');
+  v_notes := NULLIF(btrim(COALESCE(NEW.notes, '')), '');
+
+  IF TG_OP = 'UPDATE' THEN
+    v_old_notas := NULLIF(btrim(COALESCE(OLD.notas, '')), '');
+    v_old_notes := NULLIF(btrim(COALESCE(OLD.notes, '')), '');
+    v_notas_changed := v_notas IS DISTINCT FROM v_old_notas;
+    v_notes_changed := v_notes IS DISTINCT FROM v_old_notes;
+
+    IF v_notas_changed AND NOT v_notes_changed THEN
+      v_resolved_notas := v_notas;
+    ELSIF v_notes_changed AND NOT v_notas_changed THEN
+      v_resolved_notas := v_notes;
+    ELSIF v_notas_changed AND v_notes_changed THEN
+      v_resolved_notas := COALESCE(v_notas, v_notes);
+    ELSE
+      v_resolved_notas := COALESCE(v_notas, v_notes, v_old_notas, v_old_notes);
+    END IF;
+  ELSE
+    v_resolved_notas := COALESCE(v_notas, v_notes);
+  END IF;
+
+  NEW.notas := v_resolved_notas;
+  NEW.notes := v_resolved_notas;
+
+  RETURN NEW;
+END;
+$$;
 
 
 --
@@ -14412,6 +14725,155 @@ $$;
 --
 
 COMMENT ON FUNCTION public.tg_conversaciones_auto_tarjeta() IS 'Crea una tarjeta de lead cuando inicia una conversación con interacción entrante.';
+
+
+--
+-- Name: tg_cuentas_codigo_y_sync(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.tg_cuentas_codigo_y_sync() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+DECLARE
+  v_email text;
+  v_correo text;
+  v_old_email text;
+  v_old_correo text;
+  v_email_changed boolean := false;
+  v_correo_changed boolean := false;
+  v_resolved_email text;
+
+  v_web text;
+  v_sitio text;
+  v_old_web text;
+  v_old_sitio text;
+  v_web_changed boolean := false;
+  v_sitio_changed boolean := false;
+  v_resolved_web text;
+
+  v_tipo_industria text;
+  v_industria text;
+  v_old_tipo_industria text;
+  v_old_industria text;
+  v_tipo_industria_changed boolean := false;
+  v_industria_changed boolean := false;
+  v_resolved_industria text;
+BEGIN
+  IF TG_OP = 'INSERT' THEN
+    NEW.codigo_cuenta := public.gen_codigo_cuenta(NEW.organizacion_id);
+  ELSIF COALESCE(NULLIF(btrim(NEW.codigo_cuenta), ''), NULL) IS NULL THEN
+    NEW.codigo_cuenta := public.gen_codigo_cuenta(NEW.organizacion_id);
+  ELSE
+    NEW.codigo_cuenta := btrim(NEW.codigo_cuenta);
+  END IF;
+
+  IF NEW.fecha_incorporacion IS NULL THEN
+    NEW.fecha_incorporacion := now();
+  END IF;
+
+  v_email := NULLIF(btrim(COALESCE(NEW.email, '')), '');
+  v_correo := NULLIF(btrim(COALESCE(NEW.correo, '')), '');
+
+  IF TG_OP = 'UPDATE' THEN
+    v_old_email := NULLIF(btrim(COALESCE(OLD.email, '')), '');
+    v_old_correo := NULLIF(btrim(COALESCE(OLD.correo, '')), '');
+    v_email_changed := v_email IS DISTINCT FROM v_old_email;
+    v_correo_changed := v_correo IS DISTINCT FROM v_old_correo;
+
+    IF v_email_changed AND NOT v_correo_changed THEN
+      v_resolved_email := v_email;
+    ELSIF v_correo_changed AND NOT v_email_changed THEN
+      v_resolved_email := v_correo;
+    ELSIF v_email_changed AND v_correo_changed THEN
+      v_resolved_email := COALESCE(v_email, v_correo);
+    ELSE
+      v_resolved_email := COALESCE(v_email, v_correo, v_old_email, v_old_correo);
+    END IF;
+  ELSE
+    v_resolved_email := COALESCE(v_email, v_correo);
+  END IF;
+
+  NEW.email := v_resolved_email;
+  NEW.correo := v_resolved_email;
+
+  v_web := NULLIF(btrim(COALESCE(NEW.website, '')), '');
+  v_sitio := NULLIF(btrim(COALESCE(NEW.sitio_web, '')), '');
+
+  IF TG_OP = 'UPDATE' THEN
+    v_old_web := NULLIF(btrim(COALESCE(OLD.website, '')), '');
+    v_old_sitio := NULLIF(btrim(COALESCE(OLD.sitio_web, '')), '');
+    v_web_changed := v_web IS DISTINCT FROM v_old_web;
+    v_sitio_changed := v_sitio IS DISTINCT FROM v_old_sitio;
+
+    IF v_web_changed AND NOT v_sitio_changed THEN
+      v_resolved_web := v_web;
+    ELSIF v_sitio_changed AND NOT v_web_changed THEN
+      v_resolved_web := v_sitio;
+    ELSIF v_web_changed AND v_sitio_changed THEN
+      v_resolved_web := COALESCE(v_web, v_sitio);
+    ELSE
+      v_resolved_web := COALESCE(v_web, v_sitio, v_old_web, v_old_sitio);
+    END IF;
+  ELSE
+    v_resolved_web := COALESCE(v_web, v_sitio);
+  END IF;
+
+  NEW.website := v_resolved_web;
+  NEW.sitio_web := v_resolved_web;
+
+  v_tipo_industria := NULLIF(btrim(COALESCE(NEW.tipo_industria, '')), '');
+  v_industria := NULLIF(btrim(COALESCE(NEW.industria, '')), '');
+
+  IF TG_OP = 'UPDATE' THEN
+    v_old_tipo_industria := NULLIF(btrim(COALESCE(OLD.tipo_industria, '')), '');
+    v_old_industria := NULLIF(btrim(COALESCE(OLD.industria, '')), '');
+    v_tipo_industria_changed := v_tipo_industria IS DISTINCT FROM v_old_tipo_industria;
+    v_industria_changed := v_industria IS DISTINCT FROM v_old_industria;
+
+    IF v_tipo_industria_changed AND NOT v_industria_changed THEN
+      v_resolved_industria := v_tipo_industria;
+    ELSIF v_industria_changed AND NOT v_tipo_industria_changed THEN
+      v_resolved_industria := v_industria;
+    ELSIF v_tipo_industria_changed AND v_industria_changed THEN
+      v_resolved_industria := COALESCE(v_tipo_industria, v_industria);
+    ELSE
+      v_resolved_industria := COALESCE(v_tipo_industria, v_industria, v_old_tipo_industria, v_old_industria);
+    END IF;
+  ELSE
+    v_resolved_industria := COALESCE(v_tipo_industria, v_industria);
+  END IF;
+
+  NEW.tipo_industria := v_resolved_industria;
+  NEW.industria := v_resolved_industria;
+
+  RETURN NEW;
+END;
+$$;
+
+
+--
+-- Name: tg_personas_derive_nombre_completo(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.tg_personas_derive_nombre_completo() RETURNS trigger
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+BEGIN
+    NEW.nombre := btrim(NEW.nombre);
+    NEW.apellido_paterno := NULLIF(btrim(COALESCE(NEW.apellido_paterno, '')), '');
+    NEW.apellido_materno := NULLIF(btrim(COALESCE(NEW.apellido_materno, '')), '');
+    NEW.nombre_completo := btrim(concat_ws(' ', NEW.nombre, NEW.apellido_paterno, NEW.apellido_materno));
+    RETURN NEW;
+END;
+$$;
+
+
+--
+-- Name: FUNCTION tg_personas_derive_nombre_completo(); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.tg_personas_derive_nombre_completo() IS 'Mantiene nombre_completo como campo materializado a partir de nombre y apellidos.';
 
 
 --
@@ -15009,6 +15471,260 @@ $$;
 --
 
 COMMENT ON FUNCTION public.tg_set_organizacion_id() IS 'Asigna organizacion_id primero desde metadata cuando existe, luego desde auth.uid().';
+
+
+--
+-- Name: tg_sync_contactos_to_personas(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.tg_sync_contactos_to_personas() RETURNS trigger
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+DECLARE
+    v_persona_id uuid;
+    v_nombre text;
+    v_correo text;
+    v_telefono text;
+    v_estado text;
+    v_origen text;
+    v_notas text;
+    v_legacy_tipo text;
+    v_metadata jsonb;
+    v_role text;
+BEGIN
+    IF TG_OP = 'DELETE' THEN
+        SELECT p.id
+        INTO v_persona_id
+        FROM public.personas p
+        WHERE p.metadata->>'legacy_contacto_id' = OLD.id::text
+        LIMIT 1;
+
+        IF v_persona_id IS NOT NULL THEN
+            DELETE FROM public.cuenta_personas
+            WHERE persona_id = v_persona_id;
+
+            DELETE FROM public.personas
+            WHERE id = v_persona_id;
+        END IF;
+
+        RETURN OLD;
+    END IF;
+
+    v_nombre := btrim(COALESCE(
+        NULLIF(NEW.nombre_completo, ''),
+        NULLIF(concat_ws(' ', NEW.nombre_nombres, NEW.apellido_paterno, NEW.apellido_materno), ''),
+        NULLIF(NEW.company_name, ''),
+        NULLIF(NEW.razon_social, ''),
+        'Contacto'
+    ));
+
+    v_correo := COALESCE(NULLIF(lower(btrim(NEW.correo)), ''), NULLIF(lower(btrim(NEW.email)), ''));
+    v_telefono := COALESCE(NULLIF(btrim(NEW.telefono_e164), ''), NULLIF(btrim(NEW.telefono), ''));
+    v_estado := CASE
+        WHEN lower(COALESCE(NEW.estado, '')) IN ('lead', 'activo', 'inactivo', 'bloqueado')
+            THEN lower(NEW.estado)
+        ELSE 'lead'
+    END;
+    v_origen := NULLIF(btrim(NEW.origen), '');
+    v_notas := NULLIF(btrim(concat_ws(' | ', NEW.notas, NEW.notes, NEW.necesidad_proposito)), '');
+    v_legacy_tipo := CASE
+        WHEN lower(COALESCE(NEW.persona_fisica_moral, '')) = 'fisica' THEN 'persona_fisica'
+        WHEN COALESCE(
+            NULLIF(btrim(NEW.company_name), ''),
+            NULLIF(btrim(NEW.razon_social), ''),
+            NULLIF(btrim(NEW.rfc), ''),
+            NULLIF(btrim(NEW.email_facturacion), ''),
+            NULLIF(btrim(NEW.website), '')
+        ) IS NOT NULL THEN 'empresa'
+        ELSE 'persona'
+    END;
+
+    v_metadata := jsonb_strip_nulls(
+        jsonb_build_object(
+            'legacy_contacto_id', NEW.id::text,
+            'legacy_contacto_codigo', NEW.codigo_contacto,
+            'legacy_contacto_tipo', v_legacy_tipo,
+            'legacy_persona_fisica_moral', NEW.persona_fisica_moral,
+            'legacy_company_name', NEW.company_name,
+            'legacy_razon_social', NEW.razon_social,
+            'legacy_rfc', NEW.rfc,
+            'legacy_uso_cfdi', NEW.uso_cfdi,
+            'legacy_metodo_pago', NEW.metodo_pago,
+            'legacy_forma_pago', NEW.forma_pago,
+            'legacy_email_facturacion', NEW.email_facturacion,
+            'legacy_tipo_industria', NEW.tipo_industria,
+            'legacy_tamano', NEW.tamano,
+            'legacy_codigo_cuenta', (SELECT codigo_cuenta FROM public.cuentas WHERE id = NEW.cuenta_id LIMIT 1),
+            'legacy_cuenta_id', NEW.cuenta_id::text,
+            'legacy_contacto_datos', NEW.contacto_datos,
+            'legacy_necesidad_proposito', NEW.necesidad_proposito,
+            'legacy_captura_estado', NEW.captura_estado,
+            'legacy_direccion', jsonb_strip_nulls(jsonb_build_object(
+                'tipo_vialidad', NEW.tipo_vialidad,
+                'nombre_vialidad', NEW.nombre_vialidad,
+                'numero_exterior', NEW.numero_exterior,
+                'letra_exterior', NEW.letra_exterior,
+                'edificio', NEW.edificio,
+                'edificio_piso', NEW.edificio_piso,
+                'numero_interior', NEW.numero_interior,
+                'letra_interior', NEW.letra_interior,
+                'tipo_asentamiento', NEW.tipo_asentamiento,
+                'nombre_asentamiento', NEW.nombre_asentamiento,
+                'tipo_centro_comercial', NEW.tipo_centro_comercial,
+                'corredor_industrial', NEW.corredor_industrial,
+                'numero_local', NEW.numero_local,
+                'codigo_postal', NEW.codigo_postal,
+                'clave_entidad', NEW.clave_entidad,
+                'entidad', NEW.entidad,
+                'clave_municipio', NEW.clave_municipio,
+                'municipio', NEW.municipio,
+                'clave_localidad', NEW.clave_localidad,
+                'localidad', NEW.localidad,
+                'pais', NEW.pais,
+                'latitud', NEW.latitud,
+                'longitud', NEW.longitud
+            ))
+        )
+    );
+
+    SELECT p.id
+    INTO v_persona_id
+    FROM public.personas p
+    WHERE p.metadata->>'legacy_contacto_id' = NEW.id::text
+    LIMIT 1;
+
+    IF v_persona_id IS NULL THEN
+        INSERT INTO public.personas (
+            id,
+            organizacion_id,
+            nombre,
+            apellido_paterno,
+            apellido_materno,
+            nombre_completo,
+            correo_principal,
+            telefono_principal_e164,
+            puesto,
+            area,
+            rol_decision,
+            estado,
+            origen,
+            notas,
+            metadata,
+            propietario_usuario_id,
+            creado_en,
+            actualizado_en
+        ) VALUES (
+            gen_random_uuid(),
+            NEW.organizacion_id,
+            v_nombre,
+            NULLIF(btrim(NEW.apellido_paterno), ''),
+            NULLIF(btrim(NEW.apellido_materno), ''),
+            v_nombre,
+            v_correo,
+            v_telefono,
+            NULLIF(btrim(NEW.puesto), ''),
+            NULLIF(btrim(NEW.area), ''),
+            NULLIF(btrim(NEW.rol_decision), ''),
+            v_estado,
+            v_origen,
+            v_notas,
+            v_metadata,
+            NEW.propietario_usuario_id,
+            COALESCE(NEW.fecha_incorporacion, NEW.creado_en, now()),
+            now()
+        )
+        RETURNING id INTO v_persona_id;
+    ELSE
+        UPDATE public.personas
+        SET
+            nombre = v_nombre,
+            apellido_paterno = NULLIF(btrim(NEW.apellido_paterno), ''),
+            apellido_materno = NULLIF(btrim(NEW.apellido_materno), ''),
+            nombre_completo = v_nombre,
+            correo_principal = v_correo,
+            telefono_principal_e164 = v_telefono,
+            puesto = NULLIF(btrim(NEW.puesto), ''),
+            area = NULLIF(btrim(NEW.area), ''),
+            rol_decision = NULLIF(btrim(NEW.rol_decision), ''),
+            estado = v_estado,
+            origen = v_origen,
+            notas = v_notas,
+            metadata = v_metadata,
+            propietario_usuario_id = NEW.propietario_usuario_id,
+            actualizado_en = now()
+        WHERE id = v_persona_id;
+    END IF;
+
+    IF NEW.cuenta_id IS NOT NULL THEN
+        v_role := CASE
+            WHEN lower(COALESCE(NEW.persona_fisica_moral, '')) = 'fisica' THEN 'dueno'
+            ELSE 'contacto_principal'
+        END;
+
+        INSERT INTO public.cuenta_personas (
+            id,
+            organizacion_id,
+            cuenta_id,
+            persona_id,
+            rol_en_cuenta,
+            puesto,
+            es_contacto_principal,
+            es_contacto_facturacion,
+            es_representante_legal,
+            activo,
+            fecha_inicio,
+            notas,
+            metadata,
+            creado_en,
+            actualizado_en
+        ) VALUES (
+            gen_random_uuid(),
+            NEW.organizacion_id,
+            NEW.cuenta_id,
+            v_persona_id,
+            v_role,
+            NULLIF(btrim(NEW.puesto), ''),
+            true,
+            false,
+            lower(COALESCE(NEW.persona_fisica_moral, '')) = 'fisica',
+            true,
+            COALESCE(NEW.fecha_incorporacion::date, NEW.creado_en::date, current_date),
+            v_notas,
+            jsonb_strip_nulls(jsonb_build_object(
+                'legacy_contacto_id', NEW.id::text,
+                'legacy_contacto_codigo', NEW.codigo_contacto
+            )),
+            now(),
+            now()
+        )
+        ON CONFLICT (cuenta_id, persona_id, rol_en_cuenta)
+        DO UPDATE SET
+            puesto = EXCLUDED.puesto,
+            es_contacto_principal = EXCLUDED.es_contacto_principal,
+            es_contacto_facturacion = EXCLUDED.es_contacto_facturacion,
+            es_representante_legal = EXCLUDED.es_representante_legal,
+            activo = EXCLUDED.activo,
+            fecha_inicio = COALESCE(public.cuenta_personas.fecha_inicio, EXCLUDED.fecha_inicio),
+            notas = EXCLUDED.notas,
+            metadata = EXCLUDED.metadata,
+            actualizado_en = now();
+    ELSE
+        DELETE FROM public.cuenta_personas
+        WHERE persona_id = v_persona_id
+          AND metadata->>'legacy_contacto_id' = NEW.id::text;
+    END IF;
+
+    RETURN NEW;
+END;
+$$;
+
+
+--
+-- Name: FUNCTION tg_sync_contactos_to_personas(); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.tg_sync_contactos_to_personas() IS 'Sincroniza el legacy contactos con personas y cuenta_personas durante la transición.';
 
 
 --
@@ -15774,66 +16490,75 @@ CREATE FUNCTION realtime.is_visible_through_filters(columns realtime.wal_column[
 -- Name: list_changes(name, name, integer, integer); Type: FUNCTION; Schema: realtime; Owner: -
 --
 
-CREATE FUNCTION realtime.list_changes(publication name, slot_name name, max_changes integer, max_record_bytes integer) RETURNS SETOF realtime.wal_rls
+CREATE FUNCTION realtime.list_changes(publication name, slot_name name, max_changes integer, max_record_bytes integer) RETURNS TABLE(wal jsonb, is_rls_enabled boolean, subscription_ids uuid[], errors text[], slot_changes_count bigint)
     LANGUAGE sql
     SET log_min_messages TO 'fatal'
     AS $$
-      with pub as (
-        select
-          concat_ws(
-            ',',
-            case when bool_or(pubinsert) then 'insert' else null end,
-            case when bool_or(pubupdate) then 'update' else null end,
-            case when bool_or(pubdelete) then 'delete' else null end
-          ) as w2j_actions,
-          coalesce(
-            string_agg(
-              realtime.quote_wal2json(format('%I.%I', schemaname, tablename)::regclass),
-              ','
-            ) filter (where ppt.tablename is not null and ppt.tablename not like '% %'),
-            ''
-          ) w2j_add_tables
-        from
-          pg_publication pp
-          left join pg_publication_tables ppt
-            on pp.pubname = ppt.pubname
-        where
-          pp.pubname = publication
-        group by
-          pp.pubname
-        limit 1
-      ),
-      w2j as (
-        select
-          x.*, pub.w2j_add_tables
-        from
-          pub,
-          pg_logical_slot_get_changes(
-            slot_name, null, max_changes,
-            'include-pk', 'true',
-            'include-transaction', 'false',
-            'include-timestamp', 'true',
-            'include-type-oids', 'true',
-            'format-version', '2',
-            'actions', pub.w2j_actions,
-            'add-tables', pub.w2j_add_tables
-          ) x
-      )
-      select
-        xyz.wal,
-        xyz.is_rls_enabled,
-        xyz.subscription_ids,
-        xyz.errors
-      from
-        w2j,
-        realtime.apply_rls(
-          wal := w2j.data::jsonb,
-          max_record_bytes := max_record_bytes
-        ) xyz(wal, is_rls_enabled, subscription_ids, errors)
-      where
-        w2j.w2j_add_tables <> ''
-        and xyz.subscription_ids[1] is not null
-    $$;
+  WITH pub AS (
+    SELECT
+      concat_ws(
+        ',',
+        CASE WHEN bool_or(pubinsert) THEN 'insert' ELSE NULL END,
+        CASE WHEN bool_or(pubupdate) THEN 'update' ELSE NULL END,
+        CASE WHEN bool_or(pubdelete) THEN 'delete' ELSE NULL END
+      ) AS w2j_actions,
+      coalesce(
+        string_agg(
+          realtime.quote_wal2json(format('%I.%I', schemaname, tablename)::regclass),
+          ','
+        ) filter (WHERE ppt.tablename IS NOT NULL AND ppt.tablename NOT LIKE '% %'),
+        ''
+      ) AS w2j_add_tables
+    FROM pg_publication pp
+    LEFT JOIN pg_publication_tables ppt ON pp.pubname = ppt.pubname
+    WHERE pp.pubname = publication
+    GROUP BY pp.pubname
+    LIMIT 1
+  ),
+  -- MATERIALIZED ensures pg_logical_slot_get_changes is called exactly once
+  w2j AS MATERIALIZED (
+    SELECT x.*, pub.w2j_add_tables
+    FROM pub,
+         pg_logical_slot_get_changes(
+           slot_name, null, max_changes,
+           'include-pk', 'true',
+           'include-transaction', 'false',
+           'include-timestamp', 'true',
+           'include-type-oids', 'true',
+           'format-version', '2',
+           'actions', pub.w2j_actions,
+           'add-tables', pub.w2j_add_tables
+         ) x
+  ),
+  -- Count raw slot entries before apply_rls/subscription filter
+  slot_count AS (
+    SELECT count(*)::bigint AS cnt
+    FROM w2j
+    WHERE w2j.w2j_add_tables <> ''
+  ),
+  -- Apply RLS and filter as before
+  rls_filtered AS (
+    SELECT xyz.wal, xyz.is_rls_enabled, xyz.subscription_ids, xyz.errors
+    FROM w2j,
+         realtime.apply_rls(
+           wal := w2j.data::jsonb,
+           max_record_bytes := max_record_bytes
+         ) xyz(wal, is_rls_enabled, subscription_ids, errors)
+    WHERE w2j.w2j_add_tables <> ''
+      AND xyz.subscription_ids[1] IS NOT NULL
+  )
+  -- Real rows with slot count attached
+  SELECT rf.wal, rf.is_rls_enabled, rf.subscription_ids, rf.errors, sc.cnt
+  FROM rls_filtered rf, slot_count sc
+
+  UNION ALL
+
+  -- Sentinel row: always returned when no real rows exist so Elixir can
+  -- always read slot_changes_count. Identified by wal IS NULL.
+  SELECT null, null, null, null, sc.cnt
+  FROM slot_count sc
+  WHERE NOT EXISTS (SELECT 1 FROM rls_filtered)
+$$;
 
 
 --
@@ -18382,8 +19107,57 @@ CREATE TABLE public.contactos (
     captura_estado text DEFAULT 'incompleto'::text NOT NULL,
     organizacion_id uuid NOT NULL,
     cuenta_id uuid,
+    codigo_contacto text NOT NULL,
+    nombre_nombres text,
+    apellido_paterno text,
+    apellido_materno text,
+    persona_fisica_moral text,
+    razon_social text,
+    rfc text,
+    uso_cfdi text,
+    metodo_pago text,
+    forma_pago text,
+    email_facturacion text,
+    tipo_industria text,
+    tamano text,
+    puesto text,
+    area text,
+    rol_decision text,
+    notas text,
+    tipo_vialidad text,
+    nombre_vialidad text,
+    numero_exterior text,
+    letra_exterior text,
+    edificio text,
+    edificio_piso text,
+    numero_interior text,
+    letra_interior text,
+    tipo_asentamiento text,
+    nombre_asentamiento text,
+    tipo_centro_comercial text,
+    corredor_industrial text,
+    numero_local text,
+    codigo_postal text,
+    clave_entidad text,
+    entidad text,
+    clave_municipio text,
+    municipio text,
+    clave_localidad text,
+    localidad text,
+    pais text,
+    telefono text,
+    email text,
+    website text,
+    tipo_establecimiento text,
+    latitud numeric(10,7),
+    longitud numeric(10,7),
+    fecha_incorporacion timestamp with time zone DEFAULT now(),
     CONSTRAINT contactos_captura_estado_check CHECK ((captura_estado = ANY (ARRAY['incompleto'::text, 'completo'::text]))),
-    CONSTRAINT contactos_estado_check CHECK ((estado = ANY (ARRAY['lead'::text, 'activo'::text, 'bloqueado'::text])))
+    CONSTRAINT contactos_codigo_contacto_formato_chk CHECK ((codigo_contacto ~ '^Con[0-9]+$'::text)),
+    CONSTRAINT contactos_estado_check CHECK ((estado = ANY (ARRAY['lead'::text, 'activo'::text, 'bloqueado'::text]))),
+    CONSTRAINT contactos_latitud_chk CHECK (((latitud IS NULL) OR ((latitud >= ('-90'::integer)::numeric) AND (latitud <= (90)::numeric)))),
+    CONSTRAINT contactos_longitud_chk CHECK (((longitud IS NULL) OR ((longitud >= ('-180'::integer)::numeric) AND (longitud <= (180)::numeric)))),
+    CONSTRAINT contactos_persona_fisica_moral_chk CHECK (((persona_fisica_moral IS NULL) OR (lower(persona_fisica_moral) = ANY (ARRAY['fisica'::text, 'moral'::text]))))
 );
 
 ALTER TABLE ONLY public.contactos FORCE ROW LEVEL SECURITY;
@@ -18581,6 +19355,66 @@ ALTER TABLE ONLY public.cotizaciones FORCE ROW LEVEL SECURITY;
 
 
 --
+-- Name: cuenta_direcciones; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.cuenta_direcciones (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    organizacion_id uuid NOT NULL,
+    cuenta_id uuid NOT NULL,
+    direccion_id uuid NOT NULL,
+    tipo_relacion text NOT NULL,
+    es_principal boolean DEFAULT false NOT NULL,
+    activo boolean DEFAULT true NOT NULL,
+    notas text,
+    metadata jsonb DEFAULT '{}'::jsonb NOT NULL,
+    creado_en timestamp with time zone DEFAULT now() NOT NULL,
+    actualizado_en timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT cuenta_direcciones_tipo_chk CHECK ((tipo_relacion = ANY (ARRAY['fiscal'::text, 'operativa'::text, 'envio'::text, 'sucursal'::text, 'historial'::text, 'otro'::text])))
+);
+
+
+--
+-- Name: TABLE cuenta_direcciones; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.cuenta_direcciones IS 'Pivote reutilizable para multiples direcciones por cuenta.';
+
+
+--
+-- Name: cuenta_personas; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.cuenta_personas (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    organizacion_id uuid NOT NULL,
+    cuenta_id uuid NOT NULL,
+    persona_id uuid NOT NULL,
+    rol_en_cuenta text NOT NULL,
+    rol_catalogo_id uuid,
+    puesto text,
+    es_contacto_principal boolean DEFAULT false NOT NULL,
+    es_contacto_facturacion boolean DEFAULT false NOT NULL,
+    es_representante_legal boolean DEFAULT false NOT NULL,
+    activo boolean DEFAULT true NOT NULL,
+    fecha_inicio date,
+    fecha_fin date,
+    notas text,
+    metadata jsonb DEFAULT '{}'::jsonb NOT NULL,
+    creado_en timestamp with time zone DEFAULT now() NOT NULL,
+    actualizado_en timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT cuenta_personas_fechas_chk CHECK (((fecha_fin IS NULL) OR (fecha_inicio IS NULL) OR (fecha_fin >= fecha_inicio)))
+);
+
+
+--
+-- Name: TABLE cuenta_personas; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.cuenta_personas IS 'Relacion flexible entre personas y cuentas.';
+
+
+--
 -- Name: cuentas; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -18599,7 +19433,47 @@ CREATE TABLE public.cuentas (
     propietario_usuario_id uuid,
     metadata jsonb DEFAULT '{}'::jsonb NOT NULL,
     creado_en timestamp with time zone DEFAULT now() NOT NULL,
-    actualizado_en timestamp with time zone DEFAULT now() NOT NULL
+    actualizado_en timestamp with time zone DEFAULT now() NOT NULL,
+    codigo_cuenta text NOT NULL,
+    razon_social text,
+    rfc text,
+    uso_cfdi text,
+    metodo_pago text,
+    forma_pago text,
+    email_facturacion text,
+    tipo_industria text,
+    notas text,
+    necesidad_proposito text,
+    tipo_vialidad text,
+    nombre_vialidad text,
+    numero_exterior text,
+    letra_exterior text,
+    edificio text,
+    edificio_piso text,
+    numero_interior text,
+    letra_interior text,
+    tipo_asentamiento text,
+    nombre_asentamiento text,
+    tipo_centro_comercial text,
+    corredor_industrial text,
+    numero_local text,
+    codigo_postal text,
+    clave_entidad text,
+    entidad text,
+    clave_municipio text,
+    municipio text,
+    clave_localidad text,
+    localidad text,
+    pais text,
+    email text,
+    website text,
+    tipo_establecimiento text,
+    latitud numeric(10,7),
+    longitud numeric(10,7),
+    fecha_incorporacion timestamp with time zone DEFAULT now(),
+    CONSTRAINT cuentas_codigo_cuenta_formato_chk CHECK ((codigo_cuenta ~ '^Emp[0-9]+$'::text)),
+    CONSTRAINT cuentas_latitud_chk CHECK (((latitud IS NULL) OR ((latitud >= ('-90'::integer)::numeric) AND (latitud <= (90)::numeric)))),
+    CONSTRAINT cuentas_longitud_chk CHECK (((longitud IS NULL) OR ((longitud >= ('-180'::integer)::numeric) AND (longitud <= (180)::numeric))))
 );
 
 ALTER TABLE ONLY public.cuentas FORCE ROW LEVEL SECURITY;
@@ -18648,6 +19522,64 @@ CREATE TABLE public.departamentos (
 );
 
 ALTER TABLE ONLY public.departamentos FORCE ROW LEVEL SECURITY;
+
+
+--
+-- Name: direcciones; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.direcciones (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    organizacion_id uuid NOT NULL,
+    tipo text NOT NULL,
+    pais text,
+    clave_entidad text,
+    entidad text,
+    clave_municipio text,
+    municipio text,
+    clave_localidad text,
+    localidad text,
+    tipo_vialidad text,
+    nombre_vialidad text,
+    numero_exterior text,
+    letra_exterior text,
+    edificio text,
+    edificio_piso text,
+    numero_interior text,
+    letra_interior text,
+    tipo_asentamiento text,
+    nombre_asentamiento text,
+    tipo_centro_comercial text,
+    corredor_industrial text,
+    numero_local text,
+    codigo_postal text,
+    latitud numeric(10,7),
+    longitud numeric(10,7),
+    metadata jsonb DEFAULT '{}'::jsonb NOT NULL,
+    creado_en timestamp with time zone DEFAULT now() NOT NULL,
+    actualizado_en timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT direcciones_tipo_chk CHECK ((tipo = ANY (ARRAY['fiscal'::text, 'operativa'::text, 'facturacion'::text, 'envio'::text, 'personal'::text, 'otro'::text])))
+);
+
+
+--
+-- Name: TABLE direcciones; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.direcciones IS 'Direcciones reutilizables para cuentas o personas.';
+
+
+--
+-- Name: disposable_email_domains; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.disposable_email_domains (
+    domain text NOT NULL,
+    activo boolean DEFAULT true NOT NULL,
+    creado_en timestamp with time zone DEFAULT now() NOT NULL,
+    actualizado_en timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT disposable_email_domains_domain_ck CHECK ((POSITION((' '::text) IN (domain)) = 0))
+);
 
 
 --
@@ -18786,6 +19718,78 @@ CREATE TABLE public.familias_productos (
     metadata jsonb DEFAULT '{}'::jsonb NOT NULL,
     creado_en timestamp with time zone DEFAULT now() NOT NULL,
     actualizado_en timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: geo_estados_mexico; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.geo_estados_mexico (
+    clave_entidad text NOT NULL,
+    pais_codigo text DEFAULT 'MX'::text NOT NULL,
+    nombre text NOT NULL,
+    activo boolean DEFAULT true NOT NULL,
+    creado_en timestamp with time zone DEFAULT now() NOT NULL,
+    actualizado_en timestamp with time zone DEFAULT now() NOT NULL,
+    geom public.geometry(MultiPolygon,4326),
+    centroid public.geometry(Point,4326),
+    CONSTRAINT geo_estados_mexico_clave_entidad_ck CHECK ((clave_entidad ~ '^[0-9]{2}$'::text))
+);
+
+
+--
+-- Name: geo_ladas_mexico; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.geo_ladas_mexico (
+    lada text NOT NULL,
+    clave_entidad text NOT NULL,
+    entidad text NOT NULL,
+    localidad text NOT NULL,
+    activo boolean DEFAULT true NOT NULL,
+    creado_en timestamp with time zone DEFAULT now() NOT NULL,
+    actualizado_en timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT geo_ladas_mexico_clave_entidad_ck CHECK ((clave_entidad ~ '^[0-9]{2}$'::text)),
+    CONSTRAINT geo_ladas_mexico_lada_ck CHECK ((lada ~ '^[0-9]{2,3}$'::text))
+);
+
+
+--
+-- Name: geo_municipios_mexico; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.geo_municipios_mexico (
+    clave_entidad text NOT NULL,
+    clave_municipio text NOT NULL,
+    cvegeo text,
+    nombre text NOT NULL,
+    activo boolean DEFAULT true NOT NULL,
+    creado_en timestamp with time zone DEFAULT now() NOT NULL,
+    actualizado_en timestamp with time zone DEFAULT now() NOT NULL,
+    geom public.geometry(MultiPolygon,4326),
+    centroid public.geometry(Point,4326),
+    CONSTRAINT geo_municipios_mexico_clave_municipio_ck CHECK ((clave_municipio ~ '^[0-9]{3}$'::text)),
+    CONSTRAINT geo_municipios_mexico_cvegeo_ck CHECK (((cvegeo IS NULL) OR (cvegeo ~ '^[0-9]{5}$'::text)))
+);
+
+
+--
+-- Name: geo_paises; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.geo_paises (
+    codigo_iso2 text NOT NULL,
+    codigo_iso3 text,
+    nombre text NOT NULL,
+    nombre_largo text,
+    activo boolean DEFAULT true NOT NULL,
+    creado_en timestamp with time zone DEFAULT now() NOT NULL,
+    actualizado_en timestamp with time zone DEFAULT now() NOT NULL,
+    geom public.geometry(MultiPolygon,4326),
+    centroid public.geometry(Point,4326),
+    CONSTRAINT geo_paises_codigo_iso2_ck CHECK ((codigo_iso2 ~ '^[A-Z]{2}$'::text)),
+    CONSTRAINT geo_paises_codigo_iso3_ck CHECK (((codigo_iso3 IS NULL) OR (codigo_iso3 ~ '^[A-Z]{3}$'::text)))
 );
 
 
@@ -19579,6 +20583,42 @@ ALTER TABLE ONLY public.permisos FORCE ROW LEVEL SECURITY;
 
 
 --
+-- Name: personas; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.personas (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    organizacion_id uuid NOT NULL,
+    nombre text NOT NULL,
+    apellido_paterno text,
+    apellido_materno text,
+    nombre_completo text NOT NULL,
+    correo_principal text,
+    telefono_principal_e164 text,
+    puesto text,
+    area text,
+    rol_decision text,
+    estado text DEFAULT 'activo'::text NOT NULL,
+    origen text,
+    notas text,
+    metadata jsonb DEFAULT '{}'::jsonb NOT NULL,
+    propietario_usuario_id uuid,
+    creado_en timestamp with time zone DEFAULT now() NOT NULL,
+    actualizado_en timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT personas_estado_chk CHECK ((estado = ANY (ARRAY['lead'::text, 'activo'::text, 'inactivo'::text, 'bloqueado'::text]))),
+    CONSTRAINT personas_nombre_chk CHECK ((btrim(nombre) <> ''::text)),
+    CONSTRAINT personas_nombre_completo_chk CHECK ((btrim(nombre_completo) <> ''::text))
+);
+
+
+--
+-- Name: TABLE personas; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.personas IS 'Entidad humana real dentro del CRM.';
+
+
+--
 -- Name: platform_admins; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -20258,7 +21298,20 @@ CREATE TABLE public.prospeccion_prospectos (
     email_lookup_details jsonb DEFAULT '{}'::jsonb NOT NULL,
     email_quality_tier text,
     email_risk_score integer,
-    email_recommendation text
+    email_recommendation text,
+    stage text,
+    busqueda_ref text,
+    query_sort text,
+    website_lookup_status text DEFAULT 'pendiente'::text NOT NULL,
+    website_lookup_error text,
+    website_lookup_checked_en timestamp with time zone,
+    website_http_status integer,
+    website_final_url text,
+    website_dns_ok boolean,
+    website_reachable boolean,
+    website_functional boolean,
+    website_tls_ok boolean,
+    email_domain_relation text
 );
 
 ALTER TABLE ONLY public.prospeccion_prospectos FORCE ROW LEVEL SECURITY;
@@ -23028,6 +24081,22 @@ ALTER TABLE ONLY public.cotizaciones
 
 
 --
+-- Name: cuenta_direcciones cuenta_direcciones_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.cuenta_direcciones
+    ADD CONSTRAINT cuenta_direcciones_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: cuenta_personas cuenta_personas_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.cuenta_personas
+    ADD CONSTRAINT cuenta_personas_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: cuentas cuentas_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -23065,6 +24134,22 @@ ALTER TABLE ONLY public.departamentos
 
 ALTER TABLE ONLY public.departamentos
     ADD CONSTRAINT departments_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: direcciones direcciones_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.direcciones
+    ADD CONSTRAINT direcciones_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: disposable_email_domains disposable_email_domains_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.disposable_email_domains
+    ADD CONSTRAINT disposable_email_domains_pkey PRIMARY KEY (domain);
 
 
 --
@@ -23137,6 +24222,38 @@ ALTER TABLE ONLY public.eventos_auditoria
 
 ALTER TABLE ONLY public.familias_productos
     ADD CONSTRAINT familias_productos_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: geo_estados_mexico geo_estados_mexico_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.geo_estados_mexico
+    ADD CONSTRAINT geo_estados_mexico_pkey PRIMARY KEY (clave_entidad);
+
+
+--
+-- Name: geo_ladas_mexico geo_ladas_mexico_pk; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.geo_ladas_mexico
+    ADD CONSTRAINT geo_ladas_mexico_pk PRIMARY KEY (lada, clave_entidad, localidad);
+
+
+--
+-- Name: geo_municipios_mexico geo_municipios_mexico_pk; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.geo_municipios_mexico
+    ADD CONSTRAINT geo_municipios_mexico_pk PRIMARY KEY (clave_entidad, clave_municipio);
+
+
+--
+-- Name: geo_paises geo_paises_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.geo_paises
+    ADD CONSTRAINT geo_paises_pkey PRIMARY KEY (codigo_iso2);
 
 
 --
@@ -23313,6 +24430,14 @@ ALTER TABLE ONLY public.panel_email_templates
 
 ALTER TABLE ONLY public.permisos
     ADD CONSTRAINT permissions_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: personas personas_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.personas
+    ADD CONSTRAINT personas_pkey PRIMARY KEY (id);
 
 
 --
@@ -25030,6 +26155,27 @@ CREATE INDEX contactos_datos_gin ON public.contactos USING gin (contacto_datos);
 
 
 --
+-- Name: contactos_org_codigo_contacto_uidx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX contactos_org_codigo_contacto_uidx ON public.contactos USING btree (organizacion_id, codigo_contacto) WHERE ((codigo_contacto IS NOT NULL) AND (btrim(codigo_contacto) <> ''::text));
+
+
+--
+-- Name: contactos_org_email_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX contactos_org_email_idx ON public.contactos USING btree (organizacion_id, lower(email)) WHERE ((email IS NOT NULL) AND (btrim(email) <> ''::text));
+
+
+--
+-- Name: contactos_org_geo_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX contactos_org_geo_idx ON public.contactos USING btree (organizacion_id, clave_entidad, clave_municipio, pais);
+
+
+--
 -- Name: contactos_org_id_id_key; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -25037,10 +26183,31 @@ CREATE UNIQUE INDEX contactos_org_id_id_key ON public.contactos USING btree (org
 
 
 --
+-- Name: contactos_org_rfc_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX contactos_org_rfc_idx ON public.contactos USING btree (organizacion_id, upper(rfc)) WHERE ((rfc IS NOT NULL) AND (btrim(rfc) <> ''::text));
+
+
+--
+-- Name: contactos_org_telefono_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX contactos_org_telefono_idx ON public.contactos USING btree (organizacion_id, telefono) WHERE ((telefono IS NOT NULL) AND (btrim(telefono) <> ''::text));
+
+
+--
 -- Name: contactos_organizacion_id_idx; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX contactos_organizacion_id_idx ON public.contactos USING btree (organizacion_id);
+
+
+--
+-- Name: conversaciones_org_contacto_canal_ultimo_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX conversaciones_org_contacto_canal_ultimo_idx ON public.conversaciones USING btree (organizacion_id, contacto_id, canal, ultimo_mensaje_en DESC);
 
 
 --
@@ -25079,10 +26246,87 @@ CREATE UNIQUE INDEX cotizaciones_org_id_id_key ON public.cotizaciones USING btre
 
 
 --
+-- Name: cuenta_direcciones_cuenta_direccion_tipo_uidx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX cuenta_direcciones_cuenta_direccion_tipo_uidx ON public.cuenta_direcciones USING btree (cuenta_id, direccion_id, tipo_relacion);
+
+
+--
+-- Name: cuenta_direcciones_cuenta_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX cuenta_direcciones_cuenta_idx ON public.cuenta_direcciones USING btree (organizacion_id, cuenta_id);
+
+
+--
+-- Name: cuenta_direcciones_direccion_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX cuenta_direcciones_direccion_idx ON public.cuenta_direcciones USING btree (organizacion_id, direccion_id);
+
+
+--
+-- Name: cuenta_direcciones_org_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX cuenta_direcciones_org_idx ON public.cuenta_direcciones USING btree (organizacion_id);
+
+
+--
+-- Name: cuenta_personas_cuenta_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX cuenta_personas_cuenta_idx ON public.cuenta_personas USING btree (organizacion_id, cuenta_id);
+
+
+--
+-- Name: cuenta_personas_cuenta_persona_rol_uidx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX cuenta_personas_cuenta_persona_rol_uidx ON public.cuenta_personas USING btree (cuenta_id, persona_id, rol_en_cuenta);
+
+
+--
+-- Name: cuenta_personas_org_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX cuenta_personas_org_idx ON public.cuenta_personas USING btree (organizacion_id);
+
+
+--
+-- Name: cuenta_personas_persona_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX cuenta_personas_persona_idx ON public.cuenta_personas USING btree (organizacion_id, persona_id);
+
+
+--
+-- Name: cuentas_org_codigo_cuenta_uidx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX cuentas_org_codigo_cuenta_uidx ON public.cuentas USING btree (organizacion_id, codigo_cuenta) WHERE ((codigo_cuenta IS NOT NULL) AND (btrim(codigo_cuenta) <> ''::text));
+
+
+--
+-- Name: cuentas_org_email_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX cuentas_org_email_idx ON public.cuentas USING btree (organizacion_id, lower(email)) WHERE ((email IS NOT NULL) AND (btrim(email) <> ''::text));
+
+
+--
 -- Name: cuentas_org_id_id_key; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE UNIQUE INDEX cuentas_org_id_id_key ON public.cuentas USING btree (organizacion_id, id);
+
+
+--
+-- Name: cuentas_org_rfc_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX cuentas_org_rfc_idx ON public.cuentas USING btree (organizacion_id, upper(rfc)) WHERE ((rfc IS NOT NULL) AND (btrim(rfc) <> ''::text));
 
 
 --
@@ -25114,6 +26358,34 @@ CREATE UNIQUE INDEX departamentos_org_id_id_key ON public.departamentos USING bt
 
 
 --
+-- Name: direcciones_org_cp_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX direcciones_org_cp_idx ON public.direcciones USING btree (organizacion_id, codigo_postal) WHERE ((codigo_postal IS NOT NULL) AND (btrim(codigo_postal) <> ''::text));
+
+
+--
+-- Name: direcciones_org_id_id_key; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX direcciones_org_id_id_key ON public.direcciones USING btree (organizacion_id, id);
+
+
+--
+-- Name: direcciones_org_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX direcciones_org_idx ON public.direcciones USING btree (organizacion_id);
+
+
+--
+-- Name: direcciones_org_tipo_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX direcciones_org_tipo_idx ON public.direcciones USING btree (organizacion_id, tipo);
+
+
+--
 -- Name: etapas_pipeline_org_id_id_key; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -25132,6 +26404,104 @@ CREATE INDEX etapas_pipeline_org_idx ON public.etapas_pipeline USING btree (orga
 --
 
 CREATE UNIQUE INDEX familias_productos_unq_org_linea_nombre ON public.familias_productos USING btree (organizacion_id, linea_id, lower(nombre));
+
+
+--
+-- Name: geo_estados_mexico_centroid_gix; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX geo_estados_mexico_centroid_gix ON public.geo_estados_mexico USING gist (centroid);
+
+
+--
+-- Name: geo_estados_mexico_geom_gix; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX geo_estados_mexico_geom_gix ON public.geo_estados_mexico USING gist (geom);
+
+
+--
+-- Name: geo_estados_mexico_nombre_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX geo_estados_mexico_nombre_idx ON public.geo_estados_mexico USING btree (nombre);
+
+
+--
+-- Name: geo_ladas_mexico_entidad_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX geo_ladas_mexico_entidad_idx ON public.geo_ladas_mexico USING btree (clave_entidad, entidad);
+
+
+--
+-- Name: geo_ladas_mexico_lada_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX geo_ladas_mexico_lada_idx ON public.geo_ladas_mexico USING btree (lada);
+
+
+--
+-- Name: geo_ladas_mexico_localidad_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX geo_ladas_mexico_localidad_idx ON public.geo_ladas_mexico USING btree (localidad);
+
+
+--
+-- Name: geo_municipios_mexico_centroid_gix; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX geo_municipios_mexico_centroid_gix ON public.geo_municipios_mexico USING gist (centroid);
+
+
+--
+-- Name: geo_municipios_mexico_cvegeo_uidx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX geo_municipios_mexico_cvegeo_uidx ON public.geo_municipios_mexico USING btree (cvegeo) WHERE (cvegeo IS NOT NULL);
+
+
+--
+-- Name: geo_municipios_mexico_estado_nombre_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX geo_municipios_mexico_estado_nombre_idx ON public.geo_municipios_mexico USING btree (clave_entidad, nombre);
+
+
+--
+-- Name: geo_municipios_mexico_geom_gix; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX geo_municipios_mexico_geom_gix ON public.geo_municipios_mexico USING gist (geom);
+
+
+--
+-- Name: geo_paises_centroid_gix; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX geo_paises_centroid_gix ON public.geo_paises USING gist (centroid);
+
+
+--
+-- Name: geo_paises_codigo_iso3_uidx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX geo_paises_codigo_iso3_uidx ON public.geo_paises USING btree (codigo_iso3) WHERE (codigo_iso3 IS NOT NULL);
+
+
+--
+-- Name: geo_paises_geom_gix; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX geo_paises_geom_gix ON public.geo_paises USING gist (geom);
+
+
+--
+-- Name: geo_paises_nombre_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX geo_paises_nombre_idx ON public.geo_paises USING btree (nombre);
 
 
 --
@@ -25639,6 +27009,13 @@ CREATE UNIQUE INDEX mensajes_org_id_id_key ON public.mensajes USING btree (organ
 
 
 --
+-- Name: mensajes_prospeccion_correo_reply_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX mensajes_prospeccion_correo_reply_idx ON public.mensajes USING btree (conversacion_id, creado_en) WHERE ((lower(COALESCE((datos ->> 'action'::text), ''::text)) = 'reply_inbound'::text) AND (lower(COALESCE((datos ->> 'source'::text), ''::text)) = 'prospeccion'::text) AND (lower(COALESCE((datos ->> 'channel'::text), ''::text)) = 'correo'::text));
+
+
+--
 -- Name: modelos_productos_unq_org_nombre; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -25811,6 +27188,41 @@ CREATE UNIQUE INDEX permisos_org_codigo_key ON public.permisos USING btree (orga
 --
 
 CREATE UNIQUE INDEX permisos_org_id_id_key ON public.permisos USING btree (organizacion_id, id);
+
+
+--
+-- Name: personas_org_email_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX personas_org_email_idx ON public.personas USING btree (organizacion_id, lower(correo_principal)) WHERE ((correo_principal IS NOT NULL) AND (btrim(correo_principal) <> ''::text));
+
+
+--
+-- Name: personas_org_id_id_key; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX personas_org_id_id_key ON public.personas USING btree (organizacion_id, id);
+
+
+--
+-- Name: personas_org_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX personas_org_idx ON public.personas USING btree (organizacion_id);
+
+
+--
+-- Name: personas_org_owner_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX personas_org_owner_idx ON public.personas USING btree (organizacion_id, propietario_usuario_id);
+
+
+--
+-- Name: personas_org_phone_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX personas_org_phone_idx ON public.personas USING btree (organizacion_id, telefono_principal_e164) WHERE ((telefono_principal_e164 IS NOT NULL) AND (btrim(telefono_principal_e164) <> ''::text));
 
 
 --
@@ -26143,6 +27555,13 @@ CREATE UNIQUE INDEX prospeccion_prospectos_denue_external_id_key ON public.prosp
 
 
 --
+-- Name: prospeccion_prospectos_email_domain_relation_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX prospeccion_prospectos_email_domain_relation_idx ON public.prospeccion_prospectos USING btree (email_domain_relation);
+
+
+--
 -- Name: prospeccion_prospectos_email_lookup_status_idx; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -26175,6 +27594,13 @@ CREATE UNIQUE INDEX prospeccion_prospectos_google_external_id_key ON public.pros
 --
 
 CREATE INDEX prospeccion_prospectos_org_actividad_idx ON public.prospeccion_prospectos USING btree (organizacion_id, actividad);
+
+
+--
+-- Name: prospeccion_prospectos_org_busqueda_ref_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX prospeccion_prospectos_org_busqueda_ref_idx ON public.prospeccion_prospectos USING btree (organizacion_id, busqueda_ref) WHERE (busqueda_ref IS NOT NULL);
 
 
 --
@@ -26213,10 +27639,38 @@ CREATE INDEX prospeccion_prospectos_org_query_expr_idx ON public.prospeccion_pro
 
 
 --
+-- Name: prospeccion_prospectos_org_query_sort_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX prospeccion_prospectos_org_query_sort_idx ON public.prospeccion_prospectos USING btree (organizacion_id, query_sort, actividad, id) WHERE (query_sort IS NOT NULL);
+
+
+--
+-- Name: prospeccion_prospectos_org_stage_creado_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX prospeccion_prospectos_org_stage_creado_idx ON public.prospeccion_prospectos USING btree (organizacion_id, stage, creado_en DESC) WHERE (stage IS NOT NULL);
+
+
+--
 -- Name: prospeccion_prospectos_organizacion_idx; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX prospeccion_prospectos_organizacion_idx ON public.prospeccion_prospectos USING btree (organizacion_id, creado_en DESC);
+
+
+--
+-- Name: prospeccion_prospectos_website_lookup_checked_en_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX prospeccion_prospectos_website_lookup_checked_en_idx ON public.prospeccion_prospectos USING btree (website_lookup_checked_en DESC);
+
+
+--
+-- Name: prospeccion_prospectos_website_lookup_status_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX prospeccion_prospectos_website_lookup_status_idx ON public.prospeccion_prospectos USING btree (website_lookup_status);
 
 
 --
@@ -27083,10 +28537,38 @@ CREATE TRIGGER contactos_captura_estado BEFORE INSERT OR UPDATE OF nombre_comple
 
 
 --
+-- Name: contactos contactos_sync_nuevo_modelo; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER contactos_sync_nuevo_modelo AFTER INSERT OR DELETE OR UPDATE ON public.contactos FOR EACH ROW EXECUTE FUNCTION public.tg_sync_contactos_to_personas();
+
+
+--
 -- Name: conversaciones conversaciones_auto_tarjeta; Type: TRIGGER; Schema: public; Owner: -
 --
 
 CREATE TRIGGER conversaciones_auto_tarjeta AFTER INSERT ON public.conversaciones FOR EACH ROW EXECUTE FUNCTION public.tg_conversaciones_auto_tarjeta();
+
+
+--
+-- Name: cuenta_direcciones cuenta_direcciones_touch_updated_at; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER cuenta_direcciones_touch_updated_at BEFORE UPDATE ON public.cuenta_direcciones FOR EACH ROW EXECUTE FUNCTION public.tg_touch_updated_at();
+
+
+--
+-- Name: cuenta_personas cuenta_personas_touch_updated_at; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER cuenta_personas_touch_updated_at BEFORE UPDATE ON public.cuenta_personas FOR EACH ROW EXECUTE FUNCTION public.tg_touch_updated_at();
+
+
+--
+-- Name: direcciones direcciones_touch_updated_at; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER direcciones_touch_updated_at BEFORE UPDATE ON public.direcciones FOR EACH ROW EXECUTE FUNCTION public.tg_touch_updated_at();
 
 
 --
@@ -27108,6 +28590,20 @@ CREATE TRIGGER organizacion_rutas_canal_set_org BEFORE INSERT ON public.organiza
 --
 
 CREATE TRIGGER organizacion_rutas_canal_touch_updated_at BEFORE UPDATE ON public.organizacion_rutas_canal FOR EACH ROW EXECUTE FUNCTION public.tg_touch_updated_at();
+
+
+--
+-- Name: personas personas_derive_nombre_completo; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER personas_derive_nombre_completo BEFORE INSERT OR UPDATE ON public.personas FOR EACH ROW EXECUTE FUNCTION public.tg_personas_derive_nombre_completo();
+
+
+--
+-- Name: personas personas_touch_updated_at; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER personas_touch_updated_at BEFORE UPDATE ON public.personas FOR EACH ROW EXECUTE FUNCTION public.tg_touch_updated_at();
 
 
 --
@@ -27874,6 +29370,20 @@ CREATE TRIGGER tg_resultados_set_tsv BEFORE INSERT OR UPDATE OF name, actividad,
 
 
 --
+-- Name: contactos tr_contactos_codigo_y_sync; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER tr_contactos_codigo_y_sync BEFORE INSERT OR UPDATE ON public.contactos FOR EACH ROW EXECUTE FUNCTION public.tg_contactos_codigo_y_sync();
+
+
+--
+-- Name: cuentas tr_cuentas_codigo_y_sync; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER tr_cuentas_codigo_y_sync BEFORE INSERT OR UPDATE ON public.cuentas FOR EACH ROW EXECUTE FUNCTION public.tg_cuentas_codigo_y_sync();
+
+
+--
 -- Name: conversaciones_controles trg_conversaciones_controles_touch; Type: TRIGGER; Schema: public; Owner: -
 --
 
@@ -27885,6 +29395,13 @@ CREATE TRIGGER trg_conversaciones_controles_touch BEFORE UPDATE ON public.conver
 --
 
 CREATE TRIGGER trg_prevent_remove_last_admin BEFORE DELETE OR UPDATE ON public.usuarios_roles FOR EACH ROW EXECUTE FUNCTION public.prevent_remove_last_admin();
+
+
+--
+-- Name: prospeccion_prospectos trg_prospeccion_prospectos_sync_derived_cols; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_prospeccion_prospectos_sync_derived_cols BEFORE INSERT OR UPDATE OF metadata ON public.prospeccion_prospectos FOR EACH ROW EXECUTE FUNCTION public.sync_prospeccion_prospectos_derived_cols();
 
 
 --
@@ -28752,6 +30269,54 @@ ALTER TABLE ONLY public.cotizaciones
 
 
 --
+-- Name: cuenta_direcciones cuenta_direcciones_cuenta_org_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.cuenta_direcciones
+    ADD CONSTRAINT cuenta_direcciones_cuenta_org_fkey FOREIGN KEY (organizacion_id, cuenta_id) REFERENCES public.cuentas(organizacion_id, id) ON DELETE CASCADE;
+
+
+--
+-- Name: cuenta_direcciones cuenta_direcciones_direccion_org_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.cuenta_direcciones
+    ADD CONSTRAINT cuenta_direcciones_direccion_org_fkey FOREIGN KEY (organizacion_id, direccion_id) REFERENCES public.direcciones(organizacion_id, id) ON DELETE CASCADE;
+
+
+--
+-- Name: cuenta_direcciones cuenta_direcciones_organizacion_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.cuenta_direcciones
+    ADD CONSTRAINT cuenta_direcciones_organizacion_id_fkey FOREIGN KEY (organizacion_id) REFERENCES public.organizaciones(id) ON DELETE CASCADE;
+
+
+--
+-- Name: cuenta_personas cuenta_personas_cuenta_org_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.cuenta_personas
+    ADD CONSTRAINT cuenta_personas_cuenta_org_fkey FOREIGN KEY (organizacion_id, cuenta_id) REFERENCES public.cuentas(organizacion_id, id) ON DELETE CASCADE;
+
+
+--
+-- Name: cuenta_personas cuenta_personas_organizacion_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.cuenta_personas
+    ADD CONSTRAINT cuenta_personas_organizacion_id_fkey FOREIGN KEY (organizacion_id) REFERENCES public.organizaciones(id) ON DELETE CASCADE;
+
+
+--
+-- Name: cuenta_personas cuenta_personas_persona_org_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.cuenta_personas
+    ADD CONSTRAINT cuenta_personas_persona_org_fkey FOREIGN KEY (organizacion_id, persona_id) REFERENCES public.personas(organizacion_id, id) ON DELETE CASCADE;
+
+
+--
 -- Name: cuentas cuentas_organizacion_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -28797,6 +30362,14 @@ ALTER TABLE ONLY public.departamentos
 
 ALTER TABLE ONLY public.departamentos
     ADD CONSTRAINT departamentos_padre_org_fkey FOREIGN KEY (organizacion_id, departamento_padre_id) REFERENCES public.departamentos(organizacion_id, id) ON DELETE SET NULL;
+
+
+--
+-- Name: direcciones direcciones_organizacion_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.direcciones
+    ADD CONSTRAINT direcciones_organizacion_id_fkey FOREIGN KEY (organizacion_id) REFERENCES public.organizaciones(id) ON DELETE CASCADE;
 
 
 --
@@ -28901,6 +30474,22 @@ ALTER TABLE ONLY public.familias_productos
 
 ALTER TABLE ONLY public.familias_productos
     ADD CONSTRAINT familias_productos_organizacion_id_fkey FOREIGN KEY (organizacion_id) REFERENCES public.organizaciones(id);
+
+
+--
+-- Name: geo_estados_mexico geo_estados_mexico_pais_codigo_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.geo_estados_mexico
+    ADD CONSTRAINT geo_estados_mexico_pais_codigo_fk FOREIGN KEY (pais_codigo) REFERENCES public.geo_paises(codigo_iso2) ON UPDATE CASCADE;
+
+
+--
+-- Name: geo_municipios_mexico geo_municipios_mexico_clave_entidad_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.geo_municipios_mexico
+    ADD CONSTRAINT geo_municipios_mexico_clave_entidad_fk FOREIGN KEY (clave_entidad) REFERENCES public.geo_estados_mexico(clave_entidad) ON UPDATE CASCADE;
 
 
 --
@@ -29253,6 +30842,22 @@ ALTER TABLE ONLY public.panel_email_templates
 
 ALTER TABLE ONLY public.permisos
     ADD CONSTRAINT permisos_organizacion_id_fkey FOREIGN KEY (organizacion_id) REFERENCES public.organizaciones(id) ON DELETE CASCADE;
+
+
+--
+-- Name: personas personas_organizacion_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.personas
+    ADD CONSTRAINT personas_organizacion_id_fkey FOREIGN KEY (organizacion_id) REFERENCES public.organizaciones(id) ON DELETE CASCADE;
+
+
+--
+-- Name: personas personas_propietario_usuario_org_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.personas
+    ADD CONSTRAINT personas_propietario_usuario_org_fkey FOREIGN KEY (organizacion_id, propietario_usuario_id) REFERENCES public.usuarios(organizacion_id, id) ON DELETE SET NULL;
 
 
 --
@@ -30962,6 +32567,46 @@ CREATE POLICY cotizaciones_member_org ON public.cotizaciones TO authenticated US
 
 
 --
+-- Name: cuenta_direcciones; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.cuenta_direcciones ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: cuenta_direcciones cuenta_direcciones_admin_all; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY cuenta_direcciones_admin_all ON public.cuenta_direcciones TO authenticated USING (public.es_admin(auth.uid())) WITH CHECK (public.es_admin(auth.uid()));
+
+
+--
+-- Name: cuenta_direcciones cuenta_direcciones_member_org; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY cuenta_direcciones_member_org ON public.cuenta_direcciones TO authenticated USING ((organizacion_id = public.usuario_organizacion_id(auth.uid()))) WITH CHECK ((organizacion_id = public.usuario_organizacion_id(auth.uid())));
+
+
+--
+-- Name: cuenta_personas; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.cuenta_personas ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: cuenta_personas cuenta_personas_admin_all; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY cuenta_personas_admin_all ON public.cuenta_personas TO authenticated USING (public.es_admin(auth.uid())) WITH CHECK (public.es_admin(auth.uid()));
+
+
+--
+-- Name: cuenta_personas cuenta_personas_member_org; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY cuenta_personas_member_org ON public.cuenta_personas TO authenticated USING ((organizacion_id = public.usuario_organizacion_id(auth.uid()))) WITH CHECK ((organizacion_id = public.usuario_organizacion_id(auth.uid())));
+
+
+--
 -- Name: cuentas; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
@@ -30971,14 +32616,14 @@ ALTER TABLE public.cuentas ENABLE ROW LEVEL SECURITY;
 -- Name: cuentas cuentas_admin_all; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY cuentas_admin_all ON public.cuentas TO authenticated USING ((public.es_admin(auth.uid()) AND (organizacion_id = public.usuario_organizacion_id(auth.uid())) AND (organizacion_id = public.usuario_organizacion_id(auth.uid())) AND (organizacion_id = public.usuario_organizacion_id(auth.uid())))) WITH CHECK ((public.es_admin(auth.uid()) AND (organizacion_id = public.usuario_organizacion_id(auth.uid())) AND (organizacion_id = public.usuario_organizacion_id(auth.uid())) AND (organizacion_id = public.usuario_organizacion_id(auth.uid()))));
+CREATE POLICY cuentas_admin_all ON public.cuentas TO authenticated USING (public.es_admin(auth.uid())) WITH CHECK (public.es_admin(auth.uid()));
 
 
 --
 -- Name: cuentas cuentas_member_org; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY cuentas_member_org ON public.cuentas TO authenticated USING (((organizacion_id = public.usuario_organizacion_id(auth.uid())) AND (organizacion_id = public.usuario_organizacion_id(auth.uid())) AND (organizacion_id = public.usuario_organizacion_id(auth.uid())))) WITH CHECK (((organizacion_id = public.usuario_organizacion_id(auth.uid())) AND (organizacion_id = public.usuario_organizacion_id(auth.uid())) AND (organizacion_id = public.usuario_organizacion_id(auth.uid()))));
+CREATE POLICY cuentas_member_org ON public.cuentas TO authenticated USING ((organizacion_id = public.usuario_organizacion_id(auth.uid()))) WITH CHECK ((organizacion_id = public.usuario_organizacion_id(auth.uid())));
 
 
 --
@@ -31012,6 +32657,26 @@ ALTER TABLE public.departamentos ENABLE ROW LEVEL SECURITY;
 --
 
 CREATE POLICY departamentos_admin ON public.departamentos TO authenticated USING ((public.es_admin(( SELECT auth.uid() AS uid)) AND (organizacion_id = public.usuario_organizacion_id(( SELECT auth.uid() AS uid))) AND (organizacion_id = public.usuario_organizacion_id(auth.uid())) AND (organizacion_id = public.usuario_organizacion_id(auth.uid())))) WITH CHECK ((public.es_admin(( SELECT auth.uid() AS uid)) AND (organizacion_id = public.usuario_organizacion_id(( SELECT auth.uid() AS uid))) AND (organizacion_id = public.usuario_organizacion_id(auth.uid())) AND (organizacion_id = public.usuario_organizacion_id(auth.uid()))));
+
+
+--
+-- Name: direcciones; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.direcciones ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: direcciones direcciones_admin_all; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY direcciones_admin_all ON public.direcciones TO authenticated USING (public.es_admin(auth.uid())) WITH CHECK (public.es_admin(auth.uid()));
+
+
+--
+-- Name: direcciones direcciones_member_org; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY direcciones_member_org ON public.direcciones TO authenticated USING ((organizacion_id = public.usuario_organizacion_id(auth.uid()))) WITH CHECK ((organizacion_id = public.usuario_organizacion_id(auth.uid())));
 
 
 --
@@ -31544,6 +33209,26 @@ ALTER TABLE public.permisos ENABLE ROW LEVEL SECURITY;
 --
 
 CREATE POLICY permisos_admin ON public.permisos TO authenticated USING ((public.es_admin(( SELECT auth.uid() AS uid)) AND (organizacion_id = public.usuario_organizacion_id(( SELECT auth.uid() AS uid))) AND (organizacion_id = public.usuario_organizacion_id(auth.uid())) AND (organizacion_id = public.usuario_organizacion_id(auth.uid())))) WITH CHECK ((public.es_admin(( SELECT auth.uid() AS uid)) AND (organizacion_id = public.usuario_organizacion_id(( SELECT auth.uid() AS uid))) AND (organizacion_id = public.usuario_organizacion_id(auth.uid())) AND (organizacion_id = public.usuario_organizacion_id(auth.uid()))));
+
+
+--
+-- Name: personas; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.personas ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: personas personas_admin_all; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY personas_admin_all ON public.personas TO authenticated USING (public.es_admin(auth.uid())) WITH CHECK (public.es_admin(auth.uid()));
+
+
+--
+-- Name: personas personas_member_org; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY personas_member_org ON public.personas TO authenticated USING ((organizacion_id = public.usuario_organizacion_id(auth.uid()))) WITH CHECK ((organizacion_id = public.usuario_organizacion_id(auth.uid())));
 
 
 --
@@ -32913,5 +34598,5 @@ CREATE EVENT TRIGGER pgrst_drop_watch ON sql_drop
 -- PostgreSQL database dump complete
 --
 
-\unrestrict jDPhgvyqUfiILPK4CILT1wsIKKQMEV2nmqL7DiVlIMxRPTaicXFXgeRYqXkszQR
+\unrestrict a8LfO07gFvd52RlV1s4YNbHNwwGTyzH8nc18VNDodMRue5uInbmwfs680XfNpTm
 
