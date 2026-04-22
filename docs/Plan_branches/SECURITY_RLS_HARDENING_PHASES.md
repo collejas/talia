@@ -92,8 +92,9 @@ Estado actual (security):
 Fecha de registro: 2026-03-28
 
 - `public.spatial_ref_sys`:
-  - Motivo: tabla gestionada por extensión PostGIS, sin ownership editable desde flujo normal de migraciones.
-  - Decisión: excepción aceptada en `develop` y `production` hasta tener ruta oficial de Supabase/owner-change.
+  - Motivo: tabla de metadatos de PostGIS. La app consume la extensión, pero no es dueña del objeto ni puede aplicar `ALTER TABLE ... ENABLE ROW LEVEL SECURITY` desde el flujo normal de migraciones.
+  - Decisión: excepción aceptada. Se documenta como warning esperado del advisor, no como deuda funcional de multitenancy.
+  - Nota: no afecta datos de negocio; solo acompaña a las geometrías y funciones de PostGIS.
 
 - `extension_in_public` (`btree_gist`, `pg_trgm`, `postgis`, `unaccent`, `vector`):
   - Motivo: mover extensiones fuera de `public` requiere refactor y validación amplia.
