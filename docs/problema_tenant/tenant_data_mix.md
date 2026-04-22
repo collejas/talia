@@ -1,7 +1,7 @@
 # Mezcla de datos entre tenants
 
 ## Descripción
-- La tenant `9bb3c9eb-1687-4ee5-9d69-80c30f7f0c57` abre el dashboard con `X-Organizacion-Id=9bb...` (según `logs/tenant-access.log`) pero todas las vistas principales renderizan filas pertenecientes al tenant maestro `00000000-0000-0000-0000-000000000001`.
+- El tenant `9bb3c9eb-1687-4ee5-9d69-80c30f7f0c57` abre el dashboard con `X-Organizacion-Id=9bb...` (según `logs/tenant-access.log`) pero todas las vistas principales renderizan filas pertenecientes al tenant legacy `00000000-0000-0000-0000-000000000001`.
 - Las vistas en las que se detectó mezcla inicialmente son las siguientes:
   - `embudo`
   - `mapa-de-conversion`
@@ -24,7 +24,7 @@
   - `settings/empleados/departamentos`
   - `settings/empleados/puestos`
   - `visitas`
-- Después de aplicar las correcciones recientes, aún siguen presentando datos del tenant maestro estas vistas del tenant `9bb3...`:
+- Después de aplicar las correcciones recientes, aún siguen presentando datos del tenant legacy estas vistas del tenant `9bb3...`:
   - `mapa-de-conversion`
   - `prospeccion/prospectos`
   - `settings/email`
@@ -81,11 +81,11 @@ Consultando `pg_proc` se identificaron las funciones del esquema `public` que me
 | `upsert_resultados_lote` | Graba resultados en `public.resultados` sin asegurar organización. |
 | `usuario_organizacion_id` | Debe reutilizarse; la función figura aquí porque no se auto-invoca. |
 
-Estas funciones deben adaptarse para recibir el tenant por parámetro y/o usar `public.usuario_organizacion_id(auth.uid())` antes de tocar tablas multitenant. Mientras tanto, cualquier vista que las llame seguirá devolviendo filas del tenant maestro aunque el usuario esté en `9bb3...`.
+Estas funciones deben adaptarse para recibir el tenant por parámetro y/o usar `public.usuario_organizacion_id(auth.uid())` antes de tocar tablas multitenant. Mientras tanto, cualquier vista que las llame seguirá devolviendo filas del tenant legacy aunque el usuario esté en `9bb3...`.
 
 ## Trabajo realizado previo
 - Se intentó aplicar `supabase/migrations/20260203_150000_tenant_rpc_filters.sql`, que reescribe `dashboard_kpis`, las variantes de `embudo_visitantes_contador` y `panel_visitantes_sin_chat_*` para que tomen el tenant del token activo o de un `p_organizacion` opcional y filtren por `organizacion_id` en las CTE relacionadas. Sin embargo, la migración falló por los errores listados más arriba, así que aún no está en producción.
 
 ## Siguientes pasos secundarios
 1. Terminar de adaptar las RPC restantes (`crm_propiedades_geojson`, `panel_leads_geo_base`, `registrar_mensaje_*`, etc.) con el mismo enfoque de `organizacion_id`.
-2. Crear pruebas manuales o scripts que llamen cada RPC desde el tenant `9bb3...` para garantizar que los resultados estén scoped a ese tenant; especialmente verificar que el tenant vacío ya no obtiene datos del maestro `0000...001`.
+2. Crear pruebas manuales o scripts que llamen cada RPC desde el tenant `9bb3...` para garantizar que los resultados estén scoped a ese tenant; especialmente verificar que el tenant vacío ya no obtiene datos del tenant legacy `0000...001`.

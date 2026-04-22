@@ -103,5 +103,5 @@ Fecha de registro: 2026-03-28
 
 ## Regla operativa
 - Aplicar primero en proyecto Supabase de staging aislado.
-- Ejecutar smoke suite tenant `0001`.
+- Ejecutar smoke suite tenant legacy `0001`.
 - Solo después promover la misma migración a producción.

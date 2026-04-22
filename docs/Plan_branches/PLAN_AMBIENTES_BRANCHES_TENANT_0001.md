@@ -4,7 +4,7 @@
 Permitir que el equipo siga desarrollando y validando cambios reales sin impactar a los tenants productivos, usando:
 - separación de ambientes (`producción`, `staging`, `desarrollo`),
 - estrategia de branches de código y base de datos,
-- validación controlada con tenant maestro `0001`.
+- validación controlada con tenant legacy `0001`.
 
 ## Estado actual (2026-03-26)
 - Existe un único stack activo de app (`talia-api.service` + `talia-panel.service`).
@@ -12,7 +12,7 @@ Permitir que el equipo siga desarrollando y validando cambios reales sin impacta
 - Supabase del proyecto principal enlazado a un solo `project-ref` (`qnimyamtczbbwmlrlejc`) en branch `main`.
 - El sistema sí es multi-tenant por `organizacion_id` + RLS.
 - Ya existe mecanismo para operar contexto de tenant en panel (`Operar este tenant`) con cookie `talia.tenant_context`.
-- Tenant maestro identificado: `00000000-0000-0000-0000-000000000001`.
+- Tenant legacy identificado: `00000000-0000-0000-0000-000000000001`.
 - Existe script de deploy atómico de panel (`scripts/deploy_panel_atomic.sh`), pero actualmente el servicio de panel usa `WorkingDirectory=/var/www/talia/frontend/panel`; por lo tanto, el symlink `current/panel` aún no es el runtime efectivo de producción.
 
 ## Estrategia de deploy atómico (panel)
@@ -97,7 +97,7 @@ Flujo:
 - validar funcionalidad y performance
 - aplicar exactamente las mismas migraciones en `producción`
 
-## Estrategia tenant maestro `0001`
+## Estrategia tenant legacy `0001`
 Uso recomendado:
 - `0001` en **staging** como tenant de validación funcional principal.
 - en producción, usar `0001` sólo para activaciones controladas (feature flags) cuando sea necesario.
