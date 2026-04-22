@@ -1,5 +1,8 @@
 """Dependencias reutilizables para rutas de WhatsApp."""
 
+import hashlib
+import hmac
+import json
 from uuid import UUID
 
 from typing import Any
@@ -37,6 +40,28 @@ async def verify_twilio_signature(
     return form
 
 
+async def verify_meta_signature(
+    request: Request,
+    organizacion_id: UUID,
+    x_hub_signature_256: str = Header(default=""),
+) -> dict[str, Any]:
+    """Valida la firma de WhatsApp Cloud API y retorna el payload JSON."""
+    body = await request.body()
+    try:
+        payload = json.loads(body or b"{}")
+    except ValueError:
+        raise HTTPException(status_code=400, detail="invalid_meta_payload")
+
+    runtime_settings = await tenant_runtime.get_whatsapp_runtime_settings(organizacion_id=organizacion_id)
+    app_secret = runtime_settings.meta_app_secret
+    if not app_secret:
+        raise HTTPException(status_code=500, detail="meta_app_secret_missing")
+
+    if not _verify_hub_signature(body, x_hub_signature_256 or "", app_secret):
+        raise HTTPException(status_code=403, detail="invalid_meta_signature")
+    return payload
+
+
 def _parse_org_uuid(value: str | None) -> UUID | None:
     if not value:
         return None
@@ -51,3 +76,15 @@ def _normalize_to_number(value: Any) -> str | None:
         return None
     cleaned = value.strip()
     return cleaned or None
+
+
+def _verify_hub_signature(payload: bytes, signature_header: str, secret: str) -> bool:
+    if not payload:
+        return False
+    if not signature_header:
+        return False
+    prefix, _, signature = signature_header.partition("=")
+    if prefix.strip().lower() != "sha256" or not signature:
+        return False
+    expected = hmac.new(secret.encode("utf-8"), payload, hashlib.sha256).hexdigest()
+    return hmac.compare_digest(expected, signature.strip())

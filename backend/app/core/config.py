@@ -145,6 +145,14 @@ class Settings(BaseSettings):
             "TWILIO_VALIDATE_SIGNATURES", "TALIA_TWILIO_VALIDATE_SIGNATURES"
         ),
     )
+    whatsapp_meta_verify_token: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices(
+            "WHATSAPP_META_VERIFY_TOKEN",
+            "META_WHATSAPP_VERIFY_TOKEN",
+            "TALIA_WHATSAPP_META_VERIFY_TOKEN",
+        ),
+    )
     voice_webhook_path: str | None = Field(
         default=None,
         description="Ruta base para los callbacks de voz (TwiML) cuando Twilio inicia conexiones.",

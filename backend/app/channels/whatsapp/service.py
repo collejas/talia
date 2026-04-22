@@ -181,6 +181,7 @@ class TwilioSendResult:
     status: str | None
     error: str | None = None
     from_number: str | None = None
+    provider: str = "twilio"
 
 
 def _trim_text(value: Any) -> str | None:
@@ -191,6 +192,23 @@ def _trim_text(value: Any) -> str | None:
         return None
     trimmed = str(value).strip()
     return trimmed or None
+
+
+def _normalize_whatsapp_provider(value: Any) -> str:
+    provider = str(value or "").strip().lower()
+    return provider if provider in {"twilio", "meta"} else "twilio"
+
+
+def _normalize_meta_recipient_number(value: str | None) -> str | None:
+    if not value:
+        return None
+    cleaned = value.strip()
+    if cleaned.lower().startswith("whatsapp:"):
+        cleaned = cleaned.split(":", 1)[1]
+    digits = re.sub(r"\D+", "", cleaned)
+    if digits:
+        return digits
+    return cleaned or None
 
 
 async def _sync_inbound_to_prospeccion_log(
@@ -921,11 +939,17 @@ async def _guard_booking_confirmation_claim(
 async def handle_incoming_message(
     message: schemas.WhatsAppIncomingMessage,
     source: str = "webhook",
+    organizacion_id: UUID | str | None = None,
 ) -> None:
     """Procesa un mensaje entrante desde Twilio y delega la respuesta a OpenAI."""
     turn_started = time.perf_counter()
     trace_id = f"whatsapp-{uuid4().hex[:12]}"
     stage_timings: dict[str, float] = {}
+    org_uuid: UUID | None = None
+    if isinstance(organizacion_id, UUID):
+        org_uuid = organizacion_id
+    elif isinstance(organizacion_id, str):
+        org_uuid = _parse_org_uuid(organizacion_id)
     log_event(
         logger,
         "whatsapp.incoming_message_received",
@@ -958,9 +982,13 @@ async def handle_incoming_message(
 
     normalized_from = _normalize_phone_number(message.from_number)
     recipient_number = _normalize_phone_number(message.to_number)
-    resolve_org_started = time.perf_counter()
-    organizacion_hint = await resolve_whatsapp_organizacion(to_number=recipient_number)
-    _record_stage_timing(stage_timings, "resolve_org_ms", resolve_org_started)
+    if org_uuid is None:
+        resolve_org_started = time.perf_counter()
+        organizacion_hint = await resolve_whatsapp_organizacion(to_number=recipient_number)
+        _record_stage_timing(stage_timings, "resolve_org_ms", resolve_org_started)
+        org_uuid = _parse_org_uuid(organizacion_hint) if organizacion_hint else None
+    else:
+        organizacion_hint = str(org_uuid)
 
     if not organizacion_hint:
         logger.error(
@@ -969,10 +997,10 @@ async def handle_incoming_message(
         )
         raise HTTPException(status_code=500, detail="No se pudo enrutar el mensaje entrante")
 
-    org_uuid = _parse_org_uuid(organizacion_hint)
     runtime_settings_started = time.perf_counter()
     whatsapp_settings = await tenant_runtime.get_whatsapp_runtime_settings(organizacion_id=org_uuid)
     _record_stage_timing(stage_timings, "runtime_settings_ms", runtime_settings_started)
+    whatsapp_provider = _normalize_whatsapp_provider(whatsapp_settings.provider)
     try:
         register_inbound_started = time.perf_counter()
         registration = await storage.register_whatsapp_message(
@@ -1439,7 +1467,8 @@ async def handle_incoming_message(
             status_code=error_meta.get("status_code"),
             retryable=bool(error_meta.get("retryable")),
         )
-        await high_demand_controller.record_twilio_attempt(error_code="dispatch_exception")
+        if whatsapp_provider == "twilio":
+            await high_demand_controller.record_twilio_attempt(error_code="dispatch_exception")
         await high_demand_controller.record_assistant_latency(
             channel="whatsapp",
             latency_ms=(time.perf_counter() - turn_started) * 1000,
@@ -1476,12 +1505,14 @@ async def handle_incoming_message(
         contact_id=contact_id,
         inbound_message_id=inbound_message_id,
         extra={
-            "twilio_sid": _trim_text(send_result.sid),
+            "provider": send_result.provider,
+            "provider_message_id": _trim_text(send_result.sid),
             "delivery_status": _trim_text(send_result.status),
             "delivery_error": _trim_text(send_result.error),
         },
     )
-    await high_demand_controller.record_twilio_attempt(error_code=send_result.error)
+    if send_result.provider == "twilio":
+        await high_demand_controller.record_twilio_attempt(error_code=send_result.error)
     await high_demand_controller.record_assistant_latency(
         channel="whatsapp",
         latency_ms=(time.perf_counter() - turn_started) * 1000,
@@ -1491,13 +1522,15 @@ async def handle_incoming_message(
         "openai_conversation_id": assistant_reply.openai_conversation_id,
         "response_id": assistant_reply.response_id,
         "delivery_status": send_result.status,
+        "provider": send_result.provider,
         "inbound_message_id": inbound_message_id,
         "inbound_message_sid": _trim_text(message.message_sid),
+        "provider_message_id": _trim_text(send_result.sid),
     }
     if send_result.error:
         metadata["delivery_error"] = send_result.error
 
-    resolved_contact_org = await resolve_whatsapp_organizacion(contact=contact_record)
+    resolved_contact_org = await resolve_whatsapp_organizacion(contact=contact_record) or organizacion_hint
     try:
         persist_outbound_started = time.perf_counter()
         outgoing_registration = await storage.register_whatsapp_message(
@@ -1541,7 +1574,8 @@ async def handle_incoming_message(
             inbound_message_id=inbound_message_id,
             extra={
                 "outbound_message_id": outgoing_registration.get("message_id"),
-                "twilio_sid": _trim_text(send_result.sid),
+                "provider": send_result.provider,
+                "provider_message_id": _trim_text(send_result.sid),
             },
         )
     _log_turn_timing(
@@ -1557,14 +1591,19 @@ async def handle_incoming_message(
             "assistant_response_id": assistant_reply.response_id,
             "openai_conversation_id": assistant_reply.openai_conversation_id,
             "message_sid": _trim_text(message.message_sid),
-            "twilio_sid": _trim_text(send_result.sid),
+            "provider": send_result.provider,
+            "provider_message_id": _trim_text(send_result.sid),
             "delivery_status": _trim_text(send_result.status),
         },
     )
 
 
-async def handle_status_callback(callback: schemas.WhatsAppStatusCallback) -> None:
-    """Persistencia básica de los eventos de entrega reportados por Twilio."""
+async def handle_status_callback(
+    callback: schemas.WhatsAppStatusCallback,
+    *,
+    provider: str = "twilio",
+) -> None:
+    """Persistencia básica de los eventos de entrega reportados por el provider."""
     event = _map_status_to_event(callback.status)
     if not event:
         log_event(
@@ -1577,7 +1616,7 @@ async def handle_status_callback(callback: schemas.WhatsAppStatusCallback) -> No
 
     try:
         await storage.record_delivery_event(
-            provider="twilio",
+            provider=_normalize_whatsapp_provider(provider),
             message_sid=callback.message_sid,
             event=event,
             raw_payload=callback.raw_payload,
@@ -2462,7 +2501,7 @@ async def _generate_assistant_reply(
     )
 
 
-async def _send_whatsapp_reply(
+async def _send_twilio_whatsapp_reply(
     *,
     to_number: str,
     body: str | None = None,
@@ -2522,6 +2561,124 @@ async def _send_whatsapp_reply(
         status=status,
         error=None,
         from_number=normalized_from,
+        provider="twilio",
+    )
+
+
+async def _send_meta_whatsapp_reply(
+    *,
+    to_number: str,
+    body: str | None = None,
+    content_sid: str | None = None,
+    content_variables: dict[str, str] | None = None,
+    organizacion_id: UUID | None = None,
+) -> TwilioSendResult:
+    """Envía la respuesta al contacto utilizando WhatsApp Cloud API."""
+
+    runtime = await tenant_runtime.get_whatsapp_runtime_settings(organizacion_id=organizacion_id)
+    if not runtime.meta_phone_number_id or not runtime.meta_page_access_token:
+        logger.warning("whatsapp.meta_not_configured")
+        return TwilioSendResult(sid=None, status="skipped", error="meta_not_configured", provider="meta")
+
+    if content_sid:
+        logger.warning("whatsapp.meta_template_not_supported", extra={"content_sid": content_sid})
+        return TwilioSendResult(
+            sid=None,
+            status="skipped",
+            error="meta_template_not_supported",
+            provider="meta",
+        )
+
+    if not body:
+        logger.warning("whatsapp.empty_payload")
+        return TwilioSendResult(sid=None, status="skipped", error="empty_payload", provider="meta")
+
+    normalized_to = _normalize_meta_recipient_number(to_number)
+    if not normalized_to:
+        return TwilioSendResult(sid=None, status="skipped", error="invalid_recipient", provider="meta")
+
+    graph_version = runtime.meta_graph_api_version or "v21.0"
+    url = f"https://graph.facebook.com/{graph_version}/{runtime.meta_phone_number_id}/messages"
+    payload: dict[str, Any] = {
+        "messaging_product": "whatsapp",
+        "to": normalized_to,
+        "type": "text",
+        "text": {"body": body},
+    }
+    headers = {
+        "Authorization": f"Bearer {runtime.meta_page_access_token}",
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+    }
+
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.post(url, json=payload, headers=headers)
+    except Exception as exc:  # pragma: no cover - red/servicio externo
+        logger.exception("whatsapp.meta_send_failed", extra={"error": str(exc)})
+        return TwilioSendResult(sid=None, status="failed", error=str(exc), provider="meta")
+
+    if response.status_code >= 400:
+        logger.warning(
+            "whatsapp.meta_reply_failed",
+            extra={
+                "status_code": response.status_code,
+                "body": response.text,
+                "recipient": normalized_to,
+            },
+        )
+        return TwilioSendResult(
+            sid=None,
+            status="failed",
+            error=f"http_{response.status_code}",
+            provider="meta",
+        )
+
+    response_payload: dict[str, Any] = {}
+    try:
+        response_payload = response.json()
+    except ValueError:
+        response_payload = {}
+    message_id = None
+    messages = response_payload.get("messages") if isinstance(response_payload, dict) else None
+    if isinstance(messages, list) and messages and isinstance(messages[0], dict):
+        message_id = _trim_text(messages[0].get("id"))
+    if not message_id and isinstance(response_payload, dict):
+        message_id = _trim_text(response_payload.get("message_id") or response_payload.get("id"))
+
+    return TwilioSendResult(
+        sid=message_id,
+        status="sent",
+        error=None,
+        from_number=runtime.meta_phone_number_id,
+        provider="meta",
+    )
+
+
+async def _send_whatsapp_reply(
+    *,
+    to_number: str,
+    body: str | None = None,
+    content_sid: str | None = None,
+    content_variables: dict[str, str] | None = None,
+    organizacion_id: UUID | None = None,
+) -> TwilioSendResult:
+    runtime = await tenant_runtime.get_whatsapp_runtime_settings(organizacion_id=organizacion_id)
+    provider = _normalize_whatsapp_provider(runtime.provider)
+    if provider == "meta":
+        return await _send_meta_whatsapp_reply(
+            to_number=to_number,
+            body=body,
+            content_sid=content_sid,
+            content_variables=content_variables,
+            organizacion_id=organizacion_id,
+        )
+    return await _send_twilio_whatsapp_reply(
+        to_number=to_number,
+        body=body,
+        content_sid=content_sid,
+        content_variables=content_variables,
+        organizacion_id=organizacion_id,
     )
 
 
@@ -2541,8 +2698,12 @@ async def _send_whatsapp_typing_indicator(
     if organizacion_id is None:
         return False
 
-    runtime = await tenant_runtime.get_twilio_runtime_settings(organizacion_id=organizacion_id)
-    if not runtime.account_sid or not runtime.auth_token:
+    runtime = await tenant_runtime.get_whatsapp_runtime_settings(organizacion_id=organizacion_id)
+    provider = _normalize_whatsapp_provider(runtime.provider)
+    if provider == "meta":
+        return False
+    runtime_twilio = await tenant_runtime.get_twilio_runtime_settings(organizacion_id=organizacion_id)
+    if not runtime_twilio.account_sid or not runtime_twilio.auth_token:
         return False
 
     try:
@@ -2550,7 +2711,7 @@ async def _send_whatsapp_typing_indicator(
             response = await client.post(
                 _WHATSAPP_TYPING_INDICATOR_URL,
                 data={"messageId": message_sid, "channel": "whatsapp"},
-                auth=(runtime.account_sid, runtime.auth_token),
+                auth=(runtime_twilio.account_sid, runtime_twilio.auth_token),
                 headers={"Accept": "application/json"},
             )
         if 200 <= response.status_code < 300:
@@ -2586,8 +2747,47 @@ async def _send_whatsapp_read_indicator(
     if organizacion_id is None:
         return False
 
-    runtime = await tenant_runtime.get_twilio_runtime_settings(organizacion_id=organizacion_id)
-    if not runtime.account_sid or not runtime.auth_token:
+    runtime = await tenant_runtime.get_whatsapp_runtime_settings(organizacion_id=organizacion_id)
+    provider = _normalize_whatsapp_provider(runtime.provider)
+    if provider == "meta":
+        if not runtime.meta_phone_number_id or not runtime.meta_page_access_token:
+            return False
+        graph_version = runtime.meta_graph_api_version or "v21.0"
+        url = f"https://graph.facebook.com/{graph_version}/{runtime.meta_phone_number_id}/messages"
+        payload = {
+            "messaging_product": "whatsapp",
+            "status": "read",
+            "message_id": message_sid,
+        }
+        headers = {
+            "Authorization": f"Bearer {runtime.meta_page_access_token}",
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+        }
+        try:
+            async with httpx.AsyncClient(timeout=_WHATSAPP_READ_TIMEOUT_SECONDS) as client:
+                response = await client.post(url, json=payload, headers=headers)
+            if 200 <= response.status_code < 300:
+                log_event(logger, "whatsapp.read_indicator_sent", message_sid=message_sid)
+                return True
+            logger.info(
+                "whatsapp.read_indicator_not_sent",
+                extra={
+                    "message_sid": message_sid,
+                    "status_code": response.status_code,
+                    "response_preview": response.text[:300],
+                },
+            )
+            return False
+        except Exception as exc:  # pragma: no cover - red/servicio externo
+            logger.info(
+                "whatsapp.read_indicator_failed",
+                extra={"message_sid": message_sid, "error": str(exc)},
+            )
+            return False
+
+    runtime_twilio = await tenant_runtime.get_twilio_runtime_settings(organizacion_id=organizacion_id)
+    if not runtime_twilio.account_sid or not runtime_twilio.auth_token:
         return False
 
     try:
@@ -2595,7 +2795,7 @@ async def _send_whatsapp_read_indicator(
             response = await client.post(
                 _WHATSAPP_READ_INDICATOR_URL,
                 data={"messageId": message_sid, "channel": "whatsapp"},
-                auth=(runtime.account_sid, runtime.auth_token),
+                auth=(runtime_twilio.account_sid, runtime_twilio.auth_token),
                 headers={"Accept": "application/json"},
             )
         if 200 <= response.status_code < 300:

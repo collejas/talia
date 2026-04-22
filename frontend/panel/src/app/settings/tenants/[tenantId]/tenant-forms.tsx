@@ -1715,6 +1715,9 @@ export function TenantWhatsAppSettings({
             <p className="text-xs text-muted-foreground">
               Este bloque prepara el provider nuevo que correrá en paralelo a Twilio.
             </p>
+            <p className="text-xs text-muted-foreground">
+              Webhook sugerido: <code>{`/api/whatsapp/meta/${tenantId}/webhook`}</code>
+            </p>
           </div>
           <div className="grid gap-4 md:grid-cols-2">
             <div className="space-y-2">
