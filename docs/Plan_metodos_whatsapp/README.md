@@ -15,6 +15,7 @@ Este directorio concentra el plan de migracion y coexistencia de proveedores de 
 - [Diseno final webhook unico Meta](./DISEÑO_FINAL_META_WEBHOOK_UNICO.md)
 - [Plan de ejecucion webhook unico Meta](./PLAN_EJECUCION_META_WEBHOOK_UNICO.md)
 - [Checklist de tareas](./CHECKLIST.md)
+- [Checklist final de implementacion](./CHECKLIST_FINAL_IMPLEMENTACION.md)
 - [Plan de ejecucion](./PLAN_EJECUCION.md)
 
 ## Objetivo
