@@ -15,35 +15,18 @@ type UseCurrentUserState = {
   error: string | null
 }
 
-let sessionCache: SessionPayload | null = null
-let sessionRequest: Promise<SessionPayload> | null = null
-
 async function fetchSessionPayload(): Promise<SessionPayload> {
-  if (sessionCache) {
-    return sessionCache
-  }
-  if (sessionRequest) {
-    return sessionRequest
-  }
-
-  sessionRequest = fetch("/api/session", {
+  const response = await fetch("/api/session", {
     method: "GET",
     headers: { "Content-Type": "application/json" },
-  }).then(async (response) => {
-    if (response.status === 401) {
-      throw new Error("auth_required")
-    }
-    if (!response.ok) {
-      throw new Error(`auth_error_${response.status}`)
-    }
-    const data = (await response.json()) as SessionPayload
-    sessionCache = data
-    return data
-  }).finally(() => {
-    sessionRequest = null
   })
-
-  return sessionRequest
+  if (response.status === 401) {
+    throw new Error("auth_required")
+  }
+  if (!response.ok) {
+    throw new Error(`auth_error_${response.status}`)
+  }
+  return (await response.json()) as SessionPayload
 }
 
 export function useCurrentUser() {
@@ -154,8 +137,6 @@ export function useCurrentUser() {
   }, [resolveAuthErrorState])
 
   const refresh = async () => {
-    sessionCache = null
-    sessionRequest = null
     await fetchSession()
   }
 

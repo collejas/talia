@@ -114,7 +114,6 @@ export async function POST(request: Request) {
     maxAge: refreshMaxAge,
   })
 
-  // Evita arrastrar contexto de tenant de una sesión previa.
   response.cookies.set({
     ...COOKIE_BASE_OPTIONS,
     name: TENANT_CONTEXT_COOKIE,

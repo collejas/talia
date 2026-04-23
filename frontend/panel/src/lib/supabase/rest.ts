@@ -63,6 +63,11 @@ export async function callSupabaseRest<T = unknown>(
     const organizacionId = await resolveOrganizacionId()
     if (organizacionId) {
       url.searchParams.set("organizacion_id", `eq.${organizacionId}`)
+    } else {
+      return {
+        ok: false,
+        error: "No se pudo resolver la organización activa para una consulta con alcance de tenant.",
+      }
     }
   }
 

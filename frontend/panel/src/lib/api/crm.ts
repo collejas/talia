@@ -1,6 +1,5 @@
 "use server";
 
-import { cache } from "react";
 import { cookies } from "next/headers";
 
 import { getPanelApiBaseUrl } from "@/lib/api/panel";
@@ -35,20 +34,16 @@ const CRM_USER_ENV_KEYS = [
   "NEXT_PUBLIC_USUARIO_ID",
 ] as const;
 
-const resolveCurrentAccessTokenCached = cache(resolveCurrentAccessToken)
-const resolveCurrentUsuarioIdCached = cache(resolveCurrentUsuarioId)
-const resolvePanelApiTokenCached = cache(resolvePanelApiToken)
-
 export async function callCrmApi<T = unknown>(
   path: string,
   options: CrmFetchOptions = {},
 ): Promise<CrmResult<T>> {
   let baseUrl: string;
   let token: string;
-  let userAccessToken = await resolveCurrentAccessTokenCached();
+  let userAccessToken = await resolveCurrentAccessToken();
   try {
     baseUrl = getPanelApiBaseUrl();
-    token = await resolvePanelApiTokenCached();
+    token = await resolvePanelApiToken();
   } catch (error) {
     return {
       ok: false,
@@ -56,7 +51,7 @@ export async function callCrmApi<T = unknown>(
     };
   }
 
-  const usuarioId = options.usuarioId ?? (await resolveCurrentUsuarioIdCached());
+  const usuarioId = options.usuarioId ?? (await resolveCurrentUsuarioId());
   let resolvedOrganizacionId: string | null | undefined;
   if (options.organizacionId !== undefined) {
     resolvedOrganizacionId = options.organizacionId;

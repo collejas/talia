@@ -3,6 +3,9 @@ import { cookies } from "next/headers"
 
 import { callCrmApi } from "@/lib/api/crm"
 import { COOKIE_BASE_OPTIONS, TENANT_CONTEXT_COOKIE } from "@/lib/auth/cookies"
+import { decodeJwtUserId } from "@/lib/auth/jwt"
+import { parseTenantContextCookie, serializeTenantContextCookie } from "@/lib/auth/tenant-context"
+import { resolveServerAccessToken } from "@/lib/auth/server-session"
 
 type TenantContextPayload = {
   tenant_id?: string
@@ -21,7 +24,16 @@ function clearTenantContextCookie(response: NextResponse) {
 
 export async function GET() {
   const store = await cookies()
-  const tenantId = store.get(TENANT_CONTEXT_COOKIE)?.value?.trim() || null
+  const accessToken = await resolveServerAccessToken({ minTtlSeconds: 0 })
+  const currentUserId = decodeJwtUserId(accessToken)
+  const parsed = parseTenantContextCookie(store.get(TENANT_CONTEXT_COOKIE)?.value)
+  if (!parsed || !currentUserId || parsed.user_id !== currentUserId) {
+    const response = NextResponse.json({ tenant_id: null, tenant_name: null })
+    clearTenantContextCookie(response)
+    return response
+  }
+
+  const tenantId = parsed.tenant_id
   if (!tenantId) {
     return NextResponse.json({ tenant_id: null, tenant_name: null })
   }
@@ -76,6 +88,12 @@ export async function PUT(request: Request) {
     return NextResponse.json({ error: "platform_admin_required" }, { status: 403 })
   }
 
+  const accessToken = await resolveServerAccessToken({ minTtlSeconds: 0 })
+  const currentUserId = decodeJwtUserId(accessToken)
+  if (!currentUserId) {
+    return NextResponse.json({ error: "auth_required" }, { status: 401 })
+  }
+
   const tenantCheck = await callCrmApi<{ ok?: boolean }>(`/admin/tenants/${tenantId}`, {
     method: "GET",
     organizacionId: null,
@@ -89,7 +107,7 @@ export async function PUT(request: Request) {
   response.cookies.set({
     ...COOKIE_BASE_OPTIONS,
     name: TENANT_CONTEXT_COOKIE,
-    value: tenantId,
+    value: serializeTenantContextCookie({ tenant_id: tenantId, user_id: currentUserId }),
     maxAge: 60 * 60 * 24 * 30,
   })
   return response

@@ -6,6 +6,9 @@ import { redirect } from "next/navigation"
 
 import { callCrmApi } from "@/lib/api/crm"
 import { COOKIE_BASE_OPTIONS, TENANT_CONTEXT_COOKIE } from "@/lib/auth/cookies"
+import { decodeJwtUserId } from "@/lib/auth/jwt"
+import { serializeTenantContextCookie } from "@/lib/auth/tenant-context"
+import { resolveServerAccessToken } from "@/lib/auth/server-session"
 
 export type CrudActionState = {
   status: "idle" | "success" | "error"
@@ -44,11 +47,17 @@ export async function activateTenantContextAndRedirectAction(formData: FormData)
     throw new Error(tenantCheck.error || "tenant_not_found")
   }
 
+  const accessToken = await resolveServerAccessToken({ minTtlSeconds: 0 })
+  const currentUserId = decodeJwtUserId(accessToken)
+  if (!currentUserId) {
+    throw new Error("auth_required")
+  }
+
   const store = await cookies()
   store.set({
     ...COOKIE_BASE_OPTIONS,
     name: TENANT_CONTEXT_COOKIE,
-    value: tenantId,
+    value: serializeTenantContextCookie({ tenant_id: tenantId, user_id: currentUserId }),
     maxAge: 60 * 60 * 24 * 30,
   })
 

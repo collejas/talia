@@ -1,6 +1,7 @@
 import { cookies } from "next/headers"
 import { ACCESS_TOKEN_COOKIE } from "@/lib/auth/cookies"
 import { decodeJwtOrganizacionId, decodeJwtUserId } from "@/lib/auth/jwt"
+import { parseTenantContextCookie } from "@/lib/auth/tenant-context"
 import { callCrmApi } from "@/lib/api/crm"
 import { TENANT_CONTEXT_COOKIE } from "@/lib/auth/cookies"
 import { getSupabaseConfig } from "@/lib/auth/supabase"
@@ -80,18 +81,19 @@ export async function resolveOrganizacionId(): Promise<string | null> {
       store.get("sb-access-token")?.value ||
       store.get("access_token")?.value ||
       null
-    const tenantOverride = store.get(TENANT_CONTEXT_COOKIE)?.value?.trim() || null
+    const tenantOverrideRaw = store.get(TENANT_CONTEXT_COOKIE)?.value?.trim() || null
+    const tenantOverride = parseTenantContextCookie(tenantOverrideRaw)
     if (token) {
       const tokenUserId = decodeJwtUserId(token)
       const decoded = decodeJwtOrganizacionId(token)
-      if (tenantOverride) {
+      if (tenantOverride && tokenUserId && tenantOverride.user_id === tokenUserId) {
         const platformStatus = await callCrmApi<{ is_platform_admin: boolean }>("/admin/me/platform-admin", {
           method: "GET",
           organizacionId: null,
           withUserToken: true,
         })
         if (platformStatus.ok && platformStatus.data?.is_platform_admin) {
-          return tenantOverride
+          return tenantOverride.tenant_id
         }
       }
       if (tokenUserId) {
@@ -103,9 +105,12 @@ export async function resolveOrganizacionId(): Promise<string | null> {
       if (decoded) {
         return decoded
       }
+      return null
     }
   } catch {
-    // ignore; fallback to env var
+    // If we already have a session token and cannot resolve the tenant,
+    // fail closed instead of guessing a global default.
+    return null
   }
   return getDefaultOrganizacionId()
 }
