@@ -525,9 +525,15 @@ def _sort_prospect_rows(rows: list[dict[str, Any]], *, order: str | None = None)
     )
 
 
-def _build_prospectos_ids_cache_key(*, usuario_token: str, suffix: str) -> str:
+def _build_prospectos_ids_cache_key(
+    *,
+    usuario_token: str,
+    suffix: str,
+    organizacion_id: UUID | None = None,
+) -> str:
     token_hash = sha1(usuario_token.encode("utf-8")).hexdigest()[:16]
-    return f"{token_hash}:{suffix}"
+    org_part = str(organizacion_id) if organizacion_id else "__no_org__"
+    return f"{token_hash}:{org_part}:{suffix}"
 
 
 def _read_prospectos_ids_cache(
@@ -10683,6 +10689,7 @@ class CRMRepository:
         self,
         *,
         usuario_token: str,
+        organizacion_id: UUID | None = None,
         limit: int = 50,
         offset: int = 0,
         search: str | None = None,
@@ -10722,6 +10729,8 @@ class CRMRepository:
             "offset": str(offset),
             "order": order or "creado_en.desc",
         }
+        if organizacion_id is not None:
+            params["organizacion_id"] = f"eq.{organizacion_id}"
         and_filters: list[str] = []
 
         if fuente:
@@ -10865,6 +10874,7 @@ class CRMRepository:
         if campana_id is not None or con_envio is not None or normalized_con_envio_canales:
             envio_prospecto_ids = await self._list_prospecto_ids_with_contact_envios(
                 usuario_token=usuario_token,
+                organizacion_id=organizacion_id,
                 campana_id=campana_id,
                 canales=normalized_con_envio_canales or None,
             )
@@ -10889,6 +10899,7 @@ class CRMRepository:
         if con_scraper is not None:
             scraper_prospecto_ids = await self._list_prospecto_ids_with_scraper_jobs(
                 usuario_token=usuario_token,
+                organizacion_id=organizacion_id,
             )
             if con_scraper:
                 if not scraper_prospecto_ids:
@@ -11333,6 +11344,7 @@ class CRMRepository:
         self,
         *,
         usuario_token: str,
+        organizacion_id: UUID | None = None,
         campana_id: UUID | None = None,
         canales: Sequence[str] | None = None,
     ) -> set[str]:
@@ -11358,6 +11370,7 @@ class CRMRepository:
         canales_key = ",".join(normalized_canales) if normalized_canales else "__all_canales__"
         cache_key = _build_prospectos_ids_cache_key(
             usuario_token=usuario_token,
+            organizacion_id=organizacion_id,
             suffix=f"envios:{str(campana_id) if campana_id else '__all__'}:{canales_key}",
         )
         cached_ids = _read_prospectos_ids_cache(
@@ -11408,6 +11421,8 @@ class CRMRepository:
                     "order": "prospecto_id.asc",
                     "total_envios": "gt.0",
                 }
+                if organizacion_id is not None:
+                    params["organizacion_id"] = f"eq.{organizacion_id}"
                 resp = await self._request_with_user(
                     "GET",
                     "/rest/v1/prospeccion_prospecto_contacto_stats",
@@ -11472,6 +11487,8 @@ class CRMRepository:
                         "offset": str(offset),
                         "estado": "neq.cancelado",
                     }
+                    if organizacion_id is not None:
+                        params["organizacion_id"] = f"eq.{organizacion_id}"
                     if batch_chunk:
                         params["batch_id"] = _postgrest_in_clause(batch_chunk)
                     resp = await self._request_with_user(
@@ -11508,9 +11525,11 @@ class CRMRepository:
         self,
         *,
         usuario_token: str,
+        organizacion_id: UUID | None = None,
     ) -> set[str]:
         cache_key = _build_prospectos_ids_cache_key(
             usuario_token=usuario_token,
+            organizacion_id=organizacion_id,
             suffix="scraper",
         )
         cached_ids = _read_prospectos_ids_cache(
@@ -11533,6 +11552,8 @@ class CRMRepository:
                 "limit": str(page_size),
                 "offset": str(offset),
             }
+            if organizacion_id is not None:
+                params["organizacion_id"] = f"eq.{organizacion_id}"
             resp = await self._request_with_user(
                 "GET",
                 "/rest/v1/prospeccion_buscador_jobs",

@@ -20034,6 +20034,7 @@ async def listar_prospectos(
         try:
             rows, total = await repo.list_prospectos(
                 usuario_token=user_token,
+                organizacion_id=organizacion_id,
                 limit=params.limit,
                 offset=params.offset,
                 search=params.search,
@@ -22491,6 +22492,7 @@ async def prospeccion_metricas_export_xlsx(
         try:
             _, website_total = await repo.list_prospectos(
                 usuario_token=user_token,
+                organizacion_id=organizacion_id,
                 limit=1,
                 offset=0,
                 website_lookup_status=website_status,
@@ -22907,6 +22909,7 @@ async def prospeccion_campana_update(
         repo_kwargs = _prospecto_filters_to_kwargs(filtros_fuente)
         prospectos, total = await repo.list_prospectos(
             usuario_token=user_token,
+            organizacion_id=organizacion_id,
             limit=MAX_PROSPECCION_BATCH,
             offset=0,
             order="creado_en.desc",
@@ -22919,6 +22922,7 @@ async def prospeccion_campana_update(
         repo_kwargs = _prospecto_filters_to_kwargs(payload.filtros)
         prospectos, total = await repo.list_prospectos(
             usuario_token=user_token,
+            organizacion_id=organizacion_id,
             limit=MAX_PROSPECCION_BATCH,
             offset=0,
             order="creado_en.desc",
@@ -23615,6 +23619,7 @@ async def eliminar_grupos_prospectos(
             try:
                 rows, _ = await repo.list_prospectos(
                     usuario_token=user_token,
+                    organizacion_id=organizacion_id,
                     limit=page_limit,
                     offset=0,
                     metadata_queries=[query_value],
@@ -24283,6 +24288,7 @@ async def contactar_prospectos(
                 operation="list_prospectos_for_contactar",
                 func=lambda: repo.list_prospectos(
                     usuario_token=user_token,
+                    organizacion_id=organizacion_id,
                     limit=MAX_PROSPECCION_BATCH,
                     offset=0,
                     order="creado_en.desc",
