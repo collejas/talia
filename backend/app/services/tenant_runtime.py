@@ -779,6 +779,8 @@ async def get_google_places_runtime_settings(
 class BrevoRuntimeSettings:
     api_key: str | None
     base_url: str
+    sender_email: str | None = None
+    sender_name: str | None = None
 
 
 async def get_brevo_runtime_settings(
@@ -799,6 +801,13 @@ async def get_brevo_runtime_settings(
     if base_url_candidate is not None:
         normalized = base_url_candidate.strip()
         settings_payload.base_url = normalized.rstrip("/") if normalized else normalized
+
+    sender_email = _coerce_str(brevo_cfg.get("sender_email"))
+    if sender_email is not None:
+        settings_payload.sender_email = sender_email
+    sender_name = _coerce_str(brevo_cfg.get("sender_name"))
+    if sender_name is not None:
+        settings_payload.sender_name = sender_name
 
     api_key_secret = await get_secret_plaintext(organizacion_id=organizacion_id, clave="brevo.api_key")
     if api_key_secret:

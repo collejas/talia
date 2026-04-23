@@ -382,6 +382,8 @@ type MailInitialValues = {
   mail_use_ssl?: boolean
   mail_use_tls?: boolean
   brevo_base_url?: string
+  brevo_sender_email?: string
+  brevo_sender_name?: string
 }
 
 type TwilioInitialValues = {
@@ -1045,6 +1047,24 @@ export function TenantMailSettings({
               name="brevo_base_url"
               placeholder="https://api.brevo.com/v3"
               defaultValue={initialValues.brevo_base_url ?? ""}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="brevo_sender_email">brevo.sender_email</Label>
+            <Input
+              id="brevo_sender_email"
+              name="brevo_sender_email"
+              placeholder="pui@geoactiv.mx"
+              defaultValue={initialValues.brevo_sender_email ?? ""}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="brevo_sender_name">brevo.sender_name</Label>
+            <Input
+              id="brevo_sender_name"
+              name="brevo_sender_name"
+              placeholder="PUI - Geoactiv"
+              defaultValue={initialValues.brevo_sender_name ?? ""}
             />
           </div>
           <div className="space-y-2">

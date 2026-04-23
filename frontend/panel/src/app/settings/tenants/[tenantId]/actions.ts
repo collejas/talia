@@ -533,6 +533,8 @@ export async function updateMailSettingsAction(_: CrudActionState, formData: For
     const mailUsername = getText(formData, "mail_username")
     const mailPassword = getText(formData, "mail_password")
     const brevoBaseUrl = getText(formData, "brevo_base_url")
+    const brevoSenderEmail = getText(formData, "brevo_sender_email")
+    const brevoSenderName = getText(formData, "brevo_sender_name")
     const brevoApiKey = getText(formData, "brevo_api_key")
 
     const mailPatch: Record<string, unknown> = {}
@@ -546,7 +548,7 @@ export async function updateMailSettingsAction(_: CrudActionState, formData: For
     mailPatch.use_tls = useTls
 
     const hasMailConfig = Object.keys(mailPatch).length > 0
-    const hasBrevoConfig = Boolean(brevoBaseUrl)
+    const hasBrevoConfig = Boolean(brevoBaseUrl || brevoSenderEmail || brevoSenderName)
     if (!hasMailConfig && !mailUsername && !mailPassword && !hasBrevoConfig && !brevoApiKey) {
       throw new Error("Debes completar al menos un campo de la configuración de correo o Brevo.")
     }
@@ -565,6 +567,8 @@ export async function updateMailSettingsAction(_: CrudActionState, formData: For
     }
     const brevoPatch: Record<string, unknown> = {}
     if (brevoBaseUrl) brevoPatch.base_url = brevoBaseUrl
+    if (brevoSenderEmail) brevoPatch.sender_email = brevoSenderEmail
+    if (brevoSenderName) brevoPatch.sender_name = brevoSenderName
     if (Object.keys(brevoPatch).length) {
       patch.brevo = brevoPatch
     }

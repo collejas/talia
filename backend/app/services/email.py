@@ -47,6 +47,8 @@ def _resolve_brevo_settings(brevo_settings: BrevoRuntimeSettings | None) -> Brev
         return BrevoRuntimeSettings(
             api_key=brevo_settings.api_key,
             base_url=normalized_base or brevo_settings.base_url,
+            sender_email=brevo_settings.sender_email,
+            sender_name=brevo_settings.sender_name,
         )
     base_url_candidate = (settings.brevo_base_url or "https://api.brevo.com/v3").strip()
     if base_url_candidate:
@@ -54,6 +56,8 @@ def _resolve_brevo_settings(brevo_settings: BrevoRuntimeSettings | None) -> Brev
     return BrevoRuntimeSettings(
         api_key=settings.brevo_api_key,
         base_url=base_url_candidate or settings.brevo_base_url or "https://api.brevo.com/v3",
+        sender_email=None,
+        sender_name=None,
     )
 
 
@@ -250,13 +254,13 @@ def _send_email_brevo(
 ) -> str:
     api_key = (brevo_settings.api_key or "").strip()
     base_url = (brevo_settings.base_url or "https://api.brevo.com/v3").strip().rstrip("/")
-    sender_email = (mail_settings.username or "").strip()
+    sender_email = (brevo_settings.sender_email or mail_settings.username or "").strip()
     if not api_key:
         raise EmailSendError("Configuración Brevo incompleta: falta API Key.")
     if not sender_email:
-        raise EmailSendError("Configuración Brevo incompleta: falta MAIL_USERNAME como remitente.")
+        raise EmailSendError("Configuración Brevo incompleta: falta sender_email o MAIL_USERNAME como remitente.")
 
-    sender_name = (mail_settings.from_name or "").strip() or sender_email
+    sender_name = (brevo_settings.sender_name or mail_settings.from_name or "").strip() or sender_email
     endpoint = f"{base_url}/smtp/email"
     brevo_headers: dict[str, str] = {"Message-ID": message_id}
     for header_name, header_value in (headers or {}).items():

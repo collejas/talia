@@ -144,6 +144,8 @@ export default async function TenantDetailSettingsPage({ params }: { params: Pro
     mail_use_ssl: getNestedBoolean(mailConfig, "use_ssl"),
     mail_use_tls: getNestedBoolean(mailConfig, "use_tls"),
     brevo_base_url: getNestedString(brevoConfig, "base_url"),
+    brevo_sender_email: getNestedString(brevoConfig, "sender_email"),
+    brevo_sender_name: getNestedString(brevoConfig, "sender_name"),
   }
   const twilioConfig = getNestedRecord(config, "twilio") ?? {}
   const voiceConfig = getNestedRecord(config, "voice") ?? {}

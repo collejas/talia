@@ -383,6 +383,8 @@ async def test_handle_information_email_triggers_notification(
         return tools.tenant_runtime.BrevoRuntimeSettings(
             api_key=None,
             base_url="https://api.brevo.com/v3",
+            sender_email=None,
+            sender_name=None,
         )
 
     monkeypatch.setattr(

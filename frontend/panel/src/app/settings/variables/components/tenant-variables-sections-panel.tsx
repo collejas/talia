@@ -100,6 +100,8 @@ const SECTIONS: SectionConfig[] = [
       { label: "mail.use_ssl", path: "mail.use_ssl", control: "checkbox" },
       { label: "mail.use_tls", path: "mail.use_tls", control: "checkbox" },
       { label: "brevo.base_url", path: "brevo.base_url" },
+      { label: "brevo.sender_email", path: "brevo.sender_email" },
+      { label: "brevo.sender_name", path: "brevo.sender_name" },
     ],
     secrets: [
       { clave: "mail.username", label: "mail.username (tier A)", tier: "A", placeholder: "usuario" },
