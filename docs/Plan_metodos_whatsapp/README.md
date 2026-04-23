@@ -9,6 +9,8 @@ Este directorio concentra el plan de migracion y coexistencia de proveedores de 
 
 - [Plan maestro](./PLAN_MAESTRO.md)
 - [Plan tecnico de implementacion](./PLAN_TECNICO_IMPLEMENTACION.md)
+- [Guia de credenciales Meta WhatsApp Cloud API](./GUIA_META_CREDENCIALES.md)
+- [Paso a paso Meta](./PASO_A_PASO_META.md)
 - [Checklist de tareas](./CHECKLIST.md)
 - [Plan de ejecucion](./PLAN_EJECUCION.md)
 

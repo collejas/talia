@@ -128,6 +128,29 @@ def _append_supabase_connectivity_event(entry: dict[str, Any]) -> None:
         logger.debug("tenant_runtime.supabase_connectivity_log_write_failed", exc_info=True)
 
 
+def invalidate_runtime_cache(*, organizacion_id: UUID | None = None) -> None:
+    """Invalida el cache local de config/secretos para un tenant.
+
+    Se usa después de mutaciones de settings para que el runtime lea la
+    versión recién guardada en la siguiente petición, sin esperar al TTL.
+    """
+
+    if organizacion_id is None:
+        _CONFIG_CACHE.clear()
+        _CONFIG_CACHE_EXPIRES.clear()
+        _SECRET_CACHE.clear()
+        _SECRET_CACHE_EXPIRES.clear()
+        return
+
+    cache_prefix = f"{organizacion_id}:"
+    _CONFIG_CACHE.pop(str(organizacion_id), None)
+    _CONFIG_CACHE_EXPIRES.pop(str(organizacion_id), None)
+    for key in list(_SECRET_CACHE.keys()):
+        if key.startswith(cache_prefix):
+            _SECRET_CACHE.pop(key, None)
+            _SECRET_CACHE_EXPIRES.pop(key, None)
+
+
 async def _supabase_get(path: str, *, params: dict[str, str]) -> Any:
     base_url, service_role = _require_supabase()
     url = f"{base_url}{path}"
@@ -198,14 +221,15 @@ async def _supabase_get(path: str, *, params: dict[str, str]) -> Any:
     return resp.json()
 
 
-async def get_org_config(*, organizacion_id: UUID) -> dict[str, Any]:
+async def get_org_config(*, organizacion_id: UUID, force_refresh: bool = False) -> dict[str, Any]:
     cache_key = str(organizacion_id)
     now = datetime.now(timezone.utc)
-    expires = _CONFIG_CACHE_EXPIRES.get(cache_key)
-    if expires and expires > now:
-        cached = _CONFIG_CACHE.get(cache_key)
-        if isinstance(cached, dict):
-            return cached
+    if not force_refresh:
+        expires = _CONFIG_CACHE_EXPIRES.get(cache_key)
+        if expires and expires > now:
+            cached = _CONFIG_CACHE.get(cache_key)
+            if isinstance(cached, dict):
+                return cached
 
     if not _has_supabase():
         return {}
@@ -223,16 +247,22 @@ async def get_org_config(*, organizacion_id: UUID) -> dict[str, Any]:
     return config
 
 
-async def get_secret_plaintext(*, organizacion_id: UUID | None, clave: str) -> str | None:
+async def get_secret_plaintext(
+    *,
+    organizacion_id: UUID | None,
+    clave: str,
+    force_refresh: bool = False,
+) -> str | None:
     if organizacion_id is None:
         return None
     key = clave.strip().lower()
     cache_key = f"{organizacion_id}:{key}"
     now = datetime.now(timezone.utc)
-    expires = _SECRET_CACHE_EXPIRES.get(cache_key)
-    if expires and expires > now:
-        cached = _SECRET_CACHE.get(cache_key)
-        return cached if isinstance(cached, str) else None
+    if not force_refresh:
+        expires = _SECRET_CACHE_EXPIRES.get(cache_key)
+        if expires and expires > now:
+            cached = _SECRET_CACHE.get(cache_key)
+            return cached if isinstance(cached, str) else None
 
     if not _has_supabase():
         _SECRET_CACHE[cache_key] = None
@@ -295,9 +325,18 @@ def _openai_secret_candidates(channel: str | None) -> list[str]:
     return ["openai.general.api_key", "openai.api_key"]
 
 
-async def get_openai_api_key(*, organizacion_id: UUID | None, channel: str | None = None) -> str | None:
+async def get_openai_api_key(
+    *,
+    organizacion_id: UUID | None,
+    channel: str | None = None,
+    force_refresh: bool = False,
+) -> str | None:
     for key in _openai_secret_candidates(channel):
-        value = await get_secret_plaintext(organizacion_id=organizacion_id, clave=key)
+        value = await get_secret_plaintext(
+            organizacion_id=organizacion_id,
+            clave=key,
+            force_refresh=force_refresh,
+        )
         if value:
             return value
     return settings.openai_api_key
@@ -977,12 +1016,13 @@ class WhatsappRuntimeSettings:
 async def get_whatsapp_runtime_settings(
     *,
     organizacion_id: UUID | None = None,
+    force_refresh: bool = False,
 ) -> WhatsappRuntimeSettings:
     settings_payload = WhatsappRuntimeSettings.from_settings()
     if organizacion_id is None:
         return settings_payload
 
-    config = await get_org_config(organizacion_id=organizacion_id)
+    config = await get_org_config(organizacion_id=organizacion_id, force_refresh=force_refresh)
     whatsapp_cfg = _as_dict(config.get("whatsapp")) or {}
     whatsapp_twilio_cfg = _as_dict(whatsapp_cfg.get("twilio")) or {}
     whatsapp_meta_cfg = _as_dict(whatsapp_cfg.get("meta")) or {}
@@ -1080,7 +1120,10 @@ async def get_whatsapp_runtime_settings(
     if stt_value is not None:
         settings_payload.voice_stt_model = stt_value
 
-    settings_payload.voice_api_key = await get_openai_api_key(organizacion_id=organizacion_id)
+    settings_payload.voice_api_key = await get_openai_api_key(
+        organizacion_id=organizacion_id,
+        force_refresh=force_refresh,
+    )
 
     twilio_phone_number = _coerce_str_or_none(whatsapp_twilio_cfg.get("phone_number"))
     if twilio_phone_number is not None:
@@ -1099,13 +1142,21 @@ async def get_whatsapp_runtime_settings(
         settings_payload.twilio_validate_signatures,
     )
 
-    twilio_account_sid = await get_secret_plaintext(organizacion_id=organizacion_id, clave="twilio.account_sid")
+    twilio_account_sid = await get_secret_plaintext(
+        organizacion_id=organizacion_id,
+        clave="twilio.account_sid",
+        force_refresh=force_refresh,
+    )
     if twilio_account_sid is not None:
         settings_payload.twilio_account_sid = twilio_account_sid
     elif settings_payload.twilio_account_sid is None:
         settings_payload.twilio_account_sid = settings.twilio_account_sid
 
-    twilio_auth_token = await get_secret_plaintext(organizacion_id=organizacion_id, clave="twilio.auth_token")
+    twilio_auth_token = await get_secret_plaintext(
+        organizacion_id=organizacion_id,
+        clave="twilio.auth_token",
+        force_refresh=force_refresh,
+    )
     if twilio_auth_token is not None:
         settings_payload.twilio_auth_token = twilio_auth_token
     elif settings_payload.twilio_auth_token is None:
@@ -1118,6 +1169,7 @@ async def get_whatsapp_runtime_settings(
     meta_page_access_token = await get_secret_plaintext(
         organizacion_id=organizacion_id,
         clave="meta.whatsapp.page_access_token",
+        force_refresh=force_refresh,
     )
     if meta_page_access_token is not None:
         settings_payload.meta_page_access_token = meta_page_access_token
@@ -1125,6 +1177,7 @@ async def get_whatsapp_runtime_settings(
     meta_verify_token = await get_secret_plaintext(
         organizacion_id=organizacion_id,
         clave="meta.whatsapp.verify_token",
+        force_refresh=force_refresh,
     )
     if meta_verify_token is not None:
         settings_payload.meta_verify_token = meta_verify_token
@@ -1132,6 +1185,7 @@ async def get_whatsapp_runtime_settings(
     meta_app_secret = await get_secret_plaintext(
         organizacion_id=organizacion_id,
         clave="meta.whatsapp.app_secret",
+        force_refresh=force_refresh,
     )
     if meta_app_secret is not None:
         settings_payload.meta_app_secret = meta_app_secret

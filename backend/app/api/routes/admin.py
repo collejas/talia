@@ -16,6 +16,7 @@ from app.core.secrets_crypto import SecretsCryptoError, encrypt_secret
 from app.repositories.crm import CRMRepository, CRMRepositoryError
 from app.repositories.platform_admin import PlatformRepository, PlatformRepositoryError
 from app.services import channel_routing
+from app.services import tenant_runtime
 from app.services.role_permissions_sync import (
     RolePermissionPlan,
     compute_matrix_hash,
@@ -675,6 +676,29 @@ def _build_default_tenant_config(*, calendar_resource_id: str) -> dict[str, Any]
     return config
 
 
+async def _ensure_webchat_alias_is_available(
+    *,
+    repo: PlatformRepository,
+    alias: str | None,
+) -> None:
+    normalized_alias = str(alias or "").strip().lower()
+    if not normalized_alias:
+        return
+    existing_org = await repo.resolve_org_for_route(canal="webchat", clave=normalized_alias)
+    if existing_org:
+        raise HTTPException(status_code=409, detail="webchat_alias_already_exists")
+
+
+async def _delete_created_tenant_best_effort(*, repo: PlatformRepository, tenant_id: UUID) -> None:
+    try:
+        await repo.delete_organizacion(organizacion_id=tenant_id)
+    except PlatformRepositoryError as exc:
+        logger.warning(
+            "tenant_create_cleanup_failed",
+            extra={"tenant_id": str(tenant_id), "error": str(exc)},
+        )
+
+
 CRITICAL_OWNER_PERMISSION_CODES = (
     "ver_panel",
     "settings.view",
@@ -1161,6 +1185,9 @@ async def create_tenant(
     if payload.config is not None:
         tenant_payload["config"] = payload.config
 
+    alias = payload.webchat_alias.strip().lower() if payload.webchat_alias else None
+    await _ensure_webchat_alias_is_available(repo=repo, alias=alias)
+
     tenant = await repo.create_organizacion(payload=tenant_payload)
     tenant_id = UUID(str(tenant["id"]))
     try:
@@ -1175,7 +1202,6 @@ async def create_tenant(
     except PlatformRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
-    alias = payload.webchat_alias.strip().lower() if payload.webchat_alias else None
     if alias:
         try:
             await repo.create_channel_route(
@@ -1189,6 +1215,7 @@ async def create_tenant(
             )
             channel_routing.invalidate_cache(canal="webchat", clave=alias)
         except PlatformRepositoryError as exc:
+            await _delete_created_tenant_best_effort(repo=repo, tenant_id=tenant_id)
             raise HTTPException(status_code=409, detail=str(exc)) from exc
 
     await _bootstrap_default_org_structure(
@@ -1234,182 +1261,193 @@ async def create_tenant_with_admin(
         if payload.tenant.config is not None:
             tenant_payload["config"] = payload.tenant.config
 
+        alias = payload.tenant.webchat_alias.strip().lower() if payload.tenant.webchat_alias else None
+        await _ensure_webchat_alias_is_available(repo=repo, alias=alias)
         tenant = await repo.create_organizacion(payload=tenant_payload)
         tenant_id = UUID(str(tenant["id"]))
-        current_config = await repo.get_organizacion_config(organizacion_id=tenant_id)
-        merged_config = await _ensure_tenant_calendar_bootstrap(
-            repo=repo,
-            tenant_id=tenant_id,
-            tenant_name=payload.tenant.nombre,
-            current_config=current_config or {},
-        )
-        await repo.set_organizacion_config(organizacion_id=tenant_id, config=merged_config)
+        try:
+            current_config = await repo.get_organizacion_config(organizacion_id=tenant_id)
+            merged_config = await _ensure_tenant_calendar_bootstrap(
+                repo=repo,
+                tenant_id=tenant_id,
+                tenant_name=payload.tenant.nombre,
+                current_config=current_config or {},
+            )
+            await repo.set_organizacion_config(organizacion_id=tenant_id, config=merged_config)
 
-        alias = payload.tenant.webchat_alias.strip().lower() if payload.tenant.webchat_alias else None
-        if alias:
-            try:
-                await repo.create_channel_route(
-                    payload={
-                        "organizacion_id": str(tenant_id),
-                        "canal": "webchat",
-                        "clave": alias,
-                        "metadata": {"source": "admin.create_tenant_with_admin"},
-                        "activo": True,
-                    }
+            if alias:
+                try:
+                    await repo.create_channel_route(
+                        payload={
+                            "organizacion_id": str(tenant_id),
+                            "canal": "webchat",
+                            "clave": alias,
+                            "metadata": {"source": "admin.create_tenant_with_admin"},
+                            "activo": True,
+                        }
+                    )
+                    channel_routing.invalidate_cache(canal="webchat", clave=alias)
+                except PlatformRepositoryError as exc:
+                    raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+            tenant_role_plans = _load_tenant_role_plans()
+            role_descriptions = {
+                "owner": "Propietario del tenant",
+                "admin_operativo": "Administrador operativo",
+                "supervisor": "Supervisor comercial",
+                "agente": "Agente comercial",
+                "capturista": "Captura y apoyo operativo",
+                "marketing": "Prospección y campañas",
+                "soporte": "Atención e inbox",
+                "auditor": "Lectura y auditoría",
+                "invitado": "Lectura básica",
+            }
+            role_ids_by_name: dict[str, UUID] = {}
+            for plan in tenant_role_plans:
+                role_name = _normalize_role_name(plan.role_name).lower()
+                if not role_name:
+                    continue
+                role_ids_by_name[role_name] = await _ensure_role_exists(
+                    repo=repo,
+                    organizacion_id=tenant_id,
+                    nombre=role_name,
+                    descripcion=role_descriptions.get(role_name),
                 )
-                channel_routing.invalidate_cache(canal="webchat", clave=alias)
-            except PlatformRepositoryError as exc:
-                raise HTTPException(status_code=409, detail=str(exc)) from exc
 
-        usuario_id_str, telefono_value = await create_supabase_user(
-            email=admin_email,
-            nombre=payload.admin.nombre_completo,
-            telefono=payload.admin.telefono,
-            organizacion_id=str(tenant_id),
-        )
-        usuario_id = UUID(usuario_id_str)
-
-        await repo.upsert_usuario(
-            usuario_id=usuario_id,
-            payload={
-                "correo": admin_email,
-                "nombre_completo": payload.admin.nombre_completo,
-                "telefono_e164": telefono_value,
-                "estado": payload.admin.estado,
-                "organizacion_id": str(tenant_id),
-            },
-        )
-
-        tenant_role_plans = _load_tenant_role_plans()
-        role_descriptions = {
-            "owner": "Propietario del tenant",
-            "admin_operativo": "Administrador operativo",
-            "supervisor": "Supervisor comercial",
-            "agente": "Agente comercial",
-            "capturista": "Captura y apoyo operativo",
-            "marketing": "Prospección y campañas",
-            "soporte": "Atención e inbox",
-            "auditor": "Lectura y auditoría",
-            "invitado": "Lectura básica",
-        }
-        role_ids_by_name: dict[str, UUID] = {}
-        for plan in tenant_role_plans:
-            role_name = _normalize_role_name(plan.role_name).lower()
-            if not role_name:
-                continue
-            role_ids_by_name[role_name] = await _ensure_role_exists(
+            admin_seed_role_name = _normalize_role_name(payload.seed.rol_nombre).lower() or "admin_operativo"
+            role_id = await _ensure_role_exists(
                 repo=repo,
                 organizacion_id=tenant_id,
-                nombre=role_name,
-                descripcion=role_descriptions.get(role_name),
+                nombre=admin_seed_role_name,
+                descripcion=payload.seed.rol_descripcion,
             )
 
-        admin_seed_role_name = _normalize_role_name(payload.seed.rol_nombre).lower() or "admin_operativo"
-        role_id = await _ensure_role_exists(
-            repo=repo,
-            organizacion_id=tenant_id,
-            nombre=admin_seed_role_name,
-            descripcion=payload.seed.rol_descripcion,
-        )
-
-        seed_permission_codes = {
-            permiso.codigo.strip() for permiso in payload.seed.permisos if permiso.codigo.strip()
-        }
-        desired_permission_codes = set(TENANT_BASE_PERMISSION_CODES)
-        desired_permission_codes.update(CRITICAL_OWNER_PERMISSION_CODES)
-        desired_permission_codes.update(seed_permission_codes)
-        for plan in tenant_role_plans:
-            desired_permission_codes.update(plan.permissions)
-        await _ensure_permissions_exist(
-            repo=repo,
-            organizacion_id=tenant_id,
-            permission_codes=tuple(sorted(desired_permission_codes)),
-        )
-
-        permissions = await repo.list_permissions(organizacion_id=tenant_id)
-        permission_by_code = {
-            str(row.get("codigo") or "").strip(): UUID(str(row["id"]))
-            for row in permissions
-            if isinstance(row, dict) and row.get("codigo") and row.get("id")
-        }
-        for plan in tenant_role_plans:
-            role_name = _normalize_role_name(plan.role_name).lower()
-            role_plan_id = role_ids_by_name.get(role_name)
-            if not role_plan_id:
-                continue
-            perm_ids_for_role = {
-                permission_by_code[code]
-                for code in plan.permissions
-                if code in permission_by_code
+            seed_permission_codes = {
+                permiso.codigo.strip() for permiso in payload.seed.permisos if permiso.codigo.strip()
             }
+            desired_permission_codes = set(TENANT_BASE_PERMISSION_CODES)
+            desired_permission_codes.update(CRITICAL_OWNER_PERMISSION_CODES)
+            desired_permission_codes.update(seed_permission_codes)
+            for plan in tenant_role_plans:
+                desired_permission_codes.update(plan.permissions)
+            await _ensure_permissions_exist(
+                repo=repo,
+                organizacion_id=tenant_id,
+                permission_codes=tuple(sorted(desired_permission_codes)),
+            )
+
+            permissions = await repo.list_permissions(organizacion_id=tenant_id)
+            permission_by_code = {
+                str(row.get("codigo") or "").strip(): UUID(str(row["id"]))
+                for row in permissions
+                if isinstance(row, dict) and row.get("codigo") and row.get("id")
+            }
+            for plan in tenant_role_plans:
+                role_name = _normalize_role_name(plan.role_name).lower()
+                role_plan_id = role_ids_by_name.get(role_name)
+                if not role_plan_id:
+                    continue
+                perm_ids_for_role = {
+                    permission_by_code[code]
+                    for code in plan.permissions
+                    if code in permission_by_code
+                }
+                await _grant_permissions_to_role(
+                    repo=repo,
+                    organizacion_id=tenant_id,
+                    rol_id=role_plan_id,
+                    permiso_ids=perm_ids_for_role,
+                )
+            permiso_ids = [
+                permission_by_code[code]
+                for code in sorted(seed_permission_codes)
+                if code in permission_by_code
+            ]
             await _grant_permissions_to_role(
                 repo=repo,
                 organizacion_id=tenant_id,
-                rol_id=role_plan_id,
-                permiso_ids=perm_ids_for_role,
+                rol_id=role_id,
+                permiso_ids=set(permiso_ids),
             )
-        permiso_ids = [
-            permission_by_code[code]
-            for code in sorted(seed_permission_codes)
-            if code in permission_by_code
-        ]
-        await _grant_permissions_to_role(
-            repo=repo,
-            organizacion_id=tenant_id,
-            rol_id=role_id,
-            permiso_ids=set(permiso_ids),
-        )
-        # El rol administrativo de seed (normalmente "admin") también debe quedar operativo completo.
-        await _grant_all_permissions_to_role(
-            repo=repo,
-            organizacion_id=tenant_id,
-            rol_id=role_id,
-        )
+            # El rol administrativo de seed (normalmente "admin") también debe quedar operativo completo.
+            await _grant_all_permissions_to_role(
+                repo=repo,
+                organizacion_id=tenant_id,
+                rol_id=role_id,
+            )
 
-        departamento = await repo.create_department(
-            organizacion_id=tenant_id, nombre=payload.seed.departamento
-        )
-        departamento_id = UUID(str(departamento["id"]))
-        puesto = await repo.create_position(organizacion_id=tenant_id, nombre=payload.seed.puesto)
-        puesto_id = UUID(str(puesto["id"]))
+            departamento = await repo.create_department(
+                organizacion_id=tenant_id, nombre=payload.seed.departamento
+            )
+            departamento_id = UUID(str(departamento["id"]))
+            puesto = await repo.create_position(organizacion_id=tenant_id, nombre=payload.seed.puesto)
+            puesto_id = UUID(str(puesto["id"]))
 
-        await _bootstrap_default_org_structure(
-            repo=repo,
-            organizacion_id=tenant_id,
-            primary_department_name=payload.seed.departamento,
-            primary_position_name=payload.seed.puesto,
-        )
+            await _bootstrap_default_org_structure(
+                repo=repo,
+                organizacion_id=tenant_id,
+                primary_department_name=payload.seed.departamento,
+                primary_position_name=payload.seed.puesto,
+            )
 
-        owner_role_id = await _resolve_owner_role_id(repo=repo, organizacion_id=tenant_id)
-        admin_role_id = owner_role_id or role_id
-        await _grant_all_permissions_to_role(
-            repo=repo,
-            organizacion_id=tenant_id,
-            rol_id=admin_role_id,
-        )
-        await repo.assign_user_role(
-            usuario_id=usuario_id, rol_id=admin_role_id, organizacion_id=tenant_id
-        )
+            usuario_id_str, telefono_value = await create_supabase_user(
+                email=admin_email,
+                nombre=payload.admin.nombre_completo,
+                telefono=payload.admin.telefono,
+                organizacion_id=str(tenant_id),
+            )
+            usuario_id = UUID(usuario_id_str)
 
-        await repo.create_employee(
-            usuario_id=usuario_id,
-            departamento_id=departamento_id,
-            puesto_id=puesto_id,
-            organizacion_id=tenant_id,
-        )
+            await repo.upsert_usuario(
+                usuario_id=usuario_id,
+                payload={
+                    "correo": admin_email,
+                    "nombre_completo": payload.admin.nombre_completo,
+                    "telefono_e164": telefono_value,
+                    "estado": payload.admin.estado,
+                    "organizacion_id": str(tenant_id),
+                },
+            )
 
-        return CreateTenantWithAdminResponse(
-            tenant_id=tenant_id,
-            usuario_id=usuario_id,
-            seed=TenantSeedSummary(
+            owner_role_id = await _resolve_owner_role_id(repo=repo, organizacion_id=tenant_id)
+            admin_role_id = owner_role_id or role_id
+            await _grant_all_permissions_to_role(
+                repo=repo,
+                organizacion_id=tenant_id,
                 rol_id=admin_role_id,
-                permisos_ids=permiso_ids,
+            )
+            await repo.assign_user_role(
+                usuario_id=usuario_id, rol_id=admin_role_id, organizacion_id=tenant_id
+            )
+
+            await repo.create_employee(
+                usuario_id=usuario_id,
                 departamento_id=departamento_id,
                 puesto_id=puesto_id,
-                empleado_id=usuario_id,
-            ),
-            recovery_email_sent=True,
-        )
+                organizacion_id=tenant_id,
+            )
+
+            return CreateTenantWithAdminResponse(
+                tenant_id=tenant_id,
+                usuario_id=usuario_id,
+                seed=TenantSeedSummary(
+                    rol_id=admin_role_id,
+                    permisos_ids=permiso_ids,
+                    departamento_id=departamento_id,
+                    puesto_id=puesto_id,
+                    empleado_id=usuario_id,
+                ),
+                recovery_email_sent=True,
+            )
+        except HTTPException:
+            await _delete_created_tenant_best_effort(repo=repo, tenant_id=tenant_id)
+            raise
+        except (PlatformRepositoryError, SupabaseAdminError) as exc:
+            await _delete_created_tenant_best_effort(repo=repo, tenant_id=tenant_id)
+            raise HTTPException(status_code=502, detail=str(exc)) from exc
+        except Exception as exc:
+            await _delete_created_tenant_best_effort(repo=repo, tenant_id=tenant_id)
+            raise HTTPException(status_code=502, detail=str(exc)) from exc
     except PlatformRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     except SupabaseAdminError as exc:
@@ -1539,6 +1577,7 @@ async def set_tenant_config(
         row = await repo.set_organizacion_config(organizacion_id=organizacion_id, config=payload.config)
     except PlatformRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
+    tenant_runtime.invalidate_runtime_cache(organizacion_id=organizacion_id)
     config = row.get("config")
     return TenantConfigResponse(
         organizacion_id=organizacion_id,
@@ -1687,6 +1726,7 @@ async def set_tenant_secret(
         )
     except PlatformRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
+    tenant_runtime.invalidate_runtime_cache(organizacion_id=organizacion_id)
 
     # Nunca devolver valor/nonce/cifrado. Solo metadata.
     safe_row = {
@@ -1717,6 +1757,7 @@ async def delete_tenant_secret(
         await repo.delete_secret(organizacion_id=organizacion_id, clave=secret_key)
     except PlatformRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
+    tenant_runtime.invalidate_runtime_cache(organizacion_id=organizacion_id)
     return Response(status_code=204)
 
 

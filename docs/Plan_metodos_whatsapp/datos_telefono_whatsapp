@@ -1,0 +1,29 @@
+# Nombre de la App:
+App WhatApp Tal-IA
+
+# Identificador de la app:
+950298070825920
+
+# Clave secreta de la app (meta.whatsapp.app_secret)
+24d5f1f1800c92728fa62c73d93d4695
+
+# telefono Whatsapp Pruebas (test) dado por Meta
++1 555-641-9215
+
+# Identificador de la cuenta de WhatsApp de Pruebas (test) dado por Meta
+2704137706621106
+
+# Identificador de número de teléfono de WhatsApp: 
+1064798490047119
+
+# telefono numero
++52 1 444 214 9740
+
+# Token usuario (meta.whatsapp.page_access_token)
+EAANgSoLxO8ABRcIHoFhYUVnJZAdbIqZCxmZAWOhdxA4PvYpFmZCmxJPolsqBohaQALrjejjtrxV6bkX1xpFXpLNjz0sjICRrk6D3SMrrjjpe6ZAxl7OnK4sNTUp7XD5oafYQwT1sJkEZBLGu7IKMi58DyMebv0aKguzZA08UJ8UElptso9h1zIktgZB9HEkMdT54rAZDZD
+
+# Callback URL
+https://talia.mx/api/whatsapp/meta/66c5c186-d0b5-4e8c-b126-a3a17831367c/webhook
+
+# meta.whatsapp.verify_token
+jsdbf#fhGE&f&&dhdfj8734334%as@ddGHJ$644GSBMsgojbsg195917dfgdfg8sdkn_dsfjnh-sdf=GSSH334BDsofhsnus334587255gnVS%nj2@D%d*djs/jsj_gbg-sh#6634

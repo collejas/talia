@@ -998,7 +998,10 @@ async def handle_incoming_message(
         raise HTTPException(status_code=500, detail="No se pudo enrutar el mensaje entrante")
 
     runtime_settings_started = time.perf_counter()
-    whatsapp_settings = await tenant_runtime.get_whatsapp_runtime_settings(organizacion_id=org_uuid)
+    whatsapp_settings = await tenant_runtime.get_whatsapp_runtime_settings(
+        organizacion_id=org_uuid,
+        force_refresh=True,
+    )
     _record_stage_timing(stage_timings, "runtime_settings_ms", runtime_settings_started)
     whatsapp_provider = _normalize_whatsapp_provider(whatsapp_settings.provider)
     try:
@@ -2575,7 +2578,10 @@ async def _send_meta_whatsapp_reply(
 ) -> TwilioSendResult:
     """Envía la respuesta al contacto utilizando WhatsApp Cloud API."""
 
-    runtime = await tenant_runtime.get_whatsapp_runtime_settings(organizacion_id=organizacion_id)
+    runtime = await tenant_runtime.get_whatsapp_runtime_settings(
+        organizacion_id=organizacion_id,
+        force_refresh=True,
+    )
     if not runtime.meta_phone_number_id or not runtime.meta_page_access_token:
         logger.warning("whatsapp.meta_not_configured")
         return TwilioSendResult(sid=None, status="skipped", error="meta_not_configured", provider="meta")
@@ -2663,7 +2669,10 @@ async def _send_whatsapp_reply(
     content_variables: dict[str, str] | None = None,
     organizacion_id: UUID | None = None,
 ) -> TwilioSendResult:
-    runtime = await tenant_runtime.get_whatsapp_runtime_settings(organizacion_id=organizacion_id)
+    runtime = await tenant_runtime.get_whatsapp_runtime_settings(
+        organizacion_id=organizacion_id,
+        force_refresh=True,
+    )
     provider = _normalize_whatsapp_provider(runtime.provider)
     if provider == "meta":
         return await _send_meta_whatsapp_reply(
@@ -2698,7 +2707,10 @@ async def _send_whatsapp_typing_indicator(
     if organizacion_id is None:
         return False
 
-    runtime = await tenant_runtime.get_whatsapp_runtime_settings(organizacion_id=organizacion_id)
+    runtime = await tenant_runtime.get_whatsapp_runtime_settings(
+        organizacion_id=organizacion_id,
+        force_refresh=True,
+    )
     provider = _normalize_whatsapp_provider(runtime.provider)
     if provider == "meta":
         return False
@@ -2747,7 +2759,10 @@ async def _send_whatsapp_read_indicator(
     if organizacion_id is None:
         return False
 
-    runtime = await tenant_runtime.get_whatsapp_runtime_settings(organizacion_id=organizacion_id)
+    runtime = await tenant_runtime.get_whatsapp_runtime_settings(
+        organizacion_id=organizacion_id,
+        force_refresh=True,
+    )
     provider = _normalize_whatsapp_provider(runtime.provider)
     if provider == "meta":
         if not runtime.meta_phone_number_id or not runtime.meta_page_access_token:

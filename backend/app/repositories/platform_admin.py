@@ -118,6 +118,13 @@ class PlatformRepository:
             raise PlatformRepositoryError("organizacion_create_failed")
         return data[0]
 
+    async def delete_organizacion(self, *, organizacion_id: UUID) -> None:
+        await self._rest(
+            "DELETE",
+            "/rest/v1/organizaciones",
+            params={"id": f"eq.{organizacion_id}"},
+        )
+
     async def list_channel_routes(self, *, organizacion_id: UUID) -> list[dict[str, Any]]:
         params = {
             "select": "id,organizacion_id,canal,clave,metadata,activo,creado_en,actualizado_en",

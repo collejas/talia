@@ -33,6 +33,11 @@ class DummyRepo:
             raise PlatformRepositoryError("route_conflict")
         return {"id": str(uuid4())}
 
+    async def resolve_org_for_route(self, *, canal: str, clave: str) -> str | None:
+        if self.fail_route and canal == "webchat" and clave:
+            return str(uuid4())
+        return None
+
     async def get_organizacion_config(self, *, organizacion_id: UUID) -> dict[str, Any]:
         return {}
 
@@ -50,6 +55,9 @@ class DummyRepo:
     async def set_organizacion_config(self, *, organizacion_id: UUID, config: dict[str, Any]) -> dict[str, Any]:
         self.updated_config = config
         return {"id": str(organizacion_id), "config": config}
+
+    async def delete_organizacion(self, *, organizacion_id: UUID) -> None:
+        return None
 
     async def create_permissions(
         self, *, organizacion_id: UUID, permisos: Sequence[dict[str, str]]
@@ -198,6 +206,7 @@ async def test_create_tenant_with_admin_alias_conflict(async_client: AsyncClient
     with patch("app.api.routes.admin.is_email_registered", AsyncMock(return_value=False)):
         response = await async_client.post("/admin/tenants/con_usuario", json=payload)
     assert response.status_code == 409
+    assert repo.created_tenant is None
 
 
 @pytest.mark.asyncio

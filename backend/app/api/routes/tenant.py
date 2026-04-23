@@ -29,6 +29,7 @@ from app.core.logging import get_logger
 from app.core.secrets_crypto import SecretsCryptoError, encrypt_secret
 from app.repositories.crm import CRMRepository, CRMRepositoryError
 from app.repositories.platform_admin import PlatformRepository, PlatformRepositoryError
+from app.services import tenant_runtime
 from app.services import channel_routing
 
 router = APIRouter(prefix="/tenant", tags=["tenant"])
@@ -288,6 +289,7 @@ async def upsert_tenant_secrets(
             )
         except PlatformRepositoryError as exc:
             raise HTTPException(status_code=502, detail=str(exc)) from exc
+        tenant_runtime.invalidate_runtime_cache(organizacion_id=context.organizacion_id)
 
         safe_row = {
             "id": row.get("id"),
@@ -329,6 +331,7 @@ async def delete_tenant_secret(
         await repo.delete_secret(organizacion_id=context.organizacion_id, clave=secret_key)
     except PlatformRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
+    tenant_runtime.invalidate_runtime_cache(organizacion_id=context.organizacion_id)
     return Response(status_code=204)
 
 
@@ -409,6 +412,7 @@ async def set_my_tenant_config(
         )
     except PlatformRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
+    tenant_runtime.invalidate_runtime_cache(organizacion_id=context.organizacion_id)
     config = row.get("config")
     return TenantConfigResponse(
         organizacion_id=context.organizacion_id,

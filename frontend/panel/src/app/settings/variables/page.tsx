@@ -195,6 +195,7 @@ export default async function SettingsVariablesPage() {
   const whatsappTemplates = getNestedRecord(whatsappConfig, "templates") ?? {}
   const whatsappProspeccionConfig = getNestedRecord(whatsappConfig, "prospeccion") ?? {}
   const whatsappInitialValues = {
+    whatsapp_provider: getNestedString(whatsappConfig, "provider") as "twilio" | "meta" | undefined,
     whatsapp_prompt_id: getNestedString(whatsappConfig, "prompt_id"),
     whatsapp_prompt_version: getNestedString(whatsappConfig, "prompt_version"),
     whatsapp_assistant_id: getNestedString(whatsappConfig, "assistant_id"),
@@ -202,6 +203,8 @@ export default async function SettingsVariablesPage() {
     whatsapp_reengage_minutes: getNestedNumber(whatsappConfig, "reengage_minutes"),
     whatsapp_reengage_max_attempts: getNestedNumber(whatsappConfig, "reengage_max_attempts"),
     whatsapp_escalate_minutes: getNestedNumber(whatsappConfig, "escalate_minutes"),
+    whatsapp_meta_phone_number_id: getNestedString(getNestedRecord(whatsappConfig, "meta") ?? {}, "phone_number_id"),
+    whatsapp_meta_graph_api_version: getNestedString(getNestedRecord(whatsappConfig, "meta") ?? {}, "graph_api_version"),
     whatsapp_template_sales: getNestedString(whatsappTemplates, "sales"),
     whatsapp_template_appointment: getNestedString(whatsappTemplates, "appointment"),
     whatsapp_template_cancel: getNestedString(whatsappTemplates, "cancel"),
