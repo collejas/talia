@@ -317,6 +317,7 @@ class DenueClient:
         - "46"      -> ("46", "0", "0", "0")
         - "464"     -> ("46", "464", "0", "0")
         - "4641"    -> ("46", "464", "4641", "0")
+        - "46411"   -> ("46", "464", "4641", "46411")
         - "464112"  -> ("46", "464", "4641", "464112")
         - None/"0"  -> ("0", "0", "0", "0")  (todas las actividades)
         """
@@ -326,11 +327,16 @@ class DenueClient:
         only_digits = "".join(ch for ch in codigo if ch.isdigit()).strip()
         if not only_digits or only_digits == "0":
             return ("0", "0", "0", "0")
+        segmento_clase = "0"
+        if len(only_digits) >= 6:
+            segmento_clase = only_digits[:6]
+        elif len(only_digits) >= 5:
+            segmento_clase = only_digits[:5]
         return (
             only_digits[:2] if len(only_digits) >= 2 else "0",
             only_digits[:3] if len(only_digits) >= 3 else "0",
             only_digits[:4] if len(only_digits) >= 4 else "0",
-            only_digits[:6] if len(only_digits) >= 6 else "0",
+            segmento_clase,
         )
 
     def _build_area_segments(
