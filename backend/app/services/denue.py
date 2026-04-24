@@ -12,11 +12,13 @@ import httpx
 
 from app.core.config import settings
 from app.core.logging import get_logger
+from app.data.geo.locations import list_municipalities_for_state
 
 logger = get_logger(__name__)
 search_logger = get_logger("app.prospeccion.busquedas")
 
 _ALLOWED_DENUE_RADII = [250, 500, 1000, 5000]
+_DENUE_MIN_SPLIT_WINDOW = 25
 
 _DENUE_HTTP_TIMEOUT = httpx.Timeout(connect=20.0, read=30.0, write=20.0, pool=30.0)
 _DENUE_HTTP_LIMITS = httpx.Limits(max_keepalive_connections=20, max_connections=50, keepalive_expiry=30.0)
@@ -44,6 +46,40 @@ def _invalidate_denue_http_client(client: httpx.AsyncClient | None = None) -> No
     if client is not None and client is not _DENUE_HTTP_CLIENT:
         return
     _DENUE_HTTP_CLIENT = None
+
+
+def expand_state_to_municipalities(state_code: str | None) -> list[tuple[str | None, str | None]]:
+    """Expande un estado en sus municipios para búsquedas DENUE más robustas."""
+    state = str(state_code or "").strip().zfill(2)
+    if not state or state == "00":
+        return []
+    municipalities = list_municipalities_for_state(state)
+    if not municipalities:
+        return []
+    return [(state, municipio.get("code")) for municipio in municipalities if municipio.get("code")]
+
+
+def expand_targets_for_area_act(
+    targets: list[tuple[str | None, str | None]],
+) -> list[tuple[str | None, str | None]]:
+    """Expande solo los estados problemáticos a nivel de municipio antes de consultar DENUE."""
+    expanded: list[tuple[str | None, str | None]] = []
+    for state, municipality in targets:
+        normalized_state = str(state or "").strip().zfill(2)
+        if normalized_state == "01" and municipality is None:
+            fallback = expand_state_to_municipalities(normalized_state)
+            if fallback:
+                expanded.extend(fallback)
+                continue
+        expanded.append((state, municipality))
+    seen: set[tuple[str | None, str | None]] = set()
+    unique: list[tuple[str | None, str | None]] = []
+    for pair in expanded:
+        if pair in seen:
+            continue
+        seen.add(pair)
+        unique.append(pair)
+    return unique
 
 
 class DenueError(RuntimeError):
@@ -182,12 +218,7 @@ class DenueClient:
                 logger.exception("denue.invalid_json", extra={"detail": text[:500]})
                 search_logger.exception("denue.invalid_json", extra={"detail": text[:500], "url": url})
                 raise DenueError("denue_invalid_response") from exc
-        if isinstance(data, dict):
-            message = data.get("error") or data.get("message") or "denue_error"
-            raise DenueError(message)
-        if not isinstance(data, list):
-            raise DenueError("denue_invalid_response")
-        return data
+        return self._coerce_rows(data, method="Buscar", url=url)
 
     @staticmethod
     async def _safe_text(resp: httpx.Response) -> str:
@@ -276,7 +307,13 @@ class DenueClient:
             "denue.request_path",
             extra={"method": method, "segments": segments, "url": path},
         )
-        resp = await self._get(path, method=method, segments=segments)
+        try:
+            resp = await self._get(path, method=method, segments=segments)
+        except DenueError as exc:
+            split_results = await self._retry_request_list_with_split(method, segments, exc)
+            if split_results is not None:
+                return split_results
+            raise
         if resp.status_code >= 400:
             detail = await self._safe_text(resp)
             logger.error(
@@ -309,12 +346,129 @@ class DenueClient:
                     extra={"detail": text[:500], "method": method, "segments": segments, "url": path},
                 )
                 raise DenueError("denue_invalid_response") from exc
-        if isinstance(data, dict):
-            message = data.get("error") or data.get("message") or "denue_error"
-            raise DenueError(message)
-        if not isinstance(data, list):
+        return self._coerce_rows(data, method=method, url=path)
+
+    @staticmethod
+    def _coerce_rows(data: Any, *, method: str, url: str) -> list[dict[str, Any]]:
+        if isinstance(data, list):
+            return data
+        if not isinstance(data, dict):
             raise DenueError("denue_invalid_response")
-        return data
+
+        message = data.get("error") or data.get("message")
+        if message:
+            raise DenueError(str(message))
+
+        row_keys = (
+            "rows",
+            "results",
+            "registros",
+            "items",
+            "data",
+        )
+        for key in row_keys:
+            rows = data.get(key)
+            if isinstance(rows, list):
+                return rows
+
+        count_keys = (
+            "total",
+            "count",
+            "total_count",
+            "num_registros",
+            "registro_total",
+        )
+        for key in count_keys:
+            value = data.get(key)
+            if value is None:
+                continue
+            try:
+                if int(value) == 0:
+                    search_logger.info(
+                        "denue.empty_result",
+                        extra={"method": method, "url": url, "key": key},
+                    )
+                    return []
+            except (TypeError, ValueError):
+                continue
+
+        if not data:
+            search_logger.info("denue.empty_result", extra={"method": method, "url": url, "reason": "empty_dict"})
+            return []
+
+        empty_values = (None, "", 0, 0.0, False)
+        if all(value in empty_values or value == [] for value in data.values()):
+            search_logger.info("denue.empty_result", extra={"method": method, "url": url, "reason": "empty_values"})
+            return []
+
+        raise DenueError("denue_invalid_response")
+
+    async def _retry_request_list_with_split(
+        self,
+        method: str,
+        segments: list[str],
+        exc: DenueError,
+    ) -> list[dict[str, Any]] | None:
+        if str(exc) not in {"denue_request_failed", "denue_connect_timeout", "denue_read_timeout"}:
+            return None
+        window = self._extract_batch_window(method, segments)
+        if window is None:
+            return None
+        start_idx, end_idx = window
+        try:
+            start = int(segments[start_idx])
+            end = int(segments[end_idx])
+        except (TypeError, ValueError):
+            return None
+        if end <= start:
+            return None
+        size = end - start + 1
+        if size <= _DENUE_MIN_SPLIT_WINDOW:
+            return None
+
+        mid = start + (size // 2) - 1
+        left = list(segments)
+        right = list(segments)
+        left[end_idx] = str(mid)
+        right[start_idx] = str(mid + 1)
+
+        search_logger.warning(
+            "denue.request_split_retry",
+            extra={
+                "method": method,
+                "segments": segments,
+                "window": {"start": start, "end": end, "size": size},
+                "split_at": mid,
+            },
+        )
+        left_rows = await self._request_list(method, left)
+        right_rows = await self._request_list(method, right)
+        return self._merge_rows(left_rows, right_rows)
+
+    @staticmethod
+    def _extract_batch_window(method: str, segments: list[str]) -> tuple[int, int] | None:
+        if method == "BuscarEntidad" and len(segments) >= 4:
+            return (2, 3)
+        if method in {"BuscarAreaAct", "BuscarAreaActEstr"} and len(segments) >= 13:
+            return (10, 11)
+        return None
+
+    @staticmethod
+    def _merge_rows(*groups: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        merged: list[dict[str, Any]] = []
+        seen_ids: set[str] = set()
+        for group in groups:
+            for row in group:
+                if not isinstance(row, dict):
+                    continue
+                external_id = row.get("Id") or row.get("id")
+                key = str(external_id) if external_id is not None else None
+                if key and key in seen_ids:
+                    continue
+                if key:
+                    seen_ids.add(key)
+                merged.append(row)
+        return merged
 
     @staticmethod
     def _normalize_geo_segment(value: str | None, length: int, default: str = "0") -> str:
@@ -523,4 +677,10 @@ def _classify_estrato(raw: str | None) -> str | None:
     return raw
 
 
-__all__ = ["DenueClient", "DenueError", "normalize_denue_place"]
+__all__ = [
+    "DenueClient",
+    "DenueError",
+    "expand_state_to_municipalities",
+    "expand_targets_for_area_act",
+    "normalize_denue_place",
+]

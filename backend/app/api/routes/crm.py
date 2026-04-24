@@ -81,6 +81,7 @@ from app.services.channel_routing import resolve_organizacion_id
 from app.services import calendar as calendar_service
 from app.services import quotes as quotes_service
 from app.services.buscador_jobs import BUSCADOR_JOB_MANAGER
+from app.services.denue import expand_state_to_municipalities, expand_targets_for_area_act
 from app.services.denue_search_jobs import DENUE_SEARCH_JOB_MANAGER, DenueSearchJob
 from app.services.google_search_jobs import GOOGLE_SEARCH_JOB_MANAGER, GoogleSearchJob
 from app.services.buscador_runner import BuscadorParams
@@ -3783,8 +3784,6 @@ def _geo_targets_from_payload(payload: DenueBusquedaPayload) -> list[tuple[str |
     if not targets:
         targets.append((None, None))
     return targets
-
-
 async def _build_advanced_meta(payload: DenueBusquedaPayload, repo: CRMRepository | None = None) -> dict[str, Any]:
     meta: dict[str, Any] = {"modo": payload.modo}
     if payload.texto_busqueda:
@@ -19241,6 +19240,7 @@ async def crear_busqueda_denue(
                 if not activity_codes:
                     raise HTTPException(status_code=400, detail="actividad_required")
                 geo_targets = _geo_targets_from_payload(payload)
+                geo_targets = expand_targets_for_area_act(geo_targets)
                 estratos: list[str | None]
                 if modo == "area_act_estr":
                     if not payload.estrato_ids:
@@ -19269,52 +19269,85 @@ async def crear_busqueda_denue(
                     combos = combos[:combo_limit]
 
                 for activity, entidad, municipio, estrato in combos:
-                    if modo == "area_act_estr":
-                        async def search_batch(
-                            registro_inicial: int,
-                            registro_final: int,
-                            *,
-                            _activity: str = activity,
-                            _entidad: str | None = entidad,
-                            _municipio: str | None = municipio,
-                            _estrato: str | None = estrato,
-                        ) -> list[dict[str, Any]]:
-                            return await client.search_area_act_estr(
-                                entidad=_entidad,
-                                municipio=_municipio,
-                                actividad_codigo=_activity,
-                                texto=text_query or None,
-                                registro_inicial=registro_inicial,
-                                registro_final=registro_final,
-                                estrato=_estrato,
-                            )
-                    else:
-                        async def search_batch(
-                            registro_inicial: int,
-                            registro_final: int,
-                            *,
-                            _activity: str = activity,
-                            _entidad: str | None = entidad,
-                            _municipio: str | None = municipio,
-                        ) -> list[dict[str, Any]]:
-                            return await client.search_area_act(
-                                entidad=_entidad,
-                                municipio=_municipio,
-                                actividad_codigo=_activity,
-                                texto=text_query or None,
-                                registro_inicial=registro_inicial,
-                                registro_final=registro_final,
-                            )
+                    async def _run_combo(
+                        *,
+                        _activity: str = activity,
+                        _entidad: str | None = entidad,
+                        _municipio: str | None = municipio,
+                        _estrato: str | None = estrato,
+                    ) -> None:
+                        if modo == "area_act_estr":
+                            async def search_batch(
+                                registro_inicial: int,
+                                registro_final: int,
+                                *,
+                                _activity_inner: str = _activity,
+                                _entidad_inner: str | None = _entidad,
+                                _municipio_inner: str | None = _municipio,
+                                _estrato_inner: str | None = _estrato,
+                            ) -> list[dict[str, Any]]:
+                                return await client.search_area_act_estr(
+                                    entidad=_entidad_inner,
+                                    municipio=_municipio_inner,
+                                    actividad_codigo=_activity_inner,
+                                    texto=text_query or None,
+                                    registro_inicial=registro_inicial,
+                                    registro_final=registro_final,
+                                    estrato=_estrato_inner,
+                                )
+                        else:
+                            async def search_batch(
+                                registro_inicial: int,
+                                registro_final: int,
+                                *,
+                                _activity_inner: str = _activity,
+                                _entidad_inner: str | None = _entidad,
+                                _municipio_inner: str | None = _municipio,
+                            ) -> list[dict[str, Any]]:
+                                return await client.search_area_act(
+                                    entidad=_entidad_inner,
+                                    municipio=_municipio_inner,
+                                    actividad_codigo=_activity_inner,
+                                    texto=text_query or None,
+                                    registro_inicial=registro_inicial,
+                                    registro_final=registro_final,
+                                )
 
-                    await _process_batches(
-                        search_batch,
-                        extra={
-                            "entidad": entidad,
-                            "municipio": municipio,
-                            "actividad_codigo": activity,
-                            "estrato": estrato,
-                        },
-                    )
+                        await _process_batches(
+                            search_batch,
+                            extra={
+                                "entidad": _entidad,
+                                "municipio": _municipio,
+                                "actividad_codigo": _activity,
+                                "estrato": _estrato,
+                            },
+                        )
+
+                    try:
+                        await _run_combo()
+                    except DenueError as exc:
+                        if municipio is not None:
+                            raise
+                        fallback_targets = expand_state_to_municipalities(entidad)
+                        if not fallback_targets:
+                            raise
+                        search_logger.warning(
+                            "denue.state_municipality_fallback",
+                            extra={
+                                "modo": modo,
+                                "entidad": entidad,
+                                "actividad_codigo": activity,
+                                "estrato": estrato,
+                                "error": str(exc),
+                                "municipios": len(fallback_targets),
+                            },
+                        )
+                        for fallback_entidad, fallback_municipio in fallback_targets:
+                            await _run_combo(
+                                _entidad=fallback_entidad,
+                                _municipio=fallback_municipio,
+                                _estrato=estrato,
+                            )
             else:
                 raise HTTPException(status_code=400, detail="modo_desconocido")
     except DenueError as exc:

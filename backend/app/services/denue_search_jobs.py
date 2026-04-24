@@ -13,7 +13,13 @@ from app.core.config import settings
 from app.core.logging import get_logger
 from app.repositories.crm import CRMRepository, CRMRepositoryError
 from app.services import tenant_runtime
-from app.services.denue import DenueClient, DenueError, normalize_denue_place
+from app.services.denue import (
+    DenueClient,
+    DenueError,
+    expand_state_to_municipalities,
+    expand_targets_for_area_act,
+    normalize_denue_place,
+)
 
 logger = get_logger(__name__)
 search_logger = get_logger("app.prospeccion.busquedas")
@@ -346,7 +352,7 @@ class DenueSearchJobManager:
         elif modo == "entidad":
             if not text_query:
                 raise DenueError("texto_busqueda_required")
-            targets = _geo_targets()
+            targets = expand_targets_for_area_act(_geo_targets())
             entidades = [estado for estado, _ in targets if estado]
             if not entidades:
                 raise DenueError("entidad_required")
@@ -389,48 +395,87 @@ class DenueSearchJobManager:
                 combos = combos[:combo_limit]
 
             for activity, entidad, municipio, estrato in combos:
-                if modo == "area_act_estr":
-                    async def fetch_batch(
-                        start: int,
-                        end: int,
-                        *,
-                        _activity: str = activity,
-                        _entidad: str | None = entidad,
-                        _municipio: str | None = municipio,
-                        _estrato: str | None = estrato,
-                    ) -> list[dict[str, Any]]:
-                        return await client.search_area_act_estr(
-                            entidad=_entidad,
-                            municipio=_municipio,
-                            actividad_codigo=_activity,
-                            texto=text_query,
-                            registro_inicial=start,
-                            registro_final=end,
-                            estrato=_estrato,
-                        )
+                async def _run_combo(
+                    *,
+                    _activity: str = activity,
+                    _entidad: str | None = entidad,
+                    _municipio: str | None = municipio,
+                    _estrato: str | None = estrato,
+                ) -> None:
+                    if modo == "area_act_estr":
+                        async def fetch_batch(
+                            start: int,
+                            end: int,
+                            *,
+                            _activity_inner: str = _activity,
+                            _entidad_inner: str | None = _entidad,
+                            _municipio_inner: str | None = _municipio,
+                            _estrato_inner: str | None = _estrato,
+                        ) -> list[dict[str, Any]]:
+                            return await client.search_area_act_estr(
+                                entidad=_entidad_inner,
+                                municipio=_municipio_inner,
+                                actividad_codigo=_activity_inner,
+                                texto=text_query,
+                                registro_inicial=start,
+                                registro_final=end,
+                                estrato=_estrato_inner,
+                            )
+                    else:
+                        async def fetch_batch(
+                            start: int,
+                            end: int,
+                            *,
+                            _activity_inner: str = _activity,
+                            _entidad_inner: str | None = _entidad,
+                            _municipio_inner: str | None = _municipio,
+                        ) -> list[dict[str, Any]]:
+                            return await client.search_area_act(
+                                entidad=_entidad_inner,
+                                municipio=_municipio_inner,
+                                actividad_codigo=_activity_inner,
+                                texto=text_query,
+                                registro_inicial=start,
+                                registro_final=end,
+                            )
 
-                else:
-                    async def fetch_batch(
-                        start: int,
-                        end: int,
-                        *,
-                        _activity: str = activity,
-                        _entidad: str | None = entidad,
-                        _municipio: str | None = municipio,
-                    ) -> list[dict[str, Any]]:
-                        return await client.search_area_act(
-                            entidad=_entidad,
-                            municipio=_municipio,
-                            actividad_codigo=_activity,
-                            texto=text_query,
-                            registro_inicial=start,
-                            registro_final=end,
-                        )
+                    await _process_batches(
+                        fetch_batch,
+                        extra={
+                            "actividad_codigo": _activity,
+                            "entidad": _entidad,
+                            "municipio": _municipio,
+                            "estrato": _estrato,
+                        },
+                    )
 
-                await _process_batches(
-                    fetch_batch,
-                    extra={"actividad_codigo": activity, "entidad": entidad, "municipio": municipio, "estrato": estrato},
-                )
+                try:
+                    await _run_combo()
+                except DenueError as exc:
+                    if municipio is not None:
+                        raise
+                    fallback_targets = expand_state_to_municipalities(entidad)
+                    if not fallback_targets:
+                        raise
+                    search_logger.warning(
+                        "denue.state_municipality_fallback",
+                        extra={
+                            "job_id": str(job.job_id),
+                            "busqueda_id": str(job.busqueda_id),
+                            "modo": modo,
+                            "entidad": entidad,
+                            "actividad_codigo": activity,
+                            "estrato": estrato,
+                            "error": str(exc),
+                            "municipios": len(fallback_targets),
+                        },
+                    )
+                    for fallback_entidad, fallback_municipio in fallback_targets:
+                        await _run_combo(
+                            _entidad=fallback_entidad,
+                            _municipio=fallback_municipio,
+                            _estrato=estrato,
+                        )
         else:
             raise DenueError("modo_desconocido")
 
