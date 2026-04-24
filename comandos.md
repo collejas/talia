@@ -89,6 +89,7 @@ sudo systemctl restart talia-api.service
 sudo systemctl restart talia-panel.service
 
 BUSQUEDAS DENUE codex resume 019dbbf0-3dc7-7e81-aca8-16ee42ae7984
+CORREO: codex resume 019dbc66-c341-76f2-a997-a8785463446c
 # Permisos Git
 sudo chown -R jorge:jorge /var/www/talia/.git
 

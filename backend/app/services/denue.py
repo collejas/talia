@@ -38,6 +38,14 @@ def _get_denue_http_client(timeout: float) -> httpx.AsyncClient:
     return _DENUE_HTTP_CLIENT
 
 
+def _invalidate_denue_http_client(client: httpx.AsyncClient | None = None) -> None:
+    """Descarta el cliente compartido cuando el pool queda en un estado inválido."""
+    global _DENUE_HTTP_CLIENT  # noqa: PLW0603
+    if client is not None and client is not _DENUE_HTTP_CLIENT:
+        return
+    _DENUE_HTTP_CLIENT = None
+
+
 class DenueError(RuntimeError):
     """Error al interactuar con DENUE."""
 
@@ -57,9 +65,9 @@ class DenueClient:
         self.pause_between_pages = pause_between_pages
 
     async def _get(self, url: str, *, method: str, segments: list[str] | None = None) -> httpx.Response:
-        client = _get_denue_http_client(self.timeout)
         max_attempts = 3
         for attempt in range(1, max_attempts + 1):
+            client = _get_denue_http_client(self.timeout)
             try:
                 return await client.get(url)
             except httpx.ConnectTimeout as exc:
@@ -88,6 +96,15 @@ class DenueClient:
                 )
                 if attempt >= max_attempts:
                     raise DenueError("denue_read_timeout") from exc
+            except httpx.RemoteProtocolError as exc:
+                logger.exception("denue.request_error", extra={"error": str(exc)})
+                search_logger.exception(
+                    "denue.request_error",
+                    extra={"error": str(exc), "method": method, "segments": segments, "url": url},
+                )
+                _invalidate_denue_http_client(client)
+                if attempt >= max_attempts:
+                    raise DenueError("denue_request_failed") from exc
             except httpx.RequestError as exc:  # pragma: no cover - depende de red
                 logger.exception("denue.request_error", extra={"error": str(exc)})
                 search_logger.exception(
