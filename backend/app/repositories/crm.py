@@ -277,37 +277,21 @@ def _row_matches_geo_filters(
     municipality_code_keys = ("municipio_cve", "cve_mun", "municipio_code", "codigo_municipio")
     municipality_name_keys = ("municipio", "municipio_nombre", "nom_mun", "city", "localidad")
 
-    state_code_values: list[str] = []
-    state_name_values: list[str] = []
-    municipality_code_values: list[str] = []
-    municipality_name_values: list[str] = []
-    for source in (metadata, busqueda_meta, ubicacion_meta, ubicacion_busqueda):
-        state_code_values.extend(_extract_geo_values(source, state_code_keys))
-        state_name_values.extend(_extract_geo_values(source, state_name_keys))
-        municipality_code_values.extend(_extract_geo_values(source, municipality_code_keys))
-        municipality_name_values.extend(_extract_geo_values(source, municipality_name_keys))
+    state_code_values: list[str] = _extract_geo_values(row, state_code_keys)
+    state_name_values: list[str] = _extract_geo_values(row, state_name_keys)
+    municipality_code_values: list[str] = _extract_geo_values(row, municipality_code_keys)
+    municipality_name_values: list[str] = _extract_geo_values(row, municipality_name_keys)
 
-    for key in ("estado_nombre", "state_name"):
-        value = row.get(key)
-        if isinstance(value, str) and value.strip():
-            state_name_values.append(value.strip())
-    for key in ("municipio_nombre", "municipality_name"):
-        value = row.get(key)
-        if isinstance(value, str) and value.strip():
-            municipality_name_values.append(value.strip())
-
-    corpus_parts: list[str] = []
-    address_value = row.get("address")
-    if isinstance(address_value, str) and address_value.strip():
-        corpus_parts.append(address_value)
-    corpus_parts.extend(state_name_values)
-    corpus_parts.extend(municipality_name_values)
-    if metadata:
-        try:
-            corpus_parts.append(json.dumps(metadata, ensure_ascii=False))
-        except Exception:
-            pass
-    corpus = _normalize_geo_text(" ".join(corpus_parts))
+    # Legacy fallback: only inspect metadata when the row does not already expose
+    # normalized geo columns. This keeps the exact-column path authoritative.
+    if not state_code_values and not state_name_values:
+        for source in (metadata, busqueda_meta, ubicacion_meta, ubicacion_busqueda):
+            state_code_values.extend(_extract_geo_values(source, state_code_keys))
+            state_name_values.extend(_extract_geo_values(source, state_name_keys))
+    if not municipality_code_values and not municipality_name_values:
+        for source in (metadata, busqueda_meta, ubicacion_meta, ubicacion_busqueda):
+            municipality_code_values.extend(_extract_geo_values(source, municipality_code_keys))
+            municipality_name_values.extend(_extract_geo_values(source, municipality_name_keys))
 
     if geo_estado:
         raw_state = str(geo_estado).strip()
@@ -331,15 +315,10 @@ def _row_matches_geo_filters(
                     state_match = True
                     break
         if not state_match and state_name_candidates:
-            detected_states = _extract_state_names_from_text(corpus)
+            normalized_state_names = {_normalize_geo_text(value) for value in state_name_values if _normalize_geo_text(value)}
             for name_candidate in state_name_candidates:
                 normalized_candidate = _normalize_geo_text(name_candidate)
-                if not normalized_candidate:
-                    continue
-                if normalized_candidate in detected_states:
-                    state_match = True
-                    break
-                if not detected_states and normalized_candidate in corpus:
+                if normalized_candidate and normalized_candidate in normalized_state_names:
                     state_match = True
                     break
         if not state_match:
@@ -375,9 +354,12 @@ def _row_matches_geo_filters(
                     municipality_match = True
                     break
         if not municipality_match and municipality_name_candidates:
+            normalized_municipality_names = {
+                _normalize_geo_text(value) for value in municipality_name_values if _normalize_geo_text(value)
+            }
             for name_candidate in municipality_name_candidates:
                 normalized_candidate = _normalize_geo_text(name_candidate)
-                if normalized_candidate and normalized_candidate in corpus:
+                if normalized_candidate and normalized_candidate in normalized_municipality_names:
                     municipality_match = True
                     break
         if not municipality_match:
@@ -401,87 +383,39 @@ def _build_geo_postgrest_filters(
         state_digits = _digits_only(raw_state)
         if state_digits:
             state_code = state_digits[-2:].zfill(2)
-
-        state_name_candidates: list[str] = []
-        if state_code:
-            state_name_candidates.extend(_search_variants(get_state_name(state_code)))
-        state_name_candidates.extend(_search_variants(raw_state))
-
-        state_conditions: list[str] = []
+        state_clauses: list[str] = []
         if state_code:
             state_code_literal = _postgrest_eq_literal(state_code)
-            for key in (
-                "metadata->>estado_cve",
-                "metadata->>cve_ent",
-                "metadata->ubicacion->>estado_cve",
-                "metadata->busqueda_meta->ubicacion->>estado_cve",
-            ):
-                state_conditions.append(f"{key}.eq.{state_code_literal}")
+            state_clauses.append(f"estado_cve.eq.{state_code_literal}")
+            state_clauses.append(f"estado_nombre.ilike.{_postgrest_ilike_literal(get_state_name(state_code) or state_code)}")
+        else:
+            for candidate in _search_variants(raw_state):
+                literal = _postgrest_ilike_literal(candidate)
+                state_clauses.append(f"estado_nombre.ilike.{literal}")
 
-        seen_state_names: set[str] = set()
-        for candidate in state_name_candidates:
-            normalized = candidate.strip().casefold()
-            if not normalized or normalized in seen_state_names:
-                continue
-            seen_state_names.add(normalized)
-            literal = _postgrest_ilike_literal(candidate)
-            for key in (
-                "estado_nombre",
-                "metadata->>estado",
-                "metadata->>estado_nombre",
-                "metadata->>nom_ent",
-                "metadata->ubicacion->>estado",
-                "metadata->busqueda_meta->ubicacion->>estado",
-                "address",
-            ):
-                state_conditions.append(f"{key}.ilike.{literal}")
-
-        if state_conditions:
-            filters.append(f"or({','.join(state_conditions)})")
+        if state_clauses:
+            filters.append(f"or({','.join(state_clauses)})")
 
     if geo_municipio:
         raw_municipality = str(geo_municipio).strip()
         municipality_digits = _digits_only(raw_municipality)
         municipality_code = municipality_digits[-3:].zfill(3) if municipality_digits else None
-
-        municipality_name_candidates: list[str] = []
-        if municipality_code:
-            municipality_name_candidates.extend(
-                _search_variants(get_municipality_name(state_code, municipality_code))
-            )
-        municipality_name_candidates.extend(_search_variants(raw_municipality))
-
-        municipality_conditions: list[str] = []
+        municipality_clauses: list[str] = []
         if municipality_code:
             municipality_code_literal = _postgrest_eq_literal(municipality_code)
-            for key in (
-                "metadata->>municipio_cve",
-                "metadata->>cve_mun",
-                "metadata->ubicacion->>municipio_cve",
-                "metadata->busqueda_meta->ubicacion->>municipio_cve",
-            ):
-                municipality_conditions.append(f"{key}.eq.{municipality_code_literal}")
+            municipality_clauses.append(f"municipio_cve.eq.{municipality_code_literal}")
+            municipality_name = get_municipality_name(state_code, municipality_code) if state_code else None
+            if municipality_name:
+                municipality_clauses.append(
+                    f"municipio_nombre.ilike.{_postgrest_ilike_literal(municipality_name)}"
+                )
+        else:
+            for candidate in _search_variants(raw_municipality):
+                literal = _postgrest_ilike_literal(candidate)
+                municipality_clauses.append(f"municipio_nombre.ilike.{literal}")
 
-        seen_municipality_names: set[str] = set()
-        for candidate in municipality_name_candidates:
-            normalized = candidate.strip().casefold()
-            if not normalized or normalized in seen_municipality_names:
-                continue
-            seen_municipality_names.add(normalized)
-            literal = _postgrest_ilike_literal(candidate)
-            for key in (
-                "municipio_nombre",
-                "metadata->>municipio",
-                "metadata->>municipio_nombre",
-                "metadata->>nom_mun",
-                "metadata->ubicacion->>municipio",
-                "metadata->busqueda_meta->ubicacion->>municipio",
-                "address",
-            ):
-                municipality_conditions.append(f"{key}.ilike.{literal}")
-
-        if municipality_conditions:
-            filters.append(f"or({','.join(municipality_conditions)})")
+        if municipality_clauses:
+            filters.append(f"or({','.join(municipality_clauses)})")
 
     return filters
 
@@ -10972,13 +10906,9 @@ class CRMRepository:
             if unique_activities:
                 params["actividad"] = _postgrest_in_clause(unique_activities)
 
-        geo_filters = _build_geo_postgrest_filters(
-            geo_estado=geo_estado,
-            geo_municipio=geo_municipio,
-        )
-        geo_filters_pushed = bool(geo_filters)
-        if geo_filters:
-            and_filters.extend(geo_filters)
+        # Geo filters are evaluated in backend scan mode so we can match exact
+        # normalized columns first and keep legacy fallbacks under control.
+        geo_filters_pushed = False
 
         if and_filters:
             params["and"] = "(" + ",".join(and_filters) + ")"
@@ -11048,8 +10978,8 @@ class CRMRepository:
                     included_ids=include_ids,
                     limit=limit,
                     offset=offset,
-                    geo_estado=None if geo_filters_pushed else geo_estado,
-                    geo_municipio=None if geo_filters_pushed else geo_municipio,
+                    geo_estado=geo_estado,
+                    geo_municipio=geo_municipio,
                 )
             params["id"] = _postgrest_in_clause(sorted(include_ids))
         elif exclude_ids:
@@ -11059,8 +10989,8 @@ class CRMRepository:
                 excluded_ids=exclude_ids,
                 limit=limit,
                 offset=offset,
-                geo_estado=None if geo_filters_pushed else geo_estado,
-                geo_municipio=None if geo_filters_pushed else geo_municipio,
+                geo_estado=geo_estado,
+                geo_municipio=geo_municipio,
             )
 
         if (geo_estado or geo_municipio) and not geo_filters_pushed:

@@ -4,7 +4,12 @@ from unittest.mock import AsyncMock
 import pytest
 
 from app.core.config import settings
-from app.repositories.crm import CRMRepository, _build_prospectos_ids_cache_key
+from app.repositories.crm import (
+    CRMRepository,
+    _build_geo_postgrest_filters,
+    _build_prospectos_ids_cache_key,
+    _row_matches_geo_filters,
+)
 
 
 class DummyResponse:
@@ -135,3 +140,30 @@ def test_prospectos_cache_key_includes_organizacion_id() -> None:
     key_b = _build_prospectos_ids_cache_key(usuario_token=token, organizacion_id=org_b, suffix="scraper")
 
     assert key_a != key_b
+
+
+def test_geo_postgrest_filters_use_exact_geo_columns() -> None:
+    filters = _build_geo_postgrest_filters(geo_estado="24", geo_municipio="028")
+
+    assert any(item.startswith("or(") and "estado_cve.eq.24" in item for item in filters)
+    assert any(item.startswith("or(") and "municipio_cve.eq.028" in item for item in filters)
+    assert all("metadata->" not in item for item in filters)
+    assert all("address" not in item for item in filters)
+
+
+def test_geo_row_matching_prefers_exact_geo_columns_over_text() -> None:
+    row = {
+        "estado_cve": "24",
+        "estado_nombre": "Querétaro",
+        "municipio_cve": "028",
+        "municipio_nombre": "Querétaro",
+        "address": "Algo en Puebla",
+        "metadata": {
+            "estado_nombre": "Puebla",
+            "municipio_nombre": "Puebla",
+            "ubicacion": {"estado": "Puebla", "municipio": "Puebla"},
+        },
+    }
+
+    assert _row_matches_geo_filters(row, geo_estado="24", geo_municipio="028")
+    assert not _row_matches_geo_filters(row, geo_estado="21", geo_municipio=None)
