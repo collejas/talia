@@ -6122,32 +6122,40 @@ function sanitizeQueryDisplayLabel(value: string | null | undefined): string | n
   return normalized
 }
 
+function readTrimmedString(value: unknown): string | null {
+  if (typeof value !== "string") {
+    return null
+  }
+  const trimmed = value.trim()
+  return trimmed.length ? trimmed : null
+}
+
 function extractProspectoQueryValue(metadata: unknown, fuenteBusqueda?: string | null): string | null {
   const fuente = normalizeBusquedaLabel(fuenteBusqueda)
   if (isRecord(metadata)) {
-    const query = normalizeBusquedaLabel(String(metadata["query"] ?? ""))
+    const query = normalizeBusquedaLabel(readTrimmedString(metadata["query"]))
     if (query) {
       return query
     }
-    const busquedaQuery = normalizeBusquedaLabel(String(metadata["busqueda_query"] ?? ""))
+    const busquedaQuery = normalizeBusquedaLabel(readTrimmedString(metadata["busqueda_query"]))
     if (busquedaQuery) {
       return busquedaQuery
     }
     const busquedaMeta = metadata["busqueda_meta"]
     if (isRecord(busquedaMeta)) {
-      const nestedQuery = normalizeBusquedaLabel(String(busquedaMeta["query"] ?? ""))
+      const nestedQuery = normalizeBusquedaLabel(readTrimmedString(busquedaMeta["query"]))
       if (nestedQuery) {
         return nestedQuery
       }
       const advanced = busquedaMeta["advanced_filters"]
       if (isRecord(advanced)) {
-        const textoBusqueda = normalizeBusquedaLabel(String(advanced["texto_busqueda"] ?? ""))
+        const textoBusqueda = normalizeBusquedaLabel(readTrimmedString(advanced["texto_busqueda"]))
         if (textoBusqueda) {
           return textoBusqueda
         }
       }
     }
-    const busquedaId = normalizeBusquedaLabel(String(metadata["busqueda_id"] ?? ""))
+    const busquedaId = normalizeBusquedaLabel(readTrimmedString(metadata["busqueda_id"]))
     if (busquedaId) {
       return busquedaId
     }

@@ -119,7 +119,10 @@ async def test_list_prospectos_scopes_request_to_organizacion_id(monkeypatch: py
     select = params.get("select")
     assert isinstance(select, str)
     assert select != "*"
-    assert "nombre_comercial" in select
+    assert "display_name" in select
+    assert "scraper_ejecutado" not in select
+    assert "scraper_ultimo_en" not in select
+    assert "contact_indicators" not in select
 
 
 def test_prospectos_cache_key_includes_organizacion_id() -> None:
