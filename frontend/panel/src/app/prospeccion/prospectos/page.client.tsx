@@ -559,7 +559,6 @@ const DEFAULT_TABLE_COLUMN_ORDER: ProspectTableColumnId[] = [
   "prospecto",
   "correo",
   "sitio_web",
-  "telefono",
   "fuente",
   "tamano_rating",
   "campana",
@@ -575,8 +574,8 @@ const TABLE_COLUMN_META: Record<
   }
 > = {
   prospecto: { label: "Prospecto", widthClass: "w-[260px]" },
-  correo: { label: "Correo", widthClass: "w-[180px]" },
-  sitio_web: { label: "Sitio web", widthClass: "w-[180px]" },
+  correo: { label: "Contacto", widthClass: "w-[280px]" },
+  sitio_web: { label: "Resultados", widthClass: "w-[280px]" },
   sitio_verificado: { label: "Sitio verificado", widthClass: "w-[140px]" },
   telefono: { label: "Teléfono", widthClass: "w-[140px]" },
   tipo_linea: { label: "Tipo de línea", widthClass: "w-[120px]" },
@@ -603,7 +602,7 @@ function normalizeProspectosTablePrefs(raw: unknown): ProspectosTablePrefsState 
   if (!raw || typeof raw !== "object") return null
   const payload = raw as ProspectosTablePreferences
   const parsedOrder = Array.isArray(payload.order)
-    ? payload.order.filter((id): id is ProspectTableColumnId => id in TABLE_COLUMN_META)
+    ? payload.order.filter((id): id is ProspectTableColumnId => id in TABLE_COLUMN_META && id !== "telefono")
     : []
   const order = parsedOrder.length
     ? [...parsedOrder, ...DEFAULT_TABLE_COLUMN_ORDER.filter((id) => !parsedOrder.includes(id))]
@@ -614,7 +613,7 @@ function normalizeProspectosTablePrefs(raw: unknown): ProspectosTablePrefsState 
     correo: true,
     sitio_web: true,
     sitio_verificado: false,
-    telefono: true,
+    telefono: false,
     tipo_linea: false,
     telefono_verificado: false,
     fuente: true,
@@ -631,6 +630,7 @@ function normalizeProspectosTablePrefs(raw: unknown): ProspectosTablePrefsState 
       }
     }
   }
+  visibility.telefono = false
   return { order, visibility }
 }
 
@@ -5024,19 +5024,66 @@ function ProspectosView() {
                                 )
                               }
                               case "correo": {
-                                const email = (prospecto.email || "").trim()
-                                const normalizedEmail = email ? email.toLowerCase() : ""
-                                const status = (prospecto.email_lookup_status || (normalizedEmail ? "pendiente" : "sin_email")) as string
-                                const score = typeof prospecto.email_risk_score === "number" ? prospecto.email_risk_score : null
-                                const recommendation = (prospecto.email_recommendation || "").trim()
+                                const phoneLabel = (prospecto.phone_e164 || prospecto.phone || "").trim()
+                                const emailLabel = (prospecto.email || "").trim().toLowerCase()
+                                const websiteLabel = (prospecto.website || "").trim()
+                                const websiteHref = buildWebsiteHref(websiteLabel)
                                 return (
                                   <TableCell key={columnId}>
                                     <div className="flex flex-col gap-1">
-                                      <span className="block max-w-[160px] truncate text-[11px]" title={normalizedEmail || "—"}>
-                                        {normalizedEmail || "—"}
-                                      </span>
+                                      <div className="flex items-start gap-2">
+                                        <span className="min-w-0 flex-1 truncate text-[11px] font-medium" title={`Teléfono: ${phoneLabel || "—"}`}>
+                                          Teléfono: {phoneLabel || "—"}
+                                        </span>
+                                      </div>
+                                      <div className="flex items-start gap-2">
+                                        <span className="min-w-0 flex-1 truncate text-[11px]" title={`Correo: ${emailLabel || "—"}`}>
+                                          Correo: {emailLabel || "—"}
+                                        </span>
+                                      </div>
+                                      <div className="flex items-start gap-2">
+                                        {!websiteLabel || !websiteHref ? (
+                                          <span className="text-[11px] text-muted-foreground">Sitio web: —</span>
+                                        ) : (
+                                          <a
+                                            href={websiteHref}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="inline-flex min-w-0 items-center gap-1 truncate text-[11px] font-medium text-primary hover:underline"
+                                            title={websiteLabel}
+                                          >
+                                            <IconWorldSearch className="size-3.5" />
+                                            Sitio web
+                                          </a>
+                                        )}
+                                      </div>
+                                    </div>
+                                  </TableCell>
+                                )
+                              }
+                              case "sitio_web": {
+                                const phoneLabel = (prospecto.phone_e164 || prospecto.phone || "").trim()
+                                const phoneStatus = (prospecto.lookup_status || (phoneLabel ? "pendiente" : "sin_numero")) as string
+                                const carrier = prospecto.carrier_type ? carrierLabel(prospecto.carrier_type) : "Sin tipo"
+                                const emailLabel = (prospecto.email || "").trim().toLowerCase()
+                                const emailStatus = (prospecto.email_lookup_status || (emailLabel ? "pendiente" : "sin_email")) as string
+                                const score = typeof prospecto.email_risk_score === "number" ? prospecto.email_risk_score : null
+                                const recommendation = (prospecto.email_recommendation || "").trim()
+                                const websiteStatus = prospecto.website_lookup_status
+                                const websiteHttp = typeof prospecto.website_http_status === "number" ? prospecto.website_http_status : null
+                                return (
+                                  <TableCell key={columnId}>
+                                    <div className="flex flex-col gap-1">
                                       <div className="flex flex-wrap items-center gap-1">
-                                        <EmailLookupStatusBadge status={status} className="text-[10px]" />
+                                        <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Teléfono</span>
+                                        <LookupStatusBadge status={phoneStatus} className="text-[10px]" />
+                                        <Badge variant="outline" className="text-[10px]">
+                                          {carrier}
+                                        </Badge>
+                                      </div>
+                                      <div className="flex flex-wrap items-center gap-1">
+                                        <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Correo</span>
+                                        <EmailLookupStatusBadge status={emailStatus} className="text-[10px]" />
                                         {score !== null ? (
                                           <Badge
                                             variant="outline"
@@ -5047,38 +5094,12 @@ function ProspectosView() {
                                           </Badge>
                                         ) : null}
                                       </div>
-                                    </div>
-                                  </TableCell>
-                                )
-                              }
-                              case "sitio_web": {
-                                const websiteLabel = (prospecto.website || "").trim()
-                                const websiteHref = buildWebsiteHref(websiteLabel)
-                                return (
-                                  <TableCell key={columnId}>
-                                    <div className="flex flex-col gap-1">
-                                      {!websiteLabel || !websiteHref ? (
-                                        <span className="text-[11px] text-muted-foreground">—</span>
-                                      ) : (
-                                        <a
-                                          href={websiteHref}
-                                          target="_blank"
-                                          rel="noopener noreferrer"
-                                          className="inline-flex items-center gap-1 text-[11px] font-medium text-primary hover:underline"
-                                          title={websiteLabel}
-                                        >
-                                          <IconWorldSearch className="size-3.5" />
-                                          Sitio web
-                                        </a>
-                                      )}
                                       <div className="flex flex-wrap items-center gap-1">
-                                        <WebsiteLookupStatusBadge
-                                          status={prospecto.website_lookup_status}
-                                          className="text-[10px]"
-                                        />
-                                        {typeof prospecto.website_http_status === "number" ? (
+                                        <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Sitio web</span>
+                                        <WebsiteLookupStatusBadge status={websiteStatus} className="text-[10px]" />
+                                        {websiteHttp !== null ? (
                                           <Badge variant="outline" className="text-[10px]">
-                                            HTTP {prospecto.website_http_status}
+                                            HTTP {websiteHttp}
                                           </Badge>
                                         ) : null}
                                       </div>
