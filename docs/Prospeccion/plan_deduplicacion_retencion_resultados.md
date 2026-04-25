@@ -221,6 +221,7 @@ Estado actual:
 
 - evaluar particionado de `resultados` por fecha si el volumen vuelve a crecer.
 - mover consultas de lectura repetitivas a vistas materializadas o resúmenes sólo si la presión real reaparece.
+- si el siguiente cuello de botella es lecturas por `raw` o dirección compactada, continuar en `plan_columnarizacion_resultados_direccion.md`.
 
 ### Fase 5. Cierre operativo
 

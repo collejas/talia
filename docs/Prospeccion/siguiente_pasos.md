@@ -97,6 +97,15 @@ Este archivo sirve para capturar próximos requerimientos sin mezclar historial 
     - mantener monitoreo operativo de volumen y, si aplica, evaluar particionado o vistas materializadas.
     - documento técnico:
       - `plan_deduplicacion_retencion_resultados_migracion_tecnica.md`
+- Plan de columnarización y despiece de dirección:
+  - objetivo:
+    - mover al modelo columnar los campos más consultados para bajar latencia,
+    - desglosar dirección DENUE en partes indexables,
+    - reducir al mínimo las lecturas sobre `raw`.
+  - documento de trabajo:
+    - `plan_columnarizacion_resultados_direccion.md`
+  - estado actual:
+    - pendiente de implementación.
 
 6. Atribución de publicidad WhatsApp por frase (nuevo)
 - Objetivo:
