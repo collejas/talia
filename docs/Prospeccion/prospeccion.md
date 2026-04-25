@@ -25,7 +25,7 @@
 ## 2) Módulos principales
 
 - Descubrimiento: Google/DENUE + jobs asíncronos.
-- Prospectos: tabla central para selección comercial.
+- Prospectos: tabla central para selección comercial, con snapshot optimizado al convertir resultados y columnas hot para operación diaria.
 - Contacto: worker multicanal con reintentos y estado.
 - Campañas: agrupación/duplicación de lotes.
 - Inbox comercial: operación de respuestas de prospección desde `/inbox` con filtros de origen/canal/lote/campaña.
@@ -38,6 +38,7 @@
 - El frontend ya usa paginación alta para resultados (5000) en vistas geográficas.
 - En `prospeccion/prospectos`, la tabla ya permite orden por columna, reordenar columnas y ocultar/mostrar columnas.
 - En `google-busqueda` y `denue-busqueda`, ya existe eliminación individual y masiva de búsquedas recientes.
+- La conversión resultado -> prospecto debe guardar `nombre_comercial`, `razon_social` y dirección desglosada cuando aplique, sin copiar `raw` completo a la tabla operativa.
 
 ## 4) Referencia de datos actual (MCP, instancia vigente)
 
@@ -79,3 +80,4 @@ Para cambios nuevos:
 
 - Detalle cronológico de cambios: `docs/Prospeccion/CHANGELOG.md`.
 - Pendientes reales actuales: `docs/Prospeccion/siguiente_pasos.md`.
+- Refactor de columnarización y snapshot al convertir resultados: `docs/Prospeccion/plan_columnarizacion_resultados_direccion.md` y `docs/Prospeccion/plan_resultado_a_prospecto_snapshot.md`.

@@ -106,6 +106,15 @@ Este archivo sirve para capturar próximos requerimientos sin mezclar historial 
     - `plan_columnarizacion_resultados_direccion.md`
   - estado actual:
     - pendiente de implementación.
+- Snapshot comercial al convertir resultados en prospectos:
+  - objetivo:
+    - definir qué campos deben quedar en `prospeccion_prospectos` al guardar un resultado como prospecto,
+    - separar nombre comercial, razón social y dirección desglosada,
+    - evitar depender de `raw` en la tabla operativa.
+  - documento de trabajo:
+    - `plan_resultado_a_prospecto_snapshot.md`
+  - estado actual:
+    - pendiente de implementación.
 
 6. Atribución de publicidad WhatsApp por frase (nuevo)
 - Objetivo:

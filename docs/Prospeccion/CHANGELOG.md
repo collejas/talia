@@ -8,6 +8,17 @@ Formato recomendado por entrada:
 
 ## 2026-04-25
 
+### Documentación
+- Nuevo plan para snapshot comercial al convertir resultados en prospectos:
+  - define qué campos deben copiarse a `prospeccion_prospectos`,
+  - separa `nombre_comercial` y `razon_social`,
+  - propone dirección desglosada para filtros y segmentación,
+  - deja `raw` sólo como respaldo técnico.
+- Nuevo plan de columnarización:
+  - mover más lectura a columnas,
+  - desglosar dirección DENUE,
+  - reducir dependencia de `jsonb` en vistas calientes.
+
 ### Backend
 - Ajuste final del flujo DENUE/prospección:
   - el upsert de prospectos conserva identidad por `organizacion_id + fuente + external_id`,
