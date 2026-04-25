@@ -19052,6 +19052,16 @@ async def crear_busqueda_denue(
     except (TypeError, ValueError) as exc:
         raise HTTPException(status_code=502, detail="busqueda_id_invalid") from exc
 
+    busqueda_row = await repo.get_prospeccion_busqueda(busqueda_id=busqueda_uuid, select="organizacion_id,meta")
+    organizacion_id: UUID | None = tenant_organizacion_id
+    if not organizacion_id and isinstance(busqueda_row, dict):
+        org_value = busqueda_row.get("organizacion_id")
+        if org_value:
+            try:
+                organizacion_id = UUID(str(org_value))
+            except (TypeError, ValueError):
+                organizacion_id = None
+
     if payload.async_mode:
         if modo == "entidad" and not text_query:
             raise HTTPException(status_code=400, detail="texto_busqueda_required")
@@ -19067,16 +19077,6 @@ async def crear_busqueda_denue(
             ]
             if not cleaned_estratos:
                 raise HTTPException(status_code=400, detail="estrato_required")
-
-        busqueda_row = await repo.get_prospeccion_busqueda(busqueda_id=busqueda_uuid, select="organizacion_id,meta")
-        organizacion_id: UUID | None = tenant_organizacion_id
-        if not organizacion_id and isinstance(busqueda_row, dict):
-            org_value = busqueda_row.get("organizacion_id")
-            if org_value:
-                try:
-                    organizacion_id = UUID(str(org_value))
-                except (TypeError, ValueError):
-                    organizacion_id = None
 
         job_payload: dict[str, Any] = {
             "status": "pending",
@@ -19142,7 +19142,9 @@ async def crear_busqueda_denue(
                     "p_busqueda_id": str(busqueda_uuid),
                     "p_fuente": "denue",
                     "p_items": items,
+                    "p_organizacion_id": str(organizacion_id),
                 },
+                organizacion_id=organizacion_id,
             )
         except CRMRepositoryError as exc:
             raise HTTPException(status_code=502, detail=str(exc)) from exc

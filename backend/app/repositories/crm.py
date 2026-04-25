@@ -10164,12 +10164,14 @@ class CRMRepository:
         *,
         usuario_token: str,
         payload: dict[str, Any],
+        organizacion_id: UUID | None = None,
     ) -> Any:
         resp = await self._request_with_user(
             "POST",
             "/rest/v1/rpc/upsert_resultados_lote",
             token=usuario_token,
             json=payload,
+            organizacion_id=organizacion_id,
         )
         try:
             return resp.json()
@@ -10812,6 +10814,7 @@ class CRMRepository:
                     "display_name",
                     "actividad",
                     "estrato",
+                    "busqueda_ref",
                     "phone",
                     "phone_e164",
                     "carrier_type",

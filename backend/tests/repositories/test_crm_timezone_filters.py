@@ -120,6 +120,7 @@ async def test_list_prospectos_scopes_request_to_organizacion_id(monkeypatch: py
     assert isinstance(select, str)
     assert select != "*"
     assert "display_name" in select
+    assert "busqueda_ref" in select
     assert "scraper_ejecutado" not in select
     assert "scraper_ultimo_en" not in select
     assert "contact_indicators" not in select

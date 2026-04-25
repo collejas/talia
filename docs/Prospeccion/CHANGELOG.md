@@ -23,6 +23,9 @@ Formato recomendado por entrada:
 - Ajuste final del flujo DENUE/prospección:
   - el upsert de prospectos conserva identidad por `organizacion_id + fuente + external_id`,
   - un mismo negocio vuelve a actualizarse en vez de duplicarse cuando reaparece en otra búsqueda.
+- Corrección de guardado DENUE:
+  - la ruta síncrona ahora envía `organizacion_id` al RPC de resultados,
+  - `upsert_resultados_lote` falla de forma explícita si no recibe tenant en vez de terminar en un error opaco de RLS.
 
 ### Base de datos
 - Limpieza profunda DENUE ejecutada:
@@ -43,6 +46,7 @@ Formato recomendado por entrada:
 - DENUE y prospectos:
   - las RPC que alimentan `denue-busqueda` dejaron de depender de `raw` para teléfono, correo, web y geografía,
   - `list_prospectos` ya pide columnas explícitas en lugar de `select=*`,
+  - `list_prospectos` también materializa `busqueda_ref` para reducir fallback sobre metadata histórica al armar etiquetas de consulta,
   - la lectura caliente del panel ahora queda alineada con las columnas materializadas del refactor.
 
 ## 2026-02-28

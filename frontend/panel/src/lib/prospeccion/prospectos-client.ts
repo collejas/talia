@@ -45,6 +45,7 @@ export type ProspectoItem = {
   scraper_ultimo_en?: string | null
   scraper_ultimo_estado?: string | null
   contact_indicators?: ProspectoContactIndicators | null
+  busqueda_ref?: string | null
   metadata?: Record<string, unknown> | null
 }
 

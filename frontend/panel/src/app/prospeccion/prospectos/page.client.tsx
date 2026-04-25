@@ -4926,6 +4926,7 @@ function ProspectosView() {
                       const queryLabel = extractProspectoQueryLabel(
                         prospecto.metadata,
                         prospecto.fuente_busqueda,
+                        prospecto.busqueda_ref,
                         queryLabelMap
                       )
                       const indicator = prospecto.contact_indicators ?? (prospecto.id ? contactIndicators[prospecto.id] : undefined)
@@ -6130,8 +6131,16 @@ function readTrimmedString(value: unknown): string | null {
   return trimmed.length ? trimmed : null
 }
 
-function extractProspectoQueryValue(metadata: unknown, fuenteBusqueda?: string | null): string | null {
+function extractProspectoQueryValue(
+  metadata: unknown,
+  fuenteBusqueda?: string | null,
+  busquedaRef?: string | null
+): string | null {
   const fuente = normalizeBusquedaLabel(fuenteBusqueda)
+  const ref = normalizeBusquedaLabel(busquedaRef)
+  if (ref) {
+    return ref
+  }
   if (isRecord(metadata)) {
     const query = normalizeBusquedaLabel(readTrimmedString(metadata["query"]))
     if (query) {
@@ -6166,9 +6175,10 @@ function extractProspectoQueryValue(metadata: unknown, fuenteBusqueda?: string |
 function extractProspectoQueryLabel(
   metadata: unknown,
   fuenteBusqueda: string | null | undefined,
+  busquedaRef: string | null | undefined,
   queryLabelMap: ReadonlyMap<string, string>
 ): string | null {
-  const rawValue = extractProspectoQueryValue(metadata, fuenteBusqueda)
+  const rawValue = extractProspectoQueryValue(metadata, fuenteBusqueda, busquedaRef)
   if (!rawValue) {
     return null
   }
