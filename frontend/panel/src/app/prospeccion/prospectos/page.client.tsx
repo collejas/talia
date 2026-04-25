@@ -5031,20 +5031,33 @@ function ProspectosView() {
                                 const websiteHref = buildWebsiteHref(websiteLabel)
                                 return (
                                   <TableCell key={columnId}>
-                                    {!websiteLabel || !websiteHref ? (
-                                      <span className="text-[11px] text-muted-foreground">—</span>
-                                    ) : (
-                                      <a
-                                        href={websiteHref}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="inline-flex items-center gap-1 text-[11px] font-medium text-primary hover:underline"
-                                        title={websiteLabel}
-                                      >
-                                        <IconWorldSearch className="size-3.5" />
-                                        Sitio web
-                                      </a>
-                                    )}
+                                    <div className="flex flex-col gap-1">
+                                      {!websiteLabel || !websiteHref ? (
+                                        <span className="text-[11px] text-muted-foreground">—</span>
+                                      ) : (
+                                        <a
+                                          href={websiteHref}
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                          className="inline-flex items-center gap-1 text-[11px] font-medium text-primary hover:underline"
+                                          title={websiteLabel}
+                                        >
+                                          <IconWorldSearch className="size-3.5" />
+                                          Sitio web
+                                        </a>
+                                      )}
+                                      <div className="flex flex-wrap items-center gap-1">
+                                        <WebsiteLookupStatusBadge
+                                          status={prospecto.website_lookup_status}
+                                          className="text-[10px]"
+                                        />
+                                        {typeof prospecto.website_http_status === "number" ? (
+                                          <Badge variant="outline" className="text-[10px]">
+                                            HTTP {prospecto.website_http_status}
+                                          </Badge>
+                                        ) : null}
+                                      </div>
+                                    </div>
                                   </TableCell>
                                 )
                               }
