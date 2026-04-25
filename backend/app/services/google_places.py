@@ -676,6 +676,11 @@ def normalize_place_for_result(place: dict[str, Any]) -> dict[str, Any]:
     actividad = actividad or place.get("primaryType") or ""
     phone = place.get("internationalPhoneNumber") or place.get("nationalPhoneNumber") or None
     website = place.get("websiteUri") or place.get("googleMapsUri")
+    google_types = [
+        value
+        for value in (place.get("types") or [])
+        if isinstance(value, str) and value.strip()
+    ]
     dedupe_key = build_result_dedupe_key(
         "google_places",
         external_id=place.get("id"),
@@ -698,6 +703,10 @@ def normalize_place_for_result(place: dict[str, Any]) -> dict[str, Any]:
         "email": place.get("email"),
         "website": website,
         "address": place.get("formattedAddress"),
+        "address_full": place.get("formattedAddress"),
+        "google_primary_type": _clean_text(place.get("primaryType")),
+        "google_primary_type_display_name": _clean_text(actividad),
+        "google_types": google_types or None,
         "lat": _to_float(location.get("latitude")),
         "lng": _to_float(location.get("longitude")),
         "rating": _to_float(place.get("rating")),
@@ -705,6 +714,15 @@ def normalize_place_for_result(place: dict[str, Any]) -> dict[str, Any]:
         "maps_url": place.get("googleMapsUri"),
         "raw": place,
     }
+
+
+def _clean_text(value: Any) -> str | None:
+    if value is None:
+        return None
+    if isinstance(value, str):
+        value = value.strip()
+        return value or None
+    return str(value)
 
 
 def _sanitize_field_mask(field_mask: str | None) -> str | None:

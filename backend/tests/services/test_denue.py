@@ -4,6 +4,7 @@ from app.services.denue import DenueError
 from app.services.denue import expand_denue_activity_codes
 from app.services.denue import expand_state_to_municipalities
 from app.services.denue import expand_targets_for_area_act
+from app.services.denue import normalize_denue_place
 
 import app.services.denue as denue_module
 from app.services.denue import DenueClient
@@ -24,6 +25,59 @@ def test_build_activity_segments_ignores_non_digits() -> None:
 
 def test_expand_denue_activity_codes_expands_sector_range() -> None:
     assert expand_denue_activity_codes(["48-49"]) == ["48", "49"]
+
+
+def test_normalize_denue_place_materializes_address_columns() -> None:
+    normalized = normalize_denue_place(
+        {
+            "Id": "ABC123",
+            "Nombre": "Talia MX",
+            "Razon_social": "Tal IA MX SA de CV",
+            "Clase_actividad": "Consultoria",
+            "Estrato": "micro",
+            "Telefono": "55 1234 5678",
+            "Correo_e": "hola@example.com",
+            "Sitio_internet": "https://talia.mx",
+            "Tipo_vialidad": "Avenida",
+            "Nombre_vialidad": "Juarez",
+            "Numero_exterior": "100",
+            "Numero_interior": "Int 2",
+            "Colonia": "Centro",
+            "CP": "20000",
+            "Cve_ent": "01",
+            "Entidad": "Aguascalientes",
+            "Cve_mun": "001",
+            "Municipio": "Jesus Maria",
+            "Cve_loc": "0001",
+            "Localidad": "Aguascalientes",
+            "Cvegeo": "010010001",
+            "Asentamiento": "Urbano",
+            "Entre_calles": "Madero y Allende",
+            "Referencia": "Frente al jardin",
+            "Latitud": "21.885",
+            "Longitud": "-102.291",
+            "Ubicacion": "https://maps.example/test",
+        }
+    )
+
+    assert normalized["address"] == "Avenida Juarez, 100 Int 2, Centro, 20000, Jesus Maria, Aguascalientes"
+    assert normalized["address_full"] == normalized["address"]
+    assert normalized["tipo_vialidad"] == "Avenida"
+    assert normalized["nombre_vialidad"] == "Juarez"
+    assert normalized["numero_exterior"] == "100"
+    assert normalized["numero_interior"] == "Int 2"
+    assert normalized["colonia"] == "Centro"
+    assert normalized["codigo_postal"] == "20000"
+    assert normalized["estado_cve"] == "01"
+    assert normalized["estado_nombre"] == "Aguascalientes"
+    assert normalized["municipio_cve"] == "001"
+    assert normalized["municipio_nombre"] == "Jesus Maria"
+    assert normalized["localidad_cve"] == "0001"
+    assert normalized["localidad"] == "Aguascalientes"
+    assert normalized["cvegeo"] == "010010001"
+    assert normalized["asentamiento"] == "Urbano"
+    assert normalized["entre_calles"] == "Madero y Allende"
+    assert normalized["referencia"] == "Frente al jardin"
 
 
 async def test_get_discards_shared_client_after_remote_protocol_error(monkeypatch) -> None:

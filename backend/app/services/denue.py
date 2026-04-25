@@ -630,7 +630,8 @@ class DenueClient:
 def normalize_denue_place(place: dict[str, Any]) -> dict[str, Any]:
     """Normaliza un registro crudo de DENUE a la estructura esperada en resultados."""
     external_id = place.get("Id") or place.get("id")
-    address = _build_denue_address(place)
+    address_parts = _extract_denue_address_fields(place)
+    address = _build_denue_address(address_parts)
     actividad = _clean_text(place.get("Clase_actividad"))
     estrato_raw = _clean_text(place.get("Estrato"))
     estrato_label = _classify_estrato(estrato_raw)
@@ -662,6 +663,23 @@ def normalize_denue_place(place: dict[str, Any]) -> dict[str, Any]:
         "email": email,
         "website": website,
         "address": address,
+        "address_full": address,
+        "tipo_vialidad": address_parts["tipo_vialidad"],
+        "nombre_vialidad": address_parts["nombre_vialidad"],
+        "numero_exterior": address_parts["numero_exterior"],
+        "numero_interior": address_parts["numero_interior"],
+        "colonia": address_parts["colonia"],
+        "codigo_postal": address_parts["codigo_postal"],
+        "estado_cve": address_parts["estado_cve"],
+        "estado_nombre": address_parts["estado_nombre"],
+        "municipio_cve": address_parts["municipio_cve"],
+        "municipio_nombre": address_parts["municipio_nombre"],
+        "localidad_cve": address_parts["localidad_cve"],
+        "localidad": address_parts["localidad"],
+        "cvegeo": address_parts["cvegeo"],
+        "asentamiento": address_parts["asentamiento"],
+        "entre_calles": address_parts["entre_calles"],
+        "referencia": address_parts["referencia"],
         "lat": _to_float(place.get("Latitud")),
         "lng": _to_float(place.get("Longitud")),
         "rating": None,
@@ -680,14 +698,35 @@ def _clean_text(value: Any) -> str | None:
     return str(value)
 
 
-def _build_denue_address(place: dict[str, Any]) -> str | None:
+def _extract_denue_address_fields(place: dict[str, Any]) -> dict[str, str | None]:
+    return {
+        "tipo_vialidad": _clean_text(place.get("Tipo_vialidad")),
+        "nombre_vialidad": _clean_text(place.get("Nombre_vialidad")),
+        "numero_exterior": _clean_text(place.get("Numero_exterior")),
+        "numero_interior": _clean_text(place.get("Numero_interior")),
+        "colonia": _clean_text(place.get("Colonia")),
+        "codigo_postal": _clean_text(place.get("CP") or place.get("Codigo_postal")),
+        "estado_cve": _clean_text(place.get("Cve_ent") or place.get("cve_ent")),
+        "estado_nombre": _clean_text(place.get("Entidad") or place.get("Nom_ent")),
+        "municipio_cve": _clean_text(place.get("Cve_mun") or place.get("cve_mun")),
+        "municipio_nombre": _clean_text(place.get("Municipio") or place.get("Nom_mun")),
+        "localidad_cve": _clean_text(place.get("Cve_loc") or place.get("cve_loc")),
+        "localidad": _clean_text(place.get("Localidad") or place.get("Nom_loc")),
+        "cvegeo": _clean_text(place.get("Cvegeo") or place.get("cvegeo") or place.get("CVEGEO")),
+        "asentamiento": _clean_text(place.get("Asentamiento")),
+        "entre_calles": _clean_text(place.get("Entre_calles") or place.get("EntreCalles")),
+        "referencia": _clean_text(place.get("Referencia")),
+    }
+
+
+def _build_denue_address(address_parts: dict[str, str | None]) -> str | None:
     components: list[str] = []
     vialidad = " ".join(
         filter(
             None,
             [
-                _clean_text(place.get("Tipo_vialidad")),
-                _clean_text(place.get("Nombre_vialidad")),
+                address_parts.get("tipo_vialidad"),
+                address_parts.get("nombre_vialidad"),
             ],
         )
     ).strip()
@@ -697,18 +736,69 @@ def _build_denue_address(place: dict[str, Any]) -> str | None:
         filter(
             None,
             [
-                _clean_text(place.get("Numero_exterior")),
-                _clean_text(place.get("Numero_interior")),
+                address_parts.get("numero_exterior"),
+                address_parts.get("numero_interior"),
             ],
         )
     ).strip()
     if numero:
         components.append(numero)
-    for key in ["Colonia", "CP", "Municipio", "Entidad"]:
-        value = _clean_text(place.get(key))
+    for key in ["colonia", "codigo_postal", "municipio_nombre", "estado_nombre"]:
+        value = address_parts.get(key)
         if value:
             components.append(value)
-    ubicacion = _clean_text(place.get("Ubicacion"))
+    if not components:
+        return None
+    return ", ".join(dict.fromkeys(filter(None, components)))
+
+
+def _to_float(value: Any) -> float | None:
+    try:
+        if value is None or value == "":
+            return None
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _classify_estrato(raw: str | None) -> str | None:
+    """Convierte el valor crudo de estrato en una etiqueta estándar."""
+    if raw is None:
+        return None
+    normalized = raw.strip().lower()
+    if not normalized:
+        return None
+    # Intentar detectar directamente por palabras clave.
+    if "micro" in normalized:
+        return "Micro (0-10 personas)"
+    if "peque" in normalized:
+        return "Pequeña (11-50 personas)"
+    if "mediana" in normalized:
+        return "Mediana (51-250 personas)"
+    if "grande" in normalized or "251" in normalized:
+        return "Grande (250+ personas)"
+    # Algunos catálogos usan dígitos 1-7.
+    digit = None
+    if normalized.isdigit():
+        digit = int(normalized)
+    else:
+        # Busca números dentro del texto.
+        for ch in normalized:
+            if ch.isdigit():
+                digit = int(ch)
+                break
+    if digit is not None:
+        if digit <= 2:
+            return "Micro (0-10 personas)"
+        if digit == 3 or digit == 4:
+            return "Pequeña (11-50 personas)"
+        if digit == 5 or digit == 6:
+            return "Mediana (51-250 personas)"
+        return "Grande (250+ personas)"
+    # Fallback: conservar texto limpio.
+    if len(normalized) > 80:
+        normalized = normalized[:80]
+    return normalized.title()
     if ubicacion:
         components.append(ubicacion)
     if not components:

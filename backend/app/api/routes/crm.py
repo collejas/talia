@@ -6995,6 +6995,7 @@ def _build_manual_prospecto_payload(payload: ProspectoManualPayload) -> dict[str
         "fuente_busqueda": "manual",
         "display_name": payload.display_name.strip(),
         "name": payload.display_name.strip(),
+        "nombre_comercial": payload.display_name.strip(),
         "lookup_error": None,
         "whatsapp_permitido": False,
         "llamada_permitida": False,
@@ -7013,6 +7014,8 @@ def _build_manual_prospecto_payload(payload: ProspectoManualPayload) -> dict[str
         else:
             data[field] = value
     phone_value = data.get("phone")
+    if "address" in raw:
+        data["address_full"] = data.get("address")
     data["lookup_status"] = "pendiente" if phone_value else "sin_numero"
     return data
 
@@ -7042,6 +7045,10 @@ def _build_prospecto_update_payload(
             updates[field] = _clean_text(value)
         else:
             updates[field] = value
+    if "display_name" in updates:
+        updates["nombre_comercial"] = updates["display_name"]
+    if "address" in updates:
+        updates["address_full"] = updates["address"]
     phone_changed = False
     if "phone" in raw:
         phone_value = raw["phone"]
@@ -7080,6 +7087,8 @@ def _build_prospecto_from_contactable(
 
     phone_value = _clean_text(row.get("phone"))
     fuente_resultado = _clean_text(row.get("fuente_resultado"))
+    display_name_value = _clean_text(row.get("display_name")) or _clean_text(row.get("name")) or "Prospecto"
+    address_full_value = _clean_text(row.get("address_full")) or _clean_text(row.get("address"))
     base_metadata: dict[str, Any] = {}
     busqueda_meta = row.get("busqueda_meta")
     if isinstance(busqueda_meta, dict):
@@ -7092,15 +7101,36 @@ def _build_prospecto_from_contactable(
         "resultado_id": row.get("resultado_id"),
         "fuente": row.get("fuente_resultado"),
         "fuente_busqueda": row.get("fuente_busqueda"),
-        "display_name": row.get("display_name") or row.get("name") or "Prospecto",
+        "display_name": display_name_value,
         "name": row.get("name"),
         "razon_social": row.get("razon_social"),
+        "nombre_comercial": _clean_text(row.get("nombre_comercial")) or display_name_value,
         "actividad": row.get("actividad"),
         "estrato": row.get("estrato"),
         "phone": phone_value,
         "email": _normalize_email(row.get("email")),
         "website": _clean_text(row.get("website")),
-        "address": _clean_text(row.get("address")),
+        "address": address_full_value,
+        "address_full": address_full_value,
+        "tipo_vialidad": _clean_text(row.get("tipo_vialidad")),
+        "nombre_vialidad": _clean_text(row.get("nombre_vialidad")),
+        "numero_exterior": _clean_text(row.get("numero_exterior")),
+        "numero_interior": _clean_text(row.get("numero_interior")),
+        "colonia": _clean_text(row.get("colonia")),
+        "codigo_postal": _clean_text(row.get("codigo_postal")),
+        "estado_cve": _clean_text(row.get("estado_cve")),
+        "estado_nombre": _clean_text(row.get("estado_nombre")),
+        "municipio_cve": _clean_text(row.get("municipio_cve")),
+        "municipio_nombre": _clean_text(row.get("municipio_nombre")),
+        "localidad_cve": _clean_text(row.get("localidad_cve")),
+        "localidad": _clean_text(row.get("localidad")),
+        "cvegeo": _clean_text(row.get("cvegeo")),
+        "asentamiento": _clean_text(row.get("asentamiento")),
+        "entre_calles": _clean_text(row.get("entre_calles")),
+        "referencia": _clean_text(row.get("referencia")),
+        "google_primary_type": _clean_text(row.get("google_primary_type")),
+        "google_primary_type_display_name": _clean_text(row.get("google_primary_type_display_name")),
+        "google_types": row.get("google_types") if isinstance(row.get("google_types"), list) else None,
         "lat": row.get("lat"),
         "lng": row.get("lng"),
         "rating": row.get("rating"),
@@ -23301,7 +23331,7 @@ async def convertir_prospecto_contacto(
         user_token=user_token,
         prospecto_id=prospecto_id,
     )
-    nombre = _clean_text(payload.nombre) or _clean_text(prospecto.get("display_name"))
+    nombre = _clean_text(payload.nombre) or _clean_text(prospecto.get("nombre_comercial")) or _clean_text(prospecto.get("display_name"))
     correo = payload.correo or prospecto.get("email")
     telefono = payload.telefono or prospecto.get("phone_e164") or prospecto.get("phone")
     canal_origen = (payload.canal_origen or "otro").lower()
@@ -23311,7 +23341,7 @@ async def convertir_prospecto_contacto(
         "nombre_completo": nombre,
         "correo": correo,
         "telefono_e164": telefono,
-        "company_name": payload.company_name or prospecto.get("segmento"),
+        "company_name": payload.company_name or prospecto.get("nombre_comercial") or prospecto.get("segmento"),
         "notes": payload.notas or prospecto.get("notas"),
         "origen": "prospeccion",
     }
@@ -23377,7 +23407,7 @@ async def convertir_prospecto_contacto(
             stage_id = None
 
     if stage_id and contacto_id:
-        opportunity_title = nombre or prospecto.get("display_name") or "Prospección"
+        opportunity_title = nombre or prospecto.get("nombre_comercial") or prospecto.get("display_name") or "Prospección"
         opportunity_metadata = {
             "prospecto_id": str(prospecto_id),
             "source": source_label,
