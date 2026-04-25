@@ -16,6 +16,7 @@ from app.services import tenant_runtime
 from app.services.denue import (
     DenueClient,
     DenueError,
+    expand_denue_activity_codes,
     expand_state_to_municipalities,
     expand_targets_for_area_act,
     normalize_denue_place,
@@ -196,15 +197,7 @@ class DenueSearchJobManager:
             for value in activity_codes:
                 if isinstance(value, str) and value.strip():
                     items.append(value.strip())
-            # unique preserve order
-            seen: set[str] = set()
-            unique: list[str] = []
-            for item in items:
-                if item in seen:
-                    continue
-                seen.add(item)
-                unique.append(item)
-            return unique
+            return expand_denue_activity_codes(items)
 
         combo_limit = 20
         batch_base_size = max(requested_registro_final - registro_inicial + 1, 1)
@@ -470,12 +463,33 @@ class DenueSearchJobManager:
                             "municipios": len(fallback_targets),
                         },
                     )
+                    fallback_success = False
+                    last_fallback_exc: DenueError | None = None
                     for fallback_entidad, fallback_municipio in fallback_targets:
-                        await _run_combo(
-                            _entidad=fallback_entidad,
-                            _municipio=fallback_municipio,
-                            _estrato=estrato,
-                        )
+                        try:
+                            await _run_combo(
+                                _entidad=fallback_entidad,
+                                _municipio=fallback_municipio,
+                                _estrato=estrato,
+                            )
+                            fallback_success = True
+                        except DenueError as fallback_exc:
+                            last_fallback_exc = fallback_exc
+                            search_logger.warning(
+                                "denue.state_municipality_fallback_target_failed",
+                                extra={
+                                    "job_id": str(job.job_id),
+                                    "busqueda_id": str(job.busqueda_id),
+                                    "modo": modo,
+                                    "entidad": fallback_entidad,
+                                    "municipio": fallback_municipio,
+                                    "actividad_codigo": activity,
+                                    "estrato": estrato,
+                                    "error": str(fallback_exc),
+                                },
+                            )
+                    if not fallback_success and last_fallback_exc is not None:
+                        raise last_fallback_exc
         else:
             raise DenueError("modo_desconocido")
 

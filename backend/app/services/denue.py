@@ -82,6 +82,35 @@ def expand_targets_for_area_act(
     return unique
 
 
+def expand_denue_activity_codes(codes: list[str] | None) -> list[str]:
+    """Expande códigos SCIAN compuestos a códigos consultables por DENUE."""
+    if not codes:
+        return []
+
+    expanded: list[str] = []
+    for raw_code in codes:
+        code = str(raw_code or "").strip()
+        if not code:
+            continue
+        if code == "0":
+            return ["0"]
+
+        parts = [part.strip() for part in code.split("-") if part.strip()]
+        if (
+            len(parts) == 2
+            and all(part.isdigit() and len(part) == 2 for part in parts)
+        ):
+            start = int(parts[0])
+            end = int(parts[1])
+            if start <= end:
+                expanded.extend([f"{value:02d}" for value in range(start, end + 1)])
+                continue
+
+        expanded.append(code)
+
+    return list(dict.fromkeys(expanded))
+
+
 class DenueError(RuntimeError):
     """Error al interactuar con DENUE."""
 
@@ -140,7 +169,7 @@ class DenueClient:
                 )
                 _invalidate_denue_http_client(client)
                 if attempt >= max_attempts:
-                    raise DenueError("denue_request_failed") from exc
+                    raise DenueError("denue_remote_protocol_error") from exc
             except httpx.RequestError as exc:  # pragma: no cover - depende de red
                 logger.exception("denue.request_error", extra={"error": str(exc)})
                 search_logger.exception(
@@ -310,6 +339,12 @@ class DenueClient:
         try:
             resp = await self._get(path, method=method, segments=segments)
         except DenueError as exc:
+            if self._should_treat_remote_protocol_error_as_empty(method, segments, exc):
+                search_logger.info(
+                    "denue.empty_result",
+                    extra={"method": method, "segments": segments, "url": path, "reason": "remote_protocol_empty"},
+                )
+                return []
             split_results = await self._retry_request_list_with_split(method, segments, exc)
             if split_results is not None:
                 return split_results
@@ -409,7 +444,12 @@ class DenueClient:
         segments: list[str],
         exc: DenueError,
     ) -> list[dict[str, Any]] | None:
-        if str(exc) not in {"denue_request_failed", "denue_connect_timeout", "denue_read_timeout"}:
+        if str(exc) not in {
+            "denue_request_failed",
+            "denue_connect_timeout",
+            "denue_read_timeout",
+            "denue_remote_protocol_error",
+        }:
             return None
         window = self._extract_batch_window(method, segments)
         if window is None:
@@ -452,6 +492,23 @@ class DenueClient:
         if method in {"BuscarAreaAct", "BuscarAreaActEstr"} and len(segments) >= 13:
             return (10, 11)
         return None
+
+    @staticmethod
+    def _should_treat_remote_protocol_error_as_empty(method: str, segments: list[str], exc: DenueError) -> bool:
+        if str(exc) != "denue_remote_protocol_error":
+            return False
+        if method not in {"BuscarAreaAct", "BuscarAreaActEstr"}:
+            return False
+        window = DenueClient._extract_batch_window(method, segments)
+        if window is None:
+            return False
+        start_idx, end_idx = window
+        try:
+            start = int(segments[start_idx])
+            end = int(segments[end_idx])
+        except (TypeError, ValueError, IndexError):
+            return False
+        return (end - start + 1) <= _DENUE_MIN_SPLIT_WINDOW
 
     @staticmethod
     def _merge_rows(*groups: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -680,6 +737,7 @@ def _classify_estrato(raw: str | None) -> str | None:
 __all__ = [
     "DenueClient",
     "DenueError",
+    "expand_denue_activity_codes",
     "expand_state_to_municipalities",
     "expand_targets_for_area_act",
     "normalize_denue_place",

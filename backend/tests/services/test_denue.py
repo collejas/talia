@@ -1,6 +1,7 @@
 import httpx
 import pytest
 from app.services.denue import DenueError
+from app.services.denue import expand_denue_activity_codes
 from app.services.denue import expand_state_to_municipalities
 from app.services.denue import expand_targets_for_area_act
 
@@ -19,6 +20,10 @@ def test_build_activity_segments_preserves_higher_specificity_levels() -> None:
 
 def test_build_activity_segments_ignores_non_digits() -> None:
     assert DenueClient._build_activity_segments(" 46-41.12 ") == ("46", "464", "4641", "464112")
+
+
+def test_expand_denue_activity_codes_expands_sector_range() -> None:
+    assert expand_denue_activity_codes(["48-49"]) == ["48", "49"]
 
 
 async def test_get_discards_shared_client_after_remote_protocol_error(monkeypatch) -> None:
@@ -69,6 +74,45 @@ async def test_request_list_splits_large_paginated_windows(monkeypatch) -> None:
     )
 
     assert [row["Id"] for row in rows] == ["1-25", "26-50"]
+
+
+@pytest.mark.anyio
+async def test_request_list_splits_large_windows_for_remote_protocol_error(monkeypatch) -> None:
+    client = DenueClient(token="token", base_url="https://example.com")
+
+    async def fake_get(url: str, *, method: str, segments: list[str] | None = None) -> httpx.Response:
+        assert segments is not None
+        start = int(segments[10])
+        end = int(segments[11])
+        if end - start + 1 > denue_module._DENUE_MIN_SPLIT_WINDOW:
+            raise DenueError("denue_remote_protocol_error")
+        return httpx.Response(200, json=[{"Id": f"{start}-{end}"}])
+
+    monkeypatch.setattr(client, "_get", fake_get)
+
+    rows = await client._request_list(
+        "BuscarAreaAct",
+        ["24", "001", "0", "0", "0", "48", "484", "4849", "0", "0", "1", "50", "0"],
+    )
+
+    assert [row["Id"] for row in rows] == ["1-25", "26-50"]
+
+
+@pytest.mark.anyio
+async def test_request_list_treats_known_remote_protocol_error_as_empty_for_small_area_windows(monkeypatch) -> None:
+    client = DenueClient(token="token", base_url="https://example.com")
+
+    async def fake_get(url: str, *, method: str, segments: list[str] | None = None) -> httpx.Response:
+        raise DenueError("denue_remote_protocol_error")
+
+    monkeypatch.setattr(client, "_get", fake_get)
+
+    rows = await client._request_list(
+        "BuscarAreaAct",
+        ["01", "0", "0", "0", "0", "61", "611", "6111", "611141", "0", "1", "15", "0"],
+    )
+
+    assert rows == []
 
 
 def test_expand_state_to_municipalities_returns_aguscalientes_municipalities() -> None:

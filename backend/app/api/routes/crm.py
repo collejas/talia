@@ -81,7 +81,7 @@ from app.services.channel_routing import resolve_organizacion_id
 from app.services import calendar as calendar_service
 from app.services import quotes as quotes_service
 from app.services.buscador_jobs import BUSCADOR_JOB_MANAGER
-from app.services.denue import expand_state_to_municipalities, expand_targets_for_area_act
+from app.services.denue import expand_denue_activity_codes, expand_state_to_municipalities, expand_targets_for_area_act
 from app.services.denue_search_jobs import DENUE_SEARCH_JOB_MANAGER, DenueSearchJob
 from app.services.google_search_jobs import GOOGLE_SEARCH_JOB_MANAGER, GoogleSearchJob
 from app.services.buscador_runner import BuscadorParams
@@ -3764,9 +3764,7 @@ def _activity_codes_from_payload(payload: DenueBusquedaPayload) -> list[str]:
     codes = [str(value).strip() for value in (payload.actividad_codigos or []) if value and str(value).strip()]
     if not codes:
         return []
-    if any(code == "0" for code in codes):
-        return ["0"]
-    return _unique_preserve_order(codes)
+    return expand_denue_activity_codes(codes)
 
 
 def _geo_targets_from_payload(payload: DenueBusquedaPayload) -> list[tuple[str | None, str | None]]:
@@ -19342,12 +19340,31 @@ async def crear_busqueda_denue(
                                 "municipios": len(fallback_targets),
                             },
                         )
+                        fallback_success = False
+                        last_fallback_exc: DenueError | None = None
                         for fallback_entidad, fallback_municipio in fallback_targets:
-                            await _run_combo(
-                                _entidad=fallback_entidad,
-                                _municipio=fallback_municipio,
-                                _estrato=estrato,
-                            )
+                            try:
+                                await _run_combo(
+                                    _entidad=fallback_entidad,
+                                    _municipio=fallback_municipio,
+                                    _estrato=estrato,
+                                )
+                                fallback_success = True
+                            except DenueError as fallback_exc:
+                                last_fallback_exc = fallback_exc
+                                search_logger.warning(
+                                    "denue.state_municipality_fallback_target_failed",
+                                    extra={
+                                        "modo": modo,
+                                        "entidad": fallback_entidad,
+                                        "municipio": fallback_municipio,
+                                        "actividad_codigo": activity,
+                                        "estrato": estrato,
+                                        "error": str(fallback_exc),
+                                    },
+                                )
+                        if not fallback_success and last_fallback_exc is not None:
+                            raise last_fallback_exc
             else:
                 raise HTTPException(status_code=400, detail="modo_desconocido")
     except DenueError as exc:
