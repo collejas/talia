@@ -65,6 +65,8 @@ Validación complementaria: MCP Supabase (instancia actual).
 
 Nota: en el backup ya existen variantes con `p_contact_match text default 'all'` para filtros de contacto tipo AND/OR en DENUE.
 
+Nota 2: `resultados` y `prospeccion_prospectos` ya materializan campos calientes como `nombre_comercial`, `address_full`, desglose de dirección y, para Google, `google_primary_type`/`google_types`.
+
 ## 3) Índices importantes
 
 - `busquedas_organizacion_idx`
