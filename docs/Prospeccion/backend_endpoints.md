@@ -3,6 +3,14 @@
 Archivo principal: `backend/app/api/routes/crm.py`
 Repositorio principal: `backend/app/repositories/crm.py`
 
+## Estado actual
+
+- La estrategia de deduplicación por identidad y retención ya está aplicada en producción.
+- DENUE conserva resultados con ventana de 5 días y tiene purga automática activa.
+- Las búsquedas DENUE viejas ya fueron depuradas junto con sus dependencias operativas.
+- `prospeccion_prospectos.busqueda_id` ya no se debe tratar como una dependencia destructiva para la limpieza de resultados.
+- La deuda técnica pendiente es sólo de optimización futura de rendimiento si el volumen vuelve a crecer.
+
 ## 1) Búsquedas Google
 
 - `POST /crm/prospeccion/google/busquedas`
@@ -18,6 +26,8 @@ Repositorio principal: `backend/app/repositories/crm.py`
 - `POST /crm/prospeccion/denue/busquedas`
 - `GET /crm/prospeccion/denue/busquedas`
 - `DELETE /crm/prospeccion/denue/busquedas/{busqueda_id}`
+  - Forma parte de la limpieza profunda de DENUE ya aplicada.
+  - La eliminación de búsquedas antiguas ya no debe borrar prospectos útiles convertidos previamente.
 - `GET /crm/prospeccion/denue/jobs/{job_id}`
 - `POST /crm/prospeccion/denue/jobs/{job_id}/cancel`
 - `GET /crm/prospeccion/denue/resultados`
@@ -41,8 +51,8 @@ Repositorio principal: `backend/app/repositories/crm.py`
 - `PUT /crm/prospeccion/prospectos/views`
 - `PATCH /crm/prospeccion/prospectos/{prospecto_id}`
 - `DELETE /crm/prospeccion/prospectos/{prospecto_id}`
-- `POST /crm/prospeccion/prospectos/bulk-delete`
-- `POST /crm/prospeccion/prospectos/verificar-telefonos`
+  - `POST /crm/prospeccion/prospectos/bulk-delete`
+  - `POST /crm/prospeccion/prospectos/verificar-telefonos`
 - `POST /crm/prospeccion/prospectos/checklist/lookup`
 - `POST /crm/prospeccion/prospectos/checklist/scraper`
 - `GET /crm/prospeccion/prospectos/checklist`
@@ -50,6 +60,8 @@ Repositorio principal: `backend/app/repositories/crm.py`
 - `GET /crm/prospeccion/prospectos/{prospecto_id}/contactos`
 - `GET /crm/prospeccion/prospectos/{prospecto_id}/audit`
 - `POST /crm/prospeccion/prospectos/{prospecto_id}/convertir-contacto`
+  - Si un prospecto ya existe y vuelve a entrar por una búsqueda nueva, el flujo debe hacer `upsert` por identidad, no crear duplicados.
+  - Para DENUE/Google la identidad primaria es `organizacion_id + fuente + external_id`; si falta `external_id`, el flujo cae a la identidad de resultado.
 
 ## 4) Contacto y campañas
 

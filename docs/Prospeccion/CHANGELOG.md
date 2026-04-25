@@ -6,6 +6,24 @@ Formato recomendado por entrada:
 - `Base de datos`
 - `Operación/Notas`
 
+## 2026-04-25
+
+### Backend
+- Ajuste final del flujo DENUE/prospección:
+  - el upsert de prospectos conserva identidad por `organizacion_id + fuente + external_id`,
+  - un mismo negocio vuelve a actualizarse en vez de duplicarse cuando reaparece en otra búsqueda.
+
+### Base de datos
+- Limpieza profunda DENUE ejecutada:
+  - búsquedas DENUE viejas purgadas con cascadas seguras,
+  - `prospeccion_prospectos` desacoplados por búsquedas antiguas eliminados junto con su auditoría asociada,
+  - `prospeccion_resultado_apariciones` quedó sin residuos operativos DENUE.
+- Retención DENUE fijada en `5 días` y purga automática limitada a DENUE.
+
+### Operación/Notas
+- El módulo de prospección ya no depende del histórico bruto DENUE para conservar prospectos útiles.
+- Queda como pendiente sólo la optimización final de escalado si el volumen vuelve a crecer.
+
 ## 2026-02-28
 
 ### Frontend

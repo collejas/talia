@@ -28,6 +28,17 @@ Esto genera dos efectos:
 
 Además, `public.v_resultados_unificados` sólo hace `JOIN` entre `resultados` y `busquedas`, así que el costo real está en el volumen de `resultados`, no en la vista.
 
+## Estado real de avance
+
+A fecha `2026-04-25` ya quedó aplicado lo esencial del plan:
+
+- `public.resultados` ya deduplica por identidad de negocio cuando existe `external_id` estable.
+- `public.prospeccion_resultado_apariciones` existe y registra apariciones por búsqueda.
+- `public.resultados` quedó con retención DENUE de `5 días` y purga automática limitada a DENUE.
+- Las búsquedas DENUE viejas más allá de `5 días` ya se purgaron con sus jobs y apariciones asociadas.
+- Los prospectos DENUE desacoplados y su auditoría residual ya fueron eliminados.
+- Lo único que sigue como trabajo pendiente del plan es la optimización final de rendimiento si el volumen vuelve a crecer.
+
 ## Estado actual del modelo
 
 ### Tablas principales
@@ -40,7 +51,7 @@ Además, `public.v_resultados_unificados` sólo hace `JOIN` entre `resultados` y
 
 ### Riesgo importante
 
-Hoy `public.prospeccion_prospectos.busqueda_id` tiene cascada desde `public.busquedas`, así que una purga agresiva de búsquedas puede borrar prospectos ya convertidos si no se separa primero la dependencia.
+`public.prospeccion_prospectos.busqueda_id` ya no debe tratarse como una dependencia destructiva para limpieza. La limpieza profunda de DENUE ya se ejecutó con FKs ajustadas para no perder prospectos útiles.
 
 ## Principios de diseño
 
@@ -118,6 +129,10 @@ Y mover el `raw` completo a:
 - una tabla de archivo,
 - o almacenamiento externo si se quiere preservar trazabilidad completa.
 
+Nota:
+- para DENUE ya se dejó de usar el histórico bruto como almacenamiento permanente;
+- el crudo viejo se purga por retención y la capa comercial queda en `prospeccion_prospectos`.
+
 ## Estrategia de deduplicación
 
 ### Dedupe fuerte
@@ -150,6 +165,10 @@ Cuando dos filas compiten, la prioridad sugerida es:
 Retención sugerida:
 - 30 a 90 días, configurable por tenant o por sistema.
 
+Estado actual:
+- DENUE quedó fijado a `5 días`.
+- Google Places no entra en la purga automática.
+
 ### `public.busquedas`
 
 Retener más tiempo porque es liviana y sirve para auditoría.
@@ -162,6 +181,10 @@ Conservar permanentemente mientras el prospecto siga activo.
 
 Conservar según política de auditoría.
 - si crece demasiado, mover a retención más larga o archive.
+
+Estado actual:
+- la auditoría de DENUE desacoplada ya fue depurada;
+- el historial útil de prospectos activos permanece en la tabla de auditoría.
 
 ## Fases de implementación
 
@@ -196,8 +219,13 @@ Conservar según política de auditoría.
 
 ### Fase 4. Optimización estructural
 
-- evaluar particionado de `resultados` por fecha si el volumen sigue creciendo.
-- mover consultas de lectura repetitivas a vistas materializadas o resúmenes.
+- evaluar particionado de `resultados` por fecha si el volumen vuelve a crecer.
+- mover consultas de lectura repetitivas a vistas materializadas o resúmenes sólo si la presión real reaparece.
+
+### Fase 5. Cierre operativo
+
+- documentar la política final de retención para auditoría de prospectos.
+- revisar si hace falta dejar una vista/resumen ligero para métricas de históricos, sin reintroducir el raw como tabla caliente.
 
 ## Cambios técnicos sugeridos
 
@@ -229,6 +257,7 @@ Conservar según política de auditoría.
 - deduplicar mal puede fusionar dos negocios distintos con datos parecidos.
 - retención demasiado corta puede dificultar auditoría o re-procesamiento.
 - retención demasiado larga no resuelve la presión de BD.
+- purgar auditoría sin criterio puede eliminar trazabilidad útil de prospectos ya convertidos.
 
 ## Criterios de aceptación
 
@@ -238,6 +267,7 @@ Conservar según política de auditoría.
 4. Los prospectos actuales se conservan intactos.
 5. El sistema sigue mostrando resultados, mapa y filtros correctamente.
 6. La limpieza queda auditada y es operativamente segura.
+7. La limpieza profunda de búsquedas DENUE viejas no deja residuos operativos.
 
 ## Orden recomendado
 
@@ -246,4 +276,3 @@ Conservar según política de auditoría.
 3. Introducir retención del dato crudo.
 4. Recortar histórico antiguo.
 5. Evaluar particionado o materialización si todavía hace falta.
-

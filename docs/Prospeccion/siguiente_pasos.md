@@ -88,10 +88,13 @@ Este archivo sirve para capturar próximos requerimientos sin mezclar historial 
     - dedupe por `organizacion_id + fuente + external_id` cuando exista `external_id` estable.
     - si no existe, usar llave derivada normalizada.
   - guardas:
-    - no purgar búsquedas crudas sin separar antes la dependencia de `prospeccion_prospectos`.
-    - `resultados` debe quedar con retención limitada o archivado.
+    - la purga profunda DENUE ya se ejecutó y la dependencia destructiva con prospectos quedó corregida.
+    - `resultados` quedó con retención limitada y purga automática DENUE.
+  - estado actual:
+    - plan funcional y migración técnica cerrados en su fase principal.
+    - pendiente sólo optimización futura si el volumen vuelve a crecer.
   - siguiente paso técnico:
-    - convertir el plan funcional en migración tabla por tabla.
+    - mantener monitoreo operativo de volumen y, si aplica, evaluar particionado o vistas materializadas.
     - documento técnico:
       - `plan_deduplicacion_retencion_resultados_migracion_tecnica.md`
 

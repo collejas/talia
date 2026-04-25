@@ -96,9 +96,15 @@ El patrón es multi-tenant por `organizacion_id` con políticas para `authentica
 
 ## 5) Snapshot actual (MCP)
 
-- `busquedas`: 167 totales (Google 158, DENUE 9).
-- `resultados`: Google 61,533; DENUE 4,195.
-- `prospeccion_prospectos`: Google 72; DENUE 13.
+- `busquedas`: 166 totales (Google 158, DENUE 8).
+- `resultados`: Google 14,843; DENUE 2,058.
+- `prospeccion_prospectos`: Google 0; DENUE 1,389.
+- `prospeccion_prospectos_audit`: 122,725 filas totales.
+
+Nota operativa:
+- el bloque DENUE ya fue depurado con retención de 5 días y limpieza profunda de búsquedas antiguas;
+- el snapshot de `resultados` ya no representa un histórico bruto sin límite para DENUE;
+- `prospeccion_prospectos` conserva el valor comercial útil y ya no depende del rastro completo de búsquedas viejas.
 
 ## 6) Hallazgos prácticos
 

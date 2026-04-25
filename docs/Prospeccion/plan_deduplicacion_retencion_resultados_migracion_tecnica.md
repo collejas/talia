@@ -37,14 +37,14 @@ La migración debe garantizar que:
   - se llena por búsqueda y conserva el raw.
 - `public.prospeccion_prospectos`
   - tiene:
-    - `busqueda_id` con cascada,
+    - `busqueda_id` ya no debe tratarse como dependencia destructiva para la limpieza DENUE,
     - `resultado_id` con `ON DELETE SET NULL`,
     - unicidad por `resultado_id`,
     - y en la práctica una lógica de upsert por `organizacion_id + fuente + external_id` en el backend.
 
 ### Riesgo principal
 
-Si se borra `public.busquedas` antes de ajustar las FKs, `public.prospeccion_prospectos` puede desaparecer por cascada.
+La cascada destructiva ya fue corregida para la limpieza DENUE profunda. El riesgo restante es operativo: no volver a mezclar una purga de históricos con una ruta de escritura que reintroduzca duplicados.
 
 ## 3) Principios de migración
 
@@ -87,6 +87,10 @@ Cambios propuestos:
 - agregar índices de lectura y limpieza,
 - dejar de tratarlo como almacenamiento permanente por defecto.
 
+Estado actual:
+- `first_seen_at`, `last_seen_at`, `appearances_count`, `archived_at` y `retention_until` ya están en uso para DENUE.
+- `public.resultados` ya no se está tratando como almacenamiento permanente para DENUE.
+
 ### 4.3 Tabla puente de apariciones
 
 Nuevo objeto sugerido:
@@ -108,6 +112,9 @@ Campos sugeridos:
 - `last_seen_at timestamptz`
 - `appearances_count integer`
 - `metadata jsonb`
+
+Estado actual:
+- la tabla puente ya existe y se está usando para DENUE.
 
 ## 5) Plan de migración tabla por tabla
 
@@ -177,6 +184,10 @@ Acciones:
 - rellenar `first_seen_at`, `last_seen_at` y `appearances_count`,
 - marcar `prospecto_id` en resultados que ya tengan match canónico.
 
+Estado actual:
+- el backfill DENUE ya se ejecutó y el histórico sobrante fue depurado.
+- no queda una gran tarea de backfill pendiente para DENUE; sólo podrían aparecer backfills adicionales si se decide reintroducir otra fuente o una nueva regla de identidad.
+
 Reglas de backfill:
 - si existe `external_id`, usarlo como match principal,
 - si no existe, usar `dedupe_key`,
@@ -197,6 +208,10 @@ Acciones backend:
   - reutilizar prospecto existente si coincide identidad,
   - marcar relación de origen sin volver a insertar.
 
+Estado actual:
+- el backend ya escribe con identidad global para prospectos cuando existe `external_id`.
+- si una búsqueda nueva vuelve a traer el mismo negocio, se actualiza el existente en vez de multiplicarlo.
+
 Archivos probables:
 - `backend/app/repositories/crm.py`
 - `backend/app/api/routes/crm.py`
@@ -211,6 +226,11 @@ Acciones:
 - crear job de purga/archivo por antigüedad o por `retention_until`,
 - limpiar primero sólo filas no referenciadas por el flujo comercial,
 - mover `raw` a tabla fría o archive si se quiere retener completo.
+
+Estado actual:
+- la retención DENUE quedó en `5 días`.
+- la purga automática DENUE ya está operativa.
+- la limpieza profunda de búsquedas DENUE viejas ya se ejecutó y dejó la base sin residuos operativos de esas búsquedas.
 
 Reglas:
 - nunca purgar antes de confirmar que el prospecto fue promovido o preservado,
@@ -227,6 +247,10 @@ Acciones:
 - revisar si la tabla puente requiere materialización parcial,
 - agregar vistas/resúmenes para listados frecuentes,
 - revisar si `v_resultados_unificados` sigue siendo útil o conviene reemplazarla por una vista más ligera.
+
+Estado actual:
+- esta es la única fase que sigue realmente abierta como optimización futura.
+- no es un bloqueante funcional; es una mejora de escalado si el volumen vuelve a crecer.
 
 ## 6) Migraciones SQL sugeridas
 
@@ -283,6 +307,7 @@ Orden sugerido:
 3. `public.resultados` baja de tamaño sin romper filtros, mapa ni listado.
 4. La conversión a prospecto sigue siendo idempotente.
 5. Las búsquedas históricas siguen visibles mientras su retención lo permita.
+6. La limpieza profunda de búsquedas DENUE no deja residuos operativos en `prospeccion_*`.
 
 ## 9) Archivos impactados
 
@@ -310,4 +335,3 @@ Se puede implementar cuando estén cerradas estas tres decisiones:
 3. ¿`resultados` se purga por antigüedad fija o por transición a prospecto?
 
 Cuando esas respuestas estén definidas, la migración puede partirse en PRs/migraciones pequeñas y seguras.
-
