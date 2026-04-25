@@ -38,7 +38,7 @@
 - El frontend ya usa paginación alta para resultados (5000) en vistas geográficas.
 - En `prospeccion/prospectos`, la tabla ya permite orden por columna, reordenar columnas y ocultar/mostrar columnas.
 - En `google-busqueda` y `denue-busqueda`, ya existe eliminación individual y masiva de búsquedas recientes.
-- La conversión resultado -> prospecto debe guardar `nombre_comercial`, `razon_social` y dirección desglosada cuando aplique, sin copiar `raw` completo a la tabla operativa.
+- La conversión resultado -> prospecto ya guarda `nombre_comercial`, `razon_social` y dirección desglosada cuando aplica, sin copiar `raw` completo a la tabla operativa.
 
 ## 4) Referencia de datos actual (MCP, instancia vigente)
 

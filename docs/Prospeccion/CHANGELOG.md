@@ -33,7 +33,11 @@ Formato recomendado por entrada:
 
 ### Operación/Notas
 - El módulo de prospección ya no depende del histórico bruto DENUE para conservar prospectos útiles.
-- Queda como pendiente sólo la optimización final de escalado si el volumen vuelve a crecer.
+- Los refactors de columnarización y snapshot comercial quedaron cerrados en su fase principal.
+- Quedan sólo afinados secundarios:
+  - completar históricos incompletos cuando la fuente no traiga campos,
+  - seguir reduciendo lecturas sobre `raw` en capas no críticas,
+  - y evaluar escalado futuro si el volumen vuelve a crecer.
 
 ## 2026-02-28
 

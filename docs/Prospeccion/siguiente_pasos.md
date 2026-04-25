@@ -105,7 +105,7 @@ Este archivo sirve para capturar próximos requerimientos sin mezclar historial 
   - documento de trabajo:
     - `plan_columnarizacion_resultados_direccion.md`
   - estado actual:
-    - pendiente de implementación.
+    - completado en su fase principal; queda sólo afinado secundario si se requiere más reducción de latencia.
 - Snapshot comercial al convertir resultados en prospectos:
   - objetivo:
     - definir qué campos deben quedar en `prospeccion_prospectos` al guardar un resultado como prospecto,
@@ -114,7 +114,7 @@ Este archivo sirve para capturar próximos requerimientos sin mezclar historial 
   - documento de trabajo:
     - `plan_resultado_a_prospecto_snapshot.md`
   - estado actual:
-    - pendiente de implementación.
+    - completado en su fase principal; sólo quedan casos históricos incompletos por falta de dato fuente.
 
 6. Atribución de publicidad WhatsApp por frase (nuevo)
 - Objetivo:
