@@ -559,10 +559,7 @@ const DEFAULT_TABLE_COLUMN_ORDER: ProspectTableColumnId[] = [
   "prospecto",
   "correo",
   "sitio_web",
-  "sitio_verificado",
   "telefono",
-  "tipo_linea",
-  "telefono_verificado",
   "fuente",
   "tamano_rating",
   "campana",
@@ -616,10 +613,10 @@ function normalizeProspectosTablePrefs(raw: unknown): ProspectosTablePrefsState 
     prospecto: true,
     correo: true,
     sitio_web: true,
-    sitio_verificado: true,
+    sitio_verificado: false,
     telefono: true,
-    tipo_linea: true,
-    telefono_verificado: true,
+    tipo_linea: false,
+    telefono_verificado: false,
     fuente: true,
     tamano_rating: true,
     campana: true,
@@ -4946,7 +4943,24 @@ function ProspectosView() {
                           </TableCell>
                           {visibleColumns.map((columnId) => {
                             switch (columnId) {
-                              case "prospecto":
+                              case "prospecto": {
+                                const metadataLocation = extractMetadataLocation(prospecto.metadata)
+                                const locationBits = [
+                                  pickLocationText(prospecto.estado_nombre, prospecto.state_name, metadataLocation.estado),
+                                  pickLocationText(
+                                    prospecto.municipio_nombre,
+                                    prospecto.municipality_name,
+                                    metadataLocation.municipio
+                                  ),
+                                ].filter((value): value is string => Boolean(value && value.length))
+                                const countryName = pickLocationText(
+                                  prospecto.country_name,
+                                  prospecto.pais_nombre,
+                                  metadataLocation.country
+                                ) || (prospecto.fuente === "denue" ? "México" : null)
+                                const locationLabel = [...locationBits, countryName]
+                                  .filter((value): value is string => Boolean(value && value.length))
+                                  .join(" · ")
                                 return (
                                   <TableCell key={columnId}>
                                     <div className="max-w-[220px] truncate text-[11px] font-medium" title={prospecto.display_name || "Sin nombre"}>
@@ -4973,11 +4987,21 @@ function ProspectosView() {
                                         </Badge>
                                       )}
                                     </div>
-                                    {prospecto.address ? (
-                                      <p className="mt-1 max-w-[220px] truncate text-xs text-muted-foreground" title={prospecto.address}>
-                                        {prospecto.address}
-                                      </p>
-                                    ) : null}
+                                    <div className="mt-1 space-y-0.5">
+                                      {prospecto.address ? (
+                                        <p className="max-w-[220px] truncate text-xs text-muted-foreground" title={prospecto.address}>
+                                          {prospecto.address}
+                                        </p>
+                                      ) : null}
+                                      {locationLabel ? (
+                                        <p
+                                          className="max-w-[220px] truncate text-xs text-muted-foreground"
+                                          title={locationLabel}
+                                        >
+                                          {locationLabel}
+                                        </p>
+                                      ) : null}
+                                    </div>
                                     {prospecto.scraper_ejecutado && prospecto.scraper_ultimo_en ? (
                                       <p
                                         className="mt-1 max-w-[220px] truncate text-xs text-muted-foreground"
@@ -4998,6 +5022,7 @@ function ProspectosView() {
                                     ) : null}
                                   </TableCell>
                                 )
+                              }
                               case "correo": {
                                 const email = (prospecto.email || "").trim()
                                 const normalizedEmail = email ? email.toLowerCase() : ""
@@ -5061,35 +5086,18 @@ function ProspectosView() {
                                   </TableCell>
                                 )
                               }
-                              case "sitio_verificado":
-                                return (
-                                  <TableCell key={columnId}>
-                                    <div className="flex flex-wrap items-center gap-1">
-                                      <WebsiteLookupStatusBadge status={prospecto.website_lookup_status} className="text-[10px]" />
-                                      {typeof prospecto.website_http_status === "number" ? (
-                                        <Badge variant="outline" className="text-[10px]">
-                                          HTTP {prospecto.website_http_status}
-                                        </Badge>
-                                      ) : null}
-                                    </div>
-                                  </TableCell>
-                                )
                               case "telefono":
                                 return (
                                   <TableCell key={columnId}>
-                                    <span className="text-[11px]">{prospecto.phone_e164 || prospecto.phone || "—"}</span>
-                                  </TableCell>
-                                )
-                              case "tipo_linea":
-                                return (
-                                  <TableCell key={columnId}>
-                                    <span className="text-[11px]">{prospecto.carrier_type ? carrierLabel(prospecto.carrier_type) : "—"}</span>
-                                  </TableCell>
-                                )
-                              case "telefono_verificado":
-                                return (
-                                  <TableCell key={columnId}>
-                                    <LookupStatusBadge status={prospecto.lookup_status} className="text-[10px]" />
+                                    <div className="flex flex-col gap-1">
+                                      <span className="text-[11px]">{prospecto.phone_e164 || prospecto.phone || "—"}</span>
+                                      <div className="flex flex-wrap items-center gap-1">
+                                        <LookupStatusBadge status={prospecto.lookup_status} className="text-[10px]" />
+                                        <Badge variant="outline" className="text-[10px]">
+                                          {prospecto.carrier_type ? carrierLabel(prospecto.carrier_type) : "Sin tipo"}
+                                        </Badge>
+                                      </div>
+                                    </div>
                                   </TableCell>
                                 )
                               case "fuente":
@@ -6280,6 +6288,44 @@ function formatAuditValue(value: unknown): string {
     return "—"
   }
   return String(value)
+}
+
+function pickLocationText(...values: unknown[]): string | null {
+  for (const value of values) {
+    if (typeof value !== "string") continue
+    const trimmed = value.trim()
+    if (trimmed.length) return trimmed
+  }
+  return null
+}
+
+function extractMetadataLocation(
+  metadata: Record<string, unknown> | null | undefined
+): { estado: string | null; municipio: string | null; country: string | null } {
+  if (!metadata || typeof metadata !== "object") {
+    return { estado: null, municipio: null, country: null }
+  }
+  const root = metadata as Record<string, unknown>
+  const ubicacion = isRecord(root["ubicacion"]) ? (root["ubicacion"] as Record<string, unknown>) : null
+  const geo = isRecord(root["geo"]) ? (root["geo"] as Record<string, unknown>) : null
+  const location = isRecord(root["location"]) ? (root["location"] as Record<string, unknown>) : null
+  const sources = [root, ubicacion, geo, location].filter((value): value is Record<string, unknown> => Boolean(value))
+  const read = (...keys: string[]) => {
+    for (const source of sources) {
+      for (const key of keys) {
+        const value = source[key]
+        if (typeof value !== "string") continue
+        const trimmed = value.trim()
+        if (trimmed.length) return trimmed
+      }
+    }
+    return null
+  }
+  return {
+    estado: read("estado_nombre", "state_name", "nom_ent", "entidad", "state", "estado"),
+    municipio: read("municipio_nombre", "municipality_name", "nom_mun", "municipio", "city", "localidad"),
+    country: read("country_name", "pais_nombre", "pais", "country", "country_name"),
+  }
 }
 
 function readStageFromRow(row: Record<string, unknown> | null): string | null {

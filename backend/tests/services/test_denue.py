@@ -60,7 +60,7 @@ def test_normalize_denue_place_materializes_address_columns() -> None:
         }
     )
 
-    assert normalized["address"] == "Avenida Juarez, 100 Int 2, Centro, 20000, Jesus Maria, Aguascalientes"
+    assert normalized["address"] == "Avenida Juarez, 100 Int 2, Centro, 20000"
     assert normalized["address_full"] == normalized["address"]
     assert normalized["tipo_vialidad"] == "Avenida"
     assert normalized["nombre_vialidad"] == "Juarez"
@@ -126,6 +126,30 @@ def test_normalize_denue_place_reads_nested_raw_payload() -> None:
     assert normalized["asentamiento"] == "COLONIA"
     assert normalized["lat"] == pytest.approx(22.14994644)
     assert normalized["lng"] == pytest.approx(-100.99661473)
+
+
+def test_normalize_denue_place_derives_location_from_ubicacion_text() -> None:
+    normalized = normalize_denue_place(
+        {
+            "Id": "ABC999",
+            "Nombre": "Ejemplo",
+            "Clase_actividad": "Consultoria",
+            "Estrato": "micro",
+            "Telefono": "",
+            "Correo_e": "",
+            "Sitio_internet": "",
+            "Tipo_vialidad": "CALLE",
+            "Calle": "EJEMPLO",
+            "Num_Exterior": "10",
+            "Colonia": "CENTRO",
+            "CP": "76000",
+            "Ubicacion": "SANTIAGO DE QUERÉTARO, Querétaro, QUERÉTARO",
+        }
+    )
+
+    assert normalized["estado_nombre"] == "Querétaro"
+    assert normalized["municipio_nombre"] == "Querétaro"
+    assert normalized["localidad"] == "Santiago De Querétaro"
 
 
 async def test_get_discards_shared_client_after_remote_protocol_error(monkeypatch) -> None:

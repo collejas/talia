@@ -287,6 +287,15 @@ def _row_matches_geo_filters(
         municipality_code_values.extend(_extract_geo_values(source, municipality_code_keys))
         municipality_name_values.extend(_extract_geo_values(source, municipality_name_keys))
 
+    for key in ("estado_nombre", "state_name"):
+        value = row.get(key)
+        if isinstance(value, str) and value.strip():
+            state_name_values.append(value.strip())
+    for key in ("municipio_nombre", "municipality_name"):
+        value = row.get(key)
+        if isinstance(value, str) and value.strip():
+            municipality_name_values.append(value.strip())
+
     corpus_parts: list[str] = []
     address_value = row.get("address")
     if isinstance(address_value, str) and address_value.strip():
@@ -417,6 +426,7 @@ def _build_geo_postgrest_filters(
             seen_state_names.add(normalized)
             literal = _postgrest_ilike_literal(candidate)
             for key in (
+                "estado_nombre",
                 "metadata->>estado",
                 "metadata->>estado_nombre",
                 "metadata->>nom_ent",
@@ -460,6 +470,7 @@ def _build_geo_postgrest_filters(
             seen_municipality_names.add(normalized)
             literal = _postgrest_ilike_literal(candidate)
             for key in (
+                "municipio_nombre",
                 "metadata->>municipio",
                 "metadata->>municipio_nombre",
                 "metadata->>nom_mun",
@@ -10821,6 +10832,8 @@ class CRMRepository:
                     "email",
                     "website",
                     "address",
+                    "estado_nombre",
+                    "municipio_nombre",
                     "rating",
                     "whatsapp_permitido",
                     "llamada_permitida",
