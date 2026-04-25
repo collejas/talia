@@ -10,6 +10,7 @@ from app.repositories.crm import CRMRepository, _build_prospectos_ids_cache_key
 class DummyResponse:
     def __init__(self, payload=None):
         self._payload = payload if payload is not None else []
+        self.headers = {}
 
     def json(self):
         return self._payload
@@ -115,6 +116,10 @@ async def test_list_prospectos_scopes_request_to_organizacion_id(monkeypatch: py
     params = captured["params"]
     assert isinstance(params, dict)
     assert params.get("organizacion_id") == f"eq.{org_id}"
+    select = params.get("select")
+    assert isinstance(select, str)
+    assert select != "*"
+    assert "nombre_comercial" in select
 
 
 def test_prospectos_cache_key_includes_organizacion_id() -> None:

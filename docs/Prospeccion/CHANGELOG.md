@@ -36,8 +36,14 @@ Formato recomendado por entrada:
 - Los refactors de columnarización y snapshot comercial quedaron cerrados en su fase principal.
 - Quedan sólo afinados secundarios:
   - completar históricos incompletos cuando la fuente no traiga campos,
-  - seguir reduciendo lecturas sobre `raw` en capas no críticas,
+  - seguir reduciendo lecturas sobre `raw` en capas no críticas y fuera del camino caliente,
   - y evaluar escalado futuro si el volumen vuelve a crecer.
+  - frente abierto actual:
+    - depurar consultas/UI residuales que todavía leen `raw` cuando ya existe columna materializada equivalente.
+- DENUE y prospectos:
+  - las RPC que alimentan `denue-busqueda` dejaron de depender de `raw` para teléfono, correo, web y geografía,
+  - `list_prospectos` ya pide columnas explícitas en lugar de `select=*`,
+  - la lectura caliente del panel ahora queda alineada con las columnas materializadas del refactor.
 
 ## 2026-02-28
 

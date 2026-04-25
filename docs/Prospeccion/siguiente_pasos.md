@@ -106,6 +106,9 @@ Este archivo sirve para capturar próximos requerimientos sin mezclar historial 
     - `plan_columnarizacion_resultados_direccion.md`
   - estado actual:
     - completado en su fase principal; queda sólo afinado secundario si se requiere más reducción de latencia.
+  - frente abierto:
+    - seguir moviendo consultas/UI restantes para leer columnas materiales en lugar de `raw`,
+    - especialmente en listados, detalles y resúmenes que aún hagan fallback histórico.
 - Snapshot comercial al convertir resultados en prospectos:
   - objetivo:
     - definir qué campos deben quedar en `prospeccion_prospectos` al guardar un resultado como prospecto,
