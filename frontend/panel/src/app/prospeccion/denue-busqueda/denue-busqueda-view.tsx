@@ -1264,7 +1264,7 @@ export function DenueBusquedaView() {
     const ids = Array.from(selectedIds);
     setIsDeletingResultados(true);
     try {
-      await deleteDenueResultados(ids);
+      await deleteDenueResultados(ids, activeBusquedaId ?? undefined);
       setFeedback({
         type: "success",
         message: `Se eliminaron ${ids.length} registros.`,

@@ -13,6 +13,7 @@ import httpx
 from app.core.config import settings
 from app.core.logging import get_logger
 from app.data.geo.locations import list_municipalities_for_state
+from app.services.result_identity import build_result_dedupe_key
 
 logger = get_logger(__name__)
 search_logger = get_logger("app.prospeccion.busquedas")
@@ -622,10 +623,23 @@ def normalize_denue_place(place: dict[str, Any]) -> dict[str, Any]:
     phone = _clean_text(place.get("Telefono"))
     email = _clean_text(place.get("Correo_e"))
     website = _clean_text(place.get("Sitio_internet"))
+    dedupe_key = build_result_dedupe_key(
+        "denue",
+        external_id=external_id,
+        name=place.get("Nombre"),
+        razon_social=place.get("Razon_social"),
+        address=address,
+        phone=phone,
+        email=email,
+        website=website,
+        actividad=actividad,
+        estrato=estrato_label,
+    )
 
     return {
         "external_id": str(external_id) if external_id is not None else None,
         "clee": None,
+        "dedupe_key": dedupe_key,
         "name": _clean_text(place.get("Nombre")),
         "razon_social": _clean_text(place.get("Razon_social")),
         "actividad": actividad,

@@ -961,7 +961,7 @@ export function GoogleBusquedaView() {
     const ids = Array.from(selectedIds);
     setIsDeletingResultados(true);
     try {
-      await deleteGoogleResultados(ids);
+      await deleteGoogleResultados(ids, activeBusquedaId ?? undefined);
       setFeedback({
         type: "success",
         message: `Se eliminaron ${ids.length} registros.`,

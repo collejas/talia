@@ -391,13 +391,17 @@ export async function deleteGoogleBusqueda(busquedaId: string) {
   });
 }
 
-export async function deleteGoogleResultados(ids: string[]) {
+export async function deleteGoogleResultados(ids: string[], busquedaId?: string) {
   if (!ids.length) {
     throw new Error("Selecciona al menos un resultado.");
   }
+  const payload: { ids: string[]; busqueda_id?: string } = { ids };
+  if (busquedaId && busquedaId.trim().length) {
+    payload.busqueda_id = busquedaId.trim();
+  }
   return requestJson<{ ok: boolean; deleted: number }>("/api/prospeccion/google/resultados", {
     method: "DELETE",
-    body: JSON.stringify({ ids }),
+    body: JSON.stringify(payload),
   });
 }
 

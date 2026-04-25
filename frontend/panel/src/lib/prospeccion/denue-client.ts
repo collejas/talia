@@ -473,13 +473,17 @@ export async function deleteDenueBusqueda(busquedaId: string) {
   });
 }
 
-export async function deleteDenueResultados(ids: string[]) {
+export async function deleteDenueResultados(ids: string[], busquedaId?: string) {
   if (!ids.length) {
     throw new Error("Selecciona al menos un resultado.");
   }
+  const payload: { ids: string[]; busqueda_id?: string } = { ids };
+  if (busquedaId && busquedaId.trim().length) {
+    payload.busqueda_id = busquedaId.trim();
+  }
   return requestJson<{ ok: boolean; deleted: number }>("/api/prospeccion/denue/resultados", {
     method: "DELETE",
-    body: JSON.stringify({ ids }),
+    body: JSON.stringify(payload),
   });
 }
 

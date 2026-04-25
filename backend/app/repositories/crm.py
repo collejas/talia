@@ -10417,18 +10417,50 @@ class CRMRepository:
         *,
         ids: list[UUID],
         fuente: str,
+        busqueda_id: UUID | None = None,
     ) -> int:
         ids_param = ",".join(str(value) for value in ids)
-        params = {
-            "id": f"in.({ids_param})",
-            "fuente": f"eq.{fuente}",
-        }
-        resp = await self._request(
-            "DELETE",
-            "/rest/v1/resultados",
-            params=params,
-            prefer="return=representation",
-        )
+        if busqueda_id is not None:
+            params = {
+                "resultado_id": f"in.({ids_param})",
+                "busqueda_id": f"eq.{busqueda_id}",
+                "fuente": f"eq.{fuente}",
+            }
+            resp = await self._request(
+                "DELETE",
+                "/rest/v1/prospeccion_resultado_apariciones",
+                params=params,
+                prefer="return=representation",
+            )
+            if resp.status_code == 204:
+                data: list[dict[str, Any]] = []
+            else:
+                data = resp.json() or []
+                if not isinstance(data, list):
+                    raise CRMRepositoryError(f"Respuesta inesperada al eliminar resultados: {data!r}")
+            if data:
+                return len(data)
+            params = {
+                "id": f"in.({ids_param})",
+                "fuente": f"eq.{fuente}",
+            }
+            resp = await self._request(
+                "DELETE",
+                "/rest/v1/resultados",
+                params=params,
+                prefer="return=representation",
+            )
+        else:
+            params = {
+                "id": f"in.({ids_param})",
+                "fuente": f"eq.{fuente}",
+            }
+            resp = await self._request(
+                "DELETE",
+                "/rest/v1/resultados",
+                params=params,
+                prefer="return=representation",
+            )
         if resp.status_code == 204:
             return 0
         data = resp.json() or []

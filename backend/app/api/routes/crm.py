@@ -2491,6 +2491,7 @@ class DeleteResultadosPayload(BaseModel):
         max_length=500,
         description="IDs de resultados (uuid) a eliminar.",
     )
+    busqueda_id: UUID | None = Field(default=None, description="Busqueda activa para borrar solo apariciones.")
 
     @field_validator("ids")
     @classmethod
@@ -19974,6 +19975,7 @@ async def eliminar_resultados_google(
         deleted = await repo.delete_prospeccion_resultados(
             ids=payload.ids,
             fuente="google_places",
+            busqueda_id=payload.busqueda_id,
         )
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
@@ -19991,6 +19993,7 @@ async def eliminar_resultados_denue(
         deleted = await repo.delete_prospeccion_resultados(
             ids=payload.ids,
             fuente="denue",
+            busqueda_id=payload.busqueda_id,
         )
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc

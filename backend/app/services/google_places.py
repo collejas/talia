@@ -10,6 +10,7 @@ import httpx
 
 from app.core.config import settings
 from app.core.logging import get_logger
+from app.services.result_identity import build_result_dedupe_key
 
 logger = get_logger(__name__)
 
@@ -675,10 +676,20 @@ def normalize_place_for_result(place: dict[str, Any]) -> dict[str, Any]:
     actividad = actividad or place.get("primaryType") or ""
     phone = place.get("internationalPhoneNumber") or place.get("nationalPhoneNumber") or None
     website = place.get("websiteUri") or place.get("googleMapsUri")
+    dedupe_key = build_result_dedupe_key(
+        "google_places",
+        external_id=place.get("id"),
+        name=display_name.get("text") if isinstance(display_name, dict) else None,
+        address=place.get("formattedAddress"),
+        phone=phone,
+        website=website,
+        actividad=actividad,
+    )
 
     return {
         "external_id": place.get("id"),
         "clee": None,
+        "dedupe_key": dedupe_key,
         "name": display_name.get("text") if isinstance(display_name, dict) else None,
         "razon_social": None,
         "actividad": actividad,
