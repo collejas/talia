@@ -163,22 +163,36 @@ class DenueClient:
                 if attempt >= max_attempts:
                     raise DenueError("denue_read_timeout") from exc
             except httpx.RemoteProtocolError as exc:
-                logger.exception("denue.request_error", extra={"error": str(exc)})
-                search_logger.exception(
-                    "denue.request_error",
-                    extra={"error": str(exc), "method": method, "segments": segments, "url": url},
-                )
+                log_payload = {
+                    "error": str(exc),
+                    "attempt": attempt,
+                    "max_attempts": max_attempts,
+                    "method": method,
+                    "segments": segments,
+                    "url": url,
+                }
                 _invalidate_denue_http_client(client)
                 if attempt >= max_attempts:
+                    logger.exception("denue.request_error", extra=log_payload)
+                    search_logger.exception("denue.request_error", extra=log_payload)
                     raise DenueError("denue_remote_protocol_error") from exc
+                logger.info("denue.request_retryable_error", extra=log_payload)
+                search_logger.info("denue.request_retryable_error", extra=log_payload)
             except httpx.RequestError as exc:  # pragma: no cover - depende de red
-                logger.exception("denue.request_error", extra={"error": str(exc)})
-                search_logger.exception(
-                    "denue.request_error",
-                    extra={"error": str(exc), "method": method, "segments": segments, "url": url},
-                )
+                log_payload = {
+                    "error": str(exc),
+                    "attempt": attempt,
+                    "max_attempts": max_attempts,
+                    "method": method,
+                    "segments": segments,
+                    "url": url,
+                }
                 if attempt >= max_attempts:
+                    logger.exception("denue.request_error", extra=log_payload)
+                    search_logger.exception("denue.request_error", extra=log_payload)
                     raise DenueError("denue_request_failed") from exc
+                logger.info("denue.request_retryable_error", extra=log_payload)
+                search_logger.info("denue.request_retryable_error", extra=log_payload)
             # backoff con jitter
             delay = min(8.0, 0.7 * (2 ** (attempt - 1)) + random.random() * 0.4)
             await asyncio.sleep(delay)
@@ -473,7 +487,7 @@ class DenueClient:
         left[end_idx] = str(mid)
         right[start_idx] = str(mid + 1)
 
-        search_logger.warning(
+        search_logger.info(
             "denue.request_split_retry",
             extra={
                 "method": method,
