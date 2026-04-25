@@ -72,7 +72,30 @@ Este archivo sirve para capturar próximos requerimientos sin mezclar historial 
 - Alertas automáticas de fallos por canal.
 - Runbook técnico consolidado para soporte. (Completado: ver `runbook_metricas_brevo.md`)
 
-5. Atribución de publicidad WhatsApp por frase (nuevo)
+5. Datos y rendimiento de prospección
+- Plan de deduplicación y retención de resultados:
+  - objetivo:
+    - conservar prospectos actuales,
+    - evitar repetidos entre búsquedas,
+    - limitar el crecimiento de `public.resultados`,
+    - reducir presión sobre vistas y consultas repetitivas.
+  - documento de trabajo:
+    - `plan_deduplicacion_retencion_resultados.md`
+  - línea base:
+    - `public.resultados` se comporta como histórico crudo por búsqueda/fuente.
+    - `public.prospeccion_prospectos` es el dato comercial que debe quedar como canónico.
+  - decisión guía:
+    - dedupe por `organizacion_id + fuente + external_id` cuando exista `external_id` estable.
+    - si no existe, usar llave derivada normalizada.
+  - guardas:
+    - no purgar búsquedas crudas sin separar antes la dependencia de `prospeccion_prospectos`.
+    - `resultados` debe quedar con retención limitada o archivado.
+  - siguiente paso técnico:
+    - convertir el plan funcional en migración tabla por tabla.
+    - documento técnico:
+      - `plan_deduplicacion_retencion_resultados_migracion_tecnica.md`
+
+6. Atribución de publicidad WhatsApp por frase (nuevo)
 - Objetivo:
   - identificar conversaciones entrantes de WhatsApp que provienen de campañas digitales usando frases semilla (prefill message),
   - persistir canal/fuente de publicidad para medición comercial.
