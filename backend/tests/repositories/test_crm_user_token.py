@@ -62,3 +62,39 @@ async def test_rpc_prefers_user_token(monkeypatch: pytest.MonkeyPatch) -> None:
 
     assert repo._request_with_user.called
     assert result == {"ok": True}
+
+
+@pytest.mark.asyncio
+async def test_list_contactables_by_ids_uses_source_specific_columns(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(settings, "supabase_url", "https://example.supabase.co")
+    monkeypatch.setattr(settings, "supabase_service_role", "service")
+    monkeypatch.setattr(settings, "supabase_anon", "anon")
+
+    repo = CRMRepository(user_token="user-token")
+    captured: dict[str, object] = {}
+
+    async def fake_request_with_user(method: str, path: str, **kwargs):
+        captured.setdefault("calls", []).append((method, path, kwargs))
+        return DummyResponse([])
+
+    repo._request_with_user = AsyncMock(side_effect=fake_request_with_user)
+
+    resultado_ids = [uuid.UUID("11111111-1111-1111-1111-111111111111")]
+    await repo.list_contactables_by_ids(
+        usuario_token="user-token",
+        fuente="denue",
+        resultado_ids=resultado_ids,
+    )
+
+    assert captured["calls"]
+    method, path, kwargs = captured["calls"][0]
+    assert method == "GET"
+    assert path == "/rest/v1/v_denue_contactables"
+    params = kwargs.get("params")
+    assert isinstance(params, dict)
+    select = params.get("select")
+    assert isinstance(select, str)
+    assert "google_primary_type" not in select
+    assert "rating" not in select
+    assert "reviews" not in select
+    assert "address_full" in select
