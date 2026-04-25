@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict aUIEU1KfzG2WItabljbNnQ4bk7xk8U5FZMRWaGIm2WEcS8DTneUPTFv3TAgHAzL
+\restrict TLAdYsVgpWPHIY6URAQbRMOX6vmgOhywAvcnUZBV8U6ZAG4m3PBvsoR9zqpfFER
 
 -- Dumped from database version 17.6
 -- Dumped by pg_dump version 18.3 (Ubuntu 18.3-1.pgdg24.04+1)
@@ -6230,6 +6230,372 @@ $_$;
 
 
 --
+-- Name: merge_duplicate_resultados(uuid, public.fuente_resultado); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.merge_duplicate_resultados(p_organizacion_id uuid, p_fuente public.fuente_resultado) RETURNS jsonb
+    LANGUAGE plpgsql
+    SET search_path TO 'public', 'pg_temp'
+    AS $$
+declare
+    v_stats jsonb := '{}'::jsonb;
+begin
+    WITH normalized AS (
+        SELECT
+            r.id,
+            r.busqueda_id,
+            r.organizacion_id,
+            r.fuente,
+            r.external_id,
+            r.creado_en,
+            COALESCE(r.last_seen_at, r.creado_en) AS last_seen_at,
+            COALESCE(
+                r.dedupe_key,
+                lower(p_fuente::text) || ':ext:' || lower(
+                    regexp_replace(COALESCE(r.external_id, ''), '\s+', '', 'g')
+                )
+            ) AS dedupe_key,
+            row_number() OVER (
+                PARTITION BY COALESCE(
+                    r.dedupe_key,
+                    lower(p_fuente::text) || ':ext:' || lower(
+                        regexp_replace(COALESCE(r.external_id, ''), '\s+', '', 'g')
+                    )
+                )
+                ORDER BY
+                    EXISTS (
+                        SELECT 1
+                        FROM public.prospeccion_prospectos p
+                        WHERE p.resultado_id = r.id
+                    ) DESC,
+                    COALESCE(r.last_seen_at, r.creado_en) DESC,
+                    r.creado_en DESC,
+                    r.id DESC
+            ) AS rn,
+            first_value(r.id) OVER (
+                PARTITION BY COALESCE(
+                    r.dedupe_key,
+                    lower(p_fuente::text) || ':ext:' || lower(
+                        regexp_replace(COALESCE(r.external_id, ''), '\s+', '', 'g')
+                    )
+                )
+                ORDER BY
+                    EXISTS (
+                        SELECT 1
+                        FROM public.prospeccion_prospectos p
+                        WHERE p.resultado_id = r.id
+                    ) DESC,
+                    COALESCE(r.last_seen_at, r.creado_en) DESC,
+                    r.creado_en DESC,
+                    r.id DESC
+            ) AS canonical_id,
+            min(r.creado_en) OVER (
+                PARTITION BY COALESCE(
+                    r.dedupe_key,
+                    lower(p_fuente::text) || ':ext:' || lower(
+                        regexp_replace(COALESCE(r.external_id, ''), '\s+', '', 'g')
+                    )
+                )
+            ) AS first_seen_at,
+            max(COALESCE(r.last_seen_at, r.creado_en)) OVER (
+                PARTITION BY COALESCE(
+                    r.dedupe_key,
+                    lower(p_fuente::text) || ':ext:' || lower(
+                        regexp_replace(COALESCE(r.external_id, ''), '\s+', '', 'g')
+                    )
+                )
+            ) AS last_seen_at_group,
+            count(*) OVER (
+                PARTITION BY COALESCE(
+                    r.dedupe_key,
+                    lower(p_fuente::text) || ':ext:' || lower(
+                        regexp_replace(COALESCE(r.external_id, ''), '\s+', '', 'g')
+                    )
+                )
+            ) AS appearances_count
+        FROM public.resultados r
+        WHERE r.organizacion_id = p_organizacion_id
+          AND r.fuente = p_fuente
+          AND r.external_id IS NOT NULL
+    ),
+    canonical AS (
+        SELECT DISTINCT ON (dedupe_key)
+            dedupe_key,
+            canonical_id,
+            first_seen_at,
+            last_seen_at_group,
+            appearances_count
+        FROM normalized
+        ORDER BY dedupe_key, canonical_id
+    ),
+    updated_canonical AS (
+        UPDATE public.resultados r
+        SET
+            dedupe_key = c.dedupe_key,
+            first_seen_at = c.first_seen_at,
+            last_seen_at = c.last_seen_at_group,
+            appearances_count = c.appearances_count,
+            retention_until = GREATEST(
+                COALESCE(r.retention_until, c.first_seen_at + interval '90 days'),
+                c.last_seen_at_group + interval '90 days'
+            )
+        FROM canonical c
+        WHERE r.id = c.canonical_id
+        RETURNING 1
+    ),
+    inserted_apparitions AS (
+        INSERT INTO public.prospeccion_resultado_apariciones (
+            organizacion_id,
+            busqueda_id,
+            resultado_id,
+            prospecto_id,
+            fuente,
+            external_id,
+            dedupe_key,
+            first_seen_at,
+            last_seen_at,
+            appearances_count,
+            metadata
+        )
+        SELECT
+            n.organizacion_id,
+            n.busqueda_id,
+            c.canonical_id,
+            p.id,
+            n.fuente,
+            n.external_id,
+            c.dedupe_key,
+            n.creado_en,
+            n.last_seen_at,
+            c.appearances_count,
+            to_jsonb(n)
+        FROM normalized n
+        JOIN canonical c ON c.dedupe_key = n.dedupe_key
+        LEFT JOIN public.prospeccion_prospectos p
+            ON p.organizacion_id = n.organizacion_id
+           AND p.resultado_id = n.id
+        ON CONFLICT (organizacion_id, busqueda_id, resultado_id) WHERE resultado_id IS NOT NULL DO UPDATE
+        SET prospecto_id = COALESCE(public.prospeccion_resultado_apariciones.prospecto_id, EXCLUDED.prospecto_id),
+            dedupe_key = COALESCE(EXCLUDED.dedupe_key, public.prospeccion_resultado_apariciones.dedupe_key),
+            last_seen_at = GREATEST(public.prospeccion_resultado_apariciones.last_seen_at, EXCLUDED.last_seen_at),
+            appearances_count = GREATEST(public.prospeccion_resultado_apariciones.appearances_count, EXCLUDED.appearances_count),
+            metadata = EXCLUDED.metadata,
+            actualizado_en = now()
+        RETURNING 1
+    ),
+    prospectos_updated AS (
+        UPDATE public.prospeccion_prospectos p
+        SET resultado_id = c.canonical_id
+        FROM normalized n
+        JOIN canonical c ON c.dedupe_key = n.dedupe_key
+        WHERE p.resultado_id = n.id
+          AND n.id <> c.canonical_id
+          AND p.organizacion_id = p_organizacion_id
+        RETURNING 1
+    ),
+    deleted_duplicates AS (
+        DELETE FROM public.resultados r
+        USING normalized n
+        JOIN canonical c ON c.dedupe_key = n.dedupe_key
+        WHERE r.id = n.id
+          AND r.id <> c.canonical_id
+        RETURNING 1
+    )
+    SELECT jsonb_build_object(
+        'organizacion_id', p_organizacion_id,
+        'fuente', p_fuente::text,
+        'resultados_considerados', (SELECT count(*) FROM normalized),
+        'canonicos', (SELECT count(*) FROM canonical),
+        'apariciones_upserted', (SELECT count(*) FROM inserted_apparitions),
+        'prospectos_reasignados', (SELECT count(*) FROM prospectos_updated),
+        'duplicados_eliminados', (SELECT count(*) FROM deleted_duplicates)
+    ) INTO v_stats;
+
+    RETURN v_stats;
+end;
+$$;
+
+
+--
+-- Name: merge_duplicate_resultados_bucketed(uuid, public.fuente_resultado, integer, integer); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.merge_duplicate_resultados_bucketed(p_organizacion_id uuid, p_fuente public.fuente_resultado, p_bucket integer, p_bucket_count integer) RETURNS jsonb
+    LANGUAGE plpgsql
+    SET search_path TO 'public', 'pg_temp'
+    AS $$
+declare
+    v_stats jsonb := '{}'::jsonb;
+begin
+    IF p_bucket_count IS NULL OR p_bucket_count <= 0 THEN
+        RAISE EXCEPTION 'bucket_count must be greater than zero';
+    END IF;
+    IF p_bucket IS NULL OR p_bucket < 0 OR p_bucket >= p_bucket_count THEN
+        RAISE EXCEPTION 'bucket must be between 0 and bucket_count - 1';
+    END IF;
+
+    WITH normalized AS (
+        SELECT
+            r.id,
+            r.busqueda_id,
+            r.organizacion_id,
+            r.fuente,
+            r.external_id,
+            r.creado_en,
+            COALESCE(r.last_seen_at, r.creado_en) AS last_seen_at,
+            lower(p_fuente::text) || ':ext:' || lower(
+                regexp_replace(COALESCE(r.external_id, ''), '\s+', '', 'g')
+            ) AS dedupe_key,
+            row_number() OVER (
+                PARTITION BY lower(p_fuente::text) || ':ext:' || lower(
+                    regexp_replace(COALESCE(r.external_id, ''), '\s+', '', 'g')
+                )
+                ORDER BY
+                    EXISTS (
+                        SELECT 1
+                        FROM public.prospeccion_prospectos p
+                        WHERE p.resultado_id = r.id
+                    ) DESC,
+                    COALESCE(r.last_seen_at, r.creado_en) DESC,
+                    r.creado_en DESC,
+                    r.id DESC
+            ) AS rn,
+            first_value(r.id) OVER (
+                PARTITION BY lower(p_fuente::text) || ':ext:' || lower(
+                    regexp_replace(COALESCE(r.external_id, ''), '\s+', '', 'g')
+                )
+                ORDER BY
+                    EXISTS (
+                        SELECT 1
+                        FROM public.prospeccion_prospectos p
+                        WHERE p.resultado_id = r.id
+                    ) DESC,
+                    COALESCE(r.last_seen_at, r.creado_en) DESC,
+                    r.creado_en DESC,
+                    r.id DESC
+            ) AS canonical_id,
+            min(r.creado_en) OVER (
+                PARTITION BY lower(p_fuente::text) || ':ext:' || lower(
+                    regexp_replace(COALESCE(r.external_id, ''), '\s+', '', 'g')
+                )
+            ) AS first_seen_at,
+            max(COALESCE(r.last_seen_at, r.creado_en)) OVER (
+                PARTITION BY lower(p_fuente::text) || ':ext:' || lower(
+                    regexp_replace(COALESCE(r.external_id, ''), '\s+', '', 'g')
+                )
+            ) AS last_seen_at_group,
+            count(*) OVER (
+                PARTITION BY lower(p_fuente::text) || ':ext:' || lower(
+                    regexp_replace(COALESCE(r.external_id, ''), '\s+', '', 'g')
+                )
+            ) AS appearances_count
+        FROM public.resultados r
+        WHERE r.organizacion_id = p_organizacion_id
+          AND r.fuente = p_fuente
+          AND r.external_id IS NOT NULL
+          AND mod(abs(hashtext(r.external_id)), p_bucket_count) = p_bucket
+    ),
+    canonical AS (
+        SELECT DISTINCT ON (dedupe_key)
+            dedupe_key,
+            canonical_id,
+            first_seen_at,
+            last_seen_at_group,
+            appearances_count
+        FROM normalized
+        ORDER BY dedupe_key, canonical_id
+    ),
+    updated_canonical AS (
+        UPDATE public.resultados r
+        SET
+            dedupe_key = c.dedupe_key,
+            first_seen_at = c.first_seen_at,
+            last_seen_at = c.last_seen_at_group,
+            appearances_count = c.appearances_count,
+            retention_until = GREATEST(
+                COALESCE(r.retention_until, c.first_seen_at + interval '90 days'),
+                c.last_seen_at_group + interval '90 days'
+            )
+        FROM canonical c
+        WHERE r.id = c.canonical_id
+        RETURNING 1
+    ),
+    inserted_apparitions AS (
+        INSERT INTO public.prospeccion_resultado_apariciones (
+            organizacion_id,
+            busqueda_id,
+            resultado_id,
+            prospecto_id,
+            fuente,
+            external_id,
+            dedupe_key,
+            first_seen_at,
+            last_seen_at,
+            appearances_count,
+            metadata
+        )
+        SELECT
+            n.organizacion_id,
+            n.busqueda_id,
+            c.canonical_id,
+            p.id,
+            n.fuente,
+            n.external_id,
+            c.dedupe_key,
+            n.creado_en,
+            n.last_seen_at,
+            c.appearances_count,
+            to_jsonb(n)
+        FROM normalized n
+        JOIN canonical c ON c.dedupe_key = n.dedupe_key
+        LEFT JOIN public.prospeccion_prospectos p
+            ON p.organizacion_id = n.organizacion_id
+           AND p.resultado_id = n.id
+        ON CONFLICT (organizacion_id, busqueda_id, resultado_id) WHERE resultado_id IS NOT NULL DO UPDATE
+        SET prospecto_id = COALESCE(public.prospeccion_resultado_apariciones.prospecto_id, EXCLUDED.prospecto_id),
+            dedupe_key = COALESCE(EXCLUDED.dedupe_key, public.prospeccion_resultado_apariciones.dedupe_key),
+            last_seen_at = GREATEST(public.prospeccion_resultado_apariciones.last_seen_at, EXCLUDED.last_seen_at),
+            appearances_count = GREATEST(public.prospeccion_resultado_apariciones.appearances_count, EXCLUDED.appearances_count),
+            metadata = EXCLUDED.metadata,
+            actualizado_en = now()
+        RETURNING 1
+    ),
+    prospectos_updated AS (
+        UPDATE public.prospeccion_prospectos p
+        SET resultado_id = c.canonical_id
+        FROM normalized n
+        JOIN canonical c ON c.dedupe_key = n.dedupe_key
+        WHERE p.resultado_id = n.id
+          AND n.id <> c.canonical_id
+          AND p.organizacion_id = p_organizacion_id
+        RETURNING 1
+    ),
+    deleted_duplicates AS (
+        DELETE FROM public.resultados r
+        USING normalized n
+        JOIN canonical c ON c.dedupe_key = n.dedupe_key
+        WHERE r.id = n.id
+          AND r.id <> c.canonical_id
+        RETURNING 1
+    )
+    SELECT jsonb_build_object(
+        'organizacion_id', p_organizacion_id,
+        'fuente', p_fuente::text,
+        'bucket', p_bucket,
+        'bucket_count', p_bucket_count,
+        'resultados_considerados', (SELECT count(*) FROM normalized),
+        'canonicos', (SELECT count(*) FROM canonical),
+        'apariciones_upserted', (SELECT count(*) FROM inserted_apparitions),
+        'prospectos_reasignados', (SELECT count(*) FROM prospectos_updated),
+        'duplicados_eliminados', (SELECT count(*) FROM deleted_duplicates)
+    ) INTO v_stats;
+
+    RETURN v_stats;
+end;
+$$;
+
+
+--
 -- Name: mi_contexto_permisos(); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -11999,6 +12365,61 @@ $$;
 
 
 --
+-- Name: prospeccion_resultados_monitoring_summary(uuid, public.fuente_resultado, integer); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.prospeccion_resultados_monitoring_summary(p_organizacion_id uuid DEFAULT NULL::uuid, p_fuente public.fuente_resultado DEFAULT NULL::public.fuente_resultado, p_limit integer DEFAULT 10) RETURNS TABLE(busqueda_id uuid, fuente public.fuente_resultado, creado_en timestamp with time zone, total_resultados bigint, unique_external_ids bigint, duplicate_rows bigint, prospectos bigint, archived_resultados bigint)
+    LANGUAGE sql STABLE
+    SET search_path TO 'public', 'pg_temp'
+    AS $$
+    WITH recent_busquedas AS (
+        SELECT
+            b.id AS busqueda_id,
+            b.fuente,
+            b.creado_en
+        FROM public.busquedas b
+        WHERE (p_organizacion_id IS NULL OR b.organizacion_id = p_organizacion_id)
+          AND (p_fuente IS NULL OR b.fuente = p_fuente)
+        ORDER BY b.creado_en DESC
+        LIMIT p_limit
+    )
+    SELECT
+        rb.busqueda_id,
+        rb.fuente,
+        rb.creado_en,
+        COALESCE(r_counts.total_resultados, 0)::bigint AS total_resultados,
+        COALESCE(r_counts.unique_external_ids, 0)::bigint AS unique_external_ids,
+        GREATEST(
+            COALESCE(r_counts.total_resultados, 0) - COALESCE(r_counts.unique_external_ids, 0),
+            0
+        )::bigint AS duplicate_rows,
+        COALESCE(r_counts.prospectos, 0)::bigint AS prospectos,
+        COALESCE(r_counts.archived_resultados, 0)::bigint AS archived_resultados
+    FROM recent_busquedas rb
+    LEFT JOIN LATERAL (
+        SELECT
+            count(*)::bigint AS total_resultados,
+            count(DISTINCT r.external_id)::bigint AS unique_external_ids,
+            count(*) FILTER (WHERE r.archived_at IS NOT NULL)::bigint AS archived_resultados,
+            count(p.id)::bigint AS prospectos
+        FROM public.resultados r
+        LEFT JOIN public.prospeccion_prospectos p
+            ON p.resultado_id = r.id
+        WHERE r.busqueda_id = rb.busqueda_id
+          AND (p_fuente IS NULL OR r.fuente = p_fuente)
+    ) r_counts ON TRUE
+    ORDER BY rb.creado_en DESC;
+$$;
+
+
+--
+-- Name: FUNCTION prospeccion_resultados_monitoring_summary(p_organizacion_id uuid, p_fuente public.fuente_resultado, p_limit integer); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.prospeccion_resultados_monitoring_summary(p_organizacion_id uuid, p_fuente public.fuente_resultado, p_limit integer) IS 'Resumen ligero para monitorear resultados recientes, duplicados y estado de archivo por busqueda.';
+
+
+--
 -- Name: prospeccion_segmentos_resumen(text[], text, timestamp with time zone, timestamp with time zone); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -12319,6 +12740,127 @@ CREATE PROCEDURE public.purge_denue_busquedas_org_0001(IN p_batch integer DEFAUL
     raise notice 'Terminado. total_deleted=%', v_total_deleted;
   end;
   $$;
+
+
+--
+-- Name: purge_expired_denue_busquedas(integer); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.purge_expired_denue_busquedas(p_batch_size integer DEFAULT 50) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public', 'extensions', 'pg_temp'
+    AS $$
+declare
+    v_deleted integer := 0;
+    v_batch_size integer := greatest(coalesce(p_batch_size, 50), 1);
+begin
+    with to_delete as (
+        select b.id
+        from public.busquedas b
+        where b.fuente = 'denue'
+          and b.creado_en < now() - interval '5 days'
+        order by b.creado_en asc
+        limit v_batch_size
+    ), deleted as (
+        delete from public.busquedas b
+        using to_delete t
+        where b.id = t.id
+        returning 1
+    )
+    select count(*)::int into v_deleted
+    from deleted;
+
+    return jsonb_build_object(
+        'scope', 'denue',
+        'batch_size', v_batch_size,
+        'deleted_now', v_deleted,
+        'remaining_due', (
+            select count(*)::int
+            from public.busquedas b
+            where b.fuente = 'denue'
+              and b.creado_en < now() - interval '5 days'
+        )
+    );
+end;
+$$;
+
+
+--
+-- Name: FUNCTION purge_expired_denue_busquedas(p_batch_size integer); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.purge_expired_denue_busquedas(p_batch_size integer) IS 'Elimina búsquedas DENUE antiguas y deja prospectos vivos mediante ON DELETE SET NULL.';
+
+
+--
+-- Name: purge_expired_resultados(integer, interval); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.purge_expired_resultados(p_batch_size integer DEFAULT 1000, p_purge_after interval DEFAULT '00:00:00'::interval) RETURNS jsonb
+    LANGUAGE plpgsql
+    SET search_path TO 'public', 'pg_temp'
+    AS $$
+declare
+    v_archived integer := 0;
+    v_deleted integer := 0;
+begin
+    IF p_batch_size IS NULL OR p_batch_size <= 0 THEN
+        RAISE EXCEPTION 'p_batch_size must be greater than zero';
+    END IF;
+    IF p_purge_after IS NULL OR p_purge_after < interval '0 days' THEN
+        RAISE EXCEPTION 'p_purge_after must be greater than or equal to zero';
+    END IF;
+
+    WITH to_archive AS (
+        SELECT id
+        FROM public.resultados
+        WHERE fuente = 'denue'::public.fuente_resultado
+          AND archived_at IS NULL
+          AND retention_until IS NOT NULL
+          AND retention_until <= now()
+        ORDER BY retention_until ASC, creado_en ASC
+        LIMIT p_batch_size
+    ), archived AS (
+        UPDATE public.resultados r
+        SET archived_at = COALESCE(r.archived_at, now())
+        FROM to_archive t
+        WHERE r.id = t.id
+        RETURNING 1
+    )
+    SELECT count(*) INTO v_archived FROM archived;
+
+    WITH to_delete AS (
+        SELECT id
+        FROM public.resultados
+        WHERE fuente = 'denue'::public.fuente_resultado
+          AND archived_at IS NOT NULL
+          AND archived_at <= now() - p_purge_after
+        ORDER BY archived_at ASC, creado_en ASC
+        LIMIT p_batch_size
+    ), deleted AS (
+        DELETE FROM public.resultados r
+        USING to_delete t
+        WHERE r.id = t.id
+        RETURNING 1
+    )
+    SELECT count(*) INTO v_deleted FROM deleted;
+
+    RETURN jsonb_build_object(
+        'archived_now', v_archived,
+        'deleted_now', v_deleted,
+        'batch_size', p_batch_size,
+        'purge_after', p_purge_after,
+        'scope', 'denue'
+    );
+end;
+$$;
+
+
+--
+-- Name: FUNCTION purge_expired_resultados(p_batch_size integer, p_purge_after interval); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.purge_expired_resultados(p_batch_size integer, p_purge_after interval) IS 'Archiva y purga solo resultados DENUE vencidos por lotes. Google Places queda excluido del mantenimiento automático.';
 
 
 --
@@ -15884,124 +16426,392 @@ end$$;
 
 CREATE FUNCTION public.upsert_resultados_lote(p_busqueda_id uuid, p_fuente public.fuente_resultado, p_items jsonb, p_organizacion_id uuid DEFAULT NULL::uuid) RETURNS integer
     LANGUAGE plpgsql
-    SET search_path TO 'public, pg_temp'
+    SET search_path TO 'public', 'pg_temp'
     AS $$
 declare
-  v_count int := 0;
-  v_organizacion uuid := p_organizacion_id;
-  v_header text;
+    v_count int := 0;
+    v_organizacion uuid := p_organizacion_id;
+    v_header text;
 begin
-  if p_items is null or jsonb_typeof(p_items) <> 'array' then
-    return 0;
-  end if;
+    IF p_items IS NULL OR jsonb_typeof(p_items) <> 'array' THEN
+        RETURN 0;
+    END IF;
 
-  if v_organizacion is null then
-    begin
-      v_header := nullif(current_setting('request.headers.x-organizacion-id', true), '');
-      if v_header is not null then
-        v_organizacion := v_header::uuid;
-      end if;
-    exception when others then
-      v_organizacion := null;
-    end;
-  end if;
+    IF v_organizacion IS NULL THEN
+        BEGIN
+            v_header := NULLIF(current_setting('request.headers.x-organizacion-id', true), '');
+            IF v_header IS NOT NULL THEN
+                v_organizacion := v_header::uuid;
+            END IF;
+        EXCEPTION WHEN others THEN
+            v_organizacion := NULL;
+        END;
+    END IF;
 
-  with raw_items as (
-    select it, ord
-    from jsonb_array_elements(p_items) with ordinality as t(it, ord)
-  ), items as (
-    select
-      coalesce(it ->> 'external_id', it ->> 'id') as external_id,
-      it ->> 'clee' as clee,
-      it ->> 'name' as name,
-      it ->> 'razon_social' as razon_social,
-      it ->> 'actividad' as actividad,
-      it ->> 'estrato' as estrato,
-      it ->> 'phone' as phone,
-      it ->> 'email' as email,
-      it ->> 'website' as website,
-      it ->> 'address' as address,
-      nullif(it ->> 'lat', '')::double precision as lat,
-      nullif(it ->> 'lng', '')::double precision as lng,
-      nullif(it ->> 'rating', '')::numeric as rating,
-      nullif(it ->> 'reviews', '')::int as reviews,
-      coalesce(it ->> 'maps_url', it ->> 'maps') as maps_url,
-      it as raw,
-      ord
-    from raw_items
-  ), dedup as (
-    select external_id, clee, name, razon_social, actividad, estrato, phone, email, website, address, lat, lng, rating, reviews, maps_url, raw
-    from (
-      select
-        *,
-        row_number() over (partition by external_id order by ord desc) as rn
-      from items
-    ) s
-    where external_id is null or rn = 1
-  ), ins as (
-    insert into public.resultados (
-      busqueda_id,
-      fuente,
-      external_id,
-      clee,
-      name,
-      razon_social,
-      actividad,
-      estrato,
-      phone,
-      email,
-      website,
-      address,
-      lat,
-      lng,
-      rating,
-      reviews,
-      maps_url,
-      organizacion_id,
-      raw
+    WITH raw_items AS (
+        SELECT it, ord
+        FROM jsonb_array_elements(p_items) WITH ORDINALITY AS t(it, ord)
+    ),
+    items AS (
+        SELECT
+            COALESCE(it ->> 'external_id', it ->> 'id') AS external_id,
+            it ->> 'clee' AS clee,
+            it ->> 'name' AS name,
+            it ->> 'razon_social' AS razon_social,
+            it ->> 'actividad' AS actividad,
+            it ->> 'estrato' AS estrato,
+            it ->> 'phone' AS phone,
+            it ->> 'email' AS email,
+            it ->> 'website' AS website,
+            it ->> 'address' AS address,
+            COALESCE(it ->> 'address_full', it ->> 'formattedAddress', it ->> 'address') AS address_full,
+            it ->> 'tipo_vialidad' AS tipo_vialidad,
+            it ->> 'nombre_vialidad' AS nombre_vialidad,
+            it ->> 'numero_exterior' AS numero_exterior,
+            it ->> 'numero_interior' AS numero_interior,
+            it ->> 'colonia' AS colonia,
+            it ->> 'codigo_postal' AS codigo_postal,
+            it ->> 'estado_cve' AS estado_cve,
+            it ->> 'estado_nombre' AS estado_nombre,
+            it ->> 'municipio_cve' AS municipio_cve,
+            it ->> 'municipio_nombre' AS municipio_nombre,
+            it ->> 'localidad_cve' AS localidad_cve,
+            it ->> 'localidad' AS localidad,
+            it ->> 'cvegeo' AS cvegeo,
+            it ->> 'asentamiento' AS asentamiento,
+            it ->> 'entre_calles' AS entre_calles,
+            it ->> 'referencia' AS referencia,
+            it ->> 'google_primary_type' AS google_primary_type,
+            it ->> 'google_primary_type_display_name' AS google_primary_type_display_name,
+            CASE
+                WHEN jsonb_typeof(it -> 'google_types') = 'array' THEN ARRAY(
+                    SELECT jsonb_array_elements_text(it -> 'google_types')
+                )
+                ELSE NULL
+            END AS google_types,
+            NULLIF(it ->> 'lat', '')::double precision AS lat,
+            NULLIF(it ->> 'lng', '')::double precision AS lng,
+            NULLIF(it ->> 'rating', '')::numeric AS rating,
+            NULLIF(it ->> 'reviews', '')::int AS reviews,
+            COALESCE(it ->> 'maps_url', it ->> 'maps') AS maps_url,
+            it AS raw,
+            ord,
+            CASE
+                WHEN COALESCE(it ->> 'external_id', it ->> 'id') IS NOT NULL THEN
+                    lower(p_fuente::text) || ':ext:' || lower(
+                        regexp_replace(
+                            COALESCE(NULLIF(it ->> 'external_id', ''), NULLIF(it ->> 'id', '')),
+                            '\s+',
+                            '',
+                            'g'
+                        )
+                    )
+                ELSE
+                    lower(p_fuente::text) || ':md5:' || md5(
+                        lower(concat_ws(
+                            '|',
+                            COALESCE(it ->> 'name', ''),
+                            COALESCE(it ->> 'razon_social', ''),
+                            COALESCE(it ->> 'address', ''),
+                            COALESCE(it ->> 'phone', ''),
+                            COALESCE(it ->> 'email', ''),
+                            COALESCE(it ->> 'website', ''),
+                            COALESCE(it ->> 'actividad', ''),
+                            COALESCE(it ->> 'estrato', '')
+                        ))
+                    )
+            END AS dedupe_key
+        FROM raw_items
+    ),
+    dedup AS (
+        SELECT *
+        FROM (
+            SELECT
+                *,
+                row_number() OVER (PARTITION BY dedupe_key ORDER BY ord DESC) AS rn
+            FROM items
+        ) s
+        WHERE rn = 1
+    ),
+    chosen AS (
+        SELECT
+            d.*,
+            r.id AS resultado_id
+        FROM dedup d
+        LEFT JOIN LATERAL (
+            SELECT r.*
+            FROM public.resultados r
+            WHERE r.organizacion_id = v_organizacion
+              AND r.fuente = p_fuente
+              AND (
+                    (d.external_id IS NOT NULL AND r.external_id = d.external_id)
+                    OR (r.dedupe_key IS NOT NULL AND r.dedupe_key = d.dedupe_key)
+                  )
+            ORDER BY
+                CASE WHEN r.dedupe_key = d.dedupe_key THEN 0 ELSE 1 END,
+                r.last_seen_at DESC NULLS LAST,
+                r.creado_en DESC,
+                r.id DESC
+            LIMIT 1
+        ) r ON TRUE
+    ),
+    updated_existing AS (
+        UPDATE public.resultados r
+        SET
+            clee = c.clee,
+            name = c.name,
+            razon_social = c.razon_social,
+            actividad = c.actividad,
+            estrato = c.estrato,
+            phone = c.phone,
+            email = c.email,
+            website = c.website,
+            address = c.address,
+            address_full = c.address_full,
+            tipo_vialidad = c.tipo_vialidad,
+            nombre_vialidad = c.nombre_vialidad,
+            numero_exterior = c.numero_exterior,
+            numero_interior = c.numero_interior,
+            colonia = c.colonia,
+            codigo_postal = c.codigo_postal,
+            estado_cve = c.estado_cve,
+            estado_nombre = c.estado_nombre,
+            municipio_cve = c.municipio_cve,
+            municipio_nombre = c.municipio_nombre,
+            localidad_cve = c.localidad_cve,
+            localidad = c.localidad,
+            cvegeo = c.cvegeo,
+            asentamiento = c.asentamiento,
+            entre_calles = c.entre_calles,
+            referencia = c.referencia,
+            google_primary_type = c.google_primary_type,
+            google_primary_type_display_name = c.google_primary_type_display_name,
+            google_types = c.google_types,
+            lat = c.lat,
+            lng = c.lng,
+            rating = c.rating,
+            reviews = c.reviews,
+            maps_url = c.maps_url,
+            raw = c.raw,
+            dedupe_key = COALESCE(r.dedupe_key, c.dedupe_key),
+            last_seen_at = now(),
+            appearances_count = COALESCE(r.appearances_count, 1) + 1,
+            retention_until = GREATEST(
+                COALESCE(r.retention_until, now() + interval '5 days'),
+                now() + interval '5 days'
+            )
+        FROM chosen c
+        WHERE r.id = c.resultado_id
+        RETURNING
+            r.id AS id,
+            r.external_id AS external_id,
+            r.dedupe_key AS dedupe_key,
+            r.first_seen_at AS first_seen_at,
+            r.last_seen_at AS last_seen_at,
+            r.appearances_count AS appearances_count,
+            r.raw AS raw
+    ),
+    inserted_new AS (
+        INSERT INTO public.resultados (
+            busqueda_id,
+            fuente,
+            external_id,
+            clee,
+            name,
+            razon_social,
+            actividad,
+            estrato,
+            phone,
+            email,
+            website,
+            address,
+            address_full,
+            tipo_vialidad,
+            nombre_vialidad,
+            numero_exterior,
+            numero_interior,
+            colonia,
+            codigo_postal,
+            estado_cve,
+            estado_nombre,
+            municipio_cve,
+            municipio_nombre,
+            localidad_cve,
+            localidad,
+            cvegeo,
+            asentamiento,
+            entre_calles,
+            referencia,
+            google_primary_type,
+            google_primary_type_display_name,
+            google_types,
+            lat,
+            lng,
+            rating,
+            reviews,
+            maps_url,
+            organizacion_id,
+            raw,
+            dedupe_key,
+            first_seen_at,
+            last_seen_at,
+            appearances_count,
+            archived_at,
+            retention_until
+        )
+        SELECT
+            p_busqueda_id,
+            p_fuente,
+            c.external_id,
+            c.clee,
+            c.name,
+            c.razon_social,
+            c.actividad,
+            c.estrato,
+            c.phone,
+            c.email,
+            c.website,
+            c.address,
+            c.address_full,
+            c.tipo_vialidad,
+            c.nombre_vialidad,
+            c.numero_exterior,
+            c.numero_interior,
+            c.colonia,
+            c.codigo_postal,
+            c.estado_cve,
+            c.estado_nombre,
+            c.municipio_cve,
+            c.municipio_nombre,
+            c.localidad_cve,
+            c.localidad,
+            c.cvegeo,
+            c.asentamiento,
+            c.entre_calles,
+            c.referencia,
+            c.google_primary_type,
+            c.google_primary_type_display_name,
+            c.google_types,
+            c.lat,
+            c.lng,
+            c.rating,
+            c.reviews,
+            c.maps_url,
+            v_organizacion,
+            c.raw,
+            c.dedupe_key,
+            now(),
+            now(),
+            1,
+            NULL,
+            now() + interval '5 days'
+        FROM chosen c
+        WHERE c.resultado_id IS NULL
+        ON CONFLICT (organizacion_id, fuente, dedupe_key)
+        WHERE dedupe_key IS NOT NULL
+        DO UPDATE
+        SET
+            external_id = EXCLUDED.external_id,
+            clee = EXCLUDED.clee,
+            name = EXCLUDED.name,
+            razon_social = EXCLUDED.razon_social,
+            actividad = EXCLUDED.actividad,
+            estrato = EXCLUDED.estrato,
+            phone = EXCLUDED.phone,
+            email = EXCLUDED.email,
+            website = EXCLUDED.website,
+            address = EXCLUDED.address,
+            address_full = EXCLUDED.address_full,
+            tipo_vialidad = EXCLUDED.tipo_vialidad,
+            nombre_vialidad = EXCLUDED.nombre_vialidad,
+            numero_exterior = EXCLUDED.numero_exterior,
+            numero_interior = EXCLUDED.numero_interior,
+            colonia = EXCLUDED.colonia,
+            codigo_postal = EXCLUDED.codigo_postal,
+            estado_cve = EXCLUDED.estado_cve,
+            estado_nombre = EXCLUDED.estado_nombre,
+            municipio_cve = EXCLUDED.municipio_cve,
+            municipio_nombre = EXCLUDED.municipio_nombre,
+            localidad_cve = EXCLUDED.localidad_cve,
+            localidad = EXCLUDED.localidad,
+            cvegeo = EXCLUDED.cvegeo,
+            asentamiento = EXCLUDED.asentamiento,
+            entre_calles = EXCLUDED.entre_calles,
+            referencia = EXCLUDED.referencia,
+            google_primary_type = EXCLUDED.google_primary_type,
+            google_primary_type_display_name = EXCLUDED.google_primary_type_display_name,
+            google_types = EXCLUDED.google_types,
+            lat = EXCLUDED.lat,
+            lng = EXCLUDED.lng,
+            rating = EXCLUDED.rating,
+            reviews = EXCLUDED.reviews,
+            maps_url = EXCLUDED.maps_url,
+            raw = EXCLUDED.raw,
+            dedupe_key = COALESCE(public.resultados.dedupe_key, EXCLUDED.dedupe_key),
+            last_seen_at = now(),
+            appearances_count = COALESCE(public.resultados.appearances_count, 1) + 1,
+            retention_until = GREATEST(
+                COALESCE(public.resultados.retention_until, now() + interval '5 days'),
+                now() + interval '5 days'
+            )
+        RETURNING
+            id,
+            external_id,
+            dedupe_key,
+            first_seen_at,
+            last_seen_at,
+            appearances_count,
+            raw
+    ),
+    touched AS (
+        SELECT id, external_id, dedupe_key, first_seen_at, last_seen_at, appearances_count, raw
+        FROM updated_existing
+        UNION ALL
+        SELECT id, external_id, dedupe_key, first_seen_at, last_seen_at, appearances_count, raw
+        FROM inserted_new
+    ),
+    appearances AS (
+        INSERT INTO public.prospeccion_resultado_apariciones (
+            organizacion_id,
+            busqueda_id,
+            resultado_id,
+            prospecto_id,
+            fuente,
+            external_id,
+            dedupe_key,
+            first_seen_at,
+            last_seen_at,
+            appearances_count,
+            metadata
+        )
+        SELECT
+            v_organizacion,
+            p_busqueda_id,
+            t.id,
+            p.id,
+            p_fuente,
+            t.external_id,
+            t.dedupe_key,
+            t.first_seen_at,
+            t.last_seen_at,
+            t.appearances_count,
+            t.raw
+        FROM touched t
+        LEFT JOIN public.prospeccion_prospectos p
+            ON p.organizacion_id = v_organizacion
+           AND p.resultado_id = t.id
+        ON CONFLICT (organizacion_id, busqueda_id, resultado_id) WHERE resultado_id IS NOT NULL DO UPDATE
+        SET prospecto_id = COALESCE(public.prospeccion_resultado_apariciones.prospecto_id, EXCLUDED.prospecto_id),
+            dedupe_key = COALESCE(EXCLUDED.dedupe_key, public.prospeccion_resultado_apariciones.dedupe_key),
+            last_seen_at = GREATEST(public.prospeccion_resultado_apariciones.last_seen_at, EXCLUDED.last_seen_at),
+            appearances_count = GREATEST(public.prospeccion_resultado_apariciones.appearances_count, EXCLUDED.appearances_count),
+            metadata = EXCLUDED.metadata,
+            actualizado_en = now()
+        RETURNING 1
     )
-    select
-      p_busqueda_id,
-      p_fuente,
-      external_id,
-      clee,
-      name,
-      razon_social,
-      actividad,
-      estrato,
-      phone,
-      email,
-      website,
-      address,
-      lat,
-      lng,
-      rating,
-      reviews,
-      maps_url,
-      v_organizacion,
-      raw
-    from dedup
-    on conflict (busqueda_id, fuente, external_id) do update
-      set
-        name = excluded.name,
-        razon_social = excluded.razon_social,
-        actividad = excluded.actividad,
-        estrato = excluded.estrato,
-        phone = excluded.phone,
-        email = excluded.email,
-        website = excluded.website,
-        address = excluded.address,
-        lat = excluded.lat,
-        lng = excluded.lng,
-        rating = excluded.rating,
-        reviews = excluded.reviews,
-        maps_url = excluded.maps_url,
-        raw = excluded.raw
-    returning 1
-  )
-  select count(*) into v_count from ins;
+    SELECT count(*) INTO v_count FROM appearances;
 
-  return coalesce(v_count, 0);
+    RETURN COALESCE(v_count, 0);
 end;
 $$;
 
@@ -20160,10 +20970,78 @@ CREATE TABLE public.resultados (
     raw jsonb DEFAULT '{}'::jsonb NOT NULL,
     tsv tsvector,
     creado_en timestamp with time zone DEFAULT now() NOT NULL,
-    organizacion_id uuid NOT NULL
+    organizacion_id uuid NOT NULL,
+    dedupe_key text,
+    first_seen_at timestamp with time zone DEFAULT now() NOT NULL,
+    last_seen_at timestamp with time zone DEFAULT now() NOT NULL,
+    appearances_count integer DEFAULT 1 NOT NULL,
+    archived_at timestamp with time zone,
+    retention_until timestamp with time zone,
+    address_full text,
+    tipo_vialidad text,
+    nombre_vialidad text,
+    numero_exterior text,
+    numero_interior text,
+    colonia text,
+    codigo_postal text,
+    estado_cve text,
+    estado_nombre text,
+    municipio_cve text,
+    municipio_nombre text,
+    localidad_cve text,
+    localidad text,
+    cvegeo text,
+    asentamiento text,
+    entre_calles text,
+    referencia text,
+    google_primary_type text,
+    google_primary_type_display_name text,
+    google_types text[]
 );
 
 ALTER TABLE ONLY public.resultados FORCE ROW LEVEL SECURITY;
+
+
+--
+-- Name: COLUMN resultados.dedupe_key; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.resultados.dedupe_key IS 'Clave tecnica para deduplicacion futura por organizacion/fuente/identidad.';
+
+
+--
+-- Name: COLUMN resultados.first_seen_at; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.resultados.first_seen_at IS 'Primera vez que el resultado fue visto o persistido.';
+
+
+--
+-- Name: COLUMN resultados.last_seen_at; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.resultados.last_seen_at IS 'Ultima vez que el resultado fue visto o actualizado.';
+
+
+--
+-- Name: COLUMN resultados.appearances_count; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.resultados.appearances_count IS 'Numero de apariciones acumuladas del mismo resultado.';
+
+
+--
+-- Name: COLUMN resultados.archived_at; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.resultados.archived_at IS 'Marca de archivo para purga o exportacion historica.';
+
+
+--
+-- Name: COLUMN resultados.retention_until; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.resultados.retention_until IS 'Fecha minima de retencion antes de permitir purga automatica.';
 
 
 --
@@ -21370,7 +22248,28 @@ CREATE TABLE public.prospeccion_prospectos (
     website_reachable boolean,
     website_functional boolean,
     website_tls_ok boolean,
-    email_domain_relation text
+    email_domain_relation text,
+    nombre_comercial text,
+    address_full text,
+    tipo_vialidad text,
+    nombre_vialidad text,
+    numero_exterior text,
+    numero_interior text,
+    colonia text,
+    codigo_postal text,
+    estado_cve text,
+    estado_nombre text,
+    municipio_cve text,
+    municipio_nombre text,
+    localidad_cve text,
+    localidad text,
+    cvegeo text,
+    asentamiento text,
+    entre_calles text,
+    referencia text,
+    google_primary_type text,
+    google_primary_type_display_name text,
+    google_types text[]
 );
 
 ALTER TABLE ONLY public.prospeccion_prospectos FORCE ROW LEVEL SECURITY;
@@ -21477,6 +22376,28 @@ CREATE MATERIALIZED VIEW public.prospeccion_query_daily_mv AS
   WHERE (q_value IS NOT NULL)
   GROUP BY organizacion_id, fuente, q_value, q_label, actividad, segmento, estado_cve, estado_multi, municipio_estado_cve, municipio_cve, municipio_multi, created_day
   WITH NO DATA;
+
+
+--
+-- Name: prospeccion_resultado_apariciones; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.prospeccion_resultado_apariciones (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    organizacion_id uuid NOT NULL,
+    busqueda_id uuid NOT NULL,
+    resultado_id uuid,
+    prospecto_id uuid,
+    fuente public.fuente_resultado NOT NULL,
+    external_id text,
+    dedupe_key text,
+    first_seen_at timestamp with time zone DEFAULT now() NOT NULL,
+    last_seen_at timestamp with time zone DEFAULT now() NOT NULL,
+    appearances_count integer DEFAULT 1 NOT NULL,
+    metadata jsonb DEFAULT '{}'::jsonb NOT NULL,
+    creado_en timestamp with time zone DEFAULT now() NOT NULL,
+    actualizado_en timestamp with time zone DEFAULT now() NOT NULL
+);
 
 
 --
@@ -22399,48 +23320,163 @@ CREATE VIEW public.v_configuracion_personal WITH (security_invoker='true') AS
 --
 
 CREATE VIEW public.v_denue_contactables WITH (security_invoker='true') AS
- SELECT r.id AS resultado_id,
-    r.busqueda_id,
-    r.fuente AS fuente_resultado,
-    b.fuente AS fuente_busqueda,
-    r.external_id,
-    COALESCE(NULLIF(r.name, ''::text), NULLIF(r.razon_social, ''::text)) AS display_name,
-    r.name,
-    r.razon_social,
-    r.actividad,
-    r.estrato,
-    COALESCE(NULLIF(r.phone, ''::text), NULLIF((r.raw #>> '{Telefono}'::text[]), ''::text)) AS phone,
-    COALESCE(NULLIF(r.email, ''::text), NULLIF((r.raw #>> '{Correo_e}'::text[]), ''::text)) AS email,
-    COALESCE(NULLIF(r.website, ''::text), NULLIF((r.raw #>> '{Sitio_internet}'::text[]), ''::text)) AS website,
-    NULLIF(r.address, ''::text) AS address,
-    r.lat,
-    r.lng,
-    r.geom,
-    r.maps_url,
-    r.creado_en AS resultado_creado_en,
-    b.query AS busqueda_query,
-    b.radio_m AS busqueda_radio_m,
-    b.lat AS busqueda_lat,
-    b.lng AS busqueda_lng,
-    b.centro AS busqueda_centro,
-    b.total_encontrados AS busqueda_total_encontrados,
-    b.meta AS busqueda_meta,
-    b.creado_en AS busqueda_creado_en,
-    b.creado_por AS busqueda_creado_por,
-        CASE
-            WHEN ((b.centro IS NOT NULL) AND (r.geom IS NOT NULL)) THEN public.st_distance(b.centro, r.geom)
-            ELSE NULL::double precision
-        END AS distancia_m
-   FROM (public.resultados r
-     JOIN public.busquedas b ON ((b.id = r.busqueda_id)))
-  WHERE (r.fuente = 'denue'::public.fuente_resultado);
-
-
---
--- Name: VIEW v_denue_contactables; Type: COMMENT; Schema: public; Owner: -
---
-
-COMMENT ON VIEW public.v_denue_contactables IS 'Resultados de búsquedas DENUE listos para contactabilidad y mapa.';
+ SELECT resultado_id,
+    busqueda_id,
+    fuente_resultado,
+    fuente_busqueda,
+    external_id,
+    display_name,
+    name,
+    razon_social,
+    nombre_comercial,
+    actividad,
+    estrato,
+    phone,
+    email,
+    website,
+    address,
+    address_full,
+    tipo_vialidad,
+    nombre_vialidad,
+    numero_exterior,
+    numero_interior,
+    colonia,
+    codigo_postal,
+    estado_cve,
+    estado_nombre,
+    municipio_cve,
+    municipio_nombre,
+    localidad_cve,
+    localidad,
+    cvegeo,
+    asentamiento,
+    entre_calles,
+    referencia,
+    lat,
+    lng,
+    geom,
+    maps_url,
+    resultado_creado_en,
+    busqueda_query,
+    busqueda_radio_m,
+    busqueda_lat,
+    busqueda_lng,
+    busqueda_centro,
+    busqueda_total_encontrados,
+    busqueda_meta,
+    busqueda_creado_en,
+    busqueda_creado_por,
+    distancia_m
+   FROM ( SELECT r.id AS resultado_id,
+            a.busqueda_id,
+            r.fuente AS fuente_resultado,
+            b.fuente AS fuente_busqueda,
+            r.external_id,
+            COALESCE(NULLIF(r.name, ''::text), NULLIF(r.razon_social, ''::text)) AS display_name,
+            r.name,
+            r.razon_social,
+            COALESCE(NULLIF(r.name, ''::text), NULLIF(r.razon_social, ''::text)) AS nombre_comercial,
+            r.actividad,
+            r.estrato,
+            NULLIF(r.phone, ''::text) AS phone,
+            NULLIF(r.email, ''::text) AS email,
+            NULLIF(r.website, ''::text) AS website,
+            NULLIF(r.address, ''::text) AS address,
+            NULLIF(r.address_full, ''::text) AS address_full,
+            r.tipo_vialidad,
+            r.nombre_vialidad,
+            r.numero_exterior,
+            r.numero_interior,
+            r.colonia,
+            r.codigo_postal,
+            r.estado_cve,
+            r.estado_nombre,
+            r.municipio_cve,
+            r.municipio_nombre,
+            r.localidad_cve,
+            r.localidad,
+            r.cvegeo,
+            r.asentamiento,
+            r.entre_calles,
+            r.referencia,
+            r.lat,
+            r.lng,
+            r.geom,
+            r.maps_url,
+            a.first_seen_at AS resultado_creado_en,
+            b.query AS busqueda_query,
+            b.radio_m AS busqueda_radio_m,
+            b.lat AS busqueda_lat,
+            b.lng AS busqueda_lng,
+            b.centro AS busqueda_centro,
+            b.total_encontrados AS busqueda_total_encontrados,
+            b.meta AS busqueda_meta,
+            b.creado_en AS busqueda_creado_en,
+            b.creado_por AS busqueda_creado_por,
+                CASE
+                    WHEN ((b.centro IS NOT NULL) AND (r.geom IS NOT NULL)) THEN public.st_distance(b.centro, r.geom)
+                    ELSE NULL::double precision
+                END AS distancia_m
+           FROM ((public.prospeccion_resultado_apariciones a
+             JOIN public.resultados r ON ((r.id = a.resultado_id)))
+             JOIN public.busquedas b ON ((b.id = a.busqueda_id)))
+          WHERE (r.fuente = 'denue'::public.fuente_resultado)
+        UNION ALL
+         SELECT r.id AS resultado_id,
+            r.busqueda_id,
+            r.fuente AS fuente_resultado,
+            b.fuente AS fuente_busqueda,
+            r.external_id,
+            COALESCE(NULLIF(r.name, ''::text), NULLIF(r.razon_social, ''::text)) AS display_name,
+            r.name,
+            r.razon_social,
+            COALESCE(NULLIF(r.name, ''::text), NULLIF(r.razon_social, ''::text)) AS nombre_comercial,
+            r.actividad,
+            r.estrato,
+            NULLIF(r.phone, ''::text) AS phone,
+            NULLIF(r.email, ''::text) AS email,
+            NULLIF(r.website, ''::text) AS website,
+            NULLIF(r.address, ''::text) AS address,
+            NULLIF(r.address_full, ''::text) AS address_full,
+            r.tipo_vialidad,
+            r.nombre_vialidad,
+            r.numero_exterior,
+            r.numero_interior,
+            r.colonia,
+            r.codigo_postal,
+            r.estado_cve,
+            r.estado_nombre,
+            r.municipio_cve,
+            r.municipio_nombre,
+            r.localidad_cve,
+            r.localidad,
+            r.cvegeo,
+            r.asentamiento,
+            r.entre_calles,
+            r.referencia,
+            r.lat,
+            r.lng,
+            r.geom,
+            r.maps_url,
+            r.creado_en AS resultado_creado_en,
+            b.query AS busqueda_query,
+            b.radio_m AS busqueda_radio_m,
+            b.lat AS busqueda_lat,
+            b.lng AS busqueda_lng,
+            b.centro AS busqueda_centro,
+            b.total_encontrados AS busqueda_total_encontrados,
+            b.meta AS busqueda_meta,
+            b.creado_en AS busqueda_creado_en,
+            b.creado_por AS busqueda_creado_por,
+                CASE
+                    WHEN ((b.centro IS NOT NULL) AND (r.geom IS NOT NULL)) THEN public.st_distance(b.centro, r.geom)
+                    ELSE NULL::double precision
+                END AS distancia_m
+           FROM (public.resultados r
+             JOIN public.busquedas b ON ((b.id = r.busqueda_id)))
+          WHERE ((r.fuente = 'denue'::public.fuente_resultado) AND (NOT (EXISTS ( SELECT 1
+                   FROM public.prospeccion_resultado_apariciones a
+                  WHERE ((a.resultado_id = r.id) AND (a.busqueda_id = r.busqueda_id))))))) denue_contactables;
 
 
 --
@@ -22448,55 +23484,178 @@ COMMENT ON VIEW public.v_denue_contactables IS 'Resultados de búsquedas DENUE l
 --
 
 CREATE VIEW public.v_google_places_contactables WITH (security_invoker='true') AS
- SELECT r.id AS resultado_id,
-    r.busqueda_id,
-    r.fuente AS fuente_resultado,
-    b.fuente AS fuente_busqueda,
-    r.external_id,
-    COALESCE(NULLIF(r.name, ''::text), NULLIF(r.razon_social, ''::text)) AS display_name,
-    r.name,
-    r.razon_social,
-    r.actividad,
-    r.estrato,
-    (r.raw ->> 'primaryType'::text) AS google_primary_type,
-    (r.raw ->> 'primaryTypeDisplayName'::text) AS google_primary_type_display_name,
-    COALESCE(types.google_types, ARRAY[]::text[]) AS google_types,
-    COALESCE(NULLIF(r.phone, ''::text), NULLIF((r.raw #>> '{internationalPhoneNumber}'::text[]), ''::text), NULLIF((r.raw #>> '{nationalPhoneNumber}'::text[]), ''::text)) AS phone,
-    COALESCE(NULLIF(r.email, ''::text), NULLIF((r.raw #>> '{email}'::text[]), ''::text)) AS email,
-    COALESCE(NULLIF(r.website, ''::text), NULLIF((r.raw #>> '{websiteUri}'::text[]), ''::text), NULLIF((r.raw #>> '{googleMapsUri}'::text[]), ''::text)) AS website,
-    NULLIF(r.address, ''::text) AS address,
-    r.lat,
-    r.lng,
-    r.geom,
-    r.rating,
-    r.reviews,
-    r.maps_url,
-    r.creado_en AS resultado_creado_en,
-    b.query AS busqueda_query,
-    b.radio_m AS busqueda_radio_m,
-    b.lat AS busqueda_lat,
-    b.lng AS busqueda_lng,
-    b.centro AS busqueda_centro,
-    b.total_encontrados AS busqueda_total_encontrados,
-    b.meta AS busqueda_meta,
-    b.creado_en AS busqueda_creado_en,
-    b.creado_por AS busqueda_creado_por,
-        CASE
-            WHEN ((b.centro IS NOT NULL) AND (r.geom IS NOT NULL)) THEN public.st_distance(b.centro, r.geom)
-            ELSE NULL::double precision
-        END AS distancia_m
-   FROM ((public.resultados r
-     JOIN public.busquedas b ON ((b.id = r.busqueda_id)))
-     LEFT JOIN LATERAL ( SELECT COALESCE(array_agg(value.value), ARRAY[]::text[]) AS google_types
-           FROM jsonb_array_elements_text(COALESCE((r.raw -> 'types'::text), '[]'::jsonb)) value(value)) types ON (true))
-  WHERE (r.fuente = 'google_places'::public.fuente_resultado);
-
-
---
--- Name: VIEW v_google_places_contactables; Type: COMMENT; Schema: public; Owner: -
---
-
-COMMENT ON VIEW public.v_google_places_contactables IS 'Resultados de búsquedas Google Places listos para contactabilidad (teléfono, web, tipo, radio y distancia al centro).';
+ SELECT resultado_id,
+    busqueda_id,
+    fuente_resultado,
+    fuente_busqueda,
+    external_id,
+    display_name,
+    name,
+    razon_social,
+    nombre_comercial,
+    actividad,
+    estrato,
+    google_primary_type,
+    google_primary_type_display_name,
+    google_types,
+    phone,
+    email,
+    website,
+    address,
+    address_full,
+    tipo_vialidad,
+    nombre_vialidad,
+    numero_exterior,
+    numero_interior,
+    colonia,
+    codigo_postal,
+    estado_cve,
+    estado_nombre,
+    municipio_cve,
+    municipio_nombre,
+    localidad_cve,
+    localidad,
+    cvegeo,
+    asentamiento,
+    entre_calles,
+    referencia,
+    lat,
+    lng,
+    geom,
+    rating,
+    reviews,
+    maps_url,
+    resultado_creado_en,
+    busqueda_query,
+    busqueda_radio_m,
+    busqueda_lat,
+    busqueda_lng,
+    busqueda_centro,
+    busqueda_total_encontrados,
+    busqueda_meta,
+    busqueda_creado_en,
+    busqueda_creado_por,
+    distancia_m
+   FROM ( SELECT r.id AS resultado_id,
+            a.busqueda_id,
+            r.fuente AS fuente_resultado,
+            b.fuente AS fuente_busqueda,
+            r.external_id,
+            COALESCE(NULLIF(r.name, ''::text), NULLIF(r.razon_social, ''::text)) AS display_name,
+            r.name,
+            r.razon_social,
+            COALESCE(NULLIF(r.name, ''::text), NULLIF(r.razon_social, ''::text)) AS nombre_comercial,
+            r.actividad,
+            r.estrato,
+            r.google_primary_type,
+            r.google_primary_type_display_name,
+            COALESCE(r.google_types, ARRAY[]::text[]) AS google_types,
+            NULLIF(r.phone, ''::text) AS phone,
+            NULLIF(r.email, ''::text) AS email,
+            NULLIF(r.website, ''::text) AS website,
+            NULLIF(r.address, ''::text) AS address,
+            NULLIF(r.address_full, ''::text) AS address_full,
+            r.tipo_vialidad,
+            r.nombre_vialidad,
+            r.numero_exterior,
+            r.numero_interior,
+            r.colonia,
+            r.codigo_postal,
+            r.estado_cve,
+            r.estado_nombre,
+            r.municipio_cve,
+            r.municipio_nombre,
+            r.localidad_cve,
+            r.localidad,
+            r.cvegeo,
+            r.asentamiento,
+            r.entre_calles,
+            r.referencia,
+            r.lat,
+            r.lng,
+            r.geom,
+            r.rating,
+            r.reviews,
+            r.maps_url,
+            a.first_seen_at AS resultado_creado_en,
+            b.query AS busqueda_query,
+            b.radio_m AS busqueda_radio_m,
+            b.lat AS busqueda_lat,
+            b.lng AS busqueda_lng,
+            b.centro AS busqueda_centro,
+            b.total_encontrados AS busqueda_total_encontrados,
+            b.meta AS busqueda_meta,
+            b.creado_en AS busqueda_creado_en,
+            b.creado_por AS busqueda_creado_por,
+                CASE
+                    WHEN ((b.centro IS NOT NULL) AND (r.geom IS NOT NULL)) THEN public.st_distance(b.centro, r.geom)
+                    ELSE NULL::double precision
+                END AS distancia_m
+           FROM ((public.prospeccion_resultado_apariciones a
+             JOIN public.resultados r ON ((r.id = a.resultado_id)))
+             JOIN public.busquedas b ON ((b.id = a.busqueda_id)))
+          WHERE (r.fuente = 'google_places'::public.fuente_resultado)
+        UNION ALL
+         SELECT r.id AS resultado_id,
+            r.busqueda_id,
+            r.fuente AS fuente_resultado,
+            b.fuente AS fuente_busqueda,
+            r.external_id,
+            COALESCE(NULLIF(r.name, ''::text), NULLIF(r.razon_social, ''::text)) AS display_name,
+            r.name,
+            r.razon_social,
+            COALESCE(NULLIF(r.name, ''::text), NULLIF(r.razon_social, ''::text)) AS nombre_comercial,
+            r.actividad,
+            r.estrato,
+            r.google_primary_type,
+            r.google_primary_type_display_name,
+            COALESCE(r.google_types, ARRAY[]::text[]) AS google_types,
+            NULLIF(r.phone, ''::text) AS phone,
+            NULLIF(r.email, ''::text) AS email,
+            NULLIF(r.website, ''::text) AS website,
+            NULLIF(r.address, ''::text) AS address,
+            NULLIF(r.address_full, ''::text) AS address_full,
+            r.tipo_vialidad,
+            r.nombre_vialidad,
+            r.numero_exterior,
+            r.numero_interior,
+            r.colonia,
+            r.codigo_postal,
+            r.estado_cve,
+            r.estado_nombre,
+            r.municipio_cve,
+            r.municipio_nombre,
+            r.localidad_cve,
+            r.localidad,
+            r.cvegeo,
+            r.asentamiento,
+            r.entre_calles,
+            r.referencia,
+            r.lat,
+            r.lng,
+            r.geom,
+            r.rating,
+            r.reviews,
+            r.maps_url,
+            r.creado_en AS resultado_creado_en,
+            b.query AS busqueda_query,
+            b.radio_m AS busqueda_radio_m,
+            b.lat AS busqueda_lat,
+            b.lng AS busqueda_lng,
+            b.centro AS busqueda_centro,
+            b.total_encontrados AS busqueda_total_encontrados,
+            b.meta AS busqueda_meta,
+            b.creado_en AS busqueda_creado_en,
+            b.creado_por AS busqueda_creado_por,
+                CASE
+                    WHEN ((b.centro IS NOT NULL) AND (r.geom IS NOT NULL)) THEN public.st_distance(b.centro, r.geom)
+                    ELSE NULL::double precision
+                END AS distancia_m
+           FROM (public.resultados r
+             JOIN public.busquedas b ON ((b.id = r.busqueda_id)))
+          WHERE ((r.fuente = 'google_places'::public.fuente_resultado) AND (NOT (EXISTS ( SELECT 1
+                   FROM public.prospeccion_resultado_apariciones a
+                  WHERE ((a.resultado_id = r.id) AND (a.busqueda_id = r.busqueda_id))))))) google_contactables;
 
 
 --
@@ -22983,29 +24142,141 @@ CREATE VIEW public.v_resultados_mapa WITH (security_invoker='true') AS
 --
 
 CREATE VIEW public.v_resultados_unificados WITH (security_invoker='true') AS
- SELECT r.id,
-    r.busqueda_id,
-    b.fuente AS fuente_busqueda,
-    r.fuente AS fuente_resultado,
-    r.external_id,
-    r.clee,
-    COALESCE(NULLIF(r.name, ''::text), NULLIF(r.razon_social, ''::text)) AS display_name,
-    r.name,
-    r.razon_social,
-    r.actividad,
-    r.estrato,
-    r.phone,
-    r.email,
-    r.website,
-    r.address,
-    r.lat,
-    r.lng,
-    r.rating,
-    r.reviews,
-    r.maps_url,
-    r.creado_en
-   FROM (public.resultados r
-     JOIN public.busquedas b ON ((b.id = r.busqueda_id)));
+ SELECT id,
+    busqueda_id,
+    fuente_busqueda,
+    fuente_resultado,
+    external_id,
+    clee,
+    display_name,
+    name,
+    razon_social,
+    actividad,
+    estrato,
+    phone,
+    email,
+    website,
+    address,
+    address_full,
+    tipo_vialidad,
+    nombre_vialidad,
+    numero_exterior,
+    numero_interior,
+    colonia,
+    codigo_postal,
+    estado_cve,
+    estado_nombre,
+    municipio_cve,
+    municipio_nombre,
+    localidad_cve,
+    localidad,
+    cvegeo,
+    asentamiento,
+    entre_calles,
+    referencia,
+    lat,
+    lng,
+    rating,
+    reviews,
+    maps_url,
+    google_primary_type,
+    google_primary_type_display_name,
+    google_types,
+    creado_en,
+    nombre_comercial
+   FROM ( SELECT r.id,
+            a.busqueda_id,
+            b.fuente AS fuente_busqueda,
+            r.fuente AS fuente_resultado,
+            r.external_id,
+            r.clee,
+            COALESCE(NULLIF(r.name, ''::text), NULLIF(r.razon_social, ''::text)) AS display_name,
+            r.name,
+            r.razon_social,
+            r.actividad,
+            r.estrato,
+            r.phone,
+            r.email,
+            r.website,
+            r.address,
+            r.address_full,
+            r.tipo_vialidad,
+            r.nombre_vialidad,
+            r.numero_exterior,
+            r.numero_interior,
+            r.colonia,
+            r.codigo_postal,
+            r.estado_cve,
+            r.estado_nombre,
+            r.municipio_cve,
+            r.municipio_nombre,
+            r.localidad_cve,
+            r.localidad,
+            r.cvegeo,
+            r.asentamiento,
+            r.entre_calles,
+            r.referencia,
+            r.lat,
+            r.lng,
+            r.rating,
+            r.reviews,
+            r.maps_url,
+            r.google_primary_type,
+            r.google_primary_type_display_name,
+            r.google_types,
+            a.first_seen_at AS creado_en,
+            COALESCE(NULLIF(r.name, ''::text), NULLIF(r.razon_social, ''::text)) AS nombre_comercial
+           FROM ((public.prospeccion_resultado_apariciones a
+             JOIN public.resultados r ON ((r.id = a.resultado_id)))
+             JOIN public.busquedas b ON ((b.id = a.busqueda_id)))
+        UNION ALL
+         SELECT r.id,
+            r.busqueda_id,
+            b.fuente AS fuente_busqueda,
+            r.fuente AS fuente_resultado,
+            r.external_id,
+            r.clee,
+            COALESCE(NULLIF(r.name, ''::text), NULLIF(r.razon_social, ''::text)) AS display_name,
+            r.name,
+            r.razon_social,
+            r.actividad,
+            r.estrato,
+            r.phone,
+            r.email,
+            r.website,
+            r.address,
+            r.address_full,
+            r.tipo_vialidad,
+            r.nombre_vialidad,
+            r.numero_exterior,
+            r.numero_interior,
+            r.colonia,
+            r.codigo_postal,
+            r.estado_cve,
+            r.estado_nombre,
+            r.municipio_cve,
+            r.municipio_nombre,
+            r.localidad_cve,
+            r.localidad,
+            r.cvegeo,
+            r.asentamiento,
+            r.entre_calles,
+            r.referencia,
+            r.lat,
+            r.lng,
+            r.rating,
+            r.reviews,
+            r.maps_url,
+            r.google_primary_type,
+            r.google_primary_type_display_name,
+            r.google_types,
+            r.creado_en,
+            COALESCE(NULLIF(r.name, ''::text), NULLIF(r.razon_social, ''::text)) AS nombre_comercial
+           FROM (public.resultados r
+             JOIN public.busquedas b ON ((b.id = r.busqueda_id)))
+          WHERE (NOT (EXISTS ( SELECT 1
+                   FROM public.prospeccion_resultado_apariciones a
+                  WHERE ((a.resultado_id = r.id) AND (a.busqueda_id = r.busqueda_id)))))) resultados_unificados;
 
 
 --
@@ -24782,6 +26053,14 @@ ALTER TABLE ONLY public.prospeccion_prospectos
 
 
 --
+-- Name: prospeccion_resultado_apariciones prospeccion_resultado_apariciones_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.prospeccion_resultado_apariciones
+    ADD CONSTRAINT prospeccion_resultado_apariciones_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: prospeccion_user_preferences prospeccion_user_preferences_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -25831,6 +27110,13 @@ CREATE INDEX asignaciones_vendedores_whatsapp_oportunidad_idx ON public.asignaci
 --
 
 CREATE INDEX asignaciones_vendedores_whatsapp_vendedor_idx ON public.asignaciones_vendedores USING btree (vendedor_usuario_id);
+
+
+--
+-- Name: busquedas_denue_creado_en_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX busquedas_denue_creado_en_idx ON public.busquedas USING btree (creado_en) WHERE (fuente = 'denue'::public.fuente_resultado);
 
 
 --
@@ -27689,10 +28975,24 @@ CREATE INDEX prospeccion_prospectos_org_busqueda_ref_idx ON public.prospeccion_p
 
 
 --
--- Name: prospeccion_prospectos_org_creado_idx; Type: INDEX; Schema: public; Owner: -
+-- Name: prospeccion_prospectos_org_codigo_postal_idx; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX prospeccion_prospectos_org_creado_idx ON public.prospeccion_prospectos USING btree (organizacion_id, creado_en DESC);
+CREATE INDEX prospeccion_prospectos_org_codigo_postal_idx ON public.prospeccion_prospectos USING btree (organizacion_id, codigo_postal) WHERE (codigo_postal IS NOT NULL);
+
+
+--
+-- Name: prospeccion_prospectos_org_cvegeo_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX prospeccion_prospectos_org_cvegeo_idx ON public.prospeccion_prospectos USING btree (organizacion_id, cvegeo) WHERE (cvegeo IS NOT NULL);
+
+
+--
+-- Name: prospeccion_prospectos_org_estado_municipio_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX prospeccion_prospectos_org_estado_municipio_idx ON public.prospeccion_prospectos USING btree (organizacion_id, estado_cve, municipio_cve) WHERE ((estado_cve IS NOT NULL) OR (municipio_cve IS NOT NULL));
 
 
 --
@@ -27707,6 +29007,13 @@ CREATE INDEX prospeccion_prospectos_org_fuente_creado_idx ON public.prospeccion_
 --
 
 CREATE UNIQUE INDEX prospeccion_prospectos_org_fuente_external_unique ON public.prospeccion_prospectos USING btree (organizacion_id, fuente, external_id);
+
+
+--
+-- Name: prospeccion_prospectos_org_google_primary_type_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX prospeccion_prospectos_org_google_primary_type_idx ON public.prospeccion_prospectos USING btree (organizacion_id, google_primary_type) WHERE (google_primary_type IS NOT NULL);
 
 
 --
@@ -27784,6 +29091,41 @@ CREATE INDEX prospeccion_query_daily_mv_org_query_idx ON public.prospeccion_quer
 --
 
 CREATE UNIQUE INDEX prospeccion_query_daily_mv_uk ON public.prospeccion_query_daily_mv USING btree (organizacion_id, fuente, q_value, COALESCE(actividad, ''::text), COALESCE(segmento, ''::text), COALESCE(estado_cve, ''::text), estado_multi, COALESCE(municipio_estado_cve, ''::text), COALESCE(municipio_cve, ''::text), municipio_multi, created_day);
+
+
+--
+-- Name: prospeccion_resultado_apariciones_busqueda_resultado_uidx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX prospeccion_resultado_apariciones_busqueda_resultado_uidx ON public.prospeccion_resultado_apariciones USING btree (organizacion_id, busqueda_id, resultado_id) WHERE (resultado_id IS NOT NULL);
+
+
+--
+-- Name: prospeccion_resultado_apariciones_org_busqueda_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX prospeccion_resultado_apariciones_org_busqueda_idx ON public.prospeccion_resultado_apariciones USING btree (organizacion_id, busqueda_id, last_seen_at DESC);
+
+
+--
+-- Name: prospeccion_resultado_apariciones_org_dedupe_key_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX prospeccion_resultado_apariciones_org_dedupe_key_idx ON public.prospeccion_resultado_apariciones USING btree (organizacion_id, dedupe_key) WHERE (dedupe_key IS NOT NULL);
+
+
+--
+-- Name: prospeccion_resultado_apariciones_org_fuente_external_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX prospeccion_resultado_apariciones_org_fuente_external_idx ON public.prospeccion_resultado_apariciones USING btree (organizacion_id, fuente, external_id) WHERE (external_id IS NOT NULL);
+
+
+--
+-- Name: prospeccion_resultado_apariciones_org_prospecto_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX prospeccion_resultado_apariciones_org_prospecto_idx ON public.prospeccion_resultado_apariciones USING btree (organizacion_id, prospecto_id, last_seen_at DESC);
 
 
 --
@@ -27892,6 +29234,13 @@ CREATE UNIQUE INDEX recursos_media_portada_unq ON public.recursos_media USING bt
 
 
 --
+-- Name: resultados_archived_at_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX resultados_archived_at_idx ON public.resultados USING btree (archived_at) WHERE (archived_at IS NOT NULL);
+
+
+--
 -- Name: resultados_denue_busqueda_actividad_idx; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -27934,10 +29283,73 @@ CREATE INDEX resultados_denue_tsv_gin ON public.resultados USING gin (tsv) WHERE
 
 
 --
+-- Name: resultados_org_codigo_postal_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX resultados_org_codigo_postal_idx ON public.resultados USING btree (organizacion_id, codigo_postal) WHERE (codigo_postal IS NOT NULL);
+
+
+--
+-- Name: resultados_org_cvegeo_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX resultados_org_cvegeo_idx ON public.resultados USING btree (organizacion_id, cvegeo) WHERE (cvegeo IS NOT NULL);
+
+
+--
+-- Name: resultados_org_dedupe_key_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX resultados_org_dedupe_key_idx ON public.resultados USING btree (organizacion_id, dedupe_key) WHERE (dedupe_key IS NOT NULL);
+
+
+--
+-- Name: resultados_org_estado_municipio_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX resultados_org_estado_municipio_idx ON public.resultados USING btree (organizacion_id, estado_cve, municipio_cve) WHERE ((estado_cve IS NOT NULL) OR (municipio_cve IS NOT NULL));
+
+
+--
+-- Name: resultados_org_fuente_dedupe_uidx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX resultados_org_fuente_dedupe_uidx ON public.resultados USING btree (organizacion_id, fuente, dedupe_key) WHERE (dedupe_key IS NOT NULL);
+
+
+--
+-- Name: resultados_org_fuente_external_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX resultados_org_fuente_external_idx ON public.resultados USING btree (organizacion_id, fuente, external_id) WHERE (external_id IS NOT NULL);
+
+
+--
+-- Name: resultados_org_fuente_last_seen_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX resultados_org_fuente_last_seen_idx ON public.resultados USING btree (organizacion_id, fuente, last_seen_at DESC);
+
+
+--
+-- Name: resultados_org_google_primary_type_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX resultados_org_google_primary_type_idx ON public.resultados USING btree (organizacion_id, google_primary_type) WHERE (google_primary_type IS NOT NULL);
+
+
+--
 -- Name: resultados_org_id_id_key; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE UNIQUE INDEX resultados_org_id_id_key ON public.resultados USING btree (organizacion_id, id);
+
+
+--
+-- Name: resultados_org_retention_until_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX resultados_org_retention_until_idx ON public.resultados USING btree (organizacion_id, retention_until) WHERE (retention_until IS NOT NULL);
 
 
 --
@@ -29228,6 +30640,13 @@ CREATE TRIGGER t_prospeccion_prospectos_set_org BEFORE INSERT ON public.prospecc
 --
 
 CREATE TRIGGER t_prospeccion_prospectos_touch BEFORE UPDATE ON public.prospeccion_prospectos FOR EACH ROW EXECUTE FUNCTION public.tg_touch_updated_at();
+
+
+--
+-- Name: prospeccion_resultado_apariciones t_prospeccion_resultado_apariciones_touch; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER t_prospeccion_resultado_apariciones_touch BEFORE UPDATE ON public.prospeccion_resultado_apariciones FOR EACH ROW EXECUTE FUNCTION public.tg_touch_updated_at();
 
 
 --
@@ -31306,11 +32725,11 @@ ALTER TABLE ONLY public.prospeccion_prospectos_audit
 
 
 --
--- Name: prospeccion_prospectos prospeccion_prospectos_busqueda_org_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+-- Name: prospeccion_prospectos prospeccion_prospectos_busqueda_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.prospeccion_prospectos
-    ADD CONSTRAINT prospeccion_prospectos_busqueda_org_fkey FOREIGN KEY (organizacion_id, busqueda_id) REFERENCES public.busquedas(organizacion_id, id) ON DELETE CASCADE;
+    ADD CONSTRAINT prospeccion_prospectos_busqueda_id_fkey FOREIGN KEY (busqueda_id) REFERENCES public.busquedas(id) ON DELETE SET NULL;
 
 
 --
@@ -31322,11 +32741,43 @@ ALTER TABLE ONLY public.prospeccion_prospectos
 
 
 --
--- Name: prospeccion_prospectos prospeccion_prospectos_resultado_org_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+-- Name: prospeccion_prospectos prospeccion_prospectos_resultado_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.prospeccion_prospectos
-    ADD CONSTRAINT prospeccion_prospectos_resultado_org_fkey FOREIGN KEY (organizacion_id, resultado_id) REFERENCES public.resultados(organizacion_id, id) ON DELETE SET NULL;
+    ADD CONSTRAINT prospeccion_prospectos_resultado_id_fkey FOREIGN KEY (resultado_id) REFERENCES public.resultados(id) ON DELETE SET NULL;
+
+
+--
+-- Name: prospeccion_resultado_apariciones prospeccion_resultado_apariciones_busqueda_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.prospeccion_resultado_apariciones
+    ADD CONSTRAINT prospeccion_resultado_apariciones_busqueda_id_fkey FOREIGN KEY (busqueda_id) REFERENCES public.busquedas(id) ON DELETE CASCADE;
+
+
+--
+-- Name: prospeccion_resultado_apariciones prospeccion_resultado_apariciones_organizacion_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.prospeccion_resultado_apariciones
+    ADD CONSTRAINT prospeccion_resultado_apariciones_organizacion_id_fkey FOREIGN KEY (organizacion_id) REFERENCES public.organizaciones(id) ON DELETE CASCADE;
+
+
+--
+-- Name: prospeccion_resultado_apariciones prospeccion_resultado_apariciones_prospecto_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.prospeccion_resultado_apariciones
+    ADD CONSTRAINT prospeccion_resultado_apariciones_prospecto_id_fkey FOREIGN KEY (prospecto_id) REFERENCES public.prospeccion_prospectos(id) ON DELETE SET NULL;
+
+
+--
+-- Name: prospeccion_resultado_apariciones prospeccion_resultado_apariciones_resultado_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.prospeccion_resultado_apariciones
+    ADD CONSTRAINT prospeccion_resultado_apariciones_resultado_id_fkey FOREIGN KEY (resultado_id) REFERENCES public.resultados(id) ON DELETE CASCADE;
 
 
 --
@@ -33973,6 +35424,26 @@ CREATE POLICY prospeccion_prospectos_member_org ON public.prospeccion_prospectos
 
 
 --
+-- Name: prospeccion_resultado_apariciones; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.prospeccion_resultado_apariciones ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: prospeccion_resultado_apariciones prospeccion_resultado_apariciones_admin_all; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY prospeccion_resultado_apariciones_admin_all ON public.prospeccion_resultado_apariciones TO authenticated USING (public.es_admin(auth.uid())) WITH CHECK (public.es_admin(auth.uid()));
+
+
+--
+-- Name: prospeccion_resultado_apariciones prospeccion_resultado_apariciones_member_org; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY prospeccion_resultado_apariciones_member_org ON public.prospeccion_resultado_apariciones TO authenticated USING ((organizacion_id = public.usuario_organizacion_id(auth.uid()))) WITH CHECK ((organizacion_id = public.usuario_organizacion_id(auth.uid())));
+
+
+--
 -- Name: prospeccion_user_preferences; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
@@ -34800,5 +36271,5 @@ CREATE EVENT TRIGGER pgrst_drop_watch ON sql_drop
 -- PostgreSQL database dump complete
 --
 
-\unrestrict aUIEU1KfzG2WItabljbNnQ4bk7xk8U5FZMRWaGIm2WEcS8DTneUPTFv3TAgHAzL
+\unrestrict TLAdYsVgpWPHIY6URAQbRMOX6vmgOhywAvcnUZBV8U6ZAG4m3PBvsoR9zqpfFER
 

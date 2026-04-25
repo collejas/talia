@@ -71,13 +71,61 @@ def test_normalize_denue_place_materializes_address_columns() -> None:
     assert normalized["estado_cve"] == "01"
     assert normalized["estado_nombre"] == "Aguascalientes"
     assert normalized["municipio_cve"] == "001"
-    assert normalized["municipio_nombre"] == "Jesus Maria"
+    assert normalized["municipio_nombre"] == "Aguascalientes"
     assert normalized["localidad_cve"] == "0001"
     assert normalized["localidad"] == "Aguascalientes"
     assert normalized["cvegeo"] == "010010001"
     assert normalized["asentamiento"] == "Urbano"
     assert normalized["entre_calles"] == "Madero y Allende"
     assert normalized["referencia"] == "Frente al jardin"
+
+
+def test_normalize_denue_place_reads_nested_raw_payload() -> None:
+    normalized = normalize_denue_place(
+        {
+            "raw": {
+                "raw": {
+                    "Id": "7964973",
+                    "Nombre": "SEGUROS Y FIANZAS DJR",
+                    "Razon_social": "",
+                    "Clase_actividad": "Agentes, ajustadores y gestores de seguros y fianzas",
+                    "Estrato": "0 a 5 personas",
+                    "Telefono": "4448495078",
+                    "Correo_e": "",
+                    "Sitio_internet": "",
+                    "Tipo_vialidad": "AVENIDA",
+                    "Calle": "VENUSTIANO CARRANZA",
+                    "Num_Exterior": "1490",
+                    "Num_Interior": "0",
+                    "Colonia": "TEQUISQUIAPAN",
+                    "CP": "78250",
+                    "AreaGeo": "240280001",
+                    "Tipo_Asentamiento": "COLONIA",
+                    "Ubicacion": "SAN LUIS POTOSÍ, San Luis Potosí, SAN LUIS POTOSÍ        ",
+                    "Latitud": "22.14994644",
+                    "Longitud": "-100.99661473",
+                }
+            }
+        }
+    )
+
+    assert normalized["external_id"] == "7964973"
+    assert normalized["address"] == "AVENIDA VENUSTIANO CARRANZA, 1490 0, TEQUISQUIAPAN, 78250"
+    assert normalized["tipo_vialidad"] == "AVENIDA"
+    assert normalized["nombre_vialidad"] == "VENUSTIANO CARRANZA"
+    assert normalized["numero_exterior"] == "1490"
+    assert normalized["numero_interior"] == "0"
+    assert normalized["codigo_postal"] == "78250"
+    assert normalized["estado_cve"] == "24"
+    assert normalized["estado_nombre"] == "San Luis Potosí"
+    assert normalized["municipio_cve"] == "028"
+    assert normalized["municipio_nombre"] == "San Luis Potosí"
+    assert normalized["localidad_cve"] == "0001"
+    assert normalized["localidad"] == "San Luis Potosí"
+    assert normalized["cvegeo"] == "240280001"
+    assert normalized["asentamiento"] == "COLONIA"
+    assert normalized["lat"] == pytest.approx(22.14994644)
+    assert normalized["lng"] == pytest.approx(-100.99661473)
 
 
 async def test_get_discards_shared_client_after_remote_protocol_error(monkeypatch) -> None:

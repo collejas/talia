@@ -12,7 +12,7 @@ import httpx
 
 from app.core.config import settings
 from app.core.logging import get_logger
-from app.data.geo.locations import list_municipalities_for_state
+from app.data.geo.locations import get_municipality_name, get_state_name, list_municipalities_for_state
 from app.services.result_identity import build_result_dedupe_key
 
 logger = get_logger(__name__)
@@ -629,20 +629,22 @@ class DenueClient:
 
 def normalize_denue_place(place: dict[str, Any]) -> dict[str, Any]:
     """Normaliza un registro crudo de DENUE a la estructura esperada en resultados."""
-    external_id = place.get("Id") or place.get("id")
-    address_parts = _extract_denue_address_fields(place)
+    source = _denue_source_record(place)
+    external_id = _denue_get(source, "Id", "id")
+    address_parts = _extract_denue_address_fields(source)
+    geo_parts = _extract_denue_geo_fields(source)
     address = _build_denue_address(address_parts)
-    actividad = _clean_text(place.get("Clase_actividad"))
-    estrato_raw = _clean_text(place.get("Estrato"))
+    actividad = _clean_text(_denue_get(source, "Clase_actividad"))
+    estrato_raw = _clean_text(_denue_get(source, "Estrato"))
     estrato_label = _classify_estrato(estrato_raw)
-    phone = _clean_text(place.get("Telefono"))
-    email = _clean_text(place.get("Correo_e"))
-    website = _clean_text(place.get("Sitio_internet"))
+    phone = _clean_text(_denue_get(source, "Telefono"))
+    email = _clean_text(_denue_get(source, "Correo_e"))
+    website = _clean_text(_denue_get(source, "Sitio_internet"))
     dedupe_key = build_result_dedupe_key(
         "denue",
         external_id=external_id,
-        name=place.get("Nombre"),
-        razon_social=place.get("Razon_social"),
+        name=_denue_get(source, "Nombre"),
+        razon_social=_denue_get(source, "Razon_social"),
         address=address,
         phone=phone,
         email=email,
@@ -655,8 +657,8 @@ def normalize_denue_place(place: dict[str, Any]) -> dict[str, Any]:
         "external_id": str(external_id) if external_id is not None else None,
         "clee": None,
         "dedupe_key": dedupe_key,
-        "name": _clean_text(place.get("Nombre")),
-        "razon_social": _clean_text(place.get("Razon_social")),
+        "name": _clean_text(_denue_get(source, "Nombre")),
+        "razon_social": _clean_text(_denue_get(source, "Razon_social")),
         "actividad": actividad,
         "estrato": estrato_label,
         "phone": phone,
@@ -670,21 +672,21 @@ def normalize_denue_place(place: dict[str, Any]) -> dict[str, Any]:
         "numero_interior": address_parts["numero_interior"],
         "colonia": address_parts["colonia"],
         "codigo_postal": address_parts["codigo_postal"],
-        "estado_cve": address_parts["estado_cve"],
-        "estado_nombre": address_parts["estado_nombre"],
-        "municipio_cve": address_parts["municipio_cve"],
-        "municipio_nombre": address_parts["municipio_nombre"],
-        "localidad_cve": address_parts["localidad_cve"],
-        "localidad": address_parts["localidad"],
+        "estado_cve": geo_parts["estado_cve"] or address_parts["estado_cve"],
+        "estado_nombre": geo_parts["estado_nombre"] or address_parts["estado_nombre"],
+        "municipio_cve": geo_parts["municipio_cve"] or address_parts["municipio_cve"],
+        "municipio_nombre": geo_parts["municipio_nombre"] or address_parts["municipio_nombre"],
+        "localidad_cve": geo_parts["localidad_cve"] or address_parts["localidad_cve"],
+        "localidad": geo_parts["localidad"] or address_parts["localidad"],
         "cvegeo": address_parts["cvegeo"],
         "asentamiento": address_parts["asentamiento"],
         "entre_calles": address_parts["entre_calles"],
         "referencia": address_parts["referencia"],
-        "lat": _to_float(place.get("Latitud")),
-        "lng": _to_float(place.get("Longitud")),
+        "lat": _to_float(_denue_get(source, "Latitud")),
+        "lng": _to_float(_denue_get(source, "Longitud")),
         "rating": None,
         "reviews": None,
-        "maps_url": _clean_text(place.get("Ubicacion")),
+        "maps_url": _clean_text(_denue_get(source, "Ubicacion")),
         "raw": place,
     }
 
@@ -698,24 +700,74 @@ def _clean_text(value: Any) -> str | None:
     return str(value)
 
 
+def _denue_source_record(place: dict[str, Any]) -> dict[str, Any]:
+    nested_raw = place.get("raw")
+    if isinstance(nested_raw, dict):
+        nested = nested_raw.get("raw")
+        if isinstance(nested, dict):
+            return nested
+        return nested_raw
+    return place
+
+
+def _denue_get(place: dict[str, Any], *keys: str) -> Any:
+    for key in keys:
+        value = place.get(key)
+        if value not in (None, ""):
+            return value
+    return None
+
+
 def _extract_denue_address_fields(place: dict[str, Any]) -> dict[str, str | None]:
     return {
-        "tipo_vialidad": _clean_text(place.get("Tipo_vialidad")),
-        "nombre_vialidad": _clean_text(place.get("Nombre_vialidad")),
-        "numero_exterior": _clean_text(place.get("Numero_exterior")),
-        "numero_interior": _clean_text(place.get("Numero_interior")),
-        "colonia": _clean_text(place.get("Colonia")),
-        "codigo_postal": _clean_text(place.get("CP") or place.get("Codigo_postal")),
-        "estado_cve": _clean_text(place.get("Cve_ent") or place.get("cve_ent")),
-        "estado_nombre": _clean_text(place.get("Entidad") or place.get("Nom_ent")),
-        "municipio_cve": _clean_text(place.get("Cve_mun") or place.get("cve_mun")),
-        "municipio_nombre": _clean_text(place.get("Municipio") or place.get("Nom_mun")),
-        "localidad_cve": _clean_text(place.get("Cve_loc") or place.get("cve_loc")),
-        "localidad": _clean_text(place.get("Localidad") or place.get("Nom_loc")),
-        "cvegeo": _clean_text(place.get("Cvegeo") or place.get("cvegeo") or place.get("CVEGEO")),
-        "asentamiento": _clean_text(place.get("Asentamiento")),
-        "entre_calles": _clean_text(place.get("Entre_calles") or place.get("EntreCalles")),
-        "referencia": _clean_text(place.get("Referencia")),
+        "tipo_vialidad": _clean_text(_denue_get(place, "Tipo_vialidad")),
+        "nombre_vialidad": _clean_text(_denue_get(place, "Calle", "Nombre_vialidad")),
+        "numero_exterior": _clean_text(_denue_get(place, "Num_Exterior", "Numero_exterior")),
+        "numero_interior": _clean_text(_denue_get(place, "Num_Interior", "Numero_interior")),
+        "colonia": _clean_text(_denue_get(place, "Colonia")),
+        "codigo_postal": _clean_text(_denue_get(place, "CP", "Codigo_postal")),
+        "estado_cve": _clean_text(_denue_get(place, "Cve_ent", "cve_ent")),
+        "estado_nombre": _clean_text(_denue_get(place, "Entidad", "Nom_ent")),
+        "municipio_cve": _clean_text(_denue_get(place, "Cve_mun", "cve_mun")),
+        "municipio_nombre": _clean_text(_denue_get(place, "Municipio", "Nom_mun")),
+        "localidad_cve": _clean_text(_denue_get(place, "Cve_loc", "cve_loc")),
+        "localidad": _clean_text(_denue_get(place, "Localidad", "Nom_loc")),
+        "cvegeo": _clean_text(_denue_get(place, "AreaGeo", "Cvegeo", "cvegeo", "CVEGEO")),
+        "asentamiento": _clean_text(_denue_get(place, "Tipo_Asentamiento", "Asentamiento")),
+        "entre_calles": _clean_text(_denue_get(place, "Entre_calles", "EntreCalles")),
+        "referencia": _clean_text(_denue_get(place, "Referencia")),
+    }
+
+
+def _extract_denue_geo_fields(place: dict[str, Any]) -> dict[str, str | None]:
+    cvegeo = _clean_text(_denue_get(place, "AreaGeo", "Cvegeo", "cvegeo", "CVEGEO"))
+    state_code = cvegeo[:2] if cvegeo and len(cvegeo) >= 2 else _clean_text(_denue_get(place, "Cve_ent", "cve_ent"))
+    municipality_code = cvegeo[2:5] if cvegeo and len(cvegeo) >= 5 else _clean_text(_denue_get(place, "Cve_mun", "cve_mun"))
+    locality_code = cvegeo[5:9] if cvegeo and len(cvegeo) >= 9 else _clean_text(_denue_get(place, "Cve_loc", "cve_loc"))
+    state_name = get_state_name(state_code) if state_code else _clean_text(_denue_get(place, "Entidad", "Nom_ent"))
+    municipality_name = (
+        get_municipality_name(state_code, municipality_code)
+        if state_code and municipality_code
+        else _clean_text(_denue_get(place, "Municipio", "Nom_mun"))
+    )
+    locality_name = _clean_text(_denue_get(place, "Localidad", "Nom_loc"))
+    if not locality_name:
+        ubicacion = _clean_text(_denue_get(place, "Ubicacion"))
+        if ubicacion:
+            parts = [part.strip() for part in ubicacion.split(",") if part.strip()]
+            if len(parts) >= 2:
+                locality_name = parts[-2] if len(parts) >= 3 else parts[-1]
+            elif parts:
+                locality_name = parts[0]
+    if not locality_name:
+        locality_name = municipality_name
+    return {
+        "estado_cve": state_code,
+        "estado_nombre": state_name,
+        "municipio_cve": municipality_code,
+        "municipio_nombre": municipality_name,
+        "localidad_cve": locality_code,
+        "localidad": locality_name,
     }
 
 
