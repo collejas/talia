@@ -443,7 +443,7 @@ poetry run python ../buscador/main.py \
 
 
 
-# Correo pui@geoactiv.mx  
+# Correo pui@pui.geoactiv.mx  
 2?ckWbEQqZ%HX8Tn
 
 

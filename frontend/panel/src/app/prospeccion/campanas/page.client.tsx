@@ -63,7 +63,8 @@ type LogoAsset = {
   file_url: string
 }
 
-const EMAIL_LOGO_IMG_STYLE = "width:83.333%;height:auto;display:block;margin:0 auto;"
+const EMAIL_IMAGE_MAX_WIDTH_LANDSCAPE = 600
+const EMAIL_IMAGE_MAX_WIDTH_PORTRAIT = 420
 const EMAIL_TEMPLATE_PLACEHOLDER_PATTERN = /{{\s*([\w.-]+)\s*}}/g
 const EMAIL_TEMPLATE_VARIABLES: Array<{ token: string; label: string }> = [
   { token: "{{nombre}}", label: "Nombre" },
@@ -105,6 +106,11 @@ type BatchDetailState = {
 }
 
 type CorreoTemplateField = "asunto" | "cuerpoTexto" | "cuerpoHtml"
+
+type ImageDimensions = {
+  width: number
+  height: number
+}
 
 export function CampanasMetricsClient() {
   const [campanas, setCampanas] = useState<ProspeccionCampanaGroup[]>([])
@@ -698,7 +704,7 @@ export function CampanasMetricsClient() {
   )
 
   const insertCorreoLogo = useCallback(
-    (logoUrl: string) => {
+    async (logoUrl: string) => {
       const normalized = normalizeLogoUrl(logoUrl)
       if (!normalized) return
       setSelectedLogoUrl(normalized)
@@ -715,6 +721,32 @@ export function CampanasMetricsClient() {
       } catch {
         resolvedLogoUrl = normalized
       }
+      const imageDimensions = await new Promise<ImageDimensions | null>((resolve) => {
+        const image = new window.Image()
+        image.onload = () => {
+          resolve({ width: image.naturalWidth || image.width || 0, height: image.naturalHeight || image.height || 0 })
+        }
+        image.onerror = () => resolve(null)
+        image.src = resolvedLogoUrl
+      })
+      const maxWidth =
+        imageDimensions && imageDimensions.height > imageDimensions.width
+          ? EMAIL_IMAGE_MAX_WIDTH_PORTRAIT
+          : EMAIL_IMAGE_MAX_WIDTH_LANDSCAPE
+      const emailImageHtml = `
+        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
+          <tr>
+            <td align="center" style="padding: 20px 0;">
+              <img
+                src="${resolvedLogoUrl}"
+                alt="Logo"
+                width="${maxWidth}"
+                style="display:block; width:100%; max-width:${maxWidth}px; height:auto; border:0; margin:0 auto;"
+              >
+            </td>
+          </tr>
+        </table>
+      `.trim()
       const textFocused = lastFocusedCorreoFieldRef.current === "cuerpoTexto"
       const htmlFocused = lastFocusedCorreoFieldRef.current === "cuerpoHtml"
       const hasHtmlContent = Boolean((templateForm.cuerpoHtml ?? "").trim())
@@ -722,7 +754,7 @@ export function CampanasMetricsClient() {
         appendTemplateToken("cuerpoTexto", resolvedLogoUrl)
       }
       if (htmlFocused || hasHtmlContent) {
-        appendTemplateToken("cuerpoHtml", `<img src="${resolvedLogoUrl}" alt="Logo" style="${EMAIL_LOGO_IMG_STYLE}" />`)
+        appendTemplateToken("cuerpoHtml", emailImageHtml)
       }
     },
     [
@@ -752,6 +784,66 @@ export function CampanasMetricsClient() {
       `<a href="{{booking_url}}" target="_blank" rel="noopener noreferrer">${bookingLinkLabel}</a>`
     )
   }, [appendTemplateToken, bookingLinkLabel])
+
+  const insertCorreoTwoColumnBlock = useCallback(
+    (options?: { imageOnLeft?: boolean; leftWidth?: number; rightWidth?: number }) => {
+      const imageOnLeft = options?.imageOnLeft ?? false
+      const leftWidth = options?.leftWidth ?? 50
+      const rightWidth = options?.rightWidth ?? 50
+      const textHtml = `
+      <h3 style="margin:0 0 12px 0; font-size:20px; line-height:1.2;">{{nombre}}</h3>
+      <p style="margin:0 0 12px 0; font-size:16px; line-height:1.6;">
+        Escribe aquí el texto principal. Puedes presentar el beneficio, la oferta o el llamado a la acción.
+      </p>
+      <p style="margin:0; font-size:16px; line-height:1.6;">
+        Si quieres, agrega un cierre corto o un enlace a la agenda: {{booking_link_text}}.
+      </p>
+      `.trim()
+      const imageHtml = `
+      <img
+        src="{{logo_url}}"
+        alt="Imagen de la plantilla"
+        width="600"
+        style="display:block; width:100%; max-width:600px; height:auto; border:0; margin:0 auto;"
+      >
+      `.trim()
+      const firstCellHtml = imageOnLeft ? imageHtml : textHtml
+      const secondCellHtml = imageOnLeft ? textHtml : imageHtml
+      const firstCellClass = imageOnLeft ? "two-col-image" : "two-col-text"
+      const secondCellClass = imageOnLeft ? "two-col-text" : "two-col-image"
+      const firstCellPadding = imageOnLeft ? "padding-right:12px;" : "padding-right:12px;"
+      const secondCellPadding = imageOnLeft ? "padding-left:12px;" : "padding-left:12px;"
+      const htmlToken = `
+<style>
+@media only screen and (max-width: 600px) {
+  .two-col, .two-col tbody, .two-col tr, .two-col td {
+    display: block !important;
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+  .two-col .two-col-text,
+  .two-col .two-col-image {
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+    padding-bottom: 16px !important;
+  }
+}
+</style>
+<table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" class="two-col">
+  <tr>
+    <td class="${firstCellClass}" width="${leftWidth}%" valign="top" style="${firstCellPadding}">
+${firstCellHtml}
+    </td>
+    <td class="${secondCellClass}" width="${rightWidth}%" valign="top" style="${secondCellPadding}">
+${secondCellHtml}
+    </td>
+  </tr>
+</table>
+      `.trim()
+      appendTemplateToken("cuerpoHtml", htmlToken)
+    },
+    [appendTemplateToken]
+  )
 
   const loadLogos = useCallback(async () => {
     if (logosLoading) return
@@ -1108,6 +1200,49 @@ export function CampanasMetricsClient() {
     })
   }, [])
 
+  const handleTemplateDuplicate = useCallback(
+    (template: ContactoTemplate) => {
+      const metadata = template.metadata && typeof template.metadata === "object" ? template.metadata : {}
+      const baseName = (template.nombre ?? "").trim() || "Plantilla"
+      const baseSlug = (template.slug ?? "").trim() || slugify(baseName)
+      const logoFromMetadata = typeof metadata["logo_url"] === "string" ? metadata["logo_url"].trim() : ""
+      setSelectedLogoUrl(logoFromMetadata)
+      setTemplateForm({
+        id: "",
+        canal: template.canal,
+        nombre: `${baseName} copia`,
+        slug: `${baseSlug}-copia`,
+        descripcion: template.descripcion ?? "",
+        asunto: template.asunto ?? "",
+        cuerpoTexto: template.cuerpo_texto ?? "",
+        cuerpoHtml: template.cuerpo_html ?? "",
+        twilioSid: typeof metadata["twilio_content_sid"] === "string" ? metadata["twilio_content_sid"] : "",
+        twilioVariable6:
+          metadata["twilio_variables"] && typeof metadata["twilio_variables"] === "object"
+            ? String((metadata["twilio_variables"] as Record<string, unknown>)["6"] ?? "")
+            : "",
+        nombreIa:
+          (typeof metadata["nombre_ia"] === "string" ? metadata["nombre_ia"] : "") ||
+          (typeof metadata["assistant_name"] === "string" ? metadata["assistant_name"] : ""),
+        nombreEmpresa:
+          (typeof metadata["organizacion_nombre"] === "string" ? metadata["organizacion_nombre"] : "") ||
+          (typeof metadata["brand_name"] === "string" ? metadata["brand_name"] : "") ||
+          (typeof metadata["empresa"] === "string" ? metadata["empresa"] : ""),
+        ctaBaseUrl:
+          (typeof metadata["tracking_base_url"] === "string" && metadata["tracking_base_url"].trim()) || "https://talia.mx/",
+        bookingLinkLabel:
+          (typeof metadata["booking_link_text"] === "string" && metadata["booking_link_text"].trim()) ||
+          (typeof metadata["booking_link_label"] === "string" && metadata["booking_link_label"].trim()) ||
+          "",
+        waRuleId: (typeof metadata["wa_rule_id"] === "string" && metadata["wa_rule_id"].trim()) || "",
+        waPhrase: (typeof metadata["wa_me_text"] === "string" && metadata["wa_me_text"].trim()) || "",
+        waLinkLabel: (typeof metadata["wa_me_label"] === "string" && metadata["wa_me_label"].trim()) || "",
+      })
+      setTemplateError(null)
+    },
+    [slugify]
+  )
+
   const handleTemplateSave = useCallback(async () => {
     if (!templatesCampanaId) {
       setTemplateError("Selecciona una campaña.")
@@ -1119,8 +1254,8 @@ export function CampanasMetricsClient() {
     }
     const nombre = templateForm.nombre.trim()
     const slug = (templateForm.slug.trim() || slugify(nombre)).trim()
-    if (!nombre || !slug) {
-      setTemplateError("Nombre y slug son obligatorios.")
+    if (!nombre) {
+      setTemplateError("Escribe un nombre para la plantilla.")
       return
     }
     setTemplateSaving(true)
@@ -1197,6 +1332,10 @@ export function CampanasMetricsClient() {
       }
       await loadCampaignTemplates(templatesCampanaId)
       resetTemplateForm()
+      setBanner({
+        type: "success",
+        message: "Plantilla guardada correctamente. Ya puedes usarla desde Prospectos para preparar un envío automático.",
+      })
     } catch (err) {
       const message = err instanceof Error ? err.message : "No se pudo guardar la plantilla."
       setTemplateError(message)
@@ -1238,7 +1377,10 @@ export function CampanasMetricsClient() {
           campana_id: templatesCampanaId,
         })
         await loadCampaignTemplates(templatesCampanaId)
-        setBanner({ type: "success", message: "Plantilla importada desde Brevo." })
+        setBanner({
+          type: "success",
+          message: "Plantilla importada. Revísala y guárdala para usarla.",
+        })
       } catch (err) {
         const message = err instanceof Error ? err.message : "No se pudo importar la plantilla Brevo."
         setTemplateError(message)
@@ -1707,67 +1849,110 @@ export function CampanasMetricsClient() {
       </Dialog>
 
       <Dialog open={templatesDialogOpen} onOpenChange={setTemplatesDialogOpen}>
-        <DialogContent className="w-[98vw] max-w-7xl max-h-[92vh] overflow-hidden p-3 sm:p-4">
-          <DialogHeader>
-            <DialogTitle className="text-base">Plantillas · {templatesCampanaNombre || "Campaña"}</DialogTitle>
-          </DialogHeader>
-          <div className="grid gap-3 lg:grid-cols-[0.6fr_1.4fr] h-[78vh] overflow-hidden">
-            <div className="rounded-lg border p-2 overflow-y-auto text-xs">
-              {templatesCampanaCanal === "correo" ? (
-                <div className="mb-3 rounded-md border bg-muted/30 p-2">
-                  <div className="mb-2 flex items-center justify-between gap-2">
-                    <p className="text-xs font-semibold uppercase tracking-wide">Catálogo Brevo</p>
-                    <Button type="button" variant="outline" size="sm" onClick={() => void loadBrevoCatalog()} disabled={brevoLoading}>
-                      {brevoLoading ? "Cargando..." : "Actualizar"}
+        <DialogContent className="w-[98vw] max-w-[92rem] overflow-hidden p-0">
+          <div className="flex max-h-[92vh] min-h-[82vh] flex-col">
+            <DialogHeader className="border-b px-4 py-4 sm:px-6">
+              <DialogTitle className="text-base">Plantillas para {templatesCampanaNombre || "Campaña"}</DialogTitle>
+              <p className="text-sm text-muted-foreground">
+                Este espacio solo sirve para preparar el mensaje base. Después se usará desde Prospectos para enviar
+                automáticamente.
+              </p>
+            </DialogHeader>
+
+            <div className="grid flex-1 min-h-0 gap-0 lg:grid-cols-[300px_minmax(0,1fr)_380px]">
+              <aside className="min-h-0 border-b p-4 lg:border-b-0 lg:border-r lg:overflow-y-auto">
+                <div className="mb-4">
+                  <p className="text-sm font-semibold text-foreground">Plantillas guardadas</p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Estos mensajes ya están listos para usarse después desde la vista de Prospectos.
+                  </p>
+                </div>
+
+                <div className="mb-4 flex flex-wrap gap-2">
+                  <Button type="button" size="sm" onClick={resetTemplateForm}>
+                    + Nueva plantilla
+                  </Button>
+                  {templatesCampanaCanal === "correo" ? (
+                    <Button type="button" variant="outline" size="sm" onClick={() => void loadBrevoCatalog()}>
+                      Importar desde Brevo
                     </Button>
-                  </div>
-                  {!brevoCatalog.length ? (
-                    <p className="text-xs text-muted-foreground">Sin plantillas Brevo disponibles o sin configuración.</p>
-                  ) : (
-                    <div className="space-y-1.5">
-                      {brevoCatalog.slice(0, 12).map((item) => (
-                        <div key={item.id} className="rounded border bg-background p-2">
-                          <p className="text-xs font-medium">{item.name}</p>
-                          <p className="truncate text-[11px] text-muted-foreground">{item.subject || "Sin asunto"}</p>
-                          <div className="mt-1 flex items-center justify-between gap-2">
-                            <Badge variant="outline">{item.is_active ? "Activa" : "Inactiva"}</Badge>
-                            <Button
-                              type="button"
-                              size="sm"
-                              variant="outline"
-                              disabled={brevoImportingId === item.id}
-                              onClick={() => void handleImportBrevoTemplate(item.id)}
-                            >
-                              {brevoImportingId === item.id ? "Importando..." : "Importar"}
-                            </Button>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
+                  ) : null}
                 </div>
-              ) : null}
-              {templatesLoading ? (
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <IconLoader className="size-4 animate-spin" /> Cargando plantillas...
-                </div>
-              ) : null}
-              {!templatesLoading && !templatesItems.length ? (
-                <p className="text-sm text-muted-foreground">No hay plantillas para esta campaña.</p>
-              ) : null}
-              <div className="space-y-1.5">
-                {templatesItems.map((template) => (
-                  <div key={template.id} className="rounded-md border p-2">
-                    <div className="flex items-center justify-between gap-2">
+
+                {templatesCampanaCanal === "correo" ? (
+                  <div className="mb-4 rounded-lg border bg-muted/20 p-3">
+                    <div className="mb-2 flex items-center justify-between gap-2">
                       <div>
-                        <p className="text-sm font-semibold">{template.nombre}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {template.canal} · {template.slug}
+                        <p className="text-xs font-semibold uppercase tracking-wide">Importar desde Brevo</p>
+                        <p className="text-[11px] text-muted-foreground">
+                          Trae un borrador de Brevo y luego revísalo antes de guardarlo.
                         </p>
                       </div>
-                      <div className="flex items-center gap-2">
+                      <Button type="button" variant="outline" size="sm" onClick={() => void loadBrevoCatalog()} disabled={brevoLoading}>
+                        {brevoLoading ? "Cargando..." : "Actualizar"}
+                      </Button>
+                    </div>
+                    {!brevoCatalog.length ? (
+                      <p className="text-xs text-muted-foreground">Sin plantillas Brevo disponibles o sin configuración.</p>
+                    ) : (
+                      <div className="space-y-2">
+                        {brevoCatalog.slice(0, 8).map((item) => (
+                          <div key={item.id} className="rounded-md border bg-background p-2">
+                            <p className="text-sm font-medium">{item.name}</p>
+                            <p className="truncate text-[11px] text-muted-foreground">{item.subject || "Sin asunto"}</p>
+                            <div className="mt-2 flex items-center justify-between gap-2">
+                              <Badge variant="outline">{item.is_active ? "Activa" : "Inactiva"}</Badge>
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                disabled={brevoImportingId === item.id}
+                                onClick={() => void handleImportBrevoTemplate(item.id)}
+                              >
+                                {brevoImportingId === item.id ? "Importando..." : "Usar esta plantilla"}
+                              </Button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ) : null}
+
+                {templatesLoading ? (
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <IconLoader className="size-4 animate-spin" /> Cargando plantillas...
+                  </div>
+                ) : null}
+
+                {!templatesLoading && !templatesItems.length ? (
+                  <div className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
+                    <p className="font-medium text-foreground">Aún no hay mensajes guardados para esta campaña.</p>
+                    <p className="mt-1">Crea una plantilla para reutilizarla después en tus envíos.</p>
+                  </div>
+                ) : null}
+
+                <div className="space-y-2">
+                  {templatesItems.map((template) => (
+                    <div key={template.id} className="rounded-lg border p-3">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-semibold text-foreground">{template.nombre}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {template.canal === "correo" ? "Correo" : template.canal === "whatsapp" ? "WhatsApp" : "Llamada"}{" "}
+                            · {template.descripcion || "Sin descripción"}
+                          </p>
+                        </div>
+                        <Badge variant="outline" className="shrink-0">
+                          Activa
+                        </Badge>
+                      </div>
+                      <div className="mt-3 flex flex-wrap gap-2">
                         <Button type="button" variant="outline" size="sm" onClick={() => handleTemplateEdit(template)}>
                           Editar
+                        </Button>
+                        <Button type="button" variant="outline" size="sm" onClick={() => handleTemplateDuplicate(template)}>
+                          Duplicar
                         </Button>
                         <Button
                           type="button"
@@ -1785,181 +1970,193 @@ export function CampanasMetricsClient() {
                         </Button>
                       </div>
                     </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-            <div className="rounded-lg border p-2 overflow-y-auto space-y-2 text-xs">
-              <div className="flex items-center justify-between">
-                <p className="text-sm font-semibold">{templateForm.id ? "Editar plantilla" : "Nueva plantilla"}</p>
-                <Button type="button" variant="ghost" size="sm" onClick={resetTemplateForm}>
-                  Limpiar
-                </Button>
-              </div>
-              <div className="space-y-1">
-                <Label>Canal</Label>
-                <Select
-                  value={templateForm.canal}
-                  onValueChange={(value) =>
-                    setTemplateForm((prev) => ({ ...prev, canal: value as "correo" | "whatsapp" | "llamada" }))
-                  }
-                  disabled={Boolean(templatesCampanaCanal)}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="correo">Correo</SelectItem>
-                    <SelectItem value="whatsapp">WhatsApp</SelectItem>
-                    <SelectItem value="llamada">Llamada</SelectItem>
-                  </SelectContent>
-                </Select>
-                {templatesCampanaCanal ? (
-                  <p className="text-xs text-muted-foreground">
-                    Canal fijo por campaña: {canalLabel[templatesCampanaCanal]}.
+                  ))}
+                </div>
+              </aside>
+
+              <section className="min-h-0 border-b p-4 lg:border-b-0 lg:border-r lg:overflow-y-auto">
+                <div className="mb-4">
+                  <p className="text-sm font-semibold text-foreground">Editor de plantilla</p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Menos panel técnico, más editor de mensaje. El usuario debe poder crear una plantilla sin entender
+                    SIDs, slug, metadata o tracking.
                   </p>
+                </div>
+
+                {templateError ? (
+                  <div className="mb-4 rounded border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+                    {templateError}
+                  </div>
                 ) : null}
-              </div>
-              {templateForm.canal !== "whatsapp" ? (
-                <>
-                  <div className="space-y-1">
-                    <Label>Nombre</Label>
-                    <Input
-                      value={templateForm.nombre}
-                      onChange={(event) =>
-                        setTemplateForm((prev) => ({
-                          ...prev,
-                          nombre: event.target.value,
-                          slug: prev.slug ? prev.slug : slugify(event.target.value),
-                        }))
-                      }
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <Label>Slug</Label>
-                    <Input
-                      value={templateForm.slug}
-                      onChange={(event) => setTemplateForm((prev) => ({ ...prev, slug: event.target.value }))}
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <Label>Descripción</Label>
-                    <Input
-                      value={templateForm.descripcion}
-                      onChange={(event) => setTemplateForm((prev) => ({ ...prev, descripcion: event.target.value }))}
-                    />
-                  </div>
-                </>
-              ) : null}
-              {templateForm.canal === "correo" ? (
-                <>
-                  <div className="space-y-1">
-                    <Label>Web destino</Label>
-                    <Input
-                      value={templateForm.ctaBaseUrl}
-                      onChange={(event) => setTemplateForm((prev) => ({ ...prev, ctaBaseUrl: event.target.value }))}
-                      placeholder="https://tu-dominio.com"
-                    />
-                    <p className="text-xs text-muted-foreground">
-                      Se usa para redireccionar clics del correo con seguimiento en segundo plano.
-                    </p>
-                  </div>
-                  <div className="space-y-1">
-                    <Label>Texto del link de agenda</Label>
-                    <Input
-                      value={templateForm.bookingLinkLabel}
-                      onChange={(event) => setTemplateForm((prev) => ({ ...prev, bookingLinkLabel: event.target.value }))}
-                      placeholder="Agenda tu demo"
-                    />
-                    <p className="text-xs text-muted-foreground">
-                      Texto visible para el botón/enlace al calendario al insertar en HTML.
-                    </p>
-                  </div>
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    <div className="space-y-1 sm:col-span-2">
-                      <Label>Frase de WhatsApp para captación</Label>
-                      <Select
-                        value={templateForm.waRuleId || "__none__"}
-                        onValueChange={(value) => {
-                          if (value === "__none__") {
-                            setTemplateForm((prev) => ({ ...prev, waRuleId: "", waPhrase: "" }))
-                            return
-                          }
-                          const selected = waRules.find((rule) => rule.id === value)
-                          setTemplateForm((prev) => ({
-                            ...prev,
-                            waRuleId: value,
-                            waPhrase: selected?.frase_objetivo ?? prev.waPhrase,
-                          }))
-                        }}
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder={waRulesLoading ? "Cargando frases..." : "Selecciona una frase"} />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="__none__">Sin frase</SelectItem>
-                          {waRules.map((rule) => (
-                            <SelectItem key={rule.id} value={rule.id}>
-                              {(rule.nombre_regla || "Regla") + " · " + (rule.frase_objetivo || "")}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+
+                <div className="space-y-4">
+                  <section className="rounded-lg border p-4">
+                    <div className="mb-3">
+                      <p className="text-sm font-semibold text-foreground">Datos de la plantilla</p>
                       <p className="text-xs text-muted-foreground">
-                        Selecciona una frase y el enlace de WhatsApp se genera automáticamente al insertar.
+                        Ponle un nombre fácil de reconocer. Este nombre solo lo verá tu equipo.
                       </p>
-                      {templateForm.waPhrase ? (
-                        <p className="rounded border bg-muted/30 px-2 py-1 text-xs text-foreground">{templateForm.waPhrase}</p>
-                      ) : null}
+                    </div>
+                    <div className="space-y-3">
                       <div className="space-y-1">
-                        <Label>Texto del link de WhatsApp</Label>
+                        <Label>Nombre de la plantilla</Label>
                         <Input
-                          value={templateForm.waLinkLabel}
-                          onChange={(event) => setTemplateForm((prev) => ({ ...prev, waLinkLabel: event.target.value }))}
-                          placeholder="Escríbenos por WhatsApp"
+                          value={templateForm.nombre}
+                          onChange={(event) =>
+                            setTemplateForm((prev) => ({
+                              ...prev,
+                              nombre: event.target.value,
+                              slug: prev.slug ? prev.slug : slugify(event.target.value),
+                            }))
+                          }
+                          placeholder="Seguimiento inicial"
                         />
-                        <p className="text-xs text-muted-foreground">
-                          Se usa como texto visible al insertar el enlace wa.me en el correo.
-                        </p>
                       </div>
-                      {!normalizeWaPhone(tenantPhone) ? (
-                        <p className="text-xs text-amber-700 dark:text-amber-300">
-                          Falta teléfono del tenant para generar el enlace de WhatsApp.
-                        </p>
-                      ) : null}
+                      <div className="space-y-1">
+                        <Label>Descripción opcional</Label>
+                        <Input
+                          value={templateForm.descripcion}
+                          onChange={(event) => setTemplateForm((prev) => ({ ...prev, descripcion: event.target.value }))}
+                          placeholder="Resumen corto para el equipo"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <Label>Canal</Label>
+                        <Select
+                          value={templateForm.canal}
+                          onValueChange={(value) =>
+                            setTemplateForm((prev) => ({ ...prev, canal: value as "correo" | "whatsapp" | "llamada" }))
+                          }
+                          disabled={Boolean(templatesCampanaCanal)}
+                        >
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="correo">Correo</SelectItem>
+                            <SelectItem value="whatsapp">WhatsApp</SelectItem>
+                            <SelectItem value="llamada">Llamada</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        {templatesCampanaCanal ? (
+                          <p className="text-xs text-muted-foreground">
+                            Canal fijo por campaña: {canalLabel[templatesCampanaCanal]}.
+                          </p>
+                        ) : null}
+                      </div>
                     </div>
-                  </div>
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    <div className="space-y-1">
-                      <Label>Nombre IA (opcional)</Label>
-                      <Input
-                        value={templateForm.nombreIa}
-                        onChange={(event) => setTemplateForm((prev) => ({ ...prev, nombreIa: event.target.value }))}
-                        placeholder="Tal-IA"
-                      />
+                  </section>
+
+                  <section className="rounded-lg border p-4">
+                    <div className="mb-3">
+                      <p className="text-sm font-semibold text-foreground">Contenido del mensaje</p>
+                      <p className="text-xs text-muted-foreground">
+                        Escribe el mensaje que recibirá el prospecto cuando uses esta plantilla.
+                      </p>
                     </div>
-                    <div className="space-y-1">
-                      <Label>Empresa (opcional)</Label>
-                      <Input
-                        value={templateForm.nombreEmpresa}
-                        onChange={(event) => setTemplateForm((prev) => ({ ...prev, nombreEmpresa: event.target.value }))}
-                        placeholder="Geoactiv"
-                      />
+
+                    {templateForm.canal === "correo" ? (
+                      <div className="space-y-4">
+                        <div className="space-y-1">
+                          <Label>Asunto del correo</Label>
+                          <Input
+                            ref={correoAsuntoRef}
+                            value={templateForm.asunto}
+                            onChange={(event) => setTemplateForm((prev) => ({ ...prev, asunto: event.target.value }))}
+                            onFocus={() => {
+                              lastFocusedCorreoFieldRef.current = "asunto"
+                            }}
+                            placeholder="Hola {{nombre}}, tenemos una propuesta para ti"
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <Label>Mensaje en texto</Label>
+                          <div className="mb-2 flex flex-wrap gap-2">
+                            <Button type="button" variant="outline" size="sm" onClick={() => appendTemplateToken("cuerpoTexto", "\n")}>
+                              Salto de línea
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() => appendTemplateToken("cuerpoTexto", "\n--------------------\n")}
+                            >
+                              Separador
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() => appendTemplateToken("cuerpoTexto", "\n¿Te parece si agendamos una llamada esta semana?\n")}
+                            >
+                              CTA rápida
+                            </Button>
+                          </div>
+                          <Textarea
+                            ref={correoTextoRef}
+                            rows={5}
+                            value={templateForm.cuerpoTexto}
+                            onChange={(event) => setTemplateForm((prev) => ({ ...prev, cuerpoTexto: event.target.value }))}
+                            onFocus={() => {
+                              lastFocusedCorreoFieldRef.current = "cuerpoTexto"
+                            }}
+                            placeholder="Hola {{nombre}}, ..."
+                          />
+                        </div>
+                      </div>
+                    ) : null}
+
+                    {templateForm.canal === "whatsapp" ? (
+                      <div className="space-y-4">
+                        <div className="grid gap-3 sm:grid-cols-2">
+                          <div className="space-y-1">
+                            <Label>Mensaje de WhatsApp</Label>
+                            <Textarea
+                              rows={5}
+                              value={templateForm.cuerpoTexto}
+                              onChange={(event) => setTemplateForm((prev) => ({ ...prev, cuerpoTexto: event.target.value }))}
+                              placeholder="Hola {{nombre}}, ..."
+                            />
+                          </div>
+                          <div className="space-y-1">
+                            <Label>Botón o enlace de respuesta</Label>
+                            <Input
+                              value={templateForm.waLinkLabel}
+                              onChange={(event) => setTemplateForm((prev) => ({ ...prev, waLinkLabel: event.target.value }))}
+                              placeholder="Escríbenos por WhatsApp"
+                            />
+                            <p className="text-xs text-muted-foreground">
+                              Lo verá el usuario como texto visible al generar el enlace de respuesta.
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="rounded-md border bg-background/70 p-3 text-xs text-muted-foreground">
+                          La imagen opcional se configura arriba, en la sección de configuración avanzada.
+                        </div>
+                      </div>
+                    ) : null}
+
+                    {templateForm.canal === "llamada" ? (
+                      <div className="space-y-1">
+                        <Label>Guion</Label>
+                        <Textarea
+                          rows={5}
+                          value={templateForm.cuerpoTexto}
+                          onChange={(event) => setTemplateForm((prev) => ({ ...prev, cuerpoTexto: event.target.value }))}
+                          placeholder="Hola, le llamo de..."
+                        />
+                      </div>
+                    ) : null}
+                  </section>
+
+                  <section className="rounded-lg border p-4">
+                    <div className="mb-3">
+                      <p className="text-sm font-semibold text-foreground">Personalización automática</p>
+                      <p className="text-xs text-muted-foreground">
+                        Puedes insertar datos del prospecto para que cada mensaje se vea personalizado.
+                      </p>
                     </div>
-                  </div>
-                  <div className="space-y-1">
-                    <Label>Asunto</Label>
-                    <Input
-                      ref={correoAsuntoRef}
-                      value={templateForm.asunto}
-                      onChange={(event) => setTemplateForm((prev) => ({ ...prev, asunto: event.target.value }))}
-                      onFocus={() => {
-                        lastFocusedCorreoFieldRef.current = "asunto"
-                      }}
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <Label>Variables disponibles</Label>
                     <div className="flex flex-wrap gap-2">
                       {EMAIL_TEMPLATE_VARIABLES.map((variable) => (
                         <Button
@@ -1969,427 +2166,384 @@ export function CampanasMetricsClient() {
                           size="sm"
                           onClick={() => insertEmailVariable(variable.token)}
                         >
-                          {variable.label}
+                          Insertar {variable.label.toLowerCase()}
                         </Button>
                       ))}
                     </div>
-                    <p className="text-xs text-muted-foreground">
-                      Haz clic en una variable para insertarla donde tengas el cursor (Asunto, Texto o HTML).
-                    </p>
-                  </div>
-                  <div className="space-y-2 rounded-md border p-3">
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <Label>Vista previa con dato real</Label>
+                  </section>
+
+                  <details className="rounded-lg border p-4">
+                    <summary className="cursor-pointer list-none">
+                      <div>
+                        <p className="text-sm font-semibold text-foreground">Configuración avanzada</p>
+                        <p className="text-xs text-muted-foreground">
+                          Lo avanzado debe existir, pero no debe estorbarle al usuario normal.
+                        </p>
+                      </div>
+                    </summary>
+                    <div className="mt-4 space-y-4">
+                      <div className="space-y-1">
+                        <Label>Identificador interno</Label>
+                        <Input
+                          value={templateForm.slug}
+                          onChange={(event) => setTemplateForm((prev) => ({ ...prev, slug: event.target.value }))}
+                          placeholder="seguimiento-inicial"
+                        />
+                        <p className="text-xs text-muted-foreground">Se genera automáticamente, pero puedes ajustarlo aquí.</p>
+                      </div>
+
+                      <div className="space-y-1">
+                        <Label>Texto del link de agenda</Label>
+                        <Input
+                          value={templateForm.bookingLinkLabel}
+                          onChange={(event) => setTemplateForm((prev) => ({ ...prev, bookingLinkLabel: event.target.value }))}
+                          placeholder="Agenda tu demo"
+                        />
+                      </div>
+
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        <div className="space-y-1">
+                          <Label>Nombre IA</Label>
+                          <Input
+                            value={templateForm.nombreIa}
+                            onChange={(event) => setTemplateForm((prev) => ({ ...prev, nombreIa: event.target.value }))}
+                            placeholder="Tal-IA"
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <Label>Empresa</Label>
+                          <Input
+                            value={templateForm.nombreEmpresa}
+                            onChange={(event) => setTemplateForm((prev) => ({ ...prev, nombreEmpresa: event.target.value }))}
+                            placeholder="Geoactiv"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="space-y-2 rounded-md border bg-muted/20 p-3">
+                        <div>
+                          <p className="text-sm font-medium text-foreground">Imagen o logo</p>
+                          <p className="text-xs text-muted-foreground">Se usará en correo o WhatsApp según el canal.</p>
+                        </div>
+                        <input
+                          ref={logoFileInputRef}
+                          type="file"
+                          accept="image/*"
+                          className="hidden"
+                          onChange={(event) => void handleLogoFileChange(event)}
+                        />
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => logoFileInputRef.current?.click()}
+                            disabled={logoUploading}
+                          >
+                            {logoUploading ? "Subiendo..." : "Subir imagen"}
+                          </Button>
+                          <Button type="button" variant="outline" size="sm" onClick={() => void loadLogos()} disabled={logosLoading}>
+                            {logosLoading ? "Cargando..." : "Cargar galería"}
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => insertCorreoLogo(selectedLogoUrl)}
+                            disabled={!selectedLogoUrl}
+                          >
+                            Insertar seleccionada
+                          </Button>
+                        </div>
+                        {logos.length ? (
+                          <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
+                            {logos.map((logo) => (
+                              <button
+                                key={logo.id}
+                                type="button"
+                                className={cn(
+                                  "rounded border p-1 text-left",
+                                  selectedLogoUrl === logo.file_url ? "border-primary" : "border-border"
+                                )}
+                                onClick={() => setSelectedLogoUrl(logo.file_url)}
+                              >
+                                <Image
+                                  src={logo.file_url}
+                                  alt={logo.nombre}
+                                  width={160}
+                                  height={48}
+                                  unoptimized
+                                  className="h-12 w-full rounded object-contain"
+                                />
+                                <p className="mt-1 truncate text-[10px] text-muted-foreground">{logo.nombre}</p>
+                              </button>
+                            ))}
+                          </div>
+                        ) : null}
+                      </div>
+
+                      {templateForm.canal === "correo" ? (
+                        <div className="space-y-4">
+                          <div className="space-y-1">
+                            <Label>Diseño HTML avanzado</Label>
+                            <Textarea
+                              ref={correoHtmlRef}
+                              rows={6}
+                              value={templateForm.cuerpoHtml}
+                              onChange={(event) => setTemplateForm((prev) => ({ ...prev, cuerpoHtml: event.target.value }))}
+                              onFocus={() => {
+                                lastFocusedCorreoFieldRef.current = "cuerpoHtml"
+                              }}
+                              placeholder="<p>Hola {{nombre}}</p>"
+                            />
+                          </div>
+                          <div className="flex flex-wrap gap-2">
+                            <Button type="button" variant="outline" size="sm" onClick={() => wrapTemplateSelection("cuerpoHtml", "<strong>", "</strong>")}>
+                              Negrita
+                            </Button>
+                            <Button type="button" variant="outline" size="sm" onClick={() => wrapTemplateSelection("cuerpoHtml", "<em>", "</em>")}>
+                              Cursiva
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() => wrapTemplateSelection("cuerpoHtml", "<h3>", "</h3>", "Subtítulo")}
+                            >
+                              Subtítulo
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() => appendTemplateToken("cuerpoHtml", "<ul><li>Punto 1</li><li>Punto 2</li></ul>")}
+                            >
+                              Lista
+                            </Button>
+                            <Button type="button" variant="outline" size="sm" onClick={() => insertCorreoTwoColumnBlock()}>
+                              Bloque 2 columnas
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() => insertCorreoTwoColumnBlock({ imageOnLeft: true })}
+                            >
+                              Imagen izquierda
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() => insertCorreoTwoColumnBlock({ leftWidth: 60, rightWidth: 40 })}
+                            >
+                              Bloque 60/40
+                            </Button>
+                            <Button type="button" variant="outline" size="sm" onClick={() => insertCorreoTrackedLink()}>
+                              Insertar enlace web
+                            </Button>
+                            <Button type="button" variant="outline" size="sm" onClick={() => insertCorreoBookingLink()}>
+                              Insertar enlace agenda
+                            </Button>
+                            <Button type="button" variant="outline" size="sm" onClick={() => insertCorreoWaMeLink()}>
+                              Insertar enlace WhatsApp
+                            </Button>
+                          </div>
+                          <p className="text-xs text-muted-foreground">
+                            Variables: {"{{nombre}}, {{empresa}}, {{email}}, {{telefono}}, {{segmento}}, {{canal_origen}}, {{logo_url}}, {{tracking_url}}, {{website_url}}, {{booking_url}}, {{booking_link_text}}"}.
+                          </p>
+                        </div>
+                      ) : null}
+
+                      {templateForm.canal === "whatsapp" ? (
+                        <div className="space-y-3">
+                          <div className="grid gap-3 sm:grid-cols-2">
+                            <div className="space-y-1">
+                              <Label>Código de plantilla WhatsApp</Label>
+                              <Input
+                                value={templateForm.twilioSid}
+                                onChange={(event) => setTemplateForm((prev) => ({ ...prev, twilioSid: event.target.value }))}
+                                placeholder="HX..."
+                              />
+                            </div>
+                            <div className="space-y-1">
+                              <Label>Variable dinámica</Label>
+                              <Input
+                                value={templateForm.twilioVariable6}
+                                onChange={(event) =>
+                                  setTemplateForm((prev) => ({ ...prev, twilioVariable6: event.target.value }))
+                                }
+                                placeholder="Texto que se inyecta en {{6}}"
+                              />
+                            </div>
+                          </div>
+                          <div className="grid gap-3 sm:grid-cols-2">
+                            <div className="space-y-1">
+                              <Label>Nombre IA</Label>
+                              <Input
+                                value={templateForm.nombreIa}
+                                onChange={(event) => setTemplateForm((prev) => ({ ...prev, nombreIa: event.target.value }))}
+                                placeholder="Tal-IA"
+                              />
+                            </div>
+                            <div className="space-y-1">
+                              <Label>Empresa</Label>
+                              <Input
+                                value={templateForm.nombreEmpresa}
+                                onChange={(event) => setTemplateForm((prev) => ({ ...prev, nombreEmpresa: event.target.value }))}
+                                placeholder="Geoactiv"
+                              />
+                            </div>
+                          </div>
+                          <div className="space-y-1">
+                            <Label>Frase de WhatsApp para captación</Label>
+                            <Select
+                              value={templateForm.waRuleId || "__none__"}
+                              onValueChange={(value) => {
+                                if (value === "__none__") {
+                                  setTemplateForm((prev) => ({ ...prev, waRuleId: "", waPhrase: "" }))
+                                  return
+                                }
+                                const selected = waRules.find((rule) => rule.id === value)
+                                setTemplateForm((prev) => ({
+                                  ...prev,
+                                  waRuleId: value,
+                                  waPhrase: selected?.frase_objetivo ?? prev.waPhrase,
+                                }))
+                              }}
+                            >
+                              <SelectTrigger>
+                                <SelectValue placeholder={waRulesLoading ? "Cargando frases..." : "Selecciona una frase"} />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="__none__">Sin frase</SelectItem>
+                                {waRules.map((rule) => (
+                                  <SelectItem key={rule.id} value={rule.id}>
+                                    {(rule.nombre_regla || "Regla") + " · " + (rule.frase_objetivo || "")}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div className="space-y-1">
+                            <Label>Texto del botón/enlace</Label>
+                            <Input
+                              value={templateForm.waLinkLabel}
+                              onChange={(event) => setTemplateForm((prev) => ({ ...prev, waLinkLabel: event.target.value }))}
+                              placeholder="Escríbenos por WhatsApp"
+                            />
+                          </div>
+                          <div className="rounded-md border bg-background/70 p-3 text-xs text-muted-foreground">
+                            La imagen opcional se configura arriba, en la sección de configuración avanzada.
+                          </div>
+                        </div>
+                      ) : null}
+
+                      <div className="space-y-1">
+                        <Label>Tracking URL</Label>
+                        <Input
+                          value={templateForm.ctaBaseUrl}
+                          onChange={(event) => setTemplateForm((prev) => ({ ...prev, ctaBaseUrl: event.target.value }))}
+                          placeholder="https://tu-dominio.com"
+                        />
+                      </div>
+                    </div>
+                  </details>
+                </div>
+              </section>
+
+              <section className="min-h-0 p-4 lg:overflow-y-auto bg-muted/20">
+                <div className="mb-4">
+                  <p className="text-sm font-semibold text-foreground">Vista previa</p>
+                  <p className="mt-1 text-xs text-muted-foreground">Así verá el mensaje un prospecto.</p>
+                </div>
+
+                <div className="space-y-4">
+                  <div className="rounded-lg border bg-background p-4">
+                    <div className="flex items-center justify-between gap-2">
+                      <div>
+                        <p className="text-xs uppercase tracking-wide text-muted-foreground">Ejemplo renderizado</p>
+                        <p className="text-sm font-medium text-foreground">
+                          {templateForm.canal === "correo" ? "Correo" : templateForm.canal === "whatsapp" ? "WhatsApp" : "Llamada"}
+                        </p>
+                      </div>
                       <Button type="button" variant="outline" size="sm" onClick={() => void loadPreviewProspecto()} disabled={previewLoading}>
-                        {previewLoading ? "Cargando..." : "Recargar prospecto"}
+                        {previewLoading ? "Cargando..." : "Recargar ejemplo"}
                       </Button>
                     </div>
                     {previewProspecto ? (
-                      <p className="text-xs text-muted-foreground">
-                        Prospecto: {(previewProspecto.display_name || "Sin nombre").trim()} · Segmento:{" "}
-                        {(previewProspecto.segmento || "Sin segmento").trim() || "Sin segmento"} · Origen:{" "}
-                        {resolvePreviewCanalOrigen(previewProspecto) || "Sin origen"}
+                      <p className="mt-3 text-xs text-muted-foreground">
+                        Prospecto de ejemplo: {(previewProspecto.display_name || "Sin nombre").trim()} ·{" "}
+                        {(previewProspecto.segmento || "Sin segmento").trim() || "Sin segmento"}
                       </p>
                     ) : null}
-                    {previewError ? <p className="text-xs text-destructive">{previewError}</p> : null}
-                    <div className="grid gap-2 md:grid-cols-2">
-                      <div className="space-y-1">
-                        <p className="text-xs font-medium text-muted-foreground">Asunto renderizado</p>
-                        <div className="rounded border bg-muted/30 px-2 py-1 text-sm">{previewSubject || "Sin asunto"}</div>
+                    {previewError ? <p className="mt-3 text-xs text-destructive">{previewError}</p> : null}
+
+                    {templateForm.canal === "correo" ? (
+                      <div className="mt-4 space-y-3 rounded-2xl border bg-slate-50 p-4">
+                        <div className="text-xs text-muted-foreground">Para: prospecto@ejemplo.com</div>
+                        <div className="text-sm font-medium text-foreground">Asunto: {previewSubject || "Sin asunto"}</div>
+                        <div className="rounded-xl border bg-white p-3 text-sm leading-6 text-foreground">
+                          {previewBodyText ? (
+                            <pre className="whitespace-pre-wrap font-[inherit]">{previewBodyText}</pre>
+                          ) : (
+                            <span className="text-muted-foreground">Sin contenido</span>
+                          )}
+                        </div>
+                        <div className="rounded-xl border bg-white p-3 text-sm leading-6 text-foreground">
+                          {previewBodyHtml ? (
+                            <div dangerouslySetInnerHTML={{ __html: previewBodyHtml }} />
+                          ) : (
+                            <span className="text-muted-foreground">Sin contenido HTML</span>
+                          )}
+                        </div>
                       </div>
-                      <div className="space-y-1">
-                        <p className="text-xs font-medium text-muted-foreground">Texto renderizado</p>
-                        <pre className="max-h-32 overflow-auto whitespace-pre-wrap rounded border bg-muted/30 p-2 text-xs">
+                    ) : null}
+
+                    {templateForm.canal === "whatsapp" ? (
+                      <div className="mt-4 rounded-2xl border bg-emerald-50 p-4">
+                        <div className="mb-2 text-xs text-muted-foreground">WhatsApp</div>
+                        <div className="max-w-[90%] rounded-2xl rounded-bl-md bg-white px-4 py-3 text-sm leading-6 text-foreground shadow-sm">
                           {previewBodyText || "Sin contenido"}
-                        </pre>
+                        </div>
+                        {templateForm.waLinkLabel ? (
+                          <div className="mt-3 inline-flex rounded-full border border-emerald-200 bg-white px-3 py-1 text-xs font-medium text-emerald-900">
+                            {templateForm.waLinkLabel}
+                          </div>
+                        ) : null}
                       </div>
-                    </div>
-                    <div className="space-y-1">
-                      <p className="text-xs font-medium text-muted-foreground">HTML renderizado</p>
-                      <div className="max-h-40 overflow-auto rounded border bg-white p-2 text-xs">
-                        {previewBodyHtml ? (
-                          <div dangerouslySetInnerHTML={{ __html: previewBodyHtml }} />
-                        ) : (
-                          <span className="text-muted-foreground">Sin contenido HTML</span>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                  <div className="space-y-1">
-                    <Label>Cuerpo (texto)</Label>
-                    <div className="mb-2 flex flex-wrap items-center gap-2">
-                      <Button type="button" variant="outline" size="sm" onClick={() => appendTemplateToken("cuerpoTexto", "\n")}>
-                        Salto de línea
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() => appendTemplateToken("cuerpoTexto", "\n--------------------\n")}
-                      >
-                        Separador
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() => appendTemplateToken("cuerpoTexto", "\n- Punto 1\n- Punto 2\n")}
-                      >
-                        Viñetas
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() =>
-                          appendTemplateToken(
-                            "cuerpoTexto",
-                            "\n¿Te parece si agendamos una llamada esta semana?\n"
-                          )
-                        }
-                      >
-                        CTA rápida
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() =>
-                          appendTemplateToken(
-                            "cuerpoTexto",
-                            "\n{{booking_link_text}}: {{booking_url}}\n"
-                          )
-                        }
-                      >
-                        Insertar enlace agenda
-                      </Button>
-                    </div>
-                    <Textarea
-                      ref={correoTextoRef}
-                      rows={4}
-                      value={templateForm.cuerpoTexto}
-                      onChange={(event) => setTemplateForm((prev) => ({ ...prev, cuerpoTexto: event.target.value }))}
-                      onFocus={() => {
-                        lastFocusedCorreoFieldRef.current = "cuerpoTexto"
-                      }}
-                    />
-                  </div>
-                  <div className="space-y-2 rounded-md border p-2">
-                    <input
-                      ref={logoFileInputRef}
-                      type="file"
-                      accept="image/*"
-                      className="hidden"
-                      onChange={(event) => void handleLogoFileChange(event)}
-                    />
-                    <div className="flex flex-wrap items-center gap-2">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() => logoFileInputRef.current?.click()}
-                        disabled={logoUploading}
-                      >
-                        {logoUploading ? "Subiendo..." : "Subir imagen"}
-                      </Button>
-                      <Button type="button" variant="outline" size="sm" onClick={() => void loadLogos()} disabled={logosLoading}>
-                        {logosLoading ? "Cargando..." : "Cargar galería"}
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() => insertCorreoLogo(selectedLogoUrl)}
-                        disabled={!selectedLogoUrl}
-                      >
-                        Insertar seleccionado
-                      </Button>
-                    </div>
-                    <p className="text-xs text-muted-foreground">
-                      La imagen se guarda con contexto de campaña/canal/plantilla para trazabilidad.
-                    </p>
-                    {logos.length ? (
-                      <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
-                        {logos.map((logo) => (
-                          <button
-                            key={logo.id}
-                            type="button"
-                            className={cn(
-                              "rounded border p-1 text-left",
-                              selectedLogoUrl === logo.file_url ? "border-primary" : "border-border"
-                            )}
-                            onClick={() => setSelectedLogoUrl(logo.file_url)}
-                          >
-                            <Image
-                              src={logo.file_url}
-                              alt={logo.nombre}
-                              width={160}
-                              height={48}
-                              unoptimized
-                              className="h-12 w-full rounded object-contain"
-                            />
-                            <p className="mt-1 truncate text-[10px] text-muted-foreground">{logo.nombre}</p>
-                          </button>
-                        ))}
+                    ) : null}
+
+                    {templateForm.canal === "llamada" ? (
+                      <div className="mt-4 rounded-2xl border bg-background p-4">
+                        <p className="text-xs uppercase tracking-wide text-muted-foreground">Guion</p>
+                        <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-foreground">{previewBodyText || "Sin contenido"}</p>
                       </div>
                     ) : null}
                   </div>
-                  <div className="space-y-1">
-                    <Label>Cuerpo (HTML)</Label>
-                    <div className="mb-2 flex flex-wrap items-center gap-2">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() => wrapTemplateSelection("cuerpoHtml", "<strong>", "</strong>")}
-                      >
-                        Negrita
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() => wrapTemplateSelection("cuerpoHtml", "<em>", "</em>")}
-                      >
-                        Cursiva
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() => wrapTemplateSelection("cuerpoHtml", "<h3>", "</h3>", "Subtítulo")}
-                      >
-                        Subtítulo
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() =>
-                          appendTemplateToken("cuerpoHtml", "<ul><li>Punto 1</li><li>Punto 2</li></ul>")
-                        }
-                      >
-                        Lista
-                      </Button>
-                      <Button type="button" variant="outline" size="sm" onClick={() => insertCorreoTrackedLink()}>
-                        Insertar enlace web
-                      </Button>
-                      <Button type="button" variant="outline" size="sm" onClick={() => insertCorreoBookingLink()}>
-                        Insertar enlace agenda
-                      </Button>
-                      <Button type="button" variant="outline" size="sm" onClick={() => insertCorreoWaMeLink()}>
-                        Insertar enlace WhatsApp
-                      </Button>
-                    </div>
-                    <Textarea
-                      ref={correoHtmlRef}
-                      rows={5}
-                      value={templateForm.cuerpoHtml}
-                      onChange={(event) => setTemplateForm((prev) => ({ ...prev, cuerpoHtml: event.target.value }))}
-                      onFocus={() => {
-                        lastFocusedCorreoFieldRef.current = "cuerpoHtml"
-                      }}
-                    />
-                    <p className="text-xs text-muted-foreground">
-                      Variables: {"{{nombre}}, {{empresa}}, {{email}}, {{telefono}}, {{segmento}}, {{canal_origen}}, {{logo_url}}, {{tracking_url}}, {{website_url}}, {{booking_url}}, {{booking_link_text}}"}.
-                    </p>
-                  </div>
-                </>
-              ) : null}
-              {templateForm.canal === "whatsapp" ? (
-                <>
-                  <div className="grid gap-2 sm:grid-cols-2">
-                    <div className="space-y-1">
-                      <Label>Twilio Content SID</Label>
-                      <Input
-                        value={templateForm.twilioSid}
-                        onChange={(event) => setTemplateForm((prev) => ({ ...prev, twilioSid: event.target.value }))}
-                        placeholder="HX..."
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <Label>Texto libre variable 6</Label>
-                      <Input
-                        value={templateForm.twilioVariable6}
-                        onChange={(event) =>
-                          setTemplateForm((prev) => ({ ...prev, twilioVariable6: event.target.value }))
-                        }
-                        placeholder="Texto que se inyecta en {{6}}"
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <Label>Nombre</Label>
-                      <Input
-                        value={templateForm.nombre}
-                        onChange={(event) =>
-                          setTemplateForm((prev) => ({
-                            ...prev,
-                            nombre: event.target.value,
-                            slug: prev.slug ? prev.slug : slugify(event.target.value),
-                          }))
-                        }
-                      />
-                    </div>
-                  </div>
-                  <div className="grid gap-2 sm:grid-cols-2">
-                    <div className="space-y-1">
-                      <Label>Slug</Label>
-                      <Input
-                        value={templateForm.slug}
-                        onChange={(event) => setTemplateForm((prev) => ({ ...prev, slug: event.target.value }))}
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <Label>Descripción</Label>
-                      <Input
-                        value={templateForm.descripcion}
-                        onChange={(event) => setTemplateForm((prev) => ({ ...prev, descripcion: event.target.value }))}
-                      />
-                    </div>
-                  </div>
-                  <div className="grid gap-2 sm:grid-cols-2">
-                    <div className="space-y-1">
-                      <Label>Nombre IA (opcional)</Label>
-                      <Input
-                        value={templateForm.nombreIa}
-                        onChange={(event) => setTemplateForm((prev) => ({ ...prev, nombreIa: event.target.value }))}
-                        placeholder="Tal-IA"
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <Label>Empresa (opcional)</Label>
-                      <Input
-                        value={templateForm.nombreEmpresa}
-                        onChange={(event) => setTemplateForm((prev) => ({ ...prev, nombreEmpresa: event.target.value }))}
-                        placeholder="Geoactiv"
-                      />
-                    </div>
-                  </div>
-                  <div className="space-y-1">
-                    <Label>Mensaje</Label>
-                    <Textarea
-                      rows={4}
-                      value={templateForm.cuerpoTexto}
-                      onChange={(event) => setTemplateForm((prev) => ({ ...prev, cuerpoTexto: event.target.value }))}
-                    />
-                  </div>
-                  <div className="space-y-2 rounded-md border p-2">
-                    <input
-                      ref={logoFileInputRef}
-                      type="file"
-                      accept="image/*"
-                      className="hidden"
-                      onChange={(event) => void handleLogoFileChange(event)}
-                    />
-                    <div className="flex flex-wrap items-center gap-2">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() => logoFileInputRef.current?.click()}
-                        disabled={logoUploading}
-                      >
-                        {logoUploading ? "Subiendo..." : "Subir imagen"}
-                      </Button>
-                      <Button type="button" variant="outline" size="sm" onClick={() => void loadLogos()} disabled={logosLoading}>
-                        {logosLoading ? "Cargando..." : "Cargar galería"}
-                      </Button>
-                    </div>
-                    <p className="text-xs text-muted-foreground">
-                      Se guarda con contexto de campaña/canal/plantilla para trazabilidad.
-                    </p>
-                    {logos.length ? (
-                      <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
-                        {logos.map((logo) => (
-                          <button
-                            key={logo.id}
-                            type="button"
-                            className={cn(
-                              "rounded border p-1 text-left",
-                              selectedLogoUrl === logo.file_url ? "border-primary" : "border-border"
-                            )}
-                            onClick={() => setSelectedLogoUrl(logo.file_url)}
-                          >
-                            <Image
-                              src={logo.file_url}
-                              alt={logo.nombre}
-                              width={160}
-                              height={48}
-                              unoptimized
-                              className="h-12 w-full rounded object-contain"
-                            />
-                            <p className="mt-1 truncate text-[10px] text-muted-foreground">{logo.nombre}</p>
-                          </button>
-                        ))}
-                      </div>
-                    ) : null}
-                    <div className="grid gap-2 sm:grid-cols-2">
-                      <div className="space-y-1">
-                        <Label>URL de imagen para Twilio Media</Label>
-                        <div className="flex gap-2">
-                          <Input value={whatsappMediaUrl} readOnly placeholder="Sube o selecciona una imagen..." />
-                          <Button
-                            type="button"
-                            variant="outline"
-                            onClick={async () => {
-                              if (!whatsappMediaUrl) return
-                              try {
-                                await navigator.clipboard.writeText(whatsappMediaUrl)
-                                setBanner({ type: "success", message: "URL de imagen copiada." })
-                              } catch {
-                                setTemplateError("No se pudo copiar la URL.")
-                              }
-                            }}
-                            disabled={!whatsappMediaUrl}
-                          >
-                            Copiar
-                          </Button>
-                        </div>
-                      </div>
-                      <div className="space-y-1">
-                        <Label>URL CTA con seguimiento</Label>
-                        <div className="flex gap-2">
-                          <Input value={whatsappCtaUrl} readOnly />
-                          <Button
-                            type="button"
-                            variant="outline"
-                            onClick={async () => {
-                              if (!whatsappCtaUrl) return
-                              try {
-                                await navigator.clipboard.writeText(whatsappCtaUrl)
-                                setBanner({ type: "success", message: "URL CTA copiada." })
-                              } catch {
-                                setTemplateError("No se pudo copiar la URL CTA.")
-                              }
-                            }}
-                            disabled={!whatsappCtaUrl}
-                          >
-                            Copiar
-                          </Button>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </>
-              ) : null}
-              {templateForm.canal === "llamada" ? (
-                <div className="space-y-1">
-                  <Label>Guion</Label>
-                  <Textarea
-                    rows={4}
-                    value={templateForm.cuerpoTexto}
-                    onChange={(event) => setTemplateForm((prev) => ({ ...prev, cuerpoTexto: event.target.value }))}
-                  />
                 </div>
-              ) : null}
-              {templateError ? (
-                <div className="rounded border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-                  {templateError}
+              </section>
+            </div>
+
+            <div className="border-t bg-background/95 px-4 py-3 sm:px-6">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <p className="text-xs text-muted-foreground">Menos panel técnico, más editor de mensaje.</p>
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => {
+                      setTemplatesDialogOpen(false)
+                      resetTemplateForm()
+                    }}
+                  >
+                    Cancelar
+                  </Button>
+                  <Button type="button" onClick={() => void handleTemplateSave()} disabled={templateSaving}>
+                    {templateSaving ? "Guardando..." : templateForm.id ? "Guardar cambios" : "Guardar plantilla"}
+                  </Button>
                 </div>
-              ) : null}
-              <Button type="button" className="w-full" onClick={() => void handleTemplateSave()} disabled={templateSaving}>
-                {templateSaving ? "Guardando..." : templateForm.id ? "Guardar cambios" : "Crear plantilla"}
-              </Button>
+              </div>
             </div>
           </div>
         </DialogContent>
