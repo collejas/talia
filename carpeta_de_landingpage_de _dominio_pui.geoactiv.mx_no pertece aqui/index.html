@@ -1,0 +1,704 @@
+<!DOCTYPE html>
+<html lang="es-MX">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Plataforma Única de Identidad | Geoactiv</title>
+  <meta name="description" content="Geoactiv conecta a sujetos obligados con la Plataforma Única de Identidad. Implementación, alineación de datos, integración, monitoreo continuo y guía para registro PUI y Llave MX." />
+  <meta name="keywords" content="plataforma unica de identidad, registro pui, llave mx, dgair, integración pui, sujetos obligados" />
+  <meta name="robots" content="index,follow" />
+  <link rel="canonical" href="https://pui.geoactiv.mx/" />
+  <meta property="og:title" content="Geoactiv | Plataforma Única de Identidad" />
+  <meta property="og:description" content="Conecta tu institución a la PUI sin desarrollo propio costoso." />
+  <meta property="og:url" content="https://pui.geoactiv.mx/" />
+  <meta property="og:site_name" content="Geoactiv" />
+  <meta property="og:image" content="https://pui.geoactiv.mx/assets/icons/og-image.png" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
+  <meta property="og:type" content="website" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="Geoactiv | Plataforma Única de Identidad" />
+  <meta name="twitter:description" content="Conecta tu institución a la PUI sin desarrollo propio costoso." />
+  <meta name="twitter:image" content="https://pui.geoactiv.mx/assets/icons/og-image.png" />
+  <meta name="theme-color" content="#1B2B40" />
+  <link rel="icon" href="/assets/icons/favicon.ico" sizes="any">
+  <link rel="icon" type="image/png" sizes="16x16" href="/assets/icons/favicon-16.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/assets/icons/favicon-32.png">
+  <link rel="icon" type="image/png" sizes="48x48" href="/assets/icons/favicon-48.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="/assets/icons/apple-touch-icon.png">
+  <link rel="manifest" href="/site.webmanifest">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;0,900;1,400&family=Outfit:wght@300;400;500;600;700&display=swap">
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;0,900;1,400&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/styles.css">
+  <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@graph": [
+        {
+          "@type": "Organization",
+          "@id": "https://pui.geoactiv.mx/#organization",
+          "name": "Geoactiv",
+          "url": "https://pui.geoactiv.mx/",
+          "logo": {
+            "@type": "ImageObject",
+            "url": "https://pui.geoactiv.mx/assets/brand/logo_geo_cuadrado.png"
+          }
+        },
+        {
+          "@type": "WebSite",
+          "@id": "https://pui.geoactiv.mx/#website",
+          "url": "https://pui.geoactiv.mx/",
+          "name": "Geoactiv | Plataforma Única de Identidad",
+          "publisher": { "@id": "https://pui.geoactiv.mx/#organization" }
+        },
+        {
+          "@type": "WebPage",
+          "@id": "https://pui.geoactiv.mx/#webpage",
+          "url": "https://pui.geoactiv.mx/",
+          "name": "Plataforma Única de Identidad | Geoactiv",
+          "isPartOf": { "@id": "https://pui.geoactiv.mx/#website" }
+        }
+      ]
+    }
+  </script>
+</head>
+<body>
+
+  <div class="nav-wrap" id="nav" data-mobile-nav>
+    <div class="container nav">
+      <a href="#inicio" class="brand">
+        <span class="brand-mark" aria-hidden="true">
+          <img class="brand-logo" src="/assets/brand/logo_geo_cuadrado.png" alt="">
+        </span>
+        <span>Geoactiv</span>
+      </a>
+
+      <div class="nav-links">
+        <a href="#que-es">¿Qué es la PUI?</a>
+        <a href="#legal">Marco legal</a>
+        <a href="#precios">Precios</a>
+        <a href="#obligado">¿Soy obligado?</a>
+      </div>
+
+      <button class="nav-toggle" type="button" aria-label="Abrir menú" aria-controls="mobile-menu" aria-expanded="false">
+        <span></span>
+        <span></span>
+        <span></span>
+      </button>
+
+      <a class="btn btn-primary nav-cta" href="mailto:administracion@geoactiv.mx?subject=Demo%20Geoactiv%20PUI"><span class="nav-cta-full">Solicitar demo</span><span class="nav-cta-short">Demo</span></a>
+    </div>
+    <div class="nav-panel" id="mobile-menu">
+      <div class="container nav-panel-inner">
+        <a href="#que-es">¿Qué es la PUI?</a>
+        <a href="#legal">Marco legal</a>
+        <a href="#precios">Precios</a>
+        <a href="#obligado">¿Soy obligado?</a>
+      </div>
+    </div>
+  </div>
+
+  <main>
+    <section class="hero reveal" id="inicio">
+      <div class="container hero-grid">
+        <div>
+          <div class="eyebrow">Cumplimiento PUI · Art. 12 Bis</div>
+          <h1>Registro PUI: Conecta tu negocio a la Plataforma Única de Identidad</h1>
+          <p>
+            <strong>Sabias que</strong> El Gobierno de México <strong>EXIGE</strong> que cada institución publica o privada <strong>se inscriba, y TENGA una herramienta Tecnológica que opere</strong> conforme al <strong>manual Técnico,</strong> para hacer <strong>cruces de información de CURP en tiempo real</strong>, con la finalidad de <strong>combatir la desaparición y trata de personas</strong>. <strong>Geoactiv te ahorra</strong> crear una plataforma propia y te acompaña en el registro PUI, el proceso con Llave MX y la integración técnica para que tu institución se <strong>conecte y opere de Inmediato.</strong>
+          </p>
+
+          <div class="hero-actions">
+            <a class="btn btn-secondary" href="#obligado">¿Estoy obligado?</a>
+            <a class="btn btn-primary" href="#contacto">Quiero conectarme a la PUI</a>
+          </div>
+          <div class="hero-metrics" aria-label="Indicadores rápidos">
+            <div class="metric">
+              <span>plazo de inscripción</span>
+              <div class="metric-row">
+                <strong class="metric-value">31 marzo 2026</strong>
+                <span class="metric-badge metric-badge-danger">Vencido</span>
+              </div>
+              <span class="metric-sub metric-sub-placeholder" aria-hidden="true">&nbsp;</span>
+            </div>
+            <div class="metric">
+              <span>Plazo de Conexión</span>
+              <div class="metric-row">
+                <strong class="metric-value">Junio 2026</strong>
+                <span class="metric-badge metric-badge-warn">Próximo</span>
+              </div>
+              <span class="metric-sub metric-sub-placeholder" aria-hidden="true">&nbsp;</span>
+            </div>
+            <div class="metric">
+              <span>multa por incumplimiento</span>
+              <strong class="metric-value metric-value-small">$1,173,100 – $2,346,200 MXN</strong>
+              <span class="metric-sub">Sí, leíste bien, MILLONES (MXN)</span>
+            </div>
+          </div>
+
+        </div>
+
+      </div>
+    </section>
+
+    <section class="section reveal" id="que-es">
+        <div class="container">
+          <div class="section-head">
+            <h2>¿Qué es la Plataforma Única de Identidad (PUI)?</h2>
+          </div>
+
+          <div class="card single-info-card pui-intro">
+            <strong>La PUI es la plataforma nacional que permite al Gobierno de México consultar y cruzar información de identidad para apoyar la búsqueda de personas desaparecidas</strong>
+            <p>
+            Su eje técnico es la <strong>CURP</strong>, utilizada como identificador para realizar cruces de información entre sistemas, bases de datos y registros administrativos en tiempo real.
+            </p>
+            <p>
+              La <strong>PUI</strong> no concentra toda la información en una sola base. Su enfoque es <strong>descentralizado</strong>: cada <strong>sujeto obligado</strong> conserva sus datos, pero  <strong>debe contar con la infraestructura necesaria</strong> para <strong>interconectarse, atender consultas y notificar coincidencias a la PUI</strong> bajo reglas de seguridad, trazabilidad y cumplimiento normativo.
+            </p>
+          </div>
+
+          <div class="pui-qa-grid" aria-label="Preguntas rápidas sobre PUI">
+            <div class="card pui-qa-item">
+              <h3>¿Quién opera el PUI?</h3>
+              <p><strong>RENAPO / Secretaría de Gobernación.</strong> Es la plataforma oficial del Gobierno de México para consulta, validación y cruce de identidad.</p>
+              <p>Le permitirá saber que CURP (persona) ha sido registrada, por institución, fecha y ubicación, y con ello el gobierno tendra mejores datos de investigación de personas desaparecidas</p>
+            </div>
+
+            <div class="card pui-qa-item">
+              <h3>¿Cómo me afecta como negocio?</h3>
+              <p>Si tu empresa administra registros de personas y está dentro de los sectores obligados, <strong>el impacto es legal, administrativo y tecnológico</strong>. Debes acreditar tu identidad institucional mediante Llave MX y e.firma, pero además contar con una solución capaz de interconectarse con la PUI mediante APIs seguras, autenticación, trazabilidad, monitoreo y cumplimiento de requisitos de ciberseguridad. En otras palabras: no basta con registrarte; necesitas infraestructura tecnológica lista para operar conforme al Manual Técnico.</p>
+            </div>
+
+            <div class="card pui-qa-item">
+              <h3>¿Qué datos debo enviar al Gobierno de México?</h3>
+              <p>Solo los datos requeridos en cada flujo de búsqueda, basados en los datos definidos por el Manual Técnico ligados a la CURP: identificación, coincidencias relevantes y estatus del caso. No envías toda tu base, sino respuestas controladas bajo un modelo descentralizado.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+    <section class="section section-alt reveal" id="legal">
+      <div class="container">
+        <div class="section-head">
+          <h2>Marco legal</h2>
+        </div>
+
+        <div class="legal-grid" aria-label="Referencias del Diario Oficial de la Federación (DOF)">
+          <div class="legal-card">
+            <div class="legal-meta">
+              <span>DOF · 16 julio 2025</span>
+              <span>Ley RENAPO</span>
+            </div>
+            <strong>Art. 12 Bis LGMDFP</strong>
+            <p>Reforma que establece la obligación a 14 sectores económicos de reportar datos de identidad de CURP a la Plataforma Única de Identidad.</p>
+            <a class="legal-link" href="https://dof.gob.mx/nota_detalle.php?codigo=5755326&fecha=18/04/2025#gsc.tab=0" target="_blank" rel="noopener">Ver en DOF.gob.mx →</a>
+          </div>
+
+          <div class="legal-card">
+            <div class="legal-meta">
+              <span>DOF · 27 noviembre 2025</span>
+              <span>SEGOB</span>
+            </div>
+            <strong>Lineamientos Operativos PUI</strong>
+            <p>Lineamientos que detallan inscripción, plazos de cumplimiento, estándares de transmisión de datos y sanciones aplicables por incumplimiento.</p>
+            <a class="legal-link" href="https://dof.gob.mx/nota_detalle.php?codigo=5774120&fecha=27/11/2025#gsc.tab=0" target="_blank" rel="noopener">Ver en DOF.gob.mx →</a>
+          </div>
+
+          <div class="legal-card">
+            <div class="legal-meta">
+              <span>DOF · 23 enero 2026</span>
+              <span>Manual</span>
+            </div>
+            <strong>Manual Técnico PUI v1.03</strong>
+            <p>Especificaciones de integración: formato de mensajes, endpoints, autenticación con e.firma, catálogos de datos y ejemplos de implementación.</p>
+            <a class="legal-link" href="https://dof.gob.mx/nota_detalle.php?codigo=5778798&fecha=23/01/2026#gsc.tab=0" target="_blank" rel="noopener">Ver en DOF.gob.mx →</a>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section reveal" id="obligado">
+      <div class="container">
+        <div class="section-head">
+          <h2>¿Eres sector obligado a conectarse a la PUI?</h2>
+          <p>Selecciona el sector y obtén una guía inicial en segundos.</p>
+        </div>
+
+        <div class="sector-buttons">
+          <button class="sector-btn active" data-sector="Servicios financieros" data-obligacion="si">🏦 Servicios financieros</button>
+          <button class="sector-btn" data-sector="Transporte" data-obligacion="si">🚚 Transporte</button>
+          <button class="sector-btn" data-sector="Salud física y mental" data-obligacion="si">🏥 Salud física y mental</button>
+          <button class="sector-btn" data-sector="Telecomunicaciones" data-obligacion="si">📡 Telecomunicaciones</button>
+          <button class="sector-btn" data-sector="Educación" data-obligacion="si">🎓 Educación</button>
+          <button class="sector-btn" data-sector="Asistencia privada" data-obligacion="si">🤝 Asistencia privada</button>
+          <button class="sector-btn" data-sector="Paquetería y servicios de entrega" data-obligacion="si">📦 Paquetería y servicios de entrega</button>
+          <button class="sector-btn" data-sector="Registros patronales y seguridad social" data-obligacion="si">👥 Registros patronales y seguridad social</button>
+          <button class="sector-btn" data-sector="Religioso" data-obligacion="si">⛪ Religioso</button>
+          <button class="sector-btn" data-sector="Atención residencial a adicciones" data-obligacion="si">💊 Atención residencial a adicciones</button>
+          <button class="sector-btn" data-sector="Hospedaje" data-obligacion="si">🏨 Hospedaje</button>
+          <button class="sector-btn" data-sector="Bases de datos de personas" data-obligacion="si">🗃️ Bases de datos de personas</button>
+          <button class="sector-btn" data-sector="Tecnología / SaaS" data-obligacion="si">💻 Tecnología / SaaS</button>
+          <button class="sector-btn" data-sector="Retail / Comercio" data-obligacion="si">🛍️ Retail / Comercio</button>
+          <button class="sector-btn" data-sector="Otro sector" data-obligacion="evaluar">❓ Otro sector</button>
+        </div>
+
+        <div class="sector-result" id="sectorResult">
+          <div class="sector-result-head">
+            <span class="sector-pill sector-pill-yes">🔴 Sí, tu institución está obligada</span>
+            <strong class="sector-result-title">Servicios financieros</strong>
+          </div>
+          <p class="sector-result-text">El sector <strong>Servicios financieros</strong> está expresamente incluido en el artículo 12 Bis de la Ley General en Materia de Desaparición Forzada. Debes interconectarte a la Plataforma Única de Identidad.</p>
+          <div class="sector-result-warning">
+            <strong>⚠️ Multa por incumplimiento (Art. 43 Bis):</strong> De $1,173,100 a $2,346,200 MXN por infracción.
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section section-alt reveal" id="comparativa">
+      <div class="container">
+        <div class="section-head">
+          <h2>Desarrollo propio vs. Geoactiv PUI</h2>
+        </div>
+
+        <div class="compare-wrap">
+          <table class="compare">
+            <thead>
+              <tr>
+                <th>Actividad</th>
+                <th>Desarrollo propio</th>
+                <th>Geoactiv</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Costo inicial</td>
+                <td class="bad">$100K-$250K MXN+</td>
+                <td class="good">Planes desde $4,200 / año</td>
+              </tr>
+              <tr>
+                <td>Mantenimiento</td>
+                <td class="bad">Permanente</td>
+                <td class="good">Incluido</td>
+              </tr>
+              <tr>
+                <td>Ingenieros necesarios</td>
+                <td class="bad">2-4 Programadores</td>
+                <td class="good">Ninguno</td>
+              </tr>
+              <tr>
+                <td>Tiempo para integrar</td>
+                <td class="bad">1 A 4 Meses</td>
+                <td class="good">15 minutos (inicio)</td>
+              </tr>
+              
+              
+              <tr>
+                <td>Cumplimiento legal</td>
+                <td class="bad">Incierto</td>
+                <td class="good">Alineado al manual</td>
+              </tr>
+              <tr>
+                <td>Sandbox oficial</td>
+                <td class="bad">Lo configuras tú</td>
+                <td class="good">Incluido y gestionado</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+
+    <section class="section reveal" id="precios">
+      <div class="container">
+        <div class="section-head">
+          <div>
+            <h2>Planes y precios</h2>
+            <p>Comienza con carga manual o conecta tu sistema. La plataforma base es la misma; la diferencia está en cómo se alimentan los registros. <strong>Todos los precios son más IVA.</strong></p>
+          </div>
+        </div>
+
+        <div class="launch-banner">
+          <strong>Lanzamiento Geoactiv PUI</strong>
+          <p>
+            Primeras <strong>30 instituciones</strong> con tarifa preferencial y capacidad ampliada durante su etapa inicial.
+            Las integraciones automáticas se cotizan por separado según viabilidad técnica.
+          </p>
+        </div>
+
+        <div class="pricing-grid">
+          <article class="price-card featured">
+            <div class="price-badge">Más solicitado</div>
+            <h3>Plan Manual</h3>
+            <p class="price-subtitle">Tu institución carga registros por Excel, CSV o plantilla guiada. Actualiza semanal, quincenal o mensualmente, según tu operación.</p>
+
+            <div class="price-table">
+              <div class="price-row">
+                <span>1–100 registros</span>
+                <strong>$4,200 + IVA / año</strong>
+                <span>o $455 + IVA / mes</span>
+              </div>
+              <div class="price-row">
+                <span>101–500 registros</span>
+                <strong>$6,900 + IVA / año</strong>
+                <span>o $748 + IVA / mes</span>
+              </div>
+              <div class="price-row">
+                <span>501–1,000 registros</span>
+                <strong>$9,900 + IVA / año</strong>
+                <span>o $1,073 + IVA / mes</span>
+              </div>
+              <div class="price-row">
+                <span>1,001–2,500 registros</span>
+                <strong>$14,900 + IVA / año</strong>
+                <span>o $1,614 + IVA / mes</span>
+              </div>
+              <div class="price-row">
+                <span>2,501–5,000 registros</span>
+                <strong>$19,900 + IVA / año</strong>
+                <span>o $2,156 + IVA / mes</span>
+              </div>
+              <div class="price-row">
+                <span>5,001+ registros</span>
+                <strong>Cotización</strong>
+                <span>Cotización</span>
+              </div>
+            </div>
+
+            <ul class="price-list">
+              <li>Plataforma SaaS institucional</li>
+              <li>Operación 24/7</li>
+              <li>Carga manual de registros</li>
+              <li>Dashboard y trazabilidad</li>
+              <li>Alertas y seguimiento</li>
+              <li>Onboarding guiado</li>
+            </ul>
+
+            <a class="btn btn-primary" href="#contacto">Solicitar demo</a>
+          </article>
+
+          <article class="price-card">
+            <div class="price-badge subtle">Escalable</div>
+            <h3>Plan Integración Automática</h3>
+            <p class="price-subtitle">Tu CRM, PMS, ERP o sistema interno alimenta a Geoactiv automáticamente. Mismo SaaS base, más implementación técnica.</p>
+
+            <div class="price-table">
+              <div class="price-row">
+                <span>1–100 registros</span>
+                <strong>$4,200 + IVA / año</strong>
+                <span>o $455 + IVA / mes</span>
+              </div>
+              <div class="price-row">
+                <span>101–500 registros</span>
+                <strong>$6,900 + IVA / año</strong>
+                <span>o $748 + IVA / mes</span>
+              </div>
+              <div class="price-row">
+                <span>501–1,000 registros</span>
+                <strong>$9,900 + IVA / año</strong>
+                <span>o $1,073 + IVA / mes</span>
+              </div>
+              <div class="price-row">
+                <span>1,001–2,500 registros</span>
+                <strong>$14,900 + IVA / año</strong>
+                <span>o $1,614 + IVA / mes</span>
+              </div>
+              <div class="price-row">
+                <span>2,501–5,000 registros</span>
+                <strong>$19,900 + IVA / año</strong>
+                <span>o $2,156 + IVA / mes</span>
+              </div>
+              <div class="price-row">
+                <span>5,001+ registros</span>
+                <strong>Cotización</strong>
+                <span>Cotización</span>
+              </div>
+            </div>
+
+            <div class="implementation-box">
+              <strong>+ Cuota de implementación</strong>
+              <p>La interconexión con sistemas del cliente se cotiza por separado según API, documentación, complejidad del mapeo y pruebas necesarias.</p>
+            </div>
+
+            <ul class="price-list">
+              <li>Mismo SaaS base por escalones</li>
+              <li>Sin cargas manuales recurrentes</li>
+              <li>Sincronización con sistema fuente</li>
+              <li>Monitoreo operativo</li>
+              <li>Pruebas y puesta en marcha</li>
+              <li>Mantenimiento especial si aplica</li>
+            </ul>
+
+            <a class="btn btn-secondary" href="#contacto">Evaluar integración</a>
+          </article>
+        </div>
+
+        <div class="pricing-note">
+          <p>
+            <strong>Importante:</strong> el precio del SaaS depende del volumen de registros administrados en la plataforma.
+            La modalidad automática conserva la misma tarifa base por escalón, pero requiere una implementación inicial para conectar los sistemas del cliente.
+            <strong>Todos los precios publicados son más IVA.</strong>
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <section class="section section-alt reveal" id="caracteristicas">
+      <div class="container">
+        <div class="section-head">
+          <h2>Características del sistema</h2>
+          <p>Para operar y demostrar cumplimiento.</p>
+        </div>
+
+        <div class="card-grid-4">
+          <div class="card">
+            <strong>Conexión Valida PUI</strong>
+            <p>API homologada al manual. Soporta búsqueda por fases y operación continua.</p>
+          </div>
+          <div class="card">
+            <strong>Alertas en Tiempo Real</strong>
+            <p>Recibe notificaciones inmediatas por webhook, email o dashboard.</p>
+          </div>
+          <div class="card">
+            <strong>Dashboard de Cumplimiento</strong>
+            <p>Monitorea estado, historial de consultas y reportes para auditoría.</p>
+          </div>
+          <div class="card">
+            <strong>Seguridad Avanzada</strong>
+            <p>JWT, TLS 1.2+ y controles prácticos para operar en entornos regulados.</p>
+          </div>
+          <div class="card">
+            <strong>Sin Infraestructura Propia</strong>
+            <p>Evita DevOps y mantenimiento: la integración corre en nuestra plataforma.</p>
+          </div>
+          <div class="card">
+            <strong>Gestión Llave MX</strong>
+            <p>Guía paso a paso de inscripción con e.firma, pruebas y puesta en marcha.</p>
+          </div>
+          <div class="card">
+            <strong>Trazabilidad</strong>
+            <p>Bitácoras y visibilidad para cumplimiento, auditoría y soporte.</p>
+          </div>
+          <div class="card">
+            <strong>Soporte experto</strong>
+            <p>Acompañamiento técnico para resolver rápido sin un equipo interno grande.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section section-alt reveal" id="como-conectarte">
+      <div class="container">
+        <div class="section-head">
+          <h2>Conexión  a la PUI en 3 pasos</h2>
+          <p>Lo que el manual describe en decenas de páginas, nosotros lo aterrizamos contigo.</p>
+        </div>
+
+        <div class="steps-grid">
+          <div class="step">
+            <div class="step-num">1</div>
+            <strong>Regístrate</strong>
+            <p>Crea tu cuenta y comparte los datos de tu institución. Sin instalaciones, sin servidores propios.</p>
+          </div>
+          <div class="step">
+            <div class="step-num">2</div>
+            <strong>Configuramos tu API</strong>
+            <p>Nuestro equipo configura tu conexión, gestiona Llave MX y realiza pruebas en el Sandbox oficial.</p>
+          </div>
+          <div class="step">
+            <div class="step-num">3</div>
+            <strong>Cumple y opera</strong>
+            <p>Tu institución queda interconectada: alertas y reportes en tiempo real desde un dashboard.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section section-alt reveal" id="faq">
+      <div class="container">
+        <div class="section-head">
+          <h2>Preguntas frecuentes sobre la PUI y el Art. 12 Bis</h2>
+          <p>Respuestas breves para dudas típicas de cumplimiento.</p>
+        </div>
+
+        <div class="faq-grid">
+          <div class="faq">
+            <h3>¿Qué es exactamente la Plataforma Única de Identidad (PUI)?</h3>
+            <p>Es el sistema del Gobierno de México que busca coincidencias por CURP en instituciones conectadas para apoyar la búsqueda e identificación.</p>
+          </div>
+          <div class="faq">
+            <h3>¿Realmente mi institución está obligada por ley?</h3>
+            <p>Depende del sector y del tipo de datos administrados. Si estás en sectores contemplados por el Art. 12 Bis, conviene actuar ya.</p>
+          </div>
+          <div class="faq">
+            <h3>¿Cuánto cuesta desarrollar la integración internamente?</h3>
+            <p>Típicamente requiere 2-4 ingenieros durante 4-12 semanas, además de pruebas y mantenimiento continuo.</p>
+          </div>
+          <div class="faq">
+            <h3>¿Qué pasa con mis datos y los de mis clientes?</h3>
+            <p>La PUI opera con diseño descentralizado: tu institución mantiene sus bases y solo se notifica/consulta lo requerido bajo controles.</p>
+          </div>
+          <div class="faq">
+            <h3>¿Cómo me registro en la Plataforma Única de Identidad?</h3>
+            <p>El registro normalmente implica Llave MX (e.firma), inscripción y pruebas de webhook. Geoactiv te guía y lo ejecuta contigo.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section reveal" id="contacto">
+      <div class="container">
+        <div class="cta-box">
+          <h2>Solicita una demo de Geoactiv-PUI</h2>
+          <p>
+            Si estás evaluando plataforma unica de identidad, registro pui, llave mx o cómo conectar a tu institución sin desarrollo propio costoso, empecemos con una demo.
+          </p>
+          <div class="hero-actions" style="justify-content:center; margin-bottom:0;">
+            <a class="btn btn-primary" href="mailto:administracion@geoactiv.mx?subject=Demo%20Geoactiv%20PUI">Solicitar demo</a>
+            <a class="btn btn-secondary" href="tel:+524443354450">Hablar con un asesor</a>
+          </div>
+          <div class="cta-contacts" aria-label="Datos de contacto">
+            <div class="cta-contact">
+              <a href="mailto:administracion@geoactiv.mx">administracion@geoactiv.mx</a>
+            </div>
+            <div class="cta-contact">
+              <a href="tel:+524443354450">+52 444 335 4450</a>
+              <span class="cta-contact-sep" aria-hidden="true">·</span>
+              <a href="https://wa.me/524442149740?text=Quiero%20informacion%20de%20la%20PUI" target="_blank" rel="noopener">WhatsApp</a>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section section-alt reveal" id="otros-servicios">
+      <div class="container">
+        <div class="section-head">
+          <h2>Otros servicios de la empresa</h2>
+          <p>Si además de PUI necesitas tecnología operativa o automatización comercial, estos dos productos son los más solicitados.</p>
+        </div>
+
+        <div class="card-grid-2" aria-label="Otros servicios">
+          <div class="card">
+            <strong>Geoactiv</strong>
+            <p>Modelos de detección de objetos en video y sistemas de gestión de servicios públicos.</p>
+            <a class="legal-link" href="https://geoactiv.mx" target="_blank" rel="noopener noreferrer">Visitar Geoactiv.mx →</a>
+          </div>
+
+          <div class="card">
+            <strong>Talia</strong>
+            <p>Asistente de IA para ventas y atención a clientes.</p>
+            <a class="legal-link" href="https://talia.mx" target="_blank" rel="noopener noreferrer">Visitar Talia.mx →</a>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section reveal" id="documentos-legales">
+      <div class="container">
+        <div class="cta-box">
+          <h2>Documentos legales</h2>
+          <p>Consulta el aviso de privacidad y entra al centro legal con todas las vistas publicadas para este sitio.</p>
+          <div class="hero-actions" style="justify-content:center; margin-bottom:0;">
+            <a class="btn btn-secondary" href="/Legal/aviso-de-privacidad-geoactiv.html">Aviso de privacidad</a>
+            <a class="btn btn-primary" href="/Legal/">Legal</a>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <div class="container footer-grid">
+      <div>© <span id="year"></span> <a href="https://geoactiv.mx" target="_blank" rel="noopener noreferrer">Geoactiv S.A. de C.V.</a> Todos los derechos reservados.</div>
+      <div class="footer-links">
+        <a href="#que-es">¿Qué es la PUI?</a>
+        <a href="#obligado">¿Soy obligado?</a>
+        <a href="#comparativa">Comparativa</a>
+        <a href="#faq">FAQ</a>
+        <a href="https://geoactiv.mx" target="_blank" rel="noopener noreferrer">Geoactiv.mx</a>
+        <a href="https://talia.mx" target="_blank" rel="noopener noreferrer">Talia.mx</a>
+      </div>
+    </div>
+  </footer>
+
+  <div class="fab-wrap" aria-label="Acciones rápidas">
+    <a class="fab fab--tel" href="tel:+524443354450" aria-label="Llamar: +52 444 335 4450" title="Llamar">
+      <img src="/assets/icons/phone-call-svgrepo-com.svg" alt="" aria-hidden="true">   
+    </a>
+    <a
+      class="fab fab--wa"
+      href="https://wa.me/524442149740?text=Quiero%20informacion%20de%20la%20PUI"
+      target="_blank"
+      rel="noopener"
+      aria-label="WhatsApp: 444 214 9740"
+      title="WhatsApp"
+    >
+      <img src="/assets/icons/WhatsApp_logo-color-vertical.svg" alt="" aria-hidden="true">
+    </a>
+  </div>
+
+  <div id="talia-webchat-root">
+    <div id="talia-webchat-widget" class="talia-webchat-container is-collapsed" aria-live="polite">
+      <div class="talia-webchat-header">
+        <div>
+          <strong>Seguimiento y webchat</strong>
+          <p>Escribe tu mensaje y adjunta archivos si lo necesitas.</p>
+        </div>
+        <span class="talia-webchat-status" id="chat-status">Conectando...</span>
+      </div>
+      <div id="chat-log" class="talia-webchat-log"></div>
+      <form id="chat-form" class="talia-webchat-form">
+        <button type="button" id="chat-attachment-button" class="talia-webchat-attach" aria-label="Adjuntar archivo">Adjuntar</button>
+        <input id="chat-input" class="talia-webchat-input" placeholder="Escribe tu mensaje..." autocomplete="off" />
+        <button type="submit" class="talia-webchat-submit">Enviar</button>
+      </form>
+      <input type="file" id="chat-file-input" hidden />
+      <div id="chat-attachments" class="composer-attachments" aria-label="Archivos adjuntos"></div>
+    </div>
+    <button id="talia-webchat-toggle" class="talia-webchat-toggle" type="button" aria-expanded="false">
+      Chatea con nosotros
+    </button>
+  </div>
+
+  <script src="/js/main.js"></script>
+  <script type="module">
+    import { initialiseChat } from "/js/webchat-widget.js";
+
+    const TENANT_ALIAS = "pui";
+    const API_BASE = "https://talia.mx/api/webchat";
+
+    const toggle = document.getElementById("talia-webchat-toggle");
+    const widget = document.getElementById("talia-webchat-widget");
+
+    const setState = (open) => {
+      if (!widget || !toggle) return;
+      widget.classList.toggle("is-open", open);
+      widget.classList.toggle("is-collapsed", !open);
+      toggle.setAttribute("aria-expanded", open ? "true" : "false");
+      toggle.textContent = open ? "Cerrar chat" : "Chatea con nosotros";
+    };
+
+    if (toggle && widget) {
+      toggle.addEventListener("click", () => setState(!widget.classList.contains("is-open")));
+      window.addEventListener("load", () => setState(false), { once: true });
+    }
+
+    initialiseChat({
+      tenantAlias: TENANT_ALIAS,
+      apiBaseUrl: API_BASE,
+      chatLog: document.getElementById("chat-log"),
+      chatForm: document.getElementById("chat-form"),
+      chatInput: document.getElementById("chat-input"),
+      chatAttachmentButton: document.getElementById("chat-attachment-button"),
+      chatFileInput: document.getElementById("chat-file-input"),
+      chatAttachments: document.getElementById("chat-attachments"),
+      chatStatus: document.getElementById("chat-status"),
+      getScrollContainer: () => document.getElementById("talia-webchat-widget"),
+    });
+  </script>
+</body>
+</html>
