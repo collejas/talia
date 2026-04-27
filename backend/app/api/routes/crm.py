@@ -57,7 +57,11 @@ from app.channels.whatsapp import service as whatsapp_service
 from app.channels.whatsapp.routing import resolve_whatsapp_organizacion
 from app.core.config import resolve_log_path, settings
 from app.core.logging import get_logger
-from app.data.geo.locations import get_municipality_name, get_state_name
+from app.data.geo.locations import (
+    get_municipality_name,
+    get_state_name,
+    list_municipalities_for_state,
+)
 from app.repositories.crm import CRMRepository, CRMRepositoryError
 from app.repositories.platform_admin import PlatformRepository, PlatformRepositoryError
 from app.services import (
@@ -534,6 +538,279 @@ def _build_demografia_response_cache_key(endpoint: str, payload: dict[str, Any])
         separators=(",", ":"),
     )
     return hashlib.sha1(raw.encode("utf-8")).hexdigest()
+
+
+def _normalize_geo_label(value: str | None) -> str:
+    if not value:
+        return ""
+    normalized = unicodedata.normalize("NFKD", str(value))
+    return "".join(ch for ch in normalized if ch.isalnum()).lower()
+
+
+def _to_number(value: Any) -> int:
+    if isinstance(value, bool):
+        return 0
+    if isinstance(value, (int, float)):
+        return int(value)
+    if isinstance(value, str):
+        raw = value.strip()
+        if raw:
+            try:
+                return int(float(raw))
+            except ValueError:
+                return 0
+    return 0
+
+
+def _extract_whatsapp_phone_value(row: dict[str, Any]) -> str | None:
+    contacto = row.get("contacto")
+    if isinstance(contacto, dict):
+        for key in ("telefono_e164", "telefono", "phone"):
+            phone_value = str(contacto.get(key) or "").strip()
+            if phone_value:
+                return phone_value
+    for key in ("telefono_e164", "telefono", "phone"):
+        phone_value = str(row.get(key) or "").strip()
+        if phone_value:
+            return phone_value
+    return None
+
+
+def _resolve_whatsapp_geo_bucket(
+    phone_location: leads_geo.PhoneLocationSummary,
+    *,
+    nivel: str,
+) -> tuple[str | None, str | None]:
+    nivel_normalizado = (nivel or "estado").strip().lower() or "estado"
+    if nivel_normalizado == "pais":
+        key = str(phone_location.country_code or "").strip().upper() or "UNK"
+        name = str(phone_location.country_name or "").strip() or "País desconocido"
+        return key, name
+
+    if nivel_normalizado == "estado":
+        key = str(phone_location.estado_clave or "").strip().zfill(2) or "UNK"
+        name = str(phone_location.estado_nombre or "").strip()
+        if not name and key != "UNK":
+            name = get_state_name(key) or "Estado desconocido"
+        return key, name or "Estado desconocido"
+
+    state_code = str(phone_location.estado_clave or "").strip().zfill(2)
+    municipality_name = str(phone_location.municipio_nombre or "").strip()
+    if not state_code or not municipality_name:
+        return None, None
+    normalized_target = _normalize_geo_label(municipality_name)
+    if not normalized_target:
+        return None, None
+    for municipality in list_municipalities_for_state(state_code):
+        if not isinstance(municipality, dict):
+            continue
+        code = str(municipality.get("code") or "").strip().zfill(3)
+        name = str(municipality.get("name") or "").strip()
+        if not code or not name:
+            continue
+        if _normalize_geo_label(name) == normalized_target:
+            return f"{state_code}{code}", name
+    return None, None
+
+
+def _apply_whatsapp_bucket_counts(
+    *,
+    item: dict[str, Any],
+    count: int,
+    level: str,
+    name: str | None = None,
+) -> None:
+    if count <= 0:
+        return
+    item_level = str(item.get("level") or level)
+    item["level"] = item_level
+    if name and (str(item.get("name") or "").strip() in {"", "Desconocido", "Estado desconocido", "Municipio desconocido", "País desconocido"}):
+        item["name"] = name
+    item["whatsapp_total"] = _to_number(item.get("whatsapp_total")) + count
+    item["conversaciones_whatsapp"] = _to_number(item.get("conversaciones_whatsapp")) + count
+    visitantes_totales_por_canal = item.get("visitantes_totales_por_canal")
+    if not isinstance(visitantes_totales_por_canal, dict):
+        visitantes_totales_por_canal = {}
+        item["visitantes_totales_por_canal"] = visitantes_totales_por_canal
+    visitantes_totales_por_canal["whatsapp"] = _to_number(visitantes_totales_por_canal.get("whatsapp")) + count
+    totales_por_canal = item.get("totales_por_canal")
+    if not isinstance(totales_por_canal, dict):
+        totales_por_canal = {}
+        item["totales_por_canal"] = totales_por_canal
+    totales_por_canal["whatsapp"] = _to_number(totales_por_canal.get("whatsapp")) + count
+    conversation_channels = item.get("conversation_channels")
+    if not isinstance(conversation_channels, dict):
+        conversation_channels = {}
+        item["conversation_channels"] = conversation_channels
+    conversation_channels["conversaciones_whatsapp"] = _to_number(
+        conversation_channels.get("conversaciones_whatsapp")
+    ) + count
+    item["has_data"] = True
+
+
+async def _enrich_visitantes_payload_with_whatsapp_locations(
+    *,
+    repo: CRMRepository,
+    organizacion_id: UUID,
+    nivel: str,
+    date_from: datetime | None,
+    date_to: datetime | None,
+    visitantes_payload: dict[str, Any],
+) -> None:
+    if not isinstance(visitantes_payload, dict):
+        return
+    items = visitantes_payload.get("items")
+    if not isinstance(items, list):
+        return
+
+    already_resolved = any(
+        isinstance(item, dict)
+        and str(item.get("key") or "UNK") != "UNK"
+        and (
+            _to_number(item.get("whatsapp_total")) > 0
+            or _to_number(item.get("conversaciones_whatsapp")) > 0
+        )
+        for item in items
+    )
+    if already_resolved:
+        return
+
+    try:
+        whatsapp_rows = await repo.visitas_whatsapp_conversaciones(
+            organizacion_id=organizacion_id,
+            limit=2000,
+            date_from=date_from,
+            date_to=date_to,
+        )
+    except CRMRepositoryError:
+        logger.exception("crm.demografia.whatsapp_location_resolution_failed")
+        return
+
+    aggregates: dict[str, dict[str, Any]] = {}
+    total_resolved = 0
+    for row in whatsapp_rows:
+        if not isinstance(row, dict):
+            continue
+        phone_value = _extract_whatsapp_phone_value(row)
+        if not phone_value:
+            continue
+        phone_location = leads_geo.phone_location_from_number(phone_value)
+        key, name = _resolve_whatsapp_geo_bucket(phone_location, nivel=nivel)
+        if not key:
+            continue
+        bucket = aggregates.setdefault(
+            key,
+            {
+                "count": 0,
+                "name": name,
+            },
+        )
+        bucket["count"] += 1
+        if name and (
+            not bucket.get("name")
+            or str(bucket.get("name") or "").strip() in {"Desconocido", "Estado desconocido", "Municipio desconocido", "País desconocido"}
+        ):
+            bucket["name"] = name
+        total_resolved += 1
+
+    if not aggregates or total_resolved <= 0:
+        return
+
+    item_by_key: dict[str, dict[str, Any]] = {}
+    for item in items:
+        if isinstance(item, dict):
+            item_by_key[str(item.get("key") or "UNK")] = item
+
+    unk_item = item_by_key.get("UNK")
+    moved_from_unk = 0
+    for key, payload in aggregates.items():
+        count = int(payload.get("count") or 0)
+        if count <= 0:
+            continue
+        item = item_by_key.get(key)
+        if item is None:
+            item = {
+                "level": nivel,
+                "key": key,
+                "name": payload.get("name") or "Desconocido",
+                "total": 0,
+                "con_chat": 0,
+                "sin_chat": 0,
+                "webchat_total": 0,
+                "webchat_con_chat": 0,
+                "webchat_sin_chat": 0,
+                "whatsapp_total": 0,
+                "voz_total": 0,
+                "correo_total": 0,
+                "sesiones_web_total": 0,
+                "sesiones_webchat_total": 0,
+                "sesiones_con_chat_webchat": 0,
+                "sesiones_sin_chat_webchat": 0,
+                "conversaciones_whatsapp": 0,
+                "conversaciones_voz": 0,
+                "conversaciones_correo": 0,
+                "fuentes_top": [],
+                "utm_top": [],
+                "wa_atribucion_top": [],
+                "has_data": False,
+            }
+            items.append(item)
+            item_by_key[key] = item
+        _apply_whatsapp_bucket_counts(
+            item=item,
+            count=count,
+            level=nivel,
+            name=str(payload.get("name") or "") or None,
+        )
+        moved_from_unk += count
+
+    if unk_item is not None and moved_from_unk > 0:
+        unk_item["whatsapp_total"] = max(_to_number(unk_item.get("whatsapp_total")) - moved_from_unk, 0)
+        unk_item["conversaciones_whatsapp"] = max(
+            _to_number(unk_item.get("conversaciones_whatsapp")) - moved_from_unk,
+            0,
+        )
+        visitantes_totales_por_canal = unk_item.get("visitantes_totales_por_canal")
+        if isinstance(visitantes_totales_por_canal, dict):
+            visitantes_totales_por_canal["whatsapp"] = max(
+                _to_number(visitantes_totales_por_canal.get("whatsapp")) - moved_from_unk,
+                0,
+            )
+            if visitantes_totales_por_canal["whatsapp"] <= 0:
+                visitantes_totales_por_canal.pop("whatsapp", None)
+        totales_por_canal = unk_item.get("totales_por_canal")
+        if isinstance(totales_por_canal, dict):
+            totales_por_canal["whatsapp"] = max(
+                _to_number(totales_por_canal.get("whatsapp")) - moved_from_unk,
+                0,
+            )
+            if totales_por_canal["whatsapp"] <= 0:
+                totales_por_canal.pop("whatsapp", None)
+        conversation_channels = unk_item.get("conversation_channels")
+        if isinstance(conversation_channels, dict):
+            conversation_channels["conversaciones_whatsapp"] = max(
+                _to_number(conversation_channels.get("conversaciones_whatsapp")) - moved_from_unk,
+                0,
+            )
+            if conversation_channels["conversaciones_whatsapp"] <= 0:
+                conversation_channels.pop("conversaciones_whatsapp", None)
+        if (
+            _to_number(unk_item.get("whatsapp_total")) <= 0
+            and _to_number(unk_item.get("conversaciones_whatsapp")) <= 0
+        ):
+            unk_item["has_data"] = bool(
+                _to_number(unk_item.get("total")) > 0
+                or _to_number(unk_item.get("con_chat")) > 0
+                or _to_number(unk_item.get("sin_chat")) > 0
+                or _to_number(unk_item.get("webchat_total")) > 0
+                or _to_number(unk_item.get("voz_total")) > 0
+                or _to_number(unk_item.get("correo_total")) > 0
+            )
+
+    totals = visitantes_payload.get("totals")
+    if isinstance(totals, dict):
+        totals["whatsapp_total"] = _to_number(totals.get("whatsapp_total"))
+        totals["conversaciones_whatsapp"] = _to_number(totals.get("conversaciones_whatsapp"))
 
 
 async def _read_demografia_response_cache(cache_key: str) -> dict[str, Any] | None:
@@ -29175,6 +29452,14 @@ async def demografia_resumen_v2(
             wa_regla_id=str(wa_regla_uuid_value) if wa_regla_uuid_value else None,
             jwt=effective_user_token,
         )
+        await _enrich_visitantes_payload_with_whatsapp_locations(
+            repo=repo,
+            organizacion_id=organizacion_id,
+            nivel=nivel_normalizado,
+            date_from=date_from,
+            date_to=date_to,
+            visitantes_payload=visitantes_payload,
+        )
 
         utm_campaign_values: list[str] = []
         campaign_seen: set[str] = set()
@@ -29615,6 +29900,14 @@ async def demografia_mapa_v2(
                 wa_regla_id=str(wa_regla_uuid_value) if wa_regla_uuid_value else None,
                 jwt=effective_user_token,
             )
+        await _enrich_visitantes_payload_with_whatsapp_locations(
+            repo=repo,
+            organizacion_id=organizacion_id,
+            nivel=nivel_normalizado,
+            date_from=date_from,
+            date_to=date_to,
+            visitantes_payload=visitantes_payload,
+        )
         dataset = demografia_service.build_map_dataset(
             nivel=nivel_normalizado,
             leads_payload=leads_payload,

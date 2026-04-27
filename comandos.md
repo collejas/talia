@@ -246,6 +246,7 @@ https://github.com/collejas/buscador.git
 
 TU_puTA_mADRE_479156376421_8NbukI5vDpp0We1Ufhdfy%^$%^$VDFGdff
 
+cd frontend/panel
 npm run dev
 - Local:         http://localhost:3000
 
