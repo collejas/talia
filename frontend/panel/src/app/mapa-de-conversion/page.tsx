@@ -615,7 +615,7 @@ export default async function Page({
                 <MapKpis {...mapKpisData} />
               </div>
               <div className="px-4 lg:px-6">
-                <div className="grid gap-4 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)] xl:items-stretch">
+                <div className="grid gap-4 xl:grid-cols-[minmax(0,3fr)_minmax(0,2fr)_minmax(0,1fr)] xl:items-stretch">
                   <DemografiaControls
                     nivel={nivel}
                     canales={canalesSelected}
