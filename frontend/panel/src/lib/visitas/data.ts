@@ -114,6 +114,15 @@ export type VisitDetailRaw = {
   wa_regla_frase?: string | null;
   whatsapp_atribucion?: Record<string, unknown> | null;
   whatsapp_prospeccion?: Record<string, unknown> | null;
+  phone_location?: {
+    country_code?: string | null;
+    country_name?: string | null;
+    state_code?: string | null;
+    state_name?: string | null;
+    municipality_name?: string | null;
+    lada?: string | null;
+    ok?: boolean | null;
+  } | null;
   ip: string | null;
   registrado_en: string | null;
   primera_visita_en: string | null;
@@ -147,15 +156,6 @@ export type VisitDetailRaw = {
   cve_mun: string | null;
   nom_mun: string | null;
   cvegeo: string | null;
-  phone_location?: {
-    country_code?: string | null;
-    country_name?: string | null;
-    state_code?: string | null;
-    state_name?: string | null;
-    municipality_name?: string | null;
-    lada?: string | null;
-    ok?: boolean | null;
-  } | null;
   ubicacion_cache: Record<string, unknown> | null;
   device_type: string | null;
   dispositivo_cache: Record<string, unknown> | null;
@@ -722,10 +722,11 @@ function mapTable(
       : contactLabel
       ? `Webchat · ${contactLabel}`
       : row.session_id || `Sesión ${index + 1}`;
-    const type =
-      row.state_name ||
-      row.country_name ||
-      (isWhatsapp ? "WhatsApp" : "Webchat");
+    const type = isWhatsapp
+      ? `${resolveWhatsappLocationLabel(row) || "WhatsApp"} · WhatsApp`
+      : row.state_name ||
+        row.country_name ||
+        (isWhatsapp ? "WhatsApp" : "Webchat");
     const status = row.tuvo_chat || isWhatsapp ? "Done" : "In Process";
     const target = isWhatsapp ? "1" : toNumber(row.visit_count).toString();
     const reviewer = contactLabel || "Asignar contacto";
@@ -1017,6 +1018,17 @@ function mapWhatsappRows(rows?: WhatsappConversationRow[] | null): VisitDetailRa
       wa_regla_frase: atribucion.regla_frase ?? null,
       whatsapp_atribucion: row.whatsapp_atribucion ?? null,
       whatsapp_prospeccion: row.whatsapp_prospeccion ?? null,
+      phone_location: apiLocation
+        ? {
+            country_code: apiLocation.country_code ?? null,
+            country_name: apiLocation.country_name ?? null,
+            state_code: apiLocation.state_code ?? null,
+            state_name: apiLocation.state_name ?? null,
+            municipality_name: apiLocation.municipality_name ?? null,
+            lada: apiLocation.lada ?? null,
+            ok: apiLocation.ok ?? null,
+          }
+        : null,
       ip: null,
       registrado_en: row.iniciada_en,
       primera_visita_en: row.iniciada_en,
@@ -1076,6 +1088,38 @@ function mapWhatsappRows(rows?: WhatsappConversationRow[] | null): VisitDetailRa
       total_no_chat_rows: null,
     };
   });
+}
+
+function resolveWhatsappLocationLabel(row: VisitDetailRaw): string | null {
+  const phoneLocation = row.phone_location as
+    | {
+        state_name?: string | null;
+        municipality_name?: string | null;
+        country_name?: string | null;
+        lada?: string | null;
+        ok?: boolean | null;
+      }
+    | null
+    | undefined;
+
+  const municipalityName = row.city_name || row.nom_mun || phoneLocation?.municipality_name || null;
+  const stateName = row.state_name || row.nom_ent || phoneLocation?.state_name || null;
+  const countryName = row.country_name || phoneLocation?.country_name || null;
+  const lada = row.contacto_telefono || phoneLocation?.lada || null;
+
+  if (municipalityName && stateName) {
+    return `${municipalityName}, ${stateName}`;
+  }
+  if (stateName) {
+    return stateName;
+  }
+  if (municipalityName) {
+    return municipalityName;
+  }
+  if (countryName && lada) {
+    return `${countryName} · LADA ${lada}`;
+  }
+  return countryName || null;
 }
 
 function normalizeDate(value?: string): string | null {

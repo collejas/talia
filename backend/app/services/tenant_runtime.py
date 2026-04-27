@@ -31,9 +31,12 @@ _CONFIG_CACHE: dict[str, Any] = {}
 _CONFIG_CACHE_EXPIRES: dict[str, datetime] = {}
 _SECRET_CACHE: dict[str, Any] = {}
 _SECRET_CACHE_EXPIRES: dict[str, datetime] = {}
+_PUBLIC_URL_CACHE: dict[str, str | None] = {}
+_PUBLIC_URL_CACHE_EXPIRES: dict[str, datetime] = {}
 
 CONFIG_TTL_SECONDS = 60
 SECRET_TTL_SECONDS = 60
+PUBLIC_URL_TTL_SECONDS = 300
 SUPABASE_CONNECTIVITY_LOG_FILE = resolve_log_path("supabase-connectivity.log")
 _TRANSIENT_SUPABASE_ERROR_MARKERS = (
     "No address associated with hostname",
@@ -101,6 +104,22 @@ def _tier_from_label(etiqueta: str | None) -> str:
     if "tier:b" in text or "tier=b" in text or "tier b" in text:
         return "B"
     return "A"
+
+
+def normalize_public_base_url(value: Any) -> str | None:
+    text = value.strip() if isinstance(value, str) else (str(value).strip() if value is not None else "")
+    if not text:
+        return None
+    parsed = httpx.URL(text)
+    if not parsed.scheme or not parsed.host:
+        return None
+    path = parsed.path.rstrip("/") if parsed.path not in {"", "/"} else ""
+    normalized = f"{parsed.scheme}://{parsed.host}"
+    if parsed.port:
+        normalized += f":{parsed.port}"
+    if path:
+        normalized += path
+    return normalized
 
 
 def _has_supabase() -> bool:
@@ -245,6 +264,37 @@ async def get_org_config(*, organizacion_id: UUID, force_refresh: bool = False) 
     _CONFIG_CACHE[cache_key] = config
     _CONFIG_CACHE_EXPIRES[cache_key] = now + timedelta(seconds=CONFIG_TTL_SECONDS)
     return config
+
+
+async def get_org_public_base_url(*, organizacion_id: UUID, force_refresh: bool = False) -> str | None:
+    cache_key = str(organizacion_id)
+    now = datetime.now(timezone.utc)
+    if not force_refresh:
+        expires = _PUBLIC_URL_CACHE_EXPIRES.get(cache_key)
+        if expires and expires > now:
+            return _PUBLIC_URL_CACHE.get(cache_key)
+
+    if not _has_supabase():
+        return None
+
+    data = await _supabase_get(
+        "/rest/v1/organizaciones",
+        params={
+            "select": "sitio_web,dominio_principal",
+            "id": f"eq.{organizacion_id}",
+            "limit": "1",
+        },
+    )
+    public_base_url: str | None = None
+    if isinstance(data, list) and data and isinstance(data[0], dict):
+        row = data[0]
+        public_base_url = normalize_public_base_url(row.get("dominio_principal")) or normalize_public_base_url(
+            row.get("sitio_web")
+        )
+
+    _PUBLIC_URL_CACHE[cache_key] = public_base_url
+    _PUBLIC_URL_CACHE_EXPIRES[cache_key] = now + timedelta(seconds=PUBLIC_URL_TTL_SECONDS)
+    return public_base_url
 
 
 async def get_secret_plaintext(

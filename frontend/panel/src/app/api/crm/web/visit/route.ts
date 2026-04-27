@@ -2,6 +2,13 @@ import { NextResponse } from "next/server"
 
 import { getPanelApiBaseUrl } from "@/lib/api/panel"
 
+const CORS_HEADERS = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type, X-Tenant-Alias",
+  "Access-Control-Max-Age": "86400",
+}
+
 function buildTargetUrl(request: Request): URL {
   let backendBase: string
   try {
@@ -15,6 +22,13 @@ function buildTargetUrl(request: Request): URL {
     target.searchParams.append(key, value)
   })
   return target
+}
+
+export async function OPTIONS() {
+  return new NextResponse(null, {
+    status: 204,
+    headers: CORS_HEADERS,
+  })
 }
 
 export async function POST(request: Request) {
@@ -59,13 +73,17 @@ export async function POST(request: Request) {
   }
 
   if (backendResponse.status === 204) {
-    return new NextResponse(null, { status: 204 })
+    return new NextResponse(null, {
+      status: 204,
+      headers: CORS_HEADERS,
+    })
   }
 
   const responseText = await backendResponse.text()
   return new NextResponse(responseText || null, {
     status: backendResponse.status,
     headers: {
+      ...CORS_HEADERS,
       "content-type": backendResponse.headers.get("content-type") || "application/json",
     },
   })

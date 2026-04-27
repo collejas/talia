@@ -34,9 +34,22 @@ function getRawValue(row: TableRow, key: keyof VisitDetailRaw) {
   const raw = row.raw as VisitDetailRaw | undefined;
   if (!raw) return null;
   if (key === "state_name" && raw.canal === "whatsapp") {
-    const phoneLocation = raw.phone_location as { ok?: boolean | null } | null | undefined;
+    const phoneLocation = raw.phone_location as
+      | {
+          ok?: boolean | null;
+          municipality_name?: string | null;
+          state_name?: string | null;
+        }
+      | null
+      | undefined;
+    const derivedLocation =
+      (raw.city_name || raw.nom_mun || phoneLocation?.municipality_name || null) ||
+      (raw.state_name || raw.nom_ent || phoneLocation?.state_name || null);
     if (phoneLocation && phoneLocation.ok === false) {
       return "Ubicación no resuelta";
+    }
+    if (derivedLocation && derivedLocation !== raw.country_name) {
+      return derivedLocation;
     }
   }
   return raw[key] ?? null;

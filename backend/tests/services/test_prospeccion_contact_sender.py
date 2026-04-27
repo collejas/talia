@@ -1,4 +1,5 @@
 from app.services.prospeccion_contact_sender import (
+    _apply_tenant_public_base_url_defaults,
     _build_booking_url,
     _build_twilio_numeric_variables_from_body,
     _compose_twilio_template_variables,
@@ -133,3 +134,28 @@ def test_build_booking_url_includes_tenant_context_when_available() -> None:
     query = parse_qs(urlparse(booking_url).query)
     assert query.get("ta") == ["geoactiv"]
     assert query.get("oid") == ["aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"]
+
+
+def test_apply_tenant_public_base_url_defaults_promotes_public_domain() -> None:
+    payload = {"metadata": {"campana_id": "11111111-1111-1111-1111-111111111111"}}
+    effective_payload = _apply_tenant_public_base_url_defaults(
+        payload,
+        "https://pui.geoactiv.mx",
+    )
+
+    metadata = effective_payload["metadata"]
+    assert metadata["tracking_base_url"] == "https://pui.geoactiv.mx"
+    assert metadata["booking_base_url"] == "https://pui.geoactiv.mx"
+    assert metadata["website_url"] == "https://pui.geoactiv.mx"
+    assert metadata["dominio_principal"] == "https://pui.geoactiv.mx"
+    assert metadata["sitio_web"] == "https://pui.geoactiv.mx"
+
+    booking_url = _build_booking_url(
+        context={"segmento": "pui"},
+        payload=effective_payload,
+        tracking_url="https://pui.geoactiv.mx/?utm_source=prospeccion",
+    )
+
+    parsed = urlparse(booking_url)
+    assert parsed.netloc == "pui.geoactiv.mx"
+    assert parsed.path == "/demo.html"

@@ -257,6 +257,28 @@ def _resolve_tracking_base_url(payload: dict[str, Any]) -> str:
     return urlunparse((parsed.scheme or "https", parsed.netloc or "talia.mx", parsed.path or "/", "", "", ""))
 
 
+def _apply_tenant_public_base_url_defaults(
+    payload: dict[str, Any],
+    public_base_url: str | None,
+) -> dict[str, Any]:
+    if not public_base_url:
+        return payload
+    metadata = payload.get("metadata") if isinstance(payload.get("metadata"), dict) else {}
+    if not isinstance(metadata, dict):
+        metadata = {}
+    merged_metadata = dict(metadata)
+    merged_metadata.setdefault("tracking_base_url", public_base_url)
+    merged_metadata.setdefault("booking_base_url", public_base_url)
+    merged_metadata.setdefault("website_url", public_base_url)
+    merged_metadata.setdefault("dominio_principal", public_base_url)
+    merged_metadata.setdefault("sitio_web", public_base_url)
+    if merged_metadata is metadata:
+        return payload
+    merged_payload = dict(payload)
+    merged_payload["metadata"] = merged_metadata
+    return merged_payload
+
+
 def _build_booking_url(
     *,
     context: dict[str, Any],
@@ -860,22 +882,35 @@ async def _run_envio_correo(
             detalle={"reason": "correo_payload_incompleto"},
             error="correo_payload_incompleto",
         )
-    context = _build_placeholder_context(envio, payload, payload.get("metadata"))
+    effective_payload = payload
+    if organizacion_id:
+        try:
+            public_base_url = await tenant_runtime.get_org_public_base_url(organizacion_id=organizacion_id)
+        except Exception as exc:  # pragma: no cover - fallback a metadata/valores globales
+            log_event(
+                logger,
+                "prospeccion.sender_public_url_fallback",
+                organizacion_id=str(organizacion_id),
+                error=str(exc),
+            )
+            public_base_url = None
+        effective_payload = _apply_tenant_public_base_url_defaults(payload, public_base_url)
+    context = _build_placeholder_context(envio, effective_payload, effective_payload.get("metadata"))
     tracking_url = _build_email_tracking_url(
         context=context,
-        payload=payload,
+        payload=effective_payload,
         envio_id=envio.get("id"),
         prospecto_id=envio.get("prospecto_id"),
     )
     booking_url = _build_booking_url(
         context=context,
-        payload=payload,
+        payload=effective_payload,
         tracking_url=tracking_url,
         envio_id=envio.get("id"),
         prospecto_id=envio.get("prospecto_id"),
     )
     context["tracking_url"] = tracking_url
-    context["website_url"] = _resolve_tracking_base_url(payload)
+    context["website_url"] = _resolve_tracking_base_url(effective_payload)
     context["booking_url"] = booking_url
     subject = _render_template_text(subject_template, context).strip()
     body = _render_template_text(str(body_template), context).strip()
