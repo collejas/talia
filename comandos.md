@@ -290,13 +290,6 @@ CRM IA
 # Entarada a Ser
 ssh jorge T@67.205.156.148 port: 2222
 
-curl -X POST "https://graph.facebook.com/v17.0/691881910681610/subscribed_apps" \
-       -d "subscribed_fields=messages,message_reads,message_deliveries" \
-       -d "access_token=EAAcfgInlKWQBQaFaaJISfQXr5G6haOz6WuOkEalUVwhiMiO91ZCZC4x5dImUsOoWiMrXpt3Ww2mZBxvxcTf6uFZCXQFcEO3mmOXjbCW7kosogL2YmU2AZCma6OEViBnqP7svYgwCOSNrHLBR6eRhNg6TUh2qBg1TwTpq0v93MFrtuwM1fc9ht5FzC2Y59I5Us0Oz0EwZDZD"
-
-EAAcfgInlKWQBQaFaaJISfQXr5G6haOz6WuOkEalUVwhiMiO91ZCZC4x5dImUsOoWiMrXpt3Ww2mZBxvxcTf6uFZCXQFcEO3mmOXjbCW7kosogL2YmU2AZCma6OEViBnqP7svYgwCOSNrHLBR6eRhNg6TUh2qBg1TwTpq0v93MFrtuwM1fc9ht5FzC2Y59I5Us0Oz0EwZDZD
-codex resume 019af9d1-5c6a-79e2-8ab8-e9fa2bad544c
-
 psql "postgresql://postgres:DE_se479156376421@db.qnimyamtczbbwmlrlejc.supabase.co:5432/postgres?sslmode=require"
 \pset pager off
 
@@ -307,6 +300,75 @@ poetry run pytest 2>&1 | tee "resultados_pytest_general_$(date +%Y%m%d_%H%M%S).t
 
 poetry run ruff check . (backend)
 
+# META
+
+* Exportar export META_TOKEN='TOKEN_REAL_DE_META'      Esta en .env
+
+* comprobar como va:
+curl -X GET "https://graph.facebook.com/v25.0/<<<<WhatsApp Business Account ID>>>>/phone_numbers?fields=id,display_phone_number,verified_name,name_status,code_verification_status,quality_rating" \
+-H "Authorization: Bearer $META_TOKEN"    
+
+Esto: <<<<WhatsApp Business Account ID>>>> es el: WABA ID se debe cambiar por el del cliente, y es diferente al: Phone Number ID
+
+## Siguiente comando
+
+Usa el Phone Number ID de Gran Peñon, que ya vimos que es:
+
+1139218909270276
+
+Y corre:
+
+curl -X POST "https://graph.facebook.com/v25.0/1139218909270276/register" \
+-H "Authorization: Bearer $META_TOKEN" \
+-H "Content-Type: application/json" \
+-d '{
+  "messaging_product": "whatsapp",
+  "pin": "915637"
+}'
+
+Pon un PIN de 6 dígitos que vayas a guardar bien.
+
+Si responde esto:
+{"success": true}
+
+entonces ya quedó registrado.
+
+Luego prueba envío
+curl -X POST "https://graph.facebook.com/v25.0/1139218909270276/messages" \
+-H "Authorization: Bearer $META_TOKEN" \
+-H "Content-Type: application/json" \
+-d '{
+  "messaging_product": "whatsapp",
+  "to": "5214441302811",
+  "type": "text",
+  "text": {
+    "body": "Prueba desde Gran Peñon"
+  }
+}'
+
+el:   "to": "5214441302811", es a un telefono de prueba, que previamente debiste enviar un mensaje al que vas a probar
+Si te regresa un messages[].id, ya quedó funcionando.
+
+En resumen
+
+Ya confirmaste por comando exactamente lo que querías:
+
+WABA correcto
+phone number id correcto
+nombre aprobado
+número verificado
+
+Ahora solo falta:
+
+POST /register
+prueba con /messages
+
+Y guarda esto en tu sistema para ese cliente:
+
+waba_id = 3483150995170974
+phone_number_id = 1139218909270276
+
+Y no vuelvas a reutilizar ese token expuesto; al terminar, ró­talo.
 
 # Bse de datos
 
@@ -451,3 +513,33 @@ pui_api_key=<OPENAI_API_KEY_REDACTED>
 
 
 
+# PROPUESTA PARA MEJROAR ASISTENTE
+
+traería mejoras, pero son marginales y más de robustez que de “que el chat responda mejor”.
+
+  Qué te aporta contact_id:
+
+  - Permite al prompt saber exactamente quién está hablando sin depender solo de conversacion_id.
+  - Ayuda si quieres personalizar mejor respuestas con datos del contacto.
+  - Sirve para desambiguar cuando una conversación se cruza con varios registros o cuando el backend hace reconciliación de contacto.
+  - Facilita instrucciones del tipo “si ya existe este contacto, no vuelvas a pedir correo/teléfono”.
+
+  Qué te aporta session_id:
+
+  - Ayuda a ligar el turno del chat con la sesión del sitio.
+  - Es útil para depuración, trazabilidad y atribución.
+  - Puede servir si quieres que el prompt adapte su tono o comportamiento según continuidad de sesión.
+  - También ayuda a detectar sesiones reanudadas vs nuevas.
+
+  Lo importante:
+
+  - No son necesarios para que el webchat funcione.
+  - El maestro no depende de que estén como variables del prompt.
+  - El fallo que tenías era porque conversacion_id faltaba en la versión correcta del prompt.
+  - contact_id y session_id ya existen como contexto interno del backend, solo no se mandan como variables visibles al prompt.
+
+  Mi recomendación práctica:
+
+  - Deja conversacion_id como variable obligatoria.
+  - Si quieres más control, agrega contact_id y session_id solo si el prompt realmente los va a usar.
+  - Si no los usas en las instrucciones del prompt, meterlos solo agrega complejidad y riesgo de desalineación.
