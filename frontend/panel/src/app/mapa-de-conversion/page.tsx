@@ -671,14 +671,10 @@ export default async function Page({
                       <div className="flex flex-col gap-4 text-sm">
                         <div className="flex flex-col gap-1">
                           <span className="text-[11px] uppercase tracking-wide text-muted-foreground">
-                            {mapKpisData.nivelLabel}
+                            {mapKpisData.nivelLabel} con más interacciones:
                           </span>
                           <span className="text-lg font-semibold leading-tight">
                             {mapKpisData.topLocationName || "Sin datos"}
-                          </span>
-                          <span className="text-xs text-muted-foreground">
-                            {formatNumber(mapKpisData.visitasTotales)} interacciones ·{" "}
-                            {formatNumber(mapKpisData.sesionesWebTotales)} visitas web
                           </span>
                         </div>
 
