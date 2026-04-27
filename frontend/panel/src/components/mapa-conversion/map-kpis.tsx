@@ -7,6 +7,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
+import { cn } from "@/lib/utils"
 import { formatSourceClassLabel } from "@/lib/mapa-conversion/source-class"
 type MapKpisProps = {
   nivelLabel: string
@@ -24,6 +25,8 @@ type MapKpisProps = {
   topSourceValue: number
   stageLeader: string
   stageLeaderValue: number
+  stacked?: boolean
+  className?: string
 }
 
 function formatDisplayNumber(value: number | undefined | null): string {
@@ -49,6 +52,8 @@ export function MapKpis({
   topSourceValue,
   stageLeader,
   stageLeaderValue,
+  stacked = false,
+  className,
 }: MapKpisProps) {
   const cards = [
     {
@@ -94,7 +99,13 @@ export function MapKpis({
   ]
 
   return (
-    <div className="grid grid-cols-1 gap-4 px-4 sm:grid-cols-2 lg:grid-cols-5">
+    <div
+      className={cn(
+        "grid grid-cols-1 gap-3",
+        stacked ? "" : "sm:grid-cols-2 lg:grid-cols-5",
+        className,
+      )}
+    >
       {cards.map((config) => (
         <Card key={config.title} className="@container/card">
           <CardHeader>

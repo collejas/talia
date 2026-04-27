@@ -28,6 +28,7 @@ export type LocationComparisonChartProps = {
   globalStages?: Record<string, number>;
   stageKeys?: string[];
   attributionFilterActive?: boolean;
+  showSummary?: boolean;
 };
 
 const NIVEL_LABELS: Record<DemografiaMapResponse["nivel"], string> = {
@@ -198,6 +199,7 @@ export function LocationComparisonChart({
   globalStages,
   stageKeys: stageKeysProp,
   attributionFilterActive = false,
+  showSummary = true,
 }: LocationComparisonChartProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -680,8 +682,20 @@ export function LocationComparisonChart({
   const zoom = nivel === "pais" ? 2 : nivel === "estado" ? 5 : 6;
 
   return (
-    <div className="grid gap-4 lg:grid-cols-[minmax(0,4fr)_minmax(0,1fr)]">
-      <div className="relative z-0 h-[320px] w-full overflow-hidden rounded-lg border">
+    <div
+      className={
+        showSummary
+          ? "grid h-full min-h-0 gap-4 lg:grid-cols-[minmax(0,4fr)_minmax(0,1fr)]"
+          : "h-full min-h-0"
+      }
+    >
+      <div
+        className={
+          showSummary
+            ? "relative z-0 h-[320px] w-full overflow-hidden rounded-lg border"
+            : "relative z-0 h-full min-h-[320px] w-full overflow-hidden rounded-xl bg-background"
+        }
+      >
         <MapContainer
           key={nivel}
           center={center}
@@ -712,49 +726,51 @@ export function LocationComparisonChart({
           ) : null}
         </MapContainer>
       </div>
-      <aside className="kpi-surface flex h-[320px] flex-col gap-4 p-4 text-sm">
-        <div className="flex flex-col gap-1">
-          <span className="text-[11px] uppercase tracking-wide text-muted-foreground">
-            {metrics.scope === "dataset" ? "Resumen" : "Ubicación seleccionada"}
-          </span>
-          <span className="text-base font-semibold leading-tight">{metrics.title}</span>
-          <span className="text-xs text-muted-foreground">
-            {metrics.subtitle ?? `${formatNumber(metrics.totalVisitas)} interacciones`}
-          </span>
-          {nivel === "municipio" && unknownVisitsTotal > 0 ? (
-            <span className="text-xs text-muted-foreground">
-              Incluye {formatNumber(unknownVisitsTotal)} interacciones sin municipio mapeable.
+      {showSummary ? (
+        <aside className="kpi-surface flex h-[320px] min-h-0 flex-col gap-4 p-4 text-sm">
+          <div className="flex flex-col gap-1">
+            <span className="text-[11px] uppercase tracking-wide text-muted-foreground">
+              {metrics.scope === "dataset" ? "Resumen" : "Ubicación seleccionada"}
             </span>
-          ) : null}
-        </div>
-        <div className="flex flex-1 flex-col gap-3 overflow-y-auto pr-1">
-          <MetricSection
-            title="Canales"
-            items={displayedChannelKeys.map((channel) => ({
-              label: `Canal ${CHANNEL_LABELS[channel]}`,
-              value: metrics.channels[channel],
-              indentItems:
-                showConversationMetrics && channel === "webchat"
-                  ? [
-                      { label: "Con conversación", value: metrics.conversation.con_conversacion },
-                      { label: "Sin conversación", value: metrics.conversation.sin_conversacion },
-                    ]
-                  : showWhatsappConversationMetrics && channel === "whatsapp"
+            <span className="text-base font-semibold leading-tight">{metrics.title}</span>
+            <span className="text-xs text-muted-foreground">
+              {metrics.subtitle ?? `${formatNumber(metrics.totalVisitas)} interacciones`}
+            </span>
+            {nivel === "municipio" && unknownVisitsTotal > 0 ? (
+              <span className="text-xs text-muted-foreground">
+                Incluye {formatNumber(unknownVisitsTotal)} interacciones sin municipio mapeable.
+              </span>
+            ) : null}
+          </div>
+          <div className="flex flex-1 flex-col gap-3 overflow-y-auto pr-1">
+            <MetricSection
+              title="Canales"
+              items={displayedChannelKeys.map((channel) => ({
+                label: `Canal ${CHANNEL_LABELS[channel]}`,
+                value: metrics.channels[channel],
+                indentItems:
+                  showConversationMetrics && channel === "webchat"
                     ? [
-                        { label: "Conversaciones WhatsApp", value: metrics.whatsappConversations },
+                        { label: "Con conversación", value: metrics.conversation.con_conversacion },
+                        { label: "Sin conversación", value: metrics.conversation.sin_conversacion },
                       ]
-                  : undefined,
-            }))}
-          />
-          <MetricSection
-            title="Etapas"
-            items={stageKeys.map((key) => ({
-              label: MAPA_STAGE_LABELS[key] ?? formatStageLabel(key),
-              value: metrics.stages[key] ?? 0,
-            }))}
-          />
-        </div>
-      </aside>
+                    : showWhatsappConversationMetrics && channel === "whatsapp"
+                      ? [
+                          { label: "Conversaciones WhatsApp", value: metrics.whatsappConversations },
+                        ]
+                      : undefined,
+              }))}
+            />
+            <MetricSection
+              title="Etapas"
+              items={stageKeys.map((key) => ({
+                label: MAPA_STAGE_LABELS[key] ?? formatStageLabel(key),
+                value: metrics.stages[key] ?? 0,
+              }))}
+            />
+          </div>
+        </aside>
+      ) : null}
     </div>
   );
 }

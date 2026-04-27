@@ -604,57 +604,168 @@ export default async function Page({
           "--header-height": "calc(var(--spacing) * 12)",
         } as CSSProperties
       }
-    >
+      >
       <AppSidebar variant="inset" />
       <SidebarInset>
         <SiteHeader title="Mapa de Conversión" />
         <div className="flex flex-1 flex-col">
           <div className="@container/main flex flex-1 flex-col gap-2">
             <div className="flex flex-col gap-4 py-4 md:gap-6 md:py-6">
-              <MapKpis {...mapKpisData} />
-              <DemografiaControls
-                nivel={nivel}
-                canales={canalesSelected}
-                etapas={etapas}
-                color={colorMode}
-                sourceClass={sourceClass}
-                utmSource={utmSource}
-                utmMedium={utmMedium}
-                utmCampaign={utmCampaign}
-                campanaId={campanaId}
-                campanaTipo={campanaTipo}
-                templateId={templateId}
-                waCanalPublicitario={waCanalPublicitario}
-                waCampanaPublicitaria={waCampanaPublicitaria}
-                waReglaId={waReglaId}
-                utmSourceOptions={utmOptions.sources}
-                utmMediumOptions={utmOptions.media}
-                utmCampaignOptions={utmOptions.campaigns}
-                campanaOptions={utmOptions.campanas}
-                campanaTipoOptions={utmOptions.campanaTipos}
-                templateOptions={utmOptions.templates}
-                waCanalOptions={utmOptions.waCanales}
-                waCampanaOptions={utmOptions.waCampanas}
-                waReglaOptions={utmOptions.waReglas}
-                rango={rango}
-                desde={desde}
-                hasta={hasta}
-              />
-              <SessionRecovery errors={errores} />
-              {demografiaResponse ? (
-                <div className="px-4 lg:px-6">
-                  <LocationComparisonChartClient
-                    data={mapDataset}
-                    nivel={nivelChart}
-                    shape={mapShape}
-                    colorMode={colorMode}
-                    globalStages={globalStages}
-                    channelFilter={canalesSelected}
-                    stageKeys={stageKeys}
-                    attributionFilterActive={attributionFilterActive}
+              <div className="px-4 lg:px-6">
+                <MapKpis {...mapKpisData} />
+              </div>
+              <div className="px-4 lg:px-6">
+                <div className="grid gap-4 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)] xl:items-stretch">
+                  <DemografiaControls
+                    nivel={nivel}
+                    canales={canalesSelected}
+                    etapas={etapas}
+                    color={colorMode}
+                    sourceClass={sourceClass}
+                    utmSource={utmSource}
+                    utmMedium={utmMedium}
+                    utmCampaign={utmCampaign}
+                    campanaId={campanaId}
+                    campanaTipo={campanaTipo}
+                    templateId={templateId}
+                    waCanalPublicitario={waCanalPublicitario}
+                    waCampanaPublicitaria={waCampanaPublicitaria}
+                    waReglaId={waReglaId}
+                    utmSourceOptions={utmOptions.sources}
+                    utmMediumOptions={utmOptions.media}
+                    utmCampaignOptions={utmOptions.campaigns}
+                    campanaOptions={utmOptions.campanas}
+                    campanaTipoOptions={utmOptions.campanaTipos}
+                    templateOptions={utmOptions.templates}
+                    waCanalOptions={utmOptions.waCanales}
+                    waCampanaOptions={utmOptions.waCampanas}
+                    waReglaOptions={utmOptions.waReglas}
+                    rango={rango}
+                    desde={desde}
+                    hasta={hasta}
+                    className="xl:min-h-[540px]"
                   />
+                  <section className="flex h-[560px] flex-col overflow-hidden rounded-2xl border bg-card/95 shadow-sm">
+                    <div className="border-b px-4 py-3">
+                      <p className="text-sm font-medium text-card-foreground/80">Mapa</p>
+                    </div>
+                    <div className="min-h-0 flex-1 p-3">
+                      <LocationComparisonChartClient
+                        data={mapDataset}
+                        nivel={nivelChart}
+                        shape={mapShape}
+                        colorMode={colorMode}
+                        globalStages={globalStages}
+                        channelFilter={canalesSelected}
+                        stageKeys={stageKeys}
+                        attributionFilterActive={attributionFilterActive}
+                        showSummary={false}
+                      />
+                    </div>
+                  </section>
+                  <section className="flex h-[560px] flex-col overflow-hidden rounded-2xl border bg-card/95 shadow-sm">
+                    <div className="border-b px-4 py-3">
+                      <p className="text-sm font-medium text-card-foreground/80">Resumen general</p>
+                    </div>
+                    <div className="min-h-0 flex-1 overflow-y-auto p-4">
+                      <div className="flex flex-col gap-4 text-sm">
+                        <div className="flex flex-col gap-1">
+                          <span className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                            {mapKpisData.nivelLabel}
+                          </span>
+                          <span className="text-lg font-semibold leading-tight">
+                            {mapKpisData.topLocationName || "Sin datos"}
+                          </span>
+                          <span className="text-xs text-muted-foreground">
+                            {formatNumber(mapKpisData.visitasTotales)} interacciones ·{" "}
+                            {formatNumber(mapKpisData.sesionesWebTotales)} visitas web
+                          </span>
+                        </div>
+                        <div className="grid gap-2 rounded-xl border bg-background/60 p-3">
+                          <div className="flex items-center justify-between gap-3">
+                            <span className="text-xs text-muted-foreground">Sesiones web</span>
+                            <span className="font-medium tabular-nums">
+                              {formatNumber(mapKpisData.sesionesWebTotales)}
+                            </span>
+                          </div>
+                          <div className="flex items-center justify-between gap-3">
+                            <span className="text-xs text-muted-foreground">Sesiones webchat</span>
+                            <span className="font-medium tabular-nums">
+                              {formatNumber(mapKpisData.sesionesWebchatTotales)}
+                            </span>
+                          </div>
+                          <div className="flex items-center justify-between gap-3">
+                            <span className="text-xs text-muted-foreground">WhatsApp campañas</span>
+                            <span className="font-medium tabular-nums">
+                              {formatNumber(mapKpisData.whatsappCampaignsTotal)}
+                            </span>
+                          </div>
+                          <div className="flex items-center justify-between gap-3">
+                            <span className="text-xs text-muted-foreground">Conversaciones</span>
+                            <span className="font-medium tabular-nums">
+                              {formatNumber(
+                                mapKpisData.sesionesWebchatTotales +
+                                  mapKpisData.conversacionesWhatsapp +
+                                  mapKpisData.conversacionesVoz +
+                                  mapKpisData.conversacionesCorreo,
+                              )}
+                            </span>
+                          </div>
+                        </div>
+                        <div className="space-y-2">
+                          <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                            Canales
+                          </div>
+                          <div className="space-y-1">
+                            <div className="flex items-center justify-between gap-3">
+                              <span className="text-xs text-muted-foreground">Webchat</span>
+                              <span className="font-medium tabular-nums">
+                                {formatNumber(mapKpisData.sesionesWebchatTotales)}
+                              </span>
+                            </div>
+                            <div className="flex items-center justify-between gap-3">
+                              <span className="text-xs text-muted-foreground">WhatsApp</span>
+                              <span className="font-medium tabular-nums">
+                                {formatNumber(mapKpisData.conversacionesWhatsapp)}
+                              </span>
+                            </div>
+                            <div className="flex items-center justify-between gap-3">
+                              <span className="text-xs text-muted-foreground">Voz</span>
+                              <span className="font-medium tabular-nums">
+                                {formatNumber(mapKpisData.conversacionesVoz)}
+                              </span>
+                            </div>
+                            <div className="flex items-center justify-between gap-3">
+                              <span className="text-xs text-muted-foreground">Correo</span>
+                              <span className="font-medium tabular-nums">
+                                {formatNumber(mapKpisData.conversacionesCorreo)}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                        <div className="space-y-2">
+                          <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                            Etapas
+                          </div>
+                          <div className="space-y-1">
+                            {stageKeys.map((key) => (
+                              <div key={key} className="flex items-center justify-between gap-3">
+                                <span className="text-xs text-muted-foreground">
+                                  {STAGE_LABELS[key] ?? key}
+                                </span>
+                                <span className="font-medium tabular-nums">
+                                  {formatNumber(globalStages[key] ?? 0)}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </section>
                 </div>
-              ) : null}
+              </div>
+              <SessionRecovery errors={errores} />
               {tableData.length && demografiaResponse ? (
                 <div className="px-4 lg:px-6">
                   <MapaConversionTableClient

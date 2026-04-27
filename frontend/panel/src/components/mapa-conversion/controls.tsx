@@ -6,6 +6,7 @@ import {
   IconCurrencyDollar,
   IconFilter,
   IconMapPin,
+  IconMessageCircle,
   IconTimeline,
   IconWorld,
   IconBuildingCommunity,
@@ -29,6 +30,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { SOURCE_CLASS_OPTIONS } from "@/lib/mapa-conversion/source-class";
 import { formatWaLabel } from "@/lib/visitas/formatting";
+import { cn } from "@/lib/utils";
 
 const CHANNEL_OPTIONS = [
   { value: "webchat", label: "Webchat" },
@@ -80,6 +82,7 @@ type DemografiaControlsProps = {
   rango: string | null;
   desde: string | null;
   hasta: string | null;
+  className?: string;
 };
 
 export function DemografiaControls({
@@ -109,6 +112,7 @@ export function DemografiaControls({
   rango,
   desde,
   hasta,
+  className,
 }: DemografiaControlsProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -282,469 +286,534 @@ export function DemografiaControls({
   }
 
   return (
-    <div className="px-4 lg:px-6">
-      <div className="kpi-surface flex flex-wrap items-center gap-3 px-4 py-3 backdrop-blur">
+    <div className={cn("flex h-full min-h-0 flex-col overflow-hidden rounded-2xl border bg-card/95 shadow-sm", className)}>
+      <div className="border-b px-3 py-3 lg:px-4">
         <div className="flex items-center gap-2 text-sm font-medium text-card-foreground/80">
           <IconFilter className="size-4" />
           Filtros de demografía
         </div>
-
-        <Select value={nivel} onValueChange={handleNivelChange}>
-          <SelectTrigger className="w-[170px]">
-            <SelectValue placeholder="Nivel" />
-          </SelectTrigger>
-          <SelectContent className="z-50">
-            <SelectItem value="pais">
-              <div className="flex items-center gap-2">
-                <IconWorld className="size-4" />
-                País
-              </div>
-            </SelectItem>
-            <SelectItem value="estado">
-              <div className="flex items-center gap-2">
-                <IconMapPin className="size-4" />
-                Estado
-              </div>
-            </SelectItem>
-            <SelectItem value="municipio" disabled>
-              <div className="flex items-center gap-2">
-                <IconBuildingCommunity className="size-4" />
-                Municipio (clic en mapa)
-              </div>
-            </SelectItem>
-          </SelectContent>
-        </Select>
-
-        <DropdownMenu open={isChannelMenuOpen} onOpenChange={setChannelMenuOpen}>
-          <DropdownMenuTrigger asChild>
-            <Button type="button" variant="outline" size="sm" className="inline-flex items-center gap-2">
-              <IconCurrencyDollar className="size-4" />
-              Canales
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" className="z-50 w-[220px]">
-            {CHANNEL_OPTIONS.map((item) => (
-              <DropdownMenuCheckboxItem
-                key={item.value}
-                checked={channelDraft.has(item.value)}
-                onSelect={(event) => {
-                  event.preventDefault();
-                  event.stopPropagation();
-                }}
-                onCheckedChange={() => toggleChannel(item.value)}
-              >
-                {item.label}
-              </DropdownMenuCheckboxItem>
-            ))}
-            <DropdownMenuSeparator />
-            <div className="px-2 pb-2 text-xs text-muted-foreground">
-              {channelDraft.size === 0
-                ? "Sin selección (se mostrarán todos los canales)"
-                : channelDraft.size === CHANNEL_OPTIONS.length
-                  ? "Mostrando todos los canales"
-                  : `${channelDraft.size} canal${channelDraft.size === 1 ? "" : "es"} seleccionados`}
+      </div>
+      <div className="flex flex-1 min-h-0 flex-col gap-3 overflow-y-auto px-3 py-3 lg:px-4">
+        <div className="grid h-full gap-3 xl:grid-cols-3 xl:items-stretch">
+          <section className="h-full rounded-2xl border bg-background/70 p-3 shadow-sm">
+            <div className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              <IconWorld className="size-4" />
+              Contexto
             </div>
-            <div className="flex gap-2 px-2 pb-2">
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                className="flex-1 text-xs"
-                onClick={resetChannelFilter}
-              >
-                Restablecer
-              </Button>
-              <Button
-                type="button"
-                size="sm"
-                className="flex-1 text-xs"
-                onClick={applyChannelFilter}
-              >
-                Aplicar
+            <div className="grid gap-3">
+              <div className="space-y-1">
+                <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                  Nivel geográfico
+                </p>
+                <Select value={nivel} onValueChange={handleNivelChange}>
+                  <SelectTrigger className="h-8 w-full">
+                    <SelectValue placeholder="Nivel" />
+                  </SelectTrigger>
+                  <SelectContent className="z-50">
+                    <SelectItem value="pais">
+                      <div className="flex items-center gap-2">
+                        <IconWorld className="size-4" />
+                        País
+                      </div>
+                    </SelectItem>
+                    <SelectItem value="estado">
+                      <div className="flex items-center gap-2">
+                        <IconMapPin className="size-4" />
+                        Estado
+                      </div>
+                    </SelectItem>
+                    <SelectItem value="municipio" disabled>
+                      <div className="flex items-center gap-2">
+                        <IconBuildingCommunity className="size-4" />
+                        Municipio (clic en mapa)
+                      </div>
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-1">
+                <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                  Canales visibles
+                </p>
+                <DropdownMenu open={isChannelMenuOpen} onOpenChange={setChannelMenuOpen}>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-8 w-full justify-between"
+                    >
+                      <span className="inline-flex items-center gap-2">
+                        <IconCurrencyDollar className="size-4" />
+                        Canales
+                      </span>
+                      <span className="text-[11px] text-muted-foreground">
+                        {channelDraft.size === 0
+                          ? "Todos"
+                          : `${channelDraft.size}/${CHANNEL_OPTIONS.length}`}
+                      </span>
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="start" className="z-50 w-[220px]">
+                    {CHANNEL_OPTIONS.map((item) => (
+                      <DropdownMenuCheckboxItem
+                        key={item.value}
+                        checked={channelDraft.has(item.value)}
+                        onSelect={(event) => {
+                          event.preventDefault();
+                          event.stopPropagation();
+                        }}
+                        onCheckedChange={() => toggleChannel(item.value)}
+                      >
+                        {item.label}
+                      </DropdownMenuCheckboxItem>
+                    ))}
+                    <DropdownMenuSeparator />
+                    <div className="px-2 pb-2 text-xs text-muted-foreground">
+                      {channelDraft.size === 0
+                        ? "Sin selección (se mostrarán todos los canales)"
+                        : channelDraft.size === CHANNEL_OPTIONS.length
+                          ? "Mostrando todos los canales"
+                          : `${channelDraft.size} canal${channelDraft.size === 1 ? "" : "es"} seleccionados`}
+                    </div>
+                    <div className="flex gap-2 px-2 pb-2">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="flex-1 text-xs"
+                        onClick={resetChannelFilter}
+                      >
+                        Restablecer
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        className="flex-1 text-xs"
+                        onClick={applyChannelFilter}
+                      >
+                        Aplicar
+                      </Button>
+                    </div>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
+
+              <div className="space-y-1">
+                <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                  Etapas
+                </p>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant={etapas.length ? "default" : "outline"}
+                      className="h-8 w-full justify-start gap-2"
+                    >
+                      <IconTimeline className="size-4" />
+                      Etapas
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="start" className="z-50 w-[200px]">
+                    {STAGE_OPTIONS.map((item) => (
+                      <DropdownMenuCheckboxItem
+                        key={item.value}
+                        checked={normalizedStages.has(item.value)}
+                        onCheckedChange={() => toggleStage(item.value)}
+                      >
+                        {item.label}
+                      </DropdownMenuCheckboxItem>
+                    ))}
+                    <DropdownMenuSeparator />
+                    <DropdownMenuCheckboxItem
+                      checked={normalizedStages.size === DEFAULT_STAGES.length}
+                      onCheckedChange={() => updateParams({ etapas: null })}
+                    >
+                      Seleccionar todas
+                    </DropdownMenuCheckboxItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
+
+              <div className="space-y-1">
+                <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                  Modo de color
+                </p>
+                <div className="grid grid-cols-2 gap-2">
+                  <Button
+                    type="button"
+                    size="sm"
+                    className="h-8"
+                    variant={color === "sequential" ? "default" : "outline"}
+                    onClick={() => updateParams({ color: null })}
+                  >
+                    Escala por volumen
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    className="h-8"
+                    variant={color === "channel" ? "default" : "outline"}
+                    onClick={() => updateParams({ color: "channel" })}
+                  >
+                    Canal predominante
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <section className="h-full rounded-2xl border bg-background/70 p-3 shadow-sm">
+            <div className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              <IconWorld className="size-4" />
+              Tráfico web
+            </div>
+            <div className="grid gap-3">
+              <div className="space-y-1">
+                <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                  Origen de visita
+                </p>
+                <Select
+                  value={sourceClass ?? "all"}
+                  onValueChange={(value) => {
+                    updateParams({ source_class: value === "all" ? null : value });
+                  }}
+                >
+                  <SelectTrigger className="h-8 w-full">
+                    <SelectValue placeholder="Origen de visita" />
+                  </SelectTrigger>
+                  <SelectContent className="z-50">
+                    {SOURCE_CLASS_OPTIONS.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="grid gap-3 lg:grid-cols-2">
+                <div className="space-y-1">
+                  <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                    Fuente de campaña
+                  </p>
+                  <Select
+                    value={utmSource ?? "all"}
+                    onValueChange={(value) => {
+                      updateParams({ utm_source: value === "all" ? null : value });
+                    }}
+                  >
+                    <SelectTrigger className="h-8 w-full">
+                      <SelectValue placeholder="Fuente de campaña" />
+                    </SelectTrigger>
+                    <SelectContent className="z-50">
+                      <SelectItem value="all">Todos</SelectItem>
+                      {utmSource && !utmSourceOptions.includes(utmSource) ? (
+                        <SelectItem value={utmSource}>{utmSource}</SelectItem>
+                      ) : null}
+                      {utmSourceOptions.map((option) => (
+                        <SelectItem key={`utm-source-${option}`} value={option}>
+                          {option}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-1">
+                  <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                    Medio de campaña
+                  </p>
+                  <Select
+                    value={utmMedium ?? "all"}
+                    onValueChange={(value) => {
+                      updateParams({ utm_medium: value === "all" ? null : value });
+                    }}
+                  >
+                    <SelectTrigger className="h-8 w-full">
+                      <SelectValue placeholder="Medio de campaña" />
+                    </SelectTrigger>
+                    <SelectContent className="z-50">
+                      <SelectItem value="all">Todos</SelectItem>
+                      {utmMedium && !utmMediumOptions.includes(utmMedium) ? (
+                        <SelectItem value={utmMedium}>{utmMedium}</SelectItem>
+                      ) : null}
+                      {utmMediumOptions.map((option) => (
+                        <SelectItem key={`utm-medium-${option}`} value={option}>
+                          {option}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                  Nombre de campaña web
+                </p>
+                <Select
+                  value={utmCampaign ?? "all"}
+                  onValueChange={(value) => {
+                    updateParams({ utm_campaign: value === "all" ? null : value });
+                  }}
+                >
+                  <SelectTrigger className="h-8 w-full">
+                    <SelectValue placeholder="Nombre de campaña web" />
+                  </SelectTrigger>
+                  <SelectContent className="z-50">
+                    <SelectItem value="all">Todos</SelectItem>
+                    {utmCampaign && !utmCampaignOptions.some((option) => option.value === utmCampaign) ? (
+                      <SelectItem value={utmCampaign}>{utmCampaign}</SelectItem>
+                    ) : null}
+                    {utmCampaignOptions.map((option) => (
+                      <SelectItem key={`utm-campaign-${option.value}`} value={option.value}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="space-y-1">
+                  <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                    Rango
+                  </p>
+                  <Select
+                    value={rango ?? "mes"}
+                    onValueChange={(value) => {
+                      const isCustom = value === "fechas";
+                      updateParams({
+                        rango: value,
+                        desde: isCustom ? (desdeDraft.trim() || null) : null,
+                        hasta: isCustom ? (hastaDraft.trim() || null) : null,
+                      });
+                    }}
+                  >
+                    <SelectTrigger className="h-8 w-full">
+                      <SelectValue placeholder="Rango" />
+                    </SelectTrigger>
+                    <SelectContent className="z-50">
+                      <SelectItem value="hoy">Hoy</SelectItem>
+                      <SelectItem value="7d">Últimos 7 días</SelectItem>
+                      <SelectItem value="30d">Últimos 30 días</SelectItem>
+                      <SelectItem value="mes">Último mes</SelectItem>
+                      <SelectItem value="fechas">Rango personalizado</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1">
+                  <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                    Fechas
+                  </p>
+                  <div className="grid grid-cols-2 gap-2">
+                    <Input
+                      type="date"
+                      value={desdeDraft}
+                      onChange={(event) => setDesdeDraft(event.target.value)}
+                      className="h-8"
+                    />
+                    <Input
+                      type="date"
+                      value={hastaDraft}
+                      onChange={(event) => setHastaDraft(event.target.value)}
+                      className="h-8"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <Button type="button" size="sm" variant="outline" onClick={applyDateFilters} className="h-8 w-full">
+                Aplicar fechas
               </Button>
             </div>
-          </DropdownMenuContent>
-        </DropdownMenu>
+          </section>
 
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button
-              type="button"
-              size="sm"
-              variant={etapas.length ? "default" : "outline"}
-              className="inline-flex items-center gap-2"
-            >
-              <IconTimeline className="size-4" />
-              Etapas
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" className="z-50 w-[200px]">
-            {STAGE_OPTIONS.map((item) => (
-              <DropdownMenuCheckboxItem
-                key={item.value}
-                checked={normalizedStages.has(item.value)}
-                onCheckedChange={() => toggleStage(item.value)}
-              >
-                {item.label}
-              </DropdownMenuCheckboxItem>
-            ))}
-            <DropdownMenuSeparator />
-            <DropdownMenuCheckboxItem
-              checked={normalizedStages.size === DEFAULT_STAGES.length}
-              onCheckedChange={() => updateParams({ etapas: null })}
-            >
-              Seleccionar todas
-            </DropdownMenuCheckboxItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+          <section className="h-full rounded-2xl border bg-background/70 p-3 shadow-sm">
+            <div className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              <IconMessageCircle className="size-4" />
+              Conversaciones y atribución
+            </div>
+            <div className="grid gap-3">
+              <div className="space-y-1">
+                <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                  Tipo de campaña
+                </p>
+                <Select
+                  value={campanaTipo ?? "all"}
+                  onValueChange={(value) => {
+                    updateParams({ campana_tipo: value === "all" ? null : value, campana_id: null });
+                  }}
+                >
+                  <SelectTrigger className="h-8 w-full">
+                    <SelectValue placeholder="Tipo de campaña" />
+                  </SelectTrigger>
+                  <SelectContent className="z-50">
+                    <SelectItem value="all">Todos</SelectItem>
+                    {campanaTipo && !campanaTipoOptions.includes(campanaTipo) ? (
+                      <SelectItem value={campanaTipo}>{formatCampanaTipoLabel(campanaTipo)}</SelectItem>
+                    ) : null}
+                    {campanaTipoOptions.map((option) => (
+                      <SelectItem key={`campana-tipo-${option}`} value={option}>
+                        {formatCampanaTipoLabel(option)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
 
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-            Modo de color
-          </span>
-          <div className="inline-flex items-center gap-1">
-            <Button
-              type="button"
-              size="sm"
-              variant={color === "sequential" ? "default" : "outline"}
-              onClick={() => updateParams({ color: null })}
-            >
-              Escala por volumen
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              variant={color === "channel" ? "default" : "outline"}
-              onClick={() => updateParams({ color: "channel" })}
-            >
-              Canal predominante
-            </Button>
-          </div>
+              <div className="grid gap-3 lg:grid-cols-2">
+                <div className="space-y-1">
+                  <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                    Campaña de prospección
+                  </p>
+                  <Select
+                    value={campanaId ?? "all"}
+                    onValueChange={(value) => {
+                      updateParams({ campana_id: value === "all" ? null : value });
+                    }}
+                  >
+                    <SelectTrigger className="h-8 w-full">
+                      <SelectValue placeholder="Campaña de prospección" />
+                    </SelectTrigger>
+                    <SelectContent className="z-50">
+                      <SelectItem value="all">Todas</SelectItem>
+                      {campanaId && !campanaOptions.some((option) => option.value === campanaId) ? (
+                        <SelectItem value={campanaId}>{campanaId}</SelectItem>
+                      ) : null}
+                      {filteredCampanaOptions.map((option) => (
+                        <SelectItem key={`campana-${option.value}`} value={option.value}>
+                          {option.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-1">
+                  <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                    Plantilla captada
+                  </p>
+                  <Select
+                    value={templateId ?? "all"}
+                    onValueChange={(value) => {
+                      updateParams({ template_id: value === "all" ? null : value });
+                    }}
+                  >
+                    <SelectTrigger className="h-8 w-full">
+                      <SelectValue placeholder="Plantilla" />
+                    </SelectTrigger>
+                    <SelectContent className="z-50">
+                      <SelectItem value="all">Todas</SelectItem>
+                      {templateId && !templateOptions.some((option) => option.value === templateId) ? (
+                        <SelectItem value={templateId}>{templateId}</SelectItem>
+                      ) : null}
+                      {templateOptions.map((option) => (
+                        <SelectItem key={`template-${option.value}`} value={option.value}>
+                          {option.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="space-y-1">
+                  <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                    Canal publicitario
+                  </p>
+                  <Select
+                    value={waCanalPublicitario ?? "all"}
+                    onValueChange={(value) => {
+                      updateParams({ wa_canal_publicitario: value === "all" ? null : value });
+                    }}
+                  >
+                    <SelectTrigger className="h-8 w-full">
+                      <SelectValue placeholder="Canal publicitario" />
+                    </SelectTrigger>
+                    <SelectContent className="z-50">
+                      <SelectItem value="all">Todos</SelectItem>
+                      {waCanalPublicitario && !waCanalOptions.includes(waCanalPublicitario) ? (
+                        <SelectItem value={waCanalPublicitario}>
+                          {formatWaOptionLabel(waCanalPublicitario)}
+                        </SelectItem>
+                      ) : null}
+                      {waCanalOptions.map((option) => (
+                        <SelectItem key={`wa-canal-${option}`} value={option}>
+                          {formatWaOptionLabel(option)}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-1">
+                  <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                    Campaña publicitaria
+                  </p>
+                  <Select
+                    value={waCampanaPublicitaria ?? "all"}
+                    onValueChange={(value) => {
+                      updateParams({ wa_campana_publicitaria: value === "all" ? null : value });
+                    }}
+                  >
+                    <SelectTrigger className="h-8 w-full">
+                      <SelectValue placeholder="Campaña publicitaria" />
+                    </SelectTrigger>
+                    <SelectContent className="z-50">
+                      <SelectItem value="all">Todas</SelectItem>
+                      {waCampanaPublicitaria && !waCampanaOptions.includes(waCampanaPublicitaria) ? (
+                        <SelectItem value={waCampanaPublicitaria}>
+                          {formatWaOptionLabel(waCampanaPublicitaria)}
+                        </SelectItem>
+                      ) : null}
+                      {waCampanaOptions.map((option) => (
+                        <SelectItem key={`wa-campana-${option}`} value={option}>
+                          {formatWaOptionLabel(option)}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                  Regla de atribución
+                </p>
+                <Select
+                  value={waReglaId ?? "all"}
+                  onValueChange={(value) => {
+                    updateParams({ wa_regla_id: value === "all" ? null : value });
+                  }}
+                >
+                  <SelectTrigger className="h-8 w-full">
+                    <SelectValue placeholder="Regla de atribución" />
+                  </SelectTrigger>
+                  <SelectContent className="z-50">
+                    <SelectItem value="all">Todas</SelectItem>
+                    {waReglaId && !waReglaOptions.some((option) => option.value === waReglaId) ? (
+                      <SelectItem value={waReglaId}>{waReglaId}</SelectItem>
+                    ) : null}
+                    {filteredWaReglaOptions.map((option) => (
+                      <SelectItem key={`wa-regla-${option.value}`} value={option.value}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <Button type="button" size="sm" variant="ghost" onClick={clearAttributionFilters} className="h-8">
+                Limpiar atribución
+              </Button>
+            </div>
+          </section>
         </div>
-
-        <div className="flex w-full items-center gap-2 pt-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-          Tráfico web
-        </div>
-
-        <div className="space-y-1">
-          <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-            Origen de visita
-          </p>
-          <Select
-            value={sourceClass ?? "all"}
-            onValueChange={(value) => {
-              updateParams({ source_class: value === "all" ? null : value });
-            }}
-          >
-            <SelectTrigger className="w-[220px]">
-              <SelectValue placeholder="Origen de visita" />
-            </SelectTrigger>
-            <SelectContent className="z-50">
-              {SOURCE_CLASS_OPTIONS.map((option) => (
-                <SelectItem key={option.value} value={option.value}>
-                  {option.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-
-        <div className="space-y-1">
-          <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-            Fuente de campaña
-          </p>
-          <Select
-            value={utmSource ?? "all"}
-            onValueChange={(value) => {
-              updateParams({ utm_source: value === "all" ? null : value });
-            }}
-          >
-            <SelectTrigger className="w-[220px]">
-              <SelectValue placeholder="Fuente de campaña" />
-            </SelectTrigger>
-            <SelectContent className="z-50">
-              <SelectItem value="all">Todos</SelectItem>
-              {utmSource && !utmSourceOptions.includes(utmSource) ? (
-                <SelectItem value={utmSource}>{utmSource}</SelectItem>
-              ) : null}
-              {utmSourceOptions.map((option) => (
-                <SelectItem key={`utm-source-${option}`} value={option}>
-                  {option}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-
-        <div className="space-y-1">
-          <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-            Medio de campaña
-          </p>
-          <Select
-            value={utmMedium ?? "all"}
-            onValueChange={(value) => {
-              updateParams({ utm_medium: value === "all" ? null : value });
-            }}
-          >
-            <SelectTrigger className="w-[220px]">
-              <SelectValue placeholder="Medio de campaña" />
-            </SelectTrigger>
-            <SelectContent className="z-50">
-              <SelectItem value="all">Todos</SelectItem>
-              {utmMedium && !utmMediumOptions.includes(utmMedium) ? (
-                <SelectItem value={utmMedium}>{utmMedium}</SelectItem>
-              ) : null}
-              {utmMediumOptions.map((option) => (
-                <SelectItem key={`utm-medium-${option}`} value={option}>
-                  {option}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-
-        <div className="space-y-1">
-          <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-            Nombre de campaña web
-          </p>
-          <Select
-            value={utmCampaign ?? "all"}
-            onValueChange={(value) => {
-              updateParams({ utm_campaign: value === "all" ? null : value });
-            }}
-          >
-            <SelectTrigger className="w-[220px]">
-              <SelectValue placeholder="Nombre de campaña web" />
-            </SelectTrigger>
-            <SelectContent className="z-50">
-              <SelectItem value="all">Todos</SelectItem>
-              {utmCampaign && !utmCampaignOptions.some((option) => option.value === utmCampaign) ? (
-                <SelectItem value={utmCampaign}>{utmCampaign}</SelectItem>
-              ) : null}
-              {utmCampaignOptions.map((option) => (
-                <SelectItem key={`utm-campaign-${option.value}`} value={option.value}>
-                  {option.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-
-        <div className="flex w-full items-center gap-2 pt-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-          Conversaciones
-        </div>
-
-        <div className="space-y-1">
-          <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-            Tipo de campaña
-          </p>
-          <Select
-            value={campanaTipo ?? "all"}
-            onValueChange={(value) => {
-              updateParams({ campana_tipo: value === "all" ? null : value, campana_id: null });
-            }}
-          >
-            <SelectTrigger className="w-[220px]">
-              <SelectValue placeholder="Tipo de campaña" />
-            </SelectTrigger>
-            <SelectContent className="z-50">
-              <SelectItem value="all">Todos</SelectItem>
-              {campanaTipo && !campanaTipoOptions.includes(campanaTipo) ? (
-                <SelectItem value={campanaTipo}>{formatCampanaTipoLabel(campanaTipo)}</SelectItem>
-              ) : null}
-              {campanaTipoOptions.map((option) => (
-                <SelectItem key={`campana-tipo-${option}`} value={option}>
-                  {formatCampanaTipoLabel(option)}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-
-        <div className="space-y-1">
-          <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-            Campaña de prospección
-          </p>
-          <Select
-            value={campanaId ?? "all"}
-            onValueChange={(value) => {
-              updateParams({ campana_id: value === "all" ? null : value });
-            }}
-          >
-            <SelectTrigger className="w-[240px]">
-              <SelectValue placeholder="Campaña de prospección" />
-            </SelectTrigger>
-            <SelectContent className="z-50">
-              <SelectItem value="all">Todas</SelectItem>
-              {campanaId && !campanaOptions.some((option) => option.value === campanaId) ? (
-                <SelectItem value={campanaId}>{campanaId}</SelectItem>
-              ) : null}
-              {filteredCampanaOptions.map((option) => (
-                <SelectItem key={`campana-${option.value}`} value={option.value}>
-                  {option.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-
-        <div className="space-y-1">
-          <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-            Plantilla captada
-          </p>
-          <Select
-            value={templateId ?? "all"}
-            onValueChange={(value) => {
-              updateParams({ template_id: value === "all" ? null : value });
-            }}
-          >
-            <SelectTrigger className="w-[240px]">
-              <SelectValue placeholder="Plantilla" />
-            </SelectTrigger>
-            <SelectContent className="z-50">
-              <SelectItem value="all">Todas</SelectItem>
-              {templateId && !templateOptions.some((option) => option.value === templateId) ? (
-                <SelectItem value={templateId}>{templateId}</SelectItem>
-              ) : null}
-              {templateOptions.map((option) => (
-                <SelectItem key={`template-${option.value}`} value={option.value}>
-                  {option.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-
-        <div className="flex w-full items-center gap-2 pt-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-          Atribución WhatsApp
-        </div>
-
-        <div className="space-y-1">
-          <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-            Canal publicitario
-          </p>
-          <Select
-            value={waCanalPublicitario ?? "all"}
-            onValueChange={(value) => {
-              updateParams({ wa_canal_publicitario: value === "all" ? null : value });
-            }}
-          >
-            <SelectTrigger className="w-[220px]">
-              <SelectValue placeholder="Canal publicitario" />
-            </SelectTrigger>
-            <SelectContent className="z-50">
-              <SelectItem value="all">Todos</SelectItem>
-              {waCanalPublicitario && !waCanalOptions.includes(waCanalPublicitario) ? (
-                <SelectItem value={waCanalPublicitario}>
-                  {formatWaOptionLabel(waCanalPublicitario)}
-                </SelectItem>
-              ) : null}
-              {waCanalOptions.map((option) => (
-                <SelectItem key={`wa-canal-${option}`} value={option}>
-                  {formatWaOptionLabel(option)}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-
-        <div className="space-y-1">
-          <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-            Campaña publicitaria
-          </p>
-          <Select
-            value={waCampanaPublicitaria ?? "all"}
-            onValueChange={(value) => {
-              updateParams({ wa_campana_publicitaria: value === "all" ? null : value });
-            }}
-          >
-            <SelectTrigger className="w-[240px]">
-              <SelectValue placeholder="Campaña publicitaria" />
-            </SelectTrigger>
-            <SelectContent className="z-50">
-              <SelectItem value="all">Todas</SelectItem>
-              {waCampanaPublicitaria && !waCampanaOptions.includes(waCampanaPublicitaria) ? (
-                <SelectItem value={waCampanaPublicitaria}>
-                  {formatWaOptionLabel(waCampanaPublicitaria)}
-                </SelectItem>
-              ) : null}
-              {waCampanaOptions.map((option) => (
-                <SelectItem key={`wa-campana-${option}`} value={option}>
-                  {formatWaOptionLabel(option)}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-
-        <div className="space-y-1">
-          <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-            Regla de atribución
-          </p>
-          <Select
-            value={waReglaId ?? "all"}
-            onValueChange={(value) => {
-              updateParams({ wa_regla_id: value === "all" ? null : value });
-            }}
-          >
-            <SelectTrigger className="w-[260px]">
-              <SelectValue placeholder="Regla de atribución" />
-            </SelectTrigger>
-            <SelectContent className="z-50">
-              <SelectItem value="all">Todas</SelectItem>
-              {waReglaId && !waReglaOptions.some((option) => option.value === waReglaId) ? (
-                <SelectItem value={waReglaId}>{waReglaId}</SelectItem>
-              ) : null}
-              {filteredWaReglaOptions.map((option) => (
-                <SelectItem key={`wa-regla-${option.value}`} value={option.value}>
-                  {option.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-
-        <Button type="button" size="sm" variant="ghost" onClick={clearAttributionFilters}>
-          Limpiar atribución
-        </Button>
-
-        <Select
-          value={rango ?? "mes"}
-          onValueChange={(value) => {
-            const isCustom = value === "fechas";
-            updateParams({
-              rango: value,
-              desde: isCustom ? (desdeDraft.trim() || null) : null,
-              hasta: isCustom ? (hastaDraft.trim() || null) : null,
-            });
-          }}
-        >
-          <SelectTrigger className="w-[170px]">
-            <SelectValue placeholder="Rango" />
-          </SelectTrigger>
-          <SelectContent className="z-50">
-            <SelectItem value="hoy">Hoy</SelectItem>
-            <SelectItem value="7d">Últimos 7 días</SelectItem>
-            <SelectItem value="30d">Últimos 30 días</SelectItem>
-            <SelectItem value="mes">Último mes</SelectItem>
-            <SelectItem value="fechas">Rango personalizado</SelectItem>
-          </SelectContent>
-        </Select>
-        <Input
-          type="date"
-          value={desdeDraft}
-          onChange={(event) => setDesdeDraft(event.target.value)}
-          className="h-8 w-[150px]"
-        />
-        <Input
-          type="date"
-          value={hastaDraft}
-          onChange={(event) => setHastaDraft(event.target.value)}
-          className="h-8 w-[150px]"
-        />
-        <Button type="button" size="sm" variant="outline" onClick={applyDateFilters}>
-          Aplicar fechas
-        </Button>
       </div>
     </div>
   );
