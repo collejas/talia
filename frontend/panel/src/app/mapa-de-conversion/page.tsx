@@ -615,7 +615,7 @@ export default async function Page({
                 <MapKpis {...mapKpisData} />
               </div>
               <div className="px-4 lg:px-6">
-                <div className="grid gap-4 xl:grid-cols-[minmax(0,3fr)_minmax(0,2fr)_minmax(0,1fr)] xl:items-stretch">
+                <div className="grid gap-4 xl:grid-cols-[minmax(0,3fr)_minmax(0,2.1fr)_minmax(0,0.9fr)] xl:items-stretch">
                   <DemografiaControls
                     nivel={nivel}
                     canales={canalesSelected}
@@ -681,37 +681,44 @@ export default async function Page({
                             {formatNumber(mapKpisData.sesionesWebTotales)} visitas web
                           </span>
                         </div>
-                        <div className="grid gap-2 rounded-xl border bg-background/60 p-3">
-                          <div className="flex items-center justify-between gap-3">
-                            <span className="text-xs text-muted-foreground">Sesiones web</span>
-                            <span className="font-medium tabular-nums">
-                              {formatNumber(mapKpisData.sesionesWebTotales)}
-                            </span>
+
+                        <div className="space-y-2">
+                          <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                            Sesiones y conversaciones
                           </div>
-                          <div className="flex items-center justify-between gap-3">
-                            <span className="text-xs text-muted-foreground">Sesiones webchat</span>
-                            <span className="font-medium tabular-nums">
-                              {formatNumber(mapKpisData.sesionesWebchatTotales)}
-                            </span>
-                          </div>
-                          <div className="flex items-center justify-between gap-3">
-                            <span className="text-xs text-muted-foreground">WhatsApp campañas</span>
-                            <span className="font-medium tabular-nums">
-                              {formatNumber(mapKpisData.whatsappCampaignsTotal)}
-                            </span>
-                          </div>
-                          <div className="flex items-center justify-between gap-3">
-                            <span className="text-xs text-muted-foreground">Conversaciones</span>
-                            <span className="font-medium tabular-nums">
-                              {formatNumber(
-                                mapKpisData.sesionesWebchatTotales +
-                                  mapKpisData.conversacionesWhatsapp +
-                                  mapKpisData.conversacionesVoz +
-                                  mapKpisData.conversacionesCorreo,
-                              )}
-                            </span>
+                          <div className="space-y-1">
+                            <div className="flex items-center justify-between gap-3">
+                              <span className="text-xs text-muted-foreground">Sesiones web</span>
+                              <span className="font-medium tabular-nums">
+                                {formatNumber(mapKpisData.sesionesWebTotales)}
+                              </span>
+                            </div>
+                            <div className="flex items-center justify-between gap-3">
+                              <span className="text-xs text-muted-foreground">Sesiones webchat</span>
+                              <span className="font-medium tabular-nums">
+                                {formatNumber(mapKpisData.sesionesWebchatTotales)}
+                              </span>
+                            </div>
+                            <div className="flex items-center justify-between gap-3">
+                              <span className="text-xs text-muted-foreground">WhatsApp campañas</span>
+                              <span className="font-medium tabular-nums">
+                                {formatNumber(mapKpisData.whatsappCampaignsTotal)}
+                              </span>
+                            </div>
+                            <div className="flex items-center justify-between gap-3">
+                              <span className="text-xs text-muted-foreground">Conversaciones</span>
+                              <span className="font-medium tabular-nums">
+                                {formatNumber(
+                                  mapKpisData.sesionesWebchatTotales +
+                                    mapKpisData.conversacionesWhatsapp +
+                                    mapKpisData.conversacionesVoz +
+                                    mapKpisData.conversacionesCorreo,
+                                )}
+                              </span>
+                            </div>
                           </div>
                         </div>
+
                         <div className="space-y-2">
                           <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                             Canales
@@ -743,6 +750,7 @@ export default async function Page({
                             </div>
                           </div>
                         </div>
+
                         <div className="space-y-2">
                           <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                             Etapas
