@@ -1432,11 +1432,11 @@ class CRMRepository:
     ) -> list[str]:
         params = {
             "organizacion_id": f"eq.{organizacion_id}",
-            "captura_estado": f"eq.{captura_estado}",
-            "select": "id",
+            "metadata->>legacy_captura_estado": f"eq.{captura_estado}",
+            "select": "metadata",
             "limit": str(limit),
         }
-        resp = await self._request("GET", "/rest/v1/contactos", params=params)
+        resp = await self._request("GET", "/rest/v1/personas", params=params)
         data = resp.json()
         if not isinstance(data, list):
             raise CRMRepositoryError(
@@ -1444,10 +1444,11 @@ class CRMRepository:
             )
         ids: list[str] = []
         for row in data:
-            if isinstance(row, dict):
-                contact_id = row.get("id")
-                if isinstance(contact_id, str) and contact_id.strip():
-                    ids.append(contact_id.strip())
+            if not isinstance(row, dict):
+                continue
+            contact_id = self._legacy_contact_id_from_persona(row)
+            if contact_id:
+                ids.append(contact_id)
         return ids
 
     async def create_opportunity(
@@ -2731,18 +2732,18 @@ class CRMRepository:
         if contact_phone:
             contacts_params = {
                 "organizacion_id": f"eq.{organizacion_id}",
-                "telefono_e164": f"eq.{contact_phone}",
-                "select": "id",
+                "telefono_principal_e164": f"eq.{contact_phone}",
+                "select": "metadata",
                 "limit": "25",
             }
-            contacts_resp = await self._request("GET", "/rest/v1/contactos", params=contacts_params)
+            contacts_resp = await self._request("GET", "/rest/v1/personas", params=contacts_params)
             contacts_rows = contacts_resp.json() or []
             related_contact_ids: list[str] = []
             if isinstance(contacts_rows, list):
                 for row in contacts_rows:
                     if not isinstance(row, dict):
                         continue
-                    candidate = str(row.get("id") or "").strip()
+                    candidate = self._legacy_contact_id_from_persona(row)
                     if not candidate:
                         continue
                     if candidate == str(contacto_id):
@@ -3182,12 +3183,12 @@ class CRMRepository:
                 contact_uuid = None
             if contact_uuid:
                 params = {
-                    "id": f"eq.{contact_uuid}",
+                    "metadata->>legacy_contacto_id": f"eq.{contact_uuid}",
                     "organizacion_id": f"eq.{organizacion_id}",
                     "select": "propietario_usuario_id",
                     "limit": "1",
                 }
-                resp = await self._request("GET", "/rest/v1/contactos", params=params)
+                resp = await self._request("GET", "/rest/v1/personas", params=params)
                 rows = resp.json() or []
                 if isinstance(rows, list) and rows:
                     owner_value = rows[0].get("propietario_usuario_id")
@@ -3292,11 +3293,17 @@ class CRMRepository:
             contact_uuid = _coerce_uuid(contact_id, field="contact_id")
         except ValueError:
             return
+        persona_row = await self._get_persona_by_legacy_contact_id(
+            organizacion_id=organizacion_id,
+            contacto_id=contact_uuid,
+        )
+        if not persona_row or not persona_row.get("id"):
+            return
         await self._request(
             "PATCH",
-            "/rest/v1/contactos",
+            "/rest/v1/personas",
             params={
-                "id": f"eq.{contact_uuid}",
+                "id": f"eq.{persona_row.get('id')}",
                 "organizacion_id": f"eq.{organizacion_id}",
                 "propietario_usuario_id": "is.null",
                 "limit": "1",
@@ -4079,16 +4086,20 @@ class CRMRepository:
             return None
 
         # Evita retornar referencias huérfanas desde identidades_canal.
-        contact_resp = await self._request(
+        persona_resp = await self._request(
             "GET",
-            "/rest/v1/contactos",
-            params={"id": f"eq.{contact_key}", "select": "id", "limit": "1"},
+            "/rest/v1/personas",
+            params={
+                "metadata->>legacy_contacto_id": f"eq.{contact_key}",
+                "select": "id",
+                "limit": "1",
+            },
         )
-        contact_rows = contact_resp.json() or []
-        if isinstance(contact_rows, list) and contact_rows:
+        persona_rows = persona_resp.json() or []
+        if isinstance(persona_rows, list) and persona_rows:
             return contact_key
-        if isinstance(contact_rows, dict) and contact_rows.get("id"):
-            return str(contact_rows.get("id"))
+        if isinstance(persona_rows, dict) and persona_rows.get("id"):
+            return contact_key
         return None
 
     async def get_webchat_session_by_contact(self, *, contact_id: str) -> str | None:
@@ -5696,16 +5707,31 @@ class CRMRepository:
         pattern = f"*{sanitized}*"
         params = {
             "organizacion_id": f"eq.{organizacion_id}",
-            "select": "id,organizacion_id,nombre_completo,correo,telefono_e164,company_name,notes,necesidad_proposito,estado",
+            "select": (
+                "id,organizacion_id,nombre_completo,correo_principal,telefono_principal_e164,"
+                "notas,metadata,propietario_usuario_id,creado_en,actualizado_en"
+            ),
             "limit": str(limit),
             "offset": str(offset),
-            "or": f"(nombre_completo.ilike.*{pattern}*,correo.ilike.*{pattern}*,telefono_e164.ilike.*{pattern}*,company_name.ilike.*{pattern}*)",
+            "or": (
+                f"(nombre_completo.ilike.*{pattern}*,correo_principal.ilike.*{pattern}*,"
+                f"telefono_principal_e164.ilike.*{pattern}*,notas.ilike.*{pattern}*,"
+                f"metadata->>legacy_company_name.ilike.*{pattern}*,metadata->>legacy_razon_social.ilike.*{pattern}*)"
+            ),
         }
-        resp = await self._request("GET", "/rest/v1/contactos", params=params)
+        resp = await self._request("GET", "/rest/v1/personas", params=params)
         data = resp.json()
         if not isinstance(data, list):
             raise CRMRepositoryError(f"Respuesta inesperada al buscar contactos: {data!r}")
-        return data
+        rows: list[dict[str, Any]] = []
+        for row in data:
+            if not isinstance(row, dict):
+                continue
+            try:
+                rows.append(await self._persona_to_contact_row(persona=row, organizacion_id=organizacion_id))
+            except CRMRepositoryError:
+                continue
+        return rows
 
     async def list_geo_countries(self) -> list[dict[str, Any]]:
         params = {
@@ -6490,93 +6516,6 @@ class CRMRepository:
                 prefer="return=representation",
             )
 
-        legacy_body["cuenta_id"] = current_account_id
-        legacy_contacto_datos = _ensure_metadata(legacy_body.get("contacto_datos"))
-        legacy_contacto_datos.update(
-            {
-                "legacy_contacto_id": str(contacto_id),
-                "source": "contact_update",
-            }
-        )
-        legacy_body["contacto_datos"] = legacy_contacto_datos
-        legacy_patch = dict(legacy_body)
-        # PATCH de legacy_contactos: evita columnas no existentes/inmutables.
-        legacy_patch.pop("id", None)
-        legacy_patch.pop("organizacion_id", None)
-        legacy_patch.pop("creado_en", None)
-        try:
-            legacy_resp = await self._request(
-                "PATCH",
-                "/rest/v1/contactos",
-                params={
-                    "organizacion_id": f"eq.{organizacion_id}",
-                    "id": f"eq.{contacto_id}",
-                },
-                json=legacy_patch,
-                prefer="return=representation",
-            )
-            legacy_data = legacy_resp.json()
-            if isinstance(legacy_data, list) and legacy_data and isinstance(legacy_data[0], dict):
-                legacy_row = legacy_data[0]
-            else:
-                legacy_row = None
-        except CRMRepositoryError as exc:
-            # Si falla por FK de propietario, reintenta sin ese campo.
-            if "propietario_usuario_id" in str(exc).lower() or "violates foreign key" in str(exc).lower():
-                fallback_patch = dict(legacy_patch)
-                fallback_patch.pop("propietario_usuario_id", None)
-                try:
-                    legacy_resp = await self._request(
-                        "PATCH",
-                        "/rest/v1/contactos",
-                        params={
-                            "organizacion_id": f"eq.{organizacion_id}",
-                            "id": f"eq.{contacto_id}",
-                        },
-                        json=fallback_patch,
-                        prefer="return=representation",
-                    )
-                    legacy_data = legacy_resp.json()
-                    if (
-                        isinstance(legacy_data, list)
-                        and legacy_data
-                        and isinstance(legacy_data[0], dict)
-                    ):
-                        legacy_row = legacy_data[0]
-                    else:
-                        legacy_row = None
-                except CRMRepositoryError as fallback_exc:
-                    logger.warning(
-                        "crm.contact_legacy_sync_failed",
-                        extra={
-                            "contacto_id": str(contacto_id),
-                            "organizacion_id": str(organizacion_id),
-                            "error": str(fallback_exc),
-                        },
-                    )
-                    legacy_row = None
-            else:
-                logger.warning(
-                    "crm.contact_legacy_sync_failed",
-                    extra={
-                        "contacto_id": str(contacto_id),
-                        "organizacion_id": str(organizacion_id),
-                        "error": str(exc),
-                    },
-                )
-                legacy_row = None
-
-        if legacy_row and isinstance(legacy_row, dict):
-            try:
-                legacy_contact = await self.get_contact(
-                    organizacion_id=organizacion_id,
-                    contacto_id=contacto_id,
-                )
-                if legacy_contact:
-                    return legacy_contact
-            except CRMRepositoryError:
-                pass
-
         return await self.get_contact(
             organizacion_id=organizacion_id,
             contacto_id=contacto_id,
@@ -6869,34 +6808,6 @@ class CRMRepository:
                     prefer="return=representation,resolution=merge-duplicates",
                 )
 
-        legacy_body["id"] = str(contacto_id)
-        legacy_contacto_datos = _ensure_metadata(legacy_body.get("contacto_datos"))
-        legacy_contacto_datos.update(
-            {
-                "legacy_contacto_id": str(contacto_id),
-                "source": "contact_create",
-            }
-        )
-        legacy_body["contacto_datos"] = legacy_contacto_datos
-        try:
-            await self._request(
-                "POST",
-                "/rest/v1/contactos",
-                json=legacy_body,
-                prefer="return=representation",
-            )
-        except CRMRepositoryError as exc:
-            if "propietario_usuario_id" in str(exc).lower() or "violates foreign key" in str(exc).lower():
-                legacy_body.pop("propietario_usuario_id", None)
-                await self._request(
-                    "POST",
-                    "/rest/v1/contactos",
-                    json=legacy_body,
-                    prefer="return=representation",
-                )
-            else:
-                raise
-
         contact_row = await self.get_contact(
             organizacion_id=organizacion_id,
             contacto_id=contacto_id,
@@ -7160,16 +7071,6 @@ class CRMRepository:
                 },
                 prefer="return=representation",
             )
-        params = {
-            "organizacion_id": f"eq.{organizacion_id}",
-            "id": f"eq.{contacto_id}",
-        }
-        await self._request(
-            "DELETE",
-            "/rest/v1/contactos",
-            params=params,
-            prefer="return=representation",
-        )
 
     async def list_opportunity_stage_history(
         self,
@@ -14826,12 +14727,17 @@ class CRMRepository:
     ) -> dict[str, Any] | None:
         params = {
             "organizacion_id": f"eq.{organizacion_id}",
-            "contacto_datos->>prospecto_id": f"eq.{prospecto_id}",
+            "metadata->legacy_contacto_datos->>prospecto_id": f"eq.{prospecto_id}",
+            "select": (
+                "id,organizacion_id,nombre,apellido_paterno,apellido_materno,nombre_completo,"
+                "correo_principal,telefono_principal_e164,puesto,area,rol_decision,estado,"
+                "origen,notas,metadata,propietario_usuario_id,creado_en,actualizado_en"
+            ),
             "limit": "1",
         }
         resp = await self._request(
             "GET",
-            "/rest/v1/contactos",
+            "/rest/v1/personas",
             params=params,
         )
         data = resp.json() or []
@@ -14840,7 +14746,14 @@ class CRMRepository:
         row = data[0]
         if not isinstance(row, dict):
             raise CRMRepositoryError(f"worker_find_contact_invalid:{row!r}")
-        return row
+        org_value = row.get("organizacion_id")
+        if not org_value:
+            return None
+        try:
+            org_uuid = _coerce_uuid(str(org_value), field="organizacion_id")
+        except ValueError:
+            return None
+        return await self._persona_to_contact_row(persona=row, organizacion_id=org_uuid)
 
     async def worker_find_opportunity_by_prospecto(
         self,
