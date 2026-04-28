@@ -1226,7 +1226,7 @@ async def handle_incoming_message(
             await whatsapp_tools._notify_sales_rep(
                 context=context,
                 trigger="restart_conversation",
-                contact=persona_record,
+                persona=persona_record,
                 opportunity_id=opportunity_ref,
                 resumen=resumen_text,
                 notes=notes_text,
@@ -1779,7 +1779,7 @@ async def _retry_failed_sales_notification(
             await whatsapp_tools._notify_sales_rep(
                 context=context,
                 trigger=trigger,
-                contact=contact,
+                persona=contact,
                 opportunity_id=opportunity_id,
                 resumen=resumen,
                 notes=notes,

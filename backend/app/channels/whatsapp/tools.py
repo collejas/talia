@@ -1926,11 +1926,11 @@ async def _handle_close_lead(
             await _notify_sales_rep(
                 context=context,
                 trigger="close_lead",
-                contact=notify_persona,
+                persona=notify_persona,
                 opportunity_id=tarjeta_id,
                 resumen=necesidad,
                 notes=notes,
-            email=webchat_service._extract_persona_email(notify_persona),
+                email=webchat_service._extract_persona_email(notify_persona),
                 extra={"siguiente_accion": siguiente_accion},
             )
         except Exception:
@@ -1978,7 +1978,7 @@ async def _handle_restart_cycle(
         await _notify_sales_rep(
             context=context,
             trigger="restart_tool",
-            contact=None,
+            persona=None,
             opportunity_id=oportunidad_id,
             resumen=resumen_text,
             notes="El asistente detectó un cambio de tema y abrió un ciclo nuevo.",
@@ -2452,7 +2452,7 @@ async def _handle_schedule_demo(
         await _notify_sales_rep(
             context=context,
             trigger="booking_confirmed",
-            contact=persona_record,
+            persona=persona_record,
             opportunity_id=tarjeta_id,
             resumen="Cita agendada",
             notes=(
@@ -2543,7 +2543,7 @@ async def _handle_reschedule_demo(
         await _notify_sales_rep(
             context=context,
             trigger="booking_confirmed",
-            contact=persona,
+            persona=persona,
             opportunity_id=booking_response.tarjeta_id,
             resumen="Cita agendada",
             notes=f"Cita confirmada para {booking_response.start_at.isoformat()} (booking {booking_response.booking_id}).",
@@ -2601,7 +2601,7 @@ async def _handle_cancel_demo(arguments: dict[str, Any], context: ToolRuntimeCon
         await _notify_sales_rep(
             context=context,
             trigger="booking_canceled",
-            contact=persona_record,
+            persona=persona_record,
             opportunity_id=None,
             resumen="Cita cancelada",
             notes=reason,
@@ -2666,7 +2666,7 @@ async def _notify_sales_rep(
     *,
     context: ToolRuntimeContext,
     trigger: str,
-    contact: dict[str, Any] | None,
+    persona: dict[str, Any] | None,
     opportunity_id: str | None,
     resumen: str | None,
     notes: str | None,
@@ -2674,7 +2674,7 @@ async def _notify_sales_rep(
     extra: dict[str, Any] | None,
     force_retry: bool = False,
 ) -> None:
-    persona_record = contact or await _resolve_persona(context.contact_id)
+    persona_record = persona or await _resolve_persona(context.contact_id)
     if not persona_record:
         logger.warning(
             "whatsapp.notify_sales.contact_missing",
