@@ -100,11 +100,12 @@ def user_notification_row_to_event(row: dict[str, Any]) -> dict[str, Any]:
 
 
 async def publish_user_notification_event(row: dict[str, Any]) -> None:
+    organizacion_id = str(row.get("organizacion_id") or "").strip()
     usuario_id = str(row.get("usuario_id") or "").strip()
-    if not usuario_id:
+    if not organizacion_id or not usuario_id:
         return
     await ui_realtime_hub.publish(
-        user_notifications_topic_for_user(usuario_id=usuario_id),
+        user_notifications_topic_for_user(organizacion_id=organizacion_id, usuario_id=usuario_id),
         user_notification_row_to_event(row),
     )
 

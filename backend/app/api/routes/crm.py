@@ -20833,6 +20833,7 @@ async def stream_prospectos_updates(
 async def stream_my_notifications(
     *,
     user_token: str = Depends(require_user_token),
+    organizacion_id: UUID = Depends(require_organizacion_id),
 ) -> StreamingResponse:
     """Stream SSE global de notificaciones dirigidas al usuario autenticado."""
 
@@ -20842,7 +20843,10 @@ async def stream_my_notifications(
     except (TypeError, ValueError) as exc:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="auth_required") from exc
 
-    topic = user_notifications_topic_for_user(usuario_id=str(usuario_id))
+    topic = user_notifications_topic_for_user(
+        organizacion_id=str(organizacion_id),
+        usuario_id=str(usuario_id),
+    )
     queue = await ui_realtime_hub.subscribe(topic)
 
     async def event_generator() -> Any:

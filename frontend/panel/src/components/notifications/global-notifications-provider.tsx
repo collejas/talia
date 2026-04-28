@@ -42,6 +42,7 @@ type UserNotificationEvent = NotificationItem
 
 type GlobalNotificationsProviderProps = {
   children: React.ReactNode
+  tenantId: string | null
 }
 
 type BufferedGroup = {
@@ -115,7 +116,7 @@ function summarizeGroupedNotifications(type: string, items: NotificationItem[]) 
   }
 }
 
-export function GlobalNotificationsProvider({ children }: GlobalNotificationsProviderProps) {
+export function GlobalNotificationsProvider({ children, tenantId }: GlobalNotificationsProviderProps) {
   const router = useRouter()
   const [items, setItems] = useState<NotificationItem[]>([])
   const [unreadCount, setUnreadCount] = useState(0)
@@ -391,7 +392,7 @@ export function GlobalNotificationsProvider({ children }: GlobalNotificationsPro
 
   useEffect(() => {
     void refresh()
-  }, [refresh])
+  }, [refresh, tenantId])
 
   useEffect(() => {
     const stream = new EventSource("/api/notifications/stream")
@@ -402,6 +403,9 @@ export function GlobalNotificationsProvider({ children }: GlobalNotificationsPro
         const payload = JSON.parse(event.data) as UserNotificationEvent
         const type = (payload.type ?? "").trim().toLowerCase()
         if (!type || type === "connected" || type === "ping") {
+          return
+        }
+        if (tenantId && payload.organizacion_id && payload.organizacion_id !== tenantId) {
           return
         }
 
@@ -432,7 +436,7 @@ export function GlobalNotificationsProvider({ children }: GlobalNotificationsPro
       grouped.clear()
       stream.close()
     }
-  }, [enqueueToast, unreadOnly])
+  }, [enqueueToast, tenantId, unreadOnly])
 
   const value = useMemo<NotificationsContextValue>(
     () => ({

@@ -52,8 +52,8 @@ def prospectos_topic_for_org(*, organizacion_id: str) -> str:
     return f"prospeccion:prospectos:{organizacion_id}"
 
 
-def user_notifications_topic_for_user(*, usuario_id: str) -> str:
-    return f"user:{usuario_id}:notifications"
+def user_notifications_topic_for_user(*, organizacion_id: str, usuario_id: str) -> str:
+    return f"org:{organizacion_id}:user:{usuario_id}:notifications"
 
 
 ui_realtime_hub = UIRealtimeHub()
