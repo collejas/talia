@@ -131,12 +131,12 @@ async def _notify_webchat_sales_if_needed(
     resumen: str | None,
     notes: str | None,
     email: str | None,
-    contact: dict[str, Any] | None = None,
+    persona: dict[str, Any] | None = None,
     extra: dict[str, Any] | None = None,
 ) -> None:
     if not _is_webchat_context(context):
         return
-    persona_record = contact
+    persona_record = persona
     if not persona_record:
         try:
             persona_record = await storage.fetch_contact(context.contact_id)
@@ -394,7 +394,7 @@ async def try_execute_lead_tool(
             resumen=necesidad,
             notes=notes,
             email=(persona_record or {}).get("correo") if persona_record else None,
-            contact=persona_record,
+            persona=persona_record,
             extra={"source": "lead_tool_close_lead"},
         )
         return {
@@ -575,7 +575,7 @@ async def _handle_information_email(
         resumen=summary or persona_need,
         notes=persona_notes,
         email=email_value,
-        contact=persona,
+        persona=persona,
         extra={"source": "lead_tool_information_email", "mail_message_id": message_id},
     )
 
@@ -657,7 +657,7 @@ async def _fetch_persona(contact_id: str | None) -> dict[str, Any] | None:
 def _persona_org_uuid(persona: dict[str, Any] | None) -> UUID | None:
     if not persona:
         return None
-    org_value = webchat_service._extract_contact_org(persona)
+    org_value = webchat_service._extract_persona_org(persona)
     if not org_value:
         return None
     resolved = webchat_service._resolve_org_uuid(org_value)

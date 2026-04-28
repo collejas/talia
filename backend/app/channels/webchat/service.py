@@ -489,12 +489,12 @@ async def _resolve_conversation_metadata(conversation_id: str) -> dict[str, Any]
     return conversation_meta
 
 
-async def _ensure_opportunity_when_contact_ready(
+async def _ensure_opportunity_when_persona_ready(
     *,
     conversation_id: str,
     contact_id: str,
     channel: str | None = None,
-    contact: dict[str, Any] | None = None,
+    persona: dict[str, Any] | None = None,
 ) -> str:
     contact_key = (contact_id or "").strip()
     if not contact_key:
@@ -502,7 +502,7 @@ async def _ensure_opportunity_when_contact_ready(
     ready = await webchat_followups.ensure_contact_ready_for_assignment(
         conversation_id=conversation_id,
         contact_id=contact_key,
-        contact=contact,
+        contact=persona,
     )
     if not ready:
         log_event(
@@ -928,7 +928,7 @@ async def ensure_booking_invite_sent_for_opportunity(
         contact_id=str(contact_value) if contact_value else None,
         conversation_id=str(conversation_value or "manual"),
         tarjeta_id=tarjeta_id,
-        contact=None,
+        persona=None,
     )
 
 
@@ -936,12 +936,12 @@ async def _sync_booking_with_opportunity(
     *,
     booking: schemas.CalendarBookingResponse,
     tarjeta_id: str | None,
-    contact: dict[str, Any] | None,
+    persona: dict[str, Any] | None,
     channel: str,
 ) -> None:
     if not tarjeta_id:
         return
-    resolved_persona = contact
+    resolved_persona = persona
     if not resolved_persona or not resolved_persona.get("organizacion_id"):
         try:
             fallback_contact = await storage.fetch_opportunity_contact(
@@ -1219,11 +1219,11 @@ async def schedule_calendar_booking(
     persona: dict[str, Any] | None = await _resolve_contact(contact_id)
     organizacion_id = _extract_persona_org(persona)
     try:
-        tarjeta_id = await _ensure_opportunity_when_contact_ready(
+        tarjeta_id = await _ensure_opportunity_when_persona_ready(
             conversation_id=conversation_id,
             contact_id=contact_id,
             channel=channel_value,
-            contact=persona,
+            persona=persona,
         )
     except storage.StorageError as exc:
         logger.exception(
@@ -1302,7 +1302,7 @@ async def schedule_calendar_booking(
     await _sync_booking_with_opportunity(
         booking=booking_response,
         tarjeta_id=tarjeta_id,
-        contact=persona,
+        persona=persona,
         channel=channel_value,
     )
     await _send_booking_confirmation_email(
@@ -1310,7 +1310,7 @@ async def schedule_calendar_booking(
         contact_id=contact_id,
         conversation_id=conversation_id,
         tarjeta_id=tarjeta_id,
-        contact=persona,
+        persona=persona,
     )
     try:
         await webchat_followups.mark_information_delivered(
@@ -1405,7 +1405,7 @@ async def reschedule_calendar_booking(
     await _sync_booking_with_opportunity(
         booking=booking_response,
         tarjeta_id=booking_response.tarjeta_id,
-        contact=persona,
+        persona=persona,
         channel=channel_value,
     )
     await _send_booking_confirmation_email(
@@ -1413,7 +1413,7 @@ async def reschedule_calendar_booking(
         contact_id=contact_id,
         conversation_id=conversation_id,
         tarjeta_id=booking_response.tarjeta_id,
-        contact=persona,
+        persona=persona,
     )
     return booking_response
 
@@ -1588,7 +1588,7 @@ async def _guard_booking_confirmation_claim(
     *,
     conversation_id: str,
     reply_text: str,
-    contact: Mapping[str, Any] | None = None,
+    persona: Mapping[str, Any] | None = None,
     opportunity_id: str | None = None,
 ) -> str:
     if not _looks_like_booking_confirmation(reply_text):
@@ -1611,7 +1611,7 @@ async def _guard_booking_confirmation_claim(
         booking_status=status or None,
     )
     try:
-        resolved_persona = dict(contact or {})
+        resolved_persona = dict(persona or {})
         resolved_opportunity_id = str(opportunity_id or "").strip() or None
         if (not resolved_persona) or not resolved_opportunity_id:
             conversation_meta = await storage.fetch_webchat_conversation(conversation_id)
@@ -2742,7 +2742,7 @@ async def _register_webchat_visit(
     request: Request | None,
     metadata: dict[str, Any] | None,
     contact_id_hint: str | None = None,
-    contact: dict[str, Any] | None = None,
+    persona: dict[str, Any] | None = None,
 ) -> str | None:
     """Registra la visita para métricas y enriquece metadatos del contacto."""
     client_meta = _safe_dict(metadata)
@@ -2846,7 +2846,7 @@ async def _register_webchat_visit(
                 extra={"session_id": session_id, "error": str(exc)},
             )
             contact_id = None
-    resolved_persona = contact
+    resolved_persona = persona
     if contact_id and (
         not resolved_persona
         or _safe_str_value(resolved_persona.get("id")) != _safe_str_value(contact_id)
@@ -3079,7 +3079,7 @@ async def handle_message(
         request=request,
         metadata=metadata_dict,
         contact_id_hint=str(contact_id),
-        contact=persona,
+        persona=persona,
     )
     _record_stage_timing(stage_timings, "register_visit_ms", register_visit_started)
     contact_id = contact_id_value or str(contact_id)
@@ -3261,7 +3261,7 @@ async def handle_message(
         assistant_reply = await _guard_booking_confirmation_claim(
             conversation_id=str(conversation_id),
             reply_text=assistant_reply,
-            contact=persona,
+            persona=persona,
         )
 
     if not assistant_reply:
@@ -4490,11 +4490,11 @@ async def _execute_function_call(
     if name == "schedule_demo":
         persona = await _resolve_contact(context.contact_id)
         try:
-            tarjeta_id = await _ensure_opportunity_when_contact_ready(
+            tarjeta_id = await _ensure_opportunity_when_persona_ready(
                 conversation_id=context.conversation_id,
                 contact_id=context.contact_id,
                 channel="webchat",
-                contact=persona,
+                persona=persona,
             )
         except storage.StorageError as exc:
             logger.exception(
@@ -4654,7 +4654,7 @@ async def _execute_function_call(
         await _sync_booking_with_opportunity(
             booking=booking_response,
             tarjeta_id=tarjeta_id,
-            contact=persona,
+            persona=persona,
             channel="webchat",
         )
         await _send_booking_confirmation_email(
@@ -4662,7 +4662,7 @@ async def _execute_function_call(
             contact_id=context.contact_id,
             conversation_id=context.conversation_id,
             tarjeta_id=tarjeta_id,
-            contact=persona,
+            persona=persona,
         )
         if profiling_enabled_for_channel:
             if _has_meaningful_scoring_answers(persona):
@@ -4832,7 +4832,7 @@ async def _execute_function_call(
         await _sync_booking_with_opportunity(
             booking=booking_response,
             tarjeta_id=booking_response.tarjeta_id,
-            contact=persona,
+            persona=persona,
             channel="webchat",
         )
         await _send_booking_confirmation_email(
@@ -4840,7 +4840,7 @@ async def _execute_function_call(
             contact_id=context.contact_id,
             conversation_id=context.conversation_id,
             tarjeta_id=booking_response.tarjeta_id,
-            contact=persona,
+            persona=persona,
         )
         booking_payload = {
             "booking_id": booking_response.booking_id,

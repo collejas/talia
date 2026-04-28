@@ -867,7 +867,7 @@ async def _guard_booking_confirmation_claim(
     *,
     conversation_id: str,
     reply_text: str,
-    contact: Mapping[str, Any] | None = None,
+    persona: Mapping[str, Any] | None = None,
     opportunity_id: str | None = None,
 ) -> str:
     if not _looks_like_booking_confirmation(reply_text):
@@ -890,23 +890,23 @@ async def _guard_booking_confirmation_claim(
         booking_status=status or None,
     )
     try:
-        resolved_contact = dict(contact or {})
+        resolved_persona = dict(persona or {})
         resolved_opportunity_id = str(opportunity_id or "").strip() or None
-        if (not resolved_contact) or not resolved_opportunity_id:
+        if (not resolved_persona) or not resolved_opportunity_id:
             conversation_meta = await storage.fetch_conversation(conversation_id)
-            if not resolved_contact:
+            if not resolved_persona:
                 contact_id = str(conversation_meta.get("contact_id") or "").strip()
                 if contact_id:
-                    resolved_contact = await storage.fetch_contact(contact_id)
-            if not resolved_opportunity_id and resolved_contact:
+                    resolved_persona = await storage.fetch_contact(contact_id)
+            if not resolved_opportunity_id and resolved_persona:
                 resolved_opportunity_id = await storage.ensure_conversation_opportunity(
                     conversation_id=conversation_id,
-                    contact_id=str(resolved_contact.get("id") or ""),
+                    contact_id=str(resolved_persona.get("id") or ""),
                     channel="whatsapp",
                 )
-        if resolved_contact and resolved_opportunity_id:
+        if resolved_persona and resolved_opportunity_id:
             prefilter_status = await whatsapp_tools._has_prefilter_for_schedule(
-                contact=resolved_contact,
+                contact=resolved_persona,
                 opportunity_id=resolved_opportunity_id,
                 conversation_id=conversation_id,
             )
@@ -1910,10 +1910,10 @@ async def _sync_envio_status_from_whatsapp(callback: schemas.WhatsAppStatusCallb
 
 async def _maybe_update_persona_location(
     contact_id: str,
-    contact: dict[str, Any] | None = None,
+    persona: dict[str, Any] | None = None,
 ) -> dict[str, Any] | None:
     """Enriquece la persona con la ubicación inferida a partir de su teléfono/LADA."""
-    persona_data = contact
+    persona_data = persona
     if persona_data is None:
         try:
             persona_data = await storage.fetch_contact(contact_id)
