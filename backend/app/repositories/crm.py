@@ -6266,23 +6266,7 @@ class CRMRepository:
         resp = await self._request("GET", "/rest/v1/personas", params=params)
         data = resp.json()
         if not isinstance(data, list) or not data:
-            # Fallback temporal al legacy para no romper cualquier registro aún no sincronizado.
-            legacy_resp = await self._request(
-                "GET",
-                "/rest/v1/contactos",
-                params={
-                    "organizacion_id": f"eq.{organizacion_id}",
-                    "id": f"eq.{contacto_id}",
-                    "limit": "1",
-                },
-            )
-            legacy_data = legacy_resp.json()
-            if not isinstance(legacy_data, list) or not legacy_data:
-                return None
-            row = legacy_data[0]
-            if not isinstance(row, dict):
-                raise CRMRepositoryError(f"Respuesta inválida al obtener contacto: {row!r}")
-            return row
+            return None
         row = data[0]
         if not isinstance(row, dict):
             raise CRMRepositoryError(f"Respuesta inválida al obtener contacto: {row!r}")
