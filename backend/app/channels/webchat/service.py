@@ -2636,12 +2636,12 @@ async def _maybe_enrich_contact_metadata(
                 )
             return
 
-    contacto_datos = _safe_dict(contact.get("contacto_datos"))
-    if contacto_datos:
+    persona_contacto_datos = _safe_dict(contact.get("contacto_datos"))
+    if persona_contacto_datos:
         try:
-            updated_data = json.loads(json.dumps(contacto_datos))
+            updated_data = json.loads(json.dumps(persona_contacto_datos))
         except (TypeError, ValueError):
-            updated_data = dict(contacto_datos)
+            updated_data = dict(persona_contacto_datos)
     else:
         updated_data = {}
 
@@ -2724,7 +2724,7 @@ async def _maybe_enrich_contact_metadata(
     if trazabilidad_nueva != trazabilidad_actual and trazabilidad_nueva:
         updated_data["trazabilidad"] = trazabilidad_nueva
 
-    if updated_data == contacto_datos:
+    if updated_data == persona_contacto_datos:
         return
 
     try:
@@ -4232,7 +4232,7 @@ async def _execute_function_call(
             intencion=necesidad,
             siguiente_accion=siguiente_accion,
         )
-        contact_record = await _resolve_contact(context.contact_id)
+        persona_record = await _resolve_contact(context.contact_id)
         opportunity_id = None
         try:
             opportunity_id = await storage.ensure_conversation_opportunity(
@@ -4245,23 +4245,23 @@ async def _execute_function_call(
                 "webchat.close_lead.ensure_opportunity_failed",
                 extra={"conversation_id": context.conversation_id, "error": str(exc)},
             )
-        if not contact_record:
+        if not persona_record:
             try:
                 convo_meta = await storage.fetch_conversation(context.conversation_id)
             except StorageError:
                 convo_meta = {}
-            resolved_contact_id = str(convo_meta.get("contact_id") or "").strip()
-            if resolved_contact_id and resolved_contact_id != context.contact_id:
-                contact_record = await _resolve_contact(resolved_contact_id)
-                context.contact_id = resolved_contact_id
+            resolved_persona_id = str(convo_meta.get("contact_id") or "").strip()
+            if resolved_persona_id and resolved_persona_id != context.contact_id:
+                persona_record = await _resolve_contact(resolved_persona_id)
+                context.contact_id = resolved_persona_id
         if opportunity_id:
             channel_value = "webchat"
             profiling_enabled_for_channel = True
-            contact_org = _extract_contact_org(contact_record)
-            contact_org_uuid = _resolve_org_uuid(contact_org) if contact_org else None
-            if contact_org_uuid:
+            persona_org = _extract_contact_org(persona_record)
+            persona_org_uuid = _resolve_org_uuid(persona_org) if persona_org else None
+            if persona_org_uuid:
                 profiling_enabled_for_channel = await tenant_runtime.is_profiling_enabled(
-                    organizacion_id=UUID(contact_org_uuid),
+                    organizacion_id=UUID(persona_org_uuid),
                     channel=channel_value,
                 )
             scoring_answers = {
@@ -4491,13 +4491,13 @@ async def _execute_function_call(
         }
 
     if name == "schedule_demo":
-        contact = await _resolve_contact(context.contact_id)
+        persona = await _resolve_contact(context.contact_id)
         try:
             tarjeta_id = await _ensure_opportunity_when_contact_ready(
                 conversation_id=context.conversation_id,
                 contact_id=context.contact_id,
                 channel="webchat",
-                contact=contact,
+                contact=persona,
             )
         except storage.StorageError as exc:
             logger.exception(
@@ -4506,7 +4506,7 @@ async def _execute_function_call(
             )
             raise ValueError("No pude asociar la oportunidad para agendar la demo.") from exc
         prefilter_status = await _has_prefilter_for_schedule(
-            contact=contact,
+            contact=persona,
             opportunity_id=tarjeta_id,
         )
         if not bool(prefilter_status.get("ready")):
@@ -4541,7 +4541,7 @@ async def _execute_function_call(
                         source="schedule_demo_prefilter_infer",
                     )
                     prefilter_status = await _has_prefilter_for_schedule(
-                        contact=contact,
+                        contact=persona,
                         opportunity_id=tarjeta_id,
                     )
                 except StorageError:
@@ -4570,7 +4570,7 @@ async def _execute_function_call(
                 "guidance": guidance,
             }
 
-        organizacion_hint = _extract_contact_org(contact) if contact else None
+        organizacion_hint = _extract_contact_org(persona) if persona else None
         if not organizacion_hint:
             conversation_meta = await _resolve_conversation_metadata(context.conversation_id)
             organizacion_hint = conversation_meta.get("organizacion_id")
@@ -4591,7 +4591,7 @@ async def _execute_function_call(
         hold_minutes = max(1, calendar_settings.hold_minutes)
         slot_identifier = slot_id or _build_slot_identifier(resource_id, slot_datetime)
         notes = (arguments.get("notes") or "").strip() or None
-        contact_name = str((contact or {}).get("nombre_completo") or "").strip()
+        contact_name = str((persona or {}).get("nombre_completo") or "").strip()
         zoom_meeting_url, zoom_external_join_url, zoom_metadata = await create_zoom_meeting_for_booking_if_enabled(
             organizacion_id=UUID(str(organizacion_hint)) if organizacion_hint else None,
             start_at=slot_datetime,
@@ -4645,19 +4645,19 @@ async def _execute_function_call(
 
         booking_response = _build_booking_response(booking)
         booking_response.hold_id = hold.get("hold_id")
-        contact = await _resolve_contact(context.contact_id)
+        persona = await _resolve_contact(context.contact_id)
         profiling_enabled_for_channel = True
-        contact_org = _extract_contact_org(contact) if contact else None
-        contact_org_uuid = _resolve_org_uuid(contact_org) if contact_org else None
-        if contact_org_uuid:
+        persona_org = _extract_contact_org(persona) if persona else None
+        persona_org_uuid = _resolve_org_uuid(persona_org) if persona_org else None
+        if persona_org_uuid:
             profiling_enabled_for_channel = await tenant_runtime.is_profiling_enabled(
-                organizacion_id=UUID(contact_org_uuid),
+                organizacion_id=UUID(persona_org_uuid),
                 channel="webchat",
             )
         await _sync_booking_with_opportunity(
             booking=booking_response,
             tarjeta_id=tarjeta_id,
-            contact=contact,
+            contact=persona,
             channel="webchat",
         )
         await _send_booking_confirmation_email(
@@ -4665,7 +4665,7 @@ async def _execute_function_call(
             contact_id=context.contact_id,
             conversation_id=context.conversation_id,
             tarjeta_id=tarjeta_id,
-            contact=contact,
+            contact=persona,
         )
         if profiling_enabled_for_channel:
             if _has_meaningful_scoring_answers(contact):
@@ -4716,20 +4716,20 @@ async def _execute_function_call(
                     "channel": "webchat",
                 },
             )
-        if contact and (not _has_text(contact.get("notes")) or not _has_text(contact.get("necesidad_proposito"))):
+        if persona and (not _has_text(persona.get("notes")) or not _has_text(persona.get("necesidad_proposito"))):
             notes_auto, necesidad_auto, siguiente_accion_auto = _build_insights_from_scoring_answers(
-                contact=contact,
+                contact=persona,
                 booking_start_at=booking_response.start_at,
             )
             contact_patch: dict[str, Any] = {}
-            if not _has_text(contact.get("notes")):
+            if not _has_text(persona.get("notes")):
                 contact_patch["notes"] = notes_auto
-            if not _has_text(contact.get("necesidad_proposito")):
+            if not _has_text(persona.get("necesidad_proposito")):
                 contact_patch["necesidad_proposito"] = necesidad_auto
             if contact_patch:
                 try:
                     await storage.update_contact(context.contact_id, contact_patch)
-                    contact = await _resolve_contact(context.contact_id)
+                    persona = await _resolve_contact(context.contact_id)
                 except StorageError as exc:
                     logger.warning(
                         "webchat.schedule_demo.auto_contact_context_failed",

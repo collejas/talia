@@ -1209,7 +1209,7 @@ async def handle_incoming_message(
             attribution_event=publicidad_atribucion_event,
         )
 
-    contact_record = await _maybe_update_contact_location(contact_id)
+    contact_record = await _maybe_update_persona_location(contact_id)
 
     restart_created = bool(restart_context and restart_context.get("restart_created"))
     if restart_created:
@@ -1908,15 +1908,15 @@ async def _sync_envio_status_from_whatsapp(callback: schemas.WhatsAppStatusCallb
         )
 
 
-async def _maybe_update_contact_location(
+async def _maybe_update_persona_location(
     contact_id: str,
     contact: dict[str, Any] | None = None,
 ) -> dict[str, Any] | None:
-    """Enriquece el contacto con la ubicación inferida a partir de su teléfono/LADA."""
-    contact_data = contact
-    if contact_data is None:
+    """Enriquece la persona con la ubicación inferida a partir de su teléfono/LADA."""
+    persona_data = contact
+    if persona_data is None:
         try:
-            contact_data = await storage.fetch_contact(contact_id)
+            persona_data = await storage.fetch_contact(contact_id)
         except StorageError as exc:
             logger.warning(
                 "whatsapp.fetch_contact_failed",
@@ -1924,14 +1924,14 @@ async def _maybe_update_contact_location(
             )
             return None
 
-    contacto_datos = contact_data.get("contacto_datos") or {}
-    ubicacion = dict(contacto_datos.get("ubicacion") or {})
+    persona_contacto_datos = persona_data.get("contacto_datos") or {}
+    ubicacion = dict(persona_contacto_datos.get("ubicacion") or {})
     lada_exists = ubicacion.get("lada")
     estado_exists = ubicacion.get("cve_ent")
     cvegeo_exists = ubicacion.get("cvegeo")
 
     if lada_exists and estado_exists and cvegeo_exists:
-        return contact_data
+        return persona_data
 
     try:
         identities = await storage.fetch_contact_identities(contact_id)
@@ -1943,7 +1943,7 @@ async def _maybe_update_contact_location(
         identities = []
 
     channels = []
-    origen = contact_data.get("origen")
+    origen = persona_data.get("origen")
     if isinstance(origen, str) and origen:
         channels.append(origen)
     else:
@@ -1951,7 +1951,7 @@ async def _maybe_update_contact_location(
 
     location = leads_geo.infer_contact_location(
         contacto_id=contact_id,
-        data=contact_data,
+        data=persona_data,
         channels=channels,
         identities=identities,
     )
@@ -1980,20 +1980,20 @@ async def _maybe_update_contact_location(
         updated = True
 
     if not updated:
-        return contact_data
+        return persona_data
 
-    contacto_datos["ubicacion"] = ubicacion
+    persona_contacto_datos["ubicacion"] = ubicacion
     try:
-        await storage.update_contact(contact_id, {"contacto_datos": contacto_datos})
+        await storage.update_contact(contact_id, {"contacto_datos": persona_contacto_datos})
     except StorageError as exc:
         logger.warning(
             "whatsapp.update_contact_location_failed",
             extra={"contact_id": contact_id, "error": str(exc)},
         )
     else:
-        contact_data["contacto_datos"] = contacto_datos
+        persona_data["contacto_datos"] = persona_contacto_datos
 
-    return contact_data
+    return persona_data
 
 async def _generate_assistant_reply(
     *,
