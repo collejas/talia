@@ -139,7 +139,10 @@ export function ContactChartArea({ data }: ContactChartAreaProps) {
         </CardAction>
       </CardHeader>
       <CardContent className="px-0 pb-0">
-        <ChartContainer config={chartConfig} className="min-h-[250px] w-full">
+        <ChartContainer
+          config={chartConfig}
+          className="h-[190px] min-h-[190px] w-full aspect-auto"
+        >
           <AreaChart
             accessibilityLayer
             data={filteredData}

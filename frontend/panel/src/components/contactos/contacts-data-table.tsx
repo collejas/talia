@@ -6,6 +6,7 @@ import { z } from "zod";
 
 import { DataTable, schema } from "@/components/data-table";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   Dialog,
   DialogContent,
@@ -168,6 +169,7 @@ export function ContactsDataTable({ data }: { data: ContactTableRow[] }) {
     () => (permissionContext.permisos ?? []).map((perm) => perm.toLowerCase()),
     [permissionContext.permisos],
   );
+  const [searchTerm, setSearchTerm] = React.useState("");
 
   const canWrite =
     permissionContext.es_admin || permissionContext.es_owner || normalizedPerms.includes("contacts.write");
@@ -374,10 +376,49 @@ export function ContactsDataTable({ data }: { data: ContactTableRow[] }) {
     </Button>
   ) : null;
 
+  const filteredData = React.useMemo(() => {
+    const term = normalizeSearch(searchTerm);
+    if (!term) return data;
+
+    return data.filter((row) => matchesContactSearch(row, term));
+  }, [data, searchTerm]);
+
+  const resultsLabel =
+    searchTerm.trim().length > 0
+      ? `${filteredData.length} de ${data.length} contactos`
+      : `${data.length} contactos`;
+
   return (
     <>
+      <div className="flex flex-col gap-3 px-4 lg:px-6">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+          <div className="relative w-full sm:max-w-md">
+            <Input
+              value={searchTerm}
+              onChange={(event) => setSearchTerm(event.target.value)}
+              placeholder="Buscar contacto por nombre, correo, teléfono, empresa o código"
+              aria-label="Buscar contacto"
+              className="pr-24"
+            />
+            {searchTerm ? (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="absolute right-1 top-1 h-8 px-3 text-xs text-muted-foreground"
+                onClick={() => setSearchTerm("")}
+              >
+                Limpiar
+              </Button>
+            ) : null}
+          </div>
+          <div className="text-sm text-muted-foreground sm:ml-auto">
+            {resultsLabel}
+          </div>
+        </div>
+      </div>
       <DataTable
-        data={data}
+        data={filteredData}
         extraColumns={extraColumns}
         initialVisibility={contactColumnVisibility}
         storageKey="contacts-table-column-order"
@@ -462,4 +503,53 @@ export function ContactsDataTable({ data }: { data: ContactTableRow[] }) {
       </Dialog>
     </>
   );
+}
+
+function normalizeSearch(value: string): string {
+  return value
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+}
+
+function matchesContactSearch(row: TableRow, term: string): boolean {
+  const raw = (row.raw ?? {}) as Record<string, unknown>;
+  const values = [
+    row.header,
+    row.type,
+    row.status,
+    row.target,
+    row.limit,
+    row.reviewer,
+    raw?.codigo_contacto,
+    raw?.codigo_cuenta,
+    raw?.correo,
+    raw?.telefono,
+    raw?.estado,
+    raw?.captura_estado,
+    raw?.origen,
+    raw?.company_name,
+    raw?.propietario_nombre,
+    raw?.rfc,
+    raw?.puesto,
+    raw?.area,
+    raw?.rol_decision,
+    raw?.codigo_postal,
+    raw?.entidad,
+    raw?.municipio,
+    raw?.pais,
+    raw?.website,
+    raw?.tipo_establecimiento,
+    raw?.notes,
+    raw?.codigo_contacto,
+  ];
+
+  return values
+    .map((value) => {
+      if (value === null || value === undefined) return "";
+      if (typeof value === "number" && Number.isFinite(value)) return String(value);
+      return normalizeSearch(String(value));
+    })
+    .some((value) => value.includes(term));
 }
