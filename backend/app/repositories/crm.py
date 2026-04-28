@@ -6979,7 +6979,7 @@ class CRMRepository:
             raise CRMRepositoryError("cuenta_persona_upsert_failed")
         return data[0]
 
-    async def _resolve_persona_id_from_contacto(
+    async def _resolve_persona_id_from_contact_ref(
         self,
         *,
         organizacion_id: UUID,
@@ -7000,7 +7000,7 @@ class CRMRepository:
         contacto_id: UUID,
         activo: bool | None = None,
     ) -> list[dict[str, Any]]:
-        persona_id = await self._resolve_persona_id_from_contacto(
+        persona_id = await self._resolve_persona_id_from_contact_ref(
             organizacion_id=organizacion_id,
             contacto_id=contacto_id,
         )
@@ -7029,7 +7029,7 @@ class CRMRepository:
         contacto_id: UUID,
         payload: dict[str, Any],
     ) -> dict[str, Any]:
-        persona_id = await self._resolve_persona_id_from_contacto(
+        persona_id = await self._resolve_persona_id_from_contact_ref(
             organizacion_id=organizacion_id,
             contacto_id=contacto_id,
         )
@@ -7071,7 +7071,7 @@ class CRMRepository:
         relacion_id: UUID,
         payload: dict[str, Any],
     ) -> dict[str, Any]:
-        persona_id = await self._resolve_persona_id_from_contacto(
+        persona_id = await self._resolve_persona_id_from_contact_ref(
             organizacion_id=organizacion_id,
             contacto_id=contacto_id,
         )
@@ -7104,7 +7104,7 @@ class CRMRepository:
         contacto_id: UUID,
         relacion_id: UUID,
     ) -> None:
-        persona_id = await self._resolve_persona_id_from_contacto(
+        persona_id = await self._resolve_persona_id_from_contact_ref(
             organizacion_id=organizacion_id,
             contacto_id=contacto_id,
         )
