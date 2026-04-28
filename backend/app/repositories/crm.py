@@ -9093,10 +9093,7 @@ class CRMRepository:
         date_to: datetime | None = None,
     ) -> list[dict[str, Any]]:
         params = {
-            "select": (
-                "id,canal,iniciada_en,ultimo_mensaje_en,"
-                "contacto:contactos(nombre_completo,correo,telefono_e164)"
-            ),
+            "select": "id,canal,iniciada_en,ultimo_mensaje_en,contacto_id",
             "canal": "eq.whatsapp",
             "order": "iniciada_en.desc",
             "limit": str(max(1, min(limit, 500))),
@@ -9122,7 +9119,15 @@ class CRMRepository:
         data = resp.json()
         if not isinstance(data, list):
             raise CRMRepositoryError(f"Respuesta inesperada en conversaciones: {data!r}")
-        return data
+        rows = [row for row in data if isinstance(row, dict)]
+        if not organizacion_id:
+            return rows
+        return await self._attach_contact_rows(
+            organizacion_id=organizacion_id,
+            rows=rows,
+            source_fields=("contacto_id",),
+            target_field="contacto",
+        )
 
     async def list_whatsapp_sales_assignments(
         self,
