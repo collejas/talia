@@ -406,8 +406,8 @@ def _is_generic_opportunity_title(
         return True
     if _looks_like_placeholder_name(normalized):
         return True
-    contact_data = _ensure_dict(contact.get("contacto_datos"))
-    profile_name = _clean_text(contact_data.get("profile_name")).lower()
+    persona_contacto_datos = _ensure_dict(contact.get("contacto_datos"))
+    profile_name = _clean_text(persona_contacto_datos.get("profile_name")).lower()
     if profile_name and normalized == profile_name:
         return True
     contact_name = _clean_text(contact.get("nombre_completo")).lower()
@@ -1328,7 +1328,7 @@ async def register_whatsapp_message(
     metadata_payload = dict(metadata or {})
     if organizacion_id and "resolved_organizacion_id" not in metadata_payload:
         metadata_payload["resolved_organizacion_id"] = organizacion_id
-    resolved_contact_id = contact_id
+    resolved_persona_id = contact_id
     resolved_conversation_id = conversation_id
 
     # Reusar conversación activa del mismo contacto para evitar abrir hilos
@@ -1341,27 +1341,27 @@ async def register_whatsapp_message(
             except (TypeError, ValueError):
                 org_uuid = None
 
-        contact_row: dict[str, Any] | None = None
-        if resolved_contact_id:
-            contact_row = await repo.get_contact_by_id(contact_id=resolved_contact_id)
+        persona_row: dict[str, Any] | None = None
+        if resolved_persona_id:
+            persona_row = await repo.get_contact_by_id(contact_id=resolved_persona_id)
         else:
             if wa_id:
-                contact_row = await repo.get_contact_by_whatsapp_id(
+                persona_row = await repo.get_contact_by_whatsapp_id(
                     wa_id=wa_id,
                     organizacion_id=org_uuid,
                 )
-            if not contact_row and phone_e164:
-                contact_row = await repo.get_contact_by_phone_e164(
+            if not persona_row and phone_e164:
+                persona_row = await repo.get_contact_by_phone_e164(
                     phone_e164=phone_e164,
                     organizacion_id=org_uuid,
                 )
 
-        if contact_row:
-            contact_id_value = contact_row.get("id")
+        if persona_row:
+            contact_id_value = persona_row.get("id")
             if contact_id_value:
-                resolved_contact_id = str(contact_id_value)
+                resolved_persona_id = str(contact_id_value)
                 latest_conversation = await repo.get_latest_whatsapp_conversation(
-                    contact_id=resolved_contact_id
+                    contact_id=resolved_persona_id
                 )
                 if latest_conversation and latest_conversation.get("id"):
                     resolved_conversation_id = str(latest_conversation.get("id"))
@@ -1387,7 +1387,7 @@ async def register_whatsapp_message(
             message_sid=message_sid,
             profile_name=profile_name,
             conversation_id=resolved_conversation_id,
-            contact_id=resolved_contact_id,
+            contact_id=resolved_persona_id,
             response_id=response_id,
             metadata=metadata_payload,
             inactivity_minutes=effective_inactivity_minutes,
@@ -1410,35 +1410,35 @@ async def register_whatsapp_message(
             )
 
     if direction == "entrante" and profile_name and result.get("contact_id"):
-        contact_id_value = str(result.get("contact_id"))
+        persona_id_value = str(result.get("contact_id"))
         try:
-            contact_row = await repo.get_contact_by_id(contact_id=contact_id_value)
-            if contact_row:
-                raw_contact_data = contact_row.get("contacto_datos")
-                contact_data = _ensure_dict(raw_contact_data)
-                current_profile_name = _clean_text(contact_data.get("profile_name"))
+            persona_row = await repo.get_contact_by_id(contact_id=persona_id_value)
+            if persona_row:
+                raw_persona_data = persona_row.get("contacto_datos")
+                persona_data = _ensure_dict(raw_persona_data)
+                current_profile_name = _clean_text(persona_data.get("profile_name"))
                 incoming_profile_name = _clean_text(profile_name)
                 patch: dict[str, Any] = {}
                 if incoming_profile_name and current_profile_name != incoming_profile_name:
-                    contact_data["profile_name"] = incoming_profile_name
-                    patch["contacto_datos"] = contact_data
+                    persona_data["profile_name"] = incoming_profile_name
+                    patch["contacto_datos"] = persona_data
 
                 # No usar nombre de perfil de WhatsApp como nombre real.
                 if _is_unconfirmed_whatsapp_name(
-                    contact_name=contact_row.get("nombre_completo"),
+                    contact_name=persona_row.get("nombre_completo"),
                     profile_name=incoming_profile_name,
                 ):
                     patch["nombre_completo"] = None
                     if "contacto_datos" not in patch:
-                        contact_data["profile_name"] = incoming_profile_name
-                        patch["contacto_datos"] = contact_data
+                        persona_data["profile_name"] = incoming_profile_name
+                        patch["contacto_datos"] = persona_data
 
                 if patch:
-                    await repo.update_contact_by_id(contact_id=contact_id_value, patch=patch)
+                    await repo.update_contact_by_id(contact_id=persona_id_value, patch=patch)
         except CRMRepositoryError as exc:
             logger.warning(
                 "storage.whatsapp_profile_name_normalization_failed",
-                extra={"contact_id": contact_id_value, "error": str(exc)},
+                extra={"contact_id": persona_id_value, "error": str(exc)},
             )
     try:
         await _publish_inbox_realtime_event(
@@ -2526,8 +2526,8 @@ async def ensure_conversation_opportunity(
     if not contact_id:
         raise StorageError("No fue posible resolver contacto para crear la oportunidad")
 
-    contact = await fetch_contact(contact_id)
-    organizacion_value = contact.get("organizacion_id")
+    persona = await fetch_contact(contact_id)
+    organizacion_value = persona.get("organizacion_id")
     if not organizacion_value:
         raise StorageError("El contacto no tiene organizacion_id asociado")
 
@@ -2537,7 +2537,7 @@ async def ensure_conversation_opportunity(
         raise StorageError("organizacion_id_invalido") from exc
 
     try:
-        contacto_uuid = UUID(str(contact_id))
+        persona_uuid = UUID(str(contact_id))
     except (TypeError, ValueError) as exc:
         raise StorageError("contacto_id_invalido") from exc
 
@@ -2547,17 +2547,17 @@ async def ensure_conversation_opportunity(
         if require_contact_ready is not None
         else normalized_channel == "webchat"
     )
-    contact_ready = _contact_has_minimum_info(contact)
+    contact_ready = _contact_has_minimum_info(persona)
 
     repo = CRMRepository()
     try:
         opportunity_id, restart_created, restart_sequence = await repo.ensure_conversation_opportunity(
             organizacion_id=organizacion_uuid,
-            contacto_id=contacto_uuid,
+            contacto_id=persona_uuid,
             conversation_id=conversation_id,
             canal=channel,
-            contacto_nombre=contact.get("nombre_completo"),
-            contacto_empresa=contact.get("company_name"),
+            contacto_nombre=persona.get("nombre_completo"),
+            contacto_empresa=persona.get("company_name"),
             force_new_opportunity_on_restart=force_new_opportunity_on_restart,
             contact_ready=contact_ready,
             require_contact_ready=requires_ready,
@@ -2580,7 +2580,7 @@ async def ensure_conversation_opportunity(
         else:
             try:
                 existing_contact_opportunity = await repo.get_contact_opportunity(
-                    contact_id=contacto_uuid,
+                    contact_id=persona_uuid,
                 )
             except CRMRepositoryError:
                 existing_contact_opportunity = None
@@ -3042,8 +3042,8 @@ async def apply_lead_scoring(
         )
         return None
 
-    contact_data = _ensure_dict(contact.get("contacto_datos"))
-    contact_data["lead_scoring"] = {
+    persona_contacto_datos = _ensure_dict(contact.get("contacto_datos"))
+    persona_contacto_datos["lead_scoring"] = {
         "answers": normalized_answers,
         "profiling_by_channel": profiling_by_channel,
         "profiling": profiling_by_channel.get(channel_key, {}),
@@ -3052,7 +3052,7 @@ async def apply_lead_scoring(
         "last_scored_at": now_iso,
     }
     try:
-        await update_contact(contact_id, {"contacto_datos": contact_data})
+        await update_contact(contact_id, {"contacto_datos": persona_contacto_datos})
     except StorageError as exc:
         logger.warning(
             "storage.lead_scoring.contact_update_failed",

@@ -146,23 +146,23 @@ async def _auto_promote_prospecto_locked(
     pipeline_canal_label = _channel_label(prospecto)
     canal_label = (canal or metadata.get("ultimo_canal_prospeccion") or "").lower() or None
 
-    contacto_id = metadata.get("crm_contacto_id")
-    contacto = None
-    if not contacto_id:
+    persona_ref_id = metadata.get("crm_contacto_id")
+    persona_ref = None
+    if not persona_ref_id:
         try:
-            existing_contact = await local_repo.worker_find_contact_by_prospecto(
+            existing_persona = await local_repo.worker_find_contact_by_prospecto(
                 organizacion_id=org_uuid,
                 prospecto_id=prospecto_uuid,
             )
         except CRMRepositoryError as exc:
             log_event(logger, "prospeccion.auto_promote_contact_lookup_failed", error=str(exc))
-            existing_contact = None
-        if existing_contact:
-            contacto_id = existing_contact.get("id")
-            contacto = existing_contact
+            existing_persona = None
+        if existing_persona:
+            persona_ref_id = existing_persona.get("id")
+            persona_ref = existing_persona
 
     # Fallback de deduplicación: reutilizar contacto existente por teléfono/correo.
-    if not contacto_id:
+    if not persona_ref_id:
         if telefono:
             try:
                 existing_by_phone = await local_repo.get_contact_by_phone_e164(
@@ -178,9 +178,9 @@ async def _auto_promote_prospecto_locked(
                 )
                 existing_by_phone = None
             if existing_by_phone:
-                contacto_id = existing_by_phone.get("id")
-                contacto = existing_by_phone
-        if not contacto_id and correo:
+                persona_ref_id = existing_by_phone.get("id")
+                persona_ref = existing_by_phone
+        if not persona_ref_id and correo:
             try:
                 candidates = await local_repo.search_contacts(
                     organizacion_id=org_uuid,
@@ -199,25 +199,25 @@ async def _auto_promote_prospecto_locked(
             for candidate in candidates:
                 candidate_email = _clean_text(candidate.get("correo"))
                 if candidate_email and candidate_email.casefold() == normalized_email:
-                    contacto_id = candidate.get("id")
-                    contacto = candidate
+                    persona_ref_id = candidate.get("id")
+                    persona_ref = candidate
                     break
 
     # Si reutilizamos un contacto existente, anclamos prospecto_id en contacto_datos.
-    if contacto_id and isinstance(contacto, dict):
+    if persona_ref_id and isinstance(persona_ref, dict):
         try:
-            contacto_uuid = UUID(str(contacto_id))
+            persona_ref_uuid = UUID(str(persona_ref_id))
         except (TypeError, ValueError):
-            contacto_uuid = None
-        if contacto_uuid:
-            contacto_datos_actual = _ensure_dict(contacto.get("contacto_datos"))
-            if str(contacto_datos_actual.get("prospecto_id") or "") != str(prospecto_uuid):
-                contacto_datos_actual["prospecto_id"] = str(prospecto_uuid)
+            persona_ref_uuid = None
+        if persona_ref_uuid:
+            persona_contacto_datos = _ensure_dict(persona_ref.get("contacto_datos"))
+            if str(persona_contacto_datos.get("prospecto_id") or "") != str(prospecto_uuid):
+                persona_contacto_datos["prospecto_id"] = str(prospecto_uuid)
                 try:
-                    contacto = await local_repo.update_contact(
+                    persona_ref = await local_repo.update_contact(
                         organizacion_id=org_uuid,
-                        contacto_id=contacto_uuid,
-                        payload={"contacto_datos": contacto_datos_actual},
+                        contacto_id=persona_ref_uuid,
+                        payload={"contacto_datos": persona_contacto_datos},
                     )
                 except CRMRepositoryError as exc:
                     log_event(
@@ -225,10 +225,10 @@ async def _auto_promote_prospecto_locked(
                         "prospeccion.auto_promote_contact_link_failed",
                         error=str(exc),
                         prospecto_id=str(prospecto_uuid),
-                        contacto_id=str(contacto_uuid),
+                        contacto_id=str(persona_ref_uuid),
                     )
 
-    if not contacto_id:
+    if not persona_ref_id:
         owner_user_id: str | None = None
         try:
             sales_candidate = await local_repo.assign_next_sales_rep(organizacion_id=org_uuid)
@@ -245,27 +245,27 @@ async def _auto_promote_prospecto_locked(
             if owner_candidate:
                 owner_user_id = str(owner_candidate)
 
-        contacto_datos = {
+        persona_contacto_datos = {
             "prospecto_id": str(prospecto_uuid),
             "prospeccion_fuente": source_label,
             "auto_promovido": True,
         }
         if canal_label:
-            contacto_datos["prospeccion_canal"] = canal_label
-        contacto_payload = {
+            persona_contacto_datos["prospeccion_canal"] = canal_label
+        persona_payload = {
             "nombre_completo": display_name,
             "correo": correo,
             "telefono_e164": telefono,
             "company_name": segmento,
             "notes": notas,
-            "contacto_datos": contacto_datos,
+            "contacto_datos": persona_contacto_datos,
             "propietario_usuario_id": owner_user_id,
         }
-        contacto_payload = {k: v for k, v in contacto_payload.items() if v}
+        persona_payload = {k: v for k, v in persona_payload.items() if v}
         try:
-            contacto = await local_repo.create_contact(
+            persona_ref = await local_repo.create_contact(
                 organizacion_id=org_uuid,
-                payload=contacto_payload,
+                payload=persona_payload,
             )
         except CRMRepositoryError as exc:
             log_event(
@@ -275,9 +275,9 @@ async def _auto_promote_prospecto_locked(
                 prospecto_id=str(prospecto_uuid),
             )
             return False
-        contacto_id = contacto.get("id")
+        persona_ref_id = persona_ref.get("id")
 
-    if not contacto_id:
+    if not persona_ref_id:
         return False
 
     oportunidad_id = metadata.get("crm_oportunidad_id")
@@ -301,13 +301,13 @@ async def _auto_promote_prospecto_locked(
     # Fallback adicional: si ya existe oportunidad para el contacto, reutilizarla.
     if not oportunidad_id:
         try:
-            contacto_uuid = UUID(str(contacto_id))
+            persona_uuid = UUID(str(persona_ref_id))
         except (TypeError, ValueError):
-            contacto_uuid = None
-        if contacto_uuid:
+            persona_uuid = None
+        if persona_uuid:
             try:
                 existing_for_contact = await local_repo.get_contact_opportunity(
-                    contact_id=contacto_uuid,
+                    contact_id=persona_uuid,
                 )
             except CRMRepositoryError as exc:
                 log_event(
@@ -315,7 +315,7 @@ async def _auto_promote_prospecto_locked(
                     "prospeccion.auto_promote_opportunity_contact_lookup_failed",
                     error=str(exc),
                     prospecto_id=str(prospecto_uuid),
-                    contacto_id=str(contacto_uuid),
+                    contacto_id=str(persona_uuid),
                 )
                 existing_for_contact = None
             if existing_for_contact:
@@ -346,7 +346,7 @@ async def _auto_promote_prospecto_locked(
             opportunity_metadata["prospeccion_canal"] = canal_label
 
         opportunity_payload = {
-            "contacto_principal_id": str(contacto_id),
+            "contacto_principal_id": str(persona_ref_id),
             "etapa_id": str(stage_id) if stage_id else None,
             "titulo": display_name[:255],
             "descripcion": notas,
@@ -390,7 +390,7 @@ async def _auto_promote_prospecto_locked(
     if not oportunidad_id:
         return False
 
-    metadata["crm_contacto_id"] = str(contacto_id)
+    metadata["crm_contacto_id"] = str(persona_ref_id)
     metadata["crm_oportunidad_id"] = str(oportunidad_id)
     metadata["crm_auto_promovido"] = True
     metadata["crm_auto_promovido_en"] = datetime.now(timezone.utc).isoformat()
