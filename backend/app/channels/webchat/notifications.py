@@ -253,11 +253,11 @@ def _get_primary_notification_by_channel(
     return out
 
 
-def _extract_contact_email(contact: dict[str, Any] | None) -> str | None:
-    if not contact:
+def _extract_persona_email(persona: dict[str, Any] | None) -> str | None:
+    if not persona:
         return None
     for key in ("correo", "email", "correo_principal"):
-        email = str(contact.get(key) or "").strip()
+        email = str(persona.get(key) or "").strip()
         if email:
             return email
     return None
@@ -281,15 +281,15 @@ async def notify_sales_rep(
     raise_on_delivery_error: bool = False,
 ) -> None:
     channel_value = str(getattr(context, "channel", None) or "webchat").strip().lower() or "webchat"
-    contact_record = contact or await storage.fetch_contact(context.contact_id)
-    if not contact_record:
+    persona_record = contact or await storage.fetch_contact(context.contact_id)
+    if not persona_record:
         logger.warning(
             "webchat.notify_sales.contact_missing",
             extra={"conversation_id": context.conversation_id, "trigger": trigger},
         )
         return
 
-    org_id = contact_record.get("organizacion_id")
+    org_id = persona_record.get("organizacion_id")
     if not org_id:
         logger.warning(
             "webchat.notify_sales.org_missing",
@@ -370,7 +370,7 @@ async def notify_sales_rep(
     channel_key = channel_value
     primary_reason: str | None = None
     if trigger == "booking_confirmed":
-        if not _has_base_fields_for_case_a(contact_record):
+        if not _has_base_fields_for_case_a(persona_record):
             logger.info(
                 "webchat.notify_sales.skip_case_a_base_missing",
                 extra={"conversation_id": context.conversation_id, "trigger": trigger},
@@ -380,7 +380,7 @@ async def notify_sales_rep(
             repo=repo,
             organizacion_id=org_uuid,
             channel=channel_key,
-            contact=contact_record,
+            contact=persona_record,
             opportunity_metadata=metadata,
         ):
             logger.info(
@@ -390,13 +390,13 @@ async def notify_sales_rep(
             return
         primary_reason = "case_a_booking_profile"
     elif trigger == "webchat_escalate":
-        if not _has_base_fields_for_case_b(contact_record):
+        if not _has_base_fields_for_case_b(persona_record):
             logger.info(
                 "webchat.notify_sales.skip_case_b_base_missing",
                 extra={"conversation_id": context.conversation_id, "trigger": trigger},
             )
             return
-        if not _is_webchat_reengage_exhausted(contact_record):
+        if not _is_webchat_reengage_exhausted(persona_record):
             logger.info(
                 "webchat.notify_sales.skip_case_b_reengage_not_exhausted",
                 extra={"conversation_id": context.conversation_id, "trigger": trigger},
@@ -410,7 +410,7 @@ async def notify_sales_rep(
                 extra={"conversation_id": context.conversation_id, "trigger": trigger},
             )
             return
-        if not _has_base_fields_for_case_b(contact_record):
+        if not _has_base_fields_for_case_b(persona_record):
             logger.info(
                 "webchat.notify_sales.skip_case_c_base_missing",
                 extra={"conversation_id": context.conversation_id, "trigger": trigger},
@@ -418,7 +418,7 @@ async def notify_sales_rep(
             return
         primary_reason = "case_c_session_closed"
     elif trigger in {"close_lead", "information_email"}:
-        if not _has_base_fields_for_case_b(contact_record):
+        if not _has_base_fields_for_case_b(persona_record):
             logger.info(
                 "webchat.notify_sales.skip_case_d_base_missing",
                 extra={"conversation_id": context.conversation_id, "trigger": trigger},
@@ -460,7 +460,7 @@ async def notify_sales_rep(
 
     seller_name = str(assigned.get("nombre_completo") or "").strip() or "Equipo Tal-IA"
     message_body = shared_compose_sales_notification_message(
-        contact=contact_record,
+        contact=persona_record,
         trigger=trigger,
         resumen=resumen,
         notes=notes,
@@ -483,7 +483,7 @@ async def notify_sales_rep(
     if trigger == "booking_confirmed" and appointment_template_sid:
         template_sid = appointment_template_sid
         template_vars = shared_build_booking_template_variables(
-            contact=contact_record,
+            contact=persona_record,
             seller_name=seller_name,
             extra=extra_payload,
             include_reason=False,
@@ -492,7 +492,7 @@ async def notify_sales_rep(
         template_sid = fallback_template_sid
         if template_sid:
             template_vars = shared_build_sales_template_variables(
-                contact=contact_record,
+                contact=persona_record,
                 resumen=resumen,
                 notes=notes,
                 seller_name=seller_name,
