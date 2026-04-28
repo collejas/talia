@@ -52,6 +52,7 @@ Notas:
 - Lectura enriquecida para UI:
   - `GET /crm/contacts/{id}` ahora expone `rol_en_cuenta`, flags y `cuenta_tipo` (mapeado desde `cuenta_personas` y `cuentas`).
 - El acceso al detalle de contacto ya no cae al legacy `public.contactos`; si la persona no existe en el modelo nuevo, la lectura falla de forma explícita.
+- Los lookups internos por email, teléfono y WhatsApp quedaron apuntando a `personas`; ya no usan `public.contactos` como fallback de resolución.
 - Normalización y deduplicación inicial del flujo nuevo:
   - `POST /crm/personas/alta` y `PATCH /crm/personas/{contacto_id}` normalizan entrada (texto, correo en minúsculas y teléfono).
   - `POST /crm/personas/alta` intenta dedupe por teléfono/correo en la misma organización antes de crear:

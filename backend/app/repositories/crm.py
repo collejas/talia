@@ -6607,36 +6607,10 @@ class CRMRepository:
             return None
         org_value = row.get("organizacion_id")
         if not org_value:
-            legacy_resp = await self._request(
-                "GET",
-                "/rest/v1/contactos",
-                params={
-                    "id": f"eq.{contact_key}",
-                    "limit": "1",
-                },
-            )
-            legacy_data = legacy_resp.json() or []
-            if isinstance(legacy_data, list) and legacy_data:
-                legacy_row = legacy_data[0]
-                if isinstance(legacy_row, dict):
-                    return legacy_row
             return row
         try:
             org_uuid = _coerce_uuid(str(org_value), field="organizacion_id")
         except ValueError:
-            legacy_resp = await self._request(
-                "GET",
-                "/rest/v1/contactos",
-                params={
-                    "id": f"eq.{contact_key}",
-                    "limit": "1",
-                },
-            )
-            legacy_data = legacy_resp.json() or []
-            if isinstance(legacy_data, list) and legacy_data:
-                legacy_row = legacy_data[0]
-                if isinstance(legacy_row, dict):
-                    return legacy_row
             return row
         return await self._persona_to_contact_row(persona=row, organizacion_id=org_uuid)
 
@@ -6673,47 +6647,12 @@ class CRMRepository:
             if isinstance(row, dict):
                 org_value = row.get("organizacion_id")
                 if not org_value:
-                    legacy_resp = await self._request(
-                        "GET",
-                        "/rest/v1/contactos",
-                        params={
-                            "telefono_e164": f"eq.{phone_key}",
-                            "limit": "1",
-                        },
-                    )
-                    legacy_data = legacy_resp.json() or []
-                    if isinstance(legacy_data, list) and legacy_data:
-                        legacy_row = legacy_data[0]
-                        if isinstance(legacy_row, dict):
-                            return legacy_row
                     return row
                 try:
                     org_uuid = _coerce_uuid(str(org_value), field="organizacion_id")
                 except ValueError:
-                    legacy_resp = await self._request(
-                        "GET",
-                        "/rest/v1/contactos",
-                        params={
-                            "telefono_e164": f"eq.{phone_key}",
-                            "limit": "1",
-                        },
-                    )
-                    legacy_data = legacy_resp.json() or []
-                    if isinstance(legacy_data, list) and legacy_data:
-                        legacy_row = legacy_data[0]
-                        if isinstance(legacy_row, dict):
-                            return legacy_row
                     return row
                 return await self._persona_to_contact_row(persona=row, organizacion_id=org_uuid)
-        legacy_params: dict[str, str] = {"telefono_e164": f"in.({','.join(phone_candidates)})", "limit": "1"}
-        if organizacion_id:
-            legacy_params["organizacion_id"] = f"eq.{organizacion_id}"
-        legacy_resp = await self._request("GET", "/rest/v1/contactos", params=legacy_params)
-        legacy_data = legacy_resp.json() or []
-        if isinstance(legacy_data, list) and legacy_data:
-            row = legacy_data[0]
-            if isinstance(row, dict):
-                return row
         return None
 
     async def get_contact_by_email(
@@ -6748,36 +6687,10 @@ class CRMRepository:
             return None
         org_value = row.get("organizacion_id")
         if not org_value:
-            legacy_resp = await self._request(
-                "GET",
-                "/rest/v1/contactos",
-                params={
-                    "correo": f"eq.{email_key}",
-                    "limit": "1",
-                },
-            )
-            legacy_data = legacy_resp.json() or []
-            if isinstance(legacy_data, list) and legacy_data:
-                legacy_row = legacy_data[0]
-                if isinstance(legacy_row, dict):
-                    return legacy_row
             return row
         try:
             org_uuid = _coerce_uuid(str(org_value), field="organizacion_id")
         except ValueError:
-            legacy_resp = await self._request(
-                "GET",
-                "/rest/v1/contactos",
-                params={
-                    "correo": f"eq.{email_key}",
-                    "limit": "1",
-                },
-            )
-            legacy_data = legacy_resp.json() or []
-            if isinstance(legacy_data, list) and legacy_data:
-                legacy_row = legacy_data[0]
-                if isinstance(legacy_row, dict):
-                    return legacy_row
             return row
         return await self._persona_to_contact_row(persona=row, organizacion_id=org_uuid)
         
@@ -6814,36 +6727,10 @@ class CRMRepository:
             return None
         org_value = row.get("organizacion_id")
         if not org_value:
-            legacy_resp = await self._request(
-                "GET",
-                "/rest/v1/contactos",
-                params={
-                    "metadata->legacy_contacto_datos->>wa_id": f"eq.{wa_key}",
-                    "limit": "1",
-                },
-            )
-            legacy_data = legacy_resp.json() or []
-            if isinstance(legacy_data, list) and legacy_data:
-                legacy_row = legacy_data[0]
-                if isinstance(legacy_row, dict):
-                    return legacy_row
             return row
         try:
             org_uuid = _coerce_uuid(str(org_value), field="organizacion_id")
         except ValueError:
-            legacy_resp = await self._request(
-                "GET",
-                "/rest/v1/contactos",
-                params={
-                    "metadata->legacy_contacto_datos->>wa_id": f"eq.{wa_key}",
-                    "limit": "1",
-                },
-            )
-            legacy_data = legacy_resp.json() or []
-            if isinstance(legacy_data, list) and legacy_data:
-                legacy_row = legacy_data[0]
-                if isinstance(legacy_row, dict):
-                    return legacy_row
             return row
         return await self._persona_to_contact_row(persona=row, organizacion_id=org_uuid)
 
