@@ -697,19 +697,19 @@ async def _send_booking_confirmation_email(
     contact_id: str | None,
     conversation_id: str,
     tarjeta_id: str | None,
-    contact: dict[str, Any] | None = None,
+    persona: dict[str, Any] | None = None,
 ) -> None:
-    if not contact_id and contact is None:
+    if not contact_id and persona is None:
         return
-    contact = contact or await _resolve_contact(contact_id)
+    persona = persona or await _resolve_contact(contact_id)
     metadata = booking.metadata if isinstance(booking.metadata, dict) else {}
-    org_hint = _extract_persona_org(contact)
+    org_hint = _extract_persona_org(persona)
     if not org_hint and isinstance(metadata, dict):
         org_value = metadata.get("organizacion_id")
         if isinstance(org_value, str) and org_value.strip():
             org_hint = org_value.strip()
-    email_value = _extract_contact_email(contact)
-    needs_fallback = (not email_value or email_value.lower() == "none") or contact is None
+    email_value = _extract_persona_email(persona)
+    needs_fallback = (not email_value or email_value.lower() == "none") or persona is None
     if needs_fallback and tarjeta_id:
         try:
             fallback_contact = await storage.fetch_opportunity_contact(
@@ -727,9 +727,9 @@ async def _send_booking_confirmation_email(
             )
         else:
             if fallback_contact:
-                fallback_email = _extract_contact_email(fallback_contact)
+                fallback_email = _extract_persona_email(fallback_contact)
                 if fallback_email:
-                    contact = fallback_contact
+                    persona = fallback_contact
                     contact_id = str(fallback_contact.get("id") or contact_id)
                     email_value = fallback_email
                     org_hint = _extract_persona_org(fallback_contact) or org_hint
@@ -777,8 +777,8 @@ async def _send_booking_confirmation_email(
     date_label = start_local.strftime("%d/%m/%Y")
     time_label = start_local.strftime("%H:%M")
 
-    contact_name = _extract_contact_name(contact)
-    greeting = f"Geoactiv - Tal-IA {contact_name}," if contact_name else "Hola,"
+    persona_name = _extract_persona_name(persona)
+    greeting = f"Geoactiv - Tal-IA {persona_name}," if persona_name else "Hola,"
     end_label = end_local.strftime("%H:%M")
 
     body_lines = [
@@ -812,7 +812,7 @@ async def _send_booking_confirmation_email(
         _build_demo_ics_attachment(
             booking=booking,
             timezone_name=timezone_name,
-            contact_name=contact_name,
+            contact_name=persona_name,
             contact_email=email_value,
             organizer_email=organizer_email,
             organizer_name=organizer_name,
@@ -1018,10 +1018,10 @@ async def _send_booking_cancellation_email(
 ) -> None:
     if not contact_id:
         return
-    contact = await _resolve_contact(contact_id)
-    if not contact:
+    persona = await _resolve_contact(contact_id)
+    if not persona:
         return
-    email_value = str(contact.get("correo") or "").strip()
+    email_value = str(persona.get("correo") or "").strip()
     if not email_value:
         await _patch_booking_metadata(
             booking,
@@ -1038,7 +1038,7 @@ async def _send_booking_cancellation_email(
         )
         return
 
-    persona_org_uuid = _resolve_calendar_organizacion_uuid(_extract_persona_org(contact))
+    persona_org_uuid = _resolve_calendar_organizacion_uuid(_extract_persona_org(persona))
     mail_settings = await tenant_runtime.get_mail_runtime_settings(organizacion_id=persona_org_uuid)
 
     timezone_name = booking.timezone or settings.webchat_calendar_timezone
@@ -1051,8 +1051,8 @@ async def _send_booking_cancellation_email(
     date_label = start_local.strftime("%d/%m/%Y")
     time_label = start_local.strftime("%H:%M")
 
-    contact_name = _extract_contact_name(contact)
-    greeting = f"Hola {contact_name}," if contact_name else "Hola,"
+    persona_name = _extract_persona_name(persona)
+    greeting = f"Hola {persona_name}," if persona_name else "Hola,"
 
     body_lines = [
         greeting,
@@ -1216,14 +1216,14 @@ async def schedule_calendar_booking(
     channel_value = raw_channel.strip().lower() if isinstance(raw_channel, str) else ""
     if not channel_value:
         channel_value = "webchat"
-    contact: dict[str, Any] | None = await _resolve_contact(contact_id)
-    organizacion_id = _extract_persona_org(contact)
+    persona: dict[str, Any] | None = await _resolve_contact(contact_id)
+    organizacion_id = _extract_persona_org(persona)
     try:
         tarjeta_id = await _ensure_opportunity_when_contact_ready(
             conversation_id=conversation_id,
             contact_id=contact_id,
             channel=channel_value,
-            contact=contact,
+            contact=persona,
         )
     except storage.StorageError as exc:
         logger.exception(
@@ -1240,8 +1240,8 @@ async def schedule_calendar_booking(
     hold_minutes = max(1, calendar_settings.hold_minutes)
     slot_identifier = slot_id or _build_slot_identifier(resource_id, start_at)
     contact_name = (
-        str(contact.get("nombre_completo") or "").strip()
-        if isinstance(contact, dict)
+        str(persona.get("nombre_completo") or "").strip()
+        if isinstance(persona, dict)
         else ""
     )
     zoom_meeting_url, zoom_external_join_url, zoom_metadata = await create_zoom_meeting_for_booking_if_enabled(
@@ -1297,12 +1297,12 @@ async def schedule_calendar_booking(
 
     booking["hold_id"] = hold.get("hold_id")
     booking_response = _build_booking_response(booking)
-    if contact is None:
-        contact = await _resolve_contact(contact_id)
+    if persona is None:
+        persona = await _resolve_contact(contact_id)
     await _sync_booking_with_opportunity(
         booking=booking_response,
         tarjeta_id=tarjeta_id,
-        contact=contact,
+        contact=persona,
         channel=channel_value,
     )
     await _send_booking_confirmation_email(
@@ -1310,7 +1310,7 @@ async def schedule_calendar_booking(
         contact_id=contact_id,
         conversation_id=conversation_id,
         tarjeta_id=tarjeta_id,
-        contact=contact,
+        contact=persona,
     )
     try:
         await webchat_followups.mark_information_delivered(
@@ -1401,11 +1401,11 @@ async def reschedule_calendar_booking(
                     "zoom.update.failed",
                     extra={"meeting_id": zoom_meeting_id, "booking_id": booking_response.booking_id, "error": str(exc)},
                 )
-    contact = await _resolve_contact(contact_id)
+    persona = await _resolve_contact(contact_id)
     await _sync_booking_with_opportunity(
         booking=booking_response,
         tarjeta_id=booking_response.tarjeta_id,
-        contact=contact,
+        contact=persona,
         channel=channel_value,
     )
     await _send_booking_confirmation_email(
@@ -1413,7 +1413,7 @@ async def reschedule_calendar_booking(
         contact_id=contact_id,
         conversation_id=conversation_id,
         tarjeta_id=booking_response.tarjeta_id,
-        contact=contact,
+        contact=persona,
     )
     return booking_response
 
@@ -1627,7 +1627,7 @@ async def _guard_booking_confirmation_claim(
                 )
         if resolved_persona and resolved_opportunity_id:
             prefilter_status = await _has_prefilter_for_schedule(
-                contact=resolved_persona,
+                persona=resolved_persona,
                 opportunity_id=resolved_opportunity_id,
             )
             missing_fields = [
@@ -1788,12 +1788,12 @@ async def _load_required_case_a_questions(
     return required_fields, question_by_field
 
 
-def _has_meaningful_scoring_answers(contact: Mapping[str, Any] | None) -> bool:
-    if not contact:
+def _has_meaningful_scoring_answers(persona: Mapping[str, Any] | None) -> bool:
+    if not persona:
         return False
-    contact_data_raw = contact.get("contacto_datos")
-    contact_data = contact_data_raw if isinstance(contact_data_raw, dict) else {}
-    scoring_raw = contact_data.get("lead_scoring")
+    persona_data_raw = persona.get("contacto_datos")
+    persona_data = persona_data_raw if isinstance(persona_data_raw, dict) else {}
+    scoring_raw = persona_data.get("lead_scoring")
     scoring_data = scoring_raw if isinstance(scoring_raw, dict) else {}
     answers_raw = scoring_data.get("answers")
     answers = answers_raw if isinstance(answers_raw, dict) else {}
@@ -1807,11 +1807,11 @@ def _has_meaningful_scoring_answers(contact: Mapping[str, Any] | None) -> bool:
 
 def _build_insights_from_scoring_answers(
     *,
-    contact: Mapping[str, Any] | None,
+    persona: Mapping[str, Any] | None,
     booking_start_at: datetime | None = None,
 ) -> tuple[str, str, str]:
-    contact_data = _ensure_dict((contact or {}).get("contacto_datos"))
-    scoring = _ensure_dict(contact_data.get("lead_scoring"))
+    persona_data = _ensure_dict((persona or {}).get("contacto_datos"))
+    scoring = _ensure_dict(persona_data.get("lead_scoring"))
     answers = _ensure_dict(scoring.get("answers"))
 
     budget = str(answers.get("budget_range") or "").strip()
@@ -1959,14 +1959,14 @@ def _sanitize_profiling_reprompt_counts(
     return sanitized
 
 
-def _has_minimum_prefilter_data(contact: Mapping[str, Any] | None) -> bool:
-    if not contact:
+def _has_minimum_prefilter_data(persona: Mapping[str, Any] | None) -> bool:
+    if not persona:
         return False
-    notes = str(contact.get("notes") or "").strip()
-    need = str(contact.get("necesidad_proposito") or "").strip()
+    notes = str(persona.get("notes") or "").strip()
+    need = str(persona.get("necesidad_proposito") or "").strip()
     if notes and need:
         return True
-    return _has_meaningful_scoring_answers(contact)
+    return _has_meaningful_scoring_answers(persona)
 
 
 def _infer_prefilter_answers_from_messages(
@@ -2070,18 +2070,18 @@ def _infer_prefilter_answers_from_messages(
 
 async def _has_prefilter_for_schedule(
     *,
-    contact: Mapping[str, Any] | None,
+    persona: Mapping[str, Any] | None,
     opportunity_id: str | None,
 ) -> dict[str, Any]:
     repo = CRMRepository()
     required_fields: list[str] = list(_DEFAULT_REQUIRED_CASE_A_FIELDS)
     question_by_field: dict[str, str] = {}
-    channel = str((contact or {}).get("canal") or "webchat").strip().lower() or "webchat"
-    if not contact or not opportunity_id:
+    channel = str((persona or {}).get("canal") or "webchat").strip().lower() or "webchat"
+    if not persona or not opportunity_id:
         return {"ready": False, "missing_fields": required_fields, "questions": question_by_field}
-    if not _has_minimum_prefilter_data(contact):
+    if not _has_minimum_prefilter_data(persona):
         return {"ready": False, "missing_fields": required_fields, "questions": question_by_field}
-    org_value = _extract_persona_org(contact)
+    org_value = _extract_persona_org(persona)
     org_uuid = _resolve_org_uuid(org_value)
     if not org_uuid:
         return {"ready": False, "missing_fields": required_fields, "questions": question_by_field}
@@ -2177,11 +2177,11 @@ def _normalize_required_fields_for_context(
     return shared_normalize_required_fields_for_answers(required_fields, answers)
 
 
-def _extract_contact_email(contact: dict[str, Any] | None) -> str | None:
-    if not contact:
+def _extract_persona_email(persona: dict[str, Any] | None) -> str | None:
+    if not persona:
         return None
     for key in ("correo", "email", "correo_principal"):
-        value = contact.get(key)
+        value = persona.get(key)
         if not isinstance(value, str):
             continue
         trimmed = value.strip()
@@ -2190,25 +2190,25 @@ def _extract_contact_email(contact: dict[str, Any] | None) -> str | None:
     return None
 
 
-def _extract_contact_name(contact: dict[str, Any] | None) -> str | None:
-    if not contact:
+def _extract_persona_name(persona: dict[str, Any] | None) -> str | None:
+    if not persona:
         return None
-    full_name = str(contact.get("nombre_completo") or "").strip()
+    full_name = str(persona.get("nombre_completo") or "").strip()
     if full_name:
         return full_name
     parts = [
-        str(contact.get("nombre_nombres") or "").strip(),
-        str(contact.get("apellido_paterno") or "").strip(),
-        str(contact.get("apellido_materno") or "").strip(),
+        str(persona.get("nombre_nombres") or "").strip(),
+        str(persona.get("apellido_paterno") or "").strip(),
+        str(persona.get("apellido_materno") or "").strip(),
     ]
     combined = " ".join(part for part in parts if part).strip()
     return combined or None
 
 
-def _extract_persona_org(contact: dict[str, Any] | None) -> str | None:
-    if not contact:
+def _extract_persona_org(persona: dict[str, Any] | None) -> str | None:
+    if not persona:
         return None
-    value = contact.get("organizacion_id")
+    value = persona.get("organizacion_id")
     if not value:
         return None
     try:
@@ -2333,10 +2333,10 @@ def _resolve_alias_to_org(alias: str | None) -> str | None:
 
 async def resolve_webchat_organizacion(
     metadata: dict[str, Any] | None,
-    contact: dict[str, Any] | None = None,
+    persona: dict[str, Any] | None = None,
 ) -> str | None:
     """Determina el organizacion_id para eventos del webchat."""
-    persona_org = _extract_persona_org(contact)
+    persona_org = _extract_persona_org(persona)
     if persona_org:
         return persona_org
     metadata_org = _extract_metadata_organizacion(metadata)
@@ -2604,7 +2604,7 @@ async def _prepare_user_content_with_attachments(
     return content_items
 
 
-async def _maybe_enrich_contact_metadata(
+async def _maybe_enrich_persona_metadata(
     contact_id: str,
     *,
     client_context: dict[str, Any],
@@ -2617,11 +2617,11 @@ async def _maybe_enrich_contact_metadata(
     cvegeo: str | None,
     referrer: str | None,
     landing_url: str | None,
-    contact: dict[str, Any] | None = None,
+    persona: dict[str, Any] | None = None,
 ) -> None:
-    if contact is None:
+    if persona is None:
         try:
-            contact = await storage.fetch_contact(contact_id)
+            persona = await storage.fetch_contact(contact_id)
         except storage.StorageError as exc:
             error_text = str(exc).lower()
             if "contacto no encontrado" in error_text:
@@ -2636,7 +2636,7 @@ async def _maybe_enrich_contact_metadata(
                 )
             return
 
-    persona_contacto_datos = _safe_dict(contact.get("contacto_datos"))
+    persona_contacto_datos = _safe_dict(persona.get("contacto_datos"))
     if persona_contacto_datos:
         try:
             updated_data = json.loads(json.dumps(persona_contacto_datos))
@@ -2866,10 +2866,7 @@ async def _register_webchat_visit(
             cvegeo=cvegeo,
             referrer=referrer,
             landing_url=landing_url,
-            organizacion_id=await resolve_webchat_organizacion(
-                client_meta,
-                contact=resolved_persona,
-            ),
+            organizacion_id=await resolve_webchat_organizacion(client_meta, persona=resolved_persona),
         )
     except storage.StorageError as exc:
         logger.exception(
@@ -2879,7 +2876,7 @@ async def _register_webchat_visit(
 
     if contact_id and resolved_persona is not None:
         try:
-            await _maybe_enrich_contact_metadata(
+            await _maybe_enrich_persona_metadata(
                 contact_id,
                 client_context=client_context,
                 device_type=device_type,
@@ -2891,7 +2888,7 @@ async def _register_webchat_visit(
                 cvegeo=cvegeo,
                 referrer=referrer,
                 landing_url=landing_url,
-                contact=resolved_persona,
+                persona=resolved_persona,
             )
         except Exception:  # pragma: no cover - best effort
             logger.exception(
@@ -3070,10 +3067,10 @@ async def handle_message(
     )
     await high_demand_controller.record_inbound(channel="webchat")
     resolve_contact_started = time.perf_counter()
-    contact: dict[str, Any] | None = await _resolve_contact(str(contact_id))
+    persona: dict[str, Any] | None = await _resolve_contact(str(contact_id))
     _record_stage_timing(stage_timings, "resolve_contact_ms", resolve_contact_started)
     resolved_organizacion_id = (
-        await resolve_webchat_organizacion(metadata_dict, contact=contact) or organizacion_hint
+        await resolve_webchat_organizacion(metadata_dict, persona=persona) or organizacion_hint
     )
 
     register_visit_started = time.perf_counter()
@@ -3082,7 +3079,7 @@ async def handle_message(
         request=request,
         metadata=metadata_dict,
         contact_id_hint=str(contact_id),
-        contact=contact,
+        contact=persona,
     )
     _record_stage_timing(stage_timings, "register_visit_ms", register_visit_started)
     contact_id = contact_id_value or str(contact_id)
@@ -3155,7 +3152,7 @@ async def handle_message(
             contact_id=context.contact_id,
             conversation_id=context.conversation_id,
             channel="webchat",
-            contact=contact,
+            contact=persona,
         )
         _record_stage_timing(stage_timings, "booking_context_ms", booking_context_started)
     except Exception as exc:
@@ -3264,7 +3261,7 @@ async def handle_message(
         assistant_reply = await _guard_booking_confirmation_claim(
             conversation_id=str(conversation_id),
             reply_text=assistant_reply,
-            contact=contact,
+            contact=persona,
         )
 
     if not assistant_reply:
@@ -4506,7 +4503,7 @@ async def _execute_function_call(
             )
             raise ValueError("No pude asociar la oportunidad para agendar la demo.") from exc
         prefilter_status = await _has_prefilter_for_schedule(
-            contact=persona,
+            persona=persona,
             opportunity_id=tarjeta_id,
         )
         if not bool(prefilter_status.get("ready")):
@@ -4541,7 +4538,7 @@ async def _execute_function_call(
                         source="schedule_demo_prefilter_infer",
                     )
                     prefilter_status = await _has_prefilter_for_schedule(
-                        contact=persona,
+                        persona=persona,
                         opportunity_id=tarjeta_id,
                     )
                 except StorageError:
@@ -4718,17 +4715,17 @@ async def _execute_function_call(
             )
         if persona and (not _has_text(persona.get("notes")) or not _has_text(persona.get("necesidad_proposito"))):
             notes_auto, necesidad_auto, siguiente_accion_auto = _build_insights_from_scoring_answers(
-                contact=persona,
+                persona=persona,
                 booking_start_at=booking_response.start_at,
             )
-            contact_patch: dict[str, Any] = {}
+            persona_patch: dict[str, Any] = {}
             if not _has_text(persona.get("notes")):
-                contact_patch["notes"] = notes_auto
+                persona_patch["notes"] = notes_auto
             if not _has_text(persona.get("necesidad_proposito")):
-                contact_patch["necesidad_proposito"] = necesidad_auto
-            if contact_patch:
+                persona_patch["necesidad_proposito"] = necesidad_auto
+            if persona_patch:
                 try:
-                    await storage.update_contact(context.contact_id, contact_patch)
+                    await storage.update_contact(context.contact_id, persona_patch)
                     persona = await _resolve_contact(context.contact_id)
                 except StorageError as exc:
                     logger.warning(
