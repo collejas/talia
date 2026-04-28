@@ -281,10 +281,10 @@ def _ensure_dict(value: Any) -> dict[str, Any]:
     return {}
 
 
-def _has_meaningful_scoring_answers(contact: Mapping[str, Any] | None) -> bool:
-    if not contact:
+def _has_meaningful_scoring_answers(persona: Mapping[str, Any] | None) -> bool:
+    if not persona:
         return False
-    persona_data = _ensure_dict(contact.get("contacto_datos"))
+    persona_data = _ensure_dict(persona.get("contacto_datos"))
     scoring_data = _ensure_dict(persona_data.get("lead_scoring"))
     answers = _ensure_dict(scoring_data.get("answers"))
     if not answers:
@@ -310,16 +310,16 @@ def _is_answered_scoring_value(value: Any) -> bool:
 
 def _extract_scoring_answers(
     *,
-    contact: Mapping[str, Any] | None,
+    persona: Mapping[str, Any] | None,
     opportunity_metadata: Mapping[str, Any],
 ) -> dict[str, Any]:
     scoring = _ensure_dict(opportunity_metadata.get("lead_scoring"))
     answers = _ensure_dict(scoring.get("answers"))
     if answers:
         return answers
-    if not contact:
+    if not persona:
         return {}
-    persona_data = _ensure_dict(contact.get("contacto_datos"))
+    persona_data = _ensure_dict(persona.get("contacto_datos"))
     persona_scoring = _ensure_dict(persona_data.get("lead_scoring"))
     return _ensure_dict(persona_scoring.get("answers"))
 
@@ -351,21 +351,21 @@ def _is_profile_field_answered(
     return status_value in {"answered", "unknown", "refused", "skipped_max_retries"}
 
 
-def _has_base_fields_for_case_a(contact: Mapping[str, Any] | None) -> bool:
-    if not contact:
+def _has_base_fields_for_case_a(persona: Mapping[str, Any] | None) -> bool:
+    if not persona:
         return False
-    has_contact = _has_text(contact.get("correo")) or _has_text(
-        contact.get("telefono_e164") or contact.get("telefono")
+    has_contact = _has_text(persona.get("correo")) or _has_text(
+        persona.get("telefono_e164") or persona.get("telefono")
     )
-    has_context = _has_text(contact.get("necesidad_proposito")) or _has_text(contact.get("notes"))
+    has_context = _has_text(persona.get("necesidad_proposito")) or _has_text(persona.get("notes"))
     return has_contact and has_context
 
 
-def _has_base_fields_for_case_b(contact: Mapping[str, Any] | None) -> bool:
-    if not contact:
+def _has_base_fields_for_case_b(persona: Mapping[str, Any] | None) -> bool:
+    if not persona:
         return False
-    has_contact = _has_text(contact.get("correo")) or _has_text(
-        contact.get("telefono_e164") or contact.get("telefono")
+    has_contact = _has_text(persona.get("correo")) or _has_text(
+        persona.get("telefono_e164") or persona.get("telefono")
     )
     return has_contact
 
@@ -441,7 +441,7 @@ async def _load_required_case_a_questions(
 
 async def _has_minimum_profile_for_case_a(
     *,
-    contact: Mapping[str, Any] | None,
+    persona: Mapping[str, Any] | None,
     opportunity_metadata: Mapping[str, Any],
     repo: CRMRepository,
     organizacion_id: UUID,
@@ -453,7 +453,7 @@ async def _has_minimum_profile_for_case_a(
     ):
         return True
 
-    answers = _extract_scoring_answers(contact=contact, opportunity_metadata=opportunity_metadata)
+    answers = _extract_scoring_answers(persona=persona, opportunity_metadata=opportunity_metadata)
     profiling_questions = _extract_profiling_questions(opportunity_metadata=opportunity_metadata)
     required_fields = _extract_required_case_a_fields_from_metadata(
         opportunity_metadata=opportunity_metadata
@@ -488,10 +488,10 @@ def _is_whatsapp_reengage_exhausted(
     return attempts >= max(1, int(whatsapp_settings.reengage_max_attempts))
 
 
-def _is_webchat_reengage_exhausted(contact: Mapping[str, Any] | None) -> bool:
-    if not contact:
+def _is_webchat_reengage_exhausted(persona: Mapping[str, Any] | None) -> bool:
+    if not persona:
         return False
-    persona_data = _ensure_dict(contact.get("contacto_datos"))
+    persona_data = _ensure_dict(persona.get("contacto_datos"))
     webchat_followup = _ensure_dict(persona_data.get("webchat_followup"))
     state = _ensure_dict(webchat_followup.get("state"))
     reengage = _ensure_dict(state.get("reengage"))
@@ -736,21 +736,21 @@ def _sanitize_profiling_reprompt_counts(
 
 async def _has_prefilter_for_schedule(
     *,
-    contact: Mapping[str, Any] | None,
+    persona: Mapping[str, Any] | None,
     opportunity_id: str | None,
     conversation_id: str | None = None,
 ) -> dict[str, Any]:
-    channel = str((contact or {}).get("canal") or "whatsapp").strip().lower() or "whatsapp"
+    channel = str((persona or {}).get("canal") or "whatsapp").strip().lower() or "whatsapp"
     repo = CRMRepository()
     required_fields: list[str] = list(_DEFAULT_REQUIRED_CASE_A_FIELDS)
     question_by_field: dict[str, str] = {}
-    if not contact or not opportunity_id:
+    if not persona or not opportunity_id:
         return {"ready": False, "missing_fields": required_fields, "questions": question_by_field}
-    notes = str(contact.get("notes") or "").strip()
-    need = str(contact.get("necesidad_proposito") or "").strip()
+    notes = str(persona.get("notes") or "").strip()
+    need = str(persona.get("necesidad_proposito") or "").strip()
     if not (notes and need):
         return {"ready": False, "missing_fields": required_fields, "questions": question_by_field}
-    org_value = webchat_service._extract_persona_org(contact)
+    org_value = webchat_service._extract_persona_org(persona)
     org_uuid = webchat_service._resolve_org_uuid(org_value)
     if not org_uuid:
         return {"ready": False, "missing_fields": required_fields, "questions": question_by_field}
@@ -782,7 +782,7 @@ async def _has_prefilter_for_schedule(
     if required_from_metadata:
         required_fields = required_from_metadata
     scoring = _ensure_dict(metadata.get("lead_scoring"))
-    answers = _extract_scoring_answers(contact=contact, opportunity_metadata=metadata)
+    answers = _extract_scoring_answers(persona=persona, opportunity_metadata=metadata)
     required_fields = shared_normalize_required_fields_for_answers(required_fields, answers)
     profiling_questions = _extract_profiling_questions(
         opportunity_metadata=metadata,
@@ -866,17 +866,17 @@ def _is_prospeccion_opportunity(opportunity: dict[str, Any] | None) -> bool:
     return "prospe" in source
 
 
-def _missing_basic_contact_fields(contact: dict[str, Any] | None) -> list[str]:
+def _missing_basic_contact_fields(persona: dict[str, Any] | None) -> list[str]:
     required_order: tuple[tuple[str, str], ...] = (
         ("full_name", "nombre_completo"),
         ("email", "correo"),
         ("company_name", "company_name"),
     )
-    if not isinstance(contact, dict):
+    if not isinstance(persona, dict):
         return [field for field, _ in required_order]
     missing: list[str] = []
     for field, contact_key in required_order:
-        if not str(contact.get(contact_key) or "").strip():
+        if not str(persona.get(contact_key) or "").strip():
             missing.append(field)
     return missing
 
@@ -1930,7 +1930,7 @@ async def _handle_close_lead(
                 opportunity_id=tarjeta_id,
                 resumen=necesidad,
                 notes=notes,
-                email=webchat_service._extract_contact_email(notify_persona),
+            email=webchat_service._extract_persona_email(notify_persona),
                 extra={"siguiente_accion": siguiente_accion},
             )
         except Exception:
@@ -2079,11 +2079,11 @@ async def _handle_schedule_demo(
             channel=channel_value,
         )
     try:
-        tarjeta_id = await webchat_service._ensure_opportunity_when_contact_ready(
+        tarjeta_id = await webchat_service._ensure_opportunity_when_persona_ready(
             conversation_id=context.conversation_id,
             contact_id=context.contact_id,
             channel="whatsapp",
-            contact=persona,
+            persona=persona,
         )
     except storage.StorageError as exc:
         logger.exception(
@@ -2104,7 +2104,7 @@ async def _handle_schedule_demo(
 
     if profiling_enabled_for_channel:
         prefilter_status = await _has_prefilter_for_schedule(
-            contact=persona,
+            persona=persona,
             opportunity_id=tarjeta_id,
             conversation_id=context.conversation_id,
         )
@@ -2160,7 +2160,7 @@ async def _handle_schedule_demo(
                 if not bool(prefilter_status.get("ready")):
                     persona = await _resolve_persona(context.contact_id)
                     prefilter_status = await _has_prefilter_for_schedule(
-                        contact=persona,
+                        persona=persona,
                         opportunity_id=tarjeta_id,
                         conversation_id=context.conversation_id,
                     )
@@ -2247,10 +2247,10 @@ async def _handle_schedule_demo(
             resolved_persona_id = str(opportunity_contact.get("id") or "").strip()
             if resolved_persona_id:
                 opportunity_contact_id = resolved_persona_id
-            current_email = webchat_service._extract_contact_email(persona_record)
-            fallback_email = webchat_service._extract_contact_email(opportunity_contact)
-            current_name = webchat_service._extract_contact_name(persona_record)
-            fallback_name = webchat_service._extract_contact_name(opportunity_contact)
+            current_email = webchat_service._extract_persona_email(persona_record)
+            fallback_email = webchat_service._extract_persona_email(opportunity_contact)
+            current_name = webchat_service._extract_persona_name(persona_record)
+            fallback_name = webchat_service._extract_persona_name(opportunity_contact)
             should_prefer_fallback = (
                 (not current_email and fallback_email)
                 or (not current_name and fallback_name)
@@ -2262,7 +2262,7 @@ async def _handle_schedule_demo(
     await webchat_service._sync_booking_with_opportunity(
         booking=booking_response,
         tarjeta_id=tarjeta_id,
-        contact=persona_record,
+        persona=persona_record,
         channel="whatsapp",
     )
     await webchat_service._send_booking_confirmation_email(
@@ -2270,7 +2270,7 @@ async def _handle_schedule_demo(
         contact_id=context.contact_id,
         conversation_id=context.conversation_id,
         tarjeta_id=tarjeta_id,
-        contact=persona_record,
+        persona=persona_record,
     )
     if profiling_enabled_for_channel:
         if _has_meaningful_scoring_answers(persona_record):
@@ -2459,7 +2459,7 @@ async def _handle_schedule_demo(
                 f"Cita confirmada para {booking_response.start_at.isoformat()} "
                 f"(booking {booking_response.booking_id})."
             ),
-            email=webchat_service._extract_contact_email(persona_record),
+            email=webchat_service._extract_persona_email(persona_record),
             extra={
                 "booking_id": booking_response.booking_id,
                 "slot_start": booking_response.start_at.isoformat(),
@@ -2529,7 +2529,7 @@ async def _handle_reschedule_demo(
     await webchat_service._sync_booking_with_opportunity(
         booking=booking_response,
         tarjeta_id=booking_response.tarjeta_id,
-        contact=persona,
+        persona=persona,
         channel="whatsapp",
     )
     await webchat_service._send_booking_confirmation_email(
@@ -2537,7 +2537,7 @@ async def _handle_reschedule_demo(
         contact_id=context.contact_id,
         conversation_id=context.conversation_id,
         tarjeta_id=booking_response.tarjeta_id,
-        contact=persona,
+        persona=persona,
     )
     try:
         await _notify_sales_rep(
@@ -2547,7 +2547,7 @@ async def _handle_reschedule_demo(
             opportunity_id=booking_response.tarjeta_id,
             resumen="Cita agendada",
             notes=f"Cita confirmada para {booking_response.start_at.isoformat()} (booking {booking_response.booking_id}).",
-            email=webchat_service._extract_contact_email(persona),
+            email=webchat_service._extract_persona_email(persona),
             extra={
                 "booking_id": booking_response.booking_id,
                 "slot_start": booking_response.start_at.isoformat(),
@@ -2605,7 +2605,7 @@ async def _handle_cancel_demo(arguments: dict[str, Any], context: ToolRuntimeCon
             opportunity_id=None,
             resumen="Cita cancelada",
             notes=reason,
-            email=webchat_service._extract_contact_email(persona_record),
+            email=webchat_service._extract_persona_email(persona_record),
             extra={
                 "booking_id": booking_response.booking_id,
                 "slot_start": booking_response.start_at.isoformat(),
@@ -2647,10 +2647,10 @@ async def _resolve_persona(contact_id: str | None) -> dict[str, Any] | None:
         return None
 
 
-def _persona_org_uuid(contact: dict[str, Any] | None) -> UUID | None:
-    if not contact:
+def _persona_org_uuid(persona: dict[str, Any] | None) -> UUID | None:
+    if not persona:
         return None
-    org_value = webchat_service._extract_persona_org(contact)
+    org_value = webchat_service._extract_persona_org(persona)
     if not org_value:
         return None
     resolved = webchat_service._resolve_org_uuid(org_value)
@@ -2772,7 +2772,7 @@ async def _notify_sales_rep(
             primary_reason = "case_a_booking_prospeccion"
         else:
             if not await _has_minimum_profile_for_case_a(
-                contact=persona_record,
+                persona=persona_record,
                 opportunity_metadata=metadata,
                 repo=repo,
                 organizacion_id=org_uuid,
@@ -2795,7 +2795,7 @@ async def _notify_sales_rep(
             primary_reason = "case_a_close_lead_prospeccion"
         else:
             if not await _has_minimum_profile_for_case_a(
-                contact=persona_record,
+                persona=persona_record,
                 opportunity_metadata=metadata,
                 repo=repo,
                 organizacion_id=org_uuid,
