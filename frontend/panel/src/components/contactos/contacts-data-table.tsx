@@ -2,6 +2,11 @@
 
 import * as React from "react";
 import type { ColumnDef, VisibilityState } from "@tanstack/react-table";
+import {
+  IconArrowsLeftRight,
+  IconPencil,
+  IconTrash,
+} from "@tabler/icons-react";
 import { z } from "zod";
 
 import { DataTable, schema } from "@/components/data-table";
@@ -163,6 +168,14 @@ const contactColumnVisibility: VisibilityState = CONTACT_COLUMNS.reduce<Visibili
   return visibility;
 }, {});
 
+const contactColumnLabels = {
+  header: "Contacto",
+  type: "Estado",
+  status: "Captura",
+  target: "Conversaciones",
+  reviewer: "Propietario",
+} as const;
+
 export function ContactsDataTable({ data }: { data: ContactTableRow[] }) {
   const { context: permissionContext, loading: permissionsLoading } = usePermissions();
   const normalizedPerms = React.useMemo(
@@ -274,14 +287,16 @@ export function ContactsDataTable({ data }: { data: ContactTableRow[] }) {
         cell: ({ row }: { row: { original: TableRow } }) => (
           <div className="flex justify-end gap-1">
             {canWrite ? (
-              <Button variant="ghost" size="sm" onClick={() => void openEdit(row.original)}>
-                Editar
+              <Button variant="ghost" size="icon" className="size-8" onClick={() => void openEdit(row.original)}>
+                <IconPencil className="size-4" />
+                <span className="sr-only">Editar</span>
               </Button>
             ) : null}
             {canReassign ? (
               <Button
                 variant="ghost"
-                size="sm"
+                size="icon"
+                className="size-8"
                 onClick={() => {
                   setActiveRow(row.original);
                   const ownerId = extractString(row.original.raw as Record<string, unknown> | undefined, ["propietario_id"]);
@@ -291,13 +306,15 @@ export function ContactsDataTable({ data }: { data: ContactTableRow[] }) {
                   setReassignOpen(true);
                 }}
               >
-                Reasignar
+                <IconArrowsLeftRight className="size-4" />
+                <span className="sr-only">Reasignar</span>
               </Button>
             ) : null}
             {canWrite ? (
               <Button
                 variant="ghost"
-                size="sm"
+                size="icon"
+                className="size-8"
                 onClick={() => {
                   setActiveRow(row.original);
                   setError(null);
@@ -305,7 +322,8 @@ export function ContactsDataTable({ data }: { data: ContactTableRow[] }) {
                   setDeleteOpen(true);
                 }}
               >
-                Eliminar
+                <IconTrash className="size-4" />
+                <span className="sr-only">Eliminar</span>
               </Button>
             ) : null}
           </div>
@@ -388,6 +406,11 @@ export function ContactsDataTable({ data }: { data: ContactTableRow[] }) {
       ? `${filteredData.length} de ${data.length} contactos`
       : `${data.length} contactos`;
 
+  const contactColumnOrder = React.useMemo(
+    () => ["drag-handle", "row-select", "session", "acciones"],
+    [],
+  );
+
   return (
     <>
       <div className="flex flex-col gap-3 px-4 lg:px-6">
@@ -419,7 +442,10 @@ export function ContactsDataTable({ data }: { data: ContactTableRow[] }) {
       </div>
       <DataTable
         data={filteredData}
+        columnLabels={contactColumnLabels}
         extraColumns={extraColumns}
+        forcedColumnOrder={contactColumnOrder}
+        hideDefaultActions
         initialVisibility={contactColumnVisibility}
         storageKey="contacts-table-column-order"
         toolbarActions={toolbarActions}

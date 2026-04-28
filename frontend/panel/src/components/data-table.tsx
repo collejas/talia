@@ -169,6 +169,10 @@ function normalizeOrder(order: string[], reference: string[]): string[] {
   return next
 }
 
+function isSameOrder(left: string[], right: string[]): boolean {
+  return left.length === right.length && left.every((id, index) => id === right[index])
+}
+
 // Create a separate component for the drag handle
 function DragHandle({ id }: { id: number }) {
   const { attributes, listeners } = useSortable({
@@ -225,6 +229,7 @@ function SortIcon({ direction }: { direction: false | "asc" | "desc" }) {
 function createBaseColumns(
   labels: ColumnLabels = {},
   detailRenderer?: (row: TableRowData) => React.ReactNode,
+  hideDefaultActions = false,
 ): ColumnDef<TableRowData>[] {
   const headerLabel = labels.header ?? "Sesión"
   const typeLabel = labels.type ?? "Ubicación / Etapa"
@@ -398,31 +403,35 @@ function createBaseColumns(
       },
       meta: { label: reviewerLabel } satisfies ColumnMeta,
     },
-    {
-      id: "actions",
-      cell: () => (
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button
-              variant="ghost"
-              className="data-[state=open]:bg-muted text-muted-foreground flex size-8"
-              size="icon"
-            >
-              <IconDotsVertical />
-              <span className="sr-only">Open menu</span>
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-32">
-            <DropdownMenuItem>Edit</DropdownMenuItem>
-            <DropdownMenuItem>Make a copy</DropdownMenuItem>
-            <DropdownMenuItem>Favorite</DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem variant="destructive">Delete</DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      ),
-      meta: { label: "Acciones", reorderable: false } satisfies ColumnMeta,
-    },
+    ...(hideDefaultActions
+      ? []
+      : [
+          {
+            id: "actions",
+            cell: () => (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    className="data-[state=open]:bg-muted text-muted-foreground flex size-8"
+                    size="icon"
+                  >
+                    <IconDotsVertical />
+                    <span className="sr-only">Open menu</span>
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-32">
+                  <DropdownMenuItem>Edit</DropdownMenuItem>
+                  <DropdownMenuItem>Make a copy</DropdownMenuItem>
+                  <DropdownMenuItem>Favorite</DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem variant="destructive">Delete</DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            ),
+            meta: { label: "Acciones", reorderable: false } satisfies ColumnMeta,
+          } as ColumnDef<TableRowData>,
+        ]),
   ]
 }
 
@@ -447,9 +456,10 @@ function formatMetric(value: number): string {
 type SortableColumnHeaderProps = {
   header: Header<TableRowData, unknown>
   id: string
+  mounted: boolean
 }
 
-function SortableColumnHeader({ header, id }: SortableColumnHeaderProps) {
+function SortableColumnHeader({ header, id, mounted }: SortableColumnHeaderProps) {
   const {
     attributes,
     listeners,
@@ -465,6 +475,14 @@ function SortableColumnHeader({ header, id }: SortableColumnHeaderProps) {
     transform: `translate3d(${translateX}px, 0, 0)` ,
     transition,
     opacity: isDragging ? 0.6 : undefined,
+  }
+
+  if (!mounted) {
+    return (
+      <TableHead colSpan={header.colSpan}>
+        {flexRender(header.column.columnDef.header, header.getContext())}
+      </TableHead>
+    )
   }
 
   return (
@@ -488,10 +506,28 @@ function SortableColumnHeader({ header, id }: SortableColumnHeaderProps) {
   )
 }
 
-function DraggableRow({ row }: { row: Row<z.infer<typeof schema>> }) {
+function DraggableRow({
+  row,
+  mounted,
+}: {
+  row: Row<z.infer<typeof schema>>
+  mounted: boolean
+}) {
   const { transform, transition, setNodeRef, isDragging } = useSortable({
     id: row.original.id,
   })
+
+  if (!mounted) {
+    return (
+      <TableRow>
+        {row.getVisibleCells().map((cell) => (
+          <TableCell key={cell.id}>
+            {flexRender(cell.column.columnDef.cell, cell.getContext())}
+          </TableCell>
+        ))}
+      </TableRow>
+    )
+  }
 
   return (
     <TableRow
@@ -522,6 +558,8 @@ export function DataTable({
   metricColumns = [],
   renderRowDetails,
   toolbarActions,
+  forcedColumnOrder,
+  hideDefaultActions = false,
 }: {
   data: TableRowData[]
   extraColumns?: ColumnDef<TableRowData>[]
@@ -531,6 +569,8 @@ export function DataTable({
   metricColumns?: MetricColumnConfig[]
   renderRowDetails?: (row: TableRowData) => React.ReactNode
   toolbarActions?: React.ReactNode
+  forcedColumnOrder?: string[]
+  hideDefaultActions?: boolean
 }) {
   const [data, setData] = React.useState(() => initialData)
   const [rowSelection, setRowSelection] = React.useState({})
@@ -545,6 +585,7 @@ export function DataTable({
     pageIndex: 0,
     pageSize: 10,
   })
+  const [mounted, setMounted] = React.useState(false)
   const sortableId = React.useId()
   const sensors = useSensors(
     useSensor(MouseSensor, {}),
@@ -556,6 +597,10 @@ export function DataTable({
     setData(initialData)
   }, [initialData])
 
+  React.useEffect(() => {
+    setMounted(true)
+  }, [])
+
 
   const dataIds = React.useMemo<UniqueIdentifier[]>(
     () => data?.map(({ id }) => id) || [],
@@ -563,8 +608,8 @@ export function DataTable({
   )
 
   const resolvedBaseColumns = React.useMemo(
-    () => createBaseColumns(columnLabels, renderRowDetails),
-    [columnLabels, renderRowDetails]
+    () => createBaseColumns(columnLabels, renderRowDetails, hideDefaultActions),
+    [columnLabels, renderRowDetails, hideDefaultActions]
   )
 
   const metricColumnDefs = React.useMemo<ColumnDef<TableRowData>[]>(() => {
@@ -599,10 +644,21 @@ export function DataTable({
       .filter((id): id is string => id !== "")
   }, [mergedColumns])
 
-  const [columnOrder, setColumnOrder] = React.useState<string[]>(defaultColumnOrder)
+  const resolvedColumnOrder = React.useMemo(() => {
+    if (!forcedColumnOrder?.length) return defaultColumnOrder
+    return normalizeOrder(forcedColumnOrder, defaultColumnOrder)
+  }, [defaultColumnOrder, forcedColumnOrder])
+
+  const [columnOrder, setColumnOrder] = React.useState<string[]>(resolvedColumnOrder)
   const hasLoadedColumnOrder = React.useRef(false)
 
   React.useEffect(() => {
+    if (forcedColumnOrder?.length) {
+      setColumnOrder((current) =>
+        isSameOrder(current, resolvedColumnOrder) ? current : resolvedColumnOrder
+      )
+      return
+    }
     if (!storageKey || typeof window === "undefined" || hasLoadedColumnOrder.current) {
       return
     }
@@ -619,7 +675,7 @@ export function DataTable({
     } finally {
       hasLoadedColumnOrder.current = true
     }
-  }, [storageKey, defaultColumnOrder])
+  }, [storageKey, defaultColumnOrder, forcedColumnOrder, resolvedColumnOrder])
 
   React.useEffect(() => {
     setColumnOrder((prev) => normalizeOrder(prev, defaultColumnOrder))
@@ -790,6 +846,7 @@ export function DataTable({
                                 key={header.id}
                                 header={header}
                                 id={columnDragId(header.column.id)}
+                                mounted={mounted}
                               />
                             )
                           }
@@ -815,7 +872,7 @@ export function DataTable({
                     strategy={verticalListSortingStrategy}
                   >
                     {table.getRowModel().rows.map((row) => (
-                      <DraggableRow key={row.id} row={row} />
+                      <DraggableRow key={row.id} row={row} mounted={mounted} />
                     ))}
                   </SortableContext>
                 ) : (
