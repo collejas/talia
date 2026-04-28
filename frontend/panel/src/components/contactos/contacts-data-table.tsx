@@ -533,7 +533,7 @@ export function ContactsDataTable({ data }: { data: ContactTableRow[] }) {
       </Dialog>
 
       <Dialog open={reassignOpen} onOpenChange={setReassignOpen}>
-        <DialogContent>
+        <DialogContent className="w-full max-w-md">
           <DialogHeader>
             <DialogTitle>Cambiar vendedor</DialogTitle>
             <DialogDescription>Selecciona el vendedor destino para este contacto.</DialogDescription>
