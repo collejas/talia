@@ -574,4 +574,4 @@ La maqueta tecnica se considera lista para implementacion cuando:
 - existe un estado global coherente
 - las reglas de visibilidad estan definidas
 - el payload final se puede construir sin ambiguedad
-- el flujo nuevo puede convivir con el legado durante la transicion
+- el flujo nuevo pudo convivir con el legado durante la transicion historica

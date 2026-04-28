@@ -5,9 +5,13 @@ Estado: Borrador técnico
 
 ## Estado actual (2026-04-12)
 
-Se completó la transición operativa de **alta**, **edición** y **exportación base de contactos** del panel hacia el modelo nuevo (con compatibilidad temporal con el legado).
+Se completó la transición operativa de **alta**, **edición** y **exportación base de contactos** del panel hacia el modelo nuevo.
 
 Además, la vista de contactos ya utiliza un panel lateral real de detalle y ya no depende del drawer genérico por defecto para la información del contacto.
+
+Nota de archivo:
+- las referencias a `contactos` que permanecen en este documento describen la transición histórica
+- el flujo activo ya opera sobre `personas`, `cuentas` y `cuenta_personas`
 
 Ver progreso detallado en:
 - `docs/Plan_personas_empresa_contactos/progreso.md`
@@ -274,7 +278,7 @@ Y también campos que son más de empresa/fiscal:
 - `tipo_establecimiento`
 - dirección completa
 
-Eso confirma que hoy `contactos` funciona como una mezcla de persona + empresa.
+Eso confirma que históricamente `contactos` funcionó como una mezcla de persona + empresa.
 
 ## 6. Propuesta de transición
 
@@ -313,16 +317,16 @@ Objetivo:
 
 ### Fase 3. Lectura con compatibilidad
 
-Las pantallas existentes pueden seguir leyendo de `contactos` mientras el nuevo modelo se estabiliza.
+Durante la transición se usaron vistas y endpoints adaptadores.
 
-Opcionalmente:
+Estado actual:
 
-- crear vistas de compatibilidad
-- o endpoints que devuelvan el formato viejo construyéndolo desde las nuevas tablas
+- el runtime activo ya no depende de `contactos` para el panel de contactos
+- las referencias restantes son de archivo y migraciones históricas
 
 Objetivo:
 
-- No romper UI, reportes ni APIs mientras se migra.
+- mantener solo compatibilidad histórica donde todavía existan consumidores reales fuera del flujo principal
 
 ### Fase 4. Migración histórica
 
@@ -357,7 +361,7 @@ Cuando todo esté estable:
 
 - reducir campos duplicados en `contactos`
 - mover lógica de empresa/fiscal a `cuentas`
-- dejar `contactos` o renombrarlo a `personas` según convenga
+- dejar `contactos` solo como referencia histórica o desactivarlo donde ya no haya consumidores
 
 Antes del backfill hay que definir reglas de deduplicación:
 
@@ -476,8 +480,8 @@ Mitigación:
 
 Mitigación:
 
-- mantener compatibilidad con `contactos`
-- usar vistas o endpoints adaptadores
+- usar vistas o endpoints adaptadores solo donde todavía existan consumidores reales
+- no reintroducir dependencia del runtime principal sobre `contactos`
 
 ### Riesgo 3. Confundir al equipo con dos modelos vivos
 

@@ -14,7 +14,7 @@ Definir el contrato de datos del nuevo flujo de alta entre frontend y backend pa
 Este documento sirve como puente entre:
 
 - la propuesta funcional del frontend
-- el backend actual en transicion
+- el backend que estaba en transicion
 - la implementacion final del alta
 
 ## 2. Principio
@@ -46,9 +46,10 @@ Ese endpoint debe resolver internamente los escenarios de:
 
 ## 3.2 Compatibilidad temporal
 
-Mientras el backend legacy siga activo, el panel puede seguir usando rutas transitorias.
-
-Pero el payload del frontend ya debe construirse con el nuevo shape conceptual.
+Nota de archivo:
+- este documento describe la fase histórica de transición
+- el payload del frontend ya se construye con el nuevo shape conceptual
+- el runtime activo ya no depende de la traducción legacy del panel de contactos
 
 ## 4. Shape del request
 
@@ -412,7 +413,7 @@ La respuesta no debe volver a un shape legacy de `contacto` si el frontend nuevo
 
 ## 13. Adaptacion transitoria al backend actual
 
-Mientras el backend legacy siga vivo, el controlador del panel puede transformar este payload nuevo al shape temporal que hoy existe.
+Durante la transición, el controlador del panel transformó este payload nuevo al shape temporal que existía.
 
 Ejemplo de transformacion temporal:
 
@@ -420,7 +421,7 @@ Ejemplo de transformacion temporal:
 - `cuenta` -> payload actual de cuentas
 - `relacion` -> creacion de `cuenta_personas`
 
-Pero esa traduccion debe existir solo como capa transitoria.
+Esa traduccion quedó como referencia histórica de la migración.
 
 ## 14. Fases de implementacion tecnica
 
@@ -453,6 +454,10 @@ Hacer que el frontend nuevo use ese contrato.
 ### Fase 5
 
 Retirar la traduccion legacy.
+
+Estado actual:
+
+- la traducción legacy ya no forma parte del runtime activo del panel de contactos
 
 ## 15. Criterio de exito
 

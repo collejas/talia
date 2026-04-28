@@ -13,6 +13,10 @@ Definir el flujo completo de alta en frontend para el nuevo modelo CRM basado en
 
 La meta es que el alta se sienta natural, rapida y clara para el usuario, y que deje de arrastrar las ambiguedades del modelo legacy de `contactos`.
 
+Nota de archivo:
+- este documento describe la propuesta funcional histórica de transición
+- el flujo activo ya opera con el modelo nuevo en el panel de contactos
+
 ## 2. Principio rector
 
 El alta siempre empieza por la persona.
@@ -493,7 +497,7 @@ La primera implementacion debe ser una sola pantalla o modal por bloques dinamic
 
 ## 9. Contrato de frontend recomendado
 
-El frontend debe dejar de pensar en `contactos` como fuente de verdad.
+El frontend dejó de pensar en `contactos` como fuente de verdad.
 
 Debe trabajar conceptualmente con tres payloads:
 
@@ -501,7 +505,7 @@ Debe trabajar conceptualmente con tres payloads:
 - `cuenta`
 - `relacion`
 
-Aunque temporalmente el backend todavia mantenga compatibilidad con rutas legacy.
+La compatibilidad legacy quedó como referencia histórica de la migración.
 
 ## 10. Fases de implementacion
 
@@ -545,6 +549,10 @@ Rehacer la edicion con la misma separacion:
 ### Fase 6
 
 Retirar completamente el modal legacy.
+
+Estado actual:
+
+- el modal legacy ya no forma parte del flujo activo del panel de contactos
 
 ## 11. Criterio de exito
 

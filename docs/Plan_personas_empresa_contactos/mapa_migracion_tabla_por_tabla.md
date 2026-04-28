@@ -11,6 +11,10 @@ Ya se ejecutaron las fases:
 - Backfill inicial hacia `personas` y generación/vinculación inicial de `cuentas`
 - Transición de frontend: alta y edición del panel ya operan con payload estructurado
 
+Nota de archivo:
+- este documento conserva el mapa histórico de la migración
+- el runtime activo ya no depende de `contactos` para el panel de contactos
+
 Detalle y archivos específicos:
 - `docs/Plan_personas_empresa_contactos/progreso.md`
 
@@ -41,7 +45,7 @@ No se hará una sustitución total en un solo paso.
 La estrategia correcta es:
 
 1. Crear el nuevo modelo.
-2. Escribir en viejo y nuevo durante una transición controlada.
+2. Escribir en viejo y nuevo durante una transición controlada histórica.
 3. Leer con compatibilidad hacia atrás.
 4. Migrar histórico.
 5. Retirar columnas redundantes.
@@ -455,11 +459,11 @@ Segunda pasada sugerida:
 
 ## 13. Compatibilidad temporal
 
-Durante la transición:
+Durante la transición histórica:
 
-- `contactos` puede seguir existiendo
-- el frontend puede seguir usando el shape actual
-- el backend puede traducir entre el modelo nuevo y el viejo
+- `contactos` podía seguir existiendo
+- el frontend podía seguir usando el shape actual
+- el backend podía traducir entre el modelo nuevo y el viejo
 
 Esto evita romper:
 

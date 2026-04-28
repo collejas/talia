@@ -11,7 +11,9 @@ Se completó la transición operativa del flujo de **alta** y **edición** en el
 - `cuenta_personas` (relación)
 - `direcciones` + `cuenta_direcciones` (preparado)
 
-Manteniendo compatibilidad temporal con el legado `contactos` (shadow write / fallback read donde aplica).
+Nota histórica:
+- las migraciones y documentos del plan todavía conservan referencias a `contactos` como archivo de transición
+- el runtime activo del panel ya opera sobre `personas`, `cuentas` y `cuenta_personas`
 
 ## Completado
 
@@ -122,9 +124,10 @@ Notas:
   - personas: match fuerte por teléfono/correo, débil por nombre + org
   - cuentas: match fuerte por RFC, medio por razón social, débil por nombre comercial
 
-### 4) Retiro gradual del legado
+### 4) Retiro del legado
 
-- Reducir dependencia de `contactos`:
-  - lecturas: dejar solo fallback en casos antiguos
-  - escrituras: eventualmente apagar shadow write
-- Luego limpiar campos duplicados en `cuentas`/`contactos` cuando ya no haya consumidores.
+- El runtime activo ya no depende de `contactos` para el ciclo operativo del panel de contactos.
+- Quedan como archivo histórico las migraciones y documentos que describen la transición.
+- Pendiente solo si aparece otro consumidor real:
+  - limpiar campos duplicados en `cuentas`/`contactos`
+  - revisar relaciones SQL antiguas fuera del panel de contactos
