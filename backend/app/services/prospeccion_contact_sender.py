@@ -602,7 +602,7 @@ async def _log_whatsapp_inbox_message(
                 error=str(exc),
             )
 
-    contact_id = await _resolve_contact_id_for_prospecto(repo=repo, prospecto_id=prospecto_id)
+    contact_id = await _resolve_persona_id_for_prospecto(repo=repo, prospecto_id=prospecto_id)
     conversation_id = await _ensure_whatsapp_conversation(repo=repo, contact_id=contact_id) if contact_id else None
     detalle_meta = result.detalle if isinstance(result.detalle, dict) else {}
     body_preview = _clean_text(detalle_meta.get("body_preview"))
@@ -628,13 +628,13 @@ async def _log_whatsapp_inbox_message(
         metadata_payload["twilio_variables"] = detalle_meta.get("twilio_variables")
     metadata_payload = {k: v for k, v in metadata_payload.items() if v not in (None, "", {})}
 
-    contact_record: dict[str, Any] | None = None
+    persona_record: dict[str, Any] | None = None
     if contact_id:
         try:
-            contact_record = await storage.fetch_contact(contact_id)
+            persona_record = await storage.fetch_contact(contact_id)
         except StorageError:
-            contact_record = None
-    organizacion_hint = await resolve_whatsapp_organizacion(contact=contact_record)
+            persona_record = None
+    organizacion_hint = await resolve_whatsapp_organizacion(contact=persona_record)
     if not organizacion_hint:
         organizacion_hint = _clean_text(envio.get("organizacion_id"))
     try:
@@ -696,7 +696,7 @@ async def _log_whatsapp_inbox_message(
     return resolved_conversation_id
 
 
-async def _resolve_contact_id_for_prospecto(
+async def _resolve_persona_id_for_prospecto(
     *,
     repo: CRMRepository,
     prospecto_id: Any,
