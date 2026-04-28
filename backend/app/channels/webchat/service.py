@@ -703,7 +703,7 @@ async def _send_booking_confirmation_email(
         return
     contact = contact or await _resolve_contact(contact_id)
     metadata = booking.metadata if isinstance(booking.metadata, dict) else {}
-    org_hint = _extract_contact_org(contact)
+    org_hint = _extract_persona_org(contact)
     if not org_hint and isinstance(metadata, dict):
         org_value = metadata.get("organizacion_id")
         if isinstance(org_value, str) and org_value.strip():
@@ -732,7 +732,7 @@ async def _send_booking_confirmation_email(
                     contact = fallback_contact
                     contact_id = str(fallback_contact.get("id") or contact_id)
                     email_value = fallback_email
-                    org_hint = _extract_contact_org(fallback_contact) or org_hint
+                    org_hint = _extract_persona_org(fallback_contact) or org_hint
                     logger.info(
                         "calendar.invite_contact_fallback",
                         extra={
@@ -941,13 +941,13 @@ async def _sync_booking_with_opportunity(
 ) -> None:
     if not tarjeta_id:
         return
-    resolved_contact = contact
-    if not resolved_contact or not resolved_contact.get("organizacion_id"):
+    resolved_persona = contact
+    if not resolved_persona or not resolved_persona.get("organizacion_id"):
         try:
             fallback_contact = await storage.fetch_opportunity_contact(
                 oportunidad_id=tarjeta_id,
-                organizacion_id=str(resolved_contact.get("organizacion_id"))
-                if resolved_contact and resolved_contact.get("organizacion_id")
+                organizacion_id=str(resolved_persona.get("organizacion_id"))
+                if resolved_persona and resolved_persona.get("organizacion_id")
                 else None,
             )
         except StorageError as exc:
@@ -961,14 +961,14 @@ async def _sync_booking_with_opportunity(
             )
             return
         if fallback_contact:
-            resolved_contact = fallback_contact
+            resolved_persona = fallback_contact
             logger.info(
                 "calendar.stage_contact_fallback",
                 extra={"tarjeta_id": tarjeta_id, "booking_id": booking.booking_id},
             )
-    if not resolved_contact:
+    if not resolved_persona:
         return
-    organizacion_value = resolved_contact.get("organizacion_id")
+    organizacion_value = resolved_persona.get("organizacion_id")
     if not organizacion_value:
         return
     organizacion_id = str(organizacion_value)
@@ -1038,8 +1038,8 @@ async def _send_booking_cancellation_email(
         )
         return
 
-    contact_org_uuid = _resolve_calendar_organizacion_uuid(_extract_contact_org(contact))
-    mail_settings = await tenant_runtime.get_mail_runtime_settings(organizacion_id=contact_org_uuid)
+    persona_org_uuid = _resolve_calendar_organizacion_uuid(_extract_persona_org(contact))
+    mail_settings = await tenant_runtime.get_mail_runtime_settings(organizacion_id=persona_org_uuid)
 
     timezone_name = booking.timezone or settings.webchat_calendar_timezone
     tz_label = timezone_name.replace("_", " ") if isinstance(timezone_name, str) else "UTC"
@@ -1217,7 +1217,7 @@ async def schedule_calendar_booking(
     if not channel_value:
         channel_value = "webchat"
     contact: dict[str, Any] | None = await _resolve_contact(contact_id)
-    organizacion_id = _extract_contact_org(contact)
+    organizacion_id = _extract_persona_org(contact)
     try:
         tarjeta_id = await _ensure_opportunity_when_contact_ready(
             conversation_id=conversation_id,
@@ -1611,23 +1611,23 @@ async def _guard_booking_confirmation_claim(
         booking_status=status or None,
     )
     try:
-        resolved_contact = dict(contact or {})
+        resolved_persona = dict(contact or {})
         resolved_opportunity_id = str(opportunity_id or "").strip() or None
-        if (not resolved_contact) or not resolved_opportunity_id:
+        if (not resolved_persona) or not resolved_opportunity_id:
             conversation_meta = await storage.fetch_webchat_conversation(conversation_id)
-            if not resolved_contact:
+            if not resolved_persona:
                 contact_id = str(conversation_meta.get("contact_id") or "").strip()
                 if contact_id:
-                    resolved_contact = await _resolve_contact(contact_id) or {}
-            if not resolved_opportunity_id and resolved_contact:
+                    resolved_persona = await _resolve_contact(contact_id) or {}
+            if not resolved_opportunity_id and resolved_persona:
                 resolved_opportunity_id = await storage.ensure_conversation_opportunity(
                     conversation_id=conversation_id,
-                    contact_id=str(resolved_contact.get("id") or ""),
+                    contact_id=str(resolved_persona.get("id") or ""),
                     channel="webchat",
                 )
-        if resolved_contact and resolved_opportunity_id:
+        if resolved_persona and resolved_opportunity_id:
             prefilter_status = await _has_prefilter_for_schedule(
-                contact=resolved_contact,
+                contact=resolved_persona,
                 opportunity_id=resolved_opportunity_id,
             )
             missing_fields = [
@@ -2081,7 +2081,7 @@ async def _has_prefilter_for_schedule(
         return {"ready": False, "missing_fields": required_fields, "questions": question_by_field}
     if not _has_minimum_prefilter_data(contact):
         return {"ready": False, "missing_fields": required_fields, "questions": question_by_field}
-    org_value = _extract_contact_org(contact)
+    org_value = _extract_persona_org(contact)
     org_uuid = _resolve_org_uuid(org_value)
     if not org_uuid:
         return {"ready": False, "missing_fields": required_fields, "questions": question_by_field}
@@ -2205,7 +2205,7 @@ def _extract_contact_name(contact: dict[str, Any] | None) -> str | None:
     return combined or None
 
 
-def _extract_contact_org(contact: dict[str, Any] | None) -> str | None:
+def _extract_persona_org(contact: dict[str, Any] | None) -> str | None:
     if not contact:
         return None
     value = contact.get("organizacion_id")
@@ -2336,9 +2336,9 @@ async def resolve_webchat_organizacion(
     contact: dict[str, Any] | None = None,
 ) -> str | None:
     """Determina el organizacion_id para eventos del webchat."""
-    contact_org = _extract_contact_org(contact)
-    if contact_org:
-        return contact_org
+    persona_org = _extract_persona_org(contact)
+    if persona_org:
+        return persona_org
     metadata_org = _extract_metadata_organizacion(metadata)
     if metadata_org:
         return metadata_org
@@ -2846,12 +2846,12 @@ async def _register_webchat_visit(
                 extra={"session_id": session_id, "error": str(exc)},
             )
             contact_id = None
-    resolved_contact = contact
+    resolved_persona = contact
     if contact_id and (
-        not resolved_contact
-        or _safe_str_value(resolved_contact.get("id")) != _safe_str_value(contact_id)
+        not resolved_persona
+        or _safe_str_value(resolved_persona.get("id")) != _safe_str_value(contact_id)
     ):
-        resolved_contact = await _resolve_contact(contact_id)
+        resolved_persona = await _resolve_contact(contact_id)
 
     try:
         await storage.record_webchat_visit(
@@ -2868,7 +2868,7 @@ async def _register_webchat_visit(
             landing_url=landing_url,
             organizacion_id=await resolve_webchat_organizacion(
                 client_meta,
-                contact=resolved_contact,
+                contact=resolved_persona,
             ),
         )
     except storage.StorageError as exc:
@@ -2877,7 +2877,7 @@ async def _register_webchat_visit(
             extra={"session_id": session_id, "error": str(exc)},
         )
 
-    if contact_id and resolved_contact is not None:
+    if contact_id and resolved_persona is not None:
         try:
             await _maybe_enrich_contact_metadata(
                 contact_id,
@@ -2891,7 +2891,7 @@ async def _register_webchat_visit(
                 cvegeo=cvegeo,
                 referrer=referrer,
                 landing_url=landing_url,
-                contact=resolved_contact,
+                contact=resolved_persona,
             )
         except Exception:  # pragma: no cover - best effort
             logger.exception(
@@ -4257,7 +4257,7 @@ async def _execute_function_call(
         if opportunity_id:
             channel_value = "webchat"
             profiling_enabled_for_channel = True
-            persona_org = _extract_contact_org(persona_record)
+            persona_org = _extract_persona_org(persona_record)
             persona_org_uuid = _resolve_org_uuid(persona_org) if persona_org else None
             if persona_org_uuid:
                 profiling_enabled_for_channel = await tenant_runtime.is_profiling_enabled(
@@ -4570,7 +4570,7 @@ async def _execute_function_call(
                 "guidance": guidance,
             }
 
-        organizacion_hint = _extract_contact_org(persona) if persona else None
+        organizacion_hint = _extract_persona_org(persona) if persona else None
         if not organizacion_hint:
             conversation_meta = await _resolve_conversation_metadata(context.conversation_id)
             organizacion_hint = conversation_meta.get("organizacion_id")
@@ -4647,7 +4647,7 @@ async def _execute_function_call(
         booking_response.hold_id = hold.get("hold_id")
         persona = await _resolve_contact(context.contact_id)
         profiling_enabled_for_channel = True
-        persona_org = _extract_contact_org(persona) if persona else None
+        persona_org = _extract_persona_org(persona) if persona else None
         persona_org_uuid = _resolve_org_uuid(persona_org) if persona_org else None
         if persona_org_uuid:
             profiling_enabled_for_channel = await tenant_runtime.is_profiling_enabled(
@@ -4668,7 +4668,7 @@ async def _execute_function_call(
             contact=persona,
         )
         if profiling_enabled_for_channel:
-            if _has_meaningful_scoring_answers(contact):
+            if _has_meaningful_scoring_answers(persona):
                 try:
                     await storage.apply_lead_scoring(
                         conversation_id=context.conversation_id,
@@ -4762,21 +4762,21 @@ async def _execute_function_call(
                     extra={"conversation_id": context.conversation_id, "error": str(exc)},
                 )
         try:
-            org_uuid = UUID(str((contact or {}).get("organizacion_id")))
+            org_uuid = UUID(str((persona or {}).get("organizacion_id")))
             await enqueue_webchat_sales_notification(
                 conversation_id=context.conversation_id,
                 contact_id=context.contact_id,
                 trigger="booking_confirmed",
                 channel="webchat",
                 organizacion_id=org_uuid,
-                contact=contact,
+                contact=persona,
                 opportunity_id=str(tarjeta_id),
                 resumen="Cita agendada",
                 notes=(
                     f"Cita confirmada para {booking_response.start_at.isoformat()} "
                     f"(booking {booking_response.booking_id})."
                 ),
-                email=(contact or {}).get("correo"),
+                email=(persona or {}).get("correo"),
                 extra={
                     "booking_id": booking_response.booking_id,
                     "slot_start": booking_response.start_at.isoformat(),
@@ -4831,11 +4831,11 @@ async def _execute_function_call(
         except CalendarError as exc:
             raise ValueError(str(exc)) from exc
         booking_response = _build_booking_response(booking)
-        contact = await _resolve_contact(context.contact_id)
+        persona = await _resolve_contact(context.contact_id)
         await _sync_booking_with_opportunity(
             booking=booking_response,
             tarjeta_id=booking_response.tarjeta_id,
-            contact=contact,
+            contact=persona,
             channel="webchat",
         )
         await _send_booking_confirmation_email(
@@ -4843,7 +4843,7 @@ async def _execute_function_call(
             contact_id=context.contact_id,
             conversation_id=context.conversation_id,
             tarjeta_id=booking_response.tarjeta_id,
-            contact=contact,
+            contact=persona,
         )
         booking_payload = {
             "booking_id": booking_response.booking_id,
@@ -4878,20 +4878,20 @@ async def _execute_function_call(
             "end_at": booking.get("end_at"),
             "status": booking.get("status"),
         }
-        contact = await _resolve_contact(context.contact_id)
+        persona = await _resolve_contact(context.contact_id)
         try:
-            org_uuid = UUID(str((contact or {}).get("organizacion_id")))
+            org_uuid = UUID(str((persona or {}).get("organizacion_id")))
             await enqueue_webchat_sales_notification(
                 conversation_id=context.conversation_id,
                 contact_id=context.contact_id,
                 trigger="booking_canceled",
                 channel="webchat",
                 organizacion_id=org_uuid,
-                contact=contact,
+                contact=persona,
                 opportunity_id=None,
                 resumen="Cita cancelada",
                 notes=reason,
-                email=contact.get("correo") if contact else None,
+                email=persona.get("correo") if persona else None,
                 extra={
                     "booking_id": booking_payload["booking_id"],
                     "slot_start": booking_payload["start_at"],
@@ -4917,13 +4917,13 @@ async def _execute_function_call(
     if name == "list_catalog_fraccionamientos":
         org_value_raw = arguments.get("organizacion_id")
         org_value = str(org_value_raw).strip() if org_value_raw else None
-        contact = None
-        contact_org = None
+        persona = None
+        persona_org = None
         if context.contact_id:
-            contact = await _resolve_contact(context.contact_id)
-            contact_org = _extract_contact_org(contact)
+            persona = await _resolve_contact(context.contact_id)
+            persona_org = _extract_persona_org(persona)
         if not org_value or org_value == context.conversation_id:
-            org_value = contact_org
+            org_value = persona_org
         if not org_value:
             raise ValueError("organizacion_id requerido para listar fraccionamientos")
         resolved = _resolve_org_uuid(org_value)
@@ -4981,27 +4981,27 @@ async def _execute_function_call(
     if name == "list_catalog_modelos":
         org_value_raw = arguments.get("organizacion_id")
         org_value = str(org_value_raw).strip() if org_value_raw else None
-        contact = None
-        contact_org = None
+        persona = None
+        persona_org = None
         if context.contact_id:
-            contact = await _resolve_contact(context.contact_id)
-            contact_org = _extract_contact_org(contact)
+            persona = await _resolve_contact(context.contact_id)
+            persona_org = _extract_persona_org(persona)
         # No confiar ciegamente en el argumento del LLM para evitar cruces de tenant.
         # Si tenemos org del contacto, esa es la fuente canónica.
-        if contact_org:
-            if org_value and org_value != contact_org and org_value != context.conversation_id:
+        if persona_org:
+            if org_value and org_value != persona_org and org_value != context.conversation_id:
                 logger.warning(
                     "catalog.org_argument_mismatch",
                     extra={
                         "tool": "list_catalog_modelos",
                         "conversation_id": context.conversation_id,
                         "arg_organizacion_id": org_value,
-                        "contact_organizacion_id": contact_org,
+                        "persona_organizacion_id": persona_org,
                     },
                 )
-            org_value = contact_org
+            org_value = persona_org
         elif not org_value or org_value == context.conversation_id:
-            org_value = contact_org
+            org_value = persona_org
         if not org_value:
             raise ValueError("organizacion_id requerido para list_catalog_modelos")
         resolved = _resolve_org_uuid(org_value)
@@ -5058,27 +5058,27 @@ async def _execute_function_call(
     if name == "fetch_catalog_item_details":
         org_value_raw = arguments.get("organizacion_id")
         org_value = str(org_value_raw).strip() if org_value_raw else None
-        contact = None
-        contact_org = None
+        persona = None
+        persona_org = None
         if context.contact_id:
-            contact = await _resolve_contact(context.contact_id)
-            contact_org = _extract_contact_org(contact)
+            persona = await _resolve_contact(context.contact_id)
+            persona_org = _extract_persona_org(persona)
         # No confiar ciegamente en el argumento del LLM para evitar cruces de tenant.
         # Si tenemos org del contacto, esa es la fuente canónica.
-        if contact_org:
-            if org_value and org_value != contact_org and org_value != context.conversation_id:
+        if persona_org:
+            if org_value and org_value != persona_org and org_value != context.conversation_id:
                 logger.warning(
                     "catalog.org_argument_mismatch",
                     extra={
                         "tool": "fetch_catalog_item_details",
                         "conversation_id": context.conversation_id,
                         "arg_organizacion_id": org_value,
-                        "contact_organizacion_id": contact_org,
+                        "persona_organizacion_id": persona_org,
                     },
                 )
-            org_value = contact_org
+            org_value = persona_org
         elif not org_value or org_value == context.conversation_id:
-            org_value = contact_org
+            org_value = persona_org
         if not org_value:
             raise ValueError("organizacion_id requerido para fetch_catalog_item_details")
         resolved = _resolve_org_uuid(org_value)
