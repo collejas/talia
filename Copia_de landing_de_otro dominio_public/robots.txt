@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://pui.geoactiv.mx/sitemap.xml

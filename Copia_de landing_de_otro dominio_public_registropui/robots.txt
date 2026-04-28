@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://registropui.geoactiv.mx/sitemap.xml
