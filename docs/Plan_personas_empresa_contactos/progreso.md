@@ -92,6 +92,16 @@ Notas:
   - `Editar` abre el flujo nuevo.
   - Alta y edición ahora piden confirmación explícita cuando el dedupe detecta candidatos `medio/debil`.
 
+### 4) Exportación de contactos
+
+- Se reemplazó el exportador local del listado por un export CSV servido desde backend:
+  - `GET /crm/contacts/export`
+  - proxy del panel:
+    - `frontend/panel/src/app/api/contactos/export/route.ts`
+- El export ya sale de `panel_contactos_list` completo por paginación y no depende solo de los datos visibles en pantalla.
+- El archivo exportado incluye los campos canónicos del modelo nuevo y conserva el filtro de búsqueda del listado.
+- La exportación quedó alineada con el modelo `personas + cuentas + cuenta_personas + conversaciones` que alimenta la vista de contactos.
+
 ## Pendiente (siguiente fase sugerida)
 
 ### 1) Vista detalle post-alta (Fase 7 del UX)

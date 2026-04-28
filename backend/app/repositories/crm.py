@@ -8222,13 +8222,39 @@ class CRMRepository:
         *,
         usuario_token: str,
         limit: int = 200,
+        offset: int = 0,
+        search: str | None = None,
+        estado: str | None = None,
+        captura: str | None = None,
+        origen: str | None = None,
+        propietario: UUID | None = None,
+        date_from: datetime | None = None,
+        date_to: datetime | None = None,
     ) -> list[dict[str, Any]]:
         body = {
             "p_limit": max(1, min(limit, 500)),
-            "p_offset": 0,
+            "p_offset": max(0, offset),
             "p_order_by": "creado_en",
             "p_order_dir": "desc",
         }
+        search_value = search.strip() if isinstance(search, str) and search.strip() else None
+        estado_value = estado.strip() if isinstance(estado, str) and estado.strip() else None
+        captura_value = captura.strip() if isinstance(captura, str) and captura.strip() else None
+        origen_value = origen.strip() if isinstance(origen, str) and origen.strip() else None
+        if search_value:
+            body["p_search"] = search_value
+        if estado_value:
+            body["p_estado"] = estado_value
+        if captura_value:
+            body["p_captura"] = captura_value
+        if origen_value:
+            body["p_origen"] = origen_value
+        if propietario:
+            body["p_propietario"] = str(propietario)
+        if date_from:
+            body["p_from"] = date_from.astimezone(timezone.utc).isoformat()
+        if date_to:
+            body["p_to"] = date_to.astimezone(timezone.utc).isoformat()
         resp = await self._request_with_user(
             "POST",
             "/rest/v1/rpc/panel_contactos_list",

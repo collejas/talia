@@ -433,7 +433,18 @@ export function ContactsDataTable({ data }: { data: ContactTableRow[] }) {
         type="button"
         variant="outline"
         size="sm"
-        onClick={() => exportContactsCsv(filteredData)}
+        onClick={() => {
+          const exportUrl = new URL("/api/contactos/export", window.location.origin);
+          if (searchTerm.trim()) {
+            exportUrl.searchParams.set("search", searchTerm.trim());
+          }
+          const anchor = document.createElement("a");
+          anchor.href = exportUrl.toString();
+          anchor.rel = "noreferrer";
+          document.body.appendChild(anchor);
+          anchor.click();
+          anchor.remove();
+        }}
       >
         <IconDownload className="size-4" />
         Exportar CSV
@@ -631,86 +642,6 @@ function formatContactValue(value: unknown): string {
     return value.toLocaleString("es-MX");
   }
   return String(value);
-}
-
-function escapeCsvValue(value: unknown): string {
-  const text = formatContactValue(value);
-  if (!text.includes(",") && !text.includes('"') && !text.includes("\n") && !text.includes("\r")) {
-    return text;
-  }
-  return `"${text.replaceAll('"', '""')}"`
-}
-
-function buildContactsCsv(rows: TableRow[]): string {
-  const headers = [
-    "Contacto",
-    "Código contacto",
-    "Código empresa",
-    "Correo",
-    "Teléfono",
-    "Empresa",
-    "Propietario",
-    "Estado",
-    "Captura",
-    "Origen",
-    "Último contacto",
-    "Conversaciones",
-    "Puesto",
-    "Área",
-    "Rol decisión",
-    "C.P.",
-    "Municipio",
-    "Estado / Entidad",
-    "País",
-    "Sitio web",
-    "Tipo establecimiento",
-    "Notas",
-  ];
-
-  const lines = rows.map((row) => {
-    const raw = (row.raw ?? {}) as Record<string, unknown>;
-    return [
-      row.header,
-      raw.codigo_contacto,
-      raw.codigo_cuenta,
-      raw.correo,
-      raw.telefono,
-      raw.company_name,
-      raw.propietario_nombre,
-      raw.estado,
-      raw.captura_estado,
-      raw.origen,
-      row.limit || raw.ultimo_contacto_en,
-      raw.conversaciones,
-      raw.puesto,
-      raw.area,
-      raw.rol_decision,
-      raw.codigo_postal,
-      raw.municipio,
-      raw.entidad,
-      raw.pais,
-      raw.website,
-      raw.tipo_establecimiento,
-      raw.notes,
-    ]
-      .map(escapeCsvValue)
-      .join(",");
-  });
-
-  return ["\uFEFF" + headers.map(escapeCsvValue).join(","), ...lines].join("\r\n");
-}
-
-function exportContactsCsv(rows: TableRow[]): void {
-  const csv = buildContactsCsv(rows);
-  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-  const url = URL.createObjectURL(blob);
-  const anchor = document.createElement("a");
-  anchor.href = url;
-  anchor.download = `contactos_${new Date().toISOString().slice(0, 10)}.csv`;
-  document.body.appendChild(anchor);
-  anchor.click();
-  anchor.remove();
-  URL.revokeObjectURL(url);
 }
 
 function ContactDetailPanel({

@@ -10587,6 +10587,175 @@ class CRMContactListRow(BaseModel):
     total_rows: int | None = None
 
 
+_CONTACTS_EXPORT_HEADERS = [
+    "ID contacto",
+    "Código contacto",
+    "Código empresa",
+    "Nombre",
+    "Correo",
+    "Teléfono",
+    "Estado",
+    "Captura",
+    "Origen",
+    "Creado en",
+    "Actualizado en",
+    "Empresa",
+    "ID propietario",
+    "Propietario",
+    "Último contacto",
+    "Conversaciones",
+    "Notas",
+    "RFC",
+    "Puesto",
+    "Área",
+    "Rol decisión",
+    "C.P.",
+    "Entidad",
+    "Municipio",
+    "País",
+    "Sitio web",
+    "Tipo establecimiento",
+    "Fecha incorporación",
+]
+
+
+def _contact_export_value(value: Any) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, datetime):
+        return value.isoformat()
+    if isinstance(value, UUID):
+        return str(value)
+    return str(value)
+
+
+def _normalize_contact_search_value(value: Any) -> str:
+    if value is None:
+        return ""
+    text = str(value).strip().lower()
+    if not text:
+        return ""
+    normalized = unicodedata.normalize("NFD", text)
+    return "".join(ch for ch in normalized if not unicodedata.combining(ch))
+
+
+def _contact_matches_search(row: Mapping[str, Any], term: str) -> bool:
+    if not term:
+        return True
+    values = [
+        row.get("nombre"),
+        row.get("codigo_contacto"),
+        row.get("codigo_cuenta"),
+        row.get("correo"),
+        row.get("telefono"),
+        row.get("estado"),
+        row.get("captura_estado"),
+        row.get("origen"),
+        row.get("company_name"),
+        row.get("propietario_nombre"),
+        row.get("rfc"),
+        row.get("puesto"),
+        row.get("area"),
+        row.get("rol_decision"),
+        row.get("codigo_postal"),
+        row.get("entidad"),
+        row.get("municipio"),
+        row.get("pais"),
+        row.get("website"),
+        row.get("tipo_establecimiento"),
+        row.get("notes"),
+        row.get("contacto_id"),
+    ]
+    return any(term in _normalize_contact_search_value(value) for value in values)
+
+
+def _render_contacts_csv(rows: Sequence[Mapping[str, Any]]) -> str:
+    output = io.StringIO()
+    writer = csv.writer(output)
+    output.write("\ufeff")
+    writer.writerow(_CONTACTS_EXPORT_HEADERS)
+    for row in rows:
+        writer.writerow(
+            [
+                _contact_export_value(row.get("contacto_id")),
+                _contact_export_value(row.get("codigo_contacto")),
+                _contact_export_value(row.get("codigo_cuenta")),
+                _contact_export_value(row.get("nombre")),
+                _contact_export_value(row.get("correo")),
+                _contact_export_value(row.get("telefono")),
+                _contact_export_value(row.get("estado")),
+                _contact_export_value(row.get("captura_estado")),
+                _contact_export_value(row.get("origen")),
+                _contact_export_value(row.get("creado_en")),
+                _contact_export_value(row.get("actualizado_en")),
+                _contact_export_value(row.get("company_name")),
+                _contact_export_value(row.get("propietario_id")),
+                _contact_export_value(row.get("propietario_nombre")),
+                _contact_export_value(row.get("ultimo_contacto_en")),
+                _contact_export_value(row.get("conversaciones")),
+                _contact_export_value(row.get("notes")),
+                _contact_export_value(row.get("rfc")),
+                _contact_export_value(row.get("puesto")),
+                _contact_export_value(row.get("area")),
+                _contact_export_value(row.get("rol_decision")),
+                _contact_export_value(row.get("codigo_postal")),
+                _contact_export_value(row.get("entidad")),
+                _contact_export_value(row.get("municipio")),
+                _contact_export_value(row.get("pais")),
+                _contact_export_value(row.get("website")),
+                _contact_export_value(row.get("tipo_establecimiento")),
+                _contact_export_value(row.get("fecha_incorporacion")),
+            ]
+        )
+    return output.getvalue()
+
+
+async def _load_all_contacts_for_export(
+    *,
+    repo: CRMRepository,
+    usuario_token: str,
+    search: str | None = None,
+    estado: str | None = None,
+    captura: str | None = None,
+    origen: str | None = None,
+    propietario: UUID | None = None,
+    date_from: datetime | None = None,
+    date_to: datetime | None = None,
+) -> list[dict[str, Any]]:
+    page_size = 500
+    offset = 0
+    rows: list[dict[str, Any]] = []
+    normalized_search = _normalize_contact_search_value(search)
+
+    while True:
+        batch = await repo.contactos_list(
+            usuario_token=usuario_token,
+            limit=page_size,
+            offset=offset,
+            estado=estado,
+            captura=captura,
+            origen=origen,
+            propietario=propietario,
+            date_from=date_from,
+            date_to=date_to,
+        )
+        rows.extend(batch)
+        if len(batch) < page_size:
+            break
+        offset += page_size
+        if offset > 100000:
+            logger.warning(
+                "contacts_export.stopped_after_safety_limit",
+                extra={"offset": offset, "rows": len(rows)},
+            )
+            break
+
+    if normalized_search:
+        rows = [row for row in rows if _contact_matches_search(row, normalized_search)]
+
+    return rows
+
+
 class CRMGeoCountryItem(BaseModel):
     code: str
     name: str
@@ -15044,6 +15213,44 @@ async def get_contacts_list(
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     return [CRMContactListRow.model_validate(row) for row in rows]
+
+
+@router.get("/contacts/export")
+async def export_contacts_csv(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    _: str = Depends(require_permission("contacts.read")),
+    user_token: str = Depends(require_user_token),
+    search: str | None = Query(default=None, min_length=1),
+    estado: str | None = Query(default=None),
+    captura: str | None = Query(default=None),
+    origen: str | None = Query(default=None),
+    propietario: UUID | None = Query(default=None),
+    date_from: Annotated[datetime | None, Query(alias="from")] = None,
+    date_to: datetime | None = None,
+) -> Response:
+    try:
+        rows = await _load_all_contacts_for_export(
+            repo=repo,
+            usuario_token=user_token,
+            search=search,
+            estado=estado,
+            captura=captura,
+            origen=origen,
+            propietario=propietario,
+            date_from=date_from,
+            date_to=date_to,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    csv_content = _render_contacts_csv(rows)
+    filename = f"contactos_{datetime.now(tz=timezone.utc).strftime('%Y%m%d_%H%M%S')}.csv"
+    return Response(
+        content=csv_content,
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @router.get("/contacts/{contacto_id}", response_model=CRMContact)

@@ -5,7 +5,9 @@ Estado: Borrador técnico
 
 ## Estado actual (2026-04-12)
 
-Se completó la transición operativa de **alta** y **edición** del panel hacia el modelo nuevo (con compatibilidad temporal con el legado).
+Se completó la transición operativa de **alta**, **edición** y **exportación base de contactos** del panel hacia el modelo nuevo (con compatibilidad temporal con el legado).
+
+Además, la vista de contactos ya utiliza un panel lateral real de detalle y ya no depende del drawer genérico por defecto para la información del contacto.
 
 Ver progreso detallado en:
 - `docs/Plan_personas_empresa_contactos/progreso.md`
