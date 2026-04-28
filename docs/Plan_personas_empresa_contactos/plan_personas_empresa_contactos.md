@@ -12,6 +12,8 @@ Además, la vista de contactos ya utiliza un panel lateral real de detalle y ya 
 Nota de archivo:
 - las referencias a `contactos` que permanecen en este documento describen la transición histórica
 - el flujo activo ya opera sobre `personas`, `cuentas` y `cuenta_personas`
+- el cierre operativo y documental completo vive en:
+  - `docs/Plan_personas_empresa_contactos/cierre_refactor_runtime_y_documentacion.md`
 
 Ver progreso detallado en:
 - `docs/Plan_personas_empresa_contactos/progreso.md`
@@ -277,6 +279,8 @@ Y también campos que son más de empresa/fiscal:
 - `website`
 - `tipo_establecimiento`
 - dirección completa
+
+Este bloque describe el origen historico del modelo. El estado operativo actual del plan ya quedo resumido en el archivo de cierre de la misma carpeta.
 
 Eso confirma que históricamente `contactos` funcionó como una mezcla de persona + empresa.
 

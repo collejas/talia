@@ -15,6 +15,9 @@ Nota histórica:
 - las migraciones y documentos del plan todavía conservan referencias a `contactos` como archivo de transición
 - el runtime activo del panel ya opera sobre `personas`, `cuentas` y `cuenta_personas`
 
+Documento de cierre:
+- `docs/Plan_personas_empresa_contactos/cierre_refactor_runtime_y_documentacion.md`
+
 ## Completado
 
 ### 1) Esquema y migraciones (DB)
@@ -131,3 +134,10 @@ Notas:
 - Pendiente solo si aparece otro consumidor real:
   - limpiar campos duplicados en `cuentas`/`contactos`
   - revisar relaciones SQL antiguas fuera del panel de contactos
+
+### 5) Limpieza semantica y cierre documental
+
+- Se limpio el backend activo para que los flujos principales hablen de `persona` en lugar de `contacto` cuando eso no rompe contratos.
+- Se retiro el ultimo embed directo de `public.contactos` del runtime activo.
+- Se documento el cierre completo en:
+  - `docs/Plan_personas_empresa_contactos/cierre_refactor_runtime_y_documentacion.md`
