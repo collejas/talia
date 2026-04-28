@@ -1209,7 +1209,7 @@ async def handle_incoming_message(
             attribution_event=publicidad_atribucion_event,
         )
 
-    contact_record = await _maybe_update_persona_location(contact_id)
+    persona_record = await _maybe_update_persona_location(contact_id)
 
     restart_created = bool(restart_context and restart_context.get("restart_created"))
     if restart_created:
@@ -1226,7 +1226,7 @@ async def handle_incoming_message(
             await whatsapp_tools._notify_sales_rep(
                 context=context,
                 trigger="restart_conversation",
-                contact=contact_record,
+                contact=persona_record,
                 opportunity_id=opportunity_ref,
                 resumen=resumen_text,
                 notes=notes_text,
@@ -1279,7 +1279,7 @@ async def handle_incoming_message(
             contact_id=contact_id,
             conversation_id=conversation_id,
             channel="whatsapp",
-            contact=contact_record,
+            contact=persona_record,
         )
         _record_stage_timing(stage_timings, "booking_context_ms", booking_context_started)
     except Exception as exc:
@@ -1391,7 +1391,7 @@ async def handle_incoming_message(
         final_reply_text = await _guard_booking_confirmation_claim(
             conversation_id=conversation_id,
             reply_text=final_reply_text,
-            contact=contact_record,
+            contact=persona_record,
             opportunity_id=opportunity_ref,
         )
     except Exception as exc:
@@ -1533,7 +1533,7 @@ async def handle_incoming_message(
     if send_result.error:
         metadata["delivery_error"] = send_result.error
 
-    resolved_contact_org = await resolve_whatsapp_organizacion(contact=contact_record) or organizacion_hint
+    resolved_persona_org = await resolve_whatsapp_organizacion(contact=persona_record) or organizacion_hint
     try:
         persist_outbound_started = time.perf_counter()
         outgoing_registration = await storage.register_whatsapp_message(
@@ -1546,7 +1546,7 @@ async def handle_incoming_message(
             metadata=metadata,
             wa_id=message.wa_id,
             phone_e164=normalized_from,
-            organizacion_id=resolved_contact_org,
+            organizacion_id=resolved_persona_org,
         )
         _record_stage_timing(stage_timings, "persist_outbound_ms", persist_outbound_started)
     except StorageError as exc:
