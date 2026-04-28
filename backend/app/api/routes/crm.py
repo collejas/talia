@@ -4858,7 +4858,6 @@ def _cliente_select_clause() -> str:
         "id,organizacion_id,contacto_id,cuenta_id,oportunidad_id,legacy_lead_id,"
         "estado_onboarding,rfc,razon_social,domicilio_fiscal,domicilio_fisico,regimen_fiscal,"
         "datos_facturacion,fuente,monto_estimado,moneda,metadatos,ganado_en,creado_en,actualizado_en,"
-        "contacto:contactos!clientes_contacto_org_fkey(id,nombre_completo,correo,telefono_e164,company_name),"
         "documentos:cliente_documentos!cliente_documentos_cliente_org_fkey(id,tipo,estado,descripcion,storage_url,"
         "storage_path,metadatos,creado_en,actualizado_en,cuenta_id,oportunidad_id),"
         "responsables:cliente_responsables!cliente_responsables_cliente_org_fkey(id,nombre,correo,telefono_e164,rol,"

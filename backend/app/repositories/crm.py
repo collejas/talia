@@ -586,7 +586,6 @@ class CRMRepository:
             "asignado:usuarios!oportunidades_asignado_usuario_org_fkey(id,nombre_completo,correo,telefono_e164)",
             "propietario:usuarios!oportunidades_propietario_usuario_org_fkey(id,nombre_completo,correo,telefono_e164)",
             "etapa:etapas_pipeline!oportunidades_etapa_org_fkey(id,nombre,codigo,categoria,orden,metadata)",
-            "contacto:contactos!oportunidades_contacto_principal_org_fkey(id,nombre_completo,correo,telefono_e164,company_name,notes,necesidad_proposito,estado,captura_estado,organizacion_id,contacto_datos)",
             "cuenta:cuentas!oportunidades_cuenta_org_fkey(id,nombre,telefono,correo)",
         ]
     )
@@ -598,7 +597,6 @@ class CRMRepository:
         "id,organizacion_id,contacto_id,cuenta_id,oportunidad_id,legacy_lead_id,"
         "estado_onboarding,rfc,razon_social,domicilio_fiscal,domicilio_fisico,regimen_fiscal,"
         "datos_facturacion,fuente,monto_estimado,moneda,metadatos,ganado_en,creado_en,actualizado_en,"
-        "contacto:contactos!clientes_contacto_org_fkey(id,nombre_completo,correo,telefono_e164,company_name),"
         "documentos:cliente_documentos!cliente_documentos_cliente_org_fkey(id,tipo,estado,descripcion,storage_url,"
         "storage_path,metadatos,creado_en,actualizado_en,cuenta_id,oportunidad_id),"
         "responsables:cliente_responsables!cliente_responsables_cliente_org_fkey(id,nombre,correo,telefono_e164,rol,"
@@ -1339,7 +1337,14 @@ class CRMRepository:
         data = resp.json()
         if not isinstance(data, list):
             raise CRMRepositoryError(f"Respuesta inesperada al listar oportunidades: {data!r}")
-        return data
+        rows = [row for row in data if isinstance(row, dict)]
+        if rows:
+            await self._attach_contact_rows(
+                organizacion_id=organizacion_id,
+                rows=rows,
+                source_fields=("contacto_principal_id",),
+            )
+        return rows
 
     async def list_users(
         self,
@@ -1398,7 +1403,6 @@ class CRMRepository:
                 "moneda",
                 "probabilidad",
                 "metadata",
-                "contacto:contactos!oportunidades_contacto_principal_org_fkey(id,nombre_completo,correo,telefono_e164)",
                 "cuenta:cuentas!oportunidades_cuenta_org_fkey(id,nombre)",
                 "etapa:etapas_pipeline!oportunidades_etapa_org_fkey(id,nombre,codigo,categoria,orden)",
             ]
@@ -1421,7 +1425,14 @@ class CRMRepository:
         data = resp.json()
         if not isinstance(data, list):
             raise CRMRepositoryError(f"Respuesta inesperada al listar oportunidades de venta: {data!r}")
-        return data
+        rows = [row for row in data if isinstance(row, dict)]
+        if rows:
+            await self._attach_contact_rows(
+                organizacion_id=organizacion_id,
+                rows=rows,
+                source_fields=("contacto_principal_id",),
+            )
+        return rows
 
     async def _list_contact_ids_by_captura_estado(
         self,
@@ -2135,6 +2146,11 @@ class CRMRepository:
         if isinstance(data, list) and data:
             row = data[0]
             if isinstance(row, dict):
+                await self._attach_contact_rows(
+                    organizacion_id=organizacion_id,
+                    rows=[row],
+                    source_fields=("contacto_principal_id",),
+                )
                 return row
         return None
 
@@ -3123,6 +3139,11 @@ class CRMRepository:
         row = data[0]
         if not isinstance(row, dict):
             raise CRMRepositoryError(f"Respuesta inválida al obtener oportunidad por id: {row!r}")
+        await self._attach_contact_rows(
+            organizacion_id=organizacion_id,
+            rows=[row],
+            source_fields=("contacto_principal_id",),
+        )
         return row
 
     async def assign_next_sales_rep(self, *, organizacion_id: UUID) -> dict[str, Any] | None:
@@ -3577,6 +3598,17 @@ class CRMRepository:
         row = data[0]
         if not isinstance(row, dict):
             return None
+        if row.get("contacto_principal_id"):
+            try:
+                org_uuid = _coerce_uuid(str(row.get("organizacion_id")), field="organizacion_id")
+            except Exception:
+                org_uuid = None
+            if org_uuid:
+                await self._attach_contact_rows(
+                    organizacion_id=org_uuid,
+                    rows=[row],
+                    source_fields=("contacto_principal_id",),
+                )
         return row
 
     async def update_opportunity(
@@ -5091,7 +5123,14 @@ class CRMRepository:
         data = resp.json() or []
         if isinstance(data, list) and data:
             row = data[0]
-            return row if isinstance(row, dict) else None
+            if isinstance(row, dict):
+                await self._attach_contact_rows(
+                    organizacion_id=organizacion_id,
+                    rows=[row],
+                    source_fields=("contacto_principal_id",),
+                )
+                return row
+            return None
         return None
 
     async def ensure_prospeccion_stage(self, *, organizacion_id: UUID) -> dict[str, Any]:
@@ -5468,10 +5507,10 @@ class CRMRepository:
                 "or("
                 f"titulo.ilike.{pattern},"
                 f"descripcion.ilike.{pattern},"
-                f"contacto.nombre_completo.ilike.{pattern},"
-                f"contacto.correo.ilike.{pattern},"
-                f"contacto.telefono_e164.ilike.{pattern},"
-                f"contacto.company_name.ilike.{pattern}"
+                f"metadata->>contacto_nombre.ilike.{pattern},"
+                f"metadata->>contacto_correo.ilike.{pattern},"
+                f"metadata->>contacto_telefono.ilike.{pattern},"
+                f"metadata->>contacto_empresa.ilike.{pattern}"
                 ")"
             )
         if and_filters:
@@ -5488,6 +5527,12 @@ class CRMRepository:
                 f"Respuesta inesperada al listar pipeline de oportunidades: {data!r}"
             )
         results = [row for row in data if isinstance(row, dict)]
+        if results:
+            await self._attach_contact_rows(
+                organizacion_id=organizacion_id,
+                rows=results,
+                source_fields=("contacto_principal_id",),
+            )
         if tiene_cita:
             target = str(tiene_cita).strip().lower()
             if target in ("con_cita", "sin_cita"):
@@ -5840,6 +5885,53 @@ class CRMRepository:
         if isinstance(persona_id, str) and persona_id.strip():
             return persona_id.strip()
         return None
+
+    async def _attach_contact_rows(
+        self,
+        *,
+        organizacion_id: UUID,
+        rows: list[dict[str, Any]],
+        source_fields: tuple[str, ...],
+        target_field: str = "contacto",
+    ) -> list[dict[str, Any]]:
+        contact_ids: list[UUID] = []
+        seen: set[str] = set()
+        for row in rows:
+            for source_field in source_fields:
+                raw_contact_id = row.get(source_field)
+                if raw_contact_id is None:
+                    continue
+                try:
+                    contact_uuid = _coerce_uuid(str(raw_contact_id), field=source_field)
+                except Exception:
+                    continue
+                contact_key = str(contact_uuid)
+                if contact_key in seen:
+                    continue
+                seen.add(contact_key)
+                contact_ids.append(contact_uuid)
+                break
+        if not contact_ids:
+            return rows
+        contact_rows = await self.get_contacts_by_ids(
+            organizacion_id=organizacion_id,
+            contacto_ids=contact_ids,
+        )
+        contact_map = {
+            str(row.get("id")): row
+            for row in contact_rows
+            if isinstance(row, dict) and row.get("id")
+        }
+        for row in rows:
+            for source_field in source_fields:
+                raw_contact_id = row.get(source_field)
+                if raw_contact_id is None:
+                    continue
+                contact = contact_map.get(str(raw_contact_id))
+                if contact:
+                    row[target_field] = contact
+                    break
+        return rows
 
     async def _persona_to_contact_row(
         self,
@@ -9515,7 +9607,14 @@ class CRMRepository:
         data = resp.json() or []
         if not isinstance(data, list):
             raise CRMRepositoryError(f"Respuesta inesperada al listar clientes: {data!r}")
-        return data
+        rows = [row for row in data if isinstance(row, dict)]
+        if rows:
+            await self._attach_contact_rows(
+                organizacion_id=organizacion_id,
+                rows=rows,
+                source_fields=("contacto_id",),
+            )
+        return rows
 
     async def get_cliente_por_oportunidad(
         self,
@@ -9549,7 +9648,14 @@ class CRMRepository:
         resp = await self._request("GET", "/rest/v1/clientes", params=params)
         data = resp.json() or []
         row = self._first_row(data)
-        return row if isinstance(row, dict) else None
+        if isinstance(row, dict):
+            await self._attach_contact_rows(
+                organizacion_id=organizacion_id,
+                rows=[row],
+                source_fields=("contacto_id",),
+            )
+            return row
+        return None
 
     async def get_cliente_por_id(
         self,
@@ -9583,7 +9689,14 @@ class CRMRepository:
         resp = await self._request("GET", "/rest/v1/clientes", params=params)
         data = resp.json() or []
         row = self._first_row(data)
-        return row if isinstance(row, dict) else None
+        if isinstance(row, dict):
+            await self._attach_contact_rows(
+                organizacion_id=organizacion_id,
+                rows=[row],
+                source_fields=("contacto_id",),
+            )
+            return row
+        return None
 
     async def get_cliente_por_id_service(
         self,
@@ -9598,7 +9711,14 @@ class CRMRepository:
         resp = await self._request("GET", "/rest/v1/clientes", params=params)
         data = resp.json() or []
         row = self._first_row(data)
-        return row if isinstance(row, dict) else None
+        if isinstance(row, dict):
+            await self._attach_contact_rows(
+                organizacion_id=organizacion_id,
+                rows=[row],
+                source_fields=("contacto_id",),
+            )
+            return row
+        return None
 
     async def update_cliente(
         self,
@@ -9629,7 +9749,20 @@ class CRMRepository:
         resp = await request
         data = resp.json() or []
         row = self._first_row(data)
-        return row if isinstance(row, dict) else None
+        if isinstance(row, dict):
+            org_value = row.get("organizacion_id")
+            try:
+                org_uuid = _coerce_uuid(str(org_value), field="organizacion_id") if org_value else None
+            except Exception:
+                org_uuid = None
+            if org_uuid:
+                await self._attach_contact_rows(
+                    organizacion_id=org_uuid,
+                    rows=[row],
+                    source_fields=("contacto_id",),
+                )
+            return row
+        return None
 
     async def convert_oportunidad_en_cliente(
         self,
@@ -9828,7 +9961,22 @@ class CRMRepository:
         )
         data = resp.json() or []
         row = self._first_row(data)
-        return row if isinstance(row, dict) else None
+        if not isinstance(row, dict):
+            return None
+        cliente = row.get("cliente")
+        if isinstance(cliente, dict):
+            org_value = cliente.get("organizacion_id") or row.get("organizacion_id")
+            try:
+                org_uuid = _coerce_uuid(str(org_value), field="organizacion_id") if org_value else None
+            except Exception:
+                org_uuid = None
+            if org_uuid:
+                await self._attach_contact_rows(
+                    organizacion_id=org_uuid,
+                    rows=[cliente],
+                    source_fields=("contacto_id",),
+                )
+        return row
 
     async def touch_portal_token(
         self,
