@@ -136,10 +136,10 @@ async def _notify_webchat_sales_if_needed(
 ) -> None:
     if not _is_webchat_context(context):
         return
-    contact_record = contact
-    if not contact_record:
+    persona_record = contact
+    if not persona_record:
         try:
-            contact_record = await storage.fetch_contact(context.contact_id)
+            persona_record = await storage.fetch_contact(context.contact_id)
         except StorageError as exc:
             logger.warning(
                 "lead_tools.notify_sales_contact_fetch_failed",
@@ -150,7 +150,7 @@ async def _notify_webchat_sales_if_needed(
                     "error": str(exc),
                 },
             )
-            contact_record = None
+            persona_record = None
 
     try:
         from app.channels.webchat import notifications as webchat_notifications
@@ -158,7 +158,7 @@ async def _notify_webchat_sales_if_needed(
         await webchat_notifications.notify_sales_rep(
             context=context,
             trigger=trigger,
-            contact=contact_record,
+            contact=persona_record,
             opportunity_id=opportunity_id,
             resumen=resumen,
             notes=notes,
@@ -366,12 +366,12 @@ async def try_execute_lead_tool(
                     extra={"conversation_id": context.conversation_id, "error": str(exc)},
                 )
         await _refresh_webchat_followup_state(context)
-        contact_record = None
+        persona_record = None
         if context.contact_id:
             try:
-                contact_record = await storage.fetch_contact(context.contact_id)
+                persona_record = await storage.fetch_contact(context.contact_id)
             except StorageError:
-                contact_record = None
+                persona_record = None
         if tarjeta_id:
             try:
                 await storage.maybe_auto_name_opportunity(
@@ -393,8 +393,8 @@ async def try_execute_lead_tool(
             opportunity_id=tarjeta_id,
             resumen=necesidad,
             notes=notes,
-            email=(contact_record or {}).get("correo") if contact_record else None,
-            contact=contact_record,
+            email=(persona_record or {}).get("correo") if persona_record else None,
+            contact=persona_record,
             extra={"source": "lead_tool_close_lead"},
         )
         return {
@@ -458,36 +458,36 @@ async def _handle_information_email(
                 if label and url:
                     resources.append({"label": label, "url": url})
 
-    contact = await _fetch_contact(context.contact_id)
-    contact_notes = None
-    contact_need = None
-    if contact:
-        contact_name = str(contact.get("nombre_completo") or "").strip() or None
-        contact_company = str(contact.get("company_name") or "").strip() or None
-        contact_email = str(contact.get("correo") or "").strip() or None
-        contact_notes = str(contact.get("notes") or "").strip() or None
-        contact_need = str(contact.get("necesidad_proposito") or "").strip() or None
+    persona = await _fetch_persona(context.contact_id)
+    persona_notes = None
+    persona_need = None
+    if persona:
+        contact_name = str(persona.get("nombre_completo") or "").strip() or None
+        contact_company = str(persona.get("company_name") or "").strip() or None
+        contact_email = str(persona.get("correo") or "").strip() or None
+        persona_notes = str(persona.get("notes") or "").strip() or None
+        persona_need = str(persona.get("necesidad_proposito") or "").strip() or None
         if not full_name:
             full_name = contact_name
         if not company_name:
             company_name = contact_company
         if not summary:
-            summary = contact_need or contact_notes
+            summary = persona_need or persona_notes
         if contact_email and contact_email.lower() != email_value.lower():
             try:
                 await storage.update_contact(
-                    contact.get("id") or context.contact_id, {"correo": email_value.lower()}
+                    persona.get("id") or context.contact_id, {"correo": email_value.lower()}
                 )
             except StorageError as exc:
                 logger.warning(
                     "lead_tools.sync_contact_failed",
                     extra={
-                        "contact_id": contact.get("id") or context.contact_id,
-                "error": str(exc),
-            },
-        )
+                        "contact_id": persona.get("id") or context.contact_id,
+                        "error": str(exc),
+                    },
+                )
 
-    mail_org_uuid = _contact_org_uuid(contact)
+    mail_org_uuid = _persona_org_uuid(persona)
     mail_settings = await tenant_runtime.get_mail_runtime_settings(organizacion_id=mail_org_uuid)
 
     template_row: dict[str, Any] | None = None
@@ -558,8 +558,8 @@ async def _handle_information_email(
     try:
         await storage.upsert_conversation_insights(
             conversation_id=context.conversation_id,
-            resumen=summary or contact_notes,
-            intencion=contact_need,
+            resumen=summary or persona_notes,
+            intencion=persona_need,
             siguiente_accion="informacion_enviada_email",
         )
     except StorageError as exc:
@@ -572,10 +572,10 @@ async def _handle_information_email(
         context=context,
         trigger="information_email",
         opportunity_id=None,
-        resumen=summary or contact_need,
-        notes=contact_notes,
+        resumen=summary or persona_need,
+        notes=persona_notes,
         email=email_value,
-        contact=contact,
+        contact=persona,
         extra={"source": "lead_tool_information_email", "mail_message_id": message_id},
     )
 
@@ -641,7 +641,7 @@ async def _handle_restart_conversation_cycle(
     }
 
 
-async def _fetch_contact(contact_id: str | None) -> dict[str, Any] | None:
+async def _fetch_persona(contact_id: str | None) -> dict[str, Any] | None:
     if not contact_id:
         return None
     try:
@@ -654,10 +654,10 @@ async def _fetch_contact(contact_id: str | None) -> dict[str, Any] | None:
     return None
 
 
-def _contact_org_uuid(contact: dict[str, Any] | None) -> UUID | None:
-    if not contact:
+def _persona_org_uuid(persona: dict[str, Any] | None) -> UUID | None:
+    if not persona:
         return None
-    org_value = webchat_service._extract_contact_org(contact)
+    org_value = webchat_service._extract_contact_org(persona)
     if not org_value:
         return None
     resolved = webchat_service._resolve_org_uuid(org_value)
