@@ -3862,10 +3862,11 @@ async def _run_assistant_turn(
         "max_output_tokens": max_output_tokens,
         "temperature": 0.4,
     }
+    prompt_variables: dict[str, Any] = {"conversacion_id": context.conversation_id}
 
     def _build_request_template(*, include_tools: bool = True) -> dict[str, Any]:
         if assistant.is_prompt:
-            prompt_payload = _build_prompt_payload(assistant, context)
+            prompt_payload = _build_prompt_payload(assistant, context, prompt_variables)
             return {
                 "prompt": prompt_payload,
                 "text": {"format": {"type": "text"}},
@@ -3898,19 +3899,47 @@ async def _run_assistant_turn(
     )
 
     tool_loop_started = time.perf_counter()
-    result = await run_tool_loop(
-        client=client,
-        assistant=assistant,
-        assistant_spec=assistant_spec,
-        context=runtime_context,
-        initial_request=request_kwargs,
-        request_template=lambda: _build_request_template(include_tools=True),
-        execute_tool=lambda name, args, _: _execute_function_call(name, args, context),
-        openai_conversation_id=openai_conversation_id,
-        previous_response_id=previous_response_id,
-        api_key=api_key,
-        log=logger,
-    )
+    try:
+        result = await run_tool_loop(
+            client=client,
+            assistant=assistant,
+            assistant_spec=assistant_spec,
+            context=runtime_context,
+            initial_request=request_kwargs,
+            request_template=lambda: _build_request_template(include_tools=True),
+            execute_tool=lambda name, args, _: _execute_function_call(name, args, context),
+            openai_conversation_id=openai_conversation_id,
+            previous_response_id=previous_response_id,
+            api_key=api_key,
+            log=logger,
+        )
+    except Exception as exc:
+        if assistant.is_prompt and prompt_variables and _is_unknown_prompt_variable_error(exc):
+            log_event(
+                logger,
+                "webchat.prompt_variables_retry_without_variables",
+                conversation_id=context.conversation_id,
+                prompt_id=assistant.prompt_id,
+                prompt_version=assistant.prompt_version,
+            )
+            prompt_variables = {}
+            request_kwargs.update(_build_request_template(include_tools=True))
+            tool_loop_started = time.perf_counter()
+            result = await run_tool_loop(
+                client=client,
+                assistant=assistant,
+                assistant_spec=assistant_spec,
+                context=runtime_context,
+                initial_request=request_kwargs,
+                request_template=lambda: _build_request_template(include_tools=True),
+                execute_tool=lambda name, args, _: _execute_function_call(name, args, context),
+                openai_conversation_id=openai_conversation_id,
+                previous_response_id=previous_response_id,
+                api_key=api_key,
+                log=logger,
+            )
+        else:
+            raise
     debug_timings["tool_loop_ms"] = round((time.perf_counter() - tool_loop_started) * 1000, 2)
 
     assistant_reply = _extract_text_from_response(result.response)
@@ -5346,7 +5375,16 @@ def _extract_metadata_from_content(content: str) -> dict[str, Any] | None:
     return None
 
 
-def _build_prompt_payload(assistant: AssistantConfig, context: WebchatContext) -> dict[str, Any]:
+def _build_prompt_payload(
+    assistant: AssistantConfig,
+    context: WebchatContext,
+    variables: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     """Puente específico para usar el helper compartido con el contexto webchat."""
-    variables = {"conversacion_id": context.conversation_id}
-    return build_assistant_prompt_payload(assistant, variables)
+    prompt_variables = variables if variables is not None else {"conversacion_id": context.conversation_id}
+    return build_assistant_prompt_payload(assistant, prompt_variables)
+
+
+def _is_unknown_prompt_variable_error(exc: Exception) -> bool:
+    text = str(exc or "").lower()
+    return "prompt_variable_unknown" in text or "unknown prompt variables" in text
