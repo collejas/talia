@@ -67,18 +67,18 @@ def _normalize_required_fields_for_answers(
 
 def _extract_scoring_answers(
     *,
-    contact: dict[str, Any] | None,
+    persona: dict[str, Any] | None,
     opportunity_metadata: dict[str, Any],
 ) -> dict[str, Any]:
     scoring = _ensure_dict(opportunity_metadata.get("lead_scoring"))
     answers = _ensure_dict(scoring.get("answers"))
     if answers:
         return answers
-    if not contact:
+    if not persona:
         return {}
-    contact_data = _ensure_dict(contact.get("contacto_datos"))
-    contact_scoring = _ensure_dict(contact_data.get("lead_scoring"))
-    return _ensure_dict(contact_scoring.get("answers"))
+    persona_data = _ensure_dict(persona.get("contacto_datos"))
+    persona_scoring = _ensure_dict(persona_data.get("lead_scoring"))
+    return _ensure_dict(persona_scoring.get("answers"))
 
 
 def _extract_profiling_questions(
@@ -174,19 +174,19 @@ async def _load_required_case_a_questions(
     return required_fields
 
 
-def _has_base_fields_for_case_a(contact: dict[str, Any] | None) -> bool:
-    if not contact:
+def _has_base_fields_for_case_a(persona: dict[str, Any] | None) -> bool:
+    if not persona:
         return False
-    return _has_text(contact.get("correo")) or _has_text(
-        contact.get("telefono_e164") or contact.get("telefono")
+    return _has_text(persona.get("correo")) or _has_text(
+        persona.get("telefono_e164") or persona.get("telefono")
     )
 
 
-def _has_base_fields_for_case_b(contact: dict[str, Any] | None) -> bool:
-    if not contact:
+def _has_base_fields_for_case_b(persona: dict[str, Any] | None) -> bool:
+    if not persona:
         return False
-    return _has_text(contact.get("correo")) or _has_text(
-        contact.get("telefono_e164") or contact.get("telefono")
+    return _has_text(persona.get("correo")) or _has_text(
+        persona.get("telefono_e164") or persona.get("telefono")
     )
 
 
@@ -195,7 +195,7 @@ async def _has_minimum_profile_for_case_a(
     repo: CRMRepository,
     organizacion_id: UUID,
     channel: str,
-    contact: dict[str, Any] | None,
+    persona: dict[str, Any] | None,
     opportunity_metadata: dict[str, Any],
 ) -> bool:
     if not await tenant_runtime.is_profiling_enabled(
@@ -204,7 +204,7 @@ async def _has_minimum_profile_for_case_a(
     ):
         return True
 
-    answers = _extract_scoring_answers(contact=contact, opportunity_metadata=opportunity_metadata)
+    answers = _extract_scoring_answers(persona=persona, opportunity_metadata=opportunity_metadata)
     profiling_questions = _extract_profiling_questions(
         opportunity_metadata=opportunity_metadata,
         channel=channel,
@@ -229,11 +229,11 @@ async def _has_minimum_profile_for_case_a(
     )
 
 
-def _is_webchat_reengage_exhausted(contact: dict[str, Any] | None) -> bool:
-    if not contact:
+def _is_webchat_reengage_exhausted(persona: dict[str, Any] | None) -> bool:
+    if not persona:
         return False
-    contact_data = _ensure_dict(contact.get("contacto_datos"))
-    webchat_followup = _ensure_dict(contact_data.get("webchat_followup"))
+    persona_data = _ensure_dict(persona.get("contacto_datos"))
+    webchat_followup = _ensure_dict(persona_data.get("webchat_followup"))
     state = _ensure_dict(webchat_followup.get("state"))
     reengage = _ensure_dict(state.get("reengage"))
     try:
@@ -380,7 +380,7 @@ async def notify_sales_rep(
             repo=repo,
             organizacion_id=org_uuid,
             channel=channel_key,
-            contact=persona_record,
+            persona=persona_record,
             opportunity_metadata=metadata,
         ):
             logger.info(
