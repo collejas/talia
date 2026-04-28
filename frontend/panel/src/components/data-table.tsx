@@ -229,6 +229,7 @@ function SortIcon({ direction }: { direction: false | "asc" | "desc" }) {
 function createBaseColumns(
   labels: ColumnLabels = {},
   detailRenderer?: (row: TableRowData) => React.ReactNode,
+  detailDescription?: string,
   hideDefaultActions = false,
 ): ColumnDef<TableRowData>[] {
   const headerLabel = labels.header ?? "Sesión"
@@ -280,6 +281,7 @@ function createBaseColumns(
           <TableCellViewer
             item={row.original}
             renderDetails={detailRenderer}
+            detailDescription={detailDescription}
           />
         )
       },
@@ -557,6 +559,8 @@ export function DataTable({
   columnLabels,
   metricColumns = [],
   renderRowDetails,
+  detailDescription,
+  toolbarLeadingActions,
   toolbarActions,
   forcedColumnOrder,
   hideDefaultActions = false,
@@ -568,6 +572,8 @@ export function DataTable({
   columnLabels?: ColumnLabels
   metricColumns?: MetricColumnConfig[]
   renderRowDetails?: (row: TableRowData) => React.ReactNode
+  detailDescription?: string
+  toolbarLeadingActions?: React.ReactNode
   toolbarActions?: React.ReactNode
   forcedColumnOrder?: string[]
   hideDefaultActions?: boolean
@@ -608,8 +614,14 @@ export function DataTable({
   )
 
   const resolvedBaseColumns = React.useMemo(
-    () => createBaseColumns(columnLabels, renderRowDetails, hideDefaultActions),
-    [columnLabels, renderRowDetails, hideDefaultActions]
+    () =>
+      createBaseColumns(
+        columnLabels,
+        renderRowDetails,
+        detailDescription,
+        hideDefaultActions,
+      ),
+    [columnLabels, renderRowDetails, detailDescription, hideDefaultActions]
   )
 
   const metricColumnDefs = React.useMemo<ColumnDef<TableRowData>[]>(() => {
@@ -756,8 +768,9 @@ export function DataTable({
       defaultValue="outline"
       className="w-full flex-col justify-start gap-6"
     >
-      <div className="flex items-center justify-end px-4 lg:px-6">
-        <div className="flex items-center gap-2">
+      <div className="flex items-center justify-between gap-4 px-4 lg:px-6">
+        <div className="min-w-0 flex-1">{toolbarLeadingActions}</div>
+        <div className="flex shrink-0 items-center gap-2">
           {toolbarActions}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -1006,9 +1019,10 @@ const chartConfig = {
   },
 } satisfies ChartConfig
 
-function TableCellViewer({ item, renderDetails }: {
+function TableCellViewer({ item, renderDetails, detailDescription }: {
   item: TableRowData
   renderDetails?: (row: TableRowData) => React.ReactNode
+  detailDescription?: string
 }) {
   const isMobile = useIsMobile()
 
@@ -1082,7 +1096,7 @@ function TableCellViewer({ item, renderDetails }: {
         <DrawerHeader className="gap-1">
           <DrawerTitle>{item.header}</DrawerTitle>
           <DrawerDescription>
-            Showing total visitors for the last 6 months
+            {detailDescription ?? "Showing total visitors for the last 6 months"}
           </DrawerDescription>
         </DrawerHeader>
         <div className="flex flex-col gap-4 overflow-y-auto px-4 text-sm">
@@ -1165,9 +1179,8 @@ function TableCellViewer({ item, renderDetails }: {
           )}
         </div>
         <DrawerFooter>
-          <Button>Submit</Button>
           <DrawerClose asChild>
-            <Button variant="outline">Done</Button>
+            <Button variant="outline">Cerrar</Button>
           </DrawerClose>
         </DrawerFooter>
       </DrawerContent>

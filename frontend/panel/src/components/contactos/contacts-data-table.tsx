@@ -4,12 +4,20 @@ import * as React from "react";
 import type { ColumnDef, VisibilityState } from "@tanstack/react-table";
 import {
   IconArrowsLeftRight,
+  IconBuilding,
+  IconClock,
+  IconDownload,
+  IconMail,
   IconPencil,
+  IconPhone,
+  IconMessageCircle,
+  IconUser,
   IconTrash,
 } from "@tabler/icons-react";
 import { z } from "zod";
 
 import { DataTable, schema } from "@/components/data-table";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -26,6 +34,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Separator } from "@/components/ui/separator";
 import { usePermissions } from "@/hooks/use-permissions";
 import type { ContactTableRow } from "@/lib/contactos/data";
 import { ContactCreateFlow } from "@/components/contactos/contact-create-flow";
@@ -380,20 +389,6 @@ export function ContactsDataTable({ data }: { data: ContactTableRow[] }) {
     });
   };
 
-  const toolbarActions = canWrite ? (
-    <Button
-      type="button"
-      size="sm"
-      onClick={() => {
-        setError(null);
-        setSuccess(null);
-        setCreateOpen(true);
-      }}
-    >
-      Nuevo contacto
-    </Button>
-  ) : null;
-
   const filteredData = React.useMemo(() => {
     const term = normalizeSearch(searchTerm);
     if (!term) return data;
@@ -406,44 +401,94 @@ export function ContactsDataTable({ data }: { data: ContactTableRow[] }) {
       ? `${filteredData.length} de ${data.length} contactos`
       : `${data.length} contactos`;
 
+  const toolbarLeadingActions = (
+    <div className="flex w-full flex-wrap items-center gap-2">
+      <div className="relative w-full lg:w-[340px]">
+        <Input
+          value={searchTerm}
+          onChange={(event) => setSearchTerm(event.target.value)}
+          placeholder="Buscar contacto por nombre, correo, teléfono, empresa o código"
+          aria-label="Buscar contacto"
+          className="pr-24"
+        />
+        {searchTerm ? (
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="absolute right-1 top-1 h-8 px-3 text-xs text-muted-foreground"
+            onClick={() => setSearchTerm("")}
+          >
+            Limpiar
+          </Button>
+        ) : null}
+      </div>
+      <div className="text-sm text-muted-foreground">{resultsLabel}</div>
+    </div>
+  );
+
+  const toolbarActions = (
+    <div className="flex flex-wrap items-center gap-2">
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        onClick={() => exportContactsCsv(filteredData)}
+      >
+        <IconDownload className="size-4" />
+        Exportar CSV
+      </Button>
+      {canWrite ? (
+        <Button
+          type="button"
+          size="sm"
+          onClick={() => {
+            setError(null);
+            setSuccess(null);
+            setCreateOpen(true);
+          }}
+        >
+          Nuevo contacto
+        </Button>
+      ) : null}
+    </div>
+  );
+
   const contactColumnOrder = React.useMemo(
     () => ["drag-handle", "row-select", "session", "acciones"],
     [],
   );
 
+  const renderRowDetails = (row: TableRow) => (
+    <ContactDetailPanel
+      row={row}
+      onEdit={() => openEdit(row)}
+      onReassign={() => {
+        setActiveRow(row);
+        const ownerId = extractString(row.raw as Record<string, unknown> | undefined, ["propietario_id"]);
+        setSelectedVendorId(ownerId ?? "");
+        setError(null);
+        setSuccess(null);
+        setReassignOpen(true);
+      }}
+      onDelete={() => {
+        setActiveRow(row);
+        setError(null);
+        setSuccess(null);
+        setDeleteOpen(true);
+      }}
+    />
+  );
+
   return (
     <>
-      <div className="flex flex-col gap-3 px-4 lg:px-6">
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-          <div className="relative w-full sm:max-w-md">
-            <Input
-              value={searchTerm}
-              onChange={(event) => setSearchTerm(event.target.value)}
-              placeholder="Buscar contacto por nombre, correo, teléfono, empresa o código"
-              aria-label="Buscar contacto"
-              className="pr-24"
-            />
-            {searchTerm ? (
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                className="absolute right-1 top-1 h-8 px-3 text-xs text-muted-foreground"
-                onClick={() => setSearchTerm("")}
-              >
-                Limpiar
-              </Button>
-            ) : null}
-          </div>
-          <div className="text-sm text-muted-foreground sm:ml-auto">
-            {resultsLabel}
-          </div>
-        </div>
-      </div>
       <DataTable
         data={filteredData}
         columnLabels={contactColumnLabels}
         extraColumns={extraColumns}
+        detailDescription="Detalle del contacto"
+        toolbarLeadingActions={toolbarLeadingActions}
+        renderRowDetails={renderRowDetails}
         forcedColumnOrder={contactColumnOrder}
         hideDefaultActions
         initialVisibility={contactColumnVisibility}
@@ -578,4 +623,228 @@ function matchesContactSearch(row: TableRow, term: string): boolean {
       return normalizeSearch(String(value));
     })
     .some((value) => value.includes(term));
+}
+
+function formatContactValue(value: unknown): string {
+  if (value === null || value === undefined || value === "") return "—";
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value.toLocaleString("es-MX");
+  }
+  return String(value);
+}
+
+function escapeCsvValue(value: unknown): string {
+  const text = formatContactValue(value);
+  if (!text.includes(",") && !text.includes('"') && !text.includes("\n") && !text.includes("\r")) {
+    return text;
+  }
+  return `"${text.replaceAll('"', '""')}"`
+}
+
+function buildContactsCsv(rows: TableRow[]): string {
+  const headers = [
+    "Contacto",
+    "Código contacto",
+    "Código empresa",
+    "Correo",
+    "Teléfono",
+    "Empresa",
+    "Propietario",
+    "Estado",
+    "Captura",
+    "Origen",
+    "Último contacto",
+    "Conversaciones",
+    "Puesto",
+    "Área",
+    "Rol decisión",
+    "C.P.",
+    "Municipio",
+    "Estado / Entidad",
+    "País",
+    "Sitio web",
+    "Tipo establecimiento",
+    "Notas",
+  ];
+
+  const lines = rows.map((row) => {
+    const raw = (row.raw ?? {}) as Record<string, unknown>;
+    return [
+      row.header,
+      raw.codigo_contacto,
+      raw.codigo_cuenta,
+      raw.correo,
+      raw.telefono,
+      raw.company_name,
+      raw.propietario_nombre,
+      raw.estado,
+      raw.captura_estado,
+      raw.origen,
+      row.limit || raw.ultimo_contacto_en,
+      raw.conversaciones,
+      raw.puesto,
+      raw.area,
+      raw.rol_decision,
+      raw.codigo_postal,
+      raw.municipio,
+      raw.entidad,
+      raw.pais,
+      raw.website,
+      raw.tipo_establecimiento,
+      raw.notes,
+    ]
+      .map(escapeCsvValue)
+      .join(",");
+  });
+
+  return ["\uFEFF" + headers.map(escapeCsvValue).join(","), ...lines].join("\r\n");
+}
+
+function exportContactsCsv(rows: TableRow[]): void {
+  const csv = buildContactsCsv(rows);
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = `contactos_${new Date().toISOString().slice(0, 10)}.csv`;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  URL.revokeObjectURL(url);
+}
+
+function ContactDetailPanel({
+  row,
+  onEdit,
+  onReassign,
+  onDelete,
+}: {
+  row: TableRow;
+  onEdit: () => void;
+  onReassign: () => void;
+  onDelete: () => void;
+}) {
+  const raw = (row.raw ?? {}) as Record<string, unknown>;
+
+  const contactName = row.header;
+  const company = formatContactValue(raw.company_name);
+  const code = formatContactValue(raw.codigo_contacto);
+  const accountCode = formatContactValue(raw.codigo_cuenta);
+  const email = formatContactValue(raw.correo);
+  const phone = formatContactValue(raw.telefono);
+  const origin = formatContactValue(raw.origen);
+  const owner = formatContactValue(raw.propietario_nombre);
+  const status = formatContactValue(raw.estado);
+  const capture = formatContactValue(raw.captura_estado);
+  const conversations = formatContactValue(raw.conversaciones);
+  const lastContact = formatDate(raw.ultimo_contacto_en);
+  const notes = formatContactValue(raw.notes);
+  const role = formatContactValue(raw.rol_decision);
+  const position = formatContactValue(raw.puesto);
+  const area = formatContactValue(raw.area);
+  const postalCode = formatContactValue(raw.codigo_postal);
+  const city = formatContactValue(raw.municipio);
+  const state = formatContactValue(raw.entidad);
+  const country = formatContactValue(raw.pais);
+  const website = formatContactValue(raw.website);
+  const establishment = formatContactValue(raw.tipo_establecimiento);
+
+  return (
+    <div className="space-y-5 pb-6">
+      <div className="flex flex-wrap gap-2">
+        <Button type="button" size="sm" onClick={onEdit}>
+          <IconPencil className="size-4" />
+          Editar
+        </Button>
+        <Button type="button" variant="outline" size="sm" onClick={onReassign}>
+          <IconArrowsLeftRight className="size-4" />
+          Reasignar
+        </Button>
+        <Button type="button" variant="destructive" size="sm" onClick={onDelete}>
+          <IconTrash className="size-4" />
+          Eliminar
+        </Button>
+      </div>
+
+      <div className="grid gap-3 rounded-xl border bg-muted/20 p-4">
+        <div className="flex flex-col gap-1">
+          <div className="text-xs uppercase tracking-wide text-muted-foreground">Contacto</div>
+          <div className="text-xl font-semibold">{contactName}</div>
+          <div className="text-sm text-muted-foreground">
+            {company !== "—" ? company : "Sin empresa asociada"}
+          </div>
+        </div>
+
+        <Separator />
+
+        <div className="grid gap-3 sm:grid-cols-2">
+          <DetailItem icon={<IconMail className="size-4" />} label="Correo" value={email} href={email !== "—" ? `mailto:${email}` : undefined} />
+          <DetailItem icon={<IconPhone className="size-4" />} label="Teléfono" value={phone} href={phone !== "—" ? `tel:${phone}` : undefined} />
+          <DetailItem icon={<IconBuilding className="size-4" />} label="Empresa" value={company} />
+          <DetailItem icon={<IconUser className="size-4" />} label="Propietario" value={owner} />
+          <DetailItem icon={<IconClock className="size-4" />} label="Último contacto" value={lastContact} />
+          <DetailItem icon={<IconMessageCircle className="size-4" />} label="Conversaciones" value={conversations} />
+        </div>
+      </div>
+
+      <div className="grid gap-3 rounded-xl border p-4">
+        <div className="flex flex-wrap gap-2">
+          <Badge variant="outline">Estado: {status}</Badge>
+          <Badge variant="outline">Captura: {capture}</Badge>
+          <Badge variant="outline">Origen: {origin}</Badge>
+        </div>
+
+        <Separator />
+
+        <div className="grid gap-3 sm:grid-cols-2">
+          <DetailItem label="Código contacto" value={code} />
+          <DetailItem label="Código empresa" value={accountCode} />
+          <DetailItem label="Puesto" value={position} />
+          <DetailItem label="Rol decisión" value={role} />
+          <DetailItem label="Área" value={area} />
+          <DetailItem label="C.P." value={postalCode} />
+          <DetailItem label="Municipio" value={city} />
+          <DetailItem label="Estado" value={state} />
+          <DetailItem label="País" value={country} />
+          <DetailItem label="Sitio web" value={website} href={website !== "—" ? website : undefined} />
+          <DetailItem label="Tipo establecimiento" value={establishment} />
+        </div>
+      </div>
+
+      <div className="rounded-xl border p-4">
+        <div className="mb-2 text-sm font-medium">Notas</div>
+        <p className="whitespace-pre-wrap text-sm text-muted-foreground">
+          {notes !== "—" ? notes : "Sin notas registradas."}
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function DetailItem({
+  label,
+  value,
+  icon,
+  href,
+}: {
+  label: string;
+  value: string;
+  icon?: React.ReactNode;
+  href?: string;
+}) {
+  return (
+    <div className="grid gap-1">
+      <div className="flex items-center gap-1.5 text-xs uppercase tracking-wide text-muted-foreground">
+        {icon}
+        <span>{label}</span>
+      </div>
+      {href ? (
+        <a href={href} className="break-words text-sm font-medium text-primary underline-offset-2 hover:underline">
+          {value}
+        </a>
+      ) : (
+        <div className="break-words text-sm font-medium">{value}</div>
+      )}
+    </div>
+  );
 }
