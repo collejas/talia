@@ -6,11 +6,10 @@ Fecha: 2026-04-28 (UTC)
 
 La maqueta ya coincide en gran parte con lo que quedo implementado en el panel:
 
-- la accion principal es `Nuevo contacto`
+- la accion principal de creacion es `Nuevo contacto`
 - existen acciones separadas para:
   - `Nueva empresa`
   - `Persona física con actividad empresarial`
-  - `Vincular contacto a empresa`
 - el flujo de vinculacion ya no depende de crear un contacto nuevo
 - el alta y la edicion muestran la experiencia con lenguaje de front
 - el layout real ya privilegia un panel amplio con resumen contextual
@@ -28,6 +27,24 @@ Regla simple:
 - mostrar todos los campos persistidos de la entidad que se esta editando
 - ocultar unicamente los IDs
 - los campos tecnicos tambien deben tener representacion visual si forman parte de la persistencia
+
+## Definicion funcional
+
+La maqueta sigue tres botones de creacion:
+
+- `Contacto`
+- `Empresa`
+- `Persona física con actividad empresarial`
+
+Y una accion secundaria independiente:
+
+- `Vincular contacto a empresa`
+
+Regla de negocio:
+
+- `Contacto`: persona + relacion con empresa.
+- `Empresa`: datos fiscales + direccion + relacion con contacto.
+- `Persona física con actividad empresarial`: persona + empresa + datos fiscales + direccion + relacion principal automatica.
 
 ## Orden visual planeado
 
@@ -308,10 +325,27 @@ Mostrar en formato compacto:
 - Checkbox: `Esta persona sera el contacto principal`
 - Checkbox: `Agregar otro contacto despues`
 
-#### Accion adicional
+#### Bloque: Datos fiscales
 
-- Boton: `Vincular contacto a empresa`
-- Usa el mismo flujo que la relacion independiente, pero puede precargar la persona o la empresa segun desde donde se abra
+- Uso CFDI
+- Forma de pago
+- Metodo de pago
+- Email de facturacion
+
+#### Bloque: Direccion
+
+- Pais
+- Estado
+- Municipio
+- Calle
+- Numero exterior
+- Numero interior
+- Codigo postal
+
+#### Comportamiento
+
+- La relacion principal se crea automaticamente al guardar
+- La persona y la empresa se registran juntas porque en este caso son la misma unidad comercial
 
 ### Resumen lateral
 

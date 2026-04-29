@@ -7,11 +7,11 @@ Fecha: 2026-04-28 (UTC)
 Este plan ya quedo implementado en el panel en su parte principal de experiencia:
 
 - el alta de contactos dejo de ser un modal ambiguo
-- se agregaron las acciones de primer nivel:
+- se agregaron las acciones de creacion de primer nivel:
   - `Nuevo contacto`
   - `Nueva empresa`
   - `Persona física con actividad empresarial`
-  - `Vincular contacto a empresa`
+- la accion `Vincular contacto a empresa` queda como flujo secundario independiente
 - el flujo de alta y edicion ya usa copy de usuario final
 - el formulario de vinculacion independiente ya existe como flujo separado
 - la vista principal ya conecta el selector de accion con el flujo correcto
@@ -37,17 +37,37 @@ Regla simple:
 - ocultar unicamente los campos `id`
 - si un campo es tecnico pero sigue siendo persistido, debe tener una representacion visual, aunque sea en un bloque secundario
 
+## Definicion funcional
+
+La vista principal ya no usa `contactos` como entidad central de captura.
+
+El modal de creacion se organiza en tres botones de creacion:
+
+- `Contacto`
+- `Empresa`
+- `Persona física con actividad empresarial`
+
+Y una accion secundaria separada:
+
+- `Vincular contacto a empresa`
+
+Regla de negocio:
+
+- `Contacto`: crea la persona y permite vincularla a una empresa existente o nueva.
+- `Empresa`: crea la empresa con sus datos fiscales, direccion y contactos vinculados.
+- `Persona física con actividad empresarial`: crea persona + empresa + datos fiscales + direccion y genera automaticamente la relacion principal.
+- `Vincular contacto a empresa`: reutiliza una persona existente y crea o ajusta la relacion con una cuenta.
+
 ## Orden visual planeado
 
 ### Flujo principal
 
 1. Abrir `Nuevo contacto` o `Editar`.
 2. Mostrar un panel ancho o drawer grande con lenguaje de negocio.
-3. En alta, primero elegir el tipo:
+3. En alta, primero elegir el tipo de creacion:
    - `Contacto`
    - `Empresa`
    - `Persona física con actividad empresarial`
-   - `Vincular contacto a empresa`
 4. Mostrar solo el formulario del caso elegido.
 5. Mostrar resumen lateral con lo capturado.
 6. Confirmar y guardar.
@@ -76,9 +96,12 @@ Regla simple:
 
 1. Datos de la persona.
 2. Datos del negocio.
-3. Relación principal.
-4. Resumen lateral.
-5. Guardar registro.
+3. Datos fiscales.
+4. Dirección.
+5. Relación principal.
+6. La relacion se crea automaticamente al guardar.
+7. Resumen lateral.
+8. Guardar registro.
 
 #### 4. Vincular contacto a empresa
 
@@ -124,6 +147,15 @@ Regla simple:
 - representante legal
 - fechas de inicio y fin
 - notas de la relación
+
+### Persona física con actividad empresarial
+
+- persona
+- empresa
+- datos fiscales
+- dirección
+- relación principal
+- creación automática del vínculo al guardar
 
 ## Objetivo
 
@@ -177,7 +209,8 @@ La vista debe tener botones separados para:
 - `Nuevo contacto`
 - `Nueva empresa`
 - `Persona física con actividad empresarial`
-- `Vincular contacto a empresa`
+
+La accion `Vincular contacto a empresa` debe existir, pero como flujo secundario independiente, no como uno de los botones de creacion.
 
 ### Paso 1. Elegir tipo de alta
 

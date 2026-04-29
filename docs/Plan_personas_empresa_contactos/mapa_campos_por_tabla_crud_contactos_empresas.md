@@ -5,6 +5,9 @@ Fecha: 2026-04-29 (UTC)
 ## Regla base
 
 - La UI debe alinearse con las tablas reales de la base de datos.
+- El modal de creacion se organiza en tres botones de alta: `Contacto`, `Empresa` y `Persona física con actividad empresarial`.
+- `Vincular contacto a empresa` existe como accion secundaria independiente.
+- `Persona física con actividad empresarial` crea automaticamente la relacion principal al guardar.
 - Solo se ocultan los campos `id` y los IDs de relación cuando no aporten al usuario final.
 - Los timestamps pueden mostrarse como metadatos o solo lectura, pero no forman parte del flujo de captura principal.
 - Los campos técnicos o de compatibilidad pueden ir en un bloque avanzado si hacen falta, pero no deben desaparecer del mapa.
@@ -165,7 +168,7 @@ Fecha: 2026-04-29 (UTC)
 
 ## `public.contactos` legacy
 
-Esta tabla sigue existiendo como compatibilidad y referencia histórica.
+Esta tabla sigue existiendo como compatibilidad y referencia histórica, pero ya no es la base del flujo nuevo.
 
 | Campo | Estado | Notas |
 |---|---|---|

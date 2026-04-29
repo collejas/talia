@@ -9,7 +9,7 @@ La propuesta ya quedo ejecutada en el panel para el flujo principal de contactos
 - el selector de tipo de alta ya existe
 - el flujo de alta y edicion ya se separo por caso de uso
 - la vinculacion contacto-empresa ya tiene flujo independiente
-- el dashboard principal de contactos ya expone las cuatro acciones de primer nivel
+- el dashboard principal de contactos ya expone tres acciones de creacion y una accion secundaria de vinculacion
 - el resumen lateral ya forma parte de la experiencia real
 
 Lo que sigue como iteracion futura no bloqueante:
@@ -63,11 +63,14 @@ No cambia contratos de backend salvo que el mapeo de UI ya requiera payloads exi
 
 El boton `Nuevo contacto` debe abrir un flujo guiado.
 
-Ademas, la vista debe exponer acciones de primer nivel para:
+Ademas, la vista debe exponer acciones de creacion para:
 
 - `Nuevo contacto`
 - `Nueva empresa`
 - `Persona física con actividad empresarial`
+
+Y una accion secundaria aparte:
+
 - `Vincular contacto a empresa`
 
 ### 2. Componente orquestador
@@ -96,6 +99,12 @@ Tarjetas:
 - `Contacto`
 - `Empresa`
 - `Persona física con actividad empresarial`
+
+Regla funcional:
+
+- `Contacto`: persona + relacion con empresa
+- `Empresa`: datos fiscales + direccion + contactos
+- `Persona física con actividad empresarial`: persona + empresa + datos fiscales + direccion + relacion principal automatica
 
 #### Paso 2. Formularios especificos
 
@@ -303,6 +312,7 @@ Se mantiene oculto:
 
 - reutilizar alta estructurada y la relacion con empresa
 - usar el mismo mecanismo de deduplicacion existente
+- crear la relacion principal automaticamente al guardar
 
 ### Vinculacion de contacto a empresa
 
@@ -317,7 +327,29 @@ Se mantiene oculto:
 - crear el orquestador del flujo
 - crear la pantalla de seleccion
 - separar la UI en pasos
-- agregar la accion directa de `Vincular contacto a empresa`
+- agregar la accion secundaria de `Vincular contacto a empresa`
+
+### Datos por flujo
+
+#### Contacto
+
+- persona
+- vinculo con empresa
+
+#### Empresa
+
+- empresa
+- datos fiscales
+- direccion
+- contactos vinculados
+
+#### Persona física con actividad empresarial
+
+- persona
+- empresa
+- datos fiscales
+- direccion
+- relacion principal automatica
 
 ### Fase 2
 
@@ -393,9 +425,12 @@ La implementacion actual ya sigue esa ruta:
 1. Seleccion de tipo.
 2. Datos de la persona.
 3. Datos del negocio.
-4. Relacion principal.
-5. Resumen lateral.
-6. Guardado.
+4. Datos fiscales.
+5. Direccion.
+6. Relacion principal.
+7. Relacion automatica al guardar.
+8. Resumen lateral.
+9. Guardado.
 
 #### Vincular contacto a empresa
 
