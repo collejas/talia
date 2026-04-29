@@ -1008,6 +1008,28 @@ export function ContactEditFlow({ open, onOpenChange, contactoId, onSaved }: Con
   };
 
   const fullName = React.useMemo(() => buildFullName(state.persona), [state.persona]);
+  const personSectionTitle =
+    state.mode === "solo_persona"
+      ? "Datos del contacto"
+      : state.mode === "persona_fisica_actividad_empresarial"
+        ? "Persona y negocio"
+        : "Datos de la persona";
+  const personSectionDescription =
+    state.mode === "solo_persona"
+      ? "Edita la persona que recibe seguimiento."
+      : state.mode === "empresa_existente"
+        ? "Edita la persona y su vínculo con una empresa ya registrada."
+        : state.mode === "empresa_nueva"
+          ? "Edita la persona y los datos de la empresa asociada."
+          : "Edita la persona y la empresa en un mismo flujo.";
+  const relationSectionTitle =
+    state.mode === "persona_fisica_actividad_empresarial"
+      ? "Vínculo principal"
+      : "Vinculación con empresa";
+  const relationSectionDescription =
+    state.mode === "persona_fisica_actividad_empresarial"
+      ? "Actualiza la relación principal de la persona con su negocio."
+      : "Actualiza el rol real de la persona dentro de la empresa.";
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -1047,7 +1069,7 @@ export function ContactEditFlow({ open, onOpenChange, contactoId, onSaved }: Con
             </RadioGroup>
           </FormSection>
 
-          <FormSection title="Datos de la persona">
+          <FormSection title={personSectionTitle} description={personSectionDescription}>
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
               <Field label="Nombre">
                 <Input value={state.persona.nombre} onChange={(e) => dispatch({ type: "persona/set", field: "nombre", value: e.target.value })} />
@@ -1189,7 +1211,7 @@ export function ContactEditFlow({ open, onOpenChange, contactoId, onSaved }: Con
           ) : null}
 
           {state.mode !== "solo_persona" ? (
-            <FormSection title="Vinculación con empresa">
+            <FormSection title={relationSectionTitle} description={relationSectionDescription}>
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                 <Field label="Rol en la empresa">
                   <Input value={state.relacion.rol_en_cuenta} onChange={(e) => dispatch({ type: "relacion/set", field: "rol_en_cuenta", value: e.target.value })} placeholder="dueno, compras, facturacion..." />

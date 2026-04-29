@@ -698,6 +698,29 @@ export function ContactCreateFlow({ open, onOpenChange, onCreated, initialMode =
     };
   }, [state]);
 
+  const personSectionTitle =
+    state.mode === "solo_persona"
+      ? "Datos del contacto"
+      : state.mode === "persona_fisica_actividad_empresarial"
+        ? "Persona y negocio"
+        : "Datos de la persona";
+  const personSectionDescription =
+    state.mode === "solo_persona"
+      ? "Captura la persona a la que darás seguimiento."
+      : state.mode === "empresa_existente"
+        ? "Captura la persona y después vincúlala con una empresa ya existente."
+        : state.mode === "empresa_nueva"
+          ? "Captura la persona y después crea la empresa que se va a registrar."
+          : "Captura la persona y la empresa en un solo flujo.";
+  const relationSectionTitle =
+    state.mode === "persona_fisica_actividad_empresarial"
+      ? "Vínculo principal"
+      : "Vinculación con empresa";
+  const relationSectionDescription =
+    state.mode === "persona_fisica_actividad_empresarial"
+      ? "Define la relación principal de la persona con su negocio."
+      : "Define el rol real de la persona dentro de la empresa.";
+
   const submitLabel =
     state.mode === "solo_persona"
       ? "Guardar contacto"
@@ -824,7 +847,7 @@ export function ContactCreateFlow({ open, onOpenChange, onCreated, initialMode =
             </RadioGroup>
           </FormSection>
 
-          <FormSection title="Datos de la persona" description="Identidad humana y medio de contacto principal.">
+          <FormSection title={personSectionTitle} description={personSectionDescription}>
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
               <Field label="Nombre">
                 <Input value={state.persona.nombre} onChange={(e) => dispatch({ type: "persona/set", field: "nombre", value: e.target.value })} />
@@ -975,7 +998,7 @@ export function ContactCreateFlow({ open, onOpenChange, onCreated, initialMode =
           ) : null}
 
           {state.mode !== "solo_persona" ? (
-            <FormSection title="Vinculación con empresa" description="Define el rol real de la persona dentro de la empresa.">
+            <FormSection title={relationSectionTitle} description={relationSectionDescription}>
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                 <Field label="Rol en la empresa">
                   <Input value={state.relacion.rol_en_cuenta} onChange={(e) => dispatch({ type: "relacion/set", field: "rol_en_cuenta", value: e.target.value })} placeholder="dueno, compras, facturacion..." />
