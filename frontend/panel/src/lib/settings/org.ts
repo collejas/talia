@@ -18,6 +18,15 @@ const SUPABASE_SERVICE_ROLE_KEYS = [
   "SUPABASE_SERVICE_API_KEY",
 ] as const
 
+const ORGANIZATION_LOOKUP_CACHE_TTL_MS = 5 * 60 * 1000
+
+type CachedOrganizationId = {
+  value: string | null
+  expiresAt: number
+}
+
+const organizationLookupCache = new Map<string, CachedOrganizationId>()
+
 export function getDefaultOrganizacionId(): string | null {
   for (const key of ORGANIZATION_ENV_KEYS) {
     const value = process.env[key]
@@ -39,6 +48,11 @@ function getSupabaseServiceRole(): string | null {
 }
 
 async function resolveUsuarioOrganizacionIdFromDb(userId: string): Promise<string | null> {
+  const cached = organizationLookupCache.get(userId)
+  if (cached && cached.expiresAt > Date.now()) {
+    return cached.value
+  }
+
   const config = getSupabaseConfig()
   const serviceRole = getSupabaseServiceRole()
   if (!config || !serviceRole) {
@@ -67,7 +81,12 @@ async function resolveUsuarioOrganizacionIdFromDb(userId: string): Promise<strin
     const data = (await response.json()) as Array<{ organizacion_id?: string | null }>
     const first = Array.isArray(data) ? data[0] : null
     const value = first?.organizacion_id
-    return typeof value === "string" && value.trim() ? value.trim() : null
+    const resolved = typeof value === "string" && value.trim() ? value.trim() : null
+    organizationLookupCache.set(userId, {
+      value: resolved,
+      expiresAt: Date.now() + ORGANIZATION_LOOKUP_CACHE_TTL_MS,
+    })
+    return resolved
   } catch {
     return null
   }

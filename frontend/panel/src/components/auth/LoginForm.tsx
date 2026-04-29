@@ -1,7 +1,6 @@
 "use client"
 
 import { useMemo, useState } from "react"
-import { useRouter } from "next/navigation"
 import { Loader2, LockKeyhole, Mail } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
@@ -32,7 +31,6 @@ type LoginFormProps = {
 }
 
 export function LoginForm({ redirectTo }: LoginFormProps) {
-  const router = useRouter()
   const [fields, setFields] = useState<LoginFields>({
     email: "",
     password: "",
@@ -74,8 +72,7 @@ export function LoginForm({ redirectTo }: LoginFormProps) {
       }
 
       const data = (await response.json()) as { redirectTo?: string }
-      router.replace(data.redirectTo || "/dashboard")
-      router.refresh()
+      window.location.replace(data.redirectTo || "/dashboard")
     } catch (err) {
       console.error("[login] unexpected error", err)
       setError("No se pudo iniciar sesión. Intenta nuevamente.")

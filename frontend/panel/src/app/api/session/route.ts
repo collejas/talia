@@ -13,6 +13,7 @@ import { SupabaseErrorResponse, SupabaseTokenResponse } from "@/lib/auth/types"
 import { callCrmApi } from "@/lib/api/crm"
 import { callSupabaseRest } from "@/lib/supabase/rest"
 import { SessionPayload, SupabaseUser, TenantInfo } from "@/lib/auth/session"
+import { resolveOrganizacionId } from "@/lib/settings/org"
 
 type TenantSettingsResponse = {
   organizacion_id: string
@@ -117,8 +118,9 @@ async function fetchEmployeePosition(usuarioId: string | null): Promise<string |
 }
 
 async function buildSessionPayload(user: SupabaseUser): Promise<SessionPayload> {
-  const [tenant, employeePosition, isPlatformAdmin, profilingEnabled] = await Promise.all([
+  const [tenant, organizacionId, employeePosition, isPlatformAdmin, profilingEnabled] = await Promise.all([
     fetchTenantMetadata(),
+    resolveOrganizacionId(),
     fetchEmployeePosition(user.id),
     fetchPlatformAdminStatus(),
     fetchScoringFeatureStatus(),
@@ -126,6 +128,7 @@ async function buildSessionPayload(user: SupabaseUser): Promise<SessionPayload> 
   return {
     user,
     tenant,
+    organizacion_id: organizacionId,
     employeePosition,
     isPlatformAdmin,
     profilingEnabled,

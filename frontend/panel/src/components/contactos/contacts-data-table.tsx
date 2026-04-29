@@ -7,6 +7,7 @@ import {
   IconBuilding,
   IconClock,
   IconDownload,
+  IconLink,
   IconMail,
   IconPencil,
   IconPhone,
@@ -39,6 +40,7 @@ import { usePermissions } from "@/hooks/use-permissions";
 import type { ContactTableRow } from "@/lib/contactos/data";
 import { ContactCreateFlow } from "@/components/contactos/contact-create-flow";
 import { ContactEditFlow } from "@/components/contactos/contact-edit-flow";
+import { ContactLinkFlow } from "@/components/contactos/contact-link-flow";
 
 type TableRow = z.infer<typeof schema>;
 
@@ -208,6 +210,17 @@ export function ContactsDataTable({ data }: { data: ContactTableRow[] }) {
   const [reassignOpen, setReassignOpen] = React.useState(false);
   const [editOpen, setEditOpen] = React.useState(false);
   const [createOpen, setCreateOpen] = React.useState(false);
+  const [createInitialMode, setCreateInitialMode] = React.useState<
+    "solo_persona" | "empresa_existente" | "empresa_nueva" | "persona_fisica_actividad_empresarial"
+  >("solo_persona");
+  const [linkOpen, setLinkOpen] = React.useState(false);
+  const [linkInitialContact, setLinkInitialContact] = React.useState<{
+    id: string;
+    label: string;
+    company?: string | null;
+    correo?: string | null;
+    telefono?: string | null;
+  } | null>(null);
   const [deleteOpen, setDeleteOpen] = React.useState(false);
 
   const [activeRow, setActiveRow] = React.useState<TableRow | null>(null);
@@ -283,6 +296,25 @@ export function ContactsDataTable({ data }: { data: ContactTableRow[] }) {
     setError(null);
     setSuccess(null);
     setEditOpen(true);
+  };
+
+  const openLinkFlow = (row?: TableRow | null) => {
+    if (!row) {
+      setLinkInitialContact(null);
+      setLinkOpen(true);
+      return;
+    }
+    const raw = (row.raw ?? {}) as Record<string, unknown>;
+    const contactoId = extractString(raw, ["contacto_id"]) ?? extractString(raw, ["id"]);
+    if (!contactoId) return;
+    setLinkInitialContact({
+      id: contactoId,
+      label: row.header,
+      company: extractString(raw, ["company_name"]),
+      correo: extractString(raw, ["correo"]),
+      telefono: extractString(raw, ["telefono"]),
+    });
+    setLinkOpen(true);
   };
 
   const extraColumns = React.useMemo<ColumnDef<TableRow>[]>(() => {
@@ -450,17 +482,58 @@ export function ContactsDataTable({ data }: { data: ContactTableRow[] }) {
         Exportar CSV
       </Button>
       {canWrite ? (
-        <Button
-          type="button"
-          size="sm"
-          onClick={() => {
-            setError(null);
-            setSuccess(null);
-            setCreateOpen(true);
-          }}
-        >
-          Nuevo contacto
-        </Button>
+        <>
+          <Button
+            type="button"
+            size="sm"
+            onClick={() => {
+              setError(null);
+              setSuccess(null);
+              setCreateInitialMode("solo_persona");
+              setCreateOpen(true);
+            }}
+          >
+            Nuevo contacto
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              setError(null);
+              setSuccess(null);
+              setCreateInitialMode("empresa_nueva");
+              setCreateOpen(true);
+            }}
+          >
+            Nueva empresa
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              setError(null);
+              setSuccess(null);
+              setCreateInitialMode("persona_fisica_actividad_empresarial");
+              setCreateOpen(true);
+            }}
+          >
+            Persona física con actividad empresarial
+          </Button>
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            onClick={() => {
+              setError(null);
+              setSuccess(null);
+              openLinkFlow(null);
+            }}
+          >
+            Vincular contacto a empresa
+          </Button>
+        </>
       ) : null}
     </div>
   );
@@ -474,6 +547,7 @@ export function ContactsDataTable({ data }: { data: ContactTableRow[] }) {
     <ContactDetailPanel
       row={row}
       onEdit={() => openEdit(row)}
+      onLink={() => openLinkFlow(row)}
       onReassign={() => {
         setActiveRow(row);
         const ownerId = extractString(row.raw as Record<string, unknown> | undefined, ["propietario_id"]);
@@ -510,6 +584,7 @@ export function ContactsDataTable({ data }: { data: ContactTableRow[] }) {
       <ContactCreateFlow
         open={createOpen}
         onOpenChange={setCreateOpen}
+        initialMode={createInitialMode}
         onCreated={() => window.location.reload()}
       />
 
@@ -518,6 +593,13 @@ export function ContactsDataTable({ data }: { data: ContactTableRow[] }) {
         onOpenChange={setEditOpen}
         contactoId={editContactoId}
         onSaved={() => window.location.reload()}
+      />
+
+      <ContactLinkFlow
+        open={linkOpen}
+        onOpenChange={setLinkOpen}
+        initialContact={linkInitialContact}
+        onLinked={() => window.location.reload()}
       />
 
       <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
@@ -647,11 +729,13 @@ function formatContactValue(value: unknown): string {
 function ContactDetailPanel({
   row,
   onEdit,
+  onLink,
   onReassign,
   onDelete,
 }: {
   row: TableRow;
   onEdit: () => void;
+  onLink: () => void;
   onReassign: () => void;
   onDelete: () => void;
 }) {
@@ -686,6 +770,10 @@ function ContactDetailPanel({
         <Button type="button" size="sm" onClick={onEdit}>
           <IconPencil className="size-4" />
           Editar
+        </Button>
+        <Button type="button" variant="outline" size="sm" onClick={onLink}>
+          <IconLink className="size-4" />
+          Vincular a empresa
         </Button>
         <Button type="button" variant="outline" size="sm" onClick={onReassign}>
           <IconArrowsLeftRight className="size-4" />

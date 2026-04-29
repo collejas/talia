@@ -42,7 +42,7 @@ type UserNotificationEvent = NotificationItem
 
 type GlobalNotificationsProviderProps = {
   children: React.ReactNode
-  tenantId: string | null
+  tenantId: string | null | undefined
 }
 
 type BufferedGroup = {
@@ -391,10 +391,12 @@ export function GlobalNotificationsProvider({ children, tenantId }: GlobalNotifi
   )
 
   useEffect(() => {
+    if (tenantId === undefined) return
     void refresh()
   }, [refresh, tenantId])
 
   useEffect(() => {
+    if (tenantId === undefined) return
     const stream = new EventSource("/api/notifications/stream")
     const grouped = groupedRef.current
 

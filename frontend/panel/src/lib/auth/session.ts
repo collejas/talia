@@ -14,6 +14,7 @@ export type TenantInfo = {
 export type SessionPayload = {
   user: SupabaseUser
   tenant?: TenantInfo | null
+  organizacion_id?: string | null
   employeePosition?: string | null
   isPlatformAdmin?: boolean
   profilingEnabled?: boolean

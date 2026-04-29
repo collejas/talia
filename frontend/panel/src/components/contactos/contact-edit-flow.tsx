@@ -917,9 +917,9 @@ export function ContactEditFlow({ open, onOpenChange, contactoId, onSaved }: Con
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-5xl">
         <DialogHeader className="space-y-2">
-          <DialogTitle>Editar persona comercial</DialogTitle>
+          <DialogTitle>Editar contacto</DialogTitle>
           <DialogDescription>
-            {fullName ? `Contacto: ${fullName}` : "Actualiza persona, cuenta y relación."}
+            {fullName ? `Contacto: ${fullName}` : "Actualiza los datos del contacto, su empresa y su vínculo."}
           </DialogDescription>
         </DialogHeader>
 
@@ -962,13 +962,13 @@ export function ContactEditFlow({ open, onOpenChange, contactoId, onSaved }: Con
             </Field>
           </FormSection>
 
-          <FormSection title="Contexto comercial">
+          <FormSection title="Tipo de registro">
             <RadioGroup value={state.mode} onValueChange={(value) => dispatch({ type: "mode/set", mode: value as CreateMode })} className="grid gap-3 md:grid-cols-3">
               {[
-                { value: "solo_persona", title: "Solo persona", description: "Sin cuenta asociada." },
-                { value: "empresa_existente", title: "Cuenta existente", description: "Vincula a una cuenta ya creada." },
-                { value: "empresa_nueva", title: "Nueva cuenta", description: "Crea una cuenta nueva." },
-                { value: "persona_fisica_actividad_empresarial", title: "PFAE", description: "Cuenta propia vinculada." },
+                { value: "solo_persona", title: "Contacto", description: "Sin empresa asociada." },
+                { value: "empresa_existente", title: "Empresa existente", description: "Vincula a una empresa ya creada." },
+                { value: "empresa_nueva", title: "Nueva empresa", description: "Crea una empresa nueva." },
+                { value: "persona_fisica_actividad_empresarial", title: "Persona física con actividad empresarial", description: "Empresa propia vinculada." },
               ].map((option) => (
                 <label
                   key={option.value}
@@ -987,12 +987,12 @@ export function ContactEditFlow({ open, onOpenChange, contactoId, onSaved }: Con
           </FormSection>
 
           {state.mode === "empresa_existente" ? (
-            <FormSection title="Cuenta asociada" description="Busca una cuenta existente y selecciónala.">
+            <FormSection title="Empresa existente" description="Busca una empresa existente y selecciónala.">
               <div className="space-y-3">
-                <Field label="Buscar cuenta" hint="Busca por nombre, correo, teléfono o alias.">
+                <Field label="Buscar empresa" hint="Busca por nombre, correo, teléfono o alias.">
                   <Input value={state.accountQuery} onChange={(e) => dispatch({ type: "account-query/set", value: e.target.value })} placeholder="Escribe al menos 2 caracteres" />
                 </Field>
-                {state.accountLoading ? <p className="text-xs text-muted-foreground">Buscando cuentas...</p> : null}
+                {state.accountLoading ? <p className="text-xs text-muted-foreground">Buscando empresas...</p> : null}
                 {state.accountError ? <p className="text-xs text-destructive">{state.accountError}</p> : null}
                 {state.accountResults.length ? (
                   <div className="space-y-2">
@@ -1017,7 +1017,7 @@ export function ContactEditFlow({ open, onOpenChange, contactoId, onSaved }: Con
           ) : null}
 
           {state.mode === "empresa_nueva" || state.mode === "persona_fisica_actividad_empresarial" ? (
-            <FormSection title="Cuenta" description="Datos mínimos de la cuenta (y fiscales opcionales abajo).">
+            <FormSection title="Empresa" description="Datos mínimos de la empresa (y fiscales opcionales abajo).">
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                 <Field label="Nombre comercial">
                   <Input value={state.cuenta.nombre_comercial} onChange={(e) => dispatch({ type: "cuenta/set", field: "nombre_comercial", value: e.target.value })} />
@@ -1048,12 +1048,12 @@ export function ContactEditFlow({ open, onOpenChange, contactoId, onSaved }: Con
           ) : null}
 
           {state.mode !== "solo_persona" ? (
-            <FormSection title="Relación persona-cuenta">
+            <FormSection title="Vinculación con empresa">
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                <Field label="Rol en la cuenta">
+                <Field label="Rol en la empresa">
                   <Input value={state.relacion.rol_en_cuenta} onChange={(e) => dispatch({ type: "relacion/set", field: "rol_en_cuenta", value: e.target.value })} placeholder="dueno, compras, facturacion..." />
                 </Field>
-                <Field label="Puesto en esa cuenta">
+                <Field label="Puesto en la empresa">
                   <Input value={state.relacion.puesto} onChange={(e) => dispatch({ type: "relacion/set", field: "puesto", value: e.target.value })} />
                 </Field>
               </div>
@@ -1075,7 +1075,7 @@ export function ContactEditFlow({ open, onOpenChange, contactoId, onSaved }: Con
           ) : null}
 
           {contactoId ? (
-            <FormSection title="Relaciones existentes" description="Administra todas las relaciones de esta persona con cuentas.">
+            <FormSection title="Vinculaciones existentes" description="Administra todas las vinculaciones de esta persona con empresas.">
               {relationsLoading ? <p className="text-xs text-muted-foreground">Cargando relaciones...</p> : null}
               {!relationsLoading && !relations.length ? (
                 <p className="text-xs text-muted-foreground">No hay relaciones registradas.</p>
@@ -1137,7 +1137,7 @@ export function ContactEditFlow({ open, onOpenChange, contactoId, onSaved }: Con
                             )
                           }
                         />
-                        Facturación
+                        Contacto de facturación
                       </label>
                       <label className="flex items-center gap-2 text-sm">
                         <Checkbox
@@ -1195,9 +1195,9 @@ export function ContactEditFlow({ open, onOpenChange, contactoId, onSaved }: Con
               </div>
 
               <div className="mt-4 rounded-lg border border-dashed border-border/70 p-3">
-                <div className="mb-2 text-sm font-medium">Agregar relación</div>
+                <div className="mb-2 text-sm font-medium">Agregar vínculo</div>
                 <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-                  <Field label="Buscar cuenta">
+                  <Field label="Buscar empresa">
                     <Input
                       value={relationAccountQuery}
                       onChange={(e) => setRelationAccountQuery(e.target.value)}
@@ -1247,7 +1247,7 @@ export function ContactEditFlow({ open, onOpenChange, contactoId, onSaved }: Con
                   </div>
                 ) : null}
                 {newRelation.cuenta_id ? (
-                  <p className="mt-2 text-xs text-muted-foreground">Cuenta seleccionada: {newRelation.cuenta_id}</p>
+                  <p className="mt-2 text-xs text-muted-foreground">Empresa seleccionada: {newRelation.cuenta_id}</p>
                 ) : null}
                 <div className="mt-2 grid grid-cols-1 gap-2 md:grid-cols-3">
                   <label className="flex items-center gap-2 text-sm">
@@ -1266,7 +1266,7 @@ export function ContactEditFlow({ open, onOpenChange, contactoId, onSaved }: Con
                         setNewRelation((prev) => ({ ...prev, es_contacto_facturacion: Boolean(v) }))
                       }
                     />
-                    Facturación
+                    Contacto de facturación
                   </label>
                   <label className="flex items-center gap-2 text-sm">
                     <Checkbox
@@ -1280,17 +1280,17 @@ export function ContactEditFlow({ open, onOpenChange, contactoId, onSaved }: Con
                 </div>
                 <div className="mt-3">
                   <Button type="button" size="sm" disabled={relationBusyId === "new"} onClick={() => void createRelation()}>
-                    {relationBusyId === "new" ? "Creando..." : "Agregar relación"}
+                    {relationBusyId === "new" ? "Creando..." : "Agregar vínculo"}
                   </Button>
                 </div>
               </div>
             </FormSection>
           ) : null}
 
-          <FormSection title="Extras" description="Completa ahora o deja para después.">
+          <FormSection title="Datos opcionales" description="Completa ahora o deja para después.">
             <label className="flex items-center gap-2 text-sm">
               <Checkbox checked={state.extrasOpen} onCheckedChange={(v) => dispatch({ type: "extras/toggle", value: Boolean(v) })} />
-              Editar fiscales y dirección
+              Editar datos fiscales y dirección
             </label>
             {state.extrasOpen ? (
               <div className="mt-3 space-y-4">

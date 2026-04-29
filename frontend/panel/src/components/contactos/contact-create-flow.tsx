@@ -158,6 +158,7 @@ type ContactCreateFlowProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onCreated?: () => void;
+  initialMode?: CreateMode;
 };
 
 const INITIAL_STATE: ContactCreateState = {
@@ -478,23 +479,23 @@ function validateState(state: ContactCreateState): string | null {
     return "Debes capturar teléfono o correo.";
   }
   if (state.mode === "empresa_existente" && !state.cuenta.cuenta_id.trim()) {
-    return "Selecciona una cuenta existente.";
+    return "Selecciona una empresa existente.";
   }
   if (
     (state.mode === "empresa_nueva" || state.mode === "persona_fisica_actividad_empresarial") &&
     !state.cuenta.nombre_comercial.trim() &&
     !state.cuenta.razon_social.trim()
   ) {
-    return "La cuenta requiere nombre comercial o razón social.";
+    return "La empresa requiere nombre comercial o razón social.";
   }
   if (
     (state.mode === "empresa_nueva" || state.mode === "persona_fisica_actividad_empresarial") &&
     !state.cuenta.tipo_persona.trim()
   ) {
-    return "Selecciona el tipo de persona de la cuenta.";
+    return "Selecciona el tipo de persona de la empresa.";
   }
   if (state.mode !== "solo_persona" && !state.relacion.rol_en_cuenta.trim()) {
-    return "Define el rol de la persona dentro de la cuenta.";
+    return "Define el rol de la persona dentro de la empresa.";
   }
   return null;
 }
@@ -537,7 +538,7 @@ function Field({
   );
 }
 
-export function ContactCreateFlow({ open, onOpenChange, onCreated }: ContactCreateFlowProps) {
+export function ContactCreateFlow({ open, onOpenChange, onCreated, initialMode = "solo_persona" }: ContactCreateFlowProps) {
   const [state, dispatch] = React.useReducer(createReducer, INITIAL_STATE);
   const deferredAccountQuery = React.useDeferredValue(state.accountQuery);
   const [pendingDedupe, setPendingDedupe] = React.useState<PersonaAltaValidationResponse | null>(null);
@@ -552,7 +553,9 @@ export function ContactCreateFlow({ open, onOpenChange, onCreated }: ContactCrea
       setSelectedCuentaReuseId("");
       return;
     }
-  }, [open]);
+    dispatch({ type: "reset" });
+    dispatch({ type: "mode/set", mode: initialMode });
+  }, [open, initialMode]);
 
   React.useEffect(() => {
     if (state.mode !== "empresa_existente") return;
@@ -611,6 +614,15 @@ export function ContactCreateFlow({ open, onOpenChange, onCreated }: ContactCrea
       relacion: state.mode === "solo_persona" ? "" : state.relacion.rol_en_cuenta,
     };
   }, [state]);
+
+  const submitLabel =
+    state.mode === "solo_persona"
+      ? "Guardar contacto"
+      : state.mode === "empresa_existente"
+        ? "Guardar contacto"
+        : state.mode === "empresa_nueva"
+          ? "Guardar empresa"
+          : "Guardar registro";
 
   const submit = async (dedupeDecision?: DedupeDecision) => {
     const validationError = validateState(state);
@@ -679,15 +691,16 @@ export function ContactCreateFlow({ open, onOpenChange, onCreated }: ContactCrea
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-5xl">
+      <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-6xl">
         <DialogHeader className="space-y-2">
-          <DialogTitle>Nueva persona comercial</DialogTitle>
+          <DialogTitle>Nuevo contacto</DialogTitle>
           <DialogDescription>
-            Primero se captura la persona. Después defines si se queda sola, si pertenece a una cuenta o si opera como persona física con actividad empresarial.
+            Primero eliges qué quieres crear. Después completas solo el formulario que corresponda.
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-5">
+        <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
+          <div className="space-y-5">
           <FormSection title="Datos de la persona" description="Identidad humana y medio de contacto principal.">
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
               <Field label="Nombre">
@@ -723,28 +736,28 @@ export function ContactCreateFlow({ open, onOpenChange, onCreated }: ContactCrea
             </Field>
           </FormSection>
 
-          <FormSection title="Contexto comercial" description="Define si la persona se queda sola, se liga a una empresa o es PFAE.">
-            <RadioGroup value={state.mode} onValueChange={(value) => dispatch({ type: "mode/set", mode: value as CreateMode })} className="grid gap-3 md:grid-cols-3">
+          <FormSection title="Tipo de alta" description="Elige el camino que mejor describe lo que vas a registrar.">
+            <RadioGroup value={state.mode} onValueChange={(value) => dispatch({ type: "mode/set", mode: value as CreateMode })} className="grid gap-3 md:grid-cols-2">
               {[
                 {
                   value: "solo_persona",
-                  title: "Solo persona por ahora",
-                  description: "No se asociará a una cuenta en este momento.",
+                  title: "Contacto",
+                  description: "Persona a la que darás seguimiento.",
                 },
                 {
                   value: "empresa_existente",
-                  title: "Trabaja para una empresa",
-                  description: "Selecciona una cuenta existente para relacionar a la persona.",
+                  title: "Empresa existente",
+                  description: "Relaciona el contacto con una empresa ya creada.",
                 },
                 {
                   value: "empresa_nueva",
                   title: "Nueva empresa",
-                  description: "Crea una cuenta nueva y vincúlala con esta persona.",
+                  description: "Crea una empresa nueva y vincúlala con el contacto.",
                 },
                 {
                   value: "persona_fisica_actividad_empresarial",
                   title: "Persona física con actividad empresarial",
-                  description: "Se crea una cuenta propia vinculada a esta persona.",
+                  description: "Persona y negocio en un solo registro.",
                 },
               ].map((option) => (
                 <label
@@ -764,12 +777,12 @@ export function ContactCreateFlow({ open, onOpenChange, onCreated }: ContactCrea
           </FormSection>
 
           {state.mode === "empresa_existente" ? (
-            <FormSection title="Cuenta asociada" description="Busca una cuenta existente y selecciónala.">
+            <FormSection title="Empresa existente" description="Busca una empresa ya creada y selecciónala.">
               <div className="space-y-3">
-                <Field label="Buscar cuenta" hint="Busca por nombre, correo, teléfono o alias.">
+                <Field label="Buscar empresa" hint="Busca por nombre, correo, teléfono o alias.">
                   <Input value={state.accountQuery} onChange={(e) => dispatch({ type: "account-query/set", value: e.target.value })} placeholder="Escribe al menos 2 caracteres" />
                 </Field>
-                {state.accountLoading ? <p className="text-xs text-muted-foreground">Buscando cuentas...</p> : null}
+                {state.accountLoading ? <p className="text-xs text-muted-foreground">Buscando empresas...</p> : null}
                 {state.accountError ? <p className="text-xs text-destructive">{state.accountError}</p> : null}
                 {state.accountResults.length ? (
                   <div className="space-y-2">
@@ -795,8 +808,8 @@ export function ContactCreateFlow({ open, onOpenChange, onCreated }: ContactCrea
 
           {state.mode === "empresa_nueva" || state.mode === "persona_fisica_actividad_empresarial" ? (
             <FormSection
-              title={state.mode === "persona_fisica_actividad_empresarial" ? "Cuenta propia" : "Nueva cuenta"}
-              description={state.mode === "persona_fisica_actividad_empresarial" ? "Se prellena desde la persona y puedes ajustar los datos comerciales." : "Datos mínimos para crear la cuenta."}
+              title={state.mode === "persona_fisica_actividad_empresarial" ? "Empresa propia" : "Nueva empresa"}
+              description={state.mode === "persona_fisica_actividad_empresarial" ? "Se prellena desde la persona y puedes ajustar los datos comerciales." : "Datos mínimos para crear la empresa."}
             >
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                 <Field label="Nombre comercial">
@@ -840,12 +853,12 @@ export function ContactCreateFlow({ open, onOpenChange, onCreated }: ContactCrea
           ) : null}
 
           {state.mode !== "solo_persona" ? (
-            <FormSection title="Relación persona-cuenta" description="Define el rol real de la persona dentro de la cuenta.">
+            <FormSection title="Vinculación con empresa" description="Define el rol real de la persona dentro de la empresa.">
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                <Field label="Rol en la cuenta">
+                <Field label="Rol en la empresa">
                   <Input value={state.relacion.rol_en_cuenta} onChange={(e) => dispatch({ type: "relacion/set", field: "rol_en_cuenta", value: e.target.value })} placeholder="dueno, compras, facturacion..." />
                 </Field>
-                <Field label="Puesto en esa cuenta">
+                <Field label="Puesto en la empresa">
                   <Input value={state.relacion.puesto} onChange={(e) => dispatch({ type: "relacion/set", field: "puesto", value: e.target.value })} />
                 </Field>
                 <Field label="Fecha de inicio">
@@ -867,13 +880,13 @@ export function ContactCreateFlow({ open, onOpenChange, onCreated }: ContactCrea
                 </label>
                 <label className="flex items-center gap-3 rounded-lg border border-border/60 px-3 py-2">
                   <Checkbox checked={state.relacion.activo} onCheckedChange={(value) => dispatch({ type: "relacion/set", field: "activo", value: Boolean(value) })} />
-                  <span className="text-sm">Relación activa</span>
+                  <span className="text-sm">Vínculo activo</span>
                 </label>
               </div>
             </FormSection>
           ) : null}
 
-          <FormSection title="Información adicional" description="Puedes omitirla por ahora y completarla más tarde.">
+          <FormSection title="Datos opcionales" description="Puedes omitirlos por ahora y completarlos más tarde.">
             <div className="flex items-center justify-between gap-3">
               <p className="text-sm text-muted-foreground">Datos fiscales y dirección básicos.</p>
               <Button type="button" variant="outline" size="sm" onClick={() => dispatch({ type: "extras/toggle" })}>
@@ -922,7 +935,7 @@ export function ContactCreateFlow({ open, onOpenChange, onCreated }: ContactCrea
             ) : null}
           </FormSection>
 
-          <FormSection title="Confirmación" description="Resumen de lo que se va a crear o vincular.">
+          <FormSection title="Resumen" description="Resumen de lo que se va a crear o vincular.">
             <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
               <div className="rounded-lg border border-border/60 bg-background p-3">
                 <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Persona</div>
@@ -930,12 +943,12 @@ export function ContactCreateFlow({ open, onOpenChange, onCreated }: ContactCrea
                 <div className="mt-1 text-xs text-muted-foreground">{state.persona.correo_principal || state.persona.telefono_principal_e164 || "Sin medio de contacto"}</div>
               </div>
               <div className="rounded-lg border border-border/60 bg-background p-3">
-                <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Cuenta</div>
-                <div className="mt-2 text-sm font-medium">{review.cuenta || "No se creará cuenta"}</div>
+              <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Empresa</div>
+                <div className="mt-2 text-sm font-medium">{review.cuenta || "No se creará empresa"}</div>
                 <div className="mt-1 text-xs text-muted-foreground">{state.mode.replaceAll("_", " ")}</div>
               </div>
               <div className="rounded-lg border border-border/60 bg-background p-3">
-                <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Relación</div>
+                <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Vinculación</div>
                 <div className="mt-2 text-sm font-medium">{review.relacion || "Sin relación"}</div>
                 <div className="mt-1 text-xs text-muted-foreground">
                   {state.mode === "solo_persona" ? "No aplica" : state.relacion.es_contacto_principal ? "Contacto principal" : "Relación secundaria"}
@@ -976,7 +989,7 @@ export function ContactCreateFlow({ open, onOpenChange, onCreated }: ContactCrea
 
               {pendingDedupe.candidatos_cuenta.length ? (
                 <div className="mt-3 space-y-2">
-                  <div className="text-sm font-medium">Cuentas candidatas</div>
+                  <div className="text-sm font-medium">Empresas candidatas</div>
                   {pendingDedupe.candidatos_cuenta.map((candidate) => {
                     const selected = selectedCuentaReuseId === candidate.id;
                     return (
@@ -1041,12 +1054,46 @@ export function ContactCreateFlow({ open, onOpenChange, onCreated }: ContactCrea
 
           <div className="flex flex-wrap gap-2">
             <Button type="button" disabled={state.saving} onClick={() => void submit()}>
-              {state.saving ? "Guardando..." : state.mode === "solo_persona" ? "Guardar solo persona" : "Guardar alta"}
+              {state.saving ? "Guardando..." : submitLabel}
             </Button>
             <Button type="button" variant="outline" disabled={state.saving} onClick={() => onOpenChange(false)}>
               Cancelar
             </Button>
           </div>
+          </div>
+
+          <aside className="space-y-4 lg:sticky lg:top-4 lg:self-start">
+            <div className="rounded-2xl border border-border/60 bg-gradient-to-b from-muted/40 to-background p-4 shadow-sm">
+              <div className="text-sm font-semibold">Resumen</div>
+              <div className="mt-4 space-y-3">
+                <div className="rounded-xl border border-border/60 bg-background p-3">
+                  <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Contacto</div>
+                  <div className="mt-1 text-sm font-semibold">{review.persona || "Pendiente"}</div>
+                  <div className="mt-1 text-xs text-muted-foreground">
+                    {state.persona.correo_principal || state.persona.telefono_principal_e164 || "Sin medio de contacto"}
+                  </div>
+                </div>
+                <div className="rounded-xl border border-border/60 bg-background p-3">
+                  <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Empresa</div>
+                  <div className="mt-1 text-sm font-semibold">{review.cuenta || "No asociada"}</div>
+                  <div className="mt-1 text-xs text-muted-foreground">
+                    {state.mode === "solo_persona" ? "Contacto independiente" : state.mode.replaceAll("_", " ")}
+                  </div>
+                </div>
+                <div className="rounded-xl border border-border/60 bg-background p-3">
+                  <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Vinculación</div>
+                  <div className="mt-1 text-sm font-semibold">{review.relacion || "Sin vínculo"}</div>
+                  <div className="mt-1 text-xs text-muted-foreground">
+                    {state.mode === "solo_persona"
+                      ? "No aplica"
+                      : state.relacion.es_contacto_principal
+                        ? "Contacto principal"
+                        : "Vínculo secundario"}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </aside>
         </div>
       </DialogContent>
     </Dialog>
