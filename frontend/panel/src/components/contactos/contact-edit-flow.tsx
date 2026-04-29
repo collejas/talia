@@ -1261,6 +1261,18 @@ export function ContactEditFlow({ open, onOpenChange, contactoId, onSaved }: Con
                 <Field label="Buscar empresa" hint="Busca por nombre, correo, teléfono o alias.">
                   <Input value={state.accountQuery} onChange={(e) => dispatch({ type: "account-query/set", value: e.target.value })} placeholder="Escribe al menos 2 caracteres" />
                 </Field>
+                {state.cuenta.cuenta_id ? (
+                  <div className="rounded-lg border border-border/60 bg-background p-3 text-sm">
+                    <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Empresa seleccionada</div>
+                    <div className="mt-1 font-medium">{state.cuenta.nombre_comercial || state.cuenta.razon_social || "Empresa vinculada"}</div>
+                    <div className="mt-1 text-xs text-muted-foreground">
+                      {formatSummaryLine(
+                        [state.cuenta.alias, state.cuenta.rfc, state.cuenta.tipo_persona, state.cuenta.sitio_web || state.cuenta.correo_principal],
+                        "Sin datos adicionales",
+                      )}
+                    </div>
+                  </div>
+                ) : null}
                 {state.accountLoading ? <p className="text-xs text-muted-foreground">Buscando empresas...</p> : null}
                 {state.accountError ? <p className="text-xs text-destructive">{state.accountError}</p> : null}
                 {state.accountResults.length ? (
@@ -1285,8 +1297,13 @@ export function ContactEditFlow({ open, onOpenChange, contactoId, onSaved }: Con
             </FormSection>
           ) : null}
 
-          {state.mode === "empresa_nueva" || state.mode === "persona_fisica_actividad_empresarial" ? (
-            <FormSection title="Empresa" description="Datos de la empresa que se persistirán.">
+          {state.mode !== "solo_persona" ? (
+            <FormSection title="Datos de la empresa" description="Edita los datos fiscales, comerciales y de domicilio de la cuenta vinculada.">
+              {state.mode === "empresa_existente" ? (
+                <div className="mb-4 rounded-lg border border-dashed border-border/70 bg-background p-3 text-sm text-muted-foreground">
+                  La empresa ya está vinculada. Si deseas cambiarla, selecciona otra en el bloque anterior.
+                </div>
+              ) : null}
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                 <Field label="Nombre comercial">
                   <Input value={state.cuenta.nombre_comercial} onChange={(e) => dispatch({ type: "cuenta/set", field: "nombre_comercial", value: e.target.value })} />
@@ -1697,125 +1714,117 @@ export function ContactEditFlow({ open, onOpenChange, contactoId, onSaved }: Con
           ) : null}
 
           <FormSection title="Datos fiscales y dirección" description="Completa ahora o revisa los valores persistidos.">
-            <label className="flex items-center gap-2 text-sm">
-              <Checkbox checked={state.extrasOpen} onCheckedChange={(v) => dispatch({ type: "extras/toggle", value: Boolean(v) })} />
-              Ver o editar datos fiscales y dirección
-            </label>
-            {state.extrasOpen ? (
-              <div className="mt-3 space-y-4">
-                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                  <Field label="Uso CFDI">
-                    <Input value={state.extras.uso_cfdi} onChange={(e) => dispatch({ type: "extras/set", field: "uso_cfdi", value: e.target.value })} />
-                  </Field>
-                  <Field label="Forma de pago">
-                    <Input value={state.extras.forma_pago} onChange={(e) => dispatch({ type: "extras/set", field: "forma_pago", value: e.target.value })} />
-                  </Field>
-                  <Field label="Método de pago">
-                    <Input value={state.extras.metodo_pago} onChange={(e) => dispatch({ type: "extras/set", field: "metodo_pago", value: e.target.value })} />
-                  </Field>
-                  <Field label="Email facturación">
-                    <Input value={state.extras.email_facturacion} onChange={(e) => dispatch({ type: "extras/set", field: "email_facturacion", value: e.target.value })} />
-                  </Field>
-                </div>
-                <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-                  <div className="rounded-lg border border-border/60 bg-background p-3">
-                    <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Fiscal</div>
-                    <div className="mt-2 text-sm font-medium">{state.extras.uso_cfdi || "Sin uso CFDI"}</div>
-                    <div className="mt-1 text-xs text-muted-foreground">
-                      {[state.extras.forma_pago, state.extras.metodo_pago, state.extras.email_facturacion].filter(Boolean).join(" · ") || "Sin datos de facturación"}
-                    </div>
-                  </div>
-                  <div className="rounded-lg border border-border/60 bg-background p-3">
-                    <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Ubicación</div>
-                    <div className="mt-2 text-sm font-medium">{state.extras.pais || "MX"}</div>
-                    <div className="mt-1 text-xs text-muted-foreground">
-                      {[state.extras.entidad, state.extras.municipio, state.extras.codigo_postal].filter(Boolean).join(" · ") || "Sin ubicación"}
-                    </div>
-                  </div>
-                  <div className="rounded-lg border border-border/60 bg-background p-3">
-                    <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Domicilio</div>
-                    <div className="mt-2 text-sm font-medium">{state.extras.nombre_vialidad || "Sin vialidad"}</div>
-                    <div className="mt-1 text-xs text-muted-foreground">
-                      {[state.extras.numero_exterior, state.extras.numero_interior, state.extras.localidad].filter(Boolean).join(" · ") || "Sin detalle de domicilio"}
-                    </div>
-                  </div>
-                </div>
-                <GeoLocationSelects
-                  countryCode={state.extras.pais}
-                  stateCode={state.extras.clave_entidad}
-                  municipalityCode={state.extras.clave_municipio}
-                  onCountryChange={(countryCode) => {
-                    dispatch({ type: "extras/set", field: "pais", value: countryCode || "MX" });
-                    if ((countryCode || "MX") !== "MX") {
-                      dispatch({ type: "extras/set", field: "clave_entidad", value: "" });
-                      dispatch({ type: "extras/set", field: "entidad", value: "" });
-                      dispatch({ type: "extras/set", field: "clave_municipio", value: "" });
-                      dispatch({ type: "extras/set", field: "municipio", value: "" });
-                    }
-                  }}
-                  onStateChange={(stateCode, stateName) => {
-                    dispatch({ type: "extras/set", field: "clave_entidad", value: stateCode });
-                    dispatch({ type: "extras/set", field: "entidad", value: stateName });
-                    dispatch({ type: "extras/set", field: "clave_municipio", value: "" });
-                    dispatch({ type: "extras/set", field: "municipio", value: "" });
-                  }}
-                  onMunicipalityChange={(municipalityCode, municipalityName) => {
-                    dispatch({ type: "extras/set", field: "clave_municipio", value: municipalityCode });
-                    dispatch({ type: "extras/set", field: "municipio", value: municipalityName });
-                  }}
-                />
-                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                  <Field label="Clave de localidad">
-                    <Input value={state.extras.clave_localidad} onChange={(e) => dispatch({ type: "extras/set", field: "clave_localidad", value: e.target.value })} />
-                  </Field>
-                  <Field label="Localidad">
-                    <Input value={state.extras.localidad} onChange={(e) => dispatch({ type: "extras/set", field: "localidad", value: e.target.value })} />
-                  </Field>
-                  <Field label="Tipo de vialidad">
-                    <Input value={state.extras.tipo_vialidad} onChange={(e) => dispatch({ type: "extras/set", field: "tipo_vialidad", value: e.target.value })} />
-                  </Field>
-                  <Field label="Nombre de vialidad">
-                    <Input value={state.extras.nombre_vialidad} onChange={(e) => dispatch({ type: "extras/set", field: "nombre_vialidad", value: e.target.value })} />
-                  </Field>
-                  <Field label="Número exterior">
-                    <Input value={state.extras.numero_exterior} onChange={(e) => dispatch({ type: "extras/set", field: "numero_exterior", value: e.target.value })} />
-                  </Field>
-                  <Field label="Letra exterior">
-                    <Input value={state.extras.letra_exterior} onChange={(e) => dispatch({ type: "extras/set", field: "letra_exterior", value: e.target.value })} />
-                  </Field>
-                  <Field label="Edificio">
-                    <Input value={state.extras.edificio} onChange={(e) => dispatch({ type: "extras/set", field: "edificio", value: e.target.value })} />
-                  </Field>
-                  <Field label="Piso">
-                    <Input value={state.extras.edificio_piso} onChange={(e) => dispatch({ type: "extras/set", field: "edificio_piso", value: e.target.value })} />
-                  </Field>
-                  <Field label="Número interior">
-                    <Input value={state.extras.numero_interior} onChange={(e) => dispatch({ type: "extras/set", field: "numero_interior", value: e.target.value })} />
-                  </Field>
-                  <Field label="Letra interior">
-                    <Input value={state.extras.letra_interior} onChange={(e) => dispatch({ type: "extras/set", field: "letra_interior", value: e.target.value })} />
-                  </Field>
-                  <Field label="Tipo de asentamiento">
-                    <Input value={state.extras.tipo_asentamiento} onChange={(e) => dispatch({ type: "extras/set", field: "tipo_asentamiento", value: e.target.value })} />
-                  </Field>
-                  <Field label="Nombre de asentamiento">
-                    <Input value={state.extras.nombre_asentamiento} onChange={(e) => dispatch({ type: "extras/set", field: "nombre_asentamiento", value: e.target.value })} />
-                  </Field>
-                  <Field label="Tipo de centro comercial">
-                    <Input value={state.extras.tipo_centro_comercial} onChange={(e) => dispatch({ type: "extras/set", field: "tipo_centro_comercial", value: e.target.value })} />
-                  </Field>
-                  <Field label="Corredor industrial">
-                    <Input value={state.extras.corredor_industrial} onChange={(e) => dispatch({ type: "extras/set", field: "corredor_industrial", value: e.target.value })} />
-                  </Field>
-                  <Field label="Número local">
-                    <Input value={state.extras.numero_local} onChange={(e) => dispatch({ type: "extras/set", field: "numero_local", value: e.target.value })} />
-                  </Field>
-                  <Field label="Código postal">
-                    <Input value={state.extras.codigo_postal} onChange={(e) => dispatch({ type: "extras/set", field: "codigo_postal", value: e.target.value })} />
-                  </Field>
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              <Field label="Uso CFDI">
+                <Input value={state.extras.uso_cfdi} onChange={(e) => dispatch({ type: "extras/set", field: "uso_cfdi", value: e.target.value })} />
+              </Field>
+              <Field label="Forma de pago">
+                <Input value={state.extras.forma_pago} onChange={(e) => dispatch({ type: "extras/set", field: "forma_pago", value: e.target.value })} />
+              </Field>
+              <Field label="Método de pago">
+                <Input value={state.extras.metodo_pago} onChange={(e) => dispatch({ type: "extras/set", field: "metodo_pago", value: e.target.value })} />
+              </Field>
+              <Field label="Email facturación">
+                <Input value={state.extras.email_facturacion} onChange={(e) => dispatch({ type: "extras/set", field: "email_facturacion", value: e.target.value })} />
+              </Field>
+            </div>
+            <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-3">
+              <div className="rounded-lg border border-border/60 bg-background p-3">
+                <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Fiscal</div>
+                <div className="mt-2 text-sm font-medium">{state.extras.uso_cfdi || "Sin uso CFDI"}</div>
+                <div className="mt-1 text-xs text-muted-foreground">
+                  {[state.extras.forma_pago, state.extras.metodo_pago, state.extras.email_facturacion].filter(Boolean).join(" · ") || "Sin datos de facturación"}
                 </div>
               </div>
-            ) : null}
+              <div className="rounded-lg border border-border/60 bg-background p-3">
+                <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Ubicación</div>
+                <div className="mt-2 text-sm font-medium">{state.extras.pais || "MX"}</div>
+                <div className="mt-1 text-xs text-muted-foreground">
+                  {[state.extras.entidad, state.extras.municipio, state.extras.codigo_postal].filter(Boolean).join(" · ") || "Sin ubicación"}
+                </div>
+              </div>
+              <div className="rounded-lg border border-border/60 bg-background p-3">
+                <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Domicilio</div>
+                <div className="mt-2 text-sm font-medium">{state.extras.nombre_vialidad || "Sin vialidad"}</div>
+                <div className="mt-1 text-xs text-muted-foreground">
+                  {[state.extras.numero_exterior, state.extras.numero_interior, state.extras.localidad].filter(Boolean).join(" · ") || "Sin detalle de domicilio"}
+                </div>
+              </div>
+            </div>
+            <GeoLocationSelects
+              countryCode={state.extras.pais}
+              stateCode={state.extras.clave_entidad}
+              municipalityCode={state.extras.clave_municipio}
+              onCountryChange={(countryCode) => {
+                dispatch({ type: "extras/set", field: "pais", value: countryCode || "MX" });
+                if ((countryCode || "MX") !== "MX") {
+                  dispatch({ type: "extras/set", field: "clave_entidad", value: "" });
+                  dispatch({ type: "extras/set", field: "entidad", value: "" });
+                  dispatch({ type: "extras/set", field: "clave_municipio", value: "" });
+                  dispatch({ type: "extras/set", field: "municipio", value: "" });
+                }
+              }}
+              onStateChange={(stateCode, stateName) => {
+                dispatch({ type: "extras/set", field: "clave_entidad", value: stateCode });
+                dispatch({ type: "extras/set", field: "entidad", value: stateName });
+                dispatch({ type: "extras/set", field: "clave_municipio", value: "" });
+                dispatch({ type: "extras/set", field: "municipio", value: "" });
+              }}
+              onMunicipalityChange={(municipalityCode, municipalityName) => {
+                dispatch({ type: "extras/set", field: "clave_municipio", value: municipalityCode });
+                dispatch({ type: "extras/set", field: "municipio", value: municipalityName });
+              }}
+            />
+            <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
+              <Field label="Clave de localidad">
+                <Input value={state.extras.clave_localidad} onChange={(e) => dispatch({ type: "extras/set", field: "clave_localidad", value: e.target.value })} />
+              </Field>
+              <Field label="Localidad">
+                <Input value={state.extras.localidad} onChange={(e) => dispatch({ type: "extras/set", field: "localidad", value: e.target.value })} />
+              </Field>
+              <Field label="Tipo de vialidad">
+                <Input value={state.extras.tipo_vialidad} onChange={(e) => dispatch({ type: "extras/set", field: "tipo_vialidad", value: e.target.value })} />
+              </Field>
+              <Field label="Nombre de vialidad">
+                <Input value={state.extras.nombre_vialidad} onChange={(e) => dispatch({ type: "extras/set", field: "nombre_vialidad", value: e.target.value })} />
+              </Field>
+              <Field label="Número exterior">
+                <Input value={state.extras.numero_exterior} onChange={(e) => dispatch({ type: "extras/set", field: "numero_exterior", value: e.target.value })} />
+              </Field>
+              <Field label="Letra exterior">
+                <Input value={state.extras.letra_exterior} onChange={(e) => dispatch({ type: "extras/set", field: "letra_exterior", value: e.target.value })} />
+              </Field>
+              <Field label="Edificio">
+                <Input value={state.extras.edificio} onChange={(e) => dispatch({ type: "extras/set", field: "edificio", value: e.target.value })} />
+              </Field>
+              <Field label="Piso">
+                <Input value={state.extras.edificio_piso} onChange={(e) => dispatch({ type: "extras/set", field: "edificio_piso", value: e.target.value })} />
+              </Field>
+              <Field label="Número interior">
+                <Input value={state.extras.numero_interior} onChange={(e) => dispatch({ type: "extras/set", field: "numero_interior", value: e.target.value })} />
+              </Field>
+              <Field label="Letra interior">
+                <Input value={state.extras.letra_interior} onChange={(e) => dispatch({ type: "extras/set", field: "letra_interior", value: e.target.value })} />
+              </Field>
+              <Field label="Tipo de asentamiento">
+                <Input value={state.extras.tipo_asentamiento} onChange={(e) => dispatch({ type: "extras/set", field: "tipo_asentamiento", value: e.target.value })} />
+              </Field>
+              <Field label="Nombre de asentamiento">
+                <Input value={state.extras.nombre_asentamiento} onChange={(e) => dispatch({ type: "extras/set", field: "nombre_asentamiento", value: e.target.value })} />
+              </Field>
+              <Field label="Tipo de centro comercial">
+                <Input value={state.extras.tipo_centro_comercial} onChange={(e) => dispatch({ type: "extras/set", field: "tipo_centro_comercial", value: e.target.value })} />
+              </Field>
+              <Field label="Corredor industrial">
+                <Input value={state.extras.corredor_industrial} onChange={(e) => dispatch({ type: "extras/set", field: "corredor_industrial", value: e.target.value })} />
+              </Field>
+              <Field label="Número local">
+                <Input value={state.extras.numero_local} onChange={(e) => dispatch({ type: "extras/set", field: "numero_local", value: e.target.value })} />
+              </Field>
+              <Field label="Código postal">
+                <Input value={state.extras.codigo_postal} onChange={(e) => dispatch({ type: "extras/set", field: "codigo_postal", value: e.target.value })} />
+              </Field>
+            </div>
           </FormSection>
 
           {pendingDedupe ? (
