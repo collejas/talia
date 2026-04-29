@@ -2754,7 +2754,7 @@ async def _notify_sales_rep(
     notifications = _ensure_dict(metadata.get("sales_notifications"))
     if trigger in {"information_email"}:
         logger.info(
-            "whatsapp.notify_sales.skip_legacy_trigger",
+            "whatsapp.notify_sales.skip_trigger",
             extra={"conversation_id": context.conversation_id, "trigger": trigger},
         )
         return

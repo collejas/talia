@@ -23,6 +23,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
+import { RELATION_ROLE_OPTIONS } from "@/components/contactos/relation-role-options";
 
 type ContactSearchItem = {
   id: string;
@@ -495,12 +496,19 @@ export function ContactLinkFlow({
               </div>
 
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                <Field label="Rol en la empresa">
-                  <Input
+                <Field label="Función en la empresa" hint="La función se elige aparte de las banderas de principal, facturación y representante legal.">
+                  <select
+                    className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs"
                     value={rolEnCuenta}
                     onChange={(e) => setRolEnCuenta(e.target.value)}
-                    placeholder="contacto_principal, compras, facturación..."
-                  />
+                  >
+                    <option value="">Selecciona un rol</option>
+                    {RELATION_ROLE_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
                 </Field>
                 <Field label="Puesto">
                   <Input value={puesto} onChange={(e) => setPuesto(e.target.value)} placeholder="Director, gerente..." />

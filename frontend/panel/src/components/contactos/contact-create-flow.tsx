@@ -17,6 +17,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { GeoLocationSelects } from "@/components/contactos/geo-location-selects";
+import { RELATION_ROLE_OPTIONS } from "@/components/contactos/relation-role-options";
 
 type CreateMode =
   | "solo_persona"
@@ -999,8 +1000,19 @@ export function ContactCreateFlow({ open, onOpenChange, onCreated, initialMode =
           {isContactMode || isCompanyMode ? (
             <FormSection title={relationSectionTitle} description={relationSectionDescription}>
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                <Field label="Rol en la empresa">
-                  <Input value={state.relacion.rol_en_cuenta} onChange={(e) => dispatch({ type: "relacion/set", field: "rol_en_cuenta", value: e.target.value })} placeholder="dueno, compras, facturacion..." />
+                <Field label="Función en la empresa" hint="Este es el rol operativo; los checks marcan si además es principal, de facturación o representante legal.">
+                  <select
+                    className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs"
+                    value={state.relacion.rol_en_cuenta}
+                    onChange={(e) => dispatch({ type: "relacion/set", field: "rol_en_cuenta", value: e.target.value })}
+                  >
+                    <option value="">Selecciona un rol</option>
+                    {RELATION_ROLE_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
                 </Field>
                 <Field label="Puesto en la empresa">
                   <Input value={state.relacion.puesto} onChange={(e) => dispatch({ type: "relacion/set", field: "puesto", value: e.target.value })} />
@@ -1063,6 +1075,29 @@ export function ContactCreateFlow({ open, onOpenChange, onCreated, initialMode =
                 <Field label="Email de facturación">
                   <Input value={state.extras.email_facturacion} onChange={(e) => dispatch({ type: "extras/set", field: "email_facturacion", value: e.target.value })} />
                 </Field>
+                <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+                  <div className="rounded-lg border border-border/60 bg-background p-3">
+                    <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Fiscal</div>
+                    <div className="mt-2 text-sm font-medium">{state.extras.uso_cfdi || "Sin uso CFDI"}</div>
+                    <div className="mt-1 text-xs text-muted-foreground">
+                      {[state.extras.forma_pago, state.extras.metodo_pago, state.extras.email_facturacion].filter(Boolean).join(" · ") || "Sin datos de facturación"}
+                    </div>
+                  </div>
+                  <div className="rounded-lg border border-border/60 bg-background p-3">
+                    <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Ubicación</div>
+                    <div className="mt-2 text-sm font-medium">{state.extras.pais || "MX"}</div>
+                    <div className="mt-1 text-xs text-muted-foreground">
+                      {[state.extras.entidad, state.extras.municipio, state.extras.codigo_postal].filter(Boolean).join(" · ") || "Sin ubicación"}
+                    </div>
+                  </div>
+                  <div className="rounded-lg border border-border/60 bg-background p-3">
+                    <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Domicilio</div>
+                    <div className="mt-2 text-sm font-medium">{state.extras.nombre_vialidad || "Sin vialidad"}</div>
+                    <div className="mt-1 text-xs text-muted-foreground">
+                      {[state.extras.numero_exterior, state.extras.numero_interior, state.extras.localidad].filter(Boolean).join(" · ") || "Sin detalle de domicilio"}
+                    </div>
+                  </div>
+                </div>
                 <GeoLocationSelects
                   countryCode={state.extras.pais}
                   stateCode={state.extras.clave_entidad}

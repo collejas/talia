@@ -2600,7 +2600,6 @@ class ClienteRecord(BaseModel):
     contacto_id: UUID
     cuenta_id: UUID
     oportunidad_id: UUID | None = None
-    legacy_lead_id: UUID | None = None
     estado_onboarding: ClienteOnboardingEstado
     rfc: str | None = None
     razon_social: str | None = None
@@ -4686,7 +4685,7 @@ async def require_organizacion_id(
 
     if not user_token:
         # Para rutas sin token explícito, mantenemos comportamiento legacy.
-        audit_context["scope_mode"] = "legacy_without_user_token"
+        audit_context["scope_mode"] = "without_user_token"
         tenant_access_logger.warning("tenant_access.allowed_legacy", extra=audit_context)
         return organizacion_id
 
@@ -4855,7 +4854,7 @@ def _decimal_to_number(value: Decimal | None) -> float | None:
 
 def _cliente_select_clause() -> str:
     return (
-        "id,organizacion_id,contacto_id,cuenta_id,oportunidad_id,legacy_lead_id,"
+        "id,organizacion_id,contacto_id,cuenta_id,oportunidad_id,"
         "estado_onboarding,rfc,razon_social,domicilio_fiscal,domicilio_fisico,regimen_fiscal,"
         "datos_facturacion,fuente,monto_estimado,moneda,metadatos,ganado_en,creado_en,actualizado_en,"
         "documentos:cliente_documentos!cliente_documentos_cliente_org_fkey(id,tipo,estado,descripcion,storage_url,"
@@ -5143,9 +5142,7 @@ def _jwt_verify_and_sub(jwt_token: str | None) -> str | None:
         import hashlib
         import hmac
 
-        secret = getattr(settings, "supabase_jwt_secret", None) or getattr(
-            settings, "supabase_legacy_jwt_secret", None
-        )
+        secret = getattr(settings, "supabase_jwt_secret", None)
         header_b64, payload_b64, signature_b64 = jwt_token.split(".")
 
         def b64url_decode(value: str) -> bytes:
@@ -9014,7 +9011,6 @@ def _map_visit_detail_row(row: dict[str, Any]) -> dict[str, Any]:
         mapped.get("oportunidad_id")
         or (metadata.get("oportunidad_id") if isinstance(metadata, dict) else None)
         or mapped.get("tarjeta_id")
-        or mapped.get("legacy_lead_id")
     )
     if opportunity_id:
         mapped["oportunidad_id"] = opportunity_id
@@ -10123,99 +10119,92 @@ def _persona_alta_to_account_payload(
     contexto: CRMPersonaAltaContexto,
     cuenta: CRMPersonaAltaCuenta,
     extras: CRMPersonaAltaExtras | None,
+    existing_account: CRMAccount | None = None,
 ) -> dict[str, Any]:
     fiscales = extras.fiscales if extras else None
     direccion = extras.direccion if extras else None
+    existing_values = existing_account.model_dump(mode="python", exclude_none=True) if existing_account else {}
     full_name = _persona_alta_full_name(persona)
     nombre = (
         _persona_alta_clean_text(cuenta.nombre_comercial)
         or _persona_alta_clean_text(cuenta.razon_social)
+        or _persona_alta_clean_text(existing_values.get("nombre"))
+        or _persona_alta_clean_text(existing_values.get("alias"))
+        or _persona_alta_clean_text(existing_values.get("razon_social"))
         or full_name
         or "Cuenta sin nombre"
     )
+    base_sitio_web = _persona_alta_clean_text(cuenta.sitio_web) or _persona_alta_clean_text(existing_values.get("sitio_web"))
+    base_correo = (
+        _persona_alta_clean_text(cuenta.correo)
+        or _persona_alta_clean_text(cuenta.correo_principal)
+        or _persona_alta_clean_text(existing_values.get("correo"))
+        or _persona_alta_clean_text(existing_values.get("email"))
+    )
+    base_telefono = (
+        _persona_alta_clean_text(cuenta.telefono)
+        or _persona_alta_clean_text(cuenta.telefono_principal)
+        or _persona_alta_clean_text(existing_values.get("telefono"))
+    )
     return {
         "nombre": nombre,
-        "alias": _persona_alta_clean_text(cuenta.nombre_comercial),
+        "alias": _persona_alta_clean_text(cuenta.nombre_comercial) or _persona_alta_clean_text(existing_values.get("alias")),
         "tipo": _persona_alta_clean_text(cuenta.tipo)
         or (
             "persona_fisica_actividad_empresarial"
             if contexto.modo == "persona_fisica_actividad_empresarial"
-            else (_persona_alta_clean_text(cuenta.tipo_cuenta) or "empresa")
+            else (_persona_alta_clean_text(cuenta.tipo_cuenta) or _persona_alta_clean_text(existing_values.get("tipo")) or "empresa")
         ),
-        "industria": _persona_alta_clean_text(cuenta.industria),
-        "tamano": _persona_alta_clean_text(cuenta.tamano),
-        "sitio_web": _persona_alta_clean_text(cuenta.sitio_web),
-        "telefono": _persona_alta_clean_text(cuenta.telefono) or _persona_alta_clean_text(cuenta.telefono_principal),
-        "correo": _persona_alta_clean_text(cuenta.correo) or _persona_alta_clean_text(cuenta.correo_principal),
-        "codigo_cuenta": _persona_alta_clean_text(cuenta.codigo_cuenta),
+        "industria": _persona_alta_clean_text(cuenta.industria) or _persona_alta_clean_text(existing_values.get("industria")),
+        "tamano": _persona_alta_clean_text(cuenta.tamano) or _persona_alta_clean_text(existing_values.get("tamano")),
+        "sitio_web": base_sitio_web,
+        "website": base_sitio_web,
+        "telefono": base_telefono,
+        "correo": base_correo,
+        "email": base_correo,
+        "codigo_cuenta": _persona_alta_clean_text(cuenta.codigo_cuenta) or _persona_alta_clean_text(existing_values.get("codigo_cuenta")),
         "razon_social": _persona_alta_clean_text(cuenta.razon_social)
+        or _persona_alta_clean_text(existing_values.get("razon_social"))
         or (full_name if contexto.modo == "persona_fisica_actividad_empresarial" else None),
-        "rfc": _persona_alta_clean_text(cuenta.rfc),
-        "uso_cfdi": _persona_alta_clean_text(fiscales.uso_cfdi if fiscales else None),
-        "metodo_pago": _persona_alta_clean_text(fiscales.metodo_pago if fiscales else None),
-        "forma_pago": _persona_alta_clean_text(fiscales.forma_pago if fiscales else None),
-        "email_facturacion": _persona_alta_clean_text(fiscales.email_facturacion if fiscales else None),
-        "tipo_industria": _persona_alta_clean_text(cuenta.industria),
-        "notas": _persona_alta_clean_text(cuenta.notas),
-        "necesidad_proposito": _persona_alta_clean_text(cuenta.necesidad_proposito),
-        "direccion": {
-            key: value
-            for key, value in {
-                "pais": _persona_alta_clean_text(direccion.pais if direccion else None),
-                "clave_entidad": _persona_alta_clean_text(direccion.clave_entidad if direccion else None),
-                "entidad": _persona_alta_clean_text(direccion.entidad if direccion else None),
-                "clave_municipio": _persona_alta_clean_text(direccion.clave_municipio if direccion else None),
-                "municipio": _persona_alta_clean_text(direccion.municipio if direccion else None),
-                "clave_localidad": _persona_alta_clean_text(direccion.clave_localidad if direccion else None),
-                "localidad": _persona_alta_clean_text(direccion.localidad if direccion else None),
-                "tipo_vialidad": _persona_alta_clean_text(direccion.tipo_vialidad if direccion else None),
-                "nombre_vialidad": _persona_alta_clean_text(direccion.nombre_vialidad if direccion else None),
-                "numero_exterior": _persona_alta_clean_text(direccion.numero_exterior if direccion else None),
-                "letra_exterior": _persona_alta_clean_text(direccion.letra_exterior if direccion else None),
-                "edificio": _persona_alta_clean_text(direccion.edificio if direccion else None),
-                "edificio_piso": _persona_alta_clean_text(direccion.edificio_piso if direccion else None),
-                "numero_interior": _persona_alta_clean_text(direccion.numero_interior if direccion else None),
-                "letra_interior": _persona_alta_clean_text(direccion.letra_interior if direccion else None),
-                "tipo_asentamiento": _persona_alta_clean_text(direccion.tipo_asentamiento if direccion else None),
-                "nombre_asentamiento": _persona_alta_clean_text(direccion.nombre_asentamiento if direccion else None),
-                "tipo_centro_comercial": _persona_alta_clean_text(direccion.tipo_centro_comercial if direccion else None),
-                "corredor_industrial": _persona_alta_clean_text(direccion.corredor_industrial if direccion else None),
-                "numero_local": _persona_alta_clean_text(direccion.numero_local if direccion else None),
-                "codigo_postal": _persona_alta_clean_text(direccion.codigo_postal if direccion else None),
-                "latitud": direccion.latitud if direccion else None,
-                "longitud": direccion.longitud if direccion else None,
-            }.items()
-            if value is not None
-        },
-        "tipo_vialidad": _persona_alta_clean_text(direccion.tipo_vialidad if direccion else None),
-        "nombre_vialidad": _persona_alta_clean_text(direccion.nombre_vialidad if direccion else None),
-        "numero_exterior": _persona_alta_clean_text(direccion.numero_exterior if direccion else None),
-        "letra_exterior": _persona_alta_clean_text(direccion.letra_exterior if direccion else None),
-        "edificio": _persona_alta_clean_text(direccion.edificio if direccion else None),
-        "edificio_piso": _persona_alta_clean_text(direccion.edificio_piso if direccion else None),
-        "numero_interior": _persona_alta_clean_text(direccion.numero_interior if direccion else None),
-        "letra_interior": _persona_alta_clean_text(direccion.letra_interior if direccion else None),
-        "codigo_postal": _persona_alta_clean_text(direccion.codigo_postal if direccion else None),
-        "entidad": _persona_alta_clean_text(direccion.entidad if direccion else None),
-        "clave_entidad": _persona_alta_clean_text(direccion.clave_entidad if direccion else None),
-        "municipio": _persona_alta_clean_text(direccion.municipio if direccion else None),
-        "clave_municipio": _persona_alta_clean_text(direccion.clave_municipio if direccion else None),
-        "clave_localidad": _persona_alta_clean_text(direccion.clave_localidad if direccion else None),
-        "localidad": _persona_alta_clean_text(direccion.localidad if direccion else None),
-        "pais": _persona_alta_clean_text(direccion.pais if direccion else None),
-        "tipo_asentamiento": _persona_alta_clean_text(direccion.tipo_asentamiento if direccion else None),
-        "nombre_asentamiento": _persona_alta_clean_text(direccion.nombre_asentamiento if direccion else None),
-        "tipo_centro_comercial": _persona_alta_clean_text(direccion.tipo_centro_comercial if direccion else None),
-        "corredor_industrial": _persona_alta_clean_text(direccion.corredor_industrial if direccion else None),
-        "numero_local": _persona_alta_clean_text(direccion.numero_local if direccion else None),
-        "latitud": direccion.latitud if direccion else None,
-        "longitud": direccion.longitud if direccion else None,
+        "rfc": _persona_alta_clean_text(cuenta.rfc) or _persona_alta_clean_text(existing_values.get("rfc")),
+        "uso_cfdi": _persona_alta_clean_text(fiscales.uso_cfdi if fiscales else None) or _persona_alta_clean_text(existing_values.get("uso_cfdi")),
+        "metodo_pago": _persona_alta_clean_text(fiscales.metodo_pago if fiscales else None) or _persona_alta_clean_text(existing_values.get("metodo_pago")),
+        "forma_pago": _persona_alta_clean_text(fiscales.forma_pago if fiscales else None) or _persona_alta_clean_text(existing_values.get("forma_pago")),
+        "email_facturacion": _persona_alta_clean_text(fiscales.email_facturacion if fiscales else None) or _persona_alta_clean_text(existing_values.get("email_facturacion")),
+        "tipo_industria": _persona_alta_clean_text(cuenta.industria) or _persona_alta_clean_text(existing_values.get("tipo_industria")),
+        "notas": _persona_alta_clean_text(cuenta.notas) or _persona_alta_clean_text(existing_values.get("notas")),
+        "necesidad_proposito": _persona_alta_clean_text(cuenta.necesidad_proposito) or _persona_alta_clean_text(existing_values.get("necesidad_proposito")),
+        "tipo_vialidad": _persona_alta_clean_text(direccion.tipo_vialidad if direccion else None) or _persona_alta_clean_text(existing_values.get("tipo_vialidad")),
+        "nombre_vialidad": _persona_alta_clean_text(direccion.nombre_vialidad if direccion else None) or _persona_alta_clean_text(existing_values.get("nombre_vialidad")),
+        "numero_exterior": _persona_alta_clean_text(direccion.numero_exterior if direccion else None) or _persona_alta_clean_text(existing_values.get("numero_exterior")),
+        "letra_exterior": _persona_alta_clean_text(direccion.letra_exterior if direccion else None) or _persona_alta_clean_text(existing_values.get("letra_exterior")),
+        "edificio": _persona_alta_clean_text(direccion.edificio if direccion else None) or _persona_alta_clean_text(existing_values.get("edificio")),
+        "edificio_piso": _persona_alta_clean_text(direccion.edificio_piso if direccion else None) or _persona_alta_clean_text(existing_values.get("edificio_piso")),
+        "numero_interior": _persona_alta_clean_text(direccion.numero_interior if direccion else None) or _persona_alta_clean_text(existing_values.get("numero_interior")),
+        "letra_interior": _persona_alta_clean_text(direccion.letra_interior if direccion else None) or _persona_alta_clean_text(existing_values.get("letra_interior")),
+        "codigo_postal": _persona_alta_clean_text(direccion.codigo_postal if direccion else None) or _persona_alta_clean_text(existing_values.get("codigo_postal")),
+        "entidad": _persona_alta_clean_text(direccion.entidad if direccion else None) or _persona_alta_clean_text(existing_values.get("entidad")),
+        "clave_entidad": _persona_alta_clean_text(direccion.clave_entidad if direccion else None) or _persona_alta_clean_text(existing_values.get("clave_entidad")),
+        "municipio": _persona_alta_clean_text(direccion.municipio if direccion else None) or _persona_alta_clean_text(existing_values.get("municipio")),
+        "clave_municipio": _persona_alta_clean_text(direccion.clave_municipio if direccion else None) or _persona_alta_clean_text(existing_values.get("clave_municipio")),
+        "clave_localidad": _persona_alta_clean_text(direccion.clave_localidad if direccion else None) or _persona_alta_clean_text(existing_values.get("clave_localidad")),
+        "localidad": _persona_alta_clean_text(direccion.localidad if direccion else None) or _persona_alta_clean_text(existing_values.get("localidad")),
+        "pais": _persona_alta_clean_text(direccion.pais if direccion else None) or _persona_alta_clean_text(existing_values.get("pais")),
+        "tipo_asentamiento": _persona_alta_clean_text(direccion.tipo_asentamiento if direccion else None) or _persona_alta_clean_text(existing_values.get("tipo_asentamiento")),
+        "nombre_asentamiento": _persona_alta_clean_text(direccion.nombre_asentamiento if direccion else None) or _persona_alta_clean_text(existing_values.get("nombre_asentamiento")),
+        "tipo_centro_comercial": _persona_alta_clean_text(direccion.tipo_centro_comercial if direccion else None) or _persona_alta_clean_text(existing_values.get("tipo_centro_comercial")),
+        "corredor_industrial": _persona_alta_clean_text(direccion.corredor_industrial if direccion else None) or _persona_alta_clean_text(existing_values.get("corredor_industrial")),
+        "numero_local": _persona_alta_clean_text(direccion.numero_local if direccion else None) or _persona_alta_clean_text(existing_values.get("numero_local")),
+        "tipo_establecimiento": _persona_alta_clean_text(cuenta.tipo_establecimiento) or _persona_alta_clean_text(existing_values.get("tipo_establecimiento")),
+        "latitud": direccion.latitud if direccion else existing_values.get("latitud"),
+        "longitud": direccion.longitud if direccion else existing_values.get("longitud"),
         "fecha_incorporacion": cuenta.fecha_incorporacion.isoformat() if cuenta and cuenta.fecha_incorporacion else None,
         "metadata": {
             "segmento": _persona_alta_clean_text(cuenta.segmento),
             "tipo_persona": _persona_alta_clean_text(cuenta.tipo_persona),
             "tamano": _persona_alta_clean_text(cuenta.tamano),
             "codigo_cuenta": _persona_alta_clean_text(cuenta.codigo_cuenta),
+            "pais": _persona_alta_clean_text(existing_values.get("pais")),
             "source": "personas_alta",
         },
     }
@@ -14496,12 +14485,22 @@ async def create_persona_alta(
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
-    persona_out = CRMContact.model_validate(contact_row)
+    try:
+        persona_out = CRMContact.model_validate(contact_row)
+    except ValidationError as exc:
+        logger.exception(
+            "crm.persona_update.persona_validation_failed",
+            extra={
+                "contacto_id": str(contacto_id),
+                "errors": exc.errors(),
+            },
+        )
+        raise HTTPException(status_code=502, detail="persona_response_invalid") from exc
     account_out: CRMAccount | None = None
     relation_out: CRMCuentaPersonaRelacion | None = None
 
     if persona_out.cuenta_id:
-        if cuenta and contexto.modo in {"empresa_nueva", "persona_fisica_actividad_empresarial"}:
+        if cuenta:
             account_patch = {
                 key: value
                 for key, value in _persona_alta_to_account_payload(
@@ -14509,6 +14508,7 @@ async def create_persona_alta(
                     contexto=contexto,
                     cuenta=cuenta,
                     extras=extras,
+                    existing_account=existing_account,
                 ).items()
                 if value not in (None, "", {}, [])
             }
@@ -14527,7 +14527,18 @@ async def create_persona_alta(
         except CRMRepositoryError as exc:
             raise HTTPException(status_code=502, detail=str(exc)) from exc
         if account_row:
-            account_out = CRMAccount.model_validate(account_row)
+            try:
+                account_out = CRMAccount.model_validate(account_row)
+            except ValidationError as exc:
+                logger.exception(
+                    "crm.persona_update.account_validation_failed",
+                    extra={
+                        "contacto_id": str(contacto_id),
+                        "cuenta_id": str(persona_out.cuenta_id),
+                        "errors": exc.errors(),
+                    },
+                )
+                raise HTTPException(status_code=502, detail="account_response_invalid") from exc
 
         relation_defaults = {
             "rol_en_cuenta": (
@@ -14558,7 +14569,18 @@ async def create_persona_alta(
             )
         except CRMRepositoryError as exc:
             raise HTTPException(status_code=502, detail=str(exc)) from exc
-        relation_out = CRMCuentaPersonaRelacion.model_validate(relation_row)
+        try:
+            relation_out = CRMCuentaPersonaRelacion.model_validate(relation_row)
+        except ValidationError as exc:
+            logger.exception(
+                "crm.persona_update.relation_validation_failed",
+                extra={
+                    "contacto_id": str(contacto_id),
+                    "cuenta_id": str(persona_out.cuenta_id),
+                    "errors": exc.errors(),
+                },
+            )
+            raise HTTPException(status_code=502, detail="relation_response_invalid") from exc
 
     return CRMPersonaAltaResponse(
         persona=persona_out,
@@ -14706,8 +14728,8 @@ async def update_persona(
     relation_out: CRMCuentaPersonaRelacion | None = None
 
     if persona_out.cuenta_id:
-        # Si la UI mandó datos de cuenta (para cuenta nueva / PFAE) los aplicamos.
-        if cuenta and contexto.modo in {"empresa_nueva", "persona_fisica_actividad_empresarial"}:
+        # Si la UI mandó datos de cuenta, los aplicamos también sobre cuentas existentes.
+        if cuenta:
             account_patch = {
                 key: value
                 for key, value in _persona_alta_to_account_payload(
@@ -14715,6 +14737,7 @@ async def update_persona(
                     contexto=contexto,
                     cuenta=cuenta,
                     extras=extras,
+                    existing_account=existing_account,
                 ).items()
                 if value not in (None, "", {}, [])
             }
@@ -34449,8 +34472,6 @@ def _tablero_id_from_metadata(metadata: dict[str, Any] | None) -> str | None:
     id_keys = (
         "tablero_id",
         "tableroId",
-        "legacy_tablero_id",
-        "legacy_tableroId",
         "pipeline_id",
         "pipelineId",
         "board_id",

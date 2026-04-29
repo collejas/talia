@@ -51,6 +51,7 @@ Este documento resume todo lo que se fue cerrando dentro del plan `personas, cue
 - El detalle de contacto ya no cae al fallback legacy.
 - Los lookups activos por email, telefono y WhatsApp quedaron apuntando al modelo nuevo.
 - La escritura legacy de alta, edicion y borrado quedo retirada del flujo operativo.
+- El backend de contactos quedo sin lecturas ni escrituras `legacy_*` para el flujo activo; la clave operativa ahora es `personas.id`.
 
 ### 2.2 Contactos y relaciones
 

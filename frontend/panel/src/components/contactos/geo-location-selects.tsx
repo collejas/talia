@@ -100,7 +100,7 @@ export function GeoLocationSelects({
       mounted = false;
       controller.abort();
     };
-  }, [countryCode, onCountryChange]);
+  }, [countryCode]);
 
   React.useEffect(() => {
     const controller = new AbortController();

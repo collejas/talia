@@ -1961,10 +1961,9 @@ def build_validation_report(
         if value is None or value == "":
             report.missing_config.append(dotted)
 
-    # Compatibilidad: aceptar `webchat.inactivity_hours` mientras migra a minutos.
     if "webchat.inactivity_minutes" in report.missing_config:
-        legacy_hours = _get_config_value(config, "webchat.inactivity_hours")
-        if isinstance(legacy_hours, (int, float)):
+        inactivity_hours = _get_config_value(config, "webchat.inactivity_hours")
+        if isinstance(inactivity_hours, (int, float)):
             report.missing_config.remove("webchat.inactivity_minutes")
 
     if not settings.secrets_master_key:

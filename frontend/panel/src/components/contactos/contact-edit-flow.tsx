@@ -17,6 +17,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { GeoLocationSelects } from "@/components/contactos/geo-location-selects";
+import { RELATION_ROLE_OPTIONS } from "@/components/contactos/relation-role-options";
 
 type CreateMode =
   | "solo_persona"
@@ -165,6 +166,8 @@ type AccountRelation = {
   fecha_inicio: string | null;
   fecha_fin: string | null;
   notas: string | null;
+  cuenta_nombre: string;
+  cuenta_alias: string | null;
 };
 type NewRelationDraft = {
   cuenta_id: string;
@@ -321,6 +324,13 @@ function readBool(detail: ContactDetail, key: string, fallback: boolean): boolea
   return typeof value === "boolean" ? value : fallback;
 }
 
+function formatSummaryLine(parts: Array<string | null | undefined>, fallback: string): string {
+  const cleaned = parts
+    .map((part) => (typeof part === "string" ? part.trim() : ""))
+    .filter((part) => Boolean(part));
+  return cleaned.length ? cleaned.join(" · ") : fallback;
+}
+
 function inferMode(detail: ContactDetail): CreateMode {
   const cuentaId = readString(detail, "cuenta_id").trim();
   if (!cuentaId) return "solo_persona";
@@ -474,6 +484,36 @@ function reducer(state: ContactEditState, action: ContactEditAction): ContactEdi
     case "hydrate": {
       const detail = action.detail;
       const mode = inferMode(detail);
+      const hasFiscalOrAddressData = [
+        "uso_cfdi",
+        "forma_pago",
+        "metodo_pago",
+        "email_facturacion",
+        "pais",
+        "clave_entidad",
+        "entidad",
+        "clave_municipio",
+        "municipio",
+        "clave_localidad",
+        "localidad",
+        "tipo_vialidad",
+        "nombre_vialidad",
+        "numero_exterior",
+        "letra_exterior",
+        "edificio",
+        "edificio_piso",
+        "numero_interior",
+        "letra_interior",
+        "tipo_asentamiento",
+        "nombre_asentamiento",
+        "tipo_centro_comercial",
+        "corredor_industrial",
+        "numero_local",
+        "codigo_postal",
+        "tipo_establecimiento",
+        "latitud",
+        "longitud",
+      ].some((key) => readString(detail, key).trim());
       return {
         ...INITIAL_STATE,
         loadedId: action.contactoId,
@@ -559,6 +599,7 @@ function reducer(state: ContactEditState, action: ContactEditAction): ContactEdi
           numero_local: readString(detail, "numero_local"),
           codigo_postal: readString(detail, "codigo_postal"),
         },
+        extrasOpen: hasFiscalOrAddressData,
       };
     }
     case "mode/set":
@@ -799,7 +840,7 @@ export function ContactEditFlow({ open, onOpenChange, contactoId, onSaved }: Con
       }
       const items = Array.isArray(body.items) ? body.items : [];
       const mapped: AccountRelation[] = items
-        .map((item) => {
+        .map((item): AccountRelation | null => {
           const id = typeof item.id === "string" ? item.id : "";
           const cuenta_id = typeof item.cuenta_id === "string" ? item.cuenta_id : "";
           const persona_id = typeof item.persona_id === "string" ? item.persona_id : "";
@@ -817,10 +858,49 @@ export function ContactEditFlow({ open, onOpenChange, contactoId, onSaved }: Con
             fecha_inicio: typeof item.fecha_inicio === "string" ? item.fecha_inicio : null,
             fecha_fin: typeof item.fecha_fin === "string" ? item.fecha_fin : null,
             notas: typeof item.notas === "string" ? item.notas : null,
+            cuenta_nombre: "",
+            cuenta_alias: null as string | null,
           };
         })
         .filter((item): item is AccountRelation => item !== null);
-      setRelations(mapped);
+      const uniqueAccountIds = Array.from(new Set(mapped.map((item) => item.cuenta_id).filter(Boolean)));
+      const summaries = await Promise.all(
+        uniqueAccountIds.map(async (cuentaId) => {
+          try {
+            const accountResponse = await fetch(`/api/personas/cuentas/${encodeURIComponent(cuentaId)}`, {
+              cache: "no-store",
+            });
+            const accountBody = (await accountResponse.json().catch(() => ({}))) as {
+              item?: { id?: string; nombre?: string; alias?: string | null };
+            };
+            if (!accountResponse.ok || !accountBody.item?.nombre) {
+              return null;
+            }
+            return {
+              id: cuentaId,
+              nombre: accountBody.item.nombre,
+              alias: accountBody.item.alias ?? null,
+            };
+          } catch {
+            return null;
+          }
+        }),
+      );
+      const summaryMap = summaries.reduce<Record<string, { nombre: string; alias: string | null }>>((acc, item) => {
+        if (!item) return acc;
+        acc[item.id] = { nombre: item.nombre, alias: item.alias };
+        return acc;
+      }, {});
+      setRelations(
+        mapped.map((relation) => {
+          const summary = summaryMap[relation.cuenta_id];
+          return {
+            ...relation,
+            cuenta_nombre: summary?.nombre || "",
+            cuenta_alias: summary?.alias ?? null,
+          };
+        }),
+      );
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "No se pudieron cargar las relaciones.");
       setRelations([]);
@@ -1031,6 +1111,46 @@ export function ContactEditFlow({ open, onOpenChange, contactoId, onSaved }: Con
     state.mode === "persona_fisica_actividad_empresarial"
       ? "Actualiza la relación principal de la persona con su negocio."
       : "Actualiza el rol real de la persona dentro de la empresa.";
+  const businessSummary = formatSummaryLine(
+    [
+      state.cuenta.nombre_comercial || state.cuenta.razon_social,
+      state.cuenta.alias,
+      state.cuenta.tipo_persona,
+      state.cuenta.tamano,
+      state.cuenta.tipo_establecimiento,
+    ],
+    "Sin datos de empresa",
+  );
+  const fiscalSummary = formatSummaryLine(
+    [state.cuenta.rfc, state.extras.uso_cfdi, state.extras.forma_pago, state.extras.metodo_pago, state.extras.email_facturacion],
+    "Sin datos fiscales",
+  );
+  const locationSummary = formatSummaryLine(
+    [state.extras.pais || "MX", state.extras.entidad, state.extras.municipio, state.extras.localidad, state.extras.codigo_postal],
+    "Sin ubicación",
+  );
+  const domicileSummary = formatSummaryLine(
+    [
+      state.extras.tipo_vialidad,
+      state.extras.nombre_vialidad,
+      state.extras.numero_exterior,
+      state.extras.letra_exterior,
+      state.extras.numero_interior,
+      state.extras.letra_interior,
+      state.extras.edificio,
+      state.extras.edificio_piso,
+      state.extras.tipo_asentamiento,
+      state.extras.nombre_asentamiento,
+      state.extras.tipo_centro_comercial,
+      state.extras.corredor_industrial,
+      state.extras.numero_local,
+    ],
+    "Sin domicilio",
+  );
+  const georeferenceSummary = formatSummaryLine(
+    [state.cuenta.fecha_incorporacion, state.cuenta.latitud, state.cuenta.longitud],
+    "Sin georreferencia",
+  );
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -1045,6 +1165,33 @@ export function ContactEditFlow({ open, onOpenChange, contactoId, onSaved }: Con
         <div className="space-y-5">
           {state.loading ? <p className="text-xs text-muted-foreground">Cargando...</p> : null}
           {state.error ? <p className="text-xs text-destructive">{state.error}</p> : null}
+
+          <FormSection title="Resumen actual" description="Lo guardado y lo que quedará visible en este contacto.">
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
+              <div className="rounded-lg border border-border/60 bg-background p-3">
+                <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Persona</div>
+                <div className="mt-2 text-sm font-medium">{fullName || "Sin nombre"}</div>
+                <div className="mt-1 text-xs text-muted-foreground">
+                  {formatSummaryLine([state.persona.correo_principal, state.persona.telefono_principal_e164, state.persona.estado], "Sin medio de contacto")}
+                </div>
+              </div>
+              <div className="rounded-lg border border-border/60 bg-background p-3">
+                <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Empresa</div>
+                <div className="mt-2 text-sm font-medium">{businessSummary}</div>
+                <div className="mt-1 text-xs text-muted-foreground">{georeferenceSummary}</div>
+              </div>
+              <div className="rounded-lg border border-border/60 bg-background p-3">
+                <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Datos fiscales</div>
+                <div className="mt-2 text-sm font-medium">{fiscalSummary}</div>
+                <div className="mt-1 text-xs text-muted-foreground">{state.cuenta.rfc || "Sin RFC"}</div>
+              </div>
+              <div className="rounded-lg border border-border/60 bg-background p-3">
+                <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Dirección</div>
+                <div className="mt-2 text-sm font-medium">{locationSummary}</div>
+                <div className="mt-1 text-xs text-muted-foreground">{domicileSummary}</div>
+              </div>
+            </div>
+          </FormSection>
 
           <FormSection title="Tipo de registro">
             <RadioGroup value={state.mode} onValueChange={(value) => dispatch({ type: "mode/set", mode: value as CreateMode })} className="grid gap-3 md:grid-cols-3">
@@ -1214,8 +1361,19 @@ export function ContactEditFlow({ open, onOpenChange, contactoId, onSaved }: Con
           {state.mode !== "solo_persona" ? (
             <FormSection title={relationSectionTitle} description={relationSectionDescription}>
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                <Field label="Rol en la empresa">
-                  <Input value={state.relacion.rol_en_cuenta} onChange={(e) => dispatch({ type: "relacion/set", field: "rol_en_cuenta", value: e.target.value })} placeholder="dueno, compras, facturacion..." />
+                <Field label="Función en la empresa" hint="El rol operativo es independiente de los checks de principal, facturación y representante legal.">
+                  <select
+                    className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs"
+                    value={state.relacion.rol_en_cuenta}
+                    onChange={(e) => dispatch({ type: "relacion/set", field: "rol_en_cuenta", value: e.target.value })}
+                  >
+                    <option value="">Selecciona un rol</option>
+                    {RELATION_ROLE_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
                 </Field>
                 <Field label="Puesto en la empresa">
                   <Input value={state.relacion.puesto} onChange={(e) => dispatch({ type: "relacion/set", field: "puesto", value: e.target.value })} />
@@ -1256,12 +1414,16 @@ export function ContactEditFlow({ open, onOpenChange, contactoId, onSaved }: Con
               <div className="space-y-3">
                 {relations.map((relation) => (
                   <div key={relation.id} className="rounded-lg border border-border/60 p-3">
-                    <div className="mb-2 text-xs text-muted-foreground">
-                      cuenta_id: {relation.cuenta_id}
+                    <div className="mb-2 text-sm font-medium">
+                      {relation.cuenta_nombre || "Empresa vinculada"}
+                      {relation.cuenta_alias ? (
+                        <span className="ml-2 text-xs font-normal text-muted-foreground">{relation.cuenta_alias}</span>
+                      ) : null}
                     </div>
                     <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-                      <Field label="Rol">
-                        <Input
+                      <Field label="Función">
+                        <select
+                          className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs"
                           value={relation.rol_en_cuenta}
                           onChange={(e) =>
                             setRelations((prev) =>
@@ -1270,7 +1432,14 @@ export function ContactEditFlow({ open, onOpenChange, contactoId, onSaved }: Con
                               ),
                             )
                           }
-                        />
+                        >
+                          <option value="">Selecciona un rol</option>
+                          {RELATION_ROLE_OPTIONS.map((option) => (
+                            <option key={option.value} value={option.value}>
+                              {option.label}
+                            </option>
+                          ))}
+                        </select>
                       </Field>
                       <Field label="Puesto">
                         <Input
@@ -1418,11 +1587,19 @@ export function ContactEditFlow({ open, onOpenChange, contactoId, onSaved }: Con
                       placeholder="Nombre, RFC, correo o teléfono"
                     />
                   </Field>
-                  <Field label="Rol en cuenta">
-                    <Input
+                  <Field label="Función en cuenta" hint="Puedes cambiar la función sin tocar las banderas de principal/facturación/legal.">
+                    <select
+                      className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs"
                       value={newRelation.rol_en_cuenta}
                       onChange={(e) => setNewRelation((prev) => ({ ...prev, rol_en_cuenta: e.target.value }))}
-                    />
+                    >
+                      <option value="">Selecciona un rol</option>
+                      {RELATION_ROLE_OPTIONS.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
                   </Field>
                   <Field label="Puesto">
                     <Input
@@ -1471,14 +1648,15 @@ export function ContactEditFlow({ open, onOpenChange, contactoId, onSaved }: Con
                           <div className="text-xs text-muted-foreground">
                             {[account.alias, account.correo, account.telefono].filter(Boolean).join(" · ") || "Sin datos adicionales"}
                           </div>
-                          <div className="text-[11px] text-muted-foreground">id: {account.id}</div>
                         </button>
                       );
                     })}
                   </div>
                 ) : null}
                 {newRelation.cuenta_id ? (
-                  <p className="mt-2 text-xs text-muted-foreground">Empresa seleccionada: {newRelation.cuenta_id}</p>
+                  <p className="mt-2 text-xs text-muted-foreground">
+                    Empresa seleccionada: {relationAccountResults.find((item) => item.id === newRelation.cuenta_id)?.nombre || "Empresa seleccionada"}
+                  </p>
                 ) : null}
                 <div className="mt-2 grid grid-cols-1 gap-2 md:grid-cols-3">
                   <label className="flex items-center gap-2 text-sm">
@@ -1518,10 +1696,10 @@ export function ContactEditFlow({ open, onOpenChange, contactoId, onSaved }: Con
             </FormSection>
           ) : null}
 
-          <FormSection title="Datos opcionales" description="Completa ahora o deja para después.">
+          <FormSection title="Datos fiscales y dirección" description="Completa ahora o revisa los valores persistidos.">
             <label className="flex items-center gap-2 text-sm">
               <Checkbox checked={state.extrasOpen} onCheckedChange={(v) => dispatch({ type: "extras/toggle", value: Boolean(v) })} />
-              Editar datos fiscales y dirección
+              Ver o editar datos fiscales y dirección
             </label>
             {state.extrasOpen ? (
               <div className="mt-3 space-y-4">
@@ -1538,6 +1716,29 @@ export function ContactEditFlow({ open, onOpenChange, contactoId, onSaved }: Con
                   <Field label="Email facturación">
                     <Input value={state.extras.email_facturacion} onChange={(e) => dispatch({ type: "extras/set", field: "email_facturacion", value: e.target.value })} />
                   </Field>
+                </div>
+                <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+                  <div className="rounded-lg border border-border/60 bg-background p-3">
+                    <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Fiscal</div>
+                    <div className="mt-2 text-sm font-medium">{state.extras.uso_cfdi || "Sin uso CFDI"}</div>
+                    <div className="mt-1 text-xs text-muted-foreground">
+                      {[state.extras.forma_pago, state.extras.metodo_pago, state.extras.email_facturacion].filter(Boolean).join(" · ") || "Sin datos de facturación"}
+                    </div>
+                  </div>
+                  <div className="rounded-lg border border-border/60 bg-background p-3">
+                    <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Ubicación</div>
+                    <div className="mt-2 text-sm font-medium">{state.extras.pais || "MX"}</div>
+                    <div className="mt-1 text-xs text-muted-foreground">
+                      {[state.extras.entidad, state.extras.municipio, state.extras.codigo_postal].filter(Boolean).join(" · ") || "Sin ubicación"}
+                    </div>
+                  </div>
+                  <div className="rounded-lg border border-border/60 bg-background p-3">
+                    <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Domicilio</div>
+                    <div className="mt-2 text-sm font-medium">{state.extras.nombre_vialidad || "Sin vialidad"}</div>
+                    <div className="mt-1 text-xs text-muted-foreground">
+                      {[state.extras.numero_exterior, state.extras.numero_interior, state.extras.localidad].filter(Boolean).join(" · ") || "Sin detalle de domicilio"}
+                    </div>
+                  </div>
                 </div>
                 <GeoLocationSelects
                   countryCode={state.extras.pais}

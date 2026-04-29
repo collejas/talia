@@ -186,7 +186,6 @@ class Settings(BaseSettings):
         validation_alias=AliasChoices("TALIA_SUPABASE_ANON", "SUPABASE_ANON_KEY", "SUPABASE_ANON"),
     )
     supabase_jwt_secret: str | None = None
-    supabase_legacy_jwt_secret: str | None = None
     role_permissions_matrix_path: str = Field(
         default="docs/Roles de acceso/Matriz-permisos.md",
         description="Ruta al archivo de matriz rol-permisos que sirve como fuente de verdad.",
