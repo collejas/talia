@@ -14856,16 +14856,16 @@ class CRMRepository:
     async def create_buscador_job(
         self,
         *,
-        usuario_token: str,
+        organizacion_id: UUID,
         payload: dict[str, Any],
     ) -> dict[str, Any]:
-        body = [payload]
-        resp = await self._request_with_user(
+        body = [dict(payload, organizacion_id=str(organizacion_id))]
+        resp = await self._request(
             "POST",
             "/rest/v1/prospeccion_buscador_jobs",
-            token=usuario_token,
             json=body,
             prefer="return=representation",
+            organizacion_id=organizacion_id,
         )
         data = resp.json() or []
         row = self._first_row(data)
@@ -14876,24 +14876,25 @@ class CRMRepository:
     async def list_buscador_jobs(
         self,
         *,
-        usuario_token: str,
+        organizacion_id: UUID,
         limit: int = 20,
         offset: int = 0,
     ) -> tuple[list[dict[str, Any]], int]:
         limit_value = max(1, min(limit, 200))
         offset_value = max(0, offset)
         params = {
+            "organizacion_id": f"eq.{organizacion_id}",
             "order": "created_at.desc",
             "limit": str(limit_value),
         }
         if offset_value:
             params["offset"] = str(offset_value)
-        resp = await self._request_with_user(
+        resp = await self._request(
             "GET",
             "/rest/v1/prospeccion_buscador_jobs",
-            token=usuario_token,
             params=params,
             prefer="count=exact",
+            organizacion_id=organizacion_id,
         )
         data = resp.json() or []
         if not isinstance(data, list):
@@ -14906,24 +14907,15 @@ class CRMRepository:
         self,
         *,
         job_id: UUID,
-        usuario_token: str | None = None,
+        organizacion_id: UUID,
     ) -> dict[str, Any] | None:
-        params = {"id": f"eq.{job_id}", "limit": "1"}
-        request = (
-            self._request_with_user(
-                "GET",
-                "/rest/v1/prospeccion_buscador_jobs",
-                token=usuario_token or "",
-                params=params,
-            )
-            if usuario_token
-            else self._request(
-                "GET",
-                "/rest/v1/prospeccion_buscador_jobs",
-                params=params,
-            )
+        params = {"id": f"eq.{job_id}", "organizacion_id": f"eq.{organizacion_id}", "limit": "1"}
+        resp = await self._request(
+            "GET",
+            "/rest/v1/prospeccion_buscador_jobs",
+            params=params,
+            organizacion_id=organizacion_id,
         )
-        resp = await request
         data = resp.json() or []
         row = self._first_row(data)
         if row is None:
@@ -14936,17 +14928,18 @@ class CRMRepository:
         self,
         *,
         job_id: UUID,
-        usuario_token: str,
+        organizacion_id: UUID,
     ) -> int:
         params = {
             "id": f"eq.{job_id}",
+            "organizacion_id": f"eq.{organizacion_id}",
         }
-        resp = await self._request_with_user(
+        resp = await self._request(
             "DELETE",
             "/rest/v1/prospeccion_buscador_jobs",
-            token=usuario_token,
             params=params,
             prefer="return=representation",
+            organizacion_id=organizacion_id,
         )
         if resp.status_code == 204:
             return 0
@@ -15036,7 +15029,7 @@ class CRMRepository:
     async def list_buscador_resultados(
         self,
         *,
-        usuario_token: str,
+        organizacion_id: UUID,
         job_id: UUID,
         limit: int | None = None,
         offset: int | None = None,
@@ -15046,16 +15039,17 @@ class CRMRepository:
         offset_value = max(offset or 0, 0)
         params = {
             "job_id": f"eq.{job_id}",
+            "organizacion_id": f"eq.{organizacion_id}",
             "order": "creado_en.asc",
             "limit": str(limit_value),
         }
         if offset_value:
             params["offset"] = str(offset_value)
-        resp = await self._request_with_user(
+        resp = await self._request(
             "GET",
             "/rest/v1/prospeccion_buscador_resultados",
-            token=usuario_token,
             params=params,
+            organizacion_id=organizacion_id,
         )
         data = resp.json() or []
         if not isinstance(data, list):
@@ -15065,7 +15059,7 @@ class CRMRepository:
     async def list_buscador_resultados_by_ids(
         self,
         *,
-        usuario_token: str,
+        organizacion_id: UUID,
         job_id: UUID,
         result_ids: Sequence[UUID],
     ) -> list[dict[str, Any]]:
@@ -15074,14 +15068,15 @@ class CRMRepository:
         ids_param = ",".join(str(value) for value in result_ids)
         params = {
             "job_id": f"eq.{job_id}",
+            "organizacion_id": f"eq.{organizacion_id}",
             "id": f"in.({ids_param})",
             "limit": str(len(result_ids)),
         }
-        resp = await self._request_with_user(
+        resp = await self._request(
             "GET",
             "/rest/v1/prospeccion_buscador_resultados",
-            token=usuario_token,
             params=params,
+            organizacion_id=organizacion_id,
         )
         data = resp.json() or []
         if not isinstance(data, list):
@@ -15091,7 +15086,7 @@ class CRMRepository:
     async def list_buscador_prospecto_result_ids(
         self,
         *,
-        usuario_token: str,
+        organizacion_id: UUID,
         job_id: UUID,
         chunk_size: int = 1000,
     ) -> set[str]:
@@ -15101,16 +15096,17 @@ class CRMRepository:
         while True:
             params: dict[str, str] = {
                 "metadata->>buscador_job_id": f"eq.{job_id}",
+                "organizacion_id": f"eq.{organizacion_id}",
                 "select": "metadata",
                 "limit": str(chunk_value),
             }
             if offset:
                 params["offset"] = str(offset)
-            resp = await self._request_with_user(
+            resp = await self._request(
                 "GET",
                 "/rest/v1/prospeccion_prospectos",
-                token=usuario_token,
                 params=params,
+                organizacion_id=organizacion_id,
             )
             data = resp.json() or []
             if not isinstance(data, list):
@@ -15131,7 +15127,8 @@ class CRMRepository:
     async def list_prospectos_by_emails(
         self,
         *,
-        usuario_token: str,
+        usuario_token: str | None = None,
+        organizacion_id: UUID | None = None,
         emails: Sequence[str],
     ) -> list[dict[str, Any]]:
         normalized: list[str] = []
@@ -15149,12 +15146,23 @@ class CRMRepository:
             "email": _postgrest_in_clause(normalized),
             "limit": str(len(normalized)),
         }
-        resp = await self._request_with_user(
-            "GET",
-            "/rest/v1/prospeccion_prospectos",
-            token=usuario_token,
-            params=params,
-        )
+        if organizacion_id is not None:
+            params["organizacion_id"] = f"eq.{organizacion_id}"
+            resp = await self._request(
+                "GET",
+                "/rest/v1/prospeccion_prospectos",
+                params=params,
+                organizacion_id=organizacion_id,
+            )
+        else:
+            if not usuario_token:
+                raise CRMRepositoryError("prospectos_by_emails_missing_token")
+            resp = await self._request_with_user(
+                "GET",
+                "/rest/v1/prospeccion_prospectos",
+                token=usuario_token,
+                params=params,
+            )
         data = resp.json() or []
         if not isinstance(data, list):
             raise CRMRepositoryError(f"prospectos_by_emails_invalid:{data!r}")
@@ -15256,7 +15264,8 @@ class CRMRepository:
     async def bulk_insert_prospectos(
         self,
         *,
-        usuario_token: str,
+        usuario_token: str | None = None,
+        organizacion_id: UUID | None = None,
         items: Sequence[dict[str, Any]],
     ) -> list[dict[str, Any]]:
         if not items:
@@ -15265,13 +15274,26 @@ class CRMRepository:
         chunk_size = 200
         for start in range(0, len(items), chunk_size):
             chunk = list(items[start : start + chunk_size])
-            resp = await self._request_with_user(
-                "POST",
-                "/rest/v1/prospeccion_prospectos",
-                token=usuario_token,
-                json=chunk,
-                prefer="return=representation",
-            )
+            if organizacion_id is not None:
+                for row in chunk:
+                    row.setdefault("organizacion_id", str(organizacion_id))
+                resp = await self._request(
+                    "POST",
+                    "/rest/v1/prospeccion_prospectos",
+                    json=chunk,
+                    prefer="return=representation",
+                    organizacion_id=organizacion_id,
+                )
+            else:
+                if not usuario_token:
+                    raise CRMRepositoryError("prospecto_bulk_insert_missing_token")
+                resp = await self._request_with_user(
+                    "POST",
+                    "/rest/v1/prospeccion_prospectos",
+                    token=usuario_token,
+                    json=chunk,
+                    prefer="return=representation",
+                )
             data = resp.json() or []
             if not isinstance(data, list):
                 raise CRMRepositoryError(f"prospecto_bulk_insert_invalid:{data!r}")

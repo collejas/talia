@@ -24840,7 +24840,7 @@ async def prospeccion_checklist_scraper(
             job_payload["creado_por"] = str(usuario_id)
 
         try:
-            job_row = await repo.create_buscador_job(usuario_token=user_token, payload=job_payload)
+            job_row = await repo.create_buscador_job(organizacion_id=organizacion_id, payload=job_payload)
         except CRMRepositoryError as exc:
             raise HTTPException(status_code=502, detail=str(exc)) from exc
 
@@ -33626,6 +33626,7 @@ async def prospeccion_buscador_run(
     _: str = Depends(require_permission("ejecutar_busquedas")),
     user_token: str = Depends(require_user_token),
     usuario_id: UUID | None = Depends(optional_usuario_id),
+    organizacion_id: UUID = Depends(require_organizacion_id),
 ) -> BuscadorJobResponse:
     """Agenda la ejecución del Buscador y devuelve el identificador del job."""
 
@@ -33633,7 +33634,10 @@ async def prospeccion_buscador_run(
     skip_urls: list[str] = []
     if payload.resume_job_id:
         try:
-            resume_job = await repo.get_buscador_job(job_id=payload.resume_job_id, usuario_token=user_token)
+            resume_job = await repo.get_buscador_job(
+                job_id=payload.resume_job_id,
+                organizacion_id=organizacion_id,
+            )
         except CRMRepositoryError as exc:
             raise HTTPException(status_code=502, detail=str(exc)) from exc
         if not resume_job:
@@ -33665,7 +33669,7 @@ async def prospeccion_buscador_run(
         while len(seed_urls) < 5000:
             try:
                 chunk = await repo.list_buscador_resultados(
-                    usuario_token=user_token,
+                    organizacion_id=organizacion_id,
                     job_id=payload.resume_job_id,
                     limit=limit,
                     offset=offset,
@@ -33725,7 +33729,7 @@ async def prospeccion_buscador_run(
         job_payload["creado_por"] = str(usuario_id)
 
     try:
-        job_row = await repo.create_buscador_job(usuario_token=user_token, payload=job_payload)
+        job_row = await repo.create_buscador_job(organizacion_id=organizacion_id, payload=job_payload)
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
@@ -33743,10 +33747,11 @@ async def prospeccion_buscador_jobs(
     repo: CRMRepository = Depends(get_repository),
     _: str = Depends(require_permission("ejecutar_busquedas")),
     user_token: str = Depends(require_user_token),
+    organizacion_id: UUID = Depends(require_organizacion_id),
 ) -> BuscadorJobsListResponse:
     try:
         rows, total = await repo.list_buscador_jobs(
-            usuario_token=user_token,
+            organizacion_id=organizacion_id,
             limit=limit,
             offset=offset,
         )
@@ -33769,9 +33774,10 @@ async def prospeccion_buscador_job_detail(
     repo: CRMRepository = Depends(get_repository),
     _: str = Depends(require_permission("ejecutar_busquedas")),
     user_token: str = Depends(require_user_token),
+    organizacion_id: UUID = Depends(require_organizacion_id),
 ) -> BuscadorJobResponse:
     try:
-        job_row = await repo.get_buscador_job(job_id=job_id, usuario_token=user_token)
+        job_row = await repo.get_buscador_job(job_id=job_id, organizacion_id=organizacion_id)
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     if not job_row:
@@ -33790,9 +33796,10 @@ async def prospeccion_buscador_job_delete(
     repo: CRMRepository = Depends(get_repository),
     _: str = Depends(require_permission("ejecutar_busquedas")),
     user_token: str = Depends(require_user_token),
+    organizacion_id: UUID = Depends(require_organizacion_id),
 ) -> Response:
     try:
-        deleted = await repo.delete_buscador_job(job_id=job_id, usuario_token=user_token)
+        deleted = await repo.delete_buscador_job(job_id=job_id, organizacion_id=organizacion_id)
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     if deleted <= 0:
@@ -33809,9 +33816,10 @@ async def prospeccion_buscador_job_pause(
     repo: CRMRepository = Depends(get_repository),
     _: str = Depends(require_permission("ejecutar_busquedas")),
     user_token: str = Depends(require_user_token),
+    organizacion_id: UUID = Depends(require_organizacion_id),
 ) -> BuscadorJobResponse:
     try:
-        job_row = await repo.get_buscador_job(job_id=job_id, usuario_token=user_token)
+        job_row = await repo.get_buscador_job(job_id=job_id, organizacion_id=organizacion_id)
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     if not job_row:
@@ -33837,7 +33845,7 @@ async def prospeccion_buscador_job_pause(
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     if not updated_row:
-        refreshed = await repo.get_buscador_job(job_id=job_id, usuario_token=user_token)
+        refreshed = await repo.get_buscador_job(job_id=job_id, organizacion_id=organizacion_id)
         if not refreshed:
             raise HTTPException(status_code=404, detail="Buscador job no encontrado")
         return _job_row_to_response(refreshed)
@@ -33853,9 +33861,10 @@ async def prospeccion_buscador_job_cancel(
     repo: CRMRepository = Depends(get_repository),
     _: str = Depends(require_permission("ejecutar_busquedas")),
     user_token: str = Depends(require_user_token),
+    organizacion_id: UUID = Depends(require_organizacion_id),
 ) -> BuscadorJobResponse:
     try:
-        job_row = await repo.get_buscador_job(job_id=job_id, usuario_token=user_token)
+        job_row = await repo.get_buscador_job(job_id=job_id, organizacion_id=organizacion_id)
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     if not job_row:
@@ -33882,7 +33891,7 @@ async def prospeccion_buscador_job_cancel(
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     if not updated_row:
-        refreshed = await repo.get_buscador_job(job_id=job_id, usuario_token=user_token)
+        refreshed = await repo.get_buscador_job(job_id=job_id, organizacion_id=organizacion_id)
         if not refreshed:
             raise HTTPException(status_code=404, detail="Buscador job no encontrado")
         return _job_row_to_response(refreshed)
@@ -33895,11 +33904,12 @@ async def prospeccion_buscador_job_results(
     repo: CRMRepository = Depends(get_repository),
     _: str = Depends(require_permission("ejecutar_busquedas")),
     user_token: str = Depends(require_user_token),
+    organizacion_id: UUID = Depends(require_organizacion_id),
     limit: Annotated[int, Query(gt=0, le=2000)] = 1000,
     offset: Annotated[int, Query(ge=0)] = 0,
 ) -> JSONResponse:
     try:
-        job_row = await repo.get_buscador_job(job_id=job_id, usuario_token=user_token)
+        job_row = await repo.get_buscador_job(job_id=job_id, organizacion_id=organizacion_id)
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     if not job_row:
@@ -33915,7 +33925,7 @@ async def prospeccion_buscador_job_results(
     effective_limit = min(limit, 2000)
     try:
         rows = await repo.list_buscador_resultados(
-            usuario_token=user_token, job_id=job_id, limit=effective_limit, offset=offset
+            organizacion_id=organizacion_id, job_id=job_id, limit=effective_limit, offset=offset
         )
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
@@ -33943,6 +33953,7 @@ async def prospeccion_buscador_guardar_prospectos(
     repo: CRMRepository = Depends(get_repository),
     _: str = Depends(require_permission("ejecutar_busquedas")),
     user_token: str = Depends(require_user_token),
+    organizacion_id: UUID = Depends(require_organizacion_id),
 ) -> dict[str, Any]:
     BATCH_SIZE = 200
     FETCH_ALL_LIMIT = 1000
@@ -33951,14 +33962,14 @@ async def prospeccion_buscador_guardar_prospectos(
     if not save_all and not result_id_list:
         raise HTTPException(status_code=400, detail="result_ids_required")
     try:
-        job_row = await repo.get_buscador_job(job_id=job_id, usuario_token=user_token)
+        job_row = await repo.get_buscador_job(job_id=job_id, organizacion_id=organizacion_id)
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     if not job_row:
         raise HTTPException(status_code=404, detail="Buscador job no encontrado")
     try:
         existing_result_ids = await repo.list_buscador_prospecto_result_ids(
-            usuario_token=user_token,
+            organizacion_id=organizacion_id,
             job_id=job_id,
         )
     except CRMRepositoryError as exc:
@@ -33984,7 +33995,7 @@ async def prospeccion_buscador_guardar_prospectos(
         while True:
             try:
                 chunk_rows = await repo.list_buscador_resultados(
-                    usuario_token=user_token,
+                    organizacion_id=organizacion_id,
                     job_id=job_id,
                     limit=FETCH_ALL_LIMIT,
                     offset=offset,
@@ -34010,7 +34021,7 @@ async def prospeccion_buscador_guardar_prospectos(
             chunk_ids = result_id_list[start : start + BATCH_SIZE]
             try:
                 chunk_rows = await repo.list_buscador_resultados_by_ids(
-                    usuario_token=user_token,
+                    organizacion_id=organizacion_id,
                     job_id=job_id,
                     result_ids=chunk_ids,
                 )
@@ -34077,7 +34088,7 @@ async def prospeccion_buscador_guardar_prospectos(
 
     # Evita insertar correos que ya existen en prospectos.
     existing_rows = await repo.list_prospectos_by_emails(
-        usuario_token=user_token,
+        organizacion_id=organizacion_id,
         emails=[str(item.get("email") or "") for item in prospectos],
     )
     existing_emails = {
@@ -34095,7 +34106,11 @@ async def prospeccion_buscador_guardar_prospectos(
         return {"ok": True, "prospectos": [], "total": 0}
 
     try:
-        created = await repo.bulk_insert_prospectos(usuario_token=user_token, items=prospectos)
+        created = await repo.bulk_insert_prospectos(
+            usuario_token=None,
+            organizacion_id=organizacion_id,
+            items=prospectos,
+        )
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     await _clear_prospecto_queries_cache()
