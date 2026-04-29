@@ -1023,6 +1023,30 @@ export function ContactEditFlow({ open, onOpenChange, contactoId, onSaved }: Con
           {state.loading ? <p className="text-xs text-muted-foreground">Cargando...</p> : null}
           {state.error ? <p className="text-xs text-destructive">{state.error}</p> : null}
 
+          <FormSection title="Tipo de registro">
+            <RadioGroup value={state.mode} onValueChange={(value) => dispatch({ type: "mode/set", mode: value as CreateMode })} className="grid gap-3 md:grid-cols-3">
+              {[
+                { value: "solo_persona", title: "Contacto", description: "Sin empresa asociada." },
+                { value: "empresa_existente", title: "Empresa existente", description: "Vincula a una empresa ya creada." },
+                { value: "empresa_nueva", title: "Nueva empresa", description: "Crea una empresa nueva." },
+                { value: "persona_fisica_actividad_empresarial", title: "Persona física con actividad empresarial", description: "Empresa propia vinculada." },
+              ].map((option) => (
+                <label
+                  key={option.value}
+                  className={`flex cursor-pointer flex-col gap-2 rounded-xl border p-4 ${state.mode === option.value ? "border-foreground bg-muted/40" : "border-border/60 bg-background"}`}
+                >
+                  <div className="flex items-start gap-3">
+                    <RadioGroupItem value={option.value} id={`mode-edit-${option.value}`} />
+                    <div className="space-y-1">
+                      <div className="text-sm font-medium">{option.title}</div>
+                      <p className="text-xs text-muted-foreground">{option.description}</p>
+                    </div>
+                  </div>
+                </label>
+              ))}
+            </RadioGroup>
+          </FormSection>
+
           <FormSection title="Datos de la persona">
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
               <Field label="Nombre">
@@ -1059,30 +1083,6 @@ export function ContactEditFlow({ open, onOpenChange, contactoId, onSaved }: Con
             <Field label="Notas">
               <Textarea value={state.persona.notas} onChange={(e) => dispatch({ type: "persona/set", field: "notas", value: e.target.value })} />
             </Field>
-          </FormSection>
-
-          <FormSection title="Tipo de registro">
-            <RadioGroup value={state.mode} onValueChange={(value) => dispatch({ type: "mode/set", mode: value as CreateMode })} className="grid gap-3 md:grid-cols-3">
-              {[
-                { value: "solo_persona", title: "Contacto", description: "Sin empresa asociada." },
-                { value: "empresa_existente", title: "Empresa existente", description: "Vincula a una empresa ya creada." },
-                { value: "empresa_nueva", title: "Nueva empresa", description: "Crea una empresa nueva." },
-                { value: "persona_fisica_actividad_empresarial", title: "Persona física con actividad empresarial", description: "Empresa propia vinculada." },
-              ].map((option) => (
-                <label
-                  key={option.value}
-                  className={`flex cursor-pointer flex-col gap-2 rounded-xl border p-4 ${state.mode === option.value ? "border-foreground bg-muted/40" : "border-border/60 bg-background"}`}
-                >
-                  <div className="flex items-start gap-3">
-                    <RadioGroupItem value={option.value} id={`mode-edit-${option.value}`} />
-                    <div className="space-y-1">
-                      <div className="text-sm font-medium">{option.title}</div>
-                      <p className="text-xs text-muted-foreground">{option.description}</p>
-                    </div>
-                  </div>
-                </label>
-              ))}
-            </RadioGroup>
           </FormSection>
 
           {state.mode === "empresa_existente" ? (

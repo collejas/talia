@@ -784,44 +784,6 @@ export function ContactCreateFlow({ open, onOpenChange, onCreated, initialMode =
 
         <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
           <div className="space-y-5">
-          <FormSection title="Datos de la persona" description="Identidad humana y medio de contacto principal.">
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-              <Field label="Nombre">
-                <Input value={state.persona.nombre} onChange={(e) => dispatch({ type: "persona/set", field: "nombre", value: e.target.value })} />
-              </Field>
-              <Field label="Apellido paterno">
-                <Input value={state.persona.apellido_paterno} onChange={(e) => dispatch({ type: "persona/set", field: "apellido_paterno", value: e.target.value })} />
-              </Field>
-              <Field label="Apellido materno">
-                <Input value={state.persona.apellido_materno} onChange={(e) => dispatch({ type: "persona/set", field: "apellido_materno", value: e.target.value })} />
-              </Field>
-              <Field label="Correo principal">
-                <Input value={state.persona.correo_principal} onChange={(e) => dispatch({ type: "persona/set", field: "correo_principal", value: e.target.value })} />
-              </Field>
-              <Field label="Teléfono principal">
-                <Input value={state.persona.telefono_principal_e164} onChange={(e) => dispatch({ type: "persona/set", field: "telefono_principal_e164", value: e.target.value })} />
-              </Field>
-              <Field label="Origen">
-                <Input value={state.persona.origen} onChange={(e) => dispatch({ type: "persona/set", field: "origen", value: e.target.value })} />
-              </Field>
-              <Field label="Puesto">
-                <Input value={state.persona.puesto} onChange={(e) => dispatch({ type: "persona/set", field: "puesto", value: e.target.value })} />
-              </Field>
-              <Field label="Área">
-                <Input value={state.persona.area} onChange={(e) => dispatch({ type: "persona/set", field: "area", value: e.target.value })} />
-              </Field>
-              <Field label="Rol de decisión">
-                <Input value={state.persona.rol_decision} onChange={(e) => dispatch({ type: "persona/set", field: "rol_decision", value: e.target.value })} />
-              </Field>
-              <Field label="Estado">
-                <Input value={state.persona.estado} onChange={(e) => dispatch({ type: "persona/set", field: "estado", value: e.target.value })} />
-              </Field>
-            </div>
-            <Field label="Notas">
-              <Textarea value={state.persona.notas} onChange={(e) => dispatch({ type: "persona/set", field: "notas", value: e.target.value })} />
-            </Field>
-          </FormSection>
-
           <FormSection title="Tipo de alta" description="Elige el camino que mejor describe lo que vas a registrar.">
             <RadioGroup value={state.mode} onValueChange={(value) => dispatch({ type: "mode/set", mode: value as CreateMode })} className="grid gap-3 md:grid-cols-2">
               {[
@@ -860,6 +822,44 @@ export function ContactCreateFlow({ open, onOpenChange, onCreated, initialMode =
                 </label>
               ))}
             </RadioGroup>
+          </FormSection>
+
+          <FormSection title="Datos de la persona" description="Identidad humana y medio de contacto principal.">
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              <Field label="Nombre">
+                <Input value={state.persona.nombre} onChange={(e) => dispatch({ type: "persona/set", field: "nombre", value: e.target.value })} />
+              </Field>
+              <Field label="Apellido paterno">
+                <Input value={state.persona.apellido_paterno} onChange={(e) => dispatch({ type: "persona/set", field: "apellido_paterno", value: e.target.value })} />
+              </Field>
+              <Field label="Apellido materno">
+                <Input value={state.persona.apellido_materno} onChange={(e) => dispatch({ type: "persona/set", field: "apellido_materno", value: e.target.value })} />
+              </Field>
+              <Field label="Correo principal">
+                <Input value={state.persona.correo_principal} onChange={(e) => dispatch({ type: "persona/set", field: "correo_principal", value: e.target.value })} />
+              </Field>
+              <Field label="Teléfono principal">
+                <Input value={state.persona.telefono_principal_e164} onChange={(e) => dispatch({ type: "persona/set", field: "telefono_principal_e164", value: e.target.value })} />
+              </Field>
+              <Field label="Origen">
+                <Input value={state.persona.origen} onChange={(e) => dispatch({ type: "persona/set", field: "origen", value: e.target.value })} />
+              </Field>
+              <Field label="Puesto">
+                <Input value={state.persona.puesto} onChange={(e) => dispatch({ type: "persona/set", field: "puesto", value: e.target.value })} />
+              </Field>
+              <Field label="Área">
+                <Input value={state.persona.area} onChange={(e) => dispatch({ type: "persona/set", field: "area", value: e.target.value })} />
+              </Field>
+              <Field label="Rol de decisión">
+                <Input value={state.persona.rol_decision} onChange={(e) => dispatch({ type: "persona/set", field: "rol_decision", value: e.target.value })} />
+              </Field>
+              <Field label="Estado">
+                <Input value={state.persona.estado} onChange={(e) => dispatch({ type: "persona/set", field: "estado", value: e.target.value })} />
+              </Field>
+            </div>
+            <Field label="Notas">
+              <Textarea value={state.persona.notas} onChange={(e) => dispatch({ type: "persona/set", field: "notas", value: e.target.value })} />
+            </Field>
           </FormSection>
 
           {state.mode === "empresa_existente" ? (
