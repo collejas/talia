@@ -211,8 +211,8 @@ export function ContactsDataTable({ data }: { data: ContactTableRow[] }) {
   const [editOpen, setEditOpen] = React.useState(false);
   const [createOpen, setCreateOpen] = React.useState(false);
   const [createInitialMode, setCreateInitialMode] = React.useState<
-    "solo_persona" | "empresa_existente" | "empresa_nueva" | "persona_fisica_actividad_empresarial"
-  >("solo_persona");
+    "empresa_existente" | "empresa_nueva" | "persona_fisica_actividad_empresarial"
+  >("empresa_existente");
   const [linkOpen, setLinkOpen] = React.useState(false);
   const [linkInitialContact, setLinkInitialContact] = React.useState<{
     id: string;
@@ -489,7 +489,7 @@ export function ContactsDataTable({ data }: { data: ContactTableRow[] }) {
             onClick={() => {
               setError(null);
               setSuccess(null);
-              setCreateInitialMode("solo_persona");
+              setCreateInitialMode("empresa_existente");
               setCreateOpen(true);
             }}
           >

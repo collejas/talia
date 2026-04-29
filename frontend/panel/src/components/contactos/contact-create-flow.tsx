@@ -577,7 +577,10 @@ function validateState(state: ContactCreateState): string | null {
   ) {
     return "Selecciona el tipo de persona de la empresa.";
   }
-  if (state.mode !== "solo_persona" && !state.relacion.rol_en_cuenta.trim()) {
+  if (
+    (state.mode === "empresa_existente" || state.mode === "empresa_nueva") &&
+    !state.relacion.rol_en_cuenta.trim()
+  ) {
     return "Define el rol de la persona dentro de la empresa.";
   }
   return null;
@@ -621,7 +624,7 @@ function Field({
   );
 }
 
-export function ContactCreateFlow({ open, onOpenChange, onCreated, initialMode = "solo_persona" }: ContactCreateFlowProps) {
+export function ContactCreateFlow({ open, onOpenChange, onCreated, initialMode = "empresa_existente" }: ContactCreateFlowProps) {
   const [state, dispatch] = React.useReducer(createReducer, INITIAL_STATE);
   const deferredAccountQuery = React.useDeferredValue(state.accountQuery);
   const [pendingDedupe, setPendingDedupe] = React.useState<PersonaAltaValidationResponse | null>(null);
@@ -694,41 +697,41 @@ export function ContactCreateFlow({ open, onOpenChange, onCreated, initialMode =
     return {
       persona: nombreCompleto,
       cuenta: cuentaNombre,
-      relacion: state.mode === "solo_persona" ? "" : state.relacion.rol_en_cuenta,
+      relacion:
+        state.mode === "persona_fisica_actividad_empresarial"
+          ? "Automática"
+          : state.mode === "solo_persona"
+            ? ""
+            : state.relacion.rol_en_cuenta,
     };
   }, [state]);
 
+  const isContactMode = state.mode === "empresa_existente";
+  const isCompanyMode = state.mode === "empresa_nueva";
+  const isPfaeMode = state.mode === "persona_fisica_actividad_empresarial";
   const personSectionTitle =
-    state.mode === "solo_persona"
+    isContactMode
       ? "Datos del contacto"
-      : state.mode === "persona_fisica_actividad_empresarial"
+      : isPfaeMode
         ? "Persona y negocio"
         : "Datos de la persona";
   const personSectionDescription =
-    state.mode === "solo_persona"
-      ? "Captura la persona a la que darás seguimiento."
-      : state.mode === "empresa_existente"
-        ? "Captura la persona y después vincúlala con una empresa ya existente."
-        : state.mode === "empresa_nueva"
-          ? "Captura la persona y después crea la empresa que se va a registrar."
-          : "Captura la persona y la empresa en un solo flujo.";
+    isContactMode
+      ? "Captura la persona y su vínculo con una empresa ya existente."
+      : isCompanyMode
+        ? "Captura la persona responsable y los datos de la empresa."
+        : "Captura la persona y la empresa en un solo flujo.";
   const relationSectionTitle =
-    state.mode === "persona_fisica_actividad_empresarial"
+    isPfaeMode
       ? "Vínculo principal"
       : "Vinculación con empresa";
   const relationSectionDescription =
-    state.mode === "persona_fisica_actividad_empresarial"
-      ? "Define la relación principal de la persona con su negocio."
+    isPfaeMode
+      ? "La relación principal se creará automáticamente al guardar."
       : "Define el rol real de la persona dentro de la empresa.";
 
   const submitLabel =
-    state.mode === "solo_persona"
-      ? "Guardar contacto"
-      : state.mode === "empresa_existente"
-        ? "Guardar contacto"
-        : state.mode === "empresa_nueva"
-          ? "Guardar empresa"
-          : "Guardar registro";
+    isContactMode ? "Guardar contacto" : isCompanyMode ? "Guardar empresa" : "Guardar registro";
 
   const submit = async (dedupeDecision?: DedupeDecision) => {
     const validationError = validateState(state);
@@ -808,27 +811,22 @@ export function ContactCreateFlow({ open, onOpenChange, onCreated, initialMode =
         <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
           <div className="space-y-5">
           <FormSection title="Tipo de alta" description="Elige el camino que mejor describe lo que vas a registrar.">
-            <RadioGroup value={state.mode} onValueChange={(value) => dispatch({ type: "mode/set", mode: value as CreateMode })} className="grid gap-3 md:grid-cols-2">
+            <RadioGroup value={state.mode} onValueChange={(value) => dispatch({ type: "mode/set", mode: value as CreateMode })} className="grid gap-3 md:grid-cols-3">
               {[
                 {
-                  value: "solo_persona",
-                  title: "Contacto",
-                  description: "Persona a la que darás seguimiento.",
-                },
-                {
                   value: "empresa_existente",
-                  title: "Empresa existente",
-                  description: "Relaciona el contacto con una empresa ya creada.",
+                  title: "Contacto",
+                  description: "Persona ligada a una empresa ya registrada.",
                 },
                 {
                   value: "empresa_nueva",
-                  title: "Nueva empresa",
-                  description: "Crea una empresa nueva y vincúlala con el contacto.",
+                  title: "Empresa",
+                  description: "Datos de una empresa nueva con su contacto.",
                 },
                 {
                   value: "persona_fisica_actividad_empresarial",
                   title: "Persona física con actividad empresarial",
-                  description: "Persona y negocio en un solo registro.",
+                  description: "Persona, negocio y relación principal automática.",
                 },
               ].map((option) => (
                 <label
@@ -885,8 +883,8 @@ export function ContactCreateFlow({ open, onOpenChange, onCreated, initialMode =
             </Field>
           </FormSection>
 
-          {state.mode === "empresa_existente" ? (
-            <FormSection title="Empresa existente" description="Busca una empresa ya creada y selecciónala.">
+          {isContactMode ? (
+            <FormSection title="Empresa vinculada" description="Busca una empresa ya creada y selecciónala.">
               <div className="space-y-3">
                 <Field label="Buscar empresa" hint="Busca por nombre, correo, teléfono o alias.">
                   <Input value={state.accountQuery} onChange={(e) => dispatch({ type: "account-query/set", value: e.target.value })} placeholder="Escribe al menos 2 caracteres" />
@@ -915,10 +913,10 @@ export function ContactCreateFlow({ open, onOpenChange, onCreated, initialMode =
             </FormSection>
           ) : null}
 
-          {state.mode === "empresa_nueva" || state.mode === "persona_fisica_actividad_empresarial" ? (
+          {isCompanyMode || isPfaeMode ? (
             <FormSection
-              title={state.mode === "persona_fisica_actividad_empresarial" ? "Empresa propia" : "Nueva empresa"}
-              description={state.mode === "persona_fisica_actividad_empresarial" ? "Se prellena desde la persona y puedes ajustar los datos comerciales." : "Datos de la empresa que se persistirán."}
+              title={isPfaeMode ? "Empresa propia" : "Empresa"}
+              description={isPfaeMode ? "Se prellena desde la persona y puedes ajustar los datos comerciales." : "Datos de la empresa que se persistirán."}
             >
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                 <Field label="Nombre comercial">
@@ -941,7 +939,7 @@ export function ContactCreateFlow({ open, onOpenChange, onCreated, initialMode =
                     className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs"
                     value={state.cuenta.tipo_persona}
                     onChange={(e) => dispatch({ type: "cuenta/set", field: "tipo_persona", value: e.target.value })}
-                    disabled={state.mode === "persona_fisica_actividad_empresarial"}
+                    disabled={isPfaeMode}
                   >
                     <option value="">Selecciona</option>
                     <option value="fisica">Física</option>
@@ -997,7 +995,7 @@ export function ContactCreateFlow({ open, onOpenChange, onCreated, initialMode =
             </FormSection>
           ) : null}
 
-          {state.mode !== "solo_persona" ? (
+          {isContactMode || isCompanyMode ? (
             <FormSection title={relationSectionTitle} description={relationSectionDescription}>
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                 <Field label="Rol en la empresa">
@@ -1033,6 +1031,12 @@ export function ContactCreateFlow({ open, onOpenChange, onCreated, initialMode =
                   <Checkbox checked={state.relacion.activo} onCheckedChange={(value) => dispatch({ type: "relacion/set", field: "activo", value: Boolean(value) })} />
                   <span className="text-sm">Vínculo activo</span>
                 </label>
+              </div>
+            </FormSection>
+          ) : isPfaeMode ? (
+            <FormSection title={relationSectionTitle} description={relationSectionDescription}>
+              <div className="rounded-lg border border-dashed border-border/70 bg-background p-4 text-sm text-muted-foreground">
+                Al guardar se creará automáticamente la relación principal para esta persona y su negocio.
               </div>
             </FormSection>
           ) : null}
