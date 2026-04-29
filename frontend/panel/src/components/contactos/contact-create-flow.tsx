@@ -16,6 +16,7 @@ import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
+import { GeoLocationSelects } from "@/components/contactos/geo-location-selects";
 
 type CreateMode =
   | "solo_persona"
@@ -1043,13 +1044,13 @@ export function ContactCreateFlow({ open, onOpenChange, onCreated, initialMode =
 
           <FormSection title="Datos opcionales" description="Puedes omitirlos por ahora y completarlos más tarde.">
             <div className="flex items-center justify-between gap-3">
-              <p className="text-sm text-muted-foreground">Datos fiscales y dirección completos.</p>
+              <p className="text-sm text-muted-foreground">Datos fiscales, país, estado y municipio con claves reales.</p>
               <Button type="button" variant="outline" size="sm" onClick={() => dispatch({ type: "extras/toggle" })}>
                 {state.extrasOpen ? "Ocultar extras" : "Completar extras"}
               </Button>
             </div>
             {state.extrasOpen ? (
-              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              <div className="space-y-4">
                 <Field label="Uso CFDI">
                   <Input value={state.extras.uso_cfdi} onChange={(e) => dispatch({ type: "extras/set", field: "uso_cfdi", value: e.target.value })} />
                 </Field>
@@ -1062,21 +1063,30 @@ export function ContactCreateFlow({ open, onOpenChange, onCreated, initialMode =
                 <Field label="Email de facturación">
                   <Input value={state.extras.email_facturacion} onChange={(e) => dispatch({ type: "extras/set", field: "email_facturacion", value: e.target.value })} />
                 </Field>
-                <Field label="País">
-                  <Input value={state.extras.pais} onChange={(e) => dispatch({ type: "extras/set", field: "pais", value: e.target.value })} />
-                </Field>
-                <Field label="Clave de entidad">
-                  <Input value={state.extras.clave_entidad} onChange={(e) => dispatch({ type: "extras/set", field: "clave_entidad", value: e.target.value })} />
-                </Field>
-                <Field label="Entidad">
-                  <Input value={state.extras.entidad} onChange={(e) => dispatch({ type: "extras/set", field: "entidad", value: e.target.value })} />
-                </Field>
-                <Field label="Clave de municipio">
-                  <Input value={state.extras.clave_municipio} onChange={(e) => dispatch({ type: "extras/set", field: "clave_municipio", value: e.target.value })} />
-                </Field>
-                <Field label="Municipio">
-                  <Input value={state.extras.municipio} onChange={(e) => dispatch({ type: "extras/set", field: "municipio", value: e.target.value })} />
-                </Field>
+                <GeoLocationSelects
+                  countryCode={state.extras.pais}
+                  stateCode={state.extras.clave_entidad}
+                  municipalityCode={state.extras.clave_municipio}
+                  onCountryChange={(countryCode) => {
+                    dispatch({ type: "extras/set", field: "pais", value: countryCode || "MX" });
+                    if ((countryCode || "MX") !== "MX") {
+                      dispatch({ type: "extras/set", field: "clave_entidad", value: "" });
+                      dispatch({ type: "extras/set", field: "entidad", value: "" });
+                      dispatch({ type: "extras/set", field: "clave_municipio", value: "" });
+                      dispatch({ type: "extras/set", field: "municipio", value: "" });
+                    }
+                  }}
+                  onStateChange={(stateCode, stateName) => {
+                    dispatch({ type: "extras/set", field: "clave_entidad", value: stateCode });
+                    dispatch({ type: "extras/set", field: "entidad", value: stateName });
+                    dispatch({ type: "extras/set", field: "clave_municipio", value: "" });
+                    dispatch({ type: "extras/set", field: "municipio", value: "" });
+                  }}
+                  onMunicipalityChange={(municipalityCode, municipalityName) => {
+                    dispatch({ type: "extras/set", field: "clave_municipio", value: municipalityCode });
+                    dispatch({ type: "extras/set", field: "municipio", value: municipalityName });
+                  }}
+                />
                 <Field label="Clave de localidad">
                   <Input value={state.extras.clave_localidad} onChange={(e) => dispatch({ type: "extras/set", field: "clave_localidad", value: e.target.value })} />
                 </Field>
