@@ -2,6 +2,19 @@
 
 Fecha: 2026-04-28 (UTC)
 
+## Estado actual
+
+La maqueta ya coincide en gran parte con lo que quedo implementado en el panel:
+
+- la accion principal es `Nuevo contacto`
+- existen acciones separadas para:
+  - `Nueva empresa`
+  - `Persona física con actividad empresarial`
+  - `Vincular contacto a empresa`
+- el flujo de vinculacion ya no depende de crear un contacto nuevo
+- el alta y la edicion muestran la experiencia con lenguaje de front
+- el layout real ya privilegia un panel amplio con resumen contextual
+
 ## Objetivo
 
 Definir la experiencia visual del modal de alta y edicion de contactos para que el usuario entienda claramente que esta creando:
@@ -258,6 +271,18 @@ Si el usuario cierra el flujo:
 
 ## Recomendacion visual
 
+### Lo que ya quedo aterrizado
+
+- Drawer o panel ancho para el flujo principal
+- Resumen lateral en desktop
+- Apilado vertical en mobile
+- Paso inicial claro para elegir el tipo de alta
+
+### Lo que sigue afinandose
+
+- microcopy de ayuda para duplicados
+- estados vacios por caso
+- pulido de densidad visual en pantallas pequenas
 - No usar un modal chico
 - No mezclar todos los campos en una sola vista
 - Usar lenguaje de negocio en la UI

@@ -9,6 +9,13 @@ Se completó la transición operativa de **alta**, **edición** y **exportación
 
 Además, la vista de contactos ya utiliza un panel lateral real de detalle y ya no depende del drawer genérico por defecto para la información del contacto.
 
+Actualizacion reciente:
+
+- el flujo CRUD de contactos ya quedo guiado en el panel
+- existe una accion independiente para `Vincular contacto a empresa`
+- la vista principal ya expone las cuatro acciones de entrada
+- el resumen lateral y el lenguaje de usuario final ya forman parte del flujo
+
 Nota de archivo:
 - las referencias a `contactos` que permanecen en este documento describen la transición histórica
 - el flujo activo ya opera sobre `personas`, `cuentas` y `cuenta_personas`

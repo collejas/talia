@@ -18,14 +18,27 @@ Este documento resume todo lo que se fue cerrando dentro del plan `personas, cue
 - El drawer lateral dejo de ser el drawer generico del layout y ahora muestra detalle real del contacto.
 - El footer del drawer se simplifico para no simular un submit inexistente.
 
-### 1.2 Exportacion
+### 1.2 Flujo guiado de CRUD de contactos
+
+- El alta de contactos ya no se presenta como un modal monolitico.
+- La vista principal ofrece acciones separadas para:
+  - `Nuevo contacto`
+  - `Nueva empresa`
+  - `Persona física con actividad empresarial`
+  - `Vincular contacto a empresa`
+- El flujo de alta ya usa copy de usuario final.
+- El flujo de edicion se alineo al mismo lenguaje.
+- La vinculacion contacto-empresa quedo como flujo independiente.
+- El resumen lateral ya acompana el flujo en desktop.
+
+### 1.3 Exportacion
 
 - El exportador local del listado se reemplazo por un export backend.
 - El export descarga CSV desde el backend.
 - El export respeta el filtro de busqueda activo.
 - El archivo exportado se alinea con el modelo nuevo de `personas + cuentas + cuenta_personas + conversaciones`.
 
-### 1.3 Reasignacion
+### 1.4 Reasignacion
 
 - El modal de reasignar vendedor dejo de ocupar todo el ancho de la vista.
 - Se compacto para que solo use el espacio necesario.
@@ -85,6 +98,8 @@ Se decidio no renombrar todo de una vez porque eso requeriria una refactorizacio
 
 - Alta estructurada
 - Edicion estructurada
+- Flujo guiado de CRUD de contactos
+- Vinculacion independiente contacto-empresa
 - Exportacion base
 - Detalle real en el drawer
 - Retiro del fallback legacy en runtime

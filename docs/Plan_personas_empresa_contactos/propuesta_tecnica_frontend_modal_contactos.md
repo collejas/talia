@@ -2,6 +2,22 @@
 
 Fecha: 2026-04-28 (UTC)
 
+## Estado actual
+
+La propuesta ya quedo ejecutada en el panel para el flujo principal de contactos:
+
+- el selector de tipo de alta ya existe
+- el flujo de alta y edicion ya se separo por caso de uso
+- la vinculacion contacto-empresa ya tiene flujo independiente
+- el dashboard principal de contactos ya expone las cuatro acciones de primer nivel
+- el resumen lateral ya forma parte de la experiencia real
+
+Lo que sigue como iteracion futura no bloqueante:
+
+- detalle post-alta mas rico
+- mejor UX para sugerencias de duplicado
+- endpoint nativo adicional de relaciones si hiciera falta
+
 ## Objetivo
 
 Implementar el nuevo flujo de CRUD de contactos como una experiencia guiada, clara y consistente con el lenguaje del usuario final.
@@ -318,7 +334,17 @@ La mejor ruta es:
 1. conservar `contacts-data-table.tsx` como vista principal
 2. introducir un orquestador nuevo para el flujo CRUD
 3. dividir el formulario por tipo de alta
-4. mantener el backend actual sin cambios grandes en la primera iteracion
+
+## Resultado implementado
+
+La implementacion actual ya sigue esa ruta:
+
+- `contacts-data-table.tsx` sigue como entrada principal
+- `contact-create-flow.tsx` concentra la alta guiada
+- `contact-edit-flow.tsx` mantiene la edicion estructurada
+- `contact-link-flow.tsx` resuelve la vinculacion independiente
+- `layout.tsx` ya no bloquea el primer paint por resolver organización
+- mantener el backend actual sin cambios grandes en la primera iteracion
 
 ## Resultado esperado
 

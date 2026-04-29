@@ -18,6 +18,28 @@ Nota histórica:
 Documento de cierre:
 - `docs/Plan_personas_empresa_contactos/cierre_refactor_runtime_y_documentacion.md`
 
+## Avance reciente del flujo de contactos
+
+Se implemento el nuevo flujo de contactos en el panel con estas piezas ya operativas:
+
+- acciones de primer nivel:
+  - `Nuevo contacto`
+  - `Nueva empresa`
+  - `Persona física con actividad empresarial`
+  - `Vincular contacto a empresa`
+- alta guiada con copy de usuario final
+- edicion alineada al mismo lenguaje de front
+- flujo independiente para vincular contacto y empresa
+- experiencia de resumen lateral en desktop
+
+Archivos principales del avance:
+
+- `frontend/panel/src/components/contactos/contact-create-flow.tsx`
+- `frontend/panel/src/components/contactos/contact-edit-flow.tsx`
+- `frontend/panel/src/components/contactos/contact-link-flow.tsx`
+- `frontend/panel/src/components/contactos/contacts-data-table.tsx`
+- `frontend/panel/src/app/layout.tsx`
+
 ## Completado
 
 ### 1) Esquema y migraciones (DB)
@@ -99,6 +121,8 @@ Notas:
   - `Nuevo contacto` abre el flujo nuevo.
   - `Editar` abre el flujo nuevo.
   - Alta y edición ahora piden confirmación explícita cuando el dedupe detecta candidatos `medio/debil`.
+  - `Vincular contacto a empresa` abre el flujo independiente de relacion.
+  - La experiencia ya usa panel ancho y resumen lateral en desktop.
 
 ### 4) Exportación de contactos
 
@@ -141,3 +165,9 @@ Notas:
 - Se retiro el ultimo embed directo de `public.contactos` del runtime activo.
 - Se documento el cierre completo en:
   - `docs/Plan_personas_empresa_contactos/cierre_refactor_runtime_y_documentacion.md`
+
+### 6) Iteracion UX del flujo de contactos
+
+- Afinar detalle post-alta.
+- Mejorar estados vacios y microcopy de dedupe.
+- Revisar mobile para el flujo de vinculacion y alta guiada.

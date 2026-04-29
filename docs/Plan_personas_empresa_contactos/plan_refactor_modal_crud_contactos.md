@@ -2,6 +2,27 @@
 
 Fecha: 2026-04-28 (UTC)
 
+## Avance actual
+
+Este plan ya quedo implementado en el panel en su parte principal de experiencia:
+
+- el alta de contactos dejo de ser un modal ambiguo
+- se agregaron las acciones de primer nivel:
+  - `Nuevo contacto`
+  - `Nueva empresa`
+  - `Persona física con actividad empresarial`
+  - `Vincular contacto a empresa`
+- el flujo de alta y edicion ya usa copy de usuario final
+- el formulario de vinculacion independiente ya existe como flujo separado
+- la vista principal ya conecta el selector de accion con el flujo correcto
+
+Lo que sigue abierto es el pulido evolutivo:
+
+- detalle post-alta mas rico
+- deduplicacion mas visible en UI
+- posibles endpoints nativos adicionales para relaciones
+- refinamiento de mobile y accesibilidad
+
 ## Objetivo
 
 Rehacer el modal de CRUD de contactos dentro de la vista de contactos para que el usuario final entienda el flujo sin lenguaje de backend.
@@ -236,3 +257,9 @@ La UI debe usar lenguaje de front.
 ## Resultado esperado
 
 El modal deja de ser un formulario ambiguo y pasa a ser un flujo guiado, con tres caminos claros, coherentes con el modelo `personas + cuentas + cuenta_personas`.
+
+## Estado del plan
+
+- Experiencia base implementada en frontend
+- Flujo de vinculacion independiente implementado
+- Queda pendiente evolucionar detalle, dedupe y refinamiento visual

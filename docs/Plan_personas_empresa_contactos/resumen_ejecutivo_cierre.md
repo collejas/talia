@@ -18,6 +18,8 @@ La tabla `public.contactos` quedo fuera del flujo operativo principal.
 
 - Alta estructurada
 - Edicion estructurada
+- Flujo guiado de CRUD de contactos
+- Vinculacion independiente contacto-empresa
 - Exportacion desde backend
 - Drawer real de detalle
 - Busqueda y toolbar de contactos
