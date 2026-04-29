@@ -23,6 +23,104 @@ Lo que sigue abierto es el pulido evolutivo:
 - posibles endpoints nativos adicionales para relaciones
 - refinamiento de mobile y accesibilidad
 
+## Regla de alineacion
+
+La UI debe alinearse con los campos persistidos en las tablas reales.
+
+Regla simple:
+
+- mostrar todos los campos editables de las tablas del modelo
+- ocultar unicamente los campos `id` y los IDs de relacion equivalentes cuando no aporten al usuario
+- mantener fuera de la vista los campos puramente tecnicos del sistema solo si no forman parte del flujo de negocio
+
+## Orden visual planeado
+
+### Flujo principal
+
+1. Abrir `Nuevo contacto` o `Editar`.
+2. Mostrar un panel ancho o drawer grande con lenguaje de negocio.
+3. En alta, primero elegir el tipo:
+   - `Contacto`
+   - `Empresa`
+   - `Persona física con actividad empresarial`
+   - `Vincular contacto a empresa`
+4. Mostrar solo el formulario del caso elegido.
+5. Mostrar resumen lateral con lo capturado.
+6. Confirmar y guardar.
+
+### Orden visual por caso
+
+#### 1. Contacto
+
+1. Datos de la persona.
+2. Vinculación a empresa:
+   - empresa existente
+   - crear empresa nueva
+   - no asociar
+3. Resumen lateral.
+4. Guardar contacto.
+
+#### 2. Empresa
+
+1. Datos de la empresa.
+2. Dirección.
+3. Contactos de la empresa.
+4. Resumen lateral.
+5. Guardar empresa.
+
+#### 3. Persona física con actividad empresarial
+
+1. Datos de la persona.
+2. Datos del negocio.
+3. Relación principal.
+4. Resumen lateral.
+5. Guardar registro.
+
+#### 4. Vincular contacto a empresa
+
+1. Buscar contacto existente.
+2. Buscar empresa existente.
+3. Definir rol y si es contacto principal.
+4. Resumen lateral de la relación.
+5. Vincular.
+
+## Datos parte del CRUD
+
+### Contacto
+
+- nombre
+- apellidos
+- correo
+- teléfono
+- puesto
+- notas
+- estado
+- origen
+
+### Empresa
+
+- nombre comercial
+- razón social
+- RFC
+- sitio web
+- teléfono
+- correo
+- dirección
+- notas
+- estado
+
+### Relación contacto-empresa
+
+- contacto
+- empresa
+- rol en la empresa
+- puesto específico
+- contacto principal
+- contacto de facturación
+- representante legal
+- fechas de inicio y fin
+- notas de la relación
+
 ## Objetivo
 
 Rehacer el modal de CRUD de contactos dentro de la vista de contactos para que el usuario final entienda el flujo sin lenguaje de backend.

@@ -18,6 +18,14 @@ Lo que sigue como iteracion futura no bloqueante:
 - mejor UX para sugerencias de duplicado
 - endpoint nativo adicional de relaciones si hiciera falta
 
+## Regla de alineacion
+
+La propuesta tecnica debe partir de una sola regla:
+
+- la UI se alinea con las tablas reales del modelo
+- solo se ocultan los campos `id`
+- el resto de los campos persistidos deben tener representación visual, aunque sea en secciones avanzadas o colapsables
+
 ## Objetivo
 
 Implementar el nuevo flujo de CRUD de contactos como una experiencia guiada, clara y consistente con el lenguaje del usuario final.
@@ -345,6 +353,94 @@ La implementacion actual ya sigue esa ruta:
 - `contact-link-flow.tsx` resuelve la vinculacion independiente
 - `layout.tsx` ya no bloquea el primer paint por resolver organización
 - mantener el backend actual sin cambios grandes en la primera iteracion
+
+## Orden visual planeado
+
+### Alta y edicion
+
+1. Abrir el flujo desde la tabla principal.
+2. Presentar un panel ancho con copia contextual.
+3. En alta, elegir el tipo de registro.
+4. Mostrar solo el formulario correspondiente.
+5. Reservar una columna o bloque lateral para el resumen.
+6. Confirmar la accion final.
+
+### Orden de pantallas
+
+#### Alta de contacto
+
+1. Seleccion de tipo.
+2. Datos del contacto.
+3. Vinculacion a empresa si aplica.
+4. Resumen lateral.
+5. Guardado.
+
+#### Alta de empresa
+
+1. Seleccion de tipo.
+2. Datos de la empresa.
+3. Direccion.
+4. Contactos asociados.
+5. Resumen lateral.
+6. Guardado.
+
+#### Persona fisica con actividad empresarial
+
+1. Seleccion de tipo.
+2. Datos de la persona.
+3. Datos del negocio.
+4. Relacion principal.
+5. Resumen lateral.
+6. Guardado.
+
+#### Vincular contacto a empresa
+
+1. Buscar contacto.
+2. Buscar empresa.
+3. Definir rol y campos de relacion.
+4. Resumen de la relacion.
+5. Confirmacion final.
+
+## Datos parte del CRUD
+
+### Persona
+
+- nombres
+- apellidos
+- correo
+- telefono
+- puesto
+- area
+- rol de decision
+- estado
+- origen
+- notas
+
+### Empresa
+
+- nombre comercial
+- razon social
+- alias
+- RFC
+- industria
+- segmento
+- sitio web
+- telefono
+- correo
+- direccion
+- notas
+
+### Relacion
+
+- persona
+- empresa
+- rol en la cuenta
+- puesto especifico
+- contacto principal
+- contacto de facturacion
+- representante legal
+- fechas de inicio y fin
+- notas
 
 ## Resultado esperado
 

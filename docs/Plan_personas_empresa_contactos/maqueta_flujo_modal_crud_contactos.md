@@ -15,6 +15,87 @@ La maqueta ya coincide en gran parte con lo que quedo implementado en el panel:
 - el alta y la edicion muestran la experiencia con lenguaje de front
 - el layout real ya privilegia un panel amplio con resumen contextual
 
+## Regla de alineacion
+
+La maqueta debe reflejar las tablas reales de la base de datos.
+
+Regla simple:
+
+- mostrar todos los campos de negocio de la entidad que se esta editando
+- ocultar unicamente los IDs
+- mantener los campos tecnicos fuera del flujo principal solo si no aportan al usuario final
+
+## Orden visual planeado
+
+### Secuencia general
+
+1. Entrada desde la vista de contactos.
+2. Apertura de drawer o panel ancho.
+3. Seleccion de tipo de alta cuando aplica.
+4. Formulario del caso elegido.
+5. Resumen lateral con progreso.
+6. Confirmacion final.
+
+### Flujo de contacto
+
+1. `Datos del contacto`
+2. `Vincular a empresa`
+3. `Resumen lateral`
+4. `Guardar contacto`
+
+### Flujo de empresa
+
+1. `Datos de la empresa`
+2. `Direccion`
+3. `Contactos de la empresa`
+4. `Resumen lateral`
+5. `Guardar empresa`
+
+### Flujo de persona fisica con actividad empresarial
+
+1. `Datos de la persona`
+2. `Datos del negocio`
+3. `Relacion principal`
+4. `Resumen lateral`
+5. `Guardar registro`
+
+### Flujo de vinculacion independiente
+
+1. Buscar contacto.
+2. Buscar empresa.
+3. Definir rol, puesto y principalidad.
+4. Confirmar relacion.
+5. Guardar.
+
+## Datos parte del CRUD
+
+### Contacto
+
+- nombre
+- apellidos
+- correo
+- telefono
+- puesto
+- notas
+
+### Empresa
+
+- nombre comercial
+- razon social
+- RFC
+- sitio web
+- direccion
+- contactos relacionados
+
+### Relacion
+
+- contacto
+- empresa
+- rol
+- puesto
+- contacto principal
+- notas de la relacion
+
 ## Objetivo
 
 Definir la experiencia visual del modal de alta y edicion de contactos para que el usuario entienda claramente que esta creando:
