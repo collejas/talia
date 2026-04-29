@@ -33,9 +33,9 @@ La UI debe alinearse con los campos persistidos en las tablas reales.
 
 Regla simple:
 
-- mostrar todos los campos editables de las tablas del modelo
-- ocultar unicamente los campos `id` y los IDs de relacion equivalentes cuando no aporten al usuario
-- mantener fuera de la vista los campos puramente tecnicos del sistema solo si no forman parte del flujo de negocio
+- mostrar todos los campos persistidos de las tablas del modelo
+- ocultar unicamente los campos `id`
+- si un campo es tecnico pero sigue siendo persistido, debe tener una representacion visual, aunque sea en un bloque secundario
 
 ## Orden visual planeado
 

@@ -80,18 +80,18 @@ Fecha: 2026-04-29 (UTC)
 | `corredor_industrial` | Visible | Dirección |
 | `numero_local` | Visible | Dirección |
 | `codigo_postal` | Visible | Dirección |
-| `clave_entidad` | Oculto | Dirección |
+| `clave_entidad` | Visible | Dirección |
 | `entidad` | Visible | Dirección |
-| `clave_municipio` | Oculto | Dirección |
+| `clave_municipio` | Visible | Dirección |
 | `municipio` | Visible | Dirección |
-| `clave_localidad` | Oculto | Dirección |
+| `clave_localidad` | Visible | Dirección |
 | `localidad` | Visible | Dirección |
 | `pais` | Visible | Dirección |
 | `email` | Visible | Contacto |
 | `website` | Visible | Alias funcional de sitio web |
 | `tipo_establecimiento` | Visible | Dirección / sucursal |
-| `latitud` | Solo lectura | Ubicación |
-| `longitud` | Solo lectura | Ubicación |
+| `latitud` | Visible | Ubicación |
+| `longitud` | Visible | Ubicación |
 | `fecha_incorporacion` | Visible | Fecha de alta |
 
 ## `public.direcciones`
@@ -101,11 +101,11 @@ Fecha: 2026-04-29 (UTC)
 | `organizacion_id` | Oculto | ID de tenant |
 | `tipo` | Visible | `fiscal`, `operativa`, `facturacion`, `envio`, `personal`, `otro` |
 | `pais` | Visible | País |
-| `clave_entidad` | Oculto | Estado / entidad |
+| `clave_entidad` | Visible | Estado / entidad |
 | `entidad` | Visible | Estado / entidad |
-| `clave_municipio` | Oculto | Municipio |
+| `clave_municipio` | Visible | Municipio |
 | `municipio` | Visible | Municipio |
-| `clave_localidad` | Oculto | Localidad |
+| `clave_localidad` | Visible | Localidad |
 | `localidad` | Visible | Localidad |
 | `tipo_vialidad` | Visible | Calle / vialidad |
 | `nombre_vialidad` | Visible | Calle / vialidad |
@@ -121,8 +121,8 @@ Fecha: 2026-04-29 (UTC)
 | `corredor_industrial` | Visible | Corredor industrial |
 | `numero_local` | Visible | Local |
 | `codigo_postal` | Visible | C.P. |
-| `latitud` | Solo lectura | Coordenada |
-| `longitud` | Solo lectura | Coordenada |
+| `latitud` | Visible | Coordenada |
+| `longitud` | Visible | Coordenada |
 | `metadata` | Oculto | Extensión |
 | `creado_en` | Solo lectura | Auditoría |
 | `actualizado_en` | Solo lectura | Auditoría |
@@ -235,4 +235,3 @@ Esta tabla sigue existiendo como compatibilidad y referencia histórica.
 3. Mantener ocultos solo los `id`.
 4. Dejar los timestamps como solo lectura o bloque de auditoría.
 5. Si un campo existe en la DB y tiene sentido de negocio, debe tener representación en UI.
-

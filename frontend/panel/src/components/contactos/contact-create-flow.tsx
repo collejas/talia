@@ -32,6 +32,7 @@ type PersonaDraft = {
   puesto: string;
   area: string;
   rol_decision: string;
+  estado: string;
   origen: string;
   notas: string;
   propietario_usuario_id: string;
@@ -41,15 +42,26 @@ type CuentaDraft = {
   cuenta_id: string;
   nombre_comercial: string;
   razon_social: string;
+  alias: string;
   tipo_persona: "" | "fisica" | "moral";
   tipo_cuenta: string;
+  tipo: string;
+  codigo_cuenta: string;
   rfc: string;
   industria: string;
   segmento: string;
+  tamano: string;
   sitio_web: string;
   correo_principal: string;
   telefono_principal: string;
+  correo: string;
+  telefono: string;
   notas: string;
+  necesidad_proposito: string;
+  tipo_establecimiento: string;
+  fecha_incorporacion: string;
+  latitud: string;
+  longitud: string;
 };
 
 type RelacionDraft = {
@@ -60,6 +72,7 @@ type RelacionDraft = {
   es_representante_legal: boolean;
   activo: boolean;
   fecha_inicio: string;
+  fecha_fin: string;
   notas: string;
 };
 
@@ -69,12 +82,25 @@ type ExtrasDraft = {
   metodo_pago: string;
   email_facturacion: string;
   pais: string;
+  clave_entidad: string;
   entidad: string;
+  clave_municipio: string;
   municipio: string;
+  clave_localidad: string;
+  localidad: string;
   tipo_vialidad: string;
   nombre_vialidad: string;
   numero_exterior: string;
+  letra_exterior: string;
+  edificio: string;
+  edificio_piso: string;
   numero_interior: string;
+  letra_interior: string;
+  tipo_asentamiento: string;
+  nombre_asentamiento: string;
+  tipo_centro_comercial: string;
+  corredor_industrial: string;
+  numero_local: string;
   codigo_postal: string;
 };
 
@@ -172,6 +198,7 @@ const INITIAL_STATE: ContactCreateState = {
     puesto: "",
     area: "",
     rol_decision: "",
+    estado: "",
     origen: "manual_panel_contactos",
     notas: "",
     propietario_usuario_id: "",
@@ -180,15 +207,26 @@ const INITIAL_STATE: ContactCreateState = {
     cuenta_id: "",
     nombre_comercial: "",
     razon_social: "",
+    alias: "",
     tipo_persona: "",
     tipo_cuenta: "empresa",
+    tipo: "empresa",
+    codigo_cuenta: "",
     rfc: "",
     industria: "",
     segmento: "",
+    tamano: "",
     sitio_web: "",
     correo_principal: "",
     telefono_principal: "",
+    correo: "",
+    telefono: "",
     notas: "",
+    necesidad_proposito: "",
+    tipo_establecimiento: "",
+    fecha_incorporacion: "",
+    latitud: "",
+    longitud: "",
   },
   relacion: {
     rol_en_cuenta: "",
@@ -198,6 +236,7 @@ const INITIAL_STATE: ContactCreateState = {
     es_representante_legal: false,
     activo: true,
     fecha_inicio: "",
+    fecha_fin: "",
     notas: "",
   },
   extras: {
@@ -206,12 +245,25 @@ const INITIAL_STATE: ContactCreateState = {
     metodo_pago: "",
     email_facturacion: "",
     pais: "MX",
+    clave_entidad: "",
     entidad: "",
+    clave_municipio: "",
     municipio: "",
+    clave_localidad: "",
+    localidad: "",
     tipo_vialidad: "",
     nombre_vialidad: "",
     numero_exterior: "",
+    letra_exterior: "",
+    edificio: "",
+    edificio_piso: "",
     numero_interior: "",
+    letra_interior: "",
+    tipo_asentamiento: "",
+    nombre_asentamiento: "",
+    tipo_centro_comercial: "",
+    corredor_industrial: "",
+    numero_local: "",
     codigo_postal: "",
   },
   extrasOpen: false,
@@ -245,10 +297,12 @@ function createReducer(state: ContactCreateState, action: ContactCreateAction): 
         nextState.cuenta = {
           ...state.cuenta,
           cuenta_id: "",
+          alias: state.cuenta.alias || nombreCompleto,
           razon_social: nombreCompleto || state.cuenta.razon_social,
           nombre_comercial: state.cuenta.nombre_comercial || nombreCompleto,
           tipo_persona: "fisica",
           tipo_cuenta: "persona_fisica_actividad_empresarial",
+          tipo: "persona_fisica_actividad_empresarial",
         };
         nextState.relacion = {
           ...state.relacion,
@@ -262,6 +316,7 @@ function createReducer(state: ContactCreateState, action: ContactCreateAction): 
         nextState.cuenta = {
           ...state.cuenta,
           cuenta_id: "",
+          tipo: "empresa",
           tipo_cuenta: "empresa",
         };
         nextState.relacion = {
@@ -272,6 +327,7 @@ function createReducer(state: ContactCreateState, action: ContactCreateAction): 
       if (action.mode === "empresa_existente") {
         nextState.cuenta = {
           ...state.cuenta,
+          tipo: "empresa",
           tipo_cuenta: "empresa",
         };
         nextState.relacion = {
@@ -403,6 +459,7 @@ function buildPayload(state: ContactCreateState, dedupe?: DedupeDecision) {
       state.mode === "persona_fisica_actividad_empresarial"
         ? state.cuenta.nombre_comercial || nombreCompleto
         : state.cuenta.nombre_comercial,
+    alias: state.cuenta.alias,
     tipo_persona:
       state.mode === "persona_fisica_actividad_empresarial"
         ? "fisica"
@@ -411,6 +468,19 @@ function buildPayload(state: ContactCreateState, dedupe?: DedupeDecision) {
       state.mode === "persona_fisica_actividad_empresarial"
         ? "persona_fisica_actividad_empresarial"
         : state.cuenta.tipo_cuenta,
+    tipo:
+      state.mode === "persona_fisica_actividad_empresarial"
+        ? "persona_fisica_actividad_empresarial"
+        : state.cuenta.tipo,
+    codigo_cuenta: state.cuenta.codigo_cuenta,
+    tamano: state.cuenta.tamano,
+    correo: state.cuenta.correo || state.cuenta.correo_principal,
+    telefono: state.cuenta.telefono || state.cuenta.telefono_principal,
+    necesidad_proposito: state.cuenta.necesidad_proposito,
+    tipo_establecimiento: state.cuenta.tipo_establecimiento,
+    fecha_incorporacion: state.cuenta.fecha_incorporacion || undefined,
+    latitud: state.cuenta.latitud || undefined,
+    longitud: state.cuenta.longitud || undefined,
   });
 
   const relacion =
@@ -440,12 +510,25 @@ function buildPayload(state: ContactCreateState, dedupe?: DedupeDecision) {
     }),
     direccion: cleanObject({
       pais: state.extras.pais,
+      clave_entidad: state.extras.clave_entidad,
       entidad: state.extras.entidad,
+      clave_municipio: state.extras.clave_municipio,
       municipio: state.extras.municipio,
+      clave_localidad: state.extras.clave_localidad,
+      localidad: state.extras.localidad,
       tipo_vialidad: state.extras.tipo_vialidad,
       nombre_vialidad: state.extras.nombre_vialidad,
       numero_exterior: state.extras.numero_exterior,
+      letra_exterior: state.extras.letra_exterior,
+      edificio: state.extras.edificio,
+      edificio_piso: state.extras.edificio_piso,
       numero_interior: state.extras.numero_interior,
+      letra_interior: state.extras.letra_interior,
+      tipo_asentamiento: state.extras.tipo_asentamiento,
+      nombre_asentamiento: state.extras.nombre_asentamiento,
+      tipo_centro_comercial: state.extras.tipo_centro_comercial,
+      corredor_industrial: state.extras.corredor_industrial,
+      numero_local: state.extras.numero_local,
       codigo_postal: state.extras.codigo_postal,
     }),
   });
@@ -730,6 +813,9 @@ export function ContactCreateFlow({ open, onOpenChange, onCreated, initialMode =
               <Field label="Rol de decisión">
                 <Input value={state.persona.rol_decision} onChange={(e) => dispatch({ type: "persona/set", field: "rol_decision", value: e.target.value })} />
               </Field>
+              <Field label="Estado">
+                <Input value={state.persona.estado} onChange={(e) => dispatch({ type: "persona/set", field: "estado", value: e.target.value })} />
+              </Field>
             </div>
             <Field label="Notas">
               <Textarea value={state.persona.notas} onChange={(e) => dispatch({ type: "persona/set", field: "notas", value: e.target.value })} />
@@ -809,14 +895,23 @@ export function ContactCreateFlow({ open, onOpenChange, onCreated, initialMode =
           {state.mode === "empresa_nueva" || state.mode === "persona_fisica_actividad_empresarial" ? (
             <FormSection
               title={state.mode === "persona_fisica_actividad_empresarial" ? "Empresa propia" : "Nueva empresa"}
-              description={state.mode === "persona_fisica_actividad_empresarial" ? "Se prellena desde la persona y puedes ajustar los datos comerciales." : "Datos mínimos para crear la empresa."}
+              description={state.mode === "persona_fisica_actividad_empresarial" ? "Se prellena desde la persona y puedes ajustar los datos comerciales." : "Datos de la empresa que se persistirán."}
             >
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                 <Field label="Nombre comercial">
                   <Input value={state.cuenta.nombre_comercial} onChange={(e) => dispatch({ type: "cuenta/set", field: "nombre_comercial", value: e.target.value })} />
                 </Field>
+                <Field label="Alias">
+                  <Input value={state.cuenta.alias} onChange={(e) => dispatch({ type: "cuenta/set", field: "alias", value: e.target.value })} />
+                </Field>
                 <Field label="Razón social">
                   <Input value={state.cuenta.razon_social} onChange={(e) => dispatch({ type: "cuenta/set", field: "razon_social", value: e.target.value })} />
+                </Field>
+                <Field label="Código de cuenta">
+                  <Input value={state.cuenta.codigo_cuenta} onChange={(e) => dispatch({ type: "cuenta/set", field: "codigo_cuenta", value: e.target.value })} />
+                </Field>
+                <Field label="Tipo">
+                  <Input value={state.cuenta.tipo} onChange={(e) => dispatch({ type: "cuenta/set", field: "tipo", value: e.target.value })} />
                 </Field>
                 <Field label="Tipo persona">
                   <select
@@ -839,14 +934,41 @@ export function ContactCreateFlow({ open, onOpenChange, onCreated, initialMode =
                 <Field label="Teléfono principal">
                   <Input value={state.cuenta.telefono_principal} onChange={(e) => dispatch({ type: "cuenta/set", field: "telefono_principal", value: e.target.value })} />
                 </Field>
+                <Field label="Correo">
+                  <Input value={state.cuenta.correo} onChange={(e) => dispatch({ type: "cuenta/set", field: "correo", value: e.target.value })} />
+                </Field>
+                <Field label="Teléfono">
+                  <Input value={state.cuenta.telefono} onChange={(e) => dispatch({ type: "cuenta/set", field: "telefono", value: e.target.value })} />
+                </Field>
                 <Field label="Industria">
                   <Input value={state.cuenta.industria} onChange={(e) => dispatch({ type: "cuenta/set", field: "industria", value: e.target.value })} />
                 </Field>
                 <Field label="Segmento">
                   <Input value={state.cuenta.segmento} onChange={(e) => dispatch({ type: "cuenta/set", field: "segmento", value: e.target.value })} />
                 </Field>
+                <Field label="Tamaño">
+                  <Input value={state.cuenta.tamano} onChange={(e) => dispatch({ type: "cuenta/set", field: "tamano", value: e.target.value })} />
+                </Field>
                 <Field label="Sitio web">
                   <Input value={state.cuenta.sitio_web} onChange={(e) => dispatch({ type: "cuenta/set", field: "sitio_web", value: e.target.value })} />
+                </Field>
+                <Field label="Necesidad / propósito">
+                  <Input value={state.cuenta.necesidad_proposito} onChange={(e) => dispatch({ type: "cuenta/set", field: "necesidad_proposito", value: e.target.value })} />
+                </Field>
+                <Field label="Tipo de establecimiento">
+                  <Input value={state.cuenta.tipo_establecimiento} onChange={(e) => dispatch({ type: "cuenta/set", field: "tipo_establecimiento", value: e.target.value })} />
+                </Field>
+                <Field label="Fecha de incorporación">
+                  <Input type="date" value={state.cuenta.fecha_incorporacion} onChange={(e) => dispatch({ type: "cuenta/set", field: "fecha_incorporacion", value: e.target.value })} />
+                </Field>
+                <Field label="Latitud">
+                  <Input type="number" step="any" value={state.cuenta.latitud} onChange={(e) => dispatch({ type: "cuenta/set", field: "latitud", value: e.target.value })} />
+                </Field>
+                <Field label="Longitud">
+                  <Input type="number" step="any" value={state.cuenta.longitud} onChange={(e) => dispatch({ type: "cuenta/set", field: "longitud", value: e.target.value })} />
+                </Field>
+                <Field label="Notas">
+                  <Textarea value={state.cuenta.notas} onChange={(e) => dispatch({ type: "cuenta/set", field: "notas", value: e.target.value })} />
                 </Field>
               </div>
             </FormSection>
@@ -863,6 +985,12 @@ export function ContactCreateFlow({ open, onOpenChange, onCreated, initialMode =
                 </Field>
                 <Field label="Fecha de inicio">
                   <Input type="date" value={state.relacion.fecha_inicio} onChange={(e) => dispatch({ type: "relacion/set", field: "fecha_inicio", value: e.target.value })} />
+                </Field>
+                <Field label="Fecha de fin">
+                  <Input type="date" value={state.relacion.fecha_fin} onChange={(e) => dispatch({ type: "relacion/set", field: "fecha_fin", value: e.target.value })} />
+                </Field>
+                <Field label="Notas de relación">
+                  <Textarea value={state.relacion.notas} onChange={(e) => dispatch({ type: "relacion/set", field: "notas", value: e.target.value })} />
                 </Field>
               </div>
               <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
@@ -888,7 +1016,7 @@ export function ContactCreateFlow({ open, onOpenChange, onCreated, initialMode =
 
           <FormSection title="Datos opcionales" description="Puedes omitirlos por ahora y completarlos más tarde.">
             <div className="flex items-center justify-between gap-3">
-              <p className="text-sm text-muted-foreground">Datos fiscales y dirección básicos.</p>
+              <p className="text-sm text-muted-foreground">Datos fiscales y dirección completos.</p>
               <Button type="button" variant="outline" size="sm" onClick={() => dispatch({ type: "extras/toggle" })}>
                 {state.extrasOpen ? "Ocultar extras" : "Completar extras"}
               </Button>
@@ -910,11 +1038,23 @@ export function ContactCreateFlow({ open, onOpenChange, onCreated, initialMode =
                 <Field label="País">
                   <Input value={state.extras.pais} onChange={(e) => dispatch({ type: "extras/set", field: "pais", value: e.target.value })} />
                 </Field>
+                <Field label="Clave de entidad">
+                  <Input value={state.extras.clave_entidad} onChange={(e) => dispatch({ type: "extras/set", field: "clave_entidad", value: e.target.value })} />
+                </Field>
                 <Field label="Entidad">
                   <Input value={state.extras.entidad} onChange={(e) => dispatch({ type: "extras/set", field: "entidad", value: e.target.value })} />
                 </Field>
+                <Field label="Clave de municipio">
+                  <Input value={state.extras.clave_municipio} onChange={(e) => dispatch({ type: "extras/set", field: "clave_municipio", value: e.target.value })} />
+                </Field>
                 <Field label="Municipio">
                   <Input value={state.extras.municipio} onChange={(e) => dispatch({ type: "extras/set", field: "municipio", value: e.target.value })} />
+                </Field>
+                <Field label="Clave de localidad">
+                  <Input value={state.extras.clave_localidad} onChange={(e) => dispatch({ type: "extras/set", field: "clave_localidad", value: e.target.value })} />
+                </Field>
+                <Field label="Localidad">
+                  <Input value={state.extras.localidad} onChange={(e) => dispatch({ type: "extras/set", field: "localidad", value: e.target.value })} />
                 </Field>
                 <Field label="Tipo de vialidad">
                   <Input value={state.extras.tipo_vialidad} onChange={(e) => dispatch({ type: "extras/set", field: "tipo_vialidad", value: e.target.value })} />
@@ -925,8 +1065,35 @@ export function ContactCreateFlow({ open, onOpenChange, onCreated, initialMode =
                 <Field label="Número exterior">
                   <Input value={state.extras.numero_exterior} onChange={(e) => dispatch({ type: "extras/set", field: "numero_exterior", value: e.target.value })} />
                 </Field>
+                <Field label="Letra exterior">
+                  <Input value={state.extras.letra_exterior} onChange={(e) => dispatch({ type: "extras/set", field: "letra_exterior", value: e.target.value })} />
+                </Field>
+                <Field label="Edificio">
+                  <Input value={state.extras.edificio} onChange={(e) => dispatch({ type: "extras/set", field: "edificio", value: e.target.value })} />
+                </Field>
+                <Field label="Piso">
+                  <Input value={state.extras.edificio_piso} onChange={(e) => dispatch({ type: "extras/set", field: "edificio_piso", value: e.target.value })} />
+                </Field>
                 <Field label="Número interior">
                   <Input value={state.extras.numero_interior} onChange={(e) => dispatch({ type: "extras/set", field: "numero_interior", value: e.target.value })} />
+                </Field>
+                <Field label="Letra interior">
+                  <Input value={state.extras.letra_interior} onChange={(e) => dispatch({ type: "extras/set", field: "letra_interior", value: e.target.value })} />
+                </Field>
+                <Field label="Tipo de asentamiento">
+                  <Input value={state.extras.tipo_asentamiento} onChange={(e) => dispatch({ type: "extras/set", field: "tipo_asentamiento", value: e.target.value })} />
+                </Field>
+                <Field label="Nombre de asentamiento">
+                  <Input value={state.extras.nombre_asentamiento} onChange={(e) => dispatch({ type: "extras/set", field: "nombre_asentamiento", value: e.target.value })} />
+                </Field>
+                <Field label="Tipo de centro comercial">
+                  <Input value={state.extras.tipo_centro_comercial} onChange={(e) => dispatch({ type: "extras/set", field: "tipo_centro_comercial", value: e.target.value })} />
+                </Field>
+                <Field label="Corredor industrial">
+                  <Input value={state.extras.corredor_industrial} onChange={(e) => dispatch({ type: "extras/set", field: "corredor_industrial", value: e.target.value })} />
+                </Field>
+                <Field label="Número local">
+                  <Input value={state.extras.numero_local} onChange={(e) => dispatch({ type: "extras/set", field: "numero_local", value: e.target.value })} />
                 </Field>
                 <Field label="Código postal">
                   <Input value={state.extras.codigo_postal} onChange={(e) => dispatch({ type: "extras/set", field: "codigo_postal", value: e.target.value })} />

@@ -25,9 +25,9 @@ La maqueta debe reflejar las tablas reales de la base de datos.
 
 Regla simple:
 
-- mostrar todos los campos de negocio de la entidad que se esta editando
+- mostrar todos los campos persistidos de la entidad que se esta editando
 - ocultar unicamente los IDs
-- mantener los campos tecnicos fuera del flujo principal solo si no aportan al usuario final
+- los campos tecnicos tambien deben tener representacion visual si forman parte de la persistencia
 
 ## Orden visual planeado
 

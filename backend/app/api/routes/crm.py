@@ -9425,6 +9425,7 @@ class CRMPersonaAltaPersona(BaseModel):
     puesto: str | None = Field(default=None, max_length=120)
     area: str | None = Field(default=None, max_length=120)
     rol_decision: str | None = Field(default=None, max_length=120)
+    estado: str | None = Field(default=None, max_length=80)
     origen: str | None = Field(default=None, max_length=80)
     notas: str | None = Field(default=None, max_length=4000)
     propietario_usuario_id: UUID | None = None
@@ -9446,15 +9447,26 @@ class CRMPersonaAltaCuenta(BaseModel):
     cuenta_id: UUID | None = None
     nombre_comercial: str | None = Field(default=None, max_length=255)
     razon_social: str | None = Field(default=None, max_length=255)
+    alias: str | None = Field(default=None, max_length=255)
     tipo_persona: Literal["fisica", "moral"] | None = None
     tipo_cuenta: str | None = Field(default=None, max_length=120)
+    tipo: str | None = Field(default=None, max_length=120)
+    codigo_cuenta: str | None = Field(default=None, max_length=64)
     rfc: str | None = Field(default=None, max_length=64)
     industria: str | None = Field(default=None, max_length=120)
     segmento: str | None = Field(default=None, max_length=120)
+    tamano: str | None = Field(default=None, max_length=120)
     sitio_web: str | None = Field(default=None, max_length=255)
     correo_principal: str | None = Field(default=None, max_length=320)
     telefono_principal: str | None = Field(default=None, max_length=64)
+    correo: str | None = Field(default=None, max_length=320)
+    telefono: str | None = Field(default=None, max_length=64)
     notas: str | None = Field(default=None, max_length=4000)
+    necesidad_proposito: str | None = Field(default=None, max_length=2000)
+    tipo_establecimiento: str | None = Field(default=None, max_length=120)
+    latitud: float | None = None
+    longitud: float | None = None
+    fecha_incorporacion: datetime | None = None
 
 
 class CRMPersonaAltaRelacion(BaseModel):
@@ -9465,7 +9477,9 @@ class CRMPersonaAltaRelacion(BaseModel):
     es_representante_legal: bool = False
     activo: bool = True
     fecha_inicio: date | None = None
+    fecha_fin: date | None = None
     notas: str | None = Field(default=None, max_length=4000)
+    metadata: dict[str, Any] | None = None
 
 
 class CRMPersonaAltaExtrasFiscales(BaseModel):
@@ -9477,13 +9491,28 @@ class CRMPersonaAltaExtrasFiscales(BaseModel):
 
 class CRMPersonaAltaExtrasDireccion(BaseModel):
     pais: str | None = Field(default=None, max_length=120)
+    clave_entidad: str | None = Field(default=None, max_length=16)
     entidad: str | None = Field(default=None, max_length=120)
+    clave_municipio: str | None = Field(default=None, max_length=16)
     municipio: str | None = Field(default=None, max_length=120)
+    clave_localidad: str | None = Field(default=None, max_length=16)
+    localidad: str | None = Field(default=None, max_length=120)
     tipo_vialidad: str | None = Field(default=None, max_length=120)
     nombre_vialidad: str | None = Field(default=None, max_length=255)
     numero_exterior: str | None = Field(default=None, max_length=64)
+    letra_exterior: str | None = Field(default=None, max_length=16)
+    edificio: str | None = Field(default=None, max_length=255)
+    edificio_piso: str | None = Field(default=None, max_length=64)
     numero_interior: str | None = Field(default=None, max_length=64)
+    letra_interior: str | None = Field(default=None, max_length=16)
+    tipo_asentamiento: str | None = Field(default=None, max_length=120)
+    nombre_asentamiento: str | None = Field(default=None, max_length=255)
+    tipo_centro_comercial: str | None = Field(default=None, max_length=120)
+    corredor_industrial: str | None = Field(default=None, max_length=255)
+    numero_local: str | None = Field(default=None, max_length=64)
     codigo_postal: str | None = Field(default=None, max_length=16)
+    latitud: float | None = None
+    longitud: float | None = None
 
 
 class CRMPersonaAltaExtras(BaseModel):
@@ -9628,6 +9657,7 @@ def _persona_alta_normalize_persona(payload: CRMPersonaAltaPersona) -> CRMPerson
             "puesto": _persona_alta_clean_text(payload.puesto, compact_spaces=True),
             "area": _persona_alta_clean_text(payload.area, compact_spaces=True),
             "rol_decision": _persona_alta_clean_text(payload.rol_decision, compact_spaces=True),
+            "estado": _persona_alta_clean_text(payload.estado, compact_spaces=True),
             "origen": _persona_alta_clean_text(payload.origen),
             "notas": _persona_alta_clean_text(payload.notas),
         }
@@ -9641,14 +9671,22 @@ def _persona_alta_normalize_cuenta(payload: CRMPersonaAltaCuenta | None) -> CRMP
         update={
             "nombre_comercial": _persona_alta_clean_text(payload.nombre_comercial, compact_spaces=True),
             "razon_social": _persona_alta_clean_text(payload.razon_social, compact_spaces=True),
+            "alias": _persona_alta_clean_text(payload.alias, compact_spaces=True),
             "tipo_cuenta": _persona_alta_clean_text(payload.tipo_cuenta),
+            "tipo": _persona_alta_clean_text(payload.tipo),
+            "codigo_cuenta": _persona_alta_clean_text(payload.codigo_cuenta, compact_spaces=True),
             "rfc": _persona_alta_clean_text(payload.rfc, compact_spaces=True),
             "industria": _persona_alta_clean_text(payload.industria, compact_spaces=True),
             "segmento": _persona_alta_clean_text(payload.segmento, compact_spaces=True),
+            "tamano": _persona_alta_clean_text(payload.tamano, compact_spaces=True),
             "sitio_web": _persona_alta_clean_text(payload.sitio_web),
             "correo_principal": _persona_alta_normalize_email(payload.correo_principal),
             "telefono_principal": _persona_alta_normalize_phone(payload.telefono_principal),
+            "correo": _persona_alta_normalize_email(payload.correo),
+            "telefono": _persona_alta_normalize_phone(payload.telefono),
             "notas": _persona_alta_clean_text(payload.notas),
+            "necesidad_proposito": _persona_alta_clean_text(payload.necesidad_proposito),
+            "tipo_establecimiento": _persona_alta_clean_text(payload.tipo_establecimiento, compact_spaces=True),
         }
     )
 
@@ -9674,13 +9712,28 @@ def _persona_alta_normalize_extras(payload: CRMPersonaAltaExtras | None) -> CRMP
         direccion.model_copy(
             update={
                 "pais": _persona_alta_clean_text(direccion.pais, compact_spaces=True),
+                "clave_entidad": _persona_alta_clean_text(direccion.clave_entidad, compact_spaces=True),
                 "entidad": _persona_alta_clean_text(direccion.entidad, compact_spaces=True),
+                "clave_municipio": _persona_alta_clean_text(direccion.clave_municipio, compact_spaces=True),
                 "municipio": _persona_alta_clean_text(direccion.municipio, compact_spaces=True),
+                "clave_localidad": _persona_alta_clean_text(direccion.clave_localidad, compact_spaces=True),
+                "localidad": _persona_alta_clean_text(direccion.localidad, compact_spaces=True),
                 "tipo_vialidad": _persona_alta_clean_text(direccion.tipo_vialidad, compact_spaces=True),
                 "nombre_vialidad": _persona_alta_clean_text(direccion.nombre_vialidad, compact_spaces=True),
                 "numero_exterior": _persona_alta_clean_text(direccion.numero_exterior, compact_spaces=True),
+                "letra_exterior": _persona_alta_clean_text(direccion.letra_exterior, compact_spaces=True),
+                "edificio": _persona_alta_clean_text(direccion.edificio, compact_spaces=True),
+                "edificio_piso": _persona_alta_clean_text(direccion.edificio_piso, compact_spaces=True),
                 "numero_interior": _persona_alta_clean_text(direccion.numero_interior, compact_spaces=True),
+                "letra_interior": _persona_alta_clean_text(direccion.letra_interior, compact_spaces=True),
+                "tipo_asentamiento": _persona_alta_clean_text(direccion.tipo_asentamiento, compact_spaces=True),
+                "nombre_asentamiento": _persona_alta_clean_text(direccion.nombre_asentamiento, compact_spaces=True),
+                "tipo_centro_comercial": _persona_alta_clean_text(direccion.tipo_centro_comercial, compact_spaces=True),
+                "corredor_industrial": _persona_alta_clean_text(direccion.corredor_industrial, compact_spaces=True),
+                "numero_local": _persona_alta_clean_text(direccion.numero_local, compact_spaces=True),
                 "codigo_postal": _persona_alta_clean_text(direccion.codigo_postal, compact_spaces=True),
+                "latitud": direccion.latitud,
+                "longitud": direccion.longitud,
             }
         )
         if direccion
@@ -10035,6 +10088,7 @@ def _persona_alta_to_contact_payload(
         "puesto": _persona_alta_clean_text(persona.puesto),
         "area": _persona_alta_clean_text(persona.area),
         "rol_decision": _persona_alta_clean_text(persona.rol_decision),
+        "estado": _persona_alta_clean_text(persona.estado) or "lead",
         "origen": _persona_alta_clean_text(persona.origen),
         "notes": _persona_alta_clean_text(persona.notas),
         "propietario_usuario_id": str(persona.propietario_usuario_id) if persona.propietario_usuario_id else None,
@@ -10082,15 +10136,18 @@ def _persona_alta_to_account_payload(
     return {
         "nombre": nombre,
         "alias": _persona_alta_clean_text(cuenta.nombre_comercial),
-        "tipo": (
+        "tipo": _persona_alta_clean_text(cuenta.tipo)
+        or (
             "persona_fisica_actividad_empresarial"
             if contexto.modo == "persona_fisica_actividad_empresarial"
             else (_persona_alta_clean_text(cuenta.tipo_cuenta) or "empresa")
         ),
         "industria": _persona_alta_clean_text(cuenta.industria),
+        "tamano": _persona_alta_clean_text(cuenta.tamano),
         "sitio_web": _persona_alta_clean_text(cuenta.sitio_web),
-        "telefono": _persona_alta_clean_text(cuenta.telefono_principal),
-        "correo": _persona_alta_clean_text(cuenta.correo_principal),
+        "telefono": _persona_alta_clean_text(cuenta.telefono) or _persona_alta_clean_text(cuenta.telefono_principal),
+        "correo": _persona_alta_clean_text(cuenta.correo) or _persona_alta_clean_text(cuenta.correo_principal),
+        "codigo_cuenta": _persona_alta_clean_text(cuenta.codigo_cuenta),
         "razon_social": _persona_alta_clean_text(cuenta.razon_social)
         or (full_name if contexto.modo == "persona_fisica_actividad_empresarial" else None),
         "rfc": _persona_alta_clean_text(cuenta.rfc),
@@ -10100,31 +10157,65 @@ def _persona_alta_to_account_payload(
         "email_facturacion": _persona_alta_clean_text(fiscales.email_facturacion if fiscales else None),
         "tipo_industria": _persona_alta_clean_text(cuenta.industria),
         "notas": _persona_alta_clean_text(cuenta.notas),
+        "necesidad_proposito": _persona_alta_clean_text(cuenta.necesidad_proposito),
         "direccion": {
             key: value
             for key, value in {
                 "pais": _persona_alta_clean_text(direccion.pais if direccion else None),
+                "clave_entidad": _persona_alta_clean_text(direccion.clave_entidad if direccion else None),
                 "entidad": _persona_alta_clean_text(direccion.entidad if direccion else None),
+                "clave_municipio": _persona_alta_clean_text(direccion.clave_municipio if direccion else None),
                 "municipio": _persona_alta_clean_text(direccion.municipio if direccion else None),
+                "clave_localidad": _persona_alta_clean_text(direccion.clave_localidad if direccion else None),
+                "localidad": _persona_alta_clean_text(direccion.localidad if direccion else None),
                 "tipo_vialidad": _persona_alta_clean_text(direccion.tipo_vialidad if direccion else None),
                 "nombre_vialidad": _persona_alta_clean_text(direccion.nombre_vialidad if direccion else None),
                 "numero_exterior": _persona_alta_clean_text(direccion.numero_exterior if direccion else None),
+                "letra_exterior": _persona_alta_clean_text(direccion.letra_exterior if direccion else None),
+                "edificio": _persona_alta_clean_text(direccion.edificio if direccion else None),
+                "edificio_piso": _persona_alta_clean_text(direccion.edificio_piso if direccion else None),
                 "numero_interior": _persona_alta_clean_text(direccion.numero_interior if direccion else None),
+                "letra_interior": _persona_alta_clean_text(direccion.letra_interior if direccion else None),
+                "tipo_asentamiento": _persona_alta_clean_text(direccion.tipo_asentamiento if direccion else None),
+                "nombre_asentamiento": _persona_alta_clean_text(direccion.nombre_asentamiento if direccion else None),
+                "tipo_centro_comercial": _persona_alta_clean_text(direccion.tipo_centro_comercial if direccion else None),
+                "corredor_industrial": _persona_alta_clean_text(direccion.corredor_industrial if direccion else None),
+                "numero_local": _persona_alta_clean_text(direccion.numero_local if direccion else None),
                 "codigo_postal": _persona_alta_clean_text(direccion.codigo_postal if direccion else None),
+                "latitud": direccion.latitud if direccion else None,
+                "longitud": direccion.longitud if direccion else None,
             }.items()
             if value is not None
         },
         "tipo_vialidad": _persona_alta_clean_text(direccion.tipo_vialidad if direccion else None),
         "nombre_vialidad": _persona_alta_clean_text(direccion.nombre_vialidad if direccion else None),
         "numero_exterior": _persona_alta_clean_text(direccion.numero_exterior if direccion else None),
+        "letra_exterior": _persona_alta_clean_text(direccion.letra_exterior if direccion else None),
+        "edificio": _persona_alta_clean_text(direccion.edificio if direccion else None),
+        "edificio_piso": _persona_alta_clean_text(direccion.edificio_piso if direccion else None),
         "numero_interior": _persona_alta_clean_text(direccion.numero_interior if direccion else None),
+        "letra_interior": _persona_alta_clean_text(direccion.letra_interior if direccion else None),
         "codigo_postal": _persona_alta_clean_text(direccion.codigo_postal if direccion else None),
         "entidad": _persona_alta_clean_text(direccion.entidad if direccion else None),
+        "clave_entidad": _persona_alta_clean_text(direccion.clave_entidad if direccion else None),
         "municipio": _persona_alta_clean_text(direccion.municipio if direccion else None),
+        "clave_municipio": _persona_alta_clean_text(direccion.clave_municipio if direccion else None),
+        "clave_localidad": _persona_alta_clean_text(direccion.clave_localidad if direccion else None),
+        "localidad": _persona_alta_clean_text(direccion.localidad if direccion else None),
         "pais": _persona_alta_clean_text(direccion.pais if direccion else None),
+        "tipo_asentamiento": _persona_alta_clean_text(direccion.tipo_asentamiento if direccion else None),
+        "nombre_asentamiento": _persona_alta_clean_text(direccion.nombre_asentamiento if direccion else None),
+        "tipo_centro_comercial": _persona_alta_clean_text(direccion.tipo_centro_comercial if direccion else None),
+        "corredor_industrial": _persona_alta_clean_text(direccion.corredor_industrial if direccion else None),
+        "numero_local": _persona_alta_clean_text(direccion.numero_local if direccion else None),
+        "latitud": direccion.latitud if direccion else None,
+        "longitud": direccion.longitud if direccion else None,
+        "fecha_incorporacion": cuenta.fecha_incorporacion.isoformat() if cuenta and cuenta.fecha_incorporacion else None,
         "metadata": {
             "segmento": _persona_alta_clean_text(cuenta.segmento),
             "tipo_persona": _persona_alta_clean_text(cuenta.tipo_persona),
+            "tamano": _persona_alta_clean_text(cuenta.tamano),
+            "codigo_cuenta": _persona_alta_clean_text(cuenta.codigo_cuenta),
             "source": "personas_alta",
         },
     }
@@ -14450,8 +14541,13 @@ async def create_persona_alta(
             "es_representante_legal": True if contexto.modo == "persona_fisica_actividad_empresarial" else (relacion.es_representante_legal if relacion else False),
             "activo": relacion.activo if relacion else True,
             "fecha_inicio": relacion.fecha_inicio.isoformat() if relacion and relacion.fecha_inicio else None,
+            "fecha_fin": relacion.fecha_fin.isoformat() if relacion and relacion.fecha_fin else None,
             "notas": relacion.notas if relacion else None,
-            "metadata": {"contexto_modo": contexto.modo},
+            "metadata": (
+                {**relacion.metadata, "contexto_modo": contexto.modo}
+                if relacion and relacion.metadata
+                else {"contexto_modo": contexto.modo}
+            ),
         }
         try:
             relation_row = await repo.upsert_contact_account_relation(
@@ -14651,8 +14747,13 @@ async def update_persona(
             "es_representante_legal": True if contexto.modo == "persona_fisica_actividad_empresarial" else (relacion.es_representante_legal if relacion else False),
             "activo": relacion.activo if relacion else True,
             "fecha_inicio": relacion.fecha_inicio.isoformat() if relacion and relacion.fecha_inicio else None,
+            "fecha_fin": relacion.fecha_fin.isoformat() if relacion and relacion.fecha_fin else None,
             "notas": relacion.notas if relacion else None,
-            "metadata": {"contexto_modo": contexto.modo},
+            "metadata": (
+                {**relacion.metadata, "contexto_modo": contexto.modo}
+                if relacion and relacion.metadata
+                else {"contexto_modo": contexto.modo}
+            ),
         }
         try:
             relation_row = await repo.upsert_contact_account_relation(

@@ -32,6 +32,7 @@ type PersonaDraft = {
   puesto: string;
   area: string;
   rol_decision: string;
+  estado: string;
   origen: string;
   notas: string;
   propietario_usuario_id: string;
@@ -41,15 +42,26 @@ type CuentaDraft = {
   cuenta_id: string;
   nombre_comercial: string;
   razon_social: string;
+  alias: string;
   tipo_persona: "" | "fisica" | "moral";
   tipo_cuenta: string;
+  tipo: string;
+  codigo_cuenta: string;
   rfc: string;
   industria: string;
   segmento: string;
+  tamano: string;
   sitio_web: string;
   correo_principal: string;
   telefono_principal: string;
+  correo: string;
+  telefono: string;
   notas: string;
+  necesidad_proposito: string;
+  tipo_establecimiento: string;
+  fecha_incorporacion: string;
+  latitud: string;
+  longitud: string;
 };
 
 type RelacionDraft = {
@@ -60,6 +72,7 @@ type RelacionDraft = {
   es_representante_legal: boolean;
   activo: boolean;
   fecha_inicio: string;
+  fecha_fin: string;
   notas: string;
 };
 
@@ -69,12 +82,25 @@ type ExtrasDraft = {
   metodo_pago: string;
   email_facturacion: string;
   pais: string;
+  clave_entidad: string;
   entidad: string;
+  clave_municipio: string;
   municipio: string;
+  clave_localidad: string;
+  localidad: string;
   tipo_vialidad: string;
   nombre_vialidad: string;
   numero_exterior: string;
+  letra_exterior: string;
+  edificio: string;
+  edificio_piso: string;
   numero_interior: string;
+  letra_interior: string;
+  tipo_asentamiento: string;
+  nombre_asentamiento: string;
+  tipo_centro_comercial: string;
+  corredor_industrial: string;
+  numero_local: string;
   codigo_postal: string;
 };
 
@@ -135,6 +161,9 @@ type AccountRelation = {
   es_contacto_facturacion: boolean;
   es_representante_legal: boolean;
   activo: boolean;
+  fecha_inicio: string | null;
+  fecha_fin: string | null;
+  notas: string | null;
 };
 type NewRelationDraft = {
   cuenta_id: string;
@@ -144,6 +173,9 @@ type NewRelationDraft = {
   es_contacto_facturacion: boolean;
   es_representante_legal: boolean;
   activo: boolean;
+  fecha_inicio: string;
+  fecha_fin: string;
+  notas: string;
 };
 
 type ContactEditState = {
@@ -199,6 +231,7 @@ const INITIAL_STATE: ContactEditState = {
     puesto: "",
     area: "",
     rol_decision: "",
+    estado: "",
     origen: "",
     notas: "",
     propietario_usuario_id: "",
@@ -207,15 +240,26 @@ const INITIAL_STATE: ContactEditState = {
     cuenta_id: "",
     nombre_comercial: "",
     razon_social: "",
+    alias: "",
     tipo_persona: "",
     tipo_cuenta: "empresa",
+    tipo: "empresa",
+    codigo_cuenta: "",
     rfc: "",
     industria: "",
     segmento: "",
+    tamano: "",
     sitio_web: "",
     correo_principal: "",
     telefono_principal: "",
+    correo: "",
+    telefono: "",
     notas: "",
+    necesidad_proposito: "",
+    tipo_establecimiento: "",
+    fecha_incorporacion: "",
+    latitud: "",
+    longitud: "",
   },
   relacion: {
     rol_en_cuenta: "",
@@ -225,6 +269,7 @@ const INITIAL_STATE: ContactEditState = {
     es_representante_legal: false,
     activo: true,
     fecha_inicio: "",
+    fecha_fin: "",
     notas: "",
   },
   extras: {
@@ -233,12 +278,25 @@ const INITIAL_STATE: ContactEditState = {
     metodo_pago: "",
     email_facturacion: "",
     pais: "MX",
+    clave_entidad: "",
     entidad: "",
+    clave_municipio: "",
     municipio: "",
+    clave_localidad: "",
+    localidad: "",
     tipo_vialidad: "",
     nombre_vialidad: "",
     numero_exterior: "",
+    letra_exterior: "",
+    edificio: "",
+    edificio_piso: "",
     numero_interior: "",
+    letra_interior: "",
+    tipo_asentamiento: "",
+    nombre_asentamiento: "",
+    tipo_centro_comercial: "",
+    corredor_industrial: "",
+    numero_local: "",
     codigo_postal: "",
   },
   extrasOpen: false,
@@ -429,6 +487,7 @@ function reducer(state: ContactEditState, action: ContactEditAction): ContactEdi
           puesto: readString(detail, "puesto"),
           area: readString(detail, "area"),
           rol_decision: readString(detail, "rol_decision"),
+          estado: readString(detail, "estado"),
           origen: readString(detail, "origen"),
           notas: readString(detail, "notes"),
           propietario_usuario_id: readString(detail, "propietario_usuario_id"),
@@ -438,15 +497,26 @@ function reducer(state: ContactEditState, action: ContactEditAction): ContactEdi
           cuenta_id: readString(detail, "cuenta_id"),
           nombre_comercial: readString(detail, "company_name"),
           razon_social: readString(detail, "razon_social"),
+          alias: readString(detail, "alias"),
           tipo_persona: (readString(detail, "persona_fisica_moral") as CuentaDraft["tipo_persona"]) || "",
           tipo_cuenta: readString(detail, "cuenta_tipo") || "empresa",
+          tipo: readString(detail, "tipo") || "empresa",
+          codigo_cuenta: readString(detail, "codigo_cuenta"),
           rfc: readString(detail, "rfc"),
           industria: readString(detail, "tipo_industria"),
           sitio_web: readString(detail, "website"),
           correo_principal: readString(detail, "email_facturacion"),
           telefono_principal: readString(detail, "telefono_e164"),
+          correo: readString(detail, "correo"),
+          telefono: readString(detail, "telefono"),
           notas: "",
           segmento: "",
+          tamano: readString(detail, "tamano"),
+          necesidad_proposito: readString(detail, "necesidad_proposito"),
+          tipo_establecimiento: readString(detail, "tipo_establecimiento"),
+          fecha_incorporacion: readString(detail, "fecha_incorporacion"),
+          latitud: readString(detail, "latitud"),
+          longitud: readString(detail, "longitud"),
         },
         relacion: {
           ...INITIAL_STATE.relacion,
@@ -457,6 +527,7 @@ function reducer(state: ContactEditState, action: ContactEditAction): ContactEdi
           es_representante_legal: readBool(detail, "es_representante_legal", false),
           activo: readBool(detail, "relacion_activa", true),
           fecha_inicio: "",
+          fecha_fin: readString(detail, "fecha_fin"),
           notas: "",
         },
         extras: {
@@ -466,12 +537,25 @@ function reducer(state: ContactEditState, action: ContactEditAction): ContactEdi
           metodo_pago: readString(detail, "metodo_pago"),
           email_facturacion: readString(detail, "email_facturacion"),
           pais: readString(detail, "pais") || "MX",
+          clave_entidad: readString(detail, "clave_entidad"),
           entidad: readString(detail, "entidad"),
+          clave_municipio: readString(detail, "clave_municipio"),
           municipio: readString(detail, "municipio"),
+          clave_localidad: readString(detail, "clave_localidad"),
+          localidad: readString(detail, "localidad"),
           tipo_vialidad: readString(detail, "tipo_vialidad"),
           nombre_vialidad: readString(detail, "nombre_vialidad"),
           numero_exterior: readString(detail, "numero_exterior"),
+          letra_exterior: readString(detail, "letra_exterior"),
+          edificio: readString(detail, "edificio"),
+          edificio_piso: readString(detail, "edificio_piso"),
           numero_interior: readString(detail, "numero_interior"),
+          letra_interior: readString(detail, "letra_interior"),
+          tipo_asentamiento: readString(detail, "tipo_asentamiento"),
+          nombre_asentamiento: readString(detail, "nombre_asentamiento"),
+          tipo_centro_comercial: readString(detail, "tipo_centro_comercial"),
+          corredor_industrial: readString(detail, "corredor_industrial"),
+          numero_local: readString(detail, "numero_local"),
           codigo_postal: readString(detail, "codigo_postal"),
         },
       };
@@ -582,6 +666,9 @@ export function ContactEditFlow({ open, onOpenChange, contactoId, onSaved }: Con
     es_contacto_facturacion: false,
     es_representante_legal: false,
     activo: true,
+    fecha_inicio: "",
+    fecha_fin: "",
+    notas: "",
   });
 
   React.useEffect(() => {
@@ -726,6 +813,9 @@ export function ContactEditFlow({ open, onOpenChange, contactoId, onSaved }: Con
             es_contacto_facturacion: Boolean(item.es_contacto_facturacion),
             es_representante_legal: Boolean(item.es_representante_legal),
             activo: item.activo === false ? false : true,
+            fecha_inicio: typeof item.fecha_inicio === "string" ? item.fecha_inicio : null,
+            fecha_fin: typeof item.fecha_fin === "string" ? item.fecha_fin : null,
+            notas: typeof item.notas === "string" ? item.notas : null,
           };
         })
         .filter((item): item is AccountRelation => item !== null);
@@ -826,6 +916,9 @@ export function ContactEditFlow({ open, onOpenChange, contactoId, onSaved }: Con
           es_contacto_facturacion: newRelation.es_contacto_facturacion,
           es_representante_legal: newRelation.es_representante_legal,
           activo: newRelation.activo,
+          fecha_inicio: newRelation.fecha_inicio || null,
+          fecha_fin: newRelation.fecha_fin || null,
+          notas: newRelation.notas.trim() || null,
         }),
       });
       const body = (await response.json().catch(() => ({}))) as { error?: string };
@@ -838,6 +931,9 @@ export function ContactEditFlow({ open, onOpenChange, contactoId, onSaved }: Con
         es_contacto_facturacion: false,
         es_representante_legal: false,
         activo: true,
+        fecha_inicio: "",
+        fecha_fin: "",
+        notas: "",
       });
       setRelationAccountQuery("");
       setRelationAccountResults([]);
@@ -956,6 +1052,9 @@ export function ContactEditFlow({ open, onOpenChange, contactoId, onSaved }: Con
               <Field label="Rol de decisión">
                 <Input value={state.persona.rol_decision} onChange={(e) => dispatch({ type: "persona/set", field: "rol_decision", value: e.target.value })} />
               </Field>
+              <Field label="Estado">
+                <Input value={state.persona.estado} onChange={(e) => dispatch({ type: "persona/set", field: "estado", value: e.target.value })} />
+              </Field>
             </div>
             <Field label="Notas">
               <Textarea value={state.persona.notas} onChange={(e) => dispatch({ type: "persona/set", field: "notas", value: e.target.value })} />
@@ -1017,13 +1116,22 @@ export function ContactEditFlow({ open, onOpenChange, contactoId, onSaved }: Con
           ) : null}
 
           {state.mode === "empresa_nueva" || state.mode === "persona_fisica_actividad_empresarial" ? (
-            <FormSection title="Empresa" description="Datos mínimos de la empresa (y fiscales opcionales abajo).">
+            <FormSection title="Empresa" description="Datos de la empresa que se persistirán.">
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                 <Field label="Nombre comercial">
                   <Input value={state.cuenta.nombre_comercial} onChange={(e) => dispatch({ type: "cuenta/set", field: "nombre_comercial", value: e.target.value })} />
                 </Field>
+                <Field label="Alias">
+                  <Input value={state.cuenta.alias} onChange={(e) => dispatch({ type: "cuenta/set", field: "alias", value: e.target.value })} />
+                </Field>
                 <Field label="Razón social">
                   <Input value={state.cuenta.razon_social} onChange={(e) => dispatch({ type: "cuenta/set", field: "razon_social", value: e.target.value })} />
+                </Field>
+                <Field label="Código de cuenta">
+                  <Input value={state.cuenta.codigo_cuenta} onChange={(e) => dispatch({ type: "cuenta/set", field: "codigo_cuenta", value: e.target.value })} />
+                </Field>
+                <Field label="Tipo">
+                  <Input value={state.cuenta.tipo} onChange={(e) => dispatch({ type: "cuenta/set", field: "tipo", value: e.target.value })} />
                 </Field>
                 <Field label="Tipo persona">
                   <select
@@ -1040,8 +1148,41 @@ export function ContactEditFlow({ open, onOpenChange, contactoId, onSaved }: Con
                 <Field label="RFC">
                   <Input value={state.cuenta.rfc} onChange={(e) => dispatch({ type: "cuenta/set", field: "rfc", value: e.target.value })} />
                 </Field>
+                <Field label="Tamaño">
+                  <Input value={state.cuenta.tamano} onChange={(e) => dispatch({ type: "cuenta/set", field: "tamano", value: e.target.value })} />
+                </Field>
                 <Field label="Sitio web">
                   <Input value={state.cuenta.sitio_web} onChange={(e) => dispatch({ type: "cuenta/set", field: "sitio_web", value: e.target.value })} />
+                </Field>
+                <Field label="Correo principal">
+                  <Input value={state.cuenta.correo_principal} onChange={(e) => dispatch({ type: "cuenta/set", field: "correo_principal", value: e.target.value })} />
+                </Field>
+                <Field label="Teléfono principal">
+                  <Input value={state.cuenta.telefono_principal} onChange={(e) => dispatch({ type: "cuenta/set", field: "telefono_principal", value: e.target.value })} />
+                </Field>
+                <Field label="Correo">
+                  <Input value={state.cuenta.correo} onChange={(e) => dispatch({ type: "cuenta/set", field: "correo", value: e.target.value })} />
+                </Field>
+                <Field label="Teléfono">
+                  <Input value={state.cuenta.telefono} onChange={(e) => dispatch({ type: "cuenta/set", field: "telefono", value: e.target.value })} />
+                </Field>
+                <Field label="Necesidad / propósito">
+                  <Input value={state.cuenta.necesidad_proposito} onChange={(e) => dispatch({ type: "cuenta/set", field: "necesidad_proposito", value: e.target.value })} />
+                </Field>
+                <Field label="Tipo de establecimiento">
+                  <Input value={state.cuenta.tipo_establecimiento} onChange={(e) => dispatch({ type: "cuenta/set", field: "tipo_establecimiento", value: e.target.value })} />
+                </Field>
+                <Field label="Fecha de incorporación">
+                  <Input type="date" value={state.cuenta.fecha_incorporacion} onChange={(e) => dispatch({ type: "cuenta/set", field: "fecha_incorporacion", value: e.target.value })} />
+                </Field>
+                <Field label="Latitud">
+                  <Input type="number" step="any" value={state.cuenta.latitud} onChange={(e) => dispatch({ type: "cuenta/set", field: "latitud", value: e.target.value })} />
+                </Field>
+                <Field label="Longitud">
+                  <Input type="number" step="any" value={state.cuenta.longitud} onChange={(e) => dispatch({ type: "cuenta/set", field: "longitud", value: e.target.value })} />
+                </Field>
+                <Field label="Notas">
+                  <Textarea value={state.cuenta.notas} onChange={(e) => dispatch({ type: "cuenta/set", field: "notas", value: e.target.value })} />
                 </Field>
               </div>
             </FormSection>
@@ -1055,6 +1196,15 @@ export function ContactEditFlow({ open, onOpenChange, contactoId, onSaved }: Con
                 </Field>
                 <Field label="Puesto en la empresa">
                   <Input value={state.relacion.puesto} onChange={(e) => dispatch({ type: "relacion/set", field: "puesto", value: e.target.value })} />
+                </Field>
+                <Field label="Fecha de inicio">
+                  <Input type="date" value={state.relacion.fecha_inicio} onChange={(e) => dispatch({ type: "relacion/set", field: "fecha_inicio", value: e.target.value })} />
+                </Field>
+                <Field label="Fecha de fin">
+                  <Input type="date" value={state.relacion.fecha_fin} onChange={(e) => dispatch({ type: "relacion/set", field: "fecha_fin", value: e.target.value })} />
+                </Field>
+                <Field label="Notas de relación">
+                  <Textarea value={state.relacion.notas} onChange={(e) => dispatch({ type: "relacion/set", field: "notas", value: e.target.value })} />
                 </Field>
               </div>
               <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-3">
@@ -1111,7 +1261,45 @@ export function ContactEditFlow({ open, onOpenChange, contactoId, onSaved }: Con
                           }
                         />
                       </Field>
+                      <Field label="Fecha de inicio">
+                        <Input
+                          type="date"
+                          value={relation.fecha_inicio ?? ""}
+                          onChange={(e) =>
+                            setRelations((prev) =>
+                              prev.map((item) =>
+                                item.id === relation.id ? { ...item, fecha_inicio: e.target.value } : item,
+                              ),
+                            )
+                          }
+                        />
+                      </Field>
+                      <Field label="Fecha de fin">
+                        <Input
+                          type="date"
+                          value={relation.fecha_fin ?? ""}
+                          onChange={(e) =>
+                            setRelations((prev) =>
+                              prev.map((item) =>
+                                item.id === relation.id ? { ...item, fecha_fin: e.target.value } : item,
+                              ),
+                            )
+                          }
+                        />
+                      </Field>
                     </div>
+                    <Field label="Notas">
+                      <Textarea
+                        value={relation.notas ?? ""}
+                        onChange={(e) =>
+                          setRelations((prev) =>
+                            prev.map((item) =>
+                              item.id === relation.id ? { ...item, notas: e.target.value } : item,
+                            ),
+                          )
+                        }
+                      />
+                    </Field>
                     <div className="mt-2 grid grid-cols-1 gap-2 md:grid-cols-3">
                       <label className="flex items-center gap-2 text-sm">
                         <Checkbox
@@ -1166,6 +1354,9 @@ export function ContactEditFlow({ open, onOpenChange, contactoId, onSaved }: Con
                             es_contacto_facturacion: relation.es_contacto_facturacion,
                             es_representante_legal: relation.es_representante_legal,
                             activo: relation.activo,
+                            fecha_inicio: relation.fecha_inicio,
+                            fecha_fin: relation.fecha_fin,
+                            notas: relation.notas,
                           })
                         }
                       >
@@ -1216,7 +1407,24 @@ export function ContactEditFlow({ open, onOpenChange, contactoId, onSaved }: Con
                       onChange={(e) => setNewRelation((prev) => ({ ...prev, puesto: e.target.value }))}
                     />
                   </Field>
+                  <Field label="Fecha de inicio">
+                    <Input
+                      type="date"
+                      value={newRelation.fecha_inicio}
+                      onChange={(e) => setNewRelation((prev) => ({ ...prev, fecha_inicio: e.target.value }))}
+                    />
+                  </Field>
+                  <Field label="Fecha de fin">
+                    <Input
+                      type="date"
+                      value={newRelation.fecha_fin}
+                      onChange={(e) => setNewRelation((prev) => ({ ...prev, fecha_fin: e.target.value }))}
+                    />
+                  </Field>
                 </div>
+                <Field label="Notas">
+                  <Textarea value={newRelation.notas} onChange={(e) => setNewRelation((prev) => ({ ...prev, notas: e.target.value }))} />
+                </Field>
                 {relationAccountLoading ? (
                   <p className="mt-2 text-xs text-muted-foreground">Buscando cuentas...</p>
                 ) : null}
@@ -1312,11 +1520,62 @@ export function ContactEditFlow({ open, onOpenChange, contactoId, onSaved }: Con
                   <Field label="País">
                     <Input value={state.extras.pais} onChange={(e) => dispatch({ type: "extras/set", field: "pais", value: e.target.value })} />
                   </Field>
+                  <Field label="Clave de entidad">
+                    <Input value={state.extras.clave_entidad} onChange={(e) => dispatch({ type: "extras/set", field: "clave_entidad", value: e.target.value })} />
+                  </Field>
                   <Field label="Entidad">
                     <Input value={state.extras.entidad} onChange={(e) => dispatch({ type: "extras/set", field: "entidad", value: e.target.value })} />
                   </Field>
+                  <Field label="Clave de municipio">
+                    <Input value={state.extras.clave_municipio} onChange={(e) => dispatch({ type: "extras/set", field: "clave_municipio", value: e.target.value })} />
+                  </Field>
                   <Field label="Municipio">
                     <Input value={state.extras.municipio} onChange={(e) => dispatch({ type: "extras/set", field: "municipio", value: e.target.value })} />
+                  </Field>
+                  <Field label="Clave de localidad">
+                    <Input value={state.extras.clave_localidad} onChange={(e) => dispatch({ type: "extras/set", field: "clave_localidad", value: e.target.value })} />
+                  </Field>
+                  <Field label="Localidad">
+                    <Input value={state.extras.localidad} onChange={(e) => dispatch({ type: "extras/set", field: "localidad", value: e.target.value })} />
+                  </Field>
+                  <Field label="Tipo de vialidad">
+                    <Input value={state.extras.tipo_vialidad} onChange={(e) => dispatch({ type: "extras/set", field: "tipo_vialidad", value: e.target.value })} />
+                  </Field>
+                  <Field label="Nombre de vialidad">
+                    <Input value={state.extras.nombre_vialidad} onChange={(e) => dispatch({ type: "extras/set", field: "nombre_vialidad", value: e.target.value })} />
+                  </Field>
+                  <Field label="Número exterior">
+                    <Input value={state.extras.numero_exterior} onChange={(e) => dispatch({ type: "extras/set", field: "numero_exterior", value: e.target.value })} />
+                  </Field>
+                  <Field label="Letra exterior">
+                    <Input value={state.extras.letra_exterior} onChange={(e) => dispatch({ type: "extras/set", field: "letra_exterior", value: e.target.value })} />
+                  </Field>
+                  <Field label="Edificio">
+                    <Input value={state.extras.edificio} onChange={(e) => dispatch({ type: "extras/set", field: "edificio", value: e.target.value })} />
+                  </Field>
+                  <Field label="Piso">
+                    <Input value={state.extras.edificio_piso} onChange={(e) => dispatch({ type: "extras/set", field: "edificio_piso", value: e.target.value })} />
+                  </Field>
+                  <Field label="Número interior">
+                    <Input value={state.extras.numero_interior} onChange={(e) => dispatch({ type: "extras/set", field: "numero_interior", value: e.target.value })} />
+                  </Field>
+                  <Field label="Letra interior">
+                    <Input value={state.extras.letra_interior} onChange={(e) => dispatch({ type: "extras/set", field: "letra_interior", value: e.target.value })} />
+                  </Field>
+                  <Field label="Tipo de asentamiento">
+                    <Input value={state.extras.tipo_asentamiento} onChange={(e) => dispatch({ type: "extras/set", field: "tipo_asentamiento", value: e.target.value })} />
+                  </Field>
+                  <Field label="Nombre de asentamiento">
+                    <Input value={state.extras.nombre_asentamiento} onChange={(e) => dispatch({ type: "extras/set", field: "nombre_asentamiento", value: e.target.value })} />
+                  </Field>
+                  <Field label="Tipo de centro comercial">
+                    <Input value={state.extras.tipo_centro_comercial} onChange={(e) => dispatch({ type: "extras/set", field: "tipo_centro_comercial", value: e.target.value })} />
+                  </Field>
+                  <Field label="Corredor industrial">
+                    <Input value={state.extras.corredor_industrial} onChange={(e) => dispatch({ type: "extras/set", field: "corredor_industrial", value: e.target.value })} />
+                  </Field>
+                  <Field label="Número local">
+                    <Input value={state.extras.numero_local} onChange={(e) => dispatch({ type: "extras/set", field: "numero_local", value: e.target.value })} />
                   </Field>
                   <Field label="Código postal">
                     <Input value={state.extras.codigo_postal} onChange={(e) => dispatch({ type: "extras/set", field: "codigo_postal", value: e.target.value })} />
