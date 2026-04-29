@@ -23,6 +23,10 @@ Lo que sigue abierto es el pulido evolutivo:
 - posibles endpoints nativos adicionales para relaciones
 - refinamiento de mobile y accesibilidad
 
+Documento de referencia:
+
+- [Mapa de campos por tabla](/var/www/talia/docs/Plan_personas_empresa_contactos/mapa_campos_por_tabla_crud_contactos_empresas.md)
+
 ## Regla de alineacion
 
 La UI debe alinearse con los campos persistidos en las tablas reales.

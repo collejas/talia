@@ -15,6 +15,10 @@ La maqueta ya coincide en gran parte con lo que quedo implementado en el panel:
 - el alta y la edicion muestran la experiencia con lenguaje de front
 - el layout real ya privilegia un panel amplio con resumen contextual
 
+Documento de referencia:
+
+- [Mapa de campos por tabla](/var/www/talia/docs/Plan_personas_empresa_contactos/mapa_campos_por_tabla_crud_contactos_empresas.md)
+
 ## Regla de alineacion
 
 La maqueta debe reflejar las tablas reales de la base de datos.

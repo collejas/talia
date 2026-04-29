@@ -18,6 +18,10 @@ Lo que sigue como iteracion futura no bloqueante:
 - mejor UX para sugerencias de duplicado
 - endpoint nativo adicional de relaciones si hiciera falta
 
+Documento de referencia:
+
+- [Mapa de campos por tabla](/var/www/talia/docs/Plan_personas_empresa_contactos/mapa_campos_por_tabla_crud_contactos_empresas.md)
+
 ## Regla de alineacion
 
 La propuesta tecnica debe partir de una sola regla:
