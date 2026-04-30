@@ -2,7 +2,7 @@
 
 import { type ChangeEvent, type FormEvent, useCallback, useEffect, useState } from "react"
 import { toast } from "sonner"
-import { ChevronDown, ChevronLeft, ChevronRight } from "lucide-react"
+import { ChevronLeft, ChevronRight } from "lucide-react"
 
 import { ProspeccionViewLayout } from "@/components/layouts/prospeccion-view-layout"
 import { Button } from "@/components/ui/button"
@@ -17,7 +17,6 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Checkbox } from "@/components/ui/checkbox"
-import { Badge } from "@/components/ui/badge"
 import { cn } from "@/lib/utils"
 import {
   Select,
@@ -27,14 +26,6 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Separator } from "@/components/ui/separator"
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table"
 import {
   crearBuscadorJob,
   guardarBuscadorProspectos,
@@ -75,7 +66,6 @@ const DEFAULT_FORM_STATE: FormState = {
 }
 
 const DEFAULT_RESULTS_LIMIT = 1000
-const RESULTS_PAGE_SIZES = [200, 500, 1000] as const
 const DEFAULT_JOBS_PAGE_SIZE = 28
 const JOBS_PAGE_SIZE_OPTIONS = [10, 20, 30, 40, 50] as const
 const EXCLUDE_DOMAIN_SELECT_PLACEHOLDER = "__exclude_domain_placeholder__"
@@ -678,125 +668,92 @@ function BuscadorView() {
           ) : null}
           {jobs.length ? (
             <ScrollArea className="h-[360px] pr-2">
-              <div className="space-y-3">
+              <div className="space-y-1">
                 {jobs.map((job) => {
                   const domainInfo = getHistoryDomainGroup(job)
-                  const stageThreeReady = RESULT_READY_STATUSES.has(job.status)
                   const isSelectedJob = selectedJobId === job.id
+                  const jobReady = RESULT_READY_STATUSES.has(job.status)
                   return (
-                    <div key={job.id} className="rounded-lg border">
+                    <div key={job.id}>
                       <button
                         type="button"
-                        className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left hover:bg-muted/40"
+                        className={cn(
+                          "flex w-full items-center justify-between gap-3 px-2 py-2 text-left hover:bg-muted/40",
+                          isSelectedJob && "bg-muted/50",
+                        )}
                         onClick={() => handleSelectJob(job)}
                       >
-                        <div className="space-y-1">
-                          <p className="text-sm font-semibold break-all">Dominio: {domainInfo.label}</p>
-                          <p className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                            <span>Estado:</span>
-                            <span
-                              className={cn(
-                                "rounded-md border px-1.5 py-0.5 text-[11px] font-medium",
-                                getStatusPillClasses(job.status),
-                              )}
-                            >
-                              {STATUS_LABELS[job.status]}
-                            </span>
-                            <span>Resultados encontrados:</span>
-                            <span
-                              className={cn(
-                                "rounded-md border px-1.5 py-0.5 text-[11px] font-semibold",
-                                getResultsCountPillClasses(job.total ?? 0),
-                              )}
-                            >
-                              {job.total ?? 0}
-                            </span>
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-medium">{domainInfo.label}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {STATUS_LABELS[job.status]} · {job.total ?? 0} resultados
                           </p>
                         </div>
-                        <ChevronDown
-                          className={cn("h-4 w-4 shrink-0 transition-transform", isSelectedJob && "rotate-180")}
-                        />
+                        <span
+                          className={cn(
+                            "shrink-0 rounded-md border px-1.5 py-0.5 text-[11px] font-medium",
+                            getStatusPillClasses(job.status),
+                          )}
+                        >
+                          {STATUS_LABELS[job.status]}
+                        </span>
                       </button>
                       {isSelectedJob ? (
-                        <div className="border-t px-3 py-3">
-                          {!stageThreeReady ? (
+                        <div className="ml-4 border-l pl-3 py-2">
+                          {!jobReady ? (
                             <p className="text-sm text-muted-foreground">Este job aún no tiene resultados finales.</p>
-                          ) : resultsLoading && selectedJobId === job.id ? (
+                          ) : resultsLoading ? (
                             <p className="text-sm text-muted-foreground">Cargando resultados…</p>
                           ) : !results.length ? (
-                            <p className="text-sm text-muted-foreground">No hay resultados cargados todavía.</p>
+                            <p className="text-sm text-muted-foreground">No hay resultados para mostrar.</p>
                           ) : (
-                            <div className="space-y-3">
-                              <div className="flex items-center justify-end">
+                            <div className="space-y-2">
+                              <div className="flex items-center gap-2">
+                                <Checkbox
+                                  checked={
+                                    selectedIds.size > 0 &&
+                                    selectedIds.size ===
+                                      results.filter((item) => typeof item.id === "string" && item.id.trim().length).length
+                                  }
+                                  onCheckedChange={toggleSelectAll}
+                                  aria-label="Seleccionar todos"
+                                />
                                 <Button
                                   type="button"
+                                  size="sm"
                                   onClick={handleSaveProspectos}
                                   disabled={!jobInfo || savingProspectos || selectedIds.size === 0}
                                 >
                                   {savingProspectos ? "Guardando..." : "Guardar como prospectos"}
                                 </Button>
                               </div>
-                              <ScrollArea className="h-[420px] rounded-md border">
-                                <Table>
-                                  <TableHeader className="sticky top-0 z-20 bg-background">
-                                    <TableRow>
-                                      <TableHead className="w-10 bg-background">
-                                        <Checkbox
-                                          checked={
-                                            selectedIds.size > 0 &&
-                                            selectedIds.size ===
-                                              results.filter((item) => typeof item.id === "string" && item.id.trim().length).length
-                                          }
-                                          onCheckedChange={toggleSelectAll}
-                                          aria-label="Seleccionar todos"
-                                        />
-                                      </TableHead>
-                                      <TableHead className="bg-background">Correo</TableHead>
-                                      <TableHead className="bg-background">Nombre</TableHead>
-                                      <TableHead className="bg-background">Puesto</TableHead>
-                                      <TableHead className="bg-background">Teléfono</TableHead>
-                                      <TableHead className="bg-background">Ext.</TableHead>
-                                      <TableHead className="bg-background">Dirección</TableHead>
-                                      <TableHead className="bg-background">URL origen</TableHead>
-                                    </TableRow>
-                                  </TableHeader>
-                                  <TableBody>
-                                    {results.length === 0 ? (
-                                      <TableRow>
-                                        <TableCell colSpan={8} className="text-center text-sm text-muted-foreground">
-                                          No hay resultados para mostrar.
-                                        </TableCell>
-                                      </TableRow>
-                                    ) : (
-                                      results.map((item, index) => (
-                                        <TableRow key={`${item.email}-${index}`}>
-                                          <TableCell>
-                                            <Checkbox
-                                              checked={item.id ? selectedIds.has(item.id) : false}
-                                              onCheckedChange={(checked) => toggleSelect(item.id ?? undefined, checked)}
-                                              disabled={!item.id}
-                                              aria-label="Seleccionar contacto"
-                                            />
-                                          </TableCell>
-                                          <TableCell>
-                                            <span className="font-medium">{item.email}</span>
-                                          </TableCell>
-                                          <TableCell>{item.name || "—"}</TableCell>
-                                          <TableCell>{item.position || "—"}</TableCell>
-                                          <TableCell>{item.phone || "—"}</TableCell>
-                                          <TableCell>{item.extension || "—"}</TableCell>
-                                          <TableCell className="max-w-[200px] truncate">{item.address || "—"}</TableCell>
-                                          <TableCell className="max-w-[240px] truncate">
-                                            <a href={item.source_url} target="_blank" rel="noreferrer" className="text-primary underline">
-                                              {item.source_url}
-                                            </a>
-                                          </TableCell>
-                                        </TableRow>
-                                      ))
-                                    )}
-                                  </TableBody>
-                                </Table>
-                              </ScrollArea>
+                              <div className="space-y-1">
+                                {results.map((item, index) => (
+                                  <div key={`${item.email}-${index}`} className="flex items-start gap-2 text-sm">
+                                    <Checkbox
+                                      checked={item.id ? selectedIds.has(item.id) : false}
+                                      onCheckedChange={(checked) => toggleSelect(item.id ?? undefined, checked)}
+                                      disabled={!item.id}
+                                      aria-label="Seleccionar contacto"
+                                    />
+                                    <div className="min-w-0 flex-1">
+                                      <div className="flex flex-wrap gap-x-3 gap-y-1 text-sm">
+                                        <span className="font-medium">{item.email}</span>
+                                        <span className="text-muted-foreground">{item.name || "—"}</span>
+                                        <span className="text-muted-foreground">{item.position || "—"}</span>
+                                        <span className="text-muted-foreground">{item.phone || "—"}</span>
+                                        <span className="text-muted-foreground">{item.extension || "—"}</span>
+                                      </div>
+                                      <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
+                                        <span>{item.address || "—"}</span>
+                                        <a href={item.source_url} target="_blank" rel="noreferrer" className="text-primary underline">
+                                          {item.source_url}
+                                        </a>
+                                      </div>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
                             </div>
                           )}
                         </div>
@@ -851,17 +808,6 @@ function getStatusPillClasses(status: BuscadorJobStatus): string {
     default:
       return "border-slate-300 bg-slate-100 text-slate-800"
   }
-}
-
-function getResultsCountPillClasses(total: number): string {
-  const safe = Number.isFinite(total) ? Math.max(0, total) : 0
-  const scaled = Math.min(safe, 50)
-
-  if (scaled === 0) return "border-zinc-300 bg-zinc-100 text-zinc-800"
-  if (scaled <= 10) return "border-red-300 bg-red-100 text-red-800"
-  if (scaled <= 20) return "border-orange-300 bg-orange-100 text-orange-800"
-  if (scaled <= 35) return "border-amber-300 bg-amber-100 text-amber-800"
-  return "border-emerald-300 bg-emerald-100 text-emerald-800"
 }
 
 function NumberField({
