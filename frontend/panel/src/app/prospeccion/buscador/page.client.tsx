@@ -1,8 +1,8 @@
 "use client"
 
-import { type ChangeEvent, type FormEvent, useCallback, useEffect, useMemo, useState } from "react"
+import { type ChangeEvent, type FormEvent, useCallback, useEffect, useState } from "react"
 import { toast } from "sonner"
-import { ChevronDown, ChevronLeft, ChevronRight, RefreshCw, Trash2 } from "lucide-react"
+import { ChevronDown, ChevronLeft, ChevronRight } from "lucide-react"
 
 import { ProspeccionViewLayout } from "@/components/layouts/prospeccion-view-layout"
 import { Button } from "@/components/ui/button"
@@ -37,7 +37,6 @@ import {
 } from "@/components/ui/table"
 import {
   crearBuscadorJob,
-  eliminarBuscadorJob,
   guardarBuscadorProspectos,
   obtenerBuscadorJob,
   obtenerBuscadorResultados,
@@ -116,8 +115,6 @@ function BuscadorView() {
   const [lastResultsJobId, setLastResultsJobId] = useState<string | null>(null)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [segmento, setSegmento] = useState("")
-  const [domainFilter, setDomainFilter] = useState("all")
-  const [excludedDomains, setExcludedDomains] = useState<Set<string>>(new Set())
   const [savingProspectos, setSavingProspectos] = useState(false)
   const [jobs, setJobs] = useState<BuscadorJob[]>([])
   const [jobsLoading, setJobsLoading] = useState(false)
@@ -126,13 +123,7 @@ function BuscadorView() {
   const [jobsOffset, setJobsOffset] = useState(0)
   const [jobsPageSize, setJobsPageSize] = useState(DEFAULT_JOBS_PAGE_SIZE)
   const [selectedJobId, setSelectedJobId] = useState<string | null>(null)
-  const [deletingJobId, setDeletingJobId] = useState<string | null>(null)
 
-  const totalResultsCount = resultsTotal || jobInfo?.total || 0
-  const pageStart = results.length ? resultsOffset + 1 : 0
-  const pageEnd = resultsOffset + results.length
-  const hasPreviousPage = resultsOffset > 0
-  const hasNextPage = totalResultsCount ? pageEnd < totalResultsCount : results.length === resultsLimit
   const jobsPageStart = jobs.length ? jobsOffset + 1 : 0
   const jobsPageEnd = jobsOffset + jobs.length
   const jobsTotalPages = Math.max(1, Math.ceil(jobsTotal / jobsPageSize))
@@ -145,49 +136,6 @@ function BuscadorView() {
       : jobsLoading
         ? "Cargando historial…"
         : "Sin ejecuciones registradas."
-
-  const getEmailDomain = useCallback((email: string | null | undefined): string => {
-    const normalized = (email || "").trim().toLowerCase()
-    const atIndex = normalized.lastIndexOf("@")
-    if (atIndex <= 0 || atIndex >= normalized.length - 1) return ""
-    return normalized
-      .slice(atIndex + 1)
-      .trim()
-      .replace(/[)>.,;:]+$/g, "")
-      .replace(/^\(+/, "")
-  }, [])
-
-  const domainOptions = useMemo(() => {
-    const counts = new Map<string, number>()
-    for (const item of results) {
-      const emailDomain = getEmailDomain(item.email)
-      if (emailDomain) counts.set(emailDomain, (counts.get(emailDomain) ?? 0) + 1)
-    }
-    return Array.from(counts.entries())
-      .filter(([, count]) => count > 2)
-      .sort((a, b) => {
-        if (b[1] !== a[1]) return b[1] - a[1]
-        return a[0].localeCompare(b[0])
-      })
-      .map(([domain, count]) => ({ domain, count }))
-  }, [getEmailDomain, results])
-
-  const filteredResults = useMemo(() => {
-    if (domainFilter === "all") return results
-    return results.filter((item) => {
-      return getEmailDomain(item.email) === domainFilter
-    })
-  }, [domainFilter, getEmailDomain, results])
-
-  const excludedDomainList = useMemo(
-    () => Array.from(excludedDomains).sort((a, b) => a.localeCompare(b, "es")),
-    [excludedDomains]
-  )
-
-  const availableDomainsToExclude = useMemo(
-    () => domainOptions.filter((item) => !excludedDomains.has(item.domain)),
-    [domainOptions, excludedDomains]
-  )
 
   const handleInputChange = (key: keyof FormState) => (event: ChangeEvent<HTMLInputElement>) => {
     const value = event.target.value
@@ -325,7 +273,6 @@ function BuscadorView() {
     setResultsTotal(0)
     setResultsOffset(0)
     setSelectedIds(new Set())
-    setExcludedDomains(new Set())
 
     try {
       const payload = buildPayload()
@@ -407,9 +354,7 @@ function BuscadorView() {
     setJobInfo(null)
     setLastResultsJobId(null)
     setSelectedIds(new Set())
-    setExcludedDomains(new Set())
     setSegmento("")
-    setDomainFilter("all")
     setSelectedJobId(null)
     setResultsLoading(false)
   }
@@ -423,7 +368,6 @@ function BuscadorView() {
       setResults([])
       setResultsTotal(job.total ?? 0)
       setSelectedIds(new Set())
-      setExcludedDomains(new Set())
       if (!RESULT_READY_STATUSES.has(job.status)) {
         setLastResultsJobId(null)
         setResultsLoading(false)
@@ -436,35 +380,10 @@ function BuscadorView() {
     [loadJobResults],
   )
 
-  const handleDeleteJob = async (job: BuscadorJob) => {
-    if (deletingJobId) return
-    setDeletingJobId(job.id)
-    try {
-      await eliminarBuscadorJob(job.id)
-      toast.success("Búsqueda eliminada.")
-      if (selectedJobId === job.id) {
-        handleClearResults()
-        setJobInfo(null)
-        setSelectedJobId(null)
-        setSegmento("")
-        setLastResultsJobId(null)
-        setErrorMessage(null)
-      }
-      const nextOffset =
-        jobsOffset > 0 && jobs.length <= 1 ? Math.max(0, jobsOffset - jobsPageSize) : jobsOffset
-      void loadJobs(nextOffset)
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "No se pudo eliminar la búsqueda."
-      toast.error(message)
-    } finally {
-      setDeletingJobId(null)
-    }
-  }
-
   const toggleSelectAll = (checked: boolean | "indeterminate") => {
-    if (!filteredResults.length) return
+    if (!results.length) return
     if (checked) {
-      const ids = filteredResults
+      const ids = results
         .map((result) => result.id?.trim())
         .filter((value): value is string => Boolean(value))
       setSelectedIds(new Set(ids))
@@ -489,27 +408,11 @@ function BuscadorView() {
   const handleSaveProspectos = async () => {
     if (!jobInfo) return
     const segmentoValue = segmento.trim() || undefined
-    const allIds = (selectedIds.size ? Array.from(selectedIds) : [])
+    const ids = Array.from(selectedIds)
       .map((value) => value.trim())
       .filter((value) => value.length > 0)
-    if (!allIds.length) {
-      toast.error("Selecciona al menos un contacto para guardarlo como prospecto.")
-      return
-    }
-
-    const idToDomain = new Map<string, string>()
-    for (const item of results) {
-      if (!item.id) continue
-      idToDomain.set(item.id, getEmailDomain(item.email))
-    }
-    const ids = allIds.filter((id) => {
-      if (!excludedDomains.size) return true
-      const domain = idToDomain.get(id)
-      if (!domain) return true
-      return !excludedDomains.has(domain)
-    })
     if (!ids.length) {
-      toast.error("Con los dominios excluidos no quedan contactos para guardar.")
+      toast.error("Selecciona al menos un contacto para guardarlo como prospecto.")
       return
     }
     setSavingProspectos(true)
@@ -526,46 +429,6 @@ function BuscadorView() {
     } finally {
       setSavingProspectos(false)
     }
-  }
-
-  const handleResultsLimitChange = (value: string) => {
-    const parsed = Number(value)
-    if (!Number.isFinite(parsed) || parsed <= 0) {
-      return
-    }
-    setResultsLimit(parsed)
-    setResultsOffset(0)
-    if (jobInfo?.status === "completed") {
-      void loadJobResults(jobInfo, { limit: parsed, offset: 0, notify: false })
-    }
-  }
-
-  useEffect(() => {
-    if (domainFilter === "all") return
-    if (!domainOptions.some((item) => item.domain === domainFilter)) {
-      setDomainFilter("all")
-    }
-  }, [domainFilter, domainOptions])
-
-  useEffect(() => {
-    setExcludedDomains((prev) => {
-      if (!prev.size) return prev
-      const valid = new Set(domainOptions.map((item) => item.domain))
-      const next = new Set(Array.from(prev).filter((domain) => valid.has(domain)))
-      return next.size === prev.size ? prev : next
-    })
-  }, [domainOptions])
-
-  const handleNextPage = () => {
-    if (!jobInfo || !hasNextPage) return
-    const nextOffset = resultsOffset + resultsLimit
-    void loadJobResults(jobInfo, { offset: nextOffset, notify: false })
-  }
-
-  const handlePreviousPage = () => {
-    if (!jobInfo || !hasPreviousPage) return
-    const previousOffset = Math.max(resultsOffset - resultsLimit, 0)
-    void loadJobResults(jobInfo, { offset: previousOffset, notify: false })
   }
 
   const handleJobsNextPage = () => {
@@ -595,15 +458,6 @@ function BuscadorView() {
     setJobsPageSize(safeSize)
     setJobsOffset(0)
     void loadJobs(0, safeSize)
-  }
-
-  const handleClearResults = () => {
-    setResults([])
-    setResultsTotal(0)
-    setResultsOffset(0)
-    setDomainFilter("all")
-    setSelectedIds(new Set())
-    setExcludedDomains(new Set())
   }
 
   return (
@@ -827,7 +681,6 @@ function BuscadorView() {
               <div className="space-y-3">
                 {jobs.map((job) => {
                   const domainInfo = getHistoryDomainGroup(job)
-                  const crawl = job.stats?.crawl_metrics ?? null
                   const stageThreeReady = RESULT_READY_STATUSES.has(job.status)
                   const isSelectedJob = selectedJobId === job.id
                   return (
@@ -865,237 +718,87 @@ function BuscadorView() {
                         />
                       </button>
                       {isSelectedJob ? (
-                        <div className="border-t px-3 py-3 space-y-3">
-                          <div className="grid gap-2 text-xs text-muted-foreground sm:grid-cols-2 lg:grid-cols-5">
-                            <p>
-                              Dominios únicos:{" "}
-                              <span className="font-medium text-foreground">{job.stats?.unique_email_domains ?? 0}</span>
-                            </p>
-                            <p>
-                              Hosts explorados:{" "}
-                              <span className="font-medium text-foreground">{job.stats?.unique_source_hosts ?? 0}</span>
-                            </p>
-                            <p>
-                              Páginas visitadas:{" "}
-                              <span className="font-medium text-foreground">{Number(crawl?.pages_visited ?? 0)}</span>
-                            </p>
-                            <p>
-                              HTTP 403/429:{" "}
-                              <span className="font-medium text-foreground">
-                                {Number(crawl?.status_403 ?? 0)} / {Number(crawl?.status_429 ?? 0)}
-                              </span>
-                            </p>
-                            <p>
-                              Tasa correos/página:{" "}
-                              <span className="font-medium text-foreground">{Number(crawl?.emails_new_rate ?? 0)}</span>
-                            </p>
-                          </div>
-                          <div className="flex items-center justify-end">
-                            <Button
-                              type="button"
-                              size="icon"
-                              variant="ghost"
-                              aria-label="Eliminar búsqueda"
-                              onClick={() => handleDeleteJob(job)}
-                              disabled={deletingJobId === job.id}
-                              className="text-destructive hover:text-destructive"
-                            >
-                              {deletingJobId === job.id ? (
-                                <RefreshCw className="h-4 w-4 animate-spin" />
-                              ) : (
-                                <Trash2 className="h-4 w-4" />
-                              )}
-                            </Button>
-                          </div>
-                          <div className="rounded-md border">
-                            <div className="flex flex-col gap-2 border-b px-3 py-2 lg:flex-row lg:items-center lg:justify-between">
-                              <p className="text-sm font-medium">Resultados</p>
-                              <p className="text-xs text-muted-foreground">
-                                {resultsLoading
-                                  ? "Cargando resultados…"
-                                  : totalResultsCount
-                                    ? `Mostrando ${pageStart}-${pageEnd} de ${totalResultsCount} registros${domainFilter === "all" ? "" : ` · filtrados: ${filteredResults.length}`}.`
-                                    : `Mostrando ${filteredResults.length} registros.`}
-                              </p>
-                            </div>
-                            {!stageThreeReady ? (
-                              <p className="p-3 text-sm text-muted-foreground">Este job aún no tiene resultados finales.</p>
-                            ) : resultsLoading && selectedJobId === job.id ? (
-                              <p className="p-3 text-sm text-muted-foreground">Cargando resultados…</p>
-                            ) : !results.length ? (
-                              <p className="p-3 text-sm text-muted-foreground">No hay resultados cargados todavía.</p>
-                            ) : (
-                              <div className="space-y-4 p-3">
-                                <div className="flex flex-wrap items-center gap-2">
-                                  <Button
-                                    type="button"
-                                    onClick={handleSaveProspectos}
-                                    disabled={!jobInfo || savingProspectos || selectedIds.size === 0}
-                                  >
-                                    {savingProspectos ? "Guardando..." : "Guardar como prospectos"}
-                                  </Button>
-                                  <div className="flex items-center gap-2">
-                                    <span className="text-sm text-muted-foreground">Dominio de correo</span>
-                                    <Select value={domainFilter} onValueChange={setDomainFilter}>
-                                      <SelectTrigger className="w-[180px]">
-                                        <SelectValue placeholder="Todos los dominios" />
-                                      </SelectTrigger>
-                                      <SelectContent>
-                                        <SelectItem value="all">Todos los dominios</SelectItem>
-                                        {domainOptions.map((item) => (
-                                          <SelectItem key={item.domain} value={item.domain}>
-                                            {item.domain} ({item.count})
-                                          </SelectItem>
-                                        ))}
-                                      </SelectContent>
-                                    </Select>
-                                  </div>
-                                  <div className="flex items-center gap-2">
-                                    <span className="text-sm text-muted-foreground">Excluir al guardar</span>
-                                    <div className="w-[250px] space-y-2">
-                                      <Select
-                                        value={EXCLUDE_DOMAIN_SELECT_PLACEHOLDER}
-                                        onValueChange={(value) => {
-                                          if (value === EXCLUDE_DOMAIN_SELECT_PLACEHOLDER) return
-                                          setExcludedDomains((prev) => new Set(prev).add(value))
-                                        }}
-                                        disabled={!availableDomainsToExclude.length}
-                                      >
-                                        <SelectTrigger className="w-[180px]">
-                                          <SelectValue placeholder="Selecciona dominio para excluir" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                          {availableDomainsToExclude.map((item) => (
-                                            <SelectItem key={`exclude-option-${item.domain}`} value={item.domain}>
-                                              {item.domain} ({item.count})
-                                            </SelectItem>
-                                          ))}
-                                        </SelectContent>
-                                      </Select>
-                                      {excludedDomainList.length ? (
-                                        <div className="flex flex-wrap gap-1">
-                                          {excludedDomainList.map((domain) => (
-                                            <Badge
-                                              key={`excluded-badge-${domain}`}
-                                              variant="secondary"
-                                              className="cursor-pointer"
-                                              onClick={() =>
-                                                setExcludedDomains((prev) => {
-                                                  const next = new Set(prev)
-                                                  next.delete(domain)
-                                                  return next
-                                                })
-                                              }
-                                            >
-                                              {domain} x
-                                            </Badge>
-                                          ))}
-                                        </div>
-                                      ) : null}
-                                    </div>
-                                  </div>
-                                  <div className="flex items-center gap-2">
-                                    <span className="text-sm text-muted-foreground">Registros por página</span>
-                                    <Select value={String(resultsLimit)} onValueChange={handleResultsLimitChange}>
-                                      <SelectTrigger className="w-[120px]">
-                                        <SelectValue placeholder="Límite" />
-                                      </SelectTrigger>
-                                      <SelectContent>
-                                        {RESULTS_PAGE_SIZES.map((size) => (
-                                          <SelectItem key={size} value={String(size)}>
-                                            {size}
-                                          </SelectItem>
-                                        ))}
-                                      </SelectContent>
-                                    </Select>
-                                  </div>
-                                  <div className="flex items-center gap-2">
-                                    <Button
-                                      type="button"
-                                      variant="outline"
-                                      size="sm"
-                                      onClick={handlePreviousPage}
-                                      disabled={!hasPreviousPage || resultsLoading}
-                                    >
-                                      Anterior
-                                    </Button>
-                                    <Button
-                                      type="button"
-                                      variant="outline"
-                                      size="sm"
-                                      onClick={handleNextPage}
-                                      disabled={!hasNextPage || resultsLoading}
-                                    >
-                                      Siguiente
-                                    </Button>
-                                  </div>
-                                </div>
-                                <ScrollArea className="h-[420px] rounded-md border">
-                                  <Table>
-                                    <TableHeader className="sticky top-0 z-20 bg-background">
+                        <div className="border-t px-3 py-3">
+                          {!stageThreeReady ? (
+                            <p className="text-sm text-muted-foreground">Este job aún no tiene resultados finales.</p>
+                          ) : resultsLoading && selectedJobId === job.id ? (
+                            <p className="text-sm text-muted-foreground">Cargando resultados…</p>
+                          ) : !results.length ? (
+                            <p className="text-sm text-muted-foreground">No hay resultados cargados todavía.</p>
+                          ) : (
+                            <div className="space-y-3">
+                              <div className="flex items-center justify-end">
+                                <Button
+                                  type="button"
+                                  onClick={handleSaveProspectos}
+                                  disabled={!jobInfo || savingProspectos || selectedIds.size === 0}
+                                >
+                                  {savingProspectos ? "Guardando..." : "Guardar como prospectos"}
+                                </Button>
+                              </div>
+                              <ScrollArea className="h-[420px] rounded-md border">
+                                <Table>
+                                  <TableHeader className="sticky top-0 z-20 bg-background">
+                                    <TableRow>
+                                      <TableHead className="w-10 bg-background">
+                                        <Checkbox
+                                          checked={
+                                            selectedIds.size > 0 &&
+                                            selectedIds.size ===
+                                              results.filter((item) => typeof item.id === "string" && item.id.trim().length).length
+                                          }
+                                          onCheckedChange={toggleSelectAll}
+                                          aria-label="Seleccionar todos"
+                                        />
+                                      </TableHead>
+                                      <TableHead className="bg-background">Correo</TableHead>
+                                      <TableHead className="bg-background">Nombre</TableHead>
+                                      <TableHead className="bg-background">Puesto</TableHead>
+                                      <TableHead className="bg-background">Teléfono</TableHead>
+                                      <TableHead className="bg-background">Ext.</TableHead>
+                                      <TableHead className="bg-background">Dirección</TableHead>
+                                      <TableHead className="bg-background">URL origen</TableHead>
+                                    </TableRow>
+                                  </TableHeader>
+                                  <TableBody>
+                                    {results.length === 0 ? (
                                       <TableRow>
-                                        <TableHead className="w-10 bg-background">
-                                          <Checkbox
-                                            checked={
-                                              selectedIds.size > 0 &&
-                                              selectedIds.size ===
-                                                filteredResults.filter(
-                                                  (item) => typeof item.id === "string" && item.id.trim().length,
-                                                ).length
-                                            }
-                                            onCheckedChange={toggleSelectAll}
-                                            aria-label="Seleccionar todos"
-                                          />
-                                        </TableHead>
-                                        <TableHead className="bg-background">Correo</TableHead>
-                                        <TableHead className="bg-background">Nombre</TableHead>
-                                        <TableHead className="bg-background">Puesto</TableHead>
-                                        <TableHead className="bg-background">Teléfono</TableHead>
-                                        <TableHead className="bg-background">Ext.</TableHead>
-                                        <TableHead className="bg-background">Dirección</TableHead>
-                                        <TableHead className="bg-background">URL origen</TableHead>
+                                        <TableCell colSpan={8} className="text-center text-sm text-muted-foreground">
+                                          No hay resultados para mostrar.
+                                        </TableCell>
                                       </TableRow>
-                                    </TableHeader>
-                                    <TableBody>
-                                      {filteredResults.length === 0 ? (
-                                        <TableRow>
-                                          <TableCell colSpan={8} className="text-center text-sm text-muted-foreground">
-                                            No hay resultados para el dominio seleccionado.
+                                    ) : (
+                                      results.map((item, index) => (
+                                        <TableRow key={`${item.email}-${index}`}>
+                                          <TableCell>
+                                            <Checkbox
+                                              checked={item.id ? selectedIds.has(item.id) : false}
+                                              onCheckedChange={(checked) => toggleSelect(item.id ?? undefined, checked)}
+                                              disabled={!item.id}
+                                              aria-label="Seleccionar contacto"
+                                            />
+                                          </TableCell>
+                                          <TableCell>
+                                            <span className="font-medium">{item.email}</span>
+                                          </TableCell>
+                                          <TableCell>{item.name || "—"}</TableCell>
+                                          <TableCell>{item.position || "—"}</TableCell>
+                                          <TableCell>{item.phone || "—"}</TableCell>
+                                          <TableCell>{item.extension || "—"}</TableCell>
+                                          <TableCell className="max-w-[200px] truncate">{item.address || "—"}</TableCell>
+                                          <TableCell className="max-w-[240px] truncate">
+                                            <a href={item.source_url} target="_blank" rel="noreferrer" className="text-primary underline">
+                                              {item.source_url}
+                                            </a>
                                           </TableCell>
                                         </TableRow>
-                                      ) : (
-                                        filteredResults.map((item, index) => (
-                                          <TableRow key={`${item.email}-${index}`}>
-                                            <TableCell>
-                                              <Checkbox
-                                                checked={item.id ? selectedIds.has(item.id) : false}
-                                                onCheckedChange={(checked) => toggleSelect(item.id ?? undefined, checked)}
-                                                disabled={!item.id}
-                                                aria-label="Seleccionar contacto"
-                                              />
-                                            </TableCell>
-                                            <TableCell>
-                                              <span className="font-medium">{item.email}</span>
-                                            </TableCell>
-                                            <TableCell>{item.name || "—"}</TableCell>
-                                            <TableCell>{item.position || "—"}</TableCell>
-                                            <TableCell>{item.phone || "—"}</TableCell>
-                                            <TableCell>{item.extension || "—"}</TableCell>
-                                            <TableCell className="max-w-[200px] truncate">{item.address || "—"}</TableCell>
-                                            <TableCell className="max-w-[240px] truncate">
-                                              <a href={item.source_url} target="_blank" rel="noreferrer" className="text-primary underline">
-                                                {item.source_url}
-                                              </a>
-                                            </TableCell>
-                                          </TableRow>
-                                        ))
-                                      )}
-                                    </TableBody>
-                                  </Table>
-                                </ScrollArea>
-                              </div>
-                            )}
-                          </div>
+                                      ))
+                                    )}
+                                  </TableBody>
+                                </Table>
+                              </ScrollArea>
+                            </div>
+                          )}
                         </div>
                       ) : null}
                     </div>
