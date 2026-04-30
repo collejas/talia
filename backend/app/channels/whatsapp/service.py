@@ -228,7 +228,10 @@ async def _sync_inbound_to_prospeccion_log(
         return False
 
     try:
-        prospecto = await repo.worker_find_prospecto_by_contacto(contacto_id=contact_uuid)
+        prospecto = await repo.worker_find_prospecto_by_contacto(
+            contacto_id=contact_uuid,
+            organizacion_id=organizacion_id,
+        )
     except CRMRepositoryError as exc:
         log_event(
             logger,
@@ -245,6 +248,7 @@ async def _sync_inbound_to_prospeccion_log(
             try:
                 latest_envios_by_phone = await repo.worker_get_latest_envios_by_phones(
                     phone_values=set(phone_candidates),
+                    organizacion_id=organizacion_id,
                     canal="whatsapp",
                 )
             except CRMRepositoryError as exc:
@@ -277,7 +281,8 @@ async def _sync_inbound_to_prospeccion_log(
         if phone_candidates:
             try:
                 latest_prospectos_by_phone = await repo.worker_get_latest_prospectos_by_phones(
-                    phone_values=set(phone_candidates)
+                    phone_values=set(phone_candidates),
+                    organizacion_id=organizacion_id,
                 )
             except CRMRepositoryError as exc:
                 log_event(
@@ -451,6 +456,7 @@ async def _resolve_prospeccion_prospecto_id(
     *,
     repo: CRMRepository,
     contact_id: str,
+    organizacion_id: UUID | None,
     message: schemas.WhatsAppIncomingMessage,
 ) -> UUID | None:
     """Resuelve prospecto relacionado al inbound usando contacto o teléfono."""
@@ -460,7 +466,10 @@ async def _resolve_prospeccion_prospecto_id(
         contact_uuid = None
     if contact_uuid:
         try:
-            by_contact = await repo.worker_find_prospecto_by_contacto(contacto_id=contact_uuid)
+            by_contact = await repo.worker_find_prospecto_by_contacto(
+                contacto_id=contact_uuid,
+                organizacion_id=organizacion_id,
+            )
         except CRMRepositoryError:
             by_contact = None
         prospecto_id = (by_contact or {}).get("id") if isinstance(by_contact, dict) else None
@@ -473,7 +482,8 @@ async def _resolve_prospeccion_prospecto_id(
         return None
     try:
         latest_prospectos_by_phone = await repo.worker_get_latest_prospectos_by_phones(
-            phone_values=set(phone_candidates)
+            phone_values=set(phone_candidates),
+            organizacion_id=organizacion_id,
         )
     except CRMRepositoryError:
         latest_prospectos_by_phone = {}
@@ -843,6 +853,11 @@ def _is_unknown_prompt_variable_error(exc: Exception) -> bool:
     return "prompt_variable_unknown" in text or "unknown prompt variables" in text
 
 
+def _is_previous_response_not_found_error(exc: Exception) -> bool:
+    text = str(exc or "").lower()
+    return "previous_response_not_found" in text or "previous response with id" in text
+
+
 async def _refresh_conversation_summary_best_effort(
     *,
     conversation_id: str,
@@ -1155,6 +1170,7 @@ async def handle_incoming_message(
         prospecto_uuid = await _resolve_prospeccion_prospecto_id(
             repo=repo,
             contact_id=contact_id,
+            organizacion_id=org_uuid,
             message=message,
         )
         if prospecto_uuid:
@@ -2331,11 +2347,6 @@ async def _generate_assistant_reply(
     if assistant.is_prompt:
         request_kwargs.pop("temperature", None)
 
-    if openai_conversation_id:
-        request_kwargs["conversation"] = openai_conversation_id
-    elif previous_response_id:
-        request_kwargs["previous_response_id"] = previous_response_id
-
     context_obj = ToolRuntimeContext(
         conversation_id=conversation_id,
         contact_id=contact_id,
@@ -2345,27 +2356,54 @@ async def _generate_assistant_reply(
         feature="sales_chat",
     )
 
-    try:
+    async def _run_assistant_generation(current_previous_response_id: str | None) -> tuple[Any, float]:
+        run_request_kwargs = dict(request_kwargs)
+        run_request_kwargs.update(_build_request_template(include_tools=True))
+        if assistant.is_prompt:
+            run_request_kwargs.pop("temperature", None)
+        if openai_conversation_id:
+            run_request_kwargs["conversation"] = openai_conversation_id
+        elif current_previous_response_id:
+            run_request_kwargs["previous_response_id"] = current_previous_response_id
+        else:
+            run_request_kwargs.pop("previous_response_id", None)
         tool_loop_started = time.perf_counter()
         result = await run_tool_loop(
             client=client,
             assistant=assistant,
             assistant_spec=assistant_spec,
             context=context_obj,
-            initial_request=request_kwargs,
+            initial_request=run_request_kwargs,
             request_template=lambda: _build_request_template(include_tools=True),
             execute_tool=whatsapp_tools.execute_tool,
             openai_conversation_id=openai_conversation_id,
-            previous_response_id=previous_response_id,
+            previous_response_id=current_previous_response_id,
             api_key=whatsapp_settings.voice_api_key,
             log=logger,
         )
-        debug_timings["tool_loop_ms"] = round((time.perf_counter() - tool_loop_started) * 1000, 2)
+        return result, round((time.perf_counter() - tool_loop_started) * 1000, 2)
+
+    try:
+        result, tool_loop_ms = await _run_assistant_generation(previous_response_id)
+        debug_timings["tool_loop_ms"] = tool_loop_ms
         tool_runtime_debug = result.side_effects.get("tool_runtime_debug")
         if isinstance(tool_runtime_debug, dict) and tool_runtime_debug:
             debug_timings["tool_runtime_debug"] = tool_runtime_debug
     except Exception as exc:
-        if assistant.is_prompt and prompt_variables and _is_unknown_prompt_variable_error(exc):
+        if previous_response_id and _is_previous_response_not_found_error(exc):
+            log_event(
+                logger,
+                "whatsapp.previous_response_missing_retry",
+                conversation_id=conversation_id,
+                previous_response_id=_trim_text(previous_response_id),
+            )
+            previous_response_id = None
+            result, tool_loop_retry_ms = await _run_assistant_generation(None)
+            debug_timings["tool_loop_retry_ms"] = tool_loop_retry_ms
+            tool_runtime_debug = result.side_effects.get("tool_runtime_debug")
+            if isinstance(tool_runtime_debug, dict) and tool_runtime_debug:
+                debug_timings["tool_runtime_debug"] = tool_runtime_debug
+        elif assistant.is_prompt and prompt_variables and _is_unknown_prompt_variable_error(exc):
             log_event(
                 logger,
                 "whatsapp.prompt_variables_retry_without_variables",
@@ -2374,22 +2412,11 @@ async def _generate_assistant_reply(
                 prompt_version=assistant.prompt_version,
             )
             prompt_variables = {}
-            request_kwargs.update(_build_request_template(include_tools=True))
-            tool_loop_retry_started = time.perf_counter()
-            result = await run_tool_loop(
-                client=client,
-                assistant=assistant,
-                assistant_spec=assistant_spec,
-                context=context_obj,
-                initial_request=request_kwargs,
-                request_template=lambda: _build_request_template(include_tools=True),
-                execute_tool=whatsapp_tools.execute_tool,
-                openai_conversation_id=openai_conversation_id,
-                previous_response_id=previous_response_id,
-                api_key=whatsapp_settings.voice_api_key,
-                log=logger,
-            )
-            debug_timings["tool_loop_retry_ms"] = round((time.perf_counter() - tool_loop_retry_started) * 1000, 2)
+            result, tool_loop_retry_ms = await _run_assistant_generation(previous_response_id)
+            debug_timings["tool_loop_retry_ms"] = tool_loop_retry_ms
+            tool_runtime_debug = result.side_effects.get("tool_runtime_debug")
+            if isinstance(tool_runtime_debug, dict) and tool_runtime_debug:
+                debug_timings["tool_runtime_debug"] = tool_runtime_debug
         else:
             raise
 

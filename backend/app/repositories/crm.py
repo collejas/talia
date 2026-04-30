@@ -14138,17 +14138,21 @@ class CRMRepository:
         self,
         *,
         contacto_id: UUID,
+        organizacion_id: UUID | None = None,
     ) -> dict[str, Any] | None:
         """Resuelve un prospecto asociado al contacto CRM guardado en metadata."""
 
+        params = {
+            "metadata->>crm_contacto_id": f"eq.{contacto_id}",
+            "order": "actualizado_en.desc.nullslast,creado_en.desc",
+            "limit": "1",
+        }
+        if organizacion_id is not None:
+            params["organizacion_id"] = f"eq.{organizacion_id}"
         resp = await self._request(
             "GET",
             "/rest/v1/prospeccion_prospectos",
-            params={
-                "metadata->>crm_contacto_id": f"eq.{contacto_id}",
-                "order": "actualizado_en.desc.nullslast,creado_en.desc",
-                "limit": "1",
-            },
+            params=params,
         )
         data = resp.json() or []
         if not isinstance(data, list) or not data:
@@ -14162,6 +14166,7 @@ class CRMRepository:
         self,
         *,
         phone: str,
+        organizacion_id: UUID | None = None,
     ) -> dict[str, Any] | None:
         """Resuelve un prospecto por teléfono normalizado."""
 
@@ -14182,6 +14187,8 @@ class CRMRepository:
             },
         )
         for params in lookups:
+            if organizacion_id is not None:
+                params["organizacion_id"] = f"eq.{organizacion_id}"
             resp = await self._request(
                 "GET",
                 "/rest/v1/prospeccion_prospectos",
@@ -14200,6 +14207,7 @@ class CRMRepository:
         self,
         *,
         phone_values: set[str],
+        organizacion_id: UUID | None = None,
     ) -> dict[str, dict[str, Any]]:
         """Obtiene el prospecto más reciente para un conjunto de telefonos."""
 
@@ -14227,6 +14235,8 @@ class CRMRepository:
                     "order": order_clause,
                     "limit": str(max(200, min(1000, len(chunk) * 6))),
                 }
+                if organizacion_id is not None:
+                    params["organizacion_id"] = f"eq.{organizacion_id}"
                 resp = await self._request(
                     "GET",
                     "/rest/v1/prospeccion_prospectos",
@@ -14311,6 +14321,7 @@ class CRMRepository:
         *,
         phone_values: set[str],
         canal: str | None = None,
+        organizacion_id: UUID | None = None,
     ) -> dict[str, dict[str, Any]]:
         """Obtiene el envío más reciente por teléfono para un conjunto de números."""
 
@@ -14338,6 +14349,11 @@ class CRMRepository:
                     {
                         "p_phone_values": chunk,
                         "p_canal": rpc_canal,
+                        **(
+                            {"p_organizacion_id": str(organizacion_id)}
+                            if organizacion_id is not None
+                            else {}
+                        ),
                     },
                 )
                 if not isinstance(data, list):
@@ -14363,6 +14379,7 @@ class CRMRepository:
         return await self._worker_get_latest_envios_by_phones_legacy(
             normalized_phones=normalized_phones,
             canal=canal,
+            organizacion_id=organizacion_id,
         )
 
     async def _worker_get_latest_envios_by_phones_legacy(
@@ -14370,6 +14387,7 @@ class CRMRepository:
         *,
         normalized_phones: list[str],
         canal: str | None = None,
+        organizacion_id: UUID | None = None,
     ) -> dict[str, dict[str, Any]]:
         resolved: dict[str, dict[str, Any]] = {}
         chunk_size = 100
@@ -14391,6 +14409,8 @@ class CRMRepository:
                 }
                 if canal:
                     params["canal"] = f"eq.{canal.strip().lower()}"
+                if organizacion_id is not None:
+                    params["organizacion_id"] = f"eq.{organizacion_id}"
                 resp = await self._request(
                     "GET",
                     "/rest/v1/prospeccion_contacto_envio",

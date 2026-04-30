@@ -143,6 +143,8 @@ BEGIN
           JOIN public.personas p ON p.id = ic.contacto_id
          WHERE ic.canal = 'whatsapp'
            AND ic.id_externo = p_whatsapp_id
+           AND (v_org IS NULL OR ic.organizacion_id = v_org)
+           AND (v_org IS NULL OR p.organizacion_id = v_org)
          LIMIT 1;
         IF FOUND THEN
             v_contact_id := v_tmp_persona;
@@ -158,6 +160,7 @@ BEGIN
           INTO v_tmp_persona, v_tmp_org
           FROM public.personas
          WHERE telefono_principal_e164 = p_phone_e164
+           AND (v_org IS NULL OR organizacion_id = v_org)
          LIMIT 1;
         IF FOUND THEN
             v_contact_id := v_tmp_persona;

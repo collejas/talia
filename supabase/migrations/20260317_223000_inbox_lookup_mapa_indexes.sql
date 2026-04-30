@@ -20,7 +20,8 @@ create index if not exists idx_prospeccion_contacto_envio_phone_canal_procesado
 
 create or replace function public.prospeccion_latest_envios_by_phones(
   p_phone_values text[],
-  p_canal text default null
+  p_canal text default null,
+  p_organizacion_id uuid default null
 )
 returns table(
   phone text,
@@ -61,11 +62,15 @@ as $$
       or btrim(p_canal) = ''
       or lower(e.canal) = lower(btrim(p_canal))
     )
+    and (
+      p_organizacion_id is null
+      or e.organizacion_id = p_organizacion_id
+    )
   order by
     (e.detalle ->> 'phone'),
     e.procesado_en desc nulls last,
     e.creado_en desc;
 $$;
 
-grant execute on function public.prospeccion_latest_envios_by_phones(text[], text)
+grant execute on function public.prospeccion_latest_envios_by_phones(text[], text, uuid)
   to authenticated, service_role;

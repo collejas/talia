@@ -411,6 +411,117 @@ async def test_handle_incoming_message_prefers_phone_number_id_over_display_numb
 
 
 @pytest.mark.asyncio
+async def test_generate_assistant_reply_retries_without_previous_response_id(monkeypatch) -> None:
+    """Si OpenAI pierde el `previous_response_id`, el turno reintenta sin historial roto."""
+
+    message = _build_sample_message()
+    assistant_cfg = service.AssistantConfig(
+        assistant_id=None,
+        prompt_id="pmpt_test",
+        prompt_version="1",
+        project_id="proj-test",
+    )
+
+    monkeypatch.setattr(service, "_build_assistant_from_runtime", lambda *args, **kwargs: assistant_cfg)
+    monkeypatch.setattr(service.openai_service, "get_assistant_client", lambda **kwargs: object())
+    monkeypatch.setattr(service, "_build_openai_input", lambda *args, **kwargs: [])
+    monkeypatch.setattr(service, "build_prompt_payload", lambda *args, **kwargs: {"prompt": "test"})
+    monkeypatch.setattr(service.storage, "fetch_contact_context", _async_none)
+    monkeypatch.setattr(service.conversation_summary, "ensure_conversation_summary", _async_none)
+    monkeypatch.setattr(service.tenant_runtime, "is_profiling_enabled", _async_false)
+    monkeypatch.setattr(service, "_extract_text_from_response", lambda _response: "Respuesta final")
+
+    calls: list[str | None] = []
+
+    class PreviousResponseMissingError(Exception):
+        status_code = 400
+
+        def __str__(self) -> str:
+            return "previous_response_not_found"
+
+    async def fake_run_tool_loop(*, previous_response_id=None, **_: object):
+        calls.append(previous_response_id)
+        if len(calls) == 1:
+            assert previous_response_id == "resp-stale"
+            raise PreviousResponseMissingError()
+        assert previous_response_id is None
+        return SimpleNamespace(
+            response={"output": []},
+            conversation_id="conv-new",
+            response_id="resp-new",
+            side_effects={},
+        )
+
+    monkeypatch.setattr(service, "run_tool_loop", fake_run_tool_loop)
+
+    reply = await service._generate_assistant_reply(
+        message=message,
+        conversation_id="conv-1",
+        contact_id="contact-1",
+        openai_conversation_id=None,
+        previous_response_id="resp-stale",
+        catalog_context=None,
+        booking_context=None,
+        whatsapp_settings=SimpleNamespace(voice_api_key="api-key", project_id="proj-test"),
+        organizacion_id=None,
+        prospeccion_mode=False,
+        origin_type="general_whatsapp",
+        inbound_message_id="inbound-1",
+    )
+
+    assert calls == ["resp-stale", None]
+    assert reply.text == "Respuesta final"
+    assert reply.response_id == "resp-new"
+
+
+@pytest.mark.asyncio
+async def test_resolve_prospeccion_prospecto_id_is_org_scoped(monkeypatch) -> None:
+    """La búsqueda de prospectos por teléfono no debe cruzar tenants."""
+
+    message = schemas.WhatsAppIncomingMessage(
+        message_sid="SM-org-scope",
+        from_number="whatsapp:+5214441302811",
+        to_number="whatsapp:+5214443891655",
+        body="hola",
+        wa_id="5214441302811",
+        profile_name="Collejas",
+        num_media=0,
+        media=[],
+        raw_payload={},
+    )
+    org_gran = UUID("39e32c05-bfc2-4794-8aab-225873f2bf19")
+
+    class RepoStub:
+        async def worker_find_prospecto_by_contacto(
+            self,
+            *,
+            contacto_id,
+            organizacion_id=None,
+        ) -> dict[str, Any] | None:
+            assert organizacion_id == org_gran
+            return None
+
+        async def worker_get_latest_prospectos_by_phones(
+            self,
+            *,
+            phone_values,
+            organizacion_id=None,
+        ) -> dict[str, dict[str, Any]]:
+            assert organizacion_id == org_gran
+            assert "4441302811" in phone_values
+            return {}
+
+    result = await service._resolve_prospeccion_prospecto_id(
+        repo=RepoStub(),
+        contact_id="c8677050-f253-4448-944f-05f4d2fda7ac",
+        organizacion_id=org_gran,
+        message=message,
+    )
+
+    assert result is None
+
+
+@pytest.mark.asyncio
 async def test_handle_status_callback_records_event(monkeypatch) -> None:
     """Los eventos conocidos se envían a storage.record_delivery_event."""
     callback = schemas.WhatsAppStatusCallback(
