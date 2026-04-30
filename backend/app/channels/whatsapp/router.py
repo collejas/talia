@@ -75,7 +75,7 @@ async def whatsapp_meta_webhook(
     """Procesa mensajes entrantes y estados desde WhatsApp Cloud API."""
     background_payloads = schemas.MetaWhatsAppIncomingMessage.from_webhook_payload(payload)
     for message in background_payloads:
-        await service.handle_incoming_message(message, "meta_webhook", organizacion_id=organizacion_id)
+        await service.handle_incoming_message(message, "meta_webhook")
 
     status_callbacks = schemas.MetaWhatsAppStatusCallback.from_webhook_payload(payload)
     for callback in status_callbacks:

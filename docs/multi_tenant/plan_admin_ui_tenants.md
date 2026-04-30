@@ -41,7 +41,7 @@ Decisión tomada (2026-02-15)
 
 - [x] Se agregó la pestaña **Openai General** en `/settings/tenants/{tenantId}` que persiste `openai.general.project_id` en `organizaciones.config` y rota el secreto `openai.general.api_key` para cada tenant; la UI ahora informa si el secreto ya está registrado y oculta el valor una vez guardado.
 - [x] La misma pestaña incluye el bloque **Voz Openai** que escribe los campos `openai.voice.prompt_id`, `openai.voice.prompt_version`, `openai.voice.model`, `openai.voice.max_tokens` y `openai.voice.stt_model` en la configuración del tenant y rota `openai.voice.api_key` por tier B.
-- [x] El backend usa ahora `tenant_runtime.get_openai_api_key(..., channel=None)` para WhatsApp y convierte el UUID de la organización antes de almacenar resúmenes, lo cual permite que WhatsApp recupere la clave `openai.general.api_key` por tenant y ya no se produce el error de `api.responses.write`.
+- [x] El backend usa ahora `tenant_runtime.get_openai_api_key(..., channel=None)` para WhatsApp y convierte el UUID de la organización antes de almacenar resúmenes; en la práctica el runtime prioriza `openai.api_key` y deja `openai.general.api_key` como fallback, lo que evita el error de `api.responses.write` cuando la key correcta está ligada al proyecto del tenant.
 - [x] La pestaña Correo exhibe un bloque **Brevo** con `brevo.base_url` en `organizaciones.config` y el secreto `brevo.api_key`, y el backend ahora usa `tenant_runtime.get_brevo_runtime_settings` para leer esos valores antes de invocar la API de Brevo por tenant.
 
 ## Avances recientes

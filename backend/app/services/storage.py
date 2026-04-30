@@ -1410,9 +1410,9 @@ async def register_whatsapp_message(
             )
 
     if direction == "entrante" and profile_name and result.get("contact_id"):
-        persona_id_value = str(result.get("contact_id"))
+        persona_id_value = resolved_persona_id or str(result.get("contact_id"))
         try:
-            persona_row = await repo.get_contact_by_id(contact_id=persona_id_value)
+            persona_row = await repo.get_contact_by_id(contact_id=str(persona_id_value))
             if persona_row:
                 raw_persona_data = persona_row.get("contacto_datos")
                 persona_data = _ensure_dict(raw_persona_data)

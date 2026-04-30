@@ -43,7 +43,10 @@ async def resolve_organizacion_id(*, canal: str, clave: str) -> str | None:
     except PlatformRepositoryError:
         organizacion_id = None
 
-    _CACHE[key] = _CacheEntry(organizacion_id=organizacion_id, expires_at=now + _DEFAULT_TTL)
+    if organizacion_id is not None:
+        _CACHE[key] = _CacheEntry(organizacion_id=organizacion_id, expires_at=now + _DEFAULT_TTL)
+    else:
+        _CACHE.pop(key, None)
     return organizacion_id
 
 
@@ -63,4 +66,3 @@ def invalidate_cache(*, canal: str | None = None, clave: str | None = None) -> N
         to_delete.append((c, k))
     for key in to_delete:
         _CACHE.pop(key, None)
-

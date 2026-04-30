@@ -23,6 +23,7 @@ from app.assistants.tool_runtime import (
 )
 from app.channels.whatsapp import tools as whatsapp_tools
 from app.channels.whatsapp.routing import resolve_whatsapp_organizacion
+from app.channels.whatsapp.routing import resolve_whatsapp_organizacion_by_phone_number_id
 from app.core.config import settings
 from app.core.logging import get_logger, log_event
 from app.repositories.crm import CRMRepository, CRMRepositoryError
@@ -984,7 +985,15 @@ async def handle_incoming_message(
     recipient_number = _normalize_phone_number(message.to_number)
     if org_uuid is None:
         resolve_org_started = time.perf_counter()
-        organizacion_hint = await resolve_whatsapp_organizacion(to_number=recipient_number)
+        phone_number_id = getattr(message, "phone_number_id", None)
+        if phone_number_id:
+            organizacion_hint = await resolve_whatsapp_organizacion_by_phone_number_id(
+                phone_number_id=phone_number_id
+            )
+        else:
+            organizacion_hint = None
+        if not organizacion_hint:
+            organizacion_hint = await resolve_whatsapp_organizacion(to_number=recipient_number)
         _record_stage_timing(stage_timings, "resolve_org_ms", resolve_org_started)
         org_uuid = _parse_org_uuid(organizacion_hint) if organizacion_hint else None
     else:
@@ -1140,6 +1149,7 @@ async def handle_incoming_message(
     restart_context: dict[str, Any] | None = None
     opportunity_ref: str | None = None
     ensure_contact_id = contact_id
+    ensure_opportunity_started: float | None = None
     if repo:
         ensure_opportunity_started = time.perf_counter()
         prospecto_uuid = await _resolve_prospeccion_prospecto_id(
@@ -1200,7 +1210,8 @@ async def handle_incoming_message(
                 "restart_created": False,
                 "restart_sequence": 1,
             }
-        _record_stage_timing(stage_timings, "ensure_opportunity_ms", ensure_opportunity_started)
+        if ensure_opportunity_started is not None:
+            _record_stage_timing(stage_timings, "ensure_opportunity_ms", ensure_opportunity_started)
     if repo and opportunity_ref and publicidad_atribucion_event:
         await _mark_opportunity_as_prospeccion_whatsapp(
             repo=repo,
@@ -1279,7 +1290,7 @@ async def handle_incoming_message(
             contact_id=contact_id,
             conversation_id=conversation_id,
             channel="whatsapp",
-            contact=persona_record,
+            persona=persona_record,
         )
         _record_stage_timing(stage_timings, "booking_context_ms", booking_context_started)
     except Exception as exc:
@@ -1391,7 +1402,7 @@ async def handle_incoming_message(
         final_reply_text = await _guard_booking_confirmation_claim(
             conversation_id=conversation_id,
             reply_text=final_reply_text,
-            contact=persona_record,
+            persona=persona_record,
             opportunity_id=opportunity_ref,
         )
     except Exception as exc:

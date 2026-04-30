@@ -88,6 +88,8 @@ npm run build
 sudo systemctl restart talia-api.service
 sudo systemctl restart talia-panel.service
 
+MAPA DE CONVERSION codex resume 019ddea5-0634-7a70-a464-a6b789b1d26d
+
 BUSQUEDAS DENUE codex resume 019dbbf0-3dc7-7e81-aca8-16ee42ae7984
 CORREO: codex resume 019dbc66-c341-76f2-a997-a8785463446c
 # Permisos Git
@@ -303,7 +305,8 @@ poetry run ruff check . (backend)
 
 # META
 
-* Exportar export META_TOKEN='TOKEN_REAL_DE_META'      Esta en .env
+* Exportar 
+export META_TOKEN='EAANgSoLxO8ABRTy101AgFqoMq2R6ZAP8674vZC6niWQEHiWfYkclA5BphzhEIqtQAjsxNOQipxFHyxFEEoO9vO7eyZAJT3SVuhGOt32OwS44FM9jcaTWdgfMdbJfiN9ZAvP8fmr2emXgZCRW5QyZCqyG0szYhbemUG3a2TQNmZCQcIMk5zc03FqWFSGeF2Nr0rn4wZDZD'      Esta en .env
 
 * comprobar como va:
 curl -X GET "https://graph.facebook.com/v25.0/<<<<WhatsApp Business Account ID>>>>/phone_numbers?fields=id,display_phone_number,verified_name,name_status,code_verification_status,quality_rating" \

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from types import SimpleNamespace
 from typing import Any
 from uuid import UUID
 
@@ -22,6 +23,21 @@ def _build_sample_message() -> schemas.WhatsAppIncomingMessage:
         media=[],
         raw_payload={},
     )
+
+
+async def _async_none(*_: object, **__: object) -> None:
+    return None
+
+
+async def _async_false(*_: object, **__: object) -> bool:
+    return False
+
+
+def _async_return(value: Any):
+    async def _inner(**_: object) -> Any:
+        return value
+
+    return _inner
 
 
 def test_booking_confirmation_hint_detects_te_esperamos() -> None:
@@ -96,6 +112,7 @@ async def test_handle_incoming_message_records_sales_ack(monkeypatch) -> None:
     async def fail_register(**_: object):
         raise AssertionError("register_whatsapp_message no debe invocarse en acuse")
 
+    monkeypatch.setattr(service.storage, "fetch_message_by_twilio_sid", _async_none)
     monkeypatch.setattr(service.storage, "register_whatsapp_message", fail_register)
 
     await service.handle_incoming_message(message)
@@ -112,6 +129,10 @@ async def test_handle_incoming_message_respects_manual_mode(monkeypatch) -> None
 
     monkeypatch.setattr(service.settings, "whatsapp_default_organizacion_id", "org-test")
     monkeypatch.setattr(service.settings, "whatsapp_phone_org_map", {})
+    monkeypatch.setattr(service.storage, "fetch_message_by_twilio_sid", _async_none)
+    monkeypatch.setattr(service, "resolve_whatsapp_organizacion", _async_return("org-test"))
+    monkeypatch.setattr(service.storage, "update_conversation", _async_none)
+    monkeypatch.setattr(service.storage, "merge_conversation_inbox_context", _async_none)
 
     register_calls: list[dict[str, object]] = []
 
@@ -179,6 +200,10 @@ async def test_handle_incoming_message_sends_reply(monkeypatch) -> None:
 
     monkeypatch.setattr(service.settings, "whatsapp_default_organizacion_id", "org-test")
     monkeypatch.setattr(service.settings, "whatsapp_phone_org_map", {})
+    monkeypatch.setattr(service.storage, "fetch_message_by_twilio_sid", _async_none)
+    monkeypatch.setattr(service, "resolve_whatsapp_organizacion", _async_return("org-test"))
+    monkeypatch.setattr(service.storage, "update_conversation", _async_none)
+    monkeypatch.setattr(service.storage, "merge_conversation_inbox_context", _async_none)
 
     register_calls: list[dict] = []
 
@@ -257,6 +282,10 @@ async def test_handle_incoming_message_notifies_on_restart(monkeypatch) -> None:
 
     monkeypatch.setattr(service.settings, "whatsapp_default_organizacion_id", "org-test")
     monkeypatch.setattr(service.settings, "whatsapp_phone_org_map", {})
+    monkeypatch.setattr(service.storage, "fetch_message_by_twilio_sid", _async_none)
+    monkeypatch.setattr(service, "resolve_whatsapp_organizacion", _async_return("org-test"))
+    monkeypatch.setattr(service.storage, "update_conversation", _async_none)
+    monkeypatch.setattr(service.storage, "merge_conversation_inbox_context", _async_none)
 
     async def fake_register(**_: object):
         return {
@@ -316,6 +345,69 @@ async def test_handle_incoming_message_notifies_on_restart(monkeypatch) -> None:
 
     assert notify_calls["trigger"] == "restart_conversation"
     assert notify_calls["extra"]["restart_sequence"] == 3
+
+
+@pytest.mark.asyncio
+async def test_handle_incoming_message_prefers_phone_number_id_over_display_number(monkeypatch) -> None:
+    """El inbound Meta debe resolver el tenant por `phone_number_id` primero."""
+    message = schemas.MetaWhatsAppIncomingMessage(
+        message_sid="SM-meta",
+        from_number="whatsapp:+521111111111",
+        to_number="+5214443891655",
+        phone_number_id="1139218909270276",
+        body="Hola",
+        wa_id="521111111111",
+        profile_name="Cliente",
+        num_media=0,
+        media=[],
+        raw_payload={},
+    )
+
+    monkeypatch.setattr(service, "_maybe_handle_sales_acknowledgement", _async_false)
+    monkeypatch.setattr(service.storage, "fetch_message_by_twilio_sid", _async_none)
+    monkeypatch.setattr(service, "resolve_whatsapp_organizacion", _async_return("org-display"))
+    monkeypatch.setattr(
+        service,
+        "resolve_whatsapp_organizacion_by_phone_number_id",
+        _async_return("org-phone-id"),
+    )
+    monkeypatch.setattr(
+        service.tenant_runtime,
+        "get_whatsapp_runtime_settings",
+        _async_return(
+            SimpleNamespace(
+                provider="meta",
+                inactivity_minutes=5,
+                meta_phone_number_id="1139218909270276",
+                meta_page_access_token="token",
+                meta_graph_api_version="v21.0",
+                meta_app_secret="secret",
+            )
+        ),
+    )
+
+    register_calls: list[dict[str, Any]] = []
+
+    async def fake_register(**kwargs):
+        register_calls.append(kwargs)
+        return {
+            "conversation_id": "conv-meta",
+            "contact_id": "contact-meta",
+            "openai_conversation_id": None,
+        }
+
+    async def fake_coalesce(*_: object, **__: object):
+        return False, message.body or "", {}
+
+    monkeypatch.setattr(service.storage, "register_whatsapp_message", fake_register)
+    monkeypatch.setattr(service.storage, "update_conversation", _async_none)
+    monkeypatch.setattr(service, "_coalesce_inbound_burst", fake_coalesce)
+
+    await service.handle_incoming_message(message, "meta_webhook")
+
+    assert len(register_calls) == 1
+    assert register_calls[0]["organizacion_id"] == "org-phone-id"
+    assert register_calls[0]["webhook_payload"] == message.raw_payload
 
 
 @pytest.mark.asyncio

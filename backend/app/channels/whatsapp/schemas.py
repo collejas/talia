@@ -178,6 +178,7 @@ class MetaWhatsAppIncomingMessage(BaseModel):
     message_sid: str
     from_number: str
     to_number: str | None = None
+    phone_number_id: str | None = None
     body: str | None = None
     wa_id: str | None = None
     profile_name: str | None = None
@@ -221,6 +222,7 @@ class MetaWhatsAppIncomingMessage(BaseModel):
                             message_sid=message_sid,
                             from_number=from_number,
                             to_number=_coerce_to_str(metadata.get("display_phone_number")) or None,
+                            phone_number_id=_coerce_to_str(metadata.get("phone_number_id")) or None,
                             body=_extract_meta_text(message),
                             wa_id=_coerce_to_str(contact.get("wa_id") or message.get("from")) or None,
                             profile_name=_coerce_to_str(profile.get("name")) or None,
@@ -243,6 +245,7 @@ class MetaWhatsAppIncomingMessage(BaseModel):
         return {
             "from_number": self.from_number,
             "to_number": self.to_number,
+            "phone_number_id": self.phone_number_id,
             "wa_id": self.wa_id,
             "profile_name": self.profile_name,
             "num_media": self.num_media,

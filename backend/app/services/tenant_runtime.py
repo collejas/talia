@@ -371,8 +371,8 @@ async def get_secret_plaintext(
 
 def _openai_secret_candidates(channel: str | None) -> list[str]:
     if channel == "voice":
-        return ["openai.voice.api_key", "openai.general.api_key", "openai.api_key"]
-    return ["openai.general.api_key", "openai.api_key"]
+        return ["openai.voice.api_key", "openai.api_key", "openai.general.api_key"]
+    return ["openai.api_key", "openai.general.api_key"]
 
 
 async def get_openai_api_key(

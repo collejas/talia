@@ -319,6 +319,24 @@ class PlatformRepository:
         value = row.get("organizacion_id")
         return str(value) if value else None
 
+    async def resolve_org_for_meta_phone_number_id(self, *, phone_number_id: str) -> str | None:
+        phone_key = str(phone_number_id or "").strip()
+        if not phone_key:
+            return None
+        params = {
+            "select": "id",
+            "config->whatsapp->meta->phone_number_id": f"eq.{phone_key}",
+            "limit": "1",
+        }
+        data = await self._rest("GET", "/rest/v1/organizaciones", params=params)
+        if not isinstance(data, list) or not data:
+            return None
+        row = data[0]
+        if not isinstance(row, dict):
+            return None
+        value = row.get("id")
+        return str(value) if value else None
+
     async def create_permissions(
         self, *, organizacion_id: UUID, permisos: Sequence[dict[str, str]]
     ) -> list[dict[str, Any]]:

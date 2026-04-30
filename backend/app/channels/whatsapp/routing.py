@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from app.repositories.platform_admin import PlatformRepository, PlatformRepositoryError
 from app.core.config import settings
 from app.services.channel_routing import resolve_organizacion_id
 
@@ -68,3 +69,18 @@ async def resolve_whatsapp_organizacion(
     if phone_key and phone_key in phone_map:
         return phone_map[phone_key]
     return _safe_str_value(settings.whatsapp_default_organizacion_id)
+
+
+async def resolve_whatsapp_organizacion_by_phone_number_id(
+    *, phone_number_id: str | None
+) -> str | None:
+    """Resuelve la organización desde el `phone_number_id` de Meta."""
+    phone_key = _safe_str_value(phone_number_id)
+    if not phone_key:
+        return None
+    try:
+        repo = PlatformRepository()
+        resolved = await repo.resolve_org_for_meta_phone_number_id(phone_number_id=phone_key)
+    except PlatformRepositoryError:
+        return None
+    return _safe_str_value(resolved)

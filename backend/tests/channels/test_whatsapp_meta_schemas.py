@@ -44,6 +44,7 @@ def test_meta_whatsapp_incoming_message_from_webhook_payload_parses_text():
     assert message.message_sid == "wamid.TEST"
     assert message.from_number == "521234567890"
     assert message.to_number == "5215550000000"
+    assert message.phone_number_id == "1234567890"
     assert message.body == "Hola TalIA"
     assert message.wa_id == "521234567890"
     assert message.profile_name == "Cliente Demo"
