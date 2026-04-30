@@ -2011,7 +2011,7 @@ async def _maybe_update_persona_location(
 
     persona_contacto_datos["ubicacion"] = ubicacion
     try:
-        await storage.update_contact(contact_id, {"contacto_datos": persona_contacto_datos})
+        await storage.update_persona(contact_id, {"contacto_datos": persona_contacto_datos})
     except StorageError as exc:
         logger.warning(
             "whatsapp.update_contact_location_failed",

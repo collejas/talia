@@ -2130,12 +2130,17 @@ async def fetch_contact_context(*, conversation_id: str, contact_id: str) -> dic
 
 
 async def fetch_contact_identities(contact_id: str) -> list[dict[str, Any]]:
-    """Recupera identidades de canal asociadas al contacto."""
+    """Recupera identidades de canal asociadas a la persona."""
     repo = CRMRepository()
     try:
         return await repo.list_contact_identities(contact_id=contact_id)
     except CRMRepositoryError as exc:
         raise StorageError(str(exc)) from exc
+
+
+async def fetch_persona_identities(persona_id: str) -> list[dict[str, Any]]:
+    """Alias con nombre de persona para identidades de canal."""
+    return await fetch_contact_identities(persona_id)
 
 
 async def record_delivery_event(
@@ -2281,9 +2286,9 @@ async def fetch_email_template(slug: str = "default") -> dict[str, Any] | None:
 
 
 async def update_contact(contact_id: str, patch: dict[str, Any]) -> dict[str, Any]:
-    """Actualiza campos del contacto indicado y devuelve la fila resultante."""
+    """Actualiza campos de la persona indicada y devuelve la fila resultante."""
     if not patch:
-        raise StorageError("No se proporcionaron datos para actualizar el contacto")
+        raise StorageError("No se proporcionaron datos para actualizar la persona")
     phone_value = patch.get("telefono_e164")
     if phone_value is not None:
         patch["telefono_e164"] = normalize_phone(phone_value)
@@ -2302,6 +2307,11 @@ async def update_contact(contact_id: str, patch: dict[str, Any]) -> dict[str, An
     elif datos is None:
         row["contacto_datos"] = {}
     return row
+
+
+async def update_persona(persona_id: str, patch: dict[str, Any]) -> dict[str, Any]:
+    """Alias con nombre de persona para actualizar perfil."""
+    return await update_contact(persona_id, patch)
 
 
 async def fetch_visitantes_estados(
@@ -2658,6 +2668,26 @@ async def ensure_conversation_opportunity(
     return str(opportunity_id)
 
 
+async def ensure_persona_conversation_opportunity(
+    *,
+    conversation_id: str,
+    persona_id: str | None,
+    channel: str | None = None,
+    force_new_opportunity_on_restart: bool = False,
+    include_restart_metadata: bool = False,
+    require_contact_ready: bool | None = None,
+) -> str | dict[str, Any]:
+    """Alias con nombre de persona para la oportunidad de conversación."""
+    return await ensure_conversation_opportunity(
+        conversation_id=conversation_id,
+        contact_id=persona_id,
+        channel=channel,
+        force_new_opportunity_on_restart=force_new_opportunity_on_restart,
+        include_restart_metadata=include_restart_metadata,
+        require_contact_ready=require_contact_ready,
+    )
+
+
 async def ensure_lead_tarjeta(
     *,
     tarjeta_id: str | None,
@@ -2826,7 +2856,7 @@ async def apply_lead_scoring(
     profiling_reprompt_counts: dict[str, Any] | None = None,
     source: str = "ai_progressive_scoring",
 ) -> dict[str, Any] | None:
-    """Calcula y persiste scoring en oportunidad, contacto, insights e historial."""
+    """Calcula y persiste scoring en oportunidad, persona, insights e historial."""
 
     try:
         contact = await fetch_persona(contact_id)
@@ -3062,7 +3092,7 @@ async def apply_lead_scoring(
         "last_scored_at": now_iso,
     }
     try:
-        await update_contact(contact_id, {"contacto_datos": persona_contacto_datos})
+        await update_persona(contact_id, {"contacto_datos": persona_contacto_datos})
     except StorageError as exc:
         logger.warning(
             "storage.lead_scoring.contact_update_failed",
@@ -3107,6 +3137,30 @@ async def apply_lead_scoring(
         "confidence": scoring_payload["confidence"],
         "missing_fields": scoring_payload["missing_fields"],
     }
+
+
+async def apply_persona_lead_scoring(
+    *,
+    conversation_id: str,
+    persona_id: str,
+    opportunity_id: str | None = None,
+    answers: dict[str, Any] | None = None,
+    events: dict[str, Any] | None = None,
+    profiling_statuses: dict[str, Any] | None = None,
+    profiling_reprompt_counts: dict[str, Any] | None = None,
+    source: str = "ai_progressive_scoring",
+) -> dict[str, Any] | None:
+    """Alias con nombre de persona para el scoring."""
+    return await apply_lead_scoring(
+        conversation_id=conversation_id,
+        contact_id=persona_id,
+        opportunity_id=opportunity_id,
+        answers=answers,
+        events=events,
+        profiling_statuses=profiling_statuses,
+        profiling_reprompt_counts=profiling_reprompt_counts,
+        source=source,
+    )
 
 
 async def maybe_promote_prequalified_from_scoring(
@@ -3542,7 +3596,7 @@ async def capture_opportunity_if_ready(
     contact_id: str,
     channel: str | None = None,
 ) -> tuple[bool, str | None]:
-    """Crea/promueve la oportunidad cuando el contacto ya tiene al menos un dato válido."""
+    """Crea/promueve la oportunidad cuando la persona ya tiene al menos un dato válido."""
     capture_channel = channel or "assistant"
     log_context = {
         "conversation_id": conversation_id,
@@ -3638,6 +3692,20 @@ async def capture_opportunity_if_ready(
         **log_context,
     )
     return True, oportunidad_id
+
+
+async def capture_persona_opportunity_if_ready(
+    *,
+    conversation_id: str,
+    persona_id: str,
+    channel: str | None = None,
+) -> tuple[bool, str | None]:
+    """Alias con nombre de persona para la captura de oportunidad."""
+    return await capture_opportunity_if_ready(
+        conversation_id=conversation_id,
+        contact_id=persona_id,
+        channel=channel,
+    )
 
 
 async def capture_lead_if_ready(

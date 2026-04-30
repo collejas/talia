@@ -187,12 +187,12 @@ async def try_execute_lead_tool(
     tool_name = name.strip()
     if tool_name == "set_full_name":
         full_name = _require_argument(arguments, "full_name")
-        await storage.update_contact(context.contact_id, {"nombre_completo": full_name})
+        await storage.update_persona(context.contact_id, {"nombre_completo": full_name})
         return {"status": "ok", "full_name": full_name}
 
     if tool_name == "set_email":
         email = _require_argument(arguments, "email").lower()
-        await storage.update_contact(context.contact_id, {"correo": email})
+        await storage.update_persona(context.contact_id, {"correo": email})
         await storage.capture_opportunity_if_ready(
             conversation_id=context.conversation_id,
             contact_id=context.contact_id,
@@ -203,7 +203,7 @@ async def try_execute_lead_tool(
 
     if tool_name == "set_phone_number":
         phone_number = _require_argument(arguments, "phone_number")
-        await storage.update_contact(context.contact_id, {"telefono_e164": phone_number})
+        await storage.update_persona(context.contact_id, {"telefono_e164": phone_number})
         await storage.capture_opportunity_if_ready(
             conversation_id=context.conversation_id,
             contact_id=context.contact_id,
@@ -214,7 +214,7 @@ async def try_execute_lead_tool(
 
     if tool_name == "set_company_name":
         company_name = _require_argument(arguments, "company_name")
-        await storage.update_contact(context.contact_id, {"company_name": company_name})
+        await storage.update_persona(context.contact_id, {"company_name": company_name})
         await _refresh_webchat_followup_state(context)
         return {"status": "ok", "company_name": company_name}
 
@@ -242,7 +242,7 @@ async def try_execute_lead_tool(
                     "lead_tools.ensure_opportunity_failed",
                     extra={"conversation_id": context.conversation_id, "error": str(exc)},
                 )
-        await storage.update_contact(
+        await storage.update_persona(
             context.contact_id,
             {"notes": notes, "necesidad_proposito": necesidad},
         )
@@ -475,7 +475,7 @@ async def _handle_information_email(
             summary = persona_need or persona_notes
         if contact_email and contact_email.lower() != email_value.lower():
             try:
-                await storage.update_contact(
+                await storage.update_persona(
                     persona.get("id") or context.contact_id, {"correo": email_value.lower()}
                 )
             except StorageError as exc:

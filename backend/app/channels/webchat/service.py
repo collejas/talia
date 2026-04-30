@@ -2728,7 +2728,7 @@ async def _maybe_enrich_persona_metadata(
         return
 
     try:
-        await storage.update_contact(contact_id, {"contacto_datos": updated_data})
+        await storage.update_persona(contact_id, {"contacto_datos": updated_data})
     except storage.StorageError as exc:
         logger.exception(
             "webchat.contact_update_failed",
@@ -4218,7 +4218,7 @@ async def _execute_function_call(
         siguiente_accion = (arguments.get("siguiente_accion") or "").strip() or None
         if not notes or not necesidad:
             raise ValueError("notes y necesidad_proposito son requeridos para close_lead")
-        await storage.update_contact(
+        await storage.update_persona(
             context.contact_id,
             {"notes": notes, "necesidad_proposito": necesidad},
         )
@@ -4725,7 +4725,7 @@ async def _execute_function_call(
                 persona_patch["necesidad_proposito"] = necesidad_auto
             if persona_patch:
                 try:
-                    await storage.update_contact(context.contact_id, persona_patch)
+                    await storage.update_persona(context.contact_id, persona_patch)
                     persona = await _resolve_contact(context.contact_id)
                 except StorageError as exc:
                     logger.warning(

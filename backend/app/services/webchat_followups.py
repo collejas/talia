@@ -150,7 +150,7 @@ async def refresh_contact_followup_state(
 
     if changed:
         contact_data["webchat_followup"] = followup
-        await storage.update_contact(contact_id, {"contacto_datos": contact_data})
+        await storage.update_persona(contact_id, {"contacto_datos": contact_data})
         log_event(
             logger,
             "webchat_followup.state_updated",
@@ -203,7 +203,7 @@ async def mark_information_delivered(
 
     if changed:
         contact_data["webchat_followup"] = followup
-        await storage.update_contact(contact_id, {"contacto_datos": contact_data})
+        await storage.update_persona(contact_id, {"contacto_datos": contact_data})
         log_event(
             logger,
             "webchat_followup.delivery_marked",
@@ -315,7 +315,7 @@ async def mark_stop_reason(
     if reason == "session_closed":
         state["session_closed_at"] = _now_iso()
     contact_data["webchat_followup"] = followup
-    await storage.update_contact(contact_id, {"contacto_datos": contact_data})
+    await storage.update_persona(contact_id, {"contacto_datos": contact_data})
     log_event(
         logger,
         "webchat_followup.stop_reason_marked",
@@ -347,7 +347,7 @@ async def record_reengage_attempt(
         reengage["last_message"] = message
     state["reengage"] = reengage
     contact_data["webchat_followup"] = followup
-    await storage.update_contact(contact_id, {"contacto_datos": contact_data})
+    await storage.update_persona(contact_id, {"contacto_datos": contact_data})
     log_event(
         logger,
         "webchat_followup.reengage_recorded",
