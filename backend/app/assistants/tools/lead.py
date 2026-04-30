@@ -139,7 +139,7 @@ async def _notify_webchat_sales_if_needed(
     persona_record = persona
     if not persona_record:
         try:
-            persona_record = await storage.fetch_contact(context.contact_id)
+            persona_record = await storage.fetch_persona(context.contact_id)
         except StorageError as exc:
             logger.warning(
                 "lead_tools.notify_sales_contact_fetch_failed",
@@ -369,7 +369,7 @@ async def try_execute_lead_tool(
         persona_record = None
         if context.contact_id:
             try:
-                persona_record = await storage.fetch_contact(context.contact_id)
+                persona_record = await storage.fetch_persona(context.contact_id)
             except StorageError:
                 persona_record = None
         if tarjeta_id:
@@ -645,7 +645,7 @@ async def _fetch_persona(contact_id: str | None) -> dict[str, Any] | None:
     if not contact_id:
         return None
     try:
-        return await storage.fetch_contact(contact_id)
+        return await storage.fetch_persona(contact_id)
     except StorageError as exc:
         logger.warning(
             "lead_tools.contact_lookup_failed",

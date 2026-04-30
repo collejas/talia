@@ -108,7 +108,7 @@ async def refresh_contact_followup_state(
     contact: dict[str, Any] | None = None,
 ) -> dict[str, Any] | None:
     """Actualiza contacto_datos.webchat_followup con el progreso actual."""
-    contact_row = contact or await storage.fetch_contact(contact_id)
+    contact_row = contact or await storage.fetch_persona(contact_id)
     contact_data = _load_contact_data(contact_row)
     followup, state, changed = _prepare_followup_scope(contact_data, conversation_id)
 
@@ -167,7 +167,7 @@ async def ensure_contact_ready_for_assignment(
     contact: dict[str, Any] | None = None,
 ) -> bool:
     """Verifica y marca que el contacto tiene al menos teléfono o correo."""
-    contact_row = contact or await storage.fetch_contact(contact_id)
+    contact_row = contact or await storage.fetch_persona(contact_id)
     has_phone = _has_value(contact_row.get("telefono_e164"))
     has_email = _has_value(contact_row.get("correo"))
     if not (has_phone or has_email):
@@ -187,7 +187,7 @@ async def mark_information_delivered(
     reason: str,
 ) -> None:
     """Marca el punto en el que ya se envió información o se agendó demo."""
-    contact = await storage.fetch_contact(contact_id)
+    contact = await storage.fetch_persona(contact_id)
     contact_data = _load_contact_data(contact)
     followup, state, changed = _prepare_followup_scope(contact_data, conversation_id)
     delivery_ts = state.get("entrega_realizada_at")
@@ -304,7 +304,7 @@ async def mark_stop_reason(
     contact_id: str,
     reason: str,
 ) -> None:
-    contact = await storage.fetch_contact(contact_id)
+    contact = await storage.fetch_persona(contact_id)
     contact_data = _load_contact_data(contact)
     followup, state, changed = _prepare_followup_scope(contact_data, conversation_id)
     current_reason = _strip_text(state.get("stop_reason"))
@@ -332,7 +332,7 @@ async def record_reengage_attempt(
     sent_at: datetime,
     message: str | None = None,
 ) -> None:
-    contact = await storage.fetch_contact(contact_id)
+    contact = await storage.fetch_persona(contact_id)
     contact_data = _load_contact_data(contact)
     followup, state, _ = _prepare_followup_scope(contact_data, conversation_id)
     reengage = _ensure_dict(state.get("reengage"))
@@ -613,7 +613,7 @@ async def _process_conversation(
         return
 
     try:
-        contact = await storage.fetch_contact(contact_id_str)
+        contact = await storage.fetch_persona(contact_id_str)
     except StorageError as exc:
         logger.warning(
             "webchat.followup.contact_failed",
@@ -817,7 +817,7 @@ async def notify_session_closed_lead(
         return False
 
     try:
-        contact = await storage.fetch_contact(contact_id)
+        contact = await storage.fetch_persona(contact_id)
     except StorageError as exc:
         logger.warning(
             "webchat.session_closed.contact_fetch_failed",

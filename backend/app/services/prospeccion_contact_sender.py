@@ -631,7 +631,7 @@ async def _log_whatsapp_inbox_message(
     persona_record: dict[str, Any] | None = None
     if contact_id:
         try:
-            persona_record = await storage.fetch_contact(contact_id)
+            persona_record = await storage.fetch_persona(contact_id)
         except StorageError:
             persona_record = None
     organizacion_hint = await resolve_whatsapp_organizacion(contact=persona_record)

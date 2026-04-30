@@ -913,7 +913,7 @@ async def _guard_booking_confirmation_claim(
             if not resolved_persona:
                 contact_id = str(conversation_meta.get("contact_id") or "").strip()
                 if contact_id:
-                    resolved_persona = await storage.fetch_contact(contact_id)
+                    resolved_persona = await storage.fetch_persona(contact_id)
             if not resolved_opportunity_id and resolved_persona:
                 resolved_opportunity_id = await storage.ensure_conversation_opportunity(
                     conversation_id=conversation_id,
@@ -1757,7 +1757,7 @@ async def _retry_failed_sales_notification(
         return
 
     try:
-        contact = await storage.fetch_contact(contact_id)
+        contact = await storage.fetch_persona(contact_id)
     except StorageError as exc:
         log_event(
             logger,
@@ -1943,7 +1943,7 @@ async def _maybe_update_persona_location(
     persona_data = persona
     if persona_data is None:
         try:
-            persona_data = await storage.fetch_contact(contact_id)
+            persona_data = await storage.fetch_persona(contact_id)
         except StorageError as exc:
             logger.warning(
                 "whatsapp.fetch_contact_failed",

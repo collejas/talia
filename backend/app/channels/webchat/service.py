@@ -1674,7 +1674,7 @@ async def _resolve_contact(contact_id: str | None) -> dict[str, Any] | None:
     if not contact_id:
         return None
     try:
-        return await storage.fetch_contact(contact_id)
+        return await storage.fetch_persona(contact_id)
     except StorageError as exc:
         logger.warning(
             "webchat.contact_lookup_failed",
@@ -2621,7 +2621,7 @@ async def _maybe_enrich_persona_metadata(
 ) -> None:
     if persona is None:
         try:
-            persona = await storage.fetch_contact(contact_id)
+            persona = await storage.fetch_persona(contact_id)
         except storage.StorageError as exc:
             error_text = str(exc).lower()
             if "contacto no encontrado" in error_text:

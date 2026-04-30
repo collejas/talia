@@ -186,7 +186,7 @@ async def _process_conversation(
         return
 
     try:
-        contact = await storage.fetch_contact(contact_id)
+        contact = await storage.fetch_persona(contact_id)
     except StorageError as exc:
         logger.warning(
             "whatsapp.followup.contact_failed",

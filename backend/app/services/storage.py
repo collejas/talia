@@ -2073,15 +2073,15 @@ async def upload_cliente_document(
     }
 
 
-async def fetch_contact(contact_id: str) -> dict[str, Any]:
-    """Obtiene la representación del contacto indicado."""
+async def fetch_persona(persona_id: str) -> dict[str, Any]:
+    """Obtiene la representación de la persona indicada."""
     repo = CRMRepository()
     try:
-        row = await repo.get_contact_by_id(contact_id=contact_id)
+        row = await repo.get_contact_by_id(contact_id=persona_id)
     except CRMRepositoryError as exc:
         raise StorageError(str(exc)) from exc
     if not row:
-        raise StorageError("Contacto no encontrado")
+        raise StorageError("Persona no encontrada")
     datos = row.get("contacto_datos")
     if isinstance(datos, str):
         try:
@@ -2093,30 +2093,40 @@ async def fetch_contact(contact_id: str) -> dict[str, Any]:
     return row
 
 
-async def fetch_contact_context(*, conversation_id: str, contact_id: str) -> dict[str, Any]:
-    """Obtiene el contacto y la oportunidad más relevante asociada."""
+async def fetch_contact(contact_id: str) -> dict[str, Any]:
+    """Compatibilidad con el nombre legado; usa el resolver de personas."""
+    return await fetch_persona(contact_id)
+
+
+async def fetch_persona_context(*, conversation_id: str, persona_id: str) -> dict[str, Any]:
+    """Obtiene la persona y la oportunidad más relevante asociada."""
     repo = CRMRepository()
     try:
-        contact = await repo.get_contact_by_id(contact_id=contact_id)
+        persona = await repo.get_contact_by_id(contact_id=persona_id)
     except CRMRepositoryError as exc:
         raise StorageError(str(exc)) from exc
-    if not contact:
+    if not persona:
         return {"contact": None, "opportunity": None}
 
     try:
-        contact_uuid = UUID(str(contact.get("id") or contact_id))
+        persona_uuid = UUID(str(persona.get("id") or persona_id))
     except (TypeError, ValueError) as exc:
-        raise StorageError("contacto_id_invalido") from exc
+        raise StorageError("persona_id_invalido") from exc
 
     try:
         opportunity = await repo.get_contact_opportunity(
-            contact_id=contact_uuid,
+            contact_id=persona_uuid,
             conversation_id=conversation_id,
         )
     except CRMRepositoryError as exc:
         raise StorageError(str(exc)) from exc
 
-    return {"contact": contact, "opportunity": opportunity}
+    return {"persona": persona, "contact": persona, "opportunity": opportunity}
+
+
+async def fetch_contact_context(*, conversation_id: str, contact_id: str) -> dict[str, Any]:
+    """Compatibilidad con el nombre legado; usa el resolver de personas."""
+    return await fetch_persona_context(conversation_id=conversation_id, persona_id=contact_id)
 
 
 async def fetch_contact_identities(contact_id: str) -> list[dict[str, Any]]:
@@ -2526,7 +2536,7 @@ async def ensure_conversation_opportunity(
     if not contact_id:
         raise StorageError("No fue posible resolver contacto para crear la oportunidad")
 
-    persona = await fetch_contact(contact_id)
+    persona = await fetch_persona(contact_id)
     organizacion_value = persona.get("organizacion_id")
     if not organizacion_value:
         raise StorageError("El contacto no tiene organizacion_id asociado")
@@ -2676,7 +2686,7 @@ async def maybe_auto_name_opportunity(
     """Renombra la oportunidad con base en insights cuando el título actual es genérico."""
 
     try:
-        contact = await fetch_contact(contact_id)
+        contact = await fetch_persona(contact_id)
     except StorageError as exc:
         logger.warning(
             "storage.auto_name_opportunity.contact_lookup_failed",
@@ -2819,7 +2829,7 @@ async def apply_lead_scoring(
     """Calcula y persiste scoring en oportunidad, contacto, insights e historial."""
 
     try:
-        contact = await fetch_contact(contact_id)
+        contact = await fetch_persona(contact_id)
     except StorageError as exc:
         logger.warning(
             "storage.lead_scoring.contact_lookup_failed",
@@ -3108,7 +3118,7 @@ async def maybe_promote_prequalified_from_scoring(
 ) -> bool:
     """Promueve a precalificado cuando se cumplen condiciones minimas de scoring."""
     try:
-        contact = await fetch_contact(contact_id)
+        contact = await fetch_persona(contact_id)
     except StorageError:
         return False
     org_id = contact.get("organizacion_id")
@@ -3541,7 +3551,7 @@ async def capture_opportunity_if_ready(
     }
 
     try:
-        contact = await fetch_contact(contact_id)
+        contact = await fetch_persona(contact_id)
     except StorageError as exc:
         logger.warning(
             "storage.capture_opportunity.contact_failed",

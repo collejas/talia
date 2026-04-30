@@ -62,7 +62,7 @@ async def _resolve_booking_detail(
     resolved_contact = contact
     if not resolved_contact:
         try:
-            resolved_contact = await storage.fetch_contact(contact_id)
+            resolved_contact = await storage.fetch_persona(contact_id)
         except StorageError as exc:
             logger.debug(
                 "booking_context.contact_lookup_failed",
