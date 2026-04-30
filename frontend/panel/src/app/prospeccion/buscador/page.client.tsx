@@ -126,11 +126,8 @@ function BuscadorView() {
   const [jobsOffset, setJobsOffset] = useState(0)
   const [jobsPageSize, setJobsPageSize] = useState(DEFAULT_JOBS_PAGE_SIZE)
   const [selectedJobId, setSelectedJobId] = useState<string | null>(null)
-  const [expandedHistoryJobs, setExpandedHistoryJobs] = useState<Set<string>>(new Set())
-  const [expandedHistoryResultsJobs, setExpandedHistoryResultsJobs] = useState<Set<string>>(new Set())
   const [deletingJobId, setDeletingJobId] = useState<string | null>(null)
 
-  const canDownload = results.length > 0
   const totalResultsCount = resultsTotal || jobInfo?.total || 0
   const pageStart = results.length ? resultsOffset + 1 : 0
   const pageEnd = resultsOffset + results.length
@@ -226,36 +223,6 @@ function BuscadorView() {
       setJobsLoading(false)
     }
   }, [jobsPageSize])
-
-  const toggleHistoryJob = useCallback((jobId: string) => {
-    setExpandedHistoryJobs((prev) => {
-      const next = new Set(prev)
-      if (next.has(jobId)) {
-        next.delete(jobId)
-        setExpandedHistoryResultsJobs((innerPrev) => {
-          const innerNext = new Set(innerPrev)
-          innerNext.delete(jobId)
-          return innerNext
-        })
-      } else {
-        next.add(jobId)
-      }
-      return next
-    })
-  }, [])
-
-  const toggleHistoryResults = useCallback((job: BuscadorJob) => {
-    const jobId = job.id
-    setExpandedHistoryResultsJobs((prev) => {
-      const next = new Set(prev)
-      if (next.has(jobId)) {
-        next.delete(jobId)
-      } else {
-        next.add(jobId)
-      }
-      return next
-    })
-  }, [])
 
   useEffect(() => {
     void loadJobs(0)
@@ -453,16 +420,18 @@ function BuscadorView() {
       setSelectedJobId(job.id)
       setErrorMessage(null)
       setResultsOffset(0)
+      setResults([])
+      setResultsTotal(job.total ?? 0)
+      setSelectedIds(new Set())
+      setExcludedDomains(new Set())
       if (!RESULT_READY_STATUSES.has(job.status)) {
-        setResults([])
-        setResultsTotal(job.total ?? 0)
-        setSelectedIds(new Set())
-        setExcludedDomains(new Set())
+        setLastResultsJobId(null)
         setResultsLoading(false)
         toast.message("Esta búsqueda aún no termina. Vuelve a intentarlo más tarde.")
         return
       }
-      void loadJobResults(job, { offset: 0 })
+      setLastResultsJobId(job.id)
+      void loadJobResults(job, { offset: 0, notify: false, markAsFinal: true })
     },
     [loadJobResults],
   )
@@ -637,19 +606,6 @@ function BuscadorView() {
     setExcludedDomains(new Set())
   }
 
-  const handleDownloadJson = () => {
-    if (!canDownload) return
-    const blob = new Blob([JSON.stringify(results, null, 2)], {
-      type: "application/json;charset=utf-8",
-    })
-    const url = URL.createObjectURL(blob)
-    const anchor = document.createElement("a")
-    anchor.href = url
-    anchor.download = `buscador-resultados-${Date.now()}.json`
-    anchor.click()
-    URL.revokeObjectURL(url)
-  }
-
   return (
     <div className="space-y-6">
       <Card>
@@ -798,7 +754,7 @@ function BuscadorView() {
         <CardHeader className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
           <div>
             <CardTitle>Historial de búsquedas web</CardTitle>
-            <CardDescription>Consulta las últimas ejecuciones y vuelve a abrir sus resultados.</CardDescription>
+            <CardDescription>Haz clic en una búsqueda para abrir directamente sus resultados.</CardDescription>
           </div>
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
             <p className="text-xs text-muted-foreground sm:text-sm">{jobsRangeDescription}</p>
@@ -871,8 +827,6 @@ function BuscadorView() {
               <div className="space-y-3">
                 {jobs.map((job) => {
                   const domainInfo = getHistoryDomainGroup(job)
-                  const isStageTwoOpen = expandedHistoryJobs.has(job.id)
-                  const isStageThreeOpen = expandedHistoryResultsJobs.has(job.id)
                   const crawl = job.stats?.crawl_metrics ?? null
                   const stageThreeReady = RESULT_READY_STATUSES.has(job.status)
                   const isSelectedJob = selectedJobId === job.id
@@ -881,7 +835,7 @@ function BuscadorView() {
                       <button
                         type="button"
                         className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left hover:bg-muted/40"
-                        onClick={() => toggleHistoryJob(job.id)}
+                        onClick={() => handleSelectJob(job)}
                       >
                         <div className="space-y-1">
                           <p className="text-sm font-semibold break-all">Dominio: {domainInfo.label}</p>
@@ -890,7 +844,7 @@ function BuscadorView() {
                             <span
                               className={cn(
                                 "rounded-md border px-1.5 py-0.5 text-[11px] font-medium",
-                                getStatusPillClasses(job.status)
+                                getStatusPillClasses(job.status),
                               )}
                             >
                               {STATUS_LABELS[job.status]}
@@ -899,35 +853,44 @@ function BuscadorView() {
                             <span
                               className={cn(
                                 "rounded-md border px-1.5 py-0.5 text-[11px] font-semibold",
-                                getResultsCountPillClasses(job.total ?? 0)
+                                getResultsCountPillClasses(job.total ?? 0),
                               )}
                             >
                               {job.total ?? 0}
                             </span>
                           </p>
                         </div>
-                        <ChevronDown className={cn("h-4 w-4 shrink-0 transition-transform", isStageTwoOpen && "rotate-180")} />
+                        <ChevronDown
+                          className={cn("h-4 w-4 shrink-0 transition-transform", isSelectedJob && "rotate-180")}
+                        />
                       </button>
-                      {isStageTwoOpen ? (
-                        <div className="border-t px-3 py-3">
-                          <button
-                            type="button"
-                            className="flex w-full items-center justify-between gap-3 rounded-sm px-1 py-1 text-left hover:bg-muted/40"
-                            onClick={() => void toggleHistoryResults(job)}
-                          >
-                            <p className="text-sm font-medium">Resumen de la búsqueda</p>
-                            <ChevronDown
-                              className={cn("h-4 w-4 shrink-0 transition-transform", isStageThreeOpen && "rotate-180")}
-                            />
-                          </button>
-                          <div className="mt-2 grid gap-2 text-xs text-muted-foreground sm:grid-cols-2 lg:grid-cols-5">
-                            <p>Dominios únicos: <span className="font-medium text-foreground">{job.stats?.unique_email_domains ?? 0}</span></p>
-                            <p>Hosts explorados: <span className="font-medium text-foreground">{job.stats?.unique_source_hosts ?? 0}</span></p>
-                            <p>Páginas visitadas: <span className="font-medium text-foreground">{Number(crawl?.pages_visited ?? 0)}</span></p>
-                            <p>HTTP 403/429: <span className="font-medium text-foreground">{Number(crawl?.status_403 ?? 0)} / {Number(crawl?.status_429 ?? 0)}</span></p>
-                            <p>Tasa correos/página: <span className="font-medium text-foreground">{Number(crawl?.emails_new_rate ?? 0)}</span></p>
+                      {isSelectedJob ? (
+                        <div className="border-t px-3 py-3 space-y-3">
+                          <div className="grid gap-2 text-xs text-muted-foreground sm:grid-cols-2 lg:grid-cols-5">
+                            <p>
+                              Dominios únicos:{" "}
+                              <span className="font-medium text-foreground">{job.stats?.unique_email_domains ?? 0}</span>
+                            </p>
+                            <p>
+                              Hosts explorados:{" "}
+                              <span className="font-medium text-foreground">{job.stats?.unique_source_hosts ?? 0}</span>
+                            </p>
+                            <p>
+                              Páginas visitadas:{" "}
+                              <span className="font-medium text-foreground">{Number(crawl?.pages_visited ?? 0)}</span>
+                            </p>
+                            <p>
+                              HTTP 403/429:{" "}
+                              <span className="font-medium text-foreground">
+                                {Number(crawl?.status_403 ?? 0)} / {Number(crawl?.status_429 ?? 0)}
+                              </span>
+                            </p>
+                            <p>
+                              Tasa correos/página:{" "}
+                              <span className="font-medium text-foreground">{Number(crawl?.emails_new_rate ?? 0)}</span>
+                            </p>
                           </div>
-                          <div className="mt-3 flex items-center justify-end gap-2">
+                          <div className="flex items-center justify-end">
                             <Button
                               type="button"
                               size="icon"
@@ -944,209 +907,195 @@ function BuscadorView() {
                               )}
                             </Button>
                           </div>
-                          {isStageThreeOpen ? (
-                            <div className="mt-3 rounded-md border">
-                              <p className="border-b px-3 py-2 text-sm font-medium">Resultados</p>
-                              {!stageThreeReady ? (
-                                <p className="p-3 text-sm text-muted-foreground">Este job aún no tiene resultados finales.</p>
-                              ) : !isSelectedJob ? (
-                                <div className="p-3">
-                                  <Button type="button" size="sm" onClick={() => handleSelectJob(job)}>
-                                    Cargar resultados de este job
+                          <div className="rounded-md border">
+                            <div className="flex flex-col gap-2 border-b px-3 py-2 lg:flex-row lg:items-center lg:justify-between">
+                              <p className="text-sm font-medium">Resultados</p>
+                              <p className="text-xs text-muted-foreground">
+                                {resultsLoading
+                                  ? "Cargando resultados…"
+                                  : totalResultsCount
+                                    ? `Mostrando ${pageStart}-${pageEnd} de ${totalResultsCount} registros${domainFilter === "all" ? "" : ` · filtrados: ${filteredResults.length}`}.`
+                                    : `Mostrando ${filteredResults.length} registros.`}
+                              </p>
+                            </div>
+                            {!stageThreeReady ? (
+                              <p className="p-3 text-sm text-muted-foreground">Este job aún no tiene resultados finales.</p>
+                            ) : resultsLoading && selectedJobId === job.id ? (
+                              <p className="p-3 text-sm text-muted-foreground">Cargando resultados…</p>
+                            ) : !results.length ? (
+                              <p className="p-3 text-sm text-muted-foreground">No hay resultados cargados todavía.</p>
+                            ) : (
+                              <div className="space-y-4 p-3">
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <Button
+                                    type="button"
+                                    onClick={handleSaveProspectos}
+                                    disabled={!jobInfo || savingProspectos || selectedIds.size === 0}
+                                  >
+                                    {savingProspectos ? "Guardando..." : "Guardar como prospectos"}
                                   </Button>
-                                </div>
-                              ) : (
-                                <div className="space-y-4 p-3">
-                                  <div className="flex flex-wrap gap-2">
-                                    <Button variant="secondary" size="sm" onClick={handleDownloadJson} disabled={!canDownload}>
-                                      Descargar JSON
-                                    </Button>
-                                    <Button variant="outline" size="sm" onClick={handleClearResults} disabled={!canDownload}>
-                                      Limpiar tabla
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-sm text-muted-foreground">Dominio de correo</span>
+                                    <Select value={domainFilter} onValueChange={setDomainFilter}>
+                                      <SelectTrigger className="w-[180px]">
+                                        <SelectValue placeholder="Todos los dominios" />
+                                      </SelectTrigger>
+                                      <SelectContent>
+                                        <SelectItem value="all">Todos los dominios</SelectItem>
+                                        {domainOptions.map((item) => (
+                                          <SelectItem key={item.domain} value={item.domain}>
+                                            {item.domain} ({item.count})
+                                          </SelectItem>
+                                        ))}
+                                      </SelectContent>
+                                    </Select>
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-sm text-muted-foreground">Excluir al guardar</span>
+                                    <div className="w-[250px] space-y-2">
+                                      <Select
+                                        value={EXCLUDE_DOMAIN_SELECT_PLACEHOLDER}
+                                        onValueChange={(value) => {
+                                          if (value === EXCLUDE_DOMAIN_SELECT_PLACEHOLDER) return
+                                          setExcludedDomains((prev) => new Set(prev).add(value))
+                                        }}
+                                        disabled={!availableDomainsToExclude.length}
+                                      >
+                                        <SelectTrigger className="w-[180px]">
+                                          <SelectValue placeholder="Selecciona dominio para excluir" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                          {availableDomainsToExclude.map((item) => (
+                                            <SelectItem key={`exclude-option-${item.domain}`} value={item.domain}>
+                                              {item.domain} ({item.count})
+                                            </SelectItem>
+                                          ))}
+                                        </SelectContent>
+                                      </Select>
+                                      {excludedDomainList.length ? (
+                                        <div className="flex flex-wrap gap-1">
+                                          {excludedDomainList.map((domain) => (
+                                            <Badge
+                                              key={`excluded-badge-${domain}`}
+                                              variant="secondary"
+                                              className="cursor-pointer"
+                                              onClick={() =>
+                                                setExcludedDomains((prev) => {
+                                                  const next = new Set(prev)
+                                                  next.delete(domain)
+                                                  return next
+                                                })
+                                              }
+                                            >
+                                              {domain} x
+                                            </Badge>
+                                          ))}
+                                        </div>
+                                      ) : null}
+                                    </div>
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-sm text-muted-foreground">Registros por página</span>
+                                    <Select value={String(resultsLimit)} onValueChange={handleResultsLimitChange}>
+                                      <SelectTrigger className="w-[120px]">
+                                        <SelectValue placeholder="Límite" />
+                                      </SelectTrigger>
+                                      <SelectContent>
+                                        {RESULTS_PAGE_SIZES.map((size) => (
+                                          <SelectItem key={size} value={String(size)}>
+                                            {size}
+                                          </SelectItem>
+                                        ))}
+                                      </SelectContent>
+                                    </Select>
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                    <Button
+                                      type="button"
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={handlePreviousPage}
+                                      disabled={!hasPreviousPage || resultsLoading}
+                                    >
+                                      Anterior
                                     </Button>
                                     <Button
                                       type="button"
-                                      onClick={handleSaveProspectos}
-                                      disabled={!jobInfo || savingProspectos || selectedIds.size === 0}
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={handleNextPage}
+                                      disabled={!hasNextPage || resultsLoading}
                                     >
-                                      {savingProspectos ? "Guardando..." : "Guardar como prospectos"}
+                                      Siguiente
                                     </Button>
                                   </div>
-                                  <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-                                    <p className="text-sm text-muted-foreground">
-                                      {resultsLoading
-                                        ? "Cargando página de resultados…"
-                                        : totalResultsCount
-                                          ? `Mostrando ${pageStart}-${pageEnd} de ${totalResultsCount} registros${domainFilter === "all" ? "" : ` · filtrados: ${filteredResults.length}`}.`
-                                          : `Mostrando ${filteredResults.length} registros.`}
-                                    </p>
-                                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end sm:gap-4">
-                                      <div className="flex items-center gap-2">
-                                        <span className="text-sm text-muted-foreground">Dominio de correo</span>
-                                        <Select value={domainFilter} onValueChange={setDomainFilter}>
-                                          <SelectTrigger className="w-[180px]">
-                                            <SelectValue placeholder="Todos los dominios" />
-                                          </SelectTrigger>
-                                          <SelectContent>
-                                            <SelectItem value="all">Todos los dominios</SelectItem>
-                                            {domainOptions.map((item) => (
-                                              <SelectItem key={item.domain} value={item.domain}>
-                                                {item.domain} ({item.count})
-                                              </SelectItem>
-                                            ))}
-                                          </SelectContent>
-                                        </Select>
-                                      </div>
-                                      <div className="flex items-center gap-2">
-                                        <span className="text-sm text-muted-foreground">Excluir al guardar</span>
-                                        <div className="w-[250px] space-y-2">
-                                          <Select
-                                            value={EXCLUDE_DOMAIN_SELECT_PLACEHOLDER}
-                                            onValueChange={(value) => {
-                                              if (value === EXCLUDE_DOMAIN_SELECT_PLACEHOLDER) return
-                                              setExcludedDomains((prev) => new Set(prev).add(value))
-                                            }}
-                                            disabled={!availableDomainsToExclude.length}
-                                          >
-                                            <SelectTrigger className="w-[180px]">
-                                              <SelectValue placeholder="Selecciona dominio para excluir" />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                              {availableDomainsToExclude.map((item) => (
-                                                <SelectItem key={`exclude-option-${item.domain}`} value={item.domain}>
-                                                  {item.domain} ({item.count})
-                                                </SelectItem>
-                                              ))}
-                                            </SelectContent>
-                                          </Select>
-                                          {excludedDomainList.length ? (
-                                            <div className="flex flex-wrap gap-1">
-                                              {excludedDomainList.map((domain) => (
-                                                <Badge
-                                                  key={`excluded-badge-${domain}`}
-                                                  variant="secondary"
-                                                  className="cursor-pointer"
-                                                  onClick={() =>
-                                                    setExcludedDomains((prev) => {
-                                                      const next = new Set(prev)
-                                                      next.delete(domain)
-                                                      return next
-                                                    })
-                                                  }
-                                                >
-                                                  {domain} x
-                                                </Badge>
-                                              ))}
-                                            </div>
-                                          ) : null}
-                                        </div>
-                                      </div>
-                                      <div className="flex items-center gap-2">
-                                        <span className="text-sm text-muted-foreground">Registros por página</span>
-                                        <Select value={String(resultsLimit)} onValueChange={handleResultsLimitChange}>
-                                          <SelectTrigger className="w-[120px]">
-                                            <SelectValue placeholder="Límite" />
-                                          </SelectTrigger>
-                                          <SelectContent>
-                                            {RESULTS_PAGE_SIZES.map((size) => (
-                                              <SelectItem key={size} value={String(size)}>
-                                                {size}
-                                              </SelectItem>
-                                            ))}
-                                          </SelectContent>
-                                        </Select>
-                                      </div>
-                                      <div className="flex items-center gap-2">
-                                        <Button
-                                          type="button"
-                                          variant="outline"
-                                          size="sm"
-                                          onClick={handlePreviousPage}
-                                          disabled={!hasPreviousPage || resultsLoading}
-                                        >
-                                          Anterior
-                                        </Button>
-                                        <Button
-                                          type="button"
-                                          variant="outline"
-                                          size="sm"
-                                          onClick={handleNextPage}
-                                          disabled={!hasNextPage || resultsLoading}
-                                        >
-                                          Siguiente
-                                        </Button>
-                                      </div>
-                                    </div>
-                                  </div>
-                                  {results.length === 0 ? (
-                                    <p className="text-sm text-muted-foreground">No hay resultados todavía.</p>
-                                  ) : (
-                                    <ScrollArea className="h-[420px] rounded-md border">
-                                      <Table>
-                                        <TableHeader className="sticky top-0 z-20 bg-background">
-                                          <TableRow>
-                                            <TableHead className="w-10 bg-background">
-                                              <Checkbox
-                                                checked={
-                                                  selectedIds.size > 0 &&
-                                                  selectedIds.size ===
-                                                    filteredResults.filter((item) => typeof item.id === "string" && item.id.trim().length).length
-                                                }
-                                                onCheckedChange={toggleSelectAll}
-                                                aria-label="Seleccionar todos"
-                                              />
-                                            </TableHead>
-                                            <TableHead className="bg-background">Correo</TableHead>
-                                            <TableHead className="bg-background">Nombre</TableHead>
-                                            <TableHead className="bg-background">Puesto</TableHead>
-                                            <TableHead className="bg-background">Teléfono</TableHead>
-                                            <TableHead className="bg-background">Ext.</TableHead>
-                                            <TableHead className="bg-background">Dirección</TableHead>
-                                            <TableHead className="bg-background">URL origen</TableHead>
-                                          </TableRow>
-                                        </TableHeader>
-                                        <TableBody>
-                                          {filteredResults.length === 0 ? (
-                                            <TableRow>
-                                              <TableCell colSpan={8} className="text-center text-sm text-muted-foreground">
-                                                No hay resultados para el dominio seleccionado.
-                                              </TableCell>
-                                            </TableRow>
-                                          ) : (
-                                            filteredResults.map((item, index) => (
-                                              <TableRow key={`${item.email}-${index}`}>
-                                                <TableCell>
-                                                  <Checkbox
-                                                    checked={item.id ? selectedIds.has(item.id) : false}
-                                                    onCheckedChange={(checked) => toggleSelect(item.id ?? undefined, checked)}
-                                                    disabled={!item.id}
-                                                    aria-label="Seleccionar contacto"
-                                                  />
-                                                </TableCell>
-                                                <TableCell>
-                                                  <span className="font-medium">{item.email}</span>
-                                                </TableCell>
-                                                <TableCell>{item.name || "—"}</TableCell>
-                                                <TableCell>{item.position || "—"}</TableCell>
-                                                <TableCell>{item.phone || "—"}</TableCell>
-                                                <TableCell>{item.extension || "—"}</TableCell>
-                                                <TableCell className="max-w-[200px] truncate">{item.address || "—"}</TableCell>
-                                                <TableCell className="max-w-[240px] truncate">
-                                                  <a href={item.source_url} target="_blank" rel="noreferrer" className="text-primary underline">
-                                                    {item.source_url}
-                                                  </a>
-                                                </TableCell>
-                                              </TableRow>
-                                            ))
-                                          )}
-                                        </TableBody>
-                                      </Table>
-                                    </ScrollArea>
-                                  )}
                                 </div>
-                              )}
-                            </div>
-                          ) : null}
+                                <ScrollArea className="h-[420px] rounded-md border">
+                                  <Table>
+                                    <TableHeader className="sticky top-0 z-20 bg-background">
+                                      <TableRow>
+                                        <TableHead className="w-10 bg-background">
+                                          <Checkbox
+                                            checked={
+                                              selectedIds.size > 0 &&
+                                              selectedIds.size ===
+                                                filteredResults.filter(
+                                                  (item) => typeof item.id === "string" && item.id.trim().length,
+                                                ).length
+                                            }
+                                            onCheckedChange={toggleSelectAll}
+                                            aria-label="Seleccionar todos"
+                                          />
+                                        </TableHead>
+                                        <TableHead className="bg-background">Correo</TableHead>
+                                        <TableHead className="bg-background">Nombre</TableHead>
+                                        <TableHead className="bg-background">Puesto</TableHead>
+                                        <TableHead className="bg-background">Teléfono</TableHead>
+                                        <TableHead className="bg-background">Ext.</TableHead>
+                                        <TableHead className="bg-background">Dirección</TableHead>
+                                        <TableHead className="bg-background">URL origen</TableHead>
+                                      </TableRow>
+                                    </TableHeader>
+                                    <TableBody>
+                                      {filteredResults.length === 0 ? (
+                                        <TableRow>
+                                          <TableCell colSpan={8} className="text-center text-sm text-muted-foreground">
+                                            No hay resultados para el dominio seleccionado.
+                                          </TableCell>
+                                        </TableRow>
+                                      ) : (
+                                        filteredResults.map((item, index) => (
+                                          <TableRow key={`${item.email}-${index}`}>
+                                            <TableCell>
+                                              <Checkbox
+                                                checked={item.id ? selectedIds.has(item.id) : false}
+                                                onCheckedChange={(checked) => toggleSelect(item.id ?? undefined, checked)}
+                                                disabled={!item.id}
+                                                aria-label="Seleccionar contacto"
+                                              />
+                                            </TableCell>
+                                            <TableCell>
+                                              <span className="font-medium">{item.email}</span>
+                                            </TableCell>
+                                            <TableCell>{item.name || "—"}</TableCell>
+                                            <TableCell>{item.position || "—"}</TableCell>
+                                            <TableCell>{item.phone || "—"}</TableCell>
+                                            <TableCell>{item.extension || "—"}</TableCell>
+                                            <TableCell className="max-w-[200px] truncate">{item.address || "—"}</TableCell>
+                                            <TableCell className="max-w-[240px] truncate">
+                                              <a href={item.source_url} target="_blank" rel="noreferrer" className="text-primary underline">
+                                                {item.source_url}
+                                              </a>
+                                            </TableCell>
+                                          </TableRow>
+                                        ))
+                                      )}
+                                    </TableBody>
+                                  </Table>
+                                </ScrollArea>
+                              </div>
+                            )}
+                          </div>
                         </div>
                       ) : null}
                     </div>
