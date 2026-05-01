@@ -49,7 +49,16 @@ try:
 except ModuleNotFoundError:  # pragma: no cover
     Workbook = None
     load_workbook = None
-from pydantic import BaseModel, ConfigDict, Field, HttpUrl, ValidationError, field_validator, model_validator
+from pydantic import (
+    AliasChoices,
+    BaseModel,
+    ConfigDict,
+    Field,
+    HttpUrl,
+    ValidationError,
+    field_validator,
+    model_validator,
+)
 
 from app.channels.webchat import schemas as webchat_schemas
 from app.channels.webchat import service as webchat_service
@@ -6988,7 +6997,9 @@ async def _resolve_webchat_session_id(contact_id: str) -> str | None:
         contact = None
 
     if contact:
-        session_id = _extract_session_id_from_contact(contact.get("contacto_datos"))
+        session_id = _extract_session_id_from_contact(
+            contact.get("persona_datos") or contact.get("contacto_datos")
+        )
         if session_id:
             return session_id
 
@@ -9290,7 +9301,11 @@ class CRMContact(BaseModel):
     relacion_activa: bool | None = None
     cuenta_tipo: str | None = None
     metadata: dict[str, Any] | None = None
-    contacto_datos: dict[str, Any] | None = None
+    persona_datos: dict[str, Any] | None = Field(
+        default=None,
+        validation_alias=AliasChoices("persona_datos", "contacto_datos"),
+        serialization_alias="persona_datos",
+    )
     creado_en: datetime | None = None
     actualizado_en: datetime | None = None
 
@@ -9352,7 +9367,11 @@ class CRMContactCreate(BaseModel):
     propietario_usuario_id: UUID | None = None
     origen: str | None = Field(default=None, max_length=80)
     metadata: dict[str, Any] | None = None
-    contacto_datos: dict[str, Any] | None = None
+    persona_datos: dict[str, Any] | None = Field(
+        default=None,
+        validation_alias=AliasChoices("persona_datos", "contacto_datos"),
+        serialization_alias="persona_datos",
+    )
 
 
 class CRMContactUpdate(BaseModel):
@@ -9412,7 +9431,11 @@ class CRMContactUpdate(BaseModel):
     origen: str | None = Field(default=None, max_length=80)
     propietario_usuario_id: UUID | None = None
     metadata: dict[str, Any] | None = None
-    contacto_datos: dict[str, Any] | None = None
+    persona_datos: dict[str, Any] | None = Field(
+        default=None,
+        validation_alias=AliasChoices("persona_datos", "contacto_datos"),
+        serialization_alias="persona_datos",
+    )
 
 
 class CRMPersona(CRMContact):
@@ -10132,7 +10155,7 @@ def _persona_alta_to_contact_payload(
         "numero_exterior": _persona_alta_clean_text(direccion.numero_exterior if direccion else None),
         "numero_interior": _persona_alta_clean_text(direccion.numero_interior if direccion else None),
         "codigo_postal": _persona_alta_clean_text(direccion.codigo_postal if direccion else None),
-        "contacto_datos": {
+        "persona_datos": {
             "source": "personas_alta",
             "contexto_modo": contexto.modo,
         },
@@ -16135,7 +16158,10 @@ async def get_inbox_threads(
             contact_id_value = _clean_text(contact_row.get("id"))
             if not contact_id_value:
                 continue
-            contact_data = _ensure_dict(contact_row.get("contacto_datos"), default={})
+            contact_data = _ensure_dict(
+                contact_row.get("persona_datos") or contact_row.get("contacto_datos"),
+                default={},
+            )
             profile_name = _clean_text(contact_data.get("profile_name"))
             if profile_name:
                 contact_profile_name_map[contact_id_value] = profile_name
@@ -24184,7 +24210,7 @@ async def convertir_prospecto_contacto(
     }
     if canal_origen != "otro":
         contacto_datos["prospeccion_canal"] = canal_origen
-    contacto_body["contacto_datos"] = {k: v for k, v in contacto_datos.items() if v}
+    contacto_body["persona_datos"] = {k: v for k, v in contacto_datos.items() if v}
     contacto_body = {k: v for k, v in contacto_body.items() if v}
 
     try:
@@ -28814,9 +28840,9 @@ async def public_web_booking_create(
                 "company_name": attendee_company,
                 "origen": "agenda_publica",
                 "estado": "lead",
-                "contacto_datos": {
-                    "booking_session_id": payload.booking_session_id,
-                    "source": payload.source or "public_demo",
+                    "persona_datos": {
+                        "booking_session_id": payload.booking_session_id,
+                        "source": payload.source or "public_demo",
                     "utm_source": payload.utm_source,
                     "utm_medium": payload.utm_medium,
                     "utm_campaign": payload.utm_campaign,
@@ -33652,7 +33678,10 @@ def _card_from_opportunity(row: dict[str, Any]) -> CRMPipelineBoardCard | None:
         contacto_nombre = contacto_nombre.strip()
     else:
         contacto_nombre = None
-    contacto_datos = _ensure_dict(contacto.get("contacto_datos"), default={})
+    contacto_datos = _ensure_dict(
+        contacto.get("persona_datos") or contacto.get("contacto_datos"),
+        default={},
+    )
     contacto_profile_name = _clean_text(contacto_datos.get("profile_name"))
     nombre = contacto_nombre or contacto_profile_name or None
     conversacion_id = _safe_uuid(metadata.get("conversacion_id"))
