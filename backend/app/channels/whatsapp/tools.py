@@ -920,7 +920,7 @@ async def _refresh_opportunity_context_from_persona(
 ) -> None:
     if ensure_capture:
         try:
-            await storage.capture_persona_opportunity_if_ready(
+            await storage.capture_persona_lead_if_ready(
                 conversation_id=context.conversation_id,
                 persona_id=context.contact_id,
                 channel=context.channel or "whatsapp",

@@ -3779,3 +3779,17 @@ async def capture_lead_if_ready(
         contact_id=contact_id,
         channel=channel,
     )
+
+
+async def capture_persona_lead_if_ready(
+    *,
+    conversation_id: str,
+    persona_id: str,
+    channel: str | None = None,
+) -> tuple[bool, str | None]:
+    """Alias con nombre de persona para la captura de oportunidad."""
+    return await capture_persona_opportunity_if_ready(
+        conversation_id=conversation_id,
+        persona_id=persona_id,
+        channel=channel,
+    )

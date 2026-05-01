@@ -193,7 +193,7 @@ async def try_execute_lead_tool(
     if tool_name == "set_email":
         email = _require_argument(arguments, "email").lower()
         await storage.update_persona(context.contact_id, {"correo": email})
-        await storage.capture_persona_opportunity_if_ready(
+        await storage.capture_persona_lead_if_ready(
             conversation_id=context.conversation_id,
             persona_id=context.contact_id,
             channel=context.channel or "webchat",
@@ -204,7 +204,7 @@ async def try_execute_lead_tool(
     if tool_name == "set_phone_number":
         phone_number = _require_argument(arguments, "phone_number")
         await storage.update_persona(context.contact_id, {"telefono_e164": phone_number})
-        await storage.capture_persona_opportunity_if_ready(
+        await storage.capture_persona_lead_if_ready(
             conversation_id=context.conversation_id,
             persona_id=context.contact_id,
             channel=context.channel or "webchat",
@@ -412,7 +412,7 @@ async def try_execute_lead_tool(
         )
         if not ready:
             raise ValueError("No hay teléfono ni correo para marcar contacto listo")
-        _, oportunidad_id = await storage.capture_persona_opportunity_if_ready(
+        _, oportunidad_id = await storage.capture_persona_lead_if_ready(
             conversation_id=context.conversation_id,
             persona_id=context.contact_id,
             channel=context.channel or "webchat",
