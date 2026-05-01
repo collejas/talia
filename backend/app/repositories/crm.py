@@ -14983,6 +14983,17 @@ class CRMRepository:
             return None
         return await self._persona_to_contact_row(persona=row, organizacion_id=org_uuid)
 
+    async def worker_find_persona_by_prospecto(
+        self,
+        *,
+        organizacion_id: UUID,
+        prospecto_id: UUID,
+    ) -> dict[str, Any] | None:
+        return await self.worker_find_contact_by_prospecto(
+            organizacion_id=organizacion_id,
+            prospecto_id=prospecto_id,
+        )
+
     async def worker_find_opportunity_by_prospecto(
         self,
         *,

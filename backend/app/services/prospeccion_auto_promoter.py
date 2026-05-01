@@ -150,29 +150,29 @@ async def _auto_promote_prospecto_locked(
     persona_ref = None
     if not persona_ref_id:
         try:
-            existing_persona = await local_repo.worker_find_contact_by_prospecto(
+            existing_persona = await local_repo.worker_find_persona_by_prospecto(
                 organizacion_id=org_uuid,
                 prospecto_id=prospecto_uuid,
             )
         except CRMRepositoryError as exc:
-            log_event(logger, "prospeccion.auto_promote_contact_lookup_failed", error=str(exc))
+            log_event(logger, "prospeccion.auto_promote_persona_lookup_failed", error=str(exc))
             existing_persona = None
         if existing_persona:
             persona_ref_id = existing_persona.get("id")
             persona_ref = existing_persona
 
-    # Fallback de deduplicación: reutilizar contacto existente por teléfono/correo.
+    # Fallback de deduplicación: reutilizar persona existente por teléfono/correo.
     if not persona_ref_id:
         if telefono:
             try:
-                existing_by_phone = await local_repo.get_contact_by_phone_e164(
+                existing_by_phone = await local_repo.get_persona_by_phone_e164(
                     phone_e164=telefono,
                     organizacion_id=org_uuid,
                 )
             except CRMRepositoryError as exc:
                 log_event(
                     logger,
-                    "prospeccion.auto_promote_contact_phone_lookup_failed",
+                    "prospeccion.auto_promote_persona_phone_lookup_failed",
                     error=str(exc),
                     prospecto_id=str(prospecto_uuid),
                 )
@@ -182,7 +182,7 @@ async def _auto_promote_prospecto_locked(
                 persona_ref = existing_by_phone
         if not persona_ref_id and correo:
             try:
-                candidates = await local_repo.search_contacts(
+                candidates = await local_repo.search_personas(
                     organizacion_id=org_uuid,
                     query=correo,
                     limit=5,
@@ -190,7 +190,7 @@ async def _auto_promote_prospecto_locked(
             except CRMRepositoryError as exc:
                 log_event(
                     logger,
-                    "prospeccion.auto_promote_contact_email_lookup_failed",
+                    "prospeccion.auto_promote_persona_email_lookup_failed",
                     error=str(exc),
                     prospecto_id=str(prospecto_uuid),
                 )
@@ -203,29 +203,29 @@ async def _auto_promote_prospecto_locked(
                     persona_ref = candidate
                     break
 
-    # Si reutilizamos un contacto existente, anclamos prospecto_id en contacto_datos.
+    # Si reutilizamos una persona existente, anclamos prospecto_id en persona_datos.
     if persona_ref_id and isinstance(persona_ref, dict):
         try:
             persona_ref_uuid = UUID(str(persona_ref_id))
         except (TypeError, ValueError):
             persona_ref_uuid = None
         if persona_ref_uuid:
-            persona_contacto_datos = _ensure_dict(persona_ref.get("contacto_datos"))
-            if str(persona_contacto_datos.get("prospecto_id") or "") != str(prospecto_uuid):
-                persona_contacto_datos["prospecto_id"] = str(prospecto_uuid)
+            persona_datos = _ensure_dict(persona_ref.get("persona_datos") or persona_ref.get("contacto_datos"))
+            if str(persona_datos.get("prospecto_id") or "") != str(prospecto_uuid):
+                persona_datos["prospecto_id"] = str(prospecto_uuid)
                 try:
-                    persona_ref = await local_repo.update_contact(
+                    persona_ref = await local_repo.update_persona(
                         organizacion_id=org_uuid,
-                        contacto_id=persona_ref_uuid,
-                        payload={"contacto_datos": persona_contacto_datos},
+                        persona_id=persona_ref_uuid,
+                        payload={"persona_datos": persona_datos},
                     )
                 except CRMRepositoryError as exc:
                     log_event(
                         logger,
-                        "prospeccion.auto_promote_contact_link_failed",
+                        "prospeccion.auto_promote_persona_link_failed",
                         error=str(exc),
                         prospecto_id=str(prospecto_uuid),
-                        contacto_id=str(persona_ref_uuid),
+                        persona_id=str(persona_ref_uuid),
                     )
 
     if not persona_ref_id:
@@ -245,32 +245,32 @@ async def _auto_promote_prospecto_locked(
             if owner_candidate:
                 owner_user_id = str(owner_candidate)
 
-        persona_contacto_datos = {
+        persona_datos = {
             "prospecto_id": str(prospecto_uuid),
             "prospeccion_fuente": source_label,
             "auto_promovido": True,
         }
         if canal_label:
-            persona_contacto_datos["prospeccion_canal"] = canal_label
+            persona_datos["prospeccion_canal"] = canal_label
         persona_payload = {
             "nombre_completo": display_name,
             "correo": correo,
             "telefono_e164": telefono,
             "company_name": segmento,
             "notes": notas,
-            "contacto_datos": persona_contacto_datos,
+            "persona_datos": persona_datos,
             "propietario_usuario_id": owner_user_id,
         }
         persona_payload = {k: v for k, v in persona_payload.items() if v}
         try:
-            persona_ref = await local_repo.create_contact(
+            persona_ref = await local_repo.create_persona(
                 organizacion_id=org_uuid,
                 payload=persona_payload,
             )
         except CRMRepositoryError as exc:
             log_event(
                 logger,
-                "prospeccion.auto_promote_contact_failed",
+                "prospeccion.auto_promote_persona_failed",
                 error=str(exc),
                 prospecto_id=str(prospecto_uuid),
             )
@@ -298,7 +298,7 @@ async def _auto_promote_prospecto_locked(
         if existing_opportunity:
             oportunidad_id = existing_opportunity.get("id")
             oportunidad = existing_opportunity
-    # Fallback adicional: si ya existe oportunidad para el contacto, reutilizarla.
+    # Fallback adicional: si ya existe oportunidad para la persona, reutilizarla.
     if not oportunidad_id:
         try:
             persona_uuid = UUID(str(persona_ref_id))
@@ -306,21 +306,21 @@ async def _auto_promote_prospecto_locked(
             persona_uuid = None
         if persona_uuid:
             try:
-                existing_for_contact = await local_repo.get_contact_opportunity(
+                existing_for_persona = await local_repo.get_contact_opportunity(
                     contact_id=persona_uuid,
                 )
             except CRMRepositoryError as exc:
                 log_event(
                     logger,
-                    "prospeccion.auto_promote_opportunity_contact_lookup_failed",
+                    "prospeccion.auto_promote_opportunity_persona_lookup_failed",
                     error=str(exc),
                     prospecto_id=str(prospecto_uuid),
-                    contacto_id=str(persona_uuid),
+                    persona_id=str(persona_uuid),
                 )
-                existing_for_contact = None
-            if existing_for_contact:
-                oportunidad_id = existing_for_contact.get("id")
-                oportunidad = existing_for_contact
+                existing_for_persona = None
+            if existing_for_persona:
+                oportunidad_id = existing_for_persona.get("id")
+                oportunidad = existing_for_persona
 
     if not oportunidad_id:
         try:

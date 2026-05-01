@@ -225,20 +225,20 @@ async def _ensure_general_email_inbox_context(
     sender_email: str,
     sender_name: str | None,
 ) -> tuple[UUID, UUID] | None:
-    contact = await repo.get_contact_by_email(email=sender_email, organizacion_id=organizacion_id)
-    if not contact:
-        contact_payload: dict[str, Any] = {
+    persona = await repo.get_persona_by_email(email=sender_email, organizacion_id=organizacion_id)
+    if not persona:
+        persona_payload: dict[str, Any] = {
             "nombre_completo": sender_name or sender_email.split("@")[0],
             "correo": sender_email,
-            "contacto_datos": {
+            "persona_datos": {
                 "source": "inbox_email_inbound",
                 "prospeccion_canal": "correo",
             },
         }
-        contact = await repo.create_contact(organizacion_id=organizacion_id, payload=contact_payload)
-    contact_id = contact.get("id")
+        persona = await repo.create_persona(organizacion_id=organizacion_id, payload=persona_payload)
+    persona_id = persona.get("id")
     try:
-        contact_uuid = UUID(str(contact_id))
+        contact_uuid = UUID(str(persona_id))
     except (TypeError, ValueError):
         return None
 
