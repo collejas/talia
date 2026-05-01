@@ -173,7 +173,7 @@ async def _resolve_booking_detail(
                 )
     if not booking_row and persona_id:
         try:
-            booking_row = await storage.fetch_calendar_booking_by_contact(persona_id)
+            booking_row = await storage.fetch_calendar_booking_by_persona(persona_id)
         except StorageError as exc:
             logger.debug(
                 "booking_context.calendar_persona_missing",

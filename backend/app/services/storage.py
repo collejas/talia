@@ -3569,6 +3569,11 @@ async def fetch_calendar_booking_by_contact(contact_id: str) -> dict[str, Any] |
         raise StorageError(str(exc)) from exc
 
 
+async def fetch_calendar_booking_by_persona(persona_id: str) -> dict[str, Any] | None:
+    """Alias de compatibilidad para la cita asociada a una persona."""
+    return await fetch_calendar_booking_by_contact(persona_id)
+
+
 async def capture_opportunity_if_ready(
     *,
     conversation_id: str,
