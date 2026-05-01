@@ -937,9 +937,9 @@ async def _refresh_opportunity_context_from_persona(
             )
 
     try:
-        opportunity_id = await storage.ensure_conversation_opportunity(
+        opportunity_id = await storage.ensure_persona_conversation_opportunity(
             conversation_id=context.conversation_id,
-            contact_id=context.contact_id,
+            persona_id=context.contact_id,
             channel=context.channel or "whatsapp",
         )
     except StorageError as exc:
@@ -1648,9 +1648,9 @@ async def _handle_information_email(
 
     oportunidad_id = None
     try:
-        oportunidad_id = await storage.ensure_conversation_opportunity(
+        oportunidad_id = await storage.ensure_persona_conversation_opportunity(
             conversation_id=context.conversation_id,
-            contact_id=context.contact_id,
+            persona_id=context.contact_id,
             channel=context.channel or "whatsapp",
         )
     except StorageError as exc:
@@ -1701,9 +1701,9 @@ async def _handle_mark_lost_negacion(
         )
 
     try:
-        tarjeta_id = await storage.ensure_conversation_opportunity(
+        tarjeta_id = await storage.ensure_persona_conversation_opportunity(
             conversation_id=conversation_id,
-            contact_id=context.contact_id,
+            persona_id=context.contact_id,
             channel=context.channel or "whatsapp",
         )
     except StorageError as exc:
@@ -1742,9 +1742,9 @@ async def _handle_close_lead(
     siguiente_accion = str(arguments.get("siguiente_accion") or "").strip() or None
     tarjeta_id = None
     try:
-        tarjeta_id = await storage.ensure_conversation_opportunity(
+        tarjeta_id = await storage.ensure_persona_conversation_opportunity(
             conversation_id=context.conversation_id,
-            contact_id=context.contact_id,
+            persona_id=context.contact_id,
             channel=context.channel or "whatsapp",
         )
     except StorageError as exc:
@@ -1966,9 +1966,9 @@ async def _handle_restart_cycle(
     arguments: dict[str, Any], context: ToolRuntimeContext
 ) -> dict[str, Any]:
     reason = str(arguments.get("reason") or "").strip()
-    ensure_payload = await storage.ensure_conversation_opportunity(
+    ensure_payload = await storage.ensure_persona_conversation_opportunity(
         conversation_id=context.conversation_id,
-        contact_id=context.contact_id,
+        persona_id=context.contact_id,
         channel=context.channel or "whatsapp",
         force_new_opportunity_on_restart=True,
         include_restart_metadata=True,
@@ -2702,9 +2702,9 @@ async def _notify_sales_rep(
     opp_id = opportunity_id
     if not opp_id:
         try:
-            opp_id = await storage.ensure_conversation_opportunity(
+            opp_id = await storage.ensure_persona_conversation_opportunity(
                 conversation_id=context.conversation_id,
-                contact_id=context.contact_id,
+                persona_id=context.contact_id,
                 channel=context.channel or "whatsapp",
             )
         except StorageError as exc:

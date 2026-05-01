@@ -930,9 +930,9 @@ async def _guard_booking_confirmation_claim(
                 if contact_id:
                     resolved_persona = await storage.fetch_persona(contact_id)
             if not resolved_opportunity_id and resolved_persona:
-                resolved_opportunity_id = await storage.ensure_conversation_opportunity(
+                resolved_opportunity_id = await storage.ensure_persona_conversation_opportunity(
                     conversation_id=conversation_id,
-                    contact_id=str(resolved_persona.get("id") or ""),
+                    persona_id=str(resolved_persona.get("id") or ""),
                     channel="whatsapp",
                 )
         if resolved_persona and resolved_opportunity_id:
@@ -1219,9 +1219,9 @@ async def handle_incoming_message(
                         inbound_contact_id=contact_id,
                     )
     try:
-        ensure_payload = await storage.ensure_conversation_opportunity(
+        ensure_payload = await storage.ensure_persona_conversation_opportunity(
             conversation_id=conversation_id,
-            contact_id=ensure_contact_id,
+            persona_id=ensure_contact_id,
             channel="whatsapp",
             include_restart_metadata=True,
         )

@@ -232,9 +232,9 @@ async def try_execute_lead_tool(
         )
         if contact_ready:
             try:
-                tarjeta_id = await storage.ensure_conversation_opportunity(
+                tarjeta_id = await storage.ensure_persona_conversation_opportunity(
                     conversation_id=context.conversation_id,
-                    contact_id=context.contact_id,
+                    persona_id=context.contact_id,
                     channel=context.channel,
                 )
             except StorageError as exc:
@@ -594,9 +594,9 @@ async def _handle_restart_conversation_cycle(
     reason = str(arguments.get("reason") or "").strip()
     channel = context.channel or "messenger"
     try:
-        ensure_payload = await storage.ensure_conversation_opportunity(
+        ensure_payload = await storage.ensure_persona_conversation_opportunity(
             conversation_id=context.conversation_id,
-            contact_id=context.contact_id,
+            persona_id=context.contact_id,
             channel=channel,
             force_new_opportunity_on_restart=True,
             include_restart_metadata=True,

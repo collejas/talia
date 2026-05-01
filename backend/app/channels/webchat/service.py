@@ -1630,9 +1630,9 @@ async def _guard_booking_confirmation_claim(
                 if contact_id:
                     resolved_persona = await _resolve_persona(contact_id) or {}
             if not resolved_opportunity_id and resolved_persona:
-                resolved_opportunity_id = await storage.ensure_conversation_opportunity(
+                resolved_opportunity_id = await storage.ensure_persona_conversation_opportunity(
                     conversation_id=conversation_id,
-                    contact_id=str(resolved_persona.get("id") or ""),
+                    persona_id=str(resolved_persona.get("id") or ""),
                     channel="webchat",
                 )
         if resolved_persona and resolved_opportunity_id:
@@ -4239,9 +4239,9 @@ async def _execute_function_call(
         persona_record = await _resolve_persona(context.contact_id)
         opportunity_id = None
         try:
-            opportunity_id = await storage.ensure_conversation_opportunity(
+            opportunity_id = await storage.ensure_persona_conversation_opportunity(
                 conversation_id=context.conversation_id,
-                contact_id=context.contact_id,
+                persona_id=context.contact_id,
                 channel="webchat",
             )
         except StorageError as exc:
