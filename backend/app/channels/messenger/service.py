@@ -466,10 +466,10 @@ async def _handle_message(
     booking_context_text = None
     try:
         booking_context_text = await build_booking_context_message(
-            contact_id=contact_id,
+            persona_id=contact_id,
             conversation_id=conversation_id,
             channel="messenger",
-            contact=None,
+            persona=None,
         )
     except Exception as exc:
         logger.warning(

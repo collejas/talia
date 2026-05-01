@@ -158,7 +158,7 @@ async def _notify_webchat_sales_if_needed(
         await webchat_notifications.notify_sales_rep(
             context=context,
             trigger=trigger,
-            contact=persona_record,
+            persona=persona_record,
             opportunity_id=opportunity_id,
             resumen=resumen,
             notes=notes,

@@ -48,44 +48,44 @@ def _format_booking_labels(dt: datetime, timezone_hint: str | None) -> tuple[str
 
 async def _resolve_booking_detail(
     *,
-    contact_id: str | None,
+    persona_id: str | None,
     conversation_id: str | None,
     channel: str | None,
-    contact: dict[str, Any] | None = None,
+    persona: dict[str, Any] | None = None,
 ) -> dict[str, Any] | None:
-    if not contact_id or not conversation_id:
+    if not persona_id or not conversation_id:
         logger.debug(
             "booking_context.missing_identifiers",
-            extra={"contact_id": contact_id, "conversation_id": conversation_id},
+            extra={"persona_id": persona_id, "conversation_id": conversation_id},
         )
         return None
-    resolved_contact = contact
-    if not resolved_contact:
+    resolved_persona = persona
+    if not resolved_persona:
         try:
-            resolved_contact = await storage.fetch_persona(contact_id)
+            resolved_persona = await storage.fetch_persona(persona_id)
         except StorageError as exc:
             logger.debug(
-                "booking_context.contact_lookup_failed",
-                extra={"contact_id": contact_id, "error": str(exc)},
+                "booking_context.persona_lookup_failed",
+                extra={"persona_id": persona_id, "error": str(exc)},
             )
             return None
-    if not resolved_contact:
+    if not resolved_persona:
         logger.debug(
-            "booking_context.contact_missing",
-            extra={"contact_id": contact_id, "conversation_id": conversation_id},
+            "booking_context.persona_missing",
+            extra={"persona_id": persona_id, "conversation_id": conversation_id},
         )
         return None
-    organizacion_id = resolved_contact.get("organizacion_id")
+    organizacion_id = resolved_persona.get("organizacion_id")
     if not organizacion_id:
         logger.debug(
-            "booking_context.contact_has_no_org",
-            extra={"contact_id": contact_id, "conversation_id": conversation_id},
+            "booking_context.persona_has_no_org",
+            extra={"persona_id": persona_id, "conversation_id": conversation_id},
         )
         return None
     try:
         outcome = await storage.ensure_conversation_opportunity(
             conversation_id=conversation_id,
-            contact_id=contact_id,
+            contact_id=persona_id,
             channel=channel,
         )
     except StorageError as exc:
@@ -93,7 +93,7 @@ async def _resolve_booking_detail(
             "booking_context.opportunity_resolution_failed",
             extra={
                 "conversation_id": conversation_id,
-                "contact_id": contact_id,
+                "persona_id": persona_id,
                 "channel": channel,
                 "error": str(exc),
             },
@@ -107,7 +107,7 @@ async def _resolve_booking_detail(
     if not opportunity_id:
         logger.debug(
             "booking_context.opportunity_id_missing",
-            extra={"conversation_id": conversation_id, "contact_id": contact_id},
+            extra={"conversation_id": conversation_id, "persona_id": persona_id},
         )
         return None
     booking_row: dict[str, Any] | None = None
@@ -122,7 +122,7 @@ async def _resolve_booking_detail(
             "booking_context.demo_metadata_missing",
             extra={
                 "conversation_id": conversation_id,
-                "contact_id": contact_id,
+                "persona_id": persona_id,
                 "opportunity_id": opportunity_id,
                 "error": str(exc),
             },
@@ -157,7 +157,7 @@ async def _resolve_booking_detail(
                 "booking_context.calendar_conversation_missing",
                 extra={
                     "conversation_id": conversation_id,
-                    "contact_id": contact_id,
+                    "persona_id": persona_id,
                     "error": str(exc),
                 },
             )
@@ -167,18 +167,18 @@ async def _resolve_booking_detail(
                     "booking_context.calendar_fallback_used",
                     extra={
                         "conversation_id": conversation_id,
-                        "contact_id": contact_id,
+                        "persona_id": persona_id,
                         "booking_id": booking_row.get("id"),
                     },
                 )
-    if not booking_row and contact_id:
+    if not booking_row and persona_id:
         try:
-            booking_row = await storage.fetch_calendar_booking_by_contact(contact_id)
+            booking_row = await storage.fetch_calendar_booking_by_contact(persona_id)
         except StorageError as exc:
             logger.debug(
-                "booking_context.calendar_contact_missing",
+                "booking_context.calendar_persona_missing",
                 extra={
-                    "contact_id": contact_id,
+                    "persona_id": persona_id,
                     "conversation_id": conversation_id,
                     "error": str(exc),
                 },
@@ -186,9 +186,9 @@ async def _resolve_booking_detail(
         else:
             if booking_row:
                 logger.debug(
-                    "booking_context.calendar_contact_used",
+                    "booking_context.calendar_persona_used",
                     extra={
-                        "contact_id": contact_id,
+                        "persona_id": persona_id,
                         "conversation_id": conversation_id,
                         "booking_id": booking_row.get("id"),
                     },
@@ -196,7 +196,7 @@ async def _resolve_booking_detail(
     if not booking_row:
         logger.debug(
             "booking_context.no_booking_found",
-            extra={"conversation_id": conversation_id, "contact_id": contact_id},
+            extra={"conversation_id": conversation_id, "persona_id": persona_id},
         )
         return None
     status_value = str(booking_row.get("status") or "").strip().lower()
@@ -217,7 +217,7 @@ async def _resolve_booking_detail(
         "booking_context.found_booking",
         extra={
             "conversation_id": conversation_id,
-            "contact_id": contact_id,
+            "persona_id": persona_id,
             "booking_id": booking_id_value,
             "start_at": start_at.isoformat(),
         },
@@ -233,16 +233,16 @@ async def _resolve_booking_detail(
 
 async def build_booking_context_message(
     *,
-    contact_id: str | None,
+    persona_id: str | None,
     conversation_id: str | None,
     channel: str | None,
-    contact: dict[str, Any] | None = None,
+    persona: dict[str, Any] | None = None,
 ) -> str | None:
     booking = await _resolve_booking_detail(
-        contact_id=contact_id,
+        persona_id=persona_id,
         conversation_id=conversation_id,
         channel=channel,
-        contact=contact,
+        persona=persona,
     )
     if not booking:
         return None

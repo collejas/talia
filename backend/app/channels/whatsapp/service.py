@@ -1318,7 +1318,7 @@ async def handle_incoming_message(
     try:
         booking_context_started = time.perf_counter()
         booking_context_text = await build_booking_context_message(
-            contact_id=contact_id,
+            persona_id=contact_id,
             conversation_id=conversation_id,
             channel="whatsapp",
             persona=persona_record,
@@ -1809,7 +1809,7 @@ async def _retry_failed_sales_notification(
             await webchat_notifications.notify_sales_rep(
                 context=context,
                 trigger=trigger,
-                contact=contact,
+                persona=contact,
                 opportunity_id=opportunity_id,
                 resumen=resumen,
                 notes=notes,

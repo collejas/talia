@@ -3158,10 +3158,10 @@ async def handle_message(
     try:
         booking_context_started = time.perf_counter()
         booking_context_text = await build_booking_context_message(
-            contact_id=context.contact_id,
+            persona_id=context.contact_id,
             conversation_id=context.conversation_id,
             channel="webchat",
-            contact=persona,
+            persona=persona,
         )
         _record_stage_timing(stage_timings, "booking_context_ms", booking_context_started)
     except Exception as exc:

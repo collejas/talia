@@ -250,7 +250,7 @@ class SalesNotificationJobsRunner:
             await webchat_notifications.notify_sales_rep(
                 context=context,
                 trigger=trigger,
-                contact=payload.get("contact") if isinstance(payload.get("contact"), dict) else None,
+                persona=payload.get("contact") if isinstance(payload.get("contact"), dict) else None,
                 opportunity_id=_clean_text(payload.get("opportunity_id")),
                 resumen=_clean_text(payload.get("resumen")),
                 notes=_clean_text(payload.get("notes")),

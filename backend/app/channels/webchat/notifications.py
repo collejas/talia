@@ -281,7 +281,7 @@ async def notify_sales_rep(
     *,
     context: ToolRuntimeContext,
     trigger: str,
-    contact: dict[str, Any] | None,
+    persona: dict[str, Any] | None,
     opportunity_id: str | None,
     resumen: str | None,
     notes: str | None,
@@ -291,10 +291,10 @@ async def notify_sales_rep(
     raise_on_delivery_error: bool = False,
 ) -> None:
     channel_value = str(getattr(context, "channel", None) or "webchat").strip().lower() or "webchat"
-    persona_record = contact or await storage.fetch_persona(context.contact_id)
+    persona_record = persona or await storage.fetch_persona(context.contact_id)
     if not persona_record:
         logger.warning(
-            "webchat.notify_sales.contact_missing",
+            "webchat.notify_sales.persona_missing",
             extra={"conversation_id": context.conversation_id, "trigger": trigger},
         )
         return
@@ -320,7 +320,7 @@ async def notify_sales_rep(
                 "webchat.notify_sales.ensure_failed",
                 extra={
                     "conversation_id": context.conversation_id,
-                    "contact_id": context.contact_id,
+                    "persona_id": context.contact_id,
                     "trigger": trigger,
                     "error": str(exc),
                 },
