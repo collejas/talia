@@ -791,7 +791,7 @@ async def notify_session_closed_lead(
         return False
 
     try:
-        contact_id = await storage.get_webchat_contact_id(session_key)
+        contact_id = await storage.get_webchat_persona_id(session_key)
     except StorageError as exc:
         logger.warning(
             "webchat.session_closed.contact_lookup_failed",

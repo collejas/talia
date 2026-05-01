@@ -1633,6 +1633,11 @@ async def get_webchat_contact_id(session_id: str) -> str | None:
         raise StorageError(str(exc)) from exc
 
 
+async def get_webchat_persona_id(session_id: str) -> str | None:
+    """Alias con nombre de persona para el contacto asociado a un session_id."""
+    return await get_webchat_contact_id(session_id)
+
+
 async def fetch_webchat_session_id(contact_id: str) -> str | None:
     """Obtiene el session_id asociado al contacto para el canal webchat."""
     repo = CRMRepository()
@@ -1646,7 +1651,7 @@ async def resolve_webchat_conversation_from_session(
     session_id: str,
 ) -> dict[str, Any] | None:
     """Obtiene la última conversación webchat asociada a un session_id."""
-    contact_id = await get_webchat_contact_id(session_id)
+    contact_id = await get_webchat_persona_id(session_id)
     if not contact_id:
         return None
 
@@ -3267,6 +3272,22 @@ async def maybe_promote_prequalified_from_scoring(
         return False
 
 
+async def maybe_promote_prequalified_from_persona(
+    *,
+    conversation_id: str,
+    persona_id: str,
+    opportunity_id: str,
+    channel: str,
+) -> bool:
+    """Alias con nombre de persona para la promoción a precalificado."""
+    return await maybe_promote_prequalified_from_scoring(
+        conversation_id=conversation_id,
+        contact_id=persona_id,
+        opportunity_id=opportunity_id,
+        channel=channel,
+    )
+
+
 async def promote_opportunity_stage(
     *,
     oportunidad_id: str,
@@ -3557,6 +3578,18 @@ async def fetch_opportunity_contact(
     if resolved_org:
         result.setdefault("organizacion_id", resolved_org)
     return result
+
+
+async def fetch_opportunity_persona(
+    *,
+    oportunidad_id: str,
+    organizacion_id: str | None,
+) -> dict[str, Any] | None:
+    """Alias con nombre de persona para la entidad principal de una oportunidad."""
+    return await fetch_opportunity_contact(
+        oportunidad_id=oportunidad_id,
+        organizacion_id=organizacion_id,
+    )
 
 
 async def fetch_calendar_booking(booking_id: str) -> dict[str, Any] | None:

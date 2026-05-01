@@ -354,9 +354,9 @@ async def try_execute_lead_tool(
                     extra={"conversation_id": context.conversation_id, "error": str(exc)},
                 )
             try:
-                await storage.maybe_promote_prequalified_from_scoring(
+                await storage.maybe_promote_prequalified_from_persona(
                     conversation_id=context.conversation_id,
-                    contact_id=context.contact_id,
+                    persona_id=context.contact_id,
                     opportunity_id=str(tarjeta_id),
                     channel=context.channel or "webchat",
                 )

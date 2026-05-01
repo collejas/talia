@@ -1870,9 +1870,9 @@ async def _handle_close_lead(
                     extra={"conversation_id": context.conversation_id, "error": str(exc)},
                 )
             try:
-                await storage.maybe_promote_prequalified_from_scoring(
+                await storage.maybe_promote_prequalified_from_persona(
                     conversation_id=context.conversation_id,
-                    contact_id=context.contact_id,
+                    persona_id=context.contact_id,
                     opportunity_id=str(tarjeta_id),
                     channel=context.channel or "whatsapp",
                 )
@@ -2247,7 +2247,7 @@ async def _handle_schedule_demo(
     persona_org = webchat_service._extract_persona_org(persona_record)
     if persona_org:
         try:
-            opportunity_contact = await storage.fetch_opportunity_contact(
+            opportunity_contact = await storage.fetch_opportunity_persona(
                 oportunidad_id=str(tarjeta_id),
                 organizacion_id=str(persona_org),
             )
@@ -2308,7 +2308,7 @@ async def _handle_schedule_demo(
                 extra={"conversation_id": context.conversation_id, "opportunity_id": str(tarjeta_id)},
             )
         try:
-            await storage.maybe_promote_prequalified_from_scoring(
+            await storage.maybe_promote_prequalified_from_persona(
                 conversation_id=context.conversation_id,
                 contact_id=context.contact_id,
                 opportunity_id=str(tarjeta_id),

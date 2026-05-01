@@ -712,7 +712,7 @@ async def _send_booking_confirmation_email(
     needs_fallback = (not email_value or email_value.lower() == "none") or persona is None
     if needs_fallback and tarjeta_id:
         try:
-            fallback_contact = await storage.fetch_opportunity_contact(
+            fallback_contact = await storage.fetch_opportunity_persona(
                 oportunidad_id=tarjeta_id,
                 organizacion_id=str(org_hint) if org_hint else None,
             )
@@ -944,7 +944,7 @@ async def _sync_booking_with_opportunity(
     resolved_persona = persona
     if not resolved_persona or not resolved_persona.get("organizacion_id"):
         try:
-            fallback_contact = await storage.fetch_opportunity_contact(
+            fallback_contact = await storage.fetch_opportunity_persona(
                 oportunidad_id=tarjeta_id,
                 organizacion_id=str(resolved_persona.get("organizacion_id"))
                 if resolved_persona and resolved_persona.get("organizacion_id")
@@ -2846,7 +2846,7 @@ async def _register_webchat_visit(
     contact_id = str(contact_id_hint) if contact_id_hint else None
     if not contact_id:
         try:
-            contact_id = await storage.get_webchat_contact_id(session_id)
+            contact_id = await storage.get_webchat_persona_id(session_id)
         except storage.StorageError as exc:
             logger.exception(
                 "webchat.resolve_contact_failed",
@@ -4410,9 +4410,9 @@ async def _execute_function_call(
                         extra={"conversation_id": context.conversation_id, "error": str(exc)},
                     )
                 try:
-                    await storage.maybe_promote_prequalified_from_scoring(
+                    await storage.maybe_promote_prequalified_from_persona(
                         conversation_id=context.conversation_id,
-                        contact_id=context.contact_id,
+                        persona_id=context.contact_id,
                         opportunity_id=str(opportunity_id),
                         channel="webchat",
                     )
@@ -4700,9 +4700,9 @@ async def _execute_function_call(
                     },
                 )
             try:
-                await storage.maybe_promote_prequalified_from_scoring(
+                await storage.maybe_promote_prequalified_from_persona(
                     conversation_id=context.conversation_id,
-                    contact_id=context.contact_id,
+                    persona_id=context.contact_id,
                     opportunity_id=str(tarjeta_id),
                     channel="webchat",
                 )
