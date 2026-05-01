@@ -1966,8 +1966,8 @@ async def _maybe_update_persona_location(
             )
             return None
 
-    persona_contacto_datos = _persona_datos(persona_data)
-    ubicacion = dict(persona_contacto_datos.get("ubicacion") or {})
+    persona_datos = _persona_datos(persona_data)
+    ubicacion = dict(persona_datos.get("ubicacion") or {})
     lada_exists = ubicacion.get("lada")
     estado_exists = ubicacion.get("cve_ent")
     cvegeo_exists = ubicacion.get("cvegeo")
@@ -2024,17 +2024,17 @@ async def _maybe_update_persona_location(
     if not updated:
         return persona_data
 
-    persona_contacto_datos["ubicacion"] = ubicacion
+    persona_datos["ubicacion"] = ubicacion
     try:
-        await storage.update_persona(persona_id, {"persona_datos": persona_contacto_datos})
+        await storage.update_persona(persona_id, {"persona_datos": persona_datos})
     except StorageError as exc:
         logger.warning(
             "whatsapp.update_persona_location_failed",
             extra={"persona_id": persona_id, "error": str(exc)},
         )
     else:
-        persona_data["persona_datos"] = persona_contacto_datos
-        persona_data["contacto_datos"] = dict(persona_contacto_datos)
+        persona_data["persona_datos"] = persona_datos
+        persona_data["contacto_datos"] = dict(persona_datos)
 
     return persona_data
 
