@@ -304,9 +304,9 @@ async def _ensure_email_inbox_context(
         except (TypeError, ValueError, CRMRepositoryError):
             prospecto = None
 
-    contact = await repo.get_contact_by_email(email=sender_email, organizacion_id=org_uuid)
-    if not contact:
-        contact_payload: dict[str, Any] = {
+    persona = await repo.get_persona_by_email(email=sender_email, organizacion_id=org_uuid)
+    if not persona:
+        persona_payload: dict[str, Any] = {
             "nombre_completo": sender_name
             or _clean_text((prospecto or {}).get("display_name"))
             or sender_email.split("@")[0],
@@ -318,11 +318,11 @@ async def _ensure_email_inbox_context(
                 **({"prospecto_id": str(prospecto_uuid)} if prospecto_uuid else {}),
             },
         }
-        contact_payload = {key: value for key, value in contact_payload.items() if value not in (None, "")}
-        contact = await repo.create_contact(organizacion_id=org_uuid, payload=contact_payload)
-    contact_id = contact.get("id")
+        persona_payload = {key: value for key, value in persona_payload.items() if value not in (None, "")}
+        persona = await repo.create_persona(organizacion_id=org_uuid, payload=persona_payload)
+    persona_id = persona.get("id")
     try:
-        contact_uuid = UUID(str(contact_id))
+        contact_uuid = UUID(str(persona_id))
     except (TypeError, ValueError):
         return None
 

@@ -1359,7 +1359,7 @@ async def register_whatsapp_message(
             persona_row = await repo.get_persona_by_id(persona_id=resolved_persona_id)
         else:
             if wa_id:
-                persona_row = await repo.get_contact_by_whatsapp_id(
+                persona_row = await repo.get_persona_by_whatsapp_id(
                     wa_id=wa_id,
                     organizacion_id=org_uuid,
                 )
@@ -2273,22 +2273,6 @@ async def fetch_email_template(slug: str = "default") -> dict[str, Any] | None:
         ),
         "updated_at": row.get("updated_at"),
     }
-
-
-async def update_contact(contact_id: str, patch: dict[str, Any]) -> dict[str, Any]:
-    """Actualiza campos de la persona indicada y devuelve la fila resultante."""
-    if not patch:
-        raise StorageError("No se proporcionaron datos para actualizar la persona")
-    phone_value = patch.get("telefono_e164")
-    if phone_value is not None:
-        patch["telefono_e164"] = normalize_phone(phone_value)
-    repo = CRMRepository()
-    try:
-        row = await repo.update_persona_by_id(persona_id=contact_id, patch=patch)
-    except CRMRepositoryError as exc:
-        raise StorageError(str(exc)) from exc
-
-    return _normalize_persona_payload(row)
 
 
 async def update_persona(persona_id: str, patch: dict[str, Any]) -> dict[str, Any]:

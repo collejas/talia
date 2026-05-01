@@ -78,6 +78,11 @@ async def test_notify_sales_rep_sends_message(monkeypatch: pytest.MonkeyPatch) -
         fake_send_manual_message,
     )
 
+    async def fake_register_whatsapp_message(*_, **__):
+        return None
+
+    monkeypatch.setattr(tools.storage, "register_whatsapp_message", fake_register_whatsapp_message)
+
     contact = {
         "organizacion_id": "00000000-0000-0000-0000-0000000000bb",
         "nombre_completo": "Lead Demo",
@@ -95,7 +100,7 @@ async def test_notify_sales_rep_sends_message(monkeypatch: pytest.MonkeyPatch) -
     await tools._notify_sales_rep(
         context=context,
         trigger="booking_confirmed",
-        contact=contact,
+        persona=contact,
         opportunity_id="00000000-0000-0000-0000-0000000000cc",
         resumen="Automatizar atención",
         notes="Quiere demo esta semana",
@@ -179,7 +184,7 @@ async def test_notify_sales_rep_skips_when_already_sent(monkeypatch: pytest.Monk
     await tools._notify_sales_rep(
         context=context,
         trigger="booking_confirmed",
-        contact=contact,
+        persona=contact,
         opportunity_id="00000000-0000-0000-0000-0000000000cc",
         resumen=None,
         notes=None,
@@ -231,7 +236,7 @@ async def test_has_minimum_profile_for_case_a_uses_profiling_status_fallback(
     )
     assert (
         await tools._has_minimum_profile_for_case_a(
-            contact={},
+            persona={},
             opportunity_metadata=metadata,
             repo=DummySalesRepo(),
             organizacion_id=UUID("00000000-0000-0000-0000-000000000001"),
@@ -292,7 +297,7 @@ async def test_has_prefilter_for_schedule_uses_contact_scoring_answers_fallback(
     }
 
     status = await tools._has_prefilter_for_schedule(
-        contact=contact,
+        persona=contact,
         opportunity_id="00000000-0000-0000-0000-000000000222",
         conversation_id="conv-123",
     )
@@ -372,10 +377,10 @@ async def test_handle_information_email_triggers_notification(
         "correo": "lead@example.com",
     }
 
-    async def fake_resolve_contact(_: str) -> dict:
+    async def fake_resolve_persona(_: str) -> dict:
         return contact
 
-    monkeypatch.setattr(tools, "_resolve_contact", fake_resolve_contact)
+    monkeypatch.setattr(tools, "_resolve_persona", fake_resolve_persona)
     monkeypatch.setattr(tools, "send_email", lambda **_: "msg-email")
     async def fake_get_mail_runtime_settings(**_: object):
         return tools.tenant_runtime.MailRuntimeSettings.from_settings()
@@ -411,7 +416,7 @@ async def test_handle_information_email_triggers_notification(
 
     monkeypatch.setattr(tools.storage, "upsert_conversation_insights", fake_upsert)
     monkeypatch.setattr(tools.storage, "ensure_conversation_opportunity", fake_ensure)
-    monkeypatch.setattr(tools.storage, "update_contact", fake_upsert)
+    monkeypatch.setattr(tools.storage, "update_persona", fake_upsert)
     monkeypatch.setattr(tools.storage, "maybe_auto_name_opportunity", fake_auto_name)
 
     notified: list[str] = []
@@ -450,10 +455,10 @@ async def test_handle_close_lead_triggers_notification(
         "organizacion_id": "00000000-0000-0000-0000-0000000000bb",
     }
 
-    async def fake_resolve_contact(_: str) -> dict:
+    async def fake_resolve_persona(_: str) -> dict:
         return contact
 
-    monkeypatch.setattr(tools, "_resolve_contact", fake_resolve_contact)
+    monkeypatch.setattr(tools, "_resolve_persona", fake_resolve_persona)
 
     async def fake_ensure(*_, **__):
         return "00000000-0000-0000-0000-0000000000dd"
@@ -461,16 +466,20 @@ async def test_handle_close_lead_triggers_notification(
     async def fake_update_contact(*_, **__):
         return None
 
+    async def fake_recent_messages(*_, **__):
+        return []
+
     auto_name_calls: list[dict[str, Any]] = []
 
     async def fake_auto_name(**kwargs: Any) -> None:
         auto_name_calls.append(kwargs)
 
     monkeypatch.setattr(tools.storage, "ensure_conversation_opportunity", fake_ensure)
-    monkeypatch.setattr(tools.storage, "update_contact", fake_update_contact)
+    monkeypatch.setattr(tools.storage, "update_persona", fake_update_contact)
     monkeypatch.setattr(tools.storage, "update_conversation", fake_update_contact)
     monkeypatch.setattr(tools.storage, "upsert_conversation_insights", fake_update_contact)
     monkeypatch.setattr(tools.storage, "maybe_auto_name_opportunity", fake_auto_name)
+    monkeypatch.setattr(tools.storage, "fetch_recent_messages", fake_recent_messages)
     scored: dict[str, Any] = {}
     promoted: dict[str, Any] = {}
 
@@ -538,7 +547,7 @@ async def test_handle_close_lead_with_evasive_answers_keeps_flow_ok(
 ) -> None:
     contact = {"organizacion_id": "00000000-0000-0000-0000-0000000000bb"}
 
-    async def fake_resolve_contact(_: str) -> dict:
+    async def fake_resolve_persona(_: str) -> dict:
         return contact
 
     async def fake_ensure(*_, **__):
@@ -558,14 +567,18 @@ async def test_handle_close_lead_with_evasive_answers_keeps_flow_ok(
         promoted["payload"] = kwargs
         return False
 
-    monkeypatch.setattr(tools, "_resolve_contact", fake_resolve_contact)
+    monkeypatch.setattr(tools, "_resolve_persona", fake_resolve_persona)
     monkeypatch.setattr(tools.storage, "ensure_conversation_opportunity", fake_ensure)
-    monkeypatch.setattr(tools.storage, "update_contact", fake_noop)
+    monkeypatch.setattr(tools.storage, "update_persona", fake_noop)
     monkeypatch.setattr(tools.storage, "update_conversation", fake_noop)
     monkeypatch.setattr(tools.storage, "upsert_conversation_insights", fake_noop)
     monkeypatch.setattr(tools.storage, "maybe_auto_name_opportunity", fake_noop)
     monkeypatch.setattr(tools.storage, "apply_lead_scoring", fake_apply_lead_scoring)
     monkeypatch.setattr(tools.storage, "maybe_promote_prequalified_from_scoring", fake_promote_prequalified)
+    async def fake_recent_messages(*_, **__):
+        return []
+
+    monkeypatch.setattr(tools.storage, "fetch_recent_messages", fake_recent_messages)
     monkeypatch.setattr(tools, "_notify_sales_rep", fake_noop)
 
     context = ToolRuntimeContext(
