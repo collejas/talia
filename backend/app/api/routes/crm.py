@@ -14562,13 +14562,13 @@ async def create_persona_alta(
 
     try:
         if dedupe_contacto_id:
-            contact_row = await repo.update_contact(
+            contact_row = await repo.update_persona(
                 organizacion_id=organizacion_id,
-                contacto_id=dedupe_contacto_id,
+                persona_id=dedupe_contacto_id,
                 payload={key: value for key, value in contact_payload.items() if value is not None},
             )
         else:
-            contact_row = await repo.create_contact(
+            contact_row = await repo.create_persona(
                 organizacion_id=organizacion_id,
                 payload={key: value for key, value in contact_payload.items() if value is not None},
             )
@@ -14803,9 +14803,9 @@ async def update_persona(
         contact_payload["company_name"] = None
 
     try:
-        contact_row = await repo.update_contact(
+        contact_row = await repo.update_persona(
             organizacion_id=organizacion_id,
-            contacto_id=contacto_id,
+            persona_id=contacto_id,
             payload={key: value for key, value in contact_payload.items() if value is not None},
         )
     except CRMRepositoryError as exc:
@@ -15101,7 +15101,7 @@ async def create_persona(
 ) -> CRMPersona:
     body = payload.model_dump(mode="json", exclude_unset=True)
     try:
-        row = await repo.create_contact(
+        row = await repo.create_persona(
             organizacion_id=organizacion_id,
             payload=body,
         )
@@ -15150,9 +15150,9 @@ async def update_persona_crud(
 ) -> CRMPersona:
     body = payload.model_dump(mode="json", exclude_unset=True)
     try:
-        row = await repo.update_contact(
+        row = await repo.update_persona(
             organizacion_id=organizacion_id,
-            contacto_id=persona_id,
+            persona_id=persona_id,
             payload=body,
         )
     except CRMRepositoryError as exc:
@@ -15197,9 +15197,9 @@ async def delete_persona(
     persona_id: UUID,
 ) -> Response:
     try:
-        await repo.delete_contact(
+        await repo.delete_persona(
             organizacion_id=organizacion_id,
-            contacto_id=persona_id,
+            persona_id=persona_id,
         )
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc

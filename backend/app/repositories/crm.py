@@ -6334,6 +6334,14 @@ class CRMRepository:
             raise CRMRepositoryError(f"Respuesta inválida al obtener contacto: {row!r}")
         return await self._persona_to_contact_row(persona=row, organizacion_id=organizacion_id)
 
+    async def get_persona(
+        self,
+        *,
+        organizacion_id: UUID,
+        persona_id: UUID,
+    ) -> dict[str, Any] | None:
+        return await self.get_contact(organizacion_id=organizacion_id, contacto_id=persona_id)
+
     async def get_contacts_by_ids(
         self,
         *,
@@ -6375,6 +6383,17 @@ class CRMRepository:
             except CRMRepositoryError:
                 continue
         return rows
+
+    async def get_personas_by_ids(
+        self,
+        *,
+        organizacion_id: UUID,
+        persona_ids: list[UUID],
+    ) -> list[dict[str, Any]]:
+        return await self.get_contacts_by_ids(
+            organizacion_id=organizacion_id,
+            contacto_ids=persona_ids,
+        )
 
     async def update_contact(
         self,
@@ -6554,6 +6573,19 @@ class CRMRepository:
             organizacion_id=organizacion_id,
             contacto_id=contacto_id,
         ) or persona_row
+
+    async def update_persona(
+        self,
+        *,
+        organizacion_id: UUID,
+        persona_id: UUID,
+        payload: dict[str, Any],
+    ) -> dict[str, Any]:
+        return await self.update_contact(
+            organizacion_id=organizacion_id,
+            contacto_id=persona_id,
+            payload=payload,
+        )
 
     async def get_contact_by_id(self, *, contact_id: str) -> dict[str, Any] | None:
         contact_key = contact_id.strip()
@@ -6878,6 +6910,14 @@ class CRMRepository:
             raise CRMRepositoryError("Supabase no devolvió el contacto creado")
         return contact_row
 
+    async def create_persona(
+        self,
+        *,
+        organizacion_id: UUID,
+        payload: dict[str, Any],
+    ) -> dict[str, Any]:
+        return await self.create_contact(organizacion_id=organizacion_id, payload=payload)
+
     async def upsert_contact_account_relation(
         self,
         *,
@@ -7129,6 +7169,14 @@ class CRMRepository:
                 },
                 prefer="return=representation",
             )
+
+    async def delete_persona(
+        self,
+        *,
+        organizacion_id: UUID,
+        persona_id: UUID,
+    ) -> None:
+        await self.delete_contact(organizacion_id=organizacion_id, contacto_id=persona_id)
 
     async def list_opportunity_stage_history(
         self,
