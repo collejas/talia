@@ -9925,7 +9925,7 @@ async def _persona_alta_find_persona_candidates(
 
     if telefono_key:
         try:
-            by_phone = await repo.get_contact_by_phone_e164(
+            by_phone = await repo.get_persona_by_phone_e164(
                 phone_e164=telefono_key,
                 organizacion_id=organizacion_id,
             )
@@ -9949,7 +9949,7 @@ async def _persona_alta_find_persona_candidates(
             )
     if correo_key:
         try:
-            by_email = await repo.get_contact_by_email(
+            by_email = await repo.get_persona_by_email(
                 email=correo_key,
                 organizacion_id=organizacion_id,
             )
@@ -9975,7 +9975,7 @@ async def _persona_alta_find_persona_candidates(
     full_name = _persona_alta_full_name(persona)
     if full_name:
         try:
-            by_name = await repo.search_contacts(
+            by_name = await repo.search_personas(
                 organizacion_id=organizacion_id,
                 query=full_name,
                 limit=20,
@@ -12259,7 +12259,7 @@ async def reassign_opportunity(
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN, detail="contact_target_out_of_scope"
                 )
-        await repo.update_contact(
+        await repo.update_persona(
             organizacion_id=organizacion_id,
             contacto_id=contacto_id,
             payload={"propietario_usuario_id": str(payload.asignado_usuario_id)},
@@ -15082,7 +15082,7 @@ async def create_contact_legacy(
 ) -> CRMPersona:
     body = payload.model_dump(mode="json", exclude_unset=True)
     try:
-        row = await repo.create_contact(
+        row = await repo.create_persona(
             organizacion_id=organizacion_id,
             payload=body,
         )
@@ -15124,7 +15124,7 @@ async def update_contact_legacy(
 ) -> CRMPersona:
     body = payload.model_dump(mode="json", exclude_unset=True)
     try:
-        row = await repo.update_contact(
+        row = await repo.update_persona(
             organizacion_id=organizacion_id,
             contacto_id=contacto_id,
             payload=body,
@@ -15175,7 +15175,7 @@ async def delete_contact_legacy(
     contacto_id: UUID,
 ) -> Response:
     try:
-        await repo.delete_contact(
+        await repo.delete_persona(
             organizacion_id=organizacion_id,
             contacto_id=contacto_id,
         )
@@ -15780,7 +15780,7 @@ async def reassign_contact(
     if not contacto:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="contacto_not_found")
 
-    await repo.update_contact(
+    await repo.update_persona(
         organizacion_id=organizacion_id,
         contacto_id=contacto_id,
         payload={"propietario_usuario_id": str(payload.propietario_usuario_id)},
@@ -17348,7 +17348,7 @@ async def promote_inbox_conversation_to_opportunity(
         contact_patch["necesidad_proposito"] = form_necesidad
     if contact_patch:
         try:
-            contact_row = await repo.update_contact(
+            contact_row = await repo.update_persona(
                 organizacion_id=organizacion_id,
                 contacto_id=contact_uuid,
                 payload=contact_patch,
@@ -24264,7 +24264,7 @@ async def convertir_prospecto_contacto(
     contacto_body = {k: v for k, v in contacto_body.items() if v}
 
     try:
-        contacto = await repo.create_contact(
+        contacto = await repo.create_persona(
             organizacion_id=organizacion_id,
             payload=contacto_body,
         )
@@ -28881,7 +28881,7 @@ async def public_web_booking_create(
         attendee_company = (payload.attendee_company or "").strip() or None
         if not attendee_name and not attendee_email and not attendee_phone:
             raise HTTPException(status_code=400, detail="attendee_identity_required")
-        contact_row = await repo.create_contact(
+        contact_row = await repo.create_persona(
             organizacion_id=organizacion_uuid,
             payload={
                 "nombre_completo": attendee_name or "Lead agenda web",
