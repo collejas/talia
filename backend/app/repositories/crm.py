@@ -7996,7 +7996,7 @@ class CRMRepository:
             raise CRMRepositoryError(f"Respuesta inválida al archivar catálogo: {row!r}")
         return row
 
-    async def contactos_resumen(
+    async def personas_resumen(
         self,
         *,
         usuario_token: str,
@@ -8014,9 +8014,16 @@ class CRMRepository:
             first = data[0]
             if isinstance(first, dict):
                 return first
-        raise CRMRepositoryError(f"Respuesta inesperada en contactos_resumen: {data!r}")
+        raise CRMRepositoryError(f"Respuesta inesperada en personas_resumen: {data!r}")
 
-    async def contactos_timeline(
+    async def contactos_resumen(
+        self,
+        *,
+        usuario_token: str,
+    ) -> dict[str, Any]:
+        return await self.personas_resumen(usuario_token=usuario_token)
+
+    async def personas_timeline(
         self,
         *,
         usuario_token: str,
@@ -8029,10 +8036,17 @@ class CRMRepository:
         )
         data = resp.json()
         if not isinstance(data, list):
-            raise CRMRepositoryError(f"Respuesta inesperada en contactos_timeline: {data!r}")
+            raise CRMRepositoryError(f"Respuesta inesperada en personas_timeline: {data!r}")
         return data
 
-    async def contactos_list(
+    async def contactos_timeline(
+        self,
+        *,
+        usuario_token: str,
+    ) -> list[dict[str, Any]]:
+        return await self.personas_timeline(usuario_token=usuario_token)
+
+    async def personas_list(
         self,
         *,
         usuario_token: str,
@@ -8078,8 +8092,35 @@ class CRMRepository:
         )
         data = resp.json()
         if not isinstance(data, list):
-            raise CRMRepositoryError(f"Respuesta inesperada en contactos_list: {data!r}")
+            raise CRMRepositoryError(f"Respuesta inesperada en personas_list: {data!r}")
         return data
+
+    async def contactos_list(
+        self,
+        *,
+        usuario_token: str,
+        limit: int = 200,
+        offset: int = 0,
+        search: str | None = None,
+        estado: str | None = None,
+        captura: str | None = None,
+        origen: str | None = None,
+        propietario: UUID | None = None,
+        date_from: datetime | None = None,
+        date_to: datetime | None = None,
+    ) -> list[dict[str, Any]]:
+        return await self.personas_list(
+            usuario_token=usuario_token,
+            limit=limit,
+            offset=offset,
+            search=search,
+            estado=estado,
+            captura=captura,
+            origen=origen,
+            propietario=propietario,
+            date_from=date_from,
+            date_to=date_to,
+        )
 
     async def inbox_summary(
         self,

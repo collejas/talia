@@ -15460,7 +15460,7 @@ async def get_contacts_summary(
     user_token: str = Depends(require_user_token),
 ) -> CRMPersonaSummary:
     try:
-        row = await repo.contactos_resumen(usuario_token=user_token)
+        row = await repo.personas_resumen(usuario_token=user_token)
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     return CRMPersonaSummary.model_validate(row)
@@ -15485,7 +15485,7 @@ async def get_contacts_timeline(
     user_token: str = Depends(require_user_token),
 ) -> list[CRMPersonaTimelineEntry]:
     try:
-        rows = await repo.contactos_timeline(usuario_token=user_token)
+        rows = await repo.personas_timeline(usuario_token=user_token)
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     return [CRMPersonaTimelineEntry.model_validate(row) for row in rows]
@@ -15511,7 +15511,7 @@ async def get_contacts_list(
     limit: Annotated[int, Query(ge=1, le=500)] = DEFAULT_CONTACTS_LIMIT,
 ) -> list[CRMPersonaListRow]:
     try:
-        rows = await repo.contactos_list(usuario_token=user_token, limit=limit)
+        rows = await repo.personas_list(usuario_token=user_token, limit=limit)
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     return [CRMPersonaListRow.model_validate(row) for row in rows]
