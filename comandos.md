@@ -89,6 +89,7 @@ sudo systemctl restart talia-api.service
 sudo systemctl restart talia-panel.service
 
 MAPA DE CONVERSION codex resume 019ddea5-0634-7a70-a464-a6b789b1d26d
+REFACTO DE CONTACTOS codex resume 019ddec6-b7e9-7b30-9dd1-8a4ed30e58ba
 
 BUSQUEDAS DENUE codex resume 019dbbf0-3dc7-7e81-aca8-16ee42ae7984
 CORREO: codex resume 019dbc66-c341-76f2-a997-a8785463446c
