@@ -2145,7 +2145,11 @@ async def fetch_contact_identities(contact_id: str) -> list[dict[str, Any]]:
 
 async def fetch_persona_identities(persona_id: str) -> list[dict[str, Any]]:
     """Alias con nombre de persona para identidades de canal."""
-    return await fetch_contact_identities(persona_id)
+    repo = CRMRepository()
+    try:
+        return await repo.list_persona_identities(persona_id=persona_id)
+    except CRMRepositoryError as exc:
+        raise StorageError(str(exc)) from exc
 
 
 async def record_delivery_event(
@@ -2308,7 +2312,18 @@ async def update_contact(contact_id: str, patch: dict[str, Any]) -> dict[str, An
 
 async def update_persona(persona_id: str, patch: dict[str, Any]) -> dict[str, Any]:
     """Alias con nombre de persona para actualizar perfil."""
-    return await update_contact(persona_id, patch)
+    if not patch:
+        raise StorageError("No se proporcionaron datos para actualizar la persona")
+    phone_value = patch.get("telefono_e164")
+    if phone_value is not None:
+        patch["telefono_e164"] = normalize_phone(phone_value)
+    repo = CRMRepository()
+    try:
+        row = await repo.update_persona_by_id(persona_id=persona_id, patch=patch)
+    except CRMRepositoryError as exc:
+        raise StorageError(str(exc)) from exc
+
+    return _normalize_persona_payload(row)
 
 
 async def fetch_visitantes_estados(
