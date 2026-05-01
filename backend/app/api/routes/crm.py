@@ -9123,6 +9123,10 @@ class CRMContactSummary(BaseModel):
     organizacion_id: UUID | None = None
 
 
+class CRMPersonaSummary(CRMContactSummary):
+    pass
+
+
 class CRMAccountSummary(BaseModel):
     id: UUID
     nombre: str | None = None
@@ -9411,9 +9415,16 @@ class CRMContactUpdate(BaseModel):
     contacto_datos: dict[str, Any] | None = None
 
 
-CRMPersona = CRMContact
-CRMPersonaCreate = CRMContactCreate
-CRMPersonaUpdate = CRMContactUpdate
+class CRMPersona(CRMContact):
+    pass
+
+
+class CRMPersonaCreate(CRMContactCreate):
+    pass
+
+
+class CRMPersonaUpdate(CRMContactUpdate):
+    pass
 
 
 class CRMPersonaAltaPersona(BaseModel):
@@ -9596,7 +9607,7 @@ class CRMCuentaPersonaRelacionStatusUpdate(BaseModel):
 
 
 class CRMPersonaAltaResponse(BaseModel):
-    persona: CRMContact
+    persona: CRMPersona
     cuenta: CRMAccount | None = None
     relacion: CRMCuentaPersonaRelacion | None = None
     resumen: dict[str, Any] = Field(default_factory=dict)
@@ -9619,8 +9630,18 @@ class CRMContactSearchItem(BaseModel):
     empresa: str | None = None
 
 
+class CRMPersonaSearchItem(CRMContactSearchItem):
+    pass
+
+
 class CRMContactSearchResponse(BaseModel):
     items: list[CRMContactSearchItem]
+    limit: int
+    offset: int
+
+
+class CRMPersonaSearchResponse(BaseModel):
+    items: list[CRMPersonaSearchItem]
     limit: int
     offset: int
 
@@ -10669,6 +10690,14 @@ class CRMContactListRow(BaseModel):
     tipo_establecimiento: str | None = None
     fecha_incorporacion: datetime | None = None
     total_rows: int | None = None
+
+
+class CRMPersonaTimelineEntry(CRMContactTimelineEntry):
+    pass
+
+
+class CRMPersonaListRow(CRMContactListRow):
+    pass
 
 
 _CONTACTS_EXPORT_HEADERS = [
@@ -14330,24 +14359,37 @@ async def search_contacts(
     return CRMContactSearchResponse(items=items, limit=limit, offset=offset)
 
 
-@router.get("/personas/search", response_model=CRMContactSearchResponse)
+@router.get("/personas/search", response_model=CRMPersonaSearchResponse)
 async def search_personas(
     *,
     repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
     _: str = Depends(require_permission("contacts.read")),
-    user_token: str = Depends(require_user_token),
     q: str = Query(default=""),
     limit: Annotated[int, Query(ge=1, le=100)] = 20,
     offset: Annotated[int, Query(ge=0)] = 0,
-) -> CRMContactSearchResponse:
-    return await search_contacts(
-        repo=repo,
-        _=_,  # noqa: ARG001
-        user_token=user_token,
-        q=q,
+) -> CRMPersonaSearchResponse:
+    rows = await repo.search_contacts(
+        organizacion_id=organizacion_id,
+        query=q or "",
         limit=limit,
         offset=offset,
     )
+    items: list[CRMPersonaSearchItem] = []
+    for row in rows:
+        persona_id = _safe_uuid(row.get("id"))
+        if not persona_id:
+            continue
+        items.append(
+            CRMPersonaSearchItem(
+                id=persona_id,
+                nombre=row.get("nombre_completo"),
+                correo=row.get("correo"),
+                telefono=row.get("telefono_e164"),
+                empresa=row.get("company_name"),
+            )
+        )
+    return CRMPersonaSearchResponse(items=items, limit=limit, offset=offset)
 
 
 @router.post("/personas/alta/validar", response_model=CRMPersonaAltaValidationResponse)
@@ -15401,14 +15443,15 @@ async def get_contacts_summary(
     return CRMContactSummary.model_validate(row)
 
 
-@router.get("/personas/summary", response_model=CRMContactSummary)
+@router.get("/personas/summary", response_model=CRMPersonaSummary)
 async def get_personas_summary(
     *,
     repo: CRMRepository = Depends(get_repository),
     _: str = Depends(require_permission("contacts.read")),
     user_token: str = Depends(require_user_token),
-) -> CRMContactSummary:
-    return await get_contacts_summary(repo=repo, _=_, user_token=user_token)
+) -> CRMPersonaSummary:
+    row = await get_contacts_summary(repo=repo, _=_, user_token=user_token)
+    return CRMPersonaSummary.model_validate(row.model_dump())
 
 
 @router.get("/contacts/timeline", response_model=list[CRMContactTimelineEntry])
@@ -15425,14 +15468,15 @@ async def get_contacts_timeline(
     return [CRMContactTimelineEntry.model_validate(row) for row in rows]
 
 
-@router.get("/personas/timeline", response_model=list[CRMContactTimelineEntry])
+@router.get("/personas/timeline", response_model=list[CRMPersonaTimelineEntry])
 async def get_personas_timeline(
     *,
     repo: CRMRepository = Depends(get_repository),
     _: str = Depends(require_permission("contacts.read")),
     user_token: str = Depends(require_user_token),
-) -> list[CRMContactTimelineEntry]:
-    return await get_contacts_timeline(repo=repo, _=_, user_token=user_token)
+) -> list[CRMPersonaTimelineEntry]:
+    rows = await get_contacts_timeline(repo=repo, _=_, user_token=user_token)
+    return [CRMPersonaTimelineEntry.model_validate(row.model_dump()) for row in rows]
 
 
 @router.get("/contacts/list", response_model=list[CRMContactListRow])
@@ -15450,15 +15494,16 @@ async def get_contacts_list(
     return [CRMContactListRow.model_validate(row) for row in rows]
 
 
-@router.get("/personas/list", response_model=list[CRMContactListRow])
+@router.get("/personas/list", response_model=list[CRMPersonaListRow])
 async def get_personas_list(
     *,
     repo: CRMRepository = Depends(get_repository),
     _: str = Depends(require_permission("contacts.read")),
     user_token: str = Depends(require_user_token),
     limit: Annotated[int, Query(ge=1, le=500)] = DEFAULT_CONTACTS_LIMIT,
-) -> list[CRMContactListRow]:
-    return await get_contacts_list(repo=repo, _=_, user_token=user_token, limit=limit)
+) -> list[CRMPersonaListRow]:
+    rows = await get_contacts_list(repo=repo, _=_, user_token=user_token, limit=limit)
+    return [CRMPersonaListRow.model_validate(row.model_dump()) for row in rows]
 
 
 @router.get("/contacts/export")
@@ -15513,17 +15558,27 @@ async def export_personas_csv(
     date_from: Annotated[datetime | None, Query(alias="from")] = None,
     date_to: datetime | None = None,
 ) -> Response:
-    return await export_contacts_csv(
-        repo=repo,
-        _=_,  # noqa: ARG001
-        user_token=user_token,
-        search=search,
-        estado=estado,
-        captura=captura,
-        origen=origen,
-        propietario=propietario,
-        date_from=date_from,
-        date_to=date_to,
+    try:
+        rows = await _load_all_contacts_for_export(
+            repo=repo,
+            usuario_token=user_token,
+            search=search,
+            estado=estado,
+            captura=captura,
+            origen=origen,
+            propietario=propietario,
+            date_from=date_from,
+            date_to=date_to,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    csv_content = _render_contacts_csv(rows)
+    filename = f"personas_{datetime.now(tz=timezone.utc).strftime('%Y%m%d_%H%M%S')}.csv"
+    return Response(
+        content=csv_content,
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
 
 
