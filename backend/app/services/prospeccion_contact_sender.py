@@ -602,8 +602,8 @@ async def _log_whatsapp_inbox_message(
                 error=str(exc),
             )
 
-    contact_id = await _resolve_persona_id_for_prospecto(repo=repo, prospecto_id=prospecto_id)
-    conversation_id = await _ensure_whatsapp_conversation(repo=repo, contact_id=contact_id) if contact_id else None
+    persona_id = await _resolve_persona_id_for_prospecto(repo=repo, prospecto_id=prospecto_id)
+    conversation_id = await _ensure_whatsapp_conversation(repo=repo, persona_id=persona_id) if persona_id else None
     detalle_meta = result.detalle if isinstance(result.detalle, dict) else {}
     body_preview = _clean_text(detalle_meta.get("body_preview"))
     if not body_preview:
@@ -629,9 +629,9 @@ async def _log_whatsapp_inbox_message(
     metadata_payload = {k: v for k, v in metadata_payload.items() if v not in (None, "", {})}
 
     persona_record: dict[str, Any] | None = None
-    if contact_id:
+    if persona_id:
         try:
-            persona_record = await storage.fetch_persona(contact_id)
+            persona_record = await storage.fetch_persona(persona_id)
         except StorageError:
             persona_record = None
     organizacion_hint = await resolve_whatsapp_organizacion(contact=persona_record)
@@ -645,7 +645,7 @@ async def _log_whatsapp_inbox_message(
             body=body_preview,
             message_sid=result.mensaje_id,
             conversation_id=conversation_id,
-            contact_id=contact_id,
+            contact_id=persona_id,
             metadata=metadata_payload,
             organizacion_id=organizacion_hint,
         )
@@ -714,38 +714,38 @@ async def _resolve_persona_id_for_prospecto(
     if not prospecto:
         return None
     metadata = prospecto.get("metadata") if isinstance(prospecto.get("metadata"), dict) else {}
-    contact_id = metadata.get("crm_contacto_id")
-    return str(contact_id) if contact_id else None
+    persona_id = metadata.get("crm_contacto_id")
+    return str(persona_id) if persona_id else None
 
 
 async def _ensure_whatsapp_conversation(
     *,
     repo: CRMRepository,
-    contact_id: str,
+    persona_id: str,
 ) -> str | None:
     try:
-        existing = await repo.get_latest_whatsapp_conversation(contact_id=contact_id)
+        existing = await repo.get_latest_whatsapp_conversation(contact_id=persona_id)
     except CRMRepositoryError as exc:
         log_event(
             logger,
             "prospeccion.sender_inbox_fetch_conversation_failed",
-            contact_id=contact_id,
+            persona_id=persona_id,
             error=str(exc),
         )
         existing = None
     if existing and existing.get("id"):
         return str(existing.get("id"))
     try:
-        contact_uuid = UUID(str(contact_id))
+        persona_uuid = UUID(str(persona_id))
     except (TypeError, ValueError):
         return None
     try:
-        conversation = await repo.create_conversation(contacto_id=contact_uuid, canal="whatsapp")
+        conversation = await repo.create_conversation(contacto_id=persona_uuid, canal="whatsapp")
     except CRMRepositoryError as exc:
         log_event(
             logger,
             "prospeccion.sender_inbox_create_conversation_failed",
-            contact_id=contact_id,
+            persona_id=persona_id,
             error=str(exc),
         )
         return None
