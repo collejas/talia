@@ -507,7 +507,7 @@ async def _ensure_opportunity_when_persona_ready(
     if not ready:
         log_event(
             logger,
-            "webchat.assignment.blocked_contact_missing",
+            "webchat.assignment.blocked_persona_missing",
             conversation_id=conversation_id,
             contact_id=contact_key,
         )
@@ -718,7 +718,7 @@ async def _send_booking_confirmation_email(
             )
         except StorageError as exc:
             logger.warning(
-                "calendar.opportunity_contact_lookup_failed",
+            "calendar.opportunity_persona_lookup_failed",
                 extra={
                     "tarjeta_id": tarjeta_id,
                     "booking_id": booking.booking_id,
@@ -734,7 +734,7 @@ async def _send_booking_confirmation_email(
                     email_value = fallback_email
                     org_hint = _extract_persona_org(fallback_contact) or org_hint
                     logger.info(
-                        "calendar.invite_contact_fallback",
+                    "calendar.invite_persona_fallback",
                         extra={
                             "booking_id": booking.booking_id,
                             "tarjeta_id": tarjeta_id,
@@ -746,7 +746,7 @@ async def _send_booking_confirmation_email(
             booking,
             {
                 "invite_status": "skipped",
-                "invite_reason": "missing_contact_email",
+                "invite_reason": "missing_persona_email",
                 "invite_attempt_at": datetime.now(timezone.utc).isoformat(),
             },
         )
@@ -952,7 +952,7 @@ async def _sync_booking_with_opportunity(
             )
         except StorageError as exc:
             logger.warning(
-                "calendar.stage_contact_lookup_failed",
+            "calendar.stage_persona_lookup_failed",
                 extra={
                     "tarjeta_id": tarjeta_id,
                     "booking_id": booking.booking_id,
@@ -1239,7 +1239,7 @@ async def schedule_calendar_booking(
         raise ValueError("No se configuró el calendario de demos para el webchat.")
     hold_minutes = max(1, calendar_settings.hold_minutes)
     slot_identifier = slot_id or _build_slot_identifier(resource_id, start_at)
-    contact_name = (
+    persona_name = (
         str(persona.get("nombre_completo") or "").strip()
         if isinstance(persona, dict)
         else ""
@@ -1248,7 +1248,7 @@ async def schedule_calendar_booking(
         organizacion_id=UUID(str(organizacion_id)) if organizacion_id else None,
         start_at=start_at,
         timezone_name=calendar_settings.timezone,
-        topic=f"Demo Tal-IA - {contact_name or contact_id}",
+        topic=f"Demo Tal-IA - {persona_name or contact_id}",
         agenda=notes,
     )
 
@@ -2633,22 +2633,22 @@ async def _maybe_enrich_persona_metadata(
             error_text = str(exc).lower()
             if "contacto no encontrado" in error_text:
                 logger.warning(
-                    "webchat.contact_enrich_skipped_missing_contact",
+                "webchat.persona_enrich_skipped_missing_persona",
                     extra={"contact_id": contact_id, "error": str(exc)},
                 )
             else:
                 logger.exception(
-                    "webchat.contact_fetch_failed",
+                    "webchat.persona_fetch_failed",
                     extra={"contact_id": contact_id, "error": str(exc)},
                 )
             return
 
-    persona_contacto_datos = _persona_datos(persona)
-    if persona_contacto_datos:
+    persona_datos = _persona_datos(persona)
+    if persona_datos:
         try:
-            updated_data = json.loads(json.dumps(persona_contacto_datos))
+            updated_data = json.loads(json.dumps(persona_datos))
         except (TypeError, ValueError):
-            updated_data = dict(persona_contacto_datos)
+            updated_data = dict(persona_datos)
     else:
         updated_data = {}
 
@@ -2731,14 +2731,14 @@ async def _maybe_enrich_persona_metadata(
     if trazabilidad_nueva != trazabilidad_actual and trazabilidad_nueva:
         updated_data["trazabilidad"] = trazabilidad_nueva
 
-    if updated_data == persona_contacto_datos:
+    if updated_data == persona_datos:
         return
 
     try:
         await storage.update_persona(contact_id, {"persona_datos": updated_data})
     except storage.StorageError as exc:
         logger.exception(
-            "webchat.contact_update_failed",
+            "webchat.persona_update_failed",
             extra={"contact_id": contact_id, "error": str(exc)},
         )
 
@@ -2899,12 +2899,12 @@ async def _register_webchat_visit(
             )
         except Exception:  # pragma: no cover - best effort
             logger.exception(
-                "webchat.contact_enrich_failed",
+                "webchat.persona_enrich_failed",
                 extra={"contact_id": contact_id},
             )
     elif contact_id:
         logger.warning(
-            "webchat.contact_enrich_skipped_missing_contact",
+            "webchat.persona_enrich_skipped_missing_persona",
             extra={"contact_id": contact_id},
         )
 
@@ -4595,12 +4595,12 @@ async def _execute_function_call(
         hold_minutes = max(1, calendar_settings.hold_minutes)
         slot_identifier = slot_id or _build_slot_identifier(resource_id, slot_datetime)
         notes = (arguments.get("notes") or "").strip() or None
-        contact_name = str((persona or {}).get("nombre_completo") or "").strip()
+        persona_name = str((persona or {}).get("nombre_completo") or "").strip()
         zoom_meeting_url, zoom_external_join_url, zoom_metadata = await create_zoom_meeting_for_booking_if_enabled(
             organizacion_id=UUID(str(organizacion_hint)) if organizacion_hint else None,
             start_at=slot_datetime,
             timezone_name=calendar_settings.timezone,
-            topic=f"Demo Tal-IA - {contact_name or context.contact_id}",
+            topic=f"Demo Tal-IA - {persona_name or context.contact_id}",
             agenda=notes,
         )
 
@@ -4736,7 +4736,7 @@ async def _execute_function_call(
                     persona = await _resolve_persona(context.contact_id)
                 except StorageError as exc:
                     logger.warning(
-                        "webchat.schedule_demo.auto_contact_context_failed",
+                        "webchat.schedule_demo.auto_persona_context_failed",
                         extra={"conversation_id": context.conversation_id, "error": str(exc)},
                     )
             try:
