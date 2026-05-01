@@ -17306,11 +17306,11 @@ async def promote_inbox_conversation_to_opportunity(
         raise HTTPException(status_code=409, detail="conversation_contact_missing")
 
     try:
-        contact_row = await storage.fetch_persona(str(contact_id_value))
+        persona_row = await storage.fetch_persona(str(contact_id_value))
     except StorageError as exc:
         raise HTTPException(status_code=502, detail=f"contact_lookup_failed:{exc}") from exc
 
-    org_value = contact_row.get("organizacion_id")
+    org_value = persona_row.get("organizacion_id")
     try:
         organizacion_id = UUID(str(org_value))
     except (TypeError, ValueError):
@@ -17617,14 +17617,14 @@ async def reply_inbox_conversation(
         contact_org_id: str | None = None
         if str(contact_id).strip():
             try:
-                contact_row = await storage.fetch_persona(str(contact_id))
+                persona_row = await storage.fetch_persona(str(contact_id))
             except StorageError as exc:
                 logger.warning(
                     "panel.inbox.contact_lookup_failed",
                     extra={"contact_id": str(contact_id), "error": str(exc)},
                 )
             else:
-                org_value = contact_row.get("organizacion_id") if isinstance(contact_row, dict) else None
+                org_value = persona_row.get("organizacion_id") if isinstance(persona_row, dict) else None
                 if org_value:
                     try:
                         contact_org_id = str(org_value).strip() or None
@@ -17735,13 +17735,13 @@ async def reply_inbox_conversation(
 
         if channel == "correo":
             try:
-                contact_row = await storage.fetch_persona(str(contact_id))
+                persona_row = await storage.fetch_persona(str(contact_id))
             except StorageError as exc:
                 raise HTTPException(status_code=502, detail="contact_lookup_failed") from exc
-            recipient_email = _clean_text(contact_row.get("correo"))
+            recipient_email = _clean_text(persona_row.get("correo"))
             if not recipient_email:
                 raise HTTPException(status_code=409, detail="contact_email_not_found")
-            org_value = contact_row.get("organizacion_id")
+            org_value = persona_row.get("organizacion_id")
             org_uuid: UUID | None = None
             if org_value:
                 try:
@@ -18295,13 +18295,13 @@ async def create_agenda_booking(
         if not contact_id:
             raise HTTPException(status_code=400, detail="contacto_id_requerido")
         try:
-            contact_data = await repo.get_persona_by_id(persona_id=contact_id)
+            persona_data = await repo.get_persona_by_id(persona_id=contact_id)
         except CRMRepositoryError as exc:
             raise HTTPException(status_code=502, detail=str(exc)) from exc
-        if not contact_data:
+        if not persona_data:
             raise HTTPException(status_code=404, detail="contacto_no_encontrado")
 
-        org_uuid = _safe_uuid(contact_data.get("organizacion_id"))
+        org_uuid = _safe_uuid(persona_data.get("organizacion_id"))
         if org_uuid is None:
             raise HTTPException(status_code=400, detail="contacto_org_missing")
         calendar_settings = await tenant_runtime.get_calendar_runtime_settings(
@@ -18317,7 +18317,7 @@ async def create_agenda_booking(
                 organizacion_id=org_uuid,
                 start_at=start_dt,
                 timezone_name=calendar_settings.timezone,
-                topic=f"Demo Tal-IA - {str(contact_data.get('nombre_completo') or contact_id).strip()}",
+                topic=f"Demo Tal-IA - {str(persona_data.get('nombre_completo') or contact_id).strip()}",
                 agenda=payload.notes,
             )
         )
@@ -18367,7 +18367,7 @@ async def create_agenda_booking(
         await webchat_service._sync_booking_with_opportunity(
             booking=booking_response,
             tarjeta_id=tarjeta_id,
-            contact=contact_data,
+            contact=persona_data,
             channel=(payload.canal or "manual"),
         )
         await webchat_service._send_booking_confirmation_email(
@@ -18375,7 +18375,7 @@ async def create_agenda_booking(
             contact_id=contact_id,
             conversation_id=booking_context_id,
             tarjeta_id=tarjeta_id,
-            contact=contact_data,
+            contact=persona_data,
         )
         booking = booking_response
     else:
@@ -28922,10 +28922,10 @@ async def public_web_booking_create(
         raise HTTPException(status_code=502, detail="demo_stage_missing")
 
     display_name = (
-        _clean_text((contact_data or {}).get("nombre_completo"))
-        or _clean_text((contact_data or {}).get("company_name"))
-        or _clean_text((contact_data or {}).get("correo"))
-        or _clean_text((contact_data or {}).get("telefono_e164"))
+        _clean_text((persona_data or {}).get("nombre_completo"))
+        or _clean_text((persona_data or {}).get("company_name"))
+        or _clean_text((persona_data or {}).get("correo"))
+        or _clean_text((persona_data or {}).get("telefono_e164"))
         or "Cliente"
     )
     opportunity_title = f"Demo agendada por cliente - {display_name}"

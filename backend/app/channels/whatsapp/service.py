@@ -686,7 +686,7 @@ async def _maybe_apply_publicidad_whatsapp_attribution(
                 )
 
     try:
-        contact_row = await repo.get_persona_by_id(persona_id=contact_id)
+        persona_row = await repo.get_persona_by_id(persona_id=contact_id)
     except CRMRepositoryError as exc:
         log_event(
             logger,
@@ -695,11 +695,11 @@ async def _maybe_apply_publicidad_whatsapp_attribution(
             contact_id=contact_id,
             error=str(exc),
         )
-        contact_row = None
-    if isinstance(contact_row, dict):
-        contact_data = _persona_datos(contact_row)
-        patched_contact_data = {
-            **contact_data,
+        persona_row = None
+    if isinstance(persona_row, dict):
+        persona_data = _persona_datos(persona_row)
+        patched_persona_data = {
+            **persona_data,
             "publicidad_whatsapp_atribucion": {
                 "source": "publicidad_whatsapp",
                 "regla_id": _trim_text(created_event.get("regla_id")) or _trim_text(matched_rule.get("id")),
@@ -714,12 +714,12 @@ async def _maybe_apply_publicidad_whatsapp_attribution(
                 "atribuido_en": _trim_text(created_event.get("creado_en")) or datetime.now(timezone.utc).isoformat(),
             },
         }
-        patch_payload: dict[str, Any] = {"persona_datos": patched_contact_data}
-        current_origen = _trim_text(contact_row.get("origen"))
+        patch_payload: dict[str, Any] = {"persona_datos": patched_persona_data}
+        current_origen = _trim_text(persona_row.get("origen"))
         if (current_origen or "").lower() in {"", "whatsapp", "prospeccion"}:
             patch_payload["origen"] = "publicidad_whatsapp"
         try:
-            await repo.update_contact_by_id(contact_id=contact_id, patch=patch_payload)
+            await repo.update_persona_by_id(persona_id=contact_id, patch=patch_payload)
         except CRMRepositoryError as exc:
             log_event(
                 logger,
