@@ -658,7 +658,7 @@ async def _process_conversation(
     session_id = _strip_text(state.get("last_session_id"))
     if not session_id:
         try:
-            session_id = await storage.fetch_webchat_session_id(contact_id_str)
+            session_id = await storage.fetch_webchat_session_id_by_persona(contact_id_str)
         except StorageError as exc:
             logger.warning(
                 "webchat.followup.session_lookup_failed",

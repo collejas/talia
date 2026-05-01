@@ -1647,6 +1647,11 @@ async def fetch_webchat_session_id(contact_id: str) -> str | None:
         raise StorageError(str(exc)) from exc
 
 
+async def fetch_webchat_session_id_by_persona(persona_id: str) -> str | None:
+    """Alias con nombre de persona para el session_id webchat asociado."""
+    return await fetch_webchat_session_id(persona_id)
+
+
 async def resolve_webchat_conversation_from_session(
     session_id: str,
 ) -> dict[str, Any] | None:

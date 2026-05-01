@@ -7004,7 +7004,7 @@ async def _resolve_webchat_session_id(contact_id: str) -> str | None:
             return session_id
 
     try:
-        return await storage.fetch_webchat_session_id(contact_id)
+        return await storage.fetch_webchat_session_id_by_persona(contact_id)
     except storage.StorageError as exc:
         logger.exception(
             "panel.inbox.fetch_session_id_failed",
