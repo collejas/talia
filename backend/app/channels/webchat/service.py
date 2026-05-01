@@ -4394,9 +4394,9 @@ async def _execute_function_call(
             )
             if profiling_enabled_for_channel:
                 try:
-                    await storage.apply_lead_scoring(
+                    await storage.apply_persona_lead_scoring(
                         conversation_id=context.conversation_id,
-                        contact_id=context.contact_id,
+                        persona_id=context.contact_id,
                         opportunity_id=str(opportunity_id),
                         answers=scoring_answers,
                         events=scoring_events,
@@ -4532,9 +4532,9 @@ async def _execute_function_call(
             )
             if inferred_answers:
                 try:
-                    await storage.apply_lead_scoring(
+                    await storage.apply_persona_lead_scoring(
                         conversation_id=context.conversation_id,
-                        contact_id=context.contact_id,
+                        persona_id=context.contact_id,
                         opportunity_id=str(tarjeta_id),
                         answers=inferred_answers,
                         events={
@@ -4674,9 +4674,9 @@ async def _execute_function_call(
         if profiling_enabled_for_channel:
             if _has_meaningful_scoring_answers(persona):
                 try:
-                    await storage.apply_lead_scoring(
+                    await storage.apply_persona_lead_scoring(
                         conversation_id=context.conversation_id,
-                        contact_id=context.contact_id,
+                        persona_id=context.contact_id,
                         opportunity_id=str(tarjeta_id),
                         events={
                             "channel": "webchat",
