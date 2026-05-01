@@ -891,7 +891,7 @@ def _missing_basic_contact_fields(persona: dict[str, Any] | None) -> list[str]:
     return missing
 
 
-def _build_contact_required_guidance(missing_fields: list[str]) -> str:
+def _build_persona_required_guidance(missing_fields: list[str]) -> str:
     if not missing_fields:
         return (
             "Antes de agendar la demo falta un dato del contacto. "
@@ -1539,18 +1539,18 @@ async def _handle_information_email(
     persona_notes = None
     persona_need = None
     if persona:
-        contact_name = str(persona.get("nombre_completo") or "").strip() or None
-        contact_company = str(persona.get("company_name") or "").strip() or None
-        contact_email = str(persona.get("correo") or "").strip() or None
+        persona_name = str(persona.get("nombre_completo") or "").strip() or None
+        persona_company = str(persona.get("company_name") or "").strip() or None
+        persona_email = str(persona.get("correo") or "").strip() or None
         persona_notes = str(persona.get("notes") or "").strip() or None
         persona_need = str(persona.get("necesidad_proposito") or "").strip() or None
         if not full_name:
-            full_name = contact_name
+            full_name = persona_name
         if not company_name:
-            company_name = contact_company
+            company_name = persona_company
         if not summary:
             summary = persona_need or persona_notes
-        if contact_email and contact_email.lower() != email_value.lower():
+        if persona_email and persona_email.lower() != email_value.lower():
             try:
                 await storage.update_persona(
                     persona.get("id") or context.contact_id, {"correo": email_value.lower()}
@@ -2109,7 +2109,7 @@ async def _handle_schedule_demo(
         return {
             "status": "contact_missing",
             "missing_fields": missing_contact_fields,
-            "guidance": _build_contact_required_guidance(missing_contact_fields),
+            "guidance": _build_persona_required_guidance(missing_contact_fields),
         }
 
     if profiling_enabled_for_channel:
