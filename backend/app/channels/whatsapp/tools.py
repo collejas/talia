@@ -927,7 +927,7 @@ async def _refresh_opportunity_context_from_persona(
             )
         except StorageError as exc:
             logger.warning(
-                "whatsapp.contact_context.capture_failed",
+                "whatsapp.persona_context.capture_failed",
                 extra={
                     "conversation_id": context.conversation_id,
                     "contact_id": context.contact_id,
@@ -944,7 +944,7 @@ async def _refresh_opportunity_context_from_persona(
         )
     except StorageError as exc:
         logger.warning(
-            "whatsapp.contact_context.ensure_failed",
+                "whatsapp.persona_context.ensure_failed",
             extra={
                 "conversation_id": context.conversation_id,
                 "contact_id": context.contact_id,
@@ -975,7 +975,7 @@ async def _refresh_opportunity_context_from_persona(
             )
         except StorageError as exc:
             logger.warning(
-                "whatsapp.contact_context.insights_failed",
+                "whatsapp.persona_context.insights_failed",
                 extra={
                     "conversation_id": context.conversation_id,
                     "contact_id": context.contact_id,
@@ -995,7 +995,7 @@ async def _refresh_opportunity_context_from_persona(
         )
     except StorageError as exc:
         logger.warning(
-            "whatsapp.contact_context.auto_name_failed",
+            "whatsapp.persona_context.auto_name_failed",
             extra={
                 "conversation_id": context.conversation_id,
                 "contact_id": context.contact_id,
@@ -1557,7 +1557,7 @@ async def _handle_information_email(
                 )
             except StorageError as exc:
                 logger.warning(
-                    "whatsapp.info_email.sync_failed",
+                "whatsapp.info_email.sync_failed",
                     extra={
                         "contact_id": persona.get("id") or context.contact_id,
                         "error": str(exc),
@@ -2107,7 +2107,7 @@ async def _handle_schedule_demo(
     missing_contact_fields = _missing_basic_contact_fields(persona)
     if missing_contact_fields:
         return {
-            "status": "contact_missing",
+            "status": "persona_missing",
             "missing_fields": missing_contact_fields,
             "guidance": _build_persona_required_guidance(missing_contact_fields),
         }
@@ -2397,7 +2397,7 @@ async def _handle_schedule_demo(
             persona_record = await _resolve_persona(opportunity_contact_id)
         except StorageError as exc:
             logger.warning(
-                "whatsapp.schedule_demo.contact_context_patch_failed",
+                "whatsapp.schedule_demo.persona_context_patch_failed",
                 extra={"conversation_id": context.conversation_id, "error": str(exc)},
             )
     try:
@@ -2651,8 +2651,8 @@ async def _resolve_persona(contact_id: str | None) -> dict[str, Any] | None:
         return await storage.fetch_persona(contact_id)
     except StorageError as exc:
         logger.warning(
-            "whatsapp.tools.contact_lookup_failed",
-            extra={"contact_id": contact_id, "error": str(exc)},
+            "whatsapp.tools.persona_lookup_failed",
+            extra={"persona_id": contact_id, "error": str(exc)},
         )
         return None
 
@@ -2687,7 +2687,7 @@ async def _notify_sales_rep(
     persona_record = persona or await _resolve_persona(context.contact_id)
     if not persona_record:
         logger.warning(
-            "whatsapp.notify_sales.contact_missing",
+            "whatsapp.notify_sales.persona_missing",
             extra={"conversation_id": context.conversation_id, "trigger": trigger},
         )
         return
