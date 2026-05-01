@@ -33,6 +33,40 @@ Se implemento el nuevo flujo de contactos en el panel con estas piezas ya operat
 - flujo independiente para vincular contacto y empresa
 - experiencia de resumen lateral en desktop
 
+## Avance reciente del backend semantico
+
+Se siguio limpiando la capa interna del backend para que el runtime hable mas de `persona`
+sin romper contratos publicos ni el lenguaje de usuario del panel.
+
+### Lo que ya quedo alineado
+
+- aliases nuevos en `backend/app/services/storage.py`:
+  - `fetch_opportunity_persona(...)`
+  - `get_webchat_persona_id(...)`
+  - `fetch_webchat_session_id_by_persona(...)`
+  - `maybe_promote_prequalified_from_persona(...)`
+  - `capture_persona_lead_if_ready(...)`
+- call sites actualizados en:
+  - `backend/app/channels/webchat/service.py`
+  - `backend/app/services/webchat_followups.py`
+  - `backend/app/channels/whatsapp/tools.py`
+  - `backend/app/assistants/tools/lead.py`
+- el runtime de WhatsApp y Webchat sigue funcionando con `persona` por dentro, aunque
+  varios contratos y campos sigan llamandose `contact_id` o `contacto_id` por compatibilidad
+
+### Validacion reciente
+
+- `python3 -m py_compile` paso en los modulos tocados
+- la bateria focalizada de tests paso con `34 passed`
+- `talia-api` quedo activo tras el reinicio del servicio
+- `GET /health` responde `{"status":"ok"}`
+
+### Lo que se mantuvo intencionalmente
+
+- no se cambio el texto visible al usuario en la vista de contactos
+- no se tocaron columnas estructurales como `contacto_id`
+- no se forzaron RPCs legacy que todavia sirven como puente
+
 Archivos principales del avance:
 
 - `frontend/panel/src/components/contactos/contact-create-flow.tsx`

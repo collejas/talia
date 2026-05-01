@@ -59,6 +59,21 @@ Este documento resume todo lo que se fue cerrando dentro del plan `personas, cue
 - El repo ya resuelve detalle y listas desde el modelo nuevo.
 - Se elimino el ultimo embed directo de `contactos` en el runtime activo.
 
+### 2.3 Limpieza semantica interna reciente
+
+- Se siguio moviendo el backend hacia aliases `persona_*` en helpers de `storage.py`.
+- `webchat`, `whatsapp`, `assistants` y `webchat_followups` ya consumen varios de esos
+  aliases nuevos.
+- Se agregaron puentes como:
+  - `fetch_opportunity_persona(...)`
+  - `get_webchat_persona_id(...)`
+  - `fetch_webchat_session_id_by_persona(...)`
+  - `maybe_promote_prequalified_from_persona(...)`
+  - `capture_persona_lead_if_ready(...)`
+- Se mantuvieron los nombres legacy estructurales (`contact_id`, `contacto_id`) para no
+  romper contratos ni RPCs que todavia sirven como compatibilidad.
+- La validacion reciente quedo verde con compilacion, tests focalizados y `GET /health`.
+
 ## 3. Limpieza semantica que se hizo
 
 La base de codigo original se escribio con el concepto `contact`, y por eso quedaron contratos y helpers con ese nombre. Durante esta etapa se limpio bastante semantica interna para que el codigo hable mas de `persona` y menos de `contacto`.

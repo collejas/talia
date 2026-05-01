@@ -14,6 +14,14 @@ El runtime activo del CRM ya opera sobre el modelo nuevo:
 
 La tabla `public.contactos` quedo fuera del flujo operativo principal.
 
+En paralelo, el backend activo se siguio limpiando para reducir vocabulario legacy:
+
+- `storage.py` ya expone aliases de `persona` para captura de oportunidad, scoring,
+  busqueda de sesiones webchat y resolucion de oportunidad principal
+- `webchat`, `whatsapp` y `assistants` ya consumen varios de esos aliases nuevos
+- los contratos publicos y varios nombres estructurales siguen conservando `contact`
+  por compatibilidad, no por dependencia del modelo viejo
+
 ## Lo que ya se cerro
 
 - Alta estructurada
@@ -26,6 +34,7 @@ La tabla `public.contactos` quedo fuera del flujo operativo principal.
 - Reasignacion compacta
 - Retiro del fallback legacy en runtime
 - Limpieza semantica mayoritaria del backend activo
+- migracion parcial del backend interno hacia aliases `persona_*`
 
 ## Lo que sigue usando `contact`
 
@@ -48,6 +57,9 @@ Hay dos caminos:
 
 Si la prioridad es estabilidad, dejar los contratos como estan.
 Si la prioridad es coherencia semantica total, hacer la refactorizacion coordinada.
+
+En este momento ya se avanzo en la refactorizacion coordinada por bloques, pero sin
+renombrar todavia los contratos estructurales ni el esquema legado.
 
 ## Conclusiones
 
