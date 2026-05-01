@@ -5732,7 +5732,7 @@ class CRMRepository:
             "organizacion_id": f"eq.{organizacion_id}",
             "select": (
                 "id,organizacion_id,nombre_completo,correo_principal,telefono_principal_e164,"
-                "notas,metadata,propietario_usuario_id,creado_en,actualizado_en"
+                "notas,metadata,persona_datos,propietario_usuario_id,creado_en,actualizado_en"
             ),
             "limit": str(limit),
             "offset": str(offset),
@@ -6282,7 +6282,7 @@ class CRMRepository:
             "select": (
                 "id,organizacion_id,nombre,apellido_paterno,apellido_materno,nombre_completo,"
                 "correo_principal,telefono_principal_e164,puesto,area,rol_decision,estado,"
-                "origen,notas,metadata,propietario_usuario_id,creado_en,actualizado_en"
+                "origen,notas,metadata,persona_datos,propietario_usuario_id,creado_en,actualizado_en"
             ),
         }
         resp = await self._request("GET", "/rest/v1/personas", params=params)
@@ -6307,7 +6307,7 @@ class CRMRepository:
             "select": (
                 "id,organizacion_id,nombre,apellido_paterno,apellido_materno,nombre_completo,"
                 "correo_principal,telefono_principal_e164,puesto,area,rol_decision,estado,"
-                "origen,notas,metadata,propietario_usuario_id,creado_en,actualizado_en"
+                "origen,notas,metadata,persona_datos,propietario_usuario_id,creado_en,actualizado_en"
             ),
         }
         resp = await self._request("GET", "/rest/v1/personas", params=params)
@@ -6343,7 +6343,7 @@ class CRMRepository:
             "select": (
                 "id,organizacion_id,nombre,apellido_paterno,apellido_materno,nombre_completo,"
                 "correo_principal,telefono_principal_e164,puesto,area,rol_decision,estado,"
-                "origen,notas,metadata,propietario_usuario_id,creado_en,actualizado_en"
+                "origen,notas,metadata,persona_datos,propietario_usuario_id,creado_en,actualizado_en"
             ),
             "limit": str(min(1000, len(unique_ids))),
         }
@@ -6550,7 +6550,7 @@ class CRMRepository:
             "select": (
                 "id,organizacion_id,nombre,apellido_paterno,apellido_materno,nombre_completo,"
                 "correo_principal,telefono_principal_e164,puesto,area,rol_decision,estado,"
-                "origen,notas,metadata,propietario_usuario_id,creado_en,actualizado_en"
+                "origen,notas,metadata,persona_datos,propietario_usuario_id,creado_en,actualizado_en"
             ),
         }
         resp = await self._request("GET", "/rest/v1/personas", params=params)
@@ -6642,7 +6642,7 @@ class CRMRepository:
             "select": (
                 "id,organizacion_id,nombre,apellido_paterno,apellido_materno,nombre_completo,"
                 "correo_principal,telefono_principal_e164,puesto,area,rol_decision,estado,"
-                "origen,notas,metadata,propietario_usuario_id,creado_en,actualizado_en"
+                "origen,notas,metadata,persona_datos,propietario_usuario_id,creado_en,actualizado_en"
             ),
         }
         if organizacion_id:
@@ -6690,7 +6690,7 @@ class CRMRepository:
             "select": (
                 "id,organizacion_id,nombre,apellido_paterno,apellido_materno,nombre_completo,"
                 "correo_principal,telefono_principal_e164,puesto,area,rol_decision,estado,"
-                "origen,notas,metadata,propietario_usuario_id,creado_en,actualizado_en"
+                "origen,notas,metadata,persona_datos,propietario_usuario_id,creado_en,actualizado_en"
             ),
         }
         if organizacion_id:
@@ -14855,7 +14855,7 @@ class CRMRepository:
             "select": (
                 "id,organizacion_id,nombre,apellido_paterno,apellido_materno,nombre_completo,"
                 "correo_principal,telefono_principal_e164,puesto,area,rol_decision,estado,"
-                "origen,notas,metadata,propietario_usuario_id,creado_en,actualizado_en"
+                "origen,notas,metadata,persona_datos,propietario_usuario_id,creado_en,actualizado_en"
             ),
             "limit": "1",
         }
