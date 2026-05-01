@@ -33,7 +33,7 @@ import { formatWaLabel } from "@/lib/visitas/formatting";
 import { cn } from "@/lib/utils";
 
 const CHANNEL_OPTIONS = [
-  { value: "webchat", label: "Webchat" },
+  { value: "webchat", label: "Chat del sitio" },
   { value: "whatsapp", label: "WhatsApp" },
   { value: "voz", label: "Voz" },
   { value: "correo", label: "Correo" },
@@ -298,12 +298,12 @@ export function DemografiaControls({
           <section className="h-full rounded-2xl border bg-background/70 p-3 shadow-sm">
             <div className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
               <IconWorld className="size-4" />
-              Contexto
+              Vista general
             </div>
             <div className="grid gap-3">
               <div className="space-y-1">
                 <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                  Nivel geográfico
+                  Alcance geográfico
                 </p>
                 <Select value={nivel} onValueChange={handleNivelChange}>
                   <SelectTrigger className="h-8 w-full">
@@ -334,7 +334,7 @@ export function DemografiaControls({
 
               <div className="space-y-1">
                 <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                  Canales visibles
+                  Formas de contacto visibles
                 </p>
                 <DropdownMenu open={isChannelMenuOpen} onOpenChange={setChannelMenuOpen}>
                   <DropdownMenuTrigger asChild>
@@ -346,7 +346,7 @@ export function DemografiaControls({
                     >
                       <span className="inline-flex items-center gap-2">
                         <IconCurrencyDollar className="size-4" />
-                        Canales
+                        Formas
                       </span>
                       <span className="text-[11px] text-muted-foreground">
                         {channelDraft.size === 0
@@ -372,10 +372,10 @@ export function DemografiaControls({
                     <DropdownMenuSeparator />
                     <div className="px-2 pb-2 text-xs text-muted-foreground">
                       {channelDraft.size === 0
-                        ? "Sin selección (se mostrarán todos los canales)"
+                        ? "Sin selección (se mostrarán todas las formas)"
                         : channelDraft.size === CHANNEL_OPTIONS.length
-                          ? "Mostrando todos los canales"
-                          : `${channelDraft.size} canal${channelDraft.size === 1 ? "" : "es"} seleccionados`}
+                          ? "Mostrando todas las formas"
+                          : `${channelDraft.size} forma${channelDraft.size === 1 ? "" : "s"} seleccionada${channelDraft.size === 1 ? "" : "s"}`}
                     </div>
                     <div className="flex gap-2 px-2 pb-2">
                       <Button
@@ -402,7 +402,7 @@ export function DemografiaControls({
 
               <div className="space-y-1">
                 <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                  Etapas
+                  Etapas de avance
                 </p>
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
@@ -439,7 +439,7 @@ export function DemografiaControls({
 
               <div className="space-y-1">
                 <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                  Modo de color
+                  Forma de ver el mapa
                 </p>
                 <div className="grid grid-cols-2 gap-2">
                   <Button
@@ -468,12 +468,12 @@ export function DemografiaControls({
           <section className="h-full rounded-2xl border bg-background/70 p-3 shadow-sm">
             <div className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
               <IconWorld className="size-4" />
-              Tráfico web
+              Visitas al sitio
             </div>
             <div className="grid gap-3">
               <div className="space-y-1">
                 <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                  Origen de visita
+                  Tipo de visita
                 </p>
                 <Select
                   value={sourceClass ?? "all"}
@@ -482,7 +482,7 @@ export function DemografiaControls({
                   }}
                 >
                   <SelectTrigger className="h-8 w-full">
-                    <SelectValue placeholder="Origen de visita" />
+                    <SelectValue placeholder="Tipo de visita" />
                   </SelectTrigger>
                   <SelectContent className="z-50">
                     {SOURCE_CLASS_OPTIONS.map((option) => (
@@ -497,7 +497,7 @@ export function DemografiaControls({
               <div className="grid gap-3 lg:grid-cols-2">
                 <div className="space-y-1">
                   <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                    Fuente de campaña
+                    Origen de la visita
                   </p>
                   <Select
                     value={utmSource ?? "all"}
@@ -506,7 +506,7 @@ export function DemografiaControls({
                     }}
                   >
                     <SelectTrigger className="h-8 w-full">
-                      <SelectValue placeholder="Fuente de campaña" />
+                      <SelectValue placeholder="Origen de la visita" />
                     </SelectTrigger>
                     <SelectContent className="z-50">
                       <SelectItem value="all">Todos</SelectItem>
@@ -524,7 +524,7 @@ export function DemografiaControls({
 
                 <div className="space-y-1">
                   <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                    Medio de campaña
+                    Cómo llegó
                   </p>
                   <Select
                     value={utmMedium ?? "all"}
@@ -533,7 +533,7 @@ export function DemografiaControls({
                     }}
                   >
                     <SelectTrigger className="h-8 w-full">
-                      <SelectValue placeholder="Medio de campaña" />
+                      <SelectValue placeholder="Cómo llegó" />
                     </SelectTrigger>
                     <SelectContent className="z-50">
                       <SelectItem value="all">Todos</SelectItem>
@@ -552,17 +552,17 @@ export function DemografiaControls({
 
               <div className="space-y-1">
                 <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                  Nombre de campaña web
+                  Nombre de la promoción
                 </p>
                 <Select
                   value={utmCampaign ?? "all"}
                   onValueChange={(value) => {
                     updateParams({ utm_campaign: value === "all" ? null : value });
                   }}
-                >
-                  <SelectTrigger className="h-8 w-full">
-                    <SelectValue placeholder="Nombre de campaña web" />
-                  </SelectTrigger>
+                  >
+                    <SelectTrigger className="h-8 w-full">
+                      <SelectValue placeholder="Nombre de la promoción" />
+                    </SelectTrigger>
                   <SelectContent className="z-50">
                     <SelectItem value="all">Todos</SelectItem>
                     {utmCampaign && !utmCampaignOptions.some((option) => option.value === utmCampaign) ? (
@@ -580,7 +580,7 @@ export function DemografiaControls({
               <div className="grid gap-3 sm:grid-cols-2">
                 <div className="space-y-1">
                   <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                    Rango
+                    Periodo
                   </p>
                   <Select
                     value={rango ?? "mes"}
@@ -594,7 +594,7 @@ export function DemografiaControls({
                     }}
                   >
                     <SelectTrigger className="h-8 w-full">
-                      <SelectValue placeholder="Rango" />
+                      <SelectValue placeholder="Periodo" />
                     </SelectTrigger>
                     <SelectContent className="z-50">
                       <SelectItem value="hoy">Hoy</SelectItem>
@@ -635,12 +635,12 @@ export function DemografiaControls({
           <section className="h-full rounded-2xl border bg-background/70 p-3 shadow-sm">
             <div className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
               <IconMessageCircle className="size-4" />
-              Conversaciones y atribución
+              Conversaciones y promociones
             </div>
             <div className="grid gap-3">
               <div className="space-y-1">
                 <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                  Tipo de campaña
+                  Tipo de promoción
                 </p>
                 <Select
                   value={campanaTipo ?? "all"}
@@ -649,7 +649,7 @@ export function DemografiaControls({
                   }}
                 >
                   <SelectTrigger className="h-8 w-full">
-                    <SelectValue placeholder="Tipo de campaña" />
+                    <SelectValue placeholder="Tipo de promoción" />
                   </SelectTrigger>
                   <SelectContent className="z-50">
                     <SelectItem value="all">Todos</SelectItem>
@@ -668,7 +668,7 @@ export function DemografiaControls({
               <div className="grid gap-3 lg:grid-cols-2">
                 <div className="space-y-1">
                   <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                    Campaña de prospección
+                    Promoción de prospección
                   </p>
                   <Select
                     value={campanaId ?? "all"}
@@ -677,7 +677,7 @@ export function DemografiaControls({
                     }}
                   >
                     <SelectTrigger className="h-8 w-full">
-                      <SelectValue placeholder="Campaña de prospección" />
+                      <SelectValue placeholder="Promoción de prospección" />
                     </SelectTrigger>
                     <SelectContent className="z-50">
                       <SelectItem value="all">Todas</SelectItem>
@@ -695,7 +695,7 @@ export function DemografiaControls({
 
                 <div className="space-y-1">
                   <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                    Plantilla captada
+                    Plantilla detectada
                   </p>
                   <Select
                     value={templateId ?? "all"}
@@ -722,18 +722,18 @@ export function DemografiaControls({
               </div>
 
               <div className="grid gap-3 sm:grid-cols-2">
-                <div className="space-y-1">
-                  <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                    Canal publicitario
-                  </p>
+              <div className="space-y-1">
+                <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                  Canal de WhatsApp
+                </p>
                   <Select
                     value={waCanalPublicitario ?? "all"}
                     onValueChange={(value) => {
                       updateParams({ wa_canal_publicitario: value === "all" ? null : value });
                     }}
                   >
-                    <SelectTrigger className="h-8 w-full">
-                      <SelectValue placeholder="Canal publicitario" />
+                  <SelectTrigger className="h-8 w-full">
+                      <SelectValue placeholder="Canal de WhatsApp" />
                     </SelectTrigger>
                     <SelectContent className="z-50">
                       <SelectItem value="all">Todos</SelectItem>
@@ -753,7 +753,7 @@ export function DemografiaControls({
 
                 <div className="space-y-1">
                   <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                    Campaña publicitaria
+                    Promoción de WhatsApp
                   </p>
                   <Select
                     value={waCampanaPublicitaria ?? "all"}
@@ -761,8 +761,8 @@ export function DemografiaControls({
                       updateParams({ wa_campana_publicitaria: value === "all" ? null : value });
                     }}
                   >
-                    <SelectTrigger className="h-8 w-full">
-                      <SelectValue placeholder="Campaña publicitaria" />
+                  <SelectTrigger className="h-8 w-full">
+                      <SelectValue placeholder="Promoción de WhatsApp" />
                     </SelectTrigger>
                     <SelectContent className="z-50">
                       <SelectItem value="all">Todas</SelectItem>
@@ -783,7 +783,7 @@ export function DemografiaControls({
 
               <div className="space-y-1">
                 <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                  Regla de atribución
+                  Regla de origen
                 </p>
                 <Select
                   value={waReglaId ?? "all"}
@@ -792,7 +792,7 @@ export function DemografiaControls({
                   }}
                 >
                   <SelectTrigger className="h-8 w-full">
-                    <SelectValue placeholder="Regla de atribución" />
+                    <SelectValue placeholder="Regla de origen" />
                   </SelectTrigger>
                   <SelectContent className="z-50">
                     <SelectItem value="all">Todas</SelectItem>
@@ -809,7 +809,7 @@ export function DemografiaControls({
               </div>
 
               <Button type="button" size="sm" variant="ghost" onClick={clearAttributionFilters} className="h-8">
-                Limpiar atribución
+                Limpiar filtros
               </Button>
             </div>
           </section>

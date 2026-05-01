@@ -103,7 +103,7 @@ const CHANNEL_COLORS: Record<ChannelKey, [number, number, number]> = {
 };
 const DEFAULT_CHANNEL_COLOR: [number, number, number] = [148, 163, 184]; // slate
 const CHANNEL_LABELS: Record<ChannelKey, string> = {
-  webchat: "Webchat",
+  webchat: "Chat del sitio",
   whatsapp: "WhatsApp",
   voz: "Voz",
   correo: "Correo",
@@ -744,7 +744,7 @@ export function LocationComparisonChart({
           </div>
           <div className="flex flex-1 flex-col gap-3 overflow-y-auto pr-1">
             <MetricSection
-              title="Canales"
+      title="Formas de contacto"
               items={displayedChannelKeys.map((channel) => ({
                 label: `Canal ${CHANNEL_LABELS[channel]}`,
                 value: metrics.channels[channel],

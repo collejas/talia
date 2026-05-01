@@ -26,7 +26,7 @@ export function VisitsSectionCards({ cards }: SectionCardsProps) {
     <div className="*:data-[slot=card]:from-primary/5 *:data-[slot=card]:to-card dark:*:data-[slot=card]:bg-card grid grid-cols-1 gap-4 px-4 *:data-[slot=card]:bg-gradient-to-t *:data-[slot=card]:shadow-xs lg:px-6 @xl/main:grid-cols-2 @5xl/main:grid-cols-5">
       <Card className="@container/card">
         <CardHeader>
-          <CardDescription>Total de visitas</CardDescription>
+          <CardDescription>Visitas al sitio</CardDescription>
           <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl">
             {formatNumber(cards.totalVisits)}
           </CardTitle>
@@ -39,14 +39,14 @@ export function VisitsSectionCards({ cards }: SectionCardsProps) {
         </CardHeader>
         <CardFooter className="flex-col items-start gap-1.5 text-sm">
           <div className="line-clamp-1 flex gap-2 font-medium">
-            Conversaciones activas <IconTrendingUp className="size-4" />
+            Contactos en proceso <IconTrendingUp className="size-4" />
           </div>
-          <div className="text-muted-foreground">Incluye sesiones con y sin chat</div>
+          <div className="text-muted-foreground">Incluye visitas con y sin contacto</div>
         </CardFooter>
       </Card>
       <Card className="@container/card">
         <CardHeader>
-          <CardDescription>Visitantes sin chat</CardDescription>
+          <CardDescription>Visitas sin contacto</CardDescription>
           <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl">
             {formatNumber(cards.sinChat)}
           </CardTitle>
@@ -59,16 +59,14 @@ export function VisitsSectionCards({ cards }: SectionCardsProps) {
         </CardHeader>
         <CardFooter className="flex-col items-start gap-1.5 text-sm">
           <div className="line-clamp-1 flex gap-2 font-medium">
-            Oportunidades de contacto <IconTrendingDown className="size-4" />
+            Oportunidades por atender <IconTrendingDown className="size-4" />
           </div>
-          <div className="text-muted-foreground">
-            Sesiones sin interacción con agente
-          </div>
+          <div className="text-muted-foreground">Visitas sin interacción con un asesor</div>
         </CardFooter>
       </Card>
       <Card className="@container/card">
         <CardHeader>
-          <CardDescription>Conversaciones webchat</CardDescription>
+          <CardDescription>Contactos por chat del sitio</CardDescription>
           <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl">
             {formatNumber(cards.conChat)}
           </CardTitle>
@@ -81,16 +79,14 @@ export function VisitsSectionCards({ cards }: SectionCardsProps) {
         </CardHeader>
         <CardFooter className="flex-col items-start gap-1.5 text-sm">
           <div className="line-clamp-1 flex gap-2 font-medium">
-            Sesiones atendidas <IconTrendingUp className="size-4" />
+            Visitas atendidas <IconTrendingUp className="size-4" />
           </div>
-          <div className="text-muted-foreground">
-            Conversaciones con al menos un mensaje de salida
-          </div>
+          <div className="text-muted-foreground">Contactos con respuesta del asesor</div>
         </CardFooter>
       </Card>
       <Card className="@container/card">
         <CardHeader>
-          <CardDescription>Contactos completados</CardDescription>
+          <CardDescription>Contactos completos</CardDescription>
           <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl">
             {formatNumber(cards.contactos)}
           </CardTitle>
@@ -105,14 +101,12 @@ export function VisitsSectionCards({ cards }: SectionCardsProps) {
           <div className="line-clamp-1 flex gap-2 font-medium">
             Datos completos registrados <IconTrendingUp className="size-4" />
           </div>
-          <div className="text-muted-foreground">
-            Contactos con información verificada
-          </div>
+          <div className="text-muted-foreground">Contactos con información verificada</div>
         </CardFooter>
       </Card>
       <Card className="@container/card">
         <CardHeader>
-          <CardDescription>Conversaciones WhatsApp</CardDescription>
+          <CardDescription>Contactos por WhatsApp</CardDescription>
           <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl">
             {formatNumber(cards.whatsapp)}
           </CardTitle>
@@ -125,11 +119,9 @@ export function VisitsSectionCards({ cards }: SectionCardsProps) {
         </CardHeader>
         <CardFooter className="flex-col items-start gap-1.5 text-sm">
           <div className="line-clamp-1 flex gap-2 font-medium">
-            Leads directos desde WA <IconTrendingUp className="size-4" />
+            Contactos directos desde WhatsApp <IconTrendingUp className="size-4" />
           </div>
-          <div className="text-muted-foreground">
-            Conversaciones iniciadas por WhatsApp con Tal-IA
-          </div>
+          <div className="text-muted-foreground">Contactos iniciados por WhatsApp con Tal-IA</div>
         </CardFooter>
       </Card>
     </div>

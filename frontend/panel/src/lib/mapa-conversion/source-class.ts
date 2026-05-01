@@ -1,10 +1,10 @@
 const SOURCE_CLASS_LABELS: Record<string, string> = {
-  ai_referral: "Asistente de IA",
-  campaign: "Enlace de campaña",
-  direct: "Entrada directa",
-  organic_search: "Búsqueda en Google",
+  ai_referral: "Asistentes digitales",
+  campaign: "Promoción",
+  direct: "Visita directa",
+  organic_search: "Búsqueda",
   organic_social: "Redes sociales",
-  referral: "Otro sitio web",
+  referral: "Otro sitio",
   unknown: "Sin identificar",
 }
 

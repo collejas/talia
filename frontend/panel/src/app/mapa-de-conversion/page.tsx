@@ -670,7 +670,7 @@ export default async function Page({
                       <div className="flex flex-col gap-4 text-sm">
                         <div className="flex flex-col gap-1">
                           <span className="text-[11px] uppercase tracking-wide text-muted-foreground">
-                            {mapKpisData.nivelLabel} con más interacciones:
+                            {mapKpisData.nivelLabel} con más visitas:
                           </span>
                           <span className="text-lg font-semibold leading-tight">
                             {mapKpisData.topLocationName || "Sin datos"}
@@ -679,29 +679,29 @@ export default async function Page({
 
                         <div className="space-y-2">
                           <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                            Sesiones y conversaciones
+                            Visitas y contactos
                           </div>
                           <div className="space-y-1">
                             <div className="flex items-center justify-between gap-3">
-                              <span className="text-xs text-muted-foreground">Sesiones web</span>
+                              <span className="text-xs text-muted-foreground">Visitas al sitio</span>
                               <span className="font-medium tabular-nums">
                                 {formatNumber(mapKpisData.sesionesWebTotales)}
                               </span>
                             </div>
                             <div className="flex items-center justify-between gap-3">
-                              <span className="text-xs text-muted-foreground">Sesiones webchat</span>
+                              <span className="text-xs text-muted-foreground">Visitas con chat</span>
                               <span className="font-medium tabular-nums">
                                 {formatNumber(mapKpisData.sesionesWebchatTotales)}
                               </span>
                             </div>
                             <div className="flex items-center justify-between gap-3">
-                              <span className="text-xs text-muted-foreground">WhatsApp campañas</span>
+                              <span className="text-xs text-muted-foreground">Promociones de WhatsApp</span>
                               <span className="font-medium tabular-nums">
                                 {formatNumber(mapKpisData.whatsappCampaignsTotal)}
                               </span>
                             </div>
                             <div className="flex items-center justify-between gap-3">
-                              <span className="text-xs text-muted-foreground">Conversaciones</span>
+                              <span className="text-xs text-muted-foreground">Contactos generados</span>
                               <span className="font-medium tabular-nums">
                                 {formatNumber(
                                   mapKpisData.sesionesWebchatTotales +
@@ -716,7 +716,7 @@ export default async function Page({
 
                         <div className="space-y-2">
                           <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                            Canales
+                            Canales de contacto
                           </div>
                           <div className="space-y-1">
                             <div className="flex items-center justify-between gap-3">
@@ -797,7 +797,7 @@ export default async function Page({
               {!waAttributionFilterActive && visitsTable.length ? (
                 <div className="px-4 lg:px-6">
                   <div className="mb-3 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-                    Sesiones web
+                    Visitas web
                   </div>
                   <VisitsDataTable data={visitsTable} />
                 </div>

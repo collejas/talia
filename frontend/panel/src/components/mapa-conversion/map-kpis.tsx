@@ -57,7 +57,7 @@ export function MapKpis({
 }: MapKpisProps) {
   const cards = [
     {
-      title: "Top ubicación",
+      title: "Zona con más visitas",
       value: topLocationName || "Sin datos",
       helper: `Leads ${formatDisplayNumber(topLocationLeads)} · Visitas ${formatDisplayNumber(
         topLocationVisits,
@@ -65,23 +65,23 @@ export function MapKpis({
       icon: IconRocket,
     },
     {
-      title: "Tráfico web",
+      title: "Visitas al sitio",
       value: formatDisplayNumber(sesionesWebTotales),
-      helper: `Nivel ${nivelLabel} · Visitas totales ${formatDisplayNumber(visitasTotales)}`,
+      helper: `Nivel ${nivelLabel} · Total registrado ${formatDisplayNumber(visitasTotales)}`,
       icon: IconWorld,
     },
     {
-      title: "WhatsApp campañas",
+      title: "Promociones de WhatsApp",
       value: formatDisplayNumber(whatsappCampaignsTotal),
-      helper: `Conversaciones atribuidas por campaña`,
+      helper: `Visitas o conversaciones vinculadas a promociones`,
       icon: IconRoute,
     },
     {
-      title: "Origen principal",
+      title: "Tipo de visita principal",
       value: topSource
         ? `${formatSourceClassLabel(topSource)} (${formatDisplayNumber(topSourceValue)})`
         : "Sin datos",
-      helper: `Nivel ${nivelLabel} · Origen principal de sesiones web`,
+      helper: `Nivel ${nivelLabel} · Tipo de visita con más registros`,
       icon: IconRoute,
     },
     {
@@ -89,11 +89,11 @@ export function MapKpis({
       value: formatDisplayNumber(
         sesionesWebchatTotales + conversacionesWhatsapp + conversacionesVoz + conversacionesCorreo,
       ),
-      helper: `Webchat ${formatDisplayNumber(sesionesWebchatTotales)} · WA ${formatDisplayNumber(
+      helper: `Chat del sitio ${formatDisplayNumber(sesionesWebchatTotales)} · WhatsApp ${formatDisplayNumber(
         conversacionesWhatsapp,
       )} · Voz ${formatDisplayNumber(conversacionesVoz)} · Correo ${formatDisplayNumber(
         conversacionesCorreo,
-      )} · Etapa líder ${stageLeader || "N/A"} (${formatDisplayNumber(stageLeaderValue)})`,
+      )} · Etapa con más casos ${stageLeader || "N/A"} (${formatDisplayNumber(stageLeaderValue)})`,
       icon: IconMessageCircle,
     },
   ]

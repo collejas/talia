@@ -193,24 +193,24 @@ export function AcquisitionSummary({ summary, visits, className }: Props) {
     <section className={cn("grid gap-4", className)}>
       <Card>
         <CardHeader>
-          <CardTitle>Adquisición del sitio</CardTitle>
+          <CardTitle>De dónde llegan las visitas</CardTitle>
           <CardDescription>
-            Vista operativa del tráfico que entra al sitio y cómo se distribuye por origen.
+            Vista de negocio para entender de dónde entra el tráfico y cómo convierte cada tipo de visita.
           </CardDescription>
         </CardHeader>
         <CardContent className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          <MetricTile title="Sesiones web" value={formatNumber(totalSessions)} helper="Filas de sesiones web first-party" />
-          <MetricTile title="Sesiones convertidas" value={formatNumber(convertedSessions)} helper="Sesiones con contacto vinculado" />
-          <MetricTile title="Tasa de conversión" value={formatPercent(conversionRate)} helper="Conversión sobre sesiones web" />
-          <MetricTile title="Origen líder" value={topSourceLabel} helper={`${formatNumber(topSourceTotal)} sesiones`} />
+          <MetricTile title="Visitas totales" value={formatNumber(totalSessions)} helper="Total de visitas registradas" />
+          <MetricTile title="Visitas que terminan en contacto" value={formatNumber(convertedSessions)} helper="Visitas con contacto vinculado" />
+          <MetricTile title="Porcentaje que convierte" value={formatPercent(conversionRate)} helper="Proporción de visitas que terminan en contacto" />
+          <MetricTile title="Fuente principal" value={topSourceLabel} helper={`${formatNumber(topSourceTotal)} visitas`} />
         </CardContent>
       </Card>
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1.25fr)_minmax(0,0.75fr)]">
         <Card>
           <CardHeader>
-            <CardTitle>Sesiones por origen</CardTitle>
-            <CardDescription>Sesiones y conversiones agrupadas por `source_class`.</CardDescription>
+            <CardTitle>Visitas por tipo de visita</CardTitle>
+            <CardDescription>Visitas y contactos agrupados por tipo de visita.</CardDescription>
           </CardHeader>
           <CardContent>
             {sourceClassRows.length ? (
@@ -247,8 +247,8 @@ export function AcquisitionSummary({ summary, visits, className }: Props) {
 
         <Card>
           <CardHeader>
-            <CardTitle>Top referrers</CardTitle>
-            <CardDescription>Dominios externos que enviaron tráfico al sitio.</CardDescription>
+            <CardTitle>Sitios que envían visitas</CardTitle>
+            <CardDescription>Sitios externos que enviaron tráfico al sitio.</CardDescription>
           </CardHeader>
           <CardContent className="grid gap-2">
             {referrerRows.length ? (
@@ -271,7 +271,7 @@ export function AcquisitionSummary({ summary, visits, className }: Props) {
                 );
               })
             ) : (
-              <p className="text-muted-foreground text-sm">No hay referrers externos en este filtro.</p>
+              <p className="text-muted-foreground text-sm">No hay sitios externos en este filtro.</p>
             )}
           </CardContent>
         </Card>
@@ -279,8 +279,8 @@ export function AcquisitionSummary({ summary, visits, className }: Props) {
 
       <Card>
         <CardHeader>
-          <CardTitle>Top UTM</CardTitle>
-          <CardDescription>Combinaciones UTM observadas en el tráfico del sitio.</CardDescription>
+          <CardTitle>Promociones y enlaces</CardTitle>
+          <CardDescription>Combinaciones de promoción y enlace observadas en el tráfico del sitio.</CardDescription>
         </CardHeader>
         <CardContent className="grid gap-2">
           {topUtmRows.length ? (
@@ -298,7 +298,7 @@ export function AcquisitionSummary({ summary, visits, className }: Props) {
               </div>
             ))
           ) : (
-            <p className="text-muted-foreground text-sm">Sin campañas top en este filtro.</p>
+            <p className="text-muted-foreground text-sm">No hay promociones destacadas en este filtro.</p>
           )}
         </CardContent>
       </Card>

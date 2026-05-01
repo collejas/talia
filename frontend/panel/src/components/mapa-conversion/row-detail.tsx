@@ -37,7 +37,7 @@ type Segment = {
 };
 
 const CHANNEL_CONFIG: ChartConfig = {
-  webchat: { label: "Webchat", color: "hsl(var(--chart-1))" },
+  webchat: { label: "Chat del sitio", color: "hsl(var(--chart-1))" },
   whatsapp: { label: "WhatsApp", color: "hsl(var(--chart-2))" },
   voz: { label: "Voz", color: "hsl(var(--chart-3))" },
   correo: { label: "Correo", color: "hsl(var(--chart-4))" },
@@ -109,8 +109,8 @@ export function MapaConversionRowDetail({ row, nivel, summary }: Props) {
   }));
 
   const conversationData = [
-    { label: "Con conversación", value: visitasConChat },
-    { label: "Sin conversación", value: visitasSinChat },
+    { label: "Con contacto", value: visitasConChat },
+    { label: "Sin contacto", value: visitasSinChat },
   ];
 
   const topSegments: Segment[] = (summary?.leads?.rows ?? [])
@@ -152,35 +152,35 @@ export function MapaConversionRowDetail({ row, nivel, summary }: Props) {
         <MetricCard
           title="Visitas totales"
           value={formatNumber(totalVisitas)}
-          description={`Con chat: ${formatNumber(visitasConChat)} (${chatRate.toFixed(1)} %)` }
+          description={`Con contacto: ${formatNumber(visitasConChat)} (${chatRate.toFixed(1)} %)` }
         />
         <MetricCard
-          title="Leads totales"
+          title="Contactos totales"
           value={formatNumber(leadsTotal)}
           description={`Conversión sobre visitas: ${conversion.toFixed(1)} %`}
         />
         <MetricCard
-          title="Chat sin respuesta"
+          title="Visitas sin contacto"
           value={formatNumber(visitasSinChat)}
-          description="Visitantes que no recibieron conversación"
+          description="Visitantes que no recibieron contacto"
         />
         <MetricCard
-          title="Canal principal"
+          title="Forma principal de contacto"
           value={formatLabel(principalChannel)}
-          description="Fuente con mayor participación"
+          description="Forma con mayor participación"
         />
         <MetricCard
-          title="Sesiones web"
+          title="Visitas al sitio"
           value={formatNumber(sanitizeNumber(trafficWeb.sesiones_web_total))}
-          description="Tráfico web first-party"
+          description="Tráfico del sitio"
         />
       </section>
 
       <section className="grid gap-4 lg:grid-cols-2">
         <Card>
           <CardHeader>
-            <CardTitle>Distribución por canal</CardTitle>
-            <CardDescription>Volumen total por origen</CardDescription>
+            <CardTitle>Distribución por forma de contacto</CardTitle>
+            <CardDescription>Volumen total por tipo de contacto</CardDescription>
           </CardHeader>
           <CardContent>
             <ChartContainer config={CHANNEL_CONFIG} className="h-64">
@@ -205,8 +205,8 @@ export function MapaConversionRowDetail({ row, nivel, summary }: Props) {
 
         <Card>
           <CardHeader>
-            <CardTitle>Embudo por etapa</CardTitle>
-            <CardDescription>Progresión de leads en pipeline</CardDescription>
+            <CardTitle>Avance por etapa</CardTitle>
+            <CardDescription>Progresión de contactos en seguimiento</CardDescription>
           </CardHeader>
           <CardContent>
             <ChartContainer config={STAGE_CONFIG} className="h-64">
@@ -234,7 +234,7 @@ export function MapaConversionRowDetail({ row, nivel, summary }: Props) {
 
       <section className="grid gap-3">
         <h4 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-          Conversaciones
+          Contactos
         </h4>
         <div className="grid gap-2">
           {conversationData.map((item) => (
@@ -258,7 +258,7 @@ export function MapaConversionRowDetail({ row, nivel, summary }: Props) {
 
       <section className="grid gap-3">
         <h4 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-          Atribución web
+          Origen de las visitas
         </h4>
         <div className="grid gap-2">
           {(Array.isArray(trafficWeb.fuentes_top) ? trafficWeb.fuentes_top : []).length ? (
@@ -274,7 +274,7 @@ export function MapaConversionRowDetail({ row, nivel, summary }: Props) {
               </div>
             ))
           ) : (
-            <p className="text-muted-foreground text-sm">Sin fuentes top en este filtro.</p>
+            <p className="text-muted-foreground text-sm">Sin sitios destacados en este filtro.</p>
           )}
         </div>
         <div className="grid gap-2">
@@ -293,14 +293,14 @@ export function MapaConversionRowDetail({ row, nivel, summary }: Props) {
               </div>
             ))
           ) : (
-            <p className="text-muted-foreground text-sm">Sin campañas top en este filtro.</p>
+            <p className="text-muted-foreground text-sm">Sin promociones destacadas en este filtro.</p>
           )}
         </div>
       </section>
 
       <section className="grid gap-3">
         <h4 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-          Atribución WhatsApp
+          Promociones de WhatsApp
         </h4>
         <div className="grid gap-2">
           {(Array.isArray(whatsappAttribution.top) ? whatsappAttribution.top : []).length ? (
@@ -311,7 +311,7 @@ export function MapaConversionRowDetail({ row, nivel, summary }: Props) {
               >
                 <span className="text-muted-foreground">
                   {`${formatWaLabel(item.canal_publicitario) ?? "Sin canal"} · ${
-                    formatWaLabel(item.campana_publicitaria) ?? "Sin campaña"
+                    formatWaLabel(item.campana_publicitaria) ?? "Sin promoción"
                   }`}
                 </span>
                 <span className="font-medium">{formatNumber(sanitizeNumber(item.total))}</span>
@@ -327,7 +327,7 @@ export function MapaConversionRowDetail({ row, nivel, summary }: Props) {
 
       <section className="grid gap-3">
         <h4 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-          Principales segmentos
+          Principales grupos
         </h4>
         <div className="grid gap-2">
           {topSegments.length ? (
@@ -359,21 +359,21 @@ export function MapaConversionRowDetail({ row, nivel, summary }: Props) {
 
       <section className="grid gap-3">
         <h4 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-          Resumen ejecutivo
+          Resumen general
         </h4>
         <ul className="text-muted-foreground grid gap-2 text-sm">
           <li>
-            • El canal principal es <strong className="text-foreground">{formatLabel(principalChannel)}</strong> con {formatNumber(
+            • La forma principal es <strong className="text-foreground">{formatLabel(principalChannel)}</strong> con {formatNumber(
               channelData.find((item) => item.channel === principalChannel)?.total ?? 0,
             )} interacciones totales.
           </li>
           <li>
-            • El embudo concentra {formatNumber(sanitizeNumber(etapasTotales.captado))} leads en{" "}
+            • El avance concentra {formatNumber(sanitizeNumber(etapasTotales.captado))} casos en{" "}
             <strong className="text-foreground">Captado</strong> y {formatNumber(sanitizeNumber(etapasTotales.negociacion))} en{" "}
             <strong className="text-foreground">Negociación</strong>.
           </li>
           <li>
-            • La tasa de chat activo es {chatRate.toFixed(1)} %, con {formatNumber(visitasSinChat)} visitantes aún sin conversación.
+            • La tasa de contacto activo es {chatRate.toFixed(1)} %, con {formatNumber(visitasSinChat)} visitas aún sin contacto.
           </li>
         </ul>
       </section>
