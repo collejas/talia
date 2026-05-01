@@ -571,7 +571,7 @@ async def _ensure_inferred_contact_context(
         return contact
 
     try:
-        updated_contact = await storage.update_contact(contact_id, patch_payload)
+        updated_contact = await storage.update_persona(contact_id, patch_payload)
     except StorageError as exc:
         logger.warning(
             "whatsapp.followup.inferred_contact_update_failed",

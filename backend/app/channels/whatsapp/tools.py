@@ -1059,7 +1059,7 @@ async def execute_tool(
     func = name.strip()
     if func == "set_full_name":
         full_name = _require(arguments, "full_name")
-        await storage.update_contact(context.contact_id, {"nombre_completo": full_name})
+        await storage.update_persona(context.contact_id, {"nombre_completo": full_name})
         await _refresh_opportunity_context_from_persona(
             context,
             reason="set_full_name",
@@ -1069,7 +1069,7 @@ async def execute_tool(
 
     if func == "set_email":
         email = _require(arguments, "email").lower()
-        await storage.update_contact(context.contact_id, {"correo": email})
+        await storage.update_persona(context.contact_id, {"correo": email})
         await _refresh_opportunity_context_from_persona(
             context,
             reason="set_email",
@@ -1079,7 +1079,7 @@ async def execute_tool(
 
     if func == "set_phone_number":
         phone = _require(arguments, "phone_number")
-        await storage.update_contact(context.contact_id, {"telefono_e164": phone})
+        await storage.update_persona(context.contact_id, {"telefono_e164": phone})
         await _refresh_opportunity_context_from_persona(
             context,
             reason="set_phone_number",
@@ -1089,7 +1089,7 @@ async def execute_tool(
 
     if func == "set_company_name":
         company = _require(arguments, "company_name")
-        await storage.update_contact(context.contact_id, {"company_name": company})
+        await storage.update_persona(context.contact_id, {"company_name": company})
         await _refresh_opportunity_context_from_persona(
             context,
             reason="set_company_name",
@@ -1118,7 +1118,7 @@ async def execute_tool(
         if necesidad:
             updates["necesidad_proposito"] = necesidad
         if updates:
-            await storage.update_contact(context.contact_id, updates)
+            await storage.update_persona(context.contact_id, updates)
             await _refresh_opportunity_context_from_persona(
                 context,
                 reason="set_prospect_context",
@@ -1542,7 +1542,7 @@ async def _handle_information_email(
             summary = persona_need or persona_notes
         if contact_email and contact_email.lower() != email_value.lower():
             try:
-                await storage.update_contact(
+                await storage.update_persona(
                     persona.get("id") or context.contact_id, {"correo": email_value.lower()}
                 )
             except StorageError as exc:
@@ -1742,10 +1742,10 @@ async def _handle_close_lead(
             "whatsapp.close_lead.ensure_opportunity_failed",
             extra={"conversation_id": context.conversation_id, "error": str(exc)},
         )
-    await storage.update_contact(
-        context.contact_id,
-        {"notes": notes, "necesidad_proposito": necesidad},
-    )
+        await storage.update_persona(
+            context.contact_id,
+            {"notes": notes, "necesidad_proposito": necesidad},
+        )
     if tarjeta_id:
         channel_value = str(context.channel or "whatsapp").strip().lower() or "whatsapp"
         profiling_enabled_for_channel = True
@@ -2355,7 +2355,7 @@ async def _handle_schedule_demo(
                 merge_payload["company_name"] = candidate
         if merge_payload:
             try:
-                await storage.update_contact(opportunity_contact_id, merge_payload)
+                await storage.update_persona(opportunity_contact_id, merge_payload)
                 persona_record = await _resolve_persona(opportunity_contact_id)
             except StorageError as exc:
                 logger.warning(
@@ -2383,7 +2383,7 @@ async def _handle_schedule_demo(
         patch_payload["notes"] = inferred_notes
     if patch_payload:
         try:
-            await storage.update_contact(opportunity_contact_id, patch_payload)
+            await storage.update_persona(opportunity_contact_id, patch_payload)
             persona_record = await _resolve_persona(opportunity_contact_id)
         except StorageError as exc:
             logger.warning(

@@ -1343,7 +1343,7 @@ async def register_whatsapp_message(
 
         persona_row: dict[str, Any] | None = None
         if resolved_persona_id:
-            persona_row = await repo.get_contact_by_id(contact_id=resolved_persona_id)
+            persona_row = await repo.get_persona_by_id(persona_id=resolved_persona_id)
         else:
             if wa_id:
                 persona_row = await repo.get_contact_by_whatsapp_id(
@@ -1351,7 +1351,7 @@ async def register_whatsapp_message(
                     organizacion_id=org_uuid,
                 )
             if not persona_row and phone_e164:
-                persona_row = await repo.get_contact_by_phone_e164(
+                persona_row = await repo.get_persona_by_phone_e164(
                     phone_e164=phone_e164,
                     organizacion_id=org_uuid,
                 )
@@ -1412,7 +1412,7 @@ async def register_whatsapp_message(
     if direction == "entrante" and profile_name and result.get("contact_id"):
         persona_id_value = resolved_persona_id or str(result.get("contact_id"))
         try:
-            persona_row = await repo.get_contact_by_id(contact_id=str(persona_id_value))
+            persona_row = await repo.get_persona_by_id(persona_id=str(persona_id_value))
             if persona_row:
                 raw_persona_data = persona_row.get("contacto_datos")
                 persona_data = _ensure_dict(raw_persona_data)
@@ -1434,7 +1434,7 @@ async def register_whatsapp_message(
                         patch["contacto_datos"] = persona_data
 
                 if patch:
-                    await repo.update_contact_by_id(contact_id=persona_id_value, patch=patch)
+                    await repo.update_persona_by_id(persona_id=persona_id_value, patch=patch)
         except CRMRepositoryError as exc:
             logger.warning(
                 "storage.whatsapp_profile_name_normalization_failed",
@@ -2077,7 +2077,7 @@ async def fetch_persona(persona_id: str) -> dict[str, Any]:
     """Obtiene la representación de la persona indicada."""
     repo = CRMRepository()
     try:
-        row = await repo.get_contact_by_id(contact_id=persona_id)
+        row = await repo.get_persona_by_id(persona_id=persona_id)
     except CRMRepositoryError as exc:
         raise StorageError(str(exc)) from exc
     if not row:
@@ -2102,7 +2102,7 @@ async def fetch_persona_context(*, conversation_id: str, persona_id: str) -> dic
     """Obtiene la persona y la oportunidad más relevante asociada."""
     repo = CRMRepository()
     try:
-        persona = await repo.get_contact_by_id(contact_id=persona_id)
+        persona = await repo.get_persona_by_id(persona_id=persona_id)
     except CRMRepositoryError as exc:
         raise StorageError(str(exc)) from exc
     if not persona:
@@ -2133,7 +2133,7 @@ async def fetch_contact_identities(contact_id: str) -> list[dict[str, Any]]:
     """Recupera identidades de canal asociadas a la persona."""
     repo = CRMRepository()
     try:
-        return await repo.list_contact_identities(contact_id=contact_id)
+        return await repo.list_persona_identities(persona_id=contact_id)
     except CRMRepositoryError as exc:
         raise StorageError(str(exc)) from exc
 
@@ -2294,7 +2294,7 @@ async def update_contact(contact_id: str, patch: dict[str, Any]) -> dict[str, An
         patch["telefono_e164"] = normalize_phone(phone_value)
     repo = CRMRepository()
     try:
-        row = await repo.update_contact_by_id(contact_id=contact_id, patch=patch)
+        row = await repo.update_persona_by_id(persona_id=contact_id, patch=patch)
     except CRMRepositoryError as exc:
         raise StorageError(str(exc)) from exc
 

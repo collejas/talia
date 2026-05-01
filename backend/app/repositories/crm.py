@@ -6545,6 +6545,9 @@ class CRMRepository:
             return row
         return await self._persona_to_contact_row(persona=row, organizacion_id=org_uuid)
 
+    async def get_persona_by_id(self, *, persona_id: str) -> dict[str, Any] | None:
+        return await self.get_contact_by_id(contact_id=persona_id)
+
     async def get_contact_by_phone_e164(
         self,
         *,
@@ -6586,6 +6589,17 @@ class CRMRepository:
                 return await self._persona_to_contact_row(persona=row, organizacion_id=org_uuid)
         return None
 
+    async def get_persona_by_phone_e164(
+        self,
+        *,
+        phone_e164: str,
+        organizacion_id: UUID | None = None,
+    ) -> dict[str, Any] | None:
+        return await self.get_contact_by_phone_e164(
+            phone_e164=phone_e164,
+            organizacion_id=organizacion_id,
+        )
+
     async def get_contact_by_email(
         self,
         *,
@@ -6624,6 +6638,14 @@ class CRMRepository:
         except ValueError:
             return row
         return await self._persona_to_contact_row(persona=row, organizacion_id=org_uuid)
+
+    async def get_persona_by_email(
+        self,
+        *,
+        email: str,
+        organizacion_id: UUID | None = None,
+    ) -> dict[str, Any] | None:
+        return await self.get_contact_by_email(email=email, organizacion_id=organizacion_id)
         
 
     async def get_contact_by_whatsapp_id(
@@ -6665,6 +6687,14 @@ class CRMRepository:
             return row
         return await self._persona_to_contact_row(persona=row, organizacion_id=org_uuid)
 
+    async def get_persona_by_whatsapp_id(
+        self,
+        *,
+        wa_id: str,
+        organizacion_id: UUID | None = None,
+    ) -> dict[str, Any] | None:
+        return await self.get_contact_by_whatsapp_id(wa_id=wa_id, organizacion_id=organizacion_id)
+
     async def list_contact_identities(self, *, contact_id: str) -> list[dict[str, Any]]:
         contact_key = contact_id.strip()
         if not contact_key:
@@ -6676,6 +6706,9 @@ class CRMRepository:
         resp = await self._request("GET", "/rest/v1/identidades_canal", params=params)
         data = resp.json() or []
         return data if isinstance(data, list) else []
+
+    async def list_persona_identities(self, *, persona_id: str) -> list[dict[str, Any]]:
+        return await self.list_contact_identities(contact_id=persona_id)
 
     async def update_contact_by_id(
         self, *, contact_id: str, patch: dict[str, Any]
@@ -6698,6 +6731,9 @@ class CRMRepository:
             contacto_id=contact_uuid,
             payload=patch,
         )
+
+    async def update_persona_by_id(self, *, persona_id: str, patch: dict[str, Any]) -> dict[str, Any]:
+        return await self.update_contact_by_id(contact_id=persona_id, patch=patch)
 
     async def create_contact(
         self,

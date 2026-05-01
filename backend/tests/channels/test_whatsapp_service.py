@@ -175,6 +175,7 @@ async def test_handle_incoming_message_respects_manual_mode(monkeypatch) -> None
 
     monkeypatch.setattr(service.storage, "register_whatsapp_message", fake_register)
     monkeypatch.setattr(service.storage, "fetch_conversation", fake_fetch_conversation)
+    monkeypatch.setattr(service.storage, "fetch_persona", fake_fetch_contact)
     monkeypatch.setattr(service.storage, "fetch_contact", fake_fetch_contact)
     monkeypatch.setattr(service.storage, "fetch_contact_identities", fake_fetch_contact_identities)
     monkeypatch.setattr(
@@ -252,6 +253,7 @@ async def test_handle_incoming_message_sends_reply(monkeypatch) -> None:
 
     monkeypatch.setattr(service.storage, "register_whatsapp_message", fake_register)
     monkeypatch.setattr(service.storage, "fetch_conversation", fake_fetch_conversation)
+    monkeypatch.setattr(service.storage, "fetch_persona", fake_fetch_contact)
     monkeypatch.setattr(service.storage, "fetch_contact", fake_fetch_contact)
     monkeypatch.setattr(service.storage, "fetch_contact_identities", fake_fetch_contact_identities)
     monkeypatch.setattr(
@@ -334,6 +336,7 @@ async def test_handle_incoming_message_notifies_on_restart(monkeypatch) -> None:
 
     monkeypatch.setattr(service.storage, "register_whatsapp_message", fake_register)
     monkeypatch.setattr(service.storage, "fetch_conversation", fake_fetch_conversation)
+    monkeypatch.setattr(service.storage, "fetch_persona", fake_fetch_contact)
     monkeypatch.setattr(service.storage, "fetch_contact", fake_fetch_contact)
     monkeypatch.setattr(service.storage, "fetch_contact_identities", fake_fetch_contact_identities)
     monkeypatch.setattr(service.storage, "ensure_conversation_opportunity", fake_ensure_conversation_opportunity)
