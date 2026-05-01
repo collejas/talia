@@ -2681,6 +2681,22 @@ async def ensure_lead_tarjeta(
     )
 
 
+async def ensure_persona_tarjeta(
+    *,
+    tarjeta_id: str | None,
+    conversation_id: str,
+    persona_id: str | None,
+    channel: str | None = None,
+) -> str:
+    """Alias con nombre de persona para la tarjeta/oportunidad de conversación."""
+    return await ensure_lead_tarjeta(
+        tarjeta_id=tarjeta_id,
+        conversation_id=conversation_id,
+        contact_id=persona_id,
+        channel=channel,
+    )
+
+
 async def maybe_auto_name_opportunity(
     *,
     conversation_id: str,
@@ -2693,17 +2709,17 @@ async def maybe_auto_name_opportunity(
     """Renombra la oportunidad con base en insights cuando el título actual es genérico."""
 
     try:
-        contact = await fetch_persona(contact_id)
+        persona = await fetch_persona(contact_id)
     except StorageError as exc:
         logger.warning(
-            "storage.auto_name_opportunity.contact_lookup_failed",
+            "storage.auto_name_opportunity.persona_lookup_failed",
             extra={"contact_id": contact_id, "conversation_id": conversation_id, "error": str(exc)},
         )
         return None
 
-    proposed_title = _build_opportunity_title(contact=contact, intent=intent, summary=summary)
+    proposed_title = _build_opportunity_title(contact=persona, intent=intent, summary=summary)
     proposed_description = _build_opportunity_description(
-        contact=contact,
+        contact=persona,
         intent=intent,
         summary=summary,
     )
@@ -2735,7 +2751,7 @@ async def maybe_auto_name_opportunity(
     except (TypeError, ValueError):
         return None
 
-    org_value = contact.get("organizacion_id")
+    org_value = persona.get("organizacion_id")
     if not org_value:
         return None
     try:

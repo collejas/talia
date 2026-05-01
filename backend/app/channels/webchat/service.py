@@ -512,9 +512,9 @@ async def _ensure_opportunity_when_persona_ready(
             contact_id=contact_key,
         )
         raise ValueError(CONTACT_ASSIGNMENT_ERROR)
-    return await storage.ensure_conversation_opportunity(
+    return await storage.ensure_persona_conversation_opportunity(
         conversation_id=conversation_id,
-        contact_id=contact_key,
+        persona_id=contact_key,
         channel=channel,
     )
 
