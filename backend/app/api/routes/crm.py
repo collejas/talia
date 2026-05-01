@@ -4998,6 +4998,47 @@ def _is_same_site_referrer(*, referrer: str | None, landing_url: str | None) -> 
     return ref_host == land_host or ref_host.endswith(f".{land_host}") or land_host.endswith(f".{ref_host}")
 
 
+AI_REFERRAL_MARKERS = (
+    "chatgpt.com",
+    "chat.openai.com",
+    "openai.com",
+    "perplexity.ai",
+    "copilot.microsoft.com",
+    "gemini.google.com",
+    "bard.google.com",
+    "claude.ai",
+    "poe.com",
+    "you.com",
+)
+
+
+def _looks_like_ai_referral(value: str | None) -> bool:
+    text = (value or "").strip().lower()
+    if not text:
+        return False
+    return any(marker in text for marker in AI_REFERRAL_MARKERS)
+
+
+def _is_ai_referral_source(
+    *,
+    referrer: str | None,
+    landing_url: str | None,
+    utm_source: str | None,
+) -> bool:
+    if _looks_like_ai_referral(utm_source):
+        return True
+    try:
+        ref_host = (urlparse(referrer or "").hostname or "").strip().lower()
+        land_host = (urlparse(landing_url or "").hostname or "").strip().lower()
+    except Exception:
+        ref_host = ""
+        land_host = ""
+    return any(
+        _looks_like_ai_referral(candidate)
+        for candidate in (referrer, ref_host, landing_url, land_host)
+    )
+
+
 def _classify_source_class(
     *,
     source_class: str | None,
@@ -5009,9 +5050,14 @@ def _classify_source_class(
 ) -> str | None:
     explicit = (source_class or "").strip().lower()
     if explicit:
-        return explicit
+        if explicit == "ai_referral":
+            return explicit
+    if _is_ai_referral_source(referrer=referrer, landing_url=landing_url, utm_source=utm_source):
+        return "ai_referral"
     if (utm_source or "").strip() or (utm_medium or "").strip() or (utm_campaign or "").strip():
         return "campaign"
+    if explicit:
+        return explicit
     if _is_same_site_referrer(referrer=referrer, landing_url=landing_url):
         return "direct"
     ref = (referrer or "").strip().lower()

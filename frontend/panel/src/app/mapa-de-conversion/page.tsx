@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/sidebar";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { DemografiaControls } from "@/components/mapa-conversion/controls";
+import { AcquisitionSummary } from "@/components/mapa-conversion/acquisition-summary";
 import { MapaConversionTableClient } from "@/components/mapa-conversion/table.client";
 import { LocationComparisonChartClient } from "@/components/mapa-conversion/location-comparison-chart.client";
 import { VisitsDataTable } from "@/components/visitas/visits-data-table";
@@ -316,32 +317,30 @@ export default async function Page({
     );
   }
 
-  if (!waAttributionFilterActive) {
-    try {
-      visitsTable = await loadVisitsTableForConversionMap({
-        canales: canalesSelected,
-        // Mantener el filtro de estado alineado con demografia:
-        // solo aplica cuando el usuario navega a nivel municipio.
-        estado: nivel === "municipio" ? normalizedEstado : null,
-        sourceClass,
-        utmSource,
-        utmMedium,
-        utmCampaign,
-        templateId,
-        waCanalPublicitario,
-        waCampanaPublicitaria,
-        waReglaId,
-        rango,
-        desde,
-        hasta,
-      });
-    } catch (error) {
-      errores.push(
-        error instanceof Error
-          ? error.message
-          : "No se pudieron cargar las visitas recientes."
-      );
-    }
+  try {
+    visitsTable = await loadVisitsTableForConversionMap({
+      canales: canalesSelected,
+      // Mantener el filtro de estado alineado con demografia:
+      // solo aplica cuando el usuario navega a nivel municipio.
+      estado: nivel === "municipio" ? normalizedEstado : null,
+      sourceClass,
+      utmSource,
+      utmMedium,
+      utmCampaign,
+      templateId,
+      waCanalPublicitario,
+      waCampanaPublicitaria,
+      waReglaId,
+      rango,
+      desde,
+      hasta,
+    });
+  } catch (error) {
+    errores.push(
+      error instanceof Error
+        ? error.message
+        : "No se pudieron cargar las visitas recientes."
+    );
   }
 
   try {
@@ -770,6 +769,12 @@ export default async function Page({
                 </div>
               </div>
               <SessionRecovery errors={errores} />
+              <div className="px-4 lg:px-6">
+                <AcquisitionSummary
+                  summary={demografiaResponse?.summary ?? null}
+                  visits={visitsTable}
+                />
+              </div>
               {tableData.length && demografiaResponse ? (
                 <div className="px-4 lg:px-6">
                   <MapaConversionTableClient

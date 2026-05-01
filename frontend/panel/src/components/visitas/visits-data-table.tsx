@@ -176,6 +176,7 @@ const VISIT_FIELDS: VisitField[] = [
   { id: "timezone", key: "timezone", label: "Zona horaria", type: "string" },
   { id: "prefiere_modo_oscuro", key: "prefiere_modo_oscuro", label: "Prefiere modo oscuro", type: "boolean" },
   { id: "referrer", key: "referrer", label: "Referrer", type: "string" },
+  { id: "referrer_host", key: "referrer_host", label: "Referrer host", type: "string", defaultVisible: true },
   { id: "landing_url", key: "landing_url", label: "Landing", type: "string" },
   { id: "utm_source", key: "utm_source", label: "UTM Source", type: "string", defaultVisible: true },
   { id: "utm_medium", key: "utm_medium", label: "UTM Medium", type: "string", defaultVisible: true },

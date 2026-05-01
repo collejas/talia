@@ -1,6 +1,7 @@
 "use server";
 
 import { callCrmApi } from "@/lib/api/crm";
+import { normalizeAcquisitionSourceClass } from "@/lib/mapa-conversion/source-class";
 
 type DashboardKpisResponse = {
   visitantes?: number;
@@ -86,6 +87,7 @@ type WebSessionAttributionRow = {
   nom_mun?: string | null;
   cvegeo?: string | null;
   referrer?: string | null;
+  referrer_host?: string | null;
   landing_url?: string | null;
   utm_source?: string | null;
   utm_medium?: string | null;
@@ -165,6 +167,7 @@ export type VisitDetailRaw = {
   timezone: string | null;
   prefiere_modo_oscuro: boolean | null;
   referrer: string | null;
+  referrer_host?: string | null;
   landing_url: string | null;
   trazabilidad_cache: Record<string, unknown> | null;
   source_class?: string | null;
@@ -344,6 +347,7 @@ function normalizeWebSessionRows(rows: WebSessionAttributionRow[]): VisitDetailR
         timezone: null,
         prefiere_modo_oscuro: null,
         referrer: row.referrer ?? null,
+        referrer_host: row.referrer_host ?? null,
         landing_url: row.landing_url ?? null,
         trazabilidad_cache: row.metadata ?? null,
         source_class: row.source_class ?? null,
@@ -430,6 +434,7 @@ function enrichVisitRows(
           lookup?.templateNameBySlug.get(templateSlugKey) ||
           null,
         template_captada: tracking.template_captada,
+        referrer_host: row.referrer_host ?? null,
       });
     } catch {
     }
@@ -797,17 +802,15 @@ function extractLandingTracking(landingUrl: string | null) {
 }
 
 function resolveSourceClass(row: VisitDetailRaw): string {
-  const explicit = normalizeTrackingValue(row.source_class ?? null);
-  if (explicit) return explicit;
-  const utmSource = normalizeTrackingValue(row.utm_source ?? null);
-  const utmMedium = normalizeTrackingValue(row.utm_medium ?? null);
-  const utmCampaign = normalizeTrackingValue(row.utm_campaign ?? null);
-  const referrer = normalizeTrackingValue(row.referrer ?? null) || "";
-  if (utmSource || utmMedium || utmCampaign) return "campaign";
-  if (!referrer) return "direct";
-  if (/google\./i.test(referrer)) return "organic_search";
-  if (/(facebook|instagram|twitter|t\.co|linkedin)\./i.test(referrer)) return "organic_social";
-  return "referral";
+  return normalizeAcquisitionSourceClass({
+    sourceClass: row.source_class ?? null,
+    referrerHost: row.referrer_host ?? null,
+    referrer: row.referrer ?? null,
+    landingUrl: row.landing_url ?? null,
+    utmSource: row.utm_source ?? null,
+    utmMedium: row.utm_medium ?? null,
+    utmCampaign: row.utm_campaign ?? null,
+  });
 }
 
 function matchesVisitsFilters(row: VisitDetailRaw, filters: VisitsFilters): boolean {
