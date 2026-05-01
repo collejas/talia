@@ -15616,7 +15616,7 @@ async def get_contact(
     contacto_id: UUID,
 ) -> CRMPersona:
     try:
-        row = await repo.get_contact(
+        row = await repo.get_persona(
             organizacion_id=organizacion_id,
             contacto_id=contacto_id,
         )
@@ -15773,7 +15773,7 @@ async def reassign_contact(
     if not isinstance(vendedor, dict) or not vendedor.get("es_vendedor"):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="vendedor_invalid")
 
-    contacto = await repo.get_contact(
+    contacto = await repo.get_persona(
         organizacion_id=organizacion_id,
         contacto_id=contacto_id,
     )
