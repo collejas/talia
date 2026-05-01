@@ -17335,28 +17335,28 @@ async def promote_inbox_conversation_to_opportunity(
     form_necesidad = _clean_text(payload.necesidad) if payload else None
     form_monto = payload.monto_estimado if payload and payload.monto_estimado is not None else None
 
-    contact_patch: dict[str, Any] = {}
+    persona_patch: dict[str, Any] = {}
     if form_nombre:
-        contact_patch["nombre_completo"] = form_nombre
+        persona_patch["nombre_completo"] = form_nombre
     if form_correo is not None:
-        contact_patch["correo"] = form_correo
+        persona_patch["correo"] = form_correo
     if form_telefono:
-        contact_patch["telefono_e164"] = form_telefono
+        persona_patch["telefono_e164"] = form_telefono
     if form_company:
-        contact_patch["company_name"] = form_company
+        persona_patch["company_name"] = form_company
     if form_necesidad:
-        contact_patch["necesidad_proposito"] = form_necesidad
-    if contact_patch:
+        persona_patch["necesidad_proposito"] = form_necesidad
+    if persona_patch:
         try:
-            contact_row = await repo.update_persona(
+            persona_row = await repo.update_persona(
                 organizacion_id=organizacion_id,
                 contacto_id=contact_uuid,
-                payload=contact_patch,
+                payload=persona_patch,
             )
         except CRMRepositoryError as exc:
             raise HTTPException(status_code=502, detail=f"contact_update_failed:{exc}") from exc
 
-    contact_name = _clean_text(contact_row.get("nombre_completo")) or "Contacto"
+    persona_name = _clean_text(persona_row.get("nombre_completo")) or "Contacto"
     recent_messages = await storage.fetch_recent_messages(conversation_id=str(conversacion_id), limit=20)
     latest_subject: str | None = None
     latest_inbound_text: str | None = None
@@ -17376,7 +17376,7 @@ async def promote_inbox_conversation_to_opportunity(
             if latest_inbound_text:
                 break
 
-    title = form_proyecto or latest_subject or f"Inbound correo - {contact_name}"
+    title = form_proyecto or latest_subject or f"Inbound correo - {persona_name}"
     description = form_necesidad or latest_inbound_text or "Conversación iniciada desde correo entrante en Inbox."
     channel = _clean_text(conversation_meta.get("channel")) or "correo"
     try:
@@ -24246,7 +24246,7 @@ async def convertir_prospecto_contacto(
     canal_origen = (payload.canal_origen or "otro").lower()
     source_label = _describe_prospeccion_source(prospecto)
     pipeline_canal_label = _infer_prospeccion_canal_label(prospecto)
-    contacto_body = {
+    persona_body = {
         "nombre_completo": nombre,
         "correo": correo,
         "telefono_e164": telefono,
@@ -24254,27 +24254,27 @@ async def convertir_prospecto_contacto(
         "notes": payload.notas or prospecto.get("notas"),
         "origen": "prospeccion",
     }
-    contacto_datos = {
+    persona_datos = {
         "prospecto_id": str(prospecto_id),
         "prospeccion_fuente": source_label,
     }
     if canal_origen != "otro":
-        contacto_datos["prospeccion_canal"] = canal_origen
-    contacto_body["persona_datos"] = {k: v for k, v in contacto_datos.items() if v}
-    contacto_body = {k: v for k, v in contacto_body.items() if v}
+        persona_datos["prospeccion_canal"] = canal_origen
+    persona_body["persona_datos"] = {k: v for k, v in persona_datos.items() if v}
+    persona_body = {k: v for k, v in persona_body.items() if v}
 
     try:
-        contacto = await repo.create_persona(
+        persona = await repo.create_persona(
             organizacion_id=organizacion_id,
-            payload=contacto_body,
+            payload=persona_body,
         )
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
     metadata = _ensure_dict(prospecto.get("metadata"), default={})
-    contacto_id = contacto.get("id")
-    if contacto_id:
-        metadata["convertido_contacto_id"] = str(contacto_id)
+    persona_id = persona.get("id")
+    if persona_id:
+        metadata["convertido_contacto_id"] = str(persona_id)
     metadata["convertido_en"] = datetime.now(timezone.utc).isoformat()
     metadata["recontact_blocked"] = True
     metadata["recontact_block_reason"] = "convertido_contacto"
@@ -28881,7 +28881,7 @@ async def public_web_booking_create(
         attendee_company = (payload.attendee_company or "").strip() or None
         if not attendee_name and not attendee_email and not attendee_phone:
             raise HTTPException(status_code=400, detail="attendee_identity_required")
-        contact_row = await repo.create_persona(
+        persona_row = await repo.create_persona(
             organizacion_id=organizacion_uuid,
             payload={
                 "nombre_completo": attendee_name or "Lead agenda web",
@@ -28902,10 +28902,10 @@ async def public_web_booking_create(
                 },
             },
         )
-        contact_uuid = _safe_uuid(str(contact_row.get("id")))
+        contact_uuid = _safe_uuid(str(persona_row.get("id")))
         if not contact_uuid:
             raise HTTPException(status_code=502, detail="contact_create_failed")
-        contact_data = contact_row
+        contact_data = persona_row
 
     try:
         stage_payload = await repo.get_stage_by_code(
