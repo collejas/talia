@@ -18295,7 +18295,7 @@ async def create_agenda_booking(
         if not contact_id:
             raise HTTPException(status_code=400, detail="contacto_id_requerido")
         try:
-            contact_data = await repo.get_contact_by_id(contact_id=contact_id)
+            contact_data = await repo.get_persona_by_id(persona_id=contact_id)
         except CRMRepositoryError as exc:
             raise HTTPException(status_code=502, detail=str(exc)) from exc
         if not contact_data:
@@ -28865,15 +28865,15 @@ async def public_web_booking_create(
 
     repo = CRMRepository()
     contact_uuid = payload.contacto_id
-    contact_data: dict[str, Any] | None = None
+    persona_data: dict[str, Any] | None = None
     if contact_uuid:
-        existing_contact = await repo.get_contact_by_id(contact_id=str(contact_uuid))
+        existing_contact = await repo.get_persona_by_id(persona_id=str(contact_uuid))
         if not existing_contact:
             raise HTTPException(status_code=404, detail="contacto_not_found")
         contact_org = _safe_uuid(existing_contact.get("organizacion_id"))
         if contact_org and contact_org != organizacion_uuid:
             raise HTTPException(status_code=400, detail="contacto_org_mismatch")
-        contact_data = existing_contact
+        persona_data = existing_contact
     else:
         attendee_name = (payload.attendee_name or "").strip()
         attendee_email = (payload.attendee_email or "").strip() or None
@@ -28905,7 +28905,7 @@ async def public_web_booking_create(
         contact_uuid = _safe_uuid(str(persona_row.get("id")))
         if not contact_uuid:
             raise HTTPException(status_code=502, detail="contact_create_failed")
-        contact_data = persona_row
+        persona_data = persona_row
 
     try:
         stage_payload = await repo.get_stage_by_code(

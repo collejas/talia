@@ -686,7 +686,7 @@ async def _maybe_apply_publicidad_whatsapp_attribution(
                 )
 
     try:
-        contact_row = await repo.get_contact_by_id(contact_id=contact_id)
+        contact_row = await repo.get_persona_by_id(persona_id=contact_id)
     except CRMRepositoryError as exc:
         log_event(
             logger,
