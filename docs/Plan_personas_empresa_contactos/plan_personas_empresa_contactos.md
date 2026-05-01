@@ -11,7 +11,7 @@ Además, la vista de contactos ya utiliza un panel lateral real de detalle y ya 
 
 Actualizacion reciente:
 
-- el flujo CRUD de contactos ya quedo guiado en el panel
+- el flujo CRUD de contactos ya quedó guiado en el panel
 - existe una accion independiente para `Vincular contacto a empresa`
 - la vista principal ya expone las cuatro acciones de entrada
 - el resumen lateral y el lenguaje de usuario final ya forman parte del flujo

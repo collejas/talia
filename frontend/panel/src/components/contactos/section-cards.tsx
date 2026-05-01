@@ -84,9 +84,7 @@ export function ContactSectionCards({ data }: ContactSectionCardsProps) {
           <div className="line-clamp-1 flex gap-2 font-medium">
             En gestión continua
           </div>
-          <div className="text-muted-foreground">
-            {formatNumber(data.leads)} siguen en etapa de lead
-          </div>
+          <div className="text-muted-foreground">{formatNumber(data.leads)} siguen en etapa de lead</div>
         </CardFooter>
       </Card>
       <Card className="@container/card">

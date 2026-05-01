@@ -9122,7 +9122,7 @@ class CRMPipelineStageSummary(BaseModel):
 
 
 class CRMContactSummary(BaseModel):
-    id: UUID
+    id: UUID | None = None
     nombre_completo: str | None = None
     correo: str | None = None
     telefono_e164: str | None = None
