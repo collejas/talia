@@ -15660,6 +15660,15 @@ async def get_contactos_catalogo_paises(
     ]
 
 
+@router.get("/personas/catalogos/paises", response_model=list[CRMGeoCountryItem])
+async def get_personas_catalogo_paises(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    _: str = Depends(require_permission("contacts.read")),
+) -> list[CRMGeoCountryItem]:
+    return await get_contactos_catalogo_paises(repo=repo, _=_)
+
+
 @router.get("/contactos/catalogos/estados", response_model=list[CRMGeoStateItem])
 async def get_contactos_catalogo_estados(
     *,
@@ -15681,6 +15690,16 @@ async def get_contactos_catalogo_estados(
         for row in rows
         if str(row.get("clave_entidad") or "").strip() and str(row.get("nombre") or "").strip()
     ]
+
+
+@router.get("/personas/catalogos/estados", response_model=list[CRMGeoStateItem])
+async def get_personas_catalogo_estados(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    _: str = Depends(require_permission("contacts.read")),
+    pais: str = Query(default="MX"),
+) -> list[CRMGeoStateItem]:
+    return await get_contactos_catalogo_estados(repo=repo, _=_, pais=pais)
 
 
 @router.get("/contactos/catalogos/municipios", response_model=list[CRMGeoMunicipalityItem])
@@ -15709,6 +15728,17 @@ async def get_contactos_catalogo_municipios(
         and str(row.get("clave_municipio") or "").strip()
         and str(row.get("nombre") or "").strip()
     ]
+
+
+@router.get("/personas/catalogos/municipios", response_model=list[CRMGeoMunicipalityItem])
+async def get_personas_catalogo_municipios(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    _: str = Depends(require_permission("contacts.read")),
+    pais: str = Query(default="MX"),
+    estado: str = Query(..., min_length=1),
+) -> list[CRMGeoMunicipalityItem]:
+    return await get_contactos_catalogo_municipios(repo=repo, _=_, pais=pais, estado=estado)
 
 
 @router.post("/contactos/{contacto_id}/reasignar", response_model=CRMReassignContactResponse)
@@ -15826,6 +15856,24 @@ async def reassign_contact(
         conversacion_id=conversacion_id,
         oportunidad_actualizada=oportunidad_actualizada,
         conversacion_actualizada=conversacion_actualizada,
+    )
+
+
+@router.post("/personas/{persona_id}/reasignar", response_model=CRMReassignContactResponse)
+async def reassign_persona(
+    *,
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    persona_id: UUID,
+    payload: CRMReassignContactPayload,
+    user_token: str = Depends(require_user_token),
+    usuario_id: UUID | None = Depends(optional_usuario_id),
+) -> CRMReassignContactResponse:
+    return await reassign_contact(
+        organizacion_id=organizacion_id,
+        contacto_id=persona_id,
+        payload=payload,
+        user_token=user_token,
+        usuario_id=usuario_id,
     )
 
 
