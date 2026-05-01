@@ -14349,7 +14349,7 @@ def _build_error_payload(row: Mapping[str, str], headers_map: dict[str, str]) ->
     }
 
 
-@router.get("/contacts/search", response_model=CRMContactSearchResponse)
+@router.get("/contacts/search", response_model=CRMPersonaSearchResponse)
 async def search_contacts(
     *,
     repo: CRMRepository = Depends(get_repository),
@@ -14358,20 +14358,20 @@ async def search_contacts(
     query: Annotated[str, Query(min_length=2, alias="q")],
     limit: Annotated[int, Query(ge=1, le=25)] = 8,
     offset: Annotated[int, Query(ge=0)] = 0,
-) -> CRMContactSearchResponse:
+) -> CRMPersonaSearchResponse:
     rows = await repo.search_contacts(
         organizacion_id=organizacion_id,
         query=query,
         limit=limit,
         offset=offset,
     )
-    items: list[CRMContactSearchItem] = []
+    items: list[CRMPersonaSearchItem] = []
     for row in rows:
         contacto_id = _safe_uuid(row.get("id"))
         if not contacto_id:
             continue
         items.append(
-            CRMContactSearchItem(
+            CRMPersonaSearchItem(
                 id=contacto_id,
                 nombre=row.get("nombre_completo"),
                 correo=row.get("correo"),
@@ -14379,7 +14379,7 @@ async def search_contacts(
                 empresa=row.get("company_name"),
             )
         )
-    return CRMContactSearchResponse(items=items, limit=limit, offset=offset)
+    return CRMPersonaSearchResponse(items=items, limit=limit, offset=offset)
 
 
 @router.get("/personas/search", response_model=CRMPersonaSearchResponse)
@@ -15072,14 +15072,14 @@ async def delete_persona_relacion(
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
-@router.post("/contacts", response_model=CRMContact, status_code=status.HTTP_201_CREATED)
+@router.post("/contacts", response_model=CRMPersona, status_code=status.HTTP_201_CREATED)
 async def create_contact(
     *,
     repo: CRMRepository = Depends(get_repository),
     organizacion_id: UUID = Depends(require_organizacion_id),
     _: str = Depends(require_permission("contacts.write")),
-    payload: CRMContactCreate,
-) -> CRMContact:
+    payload: CRMPersonaCreate,
+) -> CRMPersona:
     body = payload.model_dump(mode="json", exclude_unset=True)
     try:
         row = await repo.create_contact(
@@ -15088,7 +15088,7 @@ async def create_contact(
         )
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
-    return CRMContact.model_validate(row)
+    return CRMPersona.model_validate(row)
 
 
 @router.post("/personas", response_model=CRMPersona, status_code=status.HTTP_201_CREATED)
@@ -15112,7 +15112,7 @@ async def create_persona(
 
 @router.patch(
     "/contacts/{contacto_id}",
-    response_model=CRMContact,
+    response_model=CRMPersona,
 )
 async def update_contact(
     *,
@@ -15120,8 +15120,8 @@ async def update_contact(
     organizacion_id: UUID = Depends(require_organizacion_id),
     _: str = Depends(require_permission("contacts.write")),
     contacto_id: UUID,
-    payload: CRMContactUpdate,
-) -> CRMContact:
+    payload: CRMPersonaUpdate,
+) -> CRMPersona:
     body = payload.model_dump(mode="json", exclude_unset=True)
     try:
         row = await repo.update_contact(
@@ -15133,7 +15133,7 @@ async def update_contact(
         if "contacto_no_encontrado" in str(exc):
             raise HTTPException(status_code=404, detail="contacto_no_encontrado") from exc
         raise HTTPException(status_code=502, detail=str(exc)) from exc
-    return CRMContact.model_validate(row)
+    return CRMPersona.model_validate(row)
 
 
 @router.patch(
@@ -15452,18 +15452,18 @@ async def update_reminder_settings(
     return CRMReminderSettings.model_validate(row)
 
 
-@router.get("/contacts/summary", response_model=CRMContactSummary)
+@router.get("/contacts/summary", response_model=CRMPersonaSummary)
 async def get_contacts_summary(
     *,
     repo: CRMRepository = Depends(get_repository),
     _: str = Depends(require_permission("contacts.read")),
     user_token: str = Depends(require_user_token),
-) -> CRMContactSummary:
+) -> CRMPersonaSummary:
     try:
         row = await repo.contactos_resumen(usuario_token=user_token)
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
-    return CRMContactSummary.model_validate(row)
+    return CRMPersonaSummary.model_validate(row)
 
 
 @router.get("/personas/summary", response_model=CRMPersonaSummary)
@@ -15477,18 +15477,18 @@ async def get_personas_summary(
     return CRMPersonaSummary.model_validate(row.model_dump())
 
 
-@router.get("/contacts/timeline", response_model=list[CRMContactTimelineEntry])
+@router.get("/contacts/timeline", response_model=list[CRMPersonaTimelineEntry])
 async def get_contacts_timeline(
     *,
     repo: CRMRepository = Depends(get_repository),
     _: str = Depends(require_permission("contacts.read")),
     user_token: str = Depends(require_user_token),
-) -> list[CRMContactTimelineEntry]:
+) -> list[CRMPersonaTimelineEntry]:
     try:
         rows = await repo.contactos_timeline(usuario_token=user_token)
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
-    return [CRMContactTimelineEntry.model_validate(row) for row in rows]
+    return [CRMPersonaTimelineEntry.model_validate(row) for row in rows]
 
 
 @router.get("/personas/timeline", response_model=list[CRMPersonaTimelineEntry])
@@ -15502,19 +15502,19 @@ async def get_personas_timeline(
     return [CRMPersonaTimelineEntry.model_validate(row.model_dump()) for row in rows]
 
 
-@router.get("/contacts/list", response_model=list[CRMContactListRow])
+@router.get("/contacts/list", response_model=list[CRMPersonaListRow])
 async def get_contacts_list(
     *,
     repo: CRMRepository = Depends(get_repository),
     _: str = Depends(require_permission("contacts.read")),
     user_token: str = Depends(require_user_token),
     limit: Annotated[int, Query(ge=1, le=500)] = DEFAULT_CONTACTS_LIMIT,
-) -> list[CRMContactListRow]:
+) -> list[CRMPersonaListRow]:
     try:
         rows = await repo.contactos_list(usuario_token=user_token, limit=limit)
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
-    return [CRMContactListRow.model_validate(row) for row in rows]
+    return [CRMPersonaListRow.model_validate(row) for row in rows]
 
 
 @router.get("/personas/list", response_model=list[CRMPersonaListRow])
@@ -15605,14 +15605,14 @@ async def export_personas_csv(
     )
 
 
-@router.get("/contacts/{contacto_id}", response_model=CRMContact)
+@router.get("/contacts/{contacto_id}", response_model=CRMPersona)
 async def get_contact(
     *,
     repo: CRMRepository = Depends(get_repository),
     organizacion_id: UUID = Depends(require_organizacion_id),
     _: str = Depends(require_permission("contacts.read")),
     contacto_id: UUID,
-) -> CRMContact:
+) -> CRMPersona:
     try:
         row = await repo.get_contact(
             organizacion_id=organizacion_id,
@@ -15622,7 +15622,7 @@ async def get_contact(
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     if row is None:
         raise HTTPException(status_code=404, detail="contacto_no_encontrado")
-    return CRMContact.model_validate(row)
+    return CRMPersona.model_validate(row)
 
 
 @router.get("/personas/{persona_id}", response_model=CRMPersona)
