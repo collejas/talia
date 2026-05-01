@@ -1976,10 +1976,10 @@ async def _maybe_update_persona_location(
         return persona_data
 
     try:
-        identities = await storage.fetch_contact_identities(contact_id)
+        identities = await storage.fetch_persona_identities(contact_id)
     except StorageError as exc:
         logger.warning(
-            "whatsapp.fetch_contact_identities_failed",
+            "whatsapp.fetch_persona_identities_failed",
             extra={"contact_id": contact_id, "error": str(exc)},
         )
         identities = []
@@ -2090,14 +2090,14 @@ async def _generate_assistant_reply(
     context_payload: dict[str, Any] | None = None
     try:
         context_fetch_started = time.perf_counter()
-        context_payload = await storage.fetch_contact_context(
+        context_payload = await storage.fetch_persona_context(
             conversation_id=conversation_id,
-            contact_id=contact_id,
+            persona_id=contact_id,
         )
-        debug_timings["fetch_contact_context_ms"] = round((time.perf_counter() - context_fetch_started) * 1000, 2)
+        debug_timings["fetch_persona_context_ms"] = round((time.perf_counter() - context_fetch_started) * 1000, 2)
     except StorageError as exc:  # pragma: no cover - fallbacks informativos
         logger.warning(
-            "whatsapp.fetch_contact_context_failed",
+            "whatsapp.fetch_persona_context_failed",
             extra={
                 "conversation_id": conversation_id,
                 "contact_id": contact_id,

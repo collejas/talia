@@ -15,7 +15,7 @@ async def test_schedule_calendar_booking_requires_contact(monkeypatch):
     async def fake_fetch_webchat_conversation(conversation_id: str):
         return {"contact_id": "contact-1", "channel": "webchat"}
 
-    async def fake_fetch_contact(contact_id: str):
+    async def fake_fetch_persona(contact_id: str):
         return {"id": contact_id, "telefono_e164": "", "correo": ""}
 
     async def fake_failing_calendar(**kwargs):
@@ -32,7 +32,7 @@ async def test_schedule_calendar_booking_requires_contact(monkeypatch):
         "fetch_webchat_conversation",
         fake_fetch_webchat_conversation,
     )
-    monkeypatch.setattr(service.storage, "fetch_contact", fake_fetch_contact)
+    monkeypatch.setattr(service.storage, "fetch_persona", fake_fetch_persona)
     monkeypatch.setattr(
         service.webchat_followups,
         "ensure_contact_ready_for_assignment",
@@ -69,11 +69,15 @@ async def test_schedule_demo_requires_contact(monkeypatch):
     async def fake_calendar_action(**kwargs):
         pytest.fail("No debe interactuar con el calendario")
 
+    async def fake_fetch_persona(contact_id: str):
+        return {"id": contact_id, "telefono_e164": "", "correo": ""}
+
     monkeypatch.setattr(
         service.webchat_followups,
         "ensure_contact_ready_for_assignment",
         fake_ensure_contact_ready,
     )
+    monkeypatch.setattr(service.storage, "fetch_persona", fake_fetch_persona)
     monkeypatch.setattr(
         service.storage,
         "ensure_conversation_opportunity",

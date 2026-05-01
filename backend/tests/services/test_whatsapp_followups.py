@@ -72,7 +72,7 @@ async def test_run_followups_sends_reengage(monkeypatch):
         fake_get_whatsapp_runtime_settings,
     )
 
-    async def fake_fetch_contact(contact_id):
+    async def fake_fetch_persona(contact_id):
         return {
             "id": contact_id,
             "organizacion_id": convo["organizacion_id"],
@@ -90,7 +90,7 @@ async def test_run_followups_sends_reengage(monkeypatch):
         sent["to"] = to_number
         sent["body"] = body
 
-    monkeypatch.setattr(whatsapp_followups.storage, "fetch_contact", fake_fetch_contact)
+    monkeypatch.setattr(whatsapp_followups.storage, "fetch_persona", fake_fetch_persona)
     monkeypatch.setattr(
         whatsapp_followups.storage, "ensure_conversation_opportunity", fake_ensure_conversation_opportunity
     )
@@ -138,7 +138,7 @@ async def test_run_followups_escalates_after_reengage(monkeypatch):
         fake_get_whatsapp_runtime_settings,
     )
 
-    async def fake_fetch_contact(contact_id):
+    async def fake_fetch_persona(contact_id):
         return {
             "id": contact_id,
             "organizacion_id": convo["organizacion_id"],
@@ -153,7 +153,7 @@ async def test_run_followups_escalates_after_reengage(monkeypatch):
     async def fake_notify_sales_rep(**kwargs):
         escalated["trigger"] = kwargs["trigger"]
 
-    monkeypatch.setattr(whatsapp_followups.storage, "fetch_contact", fake_fetch_contact)
+    monkeypatch.setattr(whatsapp_followups.storage, "fetch_persona", fake_fetch_persona)
     monkeypatch.setattr(
         whatsapp_followups.storage, "ensure_conversation_opportunity", fake_ensure_conversation_opportunity
     )
@@ -223,14 +223,14 @@ async def test_run_followups_skips_outbound_prospeccion_without_reply(monkeypatc
     monkeypatch.setattr(whatsapp_followups, "CRMRepository", lambda: repo)
 
     called = {
-        "fetch_contact": 0,
+        "fetch_persona": 0,
         "ensure_opportunity": 0,
         "send_manual": 0,
         "notify_sales": 0,
     }
 
-    async def fake_fetch_contact(contact_id):
-        called["fetch_contact"] += 1
+    async def fake_fetch_persona(contact_id):
+        called["fetch_persona"] += 1
         return {
             "id": contact_id,
             "organizacion_id": convo["organizacion_id"],
@@ -249,7 +249,7 @@ async def test_run_followups_skips_outbound_prospeccion_without_reply(monkeypatc
         called["notify_sales"] += 1
         return None
 
-    monkeypatch.setattr(whatsapp_followups.storage, "fetch_contact", fake_fetch_contact)
+    monkeypatch.setattr(whatsapp_followups.storage, "fetch_persona", fake_fetch_persona)
     monkeypatch.setattr(
         whatsapp_followups.storage, "ensure_conversation_opportunity", fake_ensure_conversation_opportunity
     )
@@ -258,7 +258,7 @@ async def test_run_followups_skips_outbound_prospeccion_without_reply(monkeypatc
 
     await whatsapp_followups.run_followups(now=now)
 
-    assert called["fetch_contact"] == 0
+    assert called["fetch_persona"] == 0
     assert called["ensure_opportunity"] == 0
     assert called["send_manual"] == 0
     assert called["notify_sales"] == 0

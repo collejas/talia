@@ -2098,11 +2098,6 @@ async def fetch_persona(persona_id: str) -> dict[str, Any]:
     return _normalize_persona_payload(row)
 
 
-async def fetch_contact(contact_id: str) -> dict[str, Any]:
-    """Compatibilidad con el nombre legado; usa el resolver de personas."""
-    return await fetch_persona(contact_id)
-
-
 async def fetch_persona_context(*, conversation_id: str, persona_id: str) -> dict[str, Any]:
     """Obtiene la persona y la oportunidad más relevante asociada."""
     repo = CRMRepository()
@@ -2127,20 +2122,6 @@ async def fetch_persona_context(*, conversation_id: str, persona_id: str) -> dic
         raise StorageError(str(exc)) from exc
 
     return {"persona": persona, "contact": persona, "opportunity": opportunity}
-
-
-async def fetch_contact_context(*, conversation_id: str, contact_id: str) -> dict[str, Any]:
-    """Compatibilidad con el nombre legado; usa el resolver de personas."""
-    return await fetch_persona_context(conversation_id=conversation_id, persona_id=contact_id)
-
-
-async def fetch_contact_identities(contact_id: str) -> list[dict[str, Any]]:
-    """Recupera identidades de canal asociadas a la persona."""
-    repo = CRMRepository()
-    try:
-        return await repo.list_persona_identities(persona_id=contact_id)
-    except CRMRepositoryError as exc:
-        raise StorageError(str(exc)) from exc
 
 
 async def fetch_persona_identities(persona_id: str) -> list[dict[str, Any]]:

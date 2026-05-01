@@ -6988,7 +6988,7 @@ def _extract_session_id_from_contact(contact_data: Any) -> str | None:
 
 async def _resolve_webchat_session_id(contact_id: str) -> str | None:
     try:
-        contact = await storage.fetch_contact(contact_id)
+        contact = await storage.fetch_persona(contact_id)
     except storage.StorageError as exc:
         logger.exception(
             "panel.inbox.fetch_contact_failed",
@@ -17306,7 +17306,7 @@ async def promote_inbox_conversation_to_opportunity(
         raise HTTPException(status_code=409, detail="conversation_contact_missing")
 
     try:
-        contact_row = await storage.fetch_contact(str(contact_id_value))
+        contact_row = await storage.fetch_persona(str(contact_id_value))
     except StorageError as exc:
         raise HTTPException(status_code=502, detail=f"contact_lookup_failed:{exc}") from exc
 
@@ -17617,7 +17617,7 @@ async def reply_inbox_conversation(
         contact_org_id: str | None = None
         if str(contact_id).strip():
             try:
-                contact_row = await storage.fetch_contact(str(contact_id))
+                contact_row = await storage.fetch_persona(str(contact_id))
             except StorageError as exc:
                 logger.warning(
                     "panel.inbox.contact_lookup_failed",
@@ -17735,7 +17735,7 @@ async def reply_inbox_conversation(
 
         if channel == "correo":
             try:
-                contact_row = await storage.fetch_contact(str(contact_id))
+                contact_row = await storage.fetch_persona(str(contact_id))
             except StorageError as exc:
                 raise HTTPException(status_code=502, detail="contact_lookup_failed") from exc
             recipient_email = _clean_text(contact_row.get("correo"))
@@ -34739,13 +34739,13 @@ async def _resolve_whatsapp_identity(contact_id: str) -> tuple[str | None, str |
     wa_id: str | None = None
     contact: dict[str, Any] | None = None
     try:
-        contact = await storage.fetch_contact(contact_id)
+        contact = await storage.fetch_persona(contact_id)
         phone = _clean_phone(contact.get("telefono_e164"))
     except StorageError:
         phone = None
 
     try:
-        identities = await storage.fetch_contact_identities(contact_id)
+        identities = await storage.fetch_persona_identities(contact_id)
     except StorageError:
         identities = []
 

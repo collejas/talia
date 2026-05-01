@@ -74,7 +74,7 @@ async def test_run_followups_sends_reengage(monkeypatch: pytest.MonkeyPatch) -> 
     repo = DummyRepo([convo])
     contact_store = _build_contact_store()
 
-    async def fake_fetch_contact(contact_id: str):
+    async def fake_fetch_persona(contact_id: str):
         assert contact_id == "contact-1"
         return _snapshot(contact_store)
 
@@ -95,8 +95,8 @@ async def test_run_followups_sends_reengage(monkeypatch: pytest.MonkeyPatch) -> 
         sent_messages.append(kwargs)
 
     monkeypatch.setattr(webchat_followups, "CRMRepository", lambda: repo)
-    monkeypatch.setattr(webchat_followups.storage, "fetch_contact", fake_fetch_contact)
-    monkeypatch.setattr(webchat_followups.storage, "update_contact", fake_update_contact)
+    monkeypatch.setattr(webchat_followups.storage, "fetch_persona", fake_fetch_persona)
+    monkeypatch.setattr(webchat_followups.storage, "update_persona", fake_update_contact)
     record_attempts: list[dict] = []
 
     async def fake_record_reengage_attempt(*, conversation_id: str, contact_id: str, sent_at, message: str | None = None):
@@ -146,7 +146,7 @@ async def test_run_followups_skips_when_session_closed(monkeypatch: pytest.Monke
     repo = DummyRepo([convo], closure=closure)
     contact_store = _build_contact_store()
 
-    async def fake_fetch_contact(contact_id: str):
+    async def fake_fetch_persona(contact_id: str):
         return _snapshot(contact_store)
 
     async def fake_update_contact(contact_id: str, patch: dict):
@@ -163,8 +163,8 @@ async def test_run_followups_skips_when_session_closed(monkeypatch: pytest.Monke
         reason_calls.append(reason)
 
     monkeypatch.setattr(webchat_followups, "CRMRepository", lambda: repo)
-    monkeypatch.setattr(webchat_followups.storage, "fetch_contact", fake_fetch_contact)
-    monkeypatch.setattr(webchat_followups.storage, "update_contact", fake_update_contact)
+    monkeypatch.setattr(webchat_followups.storage, "fetch_persona", fake_fetch_persona)
+    monkeypatch.setattr(webchat_followups.storage, "update_persona", fake_update_contact)
     monkeypatch.setattr(webchat_followups.storage, "fetch_webchat_session_id", fake_fetch_session)
     async def fake_register_message(**kwargs):
         return None
@@ -234,7 +234,7 @@ async def test_run_followups_escalates_when_attempts_exhausted(
         }
     }
 
-    async def fake_fetch_contact(contact_id: str):
+    async def fake_fetch_persona(contact_id: str):
         assert contact_id == "contact-1"
         return _snapshot(contact_store)
 
@@ -272,8 +272,8 @@ async def test_run_followups_escalates_when_attempts_exhausted(
         logged_events.append(event_name)
 
     monkeypatch.setattr(webchat_followups, "CRMRepository", lambda: repo)
-    monkeypatch.setattr(webchat_followups.storage, "fetch_contact", fake_fetch_contact)
-    monkeypatch.setattr(webchat_followups.storage, "update_contact", fake_update_contact)
+    monkeypatch.setattr(webchat_followups.storage, "fetch_persona", fake_fetch_persona)
+    monkeypatch.setattr(webchat_followups.storage, "update_persona", fake_update_contact)
     monkeypatch.setattr(webchat_followups.storage, "ensure_conversation_opportunity", fake_ensure_opportunity)
     monkeypatch.setattr(
         webchat_followups.whatsapp_tools,
@@ -333,7 +333,7 @@ async def test_ensure_contact_ready_for_assignment(monkeypatch: pytest.MonkeyPat
         refresh_calls.append(contact_id)
         return {"contact_ready_at": "ts"}
 
-    monkeypatch.setattr(webchat_followups.storage, "fetch_contact", fake_fetch)
+    monkeypatch.setattr(webchat_followups.storage, "fetch_persona", fake_fetch)
     monkeypatch.setattr(
         webchat_followups,
         "refresh_contact_followup_state",
@@ -372,7 +372,7 @@ async def test_record_reengage_attempt_increments_existing_state(monkeypatch: py
         },
     }
 
-    async def fake_fetch_contact(contact_id: str):
+    async def fake_fetch_persona(contact_id: str):
         assert contact_id == "contact-1"
         return {
             "id": contact_store["id"],
@@ -380,17 +380,17 @@ async def test_record_reengage_attempt_increments_existing_state(monkeypatch: py
             "contacto_datos": dict(contact_store["contacto_datos"]),
         }
 
-    async def fake_update_contact(contact_id: str, patch: dict[str, Any]):
+    async def fake_update_persona(contact_id: str, patch: dict[str, Any]):
         assert contact_id == "contact-1"
-        contact_store["contacto_datos"] = dict(patch.get("contacto_datos") or {})
+        contact_store["contacto_datos"] = dict(patch.get("persona_datos") or patch.get("contacto_datos") or {})
         return {
             "id": contact_store["id"],
             "organizacion_id": contact_store["organizacion_id"],
             "contacto_datos": dict(contact_store["contacto_datos"]),
         }
 
-    monkeypatch.setattr(webchat_followups.storage, "fetch_contact", fake_fetch_contact)
-    monkeypatch.setattr(webchat_followups.storage, "update_contact", fake_update_contact)
+    monkeypatch.setattr(webchat_followups.storage, "fetch_persona", fake_fetch_persona)
+    monkeypatch.setattr(webchat_followups.storage, "update_persona", fake_update_persona)
 
     await webchat_followups.record_reengage_attempt(
         conversation_id="conv-1",

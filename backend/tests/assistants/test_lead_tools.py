@@ -86,7 +86,7 @@ async def test_close_lead_triggers_auto_name(monkeypatch):
     async def fake_noop(*_, **__):
         return None
 
-    async def fake_fetch_contact(*_, **__):
+    async def fake_fetch_persona(*_, **__):
         return {"id": "contact-3", "organizacion_id": "00000000-0000-0000-0000-000000000001"}
 
     auto_name_calls = []
@@ -115,10 +115,10 @@ async def test_close_lead_triggers_auto_name(monkeypatch):
         "ensure_conversation_opportunity",
         fake_ensure_conversation_opportunity,
     )
-    monkeypatch.setattr(lead_tools.storage, "update_contact", fake_noop)
+    monkeypatch.setattr(lead_tools.storage, "update_persona", fake_noop)
     monkeypatch.setattr(lead_tools.storage, "update_conversation", fake_noop)
     monkeypatch.setattr(lead_tools.storage, "upsert_conversation_insights", fake_noop)
-    monkeypatch.setattr(lead_tools.storage, "fetch_contact", fake_fetch_contact)
+    monkeypatch.setattr(lead_tools.storage, "fetch_persona", fake_fetch_persona)
     monkeypatch.setattr(lead_tools.storage, "maybe_auto_name_opportunity", fake_auto_name)
     monkeypatch.setattr(lead_tools.storage, "apply_lead_scoring", fake_apply_scoring)
     monkeypatch.setattr(
@@ -162,7 +162,7 @@ async def test_close_lead_webchat_with_evasive_answers_keeps_flow_ok(monkeypatch
     async def fake_noop(*_, **__):
         return None
 
-    async def fake_fetch_contact(*_, **__):
+    async def fake_fetch_persona(*_, **__):
         return {"id": "contact-9", "organizacion_id": "00000000-0000-0000-0000-000000000001"}
 
     scoring_calls = []
@@ -186,10 +186,10 @@ async def test_close_lead_webchat_with_evasive_answers_keeps_flow_ok(monkeypatch
         "ensure_conversation_opportunity",
         fake_ensure_conversation_opportunity,
     )
-    monkeypatch.setattr(lead_tools.storage, "update_contact", fake_noop)
+    monkeypatch.setattr(lead_tools.storage, "update_persona", fake_noop)
     monkeypatch.setattr(lead_tools.storage, "update_conversation", fake_noop)
     monkeypatch.setattr(lead_tools.storage, "upsert_conversation_insights", fake_noop)
-    monkeypatch.setattr(lead_tools.storage, "fetch_contact", fake_fetch_contact)
+    monkeypatch.setattr(lead_tools.storage, "fetch_persona", fake_fetch_persona)
     monkeypatch.setattr(lead_tools.storage, "maybe_auto_name_opportunity", fake_noop)
     monkeypatch.setattr(lead_tools.storage, "apply_lead_scoring", fake_apply_scoring)
     monkeypatch.setattr(

@@ -151,10 +151,10 @@ async def test_handle_incoming_message_respects_manual_mode(monkeypatch) -> None
             "manual_override": True,
         }
 
-    async def fake_fetch_contact(contact_id: str):
+    async def fake_fetch_persona(contact_id: str):
         return {"id": contact_id}
 
-    async def fake_fetch_contact_identities(contact_id: str):
+    async def fake_fetch_persona_identities(contact_id: str):
         return []
 
     called = {"assistant": False}
@@ -175,9 +175,8 @@ async def test_handle_incoming_message_respects_manual_mode(monkeypatch) -> None
 
     monkeypatch.setattr(service.storage, "register_whatsapp_message", fake_register)
     monkeypatch.setattr(service.storage, "fetch_conversation", fake_fetch_conversation)
-    monkeypatch.setattr(service.storage, "fetch_persona", fake_fetch_contact)
-    monkeypatch.setattr(service.storage, "fetch_contact", fake_fetch_contact)
-    monkeypatch.setattr(service.storage, "fetch_contact_identities", fake_fetch_contact_identities)
+    monkeypatch.setattr(service.storage, "fetch_persona", fake_fetch_persona)
+    monkeypatch.setattr(service.storage, "fetch_persona_identities", fake_fetch_persona_identities)
     monkeypatch.setattr(
         service.storage,
         "ensure_conversation_opportunity",
@@ -225,10 +224,10 @@ async def test_handle_incoming_message_sends_reply(monkeypatch) -> None:
             "last_response_id": None,
         }
 
-    async def fake_fetch_contact(contact_id: str):
+    async def fake_fetch_persona(contact_id: str):
         return {"id": contact_id}
 
-    async def fake_fetch_contact_identities(contact_id: str):
+    async def fake_fetch_persona_identities(contact_id: str):
         return []
 
     async def fake_generate(**kwargs):
@@ -253,9 +252,8 @@ async def test_handle_incoming_message_sends_reply(monkeypatch) -> None:
 
     monkeypatch.setattr(service.storage, "register_whatsapp_message", fake_register)
     monkeypatch.setattr(service.storage, "fetch_conversation", fake_fetch_conversation)
-    monkeypatch.setattr(service.storage, "fetch_persona", fake_fetch_contact)
-    monkeypatch.setattr(service.storage, "fetch_contact", fake_fetch_contact)
-    monkeypatch.setattr(service.storage, "fetch_contact_identities", fake_fetch_contact_identities)
+    monkeypatch.setattr(service.storage, "fetch_persona", fake_fetch_persona)
+    monkeypatch.setattr(service.storage, "fetch_persona_identities", fake_fetch_persona_identities)
     monkeypatch.setattr(
         service.storage,
         "ensure_conversation_opportunity",
@@ -305,10 +303,10 @@ async def test_handle_incoming_message_notifies_on_restart(monkeypatch) -> None:
             "last_response_id": None,
         }
 
-    async def fake_fetch_contact(contact_id: str):
+    async def fake_fetch_persona(contact_id: str):
         return {"id": contact_id, "organizacion_id": "org-test"}
 
-    async def fake_fetch_contact_identities(contact_id: str):
+    async def fake_fetch_persona_identities(contact_id: str):
         return []
 
     async def fake_generate(**kwargs):
@@ -336,9 +334,8 @@ async def test_handle_incoming_message_notifies_on_restart(monkeypatch) -> None:
 
     monkeypatch.setattr(service.storage, "register_whatsapp_message", fake_register)
     monkeypatch.setattr(service.storage, "fetch_conversation", fake_fetch_conversation)
-    monkeypatch.setattr(service.storage, "fetch_persona", fake_fetch_contact)
-    monkeypatch.setattr(service.storage, "fetch_contact", fake_fetch_contact)
-    monkeypatch.setattr(service.storage, "fetch_contact_identities", fake_fetch_contact_identities)
+    monkeypatch.setattr(service.storage, "fetch_persona", fake_fetch_persona)
+    monkeypatch.setattr(service.storage, "fetch_persona_identities", fake_fetch_persona_identities)
     monkeypatch.setattr(service.storage, "ensure_conversation_opportunity", fake_ensure_conversation_opportunity)
     monkeypatch.setattr(service, "_generate_assistant_reply", fake_generate)
     monkeypatch.setattr(service, "_send_whatsapp_reply", fake_send)
@@ -429,7 +426,7 @@ async def test_generate_assistant_reply_retries_without_previous_response_id(mon
     monkeypatch.setattr(service.openai_service, "get_assistant_client", lambda **kwargs: object())
     monkeypatch.setattr(service, "_build_openai_input", lambda *args, **kwargs: [])
     monkeypatch.setattr(service, "build_prompt_payload", lambda *args, **kwargs: {"prompt": "test"})
-    monkeypatch.setattr(service.storage, "fetch_contact_context", _async_none)
+    monkeypatch.setattr(service.storage, "fetch_persona_context", _async_none)
     monkeypatch.setattr(service.conversation_summary, "ensure_conversation_summary", _async_none)
     monkeypatch.setattr(service.tenant_runtime, "is_profiling_enabled", _async_false)
     monkeypatch.setattr(service, "_extract_text_from_response", lambda _response: "Respuesta final")

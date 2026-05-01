@@ -411,9 +411,9 @@ async def _handle_message(
 
     contact_context: dict[str, Any] | None = None
     try:
-        contact_context = await storage.fetch_contact_context(
+        contact_context = await storage.fetch_persona_context(
             conversation_id=conversation_id,
-            contact_id=contact_id,
+            persona_id=contact_id,
         )
     except StorageError as exc:
         logger.warning(
