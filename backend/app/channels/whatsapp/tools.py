@@ -1557,12 +1557,12 @@ async def _handle_information_email(
                 )
             except StorageError as exc:
                 logger.warning(
-                "whatsapp.info_email.sync_failed",
+                    "whatsapp.info_email.sync_failed",
                     extra={
                         "contact_id": persona.get("id") or context.contact_id,
                         "error": str(exc),
-                },
-            )
+                    },
+                )
 
     mail_org_uuid = _persona_org_uuid(persona)
     mail_settings = await tenant_runtime.get_mail_runtime_settings(organizacion_id=mail_org_uuid)
@@ -2644,15 +2644,15 @@ async def _handle_cancel_demo(arguments: dict[str, Any], context: ToolRuntimeCon
     }
 
 
-async def _resolve_persona(contact_id: str | None) -> dict[str, Any] | None:
-    if not contact_id:
+async def _resolve_persona(persona_id: str | None) -> dict[str, Any] | None:
+    if not persona_id:
         return None
     try:
-        return await storage.fetch_persona(contact_id)
+        return await storage.fetch_persona(persona_id)
     except StorageError as exc:
         logger.warning(
             "whatsapp.tools.persona_lookup_failed",
-            extra={"persona_id": contact_id, "error": str(exc)},
+            extra={"persona_id": persona_id, "error": str(exc)},
         )
         return None
 
