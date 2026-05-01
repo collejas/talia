@@ -701,7 +701,7 @@ async def _send_booking_confirmation_email(
 ) -> None:
     if not contact_id and persona is None:
         return
-    persona = persona or await _resolve_contact(contact_id)
+    persona = persona or await _resolve_persona(contact_id)
     metadata = booking.metadata if isinstance(booking.metadata, dict) else {}
     org_hint = _extract_persona_org(persona)
     if not org_hint and isinstance(metadata, dict):
@@ -1018,7 +1018,7 @@ async def _send_booking_cancellation_email(
 ) -> None:
     if not contact_id:
         return
-    persona = await _resolve_contact(contact_id)
+    persona = await _resolve_persona(contact_id)
     if not persona:
         return
     email_value = str(persona.get("correo") or "").strip()
@@ -1216,7 +1216,7 @@ async def schedule_calendar_booking(
     channel_value = raw_channel.strip().lower() if isinstance(raw_channel, str) else ""
     if not channel_value:
         channel_value = "webchat"
-    persona: dict[str, Any] | None = await _resolve_contact(contact_id)
+    persona: dict[str, Any] | None = await _resolve_persona(contact_id)
     organizacion_id = _extract_persona_org(persona)
     try:
         tarjeta_id = await _ensure_opportunity_when_persona_ready(
@@ -1298,7 +1298,7 @@ async def schedule_calendar_booking(
     booking["hold_id"] = hold.get("hold_id")
     booking_response = _build_booking_response(booking)
     if persona is None:
-        persona = await _resolve_contact(contact_id)
+        persona = await _resolve_persona(contact_id)
     await _sync_booking_with_opportunity(
         booking=booking_response,
         tarjeta_id=tarjeta_id,
@@ -1401,7 +1401,7 @@ async def reschedule_calendar_booking(
                     "zoom.update.failed",
                     extra={"meeting_id": zoom_meeting_id, "booking_id": booking_response.booking_id, "error": str(exc)},
                 )
-    persona = await _resolve_contact(contact_id)
+    persona = await _resolve_persona(contact_id)
     await _sync_booking_with_opportunity(
         booking=booking_response,
         tarjeta_id=booking_response.tarjeta_id,
@@ -1628,7 +1628,7 @@ async def _guard_booking_confirmation_claim(
             if not resolved_persona:
                 contact_id = str(conversation_meta.get("contact_id") or "").strip()
                 if contact_id:
-                    resolved_persona = await _resolve_contact(contact_id) or {}
+                    resolved_persona = await _resolve_persona(contact_id) or {}
             if not resolved_opportunity_id and resolved_persona:
                 resolved_opportunity_id = await storage.ensure_conversation_opportunity(
                     conversation_id=conversation_id,
@@ -1680,19 +1680,17 @@ def _extract_text_from_response(payload: dict[str, Any]) -> str | None:
     return None
 
 
-async def _resolve_contact(contact_id: str | None) -> dict[str, Any] | None:
-    if not contact_id:
+async def _resolve_persona(persona_id: str | None) -> dict[str, Any] | None:
+    if not persona_id:
         return None
     try:
-        return await storage.fetch_persona(contact_id)
+        return await storage.fetch_persona(persona_id)
     except StorageError as exc:
         logger.warning(
-            "webchat.contact_lookup_failed",
-            extra={"contact_id": contact_id, "error": str(exc)},
+            "webchat.persona_lookup_failed",
+            extra={"persona_id": persona_id, "error": str(exc)},
         )
         return None
-
-
 def _is_answered_scoring_value(value: Any) -> bool:
     if value is None:
         return False
@@ -2860,7 +2858,7 @@ async def _register_webchat_visit(
         not resolved_persona
         or _safe_str_value(resolved_persona.get("id")) != _safe_str_value(contact_id)
     ):
-        resolved_persona = await _resolve_contact(contact_id)
+        resolved_persona = await _resolve_persona(contact_id)
 
     try:
         await storage.record_webchat_visit(
@@ -3076,7 +3074,7 @@ async def handle_message(
     )
     await high_demand_controller.record_inbound(channel="webchat")
     resolve_contact_started = time.perf_counter()
-    persona: dict[str, Any] | None = await _resolve_contact(str(contact_id))
+    persona: dict[str, Any] | None = await _resolve_persona(str(contact_id))
     _record_stage_timing(stage_timings, "resolve_contact_ms", resolve_contact_started)
     resolved_organizacion_id = (
         await resolve_webchat_organizacion(metadata_dict, persona=persona) or organizacion_hint
@@ -4238,7 +4236,7 @@ async def _execute_function_call(
             intencion=necesidad,
             siguiente_accion=siguiente_accion,
         )
-        persona_record = await _resolve_contact(context.contact_id)
+        persona_record = await _resolve_persona(context.contact_id)
         opportunity_id = None
         try:
             opportunity_id = await storage.ensure_conversation_opportunity(
@@ -4258,7 +4256,7 @@ async def _execute_function_call(
                 convo_meta = {}
             resolved_persona_id = str(convo_meta.get("contact_id") or "").strip()
             if resolved_persona_id and resolved_persona_id != context.contact_id:
-                persona_record = await _resolve_contact(resolved_persona_id)
+                persona_record = await _resolve_persona(resolved_persona_id)
                 context.contact_id = resolved_persona_id
         if opportunity_id:
             channel_value = "webchat"
@@ -4497,7 +4495,7 @@ async def _execute_function_call(
         }
 
     if name == "schedule_demo":
-        persona = await _resolve_contact(context.contact_id)
+        persona = await _resolve_persona(context.contact_id)
         try:
             tarjeta_id = await _ensure_opportunity_when_persona_ready(
                 conversation_id=context.conversation_id,
@@ -4651,7 +4649,7 @@ async def _execute_function_call(
 
         booking_response = _build_booking_response(booking)
         booking_response.hold_id = hold.get("hold_id")
-        persona = await _resolve_contact(context.contact_id)
+        persona = await _resolve_persona(context.contact_id)
         profiling_enabled_for_channel = True
         persona_org = _extract_persona_org(persona) if persona else None
         persona_org_uuid = _resolve_org_uuid(persona_org) if persona_org else None
@@ -4735,7 +4733,7 @@ async def _execute_function_call(
             if persona_patch:
                 try:
                     await storage.update_persona(context.contact_id, persona_patch)
-                    persona = await _resolve_contact(context.contact_id)
+                    persona = await _resolve_persona(context.contact_id)
                 except StorageError as exc:
                     logger.warning(
                         "webchat.schedule_demo.auto_contact_context_failed",
@@ -4837,7 +4835,7 @@ async def _execute_function_call(
         except CalendarError as exc:
             raise ValueError(str(exc)) from exc
         booking_response = _build_booking_response(booking)
-        persona = await _resolve_contact(context.contact_id)
+        persona = await _resolve_persona(context.contact_id)
         await _sync_booking_with_opportunity(
             booking=booking_response,
             tarjeta_id=booking_response.tarjeta_id,
@@ -4884,7 +4882,7 @@ async def _execute_function_call(
             "end_at": booking.get("end_at"),
             "status": booking.get("status"),
         }
-        persona = await _resolve_contact(context.contact_id)
+        persona = await _resolve_persona(context.contact_id)
         try:
             org_uuid = UUID(str((persona or {}).get("organizacion_id")))
             await enqueue_webchat_sales_notification(
@@ -4926,7 +4924,7 @@ async def _execute_function_call(
         persona = None
         persona_org = None
         if context.contact_id:
-            persona = await _resolve_contact(context.contact_id)
+            persona = await _resolve_persona(context.contact_id)
             persona_org = _extract_persona_org(persona)
         if not org_value or org_value == context.conversation_id:
             org_value = persona_org
@@ -4990,7 +4988,7 @@ async def _execute_function_call(
         persona = None
         persona_org = None
         if context.contact_id:
-            persona = await _resolve_contact(context.contact_id)
+            persona = await _resolve_persona(context.contact_id)
             persona_org = _extract_persona_org(persona)
         # No confiar ciegamente en el argumento del LLM para evitar cruces de tenant.
         # Si tenemos org del contacto, esa es la fuente canónica.
@@ -5067,7 +5065,7 @@ async def _execute_function_call(
         persona = None
         persona_org = None
         if context.contact_id:
-            persona = await _resolve_contact(context.contact_id)
+            persona = await _resolve_persona(context.contact_id)
             persona_org = _extract_persona_org(persona)
         # No confiar ciegamente en el argumento del LLM para evitar cruces de tenant.
         # Si tenemos org del contacto, esa es la fuente canónica.

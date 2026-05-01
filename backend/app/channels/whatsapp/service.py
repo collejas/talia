@@ -1251,7 +1251,7 @@ async def handle_incoming_message(
             attribution_event=publicidad_atribucion_event,
         )
 
-    persona_record = await _maybe_update_persona_location(contact_id)
+    persona_record = await _maybe_update_persona_location(persona_id=contact_id)
 
     restart_created = bool(restart_context and restart_context.get("restart_created"))
     if restart_created:
@@ -1951,18 +1951,18 @@ async def _sync_envio_status_from_whatsapp(callback: schemas.WhatsAppStatusCallb
 
 
 async def _maybe_update_persona_location(
-    contact_id: str,
+    persona_id: str,
     persona: dict[str, Any] | None = None,
 ) -> dict[str, Any] | None:
     """Enriquece la persona con la ubicación inferida a partir de su teléfono/LADA."""
     persona_data = persona
     if persona_data is None:
         try:
-            persona_data = await storage.fetch_persona(contact_id)
+            persona_data = await storage.fetch_persona(persona_id)
         except StorageError as exc:
             logger.warning(
-                "whatsapp.fetch_contact_failed",
-                extra={"contact_id": contact_id, "error": str(exc)},
+                "whatsapp.fetch_persona_failed",
+                extra={"persona_id": persona_id, "error": str(exc)},
             )
             return None
 
@@ -1976,11 +1976,11 @@ async def _maybe_update_persona_location(
         return persona_data
 
     try:
-        identities = await storage.fetch_persona_identities(contact_id)
+        identities = await storage.fetch_persona_identities(persona_id)
     except StorageError as exc:
         logger.warning(
             "whatsapp.fetch_persona_identities_failed",
-            extra={"contact_id": contact_id, "error": str(exc)},
+            extra={"persona_id": persona_id, "error": str(exc)},
         )
         identities = []
 
@@ -1992,7 +1992,7 @@ async def _maybe_update_persona_location(
         channels.append("whatsapp")
 
     location = leads_geo.infer_contact_location(
-        contacto_id=contact_id,
+        contacto_id=persona_id,
         data=persona_data,
         channels=channels,
         identities=identities,
@@ -2026,11 +2026,11 @@ async def _maybe_update_persona_location(
 
     persona_contacto_datos["ubicacion"] = ubicacion
     try:
-        await storage.update_persona(contact_id, {"persona_datos": persona_contacto_datos})
+        await storage.update_persona(persona_id, {"persona_datos": persona_contacto_datos})
     except StorageError as exc:
         logger.warning(
-            "whatsapp.update_contact_location_failed",
-            extra={"contact_id": contact_id, "error": str(exc)},
+            "whatsapp.update_persona_location_failed",
+            extra={"persona_id": persona_id, "error": str(exc)},
         )
     else:
         persona_data["persona_datos"] = persona_contacto_datos
