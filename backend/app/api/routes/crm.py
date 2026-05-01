@@ -15509,9 +15509,10 @@ async def get_contacts_list(
     _: str = Depends(require_permission("contacts.read")),
     user_token: str = Depends(require_user_token),
     limit: Annotated[int, Query(ge=1, le=500)] = DEFAULT_CONTACTS_LIMIT,
+    search: str | None = Query(default=None, min_length=1),
 ) -> list[CRMPersonaListRow]:
     try:
-        rows = await repo.personas_list(usuario_token=user_token, limit=limit)
+        rows = await repo.personas_list(usuario_token=user_token, limit=limit, search=search)
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     return [CRMPersonaListRow.model_validate(row) for row in rows]
@@ -15524,8 +15525,9 @@ async def get_personas_list(
     _: str = Depends(require_permission("contacts.read")),
     user_token: str = Depends(require_user_token),
     limit: Annotated[int, Query(ge=1, le=500)] = DEFAULT_CONTACTS_LIMIT,
+    search: str | None = Query(default=None, min_length=1),
 ) -> list[CRMPersonaListRow]:
-    rows = await get_contacts_list(repo=repo, _=_, user_token=user_token, limit=limit)
+    rows = await get_contacts_list(repo=repo, _=_, user_token=user_token, limit=limit, search=search)
     return [CRMPersonaListRow.model_validate(row.model_dump()) for row in rows]
 
 

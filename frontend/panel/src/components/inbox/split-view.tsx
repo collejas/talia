@@ -619,7 +619,6 @@ export function InboxSplitView({
   );
   const [loadingMoreThreads, setLoadingMoreThreads] = React.useState(false);
   const [selectedId, setSelectedId] = React.useState<string | null>(null);
-  const [searchTerm] = React.useState("");
   const [sending, setSending] = React.useState(false);
   const [sendError, setSendError] = React.useState<string | null>(null);
   const [manualToggling, setManualToggling] = React.useState(false);
@@ -787,7 +786,6 @@ export function InboxSplitView({
   }, [threads]);
 
   const filteredThreads = React.useMemo(() => {
-    const term = searchTerm.toLowerCase();
     const normalizedSourceFilter = sourceFilter ? sourceFilter.toLowerCase() : null;
     const normalizedChannelFilter = channelFilter ? channelFilter.toLowerCase() : null;
     const normalizedEstadoFilter = estadoFilter ? estadoFilter.toLowerCase() : null;
@@ -822,23 +820,9 @@ export function InboxSplitView({
         if (!normalizedCampanaFilter) return true;
         return (thread.campanaId ?? "").toLowerCase() === normalizedCampanaFilter;
       })
-      .filter((thread) => matchesReengageFilter(thread, reengageFilter))
-      .filter((thread) => {
-        if (!term) return true;
-        const haystack = [
-          thread.contactoNombre,
-          thread.source ?? "",
-          thread.canal,
-          thread.preview,
-          thread.tags.join(" "),
-        ]
-          .join(" ")
-          .toLowerCase();
-        return haystack.includes(term);
-      });
+      .filter((thread) => matchesReengageFilter(thread, reengageFilter));
   }, [
     threadItems,
-    searchTerm,
     sourceFilter,
     channelFilter,
     estadoFilter,

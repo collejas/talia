@@ -194,6 +194,11 @@ export function ContactsDataTable({ data }: { data: ContactTableRow[] }) {
     [permissionContext.permisos],
   );
   const [searchTerm, setSearchTerm] = React.useState("");
+  const [remoteSearchData, setRemoteSearchData] = React.useState<ContactTableRow[] | null>(null);
+  const [remoteSearchTotalRows, setRemoteSearchTotalRows] = React.useState<number | null>(null);
+  const [remoteSearchQuery, setRemoteSearchQuery] = React.useState("");
+  const [remoteSearchLoading, setRemoteSearchLoading] = React.useState(false);
+  const [remoteSearchError, setRemoteSearchError] = React.useState<string | null>(null);
 
   const canWrite =
     permissionContext.es_admin || permissionContext.es_owner || normalizedPerms.includes("contacts.write");
@@ -233,6 +238,56 @@ export function ContactsDataTable({ data }: { data: ContactTableRow[] }) {
   const [pending, setPending] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [success, setSuccess] = React.useState<string | null>(null);
+
+  React.useEffect(() => {
+    const term = searchTerm.trim();
+    if (term.length < 2) {
+      setRemoteSearchData(null);
+      setRemoteSearchTotalRows(null);
+      setRemoteSearchQuery("");
+      setRemoteSearchError(null);
+      setRemoteSearchLoading(false);
+      return;
+    }
+
+    const controller = new AbortController();
+    setRemoteSearchLoading(true);
+    setRemoteSearchError(null);
+
+    const timeout = window.setTimeout(async () => {
+      try {
+        const response = await fetch(`/api/contactos/list?search=${encodeURIComponent(term)}&limit=500`, {
+          cache: "no-store",
+          signal: controller.signal,
+        });
+        if (!response.ok) {
+          const body = (await response.json().catch(() => ({}))) as { error?: string };
+          throw new Error(body.error || `Error ${response.status}`);
+        }
+        const body = (await response.json()) as {
+          items?: ContactTableRow[];
+          totalRows?: number;
+        };
+        setRemoteSearchData(Array.isArray(body.items) ? body.items : []);
+        setRemoteSearchTotalRows(typeof body.totalRows === "number" ? body.totalRows : null);
+        setRemoteSearchQuery(term);
+      } catch (error) {
+        if ((error as Error).name !== "AbortError") {
+          setRemoteSearchData(null);
+          setRemoteSearchTotalRows(null);
+          setRemoteSearchQuery("");
+          setRemoteSearchError(error instanceof Error ? error.message : "No se pudo buscar contactos.");
+        }
+      } finally {
+        setRemoteSearchLoading(false);
+      }
+    }, 250);
+
+    return () => {
+      window.clearTimeout(timeout);
+      controller.abort();
+    };
+  }, [searchTerm]);
 
   React.useEffect(() => {
     if (!reassignOpen || permissionsLoading || !canReassign) return;
@@ -422,15 +477,25 @@ export function ContactsDataTable({ data }: { data: ContactTableRow[] }) {
   };
 
   const filteredData = React.useMemo(() => {
-    const term = normalizeSearch(searchTerm);
-    if (!term) return data;
+    const normalizedTerm = normalizeSearch(searchTerm);
+    if (!normalizedTerm) return data;
 
-    return data.filter((row) => matchesContactSearch(row, term));
-  }, [data, searchTerm]);
+    if (remoteSearchQuery === searchTerm.trim()) {
+      return remoteSearchData ?? [];
+    }
+
+    return [];
+  }, [data, remoteSearchData, remoteSearchQuery, searchTerm]);
 
   const resultsLabel =
     searchTerm.trim().length > 0
-      ? `${filteredData.length} de ${data.length} contactos`
+      ? remoteSearchLoading
+        ? "Buscando contactos..."
+        : remoteSearchError
+          ? remoteSearchError
+          : remoteSearchTotalRows !== null
+            ? `${filteredData.length} de ${remoteSearchTotalRows} contactos`
+            : `${filteredData.length} contactos`
       : `${data.length} contactos`;
 
   const toolbarLeadingActions = (
@@ -675,47 +740,6 @@ function normalizeSearch(value: string): string {
     .toLowerCase()
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "");
-}
-
-function matchesContactSearch(row: TableRow, term: string): boolean {
-  const raw = (row.raw ?? {}) as Record<string, unknown>;
-  const values = [
-    row.header,
-    row.type,
-    row.status,
-    row.target,
-    row.limit,
-    row.reviewer,
-    raw?.codigo_contacto,
-    raw?.codigo_cuenta,
-    raw?.correo,
-    raw?.telefono,
-    raw?.estado,
-    raw?.captura_estado,
-    raw?.origen,
-    raw?.company_name,
-    raw?.propietario_nombre,
-    raw?.rfc,
-    raw?.puesto,
-    raw?.area,
-    raw?.rol_decision,
-    raw?.codigo_postal,
-    raw?.entidad,
-    raw?.municipio,
-    raw?.pais,
-    raw?.website,
-    raw?.tipo_establecimiento,
-    raw?.notes,
-    raw?.codigo_contacto,
-  ];
-
-  return values
-    .map((value) => {
-      if (value === null || value === undefined) return "";
-      if (typeof value === "number" && Number.isFinite(value)) return String(value);
-      return normalizeSearch(String(value));
-    })
-    .some((value) => value.includes(term));
 }
 
 function formatContactValue(value: unknown): string {
