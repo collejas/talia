@@ -15073,7 +15073,7 @@ async def delete_persona_relacion(
 
 
 @router.post("/contacts", response_model=CRMPersona, status_code=status.HTTP_201_CREATED)
-async def create_contact(
+async def create_contact_legacy(
     *,
     repo: CRMRepository = Depends(get_repository),
     organizacion_id: UUID = Depends(require_organizacion_id),
@@ -15114,7 +15114,7 @@ async def create_persona(
     "/contacts/{contacto_id}",
     response_model=CRMPersona,
 )
-async def update_contact(
+async def update_contact_legacy(
     *,
     repo: CRMRepository = Depends(get_repository),
     organizacion_id: UUID = Depends(require_organizacion_id),
@@ -15167,7 +15167,7 @@ async def update_persona_crud(
     status_code=status.HTTP_204_NO_CONTENT,
     response_class=Response,
 )
-async def delete_contact(
+async def delete_contact_legacy(
     *,
     repo: CRMRepository = Depends(get_repository),
     organizacion_id: UUID = Depends(require_organizacion_id),
