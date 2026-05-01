@@ -4431,9 +4431,9 @@ async def _execute_function_call(
                     },
                 )
         try:
-            await storage.maybe_auto_name_opportunity(
+            await storage.maybe_auto_name_persona_opportunity(
                 conversation_id=context.conversation_id,
-                contact_id=context.contact_id,
+                persona_id=context.contact_id,
                 opportunity_id=str(opportunity_id) if opportunity_id else None,
                 intent=necesidad,
                 summary=notes,
@@ -4752,9 +4752,9 @@ async def _execute_function_call(
                     extra={"conversation_id": context.conversation_id, "error": str(exc)},
                 )
             try:
-                await storage.maybe_auto_name_opportunity(
+                await storage.maybe_auto_name_persona_opportunity(
                     conversation_id=context.conversation_id,
-                    contact_id=context.contact_id,
+                    persona_id=context.contact_id,
                     opportunity_id=str(tarjeta_id),
                     intent=necesidad_auto,
                     summary=notes_auto,

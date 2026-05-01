@@ -920,9 +920,9 @@ async def _refresh_opportunity_context_from_persona(
 ) -> None:
     if ensure_capture:
         try:
-            await storage.capture_opportunity_if_ready(
+            await storage.capture_persona_opportunity_if_ready(
                 conversation_id=context.conversation_id,
-                contact_id=context.contact_id,
+                persona_id=context.contact_id,
                 channel=context.channel or "whatsapp",
             )
         except StorageError as exc:
@@ -985,9 +985,9 @@ async def _refresh_opportunity_context_from_persona(
             )
 
     try:
-        await storage.maybe_auto_name_opportunity(
+        await storage.maybe_auto_name_persona_opportunity(
             conversation_id=context.conversation_id,
-            contact_id=context.contact_id,
+            persona_id=context.contact_id,
             opportunity_id=str(opportunity_id),
             intent=intent,
             summary=summary or None,
@@ -1660,9 +1660,9 @@ async def _handle_information_email(
         )
     if oportunidad_id:
         try:
-            await storage.maybe_auto_name_opportunity(
+            await storage.maybe_auto_name_persona_opportunity(
                 conversation_id=context.conversation_id,
-                contact_id=context.contact_id,
+                persona_id=context.contact_id,
                 opportunity_id=oportunidad_id,
                 intent=persona_need,
                 summary=summary or persona_notes,
@@ -1913,9 +1913,9 @@ async def _handle_close_lead(
         )
     if tarjeta_id:
         try:
-            await storage.maybe_auto_name_opportunity(
+            await storage.maybe_auto_name_persona_opportunity(
                 conversation_id=context.conversation_id,
-                contact_id=context.contact_id,
+                persona_id=context.contact_id,
                 opportunity_id=str(tarjeta_id),
                 intent=necesidad,
                 summary=notes,
@@ -2413,9 +2413,9 @@ async def _handle_schedule_demo(
             extra={"conversation_id": context.conversation_id, "error": str(exc)},
         )
     try:
-        await storage.maybe_auto_name_opportunity(
+        await storage.maybe_auto_name_persona_opportunity(
             conversation_id=context.conversation_id,
-            contact_id=opportunity_contact_id,
+            persona_id=opportunity_contact_id,
             opportunity_id=str(tarjeta_id),
             intent=inferred_need,
             summary=inferred_notes,

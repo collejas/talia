@@ -2791,7 +2791,7 @@ async def maybe_auto_name_opportunity(
 
     should_update_title = bool(proposed_title) and _is_generic_opportunity_title(
         current_title=current_title,
-        contact=contact,
+        contact=persona,
         auto_generated=title_auto_generated,
     )
     if should_update_title and proposed_title == current_title:
@@ -2836,6 +2836,26 @@ async def maybe_auto_name_opportunity(
         )
         return None
     return proposed_title or current_title or None
+
+
+async def maybe_auto_name_persona_opportunity(
+    *,
+    conversation_id: str,
+    persona_id: str,
+    summary: str | None = None,
+    intent: str | None = None,
+    channel: str | None = None,
+    opportunity_id: str | None = None,
+) -> str | None:
+    """Alias con nombre de persona para el auto-naming de oportunidad."""
+    return await maybe_auto_name_opportunity(
+        conversation_id=conversation_id,
+        contact_id=persona_id,
+        summary=summary,
+        intent=intent,
+        channel=channel,
+        opportunity_id=opportunity_id,
+    )
 
 
 async def apply_lead_scoring(
@@ -3692,6 +3712,20 @@ async def capture_opportunity_if_ready(
         **log_context,
     )
     return True, oportunidad_id
+
+
+async def capture_persona_opportunity_if_ready(
+    *,
+    conversation_id: str,
+    persona_id: str,
+    channel: str | None = None,
+) -> tuple[bool, str | None]:
+    """Alias con nombre de persona para la captura/promoción de oportunidad."""
+    return await capture_opportunity_if_ready(
+        conversation_id=conversation_id,
+        contact_id=persona_id,
+        channel=channel,
+    )
 
 
 async def capture_persona_opportunity_if_ready(
