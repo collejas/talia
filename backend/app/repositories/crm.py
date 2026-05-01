@@ -5812,6 +5812,21 @@ class CRMRepository:
                     rows.append(contact_row)
         return rows
 
+    async def search_personas(
+        self,
+        *,
+        organizacion_id: UUID,
+        query: str,
+        limit: int = 8,
+        offset: int = 0,
+    ) -> list[dict[str, Any]]:
+        return await self.search_contacts(
+            organizacion_id=organizacion_id,
+            query=query,
+            limit=limit,
+            offset=offset,
+        )
+
     async def list_geo_countries(self) -> list[dict[str, Any]]:
         params = {
             "select": "codigo_iso2,nombre,nombre_largo",

@@ -14350,7 +14350,7 @@ def _build_error_payload(row: Mapping[str, str], headers_map: dict[str, str]) ->
 
 
 @router.get("/contacts/search", response_model=CRMPersonaSearchResponse)
-async def search_contacts(
+async def search_contacts_legacy(
     *,
     repo: CRMRepository = Depends(get_repository),
     organizacion_id: UUID = Depends(require_organizacion_id),
@@ -14359,7 +14359,7 @@ async def search_contacts(
     limit: Annotated[int, Query(ge=1, le=25)] = 8,
     offset: Annotated[int, Query(ge=0)] = 0,
 ) -> CRMPersonaSearchResponse:
-    rows = await repo.search_contacts(
+    rows = await repo.search_personas(
         organizacion_id=organizacion_id,
         query=query,
         limit=limit,
@@ -14392,7 +14392,7 @@ async def search_personas(
     limit: Annotated[int, Query(ge=1, le=100)] = 20,
     offset: Annotated[int, Query(ge=0)] = 0,
 ) -> CRMPersonaSearchResponse:
-    rows = await repo.search_contacts(
+    rows = await repo.search_personas(
         organizacion_id=organizacion_id,
         query=q or "",
         limit=limit,
@@ -15453,7 +15453,7 @@ async def update_reminder_settings(
 
 
 @router.get("/contacts/summary", response_model=CRMPersonaSummary)
-async def get_contacts_summary(
+async def get_contacts_summary_legacy(
     *,
     repo: CRMRepository = Depends(get_repository),
     _: str = Depends(require_permission("contacts.read")),
@@ -15473,12 +15473,12 @@ async def get_personas_summary(
     _: str = Depends(require_permission("contacts.read")),
     user_token: str = Depends(require_user_token),
 ) -> CRMPersonaSummary:
-    row = await get_contacts_summary(repo=repo, _=_, user_token=user_token)
+    row = await get_contacts_summary_legacy(repo=repo, _=_, user_token=user_token)
     return CRMPersonaSummary.model_validate(row.model_dump())
 
 
 @router.get("/contacts/timeline", response_model=list[CRMPersonaTimelineEntry])
-async def get_contacts_timeline(
+async def get_contacts_timeline_legacy(
     *,
     repo: CRMRepository = Depends(get_repository),
     _: str = Depends(require_permission("contacts.read")),
@@ -15498,12 +15498,12 @@ async def get_personas_timeline(
     _: str = Depends(require_permission("contacts.read")),
     user_token: str = Depends(require_user_token),
 ) -> list[CRMPersonaTimelineEntry]:
-    rows = await get_contacts_timeline(repo=repo, _=_, user_token=user_token)
+    rows = await get_contacts_timeline_legacy(repo=repo, _=_, user_token=user_token)
     return [CRMPersonaTimelineEntry.model_validate(row.model_dump()) for row in rows]
 
 
 @router.get("/contacts/list", response_model=list[CRMPersonaListRow])
-async def get_contacts_list(
+async def get_contacts_list_legacy(
     *,
     repo: CRMRepository = Depends(get_repository),
     _: str = Depends(require_permission("contacts.read")),
@@ -15527,12 +15527,12 @@ async def get_personas_list(
     limit: Annotated[int, Query(ge=1, le=500)] = DEFAULT_CONTACTS_LIMIT,
     search: str | None = Query(default=None, min_length=1),
 ) -> list[CRMPersonaListRow]:
-    rows = await get_contacts_list(repo=repo, _=_, user_token=user_token, limit=limit, search=search)
+    rows = await get_contacts_list_legacy(repo=repo, _=_, user_token=user_token, limit=limit, search=search)
     return [CRMPersonaListRow.model_validate(row.model_dump()) for row in rows]
 
 
 @router.get("/contacts/export")
-async def export_contacts_csv(
+async def export_contacts_csv_legacy(
     *,
     repo: CRMRepository = Depends(get_repository),
     _: str = Depends(require_permission("contacts.read")),
