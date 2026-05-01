@@ -109,6 +109,21 @@ _WHATSAPP_INBOUND_FRAGMENT_MAX_CHARS = 80
 _WHATSAPP_INBOUND_FRAGMENT_MAX_WORDS = 12
 
 
+def _persona_datos(persona: Mapping[str, Any] | None) -> dict[str, Any]:
+    if not persona:
+        return {}
+    payload = persona.get("persona_datos")
+    if isinstance(payload, dict):
+        return dict(payload)
+    payload = persona.get("contacto_datos")
+    if isinstance(payload, dict):
+        return dict(payload)
+    payload = persona.get("metadata")
+    if isinstance(payload, dict):
+        return dict(payload)
+    return {}
+
+
 def _normalize_inbound_message_id(value: Any) -> str | None:
     parsed = str(value or "").strip()
     return parsed or None
@@ -682,7 +697,7 @@ async def _maybe_apply_publicidad_whatsapp_attribution(
         )
         contact_row = None
     if isinstance(contact_row, dict):
-        contact_data = contact_row.get("contacto_datos") if isinstance(contact_row.get("contacto_datos"), dict) else {}
+        contact_data = _persona_datos(contact_row)
         patched_contact_data = {
             **contact_data,
             "publicidad_whatsapp_atribucion": {
@@ -699,7 +714,7 @@ async def _maybe_apply_publicidad_whatsapp_attribution(
                 "atribuido_en": _trim_text(created_event.get("creado_en")) or datetime.now(timezone.utc).isoformat(),
             },
         }
-        patch_payload: dict[str, Any] = {"contacto_datos": patched_contact_data}
+        patch_payload: dict[str, Any] = {"persona_datos": patched_contact_data}
         current_origen = _trim_text(contact_row.get("origen"))
         if (current_origen or "").lower() in {"", "whatsapp", "prospeccion"}:
             patch_payload["origen"] = "publicidad_whatsapp"
@@ -1951,7 +1966,7 @@ async def _maybe_update_persona_location(
             )
             return None
 
-    persona_contacto_datos = persona_data.get("contacto_datos") or {}
+    persona_contacto_datos = _persona_datos(persona_data)
     ubicacion = dict(persona_contacto_datos.get("ubicacion") or {})
     lada_exists = ubicacion.get("lada")
     estado_exists = ubicacion.get("cve_ent")
@@ -2011,14 +2026,15 @@ async def _maybe_update_persona_location(
 
     persona_contacto_datos["ubicacion"] = ubicacion
     try:
-        await storage.update_persona(contact_id, {"contacto_datos": persona_contacto_datos})
+        await storage.update_persona(contact_id, {"persona_datos": persona_contacto_datos})
     except StorageError as exc:
         logger.warning(
             "whatsapp.update_contact_location_failed",
             extra={"contact_id": contact_id, "error": str(exc)},
         )
     else:
-        persona_data["contacto_datos"] = persona_contacto_datos
+        persona_data["persona_datos"] = persona_contacto_datos
+        persona_data["contacto_datos"] = dict(persona_contacto_datos)
 
     return persona_data
 

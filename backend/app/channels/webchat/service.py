@@ -1564,6 +1564,16 @@ def _safe_dict(value: Any) -> dict[str, Any]:
     return {}
 
 
+def _persona_datos(persona: Mapping[str, Any] | None) -> dict[str, Any]:
+    if not persona:
+        return {}
+    return _safe_dict(
+        persona.get("persona_datos")
+        or persona.get("contacto_datos")
+        or persona.get("metadata")
+    )
+
+
 def _looks_like_booking_confirmation(text: str) -> bool:
     normalized = str(text or "").strip().lower()
     if not normalized:
@@ -1791,8 +1801,7 @@ async def _load_required_case_a_questions(
 def _has_meaningful_scoring_answers(persona: Mapping[str, Any] | None) -> bool:
     if not persona:
         return False
-    persona_data_raw = persona.get("contacto_datos")
-    persona_data = persona_data_raw if isinstance(persona_data_raw, dict) else {}
+    persona_data = _persona_datos(persona)
     scoring_raw = persona_data.get("lead_scoring")
     scoring_data = scoring_raw if isinstance(scoring_raw, dict) else {}
     answers_raw = scoring_data.get("answers")
@@ -1810,7 +1819,7 @@ def _build_insights_from_scoring_answers(
     persona: Mapping[str, Any] | None,
     booking_start_at: datetime | None = None,
 ) -> tuple[str, str, str]:
-    persona_data = _ensure_dict((persona or {}).get("contacto_datos"))
+    persona_data = _persona_datos(persona)
     scoring = _ensure_dict(persona_data.get("lead_scoring"))
     answers = _ensure_dict(scoring.get("answers"))
 
@@ -2636,7 +2645,7 @@ async def _maybe_enrich_persona_metadata(
                 )
             return
 
-    persona_contacto_datos = _safe_dict(persona.get("contacto_datos"))
+    persona_contacto_datos = _persona_datos(persona)
     if persona_contacto_datos:
         try:
             updated_data = json.loads(json.dumps(persona_contacto_datos))
@@ -2728,7 +2737,7 @@ async def _maybe_enrich_persona_metadata(
         return
 
     try:
-        await storage.update_persona(contact_id, {"contacto_datos": updated_data})
+        await storage.update_persona(contact_id, {"persona_datos": updated_data})
     except storage.StorageError as exc:
         logger.exception(
             "webchat.contact_update_failed",

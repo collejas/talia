@@ -54,7 +54,7 @@ def _has_value(value: Any) -> bool:
 
 
 def _load_contact_data(contact: dict[str, Any]) -> dict[str, Any]:
-    raw = contact.get("contacto_datos")
+    raw = contact.get("persona_datos") or contact.get("contacto_datos") or contact.get("metadata")
     if isinstance(raw, dict):
         return dict(raw)
     if isinstance(raw, str):
@@ -107,7 +107,7 @@ async def refresh_contact_followup_state(
     session_id: str | None = None,
     contact: dict[str, Any] | None = None,
 ) -> dict[str, Any] | None:
-    """Actualiza contacto_datos.webchat_followup con el progreso actual."""
+    """Actualiza persona_datos.webchat_followup con el progreso actual."""
     contact_row = contact or await storage.fetch_persona(contact_id)
     contact_data = _load_contact_data(contact_row)
     followup, state, changed = _prepare_followup_scope(contact_data, conversation_id)
@@ -150,7 +150,7 @@ async def refresh_contact_followup_state(
 
     if changed:
         contact_data["webchat_followup"] = followup
-        await storage.update_persona(contact_id, {"contacto_datos": contact_data})
+        await storage.update_persona(contact_id, {"persona_datos": contact_data})
         log_event(
             logger,
             "webchat_followup.state_updated",
@@ -203,7 +203,7 @@ async def mark_information_delivered(
 
     if changed:
         contact_data["webchat_followup"] = followup
-        await storage.update_persona(contact_id, {"contacto_datos": contact_data})
+        await storage.update_persona(contact_id, {"persona_datos": contact_data})
         log_event(
             logger,
             "webchat_followup.delivery_marked",
@@ -315,7 +315,7 @@ async def mark_stop_reason(
     if reason == "session_closed":
         state["session_closed_at"] = _now_iso()
     contact_data["webchat_followup"] = followup
-    await storage.update_persona(contact_id, {"contacto_datos": contact_data})
+    await storage.update_persona(contact_id, {"persona_datos": contact_data})
     log_event(
         logger,
         "webchat_followup.stop_reason_marked",
@@ -347,7 +347,7 @@ async def record_reengage_attempt(
         reengage["last_message"] = message
     state["reengage"] = reengage
     contact_data["webchat_followup"] = followup
-    await storage.update_persona(contact_id, {"contacto_datos": contact_data})
+    await storage.update_persona(contact_id, {"persona_datos": contact_data})
     log_event(
         logger,
         "webchat_followup.reengage_recorded",

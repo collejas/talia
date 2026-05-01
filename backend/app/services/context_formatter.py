@@ -6,6 +6,27 @@ import json
 from typing import Any
 
 
+def _ensure_dict(value: Any) -> dict[str, Any]:
+    if isinstance(value, dict):
+        return dict(value)
+    if isinstance(value, str):
+        try:
+            parsed = json.loads(value)
+        except json.JSONDecodeError:
+            return {}
+        if isinstance(parsed, dict):
+            return parsed
+    return {}
+
+
+def _persona_datos(contact: dict[str, Any] | None) -> dict[str, Any]:
+    if not isinstance(contact, dict):
+        return {}
+    return _ensure_dict(
+        contact.get("persona_datos") or contact.get("contacto_datos") or contact.get("metadata")
+    )
+
+
 def build_crm_context_lines(context_data: dict[str, Any] | None) -> list[str]:
     """Devuelve las líneas del bloque 'Contexto CRM' dado el contacto y oportunidad."""
     contact = context_data.get("contact") if context_data else None
@@ -36,10 +57,8 @@ def _build_contact_context_lines(contact: dict[str, Any] | None) -> list[str]:
     if not isinstance(contact, dict):
         return []
     lines: list[str] = []
-    contacto_datos = contact.get("contacto_datos") or {}
-    if isinstance(contacto_datos, str):
-        contacto_datos = _ensure_dict(contacto_datos)
-    profile_name = str(contacto_datos.get("profile_name") or "").strip()
+    persona_datos = _persona_datos(contact)
+    profile_name = str(persona_datos.get("profile_name") or "").strip()
     contact_name = str(contact.get("nombre_completo") or "").strip()
     if contact_name and profile_name and contact_name.lower() == profile_name.lower():
         contact_name = ""
@@ -59,7 +78,7 @@ def _build_contact_context_lines(contact: dict[str, Any] | None) -> list[str]:
     captura = contact.get("captura_estado")
     if captura:
         lines.append(f"- Estado de captura: {_safe_text(captura)}")
-    ubicacion = contacto_datos.get("ubicacion") or {}
+    ubicacion = persona_datos.get("ubicacion") or {}
     location_parts: list[str] = []
     if ubicacion.get("nom_ent"):
         location_parts.append(str(ubicacion.get("nom_ent")).strip())

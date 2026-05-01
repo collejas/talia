@@ -86,6 +86,19 @@ def _ensure_metadata(value: Any) -> dict[str, Any]:
     return {}
 
 
+def _deep_merge_metadata(base: dict[str, Any], patch: dict[str, Any]) -> dict[str, Any]:
+    merged = dict(base)
+    for key, value in patch.items():
+        if value is None:
+            continue
+        existing = merged.get(key)
+        if isinstance(existing, dict) and isinstance(value, dict):
+            merged[key] = _deep_merge_metadata(existing, value)
+            continue
+        merged[key] = value
+    return merged
+
+
 def _postgrest_in_clause(values: Iterable[str]) -> str:
     quoted: list[str] = []
     for value in values:
@@ -5955,6 +5968,12 @@ class CRMRepository:
         relation = relation_bundle if isinstance(relation_bundle, dict) else None
 
         metadata = persona.get("metadata") if isinstance(persona.get("metadata"), dict) else {}
+        persona_datos = _ensure_metadata(persona.get("persona_datos"))
+        contacto_datos = _ensure_metadata(persona.get("contacto_datos"))
+        if persona_datos:
+            metadata = _deep_merge_metadata(metadata, persona_datos)
+        if contacto_datos:
+            metadata = _deep_merge_metadata(metadata, contacto_datos)
 
         account_name = None
         if isinstance(account, dict):
@@ -5980,6 +5999,8 @@ class CRMRepository:
             "notes": persona.get("notas"),
             "necesidad_proposito": account.get("necesidad_proposito") if isinstance(account, dict) else None,
             "contacto_datos": {},
+            "persona_datos": metadata,
+            "contacto_datos": dict(metadata),
             "codigo_contacto": None,
             "codigo_cuenta": account.get("codigo_cuenta") if isinstance(account, dict) else None,
             "persona_fisica_moral": None,
@@ -6128,6 +6149,12 @@ class CRMRepository:
         )
 
         metadata = _ensure_metadata(merged.get("metadata"))
+        persona_datos = _ensure_metadata(merged.get("persona_datos"))
+        contacto_datos = _ensure_metadata(merged.get("contacto_datos"))
+        if persona_datos:
+            metadata = _deep_merge_metadata(metadata, persona_datos)
+        if contacto_datos:
+            metadata = _deep_merge_metadata(metadata, contacto_datos)
         now_value = datetime.now(timezone.utc)
 
         persona_body: dict[str, Any] = {

@@ -37,7 +37,7 @@ def _contact_email(contact: Mapping[str, Any], *, override: str | None = None) -
 
 
 def _extract_contact_location(contact: Mapping[str, Any]) -> str:
-    raw_data = contact.get("contacto_datos") or {}
+    raw_data = contact.get("persona_datos") or contact.get("contacto_datos") or {}
     if isinstance(raw_data, str):
         try:
             raw_data = json.loads(raw_data)

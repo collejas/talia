@@ -312,7 +312,7 @@ async def _ensure_email_inbox_context(
             or sender_email.split("@")[0],
             "correo": sender_email,
             "company_name": _clean_text((prospecto or {}).get("segmento")),
-            "contacto_datos": {
+            "persona_datos": {
                 "source": "prospeccion_email_inbound",
                 "prospeccion_canal": "correo",
                 **({"prospecto_id": str(prospecto_uuid)} if prospecto_uuid else {}),

@@ -281,10 +281,20 @@ def _ensure_dict(value: Any) -> dict[str, Any]:
     return {}
 
 
+def _persona_datos(persona: Mapping[str, Any] | None) -> dict[str, Any]:
+    if not persona:
+        return {}
+    return _ensure_dict(
+        persona.get("persona_datos")
+        or persona.get("contacto_datos")
+        or persona.get("metadata")
+    )
+
+
 def _has_meaningful_scoring_answers(persona: Mapping[str, Any] | None) -> bool:
     if not persona:
         return False
-    persona_data = _ensure_dict(persona.get("contacto_datos"))
+    persona_data = _persona_datos(persona)
     scoring_data = _ensure_dict(persona_data.get("lead_scoring"))
     answers = _ensure_dict(scoring_data.get("answers"))
     if not answers:
@@ -319,7 +329,7 @@ def _extract_scoring_answers(
         return answers
     if not persona:
         return {}
-    persona_data = _ensure_dict(persona.get("contacto_datos"))
+    persona_data = _persona_datos(persona)
     persona_scoring = _ensure_dict(persona_data.get("lead_scoring"))
     return _ensure_dict(persona_scoring.get("answers"))
 
@@ -491,7 +501,7 @@ def _is_whatsapp_reengage_exhausted(
 def _is_webchat_reengage_exhausted(persona: Mapping[str, Any] | None) -> bool:
     if not persona:
         return False
-    persona_data = _ensure_dict(persona.get("contacto_datos"))
+    persona_data = _persona_datos(persona)
     webchat_followup = _ensure_dict(persona_data.get("webchat_followup"))
     state = _ensure_dict(webchat_followup.get("state"))
     reengage = _ensure_dict(state.get("reengage"))

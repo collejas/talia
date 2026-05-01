@@ -73,6 +73,17 @@ def _ensure_dict(value: Any) -> dict[str, Any]:
     return {}
 
 
+def _normalize_persona_payload(row: dict[str, Any]) -> dict[str, Any]:
+    persona_data = _ensure_dict(
+        row.get("persona_datos") or row.get("contacto_datos") or row.get("metadata")
+    )
+    row["persona_datos"] = dict(persona_data)
+    row["contacto_datos"] = dict(persona_data)
+    if "metadata" not in row or row.get("metadata") is None:
+        row["metadata"] = dict(persona_data)
+    return row
+
+
 def _deep_merge_dict(base: dict[str, Any], patch: dict[str, Any]) -> dict[str, Any]:
     merged = dict(base)
     for key, value in patch.items():
@@ -406,7 +417,9 @@ def _is_generic_opportunity_title(
         return True
     if _looks_like_placeholder_name(normalized):
         return True
-    persona_contacto_datos = _ensure_dict(contact.get("contacto_datos"))
+    persona_contacto_datos = _ensure_dict(
+        contact.get("persona_datos") or contact.get("contacto_datos") or contact.get("metadata")
+    )
     profile_name = _clean_text(persona_contacto_datos.get("profile_name")).lower()
     if profile_name and normalized == profile_name:
         return True
@@ -1414,14 +1427,14 @@ async def register_whatsapp_message(
         try:
             persona_row = await repo.get_persona_by_id(persona_id=str(persona_id_value))
             if persona_row:
-                raw_persona_data = persona_row.get("contacto_datos")
+                raw_persona_data = persona_row.get("persona_datos") or persona_row.get("contacto_datos")
                 persona_data = _ensure_dict(raw_persona_data)
                 current_profile_name = _clean_text(persona_data.get("profile_name"))
                 incoming_profile_name = _clean_text(profile_name)
                 patch: dict[str, Any] = {}
                 if incoming_profile_name and current_profile_name != incoming_profile_name:
                     persona_data["profile_name"] = incoming_profile_name
-                    patch["contacto_datos"] = persona_data
+                    patch["persona_datos"] = persona_data
 
                 # No usar nombre de perfil de WhatsApp como nombre real.
                 if _is_unconfirmed_whatsapp_name(
@@ -1429,9 +1442,9 @@ async def register_whatsapp_message(
                     profile_name=incoming_profile_name,
                 ):
                     patch["nombre_completo"] = None
-                    if "contacto_datos" not in patch:
+                    if "persona_datos" not in patch:
                         persona_data["profile_name"] = incoming_profile_name
-                        patch["contacto_datos"] = persona_data
+                        patch["persona_datos"] = persona_data
 
                 if patch:
                     await repo.update_persona_by_id(persona_id=persona_id_value, patch=patch)
@@ -2082,15 +2095,7 @@ async def fetch_persona(persona_id: str) -> dict[str, Any]:
         raise StorageError(str(exc)) from exc
     if not row:
         raise StorageError("Persona no encontrada")
-    datos = row.get("contacto_datos")
-    if isinstance(datos, str):
-        try:
-            row["contacto_datos"] = json.loads(datos)
-        except json.JSONDecodeError:
-            row["contacto_datos"] = {}
-    elif datos is None:
-        row["contacto_datos"] = {}
-    return row
+    return _normalize_persona_payload(row)
 
 
 async def fetch_contact(contact_id: str) -> dict[str, Any]:
@@ -2298,15 +2303,7 @@ async def update_contact(contact_id: str, patch: dict[str, Any]) -> dict[str, An
     except CRMRepositoryError as exc:
         raise StorageError(str(exc)) from exc
 
-    datos = row.get("contacto_datos")
-    if isinstance(datos, str):
-        try:
-            row["contacto_datos"] = json.loads(datos)
-        except json.JSONDecodeError:
-            row["contacto_datos"] = {}
-    elif datos is None:
-        row["contacto_datos"] = {}
-    return row
+    return _normalize_persona_payload(row)
 
 
 async def update_persona(persona_id: str, patch: dict[str, Any]) -> dict[str, Any]:
@@ -3082,7 +3079,9 @@ async def apply_lead_scoring(
         )
         return None
 
-    persona_contacto_datos = _ensure_dict(contact.get("contacto_datos"))
+    persona_contacto_datos = _ensure_dict(
+        contact.get("persona_datos") or contact.get("contacto_datos") or contact.get("metadata")
+    )
     persona_contacto_datos["lead_scoring"] = {
         "answers": normalized_answers,
         "profiling_by_channel": profiling_by_channel,
@@ -3092,7 +3091,7 @@ async def apply_lead_scoring(
         "last_scored_at": now_iso,
     }
     try:
-        await update_persona(contact_id, {"contacto_datos": persona_contacto_datos})
+        await update_persona(contact_id, {"persona_datos": persona_contacto_datos})
     except StorageError as exc:
         logger.warning(
             "storage.lead_scoring.contact_update_failed",
