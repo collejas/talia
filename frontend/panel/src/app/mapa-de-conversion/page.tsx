@@ -22,7 +22,7 @@ import {
   orderStageKeys,
 } from "@/lib/mapa-conversion/stages";
 import { buildAcquisitionMetrics } from "@/lib/mapa-conversion/acquisition";
-import { loadConversationsTableForConversionMap, loadVisitsTableForConversionMap } from "@/lib/visitas/data";
+import { loadConversionMapTablesForConversionMap } from "@/lib/visitas/data";
 import { MapKpis } from "@/components/mapa-conversion/map-kpis";
 
 export const dynamic = "force-dynamic";
@@ -287,87 +287,76 @@ export default async function Page({
   const hasta = hastaParam.length ? hastaParam : null;
 
   let demografiaResponse: Awaited<ReturnType<typeof loadDemografiaData>> | null = null;
-  let visitsTable: Awaited<ReturnType<typeof loadVisitsTableForConversionMap>> = [];
-  let conversationsTable: Awaited<ReturnType<typeof loadConversationsTableForConversionMap>> = [];
+  let visitsTable: Awaited<ReturnType<typeof loadConversionMapTablesForConversionMap>>["visitsTable"] = [];
+  let conversationsTable: Awaited<ReturnType<typeof loadConversionMapTablesForConversionMap>>["conversationsTable"] = [];
   const errores: string[] = [];
 
-  try {
-    demografiaResponse = await loadDemografiaData(nivel, {
-      canales: canalesFilter,
-      etapas,
-      estado: nivel === "municipio" ? normalizedEstado : null,
-      sourceClass,
-      utmSource,
-      utmMedium,
-      utmCampaign,
-      campanaId,
-      campanaTipo,
-      templateId,
-      waCanalPublicitario,
-      waCampanaPublicitaria,
-      waReglaId,
-      rango,
-      desde,
-      hasta,
-    });
-  } catch (error) {
-    errores.push(
-      error instanceof Error
-        ? error.message
-        : "No se pudo obtener la información demográfica."
-    );
+  const demografiaTask = loadDemografiaData(nivel, {
+    canales: canalesFilter,
+    etapas,
+    estado: nivel === "municipio" ? normalizedEstado : null,
+    sourceClass,
+    utmSource,
+    utmMedium,
+    utmCampaign,
+    campanaId,
+    campanaTipo,
+    templateId,
+    waCanalPublicitario,
+    waCampanaPublicitaria,
+    waReglaId,
+    rango,
+    desde,
+    hasta,
+  })
+    .then((value) => ({ ok: true as const, value }))
+    .catch((error: unknown) => ({
+      ok: false as const,
+      error:
+        error instanceof Error
+          ? error.message
+          : "No se pudo obtener la información demográfica.",
+    }));
+
+  const tablesTask = loadConversionMapTablesForConversionMap({
+    canales: canalesSelected,
+    estado: nivel === "municipio" ? normalizedEstado : null,
+    sourceClass,
+    utmSource,
+    utmMedium,
+    utmCampaign,
+    campanaId,
+    campanaTipo,
+    templateId,
+    waCanalPublicitario,
+    waCampanaPublicitaria,
+    waReglaId,
+    rango,
+    desde,
+    hasta,
+  })
+    .then((value) => ({ ok: true as const, value }))
+    .catch((error: unknown) => ({
+      ok: false as const,
+      error:
+        error instanceof Error
+          ? error.message
+          : "No se pudieron cargar las visitas recientes o las conversaciones.",
+    }));
+
+  const [demografiaResult, tablesResult] = await Promise.all([demografiaTask, tablesTask]);
+
+  if (demografiaResult.ok) {
+    demografiaResponse = demografiaResult.value;
+  } else {
+    errores.push(demografiaResult.error);
   }
 
-  try {
-    visitsTable = await loadVisitsTableForConversionMap({
-      canales: canalesSelected,
-      // Mantener el filtro de estado alineado con demografia:
-      // solo aplica cuando el usuario navega a nivel municipio.
-      estado: nivel === "municipio" ? normalizedEstado : null,
-      sourceClass,
-      utmSource,
-      utmMedium,
-      utmCampaign,
-      templateId,
-      waCanalPublicitario,
-      waCampanaPublicitaria,
-      waReglaId,
-      rango,
-      desde,
-      hasta,
-    });
-  } catch (error) {
-    errores.push(
-      error instanceof Error
-        ? error.message
-        : "No se pudieron cargar las visitas recientes."
-    );
-  }
-
-  try {
-    conversationsTable = await loadConversationsTableForConversionMap({
-      canales: canalesSelected,
-      estado: nivel === "municipio" ? normalizedEstado : null,
-      sourceClass,
-      utmSource,
-      utmMedium,
-      utmCampaign,
-      campanaId,
-      campanaTipo,
-      templateId,
-      waCanalPublicitario,
-      waCampanaPublicitaria,
-      waReglaId,
-      rango,
-      desde,
-      hasta,
-    });
-  } catch (error) {
-    errores.push(
-      error instanceof Error
-        ? error.message
-        : "No se pudieron cargar las conversaciones recientes."
-    );
+  if (tablesResult.ok) {
+    visitsTable = tablesResult.value.visitsTable;
+    conversationsTable = tablesResult.value.conversationsTable;
+  } else {
+    errores.push(tablesResult.error);
   }
 
   const datasetForTables =
