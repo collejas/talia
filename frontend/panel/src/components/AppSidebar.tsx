@@ -269,6 +269,7 @@ export function AppSidebar({
 
     return filterItems(items)
   }, [settingsChildren, permissionsLoading, permissionContext])
+  const dashboardRoutePrefetchedRef = useRef(false)
   const mapaRoutePrefetchedRef = useRef(false)
 
   useEffect(() => {
@@ -277,11 +278,15 @@ export function AppSidebar({
   }, [])
 
   useEffect(() => {
-    if (!hydrated || !sidebarApiEnabled || permissionsLoading || mapaRoutePrefetchedRef.current) {
+    if (!hydrated || !sidebarApiEnabled || permissionsLoading) {
       return
     }
+    if (!dashboardRoutePrefetchedRef.current) {
+      dashboardRoutePrefetchedRef.current = true
+      void router.prefetch("/dashboard")
+    }
     const hasMapaDeConversion = navItems.some((item) => item.url === "/mapa-de-conversion")
-    if (!hasMapaDeConversion) {
+    if (!hasMapaDeConversion || mapaRoutePrefetchedRef.current) {
       return
     }
     mapaRoutePrefetchedRef.current = true
