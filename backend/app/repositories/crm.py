@@ -9146,6 +9146,7 @@ class CRMRepository:
         limit: int = 200,
         date_from: datetime | None = None,
         date_to: datetime | None = None,
+        include_contact_details: bool = True,
     ) -> list[dict[str, Any]]:
         params = {
             "select": "id,canal,iniciada_en,ultimo_mensaje_en,contacto_id",
@@ -9176,6 +9177,8 @@ class CRMRepository:
             raise CRMRepositoryError(f"Respuesta inesperada en conversaciones: {data!r}")
         rows = [row for row in data if isinstance(row, dict)]
         if not organizacion_id:
+            return rows
+        if not include_contact_details:
             return rows
         return await self._attach_contact_rows(
             organizacion_id=organizacion_id,

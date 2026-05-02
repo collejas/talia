@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import time
 from datetime import datetime
 from typing import Any
 
@@ -234,6 +235,7 @@ async def fetch_leads_resumen(
     date_to: datetime | None,
     jwt: str | None,
 ) -> dict[str, Any]:
+    request_started = time.perf_counter()
     payload: dict[str, Any] = {"p_nivel": nivel}
     if channels:
         joined_channels = ",".join(sorted({c.strip().lower() for c in channels if c}))
@@ -249,6 +251,15 @@ async def fetch_leads_resumen(
         payload["p_to"] = date_to.isoformat()
 
     rows = await _call_rpc("panel_leads_geo_resumen_ext", payload, jwt=jwt)
+    logger.info(
+            "demografia.fetch_leads_resumen.rpc",
+            extra={
+                "nivel": nivel,
+                "rpc_ms": round((time.perf_counter() - request_started) * 1000, 2),
+                "has_from": bool(date_from),
+                "has_to": bool(date_to),
+            },
+        )
     if not isinstance(rows, list):
         raise DemografiaServiceError(
             f"Respuesta inesperada de panel_leads_geo_resumen_ext: {rows!r}"
@@ -442,6 +453,7 @@ async def fetch_visitantes_resumen_v2(
     wa_regla_id: str | None = None,
     jwt: str | None = None,
 ) -> dict[str, Any]:
+    request_started = time.perf_counter()
     payload: dict[str, Any] = {"p_nivel": nivel}
     if date_from:
         payload["p_from"] = date_from.isoformat()
@@ -473,6 +485,16 @@ async def fetch_visitantes_resumen_v2(
     # v3 agrega fallback de webchat cuando falta trafico web; para mapa de conversion
     # mantenemos separacion estricta entre landing (web_sessions) y webchat.
     rows = await _call_rpc("panel_visitantes_geo_resumen_v2", payload, jwt=jwt)
+    logger.info(
+            "demografia.fetch_visitantes_resumen_v2.rpc",
+            extra={
+                "nivel": nivel,
+                "rpc_ms": round((time.perf_counter() - request_started) * 1000, 2),
+                "has_from": bool(date_from),
+                "has_to": bool(date_to),
+                "state_code": state_code,
+            },
+        )
     if not isinstance(rows, list):
         raise DemografiaServiceError(
             f"Respuesta inesperada de panel_visitantes_geo_resumen_v2: {rows!r}"

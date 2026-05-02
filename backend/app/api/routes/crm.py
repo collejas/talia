@@ -683,6 +683,7 @@ async def _enrich_visitantes_payload_with_whatsapp_locations(
             limit=2000,
             date_from=date_from,
             date_to=date_to,
+            include_contact_details=False,
         )
     except CRMRepositoryError:
         logger.exception("crm.demografia.whatsapp_location_resolution_failed")
