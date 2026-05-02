@@ -1,6 +1,5 @@
 import type { DemografiaSummaryResponse } from "@/lib/mapa-conversion/api";
 import { normalizeAcquisitionSourceClass } from "@/lib/mapa-conversion/source-class";
-import type { VisitTableRow } from "@/lib/visitas/data";
 
 export type AcquisitionSourceBucket = {
   source: string;
@@ -56,13 +55,6 @@ function parseHost(value: string | null | undefined): string {
   }
 }
 
-function resolveReferrerHost(row: Record<string, unknown>): string {
-  const explicit = typeof row.referrer_host === "string" ? row.referrer_host.trim().toLowerCase() : "";
-  if (explicit) return explicit;
-  const referrer = typeof row.referrer === "string" ? row.referrer : null;
-  return parseHost(referrer);
-}
-
 function formatUtmPart(value: unknown): string {
   const text = typeof value === "string" ? value.trim() : "";
   return text.length ? text : "(none)";
@@ -114,55 +106,46 @@ function aggregateWhatsappChannels(summary: DemografiaSummaryResponse | null): A
 }
 
 export function buildAcquisitionMetrics(
-  visits: VisitTableRow[],
   summary: DemografiaSummaryResponse | null,
 ): AcquisitionMetrics {
   const sourceBuckets = new Map<string, AcquisitionSourceBucket>();
   const hostBuckets = new Map<string, AcquisitionHostBucket>();
 
-  let sessions = 0;
-  let converted = 0;
+  const items = Array.isArray(summary?.visitantes?.items) ? summary?.visitantes?.items ?? [] : [];
+  const sessions =
+    toNumber(summary?.visitantes?.totals?.sesiones_web_total) ||
+    items.reduce((acc, item) => acc + toNumber(item.sesiones_web_total), 0);
+  const converted =
+    toNumber(summary?.visitantes?.totals?.con_chat) ||
+    items.reduce((acc, item) => acc + toNumber(item.con_chat), 0);
 
-  for (const row of visits) {
-    const raw = (row.raw ?? {}) as Record<string, unknown>;
-    sessions += 1;
-    const hasConversion = Boolean(raw.contacto_id);
-    if (hasConversion) {
-      converted += 1;
-    }
+  for (const item of items) {
+    for (const sourceRow of item.fuentes_top ?? []) {
+      const source = String(sourceRow?.source || "").trim();
+      if (!source) continue;
+      const sourceClass = normalizeAcquisitionSourceClass({
+        sourceClass: source,
+        referrerHost: source,
+        referrer: source,
+      });
+      const sourceBucket = sourceBuckets.get(sourceClass) ?? {
+        source: sourceClass,
+        total: 0,
+        converted: 0,
+      };
+      sourceBucket.total += toNumber(sourceRow?.total);
+      sourceBuckets.set(sourceClass, sourceBucket);
 
-    const source = normalizeAcquisitionSourceClass({
-      sourceClass: typeof raw.source_class === "string" ? raw.source_class : null,
-      referrerHost: typeof raw.referrer_host === "string" ? raw.referrer_host : null,
-      referrer: typeof raw.referrer === "string" ? raw.referrer : null,
-      landingUrl: typeof raw.landing_url === "string" ? raw.landing_url : null,
-      utmSource: typeof raw.utm_source === "string" ? raw.utm_source : null,
-      utmMedium: typeof raw.utm_medium === "string" ? raw.utm_medium : null,
-      utmCampaign: typeof raw.utm_campaign === "string" ? raw.utm_campaign : null,
-    });
-    const sourceBucket = sourceBuckets.get(source) ?? {
-      source,
-      total: 0,
-      converted: 0,
-    };
-    sourceBucket.total += 1;
-    if (hasConversion) {
-      sourceBucket.converted += 1;
+      const host = parseHost(source);
+      if (!host) continue;
+      const hostBucket = hostBuckets.get(host) ?? {
+        host,
+        total: 0,
+        converted: 0,
+      };
+      hostBucket.total += toNumber(sourceRow?.total);
+      hostBuckets.set(host, hostBucket);
     }
-    sourceBuckets.set(source, sourceBucket);
-
-    const host = resolveReferrerHost(raw);
-    if (!host) continue;
-    const hostBucket = hostBuckets.get(host) ?? {
-      host,
-      total: 0,
-      converted: 0,
-    };
-    hostBucket.total += 1;
-    if (hasConversion) {
-      hostBucket.converted += 1;
-    }
-    hostBuckets.set(host, hostBucket);
   }
 
   const sourceClassRows = Array.from(sourceBuckets.values()).sort(

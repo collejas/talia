@@ -20,12 +20,10 @@ import {
 import type { DemografiaSummaryResponse } from "@/lib/mapa-conversion/api";
 import { formatSourceClassLabel } from "@/lib/mapa-conversion/source-class";
 import { buildAcquisitionMetrics } from "@/lib/mapa-conversion/acquisition";
-import type { VisitTableRow } from "@/lib/visitas/data";
 import { cn } from "@/lib/utils";
 
 type Props = {
   summary: DemografiaSummaryResponse | null;
-  visits: VisitTableRow[];
   className?: string;
 };
 
@@ -60,17 +58,16 @@ function formatPercent(value: number): string {
   return `${value.toFixed(1)}%`;
 }
 
-export function AcquisitionSummary({ summary, visits, className }: Props) {
+export function AcquisitionSummary({ summary, className }: Props) {
   const {
     sourceClassRows,
     referrerRows,
-    totalSessions,
     convertedSessions,
     conversionRate,
     topUtmRows,
     whatsappChannelRows,
   } =
-    React.useMemo(() => buildAcquisitionMetrics(visits, summary), [visits, summary]);
+    React.useMemo(() => buildAcquisitionMetrics(summary), [summary]);
   return (
     <section className={cn("grid gap-4", className)}>
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1.35fr)_minmax(0,0.85fr)_minmax(0,0.55fr)]">

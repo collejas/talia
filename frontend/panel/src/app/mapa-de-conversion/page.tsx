@@ -12,9 +12,9 @@ import {
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { DemografiaControls } from "@/components/mapa-conversion/controls";
 import { AcquisitionSummary } from "@/components/mapa-conversion/acquisition-summary";
+import { DeferredConversionTables } from "@/components/mapa-conversion/deferred-tables.client";
 import { MapaConversionTableClient } from "@/components/mapa-conversion/table.client";
 import { LocationComparisonChartClient } from "@/components/mapa-conversion/location-comparison-chart.client";
-import { VisitsDataTable } from "@/components/visitas/visits-data-table";
 import { loadDemografiaData } from "@/lib/mapa-conversion/api";
 import {
   MAPA_STAGE_KEYS,
@@ -22,7 +22,6 @@ import {
   orderStageKeys,
 } from "@/lib/mapa-conversion/stages";
 import { buildAcquisitionMetrics } from "@/lib/mapa-conversion/acquisition";
-import { loadConversionMapTablesForConversionMap } from "@/lib/visitas/data";
 import { MapKpis } from "@/components/mapa-conversion/map-kpis";
 
 export const dynamic = "force-dynamic";
@@ -287,8 +286,6 @@ export default async function Page({
   const hasta = hastaParam.length ? hastaParam : null;
 
   let demografiaResponse: Awaited<ReturnType<typeof loadDemografiaData>> | null = null;
-  let visitsTable: Awaited<ReturnType<typeof loadConversionMapTablesForConversionMap>>["visitsTable"] = [];
-  let conversationsTable: Awaited<ReturnType<typeof loadConversionMapTablesForConversionMap>>["conversationsTable"] = [];
   const errores: string[] = [];
 
   const demografiaTask = loadDemografiaData(nivel, {
@@ -318,45 +315,12 @@ export default async function Page({
           : "No se pudo obtener la información demográfica.",
     }));
 
-  const tablesTask = loadConversionMapTablesForConversionMap({
-    canales: canalesSelected,
-    estado: nivel === "municipio" ? normalizedEstado : null,
-    sourceClass,
-    utmSource,
-    utmMedium,
-    utmCampaign,
-    campanaId,
-    campanaTipo,
-    templateId,
-    waCanalPublicitario,
-    waCampanaPublicitaria,
-    waReglaId,
-    rango,
-    desde,
-    hasta,
-  })
-    .then((value) => ({ ok: true as const, value }))
-    .catch((error: unknown) => ({
-      ok: false as const,
-      error:
-        error instanceof Error
-          ? error.message
-          : "No se pudieron cargar las visitas recientes o las conversaciones.",
-    }));
-
-  const [demografiaResult, tablesResult] = await Promise.all([demografiaTask, tablesTask]);
+  const demografiaResult = await demografiaTask;
 
   if (demografiaResult.ok) {
     demografiaResponse = demografiaResult.value;
   } else {
     errores.push(demografiaResult.error);
-  }
-
-  if (tablesResult.ok) {
-    visitsTable = tablesResult.value.visitsTable;
-    conversationsTable = tablesResult.value.conversationsTable;
-  } else {
-    errores.push(tablesResult.error);
   }
 
   const datasetForTables =
@@ -398,10 +362,7 @@ export default async function Page({
         return acc;
       }, createEmptyStageTotals(stageKeys))
     : createEmptyStageTotals(stageKeys);
-  const acquisitionMetrics = buildAcquisitionMetrics(
-    visitsTable,
-    demografiaResponse?.summary ?? null,
-  );
+  const acquisitionMetrics = buildAcquisitionMetrics(demografiaResponse?.summary ?? null);
   const sesionesWebchatTotales =
     demografiaResponse?.summary.visitantes.totals.sesiones_webchat_total ?? 0;
   const conversacionesWhatsapp =
@@ -723,10 +684,7 @@ export default async function Page({
               </div>
               <SessionRecovery errors={errores} />
               <div className="px-4 lg:px-6">
-                <AcquisitionSummary
-                  summary={demografiaResponse?.summary ?? null}
-                  visits={visitsTable}
-                />
+                <AcquisitionSummary summary={demografiaResponse?.summary ?? null} />
               </div>
               {tableData.length && demografiaResponse ? (
                 <div className="px-4 lg:px-6">
@@ -747,22 +705,25 @@ export default async function Page({
                   />
                 </div>
               ) : null}
-              {!waAttributionFilterActive && visitsTable.length ? (
-                <div className="px-4 lg:px-6">
-                  <div className="mb-3 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-                    Visitas web
-                  </div>
-                  <VisitsDataTable data={visitsTable} />
-                </div>
-              ) : null}
-              {conversationsTable.length ? (
-                <div className="px-4 lg:px-6">
-                  <div className="mb-3 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-                    Conversaciones
-                  </div>
-                  <VisitsDataTable data={conversationsTable} />
-                </div>
-              ) : null}
+              <DeferredConversionTables
+                filters={{
+                  canales: canalesSelected,
+                  estado: nivel === "municipio" ? normalizedEstado : null,
+                  sourceClass,
+                  utmSource,
+                  utmMedium,
+                  utmCampaign,
+                  campanaId,
+                  campanaTipo,
+                  templateId,
+                  waCanalPublicitario,
+                  waCampanaPublicitaria,
+                  waReglaId,
+                  rango,
+                  desde,
+                  hasta,
+                }}
+              />
             </div>
           </div>
         </div>
