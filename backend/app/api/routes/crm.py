@@ -426,6 +426,24 @@ DEMOGRAFIA_RESPONSE_CACHE_MAX_ENTRIES = 256
 _DEMOGRAFIA_RESPONSE_CACHE: dict[str, tuple[float, dict[str, Any]]] = {}
 _DEMOGRAFIA_RESPONSE_CACHE_LOCK = asyncio.Lock()
 DEMOGRAFIA_RESPONSE_CACHE_NAMESPACE = "demografia_v2"
+
+
+def _demografia_response_cache_ttl_seconds(
+    *,
+    rango: str | None,
+    desde: str | None,
+    hasta: str | None,
+) -> int:
+    rango_norm = (rango or "").strip().lower()
+    if rango_norm in {"7d", "30d"}:
+        return 600
+    if rango_norm == "hoy":
+        return 120
+    if rango_norm == "ayer":
+        return 900
+    if rango_norm == "fechas":
+        return 300 if (desde or hasta) else 180
+    return 180
 GOOGLE_TRENDS_ALLOWED_ORGANIZACION_ID = UUID("00000000-0000-0000-0000-000000000001")
 
 
@@ -821,6 +839,7 @@ async def _read_demografia_response_cache(
     *,
     repo: CRMRepository,
     cache_key: str,
+    ttl_seconds: int,
 ) -> dict[str, Any] | None:
     now = time.monotonic()
     async with _DEMOGRAFIA_RESPONSE_CACHE_LOCK:
@@ -834,7 +853,7 @@ async def _read_demografia_response_cache(
                 return None
             safe_shared_value = json.loads(json.dumps(shared_value, default=str))
             _DEMOGRAFIA_RESPONSE_CACHE[cache_key] = (
-                now + DEMOGRAFIA_RESPONSE_CACHE_TTL_SECONDS,
+                now + ttl_seconds,
                 safe_shared_value,
             )
             return json.loads(json.dumps(safe_shared_value, default=str))
@@ -851,9 +870,10 @@ async def _write_demografia_response_cache(
     repo: CRMRepository,
     cache_key: str,
     payload: dict[str, Any],
+    ttl_seconds: int,
 ) -> None:
     now = time.monotonic()
-    expires_at = now + DEMOGRAFIA_RESPONSE_CACHE_TTL_SECONDS
+    expires_at = now + ttl_seconds
     safe_payload = json.loads(json.dumps(payload, default=str))
     async with _DEMOGRAFIA_RESPONSE_CACHE_LOCK:
         expired = [key for key, (ttl, _) in _DEMOGRAFIA_RESPONSE_CACHE.items() if ttl <= now]
@@ -869,7 +889,7 @@ async def _write_demografia_response_cache(
         cache_namespace=DEMOGRAFIA_RESPONSE_CACHE_NAMESPACE,
         cache_key=cache_key,
         payload=safe_payload,
-        ttl_seconds=int(DEMOGRAFIA_RESPONSE_CACHE_TTL_SECONDS),
+        ttl_seconds=ttl_seconds,
     )
 
 
@@ -30211,6 +30231,11 @@ async def demografia_resumen_v2(
             wa_regla_uuid_value = UUID(wa_regla_id_raw)
         except ValueError as exc:
             raise HTTPException(status_code=400, detail="wa_regla_id_invalid") from exc
+    cache_ttl_seconds = _demografia_response_cache_ttl_seconds(
+        rango=rango,
+        desde=desde,
+        hasta=hasta,
+    )
 
     resumen_cache_key = _build_demografia_response_cache_key(
         "resumen-v2",
@@ -30239,6 +30264,7 @@ async def demografia_resumen_v2(
     cached_resumen = await _read_demografia_response_cache(
         repo=repo,
         cache_key=resumen_cache_key,
+        ttl_seconds=cache_ttl_seconds,
     )
     if cached_resumen is not None:
         duration_ms = (time.perf_counter() - request_started) * 1000
@@ -30549,6 +30575,7 @@ async def demografia_resumen_v2(
         repo=repo,
         cache_key=resumen_cache_key,
         payload=response_payload,
+        ttl_seconds=cache_ttl_seconds,
     )
     duration_ms = (time.perf_counter() - request_started) * 1000
     await _record_prospectos_process_metrics(
@@ -30641,6 +30668,11 @@ async def demografia_mapa_v2(
             wa_regla_uuid_value = UUID(wa_regla_id_raw)
         except ValueError as exc:
             raise HTTPException(status_code=400, detail="wa_regla_id_invalid") from exc
+    cache_ttl_seconds = _demografia_response_cache_ttl_seconds(
+        rango=rango,
+        desde=desde,
+        hasta=hasta,
+    )
 
     mapa_cache_key = _build_demografia_response_cache_key(
         "mapa-v2",
@@ -30670,6 +30702,7 @@ async def demografia_mapa_v2(
     cached_mapa = await _read_demografia_response_cache(
         repo=repo,
         cache_key=mapa_cache_key,
+        ttl_seconds=cache_ttl_seconds,
     )
     if cached_mapa is not None:
         try:
@@ -30849,6 +30882,7 @@ async def demografia_mapa_v2(
         repo=repo,
         cache_key=mapa_cache_key,
         payload=cached_payload,
+        ttl_seconds=cache_ttl_seconds,
     )
     duration_ms = (time.perf_counter() - request_started) * 1000
     await _record_prospectos_process_metrics(

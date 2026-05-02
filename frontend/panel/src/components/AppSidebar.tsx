@@ -1,7 +1,7 @@
 "use client"
 
 import Image from "next/image"
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
 import {
   IconChartBar,
@@ -269,11 +269,24 @@ export function AppSidebar({
 
     return filterItems(items)
   }, [settingsChildren, permissionsLoading, permissionContext])
+  const mapaRoutePrefetchedRef = useRef(false)
 
   useEffect(() => {
     const frame = requestAnimationFrame(() => setHydrated(true))
     return () => cancelAnimationFrame(frame)
   }, [])
+
+  useEffect(() => {
+    if (!hydrated || !sidebarApiEnabled || permissionsLoading || mapaRoutePrefetchedRef.current) {
+      return
+    }
+    const hasMapaDeConversion = navItems.some((item) => item.url === "/mapa-de-conversion")
+    if (!hasMapaDeConversion) {
+      return
+    }
+    mapaRoutePrefetchedRef.current = true
+    void router.prefetch("/mapa-de-conversion")
+  }, [hydrated, navItems, permissionsLoading, router, sidebarApiEnabled])
 
   const sidebarUser = useMemo(() => {
     const fallbackAvatar = "/assets/logos/Logo8.png"
