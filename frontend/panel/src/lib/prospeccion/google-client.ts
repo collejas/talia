@@ -1,6 +1,7 @@
 import { refreshSession, shouldAttemptSessionRefresh } from "@/lib/auth/session-refresh";
 
 const RETRYABLE_STATUS = new Set([502, 503, 504, 522, 524]);
+const RESULT_DELETE_BATCH_SIZE = 500;
 
 export type GoogleSearchStrategy = "nearby" | "text";
 
@@ -395,14 +396,21 @@ export async function deleteGoogleResultados(ids: string[], busquedaId?: string)
   if (!ids.length) {
     throw new Error("Selecciona al menos un resultado.");
   }
-  const payload: { ids: string[]; busqueda_id?: string } = { ids };
-  if (busquedaId && busquedaId.trim().length) {
-    payload.busqueda_id = busquedaId.trim();
+  const normalizedBusquedaId = busquedaId && busquedaId.trim().length ? busquedaId.trim() : undefined;
+  let deletedTotal = 0;
+  for (let start = 0; start < ids.length; start += RESULT_DELETE_BATCH_SIZE) {
+    const chunk = ids.slice(start, start + RESULT_DELETE_BATCH_SIZE);
+    const payload: { ids: string[]; busqueda_id?: string } = { ids: chunk };
+    if (normalizedBusquedaId) {
+      payload.busqueda_id = normalizedBusquedaId;
+    }
+    const response = await requestJson<{ ok: boolean; deleted: number }>("/api/prospeccion/google/resultados", {
+      method: "DELETE",
+      body: JSON.stringify(payload),
+    });
+    deletedTotal += Number(response.deleted ?? chunk.length);
   }
-  return requestJson<{ ok: boolean; deleted: number }>("/api/prospeccion/google/resultados", {
-    method: "DELETE",
-    body: JSON.stringify(payload),
-  });
+  return { ok: true, deleted: deletedTotal };
 }
 
 export async function fetchGoogleTrends(

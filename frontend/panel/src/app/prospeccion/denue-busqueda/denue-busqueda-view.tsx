@@ -1,7 +1,7 @@
 "use client"
 
 import dynamic from "next/dynamic"
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
 import {
   AlertTriangle,
   ArrowUpRight,
@@ -1105,8 +1105,13 @@ export function DenueBusquedaView() {
     ],
   );
 
-  const handleLimitChange = useCallback(() => {
-    setResultadosPagination((prev) => ({ ...prev, limit: LIST_PAGE_SIZE, offset: 0 }));
+  const handleLimitChange = useCallback((event: ChangeEvent<HTMLInputElement>) => {
+    const nextValue = Number(event.target.value);
+    if (!Number.isFinite(nextValue)) {
+      return;
+    }
+    const nextLimit = Math.max(1, Math.min(5000, Math.trunc(nextValue)));
+    setResultadosPagination((prev) => ({ ...prev, limit: nextLimit, offset: 0 }));
   }, []);
 
   const handleDeleteBusqueda = useCallback(
@@ -2216,9 +2221,9 @@ export function DenueBusquedaView() {
                 <Label className="text-xs font-normal">Resultados por página</Label>
                 <Input
                   type="number"
-                  min={5000}
+                  min={1}
                   max={5000}
-                  step={5000}
+                  step={50}
                   value={resultadosPagination.limit}
                   onChange={handleLimitChange}
                   className="h-8 text-sm"
