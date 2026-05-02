@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { Bar, BarChart, CartesianGrid, Cell, XAxis } from "recharts";
+import { Bar, BarChart, Cell, Pie, PieChart, CartesianGrid, XAxis } from "recharts";
 
 import { Badge } from "@/components/ui/badge";
 import {
@@ -18,10 +18,8 @@ import {
   type ChartConfig,
 } from "@/components/ui/chart";
 import type { DemografiaSummaryResponse } from "@/lib/mapa-conversion/api";
-import {
-  formatSourceClassLabel,
-  normalizeAcquisitionSourceClass,
-} from "@/lib/mapa-conversion/source-class";
+import { formatSourceClassLabel } from "@/lib/mapa-conversion/source-class";
+import { buildAcquisitionMetrics } from "@/lib/mapa-conversion/acquisition";
 import type { VisitTableRow } from "@/lib/visitas/data";
 import { cn } from "@/lib/utils";
 
@@ -31,29 +29,19 @@ type Props = {
   className?: string;
 };
 
-type SourceClassBucket = {
-  source: string;
-  total: number;
-  converted: number;
-};
-
-type HostBucket = {
-  host: string;
-  total: number;
-  converted: number;
-};
-
-type UtmBucket = {
-  utm_source: string;
-  utm_medium: string;
-  utm_campaign: string;
-  total: number;
-};
-
 const SOURCE_CLASS_CONFIG: ChartConfig = {
   total: { label: "Sesiones", color: "hsl(var(--chart-1))" },
   converted: { label: "Convertidas", color: "hsl(var(--chart-2))" },
 };
+
+const WHATSAPP_COLORS = [
+  "hsl(var(--chart-1))",
+  "hsl(var(--chart-2))",
+  "hsl(var(--chart-3))",
+  "hsl(var(--chart-4))",
+  "hsl(var(--chart-5))",
+  "hsl(var(--chart-6))",
+];
 
 function toNumber(value: unknown): number {
   if (typeof value === "number" && Number.isFinite(value)) return value;
@@ -72,142 +60,21 @@ function formatPercent(value: number): string {
   return `${value.toFixed(1)}%`;
 }
 
-function parseHost(value: string | null | undefined): string {
-  const trimmed = (value || "").trim();
-  if (!trimmed) return "";
-  try {
-    const parsed = new URL(trimmed);
-    return (parsed.hostname || "").trim().toLowerCase();
-  } catch {
-    return trimmed.toLowerCase();
-  }
-}
-
-function resolveReferrerHost(row: Record<string, unknown>): string {
-  const explicit = typeof row.referrer_host === "string" ? row.referrer_host.trim().toLowerCase() : "";
-  if (explicit) return explicit;
-  const referrer = typeof row.referrer === "string" ? row.referrer : null;
-  return parseHost(referrer);
-}
-
-function formatUtmPart(value: unknown): string {
-  const text = typeof value === "string" ? value.trim() : "";
-  return text.length ? text : "(none)";
-}
-
-function aggregateTopUtm(summary: DemografiaSummaryResponse | null): UtmBucket[] {
-  const totals = new Map<string, UtmBucket>();
-  const items = Array.isArray(summary?.visitantes?.items) ? summary?.visitantes?.items ?? [] : [];
-  for (const item of items) {
-    for (const utm of item.utm_top ?? []) {
-      const source = formatUtmPart(utm?.utm_source);
-      const medium = formatUtmPart(utm?.utm_medium);
-      const campaign = formatUtmPart(utm?.utm_campaign);
-      const key = `${source}::${medium}::${campaign}`;
-      const existing = totals.get(key) ?? {
-        utm_source: source,
-        utm_medium: medium,
-        utm_campaign: campaign,
-        total: 0,
-      };
-      existing.total += toNumber(utm?.total);
-      totals.set(key, existing);
-    }
-  }
-  return Array.from(totals.values())
-    .sort((a, b) => b.total - a.total || a.utm_source.localeCompare(b.utm_source))
-    .slice(0, 5);
-}
-
 export function AcquisitionSummary({ summary, visits, className }: Props) {
-  const { sourceClassRows, referrerRows, totalSessions, convertedSessions, conversionRate } =
-    React.useMemo(() => {
-      const sourceBuckets = new Map<string, SourceClassBucket>();
-      const hostBuckets = new Map<string, HostBucket>();
-
-      let sessions = 0;
-      let converted = 0;
-
-      for (const row of visits) {
-        const raw = (row.raw ?? {}) as Record<string, unknown>;
-        sessions += 1;
-        const hasConversion = Boolean(raw.contacto_id);
-        if (hasConversion) {
-          converted += 1;
-        }
-
-        const source = normalizeAcquisitionSourceClass({
-          sourceClass: typeof raw.source_class === "string" ? raw.source_class : null,
-          referrerHost: typeof raw.referrer_host === "string" ? raw.referrer_host : null,
-          referrer: typeof raw.referrer === "string" ? raw.referrer : null,
-          landingUrl: typeof raw.landing_url === "string" ? raw.landing_url : null,
-          utmSource: typeof raw.utm_source === "string" ? raw.utm_source : null,
-          utmMedium: typeof raw.utm_medium === "string" ? raw.utm_medium : null,
-          utmCampaign: typeof raw.utm_campaign === "string" ? raw.utm_campaign : null,
-        });
-        const sourceBucket = sourceBuckets.get(source) ?? {
-          source,
-          total: 0,
-          converted: 0,
-        };
-        sourceBucket.total += 1;
-        if (hasConversion) {
-          sourceBucket.converted += 1;
-        }
-        sourceBuckets.set(source, sourceBucket);
-
-        const host = resolveReferrerHost(raw);
-        if (!host) continue;
-        const hostBucket = hostBuckets.get(host) ?? {
-          host,
-          total: 0,
-          converted: 0,
-        };
-        hostBucket.total += 1;
-        if (hasConversion) {
-          hostBucket.converted += 1;
-        }
-        hostBuckets.set(host, hostBucket);
-      }
-
-      const rows = Array.from(sourceBuckets.values()).sort((a, b) => b.total - a.total || a.source.localeCompare(b.source));
-      const referrers = Array.from(hostBuckets.values())
-        .sort((a, b) => b.total - a.total || a.host.localeCompare(b.host))
-        .slice(0, 5);
-
-      return {
-        sourceClassRows: rows,
-        referrerRows: referrers,
-        totalSessions: sessions,
-        convertedSessions: converted,
-        conversionRate: sessions > 0 ? (converted / sessions) * 100 : 0,
-      };
-    }, [visits]);
-
-  const topSource = sourceClassRows[0] ?? null;
-  const topSourceLabel = topSource ? formatSourceClassLabel(topSource.source) : "Sin datos";
-  const topSourceTotal = topSource?.total ?? 0;
-  const topUtmRows = React.useMemo(() => aggregateTopUtm(summary), [summary]);
-
+  const {
+    sourceClassRows,
+    referrerRows,
+    totalSessions,
+    convertedSessions,
+    conversionRate,
+    topUtmRows,
+    whatsappChannelRows,
+  } =
+    React.useMemo(() => buildAcquisitionMetrics(visits, summary), [visits, summary]);
   return (
     <section className={cn("grid gap-4", className)}>
-      <Card>
-        <CardHeader>
-          <CardTitle>De dónde llegan las visitas</CardTitle>
-          <CardDescription>
-            Vista de negocio para entender de dónde entra el tráfico y cómo convierte cada tipo de visita.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          <MetricTile title="Visitas totales" value={formatNumber(totalSessions)} helper="Total de visitas registradas" />
-          <MetricTile title="Visitas que terminan en contacto" value={formatNumber(convertedSessions)} helper="Visitas con contacto vinculado" />
-          <MetricTile title="Porcentaje que convierte" value={formatPercent(conversionRate)} helper="Proporción de visitas que terminan en contacto" />
-          <MetricTile title="Fuente principal" value={topSourceLabel} helper={`${formatNumber(topSourceTotal)} visitas`} />
-        </CardContent>
-      </Card>
-
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1.25fr)_minmax(0,0.75fr)]">
-        <Card>
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,1.35fr)_minmax(0,0.85fr)_minmax(0,0.55fr)]">
+        <Card className="h-full">
           <CardHeader>
             <CardTitle>Visitas por tipo de visita</CardTitle>
             <CardDescription>Visitas y contactos agrupados por tipo de visita.</CardDescription>
@@ -245,7 +112,28 @@ export function AcquisitionSummary({ summary, visits, className }: Props) {
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="h-full">
+          <CardHeader>
+            <CardTitle>De dónde llegan las visitas</CardTitle>
+            <CardDescription>
+              Vista de negocio para entender de dónde entra el tráfico y cómo convierte cada tipo de visita.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
+            <MetricTile
+              title="Visitas que terminan en contacto"
+              value={formatNumber(convertedSessions)}
+              helper="Visitas con contacto vinculado"
+            />
+            <MetricTile
+              title="Porcentaje que convierte"
+              value={formatPercent(conversionRate)}
+              helper="Proporción de visitas que terminan en contacto"
+            />
+          </CardContent>
+        </Card>
+
+        <Card className="h-full">
           <CardHeader>
             <CardTitle>Sitios que envían visitas</CardTitle>
             <CardDescription>Sitios externos que enviaron tráfico al sitio.</CardDescription>
@@ -277,31 +165,93 @@ export function AcquisitionSummary({ summary, visits, className }: Props) {
         </Card>
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Promociones y enlaces</CardTitle>
-          <CardDescription>Combinaciones de promoción y enlace observadas en el tráfico del sitio.</CardDescription>
-        </CardHeader>
-        <CardContent className="grid gap-2">
-          {topUtmRows.length ? (
-            topUtmRows.map((item) => (
-              <div
-                key={`${item.utm_source}-${item.utm_medium}-${item.utm_campaign}`}
-                className="bg-muted/50 flex flex-col gap-1 rounded-lg px-3 py-2 text-sm"
-              >
-                <div className="flex items-center justify-between gap-3">
-                  <span className="font-medium">
-                    {item.utm_source} / {item.utm_medium} / {item.utm_campaign}
-                  </span>
-                  <Badge variant="outline">{formatNumber(item.total)}</Badge>
+      <div className="grid gap-4 xl:grid-cols-2">
+        <Card className="h-full">
+          <CardHeader>
+            <CardTitle>Promociones y enlaces</CardTitle>
+            <CardDescription>Combinaciones de promoción y enlace observadas en el tráfico del sitio.</CardDescription>
+          </CardHeader>
+          <CardContent className="grid gap-2 min-h-72">
+            {topUtmRows.length ? (
+              topUtmRows.map((item) => (
+                <div
+                  key={`${item.utm_source}-${item.utm_medium}-${item.utm_campaign}`}
+                  className="bg-muted/50 flex flex-col gap-1 rounded-lg px-3 py-2 text-sm"
+                >
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="font-medium">
+                      {item.utm_source} / {item.utm_medium} / {item.utm_campaign}
+                    </span>
+                    <Badge variant="outline">{formatNumber(item.total)}</Badge>
+                  </div>
                 </div>
-              </div>
-            ))
-          ) : (
-            <p className="text-muted-foreground text-sm">No hay promociones destacadas en este filtro.</p>
-          )}
-        </CardContent>
-      </Card>
+              ))
+            ) : (
+              <p className="text-muted-foreground text-sm">No hay promociones destacadas en este filtro.</p>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card className="h-full">
+          <CardHeader>
+            <CardTitle>WhatsApp por canal</CardTitle>
+            <CardDescription>Distribución de inicios de WhatsApp por canal.</CardDescription>
+          </CardHeader>
+          <CardContent className="flex min-h-72 flex-col gap-4">
+            {whatsappChannelRows.length ? (
+              <>
+                <ChartContainer
+                  config={{
+                    total: { label: "Inicios", color: "hsl(var(--chart-1))" },
+                  }}
+                  className="h-56"
+                >
+                  <PieChart>
+                    <ChartTooltip
+                      content={<ChartTooltipContent hideLabel />}
+                      formatter={(value, name) => [
+                        formatNumber(toNumber(value)),
+                        typeof name === "string" ? name : "Inicios",
+                      ]}
+                    />
+                    <Pie
+                      data={whatsappChannelRows}
+                      dataKey="total"
+                      nameKey="source"
+                      innerRadius={54}
+                      outerRadius={88}
+                      paddingAngle={2}
+                    >
+                      {whatsappChannelRows.map((item, index) => (
+                        <Cell
+                          key={item.source}
+                          fill={WHATSAPP_COLORS[index % WHATSAPP_COLORS.length]}
+                        />
+                      ))}
+                    </Pie>
+                  </PieChart>
+                </ChartContainer>
+                <div className="grid gap-2">
+                  {whatsappChannelRows.map((item, index) => (
+                    <div key={item.source} className="flex items-center justify-between gap-3 text-sm">
+                      <div className="flex items-center gap-2">
+                        <span
+                          className="inline-block size-2.5 rounded-full"
+                          style={{ backgroundColor: WHATSAPP_COLORS[index % WHATSAPP_COLORS.length] }}
+                        />
+                        <span>{item.source}</span>
+                      </div>
+                      <Badge variant="outline">{formatNumber(item.total)}</Badge>
+                    </div>
+                  ))}
+                </div>
+              </>
+            ) : (
+              <p className="text-muted-foreground text-sm">No hay atribución de WhatsApp en este filtro.</p>
+            )}
+          </CardContent>
+        </Card>
+      </div>
     </section>
   );
 }

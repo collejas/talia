@@ -21,6 +21,7 @@ import {
   createEmptyStageTotals,
   orderStageKeys,
 } from "@/lib/mapa-conversion/stages";
+import { buildAcquisitionMetrics } from "@/lib/mapa-conversion/acquisition";
 import { loadConversationsTableForConversionMap, loadVisitsTableForConversionMap } from "@/lib/visitas/data";
 import { MapKpis } from "@/components/mapa-conversion/map-kpis";
 
@@ -408,15 +409,10 @@ export default async function Page({
         return acc;
       }, createEmptyStageTotals(stageKeys))
     : createEmptyStageTotals(stageKeys);
-  const visitantesTotal = demografiaResponse?.summary.visitantes.totals.total ?? 0;
-  const sesionesWebSummary = demografiaResponse?.summary.visitantes.totals.sesiones_web_total ?? 0;
-  const sesionesWebDataset = demografiaResponse
-    ? demografiaResponse.map.dataset.reduce(
-        (acc, entry) => acc + (entry.traffic_web?.sesiones_web_total ?? 0),
-        0,
-      )
-    : 0;
-  const sesionesWebTotales = Math.max(sesionesWebSummary, sesionesWebDataset);
+  const acquisitionMetrics = buildAcquisitionMetrics(
+    visitsTable,
+    demografiaResponse?.summary ?? null,
+  );
   const sesionesWebchatTotales =
     demografiaResponse?.summary.visitantes.totals.sesiones_webchat_total ?? 0;
   const conversacionesWhatsapp =
@@ -435,38 +431,6 @@ export default async function Page({
     : topLocation
       ? getLocationStageLeader(topLocation)
       : { name: "", total: 0 };
-  const topSource = (() => {
-    if (!demografiaResponse) return { source: "", total: 0 };
-    const totalsFrom = (
-      sourcesByLocation: Array<{ fuentes_top?: Array<{ source?: string | null; total?: number | null }> }>,
-    ): Map<string, number> => {
-      const totals = new Map<string, number>();
-      for (const bucket of sourcesByLocation) {
-        const sources = bucket.fuentes_top ?? [];
-        for (const source of sources) {
-          const key = (source.source || "").trim().toLowerCase();
-          if (!key) continue;
-          totals.set(key, (totals.get(key) ?? 0) + (source.total ?? 0));
-        }
-      }
-      return totals;
-    };
-
-    // Evita duplicar conteo: resumen y mapa representan el mismo universo de sesiones.
-    // Preferimos resumen y usamos mapa solo como fallback si resumen viene vacío.
-    let totals = totalsFrom(demografiaResponse.summary.visitantes.items ?? []);
-    if (!totals.size) {
-      totals = totalsFrom(
-        demografiaResponse.map.dataset.map((entry) => ({
-          fuentes_top: entry.traffic_web?.fuentes_top ?? [],
-        })),
-      );
-    }
-
-    const first = Array.from(totals.entries()).sort((a, b) => b[1] - a[1])[0];
-    if (!first) return { source: "", total: 0 };
-    return { source: first[0], total: first[1] };
-  })();
   const utmOptions = (() => {
     const sourceSet = new Set<string>();
     const mediumSet = new Set<string>();
@@ -572,8 +536,8 @@ export default async function Page({
   const nivelLabel = nivel.charAt(0).toUpperCase() + nivel.slice(1);
   const mapKpisData = {
     nivelLabel,
-    visitasTotales: visitantesTotal,
-    sesionesWebTotales,
+    visitasTotales: acquisitionMetrics.totalSessions,
+    sesionesWebTotales: acquisitionMetrics.totalSessions,
     sesionesWebchatTotales,
     conversacionesWhatsapp,
     conversacionesVoz,
@@ -582,8 +546,8 @@ export default async function Page({
     topLocationName,
     topLocationLeads,
     topLocationVisits,
-    topSource: topSource.source,
-    topSourceValue: topSource.total,
+    topSource: acquisitionMetrics.topSource?.source ?? "",
+    topSourceValue: acquisitionMetrics.topSource?.total ?? 0,
     stageLeader: locationStageLeader.name,
     stageLeaderValue: locationStageLeader.total,
   };
@@ -695,7 +659,7 @@ export default async function Page({
                               </span>
                             </div>
                             <div className="flex items-center justify-between gap-3">
-                              <span className="text-xs text-muted-foreground">Promociones de WhatsApp</span>
+                              <span className="text-xs text-muted-foreground">WhatsApp por canal</span>
                               <span className="font-medium tabular-nums">
                                 {formatNumber(mapKpisData.whatsappCampaignsTotal)}
                               </span>

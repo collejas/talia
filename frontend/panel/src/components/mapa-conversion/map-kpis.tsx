@@ -71,9 +71,9 @@ export function MapKpis({
       icon: IconWorld,
     },
     {
-      title: "Promociones de WhatsApp",
+      title: "WhatsApp por canal",
       value: formatDisplayNumber(whatsappCampaignsTotal),
-      helper: `Visitas o conversaciones vinculadas a promociones`,
+      helper: `Inicios de WhatsApp vinculados al canal`,
       icon: IconRoute,
     },
     {
