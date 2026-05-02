@@ -919,11 +919,12 @@ async def test_guardar_prospectos_deduplica_email_y_telefono(
 
     assert resp.status_code == 200
     data = resp.json()
-    assert data["total"] == 2
-    assert len(data["prospectos"]) == 2
-    assert len(fake_repo.last_upserted_prospectos) == 2
+    assert data["total"] == 3
+    assert len(data["prospectos"]) == 3
+    assert len(fake_repo.last_upserted_prospectos) == 3
     assert any(item.get("phone_e164") for item in fake_repo.last_upserted_prospectos)
     assert any(item.get("phone") == "55 3333 4444" for item in fake_repo.last_upserted_prospectos)
+    assert any(item.get("email") == "otro@ejemplo.com" for item in fake_repo.last_upserted_prospectos)
 
 
 @pytest.mark.asyncio

@@ -89,7 +89,7 @@ async def test_list_contactables_by_ids_uses_source_specific_columns(monkeypatch
     assert captured["calls"]
     method, path, kwargs = captured["calls"][0]
     assert method == "GET"
-    assert path == "/rest/v1/v_denue_contactables"
+    assert path == "/rest/v1/resultados"
     params = kwargs.get("params")
     assert isinstance(params, dict)
     select = params.get("select")
@@ -98,3 +98,5 @@ async def test_list_contactables_by_ids_uses_source_specific_columns(monkeypatch
     assert "rating" not in select
     assert "reviews" not in select
     assert "address_full" in select
+    assert params.get("fuente") == "eq.denue"
+    assert "id" in params

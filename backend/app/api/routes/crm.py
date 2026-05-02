@@ -5722,11 +5722,11 @@ def _merge_prospecto_payload(target: dict[str, Any], source: dict[str, Any]) -> 
 
 
 def _dedupe_prospectos_for_save(items: Sequence[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Dedupe por correo y telefono preservando el primer registro y enriqueciendo el destino."""
+    """Dedupe por correo y usa telefono solo como respaldo cuando no hay correo."""
 
     deduped: list[dict[str, Any]] = []
     seen_emails: dict[str, int] = {}
-    seen_phones: dict[str, int] = {}
+    seen_phones_without_email: dict[str, int] = {}
 
     for item in items:
         normalized = dict(item)
@@ -5746,8 +5746,8 @@ def _dedupe_prospectos_for_save(items: Sequence[dict[str, Any]]) -> list[dict[st
         target_index: int | None = None
         if email_value and email_value in seen_emails:
             target_index = seen_emails[email_value]
-        elif phone_e164_value and phone_e164_value in seen_phones:
-            target_index = seen_phones[phone_e164_value]
+        elif not email_value and phone_e164_value and phone_e164_value in seen_phones_without_email:
+            target_index = seen_phones_without_email[phone_e164_value]
 
         if target_index is None:
             deduped.append(normalized)
@@ -5757,10 +5757,44 @@ def _dedupe_prospectos_for_save(items: Sequence[dict[str, Any]]) -> list[dict[st
 
         if email_value:
             seen_emails[email_value] = target_index
-        if phone_e164_value:
-            seen_phones[phone_e164_value] = target_index
+        elif phone_e164_value:
+            seen_phones_without_email[phone_e164_value] = target_index
 
     return deduped
+
+
+def _filter_prospectos_against_existing_contacts(
+    items: Sequence[dict[str, Any]],
+    *,
+    existing_email_rows: Sequence[dict[str, Any]],
+    existing_phone_rows: Sequence[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Elimina solo coincidencias reales: correo igual, o telefono igual sin correo."""
+
+    existing_emails = {
+        value
+        for value in (_normalize_email(row.get("email")) for row in existing_email_rows)
+        if value
+    }
+    existing_phones = {
+        value
+        for value in (
+            _normalize_phone_e164(row.get("phone_e164") or row.get("phone"))
+            for row in existing_phone_rows
+        )
+        if value
+    }
+    filtered: list[dict[str, Any]] = []
+    for item in items:
+        email_value = _normalize_email(item.get("email"))
+        phone_value = _normalize_phone_e164(item.get("phone_e164") or item.get("phone"))
+        if email_value:
+            if email_value in existing_emails:
+                continue
+        elif phone_value and phone_value in existing_phones:
+            continue
+        filtered.append(item)
+    return filtered
 
 
 def _normalize_saved_views(raw_value: Any) -> list[dict[str, Any]]:
@@ -24620,39 +24654,31 @@ async def guardar_prospectos(
             "prospectos": [],
         }
 
-    existing_email_rows = await repo.list_prospectos_by_emails(
-        usuario_token=user_token,
-        emails=[str(item.get("email") or "") for item in prospectos],
-    )
-    existing_phone_rows = await repo.list_prospectos_by_phones(
-        usuario_token=user_token,
-        phones=[
-            str(item.get("phone_e164") or item.get("phone") or "")
-            for item in prospectos
-        ],
-    )
-    existing_emails = {
-        value
-        for value in (_normalize_email(row.get("email")) for row in existing_email_rows)
-        if value
-    }
-    existing_phones = {
-        value
-        for value in (
-            _normalize_phone_e164(row.get("phone_e164") or row.get("phone"))
-            for row in existing_phone_rows
+    try:
+        existing_email_rows = await repo.list_prospectos_by_emails(
+            usuario_token=user_token,
+            emails=[str(item.get("email") or "") for item in prospectos],
         )
-        if value
-    }
-    if existing_emails or existing_phones:
-        prospectos = [
-            item
-            for item in prospectos
-            if (
-                _normalize_email(item.get("email")) not in existing_emails
-                and _normalize_phone_e164(item.get("phone_e164") or item.get("phone")) not in existing_phones
-            )
-        ]
+        existing_phone_rows = await repo.list_prospectos_by_phones(
+            usuario_token=user_token,
+            phones=[
+                str(item.get("phone_e164") or item.get("phone") or "")
+                for item in prospectos
+            ],
+        )
+    except CRMRepositoryError as exc:
+        logger.warning(
+            "prospeccion.prospectos.contact_dedupe_lookup_failed",
+            extra={"error": str(exc), "contactables_encontrados": len(contactables)},
+        )
+        existing_email_rows = []
+        existing_phone_rows = []
+    if existing_email_rows or existing_phone_rows:
+        prospectos = _filter_prospectos_against_existing_contacts(
+            prospectos,
+            existing_email_rows=existing_email_rows,
+            existing_phone_rows=existing_phone_rows,
+        )
     if not prospectos:
         logger.info(
             "prospeccion.prospectos.no_payload_after_contact_dedupe",
@@ -34655,39 +34681,31 @@ async def prospeccion_buscador_guardar_prospectos(
         return {"ok": True, "prospectos": [], "total": 0}
 
     # Evita insertar contactos que ya existen en prospectos.
-    existing_email_rows = await repo.list_prospectos_by_emails(
-        organizacion_id=organizacion_id,
-        emails=[str(item.get("email") or "") for item in prospectos],
-    )
-    existing_phone_rows = await repo.list_prospectos_by_phones(
-        organizacion_id=organizacion_id,
-        phones=[
-            str(item.get("phone_e164") or item.get("phone") or "")
-            for item in prospectos
-        ],
-    )
-    existing_emails = {
-        value
-        for value in (_normalize_email(row.get("email")) for row in existing_email_rows)
-        if value
-    }
-    existing_phones = {
-        value
-        for value in (
-            _normalize_phone_e164(row.get("phone_e164") or row.get("phone"))
-            for row in existing_phone_rows
+    try:
+        existing_email_rows = await repo.list_prospectos_by_emails(
+            organizacion_id=organizacion_id,
+            emails=[str(item.get("email") or "") for item in prospectos],
         )
-        if value
-    }
-    if existing_emails or existing_phones:
-        prospectos = [
-            item
-            for item in prospectos
-            if (
-                _normalize_email(item.get("email")) not in existing_emails
-                and _normalize_phone_e164(item.get("phone_e164") or item.get("phone")) not in existing_phones
-            )
-        ]
+        existing_phone_rows = await repo.list_prospectos_by_phones(
+            organizacion_id=organizacion_id,
+            phones=[
+                str(item.get("phone_e164") or item.get("phone") or "")
+                for item in prospectos
+            ],
+        )
+    except CRMRepositoryError as exc:
+        logger.warning(
+            "buscador.prospectos.contact_dedupe_lookup_failed",
+            extra={"error": str(exc), "job_id": str(job_id)},
+        )
+        existing_email_rows = []
+        existing_phone_rows = []
+    if existing_email_rows or existing_phone_rows:
+        prospectos = _filter_prospectos_against_existing_contacts(
+            prospectos,
+            existing_email_rows=existing_email_rows,
+            existing_phone_rows=existing_phone_rows,
+        )
     if not prospectos:
         logger.info(
             "buscador.prospectos.no_payload_after_existing_contact_filter",

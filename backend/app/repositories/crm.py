@@ -10435,18 +10435,11 @@ class CRMRepository:
 
         if not resultado_ids:
             return []
-        path_map = {
-            "google_places": "/rest/v1/v_google_places_contactables",
-            "denue": "/rest/v1/v_denue_contactables",
-        }
-        path = path_map.get(fuente)
-        if not path:
-            raise CRMRepositoryError(f"fuente_contactable_desconocida:{fuente}")
-        chunk_size = 200
         ids_order = [str(value) for value in resultado_ids]
         rows_by_id: dict[str, dict[str, Any]] = {}
-        for start in range(0, len(ids_order), chunk_size):
-            chunk = ids_order[start : start + chunk_size]
+        if fuente == "google_places":
+            path = "/rest/v1/v_google_places_contactables"
+            chunk_size = 200
             base_select = [
                 "resultado_id",
                 "busqueda_id",
@@ -10484,22 +10477,69 @@ class CRMRepository:
                 "lng",
                 "distancia_m",
                 "busqueda_meta",
+                "google_primary_type",
+                "google_primary_type_display_name",
+                "google_types",
+                "rating",
+                "reviews",
             ]
-            if fuente == "google_places":
-                base_select.extend(
-                    [
-                        "google_primary_type",
-                        "google_primary_type_display_name",
-                        "google_types",
-                        "rating",
-                        "reviews",
-                    ]
-                )
-            params = {
-                "select": ",".join(base_select),
-                "resultado_id": _postgrest_in_clause(chunk),
-            }
-            resp = await self._request_with_user(
+            query_builder = self._request_with_user
+        elif fuente == "denue":
+            path = "/rest/v1/resultados"
+            chunk_size = 500
+            base_select = [
+                "id",
+                "busqueda_id",
+                "fuente",
+                "external_id",
+                "name",
+                "razon_social",
+                "actividad",
+                "estrato",
+                "phone",
+                "email",
+                "website",
+                "address",
+                "address_full",
+                "tipo_vialidad",
+                "nombre_vialidad",
+                "numero_exterior",
+                "numero_interior",
+                "colonia",
+                "codigo_postal",
+                "estado_cve",
+                "estado_nombre",
+                "municipio_cve",
+                "municipio_nombre",
+                "localidad_cve",
+                "localidad",
+                "cvegeo",
+                "asentamiento",
+                "entre_calles",
+                "referencia",
+                "lat",
+                "lng",
+                "maps_url",
+                "first_seen_at",
+                "busqueda:busquedas!inner(fuente,query,radio_m,lat,lng,centro,total_encontrados,meta,creado_en,creado_por)",
+            ]
+            query_builder = self._request_with_user
+        else:
+            raise CRMRepositoryError(f"fuente_contactable_desconocida:{fuente}")
+        for start in range(0, len(ids_order), chunk_size):
+            chunk = ids_order[start : start + chunk_size]
+            if fuente == "denue":
+                params = {
+                    "select": ",".join(base_select),
+                    "id": f"in.({','.join(chunk)})",
+                    "fuente": "eq.denue",
+                }
+            else:
+                params = {
+                    "select": ",".join(base_select),
+                    "resultado_id": _postgrest_in_clause(chunk),
+                }
+            resp = await query_builder(
                 "GET",
                 path,
                 token=usuario_token,
@@ -10511,7 +10551,20 @@ class CRMRepository:
             for row in data:
                 if not isinstance(row, dict):
                     continue
-                resultado_id = row.get("resultado_id")
+                if fuente == "denue":
+                    resultado_id = row.get("id")
+                    busqueda_value = row.get("busqueda") if isinstance(row.get("busqueda"), dict) else {}
+                    if isinstance(busqueda_value, dict):
+                        row["resultado_id"] = resultado_id
+                        row["fuente_resultado"] = row.get("fuente")
+                        row["fuente_busqueda"] = busqueda_value.get("fuente")
+                        row["busqueda_meta"] = busqueda_value.get("meta")
+                        row["distancia_m"] = None
+                        row["display_name"] = row.get("name") or row.get("razon_social") or row.get("external_id") or "Prospecto"
+                        row["nombre_comercial"] = row.get("display_name")
+                        row["resultado_creado_en"] = row.get("first_seen_at") or row.get("creado_en")
+                else:
+                    resultado_id = row.get("resultado_id")
                 if resultado_id is None:
                     continue
                 rows_by_id[str(resultado_id)] = row
@@ -15342,32 +15395,42 @@ class CRMRepository:
             normalized.append(value)
         if not normalized:
             return []
-        params = {
-            "select": "id,email",
-            "email": _postgrest_in_clause(normalized),
-            "limit": str(len(normalized)),
-        }
-        if organizacion_id is not None:
-            params["organizacion_id"] = f"eq.{organizacion_id}"
-            resp = await self._request(
-                "GET",
-                "/rest/v1/prospeccion_prospectos",
-                params=params,
-                organizacion_id=organizacion_id,
-            )
-        else:
-            if not usuario_token:
-                raise CRMRepositoryError("prospectos_by_emails_missing_token")
-            resp = await self._request_with_user(
-                "GET",
-                "/rest/v1/prospeccion_prospectos",
-                token=usuario_token,
-                params=params,
-            )
-        data = resp.json() or []
-        if not isinstance(data, list):
-            raise CRMRepositoryError(f"prospectos_by_emails_invalid:{data!r}")
-        return data
+        rows_by_id: dict[str, dict[str, Any]] = {}
+        chunk_size = 200
+        for start in range(0, len(normalized), chunk_size):
+            chunk = normalized[start : start + chunk_size]
+            params = {
+                "select": "id,email",
+                "email": _postgrest_in_clause(chunk),
+                "limit": str(len(chunk)),
+            }
+            if organizacion_id is not None:
+                params["organizacion_id"] = f"eq.{organizacion_id}"
+                resp = await self._request(
+                    "GET",
+                    "/rest/v1/prospeccion_prospectos",
+                    params=params,
+                    organizacion_id=organizacion_id,
+                )
+            else:
+                if not usuario_token:
+                    raise CRMRepositoryError("prospectos_by_emails_missing_token")
+                resp = await self._request_with_user(
+                    "GET",
+                    "/rest/v1/prospeccion_prospectos",
+                    token=usuario_token,
+                    params=params,
+                )
+            data = resp.json() or []
+            if not isinstance(data, list):
+                raise CRMRepositoryError(f"prospectos_by_emails_invalid:{data!r}")
+            for row in data:
+                if not isinstance(row, dict):
+                    continue
+                row_id = str(row.get("id") or "").strip()
+                if row_id and row_id not in rows_by_id:
+                    rows_by_id[row_id] = row
+        return list(rows_by_id.values())
 
     async def list_prospectos_by_phones(
         self,
