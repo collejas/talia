@@ -421,7 +421,7 @@ _PROSPECTO_QUERIES_CACHE: dict[str, tuple[float, dict[str, Any]]] = {}
 _PROSPECTO_QUERIES_CACHE_LOCK = asyncio.Lock()
 _PROSPECTO_QUERIES_INFLIGHT_LOCK = asyncio.Lock()
 _PROSPECTO_QUERIES_INFLIGHT: dict[str, asyncio.Future[dict[str, Any]]] = {}
-DEMOGRAFIA_RESPONSE_CACHE_TTL_SECONDS = 30.0
+DEMOGRAFIA_RESPONSE_CACHE_TTL_SECONDS = 120.0
 DEMOGRAFIA_RESPONSE_CACHE_MAX_ENTRIES = 256
 _DEMOGRAFIA_RESPONSE_CACHE: dict[str, tuple[float, dict[str, Any]]] = {}
 _DEMOGRAFIA_RESPONSE_CACHE_LOCK = asyncio.Lock()
@@ -530,13 +530,6 @@ async def _write_inbox_catalog_cache(cache_key: str, rows: list[dict[str, Any]])
             if not oldest_key:
                 break
             _INBOX_CATALOG_CACHE.pop(oldest_key, None)
-
-
-def _demografia_token_fingerprint(value: str | None) -> str:
-    raw = str(value or "").strip()
-    if not raw:
-        return ""
-    return hashlib.sha1(raw.encode("utf-8")).hexdigest()[:16]
 
 
 def _build_demografia_response_cache_key(endpoint: str, payload: dict[str, Any]) -> str:
@@ -30068,7 +30061,6 @@ async def demografia_resumen_v2(
         {
             "organizacion_id": str(organizacion_id),
             "usuario_id": str(usuario_id) if usuario_id else None,
-            "token_fp": _demografia_token_fingerprint(effective_user_token),
             "nivel": nivel_normalizado,
             "estado": state_code,
             "canales": channel_values,
@@ -30103,30 +30095,32 @@ async def demografia_resumen_v2(
         return cached_resumen
 
     try:
-        leads_payload = await demografia_service.fetch_leads_resumen(
-            nivel=nivel_normalizado,
-            channels=channel_values,
-            stages=stage_values,
-            date_from=date_from,
-            date_to=date_to,
-            jwt=effective_user_token,
-        )
-        visitantes_payload = await demografia_service.fetch_visitantes_resumen_v2(
-            nivel=nivel_normalizado,
-            date_from=date_from,
-            date_to=date_to,
-            state_code=state_code,
-            source_class=source_class_value,
-            utm_source=utm_source_value,
-            utm_medium=utm_medium_value,
-            utm_campaign=utm_campaign_value,
-            campaign_id=str(campana_uuid_value) if campana_uuid_value else None,
-            template_id=str(template_uuid_value) if template_uuid_value else None,
-            campaign_type=campana_tipo_value,
-            wa_canal_publicitario=wa_canal_publicitario_value,
-            wa_campana_publicitaria=wa_campana_publicitaria_value,
-            wa_regla_id=str(wa_regla_uuid_value) if wa_regla_uuid_value else None,
-            jwt=effective_user_token,
+        leads_payload, visitantes_payload = await asyncio.gather(
+            demografia_service.fetch_leads_resumen(
+                nivel=nivel_normalizado,
+                channels=channel_values,
+                stages=stage_values,
+                date_from=date_from,
+                date_to=date_to,
+                jwt=effective_user_token,
+            ),
+            demografia_service.fetch_visitantes_resumen_v2(
+                nivel=nivel_normalizado,
+                date_from=date_from,
+                date_to=date_to,
+                state_code=state_code,
+                source_class=source_class_value,
+                utm_source=utm_source_value,
+                utm_medium=utm_medium_value,
+                utm_campaign=utm_campaign_value,
+                campaign_id=str(campana_uuid_value) if campana_uuid_value else None,
+                template_id=str(template_uuid_value) if template_uuid_value else None,
+                campaign_type=campana_tipo_value,
+                wa_canal_publicitario=wa_canal_publicitario_value,
+                wa_campana_publicitaria=wa_campana_publicitaria_value,
+                wa_regla_id=str(wa_regla_uuid_value) if wa_regla_uuid_value else None,
+                jwt=effective_user_token,
+            ),
         )
         await _enrich_visitantes_payload_with_whatsapp_locations(
             repo=repo,
@@ -30490,7 +30484,6 @@ async def demografia_mapa_v2(
         {
             "organizacion_id": str(organizacion_id),
             "usuario_id": str(usuario_id) if usuario_id else None,
-            "token_fp": _demografia_token_fingerprint(effective_user_token),
             "nivel": nivel_normalizado,
             "estado": state_code,
             "canales": channel_values,
@@ -30538,17 +30531,8 @@ async def demografia_mapa_v2(
         return {**cached_mapa, "geojson": geojson}
 
     try:
-        leads_payload = await demografia_service.fetch_leads_resumen(
-            nivel=nivel_normalizado,
-            channels=channel_values,
-            stages=stage_values,
-            date_from=date_from,
-            date_to=date_to,
-            jwt=effective_user_token,
-        )
-        fallback_leads_payload = None
-        if nivel_normalizado == "municipio":
-            fallback_leads_payload = await demografia_service.fetch_leads_resumen(
+        fallback_leads_task = (
+            demografia_service.fetch_leads_resumen(
                 nivel="estado",
                 channels=channel_values,
                 stages=stage_values,
@@ -30556,10 +30540,11 @@ async def demografia_mapa_v2(
                 date_to=date_to,
                 jwt=effective_user_token,
             )
-        if skip_visitantes:
-            visitantes_payload = {"items": [], "totals": {}}
-        else:
-            visitantes_payload = await demografia_service.fetch_visitantes_resumen_v2(
+            if nivel_normalizado == "municipio"
+            else None
+        )
+        visitantes_task = (
+            demografia_service.fetch_visitantes_resumen_v2(
                 nivel=nivel_normalizado,
                 date_from=date_from,
                 date_to=date_to,
@@ -30576,6 +30561,21 @@ async def demografia_mapa_v2(
                 wa_regla_id=str(wa_regla_uuid_value) if wa_regla_uuid_value else None,
                 jwt=effective_user_token,
             )
+            if not skip_visitantes
+            else None
+        )
+        leads_payload, fallback_leads_payload, visitantes_payload = await asyncio.gather(
+            demografia_service.fetch_leads_resumen(
+                nivel=nivel_normalizado,
+                channels=channel_values,
+                stages=stage_values,
+                date_from=date_from,
+                date_to=date_to,
+                jwt=effective_user_token,
+            ),
+            fallback_leads_task if fallback_leads_task is not None else asyncio.sleep(0, result=None),
+            visitantes_task if visitantes_task is not None else asyncio.sleep(0, result={"items": [], "totals": {}}),
+        )
         await _enrich_visitantes_payload_with_whatsapp_locations(
             repo=repo,
             organizacion_id=organizacion_id,
