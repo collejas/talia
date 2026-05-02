@@ -16362,6 +16362,83 @@ class CRMRepository:
             )
         return resp
 
+    async def read_shared_response_cache(
+        self,
+        *,
+        cache_namespace: str,
+        cache_key: str,
+    ) -> dict[str, Any] | None:
+        namespace = (cache_namespace or "").strip()
+        key = (cache_key or "").strip()
+        if not namespace or not key:
+            return None
+        resp = await self._request_service_role(
+            "GET",
+            "/rest/v1/crm_response_cache",
+            params={
+                "cache_namespace": f"eq.{namespace}",
+                "cache_key": f"eq.{key}",
+                "select": "expires_at,payload",
+                "limit": "1",
+            },
+        )
+        data = resp.json()
+        if not isinstance(data, list) or not data:
+            return None
+        row = data[0]
+        if not isinstance(row, dict):
+            return None
+        expires_at_raw = row.get("expires_at")
+        if isinstance(expires_at_raw, str):
+            try:
+                expires_at = datetime.fromisoformat(expires_at_raw.replace("Z", "+00:00"))
+            except ValueError:
+                expires_at = None
+            else:
+                if expires_at.tzinfo is None:
+                    expires_at = expires_at.replace(tzinfo=timezone.utc)
+                if expires_at <= datetime.now(timezone.utc):
+                    return None
+        payload = row.get("payload")
+        if isinstance(payload, dict):
+            return payload
+        if isinstance(payload, str):
+            try:
+                parsed = json.loads(payload)
+            except json.JSONDecodeError:
+                return None
+            if isinstance(parsed, dict):
+                return parsed
+        return None
+
+    async def write_shared_response_cache(
+        self,
+        *,
+        cache_namespace: str,
+        cache_key: str,
+        payload: dict[str, Any],
+        ttl_seconds: int,
+    ) -> None:
+        namespace = (cache_namespace or "").strip()
+        key = (cache_key or "").strip()
+        if not namespace or not key or ttl_seconds <= 0:
+            return
+        now = datetime.now(timezone.utc)
+        body = {
+            "cache_namespace": namespace,
+            "cache_key": key,
+            "expires_at": (now + timedelta(seconds=ttl_seconds)).isoformat(),
+            "payload": payload,
+            "updated_at": now.isoformat(),
+        }
+        await self._request_service_role(
+            "POST",
+            "/rest/v1/crm_response_cache",
+            json=body,
+            params={"on_conflict": "cache_namespace,cache_key"},
+            prefer="resolution=merge-duplicates,return=representation",
+        )
+
     async def _upload_storage_object(
         self,
         *,

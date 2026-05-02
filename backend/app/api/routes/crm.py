@@ -425,6 +425,7 @@ DEMOGRAFIA_RESPONSE_CACHE_TTL_SECONDS = 120.0
 DEMOGRAFIA_RESPONSE_CACHE_MAX_ENTRIES = 256
 _DEMOGRAFIA_RESPONSE_CACHE: dict[str, tuple[float, dict[str, Any]]] = {}
 _DEMOGRAFIA_RESPONSE_CACHE_LOCK = asyncio.Lock()
+DEMOGRAFIA_RESPONSE_CACHE_NAMESPACE = "demografia_v2"
 GOOGLE_TRENDS_ALLOWED_ORGANIZACION_ID = UUID("00000000-0000-0000-0000-000000000001")
 
 
@@ -816,12 +817,27 @@ async def _enrich_visitantes_payload_with_whatsapp_locations(
         totals["conversaciones_whatsapp"] = _to_number(totals.get("conversaciones_whatsapp"))
 
 
-async def _read_demografia_response_cache(cache_key: str) -> dict[str, Any] | None:
+async def _read_demografia_response_cache(
+    *,
+    repo: CRMRepository,
+    cache_key: str,
+) -> dict[str, Any] | None:
     now = time.monotonic()
     async with _DEMOGRAFIA_RESPONSE_CACHE_LOCK:
         entry = _DEMOGRAFIA_RESPONSE_CACHE.get(cache_key)
         if not entry:
-            return None
+            shared_value = await repo.read_shared_response_cache(
+                cache_namespace=DEMOGRAFIA_RESPONSE_CACHE_NAMESPACE,
+                cache_key=cache_key,
+            )
+            if shared_value is None:
+                return None
+            safe_shared_value = json.loads(json.dumps(shared_value, default=str))
+            _DEMOGRAFIA_RESPONSE_CACHE[cache_key] = (
+                now + DEMOGRAFIA_RESPONSE_CACHE_TTL_SECONDS,
+                safe_shared_value,
+            )
+            return json.loads(json.dumps(safe_shared_value, default=str))
         expires_at, cached_value = entry
         if expires_at <= now:
             _DEMOGRAFIA_RESPONSE_CACHE.pop(cache_key, None)
@@ -830,7 +846,12 @@ async def _read_demografia_response_cache(cache_key: str) -> dict[str, Any] | No
         return json.loads(json.dumps(cached_value, default=str))
 
 
-async def _write_demografia_response_cache(cache_key: str, payload: dict[str, Any]) -> None:
+async def _write_demografia_response_cache(
+    *,
+    repo: CRMRepository,
+    cache_key: str,
+    payload: dict[str, Any],
+) -> None:
     now = time.monotonic()
     expires_at = now + DEMOGRAFIA_RESPONSE_CACHE_TTL_SECONDS
     safe_payload = json.loads(json.dumps(payload, default=str))
@@ -844,6 +865,12 @@ async def _write_demografia_response_cache(cache_key: str, payload: dict[str, An
             if not oldest_key:
                 break
             _DEMOGRAFIA_RESPONSE_CACHE.pop(oldest_key, None)
+    await repo.write_shared_response_cache(
+        cache_namespace=DEMOGRAFIA_RESPONSE_CACHE_NAMESPACE,
+        cache_key=cache_key,
+        payload=safe_payload,
+        ttl_seconds=int(DEMOGRAFIA_RESPONSE_CACHE_TTL_SECONDS),
+    )
 
 
 async def _read_whatsapp_envio_hint_cache(
@@ -30061,7 +30088,6 @@ async def demografia_resumen_v2(
         "resumen-v2",
         {
             "organizacion_id": str(organizacion_id),
-            "usuario_id": str(usuario_id) if usuario_id else None,
             "nivel": nivel_normalizado,
             "estado": state_code,
             "canales": channel_values,
@@ -30076,12 +30102,16 @@ async def demografia_resumen_v2(
             "wa_canal_publicitario": wa_canal_publicitario_value,
             "wa_campana_publicitaria": wa_campana_publicitaria_value,
             "wa_regla_id": str(wa_regla_uuid_value) if wa_regla_uuid_value else None,
-            "from": date_from.isoformat() if date_from else None,
-            "to": date_to.isoformat() if date_to else None,
+            "rango": (rango or "").strip().lower() or None,
+            "desde": (desde or "").strip() or None,
+            "hasta": (hasta or "").strip() or None,
             "timezone": effective_timezone,
         },
     )
-    cached_resumen = await _read_demografia_response_cache(resumen_cache_key)
+    cached_resumen = await _read_demografia_response_cache(
+        repo=repo,
+        cache_key=resumen_cache_key,
+    )
     if cached_resumen is not None:
         duration_ms = (time.perf_counter() - request_started) * 1000
         await _record_prospectos_process_metrics(
@@ -30387,7 +30417,11 @@ async def demografia_resumen_v2(
         "leads": leads_payload,
         "visitantes": visitantes_payload,
     }
-    await _write_demografia_response_cache(resumen_cache_key, response_payload)
+    await _write_demografia_response_cache(
+        repo=repo,
+        cache_key=resumen_cache_key,
+        payload=response_payload,
+    )
     duration_ms = (time.perf_counter() - request_started) * 1000
     await _record_prospectos_process_metrics(
         endpoint="demografia.resumen_v2",
@@ -30484,7 +30518,6 @@ async def demografia_mapa_v2(
         "mapa-v2",
         {
             "organizacion_id": str(organizacion_id),
-            "usuario_id": str(usuario_id) if usuario_id else None,
             "nivel": nivel_normalizado,
             "estado": state_code,
             "canales": channel_values,
@@ -30500,12 +30533,16 @@ async def demografia_mapa_v2(
             "wa_campana_publicitaria": wa_campana_publicitaria_value,
             "wa_regla_id": str(wa_regla_uuid_value) if wa_regla_uuid_value else None,
             "skip_visitantes": bool(skip_visitantes),
-            "from": date_from.isoformat() if date_from else None,
-            "to": date_to.isoformat() if date_to else None,
+            "rango": (rango or "").strip().lower() or None,
+            "desde": (desde or "").strip() or None,
+            "hasta": (hasta or "").strip() or None,
             "timezone": effective_timezone,
         },
     )
-    cached_mapa = await _read_demografia_response_cache(mapa_cache_key)
+    cached_mapa = await _read_demografia_response_cache(
+        repo=repo,
+        cache_key=mapa_cache_key,
+    )
     if cached_mapa is not None:
         try:
             if nivel_normalizado == "pais":
@@ -30680,7 +30717,11 @@ async def demografia_mapa_v2(
     }
     cached_payload = dict(response_payload)
     cached_payload.pop("geojson", None)
-    await _write_demografia_response_cache(mapa_cache_key, cached_payload)
+    await _write_demografia_response_cache(
+        repo=repo,
+        cache_key=mapa_cache_key,
+        payload=cached_payload,
+    )
     duration_ms = (time.perf_counter() - request_started) * 1000
     await _record_prospectos_process_metrics(
         endpoint="demografia.mapa_v2",
