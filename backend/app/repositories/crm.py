@@ -15369,6 +15369,75 @@ class CRMRepository:
             raise CRMRepositoryError(f"prospectos_by_emails_invalid:{data!r}")
         return data
 
+    async def list_prospectos_by_phones(
+        self,
+        *,
+        usuario_token: str | None = None,
+        organizacion_id: UUID | None = None,
+        phones: Sequence[str],
+    ) -> list[dict[str, Any]]:
+        """Obtiene prospectos que coinciden con alguno de los telefonos dados."""
+
+        normalized: list[str] = []
+        seen: set[str] = set()
+        for item in phones:
+            raw = str(item or "").strip()
+            if not raw:
+                continue
+            candidates = {
+                raw,
+                normalize_phone(raw) or "",
+                normalize_phone_digits(raw) or "",
+            }
+            for candidate in candidates:
+                value = candidate.strip()
+                if not value or value in seen:
+                    continue
+                seen.add(value)
+                normalized.append(value)
+        if not normalized:
+            return []
+
+        params_base = {
+            "select": "id,email,phone,phone_e164",
+            "limit": str(max(1000, len(normalized) * 4)),
+        }
+        rows_by_id: dict[str, dict[str, Any]] = {}
+        chunk_size = 200
+
+        for start in range(0, len(normalized), chunk_size):
+            chunk = normalized[start : start + chunk_size]
+            for field_name in ("phone", "phone_e164"):
+                params = dict(params_base)
+                params[field_name] = _postgrest_in_clause(chunk)
+                if organizacion_id is not None:
+                    params["organizacion_id"] = f"eq.{organizacion_id}"
+                    resp = await self._request(
+                        "GET",
+                        "/rest/v1/prospeccion_prospectos",
+                        params=params,
+                        organizacion_id=organizacion_id,
+                    )
+                else:
+                    if not usuario_token:
+                        raise CRMRepositoryError("prospectos_by_phones_missing_token")
+                    resp = await self._request_with_user(
+                        "GET",
+                        "/rest/v1/prospeccion_prospectos",
+                        token=usuario_token,
+                        params=params,
+                    )
+                data = resp.json() or []
+                if not isinstance(data, list):
+                    raise CRMRepositoryError(f"prospectos_by_phones_invalid:{data!r}")
+                for row in data:
+                    if not isinstance(row, dict):
+                        continue
+                    row_id = str(row.get("id") or "").strip()
+                    if row_id and row_id not in rows_by_id:
+                        rows_by_id[row_id] = row
+        return list(rows_by_id.values())
+
     async def worker_update_buscador_job(
         self,
         *,

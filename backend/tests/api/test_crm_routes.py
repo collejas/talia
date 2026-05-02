@@ -18,6 +18,10 @@ class DummyCRMRepository(CRMRepository):
         self.pipeline_opportunities: list[dict[str, Any]] = []
         self.dashboard_kpis: dict[str, Any] = {"webchat": {"visitas_sin_chat": 0}}
         self.next_sales_rep: uuid.UUID | None = None
+        self.contactables_by_ids_result: list[dict[str, Any]] = []
+        self.existing_prospectos_by_emails_result: list[dict[str, Any]] = []
+        self.existing_prospectos_by_phones_result: list[dict[str, Any]] = []
+        self.last_upserted_prospectos: list[dict[str, Any]] = []
 
     async def ensure_prospeccion_stage(self, **kwargs: Any) -> dict[str, Any]:
         """Evita llamadas reales durante las pruebas."""
@@ -769,6 +773,33 @@ class DummyCRMRepository(CRMRepository):
             }
         ]
 
+    async def list_contactables_by_ids(self, **kwargs: Any) -> list[dict[str, Any]]:
+        self.calls.append(("list_contactables_by_ids", kwargs))
+        return list(self.contactables_by_ids_result)
+
+    async def list_prospectos_by_emails(self, **kwargs: Any) -> list[dict[str, Any]]:
+        self.calls.append(("list_prospectos_by_emails", kwargs))
+        return list(self.existing_prospectos_by_emails_result)
+
+    async def list_prospectos_by_phones(self, **kwargs: Any) -> list[dict[str, Any]]:
+        self.calls.append(("list_prospectos_by_phones", kwargs))
+        return list(self.existing_prospectos_by_phones_result)
+
+    async def upsert_prospeccion_prospectos(self, **kwargs: Any) -> list[dict[str, Any]]:
+        self.calls.append(("upsert_prospeccion_prospectos", kwargs))
+        items = [dict(item) for item in kwargs.get("items", [])]
+        self.last_upserted_prospectos = items
+        return [
+            {
+                "id": str(uuid.uuid4()),
+                **item,
+            }
+            for item in items
+        ]
+
+    async def refresh_prospeccion_query_daily_mv(self, **kwargs: Any) -> None:
+        self.calls.append(("refresh_prospeccion_query_daily_mv", kwargs))
+
 
 @pytest.fixture()
 def fake_repo() -> DummyCRMRepository:
@@ -818,6 +849,81 @@ async def test_create_account(client: AsyncClient) -> None:
     data = resp.json()
     assert data["nombre"] == "Nueva Cuenta"
     assert data["tipo"] == "cliente"
+
+
+@pytest.mark.asyncio
+async def test_guardar_prospectos_deduplica_email_y_telefono(
+    client: AsyncClient, fake_repo: DummyCRMRepository
+) -> None:
+    resultado_ids = [uuid.uuid4() for _ in range(4)]
+    fake_repo.contactables_by_ids_result = [
+        {
+            "busqueda_id": str(uuid.uuid4()),
+            "resultado_id": str(resultado_ids[0]),
+            "fuente_resultado": "google_places",
+            "fuente_busqueda": "google",
+            "display_name": "Contacto 1",
+            "name": "Contacto 1",
+            "phone": "55 1111 2222",
+            "email": "Duplicado@Ejemplo.com",
+            "website": "https://ejemplo.com",
+            "metadata": {},
+        },
+        {
+            "busqueda_id": str(uuid.uuid4()),
+            "resultado_id": str(resultado_ids[1]),
+            "fuente_resultado": "google_places",
+            "fuente_busqueda": "google",
+            "display_name": "Contacto 2",
+            "name": "Contacto 2",
+            "phone": "55 9999 8888",
+            "email": "duplicado@ejemplo.com",
+            "website": "https://ejemplo.com",
+            "metadata": {},
+        },
+        {
+            "busqueda_id": str(uuid.uuid4()),
+            "resultado_id": str(resultado_ids[2]),
+            "fuente_resultado": "google_places",
+            "fuente_busqueda": "google",
+            "display_name": "Contacto 3",
+            "name": "Contacto 3",
+            "phone": "55 1111 2222",
+            "email": "otro@ejemplo.com",
+            "website": "https://ejemplo.com",
+            "metadata": {},
+        },
+        {
+            "busqueda_id": str(uuid.uuid4()),
+            "resultado_id": str(resultado_ids[3]),
+            "fuente_resultado": "google_places",
+            "fuente_busqueda": "google",
+            "display_name": "Contacto 4",
+            "name": "Contacto 4",
+            "phone": "55 3333 4444",
+            "email": None,
+            "website": "https://ejemplo.com",
+            "metadata": {},
+        },
+    ]
+
+    resp = await client.post(
+        "/crm/prospeccion/prospectos",
+        headers=_headers(include_user_token=True),
+        json={
+            "fuente": "google_places",
+            "resultado_ids": [str(value) for value in resultado_ids],
+            "segmento": "Prueba",
+        },
+    )
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["total"] == 2
+    assert len(data["prospectos"]) == 2
+    assert len(fake_repo.last_upserted_prospectos) == 2
+    assert any(item.get("phone_e164") for item in fake_repo.last_upserted_prospectos)
+    assert any(item.get("phone") == "55 3333 4444" for item in fake_repo.last_upserted_prospectos)
 
 
 @pytest.mark.asyncio

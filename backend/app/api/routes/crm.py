@@ -5674,6 +5674,75 @@ def _normalize_email(value: Any) -> str | None:
     return cleaned.lower()
 
 
+def _normalize_phone_e164(value: Any) -> str | None:
+    cleaned = _clean_text(value)
+    if not cleaned:
+        return None
+    return normalize_phone(cleaned)
+
+
+def _merge_prospecto_payload(target: dict[str, Any], source: dict[str, Any]) -> dict[str, Any]:
+    """Completa el prospecto destino con valores no vacios del duplicado."""
+
+    for key, value in source.items():
+        if key == "metadata":
+            if isinstance(value, dict):
+                current_metadata = target.get("metadata")
+                merged_metadata = dict(current_metadata) if isinstance(current_metadata, dict) else {}
+                merged_metadata.update(value)
+                target["metadata"] = merged_metadata
+            continue
+        if key in {"email", "phone", "phone_e164"}:
+            if not target.get(key) and value:
+                target[key] = value
+            continue
+        if target.get(key) in (None, "") and value not in (None, ""):
+            target[key] = value
+    return target
+
+
+def _dedupe_prospectos_for_save(items: Sequence[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Dedupe por correo y telefono preservando el primer registro y enriqueciendo el destino."""
+
+    deduped: list[dict[str, Any]] = []
+    seen_emails: dict[str, int] = {}
+    seen_phones: dict[str, int] = {}
+
+    for item in items:
+        normalized = dict(item)
+        email_value = _normalize_email(normalized.get("email"))
+        if email_value:
+            normalized["email"] = email_value
+
+        phone_value = normalized.get("phone_e164") or normalized.get("phone")
+        phone_e164_value = _normalize_phone_e164(phone_value)
+        if phone_e164_value:
+            normalized["phone_e164"] = phone_e164_value
+            if not normalized.get("phone"):
+                normalized["phone"] = _clean_text(phone_value)
+        if not email_value and not phone_e164_value:
+            continue
+
+        target_index: int | None = None
+        if email_value and email_value in seen_emails:
+            target_index = seen_emails[email_value]
+        elif phone_e164_value and phone_e164_value in seen_phones:
+            target_index = seen_phones[phone_e164_value]
+
+        if target_index is None:
+            deduped.append(normalized)
+            target_index = len(deduped) - 1
+        else:
+            _merge_prospecto_payload(deduped[target_index], normalized)
+
+        if email_value:
+            seen_emails[email_value] = target_index
+        if phone_e164_value:
+            seen_phones[phone_e164_value] = target_index
+
+    return deduped
+
+
 def _normalize_saved_views(raw_value: Any) -> list[dict[str, Any]]:
     if not isinstance(raw_value, dict):
         return []
@@ -7360,6 +7429,9 @@ def _build_manual_prospecto_payload(payload: ProspectoManualPayload) -> dict[str
         value = raw[field]
         if field == "email":
             data[field] = _normalize_email(value)
+        elif field == "phone":
+            data[field] = _clean_text(value)
+            data["phone_e164"] = _normalize_phone_e164(value)
         elif isinstance(value, str):
             data[field] = _clean_text(value)
         else:
@@ -7459,6 +7531,7 @@ def _build_prospecto_from_contactable(
         "actividad": row.get("actividad"),
         "estrato": row.get("estrato"),
         "phone": phone_value,
+        "phone_e164": _normalize_phone_e164(phone_value),
         "email": _normalize_email(row.get("email")),
         "website": _clean_text(row.get("website")),
         "address": address_full_value,
@@ -24486,10 +24559,65 @@ async def guardar_prospectos(
         )
         for row in contactables
     ]
+    prospectos = _dedupe_prospectos_for_save(items)
+    if not prospectos:
+        return {
+            "ok": True,
+            "total": 0,
+            "solicitados": len(payload.resultado_ids),
+            "contactables_encontrados": len(contactables),
+            "prospectos": [],
+        }
+
+    existing_email_rows = await repo.list_prospectos_by_emails(
+        usuario_token=user_token,
+        emails=[str(item.get("email") or "") for item in prospectos],
+    )
+    existing_phone_rows = await repo.list_prospectos_by_phones(
+        usuario_token=user_token,
+        phones=[
+            str(item.get("phone_e164") or item.get("phone") or "")
+            for item in prospectos
+        ],
+    )
+    existing_emails = {
+        value
+        for value in (_normalize_email(row.get("email")) for row in existing_email_rows)
+        if value
+    }
+    existing_phones = {
+        value
+        for value in (
+            _normalize_phone_e164(row.get("phone_e164") or row.get("phone"))
+            for row in existing_phone_rows
+        )
+        if value
+    }
+    if existing_emails or existing_phones:
+        prospectos = [
+            item
+            for item in prospectos
+            if (
+                _normalize_email(item.get("email")) not in existing_emails
+                and _normalize_phone_e164(item.get("phone_e164") or item.get("phone")) not in existing_phones
+            )
+        ]
+    if not prospectos:
+        logger.info(
+            "prospeccion.prospectos.no_payload_after_contact_dedupe",
+            extra={"contactables_encontrados": len(contactables)},
+        )
+        return {
+            "ok": True,
+            "total": 0,
+            "solicitados": len(payload.resultado_ids),
+            "contactables_encontrados": len(contactables),
+            "prospectos": [],
+        }
     try:
         prospectos = await repo.upsert_prospeccion_prospectos(
             usuario_token=user_token,
-            items=items,
+            items=prospectos,
         )
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
@@ -34452,42 +34580,52 @@ async def prospeccion_buscador_guardar_prospectos(
         )
         return {"ok": True, "prospectos": [], "total": 0}
 
-    # Deduplica dentro del lote por correo normalizado.
-    unique_prospectos: list[dict[str, Any]] = []
-    seen_batch_emails: set[str] = set()
-    for item in prospectos:
-        email_value = _normalize_email(item.get("email"))
-        if not email_value:
-            continue
-        if email_value in seen_batch_emails:
-            continue
-        seen_batch_emails.add(email_value)
-        item["email"] = email_value
-        unique_prospectos.append(item)
-    prospectos = unique_prospectos
+    prospectos = _dedupe_prospectos_for_save(prospectos)
 
     if not prospectos:
         logger.info(
-            "buscador.prospectos.no_payload_after_email_dedupe",
+            "buscador.prospectos.no_payload_after_contact_dedupe",
             extra={"job_id": str(job_id), "rows_considered": len(rows)},
         )
         return {"ok": True, "prospectos": [], "total": 0}
 
-    # Evita insertar correos que ya existen en prospectos.
-    existing_rows = await repo.list_prospectos_by_emails(
+    # Evita insertar contactos que ya existen en prospectos.
+    existing_email_rows = await repo.list_prospectos_by_emails(
         organizacion_id=organizacion_id,
         emails=[str(item.get("email") or "") for item in prospectos],
     )
+    existing_phone_rows = await repo.list_prospectos_by_phones(
+        organizacion_id=organizacion_id,
+        phones=[
+            str(item.get("phone_e164") or item.get("phone") or "")
+            for item in prospectos
+        ],
+    )
     existing_emails = {
         value
-        for value in (_normalize_email(row.get("email")) for row in existing_rows)
+        for value in (_normalize_email(row.get("email")) for row in existing_email_rows)
         if value
     }
-    if existing_emails:
-        prospectos = [item for item in prospectos if _normalize_email(item.get("email")) not in existing_emails]
+    existing_phones = {
+        value
+        for value in (
+            _normalize_phone_e164(row.get("phone_e164") or row.get("phone"))
+            for row in existing_phone_rows
+        )
+        if value
+    }
+    if existing_emails or existing_phones:
+        prospectos = [
+            item
+            for item in prospectos
+            if (
+                _normalize_email(item.get("email")) not in existing_emails
+                and _normalize_phone_e164(item.get("phone_e164") or item.get("phone")) not in existing_phones
+            )
+        ]
     if not prospectos:
         logger.info(
-            "buscador.prospectos.no_payload_after_existing_email_filter",
+            "buscador.prospectos.no_payload_after_existing_contact_filter",
             extra={"job_id": str(job_id), "rows_considered": len(rows)},
         )
         return {"ok": True, "prospectos": [], "total": 0}
