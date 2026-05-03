@@ -62,7 +62,7 @@ LEFT JOIN public.oportunidades o ON o.id = cb.tarjeta_id
 LEFT JOIN public.etapas_pipeline ep ON ep.id = o.etapa_id
 LEFT JOIN public.usuarios ua ON ua.id = o.asignado_a_usuario_id
 LEFT JOIN public.usuarios up ON up.id = o.propietario_usuario_id
-LEFT JOIN public.contactos c ON c.id = COALESCE(cb.contact_id, o.contacto_principal_id)
+LEFT JOIN public.personas p ON p.id = COALESCE(cb.contact_id, o.contacto_principal_id)
 LEFT JOIN public.conversaciones conv ON conv.id = cb.conversacion_id;
 
 COMMENT ON VIEW public.panel_calendar_bookings IS

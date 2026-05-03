@@ -198,5 +198,62 @@ begin
         update public.organizaciones
         set config = v_cfg
         where id = v_org.id;
+
+        -- 6) Ensure canonical CRM pipeline stages exist for the tenant.
+        with stage_defs as (
+            select *
+            from (
+                values
+                    ('captado', 'Captado', 10::smallint, 'abierta', 10.0, 'slate'),
+                    ('precalificado', 'Precalificado', 20::smallint, 'abierta', 25.0, 'sky'),
+                    ('demo', 'Demo agendada', 30::smallint, 'abierta', 45.0, 'violet'),
+                    ('propuesta', 'Propuesta', 40::smallint, 'abierta', 65.0, 'amber'),
+                    ('negociacion', 'Negociación', 50::smallint, 'abierta', 80.0, 'orange'),
+                    ('cerrado_ganado', 'Cerrado · Ganado', 60::smallint, 'ganada', 100.0, 'emerald'),
+                    ('cerrado_perdido', 'Cerrado · Perdido', 70::smallint, 'perdida', 0.0, 'rose')
+            ) as t(codigo, nombre, orden, categoria, probabilidad, color)
+        ),
+        missing_stages as (
+            select
+                gen_random_uuid() as id,
+                v_org.id as organizacion_id,
+                d.codigo,
+                d.nombre,
+                d.orden,
+                d.probabilidad,
+                d.categoria,
+                jsonb_build_object(
+                    'seed', 'default_stage',
+                    'color', d.color,
+                    'legacy_codigo', d.codigo
+                ) as metadata
+            from stage_defs d
+            where not exists (
+                select 1
+                from public.etapas_pipeline ep
+                where ep.organizacion_id = v_org.id
+                  and lower(ep.codigo) = d.codigo
+            )
+        )
+        insert into public.etapas_pipeline (
+            id,
+            organizacion_id,
+            codigo,
+            nombre,
+            orden,
+            probabilidad,
+            categoria,
+            metadata
+        )
+        select
+            m.id,
+            m.organizacion_id,
+            m.codigo,
+            m.nombre,
+            m.orden,
+            m.probabilidad,
+            m.categoria,
+            m.metadata
+        from missing_stages m;
     end loop;
 end $$;

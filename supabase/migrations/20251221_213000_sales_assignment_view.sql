@@ -23,7 +23,7 @@ from public.asignaciones_vendedores_whatsapp a
 left join public.organizaciones org on org.id = a.organizacion_id
 left join public.conversaciones conv on conv.id = a.conversacion_id
 left join public.oportunidades opp on opp.id = a.oportunidad_id
-left join public.contactos ct on ct.id = coalesce(a.contacto_id, opp.contacto_principal_id)
+left join public.personas ct on ct.id = coalesce(a.contacto_id, opp.contacto_principal_id)
 left join public.usuarios usr on usr.id = a.vendedor_usuario_id;
 
 comment on view public.v_asignaciones_vendedores_whatsapp is

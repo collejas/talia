@@ -39,6 +39,7 @@ DECLARE
     v_deleted_prosp_envio_phone integer := 0;
     v_deleted_prosp_suppressions_phone integer := 0;
     v_deleted_prospectos integer := 0;
+    v_deleted_personas integer := 0;
     v_deleted_contactos integer := 0;
 BEGIN
     IF v_digits = '' THEN
@@ -93,6 +94,12 @@ BEGIN
         OR regexp_replace(COALESCE(p.phone_e164, ''), '[^0-9]', '', 'g') IN (SELECT phone_digits FROM tmp_cleanup_phones)
       );
 
+    CREATE TEMP TABLE tmp_cleanup_personas ON COMMIT DROP AS
+    SELECT DISTINCT p.id, p.organizacion_id
+    FROM public.personas p
+    WHERE (p_organizacion_id IS NULL OR p.organizacion_id = p_organizacion_id)
+      AND regexp_replace(COALESCE(p.telefono_principal_e164, ''), '[^0-9]', '', 'g') IN (SELECT phone_digits FROM tmp_cleanup_phones);
+
     CREATE TEMP TABLE tmp_cleanup_contacts ON COMMIT DROP AS
     SELECT DISTINCT c.id, c.organizacion_id
     FROM public.contactos c
@@ -121,7 +128,8 @@ BEGIN
     FROM public.oportunidades o
     WHERE (p_organizacion_id IS NULL OR o.organizacion_id = p_organizacion_id)
       AND (
-        o.contacto_principal_id IN (SELECT id FROM tmp_cleanup_contacts)
+        o.contacto_principal_id IN (SELECT id FROM tmp_cleanup_personas)
+        OR o.contacto_principal_id IN (SELECT id FROM tmp_cleanup_contacts)
         OR NULLIF(o.metadata->>'prospecto_id', '')::uuid IN (SELECT id FROM tmp_cleanup_prospectos)
         OR o.id IN (
             SELECT NULLIF(p.metadata->>'crm_oportunidad_id', '')::uuid
@@ -136,7 +144,9 @@ BEGIN
     FROM public.conversaciones cv
     WHERE (p_organizacion_id IS NULL OR cv.organizacion_id = p_organizacion_id)
       AND (
-        cv.contacto_id IN (SELECT id FROM tmp_cleanup_contacts)
+        cv.contacto_id IN (SELECT id FROM tmp_cleanup_personas)
+        OR cv.contacto_id IN (SELECT id FROM tmp_cleanup_contacts)
+        OR cv.persona_id IN (SELECT id FROM tmp_cleanup_personas)
         OR cv.id IN (
             SELECT NULLIF(o.metadata->>'conversation_id', '')::uuid
             FROM public.oportunidades o
@@ -206,7 +216,8 @@ BEGIN
     DELETE FROM public.asignaciones_vendedores av
     WHERE av.conversacion_id IN (SELECT id FROM tmp_cleanup_conversations)
        OR av.oportunidad_id IN (SELECT id FROM tmp_cleanup_opportunities)
-       OR av.contacto_id IN (SELECT id FROM tmp_cleanup_contacts);
+       OR av.contacto_id IN (SELECT id FROM tmp_cleanup_contacts)
+       OR av.persona_id IN (SELECT id FROM tmp_cleanup_personas);
     GET DIAGNOSTICS v_deleted_asignaciones = ROW_COUNT;
 
     DELETE FROM public.conversaciones_insights ci
@@ -223,7 +234,9 @@ BEGIN
 
     DELETE FROM public.conversation_summaries cs
     WHERE cs.conversacion_id IN (SELECT id FROM tmp_cleanup_conversations)
-       OR cs.contacto_id IN (SELECT id FROM tmp_cleanup_contacts);
+       OR cs.contacto_id IN (SELECT id FROM tmp_cleanup_contacts)
+       OR cs.contacto_id IN (SELECT id FROM tmp_cleanup_personas)
+       OR cs.persona_id IN (SELECT id FROM tmp_cleanup_personas);
     GET DIAGNOSTICS v_deleted_conv_summaries = ROW_COUNT;
 
     DELETE FROM public.ejecuciones_asistente ea
@@ -246,45 +259,65 @@ BEGIN
 
     DELETE FROM public.actividades a
     WHERE a.contacto_id IN (SELECT id FROM tmp_cleanup_contacts)
+       OR a.contacto_id IN (SELECT id FROM tmp_cleanup_personas)
+       OR a.persona_id IN (SELECT id FROM tmp_cleanup_personas)
        OR a.oportunidad_id IN (SELECT id FROM tmp_cleanup_opportunities);
     GET DIAGNOSTICS v_deleted_actividades = ROW_COUNT;
 
     DELETE FROM public.cotizaciones c
     WHERE c.contacto_id IN (SELECT id FROM tmp_cleanup_contacts)
+       OR c.contacto_id IN (SELECT id FROM tmp_cleanup_personas)
+       OR c.persona_id IN (SELECT id FROM tmp_cleanup_personas)
        OR c.oportunidad_id IN (SELECT id FROM tmp_cleanup_opportunities);
     GET DIAGNOSTICS v_deleted_cotizaciones = ROW_COUNT;
 
     DELETE FROM public.clientes c
     WHERE c.contacto_id IN (SELECT id FROM tmp_cleanup_contacts)
+       OR c.contacto_id IN (SELECT id FROM tmp_cleanup_personas)
+       OR c.persona_id IN (SELECT id FROM tmp_cleanup_personas)
        OR c.oportunidad_id IN (SELECT id FROM tmp_cleanup_opportunities);
     GET DIAGNOSTICS v_deleted_clientes = ROW_COUNT;
 
     DELETE FROM public.llamadas l
-    WHERE l.contacto_id IN (SELECT id FROM tmp_cleanup_contacts);
+    WHERE l.contacto_id IN (SELECT id FROM tmp_cleanup_contacts)
+       OR l.contacto_id IN (SELECT id FROM tmp_cleanup_personas)
+       OR l.persona_id IN (SELECT id FROM tmp_cleanup_personas)
+       OR l.persona_id IN (SELECT id FROM tmp_cleanup_personas);
     GET DIAGNOSTICS v_deleted_llamadas = ROW_COUNT;
 
     DELETE FROM public.ticket_comentarios tc
-    WHERE tc.autor_cliente_id IN (SELECT id FROM tmp_cleanup_contacts);
+    WHERE tc.autor_cliente_id IN (SELECT id FROM tmp_cleanup_contacts)
+       OR tc.autor_cliente_id IN (SELECT id FROM tmp_cleanup_personas);
     GET DIAGNOSTICS v_deleted_ticket_comentarios = ROW_COUNT;
 
     DELETE FROM public.tickets t
-    WHERE t.contacto_id IN (SELECT id FROM tmp_cleanup_contacts);
+    WHERE t.contacto_id IN (SELECT id FROM tmp_cleanup_contacts)
+       OR t.contacto_id IN (SELECT id FROM tmp_cleanup_personas)
+       OR t.persona_id IN (SELECT id FROM tmp_cleanup_personas)
+       OR t.persona_id IN (SELECT id FROM tmp_cleanup_personas);
     GET DIAGNOSTICS v_deleted_tickets = ROW_COUNT;
 
     DELETE FROM public.web_sessions ws
-    WHERE ws.contacto_id IN (SELECT id FROM tmp_cleanup_contacts);
+    WHERE ws.contacto_id IN (SELECT id FROM tmp_cleanup_contacts)
+       OR ws.contacto_id IN (SELECT id FROM tmp_cleanup_personas)
+       OR ws.persona_id IN (SELECT id FROM tmp_cleanup_personas)
+       OR ws.persona_id IN (SELECT id FROM tmp_cleanup_personas);
     GET DIAGNOSTICS v_deleted_web_sessions = ROW_COUNT;
 
     DELETE FROM public.webchat_visitantes wv
-    USING tmp_cleanup_contacts tc
-    WHERE wv.organizacion_id = tc.organizacion_id
-      AND wv.contacto_id = tc.id;
+    WHERE (p_organizacion_id IS NULL OR wv.organizacion_id = p_organizacion_id)
+      AND (
+        wv.contacto_id IN (SELECT id FROM tmp_cleanup_contacts)
+        OR wv.persona_id IN (SELECT id FROM tmp_cleanup_personas)
+      );
     GET DIAGNOSTICS v_deleted_webchat_visitantes = ROW_COUNT;
 
     DELETE FROM public.webchat_session_closures wsc
-    USING tmp_cleanup_contacts tc
-    WHERE wsc.organizacion_id = tc.organizacion_id
-      AND wsc.contacto_id = tc.id;
+    WHERE (p_organizacion_id IS NULL OR wsc.organizacion_id = p_organizacion_id)
+      AND (
+        wsc.contacto_id IN (SELECT id FROM tmp_cleanup_contacts)
+        OR wsc.persona_id IN (SELECT id FROM tmp_cleanup_personas)
+      );
     GET DIAGNOSTICS v_deleted_webchat_session_closures = ROW_COUNT;
 
     DELETE FROM public.oportunidades o
@@ -303,6 +336,8 @@ BEGIN
     WHERE (p_organizacion_id IS NULL OR ic.organizacion_id = p_organizacion_id)
       AND (
         ic.contacto_id IN (SELECT id FROM tmp_cleanup_contacts)
+        OR ic.contacto_id IN (SELECT id FROM tmp_cleanup_personas)
+        OR ic.persona_id IN (SELECT id FROM tmp_cleanup_personas)
         OR regexp_replace(COALESCE(ic.metadatos->>'telefono', ''), '[^0-9]', '', 'g') IN (SELECT phone_digits FROM tmp_cleanup_phones)
         OR regexp_replace(COALESCE(ic.id_externo, ''), '[^0-9]', '', 'g') IN (SELECT phone_digits FROM tmp_cleanup_phones)
       );
@@ -313,6 +348,12 @@ BEGIN
     WHERE c.organizacion_id = tc.organizacion_id
       AND c.id = tc.id;
     GET DIAGNOSTICS v_deleted_contactos = ROW_COUNT;
+
+    DELETE FROM public.personas p
+    USING tmp_cleanup_personas tp
+    WHERE p.organizacion_id = tp.organizacion_id
+      AND p.id = tp.id;
+    GET DIAGNOSTICS v_deleted_personas = ROW_COUNT;
 
     DELETE FROM public.prospeccion_contactos_log l
     WHERE (p_organizacion_id IS NULL OR l.organizacion_id = p_organizacion_id)
@@ -381,7 +422,8 @@ BEGIN
             'prospeccion_contactos_log', v_deleted_prosp_log_phone,
             'prospeccion_contacto_envio', v_deleted_prosp_envio_phone,
             'prospeccion_contacto_suppressions', v_deleted_prosp_suppressions_phone,
-            'prospeccion_prospectos', v_deleted_prospectos
+            'prospeccion_prospectos', v_deleted_prospectos,
+            'personas', v_deleted_personas
         )
     );
 END;

@@ -160,7 +160,7 @@ from (
 ) agg
 left join public.conversaciones c
   on c.id = agg.conversation_id
-left join public.contactos ct
+left join public.personas ct
   on ct.id = c.contacto_id;
 
 create or replace view public.v_openai_costs_by_model

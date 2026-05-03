@@ -91,7 +91,7 @@ SELECT
     cur.actualizado_en
 FROM aggregated agg
 JOIN current_cycle cur ON cur.contacto_id = agg.contacto_id
-JOIN public.contactos ct ON ct.id = agg.contacto_id
+JOIN public.personas ct ON ct.id = agg.contacto_id
 LEFT JOIN public.etapas_pipeline ep ON ep.id = cur.etapa_id
 LEFT JOIN public.usuarios usr ON usr.id = cur.asignado_a_usuario_id
 WHERE agg.ciclo_actual >= GREATEST(p_min_restart_sequence, 1)

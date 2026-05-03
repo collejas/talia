@@ -52,7 +52,7 @@ FROM public.asignaciones_vendedores a
 LEFT JOIN public.organizaciones org ON org.id = a.organizacion_id
 LEFT JOIN public.conversaciones conv ON conv.id = a.conversacion_id
 LEFT JOIN public.oportunidades opp ON opp.id = a.oportunidad_id
-LEFT JOIN public.contactos ct ON ct.id = COALESCE(a.contacto_id, opp.contacto_principal_id)
+LEFT JOIN public.personas ct ON ct.id = COALESCE(a.contacto_id, opp.contacto_principal_id)
 LEFT JOIN public.usuarios usr ON usr.id = a.vendedor_usuario_id
 LEFT JOIN public.usuarios ack_usr ON ack_usr.id = a.aceptado_por_usuario_id;
 

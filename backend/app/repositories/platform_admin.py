@@ -175,6 +175,48 @@ class PlatformRepository:
             raise PlatformRepositoryError("calendar_resource_create_failed")
         return data[0]
 
+    async def list_pipeline_stages(self, *, organizacion_id: UUID) -> list[dict[str, Any]]:
+        params = {
+            "select": "id,organizacion_id,codigo,nombre,orden,probabilidad,categoria,metadata,creado_en,actualizado_en",
+            "organizacion_id": f"eq.{organizacion_id}",
+            "order": "orden.asc",
+        }
+        data = await self._rest("GET", "/rest/v1/etapas_pipeline", params=params)
+        if not isinstance(data, list):
+            raise PlatformRepositoryError("pipeline_stages_invalid_response")
+        return data
+
+    async def create_pipeline_stage(
+        self,
+        *,
+        organizacion_id: UUID,
+        codigo: str,
+        nombre: str,
+        orden: int,
+        probabilidad: float | None = None,
+        categoria: str = "abierta",
+        metadata: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        payload: dict[str, Any] = {
+            "organizacion_id": str(organizacion_id),
+            "codigo": codigo,
+            "nombre": nombre,
+            "orden": int(orden),
+            "categoria": categoria,
+            "metadata": metadata or {},
+        }
+        if probabilidad is not None:
+            payload["probabilidad"] = probabilidad
+        data = await self._rest(
+            "POST",
+            "/rest/v1/etapas_pipeline",
+            json=payload,
+            prefer="return=representation",
+        )
+        if not isinstance(data, list) or not data or not isinstance(data[0], dict):
+            raise PlatformRepositoryError("pipeline_stage_create_failed")
+        return data[0]
+
     async def delete_channel_route(self, *, organizacion_id: UUID, route_id: UUID) -> None:
         await self._rest(
             "DELETE",

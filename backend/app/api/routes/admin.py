@@ -770,6 +770,77 @@ FALLBACK_TENANT_POSITION_NAMES = (
     "Auxiliar Administrativo",
 )
 
+PIPELINE_STAGE_SEED: tuple[dict[str, Any], ...] = (
+    {
+        "codigo": "captado",
+        "nombre": "Captado",
+        "orden": 10,
+        "probabilidad": 10.0,
+        "categoria": "abierta",
+        "metadata": {"seed": "default_stage", "color": "slate", "legacy_codigo": "captado"},
+    },
+    {
+        "codigo": "precalificado",
+        "nombre": "Precalificado",
+        "orden": 20,
+        "probabilidad": 25.0,
+        "categoria": "abierta",
+        "metadata": {
+            "seed": "default_stage",
+            "color": "sky",
+            "legacy_codigo": "precalificado",
+        },
+    },
+    {
+        "codigo": "demo",
+        "nombre": "Demo agendada",
+        "orden": 30,
+        "probabilidad": 45.0,
+        "categoria": "abierta",
+        "metadata": {"seed": "default_stage", "color": "violet", "legacy_codigo": "demo"},
+    },
+    {
+        "codigo": "propuesta",
+        "nombre": "Propuesta",
+        "orden": 40,
+        "probabilidad": 65.0,
+        "categoria": "abierta",
+        "metadata": {"seed": "default_stage", "color": "amber", "legacy_codigo": "propuesta"},
+    },
+    {
+        "codigo": "negociacion",
+        "nombre": "Negociación",
+        "orden": 50,
+        "probabilidad": 80.0,
+        "categoria": "abierta",
+        "metadata": {"seed": "default_stage", "color": "orange", "legacy_codigo": "negociacion"},
+    },
+    {
+        "codigo": "cerrado_ganado",
+        "nombre": "Cerrado · Ganado",
+        "orden": 60,
+        "probabilidad": 100.0,
+        "categoria": "ganada",
+        "metadata": {
+            "seed": "default_stage",
+            "color": "emerald",
+            "legacy_codigo": "cerrado_ganado",
+        },
+    },
+    {
+        "codigo": "cerrado_perdido",
+        "nombre": "Cerrado · Perdido",
+        "orden": 70,
+        "probabilidad": 0.0,
+        "categoria": "perdida",
+        "metadata": {
+            "seed": "default_stage",
+            "color": "rose",
+            "legacy_codigo": "cerrado_perdido",
+        },
+    },
+)
+
 
 def _normalize_role_name(raw: str) -> str:
     return raw.split("(", 1)[0].strip()
@@ -949,6 +1020,51 @@ async def _ensure_tenant_calendar_bootstrap(
     defaults = _build_default_tenant_config(calendar_resource_id=resource_id)
     merged = _merge_missing_config(dict(current_config), defaults)
     return merged
+
+
+async def _ensure_tenant_pipeline_bootstrap(
+    *,
+    repo: PlatformRepository,
+    organizacion_id: UUID,
+) -> None:
+    try:
+        stages = await repo.list_pipeline_stages(organizacion_id=organizacion_id)
+    except PlatformRepositoryError as exc:
+        logger.warning(
+            "tenant_bootstrap.pipeline_catalog_fetch_failed",
+            extra={"organizacion_id": str(organizacion_id), "error": str(exc)},
+        )
+        stages = []
+
+    existing_codes = {
+        str(row.get("codigo") or "").strip().lower()
+        for row in stages
+        if isinstance(row, dict) and row.get("codigo")
+    }
+    for stage in PIPELINE_STAGE_SEED:
+        code = str(stage["codigo"]).strip().lower()
+        if not code or code in existing_codes:
+            continue
+        try:
+            await repo.create_pipeline_stage(
+                organizacion_id=organizacion_id,
+                codigo=code,
+                nombre=str(stage["nombre"]),
+                orden=int(stage["orden"]),
+                probabilidad=float(stage["probabilidad"]),
+                categoria=str(stage["categoria"]),
+                metadata=dict(stage["metadata"]),
+            )
+            existing_codes.add(code)
+        except PlatformRepositoryError as exc:
+            logger.warning(
+                "tenant_bootstrap.pipeline_seed_failed",
+                extra={
+                    "organizacion_id": str(organizacion_id),
+                    "codigo": code,
+                    "error": str(exc),
+                },
+            )
 
 
 async def _ensure_permissions_exist(
@@ -1199,6 +1315,7 @@ async def create_tenant(
             current_config=current_config or {},
         )
         await repo.set_organizacion_config(organizacion_id=tenant_id, config=merged_config)
+        await _ensure_tenant_pipeline_bootstrap(repo=repo, organizacion_id=tenant_id)
     except PlatformRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
@@ -1274,6 +1391,7 @@ async def create_tenant_with_admin(
                 current_config=current_config or {},
             )
             await repo.set_organizacion_config(organizacion_id=tenant_id, config=merged_config)
+            await _ensure_tenant_pipeline_bootstrap(repo=repo, organizacion_id=tenant_id)
 
             if alias:
                 try:

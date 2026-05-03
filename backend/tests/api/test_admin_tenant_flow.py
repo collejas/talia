@@ -18,6 +18,7 @@ class DummyRepo:
         self.fail_route = fail_route
         self.created_tenant: dict[str, Any] | None = None
         self.updated_config: dict[str, Any] | None = None
+        self.created_stages: list[dict[str, Any]] = []
         self.role_id = uuid4()
         self.department_id = uuid4()
         self.position_id = uuid4()
@@ -55,6 +56,33 @@ class DummyRepo:
     async def set_organizacion_config(self, *, organizacion_id: UUID, config: dict[str, Any]) -> dict[str, Any]:
         self.updated_config = config
         return {"id": str(organizacion_id), "config": config}
+
+    async def list_pipeline_stages(self, *, organizacion_id: UUID) -> list[dict[str, Any]]:
+        return []
+
+    async def create_pipeline_stage(
+        self,
+        *,
+        organizacion_id: UUID,
+        codigo: str,
+        nombre: str,
+        orden: int,
+        probabilidad: float | None = None,
+        categoria: str = "abierta",
+        metadata: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        stage = {
+            "id": str(uuid4()),
+            "organizacion_id": str(organizacion_id),
+            "codigo": codigo,
+            "nombre": nombre,
+            "orden": orden,
+            "probabilidad": probabilidad,
+            "categoria": categoria,
+            "metadata": metadata or {},
+        }
+        self.created_stages.append(stage)
+        return stage
 
     async def delete_organizacion(self, *, organizacion_id: UUID) -> None:
         return None
@@ -183,6 +211,15 @@ async def test_create_tenant_with_admin_success(async_client: AsyncClient, clear
     assert repo.updated_config.get("features", {}).get("webchat", {}).get("enabled") is True
     assert repo.updated_config.get("webchat", {}).get("calendar", {}).get("resource_id")
     assert repo.updated_config.get("whatsapp", {}).get("provider") == "meta"
+    assert [stage["codigo"] for stage in repo.created_stages] == [
+        "captado",
+        "precalificado",
+        "demo",
+        "propuesta",
+        "negociacion",
+        "cerrado_ganado",
+        "cerrado_perdido",
+    ]
 
 
 @pytest.mark.asyncio
