@@ -38,7 +38,10 @@ from app.services.metrics import metrics
 from app.services.prospeccion_progress import progress_hub
 from app.services.storage import StorageError
 from app.channels.booking_context import build_booking_context_message
-from app.services.catalog_context import build_catalog_context
+from app.services.catalog_context import (
+    build_catalog_context,
+    build_catalog_inventory_context,
+)
 from app.services.prospeccion_auto_promoter import auto_promote_prospecto
 from app.services.assistant_reply_guard import evaluate_reply_quality
 from app.services.time_utils import get_current_time_reference
@@ -1304,6 +1307,17 @@ async def handle_incoming_message(
     if not openai_conversation_id:
         openai_conversation_id = conversation_meta.get("openai_conversation_id")
 
+    inventory_context_text = None
+    inventory_context_started = time.perf_counter()
+    try:
+        inventory_context_text = await build_catalog_inventory_context(organizacion_hint)
+    except Exception as exc:
+        logger.warning(
+            "whatsapp.inventory_context_failed",
+            extra={"conversation_id": conversation_id, "error": str(exc)},
+        )
+    _record_stage_timing(stage_timings, "catalog_inventory_context_ms", inventory_context_started)
+
     catalog_context = None
     if settings.catalog_context_autoload:
         catalog_context_started = time.perf_counter()
@@ -1314,6 +1328,13 @@ async def handle_incoming_message(
             channel="whatsapp",
         )
         _record_stage_timing(stage_timings, "catalog_context_ms", catalog_context_started)
+    catalog_context_text = None
+    if inventory_context_text and catalog_context:
+        catalog_context_text = f"{inventory_context_text}\n\n{catalog_context.text}"
+    elif inventory_context_text:
+        catalog_context_text = inventory_context_text
+    elif catalog_context:
+        catalog_context_text = catalog_context.text
     booking_context_text = None
     try:
         booking_context_started = time.perf_counter()
@@ -1366,7 +1387,7 @@ async def handle_incoming_message(
             contact_id=contact_id,
             openai_conversation_id=openai_conversation_id,
             previous_response_id=previous_response_id,
-            catalog_context=catalog_context.text if catalog_context else None,
+            catalog_context=catalog_context_text,
             booking_context=booking_context_text,
             whatsapp_settings=whatsapp_settings,
             organizacion_id=org_uuid,

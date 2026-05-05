@@ -56,6 +56,7 @@ from app.services.calendar import CalendarError
 from app.services.catalog_context import (
     CatalogContext,
     build_catalog_context,
+    build_catalog_inventory_context,
 )
 from app.services.catalog_embeddings import CatalogEmbeddingService
 from app.services.catalog_fraccionamientos import (
@@ -3142,6 +3143,17 @@ async def handle_message(
         session_id=payload.session_id,
     )
 
+    inventory_context_text = None
+    inventory_context_started = time.perf_counter()
+    try:
+        inventory_context_text = await build_catalog_inventory_context(organizacion_hint)
+    except Exception as exc:
+        logger.warning(
+            "webchat.inventory_context_failed",
+            extra={"conversation_id": context.conversation_id, "error": str(exc)},
+        )
+    _record_stage_timing(stage_timings, "catalog_inventory_context_ms", inventory_context_started)
+
     catalog_context: CatalogContext | None = None
     if settings.catalog_context_autoload:
         catalog_context_started = time.perf_counter()
@@ -3803,7 +3815,13 @@ async def _run_assistant_turn(
                 ],
             }
         )
-    catalog_text = catalog_context.text if catalog_context and catalog_context.text else None
+    catalog_text = None
+    if inventory_context_text and catalog_context and catalog_context.text:
+        catalog_text = f"{inventory_context_text}\n\n{catalog_context.text}"
+    elif inventory_context_text:
+        catalog_text = inventory_context_text
+    elif catalog_context and catalog_context.text:
+        catalog_text = catalog_context.text
     if catalog_text:
         base_input.append(
             {
