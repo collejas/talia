@@ -150,6 +150,10 @@ df -h
 du -sh /var/www/talia
 free -m
 
+
+# REINDEXAR
+cd /var/www/talia/backend
+.venv/bin/python scripts/index_catalog.py --organizacion-id 39e32c05-bfc2-4794-8aab-225873f2bf19
 # DIAGNOSTICO DE CPU
 
 echo "========== LOAD =========="

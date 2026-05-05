@@ -9,7 +9,6 @@ from .google_places import (
 )
 from .result_identity import build_result_dedupe_key
 from .twilio_lookup import TwilioLookupError, lookup_phone_number, lookup_phone_number_free
-from . import webchat_followups
 
 __all__ = [
     "EmailSendError",
@@ -24,5 +23,4 @@ __all__ = [
     "lookup_phone_number",
     "lookup_phone_number_free",
     "TwilioLookupError",
-    "webchat_followups",
 ]

@@ -4,7 +4,7 @@ from typing import Any
 
 import pytest
 
-from app.services import webchat_followups
+import app.services.webchat_followups as webchat_followups
 
 
 class DummyRepo:

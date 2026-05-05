@@ -2292,6 +2292,50 @@ def _extract_metadata_from_content(content: str) -> dict[str, Any] | None:
     return None
 
 
+async def _enrich_item_detail_with_unit_area(
+    repo: CRMRepository,
+    *,
+    organizacion_id: UUID,
+    item_data: Mapping[str, Any] | None,
+    metadata: dict[str, Any],
+) -> dict[str, Any]:
+    merged = dict(metadata)
+    unit_id = merged.get("unidad_id")
+    if not unit_id and isinstance(item_data, Mapping):
+        unit_id = item_data.get("unidad_id")
+    if not unit_id:
+        return merged
+    try:
+        unidad_row = await repo.get_propiedad_unidad(
+            organizacion_id=organizacion_id,
+            unidad_id=UUID(str(unit_id)),
+        )
+    except (CRMRepositoryError, ValueError) as exc:
+        logger.warning(
+            "catalog.item_details_unit_lookup_failed",
+            extra={
+                "organizacion_id": str(organizacion_id),
+                "unidad_id": str(unit_id),
+                "error": str(exc),
+            },
+        )
+        return merged
+    if not unidad_row:
+        return merged
+
+    area_m2 = unidad_row.get("area_m2")
+    if area_m2 is not None:
+        merged.setdefault("area_m2", area_m2)
+        merged.setdefault("m2_de_terreno", area_m2)
+    unidad_metadata = unidad_row.get("metadata")
+    if isinstance(unidad_metadata, Mapping):
+        for key, value in unidad_metadata.items():
+            if value is None:
+                continue
+            merged.setdefault(f"unidad_metadata_{key}", value)
+    return merged
+
+
 
 
 def _map_delete_exception(
@@ -8741,6 +8785,12 @@ async def fetch_catalog_item_details(
             )
             if isinstance(metadata, Mapping):
                 metadata = {str(key): val for key, val in metadata.items()}
+            metadata = await _enrich_item_detail_with_unit_area(
+                repo,
+                organizacion_id=organizacion_uuid,
+                item_data=item_data,
+                metadata=metadata if isinstance(metadata, dict) else dict(metadata),
+            )
             metadata_keys = list(metadata.keys()) if isinstance(metadata, Mapping) else []
             matches_log.append(
                 {
@@ -8856,6 +8906,12 @@ async def fetch_catalog_item_details(
         )
         if isinstance(metadata, Mapping):
             metadata = {str(key): val for key, val in metadata.items()}
+        metadata = await _enrich_item_detail_with_unit_area(
+            repo,
+            organizacion_id=organizacion_uuid,
+            item_data=item_data,
+            metadata=metadata if isinstance(metadata, dict) else dict(metadata),
+        )
         metadata_keys = list(metadata.keys()) if isinstance(metadata, Mapping) else []
         matches_log.append(
             {

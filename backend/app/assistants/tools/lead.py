@@ -10,9 +10,10 @@ from uuid import UUID
 from app.assistants.tool_runtime import ToolRuntimeContext
 from app.channels.webchat import service as webchat_service
 from app.core.logging import get_logger
-from app.services import send_email, storage, tenant_runtime, webchat_followups
+from app.services import send_email, storage, tenant_runtime
 from app.services.email import EmailSendError
 from app.services.storage import StorageError
+import app.services.webchat_followups as webchat_followups
 
 logger = get_logger("app.assistants.tools.lead")
 
