@@ -387,6 +387,33 @@ def _row_matches_geo_filters(
     return True
 
 
+def _row_matches_query_filters(
+    row: dict[str, Any],
+    *,
+    query_filters: Sequence[str],
+) -> bool:
+    if not query_filters:
+        return True
+    metadata = _ensure_metadata(row.get("metadata"))
+    busqueda_meta = metadata.get("busqueda_meta") if isinstance(metadata.get("busqueda_meta"), dict) else {}
+    candidates = {
+        str(row.get("busqueda_ref") or "").strip(),
+        str(row.get("query_sort") or "").strip(),
+        str(metadata.get("busqueda_query") or "").strip(),
+        str(metadata.get("query") or "").strip(),
+    }
+    if isinstance(busqueda_meta, dict):
+        candidates.add(str(busqueda_meta.get("query") or "").strip())
+        candidates.add(str(busqueda_meta.get("busqueda_query") or "").strip())
+    normalized_candidates = {value for value in candidates if value}
+    if not normalized_candidates:
+        return False
+    normalized_filters = {str(value or "").strip() for value in query_filters if str(value or "").strip()}
+    if not normalized_filters:
+        return True
+    return bool(normalized_candidates & normalized_filters)
+
+
 def _build_geo_postgrest_filters(
     *,
     geo_estado: str | None = None,
@@ -10954,7 +10981,15 @@ class CRMRepository:
                 seen_queries.add(candidate)
                 unique_queries.append(candidate)
             if unique_queries:
-                params["busqueda_ref"] = _postgrest_in_clause(unique_queries)
+                return await self._list_prospectos_with_query_scan(
+                    usuario_token=usuario_token,
+                    params=params,
+                    limit=limit,
+                    offset=offset,
+                    query_filters=unique_queries,
+                    geo_estado=geo_estado,
+                    geo_municipio=geo_municipio,
+                )
 
         if actividades:
             unique_activities = []
@@ -11096,6 +11131,66 @@ class CRMRepository:
                         params=params,
                     )
         return data, total
+
+    async def _list_prospectos_with_query_scan(
+        self,
+        *,
+        usuario_token: str,
+        params: dict[str, str],
+        limit: int,
+        offset: int,
+        query_filters: Sequence[str],
+        geo_estado: str | None = None,
+        geo_municipio: str | None = None,
+    ) -> tuple[list[dict[str, Any]], int]:
+        """Escanea prospectos filtrando grupos por huellas históricas de consulta."""
+
+        if limit <= 0:
+            return [], 0
+        filtered_rows: list[dict[str, Any]] = []
+        filtered_total = 0
+        scan_offset = 0
+        page_size = max(500, min(1000, limit * 2))
+        max_scan_rows = 200_000
+        normalized_filters = [str(value or "").strip() for value in query_filters if str(value or "").strip()]
+        if not normalized_filters:
+            return [], 0
+
+        while scan_offset < max_scan_rows:
+            scan_params = dict(params)
+            scan_params["limit"] = str(page_size)
+            scan_params["offset"] = str(scan_offset)
+            resp = await self._request_with_user(
+                "GET",
+                "/rest/v1/prospeccion_prospectos",
+                token=usuario_token,
+                params=scan_params,
+                prefer="count=exact",
+            )
+            data = resp.json() or []
+            if not isinstance(data, list):
+                raise CRMRepositoryError(f"Respuesta inesperada al listar prospectos (query scan): {data!r}")
+            if not data:
+                break
+
+            for row in data:
+                if not isinstance(row, dict):
+                    continue
+                if not _row_matches_query_filters(row, query_filters=normalized_filters):
+                    continue
+                if not _row_matches_geo_filters(
+                    row,
+                    geo_estado=geo_estado,
+                    geo_municipio=geo_municipio,
+                ):
+                    continue
+                if filtered_total >= offset and len(filtered_rows) < limit:
+                    filtered_rows.append(row)
+                filtered_total += 1
+
+            scan_offset += len(data)
+
+        return filtered_rows, filtered_total
 
     async def _count_prospectos_exact(
         self,

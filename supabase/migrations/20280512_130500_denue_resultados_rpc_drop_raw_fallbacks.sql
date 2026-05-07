@@ -38,6 +38,33 @@ as $$
   with base as (
     select
       r.id as resultado_id,
+      a.busqueda_id,
+      coalesce(nullif(r.name, ''), nullif(r.razon_social, '')) as display_name,
+      nullif(r.actividad, '') as actividad,
+      nullif(r.estrato, '') as estrato,
+      nullif(r.phone, '') as phone,
+      nullif(r.email, '') as email,
+      nullif(r.website, '') as website,
+      nullif(r.address, '') as address,
+      r.lat,
+      r.lng,
+      r.maps_url,
+      a.first_seen_at as resultado_creado_en,
+      b.centro as busqueda_centro,
+      r.geom,
+      r.tsv,
+      coalesce(nullif(r.estado_cve, ''), substring(nullif(r.cvegeo, '') from 1 for 2)) as estado_code,
+      coalesce(nullif(r.municipio_cve, ''), substring(nullif(r.cvegeo, '') from 3 for 3)) as municipio_code
+    from public.prospeccion_resultado_apariciones a
+    join public.resultados r on r.id = a.resultado_id
+    join public.busquedas b on b.id = a.busqueda_id
+    where r.fuente = 'denue'
+      and a.busqueda_id = p_busqueda_id
+
+    union all
+
+    select
+      r.id as resultado_id,
       r.busqueda_id,
       coalesce(nullif(r.name, ''), nullif(r.razon_social, '')) as display_name,
       nullif(r.actividad, '') as actividad,
@@ -59,6 +86,12 @@ as $$
     join public.busquedas b on b.id = r.busqueda_id
     where r.fuente = 'denue'
       and r.busqueda_id = p_busqueda_id
+      and not exists (
+        select 1
+        from public.prospeccion_resultado_apariciones a
+        where a.resultado_id = r.id
+          and a.busqueda_id = r.busqueda_id
+      )
   )
   select
     resultado_id,
@@ -184,6 +217,36 @@ as $$
   ), filtered as (
     select
       r.id as resultado_id,
+      a.busqueda_id,
+      coalesce(nullif(r.name, ''), nullif(r.razon_social, '')) as display_name,
+      nullif(r.actividad, '') as actividad,
+      nullif(r.estrato, '') as estrato,
+      nullif(r.phone, '') as phone,
+      nullif(r.email, '') as email,
+      nullif(r.website, '') as website,
+      nullif(r.address, '') as address,
+      r.lat,
+      r.lng,
+      coalesce(
+        r.geom,
+        case
+          when r.lat is not null and r.lng is not null then st_setsrid(st_makepoint(r.lng, r.lat), 4326)::geography
+          else null::geography
+        end
+      ) as geog,
+      r.tsv,
+      coalesce(nullif(r.estado_cve, ''), substring(nullif(r.cvegeo, '') from 1 for 2)) as estado_code,
+      coalesce(nullif(r.municipio_cve, ''), substring(nullif(r.cvegeo, '') from 3 for 3)) as municipio_code
+    from public.prospeccion_resultado_apariciones a
+    join public.resultados r on r.id = a.resultado_id
+    where r.fuente = 'denue'
+      and a.busqueda_id = p_busqueda_id
+
+    union all
+
+    select
+      r.id as resultado_id,
+      r.busqueda_id,
       coalesce(nullif(r.name, ''), nullif(r.razon_social, '')) as display_name,
       nullif(r.actividad, '') as actividad,
       nullif(r.estrato, '') as estrato,
@@ -206,6 +269,12 @@ as $$
     from public.resultados r
     where r.fuente = 'denue'
       and r.busqueda_id = p_busqueda_id
+      and not exists (
+        select 1
+        from public.prospeccion_resultado_apariciones a
+        where a.resultado_id = r.id
+          and a.busqueda_id = r.busqueda_id
+      )
   ), kept as (
     select f.*
     from filtered f, env
@@ -387,6 +456,31 @@ stable
 as $$
   with filtered as (
     select
+      a.busqueda_id,
+      coalesce(
+        r.geom,
+        case
+          when r.lat is not null and r.lng is not null then st_setsrid(st_makepoint(r.lng, r.lat), 4326)::geography
+          else null::geography
+        end
+      ) as geog,
+      nullif(r.phone, '') as phone,
+      nullif(r.email, '') as email,
+      nullif(r.website, '') as website,
+      nullif(r.actividad, '') as actividad,
+      nullif(r.estrato, '') as estrato,
+      r.tsv,
+      coalesce(nullif(r.estado_cve, ''), substring(nullif(r.cvegeo, '') from 1 for 2)) as estado_code,
+      coalesce(nullif(r.municipio_cve, ''), substring(nullif(r.cvegeo, '') from 3 for 3)) as municipio_code
+    from public.prospeccion_resultado_apariciones a
+    join public.resultados r on r.id = a.resultado_id
+    where r.fuente = 'denue'
+      and a.busqueda_id = p_busqueda_id
+
+    union all
+
+    select
+      r.busqueda_id,
       coalesce(
         r.geom,
         case
@@ -405,6 +499,12 @@ as $$
     from public.resultados r
     where r.fuente = 'denue'
       and r.busqueda_id = p_busqueda_id
+      and not exists (
+        select 1
+        from public.prospeccion_resultado_apariciones a
+        where a.resultado_id = r.id
+          and a.busqueda_id = r.busqueda_id
+      )
   ), kept as (
     select *
     from filtered

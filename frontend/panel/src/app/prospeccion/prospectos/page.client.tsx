@@ -1109,11 +1109,11 @@ function ProspectosView() {
     return map
   }, [consolidatedQueryOptions])
   const effectiveMetadataQueries = useMemo(() => {
-    if (openedQueryScope) return [openedQueryScope]
+    if (openedQueryScope) return filters.queryFilters.length ? filters.queryFilters : [openedQueryScope]
     return filters.queryFilters.length ? filters.queryFilters : undefined
   }, [filters.queryFilters, openedQueryScope])
-  const groupedQueryOptions = useMemo(() => {
-    const rows = [...queryOptions]
+  const groupedQueryOptions = useMemo<ConsolidatedQueryOption[]>(() => {
+    const rows = [...consolidatedQueryOptions]
     rows.sort((a, b) => {
       let base = 0
       if (groupSort.key === "query") {
@@ -1135,7 +1135,29 @@ function ProspectosView() {
       return groupSort.direction === "asc" ? base : -base
     })
     return rows
-  }, [groupSort.direction, groupSort.key, queryOptions])
+  }, [consolidatedQueryOptions, groupSort.direction, groupSort.key])
+  const selectedGroupQueryValues = useMemo(() => {
+    if (!selectedGroupValues.length) {
+      return [] as string[]
+    }
+    const selected = new Set(selectedGroupValues)
+    const expanded: string[] = []
+    const seen = new Set<string>()
+    for (const group of groupedQueryOptions) {
+      if (!selected.has(group.value)) continue
+      for (const value of group.values) {
+        if (!value || seen.has(value)) continue
+        seen.add(value)
+        expanded.push(value)
+      }
+    }
+    for (const value of selectedGroupValues) {
+      if (!value || seen.has(value)) continue
+      seen.add(value)
+      expanded.push(value)
+    }
+    return expanded
+  }, [groupedQueryOptions, selectedGroupValues])
   const campaignLabelMap = useMemo(
     () => new Map(campaignFilterOptions.map((option) => [option.id, option.nombre])),
     [campaignFilterOptions]
@@ -2476,12 +2498,16 @@ function ProspectosView() {
     setSelectedGroups(new Set())
   }
 
-  const handleOpenQueryGroup = useCallback((queryValue: string) => {
+  const handleOpenQueryGroup = useCallback((queryValues: string[] | string) => {
+    const normalizedValues = (Array.isArray(queryValues) ? queryValues : [queryValues])
+      .map((value) => (value || "").trim())
+      .filter((value) => value.length > 0)
+    const nextValues = normalizedValues.length ? normalizedValues : []
     setOffset(0)
-    setOpenedQueryScope(queryValue || null)
+    setOpenedQueryScope(nextValues[0] ?? null)
     setFilters((prev) => ({
       ...prev,
-      queryFilters: queryValue ? [queryValue] : [],
+      queryFilters: nextValues,
     }))
     setProspectosViewMode("prospectos")
   }, [])
@@ -3447,11 +3473,11 @@ function ProspectosView() {
   }, [appendProspectos, fetchStageSummary, items, limit, offset, selectedIds, total])
 
   const handleGroupDeleteConfirm = useCallback(async () => {
-    if (!selectedGroupValues.length) return
+    if (!selectedGroupQueryValues.length) return
     setGroupDeleteLoading(true)
     setGroupDeleteError(null)
     try {
-      const response = await eliminarGruposProspectos(selectedGroupValues)
+      const response = await eliminarGruposProspectos(selectedGroupQueryValues)
       const deletedTotal = typeof response.total === "number" ? response.total : 0
       setSelectedGroups(new Set())
       setOpenedQueryScope(null)
@@ -3470,7 +3496,7 @@ function ProspectosView() {
     } finally {
       setGroupDeleteLoading(false)
     }
-  }, [fetchProspectos, fetchStageSummary, selectedGroupValues])
+  }, [fetchProspectos, fetchStageSummary, selectedGroupQueryValues, selectedGroupValues])
 
   return (
     <div className="space-y-4">
@@ -4838,7 +4864,7 @@ function ProspectosView() {
                             {formatDate(group.created_at || null)}
                           </TableCell>
                           <TableCell className="text-right">
-                            <Button variant="outline" size="sm" onClick={() => handleOpenQueryGroup(group.value)}>
+                            <Button variant="outline" size="sm" onClick={() => handleOpenQueryGroup(group.values)}>
                               Abrir
                             </Button>
                           </TableCell>

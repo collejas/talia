@@ -757,13 +757,43 @@ export function DenueBusquedaView() {
     });
   }, [busquedas]);
 
+  const buildAdvancedLabelFromFilters = useCallback((filters?: BusquedaMetaFilters | null) => {
+    if (!filters) return null;
+    const parts: string[] = ["Avanzada"];
+    const texto = filters.texto_busqueda?.trim();
+    const actividad = buildActividadDisplay(filters, scianLookups);
+    const geo = buildGeoDisplay(filters, geoLookups);
+    const estratos = (filters.estrato_ids ?? [])
+      .map((value) => String(value || "").trim())
+      .filter((value) => value.length > 0);
+
+    if (texto) {
+      parts.push(texto);
+    }
+    if (actividad.label) {
+      parts.push(actividad.label);
+    }
+    if (geo.label !== "—") {
+      parts.push(geo.label);
+    }
+    if (estratos.length) {
+      parts.push(`Tamaño ${estratos.join(", ")}`);
+    }
+    const label = parts.filter(Boolean).join(" · ").trim();
+    return label || null;
+  }, [geoLookups, scianLookups]);
+
   const busquedaDescriptor = useMemo(() => {
     if (!activeBusqueda) return null;
+    const meta = extractBusquedaMeta(activeBusqueda);
+    if ((meta.modo || "radio") !== "radio") {
+      return buildAdvancedLabelFromFilters(meta.filters) ?? activeBusqueda.query?.trim() ?? null;
+    }
     if (activeBusqueda.query?.trim()) {
       return activeBusqueda.query.trim();
     }
     return null;
-  }, [activeBusqueda]);
+  }, [activeBusqueda, buildAdvancedLabelFromFilters]);
 
   const resolveBusquedaLabel = useCallback(
     (item: DenueBusquedaItem | null) => {
@@ -773,17 +803,13 @@ export function DenueBusquedaView() {
       if (modo === "radio") {
         return item.query?.trim() || null;
       }
-      const textoBusqueda = meta.filters?.texto_busqueda?.trim();
-      if (textoBusqueda) {
-        return textoBusqueda;
-      }
-      const actividad = buildActividadDisplay(meta.filters, scianLookups);
-      if (actividad.label) {
-        return `Avanzada · ${actividad.label}`;
+      const advancedLabel = buildAdvancedLabelFromFilters(meta.filters);
+      if (advancedLabel) {
+        return advancedLabel;
       }
       return item.query?.trim() || null;
     },
-    [scianLookups],
+    [buildAdvancedLabelFromFilters],
   );
 
   const effectiveTotal = resultadosTotal || 0;
@@ -1316,26 +1342,16 @@ export function DenueBusquedaView() {
       const metaB = extractBusquedaMeta(b);
       const modoA = metaA.modo || "radio";
       const modoB = metaB.modo || "radio";
-      const actividadA = buildActividadDisplay(metaA.filters, scianLookups).label;
-      const actividadB = buildActividadDisplay(metaB.filters, scianLookups).label;
-      const textoBusquedaA = metaA.filters?.texto_busqueda?.trim();
-      const textoBusquedaB = metaB.filters?.texto_busqueda?.trim();
+      const actividadA = buildAdvancedLabelFromFilters(metaA.filters) || "";
+      const actividadB = buildAdvancedLabelFromFilters(metaB.filters) || "";
       const busquedaTituloA =
         modoA === "radio"
           ? normalizeBusquedaLabel(a.query)
-          : textoBusquedaA
-            ? textoBusquedaA
-            : actividadA
-              ? `Avanzada · ${actividadA}`
-              : normalizeBusquedaLabel(a.query);
+          : actividadA || normalizeBusquedaLabel(a.query);
       const busquedaTituloB =
         modoB === "radio"
           ? normalizeBusquedaLabel(b.query)
-          : textoBusquedaB
-            ? textoBusquedaB
-            : actividadB
-              ? `Avanzada · ${actividadB}`
-              : normalizeBusquedaLabel(b.query);
+          : actividadB || normalizeBusquedaLabel(b.query);
       const geoA = buildGeoDisplay(metaA.filters, geoLookups).label;
       const geoB = buildGeoDisplay(metaB.filters, geoLookups).label;
       const dateA = new Date(a.creado_en).getTime();
@@ -1370,7 +1386,7 @@ export function DenueBusquedaView() {
       return busquedasSort.direction === "asc" ? base : -base;
     });
     return rows;
-  }, [busquedas, busquedasSort.direction, busquedasSort.key, geoLookups, scianLookups]);
+  }, [buildAdvancedLabelFromFilters, busquedas, busquedasSort.direction, busquedasSort.key, geoLookups, scianLookups]);
 
   const goToPage = useCallback(
     (pageIndex: number) => {
@@ -1401,31 +1417,46 @@ export function DenueBusquedaView() {
   }, []);
 
   const buildAdvancedQueryLabel = useCallback((filters: DenueAdvancedFilters, payload: AdvancedSearchPayload) => {
-    const parts: string[] = [];
-    parts.push(`Avanzada:${payload.modo}`);
+    const parts: string[] = ["Avanzada"];
     const texto = (payload.texto_busqueda ?? "").trim();
+    const actividad = filters.allActivitiesSelected
+      ? { label: "Todas las actividades" }
+      : buildActividadDisplay(
+          {
+            actividad_codigos: payload.actividad_codigos,
+            actividad_nombres: payload.actividad_nombres,
+          },
+          scianLookups,
+        );
+    const geo = buildGeoDisplay(
+      {
+        geo_estados: payload.geo_estados,
+        geo_municipios: payload.geo_municipios,
+      },
+      geoLookups,
+    );
+
     if (texto) {
       parts.push(texto);
     }
-    if (filters.allActivitiesSelected) {
-      parts.push("act:todas");
-    } else if (payload.actividad_codigos?.length) {
-      parts.push(`act:${payload.actividad_codigos.length}`);
+    if (!texto && actividad.label) {
+      parts.push(actividad.label);
+    } else if (texto && actividad.label) {
+      parts.push(actividad.label);
     }
     if (payload.estrato_ids?.length) {
-      parts.push(`tam:${payload.estrato_ids.join(",")}`);
+      parts.push(`Tamaño ${payload.estrato_ids.join(", ")}`);
     }
-    if (payload.geo_municipios?.length) {
-      parts.push(`mun:${payload.geo_municipios.length}`);
-    } else if (payload.geo_estados?.length) {
-      parts.push(`edo:${payload.geo_estados.length}`);
+    if (geo.label !== "—") {
+      parts.push(geo.label);
     }
+
     const label = parts.filter(Boolean).join(" · ").trim() || "Búsqueda avanzada";
     if (label.length <= 200) {
       return label;
     }
     return `${label.slice(0, 197).trimEnd()}...`;
-  }, []);
+  }, [geoLookups, scianLookups]);
 
   const buildAdvancedPayload = useCallback((filters: DenueAdvancedFilters | null): AdvancedSearchPayload | undefined => {
     if (!filters) {
