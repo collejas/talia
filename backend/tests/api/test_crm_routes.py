@@ -800,6 +800,20 @@ class DummyCRMRepository(CRMRepository):
     async def refresh_prospeccion_query_daily_mv(self, **kwargs: Any) -> None:
         self.calls.append(("refresh_prospeccion_query_daily_mv", kwargs))
 
+    async def delete_prospeccion_busqueda(self, **kwargs: Any) -> int:
+        self.calls.append(("delete_prospeccion_busqueda", kwargs))
+        return 1
+
+    async def get_prospeccion_busqueda(self, **kwargs: Any) -> dict[str, Any] | None:
+        self.calls.append(("get_prospeccion_busqueda", kwargs))
+        return {
+            "organizacion_id": str(uuid.uuid4()),
+            "deleted_at": None,
+        }
+
+    async def worker_update_busqueda(self, **kwargs: Any) -> None:
+        self.calls.append(("worker_update_busqueda", kwargs))
+
 
 @pytest.fixture()
 def fake_repo() -> DummyCRMRepository:
@@ -849,6 +863,30 @@ async def test_create_account(client: AsyncClient) -> None:
     data = resp.json()
     assert data["nombre"] == "Nueva Cuenta"
     assert data["tipo"] == "cliente"
+
+
+@pytest.mark.asyncio
+async def test_delete_denue_busqueda_borra_fisicamente(
+    client: AsyncClient, fake_repo: DummyCRMRepository
+) -> None:
+    busqueda_id = uuid.uuid4()
+
+    resp = await client.delete(
+        f"/crm/prospeccion/denue/busquedas/{busqueda_id}",
+        headers=_headers(),
+    )
+
+    assert resp.status_code == 200
+    payload = resp.json()
+    assert payload["ok"] is True
+    assert payload["deleted"] == 1
+    assert any(
+        call_name == "delete_prospeccion_busqueda"
+        and call_kwargs.get("busqueda_id") == busqueda_id
+        and call_kwargs.get("fuente") == "denue"
+        for call_name, call_kwargs in fake_repo.calls
+    )
+    assert all(call_name != "worker_update_busqueda" for call_name, _ in fake_repo.calls)
 
 
 @pytest.mark.asyncio

@@ -20747,28 +20747,6 @@ async def listar_busquedas_denue(
     }
 
 
-async def _purge_denue_busqueda_background(*, busqueda_id: UUID) -> None:
-    try:
-        background_repo = CRMRepository()
-    except CRMRepositoryError as exc:  # pragma: no cover - best effort cleanup after response
-        logger.exception(
-            "denue_busqueda_purge_background_repo_failed",
-            extra={"busqueda_id": str(busqueda_id), "error": str(exc)},
-        )
-        return
-
-    try:
-        await background_repo.delete_prospeccion_busqueda(
-            busqueda_id=busqueda_id,
-            fuente="denue",
-        )
-    except Exception as exc:  # pragma: no cover - best effort cleanup after response
-        logger.exception(
-            "denue_busqueda_purge_background_failed",
-            extra={"busqueda_id": str(busqueda_id), "error": str(exc)},
-        )
-
-
 @router.delete("/prospeccion/google/busquedas/{busqueda_id}")
 async def eliminar_busqueda_google(
     *,
@@ -20789,26 +20767,18 @@ async def eliminar_busqueda_google(
 @router.delete("/prospeccion/denue/busquedas/{busqueda_id}")
 async def eliminar_busqueda_denue(
     *,
-    background_tasks: BackgroundTasks,
     repo: CRMRepository = Depends(get_repository),
     _: str = Depends(require_permission("busquedas.delete")),
     busqueda_id: UUID,
 ) -> dict[str, Any]:
     try:
-        existing = await repo.get_prospeccion_busqueda(
+        deleted = await repo.delete_prospeccion_busqueda(
             busqueda_id=busqueda_id,
-            select="organizacion_id,deleted_at",
+            fuente="denue",
         )
-        if not existing:
-            raise HTTPException(status_code=404, detail="busqueda_not_found")
-        await repo.worker_update_busqueda(
-            busqueda_id=busqueda_id,
-            payload={"deleted_at": datetime.now(timezone.utc).isoformat()},
-        )
-        background_tasks.add_task(_purge_denue_busqueda_background, busqueda_id=busqueda_id)
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
-    return {"ok": True, "deleted": 1, "queued": True}
+    return {"ok": True, "deleted": deleted}
 
 
 @router.get("/prospeccion/denue/jobs/{job_id}")
