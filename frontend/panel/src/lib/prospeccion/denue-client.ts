@@ -29,6 +29,7 @@ export type DenueBusquedaItem = {
   lat: number;
   lng: number;
   meta: Record<string, unknown> | null;
+  advanced_filters?: Record<string, unknown> | null;
   total_encontrados: number | null;
   creado_en: string;
 };

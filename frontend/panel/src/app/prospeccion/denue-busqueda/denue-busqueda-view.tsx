@@ -172,14 +172,17 @@ type ScianLookups = {
 
 function extractBusquedaMeta(item: DenueBusquedaItem): { source?: string; modo?: string; filters?: BusquedaMetaFilters } {
   const meta = item.meta;
+  const advancedSource = item.advanced_filters;
   const rawQuery = typeof item.query === "string" ? item.query.trim() : "";
+  const advanced = (meta && typeof meta === "object"
+    ? (meta as Record<string, unknown>).advanced_filters
+    : undefined) ?? advancedSource;
   if (!meta || typeof meta !== "object") {
     return {
-      modo: /^avanzada\b/i.test(rawQuery) ? "advanced" : undefined,
+      modo: /^avanzada\b/i.test(rawQuery) || advanced ? "advanced" : undefined,
     };
   }
   const source = typeof (meta as Record<string, unknown>).source === "string" ? String((meta as Record<string, unknown>).source) : undefined;
-  const advanced = (meta as Record<string, unknown>).advanced_filters;
   const modoRaw = typeof (meta as Record<string, unknown>).modo === "string"
     ? String((meta as Record<string, unknown>).modo).trim()
     : "";
@@ -329,6 +332,30 @@ function buildActividadDisplay(
     return { label: base, tooltip };
   }
   return { label: `${base} +${names.length - 1}`, tooltip };
+}
+
+function splitAdvancedQueryLabel(value: string | null | undefined): { title: string | null; geo: string | null } {
+  const raw = normalizeBusquedaLabel(value);
+  if (!raw || raw === "(Sin texto)") {
+    return { title: null, geo: null };
+  }
+  const cleaned = raw.replace(/^Avanzada\s*:\s*/i, "").trim();
+  const parts = cleaned
+    .split(/\s*·\s*/u)
+    .map((part) => part.trim())
+    .filter(Boolean);
+  if (parts.length < 3) {
+    return { title: cleaned || raw, geo: null };
+  }
+  const geo = parts.at(-1) ?? null;
+  if (!geo) {
+    return { title: cleaned || raw, geo: null };
+  }
+  const title = parts.slice(0, -1).join(" · ").trim() || cleaned || raw;
+  return {
+    title,
+    geo: null,
+  };
 }
 
 export function DenueBusquedaView() {
@@ -763,12 +790,11 @@ export function DenueBusquedaView() {
     });
   }, [busquedas]);
 
-  const buildAdvancedLabelFromFilters = useCallback((filters?: BusquedaMetaFilters | null) => {
+  const buildAdvancedTitleFromFilters = useCallback((filters?: BusquedaMetaFilters | null) => {
     if (!filters) return null;
     const parts: string[] = ["Avanzada"];
     const texto = filters.texto_busqueda?.trim();
     const actividad = buildActividadDisplay(filters, scianLookups);
-    const geo = buildGeoDisplay(filters, geoLookups);
     const estratos = (filters.estrato_ids ?? [])
       .map((value) => String(value || "").trim())
       .filter((value) => value.length > 0);
@@ -779,43 +805,62 @@ export function DenueBusquedaView() {
     if (actividad.label) {
       parts.push(actividad.label);
     }
-    if (geo.label !== "—") {
-      parts.push(geo.label);
-    }
     if (estratos.length) {
       parts.push(`Tamaño ${estratos.join(", ")}`);
     }
     const label = parts.filter(Boolean).join(" · ").trim();
     return label || null;
-  }, [geoLookups, scianLookups]);
+  }, [scianLookups]);
+
+  const buildBusquedaLabelParts = useCallback(
+    (item: DenueBusquedaItem) => {
+      const meta = extractBusquedaMeta(item);
+      const modo = meta.modo || "radio";
+      if (modo === "radio") {
+        return {
+          title: normalizeBusquedaLabel(item.query),
+          geo: null as string | null,
+          tooltip: null as string | null,
+        };
+      }
+      const titleFromFilters = buildAdvancedTitleFromFilters(meta.filters);
+      const legacyParts = splitAdvancedQueryLabel(item.query);
+      const title = (titleFromFilters && titleFromFilters !== "Avanzada")
+        ? titleFromFilters
+        : legacyParts.title || normalizeBusquedaLabel(item.query);
+      const geo = buildGeoDisplay(meta.filters, geoLookups).label;
+      const tooltipParts: string[] = [];
+      const textoBusqueda = meta.filters?.texto_busqueda?.trim();
+      const actividad = buildActividadDisplay(meta.filters, scianLookups);
+      if (textoBusqueda) {
+        tooltipParts.push(`Texto:\n${textoBusqueda}`);
+      }
+      if (actividad.tooltip) {
+        tooltipParts.push(actividad.tooltip);
+      }
+      if (geo !== "—") {
+        tooltipParts.push(`Estado / Municipio:\n${geo}`);
+      }
+      return {
+        title,
+        geo,
+        tooltip: tooltipParts.filter(Boolean).join("\n\n") || null,
+      };
+    },
+    [buildAdvancedTitleFromFilters, geoLookups, scianLookups],
+  );
 
   const busquedaDescriptor = useMemo(() => {
     if (!activeBusqueda) return null;
-    const meta = extractBusquedaMeta(activeBusqueda);
-    if ((meta.modo || "radio") !== "radio") {
-      return buildAdvancedLabelFromFilters(meta.filters) ?? activeBusqueda.query?.trim() ?? null;
-    }
-    if (activeBusqueda.query?.trim()) {
-      return activeBusqueda.query.trim();
-    }
-    return null;
-  }, [activeBusqueda, buildAdvancedLabelFromFilters]);
+    return buildBusquedaLabelParts(activeBusqueda).title;
+  }, [activeBusqueda, buildBusquedaLabelParts]);
 
   const resolveBusquedaLabel = useCallback(
     (item: DenueBusquedaItem | null) => {
       if (!item) return null;
-      const meta = extractBusquedaMeta(item);
-      const modo = meta.modo || "radio";
-      if (modo === "radio") {
-        return item.query?.trim() || null;
-      }
-      const advancedLabel = buildAdvancedLabelFromFilters(meta.filters);
-      if (advancedLabel) {
-        return advancedLabel;
-      }
-      return item.query?.trim() || null;
+      return buildBusquedaLabelParts(item).title;
     },
-    [buildAdvancedLabelFromFilters],
+    [buildBusquedaLabelParts],
   );
 
   const effectiveTotal = resultadosTotal || 0;
@@ -1344,22 +1389,14 @@ export function DenueBusquedaView() {
   const sortedBusquedas = useMemo(() => {
     const rows = [...busquedas];
     rows.sort((a, b) => {
+      const busquedaA = buildBusquedaLabelParts(a);
+      const busquedaB = buildBusquedaLabelParts(b);
+      const geoA = busquedaA.geo ?? "—";
+      const geoB = busquedaB.geo ?? "—";
       const metaA = extractBusquedaMeta(a);
       const metaB = extractBusquedaMeta(b);
       const modoA = metaA.modo || "radio";
       const modoB = metaB.modo || "radio";
-      const actividadA = buildAdvancedLabelFromFilters(metaA.filters) || "";
-      const actividadB = buildAdvancedLabelFromFilters(metaB.filters) || "";
-      const busquedaTituloA =
-        modoA === "radio"
-          ? normalizeBusquedaLabel(a.query)
-          : actividadA || normalizeBusquedaLabel(a.query);
-      const busquedaTituloB =
-        modoB === "radio"
-          ? normalizeBusquedaLabel(b.query)
-          : actividadB || normalizeBusquedaLabel(b.query);
-      const geoA = buildGeoDisplay(metaA.filters, geoLookups).label;
-      const geoB = buildGeoDisplay(metaB.filters, geoLookups).label;
       const dateA = new Date(a.creado_en).getTime();
       const dateB = new Date(b.creado_en).getTime();
       const radioA = modoA === "radio" && typeof a.radio_m === "number" ? a.radio_m : -1;
@@ -1370,7 +1407,7 @@ export function DenueBusquedaView() {
       let base = 0;
       switch (busquedasSort.key) {
         case "busqueda":
-          base = busquedaTituloA.localeCompare(busquedaTituloB, "es", { sensitivity: "base" });
+          base = busquedaA.title.localeCompare(busquedaB.title, "es", { sensitivity: "base" });
           break;
         case "registros":
           base = registrosA - registrosB;
@@ -1392,7 +1429,7 @@ export function DenueBusquedaView() {
       return busquedasSort.direction === "asc" ? base : -base;
     });
     return rows;
-  }, [buildAdvancedLabelFromFilters, busquedas, busquedasSort.direction, busquedasSort.key, geoLookups, scianLookups]);
+  }, [buildBusquedaLabelParts, busquedas, busquedasSort.direction, busquedasSort.key]);
 
   const goToPage = useCallback(
     (pageIndex: number) => {
@@ -1434,13 +1471,6 @@ export function DenueBusquedaView() {
           },
           scianLookups,
         );
-    const geo = buildGeoDisplay(
-      {
-        geo_estados: payload.geo_estados,
-        geo_municipios: payload.geo_municipios,
-      },
-      geoLookups,
-    );
 
     if (texto) {
       parts.push(texto);
@@ -1453,16 +1483,13 @@ export function DenueBusquedaView() {
     if (payload.estrato_ids?.length) {
       parts.push(`Tamaño ${payload.estrato_ids.join(", ")}`);
     }
-    if (geo.label !== "—") {
-      parts.push(geo.label);
-    }
 
     const label = parts.filter(Boolean).join(" · ").trim() || "Búsqueda avanzada";
     if (label.length <= 200) {
       return label;
     }
     return `${label.slice(0, 197).trimEnd()}...`;
-  }, [geoLookups, scianLookups]);
+  }, [scianLookups]);
 
   const buildAdvancedPayload = useCallback((filters: DenueAdvancedFilters | null): AdvancedSearchPayload | undefined => {
     if (!filters) {
@@ -2600,6 +2627,7 @@ export function DenueBusquedaView() {
                   <TableBody>
                     {sortedBusquedas.map((item) => {
                       const meta = extractBusquedaMeta(item);
+                      const busquedaParts = buildBusquedaLabelParts(item);
                       const geo = buildGeoDisplay(meta.filters, geoLookups);
                       const actividad = buildActividadDisplay(meta.filters, scianLookups);
                       const createdLabel = new Date(item.creado_en).toLocaleString("es-MX", {
@@ -2611,17 +2639,12 @@ export function DenueBusquedaView() {
                         modo === "radio" && typeof item.radio_m === "number"
                           ? `${numberFormatter.format(item.radio_m)} m`
                           : "—";
-                      const textoBusqueda = meta.filters?.texto_busqueda?.trim();
-                      const busquedaTitulo =
-                        modo === "radio"
-                          ? normalizeBusquedaLabel(item.query)
-                          : textoBusqueda
-                            ? textoBusqueda
-                            : actividad.label
-                              ? `Avanzada · ${actividad.label}`
-                              : normalizeBusquedaLabel(item.query);
+                      const busquedaTitulo = busquedaParts.title;
                       const tooltipParts: string[] = [];
-                      if (modo !== "radio") {
+                      if (busquedaParts.tooltip) {
+                        tooltipParts.push(busquedaParts.tooltip);
+                      } else if (modo !== "radio") {
+                        const textoBusqueda = meta.filters?.texto_busqueda?.trim();
                         if (textoBusqueda) {
                           tooltipParts.push(`Texto:\n${textoBusqueda}`);
                         }
@@ -2674,7 +2697,7 @@ export function DenueBusquedaView() {
                           </TableCell>
                           <TableCell className="text-right tabular-nums">{radioLabel}</TableCell>
                           <TableCell className="text-xs">
-                            {geo.tooltip ? (
+                            {geo.label !== "—" ? (
                               <TooltipProvider>
                                 <Tooltip>
                                   <TooltipTrigger asChild>
@@ -2688,7 +2711,7 @@ export function DenueBusquedaView() {
                                 </Tooltip>
                               </TooltipProvider>
                             ) : (
-                              geo.label
+                              "—"
                             )}
                           </TableCell>
                           <TableCell className="text-xs text-muted-foreground">{createdLabel}</TableCell>
