@@ -434,13 +434,11 @@ export function DenueBusquedaView() {
     [busquedas, activeBusquedaId],
   );
   const activeModo = useMemo(() => {
-    const meta = activeBusqueda?.meta;
-    if (!meta || typeof meta !== "object") {
+    if (!activeBusqueda) {
       return "radio";
     }
-    const maybe = (meta as Record<string, unknown>).modo;
-    return typeof maybe === "string" && maybe.trim().length ? maybe.trim() : "radio";
-  }, [activeBusqueda?.meta]);
+    return extractBusquedaMeta(activeBusqueda).modo || "radio";
+  }, [activeBusqueda]);
   const mapIsAdvanced = activeModo !== "radio";
   const uiIsAdvanced = searchMode === "advanced";
   const mapCenterLocked = uiIsAdvanced || (mapIsAdvanced && !canRunBusquedas);
@@ -508,6 +506,16 @@ export function DenueBusquedaView() {
     selectedMunicipioCode,
     websiteFilter,
   ]);
+
+  const effectiveMapViewport = useMemo(() => {
+    if (mapIsAdvanced && mapFitBounds) {
+      return {
+        bounds: mapFitBounds,
+        zoom: 14,
+      };
+    }
+    return mapViewport;
+  }, [mapFitBounds, mapIsAdvanced, mapViewport]);
 
   useEffect(() => {
     const handle = window.setTimeout(() => {
@@ -994,15 +1002,15 @@ export function DenueBusquedaView() {
   ]);
 
   useEffect(() => {
-    if (!activeBusquedaId || !mapViewport) {
+    if (!activeBusquedaId || !effectiveMapViewport) {
       return;
     }
     let cancelled = false;
     const handle = window.setTimeout(() => {
       void listDenueResultadosMap({
         busquedaId: activeBusquedaId,
-        bbox: mapViewport.bounds,
-        zoom: mapViewport.zoom,
+        bbox: effectiveMapViewport.bounds,
+        zoom: effectiveMapViewport.zoom,
         q: currentResultFilters.q,
         phonePresent: currentResultFilters.phonePresent,
         emailPresent: currentResultFilters.emailPresent,
@@ -1033,7 +1041,7 @@ export function DenueBusquedaView() {
     activeBusquedaId,
     currentResultFilters,
     filtersKey,
-    mapViewport,
+    effectiveMapViewport,
   ]);
 
   useEffect(() => {
