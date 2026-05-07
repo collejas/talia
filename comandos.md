@@ -552,3 +552,16 @@ traería mejoras, pero son marginales y más de robustez que de “que el chat r
   - Deja conversacion_id como variable obligatoria.
   - Si quieres más control, agrega contact_id y session_id solo si el prompt realmente los va a usar.
   - Si no los usas en las instrucciones del prompt, meterlos solo agrega complejidad y riesgo de desalineación.
+
+
+
+  fotos
+  lista precios
+
+
+  ** no repetir nombre cliente
+  ** no ser tan precisos en la info que da
+  ** de contado 7160
+  ** Credito 7200 credito bancario e info
+  ** pregunta  de tipo de cliente
+  ** no repetir gracias

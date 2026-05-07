@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import re
 import unicodedata
+import json
 from typing import Any
 from uuid import UUID
 
@@ -28,6 +29,65 @@ def _slugify(value: str | None) -> str:
     return slug
 
 
+_NUMERIC_QUERY_RE = re.compile(r"\d+(?:[.,]\d+)?")
+
+
+def _parse_numeric_values(text: str | None) -> list[float]:
+    if not text:
+        return []
+    values: list[float] = []
+    for token in _NUMERIC_QUERY_RE.findall(text):
+        candidate = token.replace(",", ".")
+        try:
+            values.append(float(candidate))
+        except ValueError:
+            continue
+    return values
+
+
+def _parse_metadata_dict(row: dict[str, Any]) -> dict[str, Any]:
+    metadata = row.get("metadata") or row.get("metadatos") or row.get("metadatos_extra")
+    if isinstance(metadata, dict):
+        return metadata
+    if isinstance(metadata, str):
+        try:
+            parsed = json.loads(metadata)
+        except Exception:
+            return {}
+        if isinstance(parsed, dict):
+            return parsed
+    return {}
+
+
+def _extract_row_area(row: dict[str, Any]) -> float | None:
+    candidates = [
+        row.get("area_m2"),
+        row.get("m2_de_terreno"),
+        row.get("superficie"),
+    ]
+    metadata = _parse_metadata_dict(row)
+    candidates.extend(
+        [
+            metadata.get("area_m2"),
+            metadata.get("m2_de_terreno"),
+            metadata.get("superficie"),
+        ]
+    )
+    for candidate in candidates:
+        if candidate is None:
+            continue
+        if isinstance(candidate, (int, float)):
+            return float(candidate)
+        text = str(candidate).strip()
+        if not text:
+            continue
+        try:
+            return float(text.replace(",", "."))
+        except ValueError:
+            continue
+    return None
+
+
 def _score_catalog_item(
     *,
     query_normalized: str,
@@ -49,6 +109,20 @@ def _score_catalog_item(
         return 80
     if any(query_normalized in relation_name for relation_name in relation_names):
         return 74
+    numeric_query_values = _parse_numeric_values(query_normalized)
+    row_area = _extract_row_area(row)
+    if numeric_query_values and row_area is not None:
+        best_delta = min(abs(row_area - value) for value in numeric_query_values)
+        if best_delta <= 0.01:
+            return 99
+        if best_delta <= 0.5:
+            return 96
+        if best_delta <= 1.0:
+            return 94
+        if best_delta <= 5.0:
+            return 88
+        if best_delta <= 15.0:
+            return 78
     query_tokens = [token for token in query_normalized.split(" ") if token]
     if not query_tokens:
         return 0
@@ -198,6 +272,7 @@ async def lookup_catalog_items_sql_first(
         limit=search_limit,
     )
     query_normalized = _normalize_text(query_text)
+    numeric_query_values = _parse_numeric_values(query_text)
     ranked: list[tuple[int, dict[str, Any]]] = []
     for row in rows:
         item_id = str(row.get("id") or "")
@@ -207,6 +282,21 @@ async def lookup_catalog_items_sql_first(
         if score <= 0:
             continue
         ranked.append((score, row))
+    if numeric_query_values and not ranked:
+        fallback_rows = await repo.list_catalog_items(
+            organizacion_id=organizacion_id,
+            include_inactive=False,
+            search=None,
+            limit=5000,
+        )
+        for row in fallback_rows:
+            item_id = str(row.get("id") or "")
+            if item_id and item_id in seen_ids:
+                continue
+            score = _score_catalog_item(query_normalized=query_normalized, row=row)
+            if score <= 0:
+                continue
+            ranked.append((score, row))
     if not ranked:
         relation_candidates: list[dict[str, Any]] = []
         relation_candidates.extend(
