@@ -862,6 +862,7 @@ async def test_guardar_prospectos_deduplica_email_y_telefono(
             "resultado_id": str(resultado_ids[0]),
             "fuente_resultado": "google_places",
             "fuente_busqueda": "google",
+            "busqueda_meta": {"query": "Pizza artesanal cerca de mi"},
             "display_name": "Contacto 1",
             "name": "Contacto 1",
             "phone": "55 1111 2222",
@@ -925,6 +926,8 @@ async def test_guardar_prospectos_deduplica_email_y_telefono(
     assert any(item.get("phone_e164") for item in fake_repo.last_upserted_prospectos)
     assert any(item.get("phone") == "55 3333 4444" for item in fake_repo.last_upserted_prospectos)
     assert any(item.get("email") == "otro@ejemplo.com" for item in fake_repo.last_upserted_prospectos)
+    assert fake_repo.last_upserted_prospectos[0].get("busqueda_ref")
+    assert fake_repo.last_upserted_prospectos[0].get("query_sort") == "Pizza artesanal cerca de mi"
 
 
 @pytest.mark.asyncio

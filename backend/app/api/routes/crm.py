@@ -7610,6 +7610,39 @@ def _build_prospecto_from_contactable(
     fuente_resultado = _clean_text(row.get("fuente_resultado"))
     display_name_value = _clean_text(row.get("display_name")) or _clean_text(row.get("name")) or "Prospecto"
     address_full_value = _clean_text(row.get("address_full")) or _clean_text(row.get("address"))
+    busqueda_ref_value = _clean_text(row.get("busqueda_ref")) or _clean_text(row.get("busqueda_id"))
+    query_sort_value = _clean_text(row.get("query_sort")) or _clean_text(row.get("query"))
+    if not query_sort_value:
+        query_sort_value = _clean_text(row.get("busqueda_query"))
+    if not busqueda_ref_value or not query_sort_value:
+        busqueda_value = row.get("busqueda")
+        if isinstance(busqueda_value, dict):
+            if not busqueda_ref_value:
+                busqueda_ref_value = (
+                    _clean_text(busqueda_value.get("id"))
+                    or _clean_text(busqueda_value.get("busqueda_id"))
+                    or _clean_text(busqueda_value.get("query"))
+                )
+            if not query_sort_value:
+                query_sort_value = _clean_text(busqueda_value.get("query"))
+                if not query_sort_value and isinstance(busqueda_value.get("meta"), dict):
+                    query_sort_value = _clean_text(busqueda_value["meta"].get("query"))
+    if not busqueda_ref_value or not query_sort_value:
+        busqueda_meta_value = row.get("busqueda_meta")
+        if isinstance(busqueda_meta_value, dict):
+            if not busqueda_ref_value:
+                busqueda_ref_value = (
+                    _clean_text(busqueda_meta_value.get("busqueda_id"))
+                    or _clean_text(busqueda_meta_value.get("id"))
+                    or _clean_text(busqueda_meta_value.get("query"))
+                )
+            if not query_sort_value:
+                query_sort_value = (
+                    _clean_text(busqueda_meta_value.get("query"))
+                    or _clean_text(busqueda_meta_value.get("busqueda_query"))
+                )
+    if not query_sort_value:
+        query_sort_value = busqueda_ref_value
     base_metadata: dict[str, Any] = {}
     busqueda_meta = row.get("busqueda_meta")
     if isinstance(busqueda_meta, dict):
@@ -7622,6 +7655,8 @@ def _build_prospecto_from_contactable(
         "resultado_id": row.get("resultado_id"),
         "fuente": row.get("fuente_resultado"),
         "fuente_busqueda": row.get("fuente_busqueda"),
+        "busqueda_ref": busqueda_ref_value,
+        "query_sort": query_sort_value,
         "display_name": display_name_value,
         "name": row.get("name"),
         "razon_social": row.get("razon_social"),
@@ -20585,7 +20620,7 @@ async def listar_busquedas_google(
     search: str | None = Query(default=None),
 ) -> dict[str, Any]:
     params: dict[str, str] = {
-        "select": "id,fuente,query,radio_m,lat,lng,meta,total_encontrados,creado_en",
+        "select": "id,fuente,query,radio_m,lat,lng,status,modo,source,recovered_at,denue_job_id,denue_batch_size,advanced_filters,meta,total_encontrados,creado_en",
         "order": "creado_en.desc",
         "limit": str(limit),
         "offset": str(offset),
@@ -20687,7 +20722,7 @@ async def listar_busquedas_denue(
     search: str | None = Query(default=None),
 ) -> dict[str, Any]:
     params: dict[str, str] = {
-        "select": "id,fuente,query,radio_m,lat,lng,meta,total_encontrados,creado_en",
+        "select": "id,fuente,query,radio_m,lat,lng,status,modo,source,recovered_at,denue_job_id,denue_batch_size,advanced_filters,meta,total_encontrados,creado_en",
         "order": "creado_en.desc",
         "limit": str(limit),
         "offset": str(offset),
@@ -35029,6 +35064,9 @@ def _buscador_result_to_prospecto(
         "website": website,
         "address": None,
         "segmento": segmento,
+        "buscador_job_id": str(job_id),
+        "buscador_result_id": row.get("id"),
+        "buscador_url": row.get("url"),
         "metadata": metadata,
     }
     return payload

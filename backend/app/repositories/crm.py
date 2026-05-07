@@ -15349,9 +15349,9 @@ class CRMRepository:
         offset = 0
         while True:
             params: dict[str, str] = {
-                "metadata->>buscador_job_id": f"eq.{job_id}",
+                "buscador_job_id": f"eq.{job_id}",
                 "organizacion_id": f"eq.{organizacion_id}",
-                "select": "metadata",
+                "select": "buscador_result_id",
                 "limit": str(chunk_value),
             }
             if offset:
@@ -15368,11 +15368,9 @@ class CRMRepository:
             if not data:
                 break
             for row in data:
-                metadata = row.get("metadata")
-                if isinstance(metadata, dict):
-                    value = metadata.get("buscador_result_id")
-                    if isinstance(value, str) and value:
-                        existing.add(value)
+                value = row.get("buscador_result_id")
+                if isinstance(value, str) and value:
+                    existing.add(value)
             if len(data) < chunk_value:
                 break
             offset += len(data)
