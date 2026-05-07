@@ -172,12 +172,17 @@ type ScianLookups = {
 
 function extractBusquedaMeta(item: DenueBusquedaItem): { source?: string; modo?: string; filters?: BusquedaMetaFilters } {
   const meta = item.meta;
+  const rawQuery = typeof item.query === "string" ? item.query.trim() : "";
   if (!meta || typeof meta !== "object") {
-    return {};
+    return {
+      modo: /^avanzada\b/i.test(rawQuery) ? "advanced" : undefined,
+    };
   }
   const source = typeof (meta as Record<string, unknown>).source === "string" ? String((meta as Record<string, unknown>).source) : undefined;
-  const modo = typeof (meta as Record<string, unknown>).modo === "string" ? String((meta as Record<string, unknown>).modo) : undefined;
   const advanced = (meta as Record<string, unknown>).advanced_filters;
+  const modoRaw = typeof (meta as Record<string, unknown>).modo === "string"
+    ? String((meta as Record<string, unknown>).modo).trim()
+    : "";
   const actividadNombres =
     advanced &&
     typeof advanced === "object" &&
@@ -207,6 +212,7 @@ function extractBusquedaMeta(item: DenueBusquedaItem): { source?: string; modo?:
           : undefined,
       }
       : undefined;
+  const modo = modoRaw || (advanced ? "advanced" : undefined) || (/^avanzada\b/i.test(rawQuery) ? "advanced" : undefined);
   return { source, modo, filters };
 }
 
