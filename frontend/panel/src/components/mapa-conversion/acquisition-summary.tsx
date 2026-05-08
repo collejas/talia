@@ -161,7 +161,7 @@ export function AcquisitionSummary({ summary, className }: Props) {
         </Card>
       </div>
 
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,calc(50%-1rem))_minmax(0,1fr)]">
         <Card className="h-full">
           <CardHeader>
             <CardTitle>Promociones y enlaces</CardTitle>
