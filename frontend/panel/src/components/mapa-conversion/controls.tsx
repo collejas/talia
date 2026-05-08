@@ -441,11 +441,11 @@ export function DemografiaControls({
                 <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
                   Forma de ver el mapa
                 </p>
-                <div className="grid grid-cols-2 gap-2">
+                <div className="grid gap-2">
                   <Button
                     type="button"
                     size="sm"
-                    className="h-8"
+                    className="h-8 w-full justify-start"
                     variant={color === "sequential" ? "default" : "outline"}
                     onClick={() => updateParams({ color: null })}
                   >
@@ -454,7 +454,7 @@ export function DemografiaControls({
                   <Button
                     type="button"
                     size="sm"
-                    className="h-8"
+                    className="h-8 w-full justify-start"
                     variant={color === "channel" ? "default" : "outline"}
                     onClick={() => updateParams({ color: "channel" })}
                   >
@@ -577,7 +577,7 @@ export function DemografiaControls({
                 </Select>
               </div>
 
-              <div className="grid gap-3 sm:grid-cols-2">
+              <div className="grid gap-3">
                 <div className="space-y-1">
                   <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
                     Periodo
@@ -609,7 +609,7 @@ export function DemografiaControls({
                   <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
                     Fechas
                   </p>
-                  <div className="grid grid-cols-2 gap-2">
+                  <div className="grid gap-2">
                     <Input
                       type="date"
                       value={desdeDraft}
