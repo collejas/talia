@@ -69,7 +69,7 @@ export function AcquisitionSummary({ summary, className }: Props) {
     React.useMemo(() => buildAcquisitionMetrics(summary), [summary]);
   return (
     <section className={cn("grid gap-4", className)}>
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1.35fr)_minmax(0,0.85fr)_minmax(0,0.55fr)]">
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,3fr)_minmax(0,2.1fr)_minmax(0,0.9fr)]">
         <Card className="h-full">
           <CardHeader>
             <CardTitle>Visitas por tipo de visita</CardTitle>
@@ -161,7 +161,7 @@ export function AcquisitionSummary({ summary, className }: Props) {
         </Card>
       </div>
 
-      <div className="grid gap-4 xl:grid-cols-2">
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
         <Card className="h-full">
           <CardHeader>
             <CardTitle>Promociones y enlaces</CardTitle>
