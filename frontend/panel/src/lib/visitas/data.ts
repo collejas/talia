@@ -26,7 +26,9 @@ type WhatsappConversationRow = {
     country_name?: string | null;
     state_code?: string | null;
     state_name?: string | null;
+    municipality_code?: string | null;
     municipality_name?: string | null;
+    municipality_cvegeo?: string | null;
     lada?: string | null;
     ok?: boolean | null;
   } | null;
@@ -121,7 +123,9 @@ export type VisitDetailRaw = {
     country_name?: string | null;
     state_code?: string | null;
     state_name?: string | null;
+    municipality_code?: string | null;
     municipality_name?: string | null;
+    municipality_cvegeo?: string | null;
     lada?: string | null;
     ok?: boolean | null;
   } | null;
@@ -1051,7 +1055,9 @@ function mapWhatsappRows(rows?: WhatsappConversationRow[] | null): VisitDetailRa
           lada: apiLocation.lada ?? null,
           stateCode: apiLocation.state_code ?? null,
           stateName: apiLocation.state_name ?? null,
+          municipalityCode: apiLocation.municipality_code ?? null,
           municipalityName: apiLocation.municipality_name ?? null,
+          municipalityCvegeo: apiLocation.municipality_cvegeo ?? null,
         }
       : {
           countryCode: null,
@@ -1059,7 +1065,9 @@ function mapWhatsappRows(rows?: WhatsappConversationRow[] | null): VisitDetailRa
           lada: null,
           stateCode: null,
           stateName: null,
+          municipalityCode: null,
           municipalityName: null,
+          municipalityCvegeo: null,
         };
     const atribucion = row.whatsapp_atribucion ?? {};
     const templateId =
@@ -1102,7 +1110,9 @@ function mapWhatsappRows(rows?: WhatsappConversationRow[] | null): VisitDetailRa
             country_name: apiLocation.country_name ?? null,
             state_code: apiLocation.state_code ?? null,
             state_name: apiLocation.state_name ?? null,
+            municipality_code: apiLocation.municipality_code ?? null,
             municipality_name: apiLocation.municipality_name ?? null,
+            municipality_cvegeo: apiLocation.municipality_cvegeo ?? null,
             lada: apiLocation.lada ?? null,
             ok: apiLocation.ok ?? null,
           }
@@ -1136,9 +1146,9 @@ function mapWhatsappRows(rows?: WhatsappConversationRow[] | null): VisitDetailRa
       city_name: location.municipalityName,
       cve_ent: location.stateCode,
       nom_ent: location.stateName,
-      cve_mun: null,
+      cve_mun: location.municipalityCode,
       nom_mun: location.municipalityName,
-      cvegeo: null,
+      cvegeo: location.municipalityCvegeo,
       ubicacion_cache: null,
       device_type: null,
       dispositivo_cache: null,

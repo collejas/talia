@@ -234,14 +234,25 @@ export function LocationComparisonChart({
   const [hoveredKey, setHoveredKey] = useState<string | null>(null);
 
   const selectedKey = useMemo(() => {
-    if (manualSelectedKey && data.some((entry) => entry.key === manualSelectedKey)) {
+    if (
+      manualSelectedKey &&
+      data.some(
+        (entry) =>
+          entry.key === manualSelectedKey &&
+          resolveFilteredEntryTotal(entry, activeChannelSet, allowLeadFallback) > 0,
+      )
+    ) {
       return manualSelectedKey;
     }
     if (nivel === "pais" || nivel === "municipio") {
       return null;
     }
-    return data.find((entry) => entry.has_data)?.key ?? data[0]?.key ?? null;
-  }, [data, manualSelectedKey, nivel]);
+    return (
+      data.find((entry) => resolveFilteredEntryTotal(entry, activeChannelSet, allowLeadFallback) > 0)?.key ??
+      data[0]?.key ??
+      null
+    );
+  }, [activeChannelSet, allowLeadFallback, data, manualSelectedKey, nivel]);
 
   const enhancedGeojson = useMemo<GeoJSONType | null>(() => {
     if (!shape || typeof shape !== "object") return null;
@@ -301,13 +312,13 @@ export function LocationComparisonChart({
   const keysWithData = useMemo(() => {
     const set = new Set<string>();
     for (const entry of data) {
-      if (!entry.has_data) continue;
+      if (resolveFilteredEntryTotal(entry, activeChannelSet, allowLeadFallback) <= 0) continue;
       if (entry.key) {
         set.add(entry.key);
       }
     }
     return set;
-  }, [data]);
+  }, [activeChannelSet, allowLeadFallback, data]);
 
   const selectedEntry = selectedKey ? datasetMap.get(selectedKey) ?? null : null;
   const hoveredEntry = hoveredKey ? datasetMap.get(hoveredKey) ?? null : null;
@@ -452,7 +463,7 @@ export function LocationComparisonChart({
       if (entry.key !== manualSelectedKey) {
         setManualSelectedKey(entry.key);
       }
-      if (!entry.has_data) return;
+      if (resolveFilteredEntryTotal(entry, activeChannelSet, allowLeadFallback) <= 0) return;
       const nextLevel = entry.next_level;
       if (!nextLevel) return;
 
@@ -474,7 +485,7 @@ export function LocationComparisonChart({
       }
       router.replace(`/mapa-de-conversion?${params.toString()}`, { scroll: false });
     },
-    [activeChannels, manualSelectedKey, router, searchParams, setManualSelectedKey],
+    [activeChannelSet, activeChannels, allowLeadFallback, manualSelectedKey, router, searchParams, setManualSelectedKey],
   );
 
   const style = useCallback(
@@ -486,7 +497,6 @@ export function LocationComparisonChart({
           acc + resolveFilteredEntryTotal(current, activeChannelSet, allowLeadFallback),
         0,
       );
-      const hasData = entries.some((current) => Boolean(current.has_data));
       const isSelected = entries.some(
         (current) => current?.key && selectedKey && current.key === selectedKey,
       );
@@ -494,7 +504,7 @@ export function LocationComparisonChart({
         (current) => current?.key && hoveredKey && current.key === hoveredKey,
       );
 
-      if (!primaryEntry || !hasData || maxTotal <= 0 || total <= 0) {
+      if (!primaryEntry || maxTotal <= 0 || total <= 0) {
         return {
           color: isSelected || isHovered ? "hsl(var(--primary)/0.4)" : "hsl(var(--foreground)/0.1)",
           weight: isSelected || isHovered ? 1.75 : 1,
@@ -915,9 +925,11 @@ function resolveChannelStyle(
     allowedChannels && allowedChannels.size ? Array.from(allowedChannels)[0] : CHANNEL_KEYS[0];
   const topChannel = sorted.find(([, value]) => (Number(value) ?? 0) > 0)?.[0] ?? fallbackChannel;
   const baseColor = CHANNEL_COLORS[topChannel] ?? DEFAULT_CHANNEL_COLOR;
-  const factor = Math.min(1, Math.max(0, Math.pow(intensity || 0.25, 0.75)));
+  // Evitamos que valores bajos se mezclen demasiado con blanco; si no, en WhatsApp
+  // un municipio con pocos eventos termina viéndose "sin color" aunque sí tenga datos.
+  const factor = Math.min(1, Math.max(0.35, Math.pow(intensity || 0.25, 0.75)));
   const [r, g, b] = mixWithWhite(baseColor, factor);
-  const baseOpacity = 0.55 + factor * 0.35;
+  const baseOpacity = 0.65 + factor * 0.25;
   const fillOpacity = isActive ? Math.min(1, baseOpacity + 0.15) : baseOpacity;
   return {
     fillColor: `rgb(${r}, ${g}, ${b})`,
