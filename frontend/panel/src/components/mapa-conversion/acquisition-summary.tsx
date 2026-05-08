@@ -28,17 +28,16 @@ type Props = {
 };
 
 const SOURCE_CLASS_CONFIG: ChartConfig = {
-  total: { label: "Sesiones", color: "hsl(var(--chart-1))" },
-  converted: { label: "Convertidas", color: "hsl(var(--chart-2))" },
+  total: { label: "Sesiones", color: "var(--chart-1)" },
+  converted: { label: "Convertidas", color: "var(--chart-2)" },
 };
 
 const WHATSAPP_COLORS = [
-  "hsl(var(--chart-1))",
-  "hsl(var(--chart-2))",
-  "hsl(var(--chart-3))",
-  "hsl(var(--chart-4))",
-  "hsl(var(--chart-5))",
-  "hsl(var(--chart-6))",
+  "var(--chart-1)",
+  "var(--chart-2)",
+  "var(--chart-3)",
+  "var(--chart-4)",
+  "var(--chart-5)",
 ];
 
 function toNumber(value: unknown): number {
@@ -199,7 +198,7 @@ export function AcquisitionSummary({ summary, className }: Props) {
               <>
                 <ChartContainer
                   config={{
-                    total: { label: "Inicios", color: "hsl(var(--chart-1))" },
+                    total: { label: "Inicios", color: "var(--chart-1)" },
                   }}
                   className="h-56"
                 >

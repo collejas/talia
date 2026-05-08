@@ -37,18 +37,18 @@ type Segment = {
 };
 
 const CHANNEL_CONFIG: ChartConfig = {
-  webchat: { label: "Chat del sitio", color: "hsl(var(--chart-1))" },
-  whatsapp: { label: "WhatsApp", color: "hsl(var(--chart-2))" },
-  voz: { label: "Voz", color: "hsl(var(--chart-3))" },
-  correo: { label: "Correo", color: "hsl(var(--chart-4))" },
+  webchat: { label: "Chat del sitio", color: "var(--chart-1)" },
+  whatsapp: { label: "WhatsApp", color: "var(--chart-2)" },
+  voz: { label: "Voz", color: "var(--chart-3)" },
+  correo: { label: "Correo", color: "var(--chart-4)" },
 };
 
 const STAGE_CONFIG: ChartConfig = {
-  captado: { label: "Captado", color: "hsl(var(--chart-1))" },
-  precalificado: { label: "Precalificado", color: "hsl(var(--chart-2))" },
-  negociacion: { label: "Negociación", color: "hsl(var(--chart-3))" },
-  ganado: { label: "Ganado", color: "hsl(var(--chart-4))" },
-  perdido: { label: "Perdido", color: "hsl(var(--chart-5))" },
+  captado: { label: "Captado", color: "var(--chart-1)" },
+  precalificado: { label: "Precalificado", color: "var(--chart-2)" },
+  negociacion: { label: "Negociación", color: "var(--chart-3)" },
+  ganado: { label: "Ganado", color: "var(--chart-4)" },
+  perdido: { label: "Perdido", color: "var(--chart-5)" },
 };
 
 const STAGE_ORDER: Array<keyof typeof STAGE_CONFIG> = [
@@ -58,6 +58,11 @@ const STAGE_ORDER: Array<keyof typeof STAGE_CONFIG> = [
   "ganado",
   "perdido",
 ];
+
+const CONTACT_BAR_COLORS: Record<"con" | "sin", string> = {
+  con: "var(--chart-1)",
+  sin: "var(--chart-3)",
+};
 
 function sanitizeNumber(value: unknown): number {
   if (typeof value === "number" && Number.isFinite(value)) return value;
@@ -245,8 +250,9 @@ export function MapaConversionRowDetail({ row, nivel, summary }: Props) {
               </div>
               <div className="bg-muted relative h-2 overflow-hidden rounded-full">
                 <div
-                  className="bg-primary absolute left-0 top-0 h-full rounded-full"
+                  className="absolute left-0 top-0 h-full rounded-full"
                   style={{
+                    backgroundColor: item.label === "Con contacto" ? CONTACT_BAR_COLORS.con : CONTACT_BAR_COLORS.sin,
                     width: totalVisitas > 0 ? `${Math.min(100, (item.value / totalVisitas) * 100)}%` : "0%",
                   }}
                 />

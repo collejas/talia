@@ -598,6 +598,7 @@ export function DemografiaControls({
                     </SelectTrigger>
                     <SelectContent className="z-50">
                       <SelectItem value="hoy">Hoy</SelectItem>
+                      <SelectItem value="ayer">Ayer</SelectItem>
                       <SelectItem value="7d">Últimos 7 días</SelectItem>
                       <SelectItem value="30d">Últimos 30 días</SelectItem>
                       <SelectItem value="mes">Último mes</SelectItem>

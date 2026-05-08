@@ -18,6 +18,14 @@ import { cn } from "@/lib/utils";
 
 const CHANNEL_KEYS = ["webchat", "whatsapp", "voz", "correo"] as const;
 type ChannelKey = (typeof CHANNEL_KEYS)[number];
+type RgbTuple = [number, number, number];
+
+const CHANNEL_THEME_VARS: Record<ChannelKey, string> = {
+  webchat: "--chart-1",
+  whatsapp: "--chart-2",
+  voz: "--chart-3",
+  correo: "--chart-4",
+};
 
 export type LocationComparisonChartProps = {
   data: DemografiaMapResponse["dataset"];
@@ -95,13 +103,13 @@ function resolveFeatureCandidates(feature: Feature): string[] {
   return Array.from(variants);
 }
 
-const CHANNEL_COLORS: Record<ChannelKey, [number, number, number]> = {
-  webchat: [59, 130, 246], // #3b82f6
-  whatsapp: [34, 197, 94], // #22c55e
-  voz: [249, 115, 22], // #f97316
-  correo: [14, 116, 144], // #0e7490
+const FALLBACK_CHANNEL_COLORS: Record<ChannelKey, RgbTuple> = {
+  webchat: [59, 130, 246],
+  whatsapp: [34, 197, 94],
+  voz: [249, 115, 22],
+  correo: [14, 116, 144],
 };
-const DEFAULT_CHANNEL_COLOR: [number, number, number] = [148, 163, 184]; // slate
+const DEFAULT_CHANNEL_COLOR: RgbTuple = [148, 163, 184];
 const CHANNEL_LABELS: Record<ChannelKey, string> = {
   webchat: "Chat del sitio",
   whatsapp: "WhatsApp",
@@ -113,6 +121,150 @@ function normalizeChannelKey(value: string | null | undefined): ChannelKey | nul
   if (typeof value !== "string") return null;
   const normalized = value.toLowerCase();
   return CHANNEL_KEYS.includes(normalized as ChannelKey) ? (normalized as ChannelKey) : null;
+}
+
+function useThemeVersion(): number {
+  const [version, setVersion] = useState(0);
+
+  useEffect(() => {
+    if (typeof document === "undefined") return undefined;
+    const observer = new MutationObserver(() => {
+      setVersion((current) => current + 1);
+    });
+    observer.observe(document.body, {
+      attributes: true,
+      attributeFilter: ["class"],
+    });
+    return () => observer.disconnect();
+  }, []);
+
+  return version;
+}
+
+function resolveThemeChannelColors(): Record<ChannelKey, RgbTuple> {
+  if (typeof window === "undefined" || typeof document === "undefined") {
+    return FALLBACK_CHANNEL_COLORS;
+  }
+
+  const computed = getComputedStyle(document.body);
+  return CHANNEL_KEYS.reduce((acc, channel) => {
+    const raw = computed.getPropertyValue(CHANNEL_THEME_VARS[channel]).trim();
+    acc[channel] = parseCssColorToRgb(raw) ?? FALLBACK_CHANNEL_COLORS[channel];
+    return acc;
+  }, {} as Record<ChannelKey, RgbTuple>);
+}
+
+function parseCssColorToRgb(value: string): RgbTuple | null {
+  if (!value) return null;
+  const normalized = value.trim().toLowerCase();
+
+  if (normalized.startsWith("#")) {
+    return parseHexColor(normalized);
+  }
+
+  if (normalized.startsWith("rgb")) {
+    return parseRgbColor(normalized);
+  }
+
+  if (normalized.startsWith("oklch")) {
+    return parseOklchColor(normalized);
+  }
+
+  if (normalized.startsWith("color(")) {
+    return parseColorFunction(normalized);
+  }
+
+  return null;
+}
+
+function parseHexColor(value: string): RgbTuple | null {
+  const hex = value.slice(1);
+  let normalized = hex;
+
+  if (hex.length === 3 || hex.length === 4) {
+    normalized = hex
+      .slice(0, 3)
+      .split("")
+      .map((part) => part + part)
+      .join("");
+  } else if (hex.length === 6 || hex.length === 8) {
+    normalized = hex.slice(0, 6);
+  } else {
+    return null;
+  }
+
+  const parsed = Number.parseInt(normalized, 16);
+  if (!Number.isFinite(parsed)) return null;
+  return [
+    (parsed >> 16) & 255,
+    (parsed >> 8) & 255,
+    parsed & 255,
+  ];
+}
+
+function parseRgbColor(value: string): RgbTuple | null {
+  const parts = value.match(/[-+]?\d*\.?\d+%?/g);
+  if (!parts || parts.length < 3) return null;
+  const channels = parts.slice(0, 3).map((part) => {
+    if (part.endsWith("%")) {
+      return Math.round((Number.parseFloat(part) / 100) * 255);
+    }
+    return Math.round(Number.parseFloat(part));
+  });
+  if (channels.some((component) => !Number.isFinite(component))) return null;
+  return channels as RgbTuple;
+}
+
+function parseColorFunction(value: string): RgbTuple | null {
+  const parts = value.match(/[-+]?\d*\.?\d+%?/g);
+  if (!parts || parts.length < 3) return null;
+  const channels = parts.slice(0, 3).map((part) => {
+    const numeric = Number.parseFloat(part);
+    if (!Number.isFinite(numeric)) return Number.NaN;
+    return Math.round(numeric <= 1 ? numeric * 255 : numeric);
+  });
+  if (channels.some((component) => !Number.isFinite(component))) return null;
+  return channels as RgbTuple;
+}
+
+function parseOklchColor(value: string): RgbTuple | null {
+  const parts = value.match(/[-+]?\d*\.?\d+%?/g);
+  if (!parts || parts.length < 3) return null;
+
+  const lightness = Number.parseFloat(parts[0]) / (parts[0].endsWith("%") ? 100 : 1);
+  const chroma = Number.parseFloat(parts[1]);
+  const hue = Number.parseFloat(parts[2]);
+
+  if (![lightness, chroma, hue].every((component) => Number.isFinite(component))) {
+    return null;
+  }
+
+  const hueRad = (hue * Math.PI) / 180;
+  const a = chroma * Math.cos(hueRad);
+  const b = chroma * Math.sin(hueRad);
+
+  const l_ = lightness + 0.3963377774 * a + 0.2158037573 * b;
+  const m_ = lightness - 0.1055613458 * a - 0.0638541728 * b;
+  const s_ = lightness - 0.0894841775 * a - 1.2914855480 * b;
+
+  const l = l_ ** 3;
+  const m = m_ ** 3;
+  const s = s_ ** 3;
+
+  const linearRgb: RgbTuple = [
+    4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s,
+    -1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s,
+    -0.0041960863 * l - 0.7034186147 * m + 1.7076147010 * s,
+  ];
+
+  return linearRgb.map((component) => {
+    const clamped = Math.min(1, Math.max(0, component));
+    const encoded =
+      clamped <= 0.0031308
+        ? 12.92 * clamped
+        : 1.055 * Math.pow(clamped, 1 / 2.4) - 0.055;
+    return Math.round(encoded * 255);
+  }) as RgbTuple;
 }
 
 function resolveChannelTotal(
@@ -219,6 +371,8 @@ export function LocationComparisonChart({
   const showWhatsappConversationMetrics = activeChannelSet.has("whatsapp");
   const allowLeadFallback = !attributionFilterActive;
   const displayedChannelKeys = activeChannels.length ? activeChannels : CHANNEL_KEYS;
+  const themeVersion = useThemeVersion();
+  const channelColors = useMemo(() => resolveThemeChannelColors(), [themeVersion]);
 
   const datasetMap = useMemo(() => {
     const map = new Map<string, (typeof data)[number]>();
@@ -293,8 +447,8 @@ export function LocationComparisonChart({
 
   const mapLayerKey = useMemo(() => {
     if (!enhancedGeojson) return `empty-${activeChannels.join("|")}`;
-    return `${JSON.stringify(enhancedGeojson)}-${activeChannels.join("|")}-${colorMode}-${attributionFilterActive ? "attr-on" : "attr-off"}-${dataSignature}`;
-  }, [activeChannels, attributionFilterActive, colorMode, dataSignature, enhancedGeojson]);
+    return `${JSON.stringify(enhancedGeojson)}-${activeChannels.join("|")}-${colorMode}-${attributionFilterActive ? "attr-on" : "attr-off"}-${dataSignature}-${themeVersion}`;
+  }, [activeChannels, attributionFilterActive, colorMode, dataSignature, enhancedGeojson, themeVersion]);
 
   const maxTotal = useMemo(() => {
     return (
@@ -520,6 +674,7 @@ export function LocationComparisonChart({
           intensity,
           Boolean(isSelected || isHovered),
           activeChannelSet,
+          channelColors,
         );
         return {
           color: isSelected || isHovered ? "hsl(var(--primary)/0.6)" : "hsl(var(--foreground)/0.18)",
@@ -539,7 +694,7 @@ export function LocationComparisonChart({
         fillOpacity: isSelected || isHovered ? 0.82 : 0.72,
       };
     },
-    [activeChannelSet, allowLeadFallback, colorMode, datasetMap, hoveredKey, maxTotal, selectedKey],
+    [activeChannelSet, allowLeadFallback, channelColors, colorMode, datasetMap, hoveredKey, maxTotal, selectedKey],
   );
 
   const onEachFeature = useCallback(
@@ -628,7 +783,7 @@ export function LocationComparisonChart({
           label: `Total ${CHANNEL_LABELS[channel]}`,
           value: formatNumber(total),
           monospace: true,
-          color: resolveChannelColor(channel),
+          color: resolveChannelColor(channel, channelColors),
         });
         if (showConversationMetrics && channel === "webchat") {
           rows.push(
@@ -676,6 +831,7 @@ export function LocationComparisonChart({
     [
       activeChannelSet,
       allowLeadFallback,
+      channelColors,
       datasetMap,
       displayedChannelKeys,
       handleFeatureClick,
@@ -906,6 +1062,7 @@ function resolveChannelStyle(
   intensity: number,
   isActive: boolean,
   allowedChannels?: Set<ChannelKey>,
+  channelColors: Record<ChannelKey, RgbTuple> = FALLBACK_CHANNEL_COLORS,
 ): { fillColor: string; fillOpacity: number } {
   const totals = entry.totales_por_canal || {};
   const filteredTotals = Object.entries(totals)
@@ -924,7 +1081,7 @@ function resolveChannelStyle(
   const fallbackChannel =
     allowedChannels && allowedChannels.size ? Array.from(allowedChannels)[0] : CHANNEL_KEYS[0];
   const topChannel = sorted.find(([, value]) => (Number(value) ?? 0) > 0)?.[0] ?? fallbackChannel;
-  const baseColor = CHANNEL_COLORS[topChannel] ?? DEFAULT_CHANNEL_COLOR;
+  const baseColor = channelColors[topChannel] ?? DEFAULT_CHANNEL_COLOR;
   // Evitamos que valores bajos se mezclen demasiado con blanco; si no, en WhatsApp
   // un municipio con pocos eventos termina viéndose "sin color" aunque sí tenga datos.
   const factor = Math.min(1, Math.max(0.35, Math.pow(intensity || 0.25, 0.75)));
@@ -1028,9 +1185,12 @@ function MapTooltipContent({ title, rows }: MapTooltipContentProps) {
   );
 }
 
-function resolveChannelColor(channel: string | null | undefined): string {
+function resolveChannelColor(
+  channel: string | null | undefined,
+  channelColors: Record<ChannelKey, RgbTuple> = FALLBACK_CHANNEL_COLORS,
+): string {
   const normalized = normalizeChannelKey(channel);
-  const color = normalized ? CHANNEL_COLORS[normalized] : DEFAULT_CHANNEL_COLOR;
+  const color = normalized ? channelColors[normalized] : DEFAULT_CHANNEL_COLOR;
   return `rgb(${color.join(", ")})`;
 }
 
