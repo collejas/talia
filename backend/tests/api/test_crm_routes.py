@@ -261,6 +261,9 @@ class DummyCRMRepository(CRMRepository):
                 "oportunidad_id": None,
                 "creado_por_usuario_id": None,
                 "asignado_a_usuario_id": None,
+                "completado_en": None,
+                "cancelado_en": None,
+                "cerrado_por_usuario_id": None,
                 "metadata": {},
                 "creado_en": "2024-01-01T00:00:00Z",
                 "actualizado_en": "2024-01-01T00:00:00Z",
@@ -275,9 +278,72 @@ class DummyCRMRepository(CRMRepository):
             **kwargs["payload"],
             "estado": kwargs["payload"].get("estado", "pendiente"),
             "prioridad": kwargs["payload"].get("prioridad", "media"),
+            "completado_en": kwargs["payload"].get("completado_en"),
+            "cancelado_en": kwargs["payload"].get("cancelado_en"),
+            "cerrado_por_usuario_id": kwargs["payload"].get("cerrado_por_usuario_id"),
             "creado_en": "2024-01-01T00:00:00Z",
             "actualizado_en": "2024-01-01T00:00:00Z",
         }
+
+    async def update_activity(self, **kwargs: Any) -> dict[str, Any]:
+        self.calls.append(("update_activity", kwargs))
+        body = kwargs["payload"].copy()
+        return {
+            "id": str(kwargs["activity_id"]),
+            "organizacion_id": str(kwargs["organizacion_id"]),
+            "tipo": body.get("tipo", "llamada"),
+            "canal": body.get("canal"),
+            "asunto": body.get("asunto", "Seguimiento"),
+            "descripcion": body.get("descripcion"),
+            "estado": body.get("estado", "pendiente"),
+            "prioridad": body.get("prioridad", "media"),
+            "fecha_vencimiento": body.get("fecha_vencimiento"),
+            "inicio_en": body.get("inicio_en"),
+            "fin_en": body.get("fin_en"),
+            "sla_horas": body.get("sla_horas"),
+            "recordatorio_en": body.get("recordatorio_en"),
+            "cuenta_id": body.get("cuenta_id"),
+            "contacto_id": body.get("contacto_id"),
+            "oportunidad_id": body.get("oportunidad_id"),
+            "creado_por_usuario_id": body.get("creado_por_usuario_id"),
+            "asignado_a_usuario_id": body.get("asignado_a_usuario_id"),
+            "completado_en": body.get("completado_en"),
+            "cancelado_en": body.get("cancelado_en"),
+            "cerrado_por_usuario_id": body.get("cerrado_por_usuario_id"),
+            "metadata": body.get("metadata", {}),
+            "creado_en": "2024-01-01T00:00:00Z",
+            "actualizado_en": "2024-01-01T00:00:00Z",
+        }
+
+    async def complete_activity(self, **kwargs: Any) -> dict[str, Any]:
+        self.calls.append(("complete_activity", kwargs))
+        return await self.update_activity(
+            activity_id=kwargs["activity_id"],
+            organizacion_id=kwargs["organizacion_id"],
+            payload={
+                "estado": "completada",
+                "completado_en": "2024-01-03T00:00:00Z",
+                "cancelado_en": None,
+                "cerrado_por_usuario_id": str(kwargs.get("cerrado_por_usuario_id"))
+                if kwargs.get("cerrado_por_usuario_id")
+                else None,
+            },
+        )
+
+    async def cancel_activity(self, **kwargs: Any) -> dict[str, Any]:
+        self.calls.append(("cancel_activity", kwargs))
+        return await self.update_activity(
+            activity_id=kwargs["activity_id"],
+            organizacion_id=kwargs["organizacion_id"],
+            payload={
+                "estado": "cancelada",
+                "cancelado_en": "2024-01-03T00:00:00Z",
+                "completado_en": None,
+                "cerrado_por_usuario_id": str(kwargs.get("cerrado_por_usuario_id"))
+                if kwargs.get("cerrado_por_usuario_id")
+                else None,
+            },
+        )
 
     async def get_activity(self, **kwargs: Any) -> dict[str, Any] | None:
         self.calls.append(("get_activity", kwargs))
@@ -302,6 +368,9 @@ class DummyCRMRepository(CRMRepository):
             "oportunidad_id": None,
             "creado_por_usuario_id": None,
             "asignado_a_usuario_id": None,
+            "completado_en": None,
+            "cancelado_en": None,
+            "cerrado_por_usuario_id": None,
             "metadata": {},
             "creado_en": "2024-01-01T00:00:00Z",
             "actualizado_en": "2024-01-01T00:00:00Z",
@@ -789,6 +858,7 @@ class DummyCRMRepository(CRMRepository):
                 "organizacion_id": str(kwargs["organizacion_id"]),
                 "relacion_tipo": kwargs.get("relacion_tipo") or "oportunidad",
                 "relacion_id": str(kwargs.get("relacion_id") or uuid.uuid4()),
+                "actividad_id": str(kwargs.get("actividad_id") or uuid.uuid4()) if kwargs.get("actividad_id") else None,
                 "texto": "Nota interna",
                 "visible_para_cliente": False,
                 "tipo": "interna",
@@ -806,6 +876,7 @@ class DummyCRMRepository(CRMRepository):
             **kwargs["payload"],
             "visible_para_cliente": kwargs["payload"].get("visible_para_cliente", False),
             "tipo": kwargs["payload"].get("tipo", "interna"),
+            "actividad_id": kwargs["payload"].get("actividad_id"),
             "creado_en": "2024-01-01T00:00:00Z",
             "actualizado_en": "2024-01-01T00:00:00Z",
         }
@@ -1791,6 +1862,14 @@ async def test_list_notes(client: AsyncClient) -> None:
 
 
 @pytest.mark.asyncio
+async def test_list_notes_by_activity(client: AsyncClient) -> None:
+    activity_id = uuid.uuid4()
+    resp = await client.get(f"/crm/notas?actividad_id={activity_id}", headers=_headers())
+    assert resp.status_code == 200
+    assert resp.json()[0]["actividad_id"] == str(activity_id)
+
+
+@pytest.mark.asyncio
 async def test_create_note(client: AsyncClient) -> None:
     body = {
         "relacion_tipo": "oportunidad",
@@ -1800,6 +1879,54 @@ async def test_create_note(client: AsyncClient) -> None:
     resp = await client.post("/crm/notas", headers=_headers(), json=body)
     assert resp.status_code == 201
     assert resp.json()["texto"] == "Seguimiento interno"
+
+
+@pytest.mark.asyncio
+async def test_create_note_with_activity_id(client: AsyncClient) -> None:
+    activity_id = uuid.uuid4()
+    body = {
+        "relacion_tipo": "oportunidad",
+        "relacion_id": str(uuid.uuid4()),
+        "actividad_id": str(activity_id),
+        "texto": "Seguimiento ligado a actividad",
+    }
+    resp = await client.post("/crm/notas", headers=_headers(), json=body)
+    assert resp.status_code == 201
+    assert resp.json()["actividad_id"] == str(activity_id)
+
+
+@pytest.mark.asyncio
+async def test_update_activity(client: AsyncClient) -> None:
+    activity_id = uuid.uuid4()
+    body = {
+        "asunto": "Nuevo seguimiento",
+        "prioridad": "alta",
+    }
+    resp = await client.patch(f"/crm/actividades/{activity_id}", headers=_headers(), json=body)
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["asunto"] == "Nuevo seguimiento"
+    assert data["prioridad"] == "alta"
+
+
+@pytest.mark.asyncio
+async def test_complete_activity(client: AsyncClient) -> None:
+    activity_id = uuid.uuid4()
+    resp = await client.post(f"/crm/actividades/{activity_id}/completar", headers=_headers())
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["estado"] == "completada"
+    assert data["completado_en"] is not None
+
+
+@pytest.mark.asyncio
+async def test_cancel_activity(client: AsyncClient) -> None:
+    activity_id = uuid.uuid4()
+    resp = await client.post(f"/crm/actividades/{activity_id}/cancelar", headers=_headers())
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["estado"] == "cancelada"
+    assert data["cancelado_en"] is not None
 
 
 @pytest.mark.asyncio

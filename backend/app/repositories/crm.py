@@ -1583,6 +1583,8 @@ class CRMRepository:
         oportunidad_id: UUID | None = None,
         cuenta_id: UUID | None = None,
         contacto_id: UUID | None = None,
+        asignado_a_usuario_id: UUID | None = None,
+        estado: str | None = None,
         limit: int = 50,
         offset: int = 0,
     ) -> list[dict[str, Any]]:
@@ -1598,6 +1600,10 @@ class CRMRepository:
             params["cuenta_id"] = f"eq.{cuenta_id}"
         if contacto_id:
             params["contacto_id"] = f"eq.{contacto_id}"
+        if asignado_a_usuario_id:
+            params["asignado_a_usuario_id"] = f"eq.{asignado_a_usuario_id}"
+        if estado:
+            params["estado"] = f"eq.{estado}"
         resp = await self._request("GET", "/rest/v1/actividades", params=params)
         data = resp.json()
         if not isinstance(data, list):
@@ -1624,6 +1630,75 @@ class CRMRepository:
         if not isinstance(row, dict):
             raise CRMRepositoryError(f"Respuesta inválida al crear actividad: {row!r}")
         return row
+
+    async def update_activity(
+        self,
+        *,
+        organizacion_id: UUID,
+        activity_id: UUID,
+        payload: dict[str, Any],
+    ) -> dict[str, Any]:
+        if not payload:
+            raise CRMRepositoryError("activity_update_empty")
+        params = {
+            "id": f"eq.{activity_id}",
+            "organizacion_id": f"eq.{organizacion_id}",
+            "limit": "1",
+        }
+        resp = await self._request(
+            "PATCH",
+            "/rest/v1/actividades",
+            params=params,
+            json=payload,
+            prefer="return=representation",
+        )
+        data = resp.json()
+        if not isinstance(data, list) or not data:
+            raise CRMRepositoryError("Supabase no devolvió la actividad actualizada")
+        row = data[0]
+        if not isinstance(row, dict):
+            raise CRMRepositoryError(f"Respuesta inválida al actualizar actividad: {row!r}")
+        return row
+
+    async def complete_activity(
+        self,
+        *,
+        organizacion_id: UUID,
+        activity_id: UUID,
+        cerrado_por_usuario_id: UUID | None = None,
+    ) -> dict[str, Any]:
+        payload: dict[str, Any] = {
+            "estado": "completada",
+            "completado_en": datetime.now(timezone.utc).isoformat(),
+            "cancelado_en": None,
+        }
+        if cerrado_por_usuario_id:
+            payload["cerrado_por_usuario_id"] = str(cerrado_por_usuario_id)
+        return await self.update_activity(
+            organizacion_id=organizacion_id,
+            activity_id=activity_id,
+            payload=payload,
+        )
+
+    async def cancel_activity(
+        self,
+        *,
+        organizacion_id: UUID,
+        activity_id: UUID,
+        cerrado_por_usuario_id: UUID | None = None,
+    ) -> dict[str, Any]:
+        payload: dict[str, Any] = {
+            "estado": "cancelada",
+            "cancelado_en": datetime.now(timezone.utc).isoformat(),
+            "completado_en": None,
+        }
+        if cerrado_por_usuario_id:
+            payload["cerrado_por_usuario_id"] = str(cerrado_por_usuario_id)
+        return await self.update_activity(
+            organizacion_id=organizacion_id,
+            activity_id=activity_id,
+            payload=payload,
+        )
 
     async def get_activity(
         self,
@@ -5295,6 +5370,7 @@ class CRMRepository:
         organizacion_id: UUID,
         relacion_tipo: str | None = None,
         relacion_id: UUID | None = None,
+        actividad_id: UUID | None = None,
     ) -> list[dict[str, Any]]:
         params = {
             "organizacion_id": f"eq.{organizacion_id}",
@@ -5304,6 +5380,8 @@ class CRMRepository:
             params["relacion_tipo"] = f"eq.{relacion_tipo}"
         if relacion_id:
             params["relacion_id"] = f"eq.{relacion_id}"
+        if actividad_id:
+            params["actividad_id"] = f"eq.{actividad_id}"
         resp = await self._request("GET", "/rest/v1/notas", params=params)
         data = resp.json()
         if not isinstance(data, list):

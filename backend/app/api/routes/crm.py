@@ -11573,6 +11573,9 @@ class CRMActivity(BaseModel):
     oportunidad_id: UUID | None = None
     creado_por_usuario_id: UUID | None = None
     asignado_a_usuario_id: UUID | None = None
+    completado_en: datetime | None = None
+    cancelado_en: datetime | None = None
+    cerrado_por_usuario_id: UUID | None = None
     metadata: dict | None = None
     creado_en: datetime
     actualizado_en: datetime
@@ -11596,6 +11599,27 @@ class CRMActivityCreate(BaseModel):
     creado_por_usuario_id: UUID | None = None
     asignado_a_usuario_id: UUID | None = None
     metadata: dict | None = Field(default_factory=dict)
+
+
+class CRMActivityUpdate(BaseModel):
+    tipo: str | None = Field(default=None, max_length=50)
+    canal: str | None = Field(default=None, max_length=50)
+    asunto: str | None = Field(default=None, max_length=255)
+    descripcion: str | None = Field(default=None, max_length=4000)
+    estado: str | None = Field(default=None, max_length=50)
+    prioridad: str | None = Field(default=None, max_length=50)
+    fecha_vencimiento: datetime | None = None
+    inicio_en: datetime | None = None
+    fin_en: datetime | None = None
+    sla_horas: int | None = Field(default=None, ge=0)
+    recordatorio_en: datetime | None = None
+    cuenta_id: UUID | None = None
+    contacto_id: UUID | None = None
+    oportunidad_id: UUID | None = None
+    asignado_a_usuario_id: UUID | None = None
+    completado_en: datetime | None = None
+    cancelado_en: datetime | None = None
+    cerrado_por_usuario_id: UUID | None = None
 
 
 class CRMActivitiesResponse(BaseModel):
@@ -12149,6 +12173,7 @@ class CRMNote(BaseModel):
     organizacion_id: UUID
     relacion_tipo: str
     relacion_id: UUID
+    actividad_id: UUID | None = None
     texto: str
     visible_para_cliente: bool
     tipo: str
@@ -12160,6 +12185,7 @@ class CRMNote(BaseModel):
 class CRMNoteCreate(BaseModel):
     relacion_tipo: str = Field(..., max_length=100)
     relacion_id: UUID
+    actividad_id: UUID | None = None
     texto: str = Field(..., max_length=4000)
     visible_para_cliente: bool = False
     tipo: str = Field(default="interna", max_length=50)
@@ -26990,6 +27016,8 @@ async def list_activities(
     oportunidad_id: UUID | None = Query(default=None),
     cuenta_id: UUID | None = Query(default=None),
     contacto_id: UUID | None = Query(default=None),
+    asignado_a_usuario_id: UUID | None = Query(default=None),
+    estado: str | None = Query(default=None),
     limit: Annotated[int, Query(ge=1, le=200)] = 50,
     offset: Annotated[int, Query(ge=0)] = 0,
 ) -> CRMActivitiesResponse:
@@ -26999,6 +27027,8 @@ async def list_activities(
             oportunidad_id=oportunidad_id,
             cuenta_id=cuenta_id,
             contacto_id=contacto_id,
+            asignado_a_usuario_id=asignado_a_usuario_id,
+            estado=estado,
             limit=limit,
             offset=offset,
         )
@@ -27024,6 +27054,69 @@ async def create_activity(
         row = await repo.create_activity(
             organizacion_id=organizacion_id,
             payload=body,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return CRMActivity.model_validate(row)
+
+
+@router.patch("/actividades/{actividad_id}", response_model=CRMActivity)
+async def update_activity(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("activities.view")),
+    actividad_id: UUID,
+    payload: CRMActivityUpdate,
+) -> CRMActivity:
+    body = payload.model_dump(mode="json", exclude_unset=True)
+    if not body:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="actividad_update_vacia")
+    try:
+        row = await repo.update_activity(
+            organizacion_id=organizacion_id,
+            activity_id=actividad_id,
+            payload=body,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return CRMActivity.model_validate(row)
+
+
+@router.post("/actividades/{actividad_id}/completar", response_model=CRMActivity)
+async def complete_activity(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("activities.view")),
+    usuario_id: UUID | None = Depends(optional_usuario_id),
+    actividad_id: UUID,
+) -> CRMActivity:
+    try:
+        row = await repo.complete_activity(
+            organizacion_id=organizacion_id,
+            activity_id=actividad_id,
+            cerrado_por_usuario_id=usuario_id,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return CRMActivity.model_validate(row)
+
+
+@router.post("/actividades/{actividad_id}/cancelar", response_model=CRMActivity)
+async def cancel_activity(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("activities.view")),
+    usuario_id: UUID | None = Depends(optional_usuario_id),
+    actividad_id: UUID,
+) -> CRMActivity:
+    try:
+        row = await repo.cancel_activity(
+            organizacion_id=organizacion_id,
+            activity_id=actividad_id,
+            cerrado_por_usuario_id=usuario_id,
         )
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
@@ -27552,12 +27645,14 @@ async def list_notes(
     _: str = Depends(require_permission("notes.view")),
     relacion_tipo: str | None = Query(default=None),
     relacion_id: UUID | None = Query(default=None),
+    actividad_id: UUID | None = Query(default=None),
 ) -> list[CRMNote]:
     try:
         rows = await repo.list_notes(
             organizacion_id=organizacion_id,
             relacion_tipo=relacion_tipo,
             relacion_id=relacion_id,
+            actividad_id=actividad_id,
         )
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
@@ -27576,6 +27671,16 @@ async def create_note(
     body = payload.model_dump(mode="json", exclude_unset=True)
     if not body.get("creado_por_usuario_id") and usuario_id:
         body["creado_por_usuario_id"] = str(usuario_id)
+    if payload.actividad_id:
+        try:
+            activity_row = await repo.get_activity(
+                organizacion_id=organizacion_id,
+                activity_id=payload.actividad_id,
+            )
+        except CRMRepositoryError as exc:
+            raise HTTPException(status_code=502, detail=str(exc)) from exc
+        if not activity_row:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="actividad_no_encontrada")
     try:
         row = await repo.create_note(
             organizacion_id=organizacion_id,
