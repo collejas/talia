@@ -18,6 +18,7 @@ import {
   DrawerTitle,
 } from "@/components/ui/drawer";
 import { Input } from "@/components/ui/input";
+import { DateTimeCalendarPicker } from "@/components/ui/datetime-calendar-picker";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
@@ -2898,18 +2899,13 @@ export function LeadDrawer({
                 </div>
                 {noteReminderEnabled ? (
                   <div className="grid gap-3 rounded-lg border border-border/50 bg-background/60 p-3 md:grid-cols-2">
-                    <div className="space-y-1">
-                      <label htmlFor="note-reminder-at" className="text-xs font-medium text-muted-foreground">
-                        Fecha y hora
-                      </label>
-                      <Input
-                        id="note-reminder-at"
-                        type="datetime-local"
-                        value={noteReminderAt}
-                        onChange={(event) => setNoteReminderAt(event.target.value)}
-                        disabled={notePending || isBusy}
-                      />
-                    </div>
+                    <DateTimeCalendarPicker
+                      id="note-reminder-at"
+                      label="Fecha y hora"
+                      value={noteReminderAt}
+                      onChange={setNoteReminderAt}
+                      disabled={notePending || isBusy}
+                    />
                     <div className="space-y-1">
                       <label htmlFor="note-activity-type" className="text-xs font-medium text-muted-foreground">
                         Tipo de actividad

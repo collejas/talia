@@ -46,6 +46,7 @@ import {
 import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { DateTimeCalendarPicker } from "@/components/ui/datetime-calendar-picker";
 import { fromDateTimeLocalInput, toDateTimeLocalInput } from "@/lib/datetime";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
@@ -1585,21 +1586,15 @@ export function EmbudoBoardClient({
             </SheetDescription>
           </SheetHeader>
           <form className="flex flex-col gap-4 px-4 pb-6" onSubmit={handleScheduleSubmit}>
-            <div className="space-y-2">
-              <Label htmlFor="schedule-demo-datetime" className="text-sm font-medium">
-                Fecha y hora de la demo *
-              </Label>
-              <Input
-                id="schedule-demo-datetime"
-                type="datetime-local"
-                value={scheduleDateTime}
-                onChange={(event) => setScheduleDateTime(event.target.value)}
-                min={scheduleMinValue || undefined}
-                required
-                disabled={schedulePending}
-              />
-              <p className="text-xs text-muted-foreground">Usa tu zona horaria local.</p>
-            </div>
+            <DateTimeCalendarPicker
+              id="schedule-demo-datetime"
+              label="Fecha y hora de la demo *"
+              value={scheduleDateTime}
+              onChange={setScheduleDateTime}
+              minValue={scheduleMinValue || undefined}
+              disabled={schedulePending}
+              description="Usa tu zona horaria local."
+            />
             <div className="space-y-2">
               <Label htmlFor="schedule-demo-format" className="text-sm font-medium">
                 Modalidad *
