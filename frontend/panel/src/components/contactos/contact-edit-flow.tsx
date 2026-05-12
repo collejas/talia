@@ -346,11 +346,18 @@ function buildFullName(persona: PersonaDraft): string {
     .trim();
 }
 
-function cleanObject<T extends Record<string, unknown>>(input: T): Partial<T> {
+function cleanObject<T extends Record<string, unknown>>(
+  input: T,
+  options?: { keepEmptyStringsAsNull?: boolean },
+): Partial<T> {
   const next = Object.entries(input).reduce<Record<string, unknown>>((acc, [key, value]) => {
     if (typeof value === "string") {
       const trimmed = value.trim();
-      if (trimmed) acc[key] = trimmed;
+      if (trimmed) {
+        acc[key] = trimmed;
+      } else if (options?.keepEmptyStringsAsNull) {
+        acc[key] = null;
+      }
       return acc;
     }
     if (typeof value === "boolean") {
@@ -358,6 +365,7 @@ function cleanObject<T extends Record<string, unknown>>(input: T): Partial<T> {
       return acc;
     }
     if (value !== null && value !== undefined) acc[key] = value;
+    else if (options?.keepEmptyStringsAsNull && value === null) acc[key] = null;
     return acc;
   }, {});
   return next as Partial<T>;
@@ -368,7 +376,7 @@ function buildPayload(state: ContactEditState, dedupe?: DedupeDecision) {
   const persona = cleanObject({
     ...state.persona,
     nombre_completo: nombreCompleto || state.persona.nombre.trim(),
-  });
+  }, { keepEmptyStringsAsNull: true });
 
   const cuentaBase = cleanObject({
     ...state.cuenta,
@@ -388,7 +396,7 @@ function buildPayload(state: ContactEditState, dedupe?: DedupeDecision) {
       state.mode === "persona_fisica_actividad_empresarial"
         ? "persona_fisica_actividad_empresarial"
         : state.cuenta.tipo_cuenta,
-  });
+  }, { keepEmptyStringsAsNull: true });
 
   const relacion =
     state.mode === "solo_persona"
@@ -406,7 +414,7 @@ function buildPayload(state: ContactEditState, dedupe?: DedupeDecision) {
             state.mode === "persona_fisica_actividad_empresarial"
               ? true
               : state.relacion.es_representante_legal,
-        });
+        }, { keepEmptyStringsAsNull: true });
 
   const extras = cleanObject({
     fiscales: cleanObject({
@@ -414,7 +422,7 @@ function buildPayload(state: ContactEditState, dedupe?: DedupeDecision) {
       forma_pago: state.extras.forma_pago,
       metodo_pago: state.extras.metodo_pago,
       email_facturacion: state.extras.email_facturacion,
-    }),
+    }, { keepEmptyStringsAsNull: true }),
     direccion: cleanObject({
       pais: state.extras.pais,
       entidad: state.extras.entidad,
@@ -424,8 +432,8 @@ function buildPayload(state: ContactEditState, dedupe?: DedupeDecision) {
       numero_exterior: state.extras.numero_exterior,
       numero_interior: state.extras.numero_interior,
       codigo_postal: state.extras.codigo_postal,
-    }),
-  });
+    }, { keepEmptyStringsAsNull: true }),
+  }, { keepEmptyStringsAsNull: true });
 
   return {
     persona,

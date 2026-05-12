@@ -15121,7 +15121,7 @@ async def update_persona(
         contact_row = await repo.update_persona(
             organizacion_id=organizacion_id,
             persona_id=contacto_id,
-            payload={key: value for key, value in contact_payload.items() if value is not None},
+            payload=contact_payload,
         )
     except CRMRepositoryError as exc:
         if "contacto_no_encontrado" in str(exc):
