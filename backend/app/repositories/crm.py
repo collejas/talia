@@ -6253,6 +6253,10 @@ class CRMRepository:
 
         account_body: dict[str, Any] | None = None
         if should_create_account:
+            account_metadata = dict(metadata)
+            segmento_value = self._pick_text(merged, "segmento")
+            if segmento_value:
+                account_metadata["segmento"] = segmento_value
             account_body = {
                 "nombre": account_name or full_name or "Cuenta sin nombre",
                 "alias": company_name or reason_name,
@@ -6300,7 +6304,7 @@ class CRMRepository:
                 "longitud": merged.get("longitud"),
                 "fecha_incorporacion": merged.get("fecha_incorporacion"),
                 "propietario_usuario_id": merged.get("propietario_usuario_id"),
-                "metadata": metadata,
+                "metadata": account_metadata,
             }
             account_body = {key: value for key, value in account_body.items() if value not in (None, "", {}, [])}
 
@@ -16883,6 +16887,7 @@ class CRMRepository:
             headers["X-Organizacion-Id"] = str(organizacion_id)
         if prefer:
             headers["Prefer"] = prefer
+        json_payload = _make_json_serializable(json) if json is not None else None
         retries = 2
         delay_seconds = 0.5
         last_exc: httpx.RequestError | None = None
@@ -16890,7 +16895,13 @@ class CRMRepository:
         for attempt in range(retries + 1):
             try:
                 async with httpx.AsyncClient(timeout=self._timeout) as client:
-                    resp = await client.request(method, url, params=params, json=json, headers=headers)
+                    resp = await client.request(
+                        method,
+                        url,
+                        params=params,
+                        json=json_payload,
+                        headers=headers,
+                    )
                 if attempt > 0:
                     _append_supabase_connectivity_event(
                         {

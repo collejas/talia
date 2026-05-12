@@ -227,6 +227,8 @@ export function ContactsDataTable({ data }: { data: ContactTableRow[] }) {
     telefono?: string | null;
   } | null>(null);
   const [deleteOpen, setDeleteOpen] = React.useState(false);
+  const [bulkDeleteOpen, setBulkDeleteOpen] = React.useState(false);
+  const [bulkDeleteIds, setBulkDeleteIds] = React.useState<string[]>([]);
 
   const [activeRow, setActiveRow] = React.useState<TableRow | null>(null);
 
@@ -459,6 +461,35 @@ export function ContactsDataTable({ data }: { data: ContactTableRow[] }) {
     });
   };
 
+  const handleOpenBulkDelete = (selectedRows: TableRow[]) => {
+    const ids = selectedRows
+      .map((row) => extractString(row.raw as Record<string, unknown> | undefined, ["contacto_id"]) ?? extractString(row.raw as Record<string, unknown> | undefined, ["id"]))
+      .filter((value): value is string => Boolean(value));
+    if (!ids.length) return;
+    setBulkDeleteIds(ids);
+    setError(null);
+    setSuccess(null);
+    setBulkDeleteOpen(true);
+  };
+
+  const handleBulkDelete = async () => {
+    if (!bulkDeleteIds.length) {
+      setError("No se encontraron contactos seleccionados.");
+      return;
+    }
+    setBulkDeleteOpen(false);
+    await runAndReload(async () => {
+      const response = await fetch("/api/contactos/bulk-delete", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids: bulkDeleteIds }),
+      });
+      const body = (await response.json().catch(() => ({}))) as { error?: string };
+      if (!response.ok) throw new Error(body.error || `Error ${response.status}`);
+    });
+    setBulkDeleteIds([]);
+  };
+
   const handleReassign = async () => {
     if (!activeContactoId || !selectedVendorId) return;
     await runAndReload(async () => {
@@ -644,6 +675,14 @@ export function ContactsDataTable({ data }: { data: ContactTableRow[] }) {
         initialVisibility={contactColumnVisibility}
         storageKey="contacts-table-column-order"
         toolbarActions={toolbarActions}
+        selectionActions={(selectedRows) => {
+          if (!canWrite || !selectedRows.length) return null;
+          return (
+            <Button type="button" variant="destructive" size="sm" onClick={() => handleOpenBulkDelete(selectedRows)}>
+              Eliminar seleccionados
+            </Button>
+          );
+        }}
       />
 
       <ContactCreateFlow
@@ -683,6 +722,32 @@ export function ContactsDataTable({ data }: { data: ContactTableRow[] }) {
                 {pending ? "Eliminando..." : "Eliminar"}
               </Button>
               <Button type="button" variant="outline" disabled={pending} onClick={() => setDeleteOpen(false)}>
+                Cancelar
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={bulkDeleteOpen} onOpenChange={setBulkDeleteOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Eliminar contactos seleccionados</DialogTitle>
+            <DialogDescription>
+              Esta acción elimina {bulkDeleteIds.length.toLocaleString("es-MX")} contacto
+              {bulkDeleteIds.length === 1 ? "" : "s"} y no se puede deshacer.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <p className="text-sm text-muted-foreground">
+              Se eliminarán los contactos marcados en la tabla.
+            </p>
+            {error ? <p className="text-xs text-destructive">{error}</p> : null}
+            <div className="flex gap-2">
+              <Button type="button" variant="destructive" disabled={pending} onClick={handleBulkDelete}>
+                {pending ? "Eliminando..." : "Eliminar seleccionados"}
+              </Button>
+              <Button type="button" variant="outline" disabled={pending} onClick={() => setBulkDeleteOpen(false)}>
                 Cancelar
               </Button>
             </div>

@@ -7,6 +7,7 @@ import type { BuscadorJob } from "./buscador-client"
 export type ProspectoItem = {
   id: string
   display_name: string | null
+  nombre_comercial?: string | null
   actividad: string | null
   estrato?: string | null
   phone: string | null
@@ -1294,6 +1295,9 @@ export type ConvertirProspectoPayload = {
   correo?: string
   telefono?: string
   company_name?: string
+  website?: string
+  segmento?: string
+  actividad?: string
   notas?: string
   stage?: "discover" | "enrich" | "prepare" | "launch" | "evaluate"
   canal_origen?: "correo" | "whatsapp" | "llamada" | "otro"

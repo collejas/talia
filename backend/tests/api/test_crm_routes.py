@@ -6,7 +6,7 @@ from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 
 from app.api.routes import crm as crm_routes
-from app.repositories.crm import CRMRepository
+from app.repositories.crm import CRMRepository, _make_json_serializable
 
 
 class DummyCRMRepository(CRMRepository):
@@ -16,6 +16,7 @@ class DummyCRMRepository(CRMRepository):
         self.calls: list[tuple[str, dict[str, Any]]] = []
         self.pipeline_stages: list[dict[str, Any]] = []
         self.pipeline_opportunities: list[dict[str, Any]] = []
+        self.prospectos_by_ids_result: list[dict[str, Any]] = []
         self.dashboard_kpis: dict[str, Any] = {"webchat": {"visitas_sin_chat": 0}}
         self.next_sales_rep: uuid.UUID | None = None
         self.contactables_by_ids_result: list[dict[str, Any]] = []
@@ -34,6 +35,10 @@ class DummyCRMRepository(CRMRepository):
             "categoria": "abierta",
             "metadata": {"seed": "prospeccion_stage"},
         }
+
+    async def list_prospectos_by_ids(self, **kwargs: Any) -> list[dict[str, Any]]:
+        self.calls.append(("list_prospectos_by_ids", kwargs))
+        return list(self.prospectos_by_ids_result)
 
     async def list_accounts(self, **kwargs: Any) -> list[dict[str, Any]]:
         self.calls.append(("list_accounts", kwargs))
@@ -163,6 +168,15 @@ class DummyCRMRepository(CRMRepository):
         body.setdefault("actualizado_en", "2024-01-01T00:00:00Z")
         return body
 
+    async def create_persona(self, **kwargs: Any) -> dict[str, Any]:
+        self.calls.append(("create_persona", kwargs))
+        body = kwargs["payload"].copy()
+        body.setdefault("id", str(uuid.uuid4()))
+        body["organizacion_id"] = str(kwargs["organizacion_id"])
+        body.setdefault("creado_en", "2024-01-01T00:00:00Z")
+        body.setdefault("actualizado_en", "2024-01-01T00:00:00Z")
+        return body
+
     async def get_account(self, **kwargs: Any) -> dict[str, Any] | None:
         self.calls.append(("get_account", kwargs))
         if kwargs["account_id"] == uuid.UUID(int=1):
@@ -184,6 +198,46 @@ class DummyCRMRepository(CRMRepository):
             "creado_en": "2024-01-01T00:00:00Z",
             "actualizado_en": "2024-01-01T00:00:00Z",
         }
+
+    async def get_stage_by_code(self, **kwargs: Any) -> dict[str, Any] | None:
+        self.calls.append(("get_stage_by_code", kwargs))
+        return {
+            "id": str(uuid.uuid4()),
+            "codigo": kwargs.get("codigo"),
+            "nombre": "Prospección · Primer contacto",
+            "orden": 1,
+            "categoria": "abierta",
+            "metadata": {},
+        }
+
+    async def get_default_stage_id(self, **kwargs: Any) -> uuid.UUID:
+        self.calls.append(("get_default_stage_id", kwargs))
+        return uuid.uuid4()
+
+    async def create_opportunity(self, **kwargs: Any) -> dict[str, Any]:
+        self.calls.append(("create_opportunity", kwargs))
+        body = kwargs["payload"].copy()
+        body.setdefault("id", str(uuid.uuid4()))
+        body["organizacion_id"] = str(kwargs["organizacion_id"])
+        body.setdefault("creado_en", "2024-01-01T00:00:00Z")
+        body.setdefault("actualizado_en", "2024-01-01T00:00:00Z")
+        return body
+
+    async def append_stage_history(self, **kwargs: Any) -> dict[str, Any]:
+        self.calls.append(("append_stage_history", kwargs))
+        body = kwargs["payload"].copy()
+        body.setdefault("id", str(uuid.uuid4()))
+        body["organizacion_id"] = str(kwargs["organizacion_id"])
+        return body
+
+    async def update_prospecto(self, **kwargs: Any) -> dict[str, Any]:
+        self.calls.append(("update_prospecto", kwargs))
+        body = kwargs["payload"].copy()
+        body.setdefault("id", str(kwargs["prospecto_id"]))
+        return body
+
+    async def delete_persona(self, **kwargs: Any) -> None:
+        self.calls.append(("delete_persona", kwargs))
 
     async def list_activities(self, **kwargs: Any) -> list[dict[str, Any]]:
         self.calls.append(("list_activities", kwargs))
@@ -966,6 +1020,123 @@ async def test_guardar_prospectos_deduplica_email_y_telefono(
     assert any(item.get("email") == "otro@ejemplo.com" for item in fake_repo.last_upserted_prospectos)
     assert fake_repo.last_upserted_prospectos[0].get("busqueda_ref")
     assert fake_repo.last_upserted_prospectos[0].get("query_sort") == "Pizza artesanal cerca de mi"
+
+
+@pytest.mark.asyncio
+async def test_convertir_prospecto_a_contacto_no_falla_y_actualiza_metadata(
+    client: AsyncClient, fake_repo: DummyCRMRepository
+) -> None:
+    prospecto_id = uuid.uuid4()
+    fake_repo.prospectos_by_ids_result = [
+        {
+            "id": str(prospecto_id),
+            "nombre_comercial": "Prospecto Demo",
+            "display_name": "Prospecto Demo",
+            "actividad": "Arquitectura",
+            "email": "demo@ejemplo.com",
+            "phone_e164": "+5215550000000",
+            "phone": "+52 1 555 000 0000",
+            "website": "https://demo.ejemplo.com",
+            "notas": "Nota de prueba",
+            "segmento": "Servicios",
+            "metadata": {},
+        }
+    ]
+
+    resp = await client.post(
+        f"/crm/prospeccion/prospectos/{prospecto_id}/convertir-contacto",
+        headers=_headers(include_user_token=True),
+        json={
+            "company_name": "Empresa Demo",
+            "notas": "Conversión manual",
+            "canal_origen": "correo",
+        },
+    )
+
+    assert resp.status_code == 200, resp.text
+    payload = resp.json()
+    assert payload["ok"] is True
+    assert payload["contacto"]["id"]
+    assert payload["prospecto"]["metadata"]["convertido_contacto_id"] == payload["contacto"]["id"]
+    call_names = [name for name, _ in fake_repo.calls]
+    assert "list_prospectos_by_ids" in call_names
+    assert "create_persona" in call_names
+    assert "get_stage_by_code" in call_names
+    assert "create_opportunity" in call_names
+    assert "update_prospecto" in call_names
+    create_persona_call = next(call_kwargs for call_name, call_kwargs in fake_repo.calls if call_name == "create_persona")
+    assert create_persona_call["payload"]["company_name"] == "Empresa Demo"
+    assert create_persona_call["payload"]["website"] == "https://demo.ejemplo.com"
+    assert create_persona_call["payload"]["segmento"] == "Servicios"
+    assert create_persona_call["payload"]["tipo_industria"] == "Arquitectura"
+    create_opportunity_call = next(call_kwargs for call_name, call_kwargs in fake_repo.calls if call_name == "create_opportunity")
+    assert isinstance(create_opportunity_call["payload"]["contacto_principal_id"], str)
+    assert create_opportunity_call["payload"]["metadata"]["prospeccion_segmento"] == "Servicios"
+    assert create_opportunity_call["payload"]["metadata"]["prospeccion_actividad"] == "Arquitectura"
+
+
+@pytest.mark.asyncio
+async def test_make_json_serializable_convierte_uuid_anidados() -> None:
+    nested_uuid = uuid.uuid4()
+    payload = {
+        "id": nested_uuid,
+        "metadata": {
+            "principal": nested_uuid,
+            "items": [nested_uuid, {"otro": nested_uuid}],
+        },
+    }
+
+    sanitized = _make_json_serializable(payload)
+
+    assert sanitized["id"] == str(nested_uuid)
+    assert sanitized["metadata"]["principal"] == str(nested_uuid)
+    assert sanitized["metadata"]["items"][0] == str(nested_uuid)
+    assert sanitized["metadata"]["items"][1]["otro"] == str(nested_uuid)
+
+
+@pytest.mark.asyncio
+async def test_build_contact_write_parts_mueve_segmento_a_metadata() -> None:
+    repo = object.__new__(CRMRepository)
+    parts = CRMRepository._build_contact_write_parts(
+        repo,
+        organizacion_id=uuid.uuid4(),
+        contact_id=uuid.uuid4(),
+        payload={
+            "nombre_completo": "Prospecto Demo",
+            "correo": "demo@ejemplo.com",
+            "telefono_e164": "+5215550000000",
+            "company_name": "Empresa Demo",
+            "segmento": "Servicios",
+            "tipo_industria": "Arquitectura",
+        },
+    )
+
+    account_body = parts["account_body"]
+    assert account_body is not None
+    assert "segmento" not in account_body
+    assert account_body["metadata"]["segmento"] == "Servicios"
+
+
+@pytest.mark.asyncio
+async def test_bulk_delete_contacts_elimina_varios_registros(
+    client: AsyncClient, fake_repo: DummyCRMRepository
+) -> None:
+    contact_ids = [uuid.uuid4(), uuid.uuid4(), uuid.uuid4()]
+
+    resp = await client.post(
+        "/crm/contacts/bulk-delete",
+        headers=_headers(include_user_token=True),
+        json={"ids": [str(value) for value in contact_ids]},
+    )
+
+    assert resp.status_code == 200, resp.text
+    payload = resp.json()
+    assert payload["requested"] == 3
+    assert payload["deleted"] == 3
+    assert payload["failed"] == 0
+    assert payload["deleted_ids"] == [str(value) for value in contact_ids]
+    call_names = [name for name, _ in fake_repo.calls]
+    assert call_names.count("delete_persona") == 3
 
 
 @pytest.mark.asyncio

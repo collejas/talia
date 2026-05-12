@@ -79,12 +79,24 @@ function resolveFeatureCandidates(feature: Feature): string[] {
     props.cvegeo,
     props.cve_ent,
     props.cve_entidad,
+    props.clave_entidad,
+    props.cve_mun,
+    props.clave_municipio,
+    props.codigo_iso2,
+    props.codigo_iso3,
     props.iso_a2,
     props.ISO_A2,
+    props.POSTAL,
+    props.FIPS_10,
+    props.WB_A2,
     props.iso_a3,
     props.ISO_A3,
+    props.ADM0_A3,
+    props.WB_A3,
     props.id,
     props.name,
+    props.NAME,
+    props.ADMIN,
   ];
   const variants = new Set<string>();
   for (const candidate of rawCandidates) {
@@ -94,6 +106,10 @@ function resolveFeatureCandidates(feature: Feature): string[] {
     variants.add(value);
     variants.add(value.toUpperCase());
     variants.add(value.toLowerCase());
+    const upperValue = value.toUpperCase();
+    if (upperValue === "MEX" || upperValue === "MEXICO" || upperValue === "MÉXICO") {
+      variants.add("MX");
+    }
     if (/^\d+$/.test(value)) {
       variants.add(value.padStart(2, "0"));
       variants.add(value.padStart(3, "0"));
@@ -101,6 +117,43 @@ function resolveFeatureCandidates(feature: Feature): string[] {
     }
   }
   return Array.from(variants);
+}
+
+function resolveFeatureNavigationKey(
+  feature: Feature,
+  nivel: DemografiaMapResponse["nivel"],
+  entryKey?: string | null,
+): string | null {
+  if (entryKey && entryKey.trim()) {
+    return entryKey.trim();
+  }
+  const candidates = resolveFeatureCandidates(feature);
+  if (nivel === "pais") {
+    return candidates.some((candidate) => ["MX", "MEX", "MEXICO", "MÉXICO"].includes(candidate.toUpperCase()))
+      ? "MX"
+      : null;
+  }
+  if (nivel === "estado") {
+    return candidates.find((candidate) => /^\d{1,2}$/.test(candidate))?.padStart(2, "0") ?? null;
+  }
+  return candidates.find((candidate) => /^\d{5}$/.test(candidate)) ?? null;
+}
+
+function resolveNextDrillLevel(
+  nivel: DemografiaMapResponse["nivel"],
+  entry: DemografiaMapResponse["dataset"][number] | null,
+  navigationKey: string | null,
+): "estado" | "municipio" | null {
+  if (entry?.next_level) {
+    return entry.next_level;
+  }
+  if (nivel === "pais" && navigationKey === "MX") {
+    return "estado";
+  }
+  if (nivel === "estado" && entry && navigationKey) {
+    return "municipio";
+  }
+  return null;
 }
 
 const FALLBACK_CHANNEL_COLORS: Record<ChannelKey, RgbTuple> = {
@@ -610,16 +663,15 @@ export function LocationComparisonChart({
   const metrics = activeMetrics ?? datasetSummary;
 
   const handleFeatureClick = useCallback(
-    (entry: DemografiaMapResponse["dataset"][number]) => {
-      if (!entry || !entry.key) {
+    (entry: DemografiaMapResponse["dataset"][number] | null, feature: Feature) => {
+      const navigationKey = resolveFeatureNavigationKey(feature, nivel, entry?.key ?? null);
+      const nextLevel = resolveNextDrillLevel(nivel, entry, navigationKey);
+      if (!navigationKey || !nextLevel) {
         return;
       }
-      if (entry.key !== manualSelectedKey) {
+      if (entry?.key && entry.key !== manualSelectedKey) {
         setManualSelectedKey(entry.key);
       }
-      if (resolveFilteredEntryTotal(entry, activeChannelSet, allowLeadFallback) <= 0) return;
-      const nextLevel = entry.next_level;
-      if (!nextLevel) return;
 
       const params = new URLSearchParams(searchParams.toString());
       const hasCustomChannels =
@@ -634,12 +686,12 @@ export function LocationComparisonChart({
         params.delete("estado");
       } else if (nextLevel === "municipio") {
         params.set("nivel", "municipio");
-        const stateCode = (entry.key || "").padStart(2, "0").slice(0, 2);
+        const stateCode = navigationKey.padStart(2, "0").slice(0, 2);
         params.set("estado", stateCode);
       }
       router.replace(`/mapa-de-conversion?${params.toString()}`, { scroll: false });
     },
-    [activeChannelSet, activeChannels, allowLeadFallback, manualSelectedKey, router, searchParams, setManualSelectedKey],
+    [activeChannels, manualSelectedKey, nivel, router, searchParams, setManualSelectedKey],
   );
 
   const style = useCallback(
@@ -657,13 +709,17 @@ export function LocationComparisonChart({
       const isHovered = entries.some(
         (current) => current?.key && hoveredKey && current.key === hoveredKey,
       );
+      const navigationKey = feature
+        ? resolveFeatureNavigationKey(feature, nivel, primaryEntry?.key ?? null)
+        : null;
+      const isNavigable = Boolean(resolveNextDrillLevel(nivel, primaryEntry ?? null, navigationKey));
 
       if (!primaryEntry || maxTotal <= 0 || total <= 0) {
         return {
           color: isSelected || isHovered ? "hsl(var(--primary)/0.4)" : "hsl(var(--foreground)/0.1)",
           weight: isSelected || isHovered ? 1.75 : 1,
-          fillColor: "transparent",
-          fillOpacity: 0,
+          fillColor: isNavigable ? "hsl(var(--muted-foreground))" : "transparent",
+          fillOpacity: isNavigable ? 0.08 : 0,
         };
       }
 
@@ -694,7 +750,7 @@ export function LocationComparisonChart({
         fillOpacity: isSelected || isHovered ? 0.82 : 0.72,
       };
     },
-    [activeChannelSet, allowLeadFallback, channelColors, colorMode, datasetMap, hoveredKey, maxTotal, selectedKey],
+    [activeChannelSet, allowLeadFallback, channelColors, colorMode, datasetMap, hoveredKey, maxTotal, nivel, selectedKey],
   );
 
   const onEachFeature = useCallback(
@@ -710,6 +766,8 @@ export function LocationComparisonChart({
 
       const entries = findEntriesForFeature(datasetMap, feature);
       const entry = entries[0];
+      const navigationKey = resolveFeatureNavigationKey(feature, nivel, entry?.key ?? null);
+      const nextLevel = resolveNextDrillLevel(nivel, entry ?? null, navigationKey);
 
       const tooltipLayer = pathLayer as unknown as {
         bindTooltip?: (content: string, options?: LeafletTooltipOptions) => void;
@@ -718,6 +776,9 @@ export function LocationComparisonChart({
 
       if (!entry || !entries.length) {
         tooltipLayer.unbindTooltip?.();
+        if (nextLevel) {
+          interactiveLayer.on?.("click", () => handleFeatureClick(null, feature));
+        }
         return;
       }
 
@@ -727,7 +788,9 @@ export function LocationComparisonChart({
         }
       });
       interactiveLayer.on?.("mouseout", () => setHoveredKey(null));
-      interactiveLayer.on?.("click", () => handleFeatureClick(entry));
+      if (nextLevel) {
+        interactiveLayer.on?.("click", () => handleFeatureClick(entry, feature));
+      }
 
       if (typeof tooltipLayer.bindTooltip !== "function") return;
 
@@ -835,6 +898,7 @@ export function LocationComparisonChart({
       datasetMap,
       displayedChannelKeys,
       handleFeatureClick,
+      nivel,
       setHoveredKey,
       showConversationMetrics,
       showWhatsappConversationMetrics,

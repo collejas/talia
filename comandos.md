@@ -93,6 +93,7 @@ REFACTO DE CONTACTOS codex resume 019ddec6-b7e9-7b30-9dd1-8a4ed30e58ba
 
 BUSQUEDAS DENUE codex resume 019dbbf0-3dc7-7e81-aca8-16ee42ae7984
 CORREO: codex resume 019dbc66-c341-76f2-a997-a8785463446c
+WHATSAPP MAPA CONVERSION codex resume 019e097e-9f8d-77c1-aa35-785ca75ad191
 # Permisos Git
 sudo chown -R jorge:jorge /var/www/talia/.git
 
@@ -565,3 +566,36 @@ traería mejoras, pero son marginales y más de robustez que de “que el chat r
   ** Credito 7200 credito bancario e info
   ** pregunta  de tipo de cliente
   ** no repetir gracias
+
+
+
+
+# ACTIVACION DE WHATSAPP API
+
+* Usa el Phone Number ID
+curl -X POST "https://graph.facebook.com/v25.0/"ID DEL WHATSAPP CLIENTE"/register" \
+-H "Authorization: Bearer $META_TOKEN" \
+-H "Content-Type: application/json" \
+-d '{
+  "messaging_product": "whatsapp",
+  "pin": "915637"
+}'
+
+Si TODO SALE BIEN DEBE RESPONDER:  {"success": true}
+
+
+* Luego prueba envío
+
+curl -X POST "https://graph.facebook.com/v25.0/1046129768592659/messages" \
+-H "Authorization: Bearer $META_TOKEN" \
+-H "Content-Type: application/json" \
+-d '{
+  "messaging_product": "whatsapp",
+  "to": "5214441302811",
+  "type": "text",
+  "text": {
+    "body": "Prueba desde IMLUX"
+  }
+}'
+
+Si te regresa un messages[].id, ya quedó funcionando.

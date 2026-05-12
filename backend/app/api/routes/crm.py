@@ -3318,6 +3318,9 @@ class ProspectoConvertirPayload(BaseModel):
     correo: str | None = Field(default=None, max_length=320)
     telefono: str | None = Field(default=None, max_length=60)
     company_name: str | None = Field(default=None, max_length=160)
+    website: str | None = Field(default=None, max_length=300)
+    segmento: str | None = Field(default=None, max_length=120)
+    actividad: str | None = Field(default=None, max_length=160)
     notas: str | None = Field(default=None, max_length=1000)
     stage: Literal["discover", "enrich", "prepare", "launch", "evaluate"] | None = None
     canal_origen: Literal["correo", "whatsapp", "llamada", "otro"] | None = None
@@ -15491,6 +15494,40 @@ async def delete_persona(
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
+@router.post(
+    "/contacts/bulk-delete",
+    response_model=CRMBulkDeleteResponse,
+)
+async def bulk_delete_contacts(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("contacts.write")),
+    payload: CRMBulkDeleteRequest,
+) -> CRMBulkDeleteResponse:
+    deleted_ids: list[UUID] = []
+    errors: list[CRMBulkDeleteError] = []
+
+    for contact_id in payload.ids:
+        try:
+            await repo.delete_persona(
+                organizacion_id=organizacion_id,
+                persona_id=contact_id,
+            )
+        except CRMRepositoryError as exc:
+            errors.append(CRMBulkDeleteError(id=contact_id, detail=str(exc)))
+        else:
+            deleted_ids.append(contact_id)
+
+    return CRMBulkDeleteResponse(
+        requested=len(payload.ids),
+        deleted=len(deleted_ids),
+        failed=len(errors),
+        deleted_ids=deleted_ids,
+        errors=errors,
+    )
+
+
 @router.get("/me/permissions")
 async def get_my_permissions(
     user_token: str = Depends(require_user_token),
@@ -24532,11 +24569,18 @@ async def convertir_prospecto_contacto(
     canal_origen = (payload.canal_origen or "otro").lower()
     source_label = _describe_prospeccion_source(prospecto)
     pipeline_canal_label = _infer_prospeccion_canal_label(prospecto)
+    company_name = payload.company_name or prospecto.get("nombre_comercial") or prospecto.get("display_name") or prospecto.get("segmento")
+    website = payload.website or prospecto.get("website")
+    segmento = payload.segmento or prospecto.get("segmento")
+    actividad = payload.actividad or prospecto.get("actividad")
     persona_body = {
         "nombre_completo": nombre,
         "correo": correo,
         "telefono_e164": telefono,
-        "company_name": payload.company_name or prospecto.get("nombre_comercial") or prospecto.get("segmento"),
+        "company_name": company_name,
+        "website": website,
+        "segmento": segmento,
+        "tipo_industria": actividad,
         "notes": payload.notas or prospecto.get("notas"),
         "origen": "prospeccion",
     }
@@ -24556,11 +24600,13 @@ async def convertir_prospecto_contacto(
         )
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
+    contacto = persona
+    contacto_id = _safe_uuid(str(persona.get("id"))) if isinstance(persona, dict) else None
+    if contacto_id is None:
+        raise HTTPException(status_code=502, detail="contacto_creado_sin_id")
 
     metadata = _ensure_dict(prospecto.get("metadata"), default={})
-    persona_id = persona.get("id")
-    if persona_id:
-        metadata["convertido_contacto_id"] = str(persona_id)
+    metadata["convertido_contacto_id"] = str(contacto_id)
     metadata["convertido_en"] = datetime.now(timezone.utc).isoformat()
     metadata["recontact_blocked"] = True
     metadata["recontact_block_reason"] = "convertido_contacto"
@@ -24607,6 +24653,10 @@ async def convertir_prospecto_contacto(
             "prospecto_id": str(prospecto_id),
             "source": source_label,
         }
+        if segmento:
+            opportunity_metadata["prospeccion_segmento"] = segmento
+        if actividad:
+            opportunity_metadata["prospeccion_actividad"] = actividad
         if canal_origen != "otro":
             opportunity_metadata["prospeccion_canal"] = canal_origen
         fuente_busqueda = _clean_text(prospecto.get("fuente_busqueda"))
@@ -24615,7 +24665,7 @@ async def convertir_prospecto_contacto(
         opportunity_metadata["canal"] = pipeline_canal_label
 
         opportunity_payload = {
-            "contacto_principal_id": contacto_id,
+            "contacto_principal_id": str(contacto_id),
             "etapa_id": str(stage_id),
             "titulo": opportunity_title[:255],
             "descripcion": payload.notas or prospecto.get("notas"),

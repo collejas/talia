@@ -3169,7 +3169,7 @@ function ProspectosView() {
       nombre: prospecto.display_name ?? "",
       correo: prospecto.email ?? "",
       telefono: prospecto.phone_e164 ?? prospecto.phone ?? "",
-      company: prospecto.segmento ?? "",
+      company: prospecto.nombre_comercial ?? prospecto.display_name ?? prospecto.segmento ?? "",
       notas: "",
       stage: stageValue,
       canal,
@@ -3224,6 +3224,9 @@ function ProspectosView() {
     assign(convertForm.telefono, "telefono")
     assign(convertForm.company, "company_name")
     assign(convertForm.notas, "notas")
+    assign(convertProspect.website ?? "", "website")
+    assign(convertProspect.segmento ?? "", "segmento")
+    assign(convertProspect.actividad ?? "", "actividad")
     if (convertForm.stage) {
       payload.stage = convertForm.stage
     }
@@ -5299,11 +5302,14 @@ function ProspectosView() {
               />
             </div>
             <div className="space-y-1">
-              <Label>Empresa / Segmento</Label>
+              <Label>Empresa / nombre comercial</Label>
               <Input
                 value={convertForm.company}
                 onChange={(event) => setConvertForm((prev) => ({ ...prev, company: event.target.value }))}
               />
+              <p className="text-xs text-muted-foreground">
+                Se usa para crear o reutilizar la cuenta asociada al prospecto.
+              </p>
             </div>
             <div className="space-y-1">
               <Label>Stage en prospección</Label>

@@ -562,6 +562,7 @@ export function DataTable({
   detailDescription,
   toolbarLeadingActions,
   toolbarActions,
+  selectionActions,
   forcedColumnOrder,
   hideDefaultActions = false,
 }: {
@@ -575,6 +576,7 @@ export function DataTable({
   detailDescription?: string
   toolbarLeadingActions?: React.ReactNode
   toolbarActions?: React.ReactNode
+  selectionActions?: (selectedRows: TableRowData[]) => React.ReactNode
   forcedColumnOrder?: string[]
   hideDefaultActions?: boolean
 }) {
@@ -903,9 +905,12 @@ export function DataTable({
           </DndContext>
         </div>
         <div className="flex items-center justify-between px-4">
-          <div className="text-muted-foreground hidden flex-1 text-sm lg:flex">
-            {table.getFilteredSelectedRowModel().rows.length} of{" "}
-            {table.getFilteredRowModel().rows.length} row(s) selected.
+          <div className="hidden flex-1 items-center gap-3 text-sm lg:flex">
+            <div className="text-muted-foreground">
+              {table.getFilteredSelectedRowModel().rows.length} of{" "}
+              {table.getFilteredRowModel().rows.length} row(s) selected.
+            </div>
+            {selectionActions ? selectionActions(table.getFilteredSelectedRowModel().rows.map((row) => row.original)) : null}
           </div>
           <div className="flex w-full items-center gap-8 lg:w-fit">
             <div className="hidden items-center gap-2 lg:flex">
