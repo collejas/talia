@@ -14891,7 +14891,7 @@ async def create_persona_alta(
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
     try:
-        persona_out = CRMContact.model_validate(contact_row)
+        persona_out = CRMPersona.model_validate(contact_row)
     except ValidationError as exc:
         logger.exception(
             "crm.persona_update.persona_validation_failed",
@@ -15128,7 +15128,7 @@ async def update_persona(
             raise HTTPException(status_code=404, detail="contacto_no_encontrado") from exc
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
-    persona_out = CRMContact.model_validate(contact_row)
+    persona_out = CRMPersona.model_validate(contact_row)
     account_out: CRMAccount | None = None
     relation_out: CRMCuentaPersonaRelacion | None = None
 
@@ -15967,7 +15967,7 @@ async def get_contact(
     try:
         row = await repo.get_persona(
             organizacion_id=organizacion_id,
-            contacto_id=contacto_id,
+            persona_id=contacto_id,
         )
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
@@ -16124,7 +16124,7 @@ async def reassign_contact(
 
     contacto = await repo.get_persona(
         organizacion_id=organizacion_id,
-        contacto_id=contacto_id,
+        persona_id=contacto_id,
     )
     if not contacto:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="contacto_not_found")
