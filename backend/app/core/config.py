@@ -723,6 +723,24 @@ class Settings(BaseSettings):
             "TALIA_HIGH_DEMAND_ALERT_COOLDOWN_SECONDS",
         ),
     )
+    activity_reminder_queue_enabled: bool = Field(
+        default=True,
+        description="Activa el worker que convierte recordatorios de actividades en notificaciones.",
+        validation_alias=AliasChoices(
+            "ACTIVITY_REMINDER_QUEUE_ENABLED",
+            "TALIA_ACTIVITY_REMINDER_QUEUE_ENABLED",
+        ),
+    )
+    activity_reminder_runner_interval_seconds: int = Field(
+        default=30,
+        ge=5,
+        le=300,
+        description="Intervalo del worker para revisar actividades con recordatorio vencido.",
+        validation_alias=AliasChoices(
+            "ACTIVITY_REMINDER_RUNNER_INTERVAL_SECONDS",
+            "TALIA_ACTIVITY_REMINDER_RUNNER_INTERVAL_SECONDS",
+        ),
+    )
     sales_notification_queue_enabled: bool = Field(
         default=True,
         description="Activa la cola asíncrona de notificaciones críticas al vendedor.",

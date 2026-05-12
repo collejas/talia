@@ -546,11 +546,62 @@ type LeadHistoryEntry = {
   metadata: Record<string, unknown> | null;
 };
 
+type LeadNoteEntry = {
+  id: string;
+  organizacion_id: string;
+  relacion_tipo: string;
+  relacion_id: string;
+  actividad_id: string | null;
+  texto: string;
+  visible_para_cliente: boolean;
+  tipo: string;
+  creado_por_usuario_id: string | null;
+  creado_en: string;
+  actualizado_en: string;
+};
+
+type LeadActivityEntry = {
+  id: string;
+  organizacion_id: string;
+  tipo: string;
+  canal: string | null;
+  asunto: string | null;
+  descripcion: string | null;
+  estado: string;
+  prioridad: string;
+  fecha_vencimiento: string | null;
+  inicio_en: string | null;
+  fin_en: string | null;
+  sla_horas: number | null;
+  recordatorio_en: string | null;
+  cuenta_id: string | null;
+  contacto_id: string | null;
+  oportunidad_id: string | null;
+  creado_por_usuario_id: string | null;
+  asignado_a_usuario_id: string | null;
+  completado_en: string | null;
+  cancelado_en: string | null;
+  cerrado_por_usuario_id: string | null;
+  metadata: Record<string, unknown> | null;
+  creado_en: string;
+  actualizado_en: string;
+};
+
 type HistoryState = {
   status: "idle" | "loading" | "loaded" | "error";
   data: LeadHistoryEntry[];
   error?: string;
 };
+
+type NotesState =
+  | { status: "idle" | "loading"; data: LeadNoteEntry[] }
+  | { status: "loaded"; data: LeadNoteEntry[] }
+  | { status: "error"; data: LeadNoteEntry[]; error: string };
+
+type ActivitiesState =
+  | { status: "idle" | "loading"; data: LeadActivityEntry[] }
+  | { status: "loaded"; data: LeadActivityEntry[] }
+  | { status: "error"; data: LeadActivityEntry[]; error: string };
 
 const HISTORY_FETCH_LIMIT = 100;
 
@@ -646,7 +697,7 @@ export function LeadDrawer({
   const isCreateMode = mode === "create";
   const stageName = currentStage?.nombre ?? "Sin etapa";
   const [activeTab, setActiveTab] =
-    useState<"resumen" | "notas" | "historial" | "onboarding">("resumen");
+    useState<"resumen" | "notas" | "actividades" | "historial" | "onboarding">("resumen");
 
   const defaultFormValues = useMemo<FormValues>(() => {
     const monto = typeof card?.monto === "number" && !Number.isNaN(card.monto) ? String(card.monto) : "";
@@ -758,6 +809,13 @@ export function LeadDrawer({
   const [noteText, setNoteText] = useState("");
   const [notePending, setNotePending] = useState(false);
   const [noteError, setNoteError] = useState<string | null>(null);
+  const [noteReminderEnabled, setNoteReminderEnabled] = useState(false);
+  const [noteReminderAt, setNoteReminderAt] = useState("");
+  const [noteActivityType, setNoteActivityType] = useState("seguimiento");
+  const [noteAssignedTo, setNoteAssignedTo] = useState("");
+  const [notesState, setNotesState] = useState<NotesState>({ status: "idle", data: [] });
+  const [activitiesState, setActivitiesState] = useState<ActivitiesState>({ status: "idle", data: [] });
+  const [activityError, setActivityError] = useState<string | null>(null);
 
   const { context: permissionContext, loading: permissionsLoading } = usePermissions();
   const normalizedPerms = useMemo(
@@ -818,8 +876,15 @@ export function LeadDrawer({
 
   useEffect(() => {
     setHistoryState({ status: "idle", data: [] });
+    setNotesState({ status: "idle", data: [] });
+    setActivitiesState({ status: "idle", data: [] });
     setNoteText("");
     setNoteError(null);
+    setNoteReminderEnabled(false);
+    setNoteReminderAt("");
+    setNoteActivityType("seguimiento");
+    setNoteAssignedTo(card?.asignadoId ?? "");
+    setActivityError(null);
   }, [card?.oportunidadId]);
 
   useEffect(() => {
@@ -999,6 +1064,73 @@ export function LeadDrawer({
     }
   }, [card]);
 
+  const fetchNotes = useCallback(async () => {
+    if (!card) return;
+
+    setNotesState((prev) => {
+      if (prev.status === "loading") return prev;
+      return { status: "loading", data: prev.data };
+    });
+
+    try {
+      const response = await fetch(`/api/embudo/leads/${card.oportunidadId}/notes`);
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        const message =
+          typeof body.error === "string" && body.error ? body.error : `Error ${response.status}`;
+        setNotesState((prev) => ({
+          status: "error",
+          data: prev.data,
+          error: message,
+        }));
+        return;
+      }
+      const rows = Array.isArray(body.data) ? (body.data as LeadNoteEntry[]) : [];
+      setNotesState({ status: "loaded", data: rows });
+    } catch (fetchError) {
+      setNotesState((prev) => ({
+        status: "error",
+        data: prev.data,
+        error: fetchError instanceof Error ? fetchError.message : "No se pudieron cargar las notas.",
+      }));
+    }
+  }, [card]);
+
+  const fetchActivities = useCallback(async () => {
+    if (!card) return;
+
+    setActivitiesState((prev) => {
+      if (prev.status === "loading") return prev;
+      return { status: "loading", data: prev.data };
+    });
+
+    try {
+      const response = await fetch(`/api/embudo/leads/${card.oportunidadId}/activities`);
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        const message =
+          typeof body.error === "string" && body.error ? body.error : `Error ${response.status}`;
+        setActivitiesState((prev) => ({
+          status: "error",
+          data: prev.data,
+          error: message,
+        }));
+        return;
+      }
+      const rows = Array.isArray(body.data) ? (body.data as LeadActivityEntry[]) : [];
+      setActivitiesState({ status: "loaded", data: rows });
+    } catch (fetchError) {
+      setActivitiesState((prev) => ({
+        status: "error",
+        data: prev.data,
+        error:
+          fetchError instanceof Error
+            ? fetchError.message
+            : "No se pudieron cargar las actividades.",
+      }));
+    }
+  }, [card]);
+
   const fetchQuotes = useCallback(async () => {
     if (!card) return;
     setQuotesState((prev) => {
@@ -1066,12 +1198,32 @@ export function LeadDrawer({
 
   useEffect(() => {
     if (!open || !card?.oportunidadId) return;
-    if (activeTab === "notas" || activeTab === "historial") {
+    if (activeTab === "notas") {
+      if (notesState.status === "idle") {
+        void fetchNotes();
+      }
+    }
+    if (activeTab === "actividades") {
+      if (activitiesState.status === "idle") {
+        void fetchActivities();
+      }
+    }
+    if (activeTab === "historial") {
       if (historyState.status === "idle") {
         void fetchHistory();
       }
     }
-  }, [open, card?.oportunidadId, activeTab, historyState.status, fetchHistory]);
+  }, [
+    open,
+    card?.oportunidadId,
+    activeTab,
+    notesState.status,
+    activitiesState.status,
+    historyState.status,
+    fetchNotes,
+    fetchActivities,
+    fetchHistory,
+  ]);
 
   useEffect(() => {
     if (!open || !card?.oportunidadId) return;
@@ -1093,11 +1245,8 @@ export function LeadDrawer({
   }, [card?.moneda]);
 
   const noteEntries = useMemo(
-    () =>
-      historyState.data.filter(
-        (entry) => (entry.tipo ?? "") === "nota" || (entry.nota || "").trim() !== "",
-      ),
-    [historyState.data],
+    () => notesState.data,
+    [notesState.data],
   );
 
   const filteredCatalogItems = useMemo(() => {
@@ -1118,30 +1267,76 @@ export function LeadDrawer({
       setNoteError("Escribe una nota antes de guardar.");
       return;
     }
+    if (noteReminderEnabled && !noteReminderAt.trim()) {
+      setNoteError("Selecciona la fecha y hora del recordatorio.");
+      return;
+    }
 
     setNotePending(true);
     setNoteError(null);
 
     try {
-      const response = await fetch(`/api/embudo/leads/${card.oportunidadId}/history`, {
+      let activityId: string | null = null;
+      if (noteReminderEnabled) {
+        const activityResponse = await fetch(`/api/embudo/leads/${card.oportunidadId}/activities`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            tipo: noteActivityType,
+            asunto: `Seguimiento de ${card.nombre ?? "oportunidad"}`,
+            descripcion: trimmed,
+            prioridad: "media",
+            estado: "pendiente",
+            fecha_vencimiento: noteReminderAt,
+            recordatorio_en: noteReminderAt,
+            asignado_a_usuario_id: noteAssignedTo.trim() || undefined,
+          }),
+        });
+        const activityBody = await activityResponse.json().catch(() => ({}));
+        if (!activityResponse.ok) {
+          const message =
+            typeof activityBody.error === "string" && activityBody.error
+              ? activityBody.error
+              : `Error ${activityResponse.status}`;
+          throw new Error(message);
+        }
+        activityId = typeof activityBody?.data?.id === "string" ? activityBody.data.id : null;
+      }
+
+      const noteResponse = await fetch(`/api/embudo/leads/${card.oportunidadId}/notes`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ texto: trimmed }),
+        body: JSON.stringify({
+          texto: trimmed,
+          actividad_id: activityId || undefined,
+          tipo: "interna",
+          visible_para_cliente: false,
+        }),
       });
-      const body = await response.json().catch(() => ({}));
-      if (!response.ok) {
+      const noteBody = await noteResponse.json().catch(() => ({}));
+      if (!noteResponse.ok) {
         const message =
-          typeof body.error === "string" && body.error ? body.error : `Error ${response.status}`;
-        setNoteError(message);
-      } else {
-        const rows = Array.isArray(body.data) ? (body.data as LeadHistoryEntry[]) : [];
-        setNoteText("");
-        setHistoryState((prev) => {
-          const existing =
-            prev.status === "loaded" || prev.status === "loading" ? prev.data : [];
-          const merged = dedupeHistoryEntries(rows, existing);
-          return { status: "loaded", data: merged, error: undefined };
-        });
+          typeof noteBody.error === "string" && noteBody.error ? noteBody.error : `Error ${noteResponse.status}`;
+        throw new Error(message);
+      }
+
+      setNoteText("");
+      setNoteReminderEnabled(false);
+      setNoteReminderAt("");
+      setNoteActivityType("seguimiento");
+      setNoteAssignedTo("");
+      setNotesState((prev) => {
+        const existing =
+          prev.status === "loaded" || prev.status === "loading" ? prev.data : [];
+        const created = noteBody?.data && typeof noteBody.data === "object" ? [noteBody.data as LeadNoteEntry] : [];
+        const merged = [...created, ...existing].filter((entry, index, array) =>
+          array.findIndex((item) => item.id === entry.id) === index,
+        );
+        return { status: "loaded", data: merged };
+      });
+      await fetchNotes();
+      if (noteReminderEnabled) {
+        await fetchActivities();
       }
     } catch (postError) {
       setNoteError(
@@ -1150,7 +1345,59 @@ export function LeadDrawer({
     } finally {
       setNotePending(false);
     }
-  }, [card, noteText]);
+  }, [card, noteText, noteReminderEnabled, noteReminderAt, noteActivityType, noteAssignedTo]);
+
+  const handleCompleteActivity = useCallback(
+    async (activityId: string) => {
+      if (!card) return;
+      try {
+        const response = await fetch(
+          `/api/embudo/leads/${card.oportunidadId}/activities/${activityId}/complete`,
+          {
+            method: "POST",
+          },
+        );
+        const body = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          throw new Error(
+            typeof body.error === "string" && body.error ? body.error : `Error ${response.status}`,
+          );
+        }
+        await fetchActivities();
+      } catch (activityError) {
+        setActivityError(
+          activityError instanceof Error ? activityError.message : "No se pudo completar la actividad.",
+        );
+      }
+    },
+    [card, fetchActivities],
+  );
+
+  const handleCancelActivity = useCallback(
+    async (activityId: string) => {
+      if (!card) return;
+      try {
+        const response = await fetch(
+          `/api/embudo/leads/${card.oportunidadId}/activities/${activityId}/cancel`,
+          {
+            method: "POST",
+          },
+        );
+        const body = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          throw new Error(
+            typeof body.error === "string" && body.error ? body.error : `Error ${response.status}`,
+          );
+        }
+        await fetchActivities();
+      } catch (activityError) {
+        setActivityError(
+          activityError instanceof Error ? activityError.message : "No se pudo cancelar la actividad.",
+        );
+      }
+    },
+    [card, fetchActivities],
+  );
 
   const onSubmitForm = async (values: FormValues) => {
     const nombreRaw = (values.nombre ?? "").trim();
@@ -1956,13 +2203,14 @@ export function LeadDrawer({
           <TabsList
             className={cn(
               "mx-4 grid h-auto gap-1 rounded-lg border bg-muted/60 p-1",
-              isCreateMode || !card ? "grid-cols-1" : "grid-cols-4",
+              isCreateMode || !card ? "grid-cols-1" : "grid-cols-5",
             )}
           >
             <TabsTrigger value="resumen">Resumen</TabsTrigger>
             {!isCreateMode && card ? (
               <>
                 <TabsTrigger value="notas">Notas</TabsTrigger>
+                <TabsTrigger value="actividades">Actividades</TabsTrigger>
                 <TabsTrigger value="historial">Historial</TabsTrigger>
                 <TabsTrigger value="onboarding">Onboarding</TabsTrigger>
               </>
@@ -2628,7 +2876,7 @@ export function LeadDrawer({
                 <div>
                   <h4 className="text-sm font-semibold text-foreground">Agregar nota</h4>
                   <p className="text-xs text-muted-foreground">
-                    Las notas quedan registradas en el historial y visibles para el equipo.
+                    Las notas quedan registradas en CRM y pueden ligarse a un recordatorio.
                   </p>
                 </div>
                 <Textarea
@@ -2638,6 +2886,70 @@ export function LeadDrawer({
                   disabled={notePending || isBusy}
                   minLength={1}
                 />
+                <div className="flex items-center gap-2">
+                  <Checkbox
+                    id="note-reminder-enabled"
+                    checked={noteReminderEnabled}
+                    onCheckedChange={(value) => setNoteReminderEnabled(value === true)}
+                  />
+                  <label htmlFor="note-reminder-enabled" className="text-sm">
+                    Crear recordatorio
+                  </label>
+                </div>
+                {noteReminderEnabled ? (
+                  <div className="grid gap-3 rounded-lg border border-border/50 bg-background/60 p-3 md:grid-cols-2">
+                    <div className="space-y-1">
+                      <label htmlFor="note-reminder-at" className="text-xs font-medium text-muted-foreground">
+                        Fecha y hora
+                      </label>
+                      <Input
+                        id="note-reminder-at"
+                        type="datetime-local"
+                        value={noteReminderAt}
+                        onChange={(event) => setNoteReminderAt(event.target.value)}
+                        disabled={notePending || isBusy}
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label htmlFor="note-activity-type" className="text-xs font-medium text-muted-foreground">
+                        Tipo de actividad
+                      </label>
+                      <Select value={noteActivityType} onValueChange={setNoteActivityType}>
+                        <SelectTrigger id="note-activity-type">
+                          <SelectValue placeholder="Selecciona tipo" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="seguimiento">Seguimiento</SelectItem>
+                          <SelectItem value="llamada">Llamada</SelectItem>
+                          <SelectItem value="correo">Correo</SelectItem>
+                          <SelectItem value="reunion">Reunión</SelectItem>
+                          <SelectItem value="interno">Interno</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-1 md:col-span-2">
+                      <label htmlFor="note-assigned-to" className="text-xs font-medium text-muted-foreground">
+                        Asignar a
+                      </label>
+                      <Select
+                        value={noteAssignedTo || EMPTY_SELECT_VALUE}
+                        onValueChange={(value) => setNoteAssignedTo(value === EMPTY_SELECT_VALUE ? "" : value)}
+                      >
+                        <SelectTrigger id="note-assigned-to">
+                          <SelectValue placeholder="Asignado por defecto" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value={EMPTY_SELECT_VALUE}>Asignado por defecto</SelectItem>
+                          {vendorOptions.map((vendor) => (
+                            <SelectItem key={vendor.id} value={vendor.id}>
+                              {vendor.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                ) : null}
                 {noteError ? (
                   <p className="text-xs text-destructive">{noteError}</p>
                 ) : null}
@@ -2653,38 +2965,126 @@ export function LeadDrawer({
               </div>
 
               <div className="space-y-3">
-                {historyState.status === "loading" && noteEntries.length === 0 ? (
+                {notesState.status === "loading" && noteEntries.length === 0 ? (
                   <p className="rounded-lg border border-dashed border-muted-foreground/40 p-4 text-xs text-muted-foreground">
                     Cargando notas...
                   </p>
                 ) : null}
 
-                {historyState.status === "error" ? (
+                {notesState.status === "error" ? (
                   <p className="rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-xs text-destructive">
-                    {historyState.error ?? "No se pudieron cargar las notas."}
+                    {notesState.error ?? "No se pudieron cargar las notas."}
                   </p>
                 ) : null}
 
                 {noteEntries.length ? (
                   noteEntries.map((entry) => (
-                    <div key={entry.movimiento_id} className="space-y-2 rounded-lg border border-border/60 p-3">
+                    <div key={entry.id} className="space-y-2 rounded-lg border border-border/60 p-3">
                       <p className="text-sm text-foreground whitespace-pre-wrap">
-                        {entry.nota ?? ""}
+                        {entry.texto ?? ""}
                       </p>
                       <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
-                        <span>{entry.cambiado_nombre ?? "Usuario desconocido"}</span>
-                        <span>{formatDateTime(entry.cambiado_en)}</span>
+                        <span>{entry.tipo === "interna" ? "Nota interna" : entry.tipo}</span>
+                        <span>{formatDateTime(entry.creado_en)}</span>
                       </div>
                     </div>
                   ))
-                ) : historyState.status === "loaded" ? (
+                ) : notesState.status === "loaded" ? (
                   <p className="rounded-lg border border-dashed border-muted-foreground/40 p-4 text-xs text-muted-foreground">
-                    Aún no hay notas registradas para este lead.
+                    Aún no hay notas registradas para esta oportunidad.
                   </p>
                 ) : null}
               </div>
             </div>
           </TabsContent>
+          ) : null}
+
+          {!isCreateMode && card ? (
+            <TabsContent value="actividades" className="flex flex-1 min-h-0 flex-col overflow-hidden parent-scroll">
+              <div className="flex flex-1 min-h-0 flex-col gap-4 overflow-y-auto px-4 pb-6">
+                <div className="space-y-3 rounded-lg border border-border/60 bg-muted/10 p-4">
+                  <div>
+                    <h4 className="text-sm font-semibold text-foreground">Crear actividad</h4>
+                    <p className="text-xs text-muted-foreground">
+                      Las actividades se generan desde notas con recordatorio. Aquí puedes verlas y cerrarlas.
+                    </p>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Cuando se crea una nota con recordatorio, la actividad queda asociada a esta oportunidad.
+                  </p>
+                </div>
+
+                <div className="space-y-3">
+                  {activitiesState.status === "loading" && activitiesState.data.length === 0 ? (
+                    <p className="rounded-lg border border-dashed border-muted-foreground/40 p-4 text-xs text-muted-foreground">
+                      Cargando actividades...
+                    </p>
+                  ) : null}
+
+                {activitiesState.status === "error" ? (
+                  <p className="rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-xs text-destructive">
+                    {activitiesState.error ?? "No se pudieron cargar las actividades."}
+                  </p>
+                ) : null}
+                {activityError ? (
+                  <p className="rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-xs text-destructive">
+                    {activityError}
+                  </p>
+                ) : null}
+
+                {activitiesState.data.length ? (
+                    activitiesState.data.map((activity) => (
+                      <div key={activity.id} className="space-y-2 rounded-lg border border-border/60 p-3">
+                        <div className="flex flex-wrap items-start justify-between gap-2">
+                          <div className="space-y-1">
+                            <p className="text-sm font-medium text-foreground">
+                              {activity.asunto ?? activity.tipo}
+                            </p>
+                            <p className="text-xs text-muted-foreground whitespace-pre-wrap">
+                              {activity.descripcion ?? "Sin descripción."}
+                            </p>
+                          </div>
+                          <Badge variant={activity.estado === "completada" ? "default" : activity.estado === "cancelada" ? "outline" : "secondary"}>
+                            {activity.estado}
+                          </Badge>
+                        </div>
+                        <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
+                          <span>Tipo: {activity.tipo}</span>
+                          <span>
+                            {activity.recordatorio_en ? `Recordatorio: ${formatDateTime(activity.recordatorio_en)}` : "Sin recordatorio"}
+                          </span>
+                        </div>
+                        {activity.estado === "pendiente" ? (
+                          <div className="flex flex-wrap gap-2">
+                            <Button
+                              type="button"
+                              size="sm"
+                              onClick={() => handleCompleteActivity(activity.id)}
+                              disabled={notePending || isBusy}
+                            >
+                              Completar
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleCancelActivity(activity.id)}
+                              disabled={notePending || isBusy}
+                            >
+                              Cancelar
+                            </Button>
+                          </div>
+                        ) : null}
+                      </div>
+                    ))
+                  ) : activitiesState.status === "loaded" ? (
+                    <p className="rounded-lg border border-dashed border-muted-foreground/40 p-4 text-xs text-muted-foreground">
+                      Aún no hay actividades registradas para esta oportunidad.
+                    </p>
+                  ) : null}
+                </div>
+              </div>
+            </TabsContent>
           ) : null}
 
           {!isCreateMode && card ? (

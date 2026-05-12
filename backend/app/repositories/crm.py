@@ -1610,6 +1610,24 @@ class CRMRepository:
             raise CRMRepositoryError(f"Respuesta inesperada al listar actividades: {data!r}")
         return data
 
+    async def list_due_activities_for_reminders(
+        self,
+        *,
+        limit: int = 100,
+    ) -> list[dict[str, Any]]:
+        params: dict[str, str] = {
+            "estado": "eq.pendiente",
+            "recordatorio_en": f"lte.{datetime.now(timezone.utc).isoformat()}",
+            "recordatorio_notificado_en": "is.null",
+            "order": "recordatorio_en.asc.nullslast",
+            "limit": str(max(1, min(limit, 200))),
+        }
+        resp = await self._request("GET", "/rest/v1/actividades", params=params)
+        data = resp.json()
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"Respuesta inesperada al listar recordatorios de actividades: {data!r}")
+        return data
+
     async def create_activity(
         self,
         *,
@@ -1640,6 +1658,9 @@ class CRMRepository:
     ) -> dict[str, Any]:
         if not payload:
             raise CRMRepositoryError("activity_update_empty")
+        payload = dict(payload)
+        if "recordatorio_en" in payload and "recordatorio_notificado_en" not in payload:
+            payload["recordatorio_notificado_en"] = None
         params = {
             "id": f"eq.{activity_id}",
             "organizacion_id": f"eq.{organizacion_id}",
@@ -1718,6 +1739,33 @@ class CRMRepository:
         row = data[0]
         if not isinstance(row, dict):
             raise CRMRepositoryError(f"Respuesta inválida al obtener actividad: {row!r}")
+        return row
+
+    async def get_ui_notification_by_dedupe_key(
+        self,
+        *,
+        usuario_id: UUID,
+        organizacion_id: UUID,
+        dedupe_key: str,
+    ) -> dict[str, Any] | None:
+        normalized = dedupe_key.strip()
+        if not normalized:
+            return None
+        params = {
+            "usuario_id": f"eq.{usuario_id}",
+            "organizacion_id": f"eq.{organizacion_id}",
+            "dedupe_key": f"eq.{normalized}",
+            "limit": "1",
+        }
+        resp = await self._request("GET", "/rest/v1/ui_notificaciones", params=params)
+        data = resp.json()
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"Respuesta inesperada al buscar notificación: {data!r}")
+        if not data:
+            return None
+        row = data[0]
+        if not isinstance(row, dict):
+            raise CRMRepositoryError(f"Respuesta inválida al buscar notificación: {row!r}")
         return row
 
     async def list_tickets(

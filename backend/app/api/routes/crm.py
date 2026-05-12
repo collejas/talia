@@ -11576,6 +11576,7 @@ class CRMActivity(BaseModel):
     completado_en: datetime | None = None
     cancelado_en: datetime | None = None
     cerrado_por_usuario_id: UUID | None = None
+    recordatorio_notificado_en: datetime | None = None
     metadata: dict | None = None
     creado_en: datetime
     actualizado_en: datetime

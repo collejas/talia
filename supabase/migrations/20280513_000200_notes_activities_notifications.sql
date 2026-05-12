@@ -27,7 +27,8 @@ CREATE INDEX IF NOT EXISTS notas_actividad_idx
 ALTER TABLE public.actividades
     ADD COLUMN IF NOT EXISTS completado_en timestamptz,
     ADD COLUMN IF NOT EXISTS cancelado_en timestamptz,
-    ADD COLUMN IF NOT EXISTS cerrado_por_usuario_id uuid;
+    ADD COLUMN IF NOT EXISTS cerrado_por_usuario_id uuid,
+    ADD COLUMN IF NOT EXISTS recordatorio_notificado_en timestamptz;
 
 CREATE UNIQUE INDEX IF NOT EXISTS actividades_org_id_id_key
     ON public.actividades (organizacion_id, id);
@@ -58,6 +59,12 @@ CREATE INDEX IF NOT EXISTS actividades_org_asignado_estado_idx
 
 CREATE INDEX IF NOT EXISTS actividades_org_oportunidad_estado_idx
     ON public.actividades (organizacion_id, oportunidad_id, estado);
+
+CREATE INDEX IF NOT EXISTS actividades_org_recordatorio_pendiente_idx
+    ON public.actividades (organizacion_id, recordatorio_en)
+    WHERE recordatorio_en IS NOT NULL
+      AND estado = 'pendiente'
+      AND recordatorio_notificado_en IS NULL;
 
 ALTER TABLE public.ui_notificaciones
     ADD COLUMN IF NOT EXISTS actividad_id uuid,
