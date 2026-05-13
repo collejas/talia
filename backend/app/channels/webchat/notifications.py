@@ -478,37 +478,73 @@ async def notify_sales_rep(
         extra=extra_payload,
     )
 
-    appointment_template_sid = (
-        whatsapp_settings.appointment_template_sid
-        or settings.whatsapp_sales_appointment_template_sid
-    )
-    fallback_template_sid = (
-        settings.webchat_sales_template_sid
-        or whatsapp_settings.sales_template_sid
-        or settings.whatsapp_sales_template_sid
-    )
-
+    provider = str(getattr(whatsapp_settings, "provider", "twilio") or "twilio").strip().lower()
     template_sid: str | None = None
+    template_name: str | None = None
+    template_language: str | None = None
     template_vars: dict[str, str] | None = None
-    if trigger == "booking_confirmed" and appointment_template_sid:
-        template_sid = appointment_template_sid
-        template_vars = shared_build_booking_template_variables(
-            contact=persona_record,
-            seller_name=seller_name,
-            extra=extra_payload,
-            include_reason=False,
-        )
+    if provider == "meta":
+        if trigger == "booking_confirmed":
+            template_name = getattr(whatsapp_settings, "appointment_template_name", None)
+            template_language = getattr(whatsapp_settings, "appointment_template_language", None)
+            if template_name and template_language:
+                template_vars = shared_build_booking_template_variables(
+                    contact=persona_record,
+                    seller_name=seller_name,
+                    extra=extra_payload,
+                    include_reason=False,
+                )
+        elif trigger == "booking_canceled":
+            template_name = getattr(whatsapp_settings, "cancel_template_name", None)
+            template_language = getattr(whatsapp_settings, "cancel_template_language", None)
+            if template_name and template_language:
+                template_vars = shared_build_booking_template_variables(
+                    contact=persona_record,
+                    seller_name=seller_name,
+                    extra=extra_payload,
+                    include_reason=True,
+                )
+        if not (template_name and template_language):
+            template_name = getattr(whatsapp_settings, "sales_template_name", None)
+            template_language = getattr(whatsapp_settings, "sales_template_language", None)
+            if template_name and template_language:
+                template_vars = shared_build_sales_template_variables(
+                    contact=persona_record,
+                    resumen=resumen,
+                    notes=notes,
+                    seller_name=seller_name,
+                    email=email,
+                    extra=extra_payload,
+                )
     else:
-        template_sid = fallback_template_sid
-        if template_sid:
-            template_vars = shared_build_sales_template_variables(
+        appointment_template_sid = (
+            whatsapp_settings.appointment_template_sid
+            or settings.whatsapp_sales_appointment_template_sid
+        )
+        fallback_template_sid = (
+            settings.webchat_sales_template_sid
+            or whatsapp_settings.sales_template_sid
+            or settings.whatsapp_sales_template_sid
+        )
+        if trigger == "booking_confirmed" and appointment_template_sid:
+            template_sid = appointment_template_sid
+            template_vars = shared_build_booking_template_variables(
                 contact=persona_record,
-                resumen=resumen,
-                notes=notes,
                 seller_name=seller_name,
-                email=email,
                 extra=extra_payload,
+                include_reason=False,
             )
+        else:
+            template_sid = fallback_template_sid
+            if template_sid:
+                template_vars = shared_build_sales_template_variables(
+                    contact=persona_record,
+                    resumen=resumen,
+                    notes=notes,
+                    seller_name=seller_name,
+                    email=email,
+                    extra=extra_payload,
+                )
 
     logger.info(
         "webchat.notify_sales.pre_send",
@@ -518,6 +554,8 @@ async def notify_sales_rep(
             "seller_id": seller_id,
             "seller_phone": seller_phone,
             "template_sid": template_sid,
+            "template_name": template_name,
+            "template_language": template_language,
             "template_vars": template_vars,
         },
     )
@@ -526,9 +564,11 @@ async def notify_sales_rep(
     try:
         send_result = await whatsapp_service.send_manual_message(
             to_number=seller_phone,
-            body=message_body,
+            body=message_body if not (template_sid or template_name) else None,
             template_sid=template_sid,
             template_variables=template_vars,
+            template_name=template_name,
+            template_language=template_language,
             organizacion_id=org_uuid,
         )
     except Exception as exc:  # pragma: no cover
@@ -566,6 +606,8 @@ async def notify_sales_rep(
             "conversation_id": context.conversation_id,
             "trigger": trigger,
             "template_sid": template_sid,
+            "template_name": template_name,
+            "template_language": template_language,
             "message_sid": message_sid,
             "status": status_value,
             "seller_id": seller_id,
@@ -607,7 +649,7 @@ async def notify_sales_rep(
             seller_uuid = UUID(str(seller_id))
             assignment_metadata: dict[str, Any] = {
                 "reason": extra_payload,
-                "notification": {"trigger": trigger, "uses_template": bool(template_sid)},
+                "notification": {"trigger": trigger, "uses_template": bool(template_sid or template_name)},
             }
             await repo.insert_sales_assignment_audit(
                 organizacion_id=org_uuid,
@@ -637,5 +679,7 @@ async def notify_sales_rep(
             "conversation_id": context.conversation_id,
             "trigger": trigger,
             "seller_id": seller_id,
+            "template_name": template_name,
+            "template_language": template_language,
         },
     )

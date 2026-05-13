@@ -144,6 +144,13 @@ function parseSidList(raw: string): string[] {
   return unique
 }
 
+function buildMetaTemplateValue(name: string, language: string): Record<string, string> {
+  const value: Record<string, string> = {}
+  if (name) value.name = name
+  if (language) value.language = language
+  return value
+}
+
 async function upsertTenantSecret(
   tenantId: string,
   clave: string,
@@ -815,6 +822,12 @@ export async function updateWhatsAppSettingsAction(_: CrudActionState, formData:
     const templateSales = getText(formData, "whatsapp_template_sales")
     const templateAppointment = getText(formData, "whatsapp_template_appointment")
     const templateCancel = getText(formData, "whatsapp_template_cancel")
+    const templateSalesMetaName = getText(formData, "whatsapp_template_sales_meta_name")
+    const templateSalesMetaLanguage = getText(formData, "whatsapp_template_sales_meta_language")
+    const templateAppointmentMetaName = getText(formData, "whatsapp_template_appointment_meta_name")
+    const templateAppointmentMetaLanguage = getText(formData, "whatsapp_template_appointment_meta_language")
+    const templateCancelMetaName = getText(formData, "whatsapp_template_cancel_meta_name")
+    const templateCancelMetaLanguage = getText(formData, "whatsapp_template_cancel_meta_language")
     const templateProspeccionRaw = getText(formData, "whatsapp_template_prospeccion_sids")
     const prospeccionPromptId = getText(formData, "whatsapp_prospeccion_prompt_id")
     const prospeccionPromptVersion = getText(formData, "whatsapp_prospeccion_prompt_version")
@@ -844,6 +857,19 @@ export async function updateWhatsAppSettingsAction(_: CrudActionState, formData:
     if (templateProspeccion.length) templatesPatch.prospeccion = templateProspeccion
     if (Object.keys(templatesPatch).length) {
       whatsappPatch.templates = templatesPatch
+    }
+    const templatesMetaPatch: Record<string, unknown> = {}
+    const salesMetaPatch = buildMetaTemplateValue(templateSalesMetaName, templateSalesMetaLanguage)
+    if (Object.keys(salesMetaPatch).length) templatesMetaPatch.sales = salesMetaPatch
+    const appointmentMetaPatch = buildMetaTemplateValue(
+      templateAppointmentMetaName,
+      templateAppointmentMetaLanguage,
+    )
+    if (Object.keys(appointmentMetaPatch).length) templatesMetaPatch.appointment = appointmentMetaPatch
+    const cancelMetaPatch = buildMetaTemplateValue(templateCancelMetaName, templateCancelMetaLanguage)
+    if (Object.keys(cancelMetaPatch).length) templatesMetaPatch.cancel = cancelMetaPatch
+    if (Object.keys(templatesMetaPatch).length) {
+      whatsappPatch.templates_meta = templatesMetaPatch
     }
     const prospeccionPatch: Record<string, unknown> = {}
     if (prospeccionPromptId) prospeccionPatch.prompt_id = prospeccionPromptId

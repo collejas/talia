@@ -413,6 +413,12 @@ export type WhatsAppInitialValues = {
   whatsapp_template_sales?: string
   whatsapp_template_appointment?: string
   whatsapp_template_cancel?: string
+  whatsapp_template_sales_meta_name?: string
+  whatsapp_template_sales_meta_language?: string
+  whatsapp_template_appointment_meta_name?: string
+  whatsapp_template_appointment_meta_language?: string
+  whatsapp_template_cancel_meta_name?: string
+  whatsapp_template_cancel_meta_language?: string
   whatsapp_template_prospeccion_sids?: string
   whatsapp_prospeccion_prompt_id?: string
   whatsapp_prospeccion_prompt_version?: string
@@ -1820,9 +1826,81 @@ export function TenantWhatsAppSettings({
             />
           </div>
         </div>
+        <div className="rounded-lg border border-border/60 p-4 space-y-4">
+          <div className="space-y-1">
+            <p className="text-sm font-medium">Meta templates</p>
+            <p className="text-xs text-muted-foreground">
+              Si el provider del tenant es Meta, aquí se guardan nombre técnico e idioma aprobado de cada
+              plantilla.
+            </p>
+          </div>
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="space-y-2">
+              <Label htmlFor="whatsapp_template_sales_meta_name">whatsapp.templates_meta.sales.name</Label>
+              <Input
+                id="whatsapp_template_sales_meta_name"
+                name="whatsapp_template_sales_meta_name"
+                placeholder="mi_plantilla_ventas"
+                defaultValue={initialValues.whatsapp_template_sales_meta_name ?? ""}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="whatsapp_template_sales_meta_language">whatsapp.templates_meta.sales.language</Label>
+              <Input
+                id="whatsapp_template_sales_meta_language"
+                name="whatsapp_template_sales_meta_language"
+                placeholder="es_MX"
+                defaultValue={initialValues.whatsapp_template_sales_meta_language ?? ""}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="whatsapp_template_appointment_meta_name">
+                whatsapp.templates_meta.appointment.name
+              </Label>
+              <Input
+                id="whatsapp_template_appointment_meta_name"
+                name="whatsapp_template_appointment_meta_name"
+                placeholder="mi_plantilla_cita"
+                defaultValue={initialValues.whatsapp_template_appointment_meta_name ?? ""}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="whatsapp_template_appointment_meta_language">
+                whatsapp.templates_meta.appointment.language
+              </Label>
+              <Input
+                id="whatsapp_template_appointment_meta_language"
+                name="whatsapp_template_appointment_meta_language"
+                placeholder="es_MX"
+                defaultValue={initialValues.whatsapp_template_appointment_meta_language ?? ""}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="whatsapp_template_cancel_meta_name">whatsapp.templates_meta.cancel.name</Label>
+              <Input
+                id="whatsapp_template_cancel_meta_name"
+                name="whatsapp_template_cancel_meta_name"
+                placeholder="mi_plantilla_cancelacion"
+                defaultValue={initialValues.whatsapp_template_cancel_meta_name ?? ""}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="whatsapp_template_cancel_meta_language">
+                whatsapp.templates_meta.cancel.language
+              </Label>
+              <Input
+                id="whatsapp_template_cancel_meta_language"
+                name="whatsapp_template_cancel_meta_language"
+                placeholder="es_MX"
+                defaultValue={initialValues.whatsapp_template_cancel_meta_language ?? ""}
+              />
+            </div>
+          </div>
+        </div>
         <p className="text-xs text-muted-foreground">
           Si el tenant sigue en Twilio, estos campos usan SID de plantilla. Si el tenant usa Meta, guarda el
-          nombre técnico aprobado de la plantilla y su código de idioma en la pantalla de plantillas de prospección.
+          nombre técnico aprobado y el idioma aquí para las notificaciones automáticas; las plantillas de
+          prospección se siguen gestionando aparte.
         </p>
 
         <p className="text-xs text-muted-foreground">

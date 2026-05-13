@@ -95,6 +95,113 @@ INFORMATION_EMAIL_TEMPLATE: dict[str, Any] = {
 }
 
 
+def _resolve_sales_notification_template(
+    *,
+    trigger: str,
+    whatsapp_settings: Any,
+    provider: str,
+    seller_name: str,
+    persona_record: dict[str, Any],
+    resumen: str | None,
+    notes: str | None,
+    email: str | None,
+    extra: dict[str, Any] | None,
+) -> tuple[str | None, str | None, str | None, dict[str, str] | None]:
+    if provider == "meta":
+        if trigger == "booking_confirmed":
+            template_name = getattr(whatsapp_settings, "appointment_template_name", None)
+            template_language = getattr(whatsapp_settings, "appointment_template_language", None)
+            if template_name and template_language:
+                return (
+                    None,
+                    template_name,
+                    template_language,
+                    shared_build_booking_template_variables(
+                        contact=persona_record,
+                        seller_name=seller_name,
+                        extra=extra,
+                        include_reason=False,
+                    ),
+                )
+        elif trigger == "booking_canceled":
+            template_name = getattr(whatsapp_settings, "cancel_template_name", None)
+            template_language = getattr(whatsapp_settings, "cancel_template_language", None)
+            if template_name and template_language:
+                return (
+                    None,
+                    template_name,
+                    template_language,
+                    shared_build_booking_template_variables(
+                        contact=persona_record,
+                        seller_name=seller_name,
+                        extra=extra,
+                        include_reason=True,
+                    ),
+                )
+        template_name = getattr(whatsapp_settings, "sales_template_name", None)
+        template_language = getattr(whatsapp_settings, "sales_template_language", None)
+        if template_name and template_language:
+            return (
+                None,
+                template_name,
+                template_language,
+                shared_build_sales_template_variables(
+                    contact=persona_record,
+                    resumen=resumen,
+                    notes=notes,
+                    seller_name=seller_name,
+                    email=email,
+                    extra=extra,
+                ),
+            )
+        return None, None, None, None
+
+    if trigger == "booking_confirmed":
+        template_sid = getattr(whatsapp_settings, "appointment_template_sid", None) or settings.whatsapp_sales_appointment_template_sid
+        if template_sid:
+            return (
+                template_sid,
+                None,
+                None,
+                shared_build_booking_template_variables(
+                    contact=persona_record,
+                    seller_name=seller_name,
+                    extra=extra,
+                    include_reason=False,
+                ),
+            )
+    if trigger == "booking_canceled":
+        template_sid = getattr(whatsapp_settings, "cancel_template_sid", None) or settings.whatsapp_sales_cancel_appointment_template_sid
+        if template_sid:
+            return (
+                template_sid,
+                None,
+                None,
+                shared_build_booking_template_variables(
+                    contact=persona_record,
+                    seller_name=seller_name,
+                    extra=extra,
+                    include_reason=True,
+                ),
+            )
+    template_sid = getattr(whatsapp_settings, "sales_template_sid", None) or settings.whatsapp_sales_template_sid
+    if template_sid:
+        return (
+            template_sid,
+            None,
+            None,
+            shared_build_sales_template_variables(
+                contact=persona_record,
+                resumen=resumen,
+                notes=notes,
+                seller_name=seller_name,
+                email=email,
+                extra=extra,
+            ),
+        )
+    return None, None, None, None
+
+
 def _require(arguments: dict[str, Any], key: str) -> str:
     value = arguments.get(key)
     if value is None:
@@ -2886,34 +2993,22 @@ async def _notify_sales_rep(
         email=email,
         extra=extra,
     )
-    appointment_template = (
-        whatsapp_settings.appointment_template_sid
-        or settings.whatsapp_sales_appointment_template_sid
+    provider = str(getattr(whatsapp_settings, "provider", "twilio") or "twilio").strip().lower()
+    template_sid, template_name, template_language, template_vars = _resolve_sales_notification_template(
+        trigger=trigger,
+        whatsapp_settings=whatsapp_settings,
+        provider=provider,
+        seller_name=seller_name,
+        persona_record=persona_record,
+        resumen=resumen,
+        notes=notes,
+        email=email,
+        extra=extra,
     )
-    cancel_template = (
-        whatsapp_settings.cancel_template_sid
-        or settings.whatsapp_sales_cancel_appointment_template_sid
-    )
-    template_sid: str | None = None
-    template_vars: dict[str, str] | None = None
-    if trigger == "booking_confirmed" and appointment_template:
-        template_sid = appointment_template
-        template_vars = shared_build_booking_template_variables(
-            contact=persona_record,
-            seller_name=seller_name,
-            extra=extra,
-            include_reason=False,
-        )
-    elif trigger == "booking_canceled" and cancel_template:
-        template_sid = cancel_template
-        template_vars = shared_build_booking_template_variables(
-            contact=persona_record,
-            seller_name=seller_name,
-            extra=extra,
-            include_reason=True,
-        )
-    else:
-        if trigger == "booking_canceled":
+    if trigger == "booking_canceled" and provider == "meta":
+        cancel_name = getattr(whatsapp_settings, "cancel_template_name", None)
+        cancel_language = getattr(whatsapp_settings, "cancel_template_language", None)
+        if not (cancel_name and cancel_language):
             logger.info(
                 "whatsapp.notify_sales.cancel_template_missing",
                 extra={
@@ -2923,16 +3018,6 @@ async def _notify_sales_rep(
                     "seller_id": seller_id,
                 },
             )
-        template_sid = whatsapp_settings.sales_template_sid or settings.whatsapp_sales_template_sid
-        if template_sid:
-            template_vars = shared_build_sales_template_variables(
-            contact=persona_record,
-            resumen=resumen,
-            notes=notes,
-            extra=extra,
-            seller_name=seller_name,
-            email=email,
-        )
 
     logger.info(
         "whatsapp.notify_sales.pre_send",
@@ -2942,6 +3027,8 @@ async def _notify_sales_rep(
             "seller_id": seller_id,
             "seller_phone": seller_phone,
             "template_sid": template_sid,
+            "template_name": template_name,
+            "template_language": template_language,
             "template_vars": template_vars,
         },
     )
@@ -2952,9 +3039,11 @@ async def _notify_sales_rep(
 
         send_result = await whatsapp_service.send_manual_message(
             to_number=seller_phone,
-            body=message_body,
+            body=message_body if not (template_sid or template_name) else None,
             template_sid=template_sid,
             template_variables=template_vars,
+            template_name=template_name,
+            template_language=template_language,
             organizacion_id=org_uuid,
         )
     except Exception as exc:  # pragma: no cover
@@ -2988,6 +3077,8 @@ async def _notify_sales_rep(
             "conversation_id": context.conversation_id,
             "trigger": trigger,
             "template_sid": template_sid,
+            "template_name": template_name,
+            "template_language": template_language,
             "message_sid": message_sid,
             "status": status_value,
             "seller_id": seller_id,
@@ -3000,11 +3091,13 @@ async def _notify_sales_rep(
                 direction="saliente",
                 wa_id=None,
                 phone_e164=seller_phone,
-                body=message_body if not template_sid else None,
+                body=message_body if not (template_sid or template_name) else None,
                 message_sid=message_sid,
                 metadata={
                     "trigger": trigger,
                     "template_sid": template_sid,
+                    "template_name": template_name,
+                    "template_language": template_language,
                     "sender": "sales_notification",
                 },
                 conversation_id=context.conversation_id,
@@ -3060,7 +3153,7 @@ async def _notify_sales_rep(
                 "reason": extra or {},
                 "notification": {
                     "trigger": trigger,
-                    "uses_template": bool(template_sid),
+                    "uses_template": bool(template_sid or template_name),
                 },
             }
             await repo.insert_sales_assignment_audit(

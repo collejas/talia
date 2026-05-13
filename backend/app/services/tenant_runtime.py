@@ -1016,8 +1016,14 @@ class WhatsappRuntimeSettings:
     reengage_max_attempts: int
     escalate_minutes: int
     sales_template_sid: str | None
+    sales_template_name: str | None
+    sales_template_language: str | None
     appointment_template_sid: str | None
+    appointment_template_name: str | None
+    appointment_template_language: str | None
     cancel_template_sid: str | None
+    cancel_template_name: str | None
+    cancel_template_language: str | None
     prospeccion_prompt_id: str | None
     prospeccion_prompt_version: str | None
     prospeccion_template_sids: list[str]
@@ -1049,8 +1055,14 @@ class WhatsappRuntimeSettings:
             reengage_max_attempts=max(1, int(settings.whatsapp_reengage_max_attempts)),
             escalate_minutes=settings.whatsapp_escalate_minutes,
             sales_template_sid=settings.whatsapp_sales_template_sid,
+            sales_template_name=None,
+            sales_template_language=None,
             appointment_template_sid=settings.whatsapp_sales_appointment_template_sid,
+            appointment_template_name=None,
+            appointment_template_language=None,
             cancel_template_sid=settings.whatsapp_sales_cancel_appointment_template_sid,
+            cancel_template_name=None,
+            cancel_template_language=None,
             prospeccion_prompt_id=None,
             prospeccion_prompt_version=None,
             prospeccion_template_sids=[],
@@ -1127,16 +1139,51 @@ async def get_whatsapp_runtime_settings(
     )
 
     templates = _as_dict(whatsapp_cfg.get("templates")) or {}
+    templates_meta = _as_dict(whatsapp_cfg.get("templates_meta")) or {}
     prospeccion_cfg = _as_dict(whatsapp_cfg.get("prospeccion")) or {}
     sales_template = _coerce_str_or_none(templates.get("sales"))
     if sales_template is not None:
         settings_payload.sales_template_sid = sales_template
+    sales_template_meta = _as_dict(templates_meta.get("sales")) or {}
+    sales_template_name = _coerce_str_or_none(
+        sales_template_meta.get("name") or sales_template_meta.get("template_name")
+    )
+    if sales_template_name is not None:
+        settings_payload.sales_template_name = sales_template_name
+    sales_template_language = _coerce_str_or_none(
+        sales_template_meta.get("language") or sales_template_meta.get("template_language")
+    )
+    if sales_template_language is not None:
+        settings_payload.sales_template_language = sales_template_language
     appointment_template = _coerce_str_or_none(templates.get("appointment"))
     if appointment_template is not None:
         settings_payload.appointment_template_sid = appointment_template
+    appointment_template_meta = _as_dict(templates_meta.get("appointment")) or {}
+    appointment_template_name = _coerce_str_or_none(
+        appointment_template_meta.get("name") or appointment_template_meta.get("template_name")
+    )
+    if appointment_template_name is not None:
+        settings_payload.appointment_template_name = appointment_template_name
+    appointment_template_language = _coerce_str_or_none(
+        appointment_template_meta.get("language")
+        or appointment_template_meta.get("template_language")
+    )
+    if appointment_template_language is not None:
+        settings_payload.appointment_template_language = appointment_template_language
     cancel_template = _coerce_str_or_none(templates.get("cancel"))
     if cancel_template is not None:
         settings_payload.cancel_template_sid = cancel_template
+    cancel_template_meta = _as_dict(templates_meta.get("cancel")) or {}
+    cancel_template_name = _coerce_str_or_none(
+        cancel_template_meta.get("name") or cancel_template_meta.get("template_name")
+    )
+    if cancel_template_name is not None:
+        settings_payload.cancel_template_name = cancel_template_name
+    cancel_template_language = _coerce_str_or_none(
+        cancel_template_meta.get("language") or cancel_template_meta.get("template_language")
+    )
+    if cancel_template_language is not None:
+        settings_payload.cancel_template_language = cancel_template_language
     prospeccion_prompt_id = _coerce_str_or_none(prospeccion_cfg.get("prompt_id"))
     if prospeccion_prompt_id is not None:
         settings_payload.prospeccion_prompt_id = prospeccion_prompt_id

@@ -65,12 +65,16 @@ async def test_notify_sales_rep_sends_message(monkeypatch: pytest.MonkeyPatch) -
         body: str | None = None,
         template_sid: str | None = None,
         template_variables: dict | None = None,
+        template_name: str | None = None,
+        template_language: str | None = None,
         organizacion_id: str | None = None,
     ) -> object:
         sent["to"] = to_number
         sent["body"] = body
         sent["template_sid"] = template_sid
         sent["template_vars"] = template_variables
+        sent["template_name"] = template_name
+        sent["template_language"] = template_language
         return SimpleNamespace(error=False, sid="MSG123")
 
     monkeypatch.setattr(
@@ -117,6 +121,8 @@ async def test_notify_sales_rep_sends_message(monkeypatch: pytest.MonkeyPatch) -
     assert sent["template_vars"]["5"] == "+529991112233"
     assert sent["template_vars"]["6"] == "lead@example.com"
     assert sent["template_vars"]["7"] == "Demo SA"
+    assert sent["template_name"] is None
+    assert sent["template_language"] is None
     assert "booking_confirmed" in dummy_repo.updated_payload["metadata"]["sales_notifications"]
     assert (
         dummy_repo.updated_payload["metadata"]["sales_primary_notifications"]["whatsapp"]["reason"]
@@ -193,6 +199,99 @@ async def test_notify_sales_rep_skips_when_already_sent(monkeypatch: pytest.Monk
     )
 
     assert called is False
+
+
+@pytest.mark.asyncio
+async def test_notify_sales_rep_sends_meta_template(monkeypatch: pytest.MonkeyPatch) -> None:
+    dummy_repo = DummySalesRepo(
+        metadata={
+            "lead_scoring": {
+                "answers": {
+                    "financing_type": "credito",
+                    "budget_range": "3m-4m",
+                    "purchase_timeline": "1_3_months",
+                    "decision_authority": "sole",
+                }
+            }
+        }
+    )
+    monkeypatch.setattr(tools, "CRMRepository", lambda: dummy_repo)
+
+    async def fake_get_whatsapp_runtime_settings(**_: object):
+        return SimpleNamespace(
+            provider="meta",
+            sales_template_name="meta_sales_template",
+            sales_template_language="es_MX",
+            appointment_template_name="meta_booking_template",
+            appointment_template_language="es_MX",
+            cancel_template_name="meta_cancel_template",
+            cancel_template_language="es_MX",
+        )
+
+    monkeypatch.setattr(
+        tools.tenant_runtime,
+        "get_whatsapp_runtime_settings",
+        fake_get_whatsapp_runtime_settings,
+    )
+
+    sent: dict[str, str | None] = {}
+
+    async def fake_send_manual_message(
+        *,
+        to_number: str,
+        body: str | None = None,
+        template_sid: str | None = None,
+        template_variables: dict | None = None,
+        template_name: str | None = None,
+        template_language: str | None = None,
+        organizacion_id: str | None = None,
+    ) -> object:
+        sent["to"] = to_number
+        sent["body"] = body
+        sent["template_sid"] = template_sid
+        sent["template_name"] = template_name
+        sent["template_language"] = template_language
+        sent["template_vars"] = template_variables
+        return SimpleNamespace(error=False, sid="MSG-META")
+
+    monkeypatch.setattr(
+        "app.channels.whatsapp.service.send_manual_message",
+        fake_send_manual_message,
+    )
+    async def fake_register_whatsapp_message(*_: object, **__: object) -> None:
+        return None
+
+    monkeypatch.setattr(tools.storage, "register_whatsapp_message", fake_register_whatsapp_message)
+
+    contact = {
+        "organizacion_id": "00000000-0000-0000-0000-0000000000bb",
+        "nombre_completo": "Lead Demo",
+        "company_name": "Demo SA",
+        "necesidad_proposito": "Automatizar atención",
+        "correo": "lead@example.com",
+        "telefono_e164": "+529991112233",
+    }
+    context = ToolRuntimeContext(
+        conversation_id="conv-test",
+        contact_id="contact-test",
+        channel="whatsapp",
+    )
+
+    await tools._notify_sales_rep(
+        context=context,
+        trigger="close_lead",
+        persona=contact,
+        opportunity_id="00000000-0000-0000-0000-0000000000cc",
+        resumen="Automatizar atención",
+        notes="Quiere demo esta semana",
+        email="lead@example.com",
+        extra={"siguiente_accion": "demo"},
+    )
+
+    assert sent["template_sid"] is None
+    assert sent["template_name"] == "meta_sales_template"
+    assert sent["template_language"] == "es_MX"
+    assert sent["body"] is None
 
 
 @pytest.mark.asyncio
