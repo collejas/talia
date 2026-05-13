@@ -62,12 +62,13 @@ export function AgendaView({ items }: AgendaViewProps) {
                 estado: mapBookingStatus(updated.status),
                 notes: updated.notes ?? entry.notes,
                 metadata: updated.metadata ?? entry.metadata,
+                asunto: extractBookingSubject(updated.metadata) ?? entry.asunto,
               }
             : entry,
         ),
       )
       setSelectedItem((current) =>
-      current && current.id === previous.id
+        current && current.id === previous.id
           ? {
               ...current,
               startAt: updated.start_at,
@@ -76,6 +77,7 @@ export function AgendaView({ items }: AgendaViewProps) {
               estado: mapBookingStatus(updated.status),
               notes: updated.notes ?? current.notes,
               metadata: updated.metadata ?? current.metadata,
+              asunto: extractBookingSubject(updated.metadata) ?? current.asunto,
             }
           : current,
       )
@@ -414,4 +416,15 @@ function formatDateTime(value: string, timezone: string): string {
   } catch {
     return value
   }
+}
+
+function extractBookingSubject(metadata: Record<string, unknown> | null | undefined): string | null {
+  if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) return null
+  const candidates = [metadata.asunto, metadata.title, metadata.titulo]
+  for (const candidate of candidates) {
+    if (typeof candidate === "string" && candidate.trim()) {
+      return candidate.trim()
+    }
+  }
+  return null
 }

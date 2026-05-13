@@ -106,6 +106,7 @@ export type AgendaItem = {
   oportunidadId: string | null;
   contactoId: string | null;
   conversacionId: string | null;
+  asunto: string | null;
   startAt: string;
   endAt: string | null;
   timezone: string | null;
@@ -228,11 +229,20 @@ function mapAgenda(rows: AgendaApiItem[]): AgendaItem[] {
         : {};
 
     const provider = row.provider?.trim() || "calendar";
+    const asunto =
+      typeof metadata.asunto === "string"
+        ? metadata.asunto
+        : typeof metadata.title === "string"
+          ? metadata.title
+          : typeof metadata.titulo === "string"
+            ? metadata.titulo
+            : null;
     return {
       id: row.id,
       oportunidadId: row.oportunidad_id ?? null,
       contactoId: row.contacto_id,
       conversacionId: row.conversacion_id,
+      asunto,
       startAt: row.start_at,
       endAt: row.end_at,
       timezone: row.timezone,

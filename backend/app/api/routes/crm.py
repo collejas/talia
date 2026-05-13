@@ -2785,6 +2785,15 @@ class AgendaBookingCreatePayload(BaseModel):
         default=False,
         description="Indica si el flujo debe crear una oportunidad nueva durante la cita.",
     )
+    sin_contacto: bool = Field(
+        default=False,
+        description="Indica que la cita se agenda sin vincular persona/contacto.",
+    )
+    asunto: str | None = Field(
+        default=None,
+        description="Título breve para citas manuales o sin contacto.",
+        max_length=160,
+    )
     modalidad: Literal["virtual", "presencial", "hibrida"] = Field(
         default="virtual",
         description="Modalidad de la cita.",
@@ -18568,12 +18577,10 @@ async def create_agenda_booking(
     *,
     repo: CRMRepository = Depends(get_repository),
     _: str = Depends(require_permission("agenda.view")),
+    organizacion_id: UUID = Depends(require_organizacion_id),
     user_token: str = Depends(require_user_token),  # noqa: ARG001
     payload: AgendaBookingCreatePayload,
 ) -> dict[str, Any]:
-    if payload.contacto_id is None and payload.oportunidad_id is None:
-        raise HTTPException(status_code=400, detail="contacto_id_requerido")
-
     start_dt = _parse_datetime_input(payload.start_at, field="start_at")
     crear_oportunidad = False
 
@@ -18592,21 +18599,28 @@ async def create_agenda_booking(
     if opportunity_row:
         if contact_uuid is None:
             contact_uuid = _extract_opportunity_contact_id(opportunity_row)
-
-    if contact_uuid is None:
+    if payload.sin_contacto:
+        contact_uuid = None
+        opportunity_row = None
+    elif contact_uuid is None:
         raise HTTPException(status_code=400, detail="contacto_id_requerido")
 
-    contact_id = str(contact_uuid)
-    try:
-        persona_data = await repo.get_persona_by_id(persona_id=contact_id)
-    except CRMRepositoryError as exc:
-        raise HTTPException(status_code=502, detail=str(exc)) from exc
-    if not persona_data:
-        raise HTTPException(status_code=404, detail="contacto_no_encontrado")
+    contact_id = str(contact_uuid) if contact_uuid else None
+    asunto_value = (payload.asunto or "").strip() or "Cita manual"
+    persona_data: dict[str, Any] | None = None
+    org_uuid = organizacion_id
+    if contact_id:
+        try:
+            persona_data = await repo.get_persona_by_id(persona_id=contact_id)
+        except CRMRepositoryError as exc:
+            raise HTTPException(status_code=502, detail=str(exc)) from exc
+        if not persona_data:
+            raise HTTPException(status_code=404, detail="contacto_no_encontrado")
 
-    org_uuid = _safe_uuid(persona_data.get("organizacion_id"))
-    if org_uuid is None:
-        raise HTTPException(status_code=400, detail="contacto_org_missing")
+        contact_org_uuid = _safe_uuid(persona_data.get("organizacion_id"))
+        if contact_org_uuid is not None:
+            org_uuid = contact_org_uuid
+
     calendar_settings = await tenant_runtime.get_calendar_runtime_settings(
         organizacion_id=org_uuid
     )
@@ -18622,12 +18636,17 @@ async def create_agenda_booking(
     zoom_external_join_url: str | None = None
     zoom_metadata: dict[str, Any] = {}
     if modalidad_value != "presencial":
+        booking_topic_name = "Cita manual"
+        if persona_data:
+            booking_topic_name = str(persona_data.get("nombre_completo") or "").strip() or "Cita manual"
+        elif payload.sin_contacto and asunto_value:
+            booking_topic_name = asunto_value
         zoom_meeting_url, zoom_external_join_url, zoom_metadata = (
             await webchat_service.create_zoom_meeting_for_booking_if_enabled(
                 organizacion_id=org_uuid,
                 start_at=start_dt,
                 timezone_name=calendar_settings.timezone,
-                topic=f"Demo Tal-IA - {str(persona_data.get('nombre_completo') or contact_id).strip()}",
+                topic=f"Demo Tal-IA - {booking_topic_name}",
                 agenda=payload.notes,
             )
         )
@@ -18637,6 +18656,8 @@ async def create_agenda_booking(
         "contact_id": contact_id,
         "tarjeta_id": tarjeta_id,
         "crear_oportunidad": crear_oportunidad,
+        "sin_contacto": contact_id is None,
+        "asunto": asunto_value if payload.sin_contacto else None,
         "modalidad": modalidad_value,
         "canal": (payload.canal or "manual"),
         "organizacion_id": str(org_uuid),
@@ -18649,6 +18670,8 @@ async def create_agenda_booking(
         "contact_id": contact_id,
         "tarjeta_id": tarjeta_id,
         "crear_oportunidad": crear_oportunidad,
+        "sin_contacto": contact_id is None,
+        "asunto": asunto_value if payload.sin_contacto else None,
         "modalidad": modalidad_value,
         "canal": (payload.canal or "manual"),
         "organizacion_id": str(org_uuid),
@@ -18676,7 +18699,7 @@ async def create_agenda_booking(
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
     booking_response = webchat_service._build_booking_response(booking_raw)
-    if tarjeta_id:
+    if tarjeta_id and persona_data:
         await webchat_service._sync_booking_with_opportunity(
             booking=booking_response,
             tarjeta_id=tarjeta_id,

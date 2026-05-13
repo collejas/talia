@@ -3,6 +3,7 @@
 import * as React from "react"
 
 import { AgendaItem } from "@/lib/agenda/data"
+import { getAgendaItemTitle } from "@/lib/agenda/title"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
@@ -199,7 +200,7 @@ export function AgendaTable({ items }: AgendaTableProps) {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead className="min-w-[200px]">Contacto</TableHead>
+              <TableHead className="min-w-[220px]">Título / contacto</TableHead>
               <TableHead className="min-w-[180px]">Fecha y hora</TableHead>
               <TableHead>Estado</TableHead>
               <TableHead>Canal</TableHead>
@@ -223,13 +224,13 @@ export function AgendaTable({ items }: AgendaTableProps) {
                 <TableRow key={item.id} className="align-top">
                   <TableCell className="space-y-1">
                     <div className="font-semibold">
-                      {item.contactoNombre?.trim() || "Contacto sin nombre"}
+                      {getAgendaItemTitle(item)}
                     </div>
                     <div className="text-muted-foreground text-xs">
                       {item.contactoCorreo?.trim() ||
                         item.contactoTelefono?.trim() ||
                         item.contactoEmpresa?.trim() ||
-                        "—"}
+                        (item.asunto?.trim() ? "Sin contacto" : "—")}
                     </div>
                   </TableCell>
                   <TableCell className="space-y-1">

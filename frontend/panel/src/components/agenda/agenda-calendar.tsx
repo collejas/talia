@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react"
 
 import { AgendaItem } from "@/lib/agenda/data"
+import { getAgendaItemTitle } from "@/lib/agenda/title"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 
@@ -116,7 +117,7 @@ function CalendarEventCard({ item, onClick }: { item: AgendaItem; onClick?: () =
       className="rounded-lg border border-border/60 bg-background p-2 text-left text-xs shadow-sm transition hover:border-primary hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
     >
       <div className="flex items-center justify-between gap-2">
-        <span className="font-semibold">{item.contactoNombre || "Sin nombre"}</span>
+        <span className="font-semibold">{getAgendaItemTitle(item)}</span>
         <Badge variant={resolveEstadoVariant(item.estado)} className="text-[10px] uppercase">
           {item.estado}
         </Badge>
@@ -130,6 +131,9 @@ function CalendarEventCard({ item, onClick }: { item: AgendaItem; onClick?: () =
       ) : null}
       {item.canal ? (
         <div className="text-muted-foreground mt-1 capitalize">Canal: {item.canal}</div>
+      ) : null}
+      {item.contactoNombre ? (
+        <div className="text-muted-foreground mt-1">{item.contactoNombre}</div>
       ) : null}
       {item.notes ? <p className="mt-1 line-clamp-2 text-muted-foreground">{item.notes}</p> : null}
     </button>

@@ -68,8 +68,10 @@ export function AgendaCreateBookingSheet({ open, onClose, onCreated }: AgendaCre
   const [selectedContact, setSelectedContact] = React.useState<ContactSearchItem | null>(null)
   const [creatingContact, setCreatingContact] = React.useState(false)
   const [createMode, setCreateMode] = React.useState(false)
+  const [sinContacto, setSinContacto] = React.useState(false)
   const [submitting, setSubmitting] = React.useState(false)
   const [notes, setNotes] = React.useState("")
+  const [asunto, setAsunto] = React.useState("")
   const [startAt, setStartAt] = React.useState(() => toLocalDateTimeInputValue(new Date(Date.now() + 3600000)))
   const [modalidad, setModalidad] = React.useState<BookingModalidad>("virtual")
   const [newContact, setNewContact] = React.useState({
@@ -90,7 +92,9 @@ export function AgendaCreateBookingSheet({ open, onClose, onCreated }: AgendaCre
       setSearchResults([])
       setSelectedContact(null)
       setCreateMode(false)
+      setSinContacto(false)
       setNotes("")
+      setAsunto("")
       setStartAt(toLocalDateTimeInputValue(new Date(Date.now() + 3600000)))
       setModalidad("virtual")
       setNewContact({
@@ -108,7 +112,21 @@ export function AgendaCreateBookingSheet({ open, onClose, onCreated }: AgendaCre
   }, [open])
 
   React.useEffect(() => {
-    if (!open) return
+    if (sinContacto) {
+      setSearch("")
+      setSearchResults([])
+      setSelectedContact(null)
+      setCreateMode(false)
+      setOpenOpportunities([])
+      setOpportunityMode("none")
+      setSelectedOpportunityId("")
+      setNewOpportunityTitle("")
+      return
+    }
+  }, [sinContacto])
+
+  React.useEffect(() => {
+    if (!open || sinContacto) return
     const q = search.trim()
     if (q.length < 2) {
       setSearchResults([])
@@ -144,11 +162,11 @@ export function AgendaCreateBookingSheet({ open, onClose, onCreated }: AgendaCre
       cancelled = true
       clearTimeout(timeout)
     }
-  }, [search, open])
+  }, [search, open, sinContacto])
 
   React.useEffect(() => {
     const currentContact = selectedContact
-    if (!open || !currentContact?.id) {
+    if (!open || sinContacto || !currentContact?.id) {
       setOpenOpportunities([])
       setOpportunityMode("none")
       setSelectedOpportunityId("")
@@ -197,7 +215,7 @@ export function AgendaCreateBookingSheet({ open, onClose, onCreated }: AgendaCre
     return () => {
       cancelled = true
     }
-  }, [selectedContact, open])
+  }, [selectedContact, open, sinContacto])
 
   React.useEffect(() => {
     if (!open || opportunityMode !== "create" || newOpportunityTitle.trim() || !selectedContact?.nombre) {
@@ -283,7 +301,7 @@ export function AgendaCreateBookingSheet({ open, onClose, onCreated }: AgendaCre
   }
 
   async function handleCreateBooking() {
-    if (!selectedContact?.id) {
+    if (!sinContacto && !selectedContact?.id) {
       toast.error("Selecciona un contacto para agendar la cita.")
       return
     }
@@ -300,15 +318,19 @@ export function AgendaCreateBookingSheet({ open, onClose, onCreated }: AgendaCre
 
     try {
       setSubmitting(true)
-      const crearOportunidad = opportunityMode === "create"
-      const oportunidadId = await resolveOpportunityId(selectedContact.id)
+      const crearOportunidad = !sinContacto && opportunityMode === "create"
+      const oportunidadId = !sinContacto && selectedContact?.id
+        ? await resolveOpportunityId(selectedContact.id)
+        : null
       const response = await fetch("/api/agenda/bookings", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          contacto_id: selectedContact.id,
+          contacto_id: sinContacto ? undefined : selectedContact?.id,
           oportunidad_id: oportunidadId || undefined,
           crear_oportunidad: crearOportunidad,
+          sin_contacto: sinContacto,
+          asunto: asunto.trim() || undefined,
           modalidad,
           start_at: startAtIso,
           notes: notes.trim() || undefined,
@@ -334,9 +356,27 @@ export function AgendaCreateBookingSheet({ open, onClose, onCreated }: AgendaCre
       <SheetContent side="right" className="sm:max-w-lg">
         <SheetHeader>
           <SheetTitle>Nueva cita</SheetTitle>
-          <SheetDescription>Selecciona o crea un contacto para agendar la cita.</SheetDescription>
+          <SheetDescription>Selecciona un contacto o activa la cita sin contacto para agendarla.</SheetDescription>
         </SheetHeader>
         <div className="space-y-4 px-4">
+          <div className="flex items-center justify-between gap-3 rounded-md border px-3 py-2">
+            <div className="space-y-0.5">
+              <p className="text-sm font-medium">Cita sin contacto</p>
+              <p className="text-xs text-muted-foreground">
+                Úsalo para bloquear tiempo en tu agenda sin vincular persona u oportunidad.
+              </p>
+            </div>
+            <Button
+              type="button"
+              variant={sinContacto ? "default" : "outline"}
+              onClick={() => setSinContacto((current) => !current)}
+            >
+              {sinContacto ? "Activada" : "Activar"}
+            </Button>
+          </div>
+
+          {!sinContacto ? (
+            <>
           <div className="space-y-2">
             <Label htmlFor="agenda-contact-search">Buscar contacto</Label>
             <Input
@@ -496,6 +536,30 @@ export function AgendaCreateBookingSheet({ open, onClose, onCreated }: AgendaCre
                   />
                 </div>
               ) : null}
+            </div>
+          ) : null}
+            </>
+          ) : (
+            <div className="rounded-md border bg-muted/20 p-3 text-sm">
+              <p className="font-medium">Cita manual</p>
+              <p className="text-xs text-muted-foreground">
+                Esta cita se guardará en la agenda sin contacto ni oportunidad.
+              </p>
+            </div>
+          )}
+
+          {sinContacto ? (
+            <div className="space-y-2">
+              <Label htmlFor="agenda-booking-asunto">Asunto / título</Label>
+              <Input
+                id="agenda-booking-asunto"
+                value={asunto}
+                onChange={(event) => setAsunto(event.target.value)}
+                placeholder="Bloqueo personal, junta interna..."
+              />
+              <p className="text-xs text-muted-foreground">
+                Este texto aparecerá como referencia de la cita en la agenda.
+              </p>
             </div>
           ) : null}
 

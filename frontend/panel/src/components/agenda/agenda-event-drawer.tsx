@@ -1,6 +1,7 @@
 'use client'
 
 import { AgendaItem } from "@/lib/agenda/data"
+import { getAgendaItemTitle } from "@/lib/agenda/title"
 import {
   Drawer,
   DrawerContent,
@@ -41,10 +42,10 @@ export function AgendaEventDrawer({
             {item?.estado || "sin estado"}
           </Badge>
           <DrawerTitle className="text-2xl">
-            {item?.contactoNombre || "Contacto sin nombre"}
+            {item ? getAgendaItemTitle(item) : "Cita sin nombre"}
           </DrawerTitle>
           <DrawerDescription>
-            {item?.contactoCorreo || item?.contactoTelefono || "Sin contacto registrado"}
+            {item?.contactoCorreo || item?.contactoTelefono || item?.asunto || "Sin contacto registrado"}
           </DrawerDescription>
         </DrawerHeader>
         <div className="space-y-4 px-4 pb-6">
@@ -73,6 +74,11 @@ export function AgendaEventDrawer({
           ) : null}
           <Separator />
           <div className="flex flex-col gap-2 text-sm text-muted-foreground">
+            {item?.asunto ? (
+              <span>
+                Asunto: <strong>{item.asunto}</strong>
+              </span>
+            ) : null}
             <span>
               Zona horaria preferida: <strong>{timezone}</strong>
             </span>
