@@ -8,6 +8,7 @@ import type { AgendaActionResponse } from "@/lib/agenda/data"
 type BookingCreatePayload = {
   contacto_id?: string
   oportunidad_id?: string
+  crear_oportunidad?: boolean
   start_at?: string
   notes?: string
   canal?: string
@@ -37,6 +38,7 @@ export async function POST(request: NextRequest) {
     body: {
       contacto_id: contactoId,
       oportunidad_id: oportunidadId || undefined,
+      crear_oportunidad: payload.crear_oportunidad ?? false,
       start_at: startAt,
       notes: payload.notes?.trim() || undefined,
       canal: payload.canal?.trim() || "manual",

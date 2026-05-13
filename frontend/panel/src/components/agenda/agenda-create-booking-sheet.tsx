@@ -152,7 +152,6 @@ export function AgendaCreateBookingSheet({ open, onClose, onCreated }: AgendaCre
       return
     }
     const contactId = currentContact.id
-    const contactName = currentContact.nombre?.trim() || "Oportunidad desde agenda"
 
     let cancelled = false
     async function loadOpportunities() {
@@ -177,8 +176,9 @@ export function AgendaCreateBookingSheet({ open, onClose, onCreated }: AgendaCre
           setOpportunityMode("existing")
           setSelectedOpportunityId(opportunities[0].id)
         } else {
-          setOpportunityMode("create")
-          setNewOpportunityTitle(`Seguimiento ${contactName}`)
+          setOpportunityMode("none")
+          setSelectedOpportunityId("")
+          setNewOpportunityTitle("")
         }
       } catch (error) {
         if (cancelled) return
@@ -195,6 +195,13 @@ export function AgendaCreateBookingSheet({ open, onClose, onCreated }: AgendaCre
       cancelled = true
     }
   }, [selectedContact, open])
+
+  React.useEffect(() => {
+    if (!open || opportunityMode !== "create" || newOpportunityTitle.trim() || !selectedContact?.nombre) {
+      return
+    }
+    setNewOpportunityTitle(`Seguimiento ${selectedContact.nombre.trim()}`)
+  }, [newOpportunityTitle, open, opportunityMode, selectedContact?.nombre])
 
   async function handleCreateContact() {
     if (!newContact.nombre_completo.trim()) {
@@ -290,6 +297,7 @@ export function AgendaCreateBookingSheet({ open, onClose, onCreated }: AgendaCre
 
     try {
       setSubmitting(true)
+      const crearOportunidad = opportunityMode === "create"
       const oportunidadId = await resolveOpportunityId(selectedContact.id)
       const response = await fetch("/api/agenda/bookings", {
         method: "POST",
@@ -297,6 +305,7 @@ export function AgendaCreateBookingSheet({ open, onClose, onCreated }: AgendaCre
         body: JSON.stringify({
           contacto_id: selectedContact.id,
           oportunidad_id: oportunidadId || undefined,
+          crear_oportunidad: crearOportunidad,
           start_at: startAtIso,
           notes: notes.trim() || undefined,
           canal: "manual",

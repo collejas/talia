@@ -3271,11 +3271,17 @@ class CRMRepository:
         row = data[0]
         if not isinstance(row, dict):
             raise CRMRepositoryError(f"Respuesta inválida al obtener oportunidad por id: {row!r}")
-        await self._attach_contact_rows(
-            organizacion_id=organizacion_id,
-            rows=[row],
-            source_fields=("contacto_principal_id",),
-        )
+        raw_org_id = row.get("organizacion_id")
+        try:
+            organizacion_id = _coerce_uuid(raw_org_id, field="organizacion_id")
+        except Exception:
+            organizacion_id = None
+        if organizacion_id is not None:
+            await self._attach_contact_rows(
+                organizacion_id=organizacion_id,
+                rows=[row],
+                source_fields=("contacto_principal_id",),
+            )
         return row
 
     async def assign_next_sales_rep(self, *, organizacion_id: UUID) -> dict[str, Any] | None:
@@ -4116,6 +4122,7 @@ class CRMRepository:
         canal: str,
         estado: str | None = None,
         asignado_a_usuario_id: UUID | None = None,
+        inbox_context: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         body: dict[str, Any] = {
             "contacto_id": str(contacto_id),
@@ -4125,6 +4132,8 @@ class CRMRepository:
             body["estado"] = estado
         if asignado_a_usuario_id:
             body["asignado_a_usuario_id"] = str(asignado_a_usuario_id)
+        if inbox_context:
+            body["inbox_context"] = inbox_context
         resp = await self._request(
             "POST",
             "/rest/v1/conversaciones",

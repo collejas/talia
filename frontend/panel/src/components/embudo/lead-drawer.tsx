@@ -1424,6 +1424,7 @@ export function LeadDrawer({
     }
 
     const normalizedStagePrep = buildStagePrepPayload(stagePrep, drawerDefinitions);
+    const advanceStage = onAdvanceStage ?? null;
 
     if (isCreateMode) {
       if (!currentStage || !currentStage.tableroId) {
@@ -1574,7 +1575,51 @@ export function LeadDrawer({
       };
     }
 
+    const demoScheduledAt =
+      hasStagePrepFieldValue(stagePrep, "demo_scheduled_at") ||
+      hasStagePrepFieldValue(initialStagePrepRaw, "demo_scheduled_at");
+    const demoTargetStage =
+      !isCreateMode && card && demoScheduledAt
+        ? upcomingStageGroups.find((group) => isDrawerStageCode(group.stage.codigo, "demo"))?.stage ?? null
+        : null;
+    const targetStage =
+      !isCreateMode && card && advanceStage
+        ? demoTargetStage ?? findAutoAdvanceStage(currentStage, upcomingStageGroups, stagePrep)
+        : null;
+    const shouldPersistTargetStageOnSave =
+      Boolean(targetStage && card && targetStage.id !== card.etapaId);
+    if (shouldPersistTargetStageOnSave && targetStage) {
+      oportunidadUpdates.etapa_id = targetStage.id;
+    }
+    console.info("[LeadDrawer] submit-auto-advance", {
+      opportunityId: card?.oportunidadId,
+      currentStageCode: currentStage?.codigo ?? null,
+      demoScheduledAt,
+      targetStageCode: targetStage?.codigo ?? null,
+      targetStageId: targetStage?.id ?? null,
+      hasAdvanceStage: Boolean(advanceStage),
+      shouldPersistTargetStageOnSave,
+      stagePrepKeys: Object.keys(stagePrep ?? {}),
+    });
+
     if (!Object.keys(contactoUpdates).length && !Object.keys(oportunidadUpdates).length) {
+      if (targetStage && advanceStage) {
+        console.info("[LeadDrawer] submit-auto-advance-no-diff", {
+          opportunityId: card?.oportunidadId,
+          targetStageCode: targetStage.codigo,
+          targetStageId: targetStage.id,
+        });
+        setPending(true);
+        const advanceResult = await advanceStage(targetStage, { stagePrep });
+        setPending(false);
+        if (!advanceResult.ok) {
+          setError(advanceResult.error || "No se pudo avanzar el lead automáticamente.");
+          return;
+        }
+        setError(null);
+        onOpenChange(false);
+        return;
+      }
       setError("No hay cambios por guardar.");
       return;
     }
@@ -1592,16 +1637,23 @@ export function LeadDrawer({
       return;
     }
 
-    if (!isCreateMode && card && onAdvanceStage) {
-      const targetStage = findAutoAdvanceStage(currentStage, upcomingStageGroups, stagePrep);
-      if (targetStage) {
-        setPending(true);
-        const advanceResult = await onAdvanceStage(targetStage, { stagePrep });
-        setPending(false);
-        if (!advanceResult.ok) {
-          setError(advanceResult.error || "No se pudo avanzar el lead automáticamente.");
-          return;
-        }
+    const savedStageId =
+      result.ok && result.card && typeof result.card.etapaId === "string" ? result.card.etapaId : null;
+    const stageAlreadyMoved = Boolean(targetStage && savedStageId && savedStageId === targetStage.id);
+
+    if (targetStage && advanceStage && !stageAlreadyMoved) {
+      console.info("[LeadDrawer] submit-auto-advance-after-save", {
+        opportunityId: card?.oportunidadId,
+        targetStageCode: targetStage.codigo,
+        targetStageId: targetStage.id,
+        savedStageId,
+      });
+      setPending(true);
+      const advanceResult = await advanceStage(targetStage, { stagePrep });
+      setPending(false);
+      if (!advanceResult.ok) {
+        setError(advanceResult.error || "No se pudo avanzar el lead automáticamente.");
+        return;
       }
     }
 
@@ -4020,7 +4072,7 @@ function findAutoAdvanceStage(
   for (const group of groups) {
     const stageValues = state[group.stage.codigo] ?? {};
     if (!stageHasAnyValue(stageValues)) {
-      break;
+      continue;
     }
     if (!areStageSectionsComplete(group.stage.codigo, group.sections, state)) {
       break;
@@ -4028,6 +4080,42 @@ function findAutoAdvanceStage(
     furthest = group.stage;
   }
   return furthest;
+}
+
+function isDrawerStageCode(value: string, expected: string): boolean {
+  if (!value || !expected) return false;
+  const normalized = value.toLowerCase();
+  const target = expected.toLowerCase();
+  return normalized === target || normalized.endsWith(`_${target}`);
+}
+
+function hasStagePrepFieldValue(state: StagePrepState | StagePrepPayload | undefined, fieldKey: string): string {
+  return readStagePrepFieldValue(state, fieldKey);
+}
+
+function readStagePrepFieldValue(
+  state: StagePrepState | StagePrepPayload | undefined,
+  fieldKey: string,
+): string {
+  if (!state) return "";
+  const normalizedKey = fieldKey.trim().toLowerCase();
+  if (!normalizedKey) return "";
+  for (const stageValues of Object.values(state)) {
+    const rawValue = stageValues?.[fieldKey] ?? stageValues?.[normalizedKey];
+    if (typeof rawValue === "string") {
+      const trimmed = rawValue.trim();
+      if (trimmed.length) {
+        return trimmed;
+      }
+    } else if (typeof rawValue === "number" && Number.isFinite(rawValue)) {
+      return String(rawValue);
+    } else if (typeof rawValue === "boolean") {
+      if (rawValue) {
+        return "true";
+      }
+    }
+  }
+  return "";
 }
 
 function resolveInputType(fieldType: DrawerPrepFieldType): "text" | "number" | "date" | "datetime-local" | "url" {

@@ -199,6 +199,17 @@ class DummyCRMRepository(CRMRepository):
             "actualizado_en": "2024-01-01T00:00:00Z",
         }
 
+    async def get_persona_by_id(self, **kwargs: Any) -> dict[str, Any] | None:
+        self.calls.append(("get_persona_by_id", kwargs))
+        return {
+            "id": str(kwargs["persona_id"]),
+            "organizacion_id": str(kwargs.get("organizacion_id") or uuid.uuid4()),
+            "nombre_completo": "Contacto Demo",
+            "correo": "demo@example.com",
+            "telefono_e164": "+521111111111",
+            "company_name": "Demo Inc.",
+        }
+
     async def get_stage_by_code(self, **kwargs: Any) -> dict[str, Any] | None:
         self.calls.append(("get_stage_by_code", kwargs))
         return {
@@ -1551,6 +1562,192 @@ async def test_list_agenda_bookings_returns_oportunidad_id(client: AsyncClient) 
     payload = resp.json()
     assert payload["items"]
     assert payload["items"][0]["oportunidad_id"]
+
+
+@pytest.mark.asyncio
+async def test_create_agenda_booking_can_skip_opportunity_creation(
+    client: AsyncClient, fake_repo: DummyCRMRepository, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    captured: dict[str, Any] = {}
+
+    async def fake_get_calendar_runtime_settings(**kwargs: Any) -> Any:
+        captured["calendar_runtime"] = kwargs
+        return type(
+            "CalendarSettings",
+            (),
+            {"resource_id": "resource-1", "timezone": "UTC", "hold_minutes": 10},
+        )()
+
+    async def fake_create_zoom_meeting_for_booking_if_enabled(**kwargs: Any) -> tuple[str, str, dict[str, Any]]:
+        captured["zoom"] = kwargs
+        return "https://zoom.example/meet", "https://zoom.example/join", {}
+
+    async def fake_hold_slot(**kwargs: Any) -> dict[str, Any]:
+        captured["hold"] = kwargs
+        return {
+            "hold_id": str(uuid.uuid4()),
+            "resource_id": kwargs["resource_id"],
+            "slot_start": kwargs["slot_start"].isoformat(),
+            "slot_end": kwargs["slot_start"].isoformat(),
+            "expires_at": "2026-01-01T10:10:00Z",
+        }
+
+    async def fake_confirm_slot(**kwargs: Any) -> dict[str, Any]:
+        captured["confirm"] = kwargs
+        return {
+            "booking_id": str(uuid.uuid4()),
+            "resource_id": "resource-1",
+            "start_at": "2026-01-01T10:00:00Z",
+            "end_at": "2026-01-01T10:30:00Z",
+            "timezone": "UTC",
+            "status": "confirmed",
+            "hold_id": kwargs["hold_id"],
+            "notes": kwargs.get("notes"),
+            "metadata": kwargs.get("metadata") or {"source": "test"},
+            "tarjeta_id": None,
+        }
+
+    async def fake_send_booking_confirmation_email(**kwargs: Any) -> None:
+        captured["email"] = kwargs
+
+    monkeypatch.setattr(
+        crm_routes.tenant_runtime,
+        "get_calendar_runtime_settings",
+        fake_get_calendar_runtime_settings,
+    )
+    monkeypatch.setattr(
+        crm_routes.webchat_service,
+        "create_zoom_meeting_for_booking_if_enabled",
+        fake_create_zoom_meeting_for_booking_if_enabled,
+    )
+    monkeypatch.setattr(crm_routes.calendar_service, "hold_slot", fake_hold_slot)
+    monkeypatch.setattr(crm_routes.calendar_service, "confirm_slot", fake_confirm_slot)
+    monkeypatch.setattr(
+        crm_routes.webchat_service,
+        "_send_booking_confirmation_email",
+        fake_send_booking_confirmation_email,
+    )
+    async def fake_sync_booking_with_opportunity(**kwargs: Any) -> None:
+        captured["sync"] = kwargs
+
+    monkeypatch.setattr(
+        crm_routes.webchat_service,
+        "_sync_booking_with_opportunity",
+        fake_sync_booking_with_opportunity,
+    )
+
+    resp = await client.post(
+        "/crm/agenda/bookings",
+        headers=_headers(include_user_token=True),
+        json={
+            "contacto_id": str(uuid.uuid4()),
+            "start_at": "2026-01-01T10:00:00Z",
+            "crear_oportunidad": False,
+            "notes": "Demo sin oportunidad",
+        },
+    )
+
+    assert resp.status_code == 200
+    payload = resp.json()
+    assert payload["ok"] is True
+    assert captured["hold"]["conversation_id"] is None
+    assert captured["hold"]["tarjeta_id"] is None
+    assert captured["confirm"]["metadata"]["crear_oportunidad"] is False
+    assert not any(call_name == "create_conversation" for call_name, _ in fake_repo.calls)
+    assert not any(call_name == "schedule_calendar_booking" for call_name, _ in fake_repo.calls)
+
+
+@pytest.mark.asyncio
+async def test_create_agenda_booking_without_opportunity_uses_direct_calendar_flow(
+    client: AsyncClient, fake_repo: DummyCRMRepository, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    captured: dict[str, Any] = {}
+
+    async def fake_get_calendar_runtime_settings(**kwargs: Any) -> Any:
+        captured["calendar_runtime"] = kwargs
+        return type(
+            "CalendarSettings",
+            (),
+            {"resource_id": "resource-2", "timezone": "UTC", "hold_minutes": 10},
+        )()
+
+    async def fake_create_zoom_meeting_for_booking_if_enabled(**kwargs: Any) -> tuple[str, str, dict[str, Any]]:
+        captured["zoom"] = kwargs
+        return "https://zoom.example/meet", "https://zoom.example/join", {}
+
+    async def fake_hold_slot(**kwargs: Any) -> dict[str, Any]:
+        captured["hold"] = kwargs
+        return {
+            "hold_id": str(uuid.uuid4()),
+            "resource_id": kwargs["resource_id"],
+            "slot_start": kwargs["slot_start"].isoformat(),
+            "slot_end": kwargs["slot_start"].isoformat(),
+            "expires_at": "2026-01-01T10:10:00Z",
+        }
+
+    async def fake_confirm_slot(**kwargs: Any) -> dict[str, Any]:
+        captured["confirm"] = kwargs
+        return {
+            "booking_id": str(uuid.uuid4()),
+            "resource_id": "resource-2",
+            "start_at": "2026-01-01T10:00:00Z",
+            "end_at": "2026-01-01T10:30:00Z",
+            "timezone": "UTC",
+            "status": "confirmed",
+            "hold_id": kwargs["hold_id"],
+            "notes": kwargs.get("notes"),
+            "metadata": kwargs.get("metadata") or {"source": "test"},
+            "tarjeta_id": None,
+        }
+
+    async def fake_send_booking_confirmation_email(**kwargs: Any) -> None:
+        captured["email"] = kwargs
+
+    monkeypatch.setattr(
+        crm_routes.tenant_runtime,
+        "get_calendar_runtime_settings",
+        fake_get_calendar_runtime_settings,
+    )
+    monkeypatch.setattr(
+        crm_routes.webchat_service,
+        "create_zoom_meeting_for_booking_if_enabled",
+        fake_create_zoom_meeting_for_booking_if_enabled,
+    )
+    monkeypatch.setattr(crm_routes.calendar_service, "hold_slot", fake_hold_slot)
+    monkeypatch.setattr(crm_routes.calendar_service, "confirm_slot", fake_confirm_slot)
+    monkeypatch.setattr(
+        crm_routes.webchat_service,
+        "_send_booking_confirmation_email",
+        fake_send_booking_confirmation_email,
+    )
+    async def fake_sync_booking_with_opportunity(**kwargs: Any) -> None:
+        captured["sync"] = kwargs
+
+    monkeypatch.setattr(
+        crm_routes.webchat_service,
+        "_sync_booking_with_opportunity",
+        fake_sync_booking_with_opportunity,
+    )
+
+    resp = await client.post(
+        "/crm/agenda/bookings",
+        headers=_headers(include_user_token=True),
+        json={
+            "contacto_id": str(uuid.uuid4()),
+            "start_at": "2026-01-01T10:00:00Z",
+            "crear_oportunidad": False,
+            "notes": "Demo sin oportunidad",
+        },
+    )
+
+    assert resp.status_code == 200
+    payload = resp.json()
+    assert payload["ok"] is True
+    assert captured["hold"]["conversation_id"] is None
+    assert captured["confirm"]["metadata"]["source"] == "panel_agenda"
+    assert captured["email"]["conversation_id"] is None
+    assert not any(call_name == "create_conversation" for call_name, _ in fake_repo.calls)
+    assert not any(call_name == "schedule_calendar_booking" for call_name, _ in fake_repo.calls)
 
 
 @pytest.mark.asyncio

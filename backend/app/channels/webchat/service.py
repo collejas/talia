@@ -696,7 +696,7 @@ async def _send_booking_confirmation_email(
     *,
     booking: schemas.CalendarBookingResponse,
     contact_id: str | None,
-    conversation_id: str,
+    conversation_id: str | None,
     tarjeta_id: str | None,
     persona: dict[str, Any] | None = None,
 ) -> None:
@@ -1207,6 +1207,7 @@ async def schedule_calendar_booking(
     start_at: datetime,
     notes: str | None,
     session_id: str | None = None,
+    crear_oportunidad: bool = True,
 ) -> schemas.CalendarBookingResponse:
     conversation_meta = await _resolve_conversation_metadata(conversation_id)
     contact_value = conversation_meta.get("contact_id")
@@ -1219,19 +1220,21 @@ async def schedule_calendar_booking(
         channel_value = "webchat"
     persona: dict[str, Any] | None = await _resolve_persona(contact_id)
     organizacion_id = _extract_persona_org(persona)
-    try:
-        tarjeta_id = await _ensure_opportunity_when_persona_ready(
-            conversation_id=conversation_id,
-            contact_id=contact_id,
-            channel=channel_value,
-            persona=persona,
-        )
-    except storage.StorageError as exc:
-        logger.exception(
-            "calendar.ensure_opportunity_failed",
-            extra={"conversation_id": conversation_id, "error": str(exc)},
-        )
-        raise ValueError("No pude asociar la oportunidad para agendar la demo.") from exc
+    tarjeta_id: str | None = None
+    if crear_oportunidad:
+        try:
+            tarjeta_id = await _ensure_opportunity_when_persona_ready(
+                conversation_id=conversation_id,
+                contact_id=contact_id,
+                channel=channel_value,
+                persona=persona,
+            )
+        except storage.StorageError as exc:
+            logger.exception(
+                "calendar.ensure_opportunity_failed",
+                extra={"conversation_id": conversation_id, "error": str(exc)},
+            )
+            raise ValueError("No pude asociar la oportunidad para agendar la demo.") from exc
     calendar_settings = await get_calendar_runtime_settings_for_organizacion(
         conversation_meta.get("organizacion_id")
     )
@@ -1259,9 +1262,11 @@ async def schedule_calendar_booking(
             "source": channel_value,
             "session_id": session_id,
             "conversation_id": conversation_id,
-            "tarjeta_id": tarjeta_id,
-            "oportunidad_id": tarjeta_id,
+            "crear_oportunidad": bool(crear_oportunidad),
         }
+        if tarjeta_id:
+            hold_metadata["tarjeta_id"] = tarjeta_id
+            hold_metadata["oportunidad_id"] = tarjeta_id
         if zoom_metadata:
             hold_metadata.update(zoom_metadata)
         if organizacion_id:
@@ -1279,9 +1284,11 @@ async def schedule_calendar_booking(
             "conversation_id": conversation_id,
             "contact_id": contact_id,
             "session_id": session_id,
-            "tarjeta_id": tarjeta_id,
+            "crear_oportunidad": bool(crear_oportunidad),
             "channel": channel_value,
         }
+        if tarjeta_id:
+            booking_metadata["tarjeta_id"] = tarjeta_id
         if zoom_metadata:
             booking_metadata.update(zoom_metadata)
         if organizacion_id:

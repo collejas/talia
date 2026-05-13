@@ -2781,6 +2781,10 @@ class AgendaBookingCreatePayload(BaseModel):
         default=None, description="Contacto asociado a la oportunidad."
     )
     oportunidad_id: UUID | None = Field(default=None, description="Oportunidad asociada a la cita.")
+    crear_oportunidad: bool = Field(
+        default=False,
+        description="Indica si el flujo debe crear una oportunidad nueva durante la cita.",
+    )
     canal: str | None = Field(
         default=None,
         description="Canal de origen preferido para la conversación (ej. crm, webchat).",
@@ -18563,14 +18567,11 @@ async def create_agenda_booking(
     user_token: str = Depends(require_user_token),  # noqa: ARG001
     payload: AgendaBookingCreatePayload,
 ) -> dict[str, Any]:
-    if (
-        payload.conversation_id is None
-        and payload.contacto_id is None
-        and payload.oportunidad_id is None
-    ):
-        raise HTTPException(status_code=400, detail="identificadores_requeridos")
+    if payload.contacto_id is None and payload.oportunidad_id is None:
+        raise HTTPException(status_code=400, detail="contacto_id_requerido")
 
     start_dt = _parse_datetime_input(payload.start_at, field="start_at")
+    crear_oportunidad = False
 
     opportunity_row: dict[str, Any] | None = None
     if payload.oportunidad_id:
@@ -18583,161 +18584,100 @@ async def create_agenda_booking(
         if opportunity_row is None:
             raise HTTPException(status_code=404, detail="oportunidad_no_encontrada")
 
-    conversation_id = _stringify_uuid(payload.conversation_id)
     contact_uuid = payload.contacto_id
-    schedule_without_conversation = False
-
     if opportunity_row:
         if contact_uuid is None:
             contact_uuid = _extract_opportunity_contact_id(opportunity_row)
-        if conversation_id is None:
-            conversation_id = _extract_opportunity_conversation_id(opportunity_row)
-        # Oportunidades creadas manualmente en embudo pueden no tener conversación.
-        # En ese caso agendamos directo sin generar inbox/conversación.
-        if conversation_id is None and contact_uuid is not None:
-            schedule_without_conversation = True
 
-    if conversation_id is None and contact_uuid is None:
+    if contact_uuid is None:
         raise HTTPException(status_code=400, detail="contacto_id_requerido")
 
-    if not schedule_without_conversation and conversation_id is None and contact_uuid is not None:
-        # Conversaciones tienen RLS estricta; resolver con service role evita
-        # bloqueos al agendar desde oportunidades creadas en panel.
-        service_repo = CRMRepository()
-        try:
-            existing_conversation = await service_repo.get_latest_conversation_for_contact(
-                contacto_id=contact_uuid,
-            )
-        except CRMRepositoryError as exc:
-            raise HTTPException(status_code=502, detail=str(exc)) from exc
-        if existing_conversation:
-            conversation_id = _stringify_uuid(existing_conversation.get("id"))
+    contact_id = str(contact_uuid)
+    try:
+        persona_data = await repo.get_persona_by_id(persona_id=contact_id)
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    if not persona_data:
+        raise HTTPException(status_code=404, detail="contacto_no_encontrado")
 
-    if not schedule_without_conversation and conversation_id is None and contact_uuid is not None:
-        assigned_uuid = _extract_opportunity_assignment_id(opportunity_row)
-        channel_value = _resolve_conversation_channel(payload.canal, opportunity_row)
-        service_repo = CRMRepository()
-        try:
-            created_conversation = await service_repo.create_conversation(
-                contacto_id=contact_uuid,
-                canal=channel_value,
-                estado="abierta",
-                asignado_a_usuario_id=assigned_uuid,
-            )
-        except CRMRepositoryError as exc:
-            raise HTTPException(status_code=502, detail=str(exc)) from exc
-        conversation_id = _stringify_uuid(created_conversation.get("id"))
+    org_uuid = _safe_uuid(persona_data.get("organizacion_id"))
+    if org_uuid is None:
+        raise HTTPException(status_code=400, detail="contacto_org_missing")
+    calendar_settings = await tenant_runtime.get_calendar_runtime_settings(
+        organizacion_id=org_uuid
+    )
+    resource_id = (calendar_settings.resource_id or "").strip()
+    if not resource_id:
+        raise HTTPException(status_code=400, detail="calendar_resource_missing")
 
-    if not schedule_without_conversation and conversation_id is None:
-        raise HTTPException(status_code=400, detail="conversation_id_requerido")
-
-    if opportunity_row and conversation_id:
-        await _persist_opportunity_conversation_metadata(
-            repo=repo,
-            opportunity=opportunity_row,
-            conversation_id=conversation_id,
+    tarjeta_id = str(payload.oportunidad_id) if payload.oportunidad_id else None
+    zoom_meeting_url, zoom_external_join_url, zoom_metadata = (
+        await webchat_service.create_zoom_meeting_for_booking_if_enabled(
+            organizacion_id=org_uuid,
+            start_at=start_dt,
+            timezone_name=calendar_settings.timezone,
+            topic=f"Demo Tal-IA - {str(persona_data.get('nombre_completo') or contact_id).strip()}",
+            agenda=payload.notes,
         )
-
-    if schedule_without_conversation:
-        tarjeta_id = str(payload.oportunidad_id) if payload.oportunidad_id else None
-        contact_id = str(contact_uuid) if contact_uuid else None
-        if not contact_id:
-            raise HTTPException(status_code=400, detail="contacto_id_requerido")
-        try:
-            persona_data = await repo.get_persona_by_id(persona_id=contact_id)
-        except CRMRepositoryError as exc:
-            raise HTTPException(status_code=502, detail=str(exc)) from exc
-        if not persona_data:
-            raise HTTPException(status_code=404, detail="contacto_no_encontrado")
-
-        org_uuid = _safe_uuid(persona_data.get("organizacion_id"))
-        if org_uuid is None:
-            raise HTTPException(status_code=400, detail="contacto_org_missing")
-        calendar_settings = await tenant_runtime.get_calendar_runtime_settings(
-            organizacion_id=org_uuid
+    )
+    hold_metadata: dict[str, Any] = {
+        "source": "panel_agenda",
+        "session_id": payload.session_id,
+        "contact_id": contact_id,
+        "tarjeta_id": tarjeta_id,
+        "crear_oportunidad": crear_oportunidad,
+        "canal": (payload.canal or "manual"),
+        "organizacion_id": str(org_uuid),
+    }
+    if zoom_metadata:
+        hold_metadata.update(zoom_metadata)
+    booking_metadata: dict[str, Any] = {
+        "source": "panel_agenda",
+        "session_id": payload.session_id,
+        "contact_id": contact_id,
+        "tarjeta_id": tarjeta_id,
+        "crear_oportunidad": crear_oportunidad,
+        "canal": (payload.canal or "manual"),
+        "organizacion_id": str(org_uuid),
+    }
+    if zoom_metadata:
+        booking_metadata.update(zoom_metadata)
+    try:
+        hold = await calendar_service.hold_slot(
+            resource_id=resource_id,
+            slot_start=start_dt,
+            conversation_id=None,
+            contact_id=contact_id,
+            tarjeta_id=tarjeta_id,
+            hold_minutes=max(1, int(calendar_settings.hold_minutes or 10)),
+            metadata=hold_metadata,
         )
-        resource_id = (calendar_settings.resource_id or "").strip()
-        if not resource_id:
-            raise HTTPException(status_code=400, detail="calendar_resource_missing")
-
-        booking_context_id = str(uuid4())
-        zoom_meeting_url, zoom_external_join_url, zoom_metadata = (
-            await webchat_service.create_zoom_meeting_for_booking_if_enabled(
-                organizacion_id=org_uuid,
-                start_at=start_dt,
-                timezone_name=calendar_settings.timezone,
-                topic=f"Demo Tal-IA - {str(persona_data.get('nombre_completo') or contact_id).strip()}",
-                agenda=payload.notes,
-            )
+        booking_raw = await calendar_service.confirm_slot(
+            hold_id=str(hold.get("hold_id")),
+            notes=payload.notes,
+            metadata=booking_metadata,
+            meeting_url=zoom_meeting_url,
+            external_join_url=zoom_external_join_url,
         )
-        hold_metadata: dict[str, Any] = {
-            "source": "panel_agenda",
-            "session_id": payload.session_id,
-            "conversation_id": booking_context_id,
-            "contact_id": contact_id,
-            "tarjeta_id": tarjeta_id,
-            "canal": (payload.canal or "manual"),
-            "organizacion_id": str(org_uuid),
-        }
-        if zoom_metadata:
-            hold_metadata.update(zoom_metadata)
-        booking_metadata: dict[str, Any] = {
-            "source": "panel_agenda",
-            "session_id": payload.session_id,
-            "conversation_id": booking_context_id,
-            "contact_id": contact_id,
-            "tarjeta_id": tarjeta_id,
-            "canal": (payload.canal or "manual"),
-            "organizacion_id": str(org_uuid),
-        }
-        if zoom_metadata:
-            booking_metadata.update(zoom_metadata)
-        try:
-            hold = await calendar_service.hold_slot(
-                resource_id=resource_id,
-                slot_start=start_dt,
-                conversation_id=booking_context_id,
-                contact_id=contact_id,
-                tarjeta_id=tarjeta_id,
-                hold_minutes=max(1, int(calendar_settings.hold_minutes or 10)),
-                metadata=hold_metadata,
-            )
-            booking_raw = await calendar_service.confirm_slot(
-                hold_id=str(hold.get("hold_id")),
-                notes=payload.notes,
-                metadata=booking_metadata,
-                meeting_url=zoom_meeting_url,
-                external_join_url=zoom_external_join_url,
-            )
-        except CalendarError as exc:
-            raise HTTPException(status_code=502, detail=str(exc)) from exc
+    except CalendarError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
 
-        booking_response = webchat_service._build_booking_response(booking_raw)
+    booking_response = webchat_service._build_booking_response(booking_raw)
+    if tarjeta_id:
         await webchat_service._sync_booking_with_opportunity(
             booking=booking_response,
             tarjeta_id=tarjeta_id,
-            contact=persona_data,
+            persona=persona_data,
             channel=(payload.canal or "manual"),
         )
-        await webchat_service._send_booking_confirmation_email(
-            booking=booking_response,
-            contact_id=contact_id,
-            conversation_id=booking_context_id,
-            tarjeta_id=tarjeta_id,
-            contact=persona_data,
-        )
-        booking = booking_response
-    else:
-        try:
-            booking = await webchat_service.schedule_calendar_booking(
-                conversation_id=conversation_id,
-                slot_id=None,
-                start_at=start_dt,
-                notes=payload.notes,
-                session_id=payload.session_id,
-            )
-        except ValueError as exc:
-            raise HTTPException(status_code=400, detail=str(exc)) from exc
+    await webchat_service._send_booking_confirmation_email(
+        booking=booking_response,
+        contact_id=contact_id,
+        conversation_id=None,
+        tarjeta_id=tarjeta_id,
+        persona=persona_data,
+    )
+    booking = booking_response
 
     return {"ok": True, "booking": booking}
 
@@ -29561,7 +29501,7 @@ async def public_web_booking_create(
         await webchat_service._sync_booking_with_opportunity(
             booking=booking_response,
             tarjeta_id=str(opportunity_uuid),
-            contact=contact_data,
+            persona=contact_data,
             channel="web",
         )
         await webchat_service._send_booking_confirmation_email(

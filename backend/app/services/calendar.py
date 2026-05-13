@@ -154,7 +154,7 @@ async def hold_slot(
     *,
     resource_id: str,
     slot_start: datetime,
-    conversation_id: str,
+    conversation_id: str | None,
     contact_id: str | None = None,
     tarjeta_id: str | None = None,
     hold_minutes: int = 5,

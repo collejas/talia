@@ -420,7 +420,7 @@ export async function createLeadCard(input: CreateLeadInput): Promise<LeadAction
 
 export async function updateLeadCard(input: UpdateLeadInput): Promise<LeadActionResult> {
   const contactoPayload = isRecord(input.contacto) ? removeUndefined({ ...input.contacto }) : {};
-  const oportunidadPayload = isRecord(input.oportunidad) ? { ...input.oportunidad } : {};
+  const opportunityInput = isRecord(input.oportunidad) ? { ...input.oportunidad } : {};
   const shouldMergeMetadata = input.mergeMetadata !== false;
 
   let cachedCardResponse: PipelineCardResponse | null = null;
@@ -438,30 +438,30 @@ export async function updateLeadCard(input: UpdateLeadInput): Promise<LeadAction
 
   const opportunityPayload: Record<string, unknown> = {};
 
-  if ("monto_estimado" in oportunidadPayload || "monto" in oportunidadPayload) {
+  if ("monto_estimado" in opportunityInput || "monto" in opportunityInput) {
     opportunityPayload.monto_estimado =
-      oportunidadPayload.monto_estimado ?? oportunidadPayload.monto ?? null;
+      opportunityInput.monto_estimado ?? opportunityInput.monto ?? null;
   }
-  if ("moneda" in oportunidadPayload) {
-    const monedaValue = sanitizeNullableString(oportunidadPayload.moneda);
+  if ("moneda" in opportunityInput) {
+    const monedaValue = sanitizeNullableString(opportunityInput.moneda);
     opportunityPayload.moneda = monedaValue ? monedaValue.toUpperCase() : null;
   }
-  if ("probabilidad_override" in oportunidadPayload || "probabilidad" in oportunidadPayload) {
+  if ("probabilidad_override" in opportunityInput || "probabilidad" in opportunityInput) {
     opportunityPayload.probabilidad =
-      oportunidadPayload.probabilidad_override ?? oportunidadPayload.probabilidad ?? null;
+      opportunityInput.probabilidad_override ?? opportunityInput.probabilidad ?? null;
   }
-  if ("titulo" in oportunidadPayload || "proyecto_nombre" in oportunidadPayload) {
+  if ("titulo" in opportunityInput || "proyecto_nombre" in opportunityInput) {
     opportunityPayload.titulo =
-      sanitizeNullableString(oportunidadPayload.titulo) ??
-      sanitizeNullableString(oportunidadPayload.proyecto_nombre);
+      sanitizeNullableString(opportunityInput.titulo) ??
+      sanitizeNullableString(opportunityInput.proyecto_nombre);
   }
-  if ("descripcion" in oportunidadPayload || "proyecto_necesidades" in oportunidadPayload) {
+  if ("descripcion" in opportunityInput || "proyecto_necesidades" in opportunityInput) {
     opportunityPayload.descripcion =
-      sanitizeNullableString(oportunidadPayload.descripcion) ??
-      sanitizeNullableString(oportunidadPayload.proyecto_necesidades);
+      sanitizeNullableString(opportunityInput.descripcion) ??
+      sanitizeNullableString(opportunityInput.proyecto_necesidades);
   }
-  if ("metadata" in oportunidadPayload) {
-    const metadata = normalizeMetadata(oportunidadPayload.metadata);
+  if ("metadata" in opportunityInput) {
+    const metadata = normalizeMetadata(opportunityInput.metadata);
     if (Object.keys(metadata).length) {
       opportunityPayload.metadata = metadata;
     }
@@ -557,48 +557,76 @@ export async function updateLeadCard(input: UpdateLeadInput): Promise<LeadAction
 }
 
 export async function moveLeadCard(input: MoveLeadInput): Promise<LeadActionResult> {
-  const payload: Record<string, unknown> = {
-    etapa_id: input.etapaDestino,
-    fuente: input.fuente ?? "humano",
-  };
+  try {
+    const payload: Record<string, unknown> = {
+      etapa_id: input.etapaDestino,
+      fuente: input.fuente ?? "humano",
+    };
 
-  if (input.motivo !== undefined) {
-    payload.motivo = input.motivo;
-  }
-  if (input.expectedEtapa) {
-    payload.expected_etapa_id = input.expectedEtapa;
-  }
-  if (input.metadata) {
-    const metadata = normalizeMetadata(input.metadata);
-    if (Object.keys(metadata).length) {
-      payload.metadata = metadata;
+    if (input.motivo !== undefined) {
+      payload.motivo = input.motivo;
     }
-  }
-
-  const response = await callCrmApi<PipelineCardResponse>(`/crm/pipeline/opportunities/${input.oportunidadId}`, {
-    method: "PATCH",
-    body: payload,
-  });
-
-  if (!response.ok) {
-    if (response.status === 409) {
-      const latest = await callCrmApi<PipelineCardResponse>(`/crm/pipeline/cards/${input.oportunidadId}`);
-      if (latest.ok) {
-        const mapped = mapPipelineCardResponse(latest.data);
-        return {
-          ok: false,
-          error: response.error || "El lead cambió de etapa en otra sesión. Actualizamos la información.",
-          latestStage: mapped.stage,
-          latestCard: mapped.card,
-        };
+    if (input.expectedEtapa) {
+      payload.expected_etapa_id = input.expectedEtapa;
+    }
+    if (input.metadata) {
+      const metadata = normalizeMetadata(input.metadata);
+      if (Object.keys(metadata).length) {
+        payload.metadata = metadata;
       }
     }
-    return { ok: false, error: response.error };
-  }
 
-  updateTag("embudo");
-  const mapped = mapPipelineCardResponse(response.data);
-  return { ok: true, stage: mapped.stage, card: mapped.card };
+    const response = await callCrmApi<PipelineCardResponse>(`/crm/pipeline/opportunities/${input.oportunidadId}`, {
+      method: "PATCH",
+      body: payload,
+    });
+
+    if (!response.ok) {
+      if (response.status === 409) {
+        const latest = await callCrmApi<PipelineCardResponse>(`/crm/pipeline/cards/${input.oportunidadId}`);
+        if (latest.ok) {
+          const mapped = mapPipelineCardResponse(latest.data);
+          return {
+            ok: false,
+            error: response.error || "El lead cambió de etapa en otra sesión. Actualizamos la información.",
+            latestStage: mapped.stage,
+            latestCard: mapped.card,
+          };
+        }
+      }
+      return { ok: false, error: response.error };
+    }
+
+    updateTag("embudo");
+
+    try {
+      const mapped = mapPipelineCardResponse(response.data);
+      return { ok: true, stage: mapped.stage, card: mapped.card };
+    } catch (mapError) {
+      console.warn("[embudo:moveLeadCard] parse-response-failed", {
+        oportunidadId: input.oportunidadId,
+        error: mapError instanceof Error ? mapError.message : String(mapError),
+      });
+      const latest = await callCrmApi<PipelineCardResponse>(`/crm/pipeline/cards/${input.oportunidadId}`);
+      if (!latest.ok) {
+        return {
+          ok: false,
+          error:
+            latest.error ||
+            "No se pudo actualizar la oportunidad y tampoco recuperar su estado actual.",
+        };
+      }
+      const mapped = mapPipelineCardResponse(latest.data);
+      return { ok: true, stage: mapped.stage, card: mapped.card };
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "No se pudo mover el lead.";
+    console.error("[embudo:moveLeadCard] unexpected-error", {
+      oportunidadId: input.oportunidadId,
+      error: message,
+    });
+    return { ok: false, error: message };
+  }
 }
 
 export async function deleteLeadCard(input: DeleteLeadInput): Promise<LeadDeleteResult> {

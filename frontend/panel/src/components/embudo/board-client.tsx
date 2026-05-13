@@ -22,11 +22,11 @@ import { EmbudoCardItem } from "@/components/embudo/card-item";
 import {
   createLeadCard,
   deleteLeadCard,
-  moveLeadCard,
   scheduleLeadDemo,
   updateLeadCard,
   type LeadActionResult,
   type LeadDeleteResult,
+  type MoveLeadInput,
 } from "@/lib/embudo/actions";
 import {
   LeadDrawer,
@@ -131,7 +131,7 @@ const STAGE_REQUIRED_FIELDS: Record<string, Array<{ key: string; label: string }
     { key: "close_date", label: "Fecha de cierre" },
   ],
 };
-const BOARD_LIVE_REFRESH_MS = 5000;
+const BOARD_LIVE_REFRESH_MS = 30000;
 
 function sortStages(stages: EmbudoStage[]): EmbudoStage[] {
   return [...stages].sort((a, b) => {
@@ -144,6 +144,41 @@ function sanitizeString(value: string | null | undefined): string | null {
   if (typeof value !== "string") return null;
   const trimmed = value.trim();
   return trimmed.length ? trimmed : null;
+}
+
+async function requestMoveLeadCard(input: MoveLeadInput): Promise<LeadActionResult> {
+  try {
+    const response = await fetch(`/api/embudo/leads/${input.oportunidadId}/move`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        etapa_id: input.etapaDestino,
+        motivo: input.motivo ?? undefined,
+        metadata: input.metadata ?? undefined,
+        fuente: input.fuente ?? "humano",
+        expected_etapa_id: input.expectedEtapa ?? undefined,
+      }),
+    });
+    const body = (await response.json().catch(() => ({}))) as LeadActionResult | { error?: string };
+    if (!response.ok) {
+      const fallbackError =
+        typeof (body as { error?: string }).error === "string" && (body as { error?: string }).error
+          ? (body as { error: string }).error
+          : `Error ${response.status}`;
+      if (typeof (body as LeadActionResult).ok === "boolean") {
+        return body as LeadActionResult;
+      }
+      return { ok: false, error: fallbackError };
+    }
+    return body as LeadActionResult;
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "No se pudo mover el lead.",
+    };
+  }
 }
 
 function sortCards(cards: EmbudoCard[]): EmbudoCard[] {
@@ -347,7 +382,7 @@ export function EmbudoBoardClient({
     }
     try {
       const params = new URLSearchParams();
-      params.set("limit", "400");
+      params.set("limit", "200");
       if (asignadoId) {
         params.set("asignado_id", asignadoId);
       }
@@ -633,7 +668,7 @@ export function EmbudoBoardClient({
         return;
       }
 
-      const moveResult = await moveLeadCard({
+      const moveResult = await requestMoveLeadCard({
         oportunidadId: card.oportunidadId,
         etapaDestino: furthestValidStage.id,
         fuente: "humano",
@@ -743,32 +778,31 @@ export function EmbudoBoardClient({
       scheduleContext.destinationStage.codigo,
       extraFields,
     );
-    const updateResult = await updateLeadCard({
+    const destinationStage =
+      stages.find((stage) => stage.id === scheduleContext.destinationStage.id) ?? scheduleContext.destinationStage;
+    const moveResult = await requestMoveLeadCard({
       oportunidadId: scheduleContext.card.oportunidadId,
-      contactoId: scheduleContext.card.contactoId,
-      oportunidad: {
-        metadata: {
-          stage_prep: stagePrep,
-        },
+      etapaDestino: destinationStage.id,
+      fuente: "humano",
+      expectedEtapa: scheduleContext.card.etapaId,
+      metadata: {
+        stage_prep: stagePrep,
       },
-      mergeMetadata: true,
     });
 
-    if (!updateResult.ok) {
-      setScheduleError(updateResult.error || "No se pudo guardar la cita.");
+    if (!moveResult.ok) {
+      setScheduleError(moveResult.error || "No se pudo guardar la cita.");
       setSchedulePending(false);
       setMovePending(false);
       return;
     }
 
-    const destinationStage =
-      stages.find((stage) => stage.id === scheduleContext.destinationStage.id) ?? scheduleContext.destinationStage;
     const updatedCard: EmbudoCard = {
-      ...updateResult.card,
+      ...moveResult.card,
       etapaId: destinationStage.id,
       etapaNombre: destinationStage.nombre,
       metadata: {
-        ...(updateResult.card.metadata ?? {}),
+        ...(moveResult.card.metadata ?? {}),
         stage_prep: stagePrep,
       },
     };
@@ -912,6 +946,12 @@ export function EmbudoBoardClient({
             : null;
         patchedCard.proyectoNecesidades = nextDesc ?? patchedCard.proyectoNecesidades ?? null;
       }
+      if ("metadata" in opportunityPayload && isPlainRecord(opportunityPayload.metadata)) {
+        patchedCard.metadata = {
+          ...(patchedCard.metadata ?? {}),
+          ...(opportunityPayload.metadata as Record<string, unknown>),
+        };
+      }
 
       patchedResult = { ...result, card: patchedCard };
     }
@@ -955,7 +995,7 @@ export function EmbudoBoardClient({
       }
     }
     setMovePending(true);
-    const result = await moveLeadCard({
+    const result = await requestMoveLeadCard({
       oportunidadId: selectedCard.oportunidadId,
       etapaDestino: nextStage.id,
       fuente: "humano",
@@ -977,7 +1017,21 @@ export function EmbudoBoardClient({
     if (!selectedCard) {
       return { ok: false as const, error: "No se encontró el lead seleccionado." };
     }
-    const localValue = readStagePrepValue(stagePrepState, DEMO_STAGE_CODE, "demo_scheduled_at");
+    const stagePrepEntry = resolveStagePrepStateEntry(
+      stagePrepState,
+      targetStage.codigo,
+      selectedCard.etapaCodigo,
+      DEMO_STAGE_CODE,
+    );
+    const localValue =
+      typeof stagePrepEntry?.demo_scheduled_at === "string" ? stagePrepEntry.demo_scheduled_at.trim() : "";
+    console.info("[Board] demo-advance-request", {
+      opportunityId: selectedCard.oportunidadId,
+      currentStageCode: selectedCard.etapaCodigo,
+      targetStageCode: targetStage.codigo,
+      localValue,
+      stagePrepKeys: Object.keys(stagePrepState ?? {}),
+    });
     if (!localValue) {
       return {
         ok: false as const,
@@ -988,56 +1042,69 @@ export function EmbudoBoardClient({
     if (!isoValue) {
       return { ok: false as const, error: "La fecha de la demo no tiene un formato válido." };
     }
+    const currentScheduledRaw = readDemoScheduledAt(selectedCard, targetStage.codigo, DEMO_STAGE_CODE);
+    const currentScheduledIso = currentScheduledRaw?.includes("T")
+      ? fromDateTimeLocalInput(currentScheduledRaw) ?? currentScheduledRaw
+      : currentScheduledRaw ?? null;
+    const existingBookingId =
+      typeof stagePrepEntry?.demo_booking_id === "string" && stagePrepEntry.demo_booking_id.trim().length
+        ? stagePrepEntry.demo_booking_id.trim()
+        : readDemoPrepValue(selectedCard, "demo_booking_id", targetStage.codigo, DEMO_STAGE_CODE);
+    const shouldReuseExistingBooking =
+      Boolean(currentScheduledIso) && currentScheduledIso === isoValue;
+
     setMovePending(true);
     try {
-      const bookingResult = await scheduleLeadDemo({
-        conversationId: sanitizeString(selectedCard.conversacionId),
-        contactoId: sanitizeString(selectedCard.contactoId),
-        oportunidadId: selectedCard.oportunidadId,
-        canal: sanitizeString(selectedCard.canal),
-        startAt: isoValue,
-      });
-      if (!bookingResult.ok) {
-        return { ok: false as const, error: bookingResult.error || "No se pudo agendar la demo." };
-      }
-
-      const stagePrepEntry = resolveStagePrepStateEntry(
-        stagePrepState,
-        targetStage.codigo,
-        selectedCard.etapaCodigo,
-        DEMO_STAGE_CODE,
-      );
       const extraFields = stagePrepStateEntryToMetadata(stagePrepEntry, ["demo_scheduled_at"]);
+      let bookingId: string | null = existingBookingId ?? null;
+      if (!shouldReuseExistingBooking) {
+        const bookingResult = await scheduleLeadDemo({
+          conversationId: sanitizeString(selectedCard.conversacionId),
+          contactoId: sanitizeString(selectedCard.contactoId),
+          oportunidadId: selectedCard.oportunidadId,
+          canal: sanitizeString(selectedCard.canal),
+          startAt: isoValue,
+        });
+        if (!bookingResult.ok) {
+          return { ok: false as const, error: bookingResult.error || "No se pudo agendar la demo." };
+        }
+        bookingId = bookingResult.booking.booking_id;
+      }
 
       const demoStagePrep = buildUpdatedDemoStagePrep(
         selectedCard,
         isoValue,
-        bookingResult.booking.booking_id,
+        bookingId,
         targetStage.codigo,
         extraFields ?? undefined,
       );
-      const updateResult = await updateLeadCard({
+      const moveResult = await requestMoveLeadCard({
         oportunidadId: selectedCard.oportunidadId,
-        contactoId: selectedCard.contactoId,
-        oportunidad: {
-          metadata: {
-            stage_prep: demoStagePrep,
-          },
+        etapaDestino: targetStage.id,
+        fuente: "humano",
+        expectedEtapa: selectedCard.etapaId,
+        metadata: {
+          stage_prep: demoStagePrep,
         },
-        mergeMetadata: true,
       });
 
-      if (!updateResult.ok) {
-        return { ok: false as const, error: updateResult.error || "No se pudo guardar la cita." };
+      console.info("[Board] demo-advance-result", {
+        ok: moveResult.ok,
+        error: moveResult.ok ? null : moveResult.error,
+        stage: moveResult.ok ? moveResult.stage.codigo : moveResult.latestStage?.codigo ?? null,
+      });
+
+      if (!moveResult.ok) {
+        return { ok: false as const, error: moveResult.error || "No se pudo guardar la cita." };
       }
 
       const destinationStage = stages.find((stage) => stage.id === targetStage.id) ?? targetStage;
       const updatedCard: EmbudoCard = {
-        ...updateResult.card,
+        ...moveResult.card,
         etapaId: destinationStage.id,
         etapaNombre: destinationStage.nombre,
         metadata: {
-          ...(updateResult.card.metadata ?? {}),
+          ...(moveResult.card.metadata ?? {}),
           stage_prep: demoStagePrep,
         },
       };
@@ -1220,7 +1287,7 @@ export function EmbudoBoardClient({
     }
 
     setMovePending(true);
-    const result = await moveLeadCard({
+    const result = await requestMoveLeadCard({
       oportunidadId: activeDragCard.oportunidadId,
       etapaDestino: destinationStage.id,
       fuente: "humano",
@@ -2149,22 +2216,6 @@ function getMissingStageRequirementFromPrep(
     }
   }
   return null;
-}
-
-function readStagePrepValue(
-  state: StagePrepState | undefined,
-  stageCode: string,
-  fieldKey: string,
-): string | null {
-  if (!state) return null;
-  const stageValues = state[stageCode];
-  if (!stageValues) return null;
-  const rawValue = stageValues[fieldKey];
-  if (typeof rawValue !== "string") {
-    return null;
-  }
-  const trimmed = rawValue.trim();
-  return trimmed.length ? trimmed : null;
 }
 
 function resolveStagePrepStateEntry(
