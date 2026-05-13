@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from "react"
+import { useMemo, useState } from "react"
 
 import { AgendaItem } from "@/lib/agenda/data"
 import { getAgendaItemTitle } from "@/lib/agenda/title"
@@ -53,10 +53,11 @@ export function AgendaCalendar({ items, onSelectDay, referenceDateIso }: AgendaC
     return map
   }, [items])
 
-  useEffect(() => {
-    if (!isSameMonthUTC(selectedDay, visibleMonth)) {
-      setSelectedDay(startOfDayUTC(visibleMonth))
+  const displayedSelectedDay = useMemo(() => {
+    if (isSameMonthUTC(selectedDay, visibleMonth)) {
+      return selectedDay
     }
+    return startOfDayUTC(visibleMonth)
   }, [selectedDay, visibleMonth])
 
   return (
@@ -104,7 +105,7 @@ export function AgendaCalendar({ items, onSelectDay, referenceDateIso }: AgendaC
           {days.map((day) => {
             const events = eventsByDay.get(dayKeyUTC(day)) ?? []
             const currentMonth = isSameMonthUTC(day, visibleMonth)
-            const isSelected = isSameDayUTC(day, selectedDay)
+            const isSelected = isSameDayUTC(day, displayedSelectedDay)
             const isToday = isSameDayUTC(day, referenceDate)
             return (
               <button
@@ -184,7 +185,7 @@ export function AgendaDayTimeline({
       <div className="grid grid-cols-[80px_minmax(0,1fr)] gap-0 overflow-hidden rounded-xl border border-border/60">
         <div
           className="relative border-r border-border/60 bg-muted/20"
-          style={{ height: timelineHeight() + TIMELINE_PADDING * 2 }}
+          style={{ height: timelineHeight() + TIMELINE_PADDING * 3 }}
         >
           {HOURS.map((hour) => (
             <div
@@ -207,7 +208,7 @@ export function AgendaDayTimeline({
         <div
           className="relative"
           style={{
-            height: timelineHeight() + TIMELINE_PADDING * 2,
+            height: timelineHeight() + TIMELINE_PADDING * 3,
             backgroundImage:
               "repeating-linear-gradient(to bottom, rgba(148, 163, 184, 0.12) 0, rgba(148, 163, 184, 0.12) 1px, transparent 1px, transparent 72px)",
           }}
@@ -235,8 +236,8 @@ function CalendarEventBlock({ item, onClick }: { item: AgendaItem; onClick?: () 
   const timezone = item.timezone || "UTC"
   const start = new Date(item.startAt)
   const end = item.endAt ? new Date(item.endAt) : addMinutesUTC(start, 45)
-  const startMinutes = minutesFromStartOfDayUTC(start)
-  const endMinutes = Math.max(minutesFromStartOfDayUTC(end), startMinutes + 30)
+  const startMinutes = minutesFromStartOfDayInTimeZone(start, timezone)
+  const endMinutes = Math.max(minutesFromStartOfDayInTimeZone(end, timezone), startMinutes + 30)
   const displayTitle = getAgendaItemTitle(item)
   const timelineStart = HOURS[0] * 60
   const timelineEnd = (HOURS[HOURS.length - 1] + 1) * 60
@@ -330,8 +331,16 @@ function dayKeyUTC(date: Date): number {
   return startOfDayUTC(date).getTime()
 }
 
-function minutesFromStartOfDayUTC(date: Date): number {
-  return date.getUTCHours() * 60 + date.getUTCMinutes()
+function minutesFromStartOfDayInTimeZone(date: Date, timezone: string): number {
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+    timeZone: timezone,
+  }).formatToParts(date)
+  const hour = Number(parts.find((part) => part.type === "hour")?.value ?? "0")
+  const minute = Number(parts.find((part) => part.type === "minute")?.value ?? "0")
+  return hour * 60 + minute
 }
 
 function addDaysUTC(date: Date, days: number): Date {
@@ -373,11 +382,7 @@ function formatLongDayLabelUTC(date: Date): string {
 }
 
 function formatHourLabel(hour: number): string {
-  return new Intl.DateTimeFormat("es-MX", {
-    hour: "2-digit",
-    minute: "2-digit",
-    timeZone: "UTC",
-  }).format(new Date(Date.UTC(2020, 0, 1, hour, 0, 0)))
+  return `${String(hour).padStart(2, "0")}:00`
 }
 
 function formatTimeLabel(value: string, timezone: string): string {
