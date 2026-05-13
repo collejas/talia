@@ -9,6 +9,7 @@ type BookingCreatePayload = {
   contacto_id?: string
   oportunidad_id?: string
   crear_oportunidad?: boolean
+  modalidad?: string
   start_at?: string
   notes?: string
   canal?: string
@@ -39,6 +40,7 @@ export async function POST(request: NextRequest) {
       contacto_id: contactoId,
       oportunidad_id: oportunidadId || undefined,
       crear_oportunidad: payload.crear_oportunidad ?? false,
+      modalidad: payload.modalidad?.trim() || "virtual",
       start_at: startAt,
       notes: payload.notes?.trim() || undefined,
       canal: payload.canal?.trim() || "manual",

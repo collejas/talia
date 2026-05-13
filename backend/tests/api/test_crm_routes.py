@@ -1643,6 +1643,7 @@ async def test_create_agenda_booking_can_skip_opportunity_creation(
             "contacto_id": str(uuid.uuid4()),
             "start_at": "2026-01-01T10:00:00Z",
             "crear_oportunidad": False,
+            "modalidad": "virtual",
             "notes": "Demo sin oportunidad",
         },
     )
@@ -1652,7 +1653,9 @@ async def test_create_agenda_booking_can_skip_opportunity_creation(
     assert payload["ok"] is True
     assert captured["hold"]["conversation_id"] is None
     assert captured["hold"]["tarjeta_id"] is None
+    assert captured["hold"]["metadata"]["modalidad"] == "virtual"
     assert captured["confirm"]["metadata"]["crear_oportunidad"] is False
+    assert captured["confirm"]["metadata"]["modalidad"] == "virtual"
     assert not any(call_name == "create_conversation" for call_name, _ in fake_repo.calls)
     assert not any(call_name == "schedule_calendar_booking" for call_name, _ in fake_repo.calls)
 
@@ -1736,6 +1739,7 @@ async def test_create_agenda_booking_without_opportunity_uses_direct_calendar_fl
             "contacto_id": str(uuid.uuid4()),
             "start_at": "2026-01-01T10:00:00Z",
             "crear_oportunidad": False,
+            "modalidad": "presencial",
             "notes": "Demo sin oportunidad",
         },
     )
@@ -1744,7 +1748,10 @@ async def test_create_agenda_booking_without_opportunity_uses_direct_calendar_fl
     payload = resp.json()
     assert payload["ok"] is True
     assert captured["hold"]["conversation_id"] is None
+    assert captured["hold"]["metadata"]["modalidad"] == "presencial"
     assert captured["confirm"]["metadata"]["source"] == "panel_agenda"
+    assert captured["confirm"]["metadata"]["modalidad"] == "presencial"
+    assert "zoom" not in captured
     assert captured["email"]["conversation_id"] is None
     assert not any(call_name == "create_conversation" for call_name, _ in fake_repo.calls)
     assert not any(call_name == "schedule_calendar_booking" for call_name, _ in fake_repo.calls)

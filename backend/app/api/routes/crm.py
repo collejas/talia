@@ -2785,6 +2785,10 @@ class AgendaBookingCreatePayload(BaseModel):
         default=False,
         description="Indica si el flujo debe crear una oportunidad nueva durante la cita.",
     )
+    modalidad: Literal["virtual", "presencial", "hibrida"] = Field(
+        default="virtual",
+        description="Modalidad de la cita.",
+    )
     canal: str | None = Field(
         default=None,
         description="Canal de origen preferido para la conversación (ej. crm, webchat).",
@@ -18611,21 +18615,29 @@ async def create_agenda_booking(
         raise HTTPException(status_code=400, detail="calendar_resource_missing")
 
     tarjeta_id = str(payload.oportunidad_id) if payload.oportunidad_id else None
-    zoom_meeting_url, zoom_external_join_url, zoom_metadata = (
-        await webchat_service.create_zoom_meeting_for_booking_if_enabled(
-            organizacion_id=org_uuid,
-            start_at=start_dt,
-            timezone_name=calendar_settings.timezone,
-            topic=f"Demo Tal-IA - {str(persona_data.get('nombre_completo') or contact_id).strip()}",
-            agenda=payload.notes,
+    modalidad_value = (payload.modalidad or "virtual").strip().lower()
+    if modalidad_value not in {"virtual", "presencial", "hibrida"}:
+        raise HTTPException(status_code=400, detail="modalidad_invalid")
+    zoom_meeting_url: str | None = None
+    zoom_external_join_url: str | None = None
+    zoom_metadata: dict[str, Any] = {}
+    if modalidad_value != "presencial":
+        zoom_meeting_url, zoom_external_join_url, zoom_metadata = (
+            await webchat_service.create_zoom_meeting_for_booking_if_enabled(
+                organizacion_id=org_uuid,
+                start_at=start_dt,
+                timezone_name=calendar_settings.timezone,
+                topic=f"Demo Tal-IA - {str(persona_data.get('nombre_completo') or contact_id).strip()}",
+                agenda=payload.notes,
+            )
         )
-    )
     hold_metadata: dict[str, Any] = {
         "source": "panel_agenda",
         "session_id": payload.session_id,
         "contact_id": contact_id,
         "tarjeta_id": tarjeta_id,
         "crear_oportunidad": crear_oportunidad,
+        "modalidad": modalidad_value,
         "canal": (payload.canal or "manual"),
         "organizacion_id": str(org_uuid),
     }
@@ -18637,6 +18649,7 @@ async def create_agenda_booking(
         "contact_id": contact_id,
         "tarjeta_id": tarjeta_id,
         "crear_oportunidad": crear_oportunidad,
+        "modalidad": modalidad_value,
         "canal": (payload.canal or "manual"),
         "organizacion_id": str(org_uuid),
     }

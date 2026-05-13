@@ -39,6 +39,7 @@ type OpportunityItem = {
 }
 
 type OpportunityMode = "none" | "existing" | "create"
+type BookingModalidad = "virtual" | "presencial" | "hibrida"
 
 type AgendaCreateBookingSheetProps = {
   open: boolean
@@ -70,6 +71,7 @@ export function AgendaCreateBookingSheet({ open, onClose, onCreated }: AgendaCre
   const [submitting, setSubmitting] = React.useState(false)
   const [notes, setNotes] = React.useState("")
   const [startAt, setStartAt] = React.useState(() => toLocalDateTimeInputValue(new Date(Date.now() + 3600000)))
+  const [modalidad, setModalidad] = React.useState<BookingModalidad>("virtual")
   const [newContact, setNewContact] = React.useState({
     nombre_completo: "",
     telefono_e164: "",
@@ -90,6 +92,7 @@ export function AgendaCreateBookingSheet({ open, onClose, onCreated }: AgendaCre
       setCreateMode(false)
       setNotes("")
       setStartAt(toLocalDateTimeInputValue(new Date(Date.now() + 3600000)))
+      setModalidad("virtual")
       setNewContact({
         nombre_completo: "",
         telefono_e164: "",
@@ -306,6 +309,7 @@ export function AgendaCreateBookingSheet({ open, onClose, onCreated }: AgendaCre
           contacto_id: selectedContact.id,
           oportunidad_id: oportunidadId || undefined,
           crear_oportunidad: crearOportunidad,
+          modalidad,
           start_at: startAtIso,
           notes: notes.trim() || undefined,
           canal: "manual",
@@ -494,6 +498,23 @@ export function AgendaCreateBookingSheet({ open, onClose, onCreated }: AgendaCre
               ) : null}
             </div>
           ) : null}
+
+          <div className="space-y-2">
+            <Label htmlFor="agenda-booking-modalidad">Modalidad</Label>
+            <Select value={modalidad} onValueChange={(value) => setModalidad(value as BookingModalidad)}>
+              <SelectTrigger id="agenda-booking-modalidad">
+                <SelectValue placeholder="Selecciona la modalidad" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="virtual">Virtual</SelectItem>
+                <SelectItem value="presencial">Presencial</SelectItem>
+                <SelectItem value="hibrida">Híbrida</SelectItem>
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              Si eliges presencial, no se generará enlace de Zoom.
+            </p>
+          </div>
 
           <div className="space-y-2">
             <Label htmlFor="agenda-booking-start-at">Fecha y hora</Label>
