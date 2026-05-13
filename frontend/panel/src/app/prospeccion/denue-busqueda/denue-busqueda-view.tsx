@@ -255,6 +255,44 @@ function buildScianLookups(scian: DenueCatalogosResponse["scian"]): ScianLookups
   return { titles };
 }
 
+function expandScianCodesForSearch(
+  codes: string[],
+  claseCodes: string[],
+): string[] {
+  const seen = new Set<string>();
+  const expanded: string[] = [];
+  const claseList = claseCodes
+    .map((value) => value.trim())
+    .filter((value) => value.length > 0);
+
+  for (const rawCode of codes) {
+    const code = rawCode.trim();
+    if (!code) {
+      continue;
+    }
+    if (code.length === 5) {
+      const descendants = claseList.filter((candidate) => candidate.startsWith(code));
+      if (descendants.length) {
+        for (const descendant of descendants) {
+          if (seen.has(descendant)) {
+            continue;
+          }
+          seen.add(descendant);
+          expanded.push(descendant);
+        }
+        continue;
+      }
+    }
+    if (seen.has(code)) {
+      continue;
+    }
+    seen.add(code);
+    expanded.push(code);
+  }
+
+  return expanded;
+}
+
 function buildGeoDisplay(
   filters?: BusquedaMetaFilters,
   lookups?: GeoLookups | null,
@@ -418,7 +456,13 @@ export function DenueBusquedaView() {
   const [searchMode, setSearchMode] = useState<SearchMode>("radial");
   const [geoLookups, setGeoLookups] = useState<GeoLookups | null>(null);
   const [scianLookups, setScianLookups] = useState<ScianLookups | null>(null);
+  const [scianCatalogs, setScianCatalogs] = useState<DenueCatalogosResponse["scian"] | null>(null);
   const scianTitles = scianLookups?.titles;
+  const scianClaseCodes = useMemo(() => {
+    return (scianCatalogs?.clase ?? [])
+      .map((row) => String(row.codigo ?? "").trim())
+      .filter((value) => value.length > 0);
+  }, [scianCatalogs]);
   const [geoStatesCatalog, setGeoStatesCatalog] = useState<DenueCatalogosResponse["geo"]["states"]>([]);
   const [geoEstadoFilter, setGeoEstadoFilter] = useState<string>("any");
   const [geoMunicipioFilter, setGeoMunicipioFilter] = useState<string>("any");
@@ -593,12 +637,14 @@ export function DenueBusquedaView() {
         if (cancelled) return;
         setGeoLookups(buildGeoLookups(response.geo.states ?? []));
         setScianLookups(buildScianLookups(response.scian));
+        setScianCatalogs(response.scian);
         setGeoStatesCatalog(response.geo.states ?? []);
       } catch {
         // Sin catálogos: mostrar códigos como fallback.
         if (cancelled) return;
         setGeoLookups(null);
         setScianLookups(null);
+        setScianCatalogs(null);
         setGeoStatesCatalog([]);
       }
     })();
@@ -1515,12 +1561,15 @@ export function DenueBusquedaView() {
     const actividadCodes = filters.allActivitiesSelected
       ? ["0"]
       : Array.from(
-        new Set(
-          filters.actividad
-            .map((value) => value.trim())
-            .filter((value) => value.length >= 2),
-        ),
-      );
+          new Set(
+            filters.actividad
+              .map((value) => value.trim())
+              .filter((value) => value.length >= 2),
+          ),
+        );
+    const actividadCodesForSearch = filters.allActivitiesSelected
+      ? ["0"]
+      : expandScianCodesForSearch(actividadCodes, scianClaseCodes);
     const estrato = filters.estrato.filter((value) => value !== "0");
     const geoEstados = filters.geografia.estados.length ? filters.geografia.estados : undefined;
     const geoMunicipios = filters.geografia.municipios.length ? filters.geografia.municipios : undefined;
@@ -1559,13 +1608,13 @@ export function DenueBusquedaView() {
     return {
       modo,
       texto_busqueda: texto || undefined,
-      actividad_codigos: actividadCodes,
+      actividad_codigos: actividadCodesForSearch,
       actividad_nombres: actividadNames?.length ? actividadNames : undefined,
       estrato_ids: estrato.length ? estrato : undefined,
       geo_estados: geoEstados,
       geo_municipios: geoMunicipios,
     };
-  }, [scianTitles]);
+  }, [scianClaseCodes, scianTitles]);
 
   const runBusqueda = useCallback(
     async (options?: { filters?: DenueAdvancedFilters | null; forceStandard?: boolean }) => {
