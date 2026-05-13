@@ -27818,6 +27818,8 @@ async def pipeline_board(
             q=q,
             etapa_ids=etapa_ids,
             tiene_cita=tiene_cita,
+            include_contact_rows=False,
+            count_exact=False,
         )
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
@@ -34251,6 +34253,11 @@ def _card_from_opportunity(row: dict[str, Any]) -> CRMPipelineBoardCard | None:
     )
     actualizado_en = _parse_datetime(row.get("actualizado_en"))
     canal = metadata.get("canal") or metadata.get("channel")
+    necesidad_proposito = (
+        contacto.get("necesidad_proposito")
+        or cuenta.get("necesidad_proposito")
+        or metadata.get("necesidad_proposito")
+    )
 
     return CRMPipelineBoardCard(
         tarjeta_id=oportunidad_id,
@@ -34261,9 +34268,9 @@ def _card_from_opportunity(row: dict[str, Any]) -> CRMPipelineBoardCard | None:
         contacto_profile_name=contacto_profile_name,
         correo=contacto.get("correo"),
         telefono=contacto.get("telefono_e164"),
-        empresa=contacto.get("company_name"),
-        notas=contacto.get("notes"),
-        necesidad_proposito=contacto.get("necesidad_proposito"),
+        empresa=contacto.get("company_name") or cuenta.get("nombre"),
+        notas=contacto.get("notas") or contacto.get("notes"),
+        necesidad_proposito=necesidad_proposito,
         canal=canal,
         estado=contacto.get("estado") or contacto.get("captura_estado"),
         etapa_id=etapa_id,

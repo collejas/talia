@@ -1308,6 +1308,9 @@ async def test_pipeline_board_filters_by_tablero(
     assert stage["tarjetas"]
     assert all(card["etapa_id"] == str(stage_a_id) for card in stage["tarjetas"])
     assert all(card["metadata"]["tablero_id"] == str(tablero_a) for card in stage["tarjetas"])
+    call_kwargs = next(kwargs for name, kwargs in fake_repo.calls if name == "list_pipeline_opportunities")
+    assert call_kwargs["include_contact_rows"] is False
+    assert call_kwargs["count_exact"] is False
 
 
 @pytest.mark.asyncio

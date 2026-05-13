@@ -671,7 +671,7 @@ class CRMRepository:
             "cuenta_id",
             "contacto_principal_id",
             "contacto:personas!oportunidades_contacto_principal_org_fkey("
-            "id,nombre_completo,correo_principal,telefono_principal_e164,company_name,origen,estado,metadata,persona_datos"
+            "id,nombre_completo,correo_principal,telefono_principal_e164,company_name,notas,origen,estado,metadata,persona_datos"
             ")",
             "etapa_id",
             "titulo",
@@ -694,7 +694,7 @@ class CRMRepository:
             "asignado:usuarios!oportunidades_asignado_usuario_org_fkey(id,nombre_completo,correo,telefono_e164)",
             "propietario:usuarios!oportunidades_propietario_usuario_org_fkey(id,nombre_completo,correo,telefono_e164)",
             "etapa:etapas_pipeline!oportunidades_etapa_org_fkey(id,nombre,codigo,categoria,orden,metadata)",
-            "cuenta:cuentas!oportunidades_cuenta_org_fkey(id,nombre,telefono,correo)",
+            "cuenta:cuentas!oportunidades_cuenta_org_fkey(id,nombre,telefono,correo,necesidad_proposito)",
         ]
     )
 
@@ -4527,6 +4527,8 @@ class CRMRepository:
                 q=q,
                 etapa_ids=etapa_ids,
                 tiene_cita=tiene_cita,
+                include_contact_rows=False,
+                count_exact=False,
             )
             if not assigned_rows:
                 logger.info(
@@ -5699,6 +5701,8 @@ class CRMRepository:
         q: str | None = None,
         etapa_ids: str | None = None,
         tiene_cita: str | None = None,
+        include_contact_rows: bool = True,
+        count_exact: bool = True,
     ) -> tuple[list[dict[str, Any]], int]:
         """Listar oportunidades de pipeline con filtros opcionales y conteo total."""
 
@@ -5745,11 +5749,12 @@ class CRMRepository:
             )
         if and_filters:
             params["and"] = "(" + ",".join(and_filters) + ")"
+        prefer = "count=exact" if count_exact else None
         resp = await self._request(
             "GET",
             "/rest/v1/oportunidades",
             params=params,
-            prefer="count=exact",
+            prefer=prefer,
         )
         data = resp.json()
         if not isinstance(data, list):
@@ -5757,7 +5762,7 @@ class CRMRepository:
                 f"Respuesta inesperada al listar pipeline de oportunidades: {data!r}"
             )
         results = [row for row in data if isinstance(row, dict)]
-        if results:
+        if results and include_contact_rows:
             await self._attach_contact_rows(
                 organizacion_id=organizacion_id,
                 rows=results,
