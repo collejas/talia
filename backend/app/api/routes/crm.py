@@ -30051,6 +30051,7 @@ async def _dashboard_fetch_all_lead_rows(
             offset=offset,
             creado_desde=creado_desde,
             creado_hasta=creado_hasta,
+            include_contact_rows=False,
         )
         filtered_page = [row for row in page if isinstance(row, dict)]
         if not filtered_page:
@@ -30094,15 +30095,24 @@ async def dashboard_overview(
         range_days = 30
 
     errors: dict[str, str] = {}
+    opportunity_rows_task: asyncio.Task[list[dict[str, Any]]] | None = None
+
+    async def load_opportunity_rows() -> list[dict[str, Any]]:
+        nonlocal opportunity_rows_task
+        if opportunity_rows_task is None:
+            opportunity_rows_task = asyncio.create_task(
+                _dashboard_fetch_all_lead_rows(
+                    repo=repo,
+                    organizacion_id=organizacion_id,
+                    date_from=date_from,
+                    date_to=date_to,
+                )
+            )
+        return await opportunity_rows_task
 
     async def load_leads_section() -> dict[str, Any]:
         try:
-            rows = await _dashboard_fetch_all_lead_rows(
-                repo=repo,
-                organizacion_id=organizacion_id,
-                date_from=date_from,
-                date_to=date_to,
-            )
+            rows = await load_opportunity_rows()
             return {
                 "cards": _dashboard_build_leads_cards(rows, days=range_days),
                 "chart": _dashboard_build_leads_chart(rows, date_from=date_from, date_to=date_to),
@@ -30157,11 +30167,7 @@ async def dashboard_overview(
 
     async def load_opportunity_section() -> dict[str, Any]:
         try:
-            rows = await repo.list_opportunities(
-                organizacion_id=organizacion_id,
-                limit=200,
-                offset=0,
-            )
+            rows = await load_opportunity_rows()
             safe_rows = [row for row in rows if isinstance(row, dict)]
             return _dashboard_summarize_opportunities(safe_rows)
         except Exception as exc:  # pragma: no cover - defensivo

@@ -614,6 +614,9 @@ class CRMRepository:
             "organizacion_id",
             "cuenta_id",
             "contacto_principal_id",
+            "contacto:personas!oportunidades_contacto_principal_org_fkey("
+            "id,nombre_completo,correo_principal,telefono_principal_e164,company_name,origen,estado,metadata,persona_datos"
+            ")",
             "etapa_id",
             "titulo",
             "descripcion",
@@ -1336,6 +1339,7 @@ class CRMRepository:
         creado_desde: str | None = None,
         creado_hasta: str | None = None,
         reinicio_min: int | None = None,
+        include_contact_rows: bool = True,
     ) -> list[dict[str, Any]]:
         params: dict[str, Any] = {
             "organizacion_id": f"eq.{organizacion_id}",
@@ -1384,7 +1388,7 @@ class CRMRepository:
         if not isinstance(data, list):
             raise CRMRepositoryError(f"Respuesta inesperada al listar oportunidades: {data!r}")
         rows = [row for row in data if isinstance(row, dict)]
-        if rows:
+        if rows and include_contact_rows:
             await self._attach_contact_rows(
                 organizacion_id=organizacion_id,
                 rows=rows,
