@@ -28,6 +28,7 @@ from app.core.logging import configure_logging, get_logger, resolve_log_level
 from app.core.middleware import RequestLoggingMiddleware
 from app.services.prospeccion_contact_sender import contact_sender
 from app.services.prospeccion_email_inbound_reader import email_inbound_reader
+from app.services.deleted_busquedas_purge_jobs import deleted_busquedas_purge_runner
 from app.services.high_demand_mode import high_demand_mode_runner
 from app.services.activity_reminder_jobs import activity_reminder_jobs_runner
 from app.services.sales_notification_jobs import sales_notification_jobs_runner
@@ -71,12 +72,17 @@ async def app_lifespan(_: FastAPI):
     await inbox_snapshot_refresh_runner.start()
     await high_demand_mode_runner.start()
     await activity_reminder_jobs_runner.start()
+    await deleted_busquedas_purge_runner.start()
     await sales_notification_jobs_runner.start()
     try:
         yield
     finally:
         await _shutdown_with_timeout(
             name="activity_reminder_jobs_runner", coro=activity_reminder_jobs_runner.shutdown()
+        )
+        await _shutdown_with_timeout(
+            name="deleted_busquedas_purge_runner",
+            coro=deleted_busquedas_purge_runner.shutdown(),
         )
         await _shutdown_with_timeout(
             name="sales_notification_jobs_runner", coro=sales_notification_jobs_runner.shutdown()

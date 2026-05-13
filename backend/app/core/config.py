@@ -759,6 +759,54 @@ class Settings(BaseSettings):
             "TALIA_SALES_NOTIFICATION_RUNNER_INTERVAL_SECONDS",
         ),
     )
+    busquedas_purge_queue_enabled: bool = Field(
+        default=True,
+        description="Activa el purge asíncrono de búsquedas borradas lógicamente.",
+        validation_alias=AliasChoices(
+            "BUSQUEDAS_PURGE_QUEUE_ENABLED",
+            "TALIA_BUSQUEDAS_PURGE_QUEUE_ENABLED",
+        ),
+    )
+    busquedas_purge_runner_interval_seconds: int = Field(
+        default=300,
+        ge=30,
+        le=3600,
+        description="Intervalo del worker para purgar búsquedas borradas lógicamente.",
+        validation_alias=AliasChoices(
+            "BUSQUEDAS_PURGE_RUNNER_INTERVAL_SECONDS",
+            "TALIA_BUSQUEDAS_PURGE_RUNNER_INTERVAL_SECONDS",
+        ),
+    )
+    busquedas_purge_batch_size: int = Field(
+        default=1,
+        ge=1,
+        le=50,
+        description="Número de búsquedas borradas a purgar por ciclo.",
+        validation_alias=AliasChoices(
+            "BUSQUEDAS_PURGE_BATCH_SIZE",
+            "TALIA_BUSQUEDAS_PURGE_BATCH_SIZE",
+        ),
+    )
+    busquedas_purge_row_chunk_size: int = Field(
+        default=500,
+        ge=50,
+        le=5000,
+        description="Número máximo de filas hijas a purgar por tabla en cada ciclo.",
+        validation_alias=AliasChoices(
+            "BUSQUEDAS_PURGE_ROW_CHUNK_SIZE",
+            "TALIA_BUSQUEDAS_PURGE_ROW_CHUNK_SIZE",
+        ),
+    )
+    busquedas_purge_after_days: int = Field(
+        default=7,
+        ge=1,
+        le=90,
+        description="Retención mínima antes de purgar búsquedas borradas lógicamente.",
+        validation_alias=AliasChoices(
+            "BUSQUEDAS_PURGE_AFTER_DAYS",
+            "TALIA_BUSQUEDAS_PURGE_AFTER_DAYS",
+        ),
+    )
     sales_notification_job_lease_seconds: int = Field(
         default=120,
         ge=30,

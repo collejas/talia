@@ -10408,7 +10408,6 @@ class CRMRepository:
                 "/rest/v1/busquedas",
                 token=usuario_token,
                 params=params,
-                prefer="count=planned",
             )
         except CRMRepositoryError as exc:
             # PostgREST devuelve 416 cuando el offset queda fuera del rango disponible.
@@ -10432,10 +10431,14 @@ class CRMRepository:
             "id": f"eq.{busqueda_id}",
             "fuente": f"eq.{fuente}",
         }
+        payload = {
+            "deleted_at": datetime.now(timezone.utc).isoformat(),
+        }
         resp = await self._request(
-            "DELETE",
+            "PATCH",
             "/rest/v1/busquedas",
             params=params,
+            json=payload,
             prefer="return=representation",
         )
         if resp.status_code == 204:
@@ -10444,6 +10447,31 @@ class CRMRepository:
         if not isinstance(data, list):
             raise CRMRepositoryError(f"Respuesta inesperada al eliminar búsqueda: {data!r}")
         return len(data)
+
+    async def worker_purge_deleted_busquedas(
+        self,
+        *,
+        batch_size: int = 1,
+        row_chunk_size: int = 500,
+        purge_after_days: int = 7,
+    ) -> dict[str, Any]:
+        payload = {
+            "p_batch_size": max(1, int(batch_size)),
+            "p_row_chunk_size": max(1, int(row_chunk_size)),
+            "p_purge_after_days": max(1, int(purge_after_days)),
+        }
+        resp = await self._request(
+            "POST",
+            "/rest/v1/rpc/purge_soft_deleted_busquedas",
+            json=payload,
+        )
+        try:
+            data = resp.json() or {}
+        except ValueError as exc:  # pragma: no cover
+            raise CRMRepositoryError("worker_purge_deleted_busquedas_invalid_response") from exc
+        if not isinstance(data, dict):
+            raise CRMRepositoryError(f"worker_purge_deleted_busquedas_invalid:{data!r}")
+        return data
 
     async def list_prospeccion_resultados(
         self,

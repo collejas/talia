@@ -96,6 +96,7 @@ from app.services import quotes as quotes_service
 from app.services.buscador_jobs import BUSCADOR_JOB_MANAGER
 from app.services.denue import expand_denue_activity_codes, expand_state_to_municipalities, expand_targets_for_area_act
 from app.services.denue_search_jobs import DENUE_SEARCH_JOB_MANAGER, DenueSearchJob
+from app.services.deleted_busquedas_purge_jobs import deleted_busquedas_purge_runner
 from app.services.google_search_jobs import GOOGLE_SEARCH_JOB_MANAGER, GoogleSearchJob
 from app.services.buscador_runner import BuscadorParams
 from app.services.calendar import CalendarError
@@ -20799,6 +20800,7 @@ async def eliminar_busqueda_google(
             busqueda_id=busqueda_id,
             fuente="google_places",
         )
+        await deleted_busquedas_purge_runner.wakeup()
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     return {"ok": True, "deleted": deleted}
@@ -20816,6 +20818,7 @@ async def eliminar_busqueda_denue(
             busqueda_id=busqueda_id,
             fuente="denue",
         )
+        await deleted_busquedas_purge_runner.wakeup()
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     return {"ok": True, "deleted": deleted}

@@ -595,15 +595,13 @@ export function DenueBusquedaView() {
     try {
       const allItems: DenueBusquedaItem[] = [];
       let offset = 0;
-      let total = Number.POSITIVE_INFINITY;
-      while (offset < total) {
+      while (true) {
         const response = await listDenueBusquedas({ limit: BUSQUEDAS_PAGE_SIZE, offset });
         const page = response.items ?? [];
         if (!page.length) {
           break;
         }
         allItems.push(...page);
-        total = typeof response.total === "number" ? response.total : allItems.length;
         offset += BUSQUEDAS_PAGE_SIZE;
         if (page.length < BUSQUEDAS_PAGE_SIZE) {
           break;
