@@ -1820,6 +1820,10 @@ export function TenantWhatsAppSettings({
             />
           </div>
         </div>
+        <p className="text-xs text-muted-foreground">
+          Si el tenant sigue en Twilio, estos campos usan SID de plantilla. Si el tenant usa Meta, guarda el
+          nombre técnico aprobado de la plantilla y su código de idioma en la pantalla de plantillas de prospección.
+        </p>
 
         <p className="text-xs text-muted-foreground">
           La sección guarda la configuración no sensible bajo <code>organizaciones.config.whatsapp</code> y los

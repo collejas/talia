@@ -610,6 +610,13 @@ async def _log_whatsapp_inbox_message(
         body_preview = _clean_text(payload.get("body"))
     if not body_preview and detalle_meta.get("template_sid"):
         body_preview = f"[Plantilla {detalle_meta.get('template_sid')}]"
+    template_name_value = _clean_text(
+        detalle_meta.get("template_name") or detalle_meta.get("meta_template_name")
+    )
+    if not body_preview and template_name_value:
+        template_label = template_name_value
+        if template_label:
+            body_preview = f"[Plantilla {template_label}]"
     payload_meta = payload.get("metadata") if isinstance(payload.get("metadata"), dict) else {}
     metadata_payload: dict[str, Any] = {
         "source": "prospeccion",
@@ -626,6 +633,13 @@ async def _log_whatsapp_inbox_message(
         metadata_payload["twilio_content_sid"] = detalle_meta.get("template_sid")
     if detalle_meta.get("twilio_variables"):
         metadata_payload["twilio_variables"] = detalle_meta.get("twilio_variables")
+    if template_name_value:
+        metadata_payload["meta_template_name"] = template_name_value
+    template_language_value = _clean_text(
+        detalle_meta.get("template_language") or detalle_meta.get("meta_template_language")
+    )
+    if template_language_value:
+        metadata_payload["meta_template_language"] = template_language_value
     metadata_payload = {k: v for k, v in metadata_payload.items() if v not in (None, "", {})}
 
     persona_record: dict[str, Any] | None = None
@@ -671,6 +685,8 @@ async def _log_whatsapp_inbox_message(
                 or payload_meta.get("template_nombre")
                 or payload_meta.get("template_name")
             ),
+            "meta_template_name": _clean_text(payload_meta.get("meta_template_name")),
+            "meta_template_language": _clean_text(payload_meta.get("meta_template_language")),
         }
         try:
             await storage.merge_conversation_inbox_context(
@@ -848,15 +864,19 @@ async def _send_whatsapp_message(
     *,
     content_sid: str | None = None,
     content_variables: dict[str, str] | None = None,
+    template_name: str | None = None,
+    template_language: str | None = None,
     organizacion_id: UUID | None = None,
 ) -> TwilioSendResult:
-    if not body and not content_sid:
+    if not body and not content_sid and not template_name:
         return TwilioSendResult(sid=None, status="skipped", error="empty_body")
     return await _send_whatsapp_reply(
         to_number=to_number,
         body=body or "",
         content_sid=content_sid,
         content_variables=content_variables,
+        template_name=template_name,
+        template_language=template_language,
         organizacion_id=organizacion_id,
     )
 
@@ -1001,6 +1021,18 @@ async def _run_envio_whatsapp(
         )
     metadata = payload.get("metadata") if isinstance(payload.get("metadata"), dict) else {}
     template_sid = _clean_text(metadata.get("twilio_content_sid") or payload.get("twilio_content_sid"))
+    meta_template_name = _clean_text(
+        metadata.get("meta_template_name")
+        or payload.get("meta_template_name")
+        or metadata.get("template_name")
+        or payload.get("template_name")
+    )
+    meta_template_language = _clean_text(
+        metadata.get("meta_template_language")
+        or payload.get("meta_template_language")
+        or metadata.get("template_language")
+        or payload.get("template_language")
+    )
     variables_def = metadata.get("twilio_variables") or metadata.get("twilio_content_variables")
     context = _build_placeholder_context(detalle, metadata, payload)
     rendered_vars: dict[str, str] | None = None
@@ -1027,9 +1059,11 @@ async def _run_envio_whatsapp(
         preview_text = _render_template_text(_clean_text(payload.get("body")) or "", context).strip()
         wa_result = await _send_whatsapp_message(
             to_number=telefono,
-            body=None,
+            body=preview_text,
             content_sid=template_sid,
             content_variables=rendered_vars,
+            template_name=meta_template_name,
+            template_language=meta_template_language,
             organizacion_id=organizacion_id,
         )
         fallback_used = False
@@ -1056,6 +1090,8 @@ async def _run_envio_whatsapp(
         wa_result = await _send_whatsapp_message(
             to_number=telefono,
             body=rendered_body,
+            template_name=meta_template_name,
+            template_language=meta_template_language,
             organizacion_id=organizacion_id,
         )
         preview_text = rendered_body
@@ -1068,6 +1104,10 @@ async def _run_envio_whatsapp(
             "status": wa_result.status,
             "sid": wa_result.sid,
             "template_sid": template_sid,
+            "template_name": meta_template_name,
+            "template_language": meta_template_language,
+            "meta_template_name": meta_template_name,
+            "meta_template_language": meta_template_language,
             "twilio_variables": rendered_vars if template_sid else None,
             "body_preview": preview_text,
             "fallback_plaintext_used": fallback_used,

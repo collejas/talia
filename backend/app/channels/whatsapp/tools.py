@@ -2952,7 +2952,7 @@ async def _notify_sales_rep(
 
         send_result = await whatsapp_service.send_manual_message(
             to_number=seller_phone,
-            body=None if template_sid else message_body,
+            body=message_body,
             template_sid=template_sid,
             template_variables=template_vars,
             organizacion_id=org_uuid,

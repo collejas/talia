@@ -112,6 +112,16 @@ type ImageDimensions = {
   height: number
 }
 
+function getTemplateMetaValue(metadata: Record<string, unknown>, keys: string[]): string {
+  for (const key of keys) {
+    const value = metadata[key]
+    if (typeof value === "string" && value.trim()) {
+      return value.trim()
+    }
+  }
+  return ""
+}
+
 export function CampanasMetricsClient() {
   const [campanas, setCampanas] = useState<ProspeccionCampanaGroup[]>([])
   const [campanasLoading, setCampanasLoading] = useState(false)
@@ -172,6 +182,8 @@ export function CampanasMetricsClient() {
     cuerpoHtml: "",
     twilioSid: "",
     twilioVariable6: "",
+    metaTemplateName: "",
+    metaTemplateLanguage: "",
     nombreIa: "",
     nombreEmpresa: "",
     ctaBaseUrl: "https://talia.mx/",
@@ -630,6 +642,8 @@ export function CampanasMetricsClient() {
       cuerpoHtml: "",
       twilioSid: "",
       twilioVariable6: "",
+      metaTemplateName: "",
+      metaTemplateLanguage: "",
       nombreIa: "",
       nombreEmpresa: "",
       ctaBaseUrl: "https://talia.mx/",
@@ -1143,6 +1157,8 @@ ${secondCellHtml}
         cuerpoHtml: "",
         twilioSid: "",
         twilioVariable6: "",
+        metaTemplateName: "",
+        metaTemplateLanguage: "",
         nombreIa: "",
         nombreEmpresa: "",
         ctaBaseUrl: "https://talia.mx/",
@@ -1181,6 +1197,18 @@ ${secondCellHtml}
         metadata["twilio_variables"] && typeof metadata["twilio_variables"] === "object"
           ? String((metadata["twilio_variables"] as Record<string, unknown>)["6"] ?? "")
           : "",
+      metaTemplateName: getTemplateMetaValue(metadata, [
+        "meta_template_name",
+        "template_name",
+        "whatsapp_template_name",
+        "template_nombre",
+      ]),
+      metaTemplateLanguage: getTemplateMetaValue(metadata, [
+        "meta_template_language",
+        "template_language",
+        "whatsapp_template_language",
+        "language_code",
+      ]),
       nombreIa:
         (typeof metadata["nombre_ia"] === "string" ? metadata["nombre_ia"] : "") ||
         (typeof metadata["assistant_name"] === "string" ? metadata["assistant_name"] : ""),
@@ -1221,6 +1249,18 @@ ${secondCellHtml}
           metadata["twilio_variables"] && typeof metadata["twilio_variables"] === "object"
             ? String((metadata["twilio_variables"] as Record<string, unknown>)["6"] ?? "")
             : "",
+        metaTemplateName: getTemplateMetaValue(metadata, [
+          "meta_template_name",
+          "template_name",
+          "whatsapp_template_name",
+          "template_nombre",
+        ]),
+        metaTemplateLanguage: getTemplateMetaValue(metadata, [
+          "meta_template_language",
+          "template_language",
+          "whatsapp_template_language",
+          "language_code",
+        ]),
         nombreIa:
           (typeof metadata["nombre_ia"] === "string" ? metadata["nombre_ia"] : "") ||
           (typeof metadata["assistant_name"] === "string" ? metadata["assistant_name"] : ""),
@@ -1264,6 +1304,12 @@ ${secondCellHtml}
     if (templateForm.twilioSid.trim()) metadata["twilio_content_sid"] = templateForm.twilioSid.trim()
     if (templateForm.twilioVariable6.trim()) {
       metadata["twilio_variables"] = { "6": templateForm.twilioVariable6.trim() }
+    }
+    if (templateForm.canal === "whatsapp") {
+      const metaTemplateName = templateForm.metaTemplateName.trim()
+      const metaTemplateLanguage = templateForm.metaTemplateLanguage.trim()
+      if (metaTemplateName) metadata["meta_template_name"] = metaTemplateName
+      if (metaTemplateLanguage) metadata["meta_template_language"] = metaTemplateLanguage
     }
     const normalizedLogoUrl = normalizeLogoUrl(selectedLogoUrl)
     if (templateForm.canal === "correo" && normalizedLogoUrl) {
@@ -1942,6 +1988,47 @@ ${secondCellHtml}
                             {template.canal === "correo" ? "Correo" : template.canal === "whatsapp" ? "WhatsApp" : "Llamada"}{" "}
                             · {template.descripcion || "Sin descripción"}
                           </p>
+                          {template.canal === "whatsapp" ? (
+                            <p className="mt-1 text-[11px] text-muted-foreground">
+                              {(() => {
+                                const metadata = template.metadata && typeof template.metadata === "object" ? template.metadata : {}
+                                const metaTemplateName = getTemplateMetaValue(metadata, [
+                                  "meta_template_name",
+                                  "template_name",
+                                  "whatsapp_template_name",
+                                  "template_nombre",
+                                ])
+                                const metaTemplateLanguage = getTemplateMetaValue(metadata, [
+                                  "meta_template_language",
+                                  "template_language",
+                                  "whatsapp_template_language",
+                                  "language_code",
+                                ])
+                                const twilioSid = typeof metadata["twilio_content_sid"] === "string" ? metadata["twilio_content_sid"].trim() : ""
+                                if (metaTemplateName) {
+                                  return (
+                                    <>
+                                      Meta: <span className="font-medium text-foreground">{metaTemplateName}</span>
+                                      {metaTemplateLanguage ? (
+                                        <>
+                                          {" "}
+                                          · <span className="font-medium text-foreground">{metaTemplateLanguage}</span>
+                                        </>
+                                      ) : null}
+                                    </>
+                                  )
+                                }
+                                if (twilioSid) {
+                                  return (
+                                    <>
+                                      Twilio: <span className="font-medium text-foreground">{twilioSid}</span>
+                                    </>
+                                  )
+                                }
+                                return "Sin referencia de plantilla."
+                              })()}
+                            </p>
+                          ) : null}
                         </div>
                         <Badge variant="outline" className="shrink-0">
                           Activa
@@ -2375,6 +2462,34 @@ ${secondCellHtml}
                                 }
                                 placeholder="Texto que se inyecta en {{6}}"
                               />
+                            </div>
+                          </div>
+                          <div className="grid gap-3 sm:grid-cols-2">
+                            <div className="space-y-1">
+                              <Label>Meta template name</Label>
+                              <Input
+                                value={templateForm.metaTemplateName}
+                                onChange={(event) =>
+                                  setTemplateForm((prev) => ({ ...prev, metaTemplateName: event.target.value }))
+                                }
+                                placeholder="welcome_message"
+                              />
+                              <p className="text-xs text-muted-foreground">
+                                Nombre técnico aprobado en WhatsApp Manager.
+                              </p>
+                            </div>
+                            <div className="space-y-1">
+                              <Label>Meta language code</Label>
+                              <Input
+                                value={templateForm.metaTemplateLanguage}
+                                onChange={(event) =>
+                                  setTemplateForm((prev) => ({ ...prev, metaTemplateLanguage: event.target.value }))
+                                }
+                                placeholder="es_MX"
+                              />
+                              <p className="text-xs text-muted-foreground">
+                                Idioma aprobado, por ejemplo <code>es_MX</code> o <code>en_US</code>.
+                              </p>
                             </div>
                           </div>
                           <div className="grid gap-3 sm:grid-cols-2">

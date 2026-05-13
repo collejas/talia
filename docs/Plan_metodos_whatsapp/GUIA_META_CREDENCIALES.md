@@ -150,6 +150,16 @@ Este documento sirve como checklist operativo para crear un tenant nuevo con Wha
 
 - `v21.0` o la version mas reciente que estes usando en tu app de Meta.
 
+## Que dato necesitas para las plantillas de Meta
+
+Meta no entrega un "número" de plantilla como si fuera un SID de Twilio.
+Para identificar una plantilla aprobada debes guardar estos dos datos:
+
+- `template name`: el nombre técnico de la plantilla aprobada en WhatsApp Manager.
+- `language code`: el idioma aprobado, por ejemplo `es_MX` o `en_US`.
+
+En TalIA la referencia de Meta se guarda en la plantilla del CRM como metadata, no como un SID. El nombre visible del equipo puede seguir siendo libre, pero el nombre técnico y el idioma son los que debe usar Meta al enviar la plantilla.
+
 ## Campos que debes llenar en TalIA
 
 ### En la creacion del tenant
@@ -226,4 +236,3 @@ En Meta debes configurar:
 - Los tenants existentes pueden seguir en Twilio.
 - Este tenant de prueba debe ser exclusivo para Meta.
 - Si la prueba es exitosa, ya se puede planear el cambio tenant por tenant.
-

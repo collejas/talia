@@ -526,7 +526,7 @@ async def notify_sales_rep(
     try:
         send_result = await whatsapp_service.send_manual_message(
             to_number=seller_phone,
-            body=message_body if not template_sid else None,
+            body=message_body,
             template_sid=template_sid,
             template_variables=template_vars,
             organizacion_id=org_uuid,

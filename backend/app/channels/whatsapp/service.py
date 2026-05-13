@@ -218,6 +218,59 @@ def _normalize_whatsapp_provider(value: Any) -> str:
     return provider if provider in {"twilio", "meta"} else "twilio"
 
 
+def _normalize_meta_template_language(value: Any) -> str | None:
+    language = str(value or "").strip()
+    return language or None
+
+
+def _normalize_meta_template_name(value: Any) -> str | None:
+    name = str(value or "").strip()
+    return name or None
+
+
+def _build_meta_template_components(
+    content_variables: dict[str, str] | None,
+) -> list[dict[str, Any]] | None:
+    if not content_variables:
+        return None
+
+    def _sort_key(item: tuple[str, str]) -> tuple[int, int | str]:
+        key = str(item[0]).strip()
+        if key.isdigit():
+            return (0, int(key))
+        return (1, key)
+
+    parameters: list[dict[str, Any]] = []
+    for _, value in sorted(content_variables.items(), key=_sort_key):
+        text_value = str(value or "")
+        parameters.append({"type": "text", "text": text_value})
+    if not parameters:
+        return None
+    return [{"type": "body", "parameters": parameters}]
+
+
+def _build_meta_template_payload(
+    *,
+    template_name: str,
+    template_language: str,
+    content_variables: dict[str, str] | None = None,
+) -> dict[str, Any]:
+    payload: dict[str, Any] = {
+        "type": "template",
+        "template": {
+            "name": template_name,
+            "language": {
+                "code": template_language,
+                "policy": "deterministic",
+            },
+        },
+    }
+    components = _build_meta_template_components(content_variables)
+    if components:
+        payload["template"]["components"] = components
+    return payload
+
+
 def _normalize_meta_recipient_number(value: str | None) -> str | None:
     if not value:
         return None
@@ -2649,6 +2702,8 @@ async def _send_meta_whatsapp_reply(
     body: str | None = None,
     content_sid: str | None = None,
     content_variables: dict[str, str] | None = None,
+    template_name: str | None = None,
+    template_language: str | None = None,
     organizacion_id: UUID | None = None,
 ) -> TwilioSendResult:
     """Envía la respuesta al contacto utilizando WhatsApp Cloud API."""
@@ -2661,16 +2716,20 @@ async def _send_meta_whatsapp_reply(
         logger.warning("whatsapp.meta_not_configured")
         return TwilioSendResult(sid=None, status="skipped", error="meta_not_configured", provider="meta")
 
-    if content_sid:
-        logger.warning("whatsapp.meta_template_not_supported", extra={"content_sid": content_sid})
-        return TwilioSendResult(
-            sid=None,
-            status="skipped",
-            error="meta_template_not_supported",
-            provider="meta",
-        )
-
-    if not body:
+    normalized_template_name = _normalize_meta_template_name(template_name)
+    normalized_template_language = _normalize_meta_template_language(template_language)
+    if not normalized_template_name or not normalized_template_language:
+        if content_sid:
+            logger.warning("whatsapp.meta_template_not_supported", extra={"content_sid": content_sid})
+        if not body:
+            logger.warning("whatsapp.empty_payload")
+            return TwilioSendResult(
+                sid=None,
+                status="skipped",
+                error="empty_payload",
+                provider="meta",
+            )
+    if not body and not normalized_template_name:
         logger.warning("whatsapp.empty_payload")
         return TwilioSendResult(sid=None, status="skipped", error="empty_payload", provider="meta")
 
@@ -2680,12 +2739,23 @@ async def _send_meta_whatsapp_reply(
 
     graph_version = runtime.meta_graph_api_version or "v21.0"
     url = f"https://graph.facebook.com/{graph_version}/{runtime.meta_phone_number_id}/messages"
-    payload: dict[str, Any] = {
-        "messaging_product": "whatsapp",
-        "to": normalized_to,
-        "type": "text",
-        "text": {"body": body},
-    }
+    if normalized_template_name and normalized_template_language:
+        payload = {
+            "messaging_product": "whatsapp",
+            "to": normalized_to,
+            **_build_meta_template_payload(
+                template_name=normalized_template_name,
+                template_language=normalized_template_language,
+                content_variables=content_variables,
+            ),
+        }
+    else:
+        payload = {
+            "messaging_product": "whatsapp",
+            "to": normalized_to,
+            "type": "text",
+            "text": {"body": body or ""},
+        }
     headers = {
         "Authorization": f"Bearer {runtime.meta_page_access_token}",
         "Content-Type": "application/json",
@@ -2742,6 +2812,8 @@ async def _send_whatsapp_reply(
     body: str | None = None,
     content_sid: str | None = None,
     content_variables: dict[str, str] | None = None,
+    template_name: str | None = None,
+    template_language: str | None = None,
     organizacion_id: UUID | None = None,
 ) -> TwilioSendResult:
     runtime = await tenant_runtime.get_whatsapp_runtime_settings(
@@ -2755,6 +2827,8 @@ async def _send_whatsapp_reply(
             body=body,
             content_sid=content_sid,
             content_variables=content_variables,
+            template_name=template_name,
+            template_language=template_language,
             organizacion_id=organizacion_id,
         )
     return await _send_twilio_whatsapp_reply(
@@ -2914,6 +2988,8 @@ async def send_manual_message(
     body: str | None = None,
     template_sid: str | None = None,
     template_variables: dict[str, str] | None = None,
+    template_name: str | None = None,
+    template_language: str | None = None,
     organizacion_id: UUID | str | None = None,
 ) -> TwilioSendResult:
     """Expone el envío de mensajes manuales desde el panel o automatizaciones."""
@@ -2927,6 +3003,8 @@ async def send_manual_message(
         body=body,
         content_sid=template_sid,
         content_variables=template_variables,
+        template_name=template_name,
+        template_language=template_language,
         organizacion_id=org_uuid,
     )
 
