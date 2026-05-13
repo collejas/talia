@@ -100,6 +100,9 @@ class InMemoryPipelineRepository(CRMRepository):
             "etapa_id": str(stage["id"]),
             "etapa": stage,
             "titulo": payload.get("titulo") or "Oportunidad demo",
+            "contacto_nombre": payload.get("contacto_nombre") or "Contacto Demo",
+            "canal": (payload.get("canal") or "webchat"),
+            "restart_sequence": payload.get("restart_sequence") or 1,
             "descripcion": payload.get("descripcion"),
             "monto_estimado": payload.get("monto_estimado"),
             "moneda": payload.get("moneda") or "MXN",
@@ -154,6 +157,12 @@ class InMemoryPipelineRepository(CRMRepository):
             metadata = dict(row.get("metadata") or {})
             metadata.update(payload["metadata"])
             row["metadata"] = metadata
+        if "canal" in payload:
+            row["canal"] = payload["canal"]
+        if "contacto_nombre" in payload:
+            row["contacto_nombre"] = payload["contacto_nombre"]
+        if "restart_sequence" in payload:
+            row["restart_sequence"] = payload["restart_sequence"]
         for key in (
             "titulo",
             "descripcion",

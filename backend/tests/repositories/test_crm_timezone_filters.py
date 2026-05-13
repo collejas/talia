@@ -39,12 +39,15 @@ async def test_list_opportunities_builds_combined_and_filters() -> None:
 
     await repo.list_opportunities(
         organizacion_id=uuid.UUID("00000000-0000-0000-0000-000000000001"),
+        canal="WhatsApp",
+        q="Demo",
         monto_min=10.0,
         monto_max=20.0,
         cierre_desde="2026-03-04T10:00:00+00:00",
         cierre_hasta="2026-03-05T09:59:59.999999+00:00",
         creado_desde="2026-03-04T10:00:00+00:00",
         creado_hasta="2026-03-05T09:59:59.999999+00:00",
+        reinicio_min=2,
     )
 
     assert captured["method"] == "GET"
@@ -59,6 +62,50 @@ async def test_list_opportunities_builds_combined_and_filters() -> None:
     assert "fecha_cierre_probable.lte.2026-03-05T09:59:59.999999+00:00" in and_clause
     assert "creado_en.gte.2026-03-04T10:00:00+00:00" in and_clause
     assert "creado_en.lte.2026-03-05T09:59:59.999999+00:00" in and_clause
+    assert params.get("canal") == "eq.whatsapp"
+    assert params.get("restart_sequence") == "gte.2"
+    assert params.get("or") == "(titulo.ilike.*Demo*,contacto_nombre.ilike.*Demo*)"
+    assert all(
+        "metadata->>" not in str(value)
+        for value in params.values()
+        if isinstance(value, str)
+    )
+
+
+@pytest.mark.asyncio
+async def test_list_pipeline_opportunities_uses_materialized_columns() -> None:
+    settings.supabase_url = "https://example.supabase.co"
+    settings.supabase_service_role = "service"
+    settings.supabase_anon = "anon"
+    repo = CRMRepository()
+    captured: dict[str, object] = {}
+
+    async def fake_request(method: str, path: str, **kwargs):
+        captured["method"] = method
+        captured["path"] = path
+        captured["params"] = kwargs.get("params")
+        return DummyResponse([])
+
+    repo._request = AsyncMock(side_effect=fake_request)
+
+    await repo.list_pipeline_opportunities(
+        organizacion_id=uuid.UUID("00000000-0000-0000-0000-000000000001"),
+        canal="WhatsApp",
+        q="Demo",
+        limit=25,
+    )
+
+    assert captured["method"] == "GET"
+    assert captured["path"] == "/rest/v1/oportunidades"
+    params = captured["params"]
+    assert isinstance(params, dict)
+    assert params.get("canal") == "eq.whatsapp"
+    and_clause = params.get("and")
+    assert isinstance(and_clause, str)
+    assert "titulo.ilike.*Demo*" in and_clause
+    assert "descripcion.ilike.*Demo*" in and_clause
+    assert "contacto_nombre.ilike.*Demo*" in and_clause
+    assert "metadata->>" not in and_clause
 
 
 @pytest.mark.asyncio

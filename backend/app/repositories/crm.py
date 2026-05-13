@@ -99,6 +99,62 @@ def _deep_merge_metadata(base: dict[str, Any], patch: dict[str, Any]) -> dict[st
     return merged
 
 
+def _normalize_opportunity_payload(
+    payload: dict[str, Any],
+    *,
+    include_metadata: bool = False,
+    allow_title_fallback: bool = False,
+) -> dict[str, Any]:
+    """Materializa campos de oportunidades que antes se leían desde metadata."""
+
+    body = dict(payload)
+    metadata_present = "metadata" in body
+    metadata = _ensure_metadata(body.get("metadata"))
+    metadata_changed = False
+
+    def _set_metadata(key: str, value: Any) -> None:
+        nonlocal metadata_changed
+        if value is None:
+            return
+        metadata[key] = value
+        metadata_changed = True
+
+    canal_raw = body.get("canal")
+    if not isinstance(canal_raw, str) or not canal_raw.strip():
+        canal_raw = metadata.get("canal") or metadata.get("channel")
+    canal = str(canal_raw or "").strip().lower()
+    if canal:
+        body["canal"] = canal
+        _set_metadata("canal", canal)
+        _set_metadata("channel", canal)
+
+    contacto_nombre_raw = body.get("contacto_nombre")
+    if not isinstance(contacto_nombre_raw, str) or not contacto_nombre_raw.strip():
+        contacto_nombre_raw = metadata.get("contacto_nombre")
+    if (not isinstance(contacto_nombre_raw, str) or not contacto_nombre_raw.strip()) and allow_title_fallback:
+        titulo_raw = body.get("titulo")
+        if isinstance(titulo_raw, str) and titulo_raw.strip():
+            contacto_nombre_raw = titulo_raw
+    contacto_nombre = str(contacto_nombre_raw or "").strip()
+    if contacto_nombre:
+        body["contacto_nombre"] = contacto_nombre
+        _set_metadata("contacto_nombre", contacto_nombre)
+
+    restart_sequence_raw = body.get("restart_sequence")
+    if restart_sequence_raw is None or str(restart_sequence_raw).strip() == "":
+        restart_sequence_raw = metadata.get("restart_sequence")
+    if restart_sequence_raw is not None and str(restart_sequence_raw).strip() != "":
+        restart_sequence = _coerce_positive_int(restart_sequence_raw, default=1)
+        body["restart_sequence"] = restart_sequence
+        _set_metadata("restart_sequence", restart_sequence)
+
+    if include_metadata or metadata_present or metadata_changed:
+        body["metadata"] = metadata
+    else:
+        body.pop("metadata", None)
+    return body
+
+
 def _postgrest_in_clause(values: Iterable[str]) -> str:
     quoted: list[str] = []
     for value in values:
@@ -619,6 +675,9 @@ class CRMRepository:
             ")",
             "etapa_id",
             "titulo",
+            "contacto_nombre",
+            "canal",
+            "restart_sequence",
             "descripcion",
             "monto_estimado",
             "moneda",
@@ -1360,13 +1419,11 @@ class CRMRepository:
         if cuenta_id:
             params["cuenta_id"] = f"eq.{cuenta_id}"
         if canal:
-            params["metadata->>canal"] = f"eq.{canal}"
+            params["canal"] = f"eq.{_postgrest_eq_literal(canal.strip().lower())}"
         if q:
             safe = q.replace("%", "").replace(",", " ").strip()
             if safe:
-                params["or"] = (
-                    f"(titulo.ilike.*{safe}*,metadata->>contacto_nombre.ilike.*{safe}*)"
-                )
+                params["or"] = f"(titulo.ilike.*{safe}*,contacto_nombre.ilike.*{safe}*)"
         if monto_min is not None:
             and_filters.append(f"monto_estimado.gte.{monto_min}")
         if monto_max is not None:
@@ -1380,7 +1437,7 @@ class CRMRepository:
         if creado_hasta:
             and_filters.append(f"creado_en.lte.{creado_hasta}")
         if reinicio_min is not None:
-            params["metadata->>restart_sequence"] = f"gte.{reinicio_min}"
+            params["restart_sequence"] = f"gte.{reinicio_min}"
         if and_filters:
             params["and"] = "(" + ",".join(and_filters) + ")"
         resp = await self._request("GET", "/rest/v1/oportunidades", params=params)
@@ -1518,7 +1575,11 @@ class CRMRepository:
         organizacion_id: UUID,
         payload: dict[str, Any],
     ) -> dict[str, Any]:
-        body = {"organizacion_id": str(organizacion_id), **payload}
+        body = _normalize_opportunity_payload(
+            {"organizacion_id": str(organizacion_id), **payload},
+            include_metadata=True,
+            allow_title_fallback=True,
+        )
         resp = await self._request(
             "POST",
             "/rest/v1/oportunidades",
@@ -2789,7 +2850,23 @@ class CRMRepository:
                 "perdida",
             }
 
-        async def _patch_metadata(opportunity_id: UUID, metadata: dict[str, Any]) -> UUID:
+        async def _patch_metadata(
+            opportunity_id: UUID,
+            metadata: dict[str, Any],
+            *,
+            row: dict[str, Any] | None = None,
+        ) -> UUID:
+            patch_payload: dict[str, Any] = {"metadata": metadata}
+            if row:
+                for key in ("canal", "contacto_nombre", "restart_sequence", "titulo"):
+                    value = row.get(key)
+                    if value not in (None, ""):
+                        patch_payload[key] = value
+            patch_payload = _normalize_opportunity_payload(
+                patch_payload,
+                include_metadata=True,
+                allow_title_fallback=True,
+            )
             params = {
                 "id": f"eq.{opportunity_id}",
                 "organizacion_id": f"eq.{organizacion_id}",
@@ -2799,14 +2876,14 @@ class CRMRepository:
                 "PATCH",
                 "/rest/v1/oportunidades",
                 params=params,
-                json={"metadata": metadata},
+                json=patch_payload,
                 prefer="return=representation",
             )
             return opportunity_id
 
         select_columns = (
-            "id,contacto_principal_id,metadata,asignado_a_usuario_id,etapa_id,estado,titulo,descripcion,"
-            "monto_estimado,moneda,probabilidad,"
+            "id,contacto_principal_id,metadata,canal,contacto_nombre,restart_sequence,asignado_a_usuario_id,"
+            "etapa_id,estado,titulo,descripcion,monto_estimado,moneda,probabilidad,"
             "etapa:etapas_pipeline!oportunidades_etapa_org_fkey(codigo,categoria)"
         )
 
@@ -2841,14 +2918,14 @@ class CRMRepository:
             if _is_closed_opportunity(row):
                 # Si ya existe una oportunidad cerrada para la MISMA conversación,
                 # no creamos "restart": reutilizamos esa oportunidad.
-                result_id = await _patch_metadata(opportunity_id, metadata)
+                result_id = await _patch_metadata(opportunity_id, metadata, row=row)
                 restart_sequence = _coerce_positive_int(metadata.get("restart_sequence"), default=1)
                 await self._set_conversation_restart_sequence(
                     conversation_id=conversation_key,
                     restart_sequence=restart_sequence,
                 )
                 return result_id, False, restart_sequence
-            result_id = await _patch_metadata(opportunity_id, metadata)
+            result_id = await _patch_metadata(opportunity_id, metadata, row=row)
             restart_sequence = _coerce_positive_int(metadata.get("restart_sequence"), default=1)
             await self._set_conversation_restart_sequence(
                 conversation_id=conversation_key,
@@ -2930,6 +3007,10 @@ class CRMRepository:
                         existing_contact_raw = candidate.get("contacto_principal_id")
                         if str(existing_contact_raw or "") != str(contacto_id):
                             payload["contacto_principal_id"] = str(contacto_id)
+                        for key in ("canal", "contacto_nombre", "restart_sequence", "titulo"):
+                            value = candidate.get(key)
+                            if value not in (None, ""):
+                                payload[key] = value
                         params = {
                             "id": f"eq.{opportunity_id}",
                             "organizacion_id": f"eq.{organizacion_id}",
@@ -2939,7 +3020,11 @@ class CRMRepository:
                             "PATCH",
                             "/rest/v1/oportunidades",
                             params=params,
-                            json=payload,
+                            json=_normalize_opportunity_payload(
+                                payload,
+                                include_metadata=True,
+                                allow_title_fallback=True,
+                            ),
                             prefer="return=representation",
                         )
                         restart_sequence = _coerce_positive_int(metadata.get("restart_sequence"), default=1)
@@ -3029,7 +3114,7 @@ class CRMRepository:
                 require_contact_ready=require_contact_ready,
             )
 
-            result_id = await _patch_metadata(opportunity_id, metadata)
+            result_id = await _patch_metadata(opportunity_id, metadata, row=row)
             restart_sequence = _coerce_positive_int(metadata.get("restart_sequence"), default=1)
             await self._set_conversation_restart_sequence(
                 conversation_id=conversation_key,
@@ -3148,8 +3233,16 @@ class CRMRepository:
             "etapa_id": str(stage_id),
             "titulo": titulo,
             "moneda": moneda_value or "MXN",
+            "canal": canal,
+            "contacto_nombre": contacto_nombre,
+            "restart_sequence": restart_sequence,
             "metadata": metadata,
         }
+        create_body = _normalize_opportunity_payload(
+            create_body,
+            include_metadata=True,
+            allow_title_fallback=True,
+        )
         if parent_row:
             for field in ("monto_estimado", "descripcion", "probabilidad"):
                 value = parent_row.get(field)
@@ -3754,6 +3847,11 @@ class CRMRepository:
         oportunidad_id: UUID,
         payload: dict[str, Any],
     ) -> dict[str, Any]:
+        body = _normalize_opportunity_payload(
+            payload,
+            include_metadata="metadata" in payload,
+            allow_title_fallback=False,
+        )
         params = {
             "id": f"eq.{oportunidad_id}",
             "organizacion_id": f"eq.{organizacion_id}",
@@ -3763,7 +3861,7 @@ class CRMRepository:
             "PATCH",
             "/rest/v1/oportunidades",
             params=params,
-            json=payload,
+            json=body,
             prefer="return=representation",
         )
         data = resp.json()
@@ -5634,13 +5732,7 @@ class CRMRepository:
         if estado:
             params["estado"] = f"eq.{_postgrest_eq_literal(estado)}"
         if canal:
-            literal = _postgrest_eq_literal(canal)
-            and_filters.append(
-                "or("
-                f"metadata->>canal.eq.{literal},"
-                f"metadata->>channel.eq.{literal}"
-                ")"
-            )
+            params["canal"] = f"eq.{_postgrest_eq_literal(canal.strip().lower())}"
         sanitized_query = _sanitize_search_pattern(q)
         if sanitized_query:
             pattern = _postgrest_ilike_literal(sanitized_query)
@@ -5648,10 +5740,7 @@ class CRMRepository:
                 "or("
                 f"titulo.ilike.{pattern},"
                 f"descripcion.ilike.{pattern},"
-                f"metadata->>contacto_nombre.ilike.{pattern},"
-                f"metadata->>contacto_correo.ilike.{pattern},"
-                f"metadata->>contacto_telefono.ilike.{pattern},"
-                f"metadata->>contacto_empresa.ilike.{pattern}"
+                f"contacto_nombre.ilike.{pattern}"
                 ")"
             )
         if and_filters:
