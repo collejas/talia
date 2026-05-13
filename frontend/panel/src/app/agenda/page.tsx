@@ -49,7 +49,7 @@ export default async function Page() {
                 <MetricsOverview metrics={formattedMetrics} />
               </div>
               <div className="px-4 lg:px-6">
-                <AgendaView items={agendaData.items} />
+                <AgendaView items={agendaData.items} referenceDateIso={new Date().toISOString()} />
               </div>
             </div>
           </div>

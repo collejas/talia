@@ -1,6 +1,7 @@
 'use client'
 
 import * as React from "react"
+import dynamic from "next/dynamic"
 import { useRouter } from "next/navigation"
 
 import type {
@@ -11,7 +12,7 @@ import type {
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import { usePermissions } from "@/hooks/use-permissions"
-import { AgendaCalendar } from "@/components/agenda/agenda-calendar"
+import { AgendaDayTimeline } from "@/components/agenda/agenda-calendar"
 import { AgendaTable } from "@/components/agenda/agenda-table"
 import { AgendaEventDrawer } from "@/components/agenda/agenda-event-drawer"
 import { AgendaAvailabilityQuickModal } from "@/components/agenda/agenda-availability-quick-modal"
@@ -27,11 +28,20 @@ import {
 import { Textarea } from "@/components/ui/textarea"
 import { toast } from "sonner"
 
+const AgendaCalendar = dynamic(
+  () => import("@/components/agenda/agenda-calendar").then((mod) => mod.AgendaCalendar),
+  {
+    ssr: false,
+    loading: () => <AgendaCalendarSkeleton />,
+  },
+)
+
 type AgendaViewProps = {
   items: AgendaItem[]
+  referenceDateIso?: string
 }
 
-export function AgendaView({ items }: AgendaViewProps) {
+export function AgendaView({ items, referenceDateIso }: AgendaViewProps) {
   const router = useRouter()
   const { context: permissionContext } = usePermissions()
   const canManageAvailability =
@@ -40,6 +50,9 @@ export function AgendaView({ items }: AgendaViewProps) {
     permissionContext.permisos.includes("agenda.manage")
   const [mode, setMode] = React.useState<"calendar" | "table">("calendar")
   const [selectedItem, setSelectedItem] = React.useState<AgendaItem | null>(null)
+  const [selectedDay, setSelectedDay] = React.useState<{ day: Date; events: AgendaItem[] } | null>(
+    null,
+  )
   const [rescheduleTarget, setRescheduleTarget] = React.useState<AgendaItem | null>(null)
   const [cancelTarget, setCancelTarget] = React.useState<AgendaItem | null>(null)
   const [createOpen, setCreateOpen] = React.useState(false)
@@ -91,7 +104,7 @@ export function AgendaView({ items }: AgendaViewProps) {
         <div>
           <p className="text-sm font-medium">Visualización</p>
           <p className="text-muted-foreground text-xs">
-            Cambia entre el calendario semanal y la lista detallada.
+            Cambia entre el calendario mensual y la lista detallada.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -112,11 +125,41 @@ export function AgendaView({ items }: AgendaViewProps) {
       {mode === "calendar" ? (
         <AgendaCalendar
           items={agendaItems}
-          onSelectItem={(item) => setSelectedItem(item)}
+          onSelectDay={(day, events) => setSelectedDay({ day, events })}
+          referenceDateIso={referenceDateIso}
         />
       ) : (
         <AgendaTable items={agendaItems} />
       )}
+      <Sheet
+        open={Boolean(selectedDay)}
+        onOpenChange={(open) => {
+          if (!open) setSelectedDay(null)
+        }}
+      >
+        <SheetContent side="right" className="sm:max-w-2xl overflow-hidden">
+          <div className="flex h-full min-h-0 flex-col">
+            <SheetHeader className="shrink-0">
+              <SheetTitle>Detalle del día</SheetTitle>
+              <SheetDescription>
+                {selectedDay ? formatLongDayLabelUTC(selectedDay.day) : ""}
+              </SheetDescription>
+            </SheetHeader>
+            <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-4">
+              {selectedDay ? (
+                <AgendaDayTimeline
+                  day={selectedDay.day}
+                  events={selectedDay.events}
+                  onSelectItem={(item) => {
+                    setSelectedItem(item)
+                    setSelectedDay(null)
+                  }}
+                />
+              ) : null}
+            </div>
+          </div>
+        </SheetContent>
+      </Sheet>
       <AgendaEventDrawer
         open={Boolean(selectedItem)}
         onOpenChange={(open) => {
@@ -177,6 +220,43 @@ function mapBookingStatus(status: string | null | undefined): string {
 }
 
 type AvailabilitySlot = AgendaAvailabilityResponse["availability"]["slots"][number]
+
+function formatLongDayLabelUTC(date: Date): string {
+  return new Intl.DateTimeFormat("es-MX", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+    timeZone: "UTC",
+  })
+    .format(date)
+    .replace(".", "")
+}
+
+function AgendaCalendarSkeleton() {
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between gap-3">
+        <div className="h-8 w-40 rounded-md bg-muted/50" />
+        <div className="h-8 w-28 rounded-md bg-muted/50" />
+      </div>
+      <div className="overflow-hidden rounded-2xl border border-border/60 bg-card shadow-sm">
+        <div className="grid grid-cols-7 border-b border-border/60 bg-muted/30">
+          {Array.from({ length: 7 }).map((_, index) => (
+            <div key={index} className="h-9 border-r border-border/60" />
+          ))}
+        </div>
+        <div className="grid grid-cols-7">
+          {Array.from({ length: 42 }).map((_, index) => (
+            <div key={index} className="min-h-[110px] border-t border-r border-border/60 p-2">
+              <div className="h-7 w-7 rounded-full bg-muted/50" />
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
 
 function AgendaRescheduleSheet({
   target,
