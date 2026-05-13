@@ -12498,6 +12498,7 @@ async def list_opportunities(
             creado_desde=creado_desde_utc,
             creado_hasta=creado_hasta_utc,
             reinicio_min=reinicio_min,
+            include_contact_rows=False,
         )
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc

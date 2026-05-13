@@ -1,5 +1,6 @@
 import uuid
 from typing import Any, AsyncIterator
+from unittest.mock import AsyncMock
 
 import pytest
 from fastapi import FastAPI
@@ -1233,6 +1234,33 @@ async def test_get_account_not_found(client: AsyncClient) -> None:
         headers=headers,
     )
     assert resp.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_list_opportunities_uses_lightweight_repo_call(
+    client: AsyncClient, fake_repo: DummyCRMRepository, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(
+        crm_routes,
+        "_resolve_effective_timezone_name",
+        AsyncMock(return_value=("UTC", "UTC")),
+    )
+    captured: dict[str, Any] = {}
+
+    async def fake_list_opportunities(**kwargs: Any) -> list[dict[str, Any]]:
+        captured.update(kwargs)
+        return []
+
+    fake_repo.list_opportunities = AsyncMock(side_effect=fake_list_opportunities)
+
+    resp = await client.get(
+        "/crm/oportunidades",
+        headers=_headers(include_user_token=True),
+        params={"limit": "20", "offset": "0"},
+    )
+
+    assert resp.status_code == 200
+    assert captured["include_contact_rows"] is False
 
 
 @pytest.mark.asyncio

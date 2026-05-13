@@ -73,6 +73,35 @@ async def test_list_opportunities_builds_combined_and_filters() -> None:
 
 
 @pytest.mark.asyncio
+async def test_list_opportunities_can_skip_contact_enrichment() -> None:
+    settings.supabase_url = "https://example.supabase.co"
+    settings.supabase_service_role = "service"
+    settings.supabase_anon = "anon"
+    repo = CRMRepository()
+    captured: dict[str, object] = {}
+
+    async def fake_request(method: str, path: str, **kwargs):
+        captured["method"] = method
+        captured["path"] = path
+        captured["params"] = kwargs.get("params")
+        return DummyResponse([])
+
+    repo._request = AsyncMock(side_effect=fake_request)
+    repo._attach_contact_rows = AsyncMock()
+
+    rows = await repo.list_opportunities(
+        organizacion_id=uuid.UUID("00000000-0000-0000-0000-000000000001"),
+        limit=10,
+        include_contact_rows=False,
+    )
+
+    assert rows == []
+    assert captured["method"] == "GET"
+    assert captured["path"] == "/rest/v1/oportunidades"
+    repo._attach_contact_rows.assert_not_awaited()
+
+
+@pytest.mark.asyncio
 async def test_list_pipeline_opportunities_uses_materialized_columns() -> None:
     settings.supabase_url = "https://example.supabase.co"
     settings.supabase_service_role = "service"
