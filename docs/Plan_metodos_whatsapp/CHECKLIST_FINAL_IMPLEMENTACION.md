@@ -65,6 +65,7 @@ Guardar trazabilidad de WhatsApp sin amarrarla a Twilio.
 - [ ] Verificar que `provider`, `provider_message_id`, `provider_status` y `provider_error` se persistan.
 - [ ] Revisar cualquier uso de `twilio_message_sid`.
 - [ ] Mantener compatibilidad historica.
+- [ ] Verificar que los adjuntos WhatsApp se guarden en `whatsapp` y que el inbox los sirva desde el proxy interno.
 
 ### Criterio de aceptacion
 
@@ -142,6 +143,10 @@ Dejar claro como operar el nuevo esquema sin depender de memoria.
 - [ ] Confirmar que el plan de ejecucion ya esta documentado.
 - [ ] Añadir notas operativas para alta de tenant Meta.
 - [ ] Añadir notas operativas para corte gradual desde Twilio.
+- [ ] Añadir nota operativa del flujo de adjuntos WhatsApp:
+  - bucket `whatsapp`
+  - ruta del inbox `/api/crm/inbox/attachments/{id}`
+  - firma temporal desde backend
 
 ### Criterio de aceptacion
 
@@ -164,4 +169,4 @@ Dejar claro como operar el nuevo esquema sin depender de memoria.
 - [ ] Twilio sigue funcionando como legado.
 - [ ] La UI permite administrar ambos metodos.
 - [ ] Los tenants piloto y legado conviven sin romperse.
-
+- [ ] Los adjuntos WhatsApp se abren en el inbox sin links crudos de Storage.

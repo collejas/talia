@@ -67,11 +67,13 @@ Garantizar que ambos providers se comporten igual a nivel de experiencia de usua
 - revisar deduplicacion
 - revisar entrega y estados
 - revisar adjuntos y metadata
+- asegurar que los adjuntos WhatsApp se guarden en `whatsapp` y se sirvan via el proxy interno del inbox
 - revisar notificaciones y flujo de asistente
 
 ### Criterio de salida
 
 - el inbox muestra conversaciones de ambos providers
+- el inbox abre PDFs, imagenes y videos de WhatsApp sin depender de la URL cruda de Storage
 - el CRM no pierde historial ni relaciones de contacto
 
 ## Fase 4. Frontend de tenants

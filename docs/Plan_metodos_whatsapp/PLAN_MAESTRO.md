@@ -167,6 +167,11 @@ Agregar soporte Meta en paralelo para un tenant nuevo de prueba.
 ### Fase 3
 
 Validar envio, recepcion, estados, adjuntos y registros de conversacion.
+Los adjuntos de WhatsApp deben:
+
+- guardarse en el bucket privado `whatsapp`;
+- resolverse en el inbox por `/api/crm/inbox/attachments/{id}`;
+- abrirse en el panel sin exponer la URL cruda de Storage ni depender de `webchat`.
 
 ### Fase 4
 
@@ -183,7 +188,8 @@ Suspender Twilio por configuracion para tenants migrados, manteniendo el codigo 
 3. El panel de tenants permite elegir provider y guardar credenciales.
 4. El backend enruta correctamente segun el provider.
 5. El inbox, CRM y automatizaciones siguen funcionando con ambos metodos.
-6. Twilio se puede desactivar por tenant sin eliminar integraciones historicas.
+6. Los adjuntos de WhatsApp se ven en el inbox y abren desde el proxy interno.
+7. Twilio se puede desactivar por tenant sin eliminar integraciones historicas.
 
 ## Riesgos principales
 
