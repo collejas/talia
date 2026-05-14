@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import Image from "next/image";
 import {
   IconCircleFilled,
   IconRobot,
@@ -69,6 +70,10 @@ function getSourceBadge(
     return { label: "Correo general", variant: "outline" };
   }
   return null;
+}
+
+function isImageAttachment(attachment: InboxAttachment): boolean {
+  return typeof attachment.mime === "string" && attachment.mime.toLowerCase().startsWith("image/");
 }
 
 function getSourceDetailText(
@@ -1982,20 +1987,43 @@ export function InboxSplitView({
                       {message.attachments.length ? (
                         <div className="mt-2 flex w-full max-w-xl flex-col gap-1 text-xs">
                           {message.attachments.map((attachment) => (
-                            <a
+                            <div
                               key={attachment.id ?? attachment.url}
-                              href={attachment.url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="inline-flex items-center gap-2 rounded-md border border-muted bg-background/80 px-3 py-2 text-muted-foreground hover:text-foreground"
+                              className="overflow-hidden rounded-lg border border-muted bg-background/80"
                             >
-                              <span className="truncate">{attachment.name ?? attachment.url}</span>
-                              {attachment.size ? (
-                                <span className="text-[11px] text-muted-foreground">
-                                  {(attachment.size / 1024).toFixed(1)} KB
-                                </span>
+                              {isImageAttachment(attachment) ? (
+                                <a
+                                  href={attachment.url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="block"
+                                >
+                                  <div className="relative h-72 w-full bg-black/5">
+                                    <Image
+                                      src={attachment.url}
+                                      alt={attachment.name ?? "Imagen adjunta"}
+                                      fill
+                                      unoptimized
+                                      className="object-contain"
+                                      sizes="(max-width: 768px) 100vw, 480px"
+                                    />
+                                  </div>
+                                </a>
                               ) : null}
-                            </a>
+                              <a
+                                href={attachment.url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="flex items-center gap-2 px-3 py-2 text-muted-foreground hover:text-foreground"
+                              >
+                                <span className="truncate">{attachment.name ?? attachment.url}</span>
+                                {attachment.size ? (
+                                  <span className="text-[11px] text-muted-foreground">
+                                    {(attachment.size / 1024).toFixed(1)} KB
+                                  </span>
+                                ) : null}
+                              </a>
+                            </div>
                           ))}
                         </div>
                       ) : null}
