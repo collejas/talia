@@ -45,9 +45,9 @@
    - [x] Registrar en `docs/Plan_3D/frontend_leaflet_osmb.md` y/o en otro documento qué datos de `crm_propiedades_geojson` se usan para cada color/status y cómo se garantiza la consistencia con `propiedad_unidades`/`propiedad_capas`, incluyendo qué filtro se aplica en cada nivel.
 
 8. [ ] **Validación y pruebas**
-   - [ ] Población de muestra (30 polígonos) con datos exagerados (polígonos grandes) para comprobar colores y visibilidad.
-   - [ ] Probar queries espaciales (`ST_Intersects`, `ST_Buffer`, `ST_Simplify`) y filtros por `status`/`tipo`.
-   - [ ] Verificar que `settings/productos` pueda seguir funcionando con productos tradicionales mientras el módulo inmobiliario opera por separado.
+   - [x] Población de muestra (30 polígonos) con datos exagerados (polígonos grandes) para comprobar colores y visibilidad. La muestra reciente de `propiedad_poligonos` quedó válida en `desarrollo`, `capa` y `unidad`.
+   - [x] Probar queries espaciales (`ST_Intersects`, `ST_Buffer`, `ST_Simplify`) y filtros por `status`/`tipo`. La validación reciente respondió sin geometrías inválidas en la muestra revisada.
+   - [x] Verificar que `settings/productos` pueda seguir funcionando con productos tradicionales mientras el módulo inmobiliario opera por separado. `catalog_items` sigue activo con inventario tradicional y sin depender del árbol inmobiliario.
    - [ ] Automatizar pruebas manuales sobre `frontend/panel` para asegurarse de que los filtros (tipo, nivel, rango de precio) actualizan tanto el marcado en Leaflet como los datos de Mapbox y que el botón “volver al mapa nacional” elimina la instancia Mapbox sin corrupción de estados.
    - [x] Confirmar manualmente que el flujo país → estado → municipio sólo pinta regiones con desarrollos y que al pinchar el municipio se centran los desarrollos antes de mostrar los marcadores (pasos: abrir `/crm/propiedades`, seleccionar país → estado → municipio y pulsar “ver en Mapbox”).
 
@@ -60,6 +60,8 @@
 - Conectamos la transición “Ver en Mapbox” con los mismos datos (`frontend/panel/src/components/mapa-de-propiedades/property-map.jsx`) para montar/desmontar Mapbox GL, pintar el `fill-extrusion`, centrar el municipio, y mostrar el panel lateral 3D con la información de precio/niveles/estatus/ubicación sin recargar Leaflet.
 - Mejoramos el componente `property-map.jsx` para que los municipios pierdan el relleno al explorar sus marcadores, el mapa jerárquico ajuste el `maxZoom` por nivel, y la vista Mapbox se redimensione al activarse mientras mantiene destacados los registros seleccionados.
 - Ajustamos la inicialización de Mapbox para que arranque centrado en la unidad/development seleccionado, registramos el centro/bounds en `logs/mapbox-debug.log` y mantenemos disponible el helper `waitForMapboxPayload` para depuración de envíos del RPC.
+- (2026-05-14) Validamos la capa espacial del cierre: una muestra reciente de 30 polígonos en `propiedad_poligonos` quedó válida en `desarrollo`, `capa` y `unidad`; las consultas con `ST_Intersects`, `ST_Buffer` y `ST_Simplify` respondieron correctamente; y `catalog_items` siguió activo con `243/243` registros vigentes.
+- (2026-05-14) Ejecutamos `react-doctor` sobre `frontend/panel`; el escaneo terminó con score `98/100` y sin bloqueos funcionales, aunque el lint interno quedó limitado por OOM en `oxlint` y mostró deuda acumulada de exports/types/files no usados fuera de este cambio.
 - (2026-01-22) Ajustamos la cámara de Mapbox para transiciones smooth (sin saltar a pitch 0) usando `cameraForBounds` + `easeTo` (o fallback a `fitBounds` con `bearing/pitch`).
 - (2026-01-22) Implementamos “aislar unidad” en Mapbox: click en unidad oculta las demás unidades del set visible con `feature-state.hidden`, sin reescribir el source.
 - (2026-01-22) Compatibilidad: evitamos expresiones en `fill-extrusion-opacity` (no soportadas) y ocultamos por color transparente + `height/base` en 0 para features ocultas.
