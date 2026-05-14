@@ -48,7 +48,7 @@
    - [x] Población de muestra (30 polígonos) con datos exagerados (polígonos grandes) para comprobar colores y visibilidad. La muestra reciente de `propiedad_poligonos` quedó válida en `desarrollo`, `capa` y `unidad`.
    - [x] Probar queries espaciales (`ST_Intersects`, `ST_Buffer`, `ST_Simplify`) y filtros por `status`/`tipo`. La validación reciente respondió sin geometrías inválidas en la muestra revisada.
    - [x] Verificar que `settings/productos` pueda seguir funcionando con productos tradicionales mientras el módulo inmobiliario opera por separado. `catalog_items` sigue activo con inventario tradicional y sin depender del árbol inmobiliario.
-   - [ ] Automatizar pruebas manuales sobre `frontend/panel` para asegurarse de que los filtros (tipo, nivel, rango de precio) actualizan tanto el marcado en Leaflet como los datos de Mapbox y que el botón “volver al mapa nacional” elimina la instancia Mapbox sin corrupción de estados.
+   - [x] Automatizar pruebas manuales sobre `frontend/panel` para asegurarse de que los filtros (tipo, nivel, rango de precio) actualizan tanto el marcado en Leaflet como los datos de Mapbox y que el botón “volver al mapa nacional” elimina la instancia Mapbox sin corrupción de estados. Se agregó `frontend/panel/src/components/mapa-de-propiedades/property-map.logic.test.mjs` con `node --test` para cubrir filtros, inferencia de feature y transiciones abrir/subir/cerrar Mapbox.
    - [x] Confirmar manualmente que el flujo país → estado → municipio sólo pinta regiones con desarrollos y que al pinchar el municipio se centran los desarrollos antes de mostrar los marcadores (pasos: abrir `/crm/propiedades`, seleccionar país → estado → municipio y pulsar “ver en Mapbox”).
 
 # Registro de avances

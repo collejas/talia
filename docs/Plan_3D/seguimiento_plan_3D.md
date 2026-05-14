@@ -22,6 +22,7 @@
 - [x] (2026-01-22) Transiciones smooth sin “brinco” a vista 2D: la cámara usa `cameraForBounds + easeTo` (fallback a `fitBounds` con `bearing/pitch`) para mantener `pitch/bearing` estables al pasar desarrollo→capa→unidad.
 - [x] (2026-05-14) Validación geométrica: se reparó el polígono inválido de `Fraccionamiento San Fermin` con `ST_MakeValid` y `propiedad_poligonos` quedó válido en `desarrollo`, `capa` y `unidad`.
 - [x] (2026-05-14) Validación de cierre Plan 3D: una muestra reciente de 30 polígonos quedó válida en las consultas espaciales básicas (`ST_Intersects`, `ST_Buffer`, `ST_Simplify`), `catalog_items` se mantuvo activo con `243/243` registros y `react-doctor` sobre `frontend/panel` terminó en `98/100` sin bloqueo funcional.
+- [x] (2026-05-14) Automatización de pruebas del panel: se añadió `frontend/panel/src/components/mapa-de-propiedades/property-map.logic.test.mjs` con `node --test` para cubrir el filtrado por nivel/tipo/municipio y las transiciones abrir, subir y cerrar Mapbox sin depender de ejecución manual.
 
 ## Próximos pasos sugeridos
 - [ ] Continuar refinando la UI del árbol para que los polígonos se manejen como contenedores colapsables (con iconos de expansión y etiquetas “Polígono guardado” ocultas) y los botones de polígono estén anidados dentro del nodo correspondiente, garantizando una experiencia coherente con la jerarquía y el estado actual de los nodos.

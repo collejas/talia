@@ -6,6 +6,15 @@ import "mapbox-gl/dist/mapbox-gl.css";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import {
+  buildMunicipioGeoKey,
+  createMapboxClosedState,
+  createMapboxOpenedState,
+  getFeatureId,
+  inferFeatureKind,
+  inferFeatureLayer,
+  matchesPropertyFeatureFilters,
+} from "./property-map.logic.mjs";
 
 function formatDescriptionLabel(value) {
   if (!value) return null;
@@ -25,57 +34,6 @@ const DEFAULT_CENTER_MAPBOX = [-99.1332, 19.4326];
 const DEFAULT_CENTER_LEAFLET = [23.6345, -102.5528];
 const TILE_SOURCE = "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png";
 
-function getFeatureId(feature) {
-  if (!feature || typeof feature !== "object") return null;
-  const props = feature.properties ?? {};
-  const candidates = [
-    props.__feature_id,
-    props.__original_id,
-    feature.id,
-    props.id,
-    props.target_id,
-    props.poligono_id,
-    props.desarrollo_id,
-    props.nivel_id,
-  ];
-  const picked = candidates.find((v) => v !== undefined && v !== null && String(v).length);
-  return picked ? String(picked) : null;
-}
-
-const inferFeatureKind = (feature) => {
-  const props = feature?.properties ?? {};
-  const rawTipo = (props.target_type ?? props.tipo ?? "").toString().toLowerCase();
-  // Normaliza tipos conocidos y evita que labels de negocio (p.ej. "lote") rompan el drill-down.
-  const normalized = rawTipo.trim();
-  if (["desarrollo", "mix", "capa", "unidad"].includes(normalized)) {
-    return normalized;
-  }
-
-  // Tipos que en la UI deben comportarse como unidad.
-  const unitAliases = new Set([
-    "departamento",
-    "lote",
-    "casa",
-    "terreno",
-    "local",
-    "oficina",
-    "bodega",
-    "unit",
-    "department",
-  ]);
-  if (unitAliases.has(normalized)) {
-    return "unidad";
-  }
-
-  // Inferencia por estructura de datos (más confiable que `tipo`).
-  if (props.unidad != null || props.tipo_id != null || props.precio != null || props.area_m2 != null) {
-    return "unidad";
-  }
-  if (props.nivel != null || props.capa_nombre != null || props.altura != null) return "capa";
-  if (props.desarrollo_tipo || props.desarrollo_status) return "desarrollo";
-  return "unknown";
-};
-
 function getDevelopmentPolygonColor(properties) {
   if (!properties || typeof properties !== "object") {
     return "#2563EB";
@@ -92,28 +50,6 @@ function getDevelopmentPolygonStyle(feature) {
     fillColor: color,
     fillOpacity: 0.25,
   };
-}
-
-function inferFeatureLayer(feature) {
-  if (!feature || typeof feature !== "object") {
-    return "unknown";
-  }
-  const props = feature.properties ?? {};
-  const directLayer = (feature.layer ?? props.layer ?? "").toString().trim().toLowerCase();
-  if (directLayer) {
-    return directLayer;
-  }
-  if (props.target_type === "desarrollo") return "desarrollo";
-  if (props.unidad || props.tipo_id || props.area_m2) {
-    return "unidad";
-  }
-  if (props.capa_nombre || props.nivel != null) {
-    return "capa";
-  }
-  if (props.desarrollo_tipo || props.desarrollo_status || props.descripcion) {
-    return "desarrollo";
-  }
-  return "unknown";
 }
 
 function resolveRegionKey(feature) {
@@ -320,29 +256,6 @@ function buildHierarchy(features) {
         .sort((a, b) => a.label.localeCompare(b.label)),
     }))
     .sort((a, b) => (a.name ?? "").localeCompare(b.name ?? ""));
-}
-
-function padNumeric(value, length) {
-  if (value == null) {
-    return "".padStart(length, "0");
-  }
-  const cleaned = `${value}`.replace(/\D/g, "");
-  return cleaned.padStart(length, "0");
-}
-
-function buildMunicipioGeoKey(properties) {
-  const statePart = padNumeric(
-    properties?.estado_cve ?? properties?.cve_ent ?? properties?.cve_entidad ?? "",
-    2,
-  );
-  const municipioPart = padNumeric(
-    properties?.municipio_cve ?? properties?.cve_mun ?? "",
-    3,
-  );
-  if (!statePart.trim() || !municipioPart.trim()) {
-    return "";
-  }
-  return `${statePart}${municipioPart}`;
 }
 
 function getCountryKeyFromProps(props) {
@@ -1131,38 +1044,16 @@ export function PropertyMap() {
   }, [features]);
 
   const filteredFeatures = useMemo(() => {
-    return features.filter((feature) => {
-      if (nivelFilter) {
-        const levelValue = feature?.properties?.nivel;
-        if (String(levelValue) !== nivelFilter) {
-          return false;
-        }
-      }
-      if (tipoFilter && feature?.properties?.tipo_id) {
-        if (feature.properties.tipo_id !== tipoFilter) {
-          return false;
-        }
-      }
-      if (mapLevel === "municipio") {
-        const featureProps = feature?.properties ?? {};
-        if (selectedMunicipioGeoKey) {
-          const featureGeoKey = buildMunicipioGeoKey(featureProps);
-          if (!featureGeoKey || featureGeoKey !== selectedMunicipioGeoKey) {
-            return false;
-          }
-        } else if (selectedStateKey) {
-          const featureStateKey = padNumeric(
-            featureProps.estado_cve ?? featureProps.cve_ent ?? featureProps.cve_entidad ?? "",
-            2,
-          );
-          const selectedStateNormalized = padNumeric(selectedStateKey, 2);
-          if (!featureStateKey || featureStateKey !== selectedStateNormalized) {
-            return false;
-          }
-        }
-      }
-      return true;
-    });
+    return features.filter((feature) =>
+      matchesPropertyFeatureFilters(feature, {
+        nivelFilter,
+        tipoFilter,
+        mapLevel,
+        selectedMunicipioGeoKey,
+        selectedStateKey,
+        buildFeatureMunicipioGeoKey: buildMunicipioGeoKey,
+      }),
+    );
   }, [features, nivelFilter, tipoFilter, mapLevel, selectedMunicipioGeoKey, selectedStateKey]);
 
   useEffect(() => {
@@ -1970,14 +1861,15 @@ export function PropertyMap() {
   const openMapboxFeature = useCallback(
     (feature) => {
       if (!feature) return;
-      setSelectedId(String(feature.id ?? ""));
-      setActiveMarkerFeature(feature);
+      const next = createMapboxOpenedState(feature);
+      setSelectedId(next.selectedId);
+      setActiveMarkerFeature(next.activeMarkerFeature);
       pendingMapboxFeatureRef.current = feature;
-      setMapboxFeature(feature);
-      setMapboxActive(true);
-      setMapboxLoading(true);
-      setActiveNode(feature);
-      setParentStack([]);
+      setMapboxFeature(next.mapboxFeature);
+      setMapboxActive(next.mapboxActive);
+      setMapboxLoading(next.mapboxLoading);
+      setActiveNode(next.activeNode);
+      setParentStack(next.parentStack);
       logMapboxEvent(
         {
           feature,
@@ -2033,20 +1925,21 @@ export function PropertyMap() {
   );
 
   const closeMapbox = useCallback(() => {
-    setMapboxActive(false);
-    setMapboxLoading(false);
-    setMapboxFeature(null);
-    setActiveNode(null);
-    setParentStack([]);
-    setLeafletActiveNode(null);
-    setLeafletParentStack([]);
-    setHoveredRegionKey(null);
-    setActiveMarkerFeature(null);
-    setSelectedCountryKey(null);
-    setSelectedStateKey(null);
-    setSelectedMunicipioKey(null);
-    setSelectedMunicipioGeoKey(null);
-    setMapLevel("pais");
+    const next = createMapboxClosedState();
+    setMapboxActive(next.mapboxActive);
+    setMapboxLoading(next.mapboxLoading);
+    setMapboxFeature(next.mapboxFeature);
+    setActiveNode(next.activeNode);
+    setParentStack(next.parentStack);
+    setLeafletActiveNode(next.leafletActiveNode);
+    setLeafletParentStack(next.leafletParentStack);
+    setHoveredRegionKey(next.hoveredRegionKey);
+    setActiveMarkerFeature(next.activeMarkerFeature);
+    setSelectedCountryKey(next.selectedCountryKey);
+    setSelectedStateKey(next.selectedStateKey);
+    setSelectedMunicipioKey(next.selectedMunicipioKey);
+    setSelectedMunicipioGeoKey(next.selectedMunicipioGeoKey);
+    setMapLevel(next.mapLevel);
     // Reinicia Leaflet por completo para evitar estados visuales corruptos tras cerrar Mapbox.
     if (mapInstanceRef.current) {
       try {

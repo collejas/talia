@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build --webpack",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test:property-map": "node --test src/components/mapa-de-propiedades/property-map.logic.test.mjs"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
