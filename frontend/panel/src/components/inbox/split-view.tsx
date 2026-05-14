@@ -4,6 +4,11 @@ import * as React from "react";
 import Image from "next/image";
 import {
   IconCircleFilled,
+  IconFile,
+  IconFileDescription,
+  IconFileMusic,
+  IconFileTypePdf,
+  IconMovie,
   IconRobot,
   IconRobotOff,
   IconTargetArrow,
@@ -73,7 +78,61 @@ function getSourceBadge(
 }
 
 function isImageAttachment(attachment: InboxAttachment): boolean {
-  return typeof attachment.mime === "string" && attachment.mime.toLowerCase().startsWith("image/");
+  const mime = attachment.mime?.toLowerCase() ?? "";
+  if (mime.startsWith("image/")) return true;
+  const source = `${attachment.url} ${attachment.path ?? ""} ${attachment.name ?? ""}`.toLowerCase();
+  return /\.(png|jpe?g|gif|webp|bmp|svg)$/i.test(source);
+}
+
+function isVideoAttachment(attachment: InboxAttachment): boolean {
+  const mime = attachment.mime?.toLowerCase() ?? "";
+  if (mime.startsWith("video/")) return true;
+  const source = `${attachment.url} ${attachment.path ?? ""} ${attachment.name ?? ""}`.toLowerCase();
+  return /\.(mp4|mov|webm|m4v|3gp)$/i.test(source);
+}
+
+function isAudioAttachment(attachment: InboxAttachment): boolean {
+  const mime = attachment.mime?.toLowerCase() ?? "";
+  if (mime.startsWith("audio/")) return true;
+  const source = `${attachment.url} ${attachment.path ?? ""} ${attachment.name ?? ""}`.toLowerCase();
+  return /\.(mp3|wav|m4a|aac|ogg|oga|opus)$/i.test(source);
+}
+
+function isDocumentAttachment(attachment: InboxAttachment): boolean {
+  const mime = attachment.mime?.toLowerCase() ?? "";
+  if (
+    mime === "application/pdf" ||
+    mime.includes("officedocument") ||
+    mime.includes("msword") ||
+    mime.startsWith("text/")
+  ) {
+    return true;
+  }
+  const source = `${attachment.url} ${attachment.path ?? ""} ${attachment.name ?? ""}`.toLowerCase();
+  return /\.(pdf|docx?|xlsx?|pptx?|txt|csv)$/i.test(source);
+}
+
+function getAttachmentKind(attachment: InboxAttachment): "image" | "video" | "audio" | "document" | "file" {
+  if (isImageAttachment(attachment)) return "image";
+  if (isVideoAttachment(attachment)) return "video";
+  if (isAudioAttachment(attachment)) return "audio";
+  if (isDocumentAttachment(attachment)) return "document";
+  return "file";
+}
+
+function getAttachmentIcon(attachment: InboxAttachment): React.ReactNode {
+  const kind = getAttachmentKind(attachment);
+  const className = "h-4 w-4";
+  if (kind === "document") {
+    const mime = attachment.mime?.toLowerCase() ?? "";
+    if (mime === "application/pdf" || /\.(pdf)$/i.test(`${attachment.url} ${attachment.path ?? ""} ${attachment.name ?? ""}`)) {
+      return <IconFileTypePdf className={className} />;
+    }
+    return <IconFileDescription className={className} />;
+  }
+  if (kind === "audio") return <IconFileMusic className={className} />;
+  if (kind === "video") return <IconMovie className={className} />;
+  return <IconFile className={className} />;
 }
 
 function getSourceDetailText(
@@ -1985,11 +2044,11 @@ export function InboxSplitView({
                         ))}
                       </div>
                       {message.attachments.length ? (
-                        <div className="mt-2 flex w-full max-w-xl flex-col gap-1 text-xs">
+                        <div className="mt-2 flex w-full max-w-xl flex-col gap-2 text-xs">
                           {message.attachments.map((attachment) => (
                             <div
                               key={attachment.id ?? attachment.url}
-                              className="overflow-hidden rounded-lg border border-muted bg-background/80"
+                              className="overflow-hidden rounded-2xl border border-muted bg-background/90 shadow-sm ring-1 ring-black/5"
                             >
                               {isImageAttachment(attachment) ? (
                                 <a
@@ -2009,19 +2068,62 @@ export function InboxSplitView({
                                     />
                                   </div>
                                 </a>
-                              ) : null}
+                              ) : isVideoAttachment(attachment) ? (
+                                <div className="bg-black/5 p-2">
+                                  <video
+                                    controls
+                                    preload="metadata"
+                                    className="max-h-72 w-full rounded-xl bg-black"
+                                    src={attachment.url}
+                                  />
+                                </div>
+                              ) : isAudioAttachment(attachment) ? (
+                                <div className="px-3 py-3">
+                                  <div className="mb-2 flex items-center gap-2 text-sm font-medium text-foreground">
+                                    {getAttachmentIcon(attachment)}
+                                    <span className="truncate">{attachment.name ?? "Audio adjunto"}</span>
+                                  </div>
+                                  <audio controls preload="metadata" className="w-full" src={attachment.url} />
+                                </div>
+                              ) : (
+                                <div className="flex items-start gap-3 px-3 py-3">
+                                  <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-muted text-muted-foreground">
+                                    {getAttachmentIcon(attachment)}
+                                  </div>
+                                  <div className="min-w-0 flex-1">
+                                    <div className="font-medium text-foreground">
+                                      {attachment.name ?? "Archivo adjunto"}
+                                    </div>
+                                    <div className="mt-0.5 text-[11px] text-muted-foreground">
+                                      {attachment.mime ?? "application/octet-stream"}
+                                      {attachment.size ? ` • ${(attachment.size / 1024).toFixed(1)} KB` : ""}
+                                    </div>
+                                  </div>
+                                </div>
+                              )}
                               <a
                                 href={attachment.url}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="flex items-center gap-2 px-3 py-2 text-muted-foreground hover:text-foreground"
+                                className="flex items-center justify-between gap-3 border-t border-muted bg-background/70 px-3 py-2 text-muted-foreground hover:text-foreground"
                               >
-                                <span className="truncate">{attachment.name ?? attachment.url}</span>
-                                {attachment.size ? (
-                                  <span className="text-[11px] text-muted-foreground">
-                                    {(attachment.size / 1024).toFixed(1)} KB
+                                <span className="flex min-w-0 items-center gap-2">
+                                  {isImageAttachment(attachment) ? <IconFile className="h-3.5 w-3.5" /> : null}
+                                  <span className="truncate">
+                                    {attachment.name ??
+                                      (isImageAttachment(attachment)
+                                        ? "Imagen adjunta"
+                                        : isVideoAttachment(attachment)
+                                          ? "Video adjunto"
+                                          : isAudioAttachment(attachment)
+                                            ? "Audio adjunto"
+                                            : "Archivo adjunto")}
                                   </span>
-                                ) : null}
+                                </span>
+                                <span className="shrink-0 text-[11px] font-medium text-foreground/80">
+                                  Abrir
+                                  {attachment.size ? ` • ${(attachment.size / 1024).toFixed(1)} KB` : ""}
+                                </span>
                               </a>
                             </div>
                           ))}

@@ -189,12 +189,14 @@ function normalizeAttachments(source: Record<string, unknown> | InboxMessageRow)
 
   const candidates: unknown[] = [];
   const direct = (source as InboxMessageRow).attachments;
-  if (Array.isArray(direct)) candidates.push(direct);
-
-  const datos = (source as InboxMessageRow).datos;
-  if (datos && typeof datos === "object") {
-    const maybe = (datos as Record<string, unknown>).attachments;
-    if (Array.isArray(maybe)) candidates.push(maybe);
+  if (Array.isArray(direct) && direct.length > 0) {
+    candidates.push(direct);
+  } else {
+    const datos = (source as InboxMessageRow).datos;
+    if (datos && typeof datos === "object") {
+      const maybe = (datos as Record<string, unknown>).attachments;
+      if (Array.isArray(maybe)) candidates.push(maybe);
+    }
   }
 
   for (const candidate of candidates) {
