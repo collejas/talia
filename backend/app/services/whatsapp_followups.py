@@ -477,7 +477,7 @@ async def _escalate_to_sales(
         await whatsapp_tools._notify_sales_rep(
             context=context,
             trigger="followup_escalate",
-            contact=contact,
+            persona=contact,
             opportunity_id=str(opportunity.get("id")),
             resumen=resumen,
             notes=notes,

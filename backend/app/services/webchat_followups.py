@@ -466,7 +466,7 @@ async def _escalate_due_to_attempt_limit(
         await whatsapp_tools._notify_sales_rep(
             context=context,
             trigger="webchat_escalate",
-            contact=contact,
+            persona=contact,
             opportunity_id=str(opportunity.get("id")),
             resumen=resumen,
             notes=notes,

@@ -33,6 +33,7 @@ class DummyRepo:
             "metadata": self.opportunity_metadata.copy(),
             "contacto": {
                 "nombre_completo": "Lead Demo",
+                "telefono_e164": "+5218887776666",
                 "necesidad_proposito": "Automatizar",
                 "notes": "Demo asap",
             },
@@ -151,7 +152,9 @@ async def test_run_followups_escalates_after_reengage(monkeypatch):
     escalated = {}
 
     async def fake_notify_sales_rep(**kwargs):
+        assert "persona" in kwargs
         escalated["trigger"] = kwargs["trigger"]
+        escalated["persona_phone"] = kwargs["persona"]["telefono_e164"]
 
     monkeypatch.setattr(whatsapp_followups.storage, "fetch_persona", fake_fetch_persona)
     monkeypatch.setattr(
@@ -163,6 +166,7 @@ async def test_run_followups_escalates_after_reengage(monkeypatch):
     await whatsapp_followups.run_followups(now=now)
 
     assert escalated["trigger"] == "followup_escalate"
+    assert escalated["persona_phone"] == "+5218887776666"
     assert repo.updated_payloads, "Debe registrar metadata de escalación"
 
 

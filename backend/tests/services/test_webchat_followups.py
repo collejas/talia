@@ -249,6 +249,7 @@ async def test_run_followups_escalates_when_attempts_exhausted(
     notified: list[dict] = []
 
     async def fake_notify_sales_rep(**kwargs):
+        assert "persona" in kwargs
         notified.append(kwargs)
 
     stop_reasons: list[str] = []
@@ -296,6 +297,7 @@ async def test_run_followups_escalates_when_attempts_exhausted(
     assert notified, "Debe notificar la escalación"
     assert notified[0]["trigger"] == "webchat_escalate"
     assert notified[0]["extra"]["attempts"] == 2
+    assert notified[0]["persona"]["telefono_e164"] == "+5212345678999"
     assert logged_events and "webchat.followup.escalated" in logged_events
     assert stop_reasons == ["reengage_limit"]
     assert not sent_messages
