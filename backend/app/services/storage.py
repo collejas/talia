@@ -1924,7 +1924,7 @@ async def upload_whatsapp_attachment(
     content_type: str | None = None,
     conversation_id: str | None = None,
 ) -> dict[str, Any]:
-    """Sube un adjunto entrante de WhatsApp al bucket compartido de media."""
+    """Sube un adjunto entrante de WhatsApp al bucket privado `whatsapp`."""
 
     if not content:
         raise StorageError("El archivo a subir está vacío")

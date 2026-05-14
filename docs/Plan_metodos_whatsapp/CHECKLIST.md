@@ -62,6 +62,10 @@
 - [ ] Definir variables y secretos por ambiente.
 - [ ] Documentar pasos de alta de tenant con Twilio.
 - [ ] Documentar pasos de alta de tenant con Meta.
+- [ ] Documentar el flujo de adjuntos WhatsApp:
+  - bucket privado `whatsapp`
+  - proxy interno del inbox en `/api/crm/inbox/attachments/{id}`
+  - firma temporal desde backend con service role
 - [ ] Definir tenant piloto para pruebas.
 - [ ] Establecer criterio para mover un tenant de Twilio a Meta.
 - [ ] Definir criterio para suspender Twilio por configuracion.

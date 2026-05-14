@@ -122,6 +122,16 @@ deben seleccionar la logica correcta segun el provider del tenant.
 - `storage.record_delivery_event(...)` debe dejar de depender unicamente de Twilio.
 - `CRMRepository.get_message_by_twilio_sid(...)` debe convivir con un equivalente generico o con una ruta de compatibilidad.
 
+#### F. Flujo de adjuntos WhatsApp
+
+- Los adjuntos entrantes de WhatsApp se guardan en el bucket privado `whatsapp`.
+- `public.adjuntos.path` conserva la ruta interna del objeto en Storage.
+- El inbox del panel consume una ruta local (`/api/crm/inbox/attachments/{attachment_id}`) que:
+  - resuelve el adjunto en backend;
+  - firma el objeto con service role;
+  - devuelve PDF, video o imagen con el MIME correcto.
+- Los adjuntos históricos de Twilio pueden mantenerse como compatibilidad, pero el flujo nuevo no debe depender de `webchat`.
+
 ### Archivos de apoyo que casi seguro se tocaran
 
 - `backend/app/main.py`
