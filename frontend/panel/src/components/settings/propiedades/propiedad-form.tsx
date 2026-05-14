@@ -2049,7 +2049,7 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
   >
     <DialogContent className="max-w-2xl">
       <DialogHeader>
-        <DialogTitle>Importar propiedades</DialogTitle>
+        <DialogTitle>Importar jerarquía inmobiliaria</DialogTitle>
         <DialogDescription>
           Carga un CSV con la jerarquía de desarrollos, capas y unidades. Consulta{" "}
           <span className="font-semibold text-slate-700">docs/Plan_3D/propiedades_importador.md</span>{" "}

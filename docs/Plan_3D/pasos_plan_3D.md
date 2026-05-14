@@ -13,12 +13,12 @@
    - [x] Crear RPC/endpoint `crm_propiedades_geojson(...)` que filtre por organización, estado, municipio y tipo, devolviendo `FeatureCollection` con todos los `properties` necesarios (color, alturas, referencias a línea/familia/modelo).
    - [x] Añadir proxy Next.js `/api/crm/propiedades/geojson` para consumir esa función y manejar filtros de UI.
 
-4. [ ] **Enriquecer propiedades con jerarquía geográfica**
-   - [ ] Extender `propiedades` con `pais_codigo`, `estado_cve`, `municipio_cve`, `codigo_postal`, `colonia`.
-   - [ ] Crear selects que reutilicen los JSONB/servicios existentes (`backend/app/data/geo`, `leads_geo`) para popular estados/municipios.
-   - [ ] Verificar que `propiedades` pueda referenciar `linea_id`, `familia_id`, `modelo_id` sin acoplarse a `settings/productos`.
-   - [x] Confirmar que el RPC `crm_propiedades_geojson` (ver `supabase/migrations/20280205_100000_propiedades_geojson_extended.sql` y `supabase/migrations/20280214_130000_propiedades_geojson_3d_metadata.sql`) expone los nuevos atributos geográficos y los nombres de `linea`, `familia` y `modelo` para que Leaflet/Mapbox puedan colorear y filtrar por plantilla.
-   - [ ] Ajustar `frontend/panel/src/components/settings/propiedades/propiedad-form.tsx` y el payload de `/crm/propiedades` para que el formulario capture/normalice `pais_codigo`, `estado_cve`, `municipio_cve`, `codigo_postal`, `colonia` y que conserve el vínculo con los catálogos (`linea_id`, `familia_id`, `modelo_id`) sin mezclar lógica del módulo `settings/productos`.
+4. [x] **Enriquecer la jerarquía geográfica del módulo inmobiliario**
+   - [x] Extender el nodo de desarrollo para capturar `pais_codigo`, `estado_cve`, `municipio_cve`, `codigo_postal` y `colonia`.
+   - [x] Crear selects que reutilicen los JSONB/servicios existentes (`backend/app/data/geo`, `leads_geo`) para popular estados/municipios.
+   - [x] Verificar que la jerarquía inmobiliaria pueda referenciar `linea_id`, `familia_id`, `modelo_id` sin acoplarse a `settings/productos`.
+   - [x] Confirmar que el RPC `crm_propiedades_geojson` (ver `supabase/migrations/20280205_100000_propiedades_geojson_extended.sql` y `supabase/migrations/20280214_130000_propiedades_geojson_3d_metadata.sql`) expone los atributos geográficos y los nombres de `linea`, `familia` y `modelo` para que Leaflet/Mapbox puedan colorear y filtrar por plantilla.
+   - [x] Ajustar `frontend/panel/src/components/settings/propiedades/propiedad-form.tsx` y el payload de `/crm/propiedades` para que el formulario capture/normalice `pais_codigo`, `estado_cve`, `municipio_cve`, `codigo_postal`, `colonia` y conserve el vínculo con los catálogos (`linea_id`, `familia_id`, `modelo_id`) sin mezclar lógica del módulo `settings/productos`.
 
 5. [ ] **Implementar flujo Leaflet jerárquico + Mapbox**
    - [ ] Leaflet inicia con México coloreado por el consolidado global; el hover muestra totales y el clic abre el nivel de estados restringidos a los tres con desarrollos.
@@ -30,12 +30,12 @@
    - [x] Crear el módulo Mapbox que se monta/desmonta con cada “Ver en Mapbox”, reutiliza los datos de `crm_propiedades_geojson` y pinta el `fill-extrusion` con las alturas/status del desarrollo, y muestra el panel de detalles con precio, niveles, amenities y el botón “volver al mapa nacional” como en el documento.
    - [x] Filtrar los geoJSON jerárquicos por los códigos `pais_codigo`/`estado_cve`/`municipio_cve` de `crm_propiedades_geojson`, de modo que solo se coloreen y centren las regiones que realmente tienen desarrollos antes de mostrar las unidades del siguiente nivel.
 
-6. [ ] **Diseñar la vista de creación/edición en settings**
-   - [ ] Añadir `/settings/propiedades` en el sidebar (al lado de `settings/productos`) con el botón “Propiedades”.
-   - [ ] Diseñar layout tipo editor de capas: formulario compacto a la izquierda y mapa Leaflet + `leaflet-draw` a la derecha, misma altura.
-   - [ ] El formulario incluye datos generales, jerarquía país/estado/municipio/código postal/colonia, referencias a línea/familia/modelo, altura/levels/status y controles guardar/limpiar/centrar.
-   - [ ] El mapa permite dibujar/editar polígonos, mantiene el `featureGroup`, y si ya existe la geometría la carga para seguir editando.
-   - [ ] Revisar `frontend/panel/src/app/settings/propiedades/page.tsx` y `PropiedadForm` para asegurar que el layout coincide con el editor de capas descrito en `docs/Plan_3D/frontend_leaflet_osmb.md`, que `PropiedadGeomEditor` expone los controles de `leaflet-draw` y que las acciones de guardar/centrar limpian el `featureGroup` antes de subir la geometría.
+6. [x] **Diseñar la vista de creación/edición en settings**
+   - [x] Añadir `/settings/propiedades` en el sidebar (al lado de `settings/productos`) con el botón “Propiedades”.
+   - [x] Diseñar layout tipo editor de capas: formulario compacto a la izquierda y mapa Leaflet + `leaflet-draw` a la derecha, misma altura.
+   - [x] El formulario incluye datos generales, jerarquía país/estado/municipio/código postal/colonia, referencias a línea/familia/modelo, altura/levels/status y controles guardar/limpiar/centrar.
+   - [x] El mapa permite dibujar/editar polígonos, mantiene el `featureGroup`, y si ya existe la geometría la carga para seguir editando.
+   - [x] Revisar `frontend/panel/src/app/settings/propiedades/page.tsx` y `PropiedadForm` para asegurar que el layout coincide con el editor de capas descrito en `docs/Plan_3D/frontend_leaflet_osmb.md`, que `PropiedadGeomEditor` expone los controles de `leaflet-draw` y que las acciones de guardar/centrar limpian el `featureGroup` antes de subir la geometría.
 
 7. [ ] **UX, filtros y documentación**
    - [ ] Añadir panel lateral con lista de desarrollos (por municipio/estado) que permita centrar y saltar a Mapbox.
