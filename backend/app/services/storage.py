@@ -1917,6 +1917,46 @@ async def upload_webchat_attachment(
     }
 
 
+async def upload_whatsapp_attachment(
+    *,
+    content: bytes,
+    filename: str,
+    content_type: str | None = None,
+    conversation_id: str | None = None,
+) -> dict[str, Any]:
+    """Sube un adjunto entrante de WhatsApp al bucket compartido de media."""
+
+    if not content:
+        raise StorageError("El archivo a subir está vacío")
+
+    safe_name = Path(filename).name or "whatsapp-attachment"
+    extension = Path(safe_name).suffix
+    prefix = conversation_id or "whatsapp"
+    key = f"{prefix}/{uuid4().hex}{extension}"
+
+    repo = CRMRepository()
+    try:
+        public_path = await repo.upload_webchat_object(
+            object_key=key,
+            content=content,
+            content_type=content_type or "application/octet-stream",
+        )
+    except CRMRepositoryError as exc:
+        raise StorageError(str(exc)) from exc
+
+    base_url = settings.supabase_url.rstrip("/") if settings.supabase_url else ""
+    public_url = f"{base_url}/storage/v1/object/public/{public_path}" if base_url else public_path
+
+    return {
+        "url": public_url,
+        "name": safe_name,
+        "mime": content_type,
+        "size": len(content),
+        "provider_id": public_path,
+        "path": public_path,
+    }
+
+
 async def upload_quote_document(
     *,
     content: bytes,

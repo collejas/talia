@@ -47,9 +47,10 @@ class WhatsAppMediaAttachment(BaseModel):
     """Metadatos básicos de archivos recibidos vía Twilio."""
 
     index: int
-    url: str
+    url: str | None = None
     content_type: str | None = None
     filename: str | None = None
+    provider_id: str | None = None
 
 
 class WhatsAppIncomingMessage(BaseModel):
@@ -172,6 +173,28 @@ def _extract_meta_text(message: dict[str, Any]) -> str | None:
     return None
 
 
+def _extract_meta_media_attachments(message: dict[str, Any]) -> list[WhatsAppMediaAttachment]:
+    attachments: list[WhatsAppMediaAttachment] = []
+    for index, key in enumerate(("image", "audio", "video", "document")):
+        payload = message.get(key)
+        if not isinstance(payload, dict):
+            continue
+        media_id = payload.get("id")
+        if not isinstance(media_id, str) or not media_id.strip():
+            continue
+        filename = payload.get("filename") or payload.get("caption") or payload.get("title")
+        mime_type = payload.get("mime_type") or payload.get("mimeType") or payload.get("content_type")
+        attachments.append(
+            WhatsAppMediaAttachment(
+                index=index,
+                provider_id=media_id.strip(),
+                content_type=_coerce_to_str(mime_type) or None,
+                filename=_coerce_to_str(filename) or None,
+            )
+        )
+    return attachments
+
+
 class MetaWhatsAppIncomingMessage(BaseModel):
     """Representa un mensaje entrante del webhook de WhatsApp Cloud API."""
 
@@ -217,6 +240,7 @@ class MetaWhatsAppIncomingMessage(BaseModel):
                     from_number = _coerce_to_str(message.get("from"))
                     if not message_sid or not from_number:
                         continue
+                    attachments = _extract_meta_media_attachments(message)
                     messages.append(
                         cls(
                             message_sid=message_sid,
@@ -226,8 +250,8 @@ class MetaWhatsAppIncomingMessage(BaseModel):
                             body=_extract_meta_text(message),
                             wa_id=_coerce_to_str(contact.get("wa_id") or message.get("from")) or None,
                             profile_name=_coerce_to_str(profile.get("name")) or None,
-                            num_media=0,
-                            media=[],
+                            num_media=len(attachments),
+                            media=attachments,
                             raw_payload={
                                 "entry": entry,
                                 "change": change,

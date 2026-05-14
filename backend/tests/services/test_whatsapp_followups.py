@@ -86,10 +86,17 @@ async def test_run_followups_sends_reengage(monkeypatch):
     sent = {}
 
     async def fake_send_manual_message(
-        *, to_number, body=None, template_sid=None, template_variables=None, organizacion_id=None
+        *,
+        to_number,
+        body=None,
+        template_sid=None,
+        template_variables=None,
+        attachments=None,
+        organizacion_id=None,
     ):
         sent["to"] = to_number
         sent["body"] = body
+        sent["attachments"] = attachments
 
     monkeypatch.setattr(whatsapp_followups.storage, "fetch_persona", fake_fetch_persona)
     monkeypatch.setattr(

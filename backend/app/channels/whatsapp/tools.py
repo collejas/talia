@@ -2789,6 +2789,7 @@ async def _notify_sales_rep(
     notes: str | None,
     email: str | None,
     extra: dict[str, Any] | None,
+    attachments: list[dict[str, Any]] | None = None,
     force_retry: bool = False,
 ) -> None:
     persona_record = persona or await _resolve_persona(context.contact_id)
@@ -2985,6 +2986,26 @@ async def _notify_sales_rep(
         )
         return
 
+    recent_attachments = attachments
+    if recent_attachments is None:
+        try:
+            recent_messages = await storage.fetch_recent_messages(
+                conversation_id=context.conversation_id,
+                limit=5,
+            )
+        except StorageError:
+            recent_messages = []
+        for recent_message in reversed(recent_messages):
+            if str(recent_message.get("direccion") or "").lower() != "entrante":
+                continue
+            candidate = recent_message.get("attachments")
+            if isinstance(candidate, list) and candidate:
+                recent_attachments = [
+                    item for item in candidate if isinstance(item, dict) and item.get("url")
+                ]
+                if recent_attachments:
+                    break
+
     message_body = shared_compose_sales_notification_message(
         contact=persona_record,
         trigger=trigger,
@@ -3044,8 +3065,64 @@ async def _notify_sales_rep(
             template_variables=template_vars,
             template_name=template_name,
             template_language=template_language,
+            attachments=recent_attachments,
             organizacion_id=org_uuid,
         )
+        if recent_attachments and (template_sid or template_name):
+            try:
+                attachment_result = await whatsapp_service.send_manual_message(
+                    to_number=seller_phone,
+                    body=message_body,
+                    attachments=recent_attachments,
+                    organizacion_id=org_uuid,
+                )
+                if attachment_result and getattr(attachment_result, "sid", None):
+                    logger.info(
+                        "whatsapp.notify_sales.attachment_sent",
+                        extra={
+                            "conversation_id": context.conversation_id,
+                            "trigger": trigger,
+                            "attachment_sid": getattr(attachment_result, "sid", None),
+                            "attachment_count": len(recent_attachments),
+                        },
+                    )
+                    try:
+                        await storage.register_whatsapp_message(
+                            direction="saliente",
+                            wa_id=None,
+                            phone_e164=seller_phone,
+                            body=message_body,
+                            message_sid=getattr(attachment_result, "sid", None),
+                            metadata={
+                                "trigger": trigger,
+                                "template_sid": None,
+                                "template_name": None,
+                                "template_language": None,
+                                "sender": "sales_notification_attachment",
+                            },
+                            attachments=recent_attachments,
+                            conversation_id=context.conversation_id,
+                            contact_id=context.contact_id,
+                            organizacion_id=str(org_id),
+                        )
+                    except StorageError as exc:
+                        logger.warning(
+                            "whatsapp.notify_sales.attachment_metadata_failed",
+                            extra={
+                                "conversation_id": context.conversation_id,
+                                "trigger": trigger,
+                                "error": str(exc),
+                            },
+                        )
+            except Exception as exc:  # pragma: no cover
+                logger.warning(
+                    "whatsapp.notify_sales.attachment_send_failed",
+                    extra={
+                        "conversation_id": context.conversation_id,
+                        "trigger": trigger,
+                        "error": str(exc),
+                    },
+                )
     except Exception as exc:  # pragma: no cover
         logger.warning(
             "whatsapp.notify_sales.send_failed",
@@ -3100,6 +3177,7 @@ async def _notify_sales_rep(
                     "template_language": template_language,
                     "sender": "sales_notification",
                 },
+                attachments=recent_attachments,
                 conversation_id=context.conversation_id,
                 contact_id=context.contact_id,
                 organizacion_id=str(org_id),

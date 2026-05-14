@@ -3,16 +3,22 @@
 from __future__ import annotations
 
 import asyncio
+import io
 import json
 import re
 import time
+import zipfile
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 from typing import Any, Mapping
 from uuid import UUID, uuid4
 
 import httpx
 from fastapi import HTTPException
+from openpyxl import load_workbook
+from openai import AsyncOpenAI
+from xml.etree import ElementTree as ET
 
 from app.assistants.manager import AssistantConfig
 from app.assistants.runtime import build_prompt_payload, resolve_assistant_spec
@@ -110,6 +116,9 @@ _WHATSAPP_INBOUND_MERGE_MAX_MESSAGES = 4
 _WHATSAPP_INBOUND_MERGE_MAX_WINDOW_SECONDS = 12
 _WHATSAPP_INBOUND_FRAGMENT_MAX_CHARS = 80
 _WHATSAPP_INBOUND_FRAGMENT_MAX_WORDS = 12
+MAX_WHATSAPP_ATTACHMENT_BYTES = 8 * 1024 * 1024
+MAX_WHATSAPP_ATTACHMENT_TEXT_CHARS = 12000
+MAX_WHATSAPP_ATTACHMENTS_PER_MESSAGE = 4
 
 
 def _persona_datos(persona: Mapping[str, Any] | None) -> dict[str, Any]:
@@ -216,6 +225,419 @@ def _trim_text(value: Any) -> str | None:
 def _normalize_whatsapp_provider(value: Any) -> str:
     provider = str(value or "").strip().lower()
     return provider if provider in {"twilio", "meta"} else "twilio"
+
+
+def _guess_attachment_name(attachment: schemas.WhatsAppMediaAttachment) -> str:
+    candidate = attachment.filename or attachment.provider_id or attachment.url or ""
+    candidate = str(candidate).strip()
+    if candidate:
+        return Path(candidate).name
+    return f"whatsapp-adjunto-{attachment.index + 1}"
+
+
+def _guess_attachment_extension(name: str, content_type: str | None) -> str:
+    suffix = Path(name).suffix.lower()
+    if suffix:
+        return suffix
+    mime = (content_type or "").lower().strip()
+    mime_map = {
+        "image/jpeg": ".jpg",
+        "image/jpg": ".jpg",
+        "image/png": ".png",
+        "image/webp": ".webp",
+        "image/gif": ".gif",
+        "audio/ogg": ".ogg",
+        "audio/mpeg": ".mp3",
+        "audio/mp3": ".mp3",
+        "audio/wav": ".wav",
+        "audio/x-wav": ".wav",
+        "video/mp4": ".mp4",
+        "application/pdf": ".pdf",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document": ".docx",
+        "application/msword": ".doc",
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": ".xlsx",
+        "application/vnd.ms-excel": ".xls",
+    }
+    return mime_map.get(mime, "")
+
+
+def _is_image_mime(mime: str | None, *, extension: str | None = None) -> bool:
+    mime_value = (mime or "").lower()
+    ext_value = (extension or "").lower()
+    return mime_value.startswith("image/") or ext_value in {".jpg", ".jpeg", ".png", ".webp", ".gif"}
+
+
+def _is_audio_mime(mime: str | None, *, extension: str | None = None) -> bool:
+    mime_value = (mime or "").lower()
+    ext_value = (extension or "").lower()
+    return mime_value.startswith("audio/") or ext_value in {".ogg", ".opus", ".mp3", ".wav", ".aac", ".amr", ".3gp"}
+
+
+def _is_text_attachment(mime: str | None, *, extension: str | None = None) -> bool:
+    mime_value = (mime or "").lower()
+    ext_value = (extension or "").lower()
+    return mime_value.startswith("text/") or ext_value in {".txt", ".csv", ".md", ".json", ".log"}
+
+
+def _is_docx_attachment(mime: str | None, *, extension: str | None = None) -> bool:
+    mime_value = (mime or "").lower()
+    ext_value = (extension or "").lower()
+    return ext_value == ".docx" or mime_value == "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+
+
+def _is_xlsx_attachment(mime: str | None, *, extension: str | None = None) -> bool:
+    mime_value = (mime or "").lower()
+    ext_value = (extension or "").lower()
+    return ext_value in {".xlsx", ".xlsm"} or mime_value in {
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "application/vnd.ms-excel.sheet.macroenabled.12",
+    }
+
+
+def _is_pdf_attachment(mime: str | None, *, extension: str | None = None) -> bool:
+    mime_value = (mime or "").lower()
+    ext_value = (extension or "").lower()
+    return ext_value == ".pdf" or mime_value == "application/pdf"
+
+
+def _trim_text_payload(text: str, limit: int) -> tuple[str, bool]:
+    normalized = str(text or "").strip()
+    if len(normalized) <= limit:
+        return normalized, False
+    return normalized[:limit].rstrip(), True
+
+
+def _extract_docx_text(data: bytes) -> str:
+    with zipfile.ZipFile(io.BytesIO(data)) as archive:
+        xml_bytes = archive.read("word/document.xml")
+    root = ET.fromstring(xml_bytes)
+    ns = {"w": "http://schemas.openxmlformats.org/wordprocessingml/2006/main"}
+    paragraphs: list[str] = []
+    for para in root.findall(".//w:p", ns):
+        runs = [node.text for node in para.findall(".//w:t", ns) if node.text]
+        if runs:
+            paragraphs.append("".join(runs))
+    return "\n\n".join(paragraphs).strip()
+
+
+def _extract_xlsx_text(data: bytes) -> str:
+    workbook = load_workbook(io.BytesIO(data), read_only=True, data_only=True)
+    lines: list[str] = []
+    try:
+        for sheet in workbook.worksheets:
+            sheet_lines: list[str] = []
+            for row in sheet.iter_rows(values_only=True):
+                values = [str(value).strip() for value in row if value is not None and str(value).strip()]
+                if values:
+                    sheet_lines.append(" | ".join(values))
+            if sheet_lines:
+                lines.append(f"[{sheet.title}]")
+                lines.extend(sheet_lines)
+    finally:
+        workbook.close()
+    return "\n".join(lines).strip()
+
+
+async def _transcribe_audio_attachment(
+    client: AsyncOpenAI,
+    *,
+    data: bytes,
+    filename: str,
+    content_type: str | None,
+    model_name: str | None,
+) -> str | None:
+    model = model_name or settings.openai_stt_model or "whisper-1"
+    try:
+        response = await client.audio.transcriptions.create(
+            model=model,
+            file=(filename, io.BytesIO(data), content_type or "application/octet-stream"),
+        )
+    except Exception as exc:  # pragma: no cover - depende del SDK/red
+        logger.warning(
+            "whatsapp.attachment_transcription_failed",
+            extra={"name": filename, "error": str(exc)},
+        )
+        return None
+    text = getattr(response, "text", None)
+    if isinstance(text, str) and text.strip():
+        return text.strip()
+    if isinstance(response, str) and response.strip():
+        return response.strip()
+    return None
+
+
+async def _download_whatsapp_attachment(
+    *,
+    attachment: schemas.WhatsAppMediaAttachment,
+    provider: str,
+    whatsapp_settings: tenant_runtime.WhatsappRuntimeSettings,
+) -> tuple[bytes | None, str | None, str]:
+    download_url = attachment.url
+    resolved_mime = attachment.content_type
+    resolved_name = _guess_attachment_name(attachment)
+
+    if provider == "meta" and attachment.provider_id:
+        meta_token = getattr(whatsapp_settings, "meta_page_access_token", None)
+        if not meta_token:
+            return None, resolved_mime, resolved_name
+        graph_version = getattr(whatsapp_settings, "meta_graph_api_version", None) or "v21.0"
+        media_url = f"https://graph.facebook.com/{graph_version}/{attachment.provider_id}"
+        headers = {
+            "Authorization": f"Bearer {meta_token}",
+            "Accept": "application/json",
+        }
+        async with httpx.AsyncClient(timeout=10.0, follow_redirects=True) as client:
+            response = await client.get(media_url, headers=headers)
+        if response.status_code >= 400:
+            logger.warning(
+                "whatsapp.meta_media_lookup_failed",
+                extra={
+                    "provider_id": attachment.provider_id,
+                    "status_code": response.status_code,
+                    "body": response.text[:300],
+                },
+            )
+            return None, resolved_mime, resolved_name
+        payload = response.json() if response.headers.get("content-type", "").lower().startswith("application/json") else {}
+        if isinstance(payload, dict):
+            download_url = payload.get("url") if isinstance(payload.get("url"), str) else download_url
+            resolved_mime = resolved_mime or (
+                payload.get("mime_type") if isinstance(payload.get("mime_type"), str) else None
+            )
+            if not attachment.filename:
+                filename = payload.get("filename") or payload.get("name")
+                if isinstance(filename, str) and filename.strip():
+                    resolved_name = Path(filename).name
+        if not download_url:
+            return None, resolved_mime, resolved_name
+        async with httpx.AsyncClient(timeout=15.0, follow_redirects=True) as client:
+            response = await client.get(
+                download_url,
+                headers={"Authorization": f"Bearer {meta_token}"},
+            )
+        if response.status_code >= 400:
+            logger.warning(
+                "whatsapp.meta_media_download_failed",
+                extra={
+                    "provider_id": attachment.provider_id,
+                    "status_code": response.status_code,
+                    "body": response.text[:300],
+                },
+            )
+            return None, resolved_mime, resolved_name
+        return response.content, resolved_mime, resolved_name
+
+    if not download_url:
+        return None, resolved_mime, resolved_name
+
+    twilio_account_sid = getattr(whatsapp_settings, "twilio_account_sid", None)
+    twilio_auth_token = getattr(whatsapp_settings, "twilio_auth_token", None)
+    async with httpx.AsyncClient(timeout=15.0, follow_redirects=True) as client:
+        response = await client.get(download_url)
+        if response.status_code in {401, 403} and twilio_account_sid and twilio_auth_token:
+            response = await client.get(download_url, auth=(twilio_account_sid, twilio_auth_token))
+    if response.status_code >= 400:
+        logger.warning(
+            "whatsapp.attachment_download_failed",
+            extra={
+                "url": download_url,
+                "status_code": response.status_code,
+                "body": response.text[:300],
+            },
+        )
+        return None, resolved_mime, resolved_name
+    return response.content, resolved_mime, resolved_name
+
+
+async def _prepare_whatsapp_attachments(
+    *,
+    message: schemas.WhatsAppIncomingMessage,
+    whatsapp_settings: tenant_runtime.WhatsappRuntimeSettings,
+    client: AsyncOpenAI,
+    conversation_id: str | None,
+    provider: str,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[str]]:
+    normalized_attachments: list[dict[str, Any]] = []
+    content_items: list[dict[str, Any]] = []
+    warnings: list[str] = []
+
+    if not message.media:
+        return normalized_attachments, content_items, warnings
+
+    processed = 0
+    for attachment in message.media:
+        if processed >= MAX_WHATSAPP_ATTACHMENTS_PER_MESSAGE:
+            warnings.append(
+                f"Se ignoraron adjuntos extra; límite {MAX_WHATSAPP_ATTACHMENTS_PER_MESSAGE} por mensaje."
+            )
+            break
+
+        data_bytes, mime, filename = await _download_whatsapp_attachment(
+            attachment=attachment,
+            provider=provider,
+            whatsapp_settings=whatsapp_settings,
+        )
+        if not data_bytes:
+            warnings.append(f"No se pudo descargar {filename}.")
+            continue
+        if len(data_bytes) > MAX_WHATSAPP_ATTACHMENT_BYTES:
+            warnings.append(
+                f"El archivo {filename} supera el límite permitido de {MAX_WHATSAPP_ATTACHMENT_BYTES // (1024 * 1024)} MB."
+            )
+            continue
+
+        extension = _guess_attachment_extension(filename, mime)
+        try:
+            uploaded = await storage.upload_whatsapp_attachment(
+                content=data_bytes,
+                filename=filename,
+                content_type=mime,
+                conversation_id=conversation_id,
+            )
+        except StorageError as exc:
+            logger.warning(
+                "whatsapp.attachment_upload_failed",
+                extra={"name": filename, "error": str(exc)},
+            )
+            warnings.append(f"No se pudo guardar {filename} en el almacenamiento.")
+            continue
+
+        normalized = dict(uploaded)
+        if attachment.provider_id and not normalized.get("provider_id"):
+            normalized["provider_id"] = attachment.provider_id
+        normalized_attachments.append(normalized)
+
+        if _is_image_mime(mime, extension=extension):
+            content_items.append({"type": "input_image", "image_url": uploaded["url"]})
+            processed += 1
+            continue
+
+        if _is_audio_mime(mime, extension=extension):
+            transcript = await _transcribe_audio_attachment(
+                client,
+                data=data_bytes,
+                filename=filename,
+                content_type=mime,
+                model_name=getattr(whatsapp_settings, "voice_stt_model", None),
+            )
+            if transcript:
+                trimmed_text, truncated = _trim_text_payload(transcript, MAX_WHATSAPP_ATTACHMENT_TEXT_CHARS)
+                if truncated:
+                    trimmed_text += (
+                        f"\n\n[Nota interna: contenido truncado a {MAX_WHATSAPP_ATTACHMENT_TEXT_CHARS} caracteres.]"
+                    )
+                content_items.append(
+                    {
+                        "type": "input_text",
+                        "text": f"Transcripción de {filename}:\n{trimmed_text}",
+                    }
+                )
+            else:
+                warnings.append(f"No pude transcribir {filename}.")
+            processed += 1
+            continue
+
+        if _is_docx_attachment(mime, extension=extension):
+            try:
+                doc_text = _extract_docx_text(data_bytes)
+            except Exception as exc:  # pragma: no cover - archivos corruptos
+                logger.warning(
+                    "whatsapp.attachment_docx_parse_failed",
+                    extra={"name": filename, "error": str(exc)},
+                )
+                warnings.append(f"No pude leer {filename} (DOCX).")
+                continue
+            trimmed_text, truncated = _trim_text_payload(doc_text, MAX_WHATSAPP_ATTACHMENT_TEXT_CHARS)
+            if truncated:
+                trimmed_text += (
+                    f"\n\n[Nota interna: contenido truncado a {MAX_WHATSAPP_ATTACHMENT_TEXT_CHARS} caracteres.]"
+                )
+            content_items.append(
+                {
+                    "type": "input_text",
+                    "text": f"Contenido de {filename} (extraído de DOCX):\n{trimmed_text}",
+                }
+            )
+            processed += 1
+            continue
+
+        if _is_xlsx_attachment(mime, extension=extension):
+            try:
+                sheet_text = _extract_xlsx_text(data_bytes)
+            except Exception as exc:  # pragma: no cover - archivos corruptos
+                logger.warning(
+                    "whatsapp.attachment_xlsx_parse_failed",
+                    extra={"name": filename, "error": str(exc)},
+                )
+                warnings.append(f"No pude leer {filename} (XLSX).")
+                continue
+            trimmed_text, truncated = _trim_text_payload(sheet_text, MAX_WHATSAPP_ATTACHMENT_TEXT_CHARS)
+            if truncated:
+                trimmed_text += (
+                    f"\n\n[Nota interna: contenido truncado a {MAX_WHATSAPP_ATTACHMENT_TEXT_CHARS} caracteres.]"
+                )
+            content_items.append(
+                {
+                    "type": "input_text",
+                    "text": f"Contenido de {filename} (extraído de Excel):\n{trimmed_text}",
+                }
+            )
+            processed += 1
+            continue
+
+        if _is_pdf_attachment(mime, extension=extension):
+            try:
+                upload = await client.files.create(
+                    file=(filename, io.BytesIO(data_bytes), mime or "application/pdf"),
+                    purpose="assistants",
+                )
+            except Exception as exc:  # pragma: no cover - API/red
+                logger.warning(
+                    "whatsapp.attachment_pdf_upload_failed",
+                    extra={"name": filename, "error": str(exc)},
+                )
+                warnings.append(f"No se pudo compartir {filename} con el asistente.")
+                continue
+            content_items.append({"type": "input_file", "file_id": upload.id})
+            processed += 1
+            continue
+
+        if _is_text_attachment(mime, extension=extension):
+            try:
+                text_content = data_bytes.decode("utf-8")
+            except UnicodeDecodeError:
+                text_content = data_bytes.decode("utf-8", errors="replace")
+            trimmed_text, truncated = _trim_text_payload(text_content, MAX_WHATSAPP_ATTACHMENT_TEXT_CHARS)
+            if truncated:
+                trimmed_text += (
+                    f"\n\n[Nota interna: contenido truncado a {MAX_WHATSAPP_ATTACHMENT_TEXT_CHARS} caracteres.]"
+                )
+            content_items.append(
+                {
+                    "type": "input_text",
+                    "text": f"Contenido de {filename}:\n{trimmed_text}",
+                }
+            )
+            processed += 1
+            continue
+
+        try:
+            upload = await client.files.create(
+                file=(filename, io.BytesIO(data_bytes), mime or "application/octet-stream"),
+                purpose="assistants",
+            )
+        except Exception as exc:  # pragma: no cover - API/red
+            logger.warning(
+                "whatsapp.attachment_upload_failed",
+                extra={"name": filename, "error": str(exc)},
+            )
+            warnings.append(f"No se pudo compartir {filename} con el asistente.")
+            continue
+
+        content_items.append({"type": "input_file", "file_id": upload.id})
+        processed += 1
+
+    return normalized_attachments, content_items, warnings
 
 
 def _normalize_meta_template_language(value: Any) -> str | None:
@@ -1099,6 +1521,28 @@ async def handle_incoming_message(
     )
     _record_stage_timing(stage_timings, "runtime_settings_ms", runtime_settings_started)
     whatsapp_provider = _normalize_whatsapp_provider(whatsapp_settings.provider)
+    normalized_attachments: list[dict[str, Any]] = []
+    attachment_content_items: list[dict[str, Any]] = []
+    attachment_warnings: list[str] = []
+    if message.media:
+        try:
+            openai_client = openai_service.get_assistant_client(
+                api_key=getattr(whatsapp_settings, "voice_api_key", None),
+                project_id=getattr(whatsapp_settings, "project_id", None),
+            )
+            normalized_attachments, attachment_content_items, attachment_warnings = await _prepare_whatsapp_attachments(
+                message=message,
+                whatsapp_settings=whatsapp_settings,
+                client=openai_client,
+                conversation_id=message.message_sid,
+                provider=whatsapp_provider,
+            )
+        except Exception as exc:  # pragma: no cover - fallback defensivo
+            logger.warning(
+                "whatsapp.attachment_prepare_failed",
+                extra={"message_sid": message.message_sid, "error": str(exc)},
+            )
+    attachments_payload = normalized_attachments or message.attachments_as_dict()
     try:
         register_inbound_started = time.perf_counter()
         registration = await storage.register_whatsapp_message(
@@ -1110,7 +1554,7 @@ async def handle_incoming_message(
             profile_name=message.profile_name,
             inactivity_minutes=whatsapp_settings.inactivity_minutes,
             metadata=message.metadata(),
-            attachments=message.attachments_as_dict(),
+            attachments=attachments_payload,
             webhook_payload=message.raw_payload,
             organizacion_id=organizacion_hint,
         )
@@ -1447,6 +1891,20 @@ async def handle_incoming_message(
             prospeccion_mode=is_prospeccion_mode,
             origin_type=origin_type,
             inbound_message_id=inbound_message_id,
+            attachment_content_items=attachment_content_items
+            + (
+                [
+                    {
+                        "type": "input_text",
+                        "text": (
+                            "Nota interna: Algunos adjuntos no pudieron procesarse. "
+                            + " ".join(attachment_warnings)
+                        ).strip(),
+                    }
+                ]
+                if attachment_warnings
+                else []
+            ),
         )
         _record_stage_timing(stage_timings, "assistant_generation_ms", assistant_generation_started)
         if assistant_reply.debug_timings:
@@ -2126,6 +2584,7 @@ async def _generate_assistant_reply(
     prospeccion_mode: bool = False,
     origin_type: str | None = None,
     inbound_message_id: str | None = None,
+    attachment_content_items: list[dict[str, Any]] | None = None,
 ) -> AssistantReply:
     debug_timings: dict[str, float] = {}
     started = time.perf_counter()
@@ -2222,6 +2681,7 @@ async def _generate_assistant_reply(
         summary_text=summary_text,
         summary_created_en=summary_created_en,
         catalog_context=catalog_context,
+        attachment_content_items=attachment_content_items,
     )
     profiling_enabled_for_channel = True
     if organizacion_id:
@@ -2638,6 +3098,7 @@ async def _send_twilio_whatsapp_reply(
     body: str | None = None,
     content_sid: str | None = None,
     content_variables: dict[str, str] | None = None,
+    attachments: list[dict[str, Any]] | None = None,
     organizacion_id: UUID | None = None,
 ) -> TwilioSendResult:
     """Envía la respuesta al contacto utilizando la API de Twilio."""
@@ -2651,7 +3112,7 @@ async def _send_twilio_whatsapp_reply(
         logger.warning("whatsapp.twilio_not_configured")
         return TwilioSendResult(sid=None, status="skipped", error="twilio_not_configured")
 
-    if not body and not content_sid:
+    if not body and not content_sid and not attachments:
         logger.warning("whatsapp.empty_payload")
         return TwilioSendResult(sid=None, status="skipped", error="empty_payload")
 
@@ -2676,6 +3137,10 @@ async def _send_twilio_whatsapp_reply(
             )
     else:
         message_kwargs["body"] = body or ""
+        if attachments:
+            first_attachment = next((item for item in attachments if isinstance(item, dict) and item.get("url")), None)
+            if first_attachment and first_attachment.get("url"):
+                message_kwargs["media_url"] = [str(first_attachment["url"])]
 
     try:
         message = await asyncio.to_thread(
@@ -2704,6 +3169,7 @@ async def _send_meta_whatsapp_reply(
     content_variables: dict[str, str] | None = None,
     template_name: str | None = None,
     template_language: str | None = None,
+    attachments: list[dict[str, Any]] | None = None,
     organizacion_id: UUID | None = None,
 ) -> TwilioSendResult:
     """Envía la respuesta al contacto utilizando WhatsApp Cloud API."""
@@ -2729,7 +3195,7 @@ async def _send_meta_whatsapp_reply(
                 error="empty_payload",
                 provider="meta",
             )
-    if not body and not normalized_template_name:
+    if not body and not normalized_template_name and not attachments:
         logger.warning("whatsapp.empty_payload")
         return TwilioSendResult(sid=None, status="skipped", error="empty_payload", provider="meta")
 
@@ -2750,12 +3216,50 @@ async def _send_meta_whatsapp_reply(
             ),
         }
     else:
-        payload = {
-            "messaging_product": "whatsapp",
-            "to": normalized_to,
-            "type": "text",
-            "text": {"body": body or ""},
-        }
+        attachment = next((item for item in attachments or [] if isinstance(item, dict) and item.get("url")), None)
+        if attachment:
+            mime = str(attachment.get("mime") or "").lower()
+            url = str(attachment["url"])
+            name = str(attachment.get("name") or "").strip()
+            if mime.startswith("image/"):
+                payload = {
+                    "messaging_product": "whatsapp",
+                    "to": normalized_to,
+                    "type": "image",
+                    "image": {"link": url, **({"caption": body} if body else {})},
+                }
+            elif mime.startswith("audio/"):
+                payload = {
+                    "messaging_product": "whatsapp",
+                    "to": normalized_to,
+                    "type": "audio",
+                    "audio": {"link": url},
+                }
+            elif mime.startswith("video/"):
+                payload = {
+                    "messaging_product": "whatsapp",
+                    "to": normalized_to,
+                    "type": "video",
+                    "video": {"link": url, **({"caption": body} if body else {})},
+                }
+            else:
+                payload = {
+                    "messaging_product": "whatsapp",
+                    "to": normalized_to,
+                    "type": "document",
+                    "document": {
+                        "link": url,
+                        **({"caption": body} if body else {}),
+                        **({"filename": name} if name else {}),
+                    },
+                }
+        else:
+            payload = {
+                "messaging_product": "whatsapp",
+                "to": normalized_to,
+                "type": "text",
+                "text": {"body": body or ""},
+            }
     headers = {
         "Authorization": f"Bearer {runtime.meta_page_access_token}",
         "Content-Type": "application/json",
@@ -2990,6 +3494,7 @@ async def send_manual_message(
     template_variables: dict[str, str] | None = None,
     template_name: str | None = None,
     template_language: str | None = None,
+    attachments: list[dict[str, Any]] | None = None,
     organizacion_id: UUID | str | None = None,
 ) -> TwilioSendResult:
     """Expone el envío de mensajes manuales desde el panel o automatizaciones."""
@@ -3005,6 +3510,7 @@ async def send_manual_message(
         content_variables=template_variables,
         template_name=template_name,
         template_language=template_language,
+        attachments=attachments,
         organizacion_id=org_uuid,
     )
 
@@ -3016,6 +3522,7 @@ def _build_openai_input(
     summary_text: str | None = None,
     summary_created_en: str | None = None,
     catalog_context: str | None = None,
+    attachment_content_items: list[dict[str, Any]] | None = None,
 ) -> list[dict[str, Any]]:
     """Normaliza el contenido del mensaje con contexto CRM para la Responses API."""
     text_parts: list[str] = []
@@ -3051,6 +3558,8 @@ def _build_openai_input(
             }
         ],
     }
+    if attachment_content_items:
+        user_message["content"].extend(attachment_content_items)
     messages: list[dict[str, Any]] = []
     if catalog_context:
         messages.append(

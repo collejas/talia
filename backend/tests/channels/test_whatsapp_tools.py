@@ -67,6 +67,7 @@ async def test_notify_sales_rep_sends_message(monkeypatch: pytest.MonkeyPatch) -
         template_variables: dict | None = None,
         template_name: str | None = None,
         template_language: str | None = None,
+        attachments: list[dict[str, object]] | None = None,
         organizacion_id: str | None = None,
     ) -> object:
         sent["to"] = to_number
@@ -75,6 +76,7 @@ async def test_notify_sales_rep_sends_message(monkeypatch: pytest.MonkeyPatch) -
         sent["template_vars"] = template_variables
         sent["template_name"] = template_name
         sent["template_language"] = template_language
+        sent["attachments"] = attachments
         return SimpleNamespace(error=False, sid="MSG123")
 
     monkeypatch.setattr(
@@ -86,6 +88,11 @@ async def test_notify_sales_rep_sends_message(monkeypatch: pytest.MonkeyPatch) -
         return None
 
     monkeypatch.setattr(tools.storage, "register_whatsapp_message", fake_register_whatsapp_message)
+
+    async def fake_fetch_recent_messages(**_: object):
+        return []
+
+    monkeypatch.setattr(tools.storage, "fetch_recent_messages", fake_fetch_recent_messages)
 
     contact = {
         "organizacion_id": "00000000-0000-0000-0000-0000000000bb",
@@ -172,6 +179,10 @@ async def test_notify_sales_rep_skips_when_already_sent(monkeypatch: pytest.Monk
         "app.channels.whatsapp.service.send_manual_message",
         fake_send_manual_message,
     )
+    async def fake_fetch_recent_messages(**_: object):
+        return []
+
+    monkeypatch.setattr(tools.storage, "fetch_recent_messages", fake_fetch_recent_messages)
 
     contact = {
         "organizacion_id": "00000000-0000-0000-0000-0000000000bb",
@@ -244,6 +255,7 @@ async def test_notify_sales_rep_sends_meta_template(monkeypatch: pytest.MonkeyPa
         template_variables: dict | None = None,
         template_name: str | None = None,
         template_language: str | None = None,
+        attachments: list[dict[str, object]] | None = None,
         organizacion_id: str | None = None,
     ) -> object:
         sent["to"] = to_number
@@ -252,6 +264,7 @@ async def test_notify_sales_rep_sends_meta_template(monkeypatch: pytest.MonkeyPa
         sent["template_name"] = template_name
         sent["template_language"] = template_language
         sent["template_vars"] = template_variables
+        sent["attachments"] = attachments
         return SimpleNamespace(error=False, sid="MSG-META")
 
     monkeypatch.setattr(
@@ -262,6 +275,10 @@ async def test_notify_sales_rep_sends_meta_template(monkeypatch: pytest.MonkeyPa
         return None
 
     monkeypatch.setattr(tools.storage, "register_whatsapp_message", fake_register_whatsapp_message)
+    async def fake_fetch_recent_messages(**_: object):
+        return []
+
+    monkeypatch.setattr(tools.storage, "fetch_recent_messages", fake_fetch_recent_messages)
 
     contact = {
         "organizacion_id": "00000000-0000-0000-0000-0000000000bb",
