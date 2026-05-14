@@ -13984,6 +13984,32 @@ class CRMRepository:
             raise CRMRepositoryError(f"message_by_id_invalid:{row!r}")
         return row
 
+    async def worker_get_attachment_by_id(
+        self,
+        *,
+        attachment_id: str,
+    ) -> dict[str, Any] | None:
+        attachment_key = str(attachment_id or "").strip()
+        if not attachment_key:
+            return None
+        resp = await self._request_service_role(
+            "GET",
+            "/rest/v1/adjuntos",
+            params={
+                "select": "id,mensaje_id,organizacion_id,url,mime,tamano_bytes,size_bytes,proveedor_id,nombre,path",
+                "id": f"eq.{attachment_key}",
+                "limit": "1",
+            },
+            organizacion_id=None,
+        )
+        data = resp.json() or []
+        if not isinstance(data, list) or not data:
+            return None
+        row = data[0]
+        if not isinstance(row, dict):
+            raise CRMRepositoryError(f"attachment_by_id_invalid:{row!r}")
+        return row
+
     async def worker_update_message_datos(
         self,
         *,
@@ -17000,32 +17026,50 @@ class CRMRepository:
         if expires_in <= 0:
             raise CRMRepositoryError("expires_in_invalid")
 
-        key = object_path.lstrip("/")
-        if key.startswith(f"{bucket_name}/"):
-            key = key[len(bucket_name) + 1 :]
-        if not key:
+        normalized_path = object_path.strip().lstrip("/")
+        if not normalized_path:
             raise CRMRepositoryError("object_key_required")
 
-        resp = await self._request(
-            "POST",
-            f"/storage/v1/object/sign/{bucket_name}/{key}",
-            json={"expiresIn": expires_in},
-        )
-        data = resp.json()
-        if not isinstance(data, dict):
-            raise CRMRepositoryError("signed_url_invalid_response")
-        signed_fragment = data.get("signedURL") or data.get("signedUrl")
-        if not signed_fragment or not isinstance(signed_fragment, str):
-            raise CRMRepositoryError("signed_url_missing")
-        if signed_fragment.startswith("http://") or signed_fragment.startswith("https://"):
-            return signed_fragment
+        candidate_paths = [normalized_path]
+        if normalized_path.startswith(f"{bucket_name}/"):
+            candidate_paths.append(normalized_path[len(bucket_name) + 1 :])
+        else:
+            candidate_paths.append(f"{bucket_name}/{normalized_path}")
 
-        fragment = signed_fragment if signed_fragment.startswith("/") else f"/{signed_fragment}"
-        if not fragment.startswith("/storage/"):
-            fragment = f"/storage/v1{fragment}"
+        last_error: CRMRepositoryError | None = None
+        for candidate in candidate_paths:
+            if not candidate:
+                continue
+            resp = await self._request(
+                "POST",
+                f"/storage/v1/object/sign/{bucket_name}/{candidate}",
+                json={"expiresIn": expires_in},
+            )
+            if resp.status_code >= 400:
+                payload_text = resp.text or ""
+                if "not_found" in payload_text.lower() or "object not found" in payload_text.lower():
+                    last_error = CRMRepositoryError(payload_text)
+                    continue
+                raise CRMRepositoryError(
+                    f"Supabase respondió error {resp.status_code} al firmar objeto {bucket_name}/{candidate}: {resp.text}"
+                )
+            data = resp.json()
+            if not isinstance(data, dict):
+                raise CRMRepositoryError("signed_url_invalid_response")
+            signed_fragment = data.get("signedURL") or data.get("signedUrl")
+            if not signed_fragment or not isinstance(signed_fragment, str):
+                raise CRMRepositoryError("signed_url_missing")
+            if signed_fragment.startswith("http://") or signed_fragment.startswith("https://"):
+                return signed_fragment
 
-        base = self._base_url.rstrip("/")
-        return f"{base}{fragment}"
+            fragment = signed_fragment if signed_fragment.startswith("/") else f"/{signed_fragment}"
+            if not fragment.startswith("/storage/"):
+                fragment = f"/storage/v1{fragment}"
+
+            base = self._base_url.rstrip("/")
+            return f"{base}{fragment}"
+
+        raise last_error or CRMRepositoryError("signed_url_missing")
 
     async def _rpc(self, function_name: str, payload: dict[str, Any]) -> Any:
         url = f"{self._base_url}/rest/v1/rpc/{function_name}"

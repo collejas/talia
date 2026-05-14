@@ -38,6 +38,15 @@ class FakeWhatsappRepository:
         """Inicializa el registro de actualizaciones."""
         self.update_calls: list[dict[str, Any]] = []
 
+    async def get_persona_by_whatsapp_id(self, **_: Any) -> dict[str, Any] | None:
+        return None
+
+    async def get_persona_by_phone_e164(self, **_: Any) -> dict[str, Any] | None:
+        return None
+
+    async def get_latest_whatsapp_conversation(self, **_: Any) -> dict[str, Any] | None:
+        return None
+
     async def get_contact_by_whatsapp_id(self, **_: Any) -> dict[str, Any] | None:
         return None
 
@@ -59,6 +68,46 @@ class FakeWhatsappRepository:
         """Registra la solicitud de actualización del canal."""
         self.update_calls.append({"conversation_id": conversation_id, "patch": patch})
         return {"id": conversation_id, **patch}
+
+
+class FakeAttachmentRepository:
+    def __init__(self) -> None:
+        self.upload_calls: list[dict[str, Any]] = []
+        self.sign_calls: list[dict[str, Any]] = []
+
+    async def upload_storage_object(
+        self,
+        *,
+        bucket: str,
+        object_key: str,
+        content: bytes,
+        content_type: str | None = None,
+    ) -> str:
+        self.upload_calls.append(
+            {
+                "bucket": bucket,
+                "object_key": object_key,
+                "content": content,
+                "content_type": content_type,
+            }
+        )
+        return f"{bucket}/{object_key}"
+
+    async def create_signed_storage_url(
+        self,
+        *,
+        bucket: str,
+        object_path: str,
+        expires_in: int = 300,
+    ) -> str:
+        self.sign_calls.append(
+            {
+                "bucket": bucket,
+                "object_path": object_path,
+                "expires_in": expires_in,
+            }
+        )
+        return f"https://signed.example/{bucket}/{object_path}?exp={expires_in}"
 
 
 @pytest.mark.asyncio
@@ -113,3 +162,23 @@ async def test_register_whatsapp_message_sets_channel(
     assert fake_repo.update_calls == [
         {"conversation_id": "conv-whatsapp", "patch": {"canal": "whatsapp"}}
     ]
+
+
+@pytest.mark.asyncio
+async def test_upload_whatsapp_attachment_uses_private_bucket(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    fake_repo = FakeAttachmentRepository()
+    monkeypatch.setattr(storage, "CRMRepository", lambda: fake_repo)
+
+    result = await storage.upload_whatsapp_attachment(
+        content=b"abc123",
+        filename="foto.png",
+        content_type="image/png",
+        conversation_id="conv-1",
+    )
+
+    assert fake_repo.upload_calls[0]["bucket"] == "whatsapp"
+    assert fake_repo.sign_calls[0]["bucket"] == "whatsapp"
+    assert result["path"].startswith("whatsapp/conv-1/")
+    assert result["url"].startswith("https://signed.example/whatsapp/whatsapp/conv-1/")

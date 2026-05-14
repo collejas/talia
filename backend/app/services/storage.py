@@ -1936,7 +1936,8 @@ async def upload_whatsapp_attachment(
 
     repo = CRMRepository()
     try:
-        public_path = await repo.upload_webchat_object(
+        public_path = await repo.upload_storage_object(
+            bucket="whatsapp",
             object_key=key,
             content=content,
             content_type=content_type or "application/octet-stream",
@@ -1944,11 +1945,17 @@ async def upload_whatsapp_attachment(
     except CRMRepositoryError as exc:
         raise StorageError(str(exc)) from exc
 
-    base_url = settings.supabase_url.rstrip("/") if settings.supabase_url else ""
-    public_url = f"{base_url}/storage/v1/object/public/{public_path}" if base_url else public_path
+    try:
+        access_url = await repo.create_signed_storage_url(
+            bucket="whatsapp",
+            object_path=public_path,
+            expires_in=3600,
+        )
+    except CRMRepositoryError as exc:
+        raise StorageError(str(exc)) from exc
 
     return {
-        "url": public_url,
+        "url": access_url,
         "name": safe_name,
         "mime": content_type,
         "size": len(content),

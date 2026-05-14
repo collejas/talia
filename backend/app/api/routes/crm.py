@@ -28,6 +28,7 @@ from urllib.request import Request as UrlRequest, urlopen
 import time
 from zoneinfo import ZoneInfo
 
+import httpx
 from fastapi import (
     APIRouter,
     BackgroundTasks,
@@ -43,7 +44,7 @@ from fastapi import (
     UploadFile,
     status,
 )
-from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.responses import JSONResponse, RedirectResponse, StreamingResponse
 try:
     from openpyxl import Workbook, load_workbook
 except ModuleNotFoundError:  # pragma: no cover
@@ -18303,6 +18304,90 @@ async def upload_inbox_attachment(
         raise HTTPException(status_code=502, detail="upload_failed") from exc
 
     return {"ok": True, "attachment": uploaded}
+
+
+@router.get("/inbox/attachments/{attachment_id}")
+async def download_inbox_attachment(
+    *,
+    attachment_id: UUID,
+    _: str = Depends(require_permission("ver_inbox")),
+) -> Response:
+    repo = CRMRepository()
+    try:
+        attachment = await repo.worker_get_attachment_by_id(
+            attachment_id=str(attachment_id),
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"attachment_lookup_failed:{exc}") from exc
+
+    if not isinstance(attachment, dict):
+        raise HTTPException(status_code=404, detail="attachment_not_found")
+
+    stored_url = str(attachment.get("url") or "").strip()
+    stored_path = str(attachment.get("path") or "").strip()
+    source_url = stored_path if stored_path.startswith("http://") or stored_path.startswith("https://") else stored_url
+    filename = str(attachment.get("nombre") or attachment_id).strip() or str(attachment_id)
+    mime = str(attachment.get("mime") or "application/octet-stream").strip() or "application/octet-stream"
+
+    if stored_path and not stored_path.startswith("http://") and not stored_path.startswith("https://"):
+        bucket_name, separator, object_key = stored_path.partition("/")
+        if separator and bucket_name:
+            if bucket_name == "webchat":
+                base_url = settings.supabase_url.rstrip("/") if settings.supabase_url else ""
+                if base_url:
+                    return RedirectResponse(
+                        url=f"{base_url}/storage/v1/object/public/{stored_path}",
+                        status_code=status.HTTP_307_TEMPORARY_REDIRECT,
+                    )
+            try:
+                signed_url = await repo.create_signed_storage_url(
+                    bucket=bucket_name,
+                    object_path=object_key,
+                    expires_in=300,
+                )
+            except Exception as exc:
+                raise HTTPException(status_code=502, detail=f"attachment_signed_url_failed:{exc}") from exc
+            return RedirectResponse(url=signed_url, status_code=status.HTTP_307_TEMPORARY_REDIRECT)
+
+    if source_url.startswith("http://") or source_url.startswith("https://"):
+        parsed = urlparse(source_url)
+        if "twilio.com" not in parsed.netloc:
+            return RedirectResponse(url=source_url, status_code=status.HTTP_307_TEMPORARY_REDIRECT)
+
+        organizacion_id_value = attachment.get("organizacion_id")
+        if not organizacion_id_value:
+            raise HTTPException(status_code=502, detail="attachment_org_missing")
+        try:
+            org_uuid = UUID(str(organizacion_id_value))
+        except ValueError as exc:
+            raise HTTPException(status_code=502, detail="attachment_org_invalid") from exc
+        whatsapp_settings = await tenant_runtime.get_whatsapp_runtime_settings(organizacion_id=org_uuid)
+        account_sid = getattr(whatsapp_settings, "twilio_account_sid", None)
+        auth_token = getattr(whatsapp_settings, "twilio_auth_token", None)
+        if not account_sid or not auth_token:
+            raise HTTPException(status_code=502, detail="twilio_attachment_not_configured")
+        try:
+            async with httpx.AsyncClient(timeout=20.0, follow_redirects=True) as client:
+                response = await client.get(source_url, auth=(account_sid, auth_token))
+        except Exception as exc:
+            raise HTTPException(status_code=502, detail=f"attachment_download_failed:{exc}") from exc
+        if response.status_code >= 400:
+            raise HTTPException(
+                status_code=502,
+                detail=f"attachment_download_failed:http_{response.status_code}",
+            )
+        headers = {
+            "Content-Disposition": f'inline; filename="{filename}"',
+        }
+        return Response(content=response.content, media_type=mime, headers=headers)
+
+    if stored_url.startswith("http://") or stored_url.startswith("https://"):
+        return RedirectResponse(url=stored_url, status_code=status.HTTP_307_TEMPORARY_REDIRECT)
+
+    if stored_path.startswith("http://") or stored_path.startswith("https://"):
+        return RedirectResponse(url=stored_path, status_code=status.HTTP_307_TEMPORARY_REDIRECT)
+
+    raise HTTPException(status_code=404, detail="attachment_not_found")
 
 
 def _stringify_uuid(value: UUID | str | None) -> str | None:

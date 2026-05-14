@@ -204,6 +204,12 @@ function normalizeAttachments(source: Record<string, unknown> | InboxMessageRow)
       const record = raw as Record<string, unknown>;
       const url = typeof record.url === "string" ? record.url : null;
       if (!url) continue;
+      const attachmentId = typeof record.id === "string" ? record.id : undefined;
+      const path = typeof record.path === "string" ? record.path : undefined;
+      const effectiveUrl =
+        attachmentId && path?.startsWith("whatsapp/")
+          ? `/api/crm/inbox/attachments/${attachmentId}`
+          : url;
       const sizeValue = record.size;
       let size: number | undefined;
       if (typeof sizeValue === "number") {
@@ -213,20 +219,20 @@ function normalizeAttachments(source: Record<string, unknown> | InboxMessageRow)
         if (!Number.isNaN(parsed)) size = Math.trunc(parsed);
       }
 
-      const key = `${url}::${typeof record.name === "string" ? record.name : ""}`;
+      const key = `${effectiveUrl}::${typeof record.name === "string" ? record.name : ""}`;
       if (seen.has(key)) {
         continue;
       }
       seen.add(key);
 
       results.push({
-        id: typeof record.id === "string" ? record.id : undefined,
-        url,
+        id: attachmentId,
+        url: effectiveUrl,
         mime: typeof record.mime === "string" ? record.mime : undefined,
         size,
         name: typeof record.name === "string" ? record.name : undefined,
         provider_id: typeof record.provider_id === "string" ? record.provider_id : undefined,
-        path: typeof record.path === "string" ? record.path : undefined,
+        path,
       });
     }
   }
