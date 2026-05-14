@@ -456,6 +456,7 @@ export function PropertyMap() {
   const [hoveredRegionKey, setHoveredRegionKey] = useState(null);
   const [activeMarkerFeature, setActiveMarkerFeature] = useState(null);
   const [mapboxActive, setMapboxActive] = useState(false);
+  const [mapboxLoading, setMapboxLoading] = useState(false);
   const [mapboxFeature, setMapboxFeature] = useState(null);
   const [leafletActiveNode, setLeafletActiveNode] = useState(null);
   const [leafletParentStack, setLeafletParentStack] = useState([]);
@@ -1974,6 +1975,7 @@ export function PropertyMap() {
       pendingMapboxFeatureRef.current = feature;
       setMapboxFeature(feature);
       setMapboxActive(true);
+      setMapboxLoading(true);
       setActiveNode(feature);
       setParentStack([]);
       logMapboxEvent(
@@ -2032,6 +2034,7 @@ export function PropertyMap() {
 
   const closeMapbox = useCallback(() => {
     setMapboxActive(false);
+    setMapboxLoading(false);
     setMapboxFeature(null);
     setActiveNode(null);
     setParentStack([]);
@@ -2526,6 +2529,7 @@ export function PropertyMap() {
 
   useEffect(() => {
     if (!mapboxActive) {
+      setMapboxLoading(false);
       mapboxInstanceRef.current?.remove();
       mapboxInstanceRef.current = null;
       return;
@@ -2848,6 +2852,7 @@ export function PropertyMap() {
           }
         });
         applyPendingFeature();
+        setMapboxLoading(false);
         map.resize();
       });
       // Sin filtros persistentes para unidades; noop en idle.
@@ -2864,6 +2869,7 @@ export function PropertyMap() {
       cancelled = true;
       pendingMapboxFeatureRef.current = null;
       selectedMapboxUnitIdRef.current = null;
+      setMapboxLoading(false);
       mapboxInstanceRef.current?.remove();
       mapboxInstanceRef.current = null;
       if (typeof window !== "undefined") {
@@ -3573,6 +3579,13 @@ export function PropertyMap() {
                 ref={mapboxContainerRef}
                 className="absolute inset-0 z-20 h-full w-full rounded-md"
               />
+              {mapboxLoading && (
+                <div className="absolute inset-0 z-[25] flex items-center justify-center bg-slate-950/35 backdrop-blur-[1px]">
+                  <div className="rounded-lg border border-slate-700/50 bg-slate-950/80 px-4 py-2 text-xs font-semibold uppercase tracking-[0.25em] text-slate-100 shadow-lg">
+                    Cargando vista 3D...
+                  </div>
+                </div>
+              )}
               <div className="absolute inset-0 z-30 pointer-events-none">
                 <div className="absolute inset-y-4 right-2 z-50 flex w-full max-w-[315px] flex-col overflow-hidden rounded-xl border border-slate-800 bg-gradient-to-b from-slate-950/80 via-slate-950/60 to-slate-950/40 p-0 shadow-xl max-h-[calc(100vh-120px)]">
               <div className="pointer-events-auto">
