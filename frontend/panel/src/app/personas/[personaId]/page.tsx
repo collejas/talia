@@ -1,10 +1,10 @@
 import { PersonaDetailView } from "@/components/contactos/persona-detail-view";
 
 type PageProps = {
-  params: Promise<{ contactoId: string }>;
+  params: Promise<{ personaId: string }>;
 };
 
 export default async function PersonaDetailPage({ params }: PageProps) {
-  const { contactoId } = await params;
-  return <PersonaDetailView contactoId={contactoId} />;
+  const { personaId } = await params;
+  return <PersonaDetailView personaId={personaId} />;
 }

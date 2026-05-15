@@ -32,7 +32,7 @@ Este documento resume todo lo que se fue cerrando dentro del plan `personas, cue
 - El flujo de edicion se alineo al mismo lenguaje.
 - La vinculacion contacto-empresa quedo como flujo independiente.
 - El resumen lateral ya acompana el flujo en desktop.
-- La vista dedicada de detalle quedo disponible en `/personas/[contactoId]`.
+- La vista dedicada de detalle quedo disponible en `/personas/[personaId]`.
 - Desde esa ficha ya se puede editar, vincular a empresa y disparar el merge controlado.
 
 ### 1.3 Exportacion
@@ -111,7 +111,7 @@ compatibilidad hasta retirar esas FKs.
 
 - Se agrego `POST /crm/personas/{contacto_id}/merge` para fusionar duplicados de persona
   de forma controlada.
-- La fusion mueve oportunidades al contacto destino, reubica relaciones de empresa y
+- La fusion mueve oportunidades a la persona destino, reubica relaciones de empresa y
   archiva el origen con metadata de merge.
 - La pantalla dedicada de detalle en el panel expone esta accion desde la ficha rica.
 
@@ -165,7 +165,7 @@ Se decidio no renombrar todo de una vez porque eso requeriria una refactorizacio
 ### 5.2 Pendiente
 
 - Deduplicacion controlada
-- Decidir si se renombra el contrato publico de `contact` a `persona`
+- Limpiar los contratos internos que todavia usan semantica `contacto` por compatibilidad
 
 ## 6. Lectura final
 

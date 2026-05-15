@@ -165,12 +165,12 @@ Notas:
 - Edición (nuevo flujo completo, sin modal legacy):
   - `frontend/panel/src/components/contactos/contact-edit-flow.tsx`
   - Endpoint panel (proxy):
-    - `frontend/panel/src/app/api/personas/[contactoId]/route.ts` -> `PATCH /crm/personas/{contacto_id}`
-    - `frontend/panel/src/app/api/personas/[contactoId]/validar/route.ts` -> `POST /crm/personas/{contacto_id}/validar`
+    - `frontend/panel/src/app/api/personas/[personaId]/route.ts` -> `PATCH /crm/personas/{contacto_id}`
+    - `frontend/panel/src/app/api/personas/[personaId]/validar/route.ts` -> `POST /crm/personas/{contacto_id}/validar`
 - Proxies listos para relaciones:
-  - `frontend/panel/src/app/api/personas/[contactoId]/relaciones/route.ts`
-  - `frontend/panel/src/app/api/personas/[contactoId]/relaciones/[relacionId]/route.ts`
-  - `frontend/panel/src/app/api/personas/[contactoId]/relaciones/[relacionId]/estado/route.ts`
+  - `frontend/panel/src/app/api/personas/[personaId]/relaciones/route.ts`
+  - `frontend/panel/src/app/api/personas/[personaId]/relaciones/[relacionId]/route.ts`
+  - `frontend/panel/src/app/api/personas/[personaId]/relaciones/[relacionId]/estado/route.ts`
 - Integración en la vista de Contactos:
   - `frontend/panel/src/components/contactos/contacts-data-table.tsx`
   - `Nuevo contacto` abre el flujo nuevo.
@@ -178,7 +178,7 @@ Notas:
   - Alta y edición ahora piden confirmación explícita cuando el dedupe detecta candidatos `medio/debil`.
   - `Vincular contacto a empresa` abre el flujo independiente de relacion.
   - La experiencia ya usa panel ancho y resumen lateral en desktop.
-  - El drawer del listado quedó como vista secundaria; la ruta principal de trabajo ahora es la ficha dedicada en `/personas/[contactoId]`.
+  - El drawer del listado quedó como vista secundaria; la ruta principal de trabajo ahora es la ficha dedicada en `/personas/[personaId]`.
   - al terminar un alta, el panel abre automáticamente la ficha rica del contacto creado
     o reutilizado, en vez de volver al listado sin contexto
 
@@ -196,7 +196,7 @@ Notas:
 
 ### 1) Vista detalle post-alta (Fase 7 del UX)
 
-- Ya existe una pantalla dedicada separada del listado en `frontend/panel/src/app/personas/[contactoId]/page.tsx`.
+- Ya existe una pantalla dedicada separada del listado en `frontend/panel/src/app/personas/[personaId]/page.tsx`.
 - Esa vista muestra resumen, notas, relaciones y acciones rápidas para editar, vincular y fusionar.
 - La navegación post-alta sigue abriendo la ficha rica embebida del flujo, pero ahora también hay una URL estable para trabajar el contacto fuera del listado.
 

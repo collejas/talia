@@ -3,14 +3,14 @@ import type { NextRequest } from "next/server";
 
 import { callCrmApi } from "@/lib/api/crm";
 
-type RouteContext = { params: Promise<{ contactoId: string }> };
+type RouteContext = { params: Promise<{ personaId: string }> };
 type UnknownRecord = Record<string, unknown>;
 
 export async function GET(_request: NextRequest, context: RouteContext) {
-  const { contactoId } = await context.params;
-  if (!contactoId) return NextResponse.json({ error: "missing_contacto_id" }, { status: 400 });
+  const { personaId } = await context.params;
+  if (!personaId) return NextResponse.json({ error: "missing_persona_id" }, { status: 400 });
 
-  const response = await callCrmApi<UnknownRecord>(`/crm/personas/${encodeURIComponent(contactoId)}/dedupe`, {
+  const response = await callCrmApi<UnknownRecord>(`/crm/personas/${encodeURIComponent(personaId)}/dedupe`, {
     method: "GET",
     withUserToken: true,
   });

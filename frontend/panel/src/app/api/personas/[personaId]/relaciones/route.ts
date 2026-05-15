@@ -3,19 +3,19 @@ import type { NextRequest } from "next/server";
 
 import { callCrmApi } from "@/lib/api/crm";
 
-type RouteContext = { params: Promise<{ contactoId: string }> };
+type RouteContext = { params: Promise<{ personaId: string }> };
 type UnknownRecord = Record<string, unknown>;
 
 export async function GET(request: NextRequest, context: RouteContext) {
-  const { contactoId } = await context.params;
-  if (!contactoId) return NextResponse.json({ error: "missing_contacto_id" }, { status: 400 });
+  const { personaId } = await context.params;
+  if (!personaId) return NextResponse.json({ error: "missing_persona_id" }, { status: 400 });
 
   const search = request.nextUrl.searchParams;
   const activo = search.get("activo");
   const qs = typeof activo === "string" ? `?activo=${encodeURIComponent(activo)}` : "";
 
   const response = await callCrmApi<UnknownRecord[]>(
-    `/crm/personas/${encodeURIComponent(contactoId)}/relaciones${qs}`,
+    `/crm/personas/${encodeURIComponent(personaId)}/relaciones${qs}`,
     {
       method: "GET",
       withUserToken: true,
@@ -33,8 +33,8 @@ export async function GET(request: NextRequest, context: RouteContext) {
 }
 
 export async function POST(request: NextRequest, context: RouteContext) {
-  const { contactoId } = await context.params;
-  if (!contactoId) return NextResponse.json({ error: "missing_contacto_id" }, { status: 400 });
+  const { personaId } = await context.params;
+  if (!personaId) return NextResponse.json({ error: "missing_persona_id" }, { status: 400 });
 
   let payload: UnknownRecord;
   try {
@@ -44,7 +44,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
   }
 
   const response = await callCrmApi<UnknownRecord>(
-    `/crm/personas/${encodeURIComponent(contactoId)}/relaciones`,
+    `/crm/personas/${encodeURIComponent(personaId)}/relaciones`,
     {
       method: "POST",
       body: payload,
@@ -61,4 +61,3 @@ export async function POST(request: NextRequest, context: RouteContext) {
 
   return NextResponse.json(response.data);
 }
-

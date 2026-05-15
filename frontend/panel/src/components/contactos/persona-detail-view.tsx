@@ -52,7 +52,7 @@ function formatDate(value: unknown): string {
   return date.toLocaleString("es-MX");
 }
 
-export function PersonaDetailView({ contactoId }: { contactoId: string }) {
+export function PersonaDetailView({ personaId }: { personaId: string }) {
   const router = useRouter();
   const [detail, setDetail] = React.useState<PersonaDetail | null>(null);
   const [relations, setRelations] = React.useState<PersonaRelation[]>([]);
@@ -78,8 +78,8 @@ export function PersonaDetailView({ contactoId }: { contactoId: string }) {
     setError(null);
     try {
       const [detailResponse, relationsResponse] = await Promise.all([
-        fetch(`/api/personas/${encodeURIComponent(contactoId)}`, { cache: "no-store" }),
-        fetch(`/api/personas/${encodeURIComponent(contactoId)}/relaciones`, { cache: "no-store" }),
+        fetch(`/api/personas/${encodeURIComponent(personaId)}`, { cache: "no-store" }),
+        fetch(`/api/personas/${encodeURIComponent(personaId)}/relaciones`, { cache: "no-store" }),
       ]);
 
       const detailBody = (await detailResponse.json().catch(() => ({}))) as PersonaDetail & { error?: string };
@@ -105,7 +105,7 @@ export function PersonaDetailView({ contactoId }: { contactoId: string }) {
     } finally {
       setLoading(false);
     }
-  }, [contactoId]);
+  }, [personaId]);
 
   React.useEffect(() => {
     void loadData();
@@ -116,7 +116,7 @@ export function PersonaDetailView({ contactoId }: { contactoId: string }) {
       setDedupeLoading(true);
       setDedupeError(null);
       try {
-        const response = await fetch(`/api/personas/${encodeURIComponent(contactoId)}/dedupe`, {
+        const response = await fetch(`/api/personas/${encodeURIComponent(personaId)}/dedupe`, {
           cache: "no-store",
         });
         const body = (await response.json().catch(() => ({}))) as {
@@ -139,7 +139,7 @@ export function PersonaDetailView({ contactoId }: { contactoId: string }) {
       }
     };
     void loadDedupe();
-  }, [contactoId]);
+  }, [personaId]);
 
   React.useEffect(() => {
     const query = mergeQuery.trim();
@@ -194,12 +194,12 @@ export function PersonaDetailView({ contactoId }: { contactoId: string }) {
 
   const handleMerge = async () => {
     if (!mergeTargetId) {
-      toast.error("Selecciona un contacto destino.");
+      toast.error("Selecciona una persona destino.");
       return;
     }
     setMergeSubmitting(true);
     try {
-      const response = await fetch(`/api/personas/${encodeURIComponent(contactoId)}/merge`, {
+      const response = await fetch(`/api/personas/${encodeURIComponent(personaId)}/merge`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ target_persona_id: mergeTargetId }),
@@ -242,7 +242,7 @@ export function PersonaDetailView({ contactoId }: { contactoId: string }) {
             </Link>
           </Button>
         </div>
-        <div className="rounded-2xl border bg-background p-8 text-sm text-destructive">{error || "No se encontró el contacto."}</div>
+        <div className="rounded-2xl border bg-background p-8 text-sm text-destructive">{error || "No se encontró la persona."}</div>
       </div>
     );
   }
@@ -251,7 +251,7 @@ export function PersonaDetailView({ contactoId }: { contactoId: string }) {
     <div className="mx-auto max-w-6xl p-6">
       <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
         <div>
-          <div className="text-xs uppercase tracking-wide text-muted-foreground">Ficha de contacto</div>
+          <div className="text-xs uppercase tracking-wide text-muted-foreground">Ficha de persona</div>
           <h1 className="text-3xl font-semibold tracking-tight">{contactName}</h1>
           <p className="mt-1 text-sm text-muted-foreground">
             {companyName !== "—" ? companyName : "Sin empresa asociada"}
@@ -404,7 +404,7 @@ export function PersonaDetailView({ contactoId }: { contactoId: string }) {
             <CardContent className="space-y-2">
               <Button className="w-full justify-start" variant="outline" onClick={() => setEditOpen(true)}>
                 <IconPencil className="mr-2 size-4" />
-                Editar contacto
+                Editar persona
               </Button>
               <Button className="w-full justify-start" variant="outline" onClick={() => setLinkOpen(true)}>
                 <IconBuilding className="mr-2 size-4" />
@@ -425,7 +425,7 @@ export function PersonaDetailView({ contactoId }: { contactoId: string }) {
           setEditOpen(open);
           if (!open) void loadData();
         }}
-        contactoId={contactoId}
+        personaId={personaId}
         onSaved={() => void loadData()}
       />
 
@@ -438,7 +438,7 @@ export function PersonaDetailView({ contactoId }: { contactoId: string }) {
         initialContact={
           detail
             ? {
-                id: contactoId,
+                id: personaId,
                 label: contactName,
                 company: companyName !== "—" ? companyName : null,
                 correo: email !== "—" ? email : null,
@@ -455,12 +455,12 @@ export function PersonaDetailView({ contactoId }: { contactoId: string }) {
             <div>
               <div className="text-lg font-semibold">Fusionar duplicado</div>
               <p className="text-sm text-muted-foreground">
-                El registro actual se archivará y sus relaciones, oportunidades y datos faltantes se moverán al contacto destino.
+                El registro actual se archivará y sus relaciones, oportunidades y datos faltantes se moverán a la persona destino.
               </p>
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="merge-target">Buscar contacto destino</Label>
+              <Label htmlFor="merge-target">Buscar persona destino</Label>
               <Input
                 id="merge-target"
                 value={mergeQuery}

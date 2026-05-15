@@ -201,7 +201,7 @@ type ContactEditState = {
 
 type ContactEditAction =
   | { type: "reset" }
-  | { type: "hydrate"; contactoId: string; detail: ContactDetail }
+  | { type: "hydrate"; personaId: string; detail: ContactDetail }
   | { type: "mode/set"; mode: CreateMode }
   | { type: "persona/set"; field: keyof PersonaDraft; value: string }
   | { type: "cuenta/set"; field: keyof CuentaDraft; value: string }
@@ -220,7 +220,8 @@ type ContactEditAction =
 type ContactEditFlowProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  contactoId: string | null;
+  personaId?: string | null;
+  contactoId?: string | null;
   onSaved?: () => void;
 };
 
@@ -524,7 +525,7 @@ function reducer(state: ContactEditState, action: ContactEditAction): ContactEdi
       ].some((key) => readString(detail, key).trim());
       return {
         ...INITIAL_STATE,
-        loadedId: action.contactoId,
+        loadedId: action.personaId,
         mode,
         persona: {
           ...INITIAL_STATE.persona,
@@ -694,7 +695,8 @@ function Field({
   );
 }
 
-export function ContactEditFlow({ open, onOpenChange, contactoId, onSaved }: ContactEditFlowProps) {
+export function ContactEditFlow({ open, onOpenChange, personaId, contactoId, onSaved }: ContactEditFlowProps) {
+  const resolvedPersonaId = personaId ?? contactoId ?? null;
   const [state, dispatch] = React.useReducer(reducer, INITIAL_STATE);
   const deferredAccountQuery = React.useDeferredValue(state.accountQuery);
   const [pendingDedupe, setPendingDedupe] = React.useState<PersonaValidationResponse | null>(null);
@@ -723,15 +725,15 @@ export function ContactEditFlow({ open, onOpenChange, contactoId, onSaved }: Con
 
   React.useEffect(() => {
     if (!open) return;
-    if (!contactoId) return;
-    if (state.loadedId === contactoId) return;
+    if (!resolvedPersonaId) return;
+    if (state.loadedId === resolvedPersonaId) return;
 
     const controller = new AbortController();
     const run = async () => {
       dispatch({ type: "loading/set", value: true });
       dispatch({ type: "error/set", value: null });
       try {
-        const response = await fetch(`/api/contactos/${encodeURIComponent(contactoId)}`, {
+        const response = await fetch(`/api/contactos/${encodeURIComponent(resolvedPersonaId)}`, {
           cache: "no-store",
           signal: controller.signal,
         });
@@ -742,7 +744,7 @@ export function ContactEditFlow({ open, onOpenChange, contactoId, onSaved }: Con
           toast.error(message);
           return;
         }
-        dispatch({ type: "hydrate", contactoId, detail: body });
+        dispatch({ type: "hydrate", personaId: resolvedPersonaId, detail: body });
       } catch (error) {
         if ((error as Error).name !== "AbortError") {
           dispatch({ type: "error/set", value: "No se pudo cargar el contacto." });
@@ -754,7 +756,7 @@ export function ContactEditFlow({ open, onOpenChange, contactoId, onSaved }: Con
 
     run();
     return () => controller.abort();
-  }, [open, contactoId, state.loadedId]);
+  }, [open, resolvedPersonaId, state.loadedId]);
 
   React.useEffect(() => {
     if (open) return;
@@ -833,10 +835,10 @@ export function ContactEditFlow({ open, onOpenChange, contactoId, onSaved }: Con
   }, [deferredRelationAccountQuery]);
 
   const loadRelations = React.useCallback(async () => {
-    if (!contactoId) return;
+    if (!resolvedPersonaId) return;
     setRelationsLoading(true);
     try {
-      const response = await fetch(`/api/personas/${encodeURIComponent(contactoId)}/relaciones`, {
+      const response = await fetch(`/api/personas/${encodeURIComponent(resolvedPersonaId)}/relaciones`, {
         cache: "no-store",
       });
       const body = (await response.json().catch(() => ({}))) as {
@@ -915,19 +917,19 @@ export function ContactEditFlow({ open, onOpenChange, contactoId, onSaved }: Con
     } finally {
       setRelationsLoading(false);
     }
-  }, [contactoId]);
+  }, [resolvedPersonaId]);
 
   React.useEffect(() => {
-    if (!open || !contactoId) return;
+    if (!open || !resolvedPersonaId) return;
     void loadRelations();
-  }, [open, contactoId, loadRelations]);
+  }, [open, resolvedPersonaId, loadRelations]);
 
   const patchRelation = async (relationId: string, payload: Record<string, unknown>) => {
-    if (!contactoId) return;
+    if (!resolvedPersonaId) return;
     setRelationBusyId(relationId);
     try {
       const response = await fetch(
-        `/api/personas/${encodeURIComponent(contactoId)}/relaciones/${encodeURIComponent(relationId)}`,
+        `/api/personas/${encodeURIComponent(resolvedPersonaId)}/relaciones/${encodeURIComponent(relationId)}`,
         {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
@@ -945,11 +947,11 @@ export function ContactEditFlow({ open, onOpenChange, contactoId, onSaved }: Con
   };
 
   const toggleRelationStatus = async (relationId: string, activo: boolean) => {
-    if (!contactoId) return;
+    if (!resolvedPersonaId) return;
     setRelationBusyId(relationId);
     try {
       const response = await fetch(
-        `/api/personas/${encodeURIComponent(contactoId)}/relaciones/${encodeURIComponent(relationId)}/estado`,
+        `/api/personas/${encodeURIComponent(resolvedPersonaId)}/relaciones/${encodeURIComponent(relationId)}/estado`,
         {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
@@ -967,11 +969,11 @@ export function ContactEditFlow({ open, onOpenChange, contactoId, onSaved }: Con
   };
 
   const deleteRelation = async (relationId: string) => {
-    if (!contactoId) return;
+    if (!resolvedPersonaId) return;
     setRelationBusyId(relationId);
     try {
       const response = await fetch(
-        `/api/personas/${encodeURIComponent(contactoId)}/relaciones/${encodeURIComponent(relationId)}`,
+        `/api/personas/${encodeURIComponent(resolvedPersonaId)}/relaciones/${encodeURIComponent(relationId)}`,
         {
           method: "DELETE",
         },
@@ -987,14 +989,14 @@ export function ContactEditFlow({ open, onOpenChange, contactoId, onSaved }: Con
   };
 
   const createRelation = async () => {
-    if (!contactoId) return;
+    if (!resolvedPersonaId) return;
     if (!newRelation.cuenta_id.trim()) {
       toast.error("Debes indicar cuenta_id para crear la relacion.");
       return;
     }
     setRelationBusyId("new");
     try {
-      const response = await fetch(`/api/personas/${encodeURIComponent(contactoId)}/relaciones`, {
+      const response = await fetch(`/api/personas/${encodeURIComponent(resolvedPersonaId)}/relaciones`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -1035,7 +1037,7 @@ export function ContactEditFlow({ open, onOpenChange, contactoId, onSaved }: Con
   };
 
   const submit = async (dedupeDecision?: DedupeDecision) => {
-    if (!contactoId) return;
+    if (!resolvedPersonaId) return;
     const validationError = validateState(state);
     if (validationError) {
       dispatch({ type: "error/set", value: validationError });
@@ -1047,7 +1049,7 @@ export function ContactEditFlow({ open, onOpenChange, contactoId, onSaved }: Con
     try {
       const payload = buildPayload(state, dedupeDecision);
       if (!dedupeDecision) {
-        const previewResponse = await fetch(`/api/personas/${encodeURIComponent(contactoId)}/validar`, {
+        const previewResponse = await fetch(`/api/personas/${encodeURIComponent(resolvedPersonaId)}/validar`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload),
@@ -1068,7 +1070,7 @@ export function ContactEditFlow({ open, onOpenChange, contactoId, onSaved }: Con
         }
       }
 
-      const response = await fetch(`/api/personas/${encodeURIComponent(contactoId)}`, {
+      const response = await fetch(`/api/personas/${encodeURIComponent(resolvedPersonaId)}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
@@ -1164,9 +1166,9 @@ export function ContactEditFlow({ open, onOpenChange, contactoId, onSaved }: Con
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-5xl">
         <DialogHeader className="space-y-2">
-          <DialogTitle>Editar contacto</DialogTitle>
+          <DialogTitle>Editar persona</DialogTitle>
           <DialogDescription>
-            {fullName ? `Contacto: ${fullName}` : "Actualiza los datos del contacto, su empresa y su vínculo."}
+            {fullName ? `Persona: ${fullName}` : "Actualiza los datos de la persona, su empresa y su vínculo."}
           </DialogDescription>
         </DialogHeader>
 
@@ -1430,7 +1432,7 @@ export function ContactEditFlow({ open, onOpenChange, contactoId, onSaved }: Con
             </FormSection>
           ) : null}
 
-          {contactoId ? (
+          {resolvedPersonaId ? (
             <FormSection title="Vinculaciones existentes" description="Administra todas las vinculaciones de esta persona con empresas.">
               {relationsLoading ? <p className="text-xs text-muted-foreground">Cargando relaciones...</p> : null}
               {!relationsLoading && !relations.length ? (
@@ -1933,7 +1935,7 @@ export function ContactEditFlow({ open, onOpenChange, contactoId, onSaved }: Con
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
             Cancelar
           </Button>
-          <Button type="button" onClick={() => void submit()} disabled={state.saving || state.loading || !contactoId}>
+          <Button type="button" onClick={() => void submit()} disabled={state.saving || state.loading || !resolvedPersonaId}>
             {state.saving ? "Guardando..." : "Guardar cambios"}
           </Button>
         </div>

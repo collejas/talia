@@ -528,7 +528,7 @@ Conectar el boton `Nuevo contacto` a ese flujo.
 
 ### Paso 3
 
-Mantener `Editar contacto` en el flujo actual por ahora.
+Mantener `Editar persona` en el flujo actual por ahora.
 
 ### Paso 4
 
