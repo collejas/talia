@@ -121,9 +121,12 @@ test("feature identity and kind inference stay stable", () => {
 });
 
 test("expands map bounds for development navigation limits", () => {
-  assert.deepEqual(expandBoundsLike({ minLng: 1, minLat: 2, maxLng: 3, maxLat: 4 }), [
-    [0.64, 1.64],
-    [3.36, 4.36],
-  ]);
+  const bounds = expandBoundsLike({ minLng: 1, minLat: 2, maxLng: 3, maxLat: 4 });
+  assert.ok(bounds);
+  assert.equal(bounds.length, 2);
+  assert.ok(Math.abs(bounds[0][0] - 0.64) < 1e-9);
+  assert.ok(Math.abs(bounds[0][1] - 1.64) < 1e-9);
+  assert.ok(Math.abs(bounds[1][0] - 3.36) < 1e-9);
+  assert.ok(Math.abs(bounds[1][1] - 4.36) < 1e-9);
   assert.equal(expandBoundsLike(null), null);
 });

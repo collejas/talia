@@ -24,10 +24,11 @@
 - [x] (2026-05-14) Validación de cierre Plan 3D: una muestra reciente de 30 polígonos quedó válida en las consultas espaciales básicas (`ST_Intersects`, `ST_Buffer`, `ST_Simplify`), `catalog_items` se mantuvo activo con `243/243` registros y `react-doctor` sobre `frontend/panel` terminó en `98/100` sin bloqueo funcional.
 - [x] (2026-05-14) Automatización de pruebas del panel: se añadió `frontend/panel/src/components/mapa-de-propiedades/property-map.logic.test.mjs` con `node --test` para cubrir el filtrado por nivel/tipo/municipio y las transiciones abrir, subir y cerrar Mapbox sin depender de ejecución manual.
 - [x] (2026-05-15) Restricción de navegación Mapbox: la vista 3D quedó limitada al entorno del desarrollo raíz con `maxBounds`, `renderWorldCopies: false` y rotación desactivada para evitar navegación global y reducir consumo de tiles.
+- [x] (2026-05-15) UI del árbol refinada: los nodos de desarrollo, tipo y capa quedaron presentados como tarjetas y contenedores jerárquicos con contadores visuales, y las capas/polígonos se distinguen como bloques anidados más claros.
+- [x] (2026-05-15) Tooltips geográficos: países, estados y municipios ya muestran `vendidas`, `apartadas` y `disponibles` al pasar el cursor, usando los totales calculados por `regionStatusCounts`.
 
 ## Próximos pasos sugeridos
-- [ ] Continuar refinando la UI del árbol para que los polígonos se manejen como contenedores colapsables (con iconos de expansión y etiquetas “Polígono guardado” ocultas) y los botones de polígono estén anidados dentro del nodo correspondiente, garantizando una experiencia coherente con la jerarquía y el estado actual de los nodos.
-- [ ] Agregar tooltips al pasar el cursor sobre países/estados/municipios que muestren los totales calculados por `regionStatusCounts` (unidades vendidas, apartadas y disponibles) para vincular la nueva capa de información con el flujo jerárquico actual.
+- [ ] Si quieres seguir afinando, podemos agregar una microleyenda visual en la barra lateral para explicar colores, niveles y estados, pero ya no es un bloqueo del Plan 3D.
 
 ## Referencias claves
 - Documentación general del plan espacial: `docs/Plan_3D/plan_3D.md` y la bitácora `docs/Plan_3D/pasos_plan_3D.md`.

@@ -171,6 +171,15 @@ function normalizeLooseString(value) {
   return str.length ? str.toLowerCase() : null;
 }
 
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
+}
+
 function buildHierarchy(features) {
   const devMap = new Map();
   for (const feature of features) {
@@ -266,10 +275,19 @@ function buildHierarchy(features) {
       id: dev.id,
       name: dev.name,
       tipoSummary: Array.from(dev.tipoLabels).filter(Boolean),
+      unitCount: Array.from(dev.tipos.values()).reduce(
+        (total, tipo) =>
+          total + Array.from(tipo.capas.values()).reduce((capaTotal, capa) => capaTotal + capa.units.length, 0),
+        0,
+      ),
       tipos: Array.from(dev.tipos.values())
         .map((tipo) => ({
           id: tipo.id,
           label: tipo.label,
+          unitCount: Array.from(tipo.capas.values()).reduce(
+            (total, capa) => total + capa.units.length,
+            0,
+          ),
           capas: Array.from(tipo.capas.values()).sort((a, b) =>
             (a.name ?? "").localeCompare(b.name ?? ""),
           ),
@@ -2175,9 +2193,19 @@ export function PropertyMap() {
     const hierarchyLayer = leaflet.geoJSON([], {
       onEachFeature: (feature, layerInstance) => {
         layerInstance.on("click", () => handleRegionClickRef.current?.(feature));
-        layerInstance.on("mouseover", () => handleRegionHoverRef.current?.(feature));
-        layerInstance.on("mouseout", () => handleRegionOutRef.current?.());
-        layerInstance.bindTooltip("", { sticky: true, direction: "top" });
+        layerInstance.on("mouseover", () => {
+          handleRegionHoverRef.current?.(feature);
+          layerInstance.openTooltip?.();
+        });
+        layerInstance.on("mouseout", () => {
+          handleRegionOutRef.current?.();
+          layerInstance.closeTooltip?.();
+        });
+        layerInstance.bindTooltip(buildRegionTooltipContent(feature), {
+          sticky: true,
+          direction: "top",
+          className: "region-tooltip",
+        });
         applyRegionStyleRef.current?.(layerInstance, feature);
       },
     });
@@ -2343,18 +2371,35 @@ export function PropertyMap() {
     });
   }, [applyRegionStyleRef, hoveredRegionKey, mapLevel, selectedMunicipioKey, selectedStateKey, leafletMountVersion]);
 
-  const buildRegionTooltipText = useCallback(
-    (key) => {
-      const stats = regionStatusCounts.get(key);
-      if (!stats) {
-        return "Vendidas: 0 · Apartadas: 0 · Disponibles: 0";
-      }
-      const sold = stats.vendidas ?? 0;
-      const reserved = stats.apartadas ?? 0;
-      const available = stats.disponibles ?? 0;
-      return `Vendidas: ${sold} · Apartadas: ${reserved} · Disponibles: ${available}`;
+  const buildRegionTooltipContent = useCallback(
+    (feature) => {
+      const props = feature?.properties ?? {};
+      const key = resolveRegionKey(feature);
+      const stats = regionStatusCounts.get(key) ?? {
+        vendidas: 0,
+        apartadas: 0,
+        disponibles: 0,
+      };
+      const title =
+        mapLevel === "pais"
+          ? props.pais_nombre ?? props.name ?? "País"
+          : mapLevel === "estado"
+          ? props.estado_nombre ?? props.name ?? "Estado"
+          : props.municipio_nombre ?? props.name ?? "Municipio";
+      return `
+        <div class="min-w-[180px]">
+          <div class="text-[0.65rem] font-semibold uppercase tracking-[0.22em] text-slate-500">${escapeHtml(
+            title,
+          )}</div>
+          <div class="mt-1 space-y-0.5 text-[0.7rem] text-slate-700">
+            <div><span class="font-semibold text-emerald-700">Vendidas:</span> ${stats.vendidas ?? 0}</div>
+            <div><span class="font-semibold text-amber-700">Apartadas:</span> ${stats.apartadas ?? 0}</div>
+            <div><span class="font-semibold text-sky-700">Disponibles:</span> ${stats.disponibles ?? 0}</div>
+          </div>
+        </div>
+      `;
     },
-    [regionStatusCounts],
+    [mapLevel, regionStatusCounts],
   );
 
   useEffect(() => {
@@ -2364,16 +2409,14 @@ export function PropertyMap() {
     hierarchyLayerRef.current.eachLayer((layer) => {
       if (layer.feature) {
         applyRegionStyleRef.current?.(layer, layer.feature);
-        const key = resolveRegionKey(layer.feature);
-        const tooltip = layer.getTooltip?.();
-        if (tooltip) {
-          layer.setTooltipContent(buildRegionTooltipText(key));
+        if (layer.setTooltipContent) {
+          layer.setTooltipContent(buildRegionTooltipContent(layer.feature));
         }
       }
     });
   }, [
     applyRegionStyleRef,
-    buildRegionTooltipText,
+    buildRegionTooltipContent,
     hoveredRegionKey,
     mapLevel,
     regionStatusCounts,
@@ -3212,12 +3255,12 @@ export function PropertyMap() {
   );
 
   return (
-    <div className="lg:flex-row flex flex-col gap-4">
+    <div className="flex min-h-0 flex-col gap-4 lg:h-[calc(100svh-9rem)] lg:flex-row lg:items-stretch">
       <aside
-        className="h-[600px] w-full rounded-md border border-slate-200 bg-white/60 p-3 shadow-sm shadow-slate-900/5 backdrop-blur dark:border-slate-800 dark:bg-slate-950/60 lg:h-[600px] lg:w-80"
-        style={{ maxHeight: "600px", overflow: "hidden" }}
+        className="flex min-h-0 w-full flex-col rounded-md border border-slate-200 bg-white/60 p-3 shadow-sm shadow-slate-900/5 backdrop-blur dark:border-slate-800 dark:bg-slate-950/60 lg:w-80 lg:h-[calc(100svh-9rem)]"
+        style={{ minHeight: "45vh", overflow: "hidden" }}
       >
-        <div className="flex flex-col gap-2">
+        <div className="flex min-h-0 flex-1 flex-col gap-2">
           <div>
             <label className="mb-1 block text-sm font-semibold text-slate-700 dark:text-slate-200">
               Filtrar por nivel
@@ -3321,23 +3364,17 @@ export function PropertyMap() {
               ? error
               : `${panelFeatures.length} propiedades mostrando`}
           </div>
-          <div
-            className="flex flex-1 flex-col overflow-hidden rounded-lg border border-slate-200 bg-white/40 shadow-sm transition"
-            style={{ height: "calc(100vh - 360px)" }}
-          >
-            <div
-              className="h-full overflow-y-auto px-3 py-2"
-              style={{ maxHeight: "calc(100vh - 360px)", minHeight: 260 }}
-            >
+          <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-slate-200 bg-white/40 shadow-sm transition">
+            <div className="min-h-0 flex-1 overflow-y-auto px-3 py-2">
               <div className="space-y-2">
                 {hierarchyTree.map((dev) => {
                   const devExpanded = expandedDevIds.has(dev.id);
                   return (
                     <div key={dev.id} className="border-b border-slate-100 pb-2 last:border-0">
-                      <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-start justify-between gap-2">
                         <button
                           type="button"
-                          className="flex-1 text-left font-semibold text-slate-700 hover:text-slate-900"
+                          className="flex-1 text-left font-semibold text-slate-800 transition hover:text-slate-950"
                           onClick={() => {
                             const feature = findFeatureForDevelopment(dev.id);
                             if (feature) {
@@ -3345,12 +3382,17 @@ export function PropertyMap() {
                             }
                           }}
                         >
-                          {dev.name}
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span>{dev.name}</span>
+                            <span className="rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[0.65rem] font-semibold text-slate-500">
+                              {dev.unitCount ?? 0} unidades
+                            </span>
+                          </div>
                         </button>
                         <div className="flex items-center gap-1">
                           <button
                             type="button"
-                            className="rounded border border-slate-200 px-2 py-1 text-[0.65rem] text-slate-600 hover:border-slate-400 hover:text-slate-800"
+                            className="rounded border border-slate-200 px-2 py-1 text-[0.65rem] text-slate-600 transition hover:border-slate-400 hover:text-slate-800"
                             onClick={() =>
                               setExpandedDevIds((prev) => {
                                 const next = new Set(prev);
@@ -3368,21 +3410,23 @@ export function PropertyMap() {
                         </div>
                       </div>
                       {dev.tipoSummary && dev.tipoSummary.length > 0 && (
-                        <div className="mt-1 flex flex-wrap gap-1 text-[0.6rem] uppercase tracking-[0.2em] text-slate-400">
+                        <div className="mt-1 flex flex-wrap gap-1 text-[0.6rem] uppercase tracking-[0.18em] text-slate-400">
                           {dev.tipoSummary.map((item) => (
-                            <span key={item}>{item}</span>
+                            <span key={item} className="rounded-full bg-slate-100 px-2 py-0.5 text-slate-500">
+                              {item}
+                            </span>
                           ))}
                         </div>
                       )}
                       {devExpanded && (
-                        <div className="mt-1 space-y-3 pl-4 text-xs text-slate-600">
+                        <div className="mt-2 space-y-2 border-l border-slate-200 pl-4 text-xs text-slate-600">
                           {dev.tipos.map((tipo) => {
                             const tipoExpanded = expandedTipos.has(tipo.id);
                             return (
                               <div key={tipo.id}>
                                 <button
                                   type="button"
-                                  className="flex w-full items-center justify-between text-left font-semibold uppercase tracking-[0.2em] text-slate-500"
+                                  className="flex w-full items-center justify-between text-left font-semibold uppercase tracking-[0.18em] text-slate-500"
                                   onClick={() =>
                                     setExpandedTipos((prev) => {
                                       const next = new Set(prev);
@@ -3394,21 +3438,26 @@ export function PropertyMap() {
                                       return next;
                                     })
                                   }
-                                >
-                                  <span>{tipo.label}</span>
+                                  >
+                                  <span className="flex items-center gap-2">
+                                    <span>{tipo.label}</span>
+                                    <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[0.6rem] text-slate-500">
+                                      {tipo.unitCount ?? 0}
+                                    </span>
+                                  </span>
                                   <span className="text-[0.6rem] text-slate-300">
                                     {tipoExpanded ? "-" : "+"}
                                   </span>
                                 </button>
                                 {tipoExpanded && (
-                                  <div className="mt-1 space-y-1 pl-3 text-[0.8rem]">
+                                  <div className="mt-2 space-y-2 pl-3 text-[0.8rem]">
                                     {tipo.capas.map((capa) => {
                                       const capaExpanded = expandedCapas.has(capa.id);
                                       return (
-                                        <div key={capa.id} className="border-t border-slate-100 pt-2">
+                                        <div key={capa.id} className="border-l border-slate-200 pl-3">
                                           <button
                                             type="button"
-                                            className="flex w-full items-center justify-between text-left font-semibold"
+                                            className="flex w-full items-center justify-between text-left font-semibold text-slate-700"
                                             onClick={() =>
                                               setExpandedCapas((prev) => {
                                                 const next = new Set(prev);
@@ -3421,22 +3470,30 @@ export function PropertyMap() {
                                               })
                                             }
                                           >
-                                            <span>{capa.name}</span>
+                                            <span className="flex items-center gap-2">
+                                              <span>{capa.name}</span>
+                                              <span className="rounded-full bg-sky-100 px-2 py-0.5 text-[0.6rem] font-semibold text-sky-700">
+                                                Polígono
+                                              </span>
+                                              <span className="rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[0.6rem] font-semibold text-slate-500">
+                                                {capa.units.length}
+                                              </span>
+                                            </span>
                                             <span className="text-[0.6rem] text-slate-400">
                                               {capaExpanded ? "-" : "+"}
                                             </span>
                                           </button>
                                           {capaExpanded && (
-                                            <div className="mt-1 space-y-1 pl-3 text-[0.8rem]">
+                                            <div className="mt-1 space-y-1 pl-2 text-[0.8rem]">
                                               {capa.units.map((unit) => (
                                                 <button
                                                   key={unit.id}
                                                   type="button"
                                                   onClick={() => handleUnitSelect(unit)}
-                                                  className={`flex w-full items-center gap-2 rounded-md border px-2 py-1 text-left text-slate-700 transition ${
+                                                  className={`flex w-full items-center gap-2 border-l px-2.5 py-1.5 text-left text-slate-700 transition ${
                                                     selectedId === String(unit.id)
-                                                      ? "border-slate-900 bg-slate-900 text-white"
-                                                      : "border-slate-200 bg-white hover:border-slate-400 hover:bg-slate-100"
+                                                      ? "border-slate-900 bg-slate-950 text-white"
+                                                      : "border-slate-200 bg-transparent hover:border-slate-400 hover:bg-slate-50"
                                                   }`}
                                                 >
                                                   <span
@@ -3469,8 +3526,11 @@ export function PropertyMap() {
           </div>
         </div>
       </aside>
-      <section className="relative flex-1 min-w-0">
-        <div className="relative h-[600px] w-full min-h-[600px] overflow-hidden rounded-md">
+      <section className="relative min-h-0 flex-1 min-w-0 self-stretch lg:h-[calc(100svh-9rem)]">
+        <div
+          className="relative h-full w-full overflow-hidden rounded-md"
+          style={{ minHeight: "55vh" }}
+        >
           <div
             key={`leaflet-map-${leafletMountVersion}`}
             ref={mapContainerRef}
