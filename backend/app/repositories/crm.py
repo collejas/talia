@@ -5237,6 +5237,17 @@ class CRMRepository:
         session_key = session_id.strip()
         if not session_key:
             raise CRMRepositoryError("session_id_required")
+        contact_id = payload.get("p_contacto_id")
+        if contact_id:
+            organizacion_id_raw = payload.get("p_organizacion_id")
+            organizacion_uuid = _coerce_uuid(str(organizacion_id_raw), field="p_organizacion_id")
+            contact_uuid = _coerce_uuid(str(contact_id), field="p_contacto_id")
+            if organizacion_uuid is None or contact_uuid is None:
+                raise CRMRepositoryError("web_session_legacy_shadow_invalid_ids")
+            await self.ensure_legacy_contact_shadow(
+                organizacion_id=organizacion_uuid,
+                persona_id=contact_uuid,
+            )
         body = {"p_session_id": session_key, **payload}
         result = await self._rpc("record_web_session", body)
         if isinstance(result, str):

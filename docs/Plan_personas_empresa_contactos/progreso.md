@@ -57,6 +57,7 @@ sin romper contratos publicos ni el lenguaje de usuario del panel.
   `contactos`:
   - `asignaciones_vendedores`
   - `prospeccion_whatsapp_atribucion_eventos`
+  - `web_sessions`
   - `web_booking_sessions`
   - `openai_request_usage`
 - el puente crea una sombra legacy en `public.contactos` solo cuando una escritura aun
@@ -203,7 +204,9 @@ Notas:
   - `web_booking_sessions`
   - `asignaciones_vendedores`
   - `prospeccion_whatsapp_atribucion_eventos`
-- `web_sessions` quedó como fuente de analítica/landing y no entra al ciclo de alta de personas.
+  - `web_sessions`
+- `web_sessions` sigue sirviendo como fuente de analítica/landing, pero su writer first-party
+  quedó cubierto por el mismo puente para no romper la FK legacy.
 - Pendiente solo si aparece otro consumidor real:
   - limpiar campos duplicados en `cuentas`/`contactos`
   - revisar relaciones SQL antiguas fuera del panel de contactos

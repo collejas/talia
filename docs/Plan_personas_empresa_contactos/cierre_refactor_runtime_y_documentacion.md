@@ -82,6 +82,7 @@ general que materializa una sombra legacy solo cuando hace falta:
 
 - `asignaciones_vendedores`
 - `prospeccion_whatsapp_atribucion_eventos`
+- `web_sessions`
 - `web_booking_sessions`
 - `openai_request_usage`
 
@@ -89,8 +90,8 @@ Ese puente toma `persona_id`, crea o reutiliza la fila sombra en `contactos` y l
 que la escritura legacy siga su curso. La traza operativa no cambia; solo se mantiene
 compatibilidad hasta retirar esas FKs.
 
-`web_sessions` no entra en ese puente porque en este momento se usa como fuente de
-analitica/landing y no como destino de escritura desde el flujo de personas.
+`web_sessions` entra al puente solo para el writer first-party que sigue persistiendo
+`contacto_id`; su uso de lectura y analitica sigue separado del ciclo de alta de personas.
 
 ## 3. Limpieza semantica que se hizo
 
