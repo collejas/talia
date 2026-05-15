@@ -164,8 +164,6 @@ Se decidio no renombrar todo de una vez porque eso requeriria una refactorizacio
 
 ### 5.2 Pendiente
 
-- Vista de detalle mas rica post-alta
-- Endpoints nativos de relacion para mayor claridad
 - Deduplicacion controlada
 - Decidir si se renombra el contrato publico de `contact` a `persona`
 

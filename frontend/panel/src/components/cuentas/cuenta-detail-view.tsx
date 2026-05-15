@@ -3,7 +3,7 @@
 import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { IconArrowLeft, IconBuilding, IconUsers, IconX } from "@tabler/icons-react";
+import { IconArrowLeft, IconBuilding, IconTrash, IconUserPlus, IconUsers, IconX } from "@tabler/icons-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -13,6 +13,27 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
 type AccountDetail = Record<string, unknown>;
+type AccountRelation = {
+  id: string;
+  cuenta_id: string;
+  persona_id: string;
+  rol_en_cuenta: string | null;
+  puesto: string | null;
+  es_contacto_principal: boolean;
+  es_contacto_facturacion: boolean;
+  es_representante_legal: boolean;
+  activo: boolean;
+  fecha_inicio: string | null;
+  fecha_fin: string | null;
+  notas: string | null;
+  persona?: {
+    id: string;
+    nombre_completo: string | null;
+    correo_principal: string | null;
+    telefono_principal_e164: string | null;
+    company_name: string | null;
+  } | null;
+};
 type SearchItem = {
   id: string;
   nombre: string;
@@ -38,8 +59,18 @@ function formatDate(value: unknown): string {
 export function CuentaDetailView({ cuentaId }: { cuentaId: string }) {
   const router = useRouter();
   const [detail, setDetail] = React.useState<AccountDetail | null>(null);
+  const [relations, setRelations] = React.useState<AccountRelation[]>([]);
   const [loading, setLoading] = React.useState(true);
+  const [relationsLoading, setRelationsLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
+  const [relationsError, setRelationsError] = React.useState<string | null>(null);
+  const [addRelationOpen, setAddRelationOpen] = React.useState(false);
+  const [relationQuery, setRelationQuery] = React.useState("");
+  const [relationResults, setRelationResults] = React.useState<SearchItem[]>([]);
+  const [relationTargetId, setRelationTargetId] = React.useState<string>("");
+  const [relationRole, setRelationRole] = React.useState("contacto_principal");
+  const [relationSubmitting, setRelationSubmitting] = React.useState(false);
+  const [relationDeletingId, setRelationDeletingId] = React.useState<string | null>(null);
   const [mergeOpen, setMergeOpen] = React.useState(false);
   const [mergeQuery, setMergeQuery] = React.useState("");
   const [mergeResults, setMergeResults] = React.useState<SearchItem[]>([]);
@@ -64,9 +95,59 @@ export function CuentaDetailView({ cuentaId }: { cuentaId: string }) {
     }
   }, [cuentaId]);
 
+  const loadRelations = React.useCallback(async () => {
+    setRelationsLoading(true);
+    setRelationsError(null);
+    try {
+      const response = await fetch(`/api/cuentas/${encodeURIComponent(cuentaId)}/relaciones`, {
+        cache: "no-store",
+      });
+      const body = (await response.json().catch(() => ({}))) as { items?: AccountRelation[]; error?: string };
+      if (!response.ok) throw new Error(body.error || "No se pudieron cargar las relaciones.");
+      setRelations(Array.isArray(body.items) ? body.items : []);
+    } catch (err) {
+      setRelationsError(err instanceof Error ? err.message : "No se pudieron cargar las relaciones.");
+      setRelations([]);
+    } finally {
+      setRelationsLoading(false);
+    }
+  }, [cuentaId]);
+
   React.useEffect(() => {
     void loadData();
   }, [loadData]);
+
+  React.useEffect(() => {
+    void loadRelations();
+  }, [loadRelations]);
+
+  React.useEffect(() => {
+    const query = relationQuery.trim();
+    if (!addRelationOpen) return;
+    if (query.length < 2) {
+      setRelationResults([]);
+      return;
+    }
+
+    const controller = new AbortController();
+    const run = async () => {
+      try {
+        const response = await fetch(`/api/personas/search?q=${encodeURIComponent(query)}&limit=10`, {
+          cache: "no-store",
+          signal: controller.signal,
+        });
+        const body = (await response.json().catch(() => ({}))) as { items?: SearchItem[]; error?: string };
+        if (!response.ok) throw new Error(body.error || "No se pudieron buscar personas.");
+        setRelationResults(Array.isArray(body.items) ? body.items : []);
+      } catch (err) {
+        if ((err as Error).name !== "AbortError") {
+          setRelationResults([]);
+        }
+      }
+    };
+    void run();
+    return () => controller.abort();
+  }, [addRelationOpen, relationQuery]);
 
   React.useEffect(() => {
     const query = mergeQuery.trim();
@@ -142,6 +223,58 @@ export function CuentaDetailView({ cuentaId }: { cuentaId: string }) {
       toast.error(err instanceof Error ? err.message : "No se pudo fusionar.");
     } finally {
       setMergeSubmitting(false);
+    }
+  };
+
+  const handleAddRelation = async () => {
+    if (!relationTargetId) {
+      toast.error("Selecciona una persona.");
+      return;
+    }
+    setRelationSubmitting(true);
+    try {
+      const response = await fetch(`/api/cuentas/${encodeURIComponent(cuentaId)}/relaciones`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          persona_id: relationTargetId,
+          rol_en_cuenta: relationRole,
+          activo: true,
+        }),
+      });
+      const body = (await response.json().catch(() => ({}))) as { error?: string };
+      if (!response.ok) throw new Error(body.error || "No se pudo vincular.");
+      toast.success("Relación agregada.");
+      setAddRelationOpen(false);
+      setRelationQuery("");
+      setRelationResults([]);
+      setRelationTargetId("");
+      setRelationRole("contacto_principal");
+      await loadRelations();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "No se pudo vincular.");
+    } finally {
+      setRelationSubmitting(false);
+    }
+  };
+
+  const handleRemoveRelation = async (relacionId: string) => {
+    setRelationDeletingId(relacionId);
+    try {
+      const response = await fetch(
+        `/api/cuentas/${encodeURIComponent(cuentaId)}/relaciones/${encodeURIComponent(relacionId)}`,
+        {
+          method: "DELETE",
+        },
+      );
+      const body = (await response.json().catch(() => ({}))) as { error?: string };
+      if (!response.ok) throw new Error(body.error || "No se pudo eliminar la relación.");
+      toast.success("Relación eliminada.");
+      await loadRelations();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "No se pudo eliminar la relación.");
+    } finally {
+      setRelationDeletingId(null);
     }
   };
 
@@ -236,7 +369,7 @@ export function CuentaDetailView({ cuentaId }: { cuentaId: string }) {
         <Card>
           <CardHeader>
             <CardTitle>Acciones</CardTitle>
-            <CardDescription>Acceso rápido a la ficha, edición y merge.</CardDescription>
+            <CardDescription>Acceso rápido a la ficha, vínculos y merge.</CardDescription>
           </CardHeader>
           <CardContent className="grid gap-3">
             <Button asChild variant="outline" className="justify-start">
@@ -249,6 +382,64 @@ export function CuentaDetailView({ cuentaId }: { cuentaId: string }) {
               <IconUsers className="mr-2 size-4" />
               Fusionar con otra cuenta
             </Button>
+            <Button variant="outline" className="justify-start" onClick={() => setAddRelationOpen(true)}>
+              <IconUserPlus className="mr-2 size-4" />
+              Vincular persona
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+
+      <div className="mt-6 grid gap-6">
+        <Card>
+          <CardHeader>
+            <CardTitle>Relaciones de cuenta</CardTitle>
+            <CardDescription>Personas vinculadas a esta cuenta y su rol operativo.</CardDescription>
+          </CardHeader>
+          <CardContent className="grid gap-3">
+            {relationsLoading ? (
+              <p className="text-sm text-muted-foreground">Cargando relaciones...</p>
+            ) : relationsError ? (
+              <p className="text-sm text-destructive">{relationsError}</p>
+            ) : relations.length ? (
+              relations.map((relation) => {
+                const person = relation.persona;
+                const personName = person?.nombre_completo || getText(relation.persona_id);
+                const personSubtitle = person?.correo_principal || person?.telefono_principal_e164 || person?.company_name || "Sin datos";
+                return (
+                  <div key={relation.id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-muted/20 p-4">
+                    <div className="grid gap-1">
+                      <div className="font-medium">{personName}</div>
+                      <div className="text-xs text-muted-foreground">
+                        {relation.rol_en_cuenta || "contacto_principal"} · {personSubtitle}
+                      </div>
+                      <div className="text-xs text-muted-foreground">
+                        {relation.activo ? "Activa" : "Inactiva"} · {relation.puesto || "Sin puesto"}
+                      </div>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <Button asChild variant="outline" size="sm">
+                        <Link href={`/personas/${encodeURIComponent(relation.persona_id)}`}>
+                          Abrir persona
+                        </Link>
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => void handleRemoveRelation(relation.id)}
+                        disabled={relationDeletingId === relation.id}
+                      >
+                        <IconTrash className="mr-2 size-4" />
+                        {relationDeletingId === relation.id ? "Quitando..." : "Quitar"}
+                      </Button>
+                    </div>
+                  </div>
+                );
+              })
+            ) : (
+              <p className="text-sm text-muted-foreground">No hay relaciones registradas.</p>
+            )}
           </CardContent>
         </Card>
       </div>
@@ -304,6 +495,70 @@ export function CuentaDetailView({ cuentaId }: { cuentaId: string }) {
               </Button>
               <Button type="button" onClick={() => void handleMerge()} disabled={mergeSubmitting || !mergeTargetId}>
                 {mergeSubmitting ? "Fusionando..." : "Fusionar seleccionado"}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={addRelationOpen} onOpenChange={setAddRelationOpen}>
+        <DialogContent className="max-w-2xl">
+          <div className="space-y-4">
+            <div>
+              <h2 className="text-lg font-semibold">Vincular persona</h2>
+              <p className="text-sm text-muted-foreground">
+                Busca una persona y asígnala a esta cuenta sin pasar por el flujo legacy.
+              </p>
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="relation-person-search">Buscar persona</Label>
+              <Input
+                id="relation-person-search"
+                value={relationQuery}
+                onChange={(event) => setRelationQuery(event.target.value)}
+                placeholder="Nombre, correo, teléfono..."
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="relation-role">Rol en cuenta</Label>
+              <Input
+                id="relation-role"
+                value={relationRole}
+                onChange={(event) => setRelationRole(event.target.value)}
+                placeholder="contacto_principal"
+              />
+            </div>
+            {relationResults.length ? (
+              <div className="grid gap-2">
+                {relationResults.map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    className={`w-full rounded-xl border px-4 py-3 text-left ${relationTargetId === item.id ? "border-foreground bg-muted/40" : "border-border/60 bg-background"}`}
+                    onClick={() => setRelationTargetId(item.id)}
+                  >
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <div className="font-medium">{item.nombre}</div>
+                        <div className="text-xs text-muted-foreground">
+                          {item.empresa || "Sin empresa"}
+                        </div>
+                      </div>
+                      <div className="text-xs text-muted-foreground">
+                        {item.telefono || item.correo || "Sin datos"}
+                      </div>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            ) : null}
+            <div className="flex justify-end gap-2">
+              <Button type="button" variant="outline" onClick={() => setAddRelationOpen(false)} disabled={relationSubmitting}>
+                <IconX className="mr-2 size-4" />
+                Cancelar
+              </Button>
+              <Button type="button" onClick={() => void handleAddRelation()} disabled={relationSubmitting || !relationTargetId}>
+                {relationSubmitting ? "Vinculando..." : "Vincular seleccionado"}
               </Button>
             </div>
           </div>

@@ -202,7 +202,9 @@ Notas:
 
 ### 2) Endpoints nativos de relación (opcional, pero recomendable)
 
-- Endpoints dedicados para CRUD de `cuenta_personas` y `cuenta_direcciones`, para no depender de “side effects” en `update_contact`.
+- Ya quedó expuesto CRUD nativo para `cuenta_personas` desde `POST /crm/cuentas/{cuenta_id}/relaciones` y sus variantes `GET/PATCH/DELETE`.
+- La ficha dedicada de cuenta ya puede listar, vincular y quitar personas sin pasar por `contacto_id`.
+- Ya quedó expuesto CRUD nativo para `cuenta_direcciones` desde `POST /crm/cuentas/{cuenta_id}/direcciones` y sus variantes `GET/PATCH/DELETE`.
 
 ### 3) Deduplicación controlada
 
@@ -226,6 +228,7 @@ Notas:
   - conserva la cuenta origen como archivada con metadata de merge.
 - El panel ya expone el proxy de merge para cuentas en `frontend/panel/src/app/api/cuentas/[cuentaId]/merge/route.ts`.
 - La UI de cuentas ya tiene ficha dedicada en `frontend/panel/src/app/cuentas/[cuentaId]/page.tsx` y un drawer del listado que enlaza a esa ficha.
+- La ficha dedicada ya lista relaciones de `cuenta_personas` y permite vincular/quitar personas sin pasar por `contacto_id`.
 - Pendiente de más profundidad, si se quiere ampliar:
   - personas: match fuerte por teléfono/correo, débil por nombre + org
   - cuentas: match fuerte por RFC, medio por razón social, débil por nombre comercial
@@ -244,6 +247,7 @@ Notas:
   quedó cubierto por el mismo puente para no romper la FK legacy.
 - Pendiente solo si aparece otro consumidor real:
   - limpiar campos duplicados en `cuentas`/`contactos`
+  - completar el CRUD nativo de `cuenta_direcciones`
   - revisar relaciones SQL antiguas fuera del panel de contactos
 
 ### 5) Limpieza semantica y cierre documental
