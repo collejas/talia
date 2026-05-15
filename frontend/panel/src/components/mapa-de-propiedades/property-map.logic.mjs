@@ -60,6 +60,10 @@ export function getFeatureId(feature) {
 }
 
 export function inferFeatureKind(feature) {
+  const directLayer = (feature?.layer ?? feature?.properties?.layer ?? "").toString().toLowerCase().trim();
+  if (["desarrollo", "mix", "capa", "unidad"].includes(directLayer)) {
+    return directLayer;
+  }
   const props = feature?.properties ?? {};
   const rawTipo = (props.target_type ?? props.tipo ?? "").toString().toLowerCase();
   const normalized = rawTipo.trim();

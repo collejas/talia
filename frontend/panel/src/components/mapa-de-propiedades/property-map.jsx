@@ -239,34 +239,7 @@ function buildHierarchy(features) {
   for (const feature of features) {
     const props = feature?.properties ?? {};
     const featureKind = inferFeatureKind(feature);
-    const rawType = (
-      typeof props.target_type === "string"
-        ? props.target_type
-        : typeof props.tipo === "string"
-        ? props.tipo
-        : ""
-    )
-      .toString()
-      .trim()
-      .toLowerCase();
-    const unitAliases = new Set([
-      "",
-      "unidad",
-      "departamento",
-      "poligono",
-      "unit",
-      "department",
-      "lote",
-      "casa",
-      "terreno",
-      "local",
-      "oficina",
-      "bodega",
-    ]);
-    const isUnit = featureKind === "unidad" || unitAliases.has(rawType);
-    if (!isUnit) {
-      continue;
-    }
+    const isUnit = featureKind === "unidad";
     const rawDevId = props.desarrollo_id;
     if (!rawDevId || (typeof rawDevId === "string" && !rawDevId.trim())) {
       continue;
@@ -288,11 +261,16 @@ function buildHierarchy(features) {
         tipoLabels: new Set(),
         tipos: new Map(),
         capas: new Map(),
+        capaLookup: new Map(),
       });
     }
     const dev = devMap.get(devId);
     if (!dev) continue;
     dev.tipoLabels.add(tipoLabel);
+    const desarrolloTipo = normalizeLooseString(
+      props.desarrollo_tipo ?? props.desarrollo_ambito ?? props.tipo_nombre ?? "",
+    );
+    const isVerticalDevelopment = desarrolloTipo === "vertical";
 
     if (!dev.tipos.has(tipoKey)) {
       dev.tipos.set(tipoKey, {
@@ -304,27 +282,52 @@ function buildHierarchy(features) {
     const tipo = dev.tipos.get(tipoKey);
     if (!tipo) continue;
 
+    if (featureKind !== "capa" && featureKind !== "unidad") {
+      continue;
+    }
+
     const capaNombre = props.capa_nombre ?? `Capa ${props.nivel ?? "0"}`;
+    const capaLevel = props.nivel ?? props.nivel_id ?? props.capa_id ?? props.capa_key ?? props.target_parent_id ?? null;
+    const capaNameKey = normalizeLooseString(capaNombre) ?? null;
+    const capaKey = isVerticalDevelopment
+      ? `${devId}::vertical::${capaLevel ?? "na"}`
+      : `${devId}::${capaNameKey ?? `capa-${capaLevel ?? "na"}`}::${capaLevel ?? "na"}`;
     const capaParentKey = props.parent_id ?? props.target_parent_id ?? props.capa_parent_id ?? props.nivel_id ?? null;
-    const capaLevelKey = props.nivel ?? props.nivel_id ?? props.capa_id ?? props.capa_key ?? props.target_parent_id ?? null;
-    const structuralCapaKey = `${devId}::${capaLevelKey ?? capaParentKey ?? capaNombre}`;
-    if (!dev.capas.has(structuralCapaKey)) {
-      dev.capas.set(structuralCapaKey, {
-        id: structuralCapaKey,
+    let capa = dev.capaLookup.get(capaKey) ?? null;
+    if (!capa) {
+      capa = {
+        id: featureKind === "capa" ? String(feature.id ?? capaKey) : capaKey,
         name: capaNombre,
         units: [],
         sortValue: resolveCapaSortValue(props),
         parentKey: capaParentKey != null ? String(capaParentKey) : null,
-      });
+        feature: featureKind === "capa" ? feature : null,
+      };
+      dev.capaLookup.set(capaKey, capa);
+      dev.capas.set(capaKey, capa);
+    } else if (featureKind === "capa" && !capa.feature) {
+      capa.feature = feature;
+      if (feature?.id != null) {
+        capa.id = String(feature.id);
+      }
+      if ((!capa.name || /^capa\s*\d+$/i.test(capa.name)) && capaNombre) {
+        capa.name = capaNombre;
+      }
     }
-    const capa = dev.capas.get(structuralCapaKey);
     if (!capa) continue;
-    if (!tipo.capas.has(structuralCapaKey)) {
-      tipo.capas.set(structuralCapaKey, capa);
+    if (!tipo.capas.has(capaKey)) {
+      tipo.capas.set(capaKey, capa);
     }
     const sortValue = resolveCapaSortValue(props);
     if (Number.isFinite(sortValue) && !Number.isFinite(capa.sortValue)) {
       capa.sortValue = sortValue;
+    }
+
+    if (featureKind === "capa") {
+      continue;
+    }
+    if (!isUnit) {
+      continue;
     }
 
     const status = (props.status ?? "").toLowerCase();
@@ -535,6 +538,9 @@ export function PropertyMap() {
 
   const mapboxFeatureRef = useRef(null);
   const pendingMapboxFeatureRef = useRef(null);
+  const pendingMapboxParentKindRef = useRef(null);
+  const suppressMapboxSyncRef = useRef(false);
+  const suppressTreeCapaFallbackRef = useRef(false);
 
   useEffect(() => {
     mapboxFeatureRef.current = mapboxFeature;
@@ -702,11 +708,11 @@ export function PropertyMap() {
   }, []);
 
   const sendFeaturesToMapbox = useCallback(
-    (featureList, parentKindOverride = null) => {
+    (featureList, parentKindOverride = null, forceImmediate = false) => {
       if (!Array.isArray(featureList) || !featureList.length) {
         return false;
       }
-      if (!mapboxActive) {
+      if (!mapboxActive && !forceImmediate) {
         pendingPayloadRef.current = featureList;
         logMapboxEvent({ step: "send-failure", reason: "inactive" }, "send-failure");
         return false;
@@ -717,32 +723,45 @@ export function PropertyMap() {
         logMapboxEvent({ step: "send-failure", reason: "no-map" }, "send-failure");
         return false;
       }
-      // Solo envia hijos inmediatos según el tipo del nodo activo/clicado para evitar mezclar niveles.
       const parentKind = parentKindOverride ?? inferFeatureKind(activeNodeRef.current);
-      let childList = featureList;
-      if (parentKind === "desarrollo") {
-        childList = featureList.filter((f) => inferFeatureKind(f) === "capa");
-      } else if (parentKind === "capa") {
-        // Solo unidades cuyo nivel coincide con la capa seleccionada
-        const parentLevel = activeNodeRef.current?.properties?.nivel;
-        childList = featureList.filter((f) => {
-          if (inferFeatureKind(f) !== "unidad") return false;
-          const unitLevel = f?.properties?.nivel;
-          return (
-            typeof parentLevel === "number" &&
-            typeof unitLevel === "number" &&
-            Number(unitLevel) === Number(parentLevel)
-          );
-        });
-      }
-      if (!childList.length) {
-        childList = featureList;
-      }
+      const childList =
+        forceImmediate && parentKindOverride
+          ? featureList
+          : (() => {
+              // Solo envia hijos inmediatos según el tipo del nodo activo/clicado para evitar mezclar niveles.
+              let list = featureList;
+              if (parentKind === "desarrollo") {
+                list = featureList.filter((f) => inferFeatureKind(f) === "capa");
+              } else if (parentKind === "capa") {
+                // Solo unidades cuyo nivel coincide con la capa seleccionada
+                const parentLevel = activeNodeRef.current?.properties?.nivel;
+                list = featureList.filter((f) => {
+                  if (inferFeatureKind(f) !== "unidad") return false;
+                  const unitLevel = f?.properties?.nivel;
+                  return (
+                    typeof parentLevel === "number" &&
+                    typeof unitLevel === "number" &&
+                    Number(unitLevel) === Number(parentLevel)
+                  );
+                });
+              }
+              if (!list.length) {
+                list = featureList;
+              }
+              return list;
+            })();
       const source = map.getSource("propiedad-3d");
       if (!source || typeof source.setData !== "function") {
         pendingPayloadRef.current = featureList;
         logMapboxEvent({ step: "send-failure", reason: "no-source" }, "send-failure");
         return false;
+      }
+      try {
+        for (const id of mapboxVisibleIdsRef.current ?? []) {
+          map.setFeatureState({ source: "propiedad-3d", id }, { hidden: false, hover: false });
+        }
+      } catch {
+        /* ignore */
       }
       const enriched = childList.map((f) => {
         const clone = ensureStatusColors({ ...f });
@@ -913,14 +932,21 @@ export function PropertyMap() {
   );
 
   const sendFeatureToMapbox = useCallback(
-    (feature) => sendFeaturesToMapbox(feature ? [feature] : []),
+    (feature, parentKindOverride = null, forceImmediate = false) =>
+      sendFeaturesToMapbox(feature ? [feature] : [], parentKindOverride, forceImmediate),
     [sendFeaturesToMapbox],
   );
 
   useEffect(() => {
     if (!mapboxActive) {
       pendingMapboxFeatureRef.current = null;
+      pendingMapboxParentKindRef.current = null;
       pendingPayloadRef.current = null;
+      suppressMapboxSyncRef.current = false;
+      suppressTreeCapaFallbackRef.current = false;
+      return;
+    }
+    if (suppressMapboxSyncRef.current) {
       return;
     }
     const hasVisibleSet = (mapboxVisibleIdsRef.current ?? []).length > 0;
@@ -933,10 +959,12 @@ export function PropertyMap() {
     if (hasVisibleSet && !pendingMapboxFeatureRef.current) {
       return;
     }
-    if (!sendFeatureToMapbox(targetFeature)) {
+    const pendingKind = pendingMapboxParentKindRef.current ?? inferFeatureKind(targetFeature);
+    if (!sendFeatureToMapbox(targetFeature, pendingKind)) {
       pendingMapboxFeatureRef.current = targetFeature;
     } else {
       pendingMapboxFeatureRef.current = null;
+      pendingMapboxParentKindRef.current = null;
     }
   }, [mapboxActive, mapboxFeature, sendFeatureToMapbox]);
 
@@ -2021,6 +2049,7 @@ export function PropertyMap() {
   const openMapboxFeature = useCallback(
     (feature) => {
       if (!feature) return;
+      pendingMapboxParentKindRef.current = inferFeatureKind(feature);
       const next = createMapboxOpenedState(feature);
       mapboxRootFeatureRef.current = feature;
       setSelectedId(next.selectedId);
@@ -2741,6 +2770,7 @@ export function PropertyMap() {
             return true;
           }
         }
+        if (suppressMapboxSyncRef.current || suppressTreeCapaFallbackRef.current) return false;
         const candidate =
           pendingMapboxFeatureRef.current ??
           mapboxFeatureRef.current ??
@@ -2894,6 +2924,8 @@ export function PropertyMap() {
           if (selectedMapboxUnitIdRef.current) {
             clearIsolation();
           }
+          suppressTreeCapaFallbackRef.current = false;
+          suppressMapboxSyncRef.current = false;
           setParentStack((prev) => {
             const next = [...prev];
             const current = activeNodeRef.current;
@@ -2944,6 +2976,7 @@ export function PropertyMap() {
       cancelled = true;
       pendingMapboxFeatureRef.current = null;
       selectedMapboxUnitIdRef.current = null;
+      suppressTreeCapaFallbackRef.current = false;
       setMapboxLoading(false);
       mapboxInstanceRef.current?.remove();
       mapboxInstanceRef.current = null;
@@ -3318,6 +3351,86 @@ export function PropertyMap() {
     [openMapboxFeature, zoomToFeature],
   );
 
+  const handleCapaSelect = useCallback(
+    (capa) => {
+      const feature = capa?.feature ?? null;
+      if (!feature?.geometry) {
+        return;
+      }
+      const orderedUnits = [...(capa?.units ?? [])].sort((a, b) => {
+        const aValue = Number.isFinite(a.sortValue) ? a.sortValue : Number.POSITIVE_INFINITY;
+        const bValue = Number.isFinite(b.sortValue) ? b.sortValue : Number.POSITIVE_INFINITY;
+        if (aValue !== bValue) {
+          return aValue - bValue;
+        }
+        return (a.name ?? "").localeCompare(b.name ?? "");
+      });
+      let unitFeatures = orderedUnits.map((unit) => unit?.feature).filter(Boolean);
+      if (!unitFeatures.length && typeof getChildrenForNode === "function") {
+        unitFeatures = getChildrenForNode(feature).filter((child) => inferFeatureKind(child) === "unidad");
+      }
+      pendingPayloadRef.current = null;
+      pendingMapboxParentKindRef.current = null;
+      pendingMapboxFeatureRef.current = null;
+      suppressMapboxSyncRef.current = false;
+      suppressTreeCapaFallbackRef.current = true;
+      selectedMapboxUnitIdRef.current = null;
+      hoveredMapboxIdRef.current = null;
+      mapboxRootFeatureRef.current = feature;
+      setSelectedId(String(feature.id ?? ""));
+      setActiveMarkerFeature(feature);
+      mapboxFeatureRef.current = null;
+      setMapboxFeature(null);
+      setMapboxActive(true);
+      setMapboxLoading(false);
+      setActiveNode(feature);
+      setParentStack([]);
+      zoomToFeature(feature);
+      if (unitFeatures.length) {
+        sendFeaturesToMapbox(unitFeatures, "capa", true);
+      }
+      if (mapboxInstanceRef.current) {
+        applyMapboxNavigationLimits(mapboxInstanceRef.current, feature);
+      }
+    },
+    [applyMapboxNavigationLimits, getChildrenForNode, sendFeaturesToMapbox, zoomToFeature],
+  );
+
+  const handleDevelopmentSelect = useCallback(
+    (developmentFeature) => {
+      if (!developmentFeature?.geometry) {
+        return;
+      }
+      const children = getChildrenForNode(developmentFeature).filter(
+        (child) => inferFeatureKind(child) === "capa",
+      );
+      pendingPayloadRef.current = null;
+      pendingMapboxParentKindRef.current = null;
+      pendingMapboxFeatureRef.current = null;
+      suppressMapboxSyncRef.current = false;
+      suppressTreeCapaFallbackRef.current = true;
+      selectedMapboxUnitIdRef.current = null;
+      hoveredMapboxIdRef.current = null;
+      mapboxRootFeatureRef.current = developmentFeature;
+      setSelectedId(String(developmentFeature.id ?? ""));
+      setActiveMarkerFeature(developmentFeature);
+      mapboxFeatureRef.current = null;
+      setMapboxFeature(null);
+      setMapboxActive(true);
+      setMapboxLoading(false);
+      setActiveNode(developmentFeature);
+      setParentStack([]);
+      zoomToFeature(developmentFeature);
+      if (children.length) {
+        sendFeaturesToMapbox(children, "desarrollo", true);
+      }
+      if (mapboxInstanceRef.current) {
+        applyMapboxNavigationLimits(mapboxInstanceRef.current, developmentFeature);
+      }
+    },
+    [applyMapboxNavigationLimits, getChildrenForNode, sendFeaturesToMapbox, zoomToFeature],
+  );
+
   const PolygonContainer = ({ geom, children }) => (
     <div className="space-y-2 rounded border border-dashed border-slate-200 bg-slate-50/80 p-2">
       {children}
@@ -3380,8 +3493,15 @@ export function PropertyMap() {
               <span className="font-semibold">{capa.name || `Nivel ${capa.nivel ?? "?"}`}</span>
             </div>
           </div>
-          <div className="rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[0.6rem] font-semibold text-slate-500">
-            {orderedUnits.length}
+          <div className="flex items-center gap-1 text-slate-500">
+            <button
+              type="button"
+              onClick={() => handleCapaSelect(capa)}
+              disabled={!capa?.feature?.geometry && !capa?.geom}
+              className="rounded border border-slate-200 px-2 py-1 text-[0.65rem] text-slate-600 transition hover:border-slate-400 hover:text-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              Ver
+            </button>
           </div>
         </div>
         {capaExpanded && (
@@ -3543,7 +3663,7 @@ export function PropertyMap() {
                             className="flex items-center gap-2 text-left font-semibold text-slate-800 transition hover:text-slate-950"
                             onClick={() => {
                               if (developmentFeature) {
-                                openMapboxFeature(developmentFeature);
+                                handleDevelopmentSelect(developmentFeature);
                               }
                             }}
                           >
