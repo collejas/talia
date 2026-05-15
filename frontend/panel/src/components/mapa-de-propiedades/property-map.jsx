@@ -687,6 +687,7 @@ export function PropertyMap() {
       });
       const payload = { type: "FeatureCollection", features: enriched };
       source.setData(payload);
+      setMapboxLoading(false);
       mapboxVisibleIdsRef.current = enriched
         .map((f) => (f?.id != null ? String(f.id) : null))
         .filter(Boolean);
@@ -1044,13 +1045,16 @@ export function PropertyMap() {
     if (!activeNode || !mapboxActive) {
       return;
     }
+    if (!parentStack.length) {
+      return;
+    }
     const children = getChildrenForNode(activeNode);
     if (children.length) {
       sendFeaturesToMapbox(children);
     } else {
       sendFeatureToMapbox(activeNode);
     }
-  }, [activeNode, getChildrenForNode, mapboxActive, sendFeatureToMapbox, sendFeaturesToMapbox]);
+  }, [activeNode, getChildrenForNode, mapboxActive, parentStack.length, sendFeatureToMapbox, sendFeaturesToMapbox]);
 
   const nivelOptions = useMemo(() => {
     const niveles = new Set();
@@ -1942,26 +1946,7 @@ export function PropertyMap() {
         );
       });
       if (exact) return exact;
-      const capaOrUnidad = list.find((f) => {
-        const props = f?.properties ?? {};
-        const featureDevId = props.target_id ?? props.desarrollo_id ?? null;
-        const kind = inferFeatureKind(f);
-        return (
-          featureDevId &&
-          String(featureDevId) === normalized &&
-          ["capa", "unidad"].includes(kind)
-        );
-      });
-      if (capaOrUnidad) return capaOrUnidad;
-      return (
-        list.find((f) => {
-          const props = f?.properties ?? {};
-          return (
-            (props.desarrollo_id && String(props.desarrollo_id) === normalized) ||
-            (props.target_id && String(props.target_id) === normalized)
-          );
-        }) || null
-      );
+      return null;
     },
     [],
   );
@@ -2608,16 +2593,19 @@ export function PropertyMap() {
         if (Array.isArray(pendingList) && pendingList.length) {
           if (sendFeaturesToMapbox(pendingList)) {
             pendingPayloadRef.current = null;
+            return true;
           }
         }
         const candidate =
           pendingMapboxFeatureRef.current ??
           mapboxFeatureRef.current ??
           activeNodeRef.current;
-        if (!candidate) return;
+        if (!candidate) return false;
         if (sendFeatureToMapbox(candidate)) {
           pendingMapboxFeatureRef.current = null;
+          return true;
         }
+        return false;
       };
       map.on("load", () => {
         if (cancelled) return;
@@ -2787,7 +2775,6 @@ export function PropertyMap() {
           }
         });
         applyPendingFeature();
-        setMapboxLoading(false);
         map.resize();
       });
       // Sin filtros persistentes para unidades; noop en idle.
@@ -2796,7 +2783,9 @@ export function PropertyMap() {
         map.setPitch(pitch);
         map.setBearing(bearing);
         addLayerRules();
-        applyPendingFeature();
+        if (applyPendingFeature()) {
+          setMapboxLoading(false);
+        }
         map.resize();
       });
     })();
