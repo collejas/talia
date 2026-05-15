@@ -493,29 +493,29 @@ async def _resolve_conversation_metadata(conversation_id: str) -> dict[str, Any]
 async def _ensure_opportunity_when_persona_ready(
     *,
     conversation_id: str,
-    contact_id: str,
+    persona_id: str,
     channel: str | None = None,
     persona: dict[str, Any] | None = None,
 ) -> str:
-    contact_key = (contact_id or "").strip()
-    if not contact_key:
+    persona_key = (persona_id or "").strip()
+    if not persona_key:
         raise ValueError("No se pudo determinar el contacto para asignar a un vendedor.")
-    ready = await webchat_followups.ensure_contact_ready_for_assignment(
+    ready = await webchat_followups.ensure_persona_ready_for_assignment(
         conversation_id=conversation_id,
-        contact_id=contact_key,
-        contact=persona,
+        persona_id=persona_key,
+        persona=persona,
     )
     if not ready:
         log_event(
             logger,
             "webchat.assignment.blocked_persona_missing",
             conversation_id=conversation_id,
-            contact_id=contact_key,
+            contact_id=persona_key,
         )
         raise ValueError(CONTACT_ASSIGNMENT_ERROR)
     return await storage.ensure_persona_conversation_opportunity(
         conversation_id=conversation_id,
-        persona_id=contact_key,
+        persona_id=persona_key,
         channel=channel,
     )
 
@@ -1225,7 +1225,7 @@ async def schedule_calendar_booking(
         try:
             tarjeta_id = await _ensure_opportunity_when_persona_ready(
                 conversation_id=conversation_id,
-                contact_id=contact_id,
+                persona_id=contact_id,
                 channel=channel_value,
                 persona=persona,
             )
@@ -1321,9 +1321,9 @@ async def schedule_calendar_booking(
         persona=persona,
     )
     try:
-        await webchat_followups.mark_information_delivered(
+        await webchat_followups.mark_persona_information_delivered(
             conversation_id=conversation_id,
-            contact_id=contact_id,
+            persona_id=contact_id,
             reason="demo_booking",
         )
     except StorageError as exc:
@@ -1511,8 +1511,16 @@ class WebchatContext:
     """Contexto mínimo necesario para resolver function calls."""
 
     conversation_id: str
-    contact_id: str
+    persona_id: str
     session_id: str
+
+    @property
+    def contact_id(self) -> str:
+        return self.persona_id
+
+    @contact_id.setter
+    def contact_id(self, value: str) -> None:
+        self.persona_id = value
 
 
 def _extract_client_ip(request: Request | None) -> str | None:
@@ -3146,7 +3154,7 @@ async def handle_message(
             ) from exc
     context = WebchatContext(
         conversation_id=str(conversation_id),
-        contact_id=str(contact_id),
+        persona_id=str(contact_id),
         session_id=payload.session_id,
     )
 
@@ -3420,7 +3428,7 @@ async def append_manual_agent_context(
 
     context = WebchatContext(
         conversation_id=str(conversation_id),
-        contact_id=str(contact_id),
+        persona_id=str(contact_id),
         session_id=session_id,
     )
 
@@ -4524,7 +4532,7 @@ async def _execute_function_call(
         try:
             tarjeta_id = await _ensure_opportunity_when_persona_ready(
                 conversation_id=context.conversation_id,
-                contact_id=context.contact_id,
+                persona_id=context.persona_id,
                 channel="webchat",
                 persona=persona,
             )

@@ -87,9 +87,9 @@ async def _refresh_webchat_followup_state(context: ToolRuntimeContext) -> None:
     if not _is_webchat_context(context):
         return
     try:
-        await webchat_followups.refresh_contact_followup_state(
+        await webchat_followups.refresh_persona_followup_state(
             conversation_id=context.conversation_id,
-            contact_id=context.contact_id,
+            persona_id=context.contact_id,
             session_id=context.session_id,
         )
     except StorageError as exc:
@@ -107,9 +107,9 @@ async def _mark_webchat_delivery(context: ToolRuntimeContext, reason: str) -> No
     if not _is_webchat_context(context):
         return
     try:
-        await webchat_followups.mark_information_delivered(
+        await webchat_followups.mark_persona_information_delivered(
             conversation_id=context.conversation_id,
-            contact_id=context.contact_id,
+            persona_id=context.contact_id,
             reason=reason,
         )
     except StorageError as exc:
@@ -227,9 +227,9 @@ async def try_execute_lead_tool(
         necesidad = _require_argument(arguments, "necesidad_proposito")
         siguiente_accion = str(arguments.get("siguiente_accion") or "").strip() or None
         tarjeta_id: str | None = None
-        contact_ready = await webchat_followups.ensure_contact_ready_for_assignment(
+        contact_ready = await webchat_followups.ensure_persona_ready_for_assignment(
             conversation_id=context.conversation_id,
-            contact_id=context.contact_id,
+            persona_id=context.contact_id,
         )
         if contact_ready:
             try:
@@ -407,9 +407,9 @@ async def try_execute_lead_tool(
         }
 
     if tool_name == "mark_contact_ready":
-        ready = await webchat_followups.ensure_contact_ready_for_assignment(
+        ready = await webchat_followups.ensure_persona_ready_for_assignment(
             conversation_id=context.conversation_id,
-            contact_id=context.contact_id,
+            persona_id=context.contact_id,
         )
         if not ready:
             raise ValueError("No hay teléfono ni correo para marcar contacto listo")

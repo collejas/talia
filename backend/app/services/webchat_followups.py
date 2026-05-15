@@ -53,8 +53,8 @@ def _has_value(value: Any) -> bool:
     return bool(_strip_text(value))
 
 
-def _load_contact_data(contact: dict[str, Any]) -> dict[str, Any]:
-    raw = contact.get("persona_datos") or contact.get("contacto_datos") or contact.get("metadata")
+def _load_persona_data(persona: dict[str, Any]) -> dict[str, Any]:
+    raw = persona.get("persona_datos") or persona.get("contacto_datos") or persona.get("metadata")
     if isinstance(raw, dict):
         return dict(raw)
     if isinstance(raw, str):
@@ -100,25 +100,25 @@ def _mark_timestamp(target: dict[str, Any], key: str) -> bool:
     return True
 
 
-async def refresh_contact_followup_state(
+async def refresh_persona_followup_state(
     *,
     conversation_id: str,
-    contact_id: str,
+    persona_id: str,
     session_id: str | None = None,
-    contact: dict[str, Any] | None = None,
+    persona: dict[str, Any] | None = None,
 ) -> dict[str, Any] | None:
     """Actualiza persona_datos.webchat_followup con el progreso actual."""
-    contact_row = contact or await storage.fetch_persona(contact_id)
-    contact_data = _load_contact_data(contact_row)
-    followup, state, changed = _prepare_followup_scope(contact_data, conversation_id)
+    persona_row = persona or await storage.fetch_persona(persona_id)
+    persona_data = _load_persona_data(persona_row)
+    followup, state, changed = _prepare_followup_scope(persona_data, conversation_id)
 
     original_fields = state.get("fields")
     fields = dict(original_fields) if isinstance(original_fields, dict) else {}
 
-    has_email = _has_value(contact_row.get("correo"))
-    has_phone = _has_value(contact_row.get("telefono_e164"))
-    has_company = _has_value(contact_row.get("company_name"))
-    has_need = _has_value(contact_row.get("necesidad_proposito"))
+    has_email = _has_value(persona_row.get("correo"))
+    has_phone = _has_value(persona_row.get("telefono_e164"))
+    has_company = _has_value(persona_row.get("company_name"))
+    has_need = _has_value(persona_row.get("necesidad_proposito"))
 
     if has_email:
         changed |= _mark_timestamp(fields, "email")
@@ -149,47 +149,47 @@ async def refresh_contact_followup_state(
         changed = True
 
     if changed:
-        contact_data["webchat_followup"] = followup
-        await storage.update_persona(contact_id, {"persona_datos": contact_data})
+        persona_data["webchat_followup"] = followup
+        await storage.update_persona(persona_id, {"persona_datos": persona_data})
         log_event(
             logger,
             "webchat_followup.state_updated",
             conversation_id=conversation_id,
-            contact_id=contact_id,
+            contact_id=persona_id,
         )
     return state
 
 
-async def ensure_contact_ready_for_assignment(
+async def ensure_persona_ready_for_assignment(
     *,
     conversation_id: str,
-    contact_id: str,
-    contact: dict[str, Any] | None = None,
+    persona_id: str,
+    persona: dict[str, Any] | None = None,
 ) -> bool:
     """Verifica y marca que el contacto tiene al menos teléfono o correo."""
-    contact_row = contact or await storage.fetch_persona(contact_id)
-    has_phone = _has_value(contact_row.get("telefono_e164"))
-    has_email = _has_value(contact_row.get("correo"))
+    persona_row = persona or await storage.fetch_persona(persona_id)
+    has_phone = _has_value(persona_row.get("telefono_e164"))
+    has_email = _has_value(persona_row.get("correo"))
     if not (has_phone or has_email):
         return False
-    await refresh_contact_followup_state(
+    await refresh_persona_followup_state(
         conversation_id=conversation_id,
-        contact_id=contact_id,
-        contact=contact_row,
+        persona_id=persona_id,
+        persona=persona_row,
     )
     return True
 
 
-async def mark_information_delivered(
+async def mark_persona_information_delivered(
     *,
     conversation_id: str,
-    contact_id: str,
+    persona_id: str,
     reason: str,
 ) -> None:
     """Marca el punto en el que ya se envió información o se agendó demo."""
-    contact = await storage.fetch_persona(contact_id)
-    contact_data = _load_contact_data(contact)
-    followup, state, changed = _prepare_followup_scope(contact_data, conversation_id)
+    persona = await storage.fetch_persona(persona_id)
+    persona_data = _load_persona_data(persona)
+    followup, state, changed = _prepare_followup_scope(persona_data, conversation_id)
     delivery_ts = state.get("entrega_realizada_at")
     if not delivery_ts:
         state["entrega_realizada_at"] = _now_iso()
@@ -202,15 +202,56 @@ async def mark_information_delivered(
         changed = True
 
     if changed:
-        contact_data["webchat_followup"] = followup
-        await storage.update_persona(contact_id, {"persona_datos": contact_data})
+        persona_data["webchat_followup"] = followup
+        await storage.update_persona(persona_id, {"persona_datos": persona_data})
         log_event(
             logger,
             "webchat_followup.delivery_marked",
             conversation_id=conversation_id,
-            contact_id=contact_id,
+            contact_id=persona_id,
             reason=reason,
         )
+
+
+async def refresh_contact_followup_state(
+    *,
+    conversation_id: str,
+    contact_id: str,
+    session_id: str | None = None,
+    contact: dict[str, Any] | None = None,
+) -> dict[str, Any] | None:
+    return await refresh_persona_followup_state(
+        conversation_id=conversation_id,
+        persona_id=contact_id,
+        session_id=session_id,
+        persona=contact,
+    )
+
+
+async def ensure_contact_ready_for_assignment(
+    *,
+    conversation_id: str,
+    contact_id: str,
+    contact: dict[str, Any] | None = None,
+) -> bool:
+    return await ensure_persona_ready_for_assignment(
+        conversation_id=conversation_id,
+        persona_id=contact_id,
+        persona=contact,
+    )
+
+
+async def mark_information_delivered(
+    *,
+    conversation_id: str,
+    contact_id: str,
+    reason: str,
+) -> None:
+    await mark_persona_information_delivered(
+        conversation_id=conversation_id,
+        persona_id=contact_id,
+        reason=reason,
+    )
 
 
 def _missing_required_fields(contact: dict[str, Any]) -> list[str]:
@@ -621,10 +662,10 @@ async def _process_conversation(
         )
         return
 
-    state = await refresh_contact_followup_state(
+    state = await refresh_persona_followup_state(
         conversation_id=conversation_id,
-        contact_id=contact_id_str,
-        contact=contact,
+        persona_id=contact_id_str,
+        persona=contact,
     )
     state = state or {}
     if _should_stop(state):
@@ -676,10 +717,10 @@ async def _process_conversation(
 
     if state.get("last_session_id") != session_id:
         state = (
-            await refresh_contact_followup_state(
+            await refresh_persona_followup_state(
                 conversation_id=conversation_id,
-                contact_id=contact_id_str,
-                contact=contact,
+                persona_id=contact_id_str,
+                persona=contact,
                 session_id=session_id,
             )
             or state

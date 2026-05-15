@@ -291,7 +291,8 @@ async def notify_sales_rep(
     raise_on_delivery_error: bool = False,
 ) -> None:
     channel_value = str(getattr(context, "channel", None) or "webchat").strip().lower() or "webchat"
-    persona_record = persona or await storage.fetch_persona(context.contact_id)
+    persona_id = str(getattr(context, "persona_id", None) or context.contact_id)
+    persona_record = persona or await storage.fetch_persona(persona_id)
     if not persona_record:
         logger.warning(
             "webchat.notify_sales.persona_missing",
@@ -312,7 +313,7 @@ async def notify_sales_rep(
         try:
             opp_id = await storage.ensure_conversation_opportunity(
                 conversation_id=context.conversation_id,
-                contact_id=context.contact_id,
+                contact_id=persona_id,
                 channel=channel_value,
             )
         except StorageError as exc:
@@ -320,7 +321,7 @@ async def notify_sales_rep(
                 "webchat.notify_sales.ensure_failed",
                 extra={
                     "conversation_id": context.conversation_id,
-                    "persona_id": context.contact_id,
+                    "persona_id": persona_id,
                     "trigger": trigger,
                     "error": str(exc),
                 },
@@ -624,7 +625,7 @@ async def notify_sales_rep(
     notifications[trigger] = {
         "sent_at": datetime.now(timezone.utc).isoformat(),
         "conversation_id": context.conversation_id,
-        "contact_id": context.contact_id,
+        "contact_id": persona_id,
         "notification_sid": message_sid,
         "retry_count": retry_count,
     }
@@ -633,7 +634,7 @@ async def notify_sales_rep(
         primary_by_channel[channel_key] = {
             "sent_at": datetime.now(timezone.utc).isoformat(),
             "conversation_id": context.conversation_id,
-            "contact_id": context.contact_id,
+            "contact_id": persona_id,
             "trigger": trigger,
             "reason": primary_reason,
         }
@@ -656,7 +657,7 @@ async def notify_sales_rep(
                 oportunidad_id=opp_uuid,
                 vendedor_id=seller_uuid,
                 conversation_id=context.conversation_id,
-                contact_id=context.contact_id,
+                contact_id=persona_id,
                 trigger=f"notify_{trigger}",
                 metadata=assignment_metadata,
                 notification_sid=message_sid,

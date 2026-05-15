@@ -64,6 +64,9 @@ Este documento resume todo lo que se fue cerrando dentro del plan `personas, cue
 - Se siguio moviendo el backend hacia aliases `persona_*` en helpers de `storage.py`.
 - `webchat`, `whatsapp`, `assistants` y `webchat_followups` ya consumen varios de esos
   aliases nuevos.
+- el nucleo de webchat ya expone `persona_id` en su contexto interno y usa helpers de
+  seguimiento con semantica `persona_*`, manteniendo compatibilidad con `contact_id`
+  donde siguen existiendo contratos viejos.
 - Se agregaron puentes como:
   - `fetch_opportunity_persona(...)`
   - `get_webchat_persona_id(...)`
