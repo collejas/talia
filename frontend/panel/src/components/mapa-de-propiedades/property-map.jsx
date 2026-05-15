@@ -85,6 +85,9 @@ function normalizeValue(value) {
 
 function buildChoroplethColor(value, max = 5000) {
   const clamped = Math.min(normalizeValue(value), max);
+  if (clamped <= 0) {
+    return "#CBD5E1";
+  }
   const ratio = max > 0 ? clamped / max : 0;
   const hue = 130 - ratio * 80;
   const light = 70 - ratio * 20;
@@ -171,15 +174,32 @@ function buildHierarchy(features) {
   const devMap = new Map();
   for (const feature of features) {
     const props = feature?.properties ?? {};
-    const featureSource =
+    const featureKind = inferFeatureKind(feature);
+    const rawType = (
       typeof props.target_type === "string"
         ? props.target_type
         : typeof props.tipo === "string"
         ? props.tipo
-        : "";
-    const featureKind = featureSource.toString().trim().toLowerCase();
-    const isUnit =
-      !featureKind || ["unidad", "departamento", "poligono", "unit", "department"].includes(featureKind);
+        : ""
+    )
+      .toString()
+      .trim()
+      .toLowerCase();
+    const unitAliases = new Set([
+      "",
+      "unidad",
+      "departamento",
+      "poligono",
+      "unit",
+      "department",
+      "lote",
+      "casa",
+      "terreno",
+      "local",
+      "oficina",
+      "bodega",
+    ]);
+    const isUnit = featureKind === "unidad" || unitAliases.has(rawType);
     if (!isUnit) {
       continue;
     }
@@ -1056,6 +1076,28 @@ export function PropertyMap() {
     );
   }, [features, nivelFilter, tipoFilter, mapLevel, selectedMunicipioGeoKey, selectedStateKey]);
 
+  const panelFeatures = useMemo(() => {
+    const hasExplicitFilter = Boolean(nivelFilter || tipoFilter);
+    const hasGeoSelection = Boolean(
+      mapLevel !== "pais" || selectedMunicipioGeoKey || selectedStateKey,
+    );
+    if (filteredFeatures.length > 0 || !features.length) {
+      return filteredFeatures;
+    }
+    if (hasExplicitFilter || hasGeoSelection) {
+      return features;
+    }
+    return filteredFeatures;
+  }, [
+    features,
+    filteredFeatures,
+    mapLevel,
+    nivelFilter,
+    selectedMunicipioGeoKey,
+    selectedStateKey,
+    tipoFilter,
+  ]);
+
   useEffect(() => {
     filteredFeaturesRef.current = filteredFeatures;
   }, [filteredFeatures]);
@@ -1109,7 +1151,7 @@ export function PropertyMap() {
     );
   }, [filteredFeatures, logMapboxEvent, mapLevel, municipioDevelopmentFeatures, selectedMunicipioGeoKey]);
 
-  const hierarchyTree = useMemo(() => buildHierarchy(filteredFeatures), [filteredFeatures]);
+  const hierarchyTree = useMemo(() => buildHierarchy(panelFeatures), [panelFeatures]);
 
   useEffect(() => {
     if (!hierarchyTree.length) return;
@@ -1121,11 +1163,11 @@ export function PropertyMap() {
     logMapboxEvent(
       {
         hierarchy: summary,
-        featureCount: filteredFeatures.length,
+        featureCount: panelFeatures.length,
       },
       "hierarchy-tree",
     );
-  }, [filteredFeatures.length, hierarchyTree, logMapboxEvent]);
+  }, [hierarchyTree, logMapboxEvent, panelFeatures.length]);
 
   useEffect(() => {
     selectedIdRef.current = selectedId;
@@ -3244,7 +3286,7 @@ export function PropertyMap() {
               ? "Cargando propiedades..."
               : error
               ? error
-              : `${filteredFeatures.length} propiedades mostrando`}
+              : `${panelFeatures.length} propiedades mostrando`}
           </div>
           <div
             className="flex flex-1 flex-col overflow-hidden rounded-lg border border-slate-200 bg-white/40 shadow-sm transition"
