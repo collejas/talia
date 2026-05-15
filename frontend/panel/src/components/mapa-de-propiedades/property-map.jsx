@@ -560,12 +560,7 @@ export function PropertyMap() {
       {
         feature_id: getFeatureId(mapboxFeature),
         layer: mapboxFeature.layer ?? props.layer ?? null,
-        catalog_item_id:
-          metadata.catalog_item_id ??
-          props.catalog_item_id ??
-          metadata.catalog_item ??
-          props.catalog_item ??
-          null,
+        catalog_item_id: props.catalog_item_id ?? props.catalog_item ?? null,
         status: (props.status ?? "").toString().toLowerCase(),
         metadata_keys: Object.keys(metadata),
         properties: {
@@ -813,16 +808,8 @@ export function PropertyMap() {
             props.min_height = nivelNum * props.height;
           }
         }
-        const metadataPayload = props.metadata ?? {};
-        if (metadataPayload && typeof metadataPayload === "object") {
-          const catalogValue =
-            props.catalog_item_id ??
-            metadataPayload.catalog_item_id ??
-            metadataPayload.catalog_item ??
-            null;
-          if (catalogValue) {
-            props.catalog_item_id = String(catalogValue);
-          }
+        if (props.catalog_item_id != null && props.catalog_item_id !== "") {
+          props.catalog_item_id = String(props.catalog_item_id);
         }
         clone.properties = props;
         return clone;
