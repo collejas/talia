@@ -5,6 +5,7 @@ import {
   IconBuilding,
   IconChevronDown,
   IconChevronRight,
+  IconDownload,
   IconLayersSelected,
   IconMinus,
   IconPlus,
@@ -231,6 +232,165 @@ function formatMultiPolygonWkt(multiPolygon: MultiPolygon3DZ): string {
 function geoJsonToMultiPolygonZWkt(geometry: GeoJsonGeometry): string {
   const normalized = ensureMultiPolygon(geometry);
   return formatMultiPolygonWkt(normalized);
+}
+
+const PROPERTY_IMPORT_TEMPLATE_HEADERS = [
+  "entidad",
+  "grupo",
+  "nombre",
+  "status",
+  "nivel",
+  "capa_nivel",
+  "unidad",
+  "tipo_desarrollo",
+  "tipo_unidad_nombre",
+  "descripcion",
+  "poligono",
+  "height",
+  "min_height",
+  "levels",
+  "color",
+  "precio",
+  "area_m2",
+  "pais_codigo",
+  "estado_cve",
+  "municipio_cve",
+  "codigo_postal",
+  "colonia",
+  "metadata_cuartos",
+  "metadata_patio_servicio",
+  "metadata_cocina",
+  "metadata_banos",
+  "metadata_m2_construccion",
+  "metadata_m2_terreno",
+  "metadata_frente",
+  "metadata_cisterna",
+  "metadata_terraza",
+  "metadata_roof_garden",
+  "metadata_vestidor_recamara_principal",
+] as const;
+
+const PROPERTY_IMPORT_TEMPLATE_ROWS = [
+  [
+    "desarrollo",
+    "Mirador",
+    "Mirador Azul",
+    "disponible",
+    "",
+    "",
+    "",
+    "horizontal",
+    "",
+    "Desarrollo base",
+    "POLYGON((-109.7383 23.0022, -109.7381 23.0023, -109.7377 23.0018, -109.7380 23.0016, -109.7383 23.0022))",
+    "",
+    "",
+    "",
+    "#0F766E",
+    "",
+    "",
+    "MX",
+    "09",
+    "004",
+    "78398",
+    "Aguaje 2000",
+    "",
+    "",
+    "",
+    "",
+    "",
+    "",
+    "",
+    "",
+    "",
+    "",
+    "",
+  ],
+  [
+    "capa",
+    "Mirador",
+    "Planta baja",
+    "disponible",
+    "0",
+    "",
+    "",
+    "",
+    "",
+    "Nivel principal",
+    "POLYGON((-109.7383 23.0022, -109.7380 23.0016, -109.7381 23.0018, -109.7383 23.0022))",
+    "3",
+    "0",
+    "1",
+    "#0F766E",
+    "",
+    "",
+    "MX",
+    "09",
+    "004",
+    "78398",
+    "Aguaje 2000",
+    "",
+    "",
+    "",
+    "",
+    "",
+    "",
+    "",
+    "",
+    "",
+    "",
+    "",
+  ],
+  [
+    "unidad",
+    "Mirador",
+    "LOTE-1",
+    "disponible",
+    "",
+    "0",
+    "LOTE-1",
+    "Terreno Departamental",
+    "",
+    "Unidad ejemplo",
+    "POLYGON((-109.7383 23.0022, -109.7381 23.0018, -109.7382 23.0020, -109.7383 23.0022))",
+    "3",
+    "0",
+    "1",
+    "#0F766E",
+    "3119155",
+    "479.87",
+    "MX",
+    "09",
+    "004",
+    "78398",
+    "Aguaje 2000",
+    "2",
+    "1",
+    "1",
+    "2",
+    "85",
+    "120",
+    "8",
+    "1",
+    "1",
+    "0",
+    "1",
+  ],
+] as const;
+
+function csvCell(value: string) {
+  if (value === "") {
+    return "";
+  }
+  if (/[",\n\r]/.test(value)) {
+    return `"${value.replace(/"/g, '""')}"`;
+  }
+  return value;
+}
+
+function buildPropertyImportTemplateCsv() {
+  const rows = [PROPERTY_IMPORT_TEMPLATE_HEADERS, ...PROPERTY_IMPORT_TEMPLATE_ROWS];
+  return `${rows.map((row) => row.map(csvCell).join(",")).join("\n")}\n`;
 }
 
 const UNIDAD_STATUS_OPTIONS = [
@@ -865,6 +1025,20 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
     setImportStatus("idle");
     setImportError(null);
     setImportResult(null);
+  }, []);
+
+  const handleDownloadImportTemplate = useCallback(() => {
+    const csv = buildPropertyImportTemplateCsv();
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = "plantilla_importacion_propiedades.csv";
+    anchor.rel = "noopener noreferrer";
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    URL.revokeObjectURL(url);
   }, []);
 
   const handleRunImport = useCallback(async () => {
@@ -2060,12 +2234,23 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
       <DialogHeader>
         <DialogTitle>Importar jerarquía inmobiliaria</DialogTitle>
         <DialogDescription>
-          Carga un CSV con la jerarquía de desarrollos, capas y unidades. Consulta{" "}
-          <span className="font-semibold text-slate-700">docs/Plan_3D/propiedades_importador.md</span>{" "}
-          para el formato y los ejemplos de geometrías.
+          Descarga la plantilla mínima si quieres empezar rápido. El CSV solo necesita
+          <span className="font-semibold text-slate-700">
+            entidad, grupo, nombre, status y poligono
+          </span>;
+          el tipo de desarrollo vive en <code>tipo_desarrollo</code> y el tipo de unidad en
+          <code>tipo_unidad_nombre</code>. Para unidades, <code>area_m2</code> es opcional pero conviene
+          mandarlo como columna. Los extras no operativos van al final en columnas como
+          <code>metadata_cuartos</code> y <code>metadata_patio_servicio</code>.
         </DialogDescription>
       </DialogHeader>
       <div className="space-y-3 pt-2">
+        <div className="flex flex-wrap gap-2">
+          <Button type="button" variant="outline" size="sm" onClick={handleDownloadImportTemplate}>
+            <IconDownload className="mr-2 h-4 w-4" />
+            Descargar plantilla mínima
+          </Button>
+        </div>
         <div className="space-y-1">
           <Label className="text-[0.7rem]">Archivo CSV</Label>
           <input
@@ -2079,17 +2264,11 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
           )}
         </div>
         <p className="text-[0.65rem] text-slate-500">
-          Carga un CSV siguiendo el formato descrito en{" "}
-          <span className="font-semibold text-slate-700">docs/Plan_3D/propiedades_importador.md</span>.
-          El archivo debe incluir columnas como <code>entidad</code>, <code>grupo</code>, <code>nombre</code>,
-          <code>nivel</code>, <code>unidad</code>, <code>tipo_nombre</code> y <code>poligono</code>; el backend
-          transformará cada fila en la jerarquía adecuada. Para enriquecer los registros también puedes añadir
-          columnas específicas a cada tabla: los desarrollos aceptan <code>descripcion_desarrollo</code>, <code>codigo_postal</code>{' '}
-          y <code>colonia</code>; las capas pueden llevar <code>descripcion_capa</code> y <code>altura</code> como altura de capa; y las unidades
-          admiten <code>descripcion_unidad</code>, <code>precio</code> y <code>area_m2</code>. Llena cada columna en la fila
-          correspondiente al nivel que quieres afectar: cada <code>descripcion_*</code> se aplica únicamente a la entidad
-          (`desarrollo`, `capa` o `unidad`) que representa la fila. También puedes seguir usando la columna genérica
-          <code>descripcion</code> y el importador la asignará según el tipo de entidad si no llenas las específicas.
+          Si ya tienes un CSV propio, basta con respetar la plantilla mínima. Las columnas de
+          volumen 3D son <code>height</code>, <code>min_height</code>, <code>levels</code> y <code>color</code>.
+          La altura de capa sigue siendo <code>altura</code> y solo aplica a <code>propiedad_capas</code>.
+          Si necesitas mandar extras no operativos, agrega columnas <code>metadata_*</code> al final; si lo
+          consultas o filtras seguido, mejor conviértelo en columna normal.
         </p>
         {importError && <p className="text-xs text-rose-500">{importError}</p>}
         {importStatus === "success" && importResult && (
@@ -2099,6 +2278,10 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
       <DialogFooter className="flex gap-2 pt-4">
         <Button variant="ghost" size="sm" onClick={() => setIsImportModalOpen(false)}>
           Cerrar
+        </Button>
+        <Button variant="outline" size="sm" onClick={handleDownloadImportTemplate}>
+          <IconDownload className="mr-2 h-4 w-4" />
+          Plantilla
         </Button>
         <Button
           size="sm"

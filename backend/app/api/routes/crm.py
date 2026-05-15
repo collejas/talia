@@ -32707,8 +32707,12 @@ def _csv_to_import_request(content: str) -> ImportPropiedadesRequest:
             unidad = ImportUnidad(
                 unidad=_require_value(row.get("unidad"), "unidad", line),
                 nombre=_strip_value(row.get("nombre")) or _strip_value(row.get("unidad")) or "",
-                tipo_id=_parse_uuid_value(row.get("tipo_id")),
-                tipo_nombre=_strip_value(row.get("tipo_nombre")),
+                tipo_id=_parse_uuid_value(row.get("tipo_id") or row.get("tipo_unidad_id")),
+                tipo_nombre=_strip_value(
+                    row.get("tipo_nombre")
+                    or row.get("tipo_unidad_nombre")
+                    or row.get("tipo_unidad")
+                ),
                 status=_parse_status_value(row.get("status")),
                 descripcion=_resolve_entity_description(row, "unidad"),
                 precio=_parse_decimal(row.get("precio")),
@@ -32767,7 +32771,7 @@ def _convert_polygon_to_multipolygon(body: str) -> str:
 
 
 def _resolve_desarrollo_tipo_value(row: dict[str, Any]) -> Any:
-    for key in ("tipo", "tipo_nombre"):
+    for key in ("tipo_desarrollo", "tipo", "tipo_nombre"):
         if key in row and row[key] is not None:
             value = _strip_value(row[key])
             if value:
@@ -33005,17 +33009,7 @@ def _merge_volume_metadata(row: dict[str, Any], base_metadata: dict[str, Any] | 
     if color:
         assign("color", color)
 
-    prefix = "metadata_unidad_"
-    for raw_key, raw_value in row.items():
-        normalized_key = raw_key.lower().strip()
-        if not normalized_key.startswith(prefix):
-            continue
-        suffix = normalized_key[len(prefix) :]
-        if not suffix:
-            continue
-        value = _strip_value(raw_value)
-        if value == "":
-            continue
+    for suffix, value in _collect_metadata_columns_from_row(row).items():
         assign(suffix, value)
 
     return meta if changes or meta else None
@@ -33043,20 +33037,28 @@ def _collect_metadata_extra_from_row(row: dict[str, Any]) -> dict[str, Any] | No
     if color:
         assign("color", color)
 
-    prefix = "metadata_unidad_"
+    for suffix, value in _collect_metadata_columns_from_row(row).items():
+        assign(suffix, value)
+
+    return extra if extra else None
+
+
+def _collect_metadata_columns_from_row(row: dict[str, Any]) -> dict[str, Any]:
+    collected: dict[str, Any] = {}
+    prefixes = ("metadata_", "metadata_unidad_")
     for raw_key, raw_value in row.items():
         normalized_key = raw_key.lower().strip()
-        if not normalized_key.startswith(prefix):
+        matched_prefix = next((prefix for prefix in prefixes if normalized_key.startswith(prefix)), None)
+        if not matched_prefix:
             continue
-        suffix = normalized_key[len(prefix) :]
+        suffix = normalized_key[len(matched_prefix) :]
         if not suffix:
             continue
         value = _strip_value(raw_value)
         if value == "":
             continue
-        assign(suffix, value)
-
-    return extra if extra else None
+        collected[suffix] = value
+    return collected
 
 
 def _parse_uuid_value(value: Any) -> UUID | None:
