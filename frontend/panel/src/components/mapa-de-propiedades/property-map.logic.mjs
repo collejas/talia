@@ -21,6 +21,27 @@ export function buildMunicipioGeoKey(properties) {
   return `${statePart}${municipioPart}`;
 }
 
+export function expandBoundsLike(bounds, paddingRatio = 0.18, minPadding = 0.01) {
+  if (!bounds || typeof bounds !== "object") return null;
+  const minLng = Number(bounds.minLng);
+  const minLat = Number(bounds.minLat);
+  const maxLng = Number(bounds.maxLng);
+  const maxLat = Number(bounds.maxLat);
+  if (![minLng, minLat, maxLng, maxLat].every((value) => Number.isFinite(value))) {
+    return null;
+  }
+  const width = Math.max(maxLng - minLng, minPadding);
+  const height = Math.max(maxLat - minLat, minPadding);
+  const padLng = Math.max(width * paddingRatio, minPadding);
+  const padLat = Math.max(height * paddingRatio, minPadding);
+  const clampLng = (value) => Math.max(-180, Math.min(180, value));
+  const clampLat = (value) => Math.max(-85, Math.min(85, value));
+  return [
+    [clampLng(minLng - padLng), clampLat(minLat - padLat)],
+    [clampLng(maxLng + padLng), clampLat(maxLat + padLat)],
+  ];
+}
+
 export function getFeatureId(feature) {
   if (!feature || typeof feature !== "object") return null;
   const props = feature.properties ?? {};

@@ -10,6 +10,7 @@ import {
   buildMunicipioGeoKey,
   createMapboxClosedState,
   createMapboxOpenedState,
+  expandBoundsLike,
   getFeatureId,
   inferFeatureKind,
   inferFeatureLayer,
@@ -391,6 +392,7 @@ export function PropertyMap() {
   const [mapboxActive, setMapboxActive] = useState(false);
   const [mapboxLoading, setMapboxLoading] = useState(false);
   const [mapboxFeature, setMapboxFeature] = useState(null);
+  const mapboxRootFeatureRef = useRef(null);
   const [leafletActiveNode, setLeafletActiveNode] = useState(null);
   const [leafletParentStack, setLeafletParentStack] = useState([]);
   const [activeNode, setActiveNode] = useState(null);
@@ -592,6 +594,33 @@ export function PropertyMap() {
     [bearing, pitch],
   );
 
+  const applyMapboxNavigationLimits = useCallback((map, feature) => {
+    if (!map || !feature?.geometry) return false;
+    const bounds = getGeometryBounds(feature.geometry);
+    const constrainedBounds = expandBoundsLike(bounds, 0.22, 0.015);
+    if (!constrainedBounds) return false;
+    try {
+      if (typeof map.setMaxBounds === "function") {
+        map.setMaxBounds(constrainedBounds);
+      }
+      if (typeof map.setRenderWorldCopies === "function") {
+        map.setRenderWorldCopies(false);
+      }
+      if (map.dragRotate && typeof map.dragRotate.disable === "function") {
+        map.dragRotate.disable();
+      }
+      if (map.touchZoomRotate && typeof map.touchZoomRotate.disableRotation === "function") {
+        map.touchZoomRotate.disableRotation();
+      }
+      if (map.keyboard && typeof map.keyboard.disableRotation === "function") {
+        map.keyboard.disableRotation();
+      }
+      return true;
+    } catch {
+      return false;
+    }
+  }, []);
+
   const sendFeaturesToMapbox = useCallback(
     (featureList, parentKindOverride = null) => {
       if (!Array.isArray(featureList) || !featureList.length) {
@@ -687,6 +716,9 @@ export function PropertyMap() {
       });
       const payload = { type: "FeatureCollection", features: enriched };
       source.setData(payload);
+      if (mapboxRootFeatureRef.current) {
+        applyMapboxNavigationLimits(map, mapboxRootFeatureRef.current);
+      }
       setMapboxLoading(false);
       mapboxVisibleIdsRef.current = enriched
         .map((f) => (f?.id != null ? String(f.id) : null))
@@ -1908,6 +1940,7 @@ export function PropertyMap() {
     (feature) => {
       if (!feature) return;
       const next = createMapboxOpenedState(feature);
+      mapboxRootFeatureRef.current = feature;
       setSelectedId(next.selectedId);
       setActiveMarkerFeature(next.activeMarkerFeature);
       pendingMapboxFeatureRef.current = feature;
@@ -1916,6 +1949,9 @@ export function PropertyMap() {
       setMapboxLoading(next.mapboxLoading);
       setActiveNode(next.activeNode);
       setParentStack(next.parentStack);
+      if (mapboxInstanceRef.current) {
+        applyMapboxNavigationLimits(mapboxInstanceRef.current, feature);
+      }
       logMapboxEvent(
         {
           feature,
@@ -1924,7 +1960,7 @@ export function PropertyMap() {
         "open-mapbox",
       );
     },
-    [logMapboxEvent],
+    [applyMapboxNavigationLimits, logMapboxEvent],
   );
 
   const findFeatureForDevelopment = useCallback(
@@ -1953,6 +1989,7 @@ export function PropertyMap() {
 
   const closeMapbox = useCallback(() => {
     const next = createMapboxClosedState();
+    mapboxRootFeatureRef.current = null;
     setMapboxActive(next.mapboxActive);
     setMapboxLoading(next.mapboxLoading);
     setMapboxFeature(next.mapboxFeature);
@@ -2479,6 +2516,7 @@ export function PropertyMap() {
         pitch: 60,
         bearing: 0,
         projection: "mercator",
+        renderWorldCopies: false,
       });
       logMapboxEvent(
         {
@@ -2622,6 +2660,9 @@ export function PropertyMap() {
           /* ignore light errors */
         }
         addLayerRules();
+        if (mapboxRootFeatureRef.current) {
+          applyMapboxNavigationLimits(map, mapboxRootFeatureRef.current);
+        }
         map.on("mouseenter", fillLayerId, () => {
           map.getCanvas().style.cursor = "pointer";
         });
@@ -2783,6 +2824,9 @@ export function PropertyMap() {
         map.setPitch(pitch);
         map.setBearing(bearing);
         addLayerRules();
+        if (mapboxRootFeatureRef.current) {
+          applyMapboxNavigationLimits(map, mapboxRootFeatureRef.current);
+        }
         if (applyPendingFeature()) {
           setMapboxLoading(false);
         }

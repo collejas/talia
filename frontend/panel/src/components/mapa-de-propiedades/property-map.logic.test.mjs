@@ -5,6 +5,7 @@ import {
   createMapboxAscendState,
   createMapboxClosedState,
   createMapboxOpenedState,
+  expandBoundsLike,
   getFeatureId,
   inferFeatureKind,
   inferFeatureLayer,
@@ -117,4 +118,12 @@ test("feature identity and kind inference stay stable", () => {
     buildMunicipioGeoKey({ estado_cve: "5", municipio_cve: "12" }),
     "05012",
   );
+});
+
+test("expands map bounds for development navigation limits", () => {
+  assert.deepEqual(expandBoundsLike({ minLng: 1, minLat: 2, maxLng: 3, maxLat: 4 }), [
+    [0.64, 1.64],
+    [3.36, 4.36],
+  ]);
+  assert.equal(expandBoundsLike(null), null);
 });
