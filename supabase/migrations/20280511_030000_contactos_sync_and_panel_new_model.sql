@@ -40,6 +40,10 @@ BEGIN
         RETURN OLD;
     END IF;
 
+    IF COALESCE(NEW.contacto_datos->>'legacy_shadow', '') = 'true' THEN
+        RETURN NEW;
+    END IF;
+
     v_nombre := btrim(COALESCE(
         NULLIF(NEW.nombre_completo, ''),
         NULLIF(concat_ws(' ', NEW.nombre_nombres, NEW.apellido_paterno, NEW.apellido_materno), ''),

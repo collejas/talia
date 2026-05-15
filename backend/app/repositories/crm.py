@@ -3670,6 +3670,11 @@ class CRMRepository:
         canal: str | None = None,
     ) -> None:
         channel_value = (canal or "").strip().lower() or "assistant"
+        if contact_id:
+            await self.ensure_legacy_contact_shadow(
+                organizacion_id=organizacion_id,
+                persona_id=_coerce_uuid(str(contact_id), field="contact_id"),
+            )
         payload: dict[str, Any] = {
             "organizacion_id": str(organizacion_id),
             "vendedor_usuario_id": str(vendedor_id),
@@ -3691,6 +3696,65 @@ class CRMRepository:
             json=payload,
             prefer="return=minimal",
         )
+
+    async def ensure_legacy_contact_shadow(
+        self,
+        *,
+        organizacion_id: UUID,
+        persona_id: UUID,
+    ) -> UUID:
+        """Crea la sombra legacy en `contactos` para tablas que aún dependen de ese FK."""
+
+        contact_row = await self.get_persona_by_id(persona_id=str(persona_id))
+        if not isinstance(contact_row, dict) or not contact_row.get("id"):
+            raise CRMRepositoryError("persona_no_encontrada_para_contacto_legacy")
+
+        shadow_id = _coerce_uuid(str(contact_row["id"]), field="contacto_id")
+        existing_resp = await self._request(
+            "GET",
+            "/rest/v1/contactos",
+            params={
+                "id": f"eq.{shadow_id}",
+                "limit": "1",
+                "select": "id",
+            },
+        )
+        existing_data = existing_resp.json() or []
+        if isinstance(existing_data, list) and existing_data:
+            existing_row = existing_data[0]
+            if isinstance(existing_row, dict) and existing_row.get("id"):
+                return shadow_id
+
+        payload: dict[str, Any] = {
+            "id": str(shadow_id),
+            "organizacion_id": str(organizacion_id),
+            "codigo_contacto": f"CT-{datetime.now(timezone.utc):%Y%m%d}-{uuid4().hex[:6].upper()}",
+            "nombre_completo": contact_row.get("nombre_completo"),
+            "correo": contact_row.get("correo"),
+            "telefono_e164": contact_row.get("telefono_e164"),
+            "origen": contact_row.get("origen"),
+            "propietario_usuario_id": contact_row.get("propietario_usuario_id"),
+            "estado": contact_row.get("estado") or "lead",
+            "contacto_datos": {
+                "legacy_shadow": True,
+                "persona_id": str(shadow_id),
+            },
+            "notas": contact_row.get("notes"),
+            "necesidad_proposito": contact_row.get("necesidad_proposito"),
+        }
+        payload = {key: value for key, value in payload.items() if value not in (None, "", {}, [])}
+        try:
+            await self._request(
+                "POST",
+                "/rest/v1/contactos",
+                json=payload,
+                prefer="return=representation",
+            )
+        except CRMRepositoryError as exc:
+            message = str(exc).lower()
+            if "409" not in message and "duplicate key" not in message and "already exists" not in message:
+                raise
+        return shadow_id
 
     async def find_sales_rep_by_phone(self, *, phone_e164: str) -> dict[str, Any] | None:
         """Localiza a un usuario/empleado usando su número de WhatsApp."""
@@ -5261,6 +5325,17 @@ class CRMRepository:
         session_key = booking_session_id.strip()
         if not session_key:
             raise CRMRepositoryError("booking_session_id_required")
+        contact_id = payload.get("contacto_id")
+        if contact_id:
+            organizacion_id_raw = payload.get("organizacion_id")
+            organizacion_uuid = _coerce_uuid(str(organizacion_id_raw), field="organizacion_id")
+            contact_uuid = _coerce_uuid(str(contact_id), field="contacto_id")
+            if organizacion_uuid is None or contact_uuid is None:
+                raise CRMRepositoryError("web_booking_session_legacy_shadow_invalid_ids")
+            await self.ensure_legacy_contact_shadow(
+                organizacion_id=organizacion_uuid,
+                persona_id=contact_uuid,
+            )
         body = {"booking_session_id": session_key, **payload}
         resp = await self._request(
             "POST",
@@ -6873,6 +6948,20 @@ class CRMRepository:
                 prefer="return=representation",
             )
 
+        try:
+            await self.ensure_legacy_contact_shadow(
+                organizacion_id=organizacion_id,
+                persona_id=_coerce_uuid(str(persona_row.get("id")), field="persona_id"),
+            )
+        except CRMRepositoryError as exc:
+            logger.warning(
+                "crm.legacy_contact_shadow_failed",
+                extra={
+                    "persona_id": str(persona_row.get("id")),
+                    "error": str(exc),
+                },
+            )
+
         return await self.get_contact(
             organizacion_id=organizacion_id,
             contacto_id=contacto_id,
@@ -7205,6 +7294,20 @@ class CRMRepository:
                     json=relation_payload,
                     prefer="return=representation,resolution=merge-duplicates",
                 )
+
+        try:
+            await self.ensure_legacy_contact_shadow(
+                organizacion_id=organizacion_id,
+                persona_id=_coerce_uuid(str(persona_row.get("id")), field="persona_id"),
+            )
+        except CRMRepositoryError as exc:
+            logger.warning(
+                "crm.legacy_contact_shadow_failed",
+                extra={
+                    "persona_id": str(persona_row.get("id")),
+                    "error": str(exc),
+                },
+            )
 
         contact_row = await self.get_contact(
             organizacion_id=organizacion_id,
@@ -13917,6 +14020,13 @@ class CRMRepository:
         payload: dict[str, Any],
     ) -> dict[str, Any] | None:
         """Crea un evento de atribución; ignora duplicado por conversación."""
+
+        contacto_id = payload.get("contacto_id")
+        if contacto_id:
+            await self.ensure_legacy_contact_shadow(
+                organizacion_id=organizacion_id,
+                persona_id=_coerce_uuid(str(contacto_id), field="contacto_id"),
+            )
 
         resp = await self._request_service_role(
             "POST",

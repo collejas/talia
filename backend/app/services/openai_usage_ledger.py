@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Any
-from uuid import UUID
+from uuid import UUID, uuid4
 
 import httpx
 
@@ -130,6 +130,78 @@ async def _request(
     return response
 
 
+async def _ensure_legacy_contact_shadow(
+    *,
+    organizacion_id: UUID,
+    persona_id: UUID,
+) -> UUID:
+    persona_resp = await _request(
+        "GET",
+        "/rest/v1/personas",
+        params={
+            "id": f"eq.{persona_id}",
+            "organizacion_id": f"eq.{organizacion_id}",
+            "select": "id,nombre_completo,correo,telefono_e164,origen,propietario_usuario_id,estado,notas",
+            "limit": "1",
+        },
+    )
+    persona_rows = persona_resp.json() or []
+    if not isinstance(persona_rows, list) or not persona_rows:
+        raise RuntimeError("persona_no_encontrada_para_contacto_legacy")
+    persona_row = persona_rows[0]
+    if not isinstance(persona_row, dict) or not persona_row.get("id"):
+        raise RuntimeError("persona_no_encontrada_para_contacto_legacy")
+
+    shadow_id = _coerce_uuid(str(persona_row["id"]))
+    if shadow_id is None:
+        raise RuntimeError("persona_id_invalido_para_contacto_legacy")
+
+    existing_resp = await _request(
+        "GET",
+        "/rest/v1/contactos",
+        params={
+            "id": f"eq.{shadow_id}",
+            "limit": "1",
+            "select": "id",
+        },
+    )
+    existing_rows = existing_resp.json() or []
+    if isinstance(existing_rows, list) and existing_rows:
+        existing_row = existing_rows[0]
+        if isinstance(existing_row, dict) and existing_row.get("id"):
+            return shadow_id
+
+    payload: dict[str, Any] = {
+        "id": str(shadow_id),
+        "organizacion_id": str(organizacion_id),
+        "codigo_contacto": f"CT-{datetime.now(timezone.utc):%Y%m%d}-{uuid4().hex[:6].upper()}",
+        "nombre_completo": persona_row.get("nombre_completo"),
+        "correo": persona_row.get("correo"),
+        "telefono_e164": persona_row.get("telefono_e164"),
+        "origen": persona_row.get("origen"),
+        "propietario_usuario_id": persona_row.get("propietario_usuario_id"),
+        "estado": persona_row.get("estado") or "lead",
+        "contacto_datos": {
+            "legacy_shadow": True,
+            "persona_id": str(shadow_id),
+        },
+        "notas": persona_row.get("notas"),
+    }
+    payload = {key: value for key, value in payload.items() if value not in (None, "", {}, [])}
+    try:
+        await _request(
+            "POST",
+            "/rest/v1/contactos",
+            json_payload=payload,
+            prefer="return=representation",
+        )
+    except Exception as exc:
+        message = str(exc).lower()
+        if "409" not in message and "duplicate key" not in message and "already exists" not in message:
+            raise
+    return shadow_id
+
+
 async def _find_active_pricing(*, provider: str, model: str, at: datetime | None = None) -> dict[str, Any] | None:
     ts = (at or datetime.now(timezone.utc)).isoformat()
     try:
@@ -245,6 +317,25 @@ async def record_response_usage(
     metadata = _ensure_dict(request_metadata)
     metadata.setdefault("pricing_found", pricing_found)
     metadata.setdefault("pricing_model_lookup", normalized_model)
+    if contact_id:
+        try:
+            organizacion_uuid = _coerce_uuid(organizacion_id)
+            contact_uuid = _coerce_uuid(contact_id)
+            if organizacion_uuid is None or contact_uuid is None:
+                raise ValueError("invalid_uuid")
+            await _ensure_legacy_contact_shadow(
+                organizacion_id=organizacion_uuid,
+                persona_id=contact_uuid,
+            )
+        except Exception as exc:
+            logger.warning(
+                "openai_usage_ledger.contact_shadow_failed",
+                extra={
+                    "organizacion_id": str(organizacion_id),
+                    "contact_id": str(contact_id),
+                    "error": str(exc),
+                },
+            )
     payload = {
         "organizacion_id": str(organizacion_id),
         "source_tenant_mode": _source_tenant_mode(

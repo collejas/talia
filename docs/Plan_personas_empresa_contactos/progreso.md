@@ -53,6 +53,14 @@ sin romper contratos publicos ni el lenguaje de usuario del panel.
   - `backend/app/assistants/tools/lead.py`
 - el runtime de WhatsApp y Webchat sigue funcionando con `persona` por dentro, aunque
   varios contratos y campos sigan llamandose `contact_id` o `contacto_id` por compatibilidad
+- se agrego el puente legacy automatico para escrituras que todavia exigen FK contra
+  `contactos`:
+  - `asignaciones_vendedores`
+  - `prospeccion_whatsapp_atribucion_eventos`
+  - `web_booking_sessions`
+  - `openai_request_usage`
+- el puente crea una sombra legacy en `public.contactos` solo cuando una escritura aun
+  depende de ese FK; no cambia el modelo operativo nuevo
 
 ### Validacion reciente
 
@@ -190,6 +198,12 @@ Notas:
 
 - El runtime activo ya no depende de `contactos` para el ciclo operativo del panel de contactos.
 - Quedan como archivo histórico las migraciones y documentos que describen la transición.
+- Quedan como compatibilidad temporal algunas escrituras que todavía necesitan sombra legacy:
+  - `openai_request_usage`
+  - `web_booking_sessions`
+  - `asignaciones_vendedores`
+  - `prospeccion_whatsapp_atribucion_eventos`
+- `web_sessions` quedó como fuente de analítica/landing y no entra al ciclo de alta de personas.
 - Pendiente solo si aparece otro consumidor real:
   - limpiar campos duplicados en `cuentas`/`contactos`
   - revisar relaciones SQL antiguas fuera del panel de contactos

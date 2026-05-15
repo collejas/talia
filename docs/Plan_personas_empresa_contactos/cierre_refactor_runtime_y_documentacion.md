@@ -74,6 +74,24 @@ Este documento resume todo lo que se fue cerrando dentro del plan `personas, cue
   romper contratos ni RPCs que todavia sirven como compatibilidad.
 - La validacion reciente quedo verde con compilacion, tests focalizados y `GET /health`.
 
+### 2.4 Puente legacy minimo que sigue vivo
+
+Aunque el runtime principal ya opera sobre `personas`, quedaron algunas tablas que aun
+exigen FK a `public.contactos`. Para no hacer hardcode por tenant, se dejo un puente
+general que materializa una sombra legacy solo cuando hace falta:
+
+- `asignaciones_vendedores`
+- `prospeccion_whatsapp_atribucion_eventos`
+- `web_booking_sessions`
+- `openai_request_usage`
+
+Ese puente toma `persona_id`, crea o reutiliza la fila sombra en `contactos` y luego deja
+que la escritura legacy siga su curso. La traza operativa no cambia; solo se mantiene
+compatibilidad hasta retirar esas FKs.
+
+`web_sessions` no entra en ese puente porque en este momento se usa como fuente de
+analitica/landing y no como destino de escritura desde el flujo de personas.
+
 ## 3. Limpieza semantica que se hizo
 
 La base de codigo original se escribio con el concepto `contact`, y por eso quedaron contratos y helpers con ese nombre. Durante esta etapa se limpio bastante semantica interna para que el codigo hable mas de `persona` y menos de `contacto`.
