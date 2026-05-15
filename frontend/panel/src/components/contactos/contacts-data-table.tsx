@@ -842,8 +842,6 @@ function ContactDetailPanel({
   const contactName = row.header;
   const contactId = formatContactValue(raw.id);
   const company = formatContactValue(raw.company_name);
-  const code = formatContactValue(raw.codigo_contacto);
-  const accountCode = formatContactValue(raw.codigo_cuenta);
   const email = formatContactValue(raw.correo);
   const phone = formatContactValue(raw.telefono);
   const origin = formatContactValue(raw.origen);
@@ -861,17 +859,23 @@ function ContactDetailPanel({
   const state = formatContactValue(raw.entidad);
   const country = formatContactValue(raw.pais);
   const website = formatContactValue(raw.website);
-  const establishment = formatContactValue(raw.tipo_establecimiento);
 
   return (
     <div className="space-y-5 pb-6">
+      <div className="rounded-xl border bg-muted/20 p-4">
+        <div className="text-xs uppercase tracking-wide text-muted-foreground">Vista secundaria</div>
+        <div className="mt-1 text-sm text-muted-foreground">
+          La ficha completa vive en su pantalla dedicada. Desde aquí solo puedes revisar lo esencial o saltar al detalle.
+        </div>
+      </div>
+
       <div className="flex flex-wrap gap-2">
         {contactId !== "—" ? (
-          <Button asChild variant="outline" size="sm">
+          <Button asChild size="sm">
             <Link href={`/personas/${encodeURIComponent(contactId)}`}>Abrir ficha</Link>
           </Button>
         ) : null}
-        <Button type="button" size="sm" onClick={onEdit}>
+        <Button type="button" variant="outline" size="sm" onClick={onEdit}>
           <IconPencil className="size-4" />
           Editar
         </Button>
@@ -909,19 +913,16 @@ function ContactDetailPanel({
           <DetailItem icon={<IconMessageCircle className="size-4" />} label="Conversaciones" value={conversations} />
         </div>
       </div>
-
-      <div className="grid gap-3 rounded-xl border p-4">
+      <div className="rounded-xl border p-4">
         <div className="flex flex-wrap gap-2">
           <Badge variant="outline">Estado: {status}</Badge>
           <Badge variant="outline">Captura: {capture}</Badge>
           <Badge variant="outline">Origen: {origin}</Badge>
         </div>
 
-        <Separator />
+        <Separator className="my-4" />
 
         <div className="grid gap-3 sm:grid-cols-2">
-          <DetailItem label="Código contacto" value={code} />
-          <DetailItem label="Código empresa" value={accountCode} />
           <DetailItem label="Puesto" value={position} />
           <DetailItem label="Rol decisión" value={role} />
           <DetailItem label="Área" value={area} />
@@ -930,14 +931,16 @@ function ContactDetailPanel({
           <DetailItem label="Estado" value={state} />
           <DetailItem label="País" value={country} />
           <DetailItem label="Sitio web" value={website} href={website !== "—" ? website : undefined} />
-          <DetailItem label="Tipo establecimiento" value={establishment} />
         </div>
-      </div>
 
-      <div className="rounded-xl border p-4">
+        <Separator className="my-4" />
+
         <div className="mb-2 text-sm font-medium">Notas</div>
         <p className="whitespace-pre-wrap text-sm text-muted-foreground">
           {notes !== "—" ? notes : "Sin notas registradas."}
+        </p>
+        <p className="mt-3 text-xs text-muted-foreground">
+          Para ver el registro completo, relaciones y acciones avanzadas, abre la ficha dedicada.
         </p>
       </div>
     </div>

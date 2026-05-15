@@ -178,6 +178,7 @@ Notas:
   - Alta y edición ahora piden confirmación explícita cuando el dedupe detecta candidatos `medio/debil`.
   - `Vincular contacto a empresa` abre el flujo independiente de relacion.
   - La experiencia ya usa panel ancho y resumen lateral en desktop.
+  - El drawer del listado quedó como vista secundaria; la ruta principal de trabajo ahora es la ficha dedicada en `/personas/[contactoId]`.
   - al terminar un alta, el panel abre automáticamente la ficha rica del contacto creado
     o reutilizado, en vez de volver al listado sin contexto
 
