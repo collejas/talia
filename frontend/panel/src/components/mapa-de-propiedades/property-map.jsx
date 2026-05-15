@@ -1,6 +1,14 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  IconBuilding,
+  IconChevronDown,
+  IconChevronRight,
+  IconLayersSelected,
+  IconMapPin,
+  IconSquares,
+} from "@tabler/icons-react";
 import "leaflet/dist/leaflet.css";
 import "mapbox-gl/dist/mapbox-gl.css";
 import { Button } from "@/components/ui/button";
@@ -171,6 +179,53 @@ function normalizeLooseString(value) {
   return str.length ? str.toLowerCase() : null;
 }
 
+function resolveCapaSortValue(props) {
+  const directLevel = Number(props?.nivel);
+  if (Number.isFinite(directLevel)) {
+    return directLevel;
+  }
+  const name = (props?.capa_nombre ?? props?.nombre ?? "").toString().trim().toLowerCase();
+  if (!name) {
+    return Number.POSITIVE_INFINITY;
+  }
+  if (name.includes("planta baja") || name === "pb") {
+    return 0;
+  }
+  const match = name.match(/(\d+)/);
+  if (match) {
+    const parsed = Number(match[1]);
+    if (Number.isFinite(parsed)) {
+      return parsed;
+    }
+  }
+  return Number.POSITIVE_INFINITY;
+}
+
+function resolveUnitSortValue(props) {
+  const directLevel = Number(props?.nivel);
+  if (Number.isFinite(directLevel)) {
+    return directLevel;
+  }
+  const candidates = [
+    props?.unidad,
+    props?.nombre,
+    props?.descripcion,
+    props?.id,
+  ]
+    .map((value) => (value == null ? "" : String(value).trim()))
+    .filter(Boolean);
+  for (const candidate of candidates) {
+    const match = candidate.match(/(\d+)/);
+    if (match) {
+      const parsed = Number(match[1]);
+      if (Number.isFinite(parsed)) {
+        return parsed;
+      }
+    }
+  }
+  return Number.POSITIVE_INFINITY;
+}
+
 function escapeHtml(value) {
   return String(value ?? "")
     .replaceAll("&", "&amp;")
@@ -233,6 +288,7 @@ function buildHierarchy(features) {
         name: devName,
         tipoLabels: new Set(),
         tipos: new Map(),
+        capas: new Map(),
       });
     }
     const dev = devMap.get(devId);
@@ -250,16 +306,27 @@ function buildHierarchy(features) {
     if (!tipo) continue;
 
     const capaNombre = props.capa_nombre ?? `Capa ${props.nivel ?? "0"}`;
-    const capaKey = `${tipoKey}::${capaNombre}`;
-    if (!tipo.capas.has(capaKey)) {
-      tipo.capas.set(capaKey, {
-        id: capaKey,
+    const capaParentKey = props.parent_id ?? props.target_parent_id ?? props.capa_parent_id ?? props.nivel_id ?? null;
+    const capaLevelKey = props.nivel ?? props.nivel_id ?? props.capa_id ?? props.capa_key ?? props.target_parent_id ?? null;
+    const structuralCapaKey = `${devId}::${capaLevelKey ?? capaParentKey ?? capaNombre}`;
+    if (!dev.capas.has(structuralCapaKey)) {
+      dev.capas.set(structuralCapaKey, {
+        id: structuralCapaKey,
         name: capaNombre,
         units: [],
+        sortValue: resolveCapaSortValue(props),
+        parentKey: capaParentKey != null ? String(capaParentKey) : null,
       });
     }
-    const capa = tipo.capas.get(capaKey);
+    const capa = dev.capas.get(structuralCapaKey);
     if (!capa) continue;
+    if (!tipo.capas.has(structuralCapaKey)) {
+      tipo.capas.set(structuralCapaKey, capa);
+    }
+    const sortValue = resolveCapaSortValue(props);
+    if (Number.isFinite(sortValue) && !Number.isFinite(capa.sortValue)) {
+      capa.sortValue = sortValue;
+    }
 
     const status = (props.status ?? "").toLowerCase();
     const statusColor = props.status_color ?? STATUS_COLORS[status] ?? STATUS_COLORS.disponible;
@@ -268,6 +335,7 @@ function buildHierarchy(features) {
       name: props.nombre ?? props.unidad ?? "Unidad",
       feature,
       color: statusColor,
+      sortValue: resolveUnitSortValue(props),
     });
   }
   return Array.from(devMap.values())
@@ -280,19 +348,15 @@ function buildHierarchy(features) {
           total + Array.from(tipo.capas.values()).reduce((capaTotal, capa) => capaTotal + capa.units.length, 0),
         0,
       ),
-      tipos: Array.from(dev.tipos.values())
-        .map((tipo) => ({
-          id: tipo.id,
-          label: tipo.label,
-          unitCount: Array.from(tipo.capas.values()).reduce(
-            (total, capa) => total + capa.units.length,
-            0,
-          ),
-          capas: Array.from(tipo.capas.values()).sort((a, b) =>
-            (a.name ?? "").localeCompare(b.name ?? ""),
-          ),
-        }))
-        .sort((a, b) => a.label.localeCompare(b.label)),
+      capas: Array.from(dev.capas.values())
+        .sort((a, b) => {
+          const aValue = Number.isFinite(a.sortValue) ? a.sortValue : Number.POSITIVE_INFINITY;
+          const bValue = Number.isFinite(b.sortValue) ? b.sortValue : Number.POSITIVE_INFINITY;
+          if (aValue !== bValue) {
+            return aValue - bValue;
+          }
+          return (a.name ?? "").localeCompare(b.name ?? "");
+        }),
     }))
     .sort((a, b) => (a.name ?? "").localeCompare(b.name ?? ""));
 }
@@ -417,7 +481,6 @@ export function PropertyMap() {
   const [parentStack, setParentStack] = useState([]);
   const [expandedDevIds, setExpandedDevIds] = useState(() => new Set());
   const [expandedCapas, setExpandedCapas] = useState(new Set());
-  const [expandedTipos, setExpandedTipos] = useState(() => new Set());
   const mapboxToken = process.env.NEXT_PUBLIC_MAPBOX_TOKEN;
 
   const logMapboxEvent = useCallback((payload, label = "event") => {
@@ -1211,8 +1274,10 @@ export function PropertyMap() {
     if (!hierarchyTree.length) return;
     const summary = hierarchyTree.map((dev) => ({
       id: dev.id,
-      tipos: dev.tipos.map((tipo) => tipo.label),
-      capas: dev.tipos.reduce((acc, tipo) => acc + tipo.capas.length, 0),
+      capas: Array.isArray(dev.capas) ? dev.capas.length : 0,
+      unidades: Array.isArray(dev.capas)
+        ? dev.capas.reduce((acc, capa) => acc + (Array.isArray(capa.units) ? capa.units.length : 0), 0)
+        : 0,
     }));
     logMapboxEvent(
       {
@@ -3254,6 +3319,102 @@ export function PropertyMap() {
     [openMapboxFeature, zoomToFeature],
   );
 
+  const renderPolygonInfo = (geom) => (
+    <div className="flex flex-wrap items-center gap-2 text-[0.65rem] text-slate-500">
+      <IconMapPin className="size-4 text-slate-400" />
+      <span>{geom?.type ? "Polígono guardado" : "Sin polígono"}</span>
+    </div>
+  );
+
+  const PolygonContainer = ({ geom, children }) => (
+    <div className="space-y-2 rounded border border-dashed border-slate-200 bg-slate-50/80 p-2">
+      {renderPolygonInfo(geom)}
+      {children}
+    </div>
+  );
+
+  const renderUnidadNode = (unit) => (
+    <div key={unit.id} className="space-y-1 border-b border-dashed border-slate-200 pb-2 last:border-b-0">
+      <div className="flex items-center justify-between gap-3 text-[0.75rem]">
+        <div className="flex items-center gap-2">
+          <IconSquares className="size-4 text-slate-400" />
+          <div className="flex flex-col">
+            <span className="font-semibold">{unit.name || "Unidad sin clave"}</span>
+            <span className="text-[0.6rem] uppercase tracking-[0.2em] text-slate-400">unidad</span>
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={() => handleUnitSelect(unit)}
+          className="rounded border border-slate-200 px-2 py-1 text-[0.65rem] text-slate-600 transition hover:border-slate-400 hover:text-slate-800"
+        >
+          Ver
+        </button>
+      </div>
+      <PolygonContainer geom={unit.feature?.geometry ?? unit.geom} />
+    </div>
+  );
+
+  const renderCapaNode = (desarrollo, capa) => {
+    const capaExpanded = expandedCapas.has(capa.id);
+    const orderedUnits = [...(capa.units ?? [])].sort((a, b) => {
+      const aValue = Number.isFinite(a.sortValue) ? a.sortValue : Number.POSITIVE_INFINITY;
+      const bValue = Number.isFinite(b.sortValue) ? b.sortValue : Number.POSITIVE_INFINITY;
+      if (aValue !== bValue) {
+        return aValue - bValue;
+      }
+      return (a.name ?? "").localeCompare(b.name ?? "");
+    });
+    return (
+      <div key={capa.id} className="space-y-2 border-b border-dashed border-slate-200 pb-3 last:border-b-0">
+        <div className="flex items-center justify-between gap-3 text-[0.75rem]">
+          <div className="flex items-center gap-2">
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              onClick={() =>
+                setExpandedCapas((prev) => {
+                  const next = new Set(prev);
+                  if (next.has(capa.id)) {
+                    next.delete(capa.id);
+                  } else {
+                    next.add(capa.id);
+                  }
+                  return next;
+                })
+              }
+              aria-label={capaExpanded ? "Ocultar unidades" : "Mostrar unidades"}
+            >
+              {capaExpanded ? <IconChevronDown className="size-4" /> : <IconChevronRight className="size-4" />}
+            </Button>
+            <div className="flex items-center gap-2">
+              <IconLayersSelected className="size-4 text-slate-400" />
+              <div className="flex flex-col">
+                <span className="font-semibold">{capa.name || `Nivel ${capa.nivel ?? "?"}`}</span>
+                <span className="text-[0.6rem] uppercase tracking-[0.2em] text-slate-400">capa</span>
+              </div>
+            </div>
+          </div>
+          <div className="rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[0.6rem] font-semibold text-slate-500">
+            {orderedUnits.length}
+          </div>
+        </div>
+        {capaExpanded && (
+          <PolygonContainer geom={capa.geom}>
+            <div className="space-y-2 border-l border-dashed border-slate-200 pl-5">
+              {orderedUnits.length ? (
+                orderedUnits.map((unit) => renderUnidadNode(unit))
+              ) : (
+                <p className="text-[0.65rem] text-slate-400">Sin unidades aún</p>
+              )}
+            </div>
+          </PolygonContainer>
+        )}
+      </div>
+    );
+  };
+
   return (
     <div className="flex min-h-0 flex-col gap-4 lg:h-[calc(100svh-9rem)] lg:flex-row lg:items-stretch">
       <aside
@@ -3369,30 +3530,15 @@ export function PropertyMap() {
               <div className="space-y-2">
                 {hierarchyTree.map((dev) => {
                   const devExpanded = expandedDevIds.has(dev.id);
+                  const developmentFeature = findFeatureForDevelopment(dev.id);
                   return (
                     <div key={dev.id} className="border-b border-slate-100 pb-2 last:border-0">
-                      <div className="flex items-start justify-between gap-2">
-                        <button
-                          type="button"
-                          className="flex-1 text-left font-semibold text-slate-800 transition hover:text-slate-950"
-                          onClick={() => {
-                            const feature = findFeatureForDevelopment(dev.id);
-                            if (feature) {
-                              openMapboxFeature(feature);
-                            }
-                          }}
-                        >
-                          <div className="flex flex-wrap items-center gap-2">
-                            <span>{dev.name}</span>
-                            <span className="rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[0.65rem] font-semibold text-slate-500">
-                              {dev.unitCount ?? 0} unidades
-                            </span>
-                          </div>
-                        </button>
-                        <div className="flex items-center gap-1">
-                          <button
+                      <div className="flex items-center justify-between gap-3 text-[0.85rem]">
+                        <div className="flex items-center gap-2">
+                          <Button
                             type="button"
-                            className="rounded border border-slate-200 px-2 py-1 text-[0.65rem] text-slate-600 transition hover:border-slate-400 hover:text-slate-800"
+                            variant="ghost"
+                            size="icon-sm"
                             onClick={() =>
                               setExpandedDevIds((prev) => {
                                 const next = new Set(prev);
@@ -3404,119 +3550,33 @@ export function PropertyMap() {
                                 return next;
                               })
                             }
+                            aria-label={devExpanded ? "Ocultar capas" : "Mostrar capas"}
                           >
-                            {devExpanded ? "-" : "+"}
+                            {devExpanded ? <IconChevronDown className="size-4" /> : <IconChevronRight className="size-4" />}
+                          </Button>
+                          <button
+                            type="button"
+                            className="flex items-center gap-2 text-left font-semibold text-slate-800 transition hover:text-slate-950"
+                            onClick={() => {
+                              if (developmentFeature) {
+                                openMapboxFeature(developmentFeature);
+                              }
+                            }}
+                          >
+                            <IconBuilding className="size-4 text-slate-400" />
+                            <span>{dev.name}</span>
                           </button>
                         </div>
+                        <div className="rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[0.6rem] font-semibold text-slate-500">
+                          {dev.unitCount ?? 0}
+                        </div>
                       </div>
-                      {dev.tipoSummary && dev.tipoSummary.length > 0 && (
-                        <div className="mt-1 flex flex-wrap gap-1 text-[0.6rem] uppercase tracking-[0.18em] text-slate-400">
-                          {dev.tipoSummary.map((item) => (
-                            <span key={item} className="rounded-full bg-slate-100 px-2 py-0.5 text-slate-500">
-                              {item}
-                            </span>
-                          ))}
-                        </div>
-                      )}
                       {devExpanded && (
-                        <div className="mt-2 space-y-2 border-l border-slate-200 pl-4 text-xs text-slate-600">
-                          {dev.tipos.map((tipo) => {
-                            const tipoExpanded = expandedTipos.has(tipo.id);
-                            return (
-                              <div key={tipo.id}>
-                                <button
-                                  type="button"
-                                  className="flex w-full items-center justify-between text-left font-semibold uppercase tracking-[0.18em] text-slate-500"
-                                  onClick={() =>
-                                    setExpandedTipos((prev) => {
-                                      const next = new Set(prev);
-                                      if (next.has(tipo.id)) {
-                                        next.delete(tipo.id);
-                                      } else {
-                                        next.add(tipo.id);
-                                      }
-                                      return next;
-                                    })
-                                  }
-                                  >
-                                  <span className="flex items-center gap-2">
-                                    <span>{tipo.label}</span>
-                                    <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[0.6rem] text-slate-500">
-                                      {tipo.unitCount ?? 0}
-                                    </span>
-                                  </span>
-                                  <span className="text-[0.6rem] text-slate-300">
-                                    {tipoExpanded ? "-" : "+"}
-                                  </span>
-                                </button>
-                                {tipoExpanded && (
-                                  <div className="mt-2 space-y-2 pl-3 text-[0.8rem]">
-                                    {tipo.capas.map((capa) => {
-                                      const capaExpanded = expandedCapas.has(capa.id);
-                                      return (
-                                        <div key={capa.id} className="border-l border-slate-200 pl-3">
-                                          <button
-                                            type="button"
-                                            className="flex w-full items-center justify-between text-left font-semibold text-slate-700"
-                                            onClick={() =>
-                                              setExpandedCapas((prev) => {
-                                                const next = new Set(prev);
-                                                if (next.has(capa.id)) {
-                                                  next.delete(capa.id);
-                                                } else {
-                                                  next.add(capa.id);
-                                                }
-                                                return next;
-                                              })
-                                            }
-                                          >
-                                            <span className="flex items-center gap-2">
-                                              <span>{capa.name}</span>
-                                              <span className="rounded-full bg-sky-100 px-2 py-0.5 text-[0.6rem] font-semibold text-sky-700">
-                                                Polígono
-                                              </span>
-                                              <span className="rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[0.6rem] font-semibold text-slate-500">
-                                                {capa.units.length}
-                                              </span>
-                                            </span>
-                                            <span className="text-[0.6rem] text-slate-400">
-                                              {capaExpanded ? "-" : "+"}
-                                            </span>
-                                          </button>
-                                          {capaExpanded && (
-                                            <div className="mt-1 space-y-1 pl-2 text-[0.8rem]">
-                                              {capa.units.map((unit) => (
-                                                <button
-                                                  key={unit.id}
-                                                  type="button"
-                                                  onClick={() => handleUnitSelect(unit)}
-                                                  className={`flex w-full items-center gap-2 border-l px-2.5 py-1.5 text-left text-slate-700 transition ${
-                                                    selectedId === String(unit.id)
-                                                      ? "border-slate-900 bg-slate-950 text-white"
-                                                      : "border-slate-200 bg-transparent hover:border-slate-400 hover:bg-slate-50"
-                                                  }`}
-                                                >
-                                                  <span
-                                                    className="h-2.5 w-2.5 rounded-full border"
-                                                    style={{
-                                                      backgroundColor: unit.color,
-                                                      borderColor: unit.color,
-                                                    }}
-                                                  />
-                                                  <span className="font-semibold">{unit.name}</span>
-                                                </button>
-                                              ))}
-                                            </div>
-                                          )}
-                                        </div>
-                                      );
-                                    })}
-                                  </div>
-                                )}
-                              </div>
-                            );
-                          })}
-                        </div>
+                        <PolygonContainer geom={developmentFeature?.geometry}>
+                          <div className="space-y-3 border-l border-dashed border-slate-200 pl-5 text-xs text-slate-600">
+                            {dev.capas.map((capa) => renderCapaNode(dev, capa))}
+                          </div>
+                        </PolygonContainer>
                       )}
                     </div>
                   );
