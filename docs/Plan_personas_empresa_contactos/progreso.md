@@ -219,6 +219,12 @@ Notas:
   - `cuentas.merge_metadata`
   - `personas.estado` ahora acepta `fusionado`
 - El backend ya escribe esa trazabilidad nativa al fusionar personas.
+- Ya existe merge formal de cuentas en `POST /crm/cuentas/{cuenta_id}/merge`:
+  - mueve oportunidades al registro destino,
+  - reasigna relaciones `cuenta_personas`,
+  - reasigna relaciones `cuenta_direcciones`,
+  - conserva la cuenta origen como archivada con metadata de merge.
+- El panel ya expone el proxy de merge para cuentas en `frontend/panel/src/app/api/cuentas/[cuentaId]/merge/route.ts`.
 - Pendiente de más profundidad, si se quiere ampliar:
   - personas: match fuerte por teléfono/correo, débil por nombre + org
   - cuentas: match fuerte por RFC, medio por razón social, débil por nombre comercial

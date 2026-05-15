@@ -7060,6 +7060,331 @@ class CRMRepository:
             raise CRMRepositoryError(f"Respuesta inválida al marcar merge de cuenta: {row!r}")
         return row
 
+    async def list_account_person_relations(
+        self,
+        *,
+        organizacion_id: UUID,
+        cuenta_id: UUID,
+        activo: bool | None = None,
+    ) -> list[dict[str, Any]]:
+        params: dict[str, str] = {
+            "organizacion_id": f"eq.{organizacion_id}",
+            "cuenta_id": f"eq.{cuenta_id}",
+            "order": "es_contacto_principal.desc,es_representante_legal.desc,activo.desc,creado_en.asc",
+            "select": (
+                "id,organizacion_id,cuenta_id,persona_id,rol_en_cuenta,puesto,es_contacto_principal,"
+                "es_contacto_facturacion,es_representante_legal,activo,fecha_inicio,fecha_fin,notas,"
+                "metadata,creado_en,actualizado_en"
+            ),
+        }
+        if activo is not None:
+            params["activo"] = "eq.true" if activo else "eq.false"
+        resp = await self._request("GET", "/rest/v1/cuenta_personas", params=params)
+        data = resp.json()
+        if not isinstance(data, list):
+            raise CRMRepositoryError("cuenta_personas_list_invalid_response")
+        return [row for row in data if isinstance(row, dict)]
+
+    async def list_account_address_relations(
+        self,
+        *,
+        organizacion_id: UUID,
+        cuenta_id: UUID,
+        activo: bool | None = None,
+    ) -> list[dict[str, Any]]:
+        params: dict[str, str] = {
+            "organizacion_id": f"eq.{organizacion_id}",
+            "cuenta_id": f"eq.{cuenta_id}",
+            "order": "es_principal.desc,activo.desc,creado_en.asc",
+            "select": (
+                "id,organizacion_id,cuenta_id,direccion_id,tipo_relacion,es_principal,activo,notas,"
+                "metadata,creado_en,actualizado_en"
+            ),
+        }
+        if activo is not None:
+            params["activo"] = "eq.true" if activo else "eq.false"
+        resp = await self._request("GET", "/rest/v1/cuenta_direcciones", params=params)
+        data = resp.json()
+        if not isinstance(data, list):
+            raise CRMRepositoryError("cuenta_direcciones_list_invalid_response")
+        return [row for row in data if isinstance(row, dict)]
+
+    async def merge_account(
+        self,
+        *,
+        organizacion_id: UUID,
+        source_account_id: UUID,
+        target_account_id: UUID,
+        merge_metadata: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        if source_account_id == target_account_id:
+            raise CRMRepositoryError("cuenta_merge_same_record")
+
+        source = await self.get_account(organizacion_id=organizacion_id, account_id=source_account_id)
+        if not source:
+            raise CRMRepositoryError("cuenta_source_not_found")
+        target = await self.get_account(organizacion_id=organizacion_id, account_id=target_account_id)
+        if not target:
+            raise CRMRepositoryError("cuenta_target_not_found")
+
+        def _pick_missing(target_value: Any, source_value: Any) -> Any:
+            if target_value not in (None, "", [], {}):
+                return target_value
+            return source_value
+
+        account_patch: dict[str, Any] = {}
+        for key in (
+            "nombre",
+            "alias",
+            "tipo",
+            "industria",
+            "tamano",
+            "sitio_web",
+            "telefono",
+            "correo",
+            "razon_social",
+            "rfc",
+            "uso_cfdi",
+            "metodo_pago",
+            "forma_pago",
+            "email_facturacion",
+            "tipo_industria",
+            "notas",
+            "necesidad_proposito",
+            "direccion",
+            "tipo_vialidad",
+            "nombre_vialidad",
+            "numero_exterior",
+            "letra_exterior",
+            "edificio",
+            "edificio_piso",
+            "numero_interior",
+            "letra_interior",
+            "tipo_asentamiento",
+            "nombre_asentamiento",
+            "tipo_centro_comercial",
+            "corredor_industrial",
+            "numero_local",
+            "codigo_postal",
+            "clave_entidad",
+            "entidad",
+            "clave_municipio",
+            "municipio",
+            "clave_localidad",
+            "localidad",
+            "pais",
+            "latitud",
+            "longitud",
+            "propietario_usuario_id",
+        ):
+            picked = _pick_missing(target.get(key), source.get(key))
+            if picked not in (None, "", [], {}):
+                account_patch[key] = picked
+
+        source_meta = _ensure_metadata(source.get("metadata"))
+        target_meta = _ensure_metadata(target.get("metadata"))
+        merged_meta = dict(source_meta)
+        merged_meta.update(target_meta)
+        merged_meta.update(_ensure_metadata(merge_metadata))
+        merged_meta["merged_from_cuenta_id"] = str(source_account_id)
+        merged_meta["merged_into_cuenta_id"] = str(target_account_id)
+        merged_meta["merge_reason"] = merged_meta.get("merge_reason") or "manual_merge"
+        account_patch["metadata"] = merged_meta
+
+        await self.update_account(
+            organizacion_id=organizacion_id,
+            account_id=target_account_id,
+            payload=account_patch,
+        )
+
+        source_relations = await self.list_account_person_relations(
+            organizacion_id=organizacion_id,
+            cuenta_id=source_account_id,
+            activo=None,
+        )
+        target_relations = await self.list_account_person_relations(
+            organizacion_id=organizacion_id,
+            cuenta_id=target_account_id,
+            activo=None,
+        )
+        target_relations_by_person = {
+            str(row.get("persona_id") or ""): row
+            for row in target_relations
+            if str(row.get("persona_id") or "").strip()
+        }
+        relations_moved = 0
+        relations_updated = 0
+        for relation in source_relations:
+            relation_id = relation.get("id")
+            person_key = str(relation.get("persona_id") or "").strip()
+            if not relation_id or not person_key:
+                continue
+            target_relation = target_relations_by_person.get(person_key)
+            relation_metadata = _ensure_metadata(relation.get("metadata"))
+            relation_metadata["merged_from_cuenta_id"] = str(source_account_id)
+            relation_metadata["merged_into_cuenta_id"] = str(target_account_id)
+            if target_relation and target_relation.get("id"):
+                merged_relation_payload = {
+                    "rol_en_cuenta": target_relation.get("rol_en_cuenta") or relation.get("rol_en_cuenta"),
+                    "puesto": target_relation.get("puesto") or relation.get("puesto"),
+                    "es_contacto_principal": bool(target_relation.get("es_contacto_principal")) or bool(relation.get("es_contacto_principal")),
+                    "es_contacto_facturacion": bool(target_relation.get("es_contacto_facturacion")) or bool(relation.get("es_contacto_facturacion")),
+                    "es_representante_legal": bool(target_relation.get("es_representante_legal")) or bool(relation.get("es_representante_legal")),
+                    "activo": bool(target_relation.get("activo", True)) or bool(relation.get("activo", True)),
+                    "fecha_inicio": target_relation.get("fecha_inicio") or relation.get("fecha_inicio"),
+                    "fecha_fin": target_relation.get("fecha_fin") or relation.get("fecha_fin"),
+                    "notas": target_relation.get("notas") or relation.get("notas"),
+                    "metadata": {
+                        **relation_metadata,
+                        **_ensure_metadata(target_relation.get("metadata")),
+                    },
+                }
+                await self._request(
+                    "PATCH",
+                    "/rest/v1/cuenta_personas",
+                    params={
+                        "organizacion_id": f"eq.{organizacion_id}",
+                        "id": f"eq.{target_relation['id']}",
+                    },
+                    json=merged_relation_payload,
+                    prefer="return=representation",
+                )
+                relations_updated += 1
+            else:
+                await self._request(
+                    "PATCH",
+                    "/rest/v1/cuenta_personas",
+                    params={
+                        "organizacion_id": f"eq.{organizacion_id}",
+                        "id": f"eq.{relation_id}",
+                    },
+                    json={
+                        "cuenta_id": str(target_account_id),
+                        "metadata": relation_metadata,
+                    },
+                    prefer="return=representation",
+                )
+                relations_moved += 1
+
+        source_addresses = await self.list_account_address_relations(
+            organizacion_id=organizacion_id,
+            cuenta_id=source_account_id,
+            activo=None,
+        )
+        target_addresses = await self.list_account_address_relations(
+            organizacion_id=organizacion_id,
+            cuenta_id=target_account_id,
+            activo=None,
+        )
+        target_addresses_by_key = {
+            f"{str(row.get('direccion_id') or '')}:{str(row.get('tipo_relacion') or '')}": row
+            for row in target_addresses
+            if str(row.get("direccion_id") or "").strip()
+        }
+        addresses_moved = 0
+        addresses_updated = 0
+        for link in source_addresses:
+            link_id = link.get("id")
+            direccion_key = str(link.get("direccion_id") or "").strip()
+            tipo_relacion = str(link.get("tipo_relacion") or "").strip()
+            if not link_id or not direccion_key:
+                continue
+            target_link = target_addresses_by_key.get(f"{direccion_key}:{tipo_relacion}")
+            link_metadata = _ensure_metadata(link.get("metadata"))
+            link_metadata["merged_from_cuenta_id"] = str(source_account_id)
+            link_metadata["merged_into_cuenta_id"] = str(target_account_id)
+            if target_link and target_link.get("id"):
+                merged_link_payload = {
+                    "tipo_relacion": target_link.get("tipo_relacion") or link.get("tipo_relacion"),
+                    "es_principal": bool(target_link.get("es_principal")) or bool(link.get("es_principal")),
+                    "activo": bool(target_link.get("activo", True)) or bool(link.get("activo", True)),
+                    "notas": target_link.get("notas") or link.get("notas"),
+                    "metadata": {
+                        **link_metadata,
+                        **_ensure_metadata(target_link.get("metadata")),
+                    },
+                }
+                await self._request(
+                    "PATCH",
+                    "/rest/v1/cuenta_direcciones",
+                    params={
+                        "organizacion_id": f"eq.{organizacion_id}",
+                        "id": f"eq.{target_link['id']}",
+                    },
+                    json=merged_link_payload,
+                    prefer="return=representation",
+                )
+                addresses_updated += 1
+            else:
+                await self._request(
+                    "PATCH",
+                    "/rest/v1/cuenta_direcciones",
+                    params={
+                        "organizacion_id": f"eq.{organizacion_id}",
+                        "id": f"eq.{link_id}",
+                    },
+                    json={
+                        "cuenta_id": str(target_account_id),
+                        "metadata": link_metadata,
+                    },
+                    prefer="return=representation",
+                )
+                addresses_moved += 1
+
+        opportunities_moved = 0
+        offset = 0
+        limit = 200
+        while True:
+            rows = await self.list_opportunities(
+                organizacion_id=organizacion_id,
+                limit=limit,
+                offset=offset,
+                cuenta_id=source_account_id,
+                include_contact_rows=False,
+            )
+            if not rows:
+                break
+            for opportunity in rows:
+                opportunity_id = _coerce_uuid(str(opportunity.get("id")), field="oportunidad_id")
+                metadata = _ensure_metadata(opportunity.get("metadata"))
+                metadata["merged_from_cuenta_id"] = str(source_account_id)
+                metadata["merged_into_cuenta_id"] = str(target_account_id)
+                await self.update_opportunity(
+                    organizacion_id=organizacion_id,
+                    oportunidad_id=opportunity_id,
+                    payload={
+                        "cuenta_id": str(target_account_id),
+                        "metadata": metadata,
+                    },
+                )
+                opportunities_moved += 1
+            if len(rows) < limit:
+                break
+            offset += limit
+
+        await self.mark_cuenta_merged(
+            organizacion_id=organizacion_id,
+            cuenta_id=source_account_id,
+            merged_into_cuenta_id=target_account_id,
+            merge_metadata={
+                "merge_reason": "manual_merge",
+                "source_cuenta_id": str(source_account_id),
+                "target_cuenta_id": str(target_account_id),
+            },
+        )
+
+        merged_target = await self.get_account(organizacion_id=organizacion_id, account_id=target_account_id)
+        if not merged_target:
+            raise CRMRepositoryError("cuenta_merge_reload_failed")
+        merged_target["merge_summary"] = {
+            "opportunities_moved": opportunities_moved,
+            "relations_moved": relations_moved,
+            "relations_updated": relations_updated,
+            "addresses_moved": addresses_moved,
+            "addresses_updated": addresses_updated,
+        }
+        return merged_target
+
     async def get_contact_by_id(self, *, contact_id: str) -> dict[str, Any] | None:
         contact_key = contact_id.strip()
         if not contact_key:

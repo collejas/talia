@@ -2420,6 +2420,9 @@ class CRMAccount(BaseModel):
     longitud: float | None = None
     fecha_incorporacion: datetime | None = None
     propietario_usuario_id: UUID | None = None
+    archived_at: datetime | None = None
+    merged_into_cuenta_id: UUID | None = None
+    merge_metadata: dict[str, Any] | None = None
     metadata: dict | None = None
     creado_en: str
     actualizado_en: str
@@ -9979,6 +9982,21 @@ class CRMPersonaMergeResponse(BaseModel):
     relations_updated: int
 
 
+class CRMCuentaMergeRequest(BaseModel):
+    target_cuenta_id: UUID
+
+
+class CRMCuentaMergeResponse(BaseModel):
+    source_cuenta_id: UUID
+    target_cuenta_id: UUID
+    merged_cuenta: CRMAccount
+    opportunities_moved: int
+    relations_moved: int
+    relations_updated: int
+    addresses_moved: int
+    addresses_updated: int
+
+
 class CRMContactSearchItem(BaseModel):
     id: UUID
     nombre: str | None = None
@@ -12349,6 +12367,50 @@ async def update_account(
             raise HTTPException(status_code=404, detail="cuenta_no_encontrada") from exc
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     return CRMAccount.model_validate(row)
+
+
+@router.post("/cuentas/{cuenta_id}/merge", response_model=CRMCuentaMergeResponse)
+async def merge_account(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("contacts.write")),
+    cuenta_id: UUID,
+    payload: CRMCuentaMergeRequest,
+) -> CRMCuentaMergeResponse:
+    try:
+        merged = await repo.merge_account(
+            organizacion_id=organizacion_id,
+            source_account_id=cuenta_id,
+            target_account_id=payload.target_cuenta_id,
+            merge_metadata={
+                "merge_reason": "manual_merge",
+                "source_cuenta_id": str(cuenta_id),
+                "target_cuenta_id": str(payload.target_cuenta_id),
+            },
+        )
+    except CRMRepositoryError as exc:
+        detail = str(exc)
+        if "cuenta_source_not_found" in detail:
+            raise HTTPException(status_code=404, detail="cuenta_source_not_found") from exc
+        if "cuenta_target_not_found" in detail:
+            raise HTTPException(status_code=404, detail="cuenta_target_not_found") from exc
+        if "cuenta_merge_same_record" in detail:
+            raise HTTPException(status_code=400, detail="cuenta_merge_same_record") from exc
+        raise HTTPException(status_code=502, detail=detail) from exc
+
+    merge_summary = merged.pop("merge_summary", {}) if isinstance(merged, dict) else {}
+    merged_cuenta = CRMAccount.model_validate(merged)
+    return CRMCuentaMergeResponse(
+        source_cuenta_id=cuenta_id,
+        target_cuenta_id=payload.target_cuenta_id,
+        merged_cuenta=merged_cuenta,
+        opportunities_moved=int(merge_summary.get("opportunities_moved") or 0),
+        relations_moved=int(merge_summary.get("relations_moved") or 0),
+        relations_updated=int(merge_summary.get("relations_updated") or 0),
+        addresses_moved=int(merge_summary.get("addresses_moved") or 0),
+        addresses_updated=int(merge_summary.get("addresses_updated") or 0),
+    )
 
 
 @router.get("/clientes", response_model=ClienteListResponse)
