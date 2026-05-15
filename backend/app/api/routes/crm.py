@@ -32985,10 +32985,10 @@ class _PropertyCatalogLookup:
 def _merge_volume_metadata(row: dict[str, Any], base_metadata: dict[str, Any] | None) -> dict[str, Any] | None:
     meta = dict(base_metadata) if base_metadata else {}
     changes = False
-    height = _parse_optional_decimal(row.get("height") or row.get("altura"))
-    min_height = _parse_optional_decimal(row.get("min_height") or row.get("base"))
+    height = _parse_optional_decimal(row.get("height"))
+    min_height = _parse_optional_decimal(row.get("min_height"))
     levels = _parse_optional_int(row.get("levels"))
-    color = _strip_value(row.get("metadata_color") or row.get("color"))
+    color = _strip_value(row.get("color"))
 
     def assign(key: str, value: Any) -> None:
         nonlocal changes
@@ -33032,10 +33032,10 @@ def _collect_metadata_extra_from_row(row: dict[str, Any]) -> dict[str, Any] | No
         else:
             extra[key] = value
 
-    height = _parse_optional_decimal(row.get("height") or row.get("altura"))
-    min_height = _parse_optional_decimal(row.get("min_height") or row.get("base"))
+    height = _parse_optional_decimal(row.get("height"))
+    min_height = _parse_optional_decimal(row.get("min_height"))
     levels = _parse_optional_int(row.get("levels"))
-    color = _strip_value(row.get("metadata_color") or row.get("color"))
+    color = _strip_value(row.get("color"))
 
     assign("height", height)
     assign("min_height", min_height)
@@ -33393,10 +33393,10 @@ def _split_poligono_volume_metadata(
                     cleaned.pop(key, None)
                 return
 
-    take_decimal("height", "height", "altura")
-    take_decimal("min_height", "min_height", "base")
-    take_int("levels", "levels", "nivel")
-    take_text("color", "color", "metadata_color")
+    take_decimal("height", "height")
+    take_decimal("min_height", "min_height")
+    take_int("levels", "levels")
+    take_text("color", "color")
 
     return (cleaned or None), (extracted or None)
 

@@ -34,7 +34,7 @@ Además de las columnas anteriores, puedes incluir campos adicionales para pobla
 
 Los nombres `descripcion_desarrollo`, `descripcion_capa` y `descripcion_unidad` se aplican únicamente cuando la fila es del tipo correspondiente; si usas la columna genérica `descripcion` también funcionará (se aplica según el valor de `entidad`), pero las columnas específicas ayudan a evitar confusiones cuando completas el archivo. Sólo escribe la descripción que corresponda al nivel del registro y deja las demás vacías.
 
-Las columnas adicionales como `pais_codigo`, `estado_cve`, `municipio_cve`, `codigo_postal`, `colonia`, `descripcion`, `altura`, `precio`, `area_m2` o `area_m2` son bienvenidas y se transfieren directamente.
+Las columnas adicionales como `pais_codigo`, `estado_cve`, `municipio_cve`, `codigo_postal`, `colonia`, `descripcion`, `height`, `min_height`, `levels`, `color`, `precio` y `area_m2` son bienvenidas y se transfieren directamente.
 
 ## Ejemplo simplificado
 
