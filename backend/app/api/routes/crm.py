@@ -9963,6 +9963,19 @@ class CRMPersonaEditRequest(BaseModel):
     dedupe: CRMPersonaAltaDedupeDecision | None = None
 
 
+class CRMPersonaMergeRequest(BaseModel):
+    target_persona_id: UUID
+
+
+class CRMPersonaMergeResponse(BaseModel):
+    source_persona_id: UUID
+    target_persona_id: UUID
+    merged_persona: CRMPersona
+    opportunities_moved: int
+    relations_moved: int
+    relations_updated: int
+
+
 class CRMContactSearchItem(BaseModel):
     id: UUID
     nombre: str | None = None
@@ -15239,6 +15252,255 @@ async def update_persona(
             "candidatos_persona": persona_candidates,
             "candidatos_cuenta": account_candidates,
         },
+    )
+
+
+@router.post("/personas/{contacto_id}/merge", response_model=CRMPersonaMergeResponse)
+async def merge_persona(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("contacts.write")),
+    contacto_id: UUID,
+    payload: CRMPersonaMergeRequest,
+) -> CRMPersonaMergeResponse:
+    source_persona = await repo.get_persona_by_id(persona_id=str(contacto_id))
+    if not source_persona:
+        raise HTTPException(status_code=404, detail="persona_source_not_found")
+    target_persona = await repo.get_persona_by_id(persona_id=str(payload.target_persona_id))
+    if not target_persona:
+        raise HTTPException(status_code=404, detail="persona_target_not_found")
+
+    source_org = _safe_uuid(source_persona.get("organizacion_id"))
+    target_org = _safe_uuid(target_persona.get("organizacion_id"))
+    if source_org and source_org != organizacion_id:
+        raise HTTPException(status_code=400, detail="persona_source_org_mismatch")
+    if target_org and target_org != organizacion_id:
+        raise HTTPException(status_code=400, detail="persona_target_org_mismatch")
+    if str(source_persona.get("id") or "").strip() == str(target_persona.get("id") or "").strip():
+        raise HTTPException(status_code=400, detail="persona_merge_same_record")
+
+    source_id = _safe_uuid(source_persona.get("id"))
+    target_id = _safe_uuid(target_persona.get("id"))
+    if not source_id or not target_id:
+        raise HTTPException(status_code=400, detail="persona_merge_invalid_id")
+
+    def _pick_missing(target_value: Any, source_value: Any) -> Any:
+        if target_value not in (None, "", [], {}):
+            return target_value
+        return source_value
+
+    target_patch: dict[str, Any] = {}
+    for key in (
+        "nombre",
+        "apellido_paterno",
+        "apellido_materno",
+        "nombre_completo",
+        "correo",
+        "correo_principal",
+        "telefono",
+        "telefono_e164",
+        "telefono_principal_e164",
+        "puesto",
+        "area",
+        "rol_decision",
+        "estado",
+        "origen",
+        "company_name",
+        "notas",
+        "necesidad_proposito",
+        "persona_datos",
+        "metadata",
+    ):
+        target_value = target_persona.get(key)
+        source_value = source_persona.get(key)
+        if key == "metadata":
+            source_meta = source_value if isinstance(source_value, dict) else {}
+            target_meta = target_value if isinstance(target_value, dict) else {}
+            merged_meta = dict(source_meta)
+            merged_meta.update(target_meta)
+            merged_meta["merged_from_persona_id"] = str(source_id)
+            merged_meta["merge_reason"] = "manual_merge"
+            merged_meta["merge_status"] = "merged"
+            target_patch[key] = merged_meta
+            continue
+        picked = _pick_missing(target_value, source_value)
+        if picked not in (None, "", [], {}):
+            target_patch[key] = picked
+    target_patch.setdefault("estado", target_persona.get("estado") or "lead")
+    target_patch["actualizado_en"] = datetime.now(timezone.utc).isoformat()
+    try:
+        updated_target_row = await repo.update_persona(
+            organizacion_id=organizacion_id,
+            persona_id=target_id,
+            payload=target_patch,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    source_relations = await repo.list_contact_account_relations(
+        organizacion_id=organizacion_id,
+        contacto_id=source_id,
+        activo=None,
+    )
+    target_relations = await repo.list_contact_account_relations(
+        organizacion_id=organizacion_id,
+        contacto_id=target_id,
+        activo=None,
+    )
+    target_relations_by_account = {
+        str(row.get("cuenta_id") or ""): row
+        for row in target_relations
+        if str(row.get("cuenta_id") or "").strip()
+    }
+    relations_moved = 0
+    relations_updated = 0
+    for relation in source_relations:
+        account_id_raw = str(relation.get("cuenta_id") or "").strip()
+        if not account_id_raw:
+            continue
+        target_relation = target_relations_by_account.get(account_id_raw)
+        relation_payload = {
+            "rol_en_cuenta": relation.get("rol_en_cuenta"),
+            "puesto": relation.get("puesto"),
+            "es_contacto_principal": bool(relation.get("es_contacto_principal")),
+            "es_contacto_facturacion": bool(relation.get("es_contacto_facturacion")),
+            "es_representante_legal": bool(relation.get("es_representante_legal")),
+            "activo": bool(relation.get("activo", True)),
+            "fecha_inicio": relation.get("fecha_inicio"),
+            "fecha_fin": relation.get("fecha_fin"),
+            "notas": relation.get("notas"),
+            "metadata": relation.get("metadata"),
+        }
+        if target_relation and target_relation.get("id"):
+            merged_relation_payload = {
+                "rol_en_cuenta": target_relation.get("rol_en_cuenta") or relation_payload["rol_en_cuenta"],
+                "puesto": target_relation.get("puesto") or relation_payload["puesto"],
+                "es_contacto_principal": bool(target_relation.get("es_contacto_principal")) or relation_payload["es_contacto_principal"],
+                "es_contacto_facturacion": bool(target_relation.get("es_contacto_facturacion")) or relation_payload["es_contacto_facturacion"],
+                "es_representante_legal": bool(target_relation.get("es_representante_legal")) or relation_payload["es_representante_legal"],
+                "activo": bool(target_relation.get("activo", True)) or relation_payload["activo"],
+                "fecha_inicio": target_relation.get("fecha_inicio") or relation_payload["fecha_inicio"],
+                "fecha_fin": target_relation.get("fecha_fin") or relation_payload["fecha_fin"],
+                "notas": target_relation.get("notas") or relation_payload["notas"],
+                "metadata": {
+                    **(relation_payload["metadata"] if isinstance(relation_payload["metadata"], dict) else {}),
+                    **(target_relation.get("metadata") if isinstance(target_relation.get("metadata"), dict) else {}),
+                    "merged_from_persona_id": str(source_id),
+                },
+            }
+            try:
+                await repo.update_contact_account_relation(
+                    organizacion_id=organizacion_id,
+                    contacto_id=target_id,
+                    relacion_id=_safe_uuid(target_relation["id"]),
+                    payload=merged_relation_payload,
+                )
+                relations_updated += 1
+            except CRMRepositoryError as exc:
+                raise HTTPException(status_code=502, detail=str(exc)) from exc
+        else:
+            relation_payload["metadata"] = {
+                **(relation_payload["metadata"] if isinstance(relation_payload["metadata"], dict) else {}),
+                "merged_from_persona_id": str(source_id),
+            }
+            try:
+                await repo.create_contact_account_relation(
+                    organizacion_id=organizacion_id,
+                    contacto_id=target_id,
+                    payload={
+                        key: value
+                        for key, value in relation_payload.items()
+                        if value not in (None, "", {}, [])
+                    },
+                )
+                relations_moved += 1
+            except CRMRepositoryError as exc:
+                raise HTTPException(status_code=502, detail=str(exc)) from exc
+        try:
+            await repo.delete_contact_account_relation(
+                organizacion_id=organizacion_id,
+                contacto_id=source_id,
+                relacion_id=_safe_uuid(relation["id"]),
+            )
+        except CRMRepositoryError as exc:
+            raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    opportunities_moved = 0
+    offset = 0
+    limit = 200
+    while True:
+        rows = await repo.list_opportunities(
+            organizacion_id=organizacion_id,
+            limit=limit,
+            offset=offset,
+            contacto_id=source_id,
+            include_contact_rows=False,
+        )
+        if not rows:
+            break
+        for opportunity in rows:
+            opportunity_id = _safe_uuid(opportunity.get("id"))
+            if not opportunity_id:
+                continue
+            metadata = _ensure_dict(opportunity.get("metadata"))
+            metadata["merged_from_persona_id"] = str(source_id)
+            metadata["merged_into_persona_id"] = str(target_id)
+            metadata["merge_reason"] = "manual_merge"
+            patch = {
+                "contacto_principal_id": str(target_id),
+                "metadata": metadata,
+            }
+            if not str(opportunity.get("contacto_nombre") or "").strip():
+                target_name = _clean_text(target_persona.get("nombre_completo")) or _clean_text(target_persona.get("company_name"))
+                if target_name:
+                    patch["contacto_nombre"] = target_name
+            try:
+                await repo.update_opportunity(
+                    organizacion_id=organizacion_id,
+                    oportunidad_id=opportunity_id,
+                    payload=patch,
+                )
+                opportunities_moved += 1
+            except (CRMRepositoryError, ValueError) as exc:
+                raise HTTPException(status_code=502, detail=str(exc)) from exc
+        if len(rows) < limit:
+            break
+        offset += limit
+
+    source_patch = {
+        "estado": "fusionado",
+        "notas": "Fusionado manualmente con " + str(target_id),
+        "metadata": {
+            **_ensure_dict(source_persona.get("metadata")),
+            "merged_into_persona_id": str(target_id),
+            "merge_status": "archived",
+            "merge_reason": "manual_merge",
+        },
+    }
+    try:
+        await repo.update_persona(
+            organizacion_id=organizacion_id,
+            persona_id=source_id,
+            payload=source_patch,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    try:
+        merged_persona = await repo.get_persona_by_id(persona_id=str(target_id))
+        if not merged_persona:
+            raise HTTPException(status_code=502, detail="persona_merge_reload_failed")
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    return CRMPersonaMergeResponse(
+        source_persona_id=source_id,
+        target_persona_id=target_id,
+        merged_persona=CRMPersona.model_validate(merged_persona),
+        opportunities_moved=opportunities_moved,
+        relations_moved=relations_moved,
+        relations_updated=relations_updated,
     )
 
 

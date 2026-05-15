@@ -16,6 +16,7 @@ import {
   IconTrash,
 } from "@tabler/icons-react";
 import { z } from "zod";
+import Link from "next/link";
 
 import { DataTable, schema } from "@/components/data-table";
 import { Badge } from "@/components/ui/badge";
@@ -839,6 +840,7 @@ function ContactDetailPanel({
   const raw = (row.raw ?? {}) as Record<string, unknown>;
 
   const contactName = row.header;
+  const contactId = formatContactValue(raw.id);
   const company = formatContactValue(raw.company_name);
   const code = formatContactValue(raw.codigo_contacto);
   const accountCode = formatContactValue(raw.codigo_cuenta);
@@ -864,6 +866,11 @@ function ContactDetailPanel({
   return (
     <div className="space-y-5 pb-6">
       <div className="flex flex-wrap gap-2">
+        {contactId !== "—" ? (
+          <Button asChild variant="outline" size="sm">
+            <Link href={`/personas/${encodeURIComponent(contactId)}`}>Abrir ficha</Link>
+          </Button>
+        ) : null}
         <Button type="button" size="sm" onClick={onEdit}>
           <IconPencil className="size-4" />
           Editar

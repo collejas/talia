@@ -32,6 +32,8 @@ Este documento resume todo lo que se fue cerrando dentro del plan `personas, cue
 - El flujo de edicion se alineo al mismo lenguaje.
 - La vinculacion contacto-empresa quedo como flujo independiente.
 - El resumen lateral ya acompana el flujo en desktop.
+- La vista dedicada de detalle quedo disponible en `/personas/[contactoId]`.
+- Desde esa ficha ya se puede editar, vincular a empresa y disparar el merge controlado.
 
 ### 1.3 Exportacion
 
@@ -104,6 +106,14 @@ compatibilidad hasta retirar esas FKs.
 
 `web_sessions` entra al puente solo para el writer first-party que sigue persistiendo
 `contacto_id`; su uso de lectura y analitica sigue separado del ciclo de alta de personas.
+
+### 2.5 Merge controlado
+
+- Se agrego `POST /crm/personas/{contacto_id}/merge` para fusionar duplicados de persona
+  de forma controlada.
+- La fusion mueve oportunidades al contacto destino, reubica relaciones de empresa y
+  archiva el origen con metadata de merge.
+- La pantalla dedicada de detalle en el panel expone esta accion desde la ficha rica.
 
 ## 3. Limpieza semantica que se hizo
 

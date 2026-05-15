@@ -195,10 +195,9 @@ Notas:
 
 ### 1) Vista detalle post-alta (Fase 7 del UX)
 
-- La navegación post-alta ya abre la ficha rica existente del contacto creado o reutilizado.
-- Pendiente solo si se quiere una pantalla dedicada separada del listado:
-  crear vista de detalle “rica” (persona/cuenta/relación) con acciones rápidas
-  para editar persona, editar cuenta, editar relación y agregar otra relación.
+- Ya existe una pantalla dedicada separada del listado en `frontend/panel/src/app/personas/[contactoId]/page.tsx`.
+- Esa vista muestra resumen, notas, relaciones y acciones rápidas para editar, vincular y fusionar.
+- La navegación post-alta sigue abriendo la ficha rica embebida del flujo, pero ahora también hay una URL estable para trabajar el contacto fuera del listado.
 
 ### 2) Endpoints nativos de relación (opcional, pero recomendable)
 
@@ -206,7 +205,11 @@ Notas:
 
 ### 3) Deduplicación controlada
 
-- Reglas y herramientas para fusionar duplicados:
+- Ya existe un merge formal de personas en `POST /crm/personas/{contacto_id}/merge`:
+  - mueve oportunidades al registro destino,
+  - reasigna relaciones de empresa,
+  - conserva el origen como archivado con metadata de merge.
+- Pendiente de más profundidad, si se quiere ampliar:
   - personas: match fuerte por teléfono/correo, débil por nombre + org
   - cuentas: match fuerte por RFC, medio por razón social, débil por nombre comercial
 
