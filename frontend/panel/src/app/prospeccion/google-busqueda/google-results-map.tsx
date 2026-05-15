@@ -608,7 +608,6 @@ function useClusterIcon(count: number, zoom: number) {
           font-weight:700;
           font-size:${fontSize}px;
           line-height:1;
-          user-select:none;
           backdrop-filter:saturate(120%);
         ">${label}</div>
       `.trim();
