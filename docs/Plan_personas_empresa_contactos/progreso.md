@@ -16,6 +16,15 @@ Nota histórica:
 - el runtime activo del panel ya opera sobre `personas`, `cuentas` y `cuenta_personas`
 - el backend de contactos ya no lee ni escribe `legacy_*`; usa `personas.id` y `cuenta_personas.persona_id` de forma directa
 
+### Cierre reciente del contrato público
+
+- la ruta pública dedicada del panel ya quedó en `/personas/[personaId]`
+- la ficha dedicada de persona ya recibe `personaId` de punta a punta
+- `ContactEditFlow` y `ContactCreateFlow` quedaron alineados a `personaId` en sus props/callbacks
+- `contacts-data-table` ya abre la ficha rica usando `personaId`
+- el bloque operativo del repositorio CRM ya expone nombres canónicos `persona_*` para lectura,
+  alta, edición, relaciones y borrado, con wrappers legacy `contact_*` solo como compatibilidad
+
 Documento de cierre:
 - `docs/Plan_personas_empresa_contactos/cierre_refactor_runtime_y_documentacion.md`
 

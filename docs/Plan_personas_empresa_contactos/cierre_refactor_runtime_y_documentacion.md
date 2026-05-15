@@ -115,6 +115,15 @@ compatibilidad hasta retirar esas FKs.
   archiva el origen con metadata de merge.
 - La pantalla dedicada de detalle en el panel expone esta accion desde la ficha rica.
 
+### 2.6 Contrato publico del panel
+
+- La vista dedicada del panel ya opera con la ruta `/personas/[personaId]`.
+- La ficha de persona, el editor y el alta quedaron alineados a `personaId` como nombre
+  de contrato visible en la UI.
+- `ContactEditFlow` y `ContactCreateFlow` ya usan `personaId` como prop/callback principal.
+- Los wrappers legacy con nombre `contactoId` se dejaron solo en capas internas donde
+  todavia sirven como compatibilidad temporal.
+
 ## 3. Limpieza semantica que se hizo
 
 La base de codigo original se escribio con el concepto `contact`, y por eso quedaron contratos y helpers con ese nombre. Durante esta etapa se limpio bastante semantica interna para que el codigo hable mas de `persona` y menos de `contacto`.
