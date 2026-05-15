@@ -1262,11 +1262,25 @@ export function PropertyMap() {
       return filteredFeatures;
     }
     if (!leafletActiveNode) {
+      if (mapLevel === "municipio" && selectedMunicipioGeoKey) {
+        const municipioUnits = filteredFeatures.filter(
+          (feature) => inferFeatureKind(feature) === "unidad",
+        );
+        return municipioUnits.length ? municipioUnits : filteredFeatures;
+      }
       return filteredFeatures;
     }
     const children = deriveDrillChildren(leafletActiveNode);
     return children.length ? children : [leafletActiveNode];
-  }, [deriveDrillChildren, filteredFeatures, leafletActiveNode, mapboxActive]);
+  }, [
+    deriveDrillChildren,
+    filteredFeatures,
+    inferFeatureKind,
+    leafletActiveNode,
+    mapLevel,
+    mapboxActive,
+    selectedMunicipioGeoKey,
+  ]);
 
   const municipioDevelopmentFeatures = useMemo(() => {
     if (mapLevel !== "municipio" || !selectedMunicipioGeoKey) {
@@ -2599,8 +2613,8 @@ export function PropertyMap() {
       return;
     }
     markersLayerRef.current.clearLayers();
-    // En drill-down Leaflet, apagamos marcadores para evitar "doble capa".
-    if (leafletActiveNodeRef.current) {
+    // En la vista municipal usamos polígonos completos, no puntos.
+    if (leafletActiveNodeRef.current || (mapLevel === "municipio" && selectedMunicipioGeoKey)) {
       return;
     }
     if (mapLevel !== "municipio" || !selectedMunicipioGeoKey) {
@@ -3319,7 +3333,8 @@ export function PropertyMap() {
       return;
     }
     const shouldRenderLayer =
-      !(mapLevel === "municipio" && municipioDevelopmentFeatures.length) ||
+      mapLevel !== "municipio" ||
+      Boolean(selectedMunicipioGeoKey) ||
       Boolean(leafletActiveNode) ||
       leafletParentStack.length > 0;
     const baseFeatures = mapboxActive ? filteredFeatures : leafletVisibleFeatures;
