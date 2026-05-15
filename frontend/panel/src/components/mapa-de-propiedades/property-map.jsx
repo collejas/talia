@@ -816,7 +816,10 @@ export function PropertyMap() {
         const metadataPayload = props.metadata ?? {};
         if (metadataPayload && typeof metadataPayload === "object") {
           const catalogValue =
-            metadataPayload.catalog_item_id ?? metadataPayload.catalog_item ?? null;
+            props.catalog_item_id ??
+            metadataPayload.catalog_item_id ??
+            metadataPayload.catalog_item ??
+            null;
           if (catalogValue) {
             props.catalog_item_id = String(catalogValue);
           }

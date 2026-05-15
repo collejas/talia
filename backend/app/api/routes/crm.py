@@ -4408,6 +4408,10 @@ class PropiedadPoligonoCreateRequest(BaseModel):
     target_id: UUID
     geom: str = Field(..., min_length=1)
     status: PropiedadStatus = PropiedadStatus.disponible
+    height: Decimal | None = None
+    min_height: Decimal | None = None
+    levels: int | None = None
+    color: str | None = None
     metadata: dict[str, Any] | None = Field(default_factory=dict)
 
     @field_validator("geom")
@@ -4427,6 +4431,10 @@ class PropiedadPoligonoUpdateRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     geom: str | None = None
     status: PropiedadStatus | None = None
+    height: Decimal | None = None
+    min_height: Decimal | None = None
+    levels: int | None = None
+    color: str | None = None
     metadata: dict[str, Any] | None = Field(default_factory=dict)
 
     @field_validator("geom")
@@ -31694,13 +31702,33 @@ async def crear_propiedad_poligono(
     organizacion_id: UUID = Depends(require_organizacion_id),
     _: str = Depends(require_permission("settings.manage")),
 ) -> dict[str, Any]:
+    metadata = _coerce_metadata(payload.metadata)
+    metadata, volume_fields = _split_poligono_volume_metadata(metadata)
     body: dict[str, Any] = {
         "target_type": payload.target_type.value,
         "target_id": str(payload.target_id),
         "geom": payload.geom.strip(),
         "status": payload.status.value,
-        "metadata": payload.metadata or {},
+        "metadata": metadata or {},
     }
+    if payload.height is not None:
+        body["height"] = _decimal_to_number(payload.height)
+    elif volume_fields and volume_fields.get("height") is not None:
+        body["height"] = volume_fields["height"]
+    if payload.min_height is not None:
+        body["min_height"] = _decimal_to_number(payload.min_height)
+    elif volume_fields and volume_fields.get("min_height") is not None:
+        body["min_height"] = volume_fields["min_height"]
+    if payload.levels is not None:
+        body["levels"] = payload.levels
+    elif volume_fields and volume_fields.get("levels") is not None:
+        body["levels"] = volume_fields["levels"]
+    if payload.color is not None:
+        color = payload.color.strip()
+        if color:
+            body["color"] = color
+    elif volume_fields and volume_fields.get("color") is not None:
+        body["color"] = volume_fields["color"]
     try:
         record = await repo.create_propiedad_poligono(
             organizacion_id=organizacion_id,
@@ -31721,15 +31749,44 @@ async def editar_propiedad_poligono(
     organizacion_id: UUID = Depends(require_organizacion_id),
     _: str = Depends(require_permission("settings.manage")),
 ) -> dict[str, Any]:
-    if payload.geom is None and not payload.status and not (payload.metadata):
+    if (
+        payload.geom is None
+        and payload.status is None
+        and payload.height is None
+        and payload.min_height is None
+        and payload.levels is None
+        and payload.color is None
+        and not (payload.metadata or {})
+    ):
         raise HTTPException(status_code=400, detail="at_least_one_field_required")
     body: dict[str, Any] = {}
     if payload.geom is not None:
         body["geom"] = payload.geom.strip()
-    if payload.status:
+    if payload.status is not None:
         body["status"] = payload.status.value
-    if payload.metadata:
-        body["metadata"] = payload.metadata
+    if payload.height is not None:
+        body["height"] = _decimal_to_number(payload.height)
+    if payload.min_height is not None:
+        body["min_height"] = _decimal_to_number(payload.min_height)
+    if payload.levels is not None:
+        body["levels"] = payload.levels
+    if payload.color is not None:
+        color = payload.color.strip()
+        if color:
+            body["color"] = color
+    metadata = _coerce_metadata(payload.metadata)
+    if metadata:
+        metadata, volume_fields = _split_poligono_volume_metadata(metadata)
+        if metadata:
+            body["metadata"] = metadata
+        if payload.height is None and volume_fields and volume_fields.get("height") is not None:
+            body["height"] = volume_fields["height"]
+        if payload.min_height is None and volume_fields and volume_fields.get("min_height") is not None:
+            body["min_height"] = volume_fields["min_height"]
+        if payload.levels is None and volume_fields and volume_fields.get("levels") is not None:
+            body["levels"] = volume_fields["levels"]
+        if payload.color is None and volume_fields and volume_fields.get("color") is not None:
+            body["color"] = volume_fields["color"]
     try:
         record = await repo.update_propiedad_poligono(
             organizacion_id=organizacion_id,
@@ -33000,11 +33057,13 @@ async def _import_desarrollo_tree(
     tipo_lookup: dict[str, str],
     catalog_lookup: _PropertyCatalogLookup,
 ) -> dict[str, Any]:
+    desarrollo_metadata = _coerce_metadata(desarrollo.metadata)
+    desarrollo_metadata, _ = _split_poligono_volume_metadata(desarrollo_metadata)
     payload: dict[str, Any] = {
         "nombre": desarrollo.nombre.strip(),
         "tipo": desarrollo.tipo.value,
         "status": desarrollo.status.value,
-        "metadata": _coerce_metadata(desarrollo.metadata),
+        "metadata": desarrollo_metadata or {},
     }
     if desarrollo.descripcion:
         payload["descripcion"] = desarrollo.descripcion.strip()
@@ -33040,8 +33099,10 @@ async def _import_desarrollo_tree(
             capa_payload: dict[str, Any] = {
                 "desarrollo_id": record["id"],
                 "nivel": capa.nivel,
-                "metadata": _coerce_metadata(capa.metadata),
             }
+            capa_metadata = _coerce_metadata(capa.metadata)
+            capa_metadata, _ = _split_poligono_volume_metadata(capa_metadata)
+            capa_payload["metadata"] = capa_metadata or {}
             if capa.nombre:
                 capa_payload["nombre"] = capa.nombre.strip()
             if capa.descripcion:
@@ -33082,8 +33143,10 @@ async def _import_desarrollo_tree(
                         "nivel_id": capa_record["id"],
                         "desarrollo_id": record["id"],
                         "status": unidad.status.value,
-                        "metadata": _coerce_metadata(unidad.metadata),
                     }
+                    unidad_metadata = _coerce_metadata(unidad.metadata)
+                    unidad_metadata, _ = _split_poligono_volume_metadata(unidad_metadata)
+                    unidad_payload["metadata"] = unidad_metadata or {}
                     if unidad.descripcion:
                         unidad_payload["descripcion"] = unidad.descripcion.strip()
                     if unidad.precio is not None:
@@ -33163,11 +33226,13 @@ async def _import_desarrollo_mixto(
     tipo_lookup: dict[str, str],
     catalog_lookup: _PropertyCatalogLookup,
 ) -> dict[str, Any]:
+    mixto_metadata = _coerce_metadata(mixto.metadata)
+    mixto_metadata, _ = _split_poligono_volume_metadata(mixto_metadata)
     payload: dict[str, Any] = {
         "nombre": mixto.nombre.strip(),
         "descripcion": mixto.descripcion.strip() if mixto.descripcion else None,
         "status": mixto.status.value,
-        "metadata": _coerce_metadata(mixto.metadata),
+        "metadata": mixto_metadata or {},
     }
     if mixto.pais_codigo:
         payload["pais_codigo"] = mixto.pais_codigo.strip()
@@ -33212,14 +33277,16 @@ async def _import_desarrollo_mixto(
             "nombre": item.desarrollo.nombre.strip(),
             "modo": item.modo.value,
             "status": item.status.value,
-            "metadata": _coerce_metadata(item.metadata),
         }
-    if item.descripcion:
-        mixto_payload["descripcion"] = item.descripcion.strip()
-    if item.nivel is not None:
-        mixto_payload["nivel"] = item.nivel
-    if item.altura is not None:
-        mixto_payload["altura"] = _decimal_to_number(item.altura)
+        item_metadata = _coerce_metadata(item.metadata)
+        item_metadata, _ = _split_poligono_volume_metadata(item_metadata)
+        mixto_payload["metadata"] = item_metadata or {}
+        if item.descripcion:
+            mixto_payload["descripcion"] = item.descripcion.strip()
+        if item.nivel is not None:
+            mixto_payload["nivel"] = item.nivel
+        if item.altura is not None:
+            mixto_payload["altura"] = _decimal_to_number(item.altura)
 
         item_record = await repo.create_propiedad_desarrollo_mix_item(
             organizacion_id=organizacion_id,
@@ -33242,6 +33309,52 @@ def _strip_catalog_volume_metadata(metadata: dict[str, Any] | None) -> dict[str,
     suppression = {"height", "min_height", "levels", "color"}
     filtered = {key: value for key, value in metadata.items() if key not in suppression}
     return filtered if filtered else None
+
+
+def _split_poligono_volume_metadata(
+    metadata: dict[str, Any] | None,
+) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
+    if not metadata:
+        return None, None
+    cleaned = dict(metadata)
+    extracted: dict[str, Any] = {}
+
+    def take_decimal(target: str, *aliases: str) -> None:
+        for alias in aliases:
+            if alias in cleaned:
+                value = _parse_optional_decimal(cleaned.get(alias))
+                if value is not None:
+                    extracted[target] = _decimal_to_number(value)
+                for key in aliases:
+                    cleaned.pop(key, None)
+                return
+
+    def take_int(target: str, *aliases: str) -> None:
+        for alias in aliases:
+            if alias in cleaned:
+                value = _parse_optional_int(cleaned.get(alias))
+                if value is not None:
+                    extracted[target] = value
+                for key in aliases:
+                    cleaned.pop(key, None)
+                return
+
+    def take_text(target: str, *aliases: str) -> None:
+        for alias in aliases:
+            if alias in cleaned:
+                value = _strip_value(cleaned.get(alias))
+                if value:
+                    extracted[target] = value
+                for key in aliases:
+                    cleaned.pop(key, None)
+                return
+
+    take_decimal("height", "height", "altura")
+    take_decimal("min_height", "min_height", "base")
+    take_int("levels", "levels", "nivel")
+    take_text("color", "color", "metadata_color")
+
+    return (cleaned or None), (extracted or None)
 
 
 async def _ensure_catalog_item_for_unidad(
@@ -33372,13 +33485,17 @@ async def _create_poligono_if_present(
     )
     if geom is None:
         return None
+    metadata = _coerce_metadata(metadata)
+    metadata, volume_fields = _split_poligono_volume_metadata(metadata)
     payload: dict[str, Any] = {
         "target_type": target_type.value,
         "target_id": target_id,
         "geom": geom,
         "status": status.value,
-        "metadata": _coerce_metadata(metadata),
+        "metadata": metadata or {},
     }
+    if volume_fields:
+        payload.update(volume_fields)
     record = await repo.create_propiedad_poligono(organizacion_id=organizacion_id, payload=payload)
     import_debug_logger.info(
         "poligono.create.finished",
