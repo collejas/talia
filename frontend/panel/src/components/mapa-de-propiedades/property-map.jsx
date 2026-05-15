@@ -480,6 +480,9 @@ export function PropertyMap() {
   const [mapboxLoading, setMapboxLoading] = useState(false);
   const [mapboxFeature, setMapboxFeature] = useState(null);
   const mapboxRootFeatureRef = useRef(null);
+  const pendingRegionFocusRef = useRef(null);
+  const skipRegionAutoFitRef = useRef(false);
+  const pendingMunicipalityOverviewRef = useRef(false);
   const [leafletActiveNode, setLeafletActiveNode] = useState(null);
   const [leafletParentStack, setLeafletParentStack] = useState([]);
   const [activeNode, setActiveNode] = useState(null);
@@ -601,8 +604,13 @@ export function PropertyMap() {
     // Vuelve a la vista raíz del nivel actual.
     const municipioFeatures = municipioDevelopmentFeaturesRef.current ?? [];
     const filtered = filteredFeaturesRef.current ?? [];
-    if (mapLevel === "municipio" && municipioFeatures.length) {
-      fitLeafletToFeatures(municipioFeatures, { padding: [30, 30], maxZoom: 18 });
+    if (mapLevel === "municipio") {
+      // En nivel municipio no forzamos un recuadre a desarrollo si todavía no hay
+      // un municipio seleccionado. Ese encuadre se hace sólo cuando el usuario
+      // entra al drill-down del municipio.
+      if (selectedMunicipioGeoKey && municipioFeatures.length) {
+        fitLeafletToFeatures(municipioFeatures, { padding: [30, 30], maxZoom: 18 });
+      }
     } else if (filtered.length) {
       fitLeafletToFeatures(filtered, { padding: [30, 30], maxZoom: 19 });
     }
@@ -613,7 +621,7 @@ export function PropertyMap() {
         filteredCount: filtered.length,
       });
     }
-  }, [fitLeafletToFeatures, mapLevel]);
+  }, [fitLeafletToFeatures, mapLevel, selectedMunicipioGeoKey]);
 
   useEffect(() => {
     activeNodeRef.current = activeNode;
@@ -1274,6 +1282,35 @@ export function PropertyMap() {
       return Boolean(municipioKey && municipioKey === selectedMunicipioGeoKey);
     });
   }, [features, mapLevel, selectedMunicipioGeoKey]);
+
+  const stateMunicipalityGeoKeys = useMemo(() => {
+    if (mapLevel !== "municipio" || !selectedStateKey || selectedMunicipioGeoKey) {
+      return new Set();
+    }
+    const developmentMunicipioKeys = new Set();
+    const selectedStateNormalized = `${selectedStateKey}`.trim().padStart(2, "0");
+    for (const feature of features) {
+      const props = feature?.properties ?? {};
+      const layerValue = inferFeatureLayer(feature);
+      if (!["desarrollo", "mix", "capa", "unidad"].includes(layerValue)) {
+        continue;
+      }
+      const featureStateKey = `${props.estado_cve ?? props.cve_ent ?? props.cve_entidad ?? ""}`
+        .trim()
+        .padStart(2, "0");
+      if (featureStateKey !== selectedStateNormalized) {
+        continue;
+      }
+      const municipioKey = buildMunicipioGeoKey(props);
+      if (municipioKey) {
+        developmentMunicipioKeys.add(municipioKey);
+      }
+    }
+    if (!developmentMunicipioKeys.size) {
+      return new Set();
+    }
+    return developmentMunicipioKeys;
+  }, [features, inferFeatureLayer, mapLevel, selectedMunicipioGeoKey, selectedStateKey]);
 
   useEffect(() => {
     municipioDevelopmentFeaturesRef.current = municipioDevelopmentFeatures;
@@ -2030,12 +2067,17 @@ export function PropertyMap() {
           : "municipio-detail";
       logRegionSelection(mapLevel, feature, targetLevel);
       if (mapLevel === "pais") {
+        skipRegionAutoFitRef.current = true;
+        pendingRegionFocusRef.current = feature;
         setSelectedCountryKey(key);
         setSelectedStateKey(null);
         setSelectedMunicipioKey(null);
         setSelectedMunicipioGeoKey(null);
         setMapLevel("estado");
       } else if (mapLevel === "estado") {
+        pendingRegionFocusRef.current = null;
+        pendingMunicipalityOverviewRef.current = true;
+        skipRegionAutoFitRef.current = false;
         setSelectedStateKey(key);
         setSelectedMunicipioKey(null);
         setSelectedMunicipioGeoKey(null);
@@ -2445,6 +2487,37 @@ export function PropertyMap() {
       return;
     }
     try {
+      if (skipRegionAutoFitRef.current) {
+        skipRegionAutoFitRef.current = false;
+        return;
+      }
+      if (mapLevel === "municipio" && pendingMunicipalityOverviewRef.current) {
+        pendingMunicipalityOverviewRef.current = false;
+        const overviewFeatures =
+          filteredDemografiaGeojson?.features?.filter((feature) =>
+            stateMunicipalityGeoKeys.has(resolveRegionKey(feature)),
+          ) ?? [];
+        const overviewCollection = {
+          type: "FeatureCollection",
+          features: overviewFeatures.length ? overviewFeatures : filteredDemografiaGeojson?.features ?? [],
+        };
+        const overviewBounds = leaflet.geoJSON(overviewCollection).getBounds();
+        if (overviewBounds.isValid()) {
+          const maxZoom = 11;
+          mapInstanceRef.current.fitBounds(overviewBounds, { padding: [30, 30], maxZoom });
+        }
+        return;
+      }
+      const pendingRegionFocus = pendingRegionFocusRef.current;
+      if (pendingRegionFocus?.geometry) {
+        const focusBounds = leaflet.geoJSON(pendingRegionFocus).getBounds();
+        if (focusBounds.isValid()) {
+          const maxZoom = mapLevel === "municipio" ? 15 : mapLevel === "estado" ? 10 : 7;
+          mapInstanceRef.current.fitBounds(focusBounds, { padding: [30, 30], maxZoom });
+        }
+        pendingRegionFocusRef.current = null;
+        return;
+      }
       const bounds = leaflet.geoJSON(filteredDemografiaGeojson).getBounds();
       if (!bounds.isValid()) {
         return;
@@ -2454,7 +2527,7 @@ export function PropertyMap() {
     } catch {
       // ignore invalid bounds
     }
-  }, [filteredDemografiaGeojson, leaflet, mapLevel, selectedMunicipioKey, leafletActiveNode, leafletMountVersion]);
+  }, [filteredDemografiaGeojson, leaflet, mapLevel, selectedMunicipioKey, leafletActiveNode, leafletMountVersion, stateMunicipalityGeoKeys]);
 
   useEffect(() => {
     if (!hierarchyLayerRef.current) {
@@ -2478,10 +2551,10 @@ export function PropertyMap() {
       };
       const title =
         mapLevel === "pais"
-          ? props.pais_nombre ?? props.name ?? "País"
+          ? props.ADMIN ?? props.NAME ?? props.nombre_largo ?? props.pais_nombre ?? props.name ?? "País"
           : mapLevel === "estado"
-          ? props.estado_nombre ?? props.name ?? "Estado"
-          : props.municipio_nombre ?? props.name ?? "Municipio";
+          ? props.nom_ent ?? props.estado_nombre ?? props.nombre ?? props.name ?? "Estado"
+          : props.nom_mun ?? props.municipio_nombre ?? props.nombre ?? props.name ?? "Municipio";
       return `
         <div class="min-w-[180px]">
           <div class="text-[0.65rem] font-semibold uppercase tracking-[0.22em] text-slate-500">${escapeHtml(
@@ -2530,9 +2603,6 @@ export function PropertyMap() {
     if (leafletActiveNodeRef.current) {
       return;
     }
-    if (mapLevel === "municipio" && municipioDevelopmentFeatures.length) {
-      return;
-    }
     if (mapLevel !== "municipio" || !selectedMunicipioGeoKey) {
       return;
     }
@@ -2578,6 +2648,10 @@ export function PropertyMap() {
       });
       markersLayerRef.current.addLayer(marker);
     }
+    if (skipRegionAutoFitRef.current) {
+      skipRegionAutoFitRef.current = false;
+      return;
+    }
     if (mapInstanceRef.current && mapLevel === "municipio" && aggregatedBounds?.isValid()) {
       mapInstanceRef.current.fitBounds(aggregatedBounds, { padding: [30, 30], maxZoom: 19 });
     }
@@ -2612,14 +2686,6 @@ export function PropertyMap() {
     layer.addData(payload);
     if (typeof layer.bringToFront === "function") {
       layer.bringToFront();
-    }
-    try {
-      const bounds = leaflet.geoJSON(payload).getBounds();
-      if (bounds.isValid()) {
-        map.fitBounds(bounds, { padding: [30, 30], maxZoom: 18 });
-      }
-    } catch {
-      // ignore invalid bounds
     }
   }, [leaflet, mapLevel, municipioDevelopmentFeatures, leafletActiveNode]);
 
