@@ -67,6 +67,9 @@ Este documento resume todo lo que se fue cerrando dentro del plan `personas, cue
 - el nucleo de webchat ya expone `persona_id` en su contexto interno y usa helpers de
   seguimiento con semantica `persona_*`, manteniendo compatibilidad con `contact_id`
   donde siguen existiendo contratos viejos.
+- el nucleo de WhatsApp ya expone `ToolRuntimeContext.persona_id` y `whatsapp_followups`
+  ya tiene helpers `persona_*` para reenganche y escalación, con wrappers legacy para
+  no romper los call sites restantes.
 - Se agregaron puentes como:
   - `fetch_opportunity_persona(...)`
   - `get_webchat_persona_id(...)`

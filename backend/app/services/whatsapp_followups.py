@@ -300,10 +300,10 @@ async def _process_conversation(
     )
 
     if should_reengage:
-        await _send_reengage_message(
+        await _send_persona_reengage_message(
             conversation_id=str(convo_id),
-            contact_id=str(contact_id),
-            contact=contact,
+            persona_id=str(contact_id),
+            persona=contact,
             followup_meta=followup_meta,
             metadata=metadata,
             repo=repo,
@@ -314,9 +314,9 @@ async def _process_conversation(
         return
 
     if should_escalate:
-        await _escalate_to_sales(
+        await _escalate_persona_to_sales(
             conversation_id=str(convo_id),
-            contact_id=str(contact_id),
+            persona_id=str(contact_id),
             opportunity=opportunity,
             followup_meta=followup_meta,
             metadata=metadata,
@@ -326,11 +326,11 @@ async def _process_conversation(
 
 
 
-async def _send_reengage_message(
+async def _send_persona_reengage_message(
     *,
     conversation_id: str,
-    contact_id: str,
-    contact: dict[str, Any],
+    persona_id: str,
+    persona: dict[str, Any],
     followup_meta: dict[str, Any],
     metadata: dict[str, Any],
     repo: CRMRepository,
@@ -338,7 +338,7 @@ async def _send_reengage_message(
     org_id: UUID,
     whatsapp_settings: tenant_runtime.WhatsappRuntimeSettings,
 ) -> None:
-    phone = str(contact.get("telefono_e164") or "").strip()
+    phone = str(persona.get("telefono_e164") or "").strip()
     if not phone:
         return
     logger.info(
@@ -366,7 +366,7 @@ async def _send_reengage_message(
 
     message_sid = getattr(send_result, "sid", None) if send_result else None
     if message_sid:
-        contact_id_value = contact.get("id") or contact.get("contacto_id")
+        contact_id_value = persona.get("id") or persona.get("contacto_id")
         wa_id = None
         if phone and phone.startswith("+"):
             wa_id = phone.lstrip("+")
@@ -387,7 +387,7 @@ async def _send_reengage_message(
                 conversation_id=conversation_id,
                 contact_id=contact_id_str,
                 metadata=metadata_payload,
-                organizacion_id=str(contact.get("organizacion_id")) if contact.get("organizacion_id") else None,
+                organizacion_id=str(persona.get("organizacion_id")) if persona.get("organizacion_id") else None,
             )
         except StorageError as exc:
             logger.warning(
@@ -421,7 +421,7 @@ async def _send_reengage_message(
         return
 
     if attempt_count >= 1:
-        contact_id_value = str(contact.get("id") or contact.get("contacto_id") or contact_id)
+        contact_id_value = str(persona.get("id") or persona.get("contacto_id") or persona_id)
         try:
             await storage.ensure_conversation_opportunity(
                 conversation_id=conversation_id,
@@ -445,39 +445,39 @@ async def _send_reengage_message(
                 )
 
 
-async def _escalate_to_sales(
+async def _escalate_persona_to_sales(
     *,
     conversation_id: str,
-    contact_id: str,
+    persona_id: str,
     opportunity: dict[str, Any],
     followup_meta: dict[str, Any],
     metadata: dict[str, Any],
     repo: CRMRepository,
 ) -> None:
-    contact = opportunity.get("contacto")
-    if isinstance(contact, dict):
-        contact = await _ensure_inferred_contact_context(
+    persona = opportunity.get("contacto")
+    if isinstance(persona, dict):
+        persona = await _ensure_inferred_persona_context(
             conversation_id=conversation_id,
-            contact_id=contact_id,
-            contact=contact,
+            persona_id=persona_id,
+            persona=persona,
             opportunity=opportunity,
         )
     resumen = None
     notes = None
-    if isinstance(contact, dict):
-        resumen = contact.get("necesidad_proposito") or contact.get("notes")
-        notes = contact.get("notes")
+    if isinstance(persona, dict):
+        resumen = persona.get("necesidad_proposito") or persona.get("notes")
+        notes = persona.get("notes")
 
     context = ToolRuntimeContext(
         conversation_id=conversation_id,
-        contact_id=contact_id,
+        contact_id=persona_id,
         channel="whatsapp",
     )
     try:
         await whatsapp_tools._notify_sales_rep(
             context=context,
             trigger="followup_escalate",
-            persona=contact,
+            persona=persona,
             opportunity_id=str(opportunity.get("id")),
             resumen=resumen,
             notes=notes,
@@ -522,19 +522,19 @@ def _build_inactivity_need(summary_text: str) -> str:
     return f"{_INFERRED_INACTIVITY_LABEL}: {first_sentence}"
 
 
-async def _ensure_inferred_contact_context(
+async def _ensure_inferred_persona_context(
     *,
     conversation_id: str,
-    contact_id: str,
-    contact: dict[str, Any],
+    persona_id: str,
+    persona: dict[str, Any],
     opportunity: dict[str, Any],
 ) -> dict[str, Any]:
-    existing_notes = str(contact.get("notes") or "").strip()
-    existing_need = str(contact.get("necesidad_proposito") or "").strip()
+    existing_notes = str(persona.get("notes") or "").strip()
+    existing_need = str(persona.get("necesidad_proposito") or "").strip()
     if existing_notes and existing_need:
-        return contact
+        return persona
 
-    org_id = contact.get("organizacion_id") or opportunity.get("organizacion_id")
+    org_id = persona.get("organizacion_id") or opportunity.get("organizacion_id")
     try:
         org_uuid = UUID(str(org_id)) if org_id else None
     except (TypeError, ValueError):
@@ -543,7 +543,7 @@ async def _ensure_inferred_contact_context(
     try:
         summary_record = await conversation_summary.ensure_conversation_summary(
             conversation_id=conversation_id,
-            contact_id=contact_id,
+            contact_id=persona_id,
             organizacion_id=org_uuid,
             generate_if_missing=True,
         )
@@ -552,7 +552,7 @@ async def _ensure_inferred_contact_context(
             "whatsapp.followup.inferred_summary_failed",
             extra={"conversation_id": conversation_id, "error": str(exc)},
         )
-        return contact
+        return persona
 
     summary_text = ""
     if isinstance(summary_record, dict):
@@ -571,13 +571,13 @@ async def _ensure_inferred_contact_context(
         return contact
 
     try:
-        updated_contact = await storage.update_persona(contact_id, patch_payload)
+        updated_contact = await storage.update_persona(persona_id, patch_payload)
     except StorageError as exc:
         logger.warning(
             "whatsapp.followup.inferred_contact_update_failed",
-            extra={"conversation_id": conversation_id, "contact_id": contact_id, "error": str(exc)},
+            extra={"conversation_id": conversation_id, "contact_id": persona_id, "error": str(exc)},
         )
-        updated_contact = {**contact, **patch_payload}
+        updated_contact = {**persona, **patch_payload}
     try:
         await storage.upsert_conversation_insights(
             conversation_id=conversation_id,
@@ -594,12 +594,71 @@ async def _ensure_inferred_contact_context(
         "whatsapp.followup.inferred_contact_context_created",
         extra={
             "conversation_id": conversation_id,
-            "contact_id": contact_id,
+            "contact_id": persona_id,
             "filled_notes": "notes" in patch_payload,
             "filled_need": "necesidad_proposito" in patch_payload,
         },
     )
-    return updated_contact if isinstance(updated_contact, dict) else {**contact, **patch_payload}
+    return updated_contact if isinstance(updated_contact, dict) else {**persona, **patch_payload}
+
+
+async def _send_reengage_message(
+    *,
+    conversation_id: str,
+    contact_id: str,
+    contact: dict[str, Any],
+    followup_meta: dict[str, Any],
+    metadata: dict[str, Any],
+    repo: CRMRepository,
+    opportunity_id: UUID,
+    org_id: UUID,
+    whatsapp_settings: tenant_runtime.WhatsappRuntimeSettings,
+) -> None:
+    await _send_persona_reengage_message(
+        conversation_id=conversation_id,
+        persona_id=contact_id,
+        persona=contact,
+        followup_meta=followup_meta,
+        metadata=metadata,
+        repo=repo,
+        opportunity_id=opportunity_id,
+        org_id=org_id,
+        whatsapp_settings=whatsapp_settings,
+    )
+
+
+async def _escalate_to_sales(
+    *,
+    conversation_id: str,
+    contact_id: str,
+    opportunity: dict[str, Any],
+    followup_meta: dict[str, Any],
+    metadata: dict[str, Any],
+    repo: CRMRepository,
+) -> None:
+    await _escalate_persona_to_sales(
+        conversation_id=conversation_id,
+        persona_id=contact_id,
+        opportunity=opportunity,
+        followup_meta=followup_meta,
+        metadata=metadata,
+        repo=repo,
+    )
+
+
+async def _ensure_inferred_contact_context(
+    *,
+    conversation_id: str,
+    contact_id: str,
+    contact: dict[str, Any],
+    opportunity: dict[str, Any],
+) -> dict[str, Any]:
+    return await _ensure_inferred_persona_context(
+        conversation_id=conversation_id,
+        persona_id=contact_id,
+        persona=contact,
+        opportunity=opportunity,
+    )
 
 
 def _manual_override(conversation: dict[str, Any]) -> bool:
