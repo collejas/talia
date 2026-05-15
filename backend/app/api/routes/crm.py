@@ -9902,6 +9902,22 @@ class CRMPersonaAltaValidationResponse(BaseModel):
     sugerencia_cuenta_reutilizar_id: UUID | None = None
 
 
+class CRMDedupeCandidate(BaseModel):
+    id: UUID
+    nombre: str | None = None
+    correo: str | None = None
+    telefono: str | None = None
+    empresa: str | None = None
+    nivel: str
+    motivo: str
+
+
+class CRMDedupePreviewResponse(BaseModel):
+    requiere_confirmacion: bool
+    candidatos: list[CRMDedupeCandidate] = Field(default_factory=list)
+    sugerencia_reutilizar_id: UUID | None = None
+
+
 class CRMCuentaPersonaRelacion(BaseModel):
     id: UUID | None = None
     organizacion_id: UUID | None = None
@@ -10496,6 +10512,87 @@ async def _persona_alta_build_dedupe_preview(
         suggested_account_id,
         requires_confirmation,
     )
+
+
+async def _persona_dedupe_preview(
+    *,
+    repo: CRMRepository,
+    organizacion_id: UUID,
+    persona_id: UUID,
+) -> tuple[list[dict[str, Any]], UUID | None, bool]:
+    persona_row = await repo.get_persona_by_id(persona_id=str(persona_id))
+    if not isinstance(persona_row, dict) or not persona_row.get("id"):
+        raise CRMRepositoryError("persona_no_encontrada_para_dedupe")
+    persona = CRMPersonaAltaPersona(
+        nombre=str(persona_row.get("nombre") or "").strip() or str(persona_row.get("nombre_completo") or "").strip() or "Contacto",
+        apellido_paterno=str(persona_row.get("apellido_paterno") or "").strip() or " ",
+        apellido_materno=persona_row.get("apellido_materno") or None,
+        nombre_completo=persona_row.get("nombre_completo"),
+        correo_principal=persona_row.get("correo_principal") or persona_row.get("correo"),
+        telefono_principal_e164=persona_row.get("telefono_principal_e164") or persona_row.get("telefono_e164"),
+        puesto=persona_row.get("puesto"),
+        area=persona_row.get("area"),
+        rol_decision=persona_row.get("rol_decision"),
+        estado=persona_row.get("estado"),
+        origen=persona_row.get("origen"),
+        notas=persona_row.get("notas"),
+        propietario_usuario_id=_safe_uuid(persona_row.get("propietario_usuario_id")),
+    )
+    candidates = await _persona_alta_find_persona_candidates(
+        repo=repo,
+        organizacion_id=organizacion_id,
+        persona=persona,
+        cuenta=None,
+        exclude_contacto_id=persona_id,
+    )
+    suggested = _pick_first_strong_persona_candidate(candidates)
+    pending = [item for item in candidates if str(item.get("nivel") or "") in {"medio", "debil"}]
+    return candidates, suggested, bool(pending)
+
+
+async def _account_dedupe_preview(
+    *,
+    repo: CRMRepository,
+    organizacion_id: UUID,
+    cuenta_id: UUID,
+) -> tuple[list[dict[str, Any]], UUID | None, bool]:
+    account_row = await repo.get_account(organizacion_id=organizacion_id, account_id=cuenta_id)
+    if not account_row:
+        raise CRMRepositoryError("cuenta_no_encontrada_para_dedupe")
+    account = CRMAccount.model_validate(account_row)
+    reused_account, candidates = await _persona_alta_find_existing_account(
+        repo=repo,
+        organizacion_id=organizacion_id,
+        cuenta=CRMPersonaAltaCuenta(
+            cuenta_id=account.id,
+            nombre_comercial=account.nombre,
+            razon_social=account.razon_social if hasattr(account, "razon_social") else None,
+            alias=account.alias,
+            tipo_persona=None,
+            tipo_cuenta=account.tipo,
+            tipo=account.tipo,
+            codigo_cuenta=account.codigo_cuenta if hasattr(account, "codigo_cuenta") else None,
+            rfc=account.rfc,
+            industria=account.industria,
+            segmento=None,
+            tamano=account.tamano,
+            sitio_web=account.sitio_web,
+            correo_principal=account.correo,
+            telefono_principal=account.telefono,
+            correo=account.correo,
+            telefono=account.telefono,
+            notas=account.notas if hasattr(account, "notas") else None,
+            necesidad_proposito=account.necesidad_proposito if hasattr(account, "necesidad_proposito") else None,
+            tipo_establecimiento=None,
+            latitud=None,
+            longitud=None,
+            fecha_incorporacion=None,
+        ),
+        exclude_account_id=cuenta_id,
+    )
+    pending = [item for item in candidates if str(item.get("nivel") or "") in {"medio", "debil"}]
+    suggested = reused_account.id if reused_account else None
+    return candidates, suggested, bool(pending)
 
 
 def _persona_alta_full_name(payload: CRMPersonaAltaPersona) -> str:
@@ -12471,6 +12568,31 @@ async def merge_account(
         relations_updated=int(merge_summary.get("relations_updated") or 0),
         addresses_moved=int(merge_summary.get("addresses_moved") or 0),
         addresses_updated=int(merge_summary.get("addresses_updated") or 0),
+    )
+
+
+@router.get("/cuentas/{cuenta_id}/dedupe", response_model=CRMDedupePreviewResponse)
+async def get_account_dedupe_preview(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("contacts.read")),
+    cuenta_id: UUID,
+) -> CRMDedupePreviewResponse:
+    try:
+        candidates, suggested_id, requires_confirmation = await _account_dedupe_preview(
+            repo=repo,
+            organizacion_id=organizacion_id,
+            cuenta_id=cuenta_id,
+        )
+    except CRMRepositoryError as exc:
+        if "cuenta_no_encontrada" in str(exc):
+            raise HTTPException(status_code=404, detail="cuenta_no_encontrada_para_dedupe") from exc
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return CRMDedupePreviewResponse(
+        requiere_confirmacion=requires_confirmation,
+        candidatos=[CRMDedupeCandidate.model_validate(row) for row in candidates],
+        sugerencia_reutilizar_id=suggested_id,
     )
 
 
@@ -15929,6 +16051,31 @@ async def validate_persona_update(
         candidatos_cuenta=account_candidates,
         sugerencia_persona_reutilizar_id=suggested_persona_id,
         sugerencia_cuenta_reutilizar_id=suggested_account_id,
+    )
+
+
+@router.get("/personas/{contacto_id}/dedupe", response_model=CRMDedupePreviewResponse)
+async def get_persona_dedupe_preview(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("contacts.read")),
+    contacto_id: UUID,
+) -> CRMDedupePreviewResponse:
+    try:
+        candidates, suggested_id, requires_confirmation = await _persona_dedupe_preview(
+            repo=repo,
+            organizacion_id=organizacion_id,
+            persona_id=contacto_id,
+        )
+    except CRMRepositoryError as exc:
+        if "persona_no_encontrada" in str(exc):
+            raise HTTPException(status_code=404, detail="persona_no_encontrada_para_dedupe") from exc
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return CRMDedupePreviewResponse(
+        requiere_confirmacion=requires_confirmation,
+        candidatos=[CRMDedupeCandidate.model_validate(row) for row in candidates],
+        sugerencia_reutilizar_id=suggested_id,
     )
 
 

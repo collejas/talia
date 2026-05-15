@@ -229,6 +229,10 @@ Notas:
 - El panel ya expone el proxy de merge para cuentas en `frontend/panel/src/app/api/cuentas/[cuentaId]/merge/route.ts`.
 - La UI de cuentas ya tiene ficha dedicada en `frontend/panel/src/app/cuentas/[cuentaId]/page.tsx` y un drawer del listado que enlaza a esa ficha.
 - La ficha dedicada ya lista relaciones de `cuenta_personas` y permite vincular/quitar personas sin pasar por `contacto_id`.
+- Ya existen contratos explícitos de dedupe para consulta de candidatos:
+  - `GET /crm/personas/{contacto_id}/dedupe`
+  - `GET /crm/cuentas/{cuenta_id}/dedupe`
+- Las fichas dedicadas ya muestran esos candidatos para que la decisión de reutilizar o fusionar quede visible antes de actuar.
 - Pendiente de más profundidad, si se quiere ampliar:
   - personas: match fuerte por teléfono/correo, débil por nombre + org
   - cuentas: match fuerte por RFC, medio por razón social, débil por nombre comercial

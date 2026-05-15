@@ -42,6 +42,15 @@ type SearchItem = {
   correo: string | null;
   telefono: string | null;
 };
+type DedupeCandidate = {
+  id: string;
+  nombre: string | null;
+  correo: string | null;
+  telefono: string | null;
+  empresa: string | null;
+  nivel: string;
+  motivo: string;
+};
 
 function getText(value: unknown): string {
   if (typeof value === "string" && value.trim()) return value.trim();
@@ -71,6 +80,11 @@ export function CuentaDetailView({ cuentaId }: { cuentaId: string }) {
   const [relationRole, setRelationRole] = React.useState("contacto_principal");
   const [relationSubmitting, setRelationSubmitting] = React.useState(false);
   const [relationDeletingId, setRelationDeletingId] = React.useState<string | null>(null);
+  const [dedupeLoading, setDedupeLoading] = React.useState(true);
+  const [dedupeError, setDedupeError] = React.useState<string | null>(null);
+  const [dedupeCandidates, setDedupeCandidates] = React.useState<DedupeCandidate[]>([]);
+  const [dedupeSuggestedId, setDedupeSuggestedId] = React.useState<string | null>(null);
+  const [dedupeRequiresConfirmation, setDedupeRequiresConfirmation] = React.useState(false);
   const [mergeOpen, setMergeOpen] = React.useState(false);
   const [mergeQuery, setMergeQuery] = React.useState("");
   const [mergeResults, setMergeResults] = React.useState<SearchItem[]>([]);
@@ -113,6 +127,33 @@ export function CuentaDetailView({ cuentaId }: { cuentaId: string }) {
     }
   }, [cuentaId]);
 
+  const loadDedupe = React.useCallback(async () => {
+    setDedupeLoading(true);
+    setDedupeError(null);
+    try {
+      const response = await fetch(`/api/cuentas/${encodeURIComponent(cuentaId)}/dedupe`, {
+        cache: "no-store",
+      });
+      const body = (await response.json().catch(() => ({}))) as {
+        candidatos?: DedupeCandidate[];
+        sugerencia_reutilizar_id?: string | null;
+        requiere_confirmacion?: boolean;
+        error?: string;
+      };
+      if (!response.ok) throw new Error(body.error || "No se pudieron cargar los candidatos.");
+      setDedupeCandidates(Array.isArray(body.candidatos) ? body.candidatos : []);
+      setDedupeSuggestedId(body.sugerencia_reutilizar_id ?? null);
+      setDedupeRequiresConfirmation(Boolean(body.requiere_confirmacion));
+    } catch (err) {
+      setDedupeError(err instanceof Error ? err.message : "No se pudieron cargar los candidatos.");
+      setDedupeCandidates([]);
+      setDedupeSuggestedId(null);
+      setDedupeRequiresConfirmation(false);
+    } finally {
+      setDedupeLoading(false);
+    }
+  }, [cuentaId]);
+
   React.useEffect(() => {
     void loadData();
   }, [loadData]);
@@ -120,6 +161,10 @@ export function CuentaDetailView({ cuentaId }: { cuentaId: string }) {
   React.useEffect(() => {
     void loadRelations();
   }, [loadRelations]);
+
+  React.useEffect(() => {
+    void loadDedupe();
+  }, [loadDedupe]);
 
   React.useEffect(() => {
     const query = relationQuery.trim();
@@ -439,6 +484,41 @@ export function CuentaDetailView({ cuentaId }: { cuentaId: string }) {
               })
             ) : (
               <p className="text-sm text-muted-foreground">No hay relaciones registradas.</p>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Posibles duplicados</CardTitle>
+            <CardDescription>Regla formal de dedupe para esta cuenta.</CardDescription>
+          </CardHeader>
+          <CardContent className="grid gap-3">
+            {dedupeLoading ? (
+              <p className="text-sm text-muted-foreground">Cargando candidatos...</p>
+            ) : dedupeError ? (
+              <p className="text-sm text-destructive">{dedupeError}</p>
+            ) : dedupeCandidates.length ? (
+              <>
+                {dedupeRequiresConfirmation ? (
+                  <p className="text-xs text-muted-foreground">Hay candidatos que requieren confirmación manual.</p>
+                ) : null}
+                {dedupeCandidates.map((candidate) => (
+                  <div key={candidate.id} className="rounded-xl border bg-muted/20 p-4 text-sm">
+                    <div className="font-medium">{candidate.nombre || candidate.id}</div>
+                    <div className="text-xs text-muted-foreground">
+                      {candidate.nivel} · {candidate.motivo} · {candidate.empresa || "Sin empresa"}
+                    </div>
+                  </div>
+                ))}
+                {dedupeSuggestedId ? (
+                  <div className="text-xs text-muted-foreground">
+                    Sugerido para reutilizar: {dedupeSuggestedId}
+                  </div>
+                ) : null}
+              </>
+            ) : (
+              <p className="text-sm text-muted-foreground">Sin candidatos de dedupe.</p>
             )}
           </CardContent>
         </Card>
