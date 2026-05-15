@@ -286,7 +286,10 @@ function buildHierarchy(features) {
       continue;
     }
 
-    const capaNombre = props.capa_nombre ?? `Capa ${props.nivel ?? "0"}`;
+    const capaNombre =
+      featureKind === "capa"
+        ? props.nombre ?? props.capa_nombre ?? `Capa ${props.nivel ?? "0"}`
+        : props.capa_nombre ?? props.nombre ?? `Capa ${props.nivel ?? "0"}`;
     const capaLevel = props.nivel ?? props.nivel_id ?? props.capa_id ?? props.capa_key ?? props.target_parent_id ?? null;
     const capaNameKey = normalizeLooseString(capaNombre) ?? null;
     const capaKey = isVerticalDevelopment
