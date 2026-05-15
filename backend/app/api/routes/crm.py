@@ -31427,6 +31427,10 @@ async def crear_propiedad_desarrollo(
     _: str = Depends(require_permission("settings.manage")),
 ) -> dict[str, Any]:
     metadata = _normalize_metadata_value(payload.metadata) or {}
+    metadata = _strip_metadata_keys(
+        metadata,
+        {"status", "pais_codigo", "estado_cve", "municipio_cve", "codigo_postal", "colonia", "tipo", "nombre", "descripcion"},
+    )
     body: dict[str, Any] = {
         "nombre": payload.nombre.strip(),
         "tipo": payload.tipo.value,
@@ -31580,6 +31584,10 @@ async def crear_propiedad_desarrollo_mix_item(
     _: str = Depends(require_permission("settings.manage")),
 ) -> dict[str, Any]:
     metadata = _normalize_metadata_value(payload.metadata) or {}
+    metadata = _strip_metadata_keys(
+        metadata,
+        {"status", "modo", "nivel", "altura", "nombre", "descripcion"},
+    )
     body: dict[str, Any] = {
         "mix_id": str(payload.mix_id),
         "desarrollo_id": str(payload.desarrollo_id),
@@ -33070,6 +33078,10 @@ async def _import_desarrollo_tree(
     catalog_lookup: _PropertyCatalogLookup,
 ) -> dict[str, Any]:
     desarrollo_metadata = _coerce_metadata(desarrollo.metadata)
+    desarrollo_metadata = _strip_metadata_keys(
+        desarrollo_metadata,
+        {"status", "pais_codigo", "estado_cve", "municipio_cve", "codigo_postal", "colonia", "tipo", "nombre", "descripcion"},
+    )
     desarrollo_metadata, _ = _split_poligono_volume_metadata(desarrollo_metadata)
     payload: dict[str, Any] = {
         "nombre": desarrollo.nombre.strip(),
@@ -33241,6 +33253,10 @@ async def _import_desarrollo_mixto(
     catalog_lookup: _PropertyCatalogLookup,
 ) -> dict[str, Any]:
     mixto_metadata = _coerce_metadata(mixto.metadata)
+    mixto_metadata = _strip_metadata_keys(
+        mixto_metadata,
+        {"status", "pais_codigo", "estado_cve", "municipio_cve", "codigo_postal", "colonia", "tipo", "nombre", "descripcion"},
+    )
     mixto_metadata, _ = _split_poligono_volume_metadata(mixto_metadata)
     payload: dict[str, Any] = {
         "nombre": mixto.nombre.strip(),
@@ -33293,6 +33309,10 @@ async def _import_desarrollo_mixto(
             "status": item.status.value,
         }
         item_metadata = _coerce_metadata(item.metadata)
+        item_metadata = _strip_metadata_keys(
+            item_metadata,
+            {"status", "modo", "nivel", "altura", "nombre", "descripcion"},
+        )
         item_metadata, _ = _split_poligono_volume_metadata(item_metadata)
         mixto_payload["metadata"] = item_metadata or {}
         if item.descripcion:
@@ -33322,6 +33342,16 @@ def _strip_catalog_volume_metadata(metadata: dict[str, Any] | None) -> dict[str,
         return metadata
     suppression = {"height", "min_height", "levels", "color"}
     filtered = {key: value for key, value in metadata.items() if key not in suppression}
+    return filtered if filtered else None
+
+
+def _strip_metadata_keys(
+    metadata: dict[str, Any] | None,
+    keys: set[str],
+) -> dict[str, Any] | None:
+    if not metadata:
+        return metadata
+    filtered = {key: value for key, value in metadata.items() if key not in keys}
     return filtered if filtered else None
 
 
