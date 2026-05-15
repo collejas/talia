@@ -70,6 +70,10 @@ Este documento resume todo lo que se fue cerrando dentro del plan `personas, cue
 - el nucleo de WhatsApp ya expone `ToolRuntimeContext.persona_id` y `whatsapp_followups`
   ya tiene helpers `persona_*` para reenganche y escalación, con wrappers legacy para
   no romper los call sites restantes.
+- el bloque operativo de `backend/app/channels/whatsapp/tools.py` ya quedó con un
+  helper local `persona_id` en los flujos centrales de alta, correo, cierre, agenda,
+  reprogramación, cancelación y notificación a ventas, conservando alias de
+  compatibilidad donde el contrato externo sigue llamándose `contact_id`
 - Se agregaron puentes como:
   - `fetch_opportunity_persona(...)`
   - `get_webchat_persona_id(...)`

@@ -58,6 +58,10 @@ sin romper contratos publicos ni el lenguaje de usuario del panel.
   - `WebchatContext.persona_id`
 - el núcleo de WhatsApp ya expone `ToolRuntimeContext.persona_id` y helpers de
   seguimiento con semántica `persona_*` en `whatsapp_followups`
+- el bloque operativo central de WhatsApp en `backend/app/channels/whatsapp/tools.py`
+  ya usa un helper local `persona_id` para alta, información por correo, cierre,
+  agenda, reprogramación, cancelación y notificaciones de ventas, manteniendo
+  alias de compatibilidad donde siguen existiendo contratos viejos
 - el runtime de WhatsApp y Webchat sigue funcionando con `persona` por dentro, aunque
   varios contratos y campos sigan llamandose `contact_id` o `contacto_id` por compatibilidad
 - se agrego el puente legacy automatico para escrituras que todavia exigen FK contra
