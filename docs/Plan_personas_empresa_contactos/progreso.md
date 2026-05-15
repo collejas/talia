@@ -206,3 +206,18 @@ Notas:
 - Afinar detalle post-alta.
 - Mejorar estados vacios y microcopy de dedupe.
 - Revisar mobile para el flujo de vinculacion y alta guiada.
+
+## Relacion con inventario y ventas
+
+El avance de `personas` ya impacta el flujo de ventas inmobiliarias porque:
+
+- las oportunidades deben quedar ligadas a `persona_id`
+- los cierres de inventario deben exigir una oportunidad válida
+- el flujo de propiedades debe dejar de depender de `contacto_id` como referencia principal
+
+Plan de coordinación:
+
+- `docs/Plan_3D/plan_normalizacion_inventario_ventas_personas.md`
+- `docs/Plan_3D/plan_3D.md`
+- `docs/Plan_3D/plan_migracion_tecnica_inventario_ventas_personas.md`
+- `docs/Plan_3D/checklist_prs_inventario_ventas_personas.md`
