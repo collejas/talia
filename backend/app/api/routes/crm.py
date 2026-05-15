@@ -4344,6 +4344,7 @@ class CRMPropertySaleRequest(BaseModel):
     lead_id: UUID | None = None
     oportunidad_id: UUID | None = None
     cuenta_id: UUID | None = None
+    persona_id: UUID | None = None
     contacto_id: UUID | None = None
     cotizacion_metadata: dict[str, Any] | None = Field(default_factory=dict)
     item_metadata: dict[str, Any] | None = Field(default_factory=dict)
@@ -31937,6 +31938,8 @@ async def actualizar_status_propiedad_unidad(
     usuario_id: UUID | None = Depends(optional_usuario_id),
     _: str = Depends(require_permission("settings.manage")),
 ) -> dict[str, Any]:
+    current_unidad = await repo.get_propiedad_unidad(unidad_id=unidad_id)
+    previous_status = str(current_unidad.get("status") or PropiedadStatus.disponible.value) if current_unidad else PropiedadStatus.disponible.value
     try:
         record = await repo.update_propiedad_unidad(
             organizacion_id=organizacion_id,
@@ -31954,6 +31957,30 @@ async def actualizar_status_propiedad_unidad(
     }
     sale_logger.info("propiedad_unidad_status_manual", extra=event_payload)
     _write_propiedad_sale_event("unidad_status_manual", event_payload)
+    if previous_status != payload.status.value:
+        try:
+            await repo.create_propiedad_unidad_movimiento(
+                organizacion_id=organizacion_id,
+                payload={
+                    "organizacion_id": str(organizacion_id),
+                    "unidad_id": str(unidad_id),
+                    "oportunidad_id": str(current_unidad.get("oportunidad_id")) if current_unidad and current_unidad.get("oportunidad_id") else None,
+                    "persona_id": None,
+                    "cuenta_id": None,
+                    "estado_anterior": previous_status,
+                    "estado_nuevo": payload.status.value,
+                    "precio": current_unidad.get("precio") if current_unidad else None,
+                    "moneda": "MXN",
+                    "motivo": "manual_status_update",
+                    "metadata": {
+                        "source": "mapbox",
+                        "usuario_id": str(usuario_id) if usuario_id else None,
+                    },
+                    "creado_por": str(usuario_id) if usuario_id else None,
+                }
+            )
+        except CRMRepositoryError as exc:
+            raise HTTPException(status_code=502, detail=str(exc)) from exc
     return {"ok": True, "unidad": record}
 
 
@@ -31993,16 +32020,39 @@ async def registrar_venta_propiedad(
     )
     if not catalog_item:
         raise HTTPException(status_code=404, detail="catalog_item_not_found")
+    current_unidad = await repo.get_propiedad_unidad(unidad_id=payload.unidad_id)
     opportunity: dict[str, Any] | None = None
-    if payload.oportunidad_id:
+    resolved_oportunidad_id = payload.oportunidad_id
+    resolved_persona_id = payload.persona_id or payload.contacto_id
+    resolved_cuenta_id = payload.cuenta_id
+    if payload.lead_id:
+        lead = await repo.get_lead_by_id(
+            organizacion_id=organizacion_id,
+            lead_id=payload.lead_id,
+        )
+        if lead:
+            if resolved_oportunidad_id is None:
+                resolved_oportunidad_id = _safe_uuid(lead.get("oportunidad_id"))
+            if resolved_persona_id is None:
+                resolved_persona_id = _safe_uuid(lead.get("persona_id") or lead.get("contacto_id"))
+            if resolved_cuenta_id is None:
+                resolved_cuenta_id = _safe_uuid(lead.get("cuenta_id"))
+    if resolved_oportunidad_id:
         opportunity = await _ensure_opportunity_ready_for_sale(
             repo,
             organizacion_id,
-            payload.oportunidad_id,
+            resolved_oportunidad_id,
             usuario_id,
         )
-    elif payload.lead_id:
-        await _ensure_lead_ready_for_sale(repo, organizacion_id, payload.lead_id)
+        if resolved_persona_id is None:
+            resolved_persona_id = _safe_uuid(opportunity.get("contacto_principal_id"))
+        if resolved_cuenta_id is None:
+            resolved_cuenta_id = _safe_uuid(opportunity.get("cuenta_id"))
+    else:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="sale_requires_opportunity",
+        )
     price_value = _decimal_to_number(payload.precio_final)
     sale_refs = {
         "propiedad_id": str(payload.propiedad_id),
@@ -32010,6 +32060,12 @@ async def registrar_venta_propiedad(
         "catalog_item_id": str(payload.catalog_item_id),
         "precio_final": price_value,
     }
+    if resolved_oportunidad_id:
+        sale_refs["oportunidad_id"] = str(resolved_oportunidad_id)
+    if resolved_persona_id:
+        sale_refs["persona_id"] = str(resolved_persona_id)
+    if resolved_cuenta_id:
+        sale_refs["cuenta_id"] = str(resolved_cuenta_id)
     if payload.lead_id:
         sale_refs["lead_id"] = str(payload.lead_id)
     quote_metadata = _normalize_metadata_value(payload.cotizacion_metadata) or {}
@@ -32023,11 +32079,13 @@ async def registrar_venta_propiedad(
         "moneda": payload.moneda,
         "metadata": quote_metadata,
     }
-    if payload.oportunidad_id:
-        quote_payload["oportunidad_id"] = str(payload.oportunidad_id)
-    if payload.cuenta_id:
-        quote_payload["cuenta_id"] = str(payload.cuenta_id)
-    if payload.contacto_id:
+    if resolved_oportunidad_id:
+        quote_payload["oportunidad_id"] = str(resolved_oportunidad_id)
+    if resolved_cuenta_id:
+        quote_payload["cuenta_id"] = str(resolved_cuenta_id)
+    if resolved_persona_id:
+        quote_payload["persona_id"] = str(resolved_persona_id)
+    elif payload.contacto_id:
         quote_payload["contacto_id"] = str(payload.contacto_id)
 
     try:
@@ -32038,8 +32096,9 @@ async def registrar_venta_propiedad(
                 "catalog_item_id": str(payload.catalog_item_id),
                 "propiedad_id": str(payload.propiedad_id),
                 "unidad_id": str(payload.unidad_id),
-                "oportunidad_id": str(payload.oportunidad_id) if payload.oportunidad_id else None,
+                "oportunidad_id": str(resolved_oportunidad_id) if resolved_oportunidad_id else None,
                 "lead_id": str(payload.lead_id) if payload.lead_id else None,
+                "persona_id": str(resolved_persona_id) if resolved_persona_id else None,
                 "precio_final": price_value,
                 "moneda": payload.moneda,
             },
@@ -32051,8 +32110,9 @@ async def registrar_venta_propiedad(
                 "catalog_item_id": str(payload.catalog_item_id),
                 "propiedad_id": str(payload.propiedad_id),
                 "unidad_id": str(payload.unidad_id),
-                "oportunidad_id": str(payload.oportunidad_id) if payload.oportunidad_id else None,
+                "oportunidad_id": str(resolved_oportunidad_id) if resolved_oportunidad_id else None,
                 "lead_id": str(payload.lead_id) if payload.lead_id else None,
+                "persona_id": str(resolved_persona_id) if resolved_persona_id else None,
                 "precio_final": price_value,
                 "moneda": payload.moneda,
             },
@@ -32133,13 +32193,13 @@ async def registrar_venta_propiedad(
                 "precio_unitario": price_value,
             },
         )
-        if payload.oportunidad_id:
+        if resolved_oportunidad_id:
             quote_uuid = _safe_uuid(quote.get("id")) or UUID(str(quote["id"]))
             await _render_quote_pdf_after_sale(
                 repo,
                 organizacion_id,
                 quote_uuid,
-                _safe_uuid(payload.oportunidad_id),
+                resolved_oportunidad_id,
                 usuario_id,
             )
             await _mark_quote_as_accepted_from_mapbox(
@@ -32151,8 +32211,38 @@ async def registrar_venta_propiedad(
         await repo.update_propiedad_unidad(
             organizacion_id=organizacion_id,
             unidad_id=payload.unidad_id,
-            payload={"status": PropiedadStatus.vendido.value},
+            payload={
+                "status": PropiedadStatus.vendido.value,
+                "oportunidad_id": str(resolved_oportunidad_id) if resolved_oportunidad_id else None,
+                "catalog_item_id": str(payload.catalog_item_id),
+            },
         )
+        try:
+            await repo.create_propiedad_unidad_movimiento(
+                organizacion_id=organizacion_id,
+                payload={
+                    "organizacion_id": str(organizacion_id),
+                    "unidad_id": str(payload.unidad_id),
+                    "oportunidad_id": str(resolved_oportunidad_id) if resolved_oportunidad_id else None,
+                    "persona_id": str(resolved_persona_id) if resolved_persona_id else None,
+                    "cuenta_id": str(resolved_cuenta_id) if resolved_cuenta_id else None,
+                    "estado_anterior": str(current_unidad.get("status") if current_unidad and current_unidad.get("status") else PropiedadStatus.disponible.value),
+                    "estado_nuevo": PropiedadStatus.vendido.value,
+                    "precio": price_value,
+                    "moneda": payload.moneda,
+                    "motivo": "venta_registrada",
+                    "metadata": {
+                        "source": "venta_propiedades",
+                        "catalog_item_id": str(payload.catalog_item_id),
+                        "propiedad_id": str(payload.propiedad_id),
+                        "lead_id": str(payload.lead_id) if payload.lead_id else None,
+                        "quote_id": str(quote["id"]),
+                    },
+                    "creado_por": str(usuario_id) if usuario_id else None,
+                }
+            )
+        except CRMRepositoryError as exc:
+            raise HTTPException(status_code=502, detail=str(exc)) from exc
         sale_logger.info(
             "propiedad_unidad_status_updated",
             extra={
@@ -32176,9 +32266,19 @@ async def registrar_venta_propiedad(
                 "venta_activa": False,
             }
         )
+        catalog_update: dict[str, Any] = {
+            "activo": False,
+            "propiedad_id": str(payload.propiedad_id),
+            "unidad_id": str(payload.unidad_id),
+            "metadatos": catalog_metadata,
+        }
+        if resolved_oportunidad_id:
+            catalog_update["oportunidad_id"] = str(resolved_oportunidad_id)
+        if resolved_persona_id:
+            catalog_update["persona_id"] = str(resolved_persona_id)
         await repo.update_catalog_item(
             item_id=payload.catalog_item_id,
-            payload={"activo": False, "metadatos": catalog_metadata},
+            payload=catalog_update,
         )
         sale_logger.info(
             "propiedad_catalog_item_deactivated",
@@ -32203,19 +32303,20 @@ async def registrar_venta_propiedad(
             "precio_final": price_value,
             "moneda": payload.moneda,
             "cotizacion_id": str(quote["id"]),
-            "oportunidad_id": str(payload.oportunidad_id) if payload.oportunidad_id else None,
-            "cuenta_id": str(payload.cuenta_id) if payload.cuenta_id else None,
+            "oportunidad_id": str(resolved_oportunidad_id) if resolved_oportunidad_id else None,
+            "cuenta_id": str(resolved_cuenta_id) if resolved_cuenta_id else None,
             "contacto_id": str(payload.contacto_id) if payload.contacto_id else None,
+            "persona_id": str(resolved_persona_id) if resolved_persona_id else None,
         }
         sale_logger.info("propiedad_sale_registered", extra=sale_entry)
         _write_propiedad_sale_log(sale_entry)
         if payload.lead_id:
             await _sync_lead_metrics_after_sale(repo, payload.lead_id)
-        if payload.oportunidad_id:
+        if resolved_oportunidad_id:
             await _advance_opportunity_to_won(
                 repo,
                 organizacion_id,
-                payload.oportunidad_id,
+                resolved_oportunidad_id,
                 _safe_uuid(opportunity.get("etapa_id")) if opportunity else None,
                 usuario_id,
             )
@@ -33150,6 +33251,8 @@ async def _ensure_catalog_item_for_unidad(
         "precio_base": _decimal_to_number(unidad_source.precio),
         "moneda": "MXN",
         "activo": True,
+        "propiedad_id": str(desarrollo_record["id"]),
+        "unidad_id": str(unidad_record["id"]),
         "metadatos": metadata,
     }
     if slug:

@@ -876,6 +876,50 @@ class CRMRepository:
             raise CRMRepositoryError(f"propiedad_unidad_invalid_update_response:{row!r}")
         return row
 
+    async def get_propiedad_unidad(
+        self,
+        *,
+        unidad_id: UUID,
+    ) -> dict[str, Any] | None:
+        params = {
+            "id": f"eq.{unidad_id}",
+            "limit": "1",
+            "select": "*",
+        }
+        resp = await self._request("GET", "/rest/v1/propiedad_unidades", params=params)
+        data = resp.json()
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"propiedad_unidad_invalid_response:{data!r}")
+        if not data:
+            return None
+        row = data[0]
+        if not isinstance(row, dict):
+            raise CRMRepositoryError(f"propiedad_unidad_invalid_response:{row!r}")
+        return row
+
+    async def create_propiedad_unidad_movimiento(
+        self,
+        *,
+        payload: dict[str, Any],
+        organizacion_id: UUID | None = None,
+    ) -> dict[str, Any]:
+        resp = await self._request(
+            "POST",
+            "/rest/v1/propiedad_unidad_movimientos",
+            json=payload,
+            prefer="return=representation",
+            organizacion_id=organizacion_id,
+        )
+        data = resp.json()
+        if not isinstance(data, list) or not data:
+            raise CRMRepositoryError("propiedad_unidad_movimiento_create_failed")
+        row = data[0]
+        if not isinstance(row, dict):
+            raise CRMRepositoryError(
+                f"propiedad_unidad_movimiento_invalid_response:{row!r}"
+            )
+        return row
+
     async def delete_propiedad_unidad(
         self,
         *,
