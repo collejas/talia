@@ -188,7 +188,7 @@ type ContactCreateAction =
 type ContactCreateFlowProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onCreated?: (contactoId: string) => void;
+  onCreated?: (personaId: string) => void;
   initialMode?: CreateMode;
 };
 

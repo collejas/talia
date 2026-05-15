@@ -341,24 +341,24 @@ export function ContactsDataTable({ data }: { data: ContactTableRow[] }) {
     return () => controller.abort();
   }, [reassignOpen, permissionsLoading, canReassign, canReassignAny]);
 
-  const [editContactoId, setEditContactoId] = React.useState<string | null>(null);
+  const [editPersonaId, setEditPersonaId] = React.useState<string | null>(null);
   const activeRaw = React.useMemo(() => (activeRow?.raw ?? {}) as Record<string, unknown>, [activeRow?.raw]);
-  const activeContactoId = extractString(activeRaw, ["contacto_id"]) ?? extractString(activeRaw, ["id"]);
+  const activePersonaId = extractString(activeRaw, ["contacto_id"]) ?? extractString(activeRaw, ["id"]);
   const activePropietarioId = extractString(activeRaw, ["propietario_id"]);
 
   const openEdit = (row: TableRow) => {
     const raw = (row.raw ?? {}) as Record<string, unknown>;
-    const contactoId = extractString(raw, ["contacto_id"]) ?? extractString(raw, ["id"]);
+    const personaId = extractString(raw, ["contacto_id"]) ?? extractString(raw, ["id"]);
     setActiveRow(row);
-    setEditContactoId(contactoId);
+    setEditPersonaId(personaId);
     setError(null);
     setSuccess(null);
     setEditOpen(true);
   };
 
-  const openDetailAfterSave = React.useCallback((contactoId: string) => {
-    if (!contactoId) return;
-    setEditContactoId(contactoId);
+  const openDetailAfterSave = React.useCallback((personaId: string) => {
+    if (!personaId) return;
+    setEditPersonaId(personaId);
     setError(null);
     setSuccess(null);
     setEditOpen(true);
@@ -371,10 +371,10 @@ export function ContactsDataTable({ data }: { data: ContactTableRow[] }) {
       return;
     }
     const raw = (row.raw ?? {}) as Record<string, unknown>;
-    const contactoId = extractString(raw, ["contacto_id"]) ?? extractString(raw, ["id"]);
-    if (!contactoId) return;
+    const personaId = extractString(raw, ["contacto_id"]) ?? extractString(raw, ["id"]);
+    if (!personaId) return;
     setLinkInitialContact({
-      id: contactoId,
+      id: personaId,
       label: row.header,
       company: extractString(raw, ["company_name"]),
       correo: extractString(raw, ["correo"]),
@@ -457,12 +457,12 @@ export function ContactsDataTable({ data }: { data: ContactTableRow[] }) {
   };
 
   const handleDelete = async () => {
-    if (!activeContactoId) {
-      setError("No se encontró el contacto a eliminar.");
+    if (!activePersonaId) {
+      setError("No se encontró la persona a eliminar.");
       return;
     }
     await runAndReload(async () => {
-      const response = await fetch(`/api/contactos/${activeContactoId}`, {
+      const response = await fetch(`/api/contactos/${activePersonaId}`, {
         method: "DELETE",
       });
       const body = (await response.json().catch(() => ({}))) as { error?: string };
@@ -500,9 +500,9 @@ export function ContactsDataTable({ data }: { data: ContactTableRow[] }) {
   };
 
   const handleReassign = async () => {
-    if (!activeContactoId || !selectedVendorId) return;
+    if (!activePersonaId || !selectedVendorId) return;
     await runAndReload(async () => {
-      const response = await fetch(`/api/contactos/${activeContactoId}/reassign`, {
+      const response = await fetch(`/api/contactos/${activePersonaId}/reassign`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -704,7 +704,7 @@ export function ContactsDataTable({ data }: { data: ContactTableRow[] }) {
       <ContactEditFlow
         open={editOpen}
         onOpenChange={setEditOpen}
-        contactoId={editContactoId}
+        personaId={editPersonaId}
         onSaved={() => window.location.reload()}
       />
 

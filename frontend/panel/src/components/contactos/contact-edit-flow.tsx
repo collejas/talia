@@ -220,8 +220,7 @@ type ContactEditAction =
 type ContactEditFlowProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  personaId?: string | null;
-  contactoId?: string | null;
+  personaId: string | null;
   onSaved?: () => void;
 };
 
@@ -695,8 +694,8 @@ function Field({
   );
 }
 
-export function ContactEditFlow({ open, onOpenChange, personaId, contactoId, onSaved }: ContactEditFlowProps) {
-  const resolvedPersonaId = personaId ?? contactoId ?? null;
+export function ContactEditFlow({ open, onOpenChange, personaId, onSaved }: ContactEditFlowProps) {
+  const resolvedPersonaId = personaId;
   const [state, dispatch] = React.useReducer(reducer, INITIAL_STATE);
   const deferredAccountQuery = React.useDeferredValue(state.accountQuery);
   const [pendingDedupe, setPendingDedupe] = React.useState<PersonaValidationResponse | null>(null);
@@ -733,7 +732,7 @@ export function ContactEditFlow({ open, onOpenChange, personaId, contactoId, onS
       dispatch({ type: "loading/set", value: true });
       dispatch({ type: "error/set", value: null });
       try {
-        const response = await fetch(`/api/contactos/${encodeURIComponent(resolvedPersonaId)}`, {
+        const response = await fetch(`/api/personas/${encodeURIComponent(resolvedPersonaId)}`, {
           cache: "no-store",
           signal: controller.signal,
         });
@@ -747,7 +746,7 @@ export function ContactEditFlow({ open, onOpenChange, personaId, contactoId, onS
         dispatch({ type: "hydrate", personaId: resolvedPersonaId, detail: body });
       } catch (error) {
         if ((error as Error).name !== "AbortError") {
-          dispatch({ type: "error/set", value: "No se pudo cargar el contacto." });
+          dispatch({ type: "error/set", value: "No se pudo cargar la persona." });
         }
       } finally {
         dispatch({ type: "loading/set", value: false });
