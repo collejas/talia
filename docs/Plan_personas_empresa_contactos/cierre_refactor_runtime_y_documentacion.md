@@ -17,6 +17,8 @@ Este documento resume todo lo que se fue cerrando dentro del plan `personas, cue
 - Los botones de acciones quedaron compactos, con icono.
 - El drawer lateral dejo de ser el drawer generico del layout y ahora muestra detalle real del contacto.
 - El footer del drawer se simplifico para no simular un submit inexistente.
+- El alta ahora abre automaticamente la ficha rica del contacto creado o reutilizado,
+  evitando regresar al listado sin contexto.
 
 ### 1.2 Flujo guiado de CRUD de contactos
 

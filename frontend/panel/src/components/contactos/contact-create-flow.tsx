@@ -122,6 +122,9 @@ type PersonaAltaResumen = {
 };
 
 type PersonaAltaResponse = {
+  persona?: {
+    id?: string | null;
+  } | null;
   resumen?: PersonaAltaResumen;
 };
 
@@ -185,7 +188,7 @@ type ContactCreateAction =
 type ContactCreateFlowProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onCreated?: () => void;
+  onCreated?: (contactoId: string) => void;
   initialMode?: CreateMode;
 };
 
@@ -789,8 +792,11 @@ export function ContactCreateFlow({ open, onOpenChange, onCreated, initialMode =
         toast.info(`Se reutilizó cuenta existente (${resumen.cuenta_reutilizada_id}).`);
       }
       toast.success("Alta creada.");
+      const createdId = body.persona?.id?.trim() || resumen.contacto_reutilizado_id || "";
       onOpenChange(false);
-      onCreated?.();
+      if (createdId) {
+        onCreated?.(createdId);
+      }
     } catch (error) {
       const message = error instanceof Error ? error.message : "No se pudo guardar.";
       dispatch({ type: "error/set", value: message });

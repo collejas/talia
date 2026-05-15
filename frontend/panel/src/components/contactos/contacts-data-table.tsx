@@ -355,6 +355,14 @@ export function ContactsDataTable({ data }: { data: ContactTableRow[] }) {
     setEditOpen(true);
   };
 
+  const openDetailAfterSave = React.useCallback((contactoId: string) => {
+    if (!contactoId) return;
+    setEditContactoId(contactoId);
+    setError(null);
+    setSuccess(null);
+    setEditOpen(true);
+  }, []);
+
   const openLinkFlow = (row?: TableRow | null) => {
     if (!row) {
       setLinkInitialContact(null);
@@ -689,7 +697,7 @@ export function ContactsDataTable({ data }: { data: ContactTableRow[] }) {
         open={createOpen}
         onOpenChange={setCreateOpen}
         initialMode={createInitialMode}
-        onCreated={() => window.location.reload()}
+        onCreated={openDetailAfterSave}
       />
 
       <ContactEditFlow

@@ -178,6 +178,8 @@ Notas:
   - Alta y edición ahora piden confirmación explícita cuando el dedupe detecta candidatos `medio/debil`.
   - `Vincular contacto a empresa` abre el flujo independiente de relacion.
   - La experiencia ya usa panel ancho y resumen lateral en desktop.
+  - al terminar un alta, el panel abre automáticamente la ficha rica del contacto creado
+    o reutilizado, en vez de volver al listado sin contexto
 
 ### 4) Exportación de contactos
 
@@ -193,8 +195,10 @@ Notas:
 
 ### 1) Vista detalle post-alta (Fase 7 del UX)
 
-- Crear vista de detalle “rica” (persona/cuenta/relación) y navegar ahí después de guardar.
-- Acciones rápidas: editar persona, editar cuenta, editar relación, agregar otra relación.
+- La navegación post-alta ya abre la ficha rica existente del contacto creado o reutilizado.
+- Pendiente solo si se quiere una pantalla dedicada separada del listado:
+  crear vista de detalle “rica” (persona/cuenta/relación) con acciones rápidas
+  para editar persona, editar cuenta, editar relación y agregar otra relación.
 
 ### 2) Endpoints nativos de relación (opcional, pero recomendable)
 
