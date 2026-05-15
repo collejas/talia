@@ -4376,6 +4376,7 @@ class PropiedadCapaCreateRequest(BaseModel):
     nivel: int = Field(..., ge=0)
     nombre: str | None = None
     descripcion: str | None = None
+    status: PropiedadStatus = PropiedadStatus.disponible
     altura: Decimal | None = None
     geom: str | None = None
     metadata: dict[str, Any] | None = Field(default_factory=dict)
@@ -4398,6 +4399,7 @@ class PropiedadCapaUpdateRequest(BaseModel):
     nombre: str | None = None
     descripcion: str | None = None
     nivel: int | None = None
+    status: PropiedadStatus | None = None
     altura: Decimal | None = None
     metadata: dict[str, Any] | None = Field(default_factory=dict)
 
@@ -31611,10 +31613,12 @@ async def crear_propiedad_capa(
     _: str = Depends(require_permission("settings.manage")),
 ) -> dict[str, Any]:
     metadata = _normalize_metadata_value(payload.metadata) or {}
+    metadata, metadata_status = _split_capa_status_metadata(metadata)
     body: dict[str, Any] = {
         "desarrollo_id": str(payload.desarrollo_id),
         "nivel": payload.nivel,
         "metadata": metadata,
+        "status": payload.status.value if payload.status else (metadata_status.value if metadata_status else PropiedadStatus.disponible.value),
     }
     if payload.nombre:
         body["nombre"] = payload.nombre.strip()
@@ -31648,6 +31652,7 @@ async def editar_propiedad_capa(
             "nombre",
             "descripcion",
             "nivel",
+            "status",
             "altura",
             "metadata",
         )
@@ -31660,10 +31665,17 @@ async def editar_propiedad_capa(
         body["descripcion"] = payload.descripcion.strip() or None
     if payload.nivel is not None:
         body["nivel"] = payload.nivel
+    if payload.status is not None:
+        body["status"] = payload.status.value
     if payload.altura is not None:
         body["altura"] = _decimal_to_number(payload.altura)
-    if payload.metadata:
-        body["metadata"] = payload.metadata
+    metadata = _normalize_metadata_value(payload.metadata) or {}
+    if metadata:
+        metadata, metadata_status = _split_capa_status_metadata(metadata)
+        if metadata:
+            body["metadata"] = metadata
+        if payload.status is None and metadata_status is not None:
+            body["status"] = metadata_status.value
     try:
         record = await repo.update_propiedad_capa(
             organizacion_id=organizacion_id,
@@ -33099,8 +33111,10 @@ async def _import_desarrollo_tree(
             capa_payload: dict[str, Any] = {
                 "desarrollo_id": record["id"],
                 "nivel": capa.nivel,
+                "status": capa.status.value,
             }
             capa_metadata = _coerce_metadata(capa.metadata)
+            capa_metadata, _ = _split_capa_status_metadata(capa_metadata)
             capa_metadata, _ = _split_poligono_volume_metadata(capa_metadata)
             capa_payload["metadata"] = capa_metadata or {}
             if capa.nombre:
@@ -33355,6 +33369,19 @@ def _split_poligono_volume_metadata(
     take_text("color", "color", "metadata_color")
 
     return (cleaned or None), (extracted or None)
+
+
+def _split_capa_status_metadata(
+    metadata: dict[str, Any] | None,
+) -> tuple[dict[str, Any] | None, PropiedadStatus | None]:
+    if not metadata:
+        return None, None
+    cleaned = dict(metadata)
+    raw_status = _strip_value(cleaned.pop("status", None))
+    if raw_status is None:
+        raw_status = _strip_value(cleaned.pop("estado", None))
+    parsed_status = PropiedadStatus(raw_status) if raw_status else None
+    return cleaned or None, parsed_status
 
 
 async def _ensure_catalog_item_for_unidad(

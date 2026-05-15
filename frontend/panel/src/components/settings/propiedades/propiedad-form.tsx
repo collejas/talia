@@ -241,6 +241,9 @@ const UNIDAD_STATUS_OPTIONS = [
 ] as const;
 type UnidadStatus = (typeof UNIDAD_STATUS_OPTIONS)[number]["value"];
 
+const CAPA_STATUS_OPTIONS = UNIDAD_STATUS_OPTIONS;
+type CapaStatus = UnidadStatus;
+
 export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFormProps) {
   const [formValues, setFormValues] = useState({
     nombre: "",
@@ -269,6 +272,7 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
   const [capaForm, setCapaForm] = useState({
     nombre: "",
     nivel: "",
+    status: "disponible" as CapaStatus,
     altura: "",
     descripcion: "",
     copias: "1",
@@ -579,6 +583,7 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
     setCapaForm({
       nombre: "",
       nivel: "",
+      status: "disponible",
       altura: "",
       descripcion: "",
       copias: "1",
@@ -604,6 +609,7 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
           ? `${duplicateFrom.nombre || `Nivel ${duplicateFrom.nivel ?? "?"}`} copia`
           : "",
         nivel: duplicateFrom && duplicateFrom.nivel != null ? String(duplicateFrom.nivel + 1) : "",
+        status: duplicateFrom?.status ? (duplicateFrom.status as CapaStatus) : "disponible",
         altura: duplicateFrom && duplicateFrom.altura != null ? String(duplicateFrom.altura) : "",
         descripcion: duplicateFrom?.descripcion || "",
         copias: "1",
@@ -657,6 +663,7 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
       setCapaForm({
         nombre: capa.nombre || "",
         nivel: capa.nivel != null ? String(capa.nivel) : "",
+        status: (capa.status || "disponible") as CapaStatus,
         altura: capa.altura != null ? String(capa.altura) : "",
         descripcion: capa.descripcion || "",
         copias: "1",
@@ -1151,6 +1158,7 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
       if (capaForm.descripcion.trim()) {
         payload.descripcion = capaForm.descripcion.trim();
       }
+      payload.status = capaForm.status;
       if (capaForm.nivel.trim()) {
         const parsedNivel = Number.parseInt(capaForm.nivel, 10);
         if (!Number.isNaN(parsedNivel)) {
@@ -1232,6 +1240,7 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
         const payload: Record<string, unknown> = {
           desarrollo_id: creatingCapaFor.id,
           nivel: currentLevel,
+          status: capaForm.status,
         };
         if (capaForm.nombre.trim()) {
           payload.nombre = capaForm.nombre.trim();
@@ -2467,6 +2476,24 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
                 onChange={(event) => handleCapaField("nombre", event.target.value)}
                 placeholder="Ej. Planta baja, Manzana A"
               />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-[0.7rem]">Estado</Label>
+              <Select
+                value={capaForm.status}
+                onValueChange={(value) => handleCapaField("status", value)}
+              >
+                <SelectTrigger size="sm">
+                  <SelectValue placeholder="Selecciona un estado" />
+                </SelectTrigger>
+                <SelectContent>
+                  {CAPA_STATUS_OPTIONS.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             {creatingCapaFor?.tipo === "vertical" && (
               <>
