@@ -50,6 +50,7 @@
    - [x] Verificar que `settings/productos` pueda seguir funcionando con productos tradicionales mientras el módulo inmobiliario opera por separado. `catalog_items` sigue activo con inventario tradicional y sin depender del árbol inmobiliario.
    - [x] Automatizar pruebas manuales sobre `frontend/panel` para asegurarse de que los filtros (tipo, nivel, rango de precio) actualizan tanto el marcado en Leaflet como los datos de Mapbox y que el botón “volver al mapa nacional” elimina la instancia Mapbox sin corrupción de estados. Se agregó `frontend/panel/src/components/mapa-de-propiedades/property-map.logic.test.mjs` con `node --test` para cubrir filtros, inferencia de feature y transiciones abrir/subir/cerrar Mapbox.
    - [x] Confirmar manualmente que el flujo país → estado → municipio sólo pinta regiones con desarrollos y que al pinchar el municipio se centran los desarrollos antes de mostrar los marcadores (pasos: abrir `/crm/propiedades`, seleccionar país → estado → municipio y pulsar “ver en Mapbox”).
+   - [x] Restringir la navegación de Mapbox al área útil de cada desarrollo con `maxBounds`, `renderWorldCopies: false` y la desactivación de rotación, para evitar navegación global innecesaria y ahorrar consumo de tiles.
 
 # Registro de avances
 
