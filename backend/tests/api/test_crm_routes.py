@@ -17,6 +17,7 @@ class DummyCRMRepository(CRMRepository):
         self.calls: list[tuple[str, dict[str, Any]]] = []
         self.pipeline_stages: list[dict[str, Any]] = []
         self.pipeline_opportunities: list[dict[str, Any]] = []
+        self.sale_ready_opportunities: list[dict[str, Any]] = []
         self.prospectos_by_ids_result: list[dict[str, Any]] = []
         self.dashboard_kpis: dict[str, Any] = {"webchat": {"visitas_sin_chat": 0}}
         self.next_sales_rep: uuid.UUID | None = None
@@ -24,6 +25,13 @@ class DummyCRMRepository(CRMRepository):
         self.existing_prospectos_by_emails_result: list[dict[str, Any]] = []
         self.existing_prospectos_by_phones_result: list[dict[str, Any]] = []
         self.last_upserted_prospectos: list[dict[str, Any]] = []
+        self.products_by_id: dict[str, dict[str, Any]] = {}
+        self.catalog_items_by_id: dict[str, dict[str, Any]] = {}
+        self.propiedad_unidades_by_id: dict[str, dict[str, Any]] = {}
+        self.opportunities_with_stage: dict[str, dict[str, Any]] = {}
+        self.updated_propiedad_unidades: list[dict[str, Any]] = []
+        self.updated_catalog_items: list[dict[str, Any]] = []
+        self.created_propiedad_unidad_movimientos: list[dict[str, Any]] = []
 
     async def ensure_prospeccion_stage(self, **kwargs: Any) -> dict[str, Any]:
         """Evita llamadas reales durante las pruebas."""
@@ -107,6 +115,11 @@ class DummyCRMRepository(CRMRepository):
                 or str((row.get("etapa", {}) or {}).get("tablero_id")) == tablero_filter
             ]
         return rows[: kwargs.get("limit", len(rows))], len(rows)
+
+    async def list_sale_ready_opportunities(self, **kwargs: Any) -> list[dict[str, Any]]:
+        self.calls.append(("list_sale_ready_opportunities", kwargs))
+        rows = list(self.sale_ready_opportunities)
+        return rows[: kwargs.get("limit", len(rows))]
 
     async def visitas_dashboard_kpis(self, **kwargs: Any) -> dict[str, Any]:
         """Simula el payload de KPIs de visitas."""
@@ -632,15 +645,19 @@ class DummyCRMRepository(CRMRepository):
 
     async def create_product(self, **kwargs: Any) -> dict[str, Any]:
         self.calls.append(("create_product", kwargs))
-        return {
-            "id": str(uuid.uuid4()),
+        payload = dict(kwargs["payload"])
+        product_id = str(payload.get("id") or uuid.uuid4())
+        product = {
+            "id": product_id,
             "organizacion_id": str(kwargs["organizacion_id"]),
-            **kwargs["payload"],
-            "moneda": kwargs["payload"].get("moneda", "MXN"),
-            "activo": kwargs["payload"].get("activo", True),
+            **payload,
+            "moneda": payload.get("moneda", "MXN"),
+            "activo": payload.get("activo", True),
             "creado_en": "2024-01-01T00:00:00Z",
             "actualizado_en": "2024-01-01T00:00:00Z",
         }
+        self.products_by_id[product_id] = product
+        return product
 
     async def list_quotes(self, **kwargs: Any) -> list[dict[str, Any]]:
         self.calls.append(("list_quotes", kwargs))
@@ -788,6 +805,97 @@ class DummyCRMRepository(CRMRepository):
                 "necesidad_proposito": "",
             },
         }
+
+    async def get_opportunity_with_stage(self, **kwargs: Any) -> dict[str, Any] | None:
+        self.calls.append(("get_opportunity_with_stage", kwargs))
+        opportunity_id = str(kwargs["opportunity_id"])
+        if opportunity_id in self.opportunities_with_stage:
+            return self.opportunities_with_stage[opportunity_id]
+        opportunity = await self.get_opportunity_with_contact(
+            organizacion_id=kwargs["organizacion_id"],
+            oportunidad_id=kwargs["opportunity_id"],
+        )
+        if not opportunity:
+            return None
+        opportunity["etapa"] = {"id": str(uuid.uuid4()), "codigo": "demo", "categoria": "abierta"}
+        return opportunity
+
+    async def get_pipeline_opportunity(self, **kwargs: Any) -> dict[str, Any] | None:
+        self.calls.append(("get_pipeline_opportunity", kwargs))
+        opportunity_id = str(kwargs["oportunidad_id"])
+        if opportunity_id in self.opportunities_with_stage:
+            return self.opportunities_with_stage[opportunity_id]
+        return await self.get_opportunity_with_contact(
+            organizacion_id=kwargs["organizacion_id"],
+            oportunidad_id=kwargs["oportunidad_id"],
+        )
+
+    async def get_catalog_item(self, **kwargs: Any) -> dict[str, Any] | None:
+        self.calls.append(("get_catalog_item", kwargs))
+        item_id = str(kwargs["item_id"])
+        if item_id in self.catalog_items_by_id:
+            return self.catalog_items_by_id[item_id]
+        return {
+            "id": item_id,
+            "organizacion_id": str(kwargs["organizacion_id"]),
+            "nombre": "Unidad demo",
+            "metadatos": {},
+        }
+
+    async def get_product(self, **kwargs: Any) -> dict[str, Any] | None:
+        self.calls.append(("get_product", kwargs))
+        return self.products_by_id.get(str(kwargs["product_id"]))
+
+    async def get_propiedad_unidad(self, **kwargs: Any) -> dict[str, Any] | None:
+        self.calls.append(("get_propiedad_unidad", kwargs))
+        return self.propiedad_unidades_by_id.get(str(kwargs["unidad_id"]))
+
+    async def update_propiedad_unidad(self, **kwargs: Any) -> dict[str, Any]:
+        self.calls.append(("update_propiedad_unidad", kwargs))
+        payload = dict(kwargs["payload"])
+        self.updated_propiedad_unidades.append(
+            {
+                "organizacion_id": str(kwargs["organizacion_id"]),
+                "unidad_id": str(kwargs["unidad_id"]),
+                "payload": payload,
+            }
+        )
+        current = dict(self.propiedad_unidades_by_id.get(str(kwargs["unidad_id"])) or {})
+        current.update(payload)
+        current.setdefault("id", str(kwargs["unidad_id"]))
+        current.setdefault("organizacion_id", str(kwargs["organizacion_id"]))
+        self.propiedad_unidades_by_id[str(kwargs["unidad_id"])] = current
+        return current
+
+    async def create_propiedad_unidad_movimiento(self, **kwargs: Any) -> dict[str, Any]:
+        self.calls.append(("create_propiedad_unidad_movimiento", kwargs))
+        payload = dict(kwargs["payload"])
+        self.created_propiedad_unidad_movimientos.append(
+            {
+                "organizacion_id": str(kwargs["organizacion_id"]),
+                "payload": payload,
+            }
+        )
+        return {
+            "id": str(uuid.uuid4()),
+            **payload,
+        }
+
+    async def update_catalog_item(self, **kwargs: Any) -> dict[str, Any]:
+        self.calls.append(("update_catalog_item", kwargs))
+        payload = dict(kwargs["payload"])
+        self.updated_catalog_items.append(
+            {
+                "item_id": str(kwargs["item_id"]),
+                "payload": payload,
+            }
+        )
+        current = dict(self.catalog_items_by_id.get(str(kwargs["item_id"])) or {})
+        current.update(payload)
+        current.setdefault("id", str(kwargs["item_id"]))
+        current.setdefault("organizacion_id", str(current.get("organizacion_id") or kwargs.get("organizacion_id") or uuid.uuid4()))
+        self.catalog_items_by_id[str(kwargs["item_id"])] = current
+        return current
 
     async def list_campaigns(self, **kwargs: Any) -> list[dict[str, Any]]:
         self.calls.append(("list_campaigns", kwargs))
@@ -1160,6 +1268,165 @@ async def test_convertir_prospecto_a_contacto_no_falla_y_actualiza_metadata(
     assert isinstance(create_opportunity_call["payload"]["contacto_principal_id"], str)
     assert create_opportunity_call["payload"]["metadata"]["prospeccion_segmento"] == "Servicios"
     assert create_opportunity_call["payload"]["metadata"]["prospeccion_actividad"] == "Arquitectura"
+
+
+@pytest.mark.asyncio
+async def test_registrar_venta_propiedad_requiere_oportunidad(
+    client: AsyncClient, fake_repo: DummyCRMRepository
+) -> None:
+    catalog_item_id = uuid.uuid4()
+    unidad_id = uuid.uuid4()
+    propiedad_id = uuid.uuid4()
+    fake_repo.catalog_items_by_id[str(catalog_item_id)] = {
+        "id": str(catalog_item_id),
+        "organizacion_id": str(uuid.uuid4()),
+        "nombre": "Unidad demo",
+        "metadatos": {},
+    }
+    fake_repo.propiedad_unidades_by_id[str(unidad_id)] = {
+        "id": str(unidad_id),
+        "organizacion_id": str(uuid.uuid4()),
+        "propiedad_id": str(propiedad_id),
+        "status": "disponible",
+        "precio": 1500000,
+    }
+
+    resp = await client.post(
+        "/crm/ventas/propiedades",
+        headers=_headers(),
+        json={
+            "catalog_item_id": str(catalog_item_id),
+            "propiedad_id": str(propiedad_id),
+            "unidad_id": str(unidad_id),
+            "precio_final": 1500000,
+            "moneda": "MXN",
+        },
+    )
+
+    assert resp.status_code == 409
+    assert resp.json()["detail"] == "sale_requires_opportunity"
+
+
+@pytest.mark.asyncio
+async def test_registrar_venta_propiedad_actualiza_relaciones_y_movimiento(
+    client: AsyncClient, fake_repo: DummyCRMRepository
+) -> None:
+    catalog_item_id = uuid.uuid4()
+    unidad_id = uuid.uuid4()
+    propiedad_id = uuid.uuid4()
+    oportunidad_id = uuid.uuid4()
+    persona_id = uuid.uuid4()
+    fallback_persona_id = uuid.uuid4()
+    cuenta_id = uuid.uuid4()
+    stage_id = uuid.uuid4()
+
+    fake_repo.catalog_items_by_id[str(catalog_item_id)] = {
+        "id": str(catalog_item_id),
+        "organizacion_id": str(uuid.uuid4()),
+        "nombre": "Unidad demo",
+        "slug": "unidad-demo",
+        "precio_base": 1500000,
+        "moneda": "MXN",
+        "activo": True,
+        "metadatos": {},
+    }
+    fake_repo.propiedad_unidades_by_id[str(unidad_id)] = {
+        "id": str(unidad_id),
+        "organizacion_id": str(uuid.uuid4()),
+        "propiedad_id": str(propiedad_id),
+        "status": "disponible",
+        "precio": 1500000,
+        "catalog_item_id": None,
+    }
+    fake_repo.opportunities_with_stage[str(oportunidad_id)] = {
+        "id": str(oportunidad_id),
+        "organizacion_id": str(uuid.uuid4()),
+        "cuenta_id": str(cuenta_id),
+        "contacto_principal_id": str(fallback_persona_id),
+        "etapa_id": str(stage_id),
+        "etapa": {"id": str(stage_id), "codigo": "demo", "categoria": "abierta"},
+        "monto_estimado": 1500000.0,
+        "moneda": "MXN",
+        "metadata": {},
+        "contacto": {
+            "id": str(fallback_persona_id),
+            "nombre_completo": "Cliente Demo",
+            "correo": "demo@example.com",
+            "telefono_e164": "+521111111111",
+        },
+    }
+
+    resp = await client.post(
+        "/crm/ventas/propiedades",
+        headers=_headers(),
+        json={
+            "catalog_item_id": str(catalog_item_id),
+            "propiedad_id": str(propiedad_id),
+            "unidad_id": str(unidad_id),
+            "precio_final": 1750000,
+            "moneda": "MXN",
+            "oportunidad_id": str(oportunidad_id),
+            "persona_id": str(persona_id),
+            "cuenta_id": str(cuenta_id),
+            "contacto_id": str(fallback_persona_id),
+        },
+    )
+
+    assert resp.status_code == 201, resp.text
+    payload = resp.json()
+    assert payload["id"]
+    assert any(call_name == "create_quote" for call_name, _ in fake_repo.calls)
+    assert any(call_name == "add_quote_item" for call_name, _ in fake_repo.calls)
+    assert fake_repo.updated_propiedad_unidades
+    assert fake_repo.updated_propiedad_unidades[0]["payload"]["status"] == "vendido"
+    assert fake_repo.updated_propiedad_unidades[0]["payload"]["oportunidad_id"] == str(oportunidad_id)
+    assert fake_repo.updated_propiedad_unidades[0]["payload"]["catalog_item_id"] == str(catalog_item_id)
+    assert fake_repo.created_propiedad_unidad_movimientos
+    movimiento_payload = fake_repo.created_propiedad_unidad_movimientos[0]["payload"]
+    assert movimiento_payload["oportunidad_id"] == str(oportunidad_id)
+    assert movimiento_payload["persona_id"] == str(persona_id)
+    assert movimiento_payload["cuenta_id"] == str(cuenta_id)
+    assert movimiento_payload["estado_nuevo"] == "vendido"
+    assert fake_repo.updated_catalog_items
+    assert fake_repo.updated_catalog_items[0]["payload"]["oportunidad_id"] == str(oportunidad_id)
+    assert fake_repo.updated_catalog_items[0]["payload"]["persona_id"] == str(persona_id)
+
+
+@pytest.mark.asyncio
+async def test_actualizar_status_propiedad_unidad_crea_movimiento(
+    client: AsyncClient, fake_repo: DummyCRMRepository
+) -> None:
+    unidad_id = uuid.uuid4()
+    oportunidad_id = uuid.uuid4()
+    persona_id = uuid.uuid4()
+    cuenta_id = uuid.uuid4()
+    fake_repo.propiedad_unidades_by_id[str(unidad_id)] = {
+        "id": str(unidad_id),
+        "organizacion_id": str(uuid.uuid4()),
+        "status": "disponible",
+        "precio": 1200000,
+        "oportunidad_id": str(oportunidad_id),
+        "persona_id": str(persona_id),
+        "cuenta_id": str(cuenta_id),
+    }
+
+    resp = await client.patch(
+        f"/crm/propiedad-unidades/{unidad_id}/status",
+        headers=_headers(),
+        json={"status": "apartado"},
+    )
+
+    assert resp.status_code == 200, resp.text
+    assert fake_repo.updated_propiedad_unidades
+    assert fake_repo.updated_propiedad_unidades[0]["payload"]["status"] == "apartado"
+    assert fake_repo.created_propiedad_unidad_movimientos
+    movimiento_payload = fake_repo.created_propiedad_unidad_movimientos[0]["payload"]
+    assert movimiento_payload["estado_anterior"] == "disponible"
+    assert movimiento_payload["estado_nuevo"] == "apartado"
+    assert movimiento_payload["oportunidad_id"] == str(oportunidad_id)
+    assert movimiento_payload["persona_id"] == str(persona_id)
+    assert movimiento_payload["cuenta_id"] == str(cuenta_id)
+    assert movimiento_payload["precio"] == 1200000
 
 
 @pytest.mark.asyncio

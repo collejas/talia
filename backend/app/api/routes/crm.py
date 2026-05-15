@@ -31940,6 +31940,22 @@ async def actualizar_status_propiedad_unidad(
 ) -> dict[str, Any]:
     current_unidad = await repo.get_propiedad_unidad(unidad_id=unidad_id)
     previous_status = str(current_unidad.get("status") or PropiedadStatus.disponible.value) if current_unidad else PropiedadStatus.disponible.value
+    resolved_oportunidad_id = _safe_uuid(current_unidad.get("oportunidad_id")) if current_unidad else None
+    resolved_persona_id = _safe_uuid(current_unidad.get("persona_id")) if current_unidad else None
+    resolved_cuenta_id = _safe_uuid(current_unidad.get("cuenta_id")) if current_unidad else None
+    if resolved_oportunidad_id:
+        try:
+            opportunity = await repo.get_pipeline_opportunity(
+                organizacion_id=organizacion_id,
+                oportunidad_id=resolved_oportunidad_id,
+            )
+        except CRMRepositoryError as exc:
+            raise HTTPException(status_code=502, detail=str(exc)) from exc
+        if opportunity:
+            if resolved_persona_id is None:
+                resolved_persona_id = _safe_uuid(opportunity.get("contacto_principal_id"))
+            if resolved_cuenta_id is None:
+                resolved_cuenta_id = _safe_uuid(opportunity.get("cuenta_id"))
     try:
         record = await repo.update_propiedad_unidad(
             organizacion_id=organizacion_id,
@@ -31964,9 +31980,9 @@ async def actualizar_status_propiedad_unidad(
                 payload={
                     "organizacion_id": str(organizacion_id),
                     "unidad_id": str(unidad_id),
-                    "oportunidad_id": str(current_unidad.get("oportunidad_id")) if current_unidad and current_unidad.get("oportunidad_id") else None,
-                    "persona_id": None,
-                    "cuenta_id": None,
+                    "oportunidad_id": str(resolved_oportunidad_id) if resolved_oportunidad_id else None,
+                    "persona_id": str(resolved_persona_id) if resolved_persona_id else None,
+                    "cuenta_id": str(resolved_cuenta_id) if resolved_cuenta_id else None,
                     "estado_anterior": previous_status,
                     "estado_nuevo": payload.status.value,
                     "precio": current_unidad.get("precio") if current_unidad else None,

@@ -1962,6 +1962,7 @@ export function PropertyMap() {
           precio_final: priceNumber,
           moneda: "MXN",
           oportunidad_id: saleModalOpportunityId,
+          persona_id: selectedOpportunity?.contacto_id ?? null,
           cuenta_id: selectedOpportunity?.cuenta_id ?? null,
           contacto_id: selectedOpportunity?.contacto_id ?? null,
         }),
