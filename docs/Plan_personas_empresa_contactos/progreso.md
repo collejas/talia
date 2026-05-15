@@ -225,6 +225,7 @@ Notas:
   - reasigna relaciones `cuenta_direcciones`,
   - conserva la cuenta origen como archivada con metadata de merge.
 - El panel ya expone el proxy de merge para cuentas en `frontend/panel/src/app/api/cuentas/[cuentaId]/merge/route.ts`.
+- La UI de cuentas ya tiene ficha dedicada en `frontend/panel/src/app/cuentas/[cuentaId]/page.tsx` y un drawer del listado que enlaza a esa ficha.
 - Pendiente de más profundidad, si se quiere ampliar:
   - personas: match fuerte por teléfono/correo, débil por nombre + org
   - cuentas: match fuerte por RFC, medio por razón social, débil por nombre comercial

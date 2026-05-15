@@ -1,5 +1,5 @@
 import { AppViewLayout } from "@/components/layouts/app-view-layout";
-import { ClientDataTable } from "@/components/client-data-table";
+import { AccountsDataTable } from "@/components/cuentas/accounts-data-table";
 import { loadCrmAccounts } from "@/lib/crm/accounts";
 
 export const dynamic = "force-dynamic";
@@ -16,7 +16,7 @@ export default async function CrmAccountsPage() {
           ))}
         </div>
       ) : (
-        <ClientDataTable rows={payload.rows} />
+        <AccountsDataTable rows={payload.rows} />
       )}
     </AppViewLayout>
   );

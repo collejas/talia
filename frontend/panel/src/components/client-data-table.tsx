@@ -14,6 +14,9 @@ type Props = {
   initialVisibility?: Record<string, boolean>;
   storageKey?: string;
   toolbarActions?: React.ReactNode;
+  renderRowDetails?: (row: DataTableRow) => React.ReactNode;
+  detailDescription?: string;
+  hideDefaultActions?: boolean;
 };
 
 export function ClientDataTable({
@@ -23,6 +26,9 @@ export function ClientDataTable({
   initialVisibility,
   storageKey,
   toolbarActions,
+  renderRowDetails,
+  detailDescription,
+  hideDefaultActions,
 }: Props) {
   return (
     <DataTable
@@ -32,6 +38,9 @@ export function ClientDataTable({
       initialVisibility={initialVisibility}
       storageKey={storageKey}
       toolbarActions={toolbarActions}
+      renderRowDetails={renderRowDetails}
+      detailDescription={detailDescription}
+      hideDefaultActions={hideDefaultActions}
     />
   );
 }
