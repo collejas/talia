@@ -50,6 +50,13 @@ SUPABASE_TRANSIENT_MARKERS = (
     "temporarily unavailable",
 )
 
+PERSONA_SELECT_FIELDS = (
+    "id,organizacion_id,nombre,apellido_paterno,apellido_materno,nombre_completo,"
+    "correo_principal,telefono_principal_e164,puesto,area,rol_decision,estado,"
+    "origen,notas,metadata,persona_datos,propietario_usuario_id,creado_en,actualizado_en,"
+    "archived_at,merged_into_persona_id,merge_metadata"
+)
+
 
 def _is_transient_supabase_error_message(value: Any) -> bool:
     message = str(value or "").lower()
@@ -6447,6 +6454,9 @@ class CRMRepository:
             "estado": persona.get("estado"),
             "origen": persona.get("origen"),
             "propietario_usuario_id": persona.get("propietario_usuario_id"),
+            "archived_at": persona.get("archived_at"),
+            "merged_into_persona_id": persona.get("merged_into_persona_id"),
+            "merge_metadata": persona.get("merge_metadata") if isinstance(persona.get("merge_metadata"), dict) else _ensure_metadata(persona.get("merge_metadata")),
             "metadata": metadata,
             "creado_en": persona.get("creado_en"),
             "actualizado_en": persona.get("actualizado_en"),
@@ -6684,11 +6694,7 @@ class CRMRepository:
             "organizacion_id": f"eq.{organizacion_id}",
             "id": f"eq.{contacto_id}",
             "limit": "1",
-            "select": (
-                "id,organizacion_id,nombre,apellido_paterno,apellido_materno,nombre_completo,"
-                "correo_principal,telefono_principal_e164,puesto,area,rol_decision,estado,"
-                "origen,notas,metadata,persona_datos,propietario_usuario_id,creado_en,actualizado_en"
-            ),
+            "select": PERSONA_SELECT_FIELDS,
         }
         resp = await self._request("GET", "/rest/v1/personas", params=params)
         data = resp.json()
@@ -6753,11 +6759,7 @@ class CRMRepository:
         params = {
             "organizacion_id": f"eq.{organizacion_id}",
             "id": f"in.({','.join(unique_ids)})",
-            "select": (
-                "id,organizacion_id,nombre,apellido_paterno,apellido_materno,nombre_completo,"
-                "correo_principal,telefono_principal_e164,puesto,area,rol_decision,estado,"
-                "origen,notas,metadata,persona_datos,propietario_usuario_id,creado_en,actualizado_en"
-            ),
+            "select": PERSONA_SELECT_FIELDS,
             "limit": str(min(1000, len(unique_ids))),
         }
         resp = await self._request("GET", "/rest/v1/personas", params=params)
@@ -6991,6 +6993,73 @@ class CRMRepository:
             payload=payload,
         )
 
+    async def mark_persona_merged(
+        self,
+        *,
+        organizacion_id: UUID,
+        persona_id: UUID,
+        merged_into_persona_id: UUID,
+        merge_metadata: dict[str, Any] | None = None,
+        archived_at: datetime | None = None,
+    ) -> dict[str, Any]:
+        payload: dict[str, Any] = {
+            "estado": "fusionado",
+            "merged_into_persona_id": str(merged_into_persona_id),
+            "merge_metadata": merge_metadata or {},
+            "archived_at": (archived_at or datetime.now(timezone.utc)).isoformat(),
+        }
+        params = {
+            "organizacion_id": f"eq.{organizacion_id}",
+            "id": f"eq.{persona_id}",
+        }
+        resp = await self._request(
+            "PATCH",
+            "/rest/v1/personas",
+            params=params,
+            json=payload,
+            prefer="return=representation",
+        )
+        data = resp.json()
+        if not isinstance(data, list) or not data:
+            raise CRMRepositoryError("persona_merge_mark_failed")
+        row = data[0]
+        if not isinstance(row, dict):
+            raise CRMRepositoryError(f"Respuesta inválida al marcar merge de persona: {row!r}")
+        return row
+
+    async def mark_cuenta_merged(
+        self,
+        *,
+        organizacion_id: UUID,
+        cuenta_id: UUID,
+        merged_into_cuenta_id: UUID,
+        merge_metadata: dict[str, Any] | None = None,
+        archived_at: datetime | None = None,
+    ) -> dict[str, Any]:
+        payload: dict[str, Any] = {
+            "merged_into_cuenta_id": str(merged_into_cuenta_id),
+            "merge_metadata": merge_metadata or {},
+            "archived_at": (archived_at or datetime.now(timezone.utc)).isoformat(),
+        }
+        params = {
+            "organizacion_id": f"eq.{organizacion_id}",
+            "id": f"eq.{cuenta_id}",
+        }
+        resp = await self._request(
+            "PATCH",
+            "/rest/v1/cuentas",
+            params=params,
+            json=payload,
+            prefer="return=representation",
+        )
+        data = resp.json()
+        if not isinstance(data, list) or not data:
+            raise CRMRepositoryError("cuenta_merge_mark_failed")
+        row = data[0]
+        if not isinstance(row, dict):
+            raise CRMRepositoryError(f"Respuesta inválida al marcar merge de cuenta: {row!r}")
+        return row
+
     async def get_contact_by_id(self, *, contact_id: str) -> dict[str, Any] | None:
         contact_key = contact_id.strip()
         if not contact_key:
@@ -6998,11 +7067,7 @@ class CRMRepository:
         params = {
             "id": f"eq.{contact_key}",
             "limit": "1",
-            "select": (
-                "id,organizacion_id,nombre,apellido_paterno,apellido_materno,nombre_completo,"
-                "correo_principal,telefono_principal_e164,puesto,area,rol_decision,estado,"
-                "origen,notas,metadata,persona_datos,propietario_usuario_id,creado_en,actualizado_en"
-            ),
+            "select": PERSONA_SELECT_FIELDS,
         }
         resp = await self._request("GET", "/rest/v1/personas", params=params)
         data = resp.json() or []
@@ -7036,9 +7101,7 @@ class CRMRepository:
         if not phone_candidates:
             return None
         select_fields = (
-            "id,organizacion_id,nombre,apellido_paterno,apellido_materno,nombre_completo,"
-            "correo_principal,telefono_principal_e164,puesto,area,rol_decision,estado,"
-            "origen,notas,metadata,propietario_usuario_id,creado_en,actualizado_en"
+            PERSONA_SELECT_FIELDS
         )
         for phone_key in phone_candidates:
             params: dict[str, str] = {
@@ -7090,11 +7153,7 @@ class CRMRepository:
         params: dict[str, str] = {
             "correo_principal": f"eq.{email_key}",
             "limit": "1",
-            "select": (
-                "id,organizacion_id,nombre,apellido_paterno,apellido_materno,nombre_completo,"
-                "correo_principal,telefono_principal_e164,puesto,area,rol_decision,estado,"
-                "origen,notas,metadata,persona_datos,propietario_usuario_id,creado_en,actualizado_en"
-            ),
+            "select": PERSONA_SELECT_FIELDS,
         }
         if organizacion_id:
             params["organizacion_id"] = f"eq.{organizacion_id}"
@@ -7138,11 +7197,7 @@ class CRMRepository:
         params: dict[str, str] = {
             "metadata->>wa_id": f"eq.{wa_key}",
             "limit": "1",
-            "select": (
-                "id,organizacion_id,nombre,apellido_paterno,apellido_materno,nombre_completo,"
-                "correo_principal,telefono_principal_e164,puesto,area,rol_decision,estado,"
-                "origen,notas,metadata,persona_datos,propietario_usuario_id,creado_en,actualizado_en"
-            ),
+            "select": PERSONA_SELECT_FIELDS,
         }
         if organizacion_id:
             params["organizacion_id"] = f"eq.{organizacion_id}"

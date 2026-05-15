@@ -218,6 +218,7 @@ Notas:
   - `cuentas.merged_into_cuenta_id`
   - `cuentas.merge_metadata`
   - `personas.estado` ahora acepta `fusionado`
+- El backend ya escribe esa trazabilidad nativa al fusionar personas.
 - Pendiente de más profundidad, si se quiere ampliar:
   - personas: match fuerte por teléfono/correo, débil por nombre + org
   - cuentas: match fuerte por RFC, medio por razón social, débil por nombre comercial

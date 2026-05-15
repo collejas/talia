@@ -9612,6 +9612,9 @@ class CRMContact(BaseModel):
     estado: str | None = None
     origen: str | None = None
     propietario_usuario_id: UUID | None = None
+    archived_at: datetime | None = None
+    merged_into_persona_id: UUID | None = None
+    merge_metadata: dict[str, Any] | None = None
     rol_en_cuenta: str | None = None
     es_contacto_principal: bool | None = None
     es_contacto_facturacion: bool | None = None
@@ -15483,6 +15486,16 @@ async def merge_persona(
             organizacion_id=organizacion_id,
             persona_id=source_id,
             payload=source_patch,
+        )
+        await repo.mark_persona_merged(
+            organizacion_id=organizacion_id,
+            persona_id=source_id,
+            merged_into_persona_id=target_id,
+            merge_metadata={
+                "merge_reason": "manual_merge",
+                "merged_into_persona_id": str(target_id),
+                "source_persona_id": str(source_id),
+            },
         )
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
