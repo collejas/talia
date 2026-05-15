@@ -210,6 +210,14 @@ Notas:
   - mueve oportunidades al registro destino,
   - reasigna relaciones de empresa,
   - conserva el origen como archivado con metadata de merge.
+- La base de datos ya tiene soporte nativo para este cierre:
+  - `personas.archived_at`
+  - `personas.merged_into_persona_id`
+  - `personas.merge_metadata`
+  - `cuentas.archived_at`
+  - `cuentas.merged_into_cuenta_id`
+  - `cuentas.merge_metadata`
+  - `personas.estado` ahora acepta `fusionado`
 - Pendiente de más profundidad, si se quiere ampliar:
   - personas: match fuerte por teléfono/correo, débil por nombre + org
   - cuentas: match fuerte por RFC, medio por razón social, débil por nombre comercial
