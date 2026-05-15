@@ -10,7 +10,7 @@
    - [x] Crear `propiedad_desarrollos` y asegurar que `propiedad_capas`/`propiedad_unidades` se relacionan a este desarrollo para reflejar los planos jerárquicos.
 
 3. [x] **Exponer GeoJSON**
-   - [x] Crear RPC/endpoint `crm_propiedades_geojson(...)` que filtre por organización, estado, municipio y tipo, devolviendo `FeatureCollection` con todos los `properties` necesarios (color, alturas, referencias a línea/familia/modelo).
+   - [x] Crear RPC/endpoint `crm_propiedades_geojson(...)` que filtre por organización, estado, municipio y tipo, devolviendo `FeatureCollection` con todos los `properties` necesarios (`color`, `height`, `min_height`, `levels`, referencias a línea/familia/modelo).
    - [x] Añadir proxy Next.js `/api/crm/propiedades/geojson` para consumir esa función y manejar filtros de UI.
 
 4. [x] **Enriquecer la jerarquía geográfica del módulo inmobiliario**
@@ -33,7 +33,7 @@
 6. [x] **Diseñar la vista de creación/edición en settings**
    - [x] Añadir `/settings/propiedades` en el sidebar (al lado de `settings/productos`) con el botón “Propiedades”.
    - [x] Diseñar layout tipo editor de capas: formulario compacto a la izquierda y mapa Leaflet + `leaflet-draw` a la derecha, misma altura.
-   - [x] El formulario incluye datos generales, jerarquía país/estado/municipio/código postal/colonia, referencias a línea/familia/modelo, altura/levels/status y controles guardar/limpiar/centrar.
+   - [x] El formulario incluye datos generales, jerarquía país/estado/municipio/código postal/colonia, referencias a línea/familia/modelo, `height`/`min_height`/`levels`/`color`/`status` y controles guardar/limpiar/centrar.
    - [x] El mapa permite dibujar/editar polígonos, mantiene el `featureGroup`, y si ya existe la geometría la carga para seguir editando.
    - [x] Revisar `frontend/panel/src/app/settings/propiedades/page.tsx` y `PropiedadForm` para asegurar que el layout coincide con el editor de capas descrito en `docs/Plan_3D/frontend_leaflet_osmb.md`, que `PropiedadGeomEditor` expone los controles de `leaflet-draw` y que las acciones de guardar/centrar limpian el `featureGroup` antes de subir la geometría.
 
@@ -58,7 +58,7 @@
 
 - Marcamos como completados los pasos 1 a 3 del plan porque ya existen `propiedad_tipos`, las tablas espaciales jerárquicas (`propiedad_desarrollos`, `propiedad_capas`, `propiedad_unidades`), y el RPC/API `/api/crm/propiedades/geojson` que alimenta el mapa.
 - Rediseñamos el flujo de `settings/propiedades` para manejar la creación jerárquica (desarrollo → capa → unidad) primero en atributos y luego en geometrías, reflejándolo en la vista tipo árbol y en el backend (nuevos endpoints/migraciones).
-- Actualizamos los catálogos, migraciones y políticas para que `organizacion_id`, `status`, `nivel`, `altura` y `geom` de la jerarquía final (propiedad_unidades) estén alineados con la experiencia inmobiliaria y podamos mostrar inventario reactivo sin depender de la tabla `propiedades`.
+- Actualizamos los catálogos, migraciones y políticas para que `organizacion_id`, `status`, `nivel`, `height`, `min_height`, `levels`, `color` y `geom` de la jerarquía final (propiedad_unidades/propiedad_poligonos) estén alineados con la experiencia inmobiliaria y podamos mostrar inventario reactivo sin depender de la tabla `propiedades`.
 - Reescribimos `crm_propiedades_geojson` (ver migración `20280214_130000_propiedades_geojson_3d_metadata.sql`), el proxy `/api/crm/propiedades/geojson` y el componente `frontend/panel/src/components/mapa-de-propiedades/property-map.jsx` para consumir los nuevos campos (`color`, `status_color`, `linea_nombre`, `familia_nombre`, `modelo_nombre`, `desarrollo_*`, `pais/estado/municipio`) y asegurar tooltips, marcadores y navegación coherentes con el plan 3D.
 - Conectamos la transición “Ver en Mapbox” con los mismos datos (`frontend/panel/src/components/mapa-de-propiedades/property-map.jsx`) para montar/desmontar Mapbox GL, pintar el `fill-extrusion`, centrar el municipio, y mostrar el panel lateral 3D con la información de precio/niveles/estatus/ubicación sin recargar Leaflet.
 - Mejoramos el componente `property-map.jsx` para que los municipios pierdan el relleno al explorar sus marcadores, el mapa jerárquico ajuste el `maxZoom` por nivel, y la vista Mapbox se redimensione al activarse mientras mantiene destacados los registros seleccionados.

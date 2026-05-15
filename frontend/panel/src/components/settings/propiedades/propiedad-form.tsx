@@ -2085,7 +2085,7 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
           <code>nivel</code>, <code>unidad</code>, <code>tipo_nombre</code> y <code>poligono</code>; el backend
           transformará cada fila en la jerarquía adecuada. Para enriquecer los registros también puedes añadir
           columnas específicas a cada tabla: los desarrollos aceptan <code>descripcion_desarrollo</code>, <code>codigo_postal</code>{' '}
-          y <code>colonia</code>; las capas pueden llevar <code>descripcion_capa</code> y <code>altura</code>; y las unidades
+          y <code>colonia</code>; las capas pueden llevar <code>descripcion_capa</code> y <code>altura</code> como altura de capa; y las unidades
           admiten <code>descripcion_unidad</code>, <code>precio</code> y <code>area_m2</code>. Llena cada columna en la fila
           correspondiente al nivel que quieres afectar: cada <code>descripcion_*</code> se aplica únicamente a la entidad
           (`desarrollo`, `capa` o `unidad`) que representa la fila. También puedes seguir usando la columna genérica
@@ -2464,7 +2464,7 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
                   puedes ajustar los metadatos antes de guardar el nuevo plano.
                 </>
               ) : (
-                "Define nivel, altura y descripción antes de dibujar el polígono que representa este plano intermedio en el mapa."
+                "Define nivel, altura de capa y descripción antes de dibujar el polígono que representa este plano intermedio en el mapa."
               )}
             </DialogDescription>
           </DialogHeader>
@@ -2511,7 +2511,7 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
                 )}
                 <div className="space-y-1">
                   <Label className="text-[0.7rem]">
-                    Altura por nivel (m)
+                    Altura de capa (m)
                   </Label>
                   <Input
                     value={capaForm.altura}
@@ -2522,6 +2522,10 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
                     min={0}
                   />
                 </div>
+                <p className="text-[0.65rem] text-muted-foreground">
+                  Este valor describe la altura del plano de la capa. El volumen 3D del
+                  polígono se controla con `height`, `min_height`, `levels` y `color`.
+                </p>
                 {duplicatingCapa && (
                   <div className="space-y-1">
                     <Label className="text-[0.7rem]">Niveles a generar</Label>

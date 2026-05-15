@@ -45,7 +45,7 @@ Este documento complementa el plan maestro y describe cómo debe comportarse el 
 ## 4. Vista de creación/edición (settings/propiedades)
 - `/settings/propiedades` está visible en el sidebar bajo la sección de `settings` como un botón “Propiedades”.
 - El layout imita un editor de capas: el formulario de “Datos generales” se ubica a la izquierda (texto compacto, márgenes reducidos) y el mapa con `leaflet-draw` a la derecha ocupando el alto completo del contenedor.
-- El formulario incluye nombre, tipo, jerarquía geográfica (país/estado/municipio/código postal/colonia), precio, status, height, levels, metadata y referencias a `linea/familia/modelo`. El mapa permite dibujar y editar polígonos, realiza zoom a la geometría registrada y tiene botones para guardar, limpiar y centrar.
+- El formulario incluye nombre, tipo, jerarquía geográfica (país/estado/municipio/código postal/colonia), precio, status, `height`, `min_height`, `levels`, `color` y referencias a `linea/familia/modelo`. `metadata` queda como extensión opcional. El mapa permite dibujar y editar polígonos, realiza zoom a la geometría registrada y tiene botones para guardar, limpiar y centrar.
 - Reutilizar los JSONB de país/estado/municipio en los selects para garantizar que la creación de propiedades se sincronice con la jerarquía del mapa nacional.
 - El editor inicializa Leaflet en modo dibujo, mostrando los controles de `leaflet-draw` y el `featureGroup` actual para permitir re-edición. Si la geometría es demasiado pequeña, mostrar un warning y sugerir repetir la captura.
 

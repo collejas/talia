@@ -29,7 +29,7 @@ El CSV debe contener al menos las siguientes columnas. Las filas se agrupan por 
 Además de las columnas anteriores, puedes incluir campos adicionales para poblar los atributos propios de cada tabla espacial:
 
 - **`propiedad_desarrollos`**: `descripcion_desarrollo`, `codigo_postal`, `colonia` (además de los campos jerárquicos como `pais_codigo`, `estado_cve` y `municipio_cve`). Estos valores se escriben directamente en el registro del desarrollo.
-- **`propiedad_capas`**: `descripcion_capa`. La descripción se guarda en la capa y la jerarquía la define `nivel`; el volumen 3D ya debe venir en columnas normalizadas de `propiedad_poligonos` y no depender de `metadata`.
+- **`propiedad_capas`**: `descripcion_capa`. La descripción se guarda en la capa y la jerarquía la define `nivel`; si necesitas guardar la altura del plano de capa, usa el campo real `altura` de la capa. El volumen 3D del polígono ya debe venir en columnas normalizadas de `propiedad_poligonos` y no depender de `metadata`.
 - **`propiedad_unidades`**: `descripcion_unidad`, `precio` y `area_m2` acompañan al identificador `unidad`/`nombre`. Si no los provees, la unidad se crea con valores en blanco pero el importador ya acepta esas columnas para enriquecer el inventario.
 
 Los nombres `descripcion_desarrollo`, `descripcion_capa` y `descripcion_unidad` se aplican únicamente cuando la fila es del tipo correspondiente; si usas la columna genérica `descripcion` también funcionará (se aplica según el valor de `entidad`), pero las columnas específicas ayudan a evitar confusiones cuando completas el archivo. Sólo escribe la descripción que corresponda al nivel del registro y deja las demás vacías.

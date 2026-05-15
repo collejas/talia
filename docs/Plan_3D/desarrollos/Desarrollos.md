@@ -26,7 +26,7 @@ Estos desarrollos pueden ser:
 * Vertical			
     - Desarrollos de Vivienda y comercio vertical  (sera el marcador)			
       - 1. Plano de planta del poligono general (y que a su vez que contiene los dos que estan abajo)	
-        - 2. Plano de planta de Niveles (que es una copia del plano del poligono general pero ubicada a diferente altura respecto al suelo), (y que a su vez contiene el que esta abajo)
+        - 2. Plano de planta de Niveles (una copia del poligono general con `min_height` y `height` propios por nivel, para controlar la extrusión 3D), (y que a su vez contiene el que esta abajo)
           - 3. Planoo de planta del poligono de cada departamento (ubicada dentro del plano del poligono general de niveles)
 
 
@@ -34,4 +34,3 @@ Estos desarrollos pueden ser:
 plano 1 tabla: propiedad_desarrollos
 plano 2 tabla: propiedad_capas
 plano 3 tabla: propiedad_unidades
-
