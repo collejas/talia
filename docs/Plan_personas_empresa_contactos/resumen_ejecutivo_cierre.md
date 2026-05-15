@@ -19,18 +19,18 @@ En paralelo, el backend activo se siguio limpiando para reducir vocabulario lega
 - `storage.py` ya expone aliases de `persona` para captura de oportunidad, scoring,
   busqueda de sesiones webchat y resolucion de oportunidad principal
 - `webchat`, `whatsapp` y `assistants` ya consumen varios de esos aliases nuevos
-- los contratos publicos y varios nombres estructurales siguen conservando `contact`
-  por compatibilidad, no por dependencia del modelo viejo
+- la cara publica del panel ya habla de `persona`; lo que queda con `contact` es
+  compatibilidad interna o historica de otros subsistemas
 
 ## Lo que ya se cerro
 
 - Alta estructurada
 - Edicion estructurada
-- Flujo guiado de CRUD de contactos
-- Vinculacion independiente contacto-empresa
+- Flujo guiado de CRUD de personas
+- Vinculacion independiente persona-empresa
 - Exportacion desde backend
 - Drawer real de detalle
-- Busqueda y toolbar de contactos
+- Busqueda y toolbar de personas
 - Reasignacion compacta
 - Retiro del fallback legacy en runtime
 - Limpieza semantica mayoritaria del backend activo
@@ -38,31 +38,21 @@ En paralelo, el backend activo se siguio limpiando para reducir vocabulario lega
 
 ## Lo que sigue usando `contact`
 
-No porque siga dependiendo de `public.contactos`, sino por compatibilidad entre capas y contratos ya existentes.
+Principalmente subsistemas internos y legacy que todavia no son parte del contrato
+publico del panel:
 
-Ejemplos:
-
-- firmas publicas de helpers compartidos
+- firmas de helpers compartidos
 - parametros de notificacion y scoring
 - wrappers entre `webchat`, `whatsapp` y `assistants`
 
 ## Lectura practica
 
-Hay dos caminos:
-
-1. Dejar los contratos publicos como estan.
-2. Hacer una refactorizacion coordinada para renombrar el contrato publico a `persona` en todo el backend.
-
-## Recomendacion
-
-Si la prioridad es estabilidad, dejar los contratos como estan.
-Si la prioridad es coherencia semantica total, hacer la refactorizacion coordinada.
-
-En este momento ya se avanzo en la refactorizacion coordinada por bloques, pero sin
-renombrar todavia los contratos estructurales ni el esquema legado.
+La interfaz publica ya quedo alineada a `persona`. Lo pendiente es seguir reduciendo
+el vocabulario legacy en capas internas donde no haya riesgo de romper integraciones.
 
 ## Conclusiones
 
 - `contactos` ya no es la fuente activa del runtime.
-- `contact` en nombres o firmas ya es semantica heredada, no dependencia del modelo viejo.
+- `contact` en nombres o firmas quedo como semantica heredada o compatibilidad interna,
+  no como contrato publico del panel.
 - La documentacion de cierre completa vive en la misma carpeta del plan.

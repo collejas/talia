@@ -5,14 +5,14 @@ Estado: Borrador técnico
 
 ## Estado actual (2026-04-12)
 
-Se completó la transición operativa de **alta**, **edición** y **exportación base de contactos** del panel hacia el modelo nuevo.
+Se completó la transición operativa de **alta**, **edición** y **exportación base de personas** del panel hacia el modelo nuevo.
 
-Además, la vista de contactos ya utiliza un panel lateral real de detalle y ya no depende del drawer genérico por defecto para la información del contacto.
+Además, la vista de personas ya utiliza un panel lateral real de detalle y ya no depende del drawer genérico por defecto para la información de la persona.
 
 Actualizacion reciente:
 
-- el flujo CRUD de contactos ya quedó guiado en el panel
-- existe una accion independiente para `Vincular contacto a empresa`
+- el flujo CRUD de personas ya quedó guiado en el panel
+- existe una accion independiente para `Vincular persona a empresa`
 - la vista principal ya expone las cuatro acciones de entrada
 - el resumen lateral y el lenguaje de usuario final ya forman parte del flujo
 
