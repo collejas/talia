@@ -234,6 +234,17 @@ function geoJsonToMultiPolygonZWkt(geometry: GeoJsonGeometry): string {
   return formatMultiPolygonWkt(normalized);
 }
 
+function safeGeoJsonToMultiPolygonZWkt(geometry: GeoJsonGeometry | null | undefined): string {
+  if (!geometry?.type || !geometry.coordinates) {
+    return "";
+  }
+  try {
+    return geoJsonToMultiPolygonZWkt(geometry);
+  } catch {
+    return "";
+  }
+}
+
 const PROPERTY_IMPORT_TEMPLATE_HEADERS = [
   "entidad",
   "grupo",
@@ -269,6 +280,10 @@ const PROPERTY_IMPORT_TEMPLATE_HEADERS = [
   "metadata_roof_garden",
   "metadata_vestidor_recamara_principal",
 ] as const;
+
+const PROPERTY_IMPORT_METADATA_COLUMNS = PROPERTY_IMPORT_TEMPLATE_HEADERS.filter((column) =>
+  column.startsWith("metadata_"),
+);
 
 const PROPERTY_IMPORT_TEMPLATE_ROWS = [
   [
@@ -390,6 +405,164 @@ function csvCell(value: string) {
 
 function buildPropertyImportTemplateCsv() {
   const rows = [PROPERTY_IMPORT_TEMPLATE_HEADERS, ...PROPERTY_IMPORT_TEMPLATE_ROWS];
+  return `${rows.map((row) => row.map(csvCell).join(",")).join("\n")}\n`;
+}
+
+function csvField(value: unknown): string {
+  if (value === null || value === undefined) {
+    return "";
+  }
+  if (typeof value === "string") {
+    return value;
+  }
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? String(value) : "";
+  }
+  if (typeof value === "boolean") {
+    return value ? "1" : "0";
+  }
+  return String(value);
+}
+
+function csvMetadataField(metadata: Record<string, unknown> | undefined, suffix: string): string {
+  if (!metadata) {
+    return "";
+  }
+  const directKey = `metadata_${suffix}`;
+  const value = metadata[suffix] ?? metadata[directKey];
+  return csvField(value);
+}
+
+function buildPropertyExportCsv(
+  hierarchy: DesarrolloNode[],
+  tipos: PropiedadTipo[],
+  geojsonFeatures: GeoFeature[] = [],
+) {
+  const tipoNombreById = new Map(tipos.map((tipo) => [tipo.id, tipo.nombre]));
+  const featureByKey = new Map<string, GeoFeature>();
+  geojsonFeatures.forEach((feature) => {
+    const layer = typeof feature.properties?.layer === "string" ? feature.properties.layer : undefined;
+    const key = `${layer || "feature"}:${String(feature.id)}`;
+    featureByKey.set(key, feature);
+  });
+  const getFeatureProps = (layer: string, id: string) => {
+    return (
+      featureByKey.get(`${layer}:${id}`)?.properties ||
+      featureByKey.get(`feature:${id}`)?.properties ||
+      undefined
+    );
+  };
+  const stringFromProps = (props: Record<string, unknown> | undefined, keys: string[]) => {
+    if (!props) return "";
+    for (const key of keys) {
+      const value = props[key];
+      if (value !== null && value !== undefined && String(value).trim() !== "") {
+        return csvField(value);
+      }
+    }
+    return "";
+  };
+  const rows: string[][] = [PROPERTY_IMPORT_TEMPLATE_HEADERS.map((header) => header)];
+
+  hierarchy.forEach((desarrollo) => {
+    const desarrolloProps = getFeatureProps("desarrollo", desarrollo.id);
+    const desarrolloGeometry = geojsonFeatures.find((feature) => String(feature.id) === desarrollo.id)?.geometry;
+    const geo = {
+      pais_codigo: stringFromProps(desarrolloProps, ["pais_codigo"]) || csvField(desarrollo.pais_codigo || ""),
+      estado_cve: stringFromProps(desarrolloProps, ["estado_cve"]) || csvField(desarrollo.estado_cve || ""),
+      municipio_cve: stringFromProps(desarrolloProps, ["municipio_cve"]) || csvField(desarrollo.municipio_cve || ""),
+      codigo_postal: stringFromProps(desarrolloProps, ["codigo_postal"]) || csvField(desarrollo.codigo_postal || ""),
+      colonia: stringFromProps(desarrolloProps, ["colonia"]) || csvField(desarrollo.colonia || ""),
+    };
+    rows.push([
+      "desarrollo",
+      desarrollo.nombre,
+      desarrollo.nombre,
+      stringFromProps(desarrolloProps, ["status"]) || csvField(desarrollo.status || "disponible"),
+      "",
+      "",
+      "",
+      stringFromProps(desarrolloProps, ["desarrollo_tipo", "tipo", "tipo_desarrollo"]) ||
+        csvField(desarrollo.tipo || "horizontal"),
+      "",
+      stringFromProps(desarrolloProps, ["descripcion"]) || csvField(desarrollo.descripcion || ""),
+      csvField(safeGeoJsonToMultiPolygonZWkt(desarrolloGeometry || desarrollo.geom)),
+      stringFromProps(desarrolloProps, ["height"]) || "",
+      stringFromProps(desarrolloProps, ["min_height"]) || "",
+      stringFromProps(desarrolloProps, ["levels"]) || "",
+      stringFromProps(desarrolloProps, ["color"]) || "",
+      "",
+      "",
+      geo.pais_codigo,
+      geo.estado_cve,
+      geo.municipio_cve,
+      geo.codigo_postal,
+      geo.colonia,
+      ...PROPERTY_IMPORT_METADATA_COLUMNS.map((column) => csvMetadataField(desarrollo.metadata, column.slice(9))),
+    ]);
+
+    desarrollo.capas?.forEach((capa) => {
+      const capaProps = getFeatureProps("capa", capa.id);
+      const capaGeometry = geojsonFeatures.find((feature) => String(feature.id) === capa.id)?.geometry;
+      rows.push([
+        "capa",
+        desarrollo.nombre,
+        csvField(capa.nombre || `Nivel ${capa.nivel ?? ""}`),
+        stringFromProps(capaProps, ["status"]) || csvField(capa.status || "disponible"),
+        stringFromProps(capaProps, ["nivel"]) || csvField(capa.nivel ?? ""),
+        "",
+        "",
+        "",
+        "",
+        stringFromProps(capaProps, ["descripcion"]) || csvField(capa.descripcion || ""),
+        csvField(safeGeoJsonToMultiPolygonZWkt(capaGeometry || capa.geom)),
+        stringFromProps(capaProps, ["height"]) || "",
+        stringFromProps(capaProps, ["min_height"]) || "",
+        stringFromProps(capaProps, ["levels"]) || "",
+        stringFromProps(capaProps, ["color"]) || "",
+        "",
+        "",
+        geo.pais_codigo,
+        geo.estado_cve,
+        geo.municipio_cve,
+        geo.codigo_postal,
+        geo.colonia,
+        ...PROPERTY_IMPORT_METADATA_COLUMNS.map((column) => csvMetadataField(capa.metadata, column.slice(9))),
+      ]);
+
+      capa.unidades?.forEach((unidad) => {
+        const unidadProps = getFeatureProps("unidad", unidad.id);
+        const unidadGeometry = geojsonFeatures.find((feature) => String(feature.id) === unidad.id)?.geometry;
+        rows.push([
+          "unidad",
+          desarrollo.nombre,
+          csvField(unidad.nombre || unidad.unidad),
+          stringFromProps(unidadProps, ["status"]) || csvField(unidad.status || "disponible"),
+          "",
+          stringFromProps(unidadProps, ["nivel"]) || csvField(capa.nivel ?? ""),
+          csvField(unidad.unidad),
+          "",
+          stringFromProps(unidadProps, ["tipo", "tipo_nombre"]) ||
+            csvField(tipoNombreById.get(unidad.tipo_id || "") || ""),
+          stringFromProps(unidadProps, ["descripcion"]) || csvField(unidad.descripcion || ""),
+          csvField(safeGeoJsonToMultiPolygonZWkt(unidadGeometry || unidad.geom)),
+          stringFromProps(unidadProps, ["height"]) || "",
+          stringFromProps(unidadProps, ["min_height"]) || "",
+          stringFromProps(unidadProps, ["levels"]) || "",
+          stringFromProps(unidadProps, ["color"]) || "",
+          stringFromProps(unidadProps, ["precio"]) || csvField(unidad.precio ?? ""),
+          stringFromProps(unidadProps, ["area_m2"]) || csvField(unidad.area_m2 ?? ""),
+          geo.pais_codigo,
+          geo.estado_cve,
+          geo.municipio_cve,
+          geo.codigo_postal,
+          geo.colonia,
+          ...PROPERTY_IMPORT_METADATA_COLUMNS.map((column) => csvMetadataField(unidad.metadata, column.slice(9))),
+        ]);
+      });
+    });
+  });
+
   return `${rows.map((row) => row.map(csvCell).join(",")).join("\n")}\n`;
 }
 
@@ -1040,6 +1213,34 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
     anchor.remove();
     URL.revokeObjectURL(url);
   }, []);
+
+  const handleDownloadPropertyExport = useCallback(async () => {
+    let geojsonFeatures: GeoFeature[] = [];
+    try {
+      const response = await fetch("/api/crm/propiedades/geojson");
+      if (response.ok) {
+        const body = (await response.json().catch(() => ({}))) as { features?: unknown };
+        if (Array.isArray(body.features)) {
+          geojsonFeatures = body.features.filter((feature): feature is GeoFeature =>
+            Boolean(feature && typeof feature === "object" && "id" in feature),
+          );
+        }
+      }
+    } catch (error) {
+      console.error("No se pudo cargar el geojson de propiedades para exportar:", error);
+    }
+    const csv = buildPropertyExportCsv(hierarchy, tipos, geojsonFeatures);
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `propiedades_exportadas_${new Date().toISOString().slice(0, 10)}.csv`;
+    anchor.rel = "noopener noreferrer";
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    URL.revokeObjectURL(url);
+  }, [hierarchy, tipos]);
 
   const handleRunImport = useCallback(async () => {
     if (!importFile) {
@@ -2250,6 +2451,10 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
             <IconDownload className="mr-2 h-4 w-4" />
             Descargar plantilla mínima
           </Button>
+          <Button type="button" variant="outline" size="sm" onClick={handleDownloadPropertyExport}>
+            <IconDownload className="mr-2 h-4 w-4" />
+            Descargar datos actuales
+          </Button>
         </div>
         <div className="space-y-1">
           <Label className="text-[0.7rem]">Archivo CSV</Label>
@@ -2264,7 +2469,8 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
           )}
         </div>
         <p className="text-[0.65rem] text-slate-500">
-          Si ya tienes un CSV propio, basta con respetar la plantilla mínima. Las columnas de
+          Si ya tienes un CSV propio, basta con respetar la plantilla mínima. También puedes
+          descargar los datos actuales con la misma estructura para usarlos como base. Las columnas de
           volumen 3D son <code>height</code>, <code>min_height</code>, <code>levels</code> y <code>color</code>.
           La altura de capa sigue siendo <code>altura</code> y solo aplica a <code>propiedad_capas</code>.
           Si necesitas mandar extras no operativos, agrega columnas <code>metadata_*</code> al final; si lo

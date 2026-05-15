@@ -2,6 +2,8 @@
 
 La nueva ruta `POST /crm/propiedades/importar/csv` convierte un archivo CSV (subido desde el modal de `/settings/propiedades`) en la jerarquía de desarrollos → capas → unidades y registra sus polígonos. De esta forma el usuario no necesita construir JSON a mano: basta con exportar desde QGIS/ArcGIS/Excel, cumplir las columnas esperadas y subir el archivo.
 
+Desde el mismo modal también puedes descargar una plantilla y exportar la jerarquía actual con la misma estructura del CSV, para usarla como base o para rehacer la importación sin inventar columnas nuevas. La exportación intenta completar `height`, `min_height`, `levels` y `color` desde el `geojson` de propiedades cuando esos datos existen.
+
 ## Plantilla mínima recomendada
 
 El CSV debe contener al menos estas columnas para que el usuario final no tenga que fabricar un archivo enorme. Las filas se agrupan por el valor de `grupo` (puede ser el nombre del desarrollo) y cada fila describe una entidad (`entidad`):
