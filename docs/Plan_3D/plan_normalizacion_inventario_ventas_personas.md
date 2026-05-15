@@ -37,6 +37,7 @@ Este plan cubre tres frentes:
 
 - Si un dato participa en filtros, listados, reglas o reportes, debe vivir en columna.
 - Si un dato es de extensión, compatibilidad o payload variable, puede quedarse en `jsonb`.
+- `metadata` no debe ser fuente de verdad para datos operativos del inventario 3D ni de ventas; solo puede conservar extensiones no críticas, trazas o compatibilidad temporal.
 - Cada unidad inmobiliaria debe tener un estado operativo único.
 - Un cambio de estado comercial relevante debe estar ligado a una oportunidad.
 - El actor humano canónico del CRM debe ser `personas`.
@@ -77,6 +78,15 @@ Dejar en `jsonb` solo:
 - metadatos opcionales del importador
 - atributos visuales no críticos
 - trazas de compatibilidad
+
+Para propiedades 3D, los campos de volumen y color se tratan como columnas reales:
+
+- `propiedad_poligonos.height`
+- `propiedad_poligonos.min_height`
+- `propiedad_poligonos.levels`
+- `propiedad_poligonos.color`
+
+`metadata` queda como respaldo histórico o extensión auxiliar, no como cálculo primario.
 
 ### 2) Ventas
 

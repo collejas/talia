@@ -797,17 +797,10 @@ export function PropertyMap() {
         }
         // Conserva el id original para cuando Mapbox pierda feature.id en eventos de clic.
         props.__original_id = f.id ?? props.id ?? null;
-        // Normaliza numéricos sin forzar a cero; deja que el dato decida la extrusión.
-        props.height = Number(props.height ?? props.levels ?? props.altura ?? 0);
-        props.min_height = Number(props.min_height ?? props.base ?? 0);
-        props.levels = Number(props.levels ?? props.nivel ?? props.height ?? 0);
-        // Si es capa y no viene min_height, calcularlo según nivel*height para que se apilen.
-        if (kind === "capa" && (!props.min_height || Number.isNaN(props.min_height))) {
-          const nivelNum = Number(props.nivel ?? props.levels ?? 0);
-          if (!Number.isNaN(nivelNum) && props.height) {
-            props.min_height = nivelNum * props.height;
-          }
-        }
+        // Usa solo las columnas normalizadas para el volumen 3D.
+        props.height = Number(props.height ?? 0);
+        props.min_height = Number(props.min_height ?? 0);
+        props.levels = Number(props.levels ?? 0);
         if (props.catalog_item_id != null && props.catalog_item_id !== "") {
           props.catalog_item_id = String(props.catalog_item_id);
         }
@@ -1806,8 +1799,8 @@ export function PropertyMap() {
   const mapboxAreaLabel =
     mapboxProps?.area_m2 != null ? `${Number(mapboxProps.area_m2)} m²` : "Sin área registrada";
   const mapboxLevelsLabel =
-    (mapboxProps?.levels ?? mapboxProps?.altura ?? mapboxProps?.height) != null
-      ? `${Number(mapboxProps?.levels ?? mapboxProps?.altura ?? mapboxProps?.height)} niveles`
+    mapboxProps?.levels != null
+      ? `${Number(mapboxProps.levels)} niveles`
       : "Niveles no definidos";
   const mapboxUnitLabel = mapboxProps?.unidad ?? mapboxProps?.nombre ?? null;
   const mapboxProductoLabel = mapboxProps?.nombre ?? mapboxUnitLabel ?? null;
