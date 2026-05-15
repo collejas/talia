@@ -3318,6 +3318,7 @@ async def _send_whatsapp_reply(
     content_variables: dict[str, str] | None = None,
     template_name: str | None = None,
     template_language: str | None = None,
+    attachments: list[dict[str, Any]] | None = None,
     organizacion_id: UUID | None = None,
 ) -> TwilioSendResult:
     runtime = await tenant_runtime.get_whatsapp_runtime_settings(
@@ -3333,6 +3334,7 @@ async def _send_whatsapp_reply(
             content_variables=content_variables,
             template_name=template_name,
             template_language=template_language,
+            attachments=attachments,
             organizacion_id=organizacion_id,
         )
     return await _send_twilio_whatsapp_reply(
@@ -3340,6 +3342,7 @@ async def _send_whatsapp_reply(
         body=body,
         content_sid=content_sid,
         content_variables=content_variables,
+        attachments=attachments,
         organizacion_id=organizacion_id,
     )
 

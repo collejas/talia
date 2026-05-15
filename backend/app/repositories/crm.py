@@ -1389,11 +1389,8 @@ class CRMRepository:
         if tablero_id:
             tablero_filter = str(tablero_id)
             params["or"] = (
-                f"(tablero_id.eq.{tablero_filter},"
-                f"metadata->>tablero_id.eq.{tablero_filter},"
-                f"metadatos->>tablero_id.eq.{tablero_filter})"
+                f"(metadata->>tablero_id.eq.{tablero_filter})"
             )
-            params["order"] = "tablero_id.asc,orden.asc"
         resp = await self._request("GET", "/rest/v1/etapas_pipeline", params=params)
         data = resp.json()
         if not isinstance(data, list):
@@ -5765,7 +5762,6 @@ class CRMRepository:
             tablero_filter = str(tablero_id)
             and_filters.append(
                 "or("
-                f"tablero_id.eq.{tablero_filter},"
                 f"metadata->>tablero_id.eq.{tablero_filter},"
                 f"etapa.metadata->>tablero_id.eq.{tablero_filter}"
                 ")"
