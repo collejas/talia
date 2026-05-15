@@ -7,7 +7,6 @@ import {
   IconChevronRight,
   IconLayersSelected,
   IconMapPin,
-  IconSquares,
 } from "@tabler/icons-react";
 import "leaflet/dist/leaflet.css";
 import "mapbox-gl/dist/mapbox-gl.css";
@@ -3319,16 +3318,8 @@ export function PropertyMap() {
     [openMapboxFeature, zoomToFeature],
   );
 
-  const renderPolygonInfo = (geom) => (
-    <div className="flex flex-wrap items-center gap-2 text-[0.65rem] text-slate-500">
-      <IconMapPin className="size-4 text-slate-400" />
-      <span>{geom?.type ? "Polígono guardado" : "Sin polígono"}</span>
-    </div>
-  );
-
   const PolygonContainer = ({ geom, children }) => (
     <div className="space-y-2 rounded border border-dashed border-slate-200 bg-slate-50/80 p-2">
-      {renderPolygonInfo(geom)}
       {children}
     </div>
   );
@@ -3337,11 +3328,7 @@ export function PropertyMap() {
     <div key={unit.id} className="space-y-1 border-b border-dashed border-slate-200 pb-2 last:border-b-0">
       <div className="flex items-center justify-between gap-3 text-[0.75rem]">
         <div className="flex items-center gap-2">
-          <IconSquares className="size-4 text-slate-400" />
-          <div className="flex flex-col">
-            <span className="font-semibold">{unit.name || "Unidad sin clave"}</span>
-            <span className="text-[0.6rem] uppercase tracking-[0.2em] text-slate-400">unidad</span>
-          </div>
+          <span className="font-semibold">{unit.name || "Unidad sin clave"}</span>
         </div>
         <button
           type="button"
@@ -3390,10 +3377,7 @@ export function PropertyMap() {
             </Button>
             <div className="flex items-center gap-2">
               <IconLayersSelected className="size-4 text-slate-400" />
-              <div className="flex flex-col">
-                <span className="font-semibold">{capa.name || `Nivel ${capa.nivel ?? "?"}`}</span>
-                <span className="text-[0.6rem] uppercase tracking-[0.2em] text-slate-400">capa</span>
-              </div>
+              <span className="font-semibold">{capa.name || `Nivel ${capa.nivel ?? "?"}`}</span>
             </div>
           </div>
           <div className="rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[0.6rem] font-semibold text-slate-500">
