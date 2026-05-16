@@ -66,6 +66,7 @@
     box-shadow: none !important;
     white-space: normal !important;
     backdrop-filter: none !important;
+    pointer-events: none !important;
   }
 
   .leaflet-tooltip.talia-map-tooltip:before {

@@ -124,33 +124,33 @@ function resolveFeatureNavigationKey(
   nivel: DemografiaMapResponse["nivel"],
   entryKey?: string | null,
 ): string | null {
-  if (entryKey && entryKey.trim()) {
-    return entryKey.trim();
-  }
   const candidates = resolveFeatureCandidates(feature);
   if (nivel === "pais") {
-    return candidates.some((candidate) => ["MX", "MEX", "MEXICO", "MÉXICO"].includes(candidate.toUpperCase()))
-      ? "MX"
-      : null;
+    if (candidates.some((candidate) => ["MX", "MEX", "MEXICO", "MÉXICO"].includes(candidate.toUpperCase()))) {
+      return "MX";
+    }
+    return entryKey && entryKey.trim() ? entryKey.trim() : null;
   }
   if (nivel === "estado") {
-    return candidates.find((candidate) => /^\d{1,2}$/.test(candidate))?.padStart(2, "0") ?? null;
+    return (
+      candidates.find((candidate) => /^\d{1,2}$/.test(candidate))?.padStart(2, "0") ??
+      (entryKey && entryKey.trim() ? entryKey.trim().padStart(2, "0").slice(0, 2) : null)
+    );
   }
-  return candidates.find((candidate) => /^\d{5}$/.test(candidate)) ?? null;
+  return (
+    candidates.find((candidate) => /^\d{5}$/.test(candidate)) ??
+    (entryKey && entryKey.trim() ? entryKey.trim() : null)
+  );
 }
 
 function resolveNextDrillLevel(
   nivel: DemografiaMapResponse["nivel"],
-  entry: DemografiaMapResponse["dataset"][number] | null,
   navigationKey: string | null,
 ): "estado" | "municipio" | null {
-  if (entry?.next_level) {
-    return entry.next_level;
-  }
   if (nivel === "pais" && navigationKey === "MX") {
     return "estado";
   }
-  if (nivel === "estado" && entry && navigationKey) {
+  if (nivel === "estado" && navigationKey) {
     return "municipio";
   }
   return null;
@@ -665,7 +665,7 @@ export function LocationComparisonChart({
   const handleFeatureClick = useCallback(
     (entry: DemografiaMapResponse["dataset"][number] | null, feature: Feature) => {
       const navigationKey = resolveFeatureNavigationKey(feature, nivel, entry?.key ?? null);
-      const nextLevel = resolveNextDrillLevel(nivel, entry, navigationKey);
+      const nextLevel = resolveNextDrillLevel(nivel, navigationKey);
       if (!navigationKey || !nextLevel) {
         return;
       }
@@ -712,7 +712,7 @@ export function LocationComparisonChart({
       const navigationKey = feature
         ? resolveFeatureNavigationKey(feature, nivel, primaryEntry?.key ?? null)
         : null;
-      const isNavigable = Boolean(resolveNextDrillLevel(nivel, primaryEntry ?? null, navigationKey));
+      const isNavigable = Boolean(resolveNextDrillLevel(nivel, navigationKey));
 
       if (!primaryEntry || maxTotal <= 0 || total <= 0) {
         return {
@@ -766,8 +766,6 @@ export function LocationComparisonChart({
 
       const entries = findEntriesForFeature(datasetMap, feature);
       const entry = entries[0];
-      const navigationKey = resolveFeatureNavigationKey(feature, nivel, entry?.key ?? null);
-      const nextLevel = resolveNextDrillLevel(nivel, entry ?? null, navigationKey);
 
       const tooltipLayer = pathLayer as unknown as {
         bindTooltip?: (content: string, options?: LeafletTooltipOptions) => void;
@@ -776,9 +774,9 @@ export function LocationComparisonChart({
 
       if (!entry || !entries.length) {
         tooltipLayer.unbindTooltip?.();
-        if (nextLevel) {
-          interactiveLayer.on?.("click", () => handleFeatureClick(null, feature));
-        }
+        interactiveLayer.on?.("click", () => handleFeatureClick(null, feature));
+        interactiveLayer.on?.("pointerup", () => handleFeatureClick(null, feature));
+        interactiveLayer.on?.("mouseup", () => handleFeatureClick(null, feature));
         return;
       }
 
@@ -788,9 +786,9 @@ export function LocationComparisonChart({
         }
       });
       interactiveLayer.on?.("mouseout", () => setHoveredKey(null));
-      if (nextLevel) {
-        interactiveLayer.on?.("click", () => handleFeatureClick(entry, feature));
-      }
+      interactiveLayer.on?.("click", () => handleFeatureClick(entry, feature));
+      interactiveLayer.on?.("pointerup", () => handleFeatureClick(entry, feature));
+      interactiveLayer.on?.("mouseup", () => handleFeatureClick(entry, feature));
 
       if (typeof tooltipLayer.bindTooltip !== "function") return;
 
@@ -886,6 +884,7 @@ export function LocationComparisonChart({
 
       const tooltipOptions: ExtendedLeafletTooltipOptions = {
         sticky: true,
+        interactive: false,
         className: "talia-map-tooltip",
       };
 
@@ -1198,7 +1197,10 @@ function findEntriesForFeature(
   return entries;
 }
 type LeafletTooltipOptions = Parameters<NonNullable<LeafletPath["bindTooltip"]>>[1];
-type ExtendedLeafletTooltipOptions = LeafletTooltipOptions & { className?: string };
+type ExtendedLeafletTooltipOptions = LeafletTooltipOptions & {
+  className?: string;
+  interactive?: boolean;
+};
 
 type MapTooltipRow = {
   key: string;
