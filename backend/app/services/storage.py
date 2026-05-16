@@ -371,17 +371,7 @@ def _build_opportunity_title(
     if not fragment:
         return None
 
-    contact_name = _clean_text(contact.get("nombre_completo"))
-    company_name = _clean_text(contact.get("company_name"))
-    suffix = ""
-    if contact_name and not _looks_like_placeholder_name(contact_name):
-        suffix = contact_name
-    elif company_name:
-        suffix = company_name
-
     title = fragment
-    if suffix:
-        title = f"{fragment} - {suffix}"
     if len(title) > 140:
         title = title[:139].rstrip() + "…"
     return title
@@ -2969,6 +2959,7 @@ async def sync_persona_opportunity_context(
     need = _clean_text(persona.get("necesidad_proposito"))
     notes = _clean_text(persona.get("notes"))
     summary = need or notes
+    proposed_title = _build_opportunity_title(contact=persona, summary=summary)
     persona_account_id = persona.get("cuenta_id")
 
     if full_name:
@@ -2986,6 +2977,16 @@ async def sync_persona_opportunity_context(
         metadata["contacto_necesidad"] = summary
         if not _clean_text(opportunity.get("descripcion")):
             patch["descripcion"] = summary[:1000]
+    if proposed_title and _is_generic_opportunity_title(
+        current_title=_clean_text(opportunity.get("titulo")),
+        contact=persona,
+        auto_generated=_normalize_manual_override(metadata.get("title_auto_generated")),
+    ):
+        metadata["project_name"] = proposed_title
+        patch["titulo"] = proposed_title
+        metadata["title_auto_generated"] = True
+        metadata["title_auto_source"] = "persona_sync"
+        metadata["title_auto_updated_at"] = datetime.now(timezone.utc).isoformat()
     if persona_account_id:
         current_account_id = _clean_text(opportunity.get("cuenta_id"))
         if not current_account_id:

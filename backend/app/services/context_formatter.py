@@ -89,8 +89,10 @@ def _build_contact_context_lines(contact: dict[str, Any] | None) -> list[str]:
         location_parts.append(f"LADA {lada}")
     if location_parts:
         lines.append(f"- Ubicación: {_safe_text(', '.join(location_parts))}")
-    if profile_name:
-        lines.append(f"- Nombre de perfil: {_safe_text(profile_name)}")
+    if profile_name and profile_name.lower() != contact_name.lower():
+        lines.append(
+            f"- Perfil WhatsApp (referencia, no nombre real): {_safe_text(profile_name)}"
+        )
     return lines
 
 

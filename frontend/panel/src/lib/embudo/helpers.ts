@@ -21,16 +21,15 @@ export function adaptCard(card: PipelineBoardCard): EmbudoCard {
       ? metadata.conversation_id.trim()
       : null;
   const resolvedConversationId = card.conversacion_id ?? metadataConversationId;
-  const resolvedTitulo = resolveTitulo(card);
   const resolvedProfileName =
     typeof card.contacto_profile_name === "string" && card.contacto_profile_name.trim().length
       ? card.contacto_profile_name.trim()
       : null;
   const resolvedNombre =
-    typeof metadata.contacto_nombre === "string" && metadata.contacto_nombre.trim().length
-      ? metadata.contacto_nombre.trim()
-      : typeof card.nombre === "string" && card.nombre.trim().length
-        ? card.nombre.trim()
+    typeof card.nombre === "string" && card.nombre.trim().length
+      ? card.nombre.trim()
+      : typeof metadata.contacto_nombre === "string" && metadata.contacto_nombre.trim().length
+        ? metadata.contacto_nombre.trim()
         : resolvedProfileName;
   const resolvedCorreo =
     typeof card.correo === "string" && card.correo.trim().length
@@ -74,6 +73,7 @@ export function adaptCard(card: PipelineBoardCard): EmbudoCard {
         : null;
   const restartSequence = extractRestartSequence(metadata);
   const leadScoring = extractLeadScoring(metadata);
+  const resolvedTitulo = resolveTitulo(card, resolvedNombre, resolvedProfileName);
   return {
     oportunidadId,
     contactoId: card.contacto_id ?? "",
@@ -150,8 +150,28 @@ function extractLeadScoring(metadata: Record<string, unknown>): EmbudoCard["lead
   };
 }
 
-function resolveTitulo(card: PipelineBoardCard): string {
-  const candidates = [card.titulo, card.nombre, card.proyecto_nombre, "Oportunidad sin nombre"];
+function normalizeComparableLabel(value: string | null | undefined): string {
+  return typeof value === "string" ? value.trim().toLowerCase() : "";
+}
+
+function resolveTitulo(
+  card: PipelineBoardCard,
+  resolvedNombre: string | null,
+  resolvedProfileName: string | null,
+): string {
+  const fallbackCandidates = [card.proyecto_nombre, card.empresa, "Oportunidad sin nombre"];
+  const titleValue = typeof card.titulo === "string" ? card.titulo.trim() : "";
+  const comparableTitle = normalizeComparableLabel(titleValue);
+  const comparableName = normalizeComparableLabel(resolvedNombre);
+  const comparableProfile = normalizeComparableLabel(resolvedProfileName);
+  const titleLooksLikeContact = Boolean(comparableTitle) && (
+    comparableTitle === comparableName ||
+    comparableTitle === comparableProfile
+  );
+  if (titleValue && !titleLooksLikeContact) {
+    return titleValue;
+  }
+  const candidates = [...fallbackCandidates];
   for (const value of candidates) {
     if (typeof value === "string" && value.trim().length) {
       return value.trim();

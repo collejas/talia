@@ -2586,7 +2586,7 @@ async def _handle_schedule_demo(
             or (full_name and current_title.casefold() == full_name.casefold())
         )
         if looks_generic or not current_description:
-            label = company_name or full_name or "Prospecto"
+            label = company_name or "Prospecto"
             title_prefix = "Demo de prospección" if is_prospeccion else "Demo agendada"
             desired_title = f"{title_prefix} - {label}"
             patch_opp: dict[str, Any] = {}

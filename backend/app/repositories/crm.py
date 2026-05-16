@@ -93,6 +93,14 @@ def _ensure_metadata(value: Any) -> dict[str, Any]:
     return {}
 
 
+def _clean_text(value: Any) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, str):
+        return value.strip()
+    return str(value).strip()
+
+
 def _deep_merge_metadata(base: dict[str, Any], patch: dict[str, Any]) -> dict[str, Any]:
     merged = dict(base)
     for key, value in patch.items():
@@ -3253,7 +3261,7 @@ class CRMRepository:
         if stage_id is None:
             stage_id = await self._get_default_stage_id(organizacion_id=organizacion_id)
 
-        base_title = (contacto_nombre or "").strip() or (contacto_empresa or "").strip()
+        base_title = (contacto_empresa or "").strip()
         if parent_row and isinstance(parent_row.get("titulo"), str):
             parent_title = parent_row["titulo"].strip()
         else:
@@ -6392,12 +6400,29 @@ class CRMRepository:
                 or account.get("codigo_cuenta")
             )
 
+        profile_name = _clean_text(persona_datos.get("profile_name")) or None
+        contact_name_parts = [
+            _clean_text(persona.get("nombre")),
+            _clean_text(persona.get("apellido_paterno")),
+            _clean_text(persona.get("apellido_materno")),
+        ]
+        contact_name_parts = [part for part in contact_name_parts if part]
+        contact_name_from_parts = " ".join(contact_name_parts).strip() if contact_name_parts else None
+        raw_full_name = _clean_text(persona.get("nombre_completo")) or None
+        preferred_name = raw_full_name
+        if profile_name and preferred_name and preferred_name.casefold() == profile_name.casefold():
+            preferred_name = contact_name_from_parts or _clean_text(persona.get("nombre")) or None
+        if not preferred_name:
+            preferred_name = contact_name_from_parts or _clean_text(persona.get("nombre")) or None
+        if not preferred_name:
+            preferred_name = raw_full_name
+
         return {
             "id": persona.get("id"),
             "organizacion_id": persona.get("organizacion_id"),
             "cuenta_id": account.get("id") if isinstance(account, dict) else persona.get("cuenta_id"),
-            "nombre_completo": persona.get("nombre_completo"),
-            "nombre": persona.get("nombre_completo"),
+            "nombre_completo": preferred_name or raw_full_name,
+            "nombre": preferred_name or raw_full_name,
             "correo": persona.get("correo_principal"),
             "email": persona.get("correo_principal"),
             "telefono_e164": persona.get("telefono_principal_e164"),
