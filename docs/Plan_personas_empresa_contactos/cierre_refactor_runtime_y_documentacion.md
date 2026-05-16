@@ -124,6 +124,33 @@ compatibilidad hasta retirar esas FKs.
 - Los wrappers legacy con nombre `contactoId` se dejaron solo en capas internas donde
   todavia sirven como compatibilidad temporal.
 
+### 2.7 Mapa de `contacto_id` en el backend CRM
+
+En `backend/app/repositories/crm.py` aun quedan referencias `contacto_id`, pero no todas
+significan lo mismo:
+
+- **Wrappers de compatibilidad que se pueden dejar por ahora**
+  - `get_contact_*`, `update_contact_*`, `create_contact_*`, `delete_contact_*`
+  - `list_contact_*`, `upsert_contact_account_relation(...)`
+  - `create_contact_account_relation(...)`, `update_contact_account_relation(...)`
+  - `delete_contact_account_relation(...)`
+  - `delete_persona(...)` y `delete_contact(...)` como aliases cruzados
+- **Campos/payloads historicos que siguen existiendo por contrato de datos**
+  - `contacto_id`
+  - `contacto_principal_id`
+  - `convertido_contacto_id`
+  - `crm_contacto_id`
+- **Zonas que todavia no conviene renombrar de golpe**
+  - consultas de `webchat`, `whatsapp`, `messenger`
+  - tablas/eventos de `prospeccion_*`
+  - sesiones y agenda que siguen guardando `contacto_id`
+
+Regla practica:
+
+- codigo nuevo: `persona_id`
+- compatibilidad temporal: `contacto_id`
+- metadatos e ისტორico: se queda hasta migracion final
+
 ## 3. Limpieza semantica que se hizo
 
 La base de codigo original se escribio con el concepto `contact`, y por eso quedaron contratos y helpers con ese nombre. Durante esta etapa se limpio bastante semantica interna para que el codigo hable mas de `persona` y menos de `contacto`.

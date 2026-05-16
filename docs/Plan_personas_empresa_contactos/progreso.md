@@ -24,6 +24,10 @@ Nota histórica:
 - `contacts-data-table` ya abre la ficha rica usando `personaId`
 - el bloque operativo del repositorio CRM ya expone nombres canónicos `persona_*` para lectura,
   alta, edición, relaciones y borrado, con wrappers legacy `contact_*` solo como compatibilidad
+- los `contacto_id` restantes en backend se agrupan en:
+  - wrappers de compatibilidad (`get_contact_*`, `update_contact_*`, `create_contact_*`, `delete_contact_*`)
+  - payloads/columnas historicas (`contacto_id`, `contacto_principal_id`, `convertido_contacto_id`, `crm_contacto_id`)
+  - contratos que siguen alimentando webchat/whatsapp/messenger/prospeccion y sesiones legacy
 
 Documento de cierre:
 - `docs/Plan_personas_empresa_contactos/cierre_refactor_runtime_y_documentacion.md`
