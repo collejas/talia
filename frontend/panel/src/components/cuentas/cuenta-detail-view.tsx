@@ -41,6 +41,7 @@ type SearchItem = {
   tipo: string | null;
   correo: string | null;
   telefono: string | null;
+  empresa: string | null;
 };
 type DedupeCandidate = {
   id: string;
