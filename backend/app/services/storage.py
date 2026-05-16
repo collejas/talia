@@ -2915,6 +2915,99 @@ async def maybe_auto_name_persona_opportunity(
     )
 
 
+async def sync_persona_opportunity_context(
+    *,
+    conversation_id: str,
+    persona_id: str,
+    opportunity_id: str,
+    channel: str | None = None,
+) -> bool:
+    """Sincroniza en la oportunidad el snapshot operativo de la persona."""
+
+    try:
+        persona = await fetch_persona(persona_id)
+    except StorageError as exc:
+        logger.warning(
+            "storage.sync_persona_opportunity_context.persona_lookup_failed",
+            extra={"contact_id": persona_id, "conversation_id": conversation_id, "error": str(exc)},
+        )
+        return False
+    if not persona:
+        return False
+
+    try:
+        org_uuid = UUID(str(persona.get("organizacion_id")))
+        opp_uuid = UUID(str(opportunity_id))
+    except (TypeError, ValueError):
+        return False
+
+    repo = CRMRepository()
+    try:
+        opportunity = await repo.get_pipeline_opportunity(
+            organizacion_id=org_uuid,
+            oportunidad_id=opp_uuid,
+        )
+    except CRMRepositoryError as exc:
+        logger.warning(
+            "storage.sync_persona_opportunity_context.opportunity_lookup_failed",
+            extra={"opportunity_id": opportunity_id, "conversation_id": conversation_id, "error": str(exc)},
+        )
+        return False
+    if not opportunity:
+        return False
+
+    metadata = _ensure_dict(opportunity.get("metadata"))
+    patch: dict[str, Any] = {}
+
+    full_name = _clean_text(persona.get("nombre_completo"))
+    email = _clean_text(persona.get("correo_principal"))
+    phone = _clean_text(persona.get("telefono_principal_e164"))
+    company_name = _clean_text(persona.get("company_name"))
+    need = _clean_text(persona.get("necesidad_proposito"))
+    notes = _clean_text(persona.get("notes"))
+    summary = need or notes
+    persona_account_id = persona.get("cuenta_id")
+
+    if full_name:
+        metadata["contacto_nombre"] = full_name
+        if not _clean_text(opportunity.get("contacto_nombre")):
+            patch["contacto_nombre"] = full_name
+    if email:
+        metadata["contacto_correo"] = email
+    if phone:
+        metadata["contacto_telefono"] = phone
+    if company_name:
+        metadata["contacto_empresa"] = company_name
+    if summary:
+        metadata["contacto_necesidad"] = summary
+        if not _clean_text(opportunity.get("descripcion")):
+            patch["descripcion"] = summary[:1000]
+    if persona_account_id:
+        current_account_id = _clean_text(opportunity.get("cuenta_id"))
+        if not current_account_id:
+            patch["cuenta_id"] = str(persona_account_id)
+
+    if metadata:
+        patch["metadata"] = metadata
+
+    if not patch:
+        return False
+
+    try:
+        await repo.update_opportunity(
+            organizacion_id=org_uuid,
+            oportunidad_id=opp_uuid,
+            payload=patch,
+        )
+    except CRMRepositoryError as exc:
+        logger.warning(
+            "storage.sync_persona_opportunity_context.update_failed",
+            extra={"opportunity_id": opportunity_id, "conversation_id": conversation_id, "error": str(exc)},
+        )
+        return False
+    return True
+
+
 async def apply_lead_scoring(
     *,
     conversation_id: str,

@@ -4773,6 +4773,18 @@ async def _execute_function_call(
                         extra={"conversation_id": context.conversation_id, "error": str(exc)},
                     )
             try:
+                await storage.sync_persona_opportunity_context(
+                    conversation_id=context.conversation_id,
+                    persona_id=context.contact_id,
+                    opportunity_id=str(tarjeta_id),
+                    channel="webchat",
+                )
+            except StorageError as exc:
+                logger.warning(
+                    "webchat.schedule_demo.context_sync_failed",
+                    extra={"conversation_id": context.conversation_id, "error": str(exc)},
+                )
+            try:
                 await storage.upsert_conversation_insights(
                     conversation_id=context.conversation_id,
                     resumen=notes_auto,

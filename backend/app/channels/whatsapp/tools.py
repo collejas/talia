@@ -1105,6 +1105,24 @@ async def _refresh_opportunity_context_from_persona(
             )
 
     try:
+        await storage.sync_persona_opportunity_context(
+            conversation_id=context.conversation_id,
+            persona_id=persona_id,
+            opportunity_id=str(opportunity_id),
+            channel=context.channel or "whatsapp",
+        )
+    except StorageError as exc:
+        logger.warning(
+            "whatsapp.persona_context.sync_failed",
+            extra={
+                "conversation_id": context.conversation_id,
+                "persona_id": persona_id,
+                "reason": reason,
+                "error": str(exc),
+            },
+        )
+
+    try:
         await storage.maybe_auto_name_persona_opportunity(
             conversation_id=context.conversation_id,
             persona_id=persona_id,
