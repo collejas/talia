@@ -2253,11 +2253,14 @@ async def update_calendar_booking_metadata(
     return merged
 
 
-async def fetch_email_template(slug: str = "default") -> dict[str, Any] | None:
+async def fetch_email_template(
+    slug: str = "default",
+    organizacion_id: str | None = None,
+) -> dict[str, Any] | None:
     """Recupera el template de correo configurado para envíos manuales."""
     repo = CRMRepository()
     try:
-        row = await repo.get_email_template(slug=slug)
+        row = await repo.get_email_template(slug=slug, organizacion_id=organizacion_id)
     except CRMRepositoryError as exc:
         raise StorageError(str(exc)) from exc
     if not row:

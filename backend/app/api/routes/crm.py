@@ -16519,13 +16519,16 @@ async def upload_settings_media(
 @router.get("/settings/email-template", response_model=CRMEmailTemplate)
 async def get_email_template(
     *,
-    repo: CRMRepository = Depends(get_repository),
     organizacion_id: UUID = Depends(require_organizacion_id),  # noqa: ARG001
     _: str = Depends(require_permission("settings.view")),
     slug: str = DEFAULT_TEMPLATE_SLUG,
 ) -> CRMEmailTemplate:
+    service_repo = CRMRepository()
     try:
-        row = await repo.get_email_template(slug=slug)
+        row = await service_repo.get_email_template(
+            slug=slug,
+            organizacion_id=organizacion_id,
+        )
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     if row is None:
@@ -16536,15 +16539,19 @@ async def get_email_template(
 @router.put("/settings/email-template", response_model=CRMEmailTemplate)
 async def update_email_template(
     *,
-    repo: CRMRepository = Depends(get_repository),
     organizacion_id: UUID = Depends(require_organizacion_id),  # noqa: ARG001
     _: str = Depends(require_permission("settings.manage")),
     payload: CRMEmailTemplateUpdate,
     slug: str = DEFAULT_TEMPLATE_SLUG,
 ) -> CRMEmailTemplate:
     body = payload.model_dump(mode="json", exclude_unset=True)
+    service_repo = CRMRepository()
     try:
-        row = await repo.upsert_email_template(slug=slug, payload=body)
+        row = await service_repo.upsert_email_template(
+            slug=slug,
+            organizacion_id=organizacion_id,
+            payload=body,
+        )
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     return CRMEmailTemplate.model_validate(row)

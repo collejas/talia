@@ -16878,11 +16878,14 @@ class CRMRepository:
         self,
         *,
         slug: str,
+        organizacion_id: UUID | None = None,
     ) -> dict[str, Any] | None:
         params = {
             "slug": f"eq.{slug}",
             "limit": "1",
         }
+        if organizacion_id is not None:
+            params["organizacion_id"] = f"eq.{organizacion_id}"
         resp = await self._request(
             "GET",
             "/rest/v1/panel_email_templates",
@@ -16900,13 +16903,14 @@ class CRMRepository:
         self,
         *,
         slug: str,
+        organizacion_id: UUID,
         payload: dict[str, Any],
     ) -> dict[str, Any]:
-        body = {"slug": slug, **payload}
+        body = {"slug": slug, "organizacion_id": str(organizacion_id), **payload}
         resp = await self._request(
             "POST",
             "/rest/v1/panel_email_templates",
-            params={"on_conflict": "slug"},
+            params={"on_conflict": "organizacion_id,slug"},
             json=body,
             prefer="return=representation,resolution=merge-duplicates",
         )

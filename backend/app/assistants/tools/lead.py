@@ -493,7 +493,7 @@ async def _handle_information_email(
 
     template_row: dict[str, Any] | None = None
     try:
-        template_row = await storage.fetch_email_template()
+        template_row = await storage.fetch_email_template(organizacion_id=str(mail_org_uuid))
     except StorageError as exc:
         logger.warning(
             "lead_tools.template_fetch_failed",
