@@ -12,6 +12,8 @@ La meta es que la app trabaje con:
 - inventario inmobiliario normalizado
 - ventas ligadas a una oportunidad real
 - actor humano canónico basado en `personas`
+- estados comerciales claros para inventario vendible
+- precio manual o precio por metro cuadrado para terrenos/lotes
 - `jsonb` solo para extensión, compatibilidad o metadata no crítica
 
 ## Problema que resuelve
@@ -40,6 +42,7 @@ Este plan cubre tres frentes:
 - `metadata` no debe ser fuente de verdad para datos operativos del inventario 3D ni de ventas; solo puede conservar extensiones no críticas, trazas o compatibilidad temporal.
 - Cada unidad inmobiliaria debe tener un estado operativo único.
 - Un cambio de estado comercial relevante debe estar ligado a una oportunidad.
+- `Reserva Patrimonial` no es un estado comercial; es una clasificación de inventario fuera del flujo de venta.
 - El actor humano canónico del CRM debe ser `personas`.
 
 ## Estado base actual
@@ -51,6 +54,7 @@ Según el esquema vigente:
 - `catalog_items` ya tiene `metadatos_extra` para separar atributos complementarios de la metadata principal.
 - `oportunidades.contacto_principal_id` ya apunta a `personas.id` aunque el nombre aún sea legado.
 - `clientes`, `cotizaciones` y `leads` ya exponen `persona_id`.
+- `propiedad_unidades` ya guarda `precio` y `area_m2`, por lo que el precio por m2 puede modelarse sin rehacer el inventario.
 
 ## Decisión de diseño
 
@@ -60,7 +64,10 @@ Mantener como columnas reales:
 
 - `propiedad_desarrollos.status`
 - `propiedad_unidades.status`
+- `propiedad_unidades.destino_inventario`
+- `propiedad_unidades.precio_tipo`
 - `propiedad_unidades.precio`
+- `propiedad_unidades.precio_m2`
 - `propiedad_unidades.area_m2`
 - `propiedad_unidades.linea_id`
 - `propiedad_unidades.familia_id`
@@ -87,6 +94,22 @@ Para propiedades 3D, los campos de volumen y color se tratan como columnas reale
 - `propiedad_poligonos.color`
 
 `metadata` queda como respaldo histórico o extensión auxiliar, no como cálculo primario.
+
+### 1.1) Estados comerciales
+
+La unidad comercial solo debe poder estar en uno de estos estados:
+
+- `disponible`
+- `reservado`
+- `apartado`
+- `vendido`
+- `bloqueado`
+
+Reglas:
+
+- `reservado`, `apartado` y `vendido` exigen `oportunidad_id`.
+- `bloqueado` no exige `oportunidad_id`.
+- `destino_inventario = patrimonial` excluye la unidad del flujo comercial.
 
 ### 2) Ventas
 
@@ -173,12 +196,13 @@ Campos que deben ser de uso directo:
 
 ### Estados inmobiliarios
 
-La unidad solo debe poder estar en uno de estos estados:
+La unidad comercial solo debe poder estar en uno de estos estados:
 
 - `disponible`
 - `reservado`
 - `apartado`
 - `vendido`
+- `bloqueado`
 
 ### Regla de obligatoriedad
 
@@ -198,6 +222,15 @@ Antes de marcar una unidad como bloqueada o vendida:
 - validar que pertenezca a la misma organización
 - validar que esté en etapa compatible
 - registrar un movimiento de auditoría
+
+### Regla patrimonial
+
+Si `destino_inventario = patrimonial`:
+
+- bloquear el flujo comercial
+- evitar la generación automática de `catalog_item`
+- excluir la unidad de KPIs de ventas
+- permitir solo manejo interno del inventario
 
 ### Regla de consistencia
 
@@ -244,6 +277,19 @@ Las rutas de `propiedades` y `settings/propiedades` deben seguir creando y edita
 - unidad
 
 pero deben dejar de depender de metadata para atributos operativos.
+
+### Precio por m2
+
+La API de inventario debe aceptar:
+
+- `precio_tipo`
+- `precio_m2`
+
+Comportamiento:
+
+- si `precio_tipo = manual`, `precio` es obligatorio;
+- si `precio_tipo = m2`, `area_m2` y `precio_m2` son obligatorios y `precio` debe calcularse a partir de ellos;
+- el backend debe persistir el precio efectivo final en `precio`.
 
 ### API de personas
 

@@ -78,12 +78,15 @@ Eliminar dependencias del `jsonb` operativo en inventario.
 - lectura de columnas estructurales
 - uso de `catalog_item_id` directo
 - UI de `settings/propiedades` validando oportunidad en estados bloqueantes
+- soporte para `precio_tipo`, `precio_m2` y `destino_inventario`
+- exclusión de `Reserva Patrimonial` del flujo comercial
 
 ### Verificación
 
 - Listados y filtros usan columnas.
 - Mapbox recibe el dato normalizado.
 - No se requiere reconstrucción desde metadata para lo crítico.
+- El inventario patrimonial no genera venta ni `catalog_item`.
 
 ## PR 5. Limpieza semántica de CRM
 
@@ -132,4 +135,3 @@ Cerrar las reglas de consistencia.
 - `docs/Plan_3D/plan_normalizacion_inventario_ventas_personas.md`
 - `docs/Plan_3D/plan_migracion_tecnica_inventario_ventas_personas.md`
 - `docs/Plan_personas_empresa_contactos/progreso.md`
-

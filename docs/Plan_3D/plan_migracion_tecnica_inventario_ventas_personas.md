@@ -14,6 +14,9 @@ Definir el orden de migracion para que el inventario inmobiliario y el flujo com
 - `oportunidades` deja de usar `contacto_principal_id` como referencia semántica principal.
 - `propiedad_unidad_movimientos` guarda el historial de estados.
 - Backend y frontend leen columnas, no metadata, para el inventario crítico.
+- El inventario comercial distingue claramente `disponible`, `reservado`, `apartado`, `vendido` y `bloqueado`.
+- `Reserva Patrimonial` queda fuera del flujo comercial y se maneja como clasificación aparte.
+- El precio por m2 permite capturar terrenos y lotes con más precisión.
 
 ## Orden recomendado de migraciones
 
@@ -24,6 +27,7 @@ Definir el orden de migracion para que el inventario inmobiliario y el flujo com
 3. Agregar `catalog_item_id` a `public.propiedad_unidades`.
 4. Agregar `propiedad_id`, `unidad_id`, `oportunidad_id`, `persona_id` a `public.catalog_items`.
 5. Crear `public.propiedad_unidad_movimientos`.
+6. Agregar `destino_inventario`, `precio_tipo` y `precio_m2` a `public.propiedad_unidades`.
 
 ### Fase 2. Backfill y validación
 
@@ -66,7 +70,10 @@ create index if not exists oportunidades_persona_id_idx
 ```sql
 alter table public.propiedad_unidades
   add column if not exists oportunidad_id uuid,
-  add column if not exists catalog_item_id uuid;
+  add column if not exists catalog_item_id uuid,
+  add column if not exists destino_inventario text,
+  add column if not exists precio_tipo text,
+  add column if not exists precio_m2 numeric;
 
 create index if not exists propiedad_unidades_oportunidad_idx
   on public.propiedad_unidades (oportunidad_id);
@@ -127,7 +134,7 @@ create index if not exists propiedad_unidad_movimientos_oportunidad_idx
 alter table public.propiedad_unidades
   add constraint propiedad_unidades_oportunidad_required_chk
   check (
-    status = 'disponible'
+    status in ('disponible', 'bloqueado')
     or oportunidad_id is not null
   );
 ```
@@ -156,4 +163,3 @@ Nota: esta restricción debe validarse primero en staging porque puede requerir 
 - `catalog_items` ya puede resolver propiedad/unidad sin metadata
 - una oportunidad nueva puede usarse desde `persona_id`
 - el historial guarda cada cambio de estado
-
