@@ -68,7 +68,6 @@ const DEFAULT_FORM_STATE: FormState = {
 const DEFAULT_RESULTS_LIMIT = 1000
 const DEFAULT_JOBS_PAGE_SIZE = 28
 const JOBS_PAGE_SIZE_OPTIONS = [10, 20, 30, 40, 50] as const
-const EXCLUDE_DOMAIN_SELECT_PLACEHOLDER = "__exclude_domain_placeholder__"
 
 const STATUS_LABELS: Record<BuscadorJobStatus, string> = {
   pending: "Pendiente",
@@ -95,7 +94,6 @@ function BuscadorView() {
   const [formValues, setFormValues] = useState<FormState>(DEFAULT_FORM_STATE)
   const [isRunning, setIsRunning] = useState(false)
   const [results, setResults] = useState<BuscadorResult[]>([])
-  const [resultsTotal, setResultsTotal] = useState(0)
   const [resultsLimit, setResultsLimit] = useState(DEFAULT_RESULTS_LIMIT)
   const [resultsOffset, setResultsOffset] = useState(0)
   const [resultsLoading, setResultsLoading] = useState(false)
@@ -176,7 +174,6 @@ function BuscadorView() {
       const resetSelection = options?.resetSelection ?? true
       setSelectedJobId(job.id)
       setResults(data.items)
-      setResultsTotal(data.total ?? job.total ?? data.items.length)
       if (resetSelection) {
         const ids = data.items
           .map((result) => result.id?.trim())
@@ -260,7 +257,6 @@ function BuscadorView() {
     setIsRunning(true)
     setErrorMessage(null)
     setResults([])
-    setResultsTotal(0)
     setResultsOffset(0)
     setSelectedIds(new Set())
 
@@ -337,7 +333,6 @@ function BuscadorView() {
   const handleReset = () => {
     setFormValues(DEFAULT_FORM_STATE)
     setResults([])
-    setResultsTotal(0)
     setResultsLimit(DEFAULT_RESULTS_LIMIT)
     setResultsOffset(0)
     setErrorMessage(null)
@@ -356,7 +351,6 @@ function BuscadorView() {
       setErrorMessage(null)
       setResultsOffset(0)
       setResults([])
-      setResultsTotal(job.total ?? 0)
       setSelectedIds(new Set())
       if (!RESULT_READY_STATUSES.has(job.status)) {
         setLastResultsJobId(null)

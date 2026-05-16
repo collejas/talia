@@ -425,7 +425,7 @@ export function LocationComparisonChart({
   const allowLeadFallback = !attributionFilterActive;
   const displayedChannelKeys = activeChannels.length ? activeChannels : CHANNEL_KEYS;
   const themeVersion = useThemeVersion();
-  const channelColors = useMemo(() => resolveThemeChannelColors(), [themeVersion]);
+  const channelColors = resolveThemeChannelColors();
 
   const datasetMap = useMemo(() => {
     const map = new Map<string, (typeof data)[number]>();

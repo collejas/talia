@@ -6,7 +6,6 @@ import {
   IconChevronDown,
   IconChevronRight,
   IconLayersSelected,
-  IconMapPin,
 } from "@tabler/icons-react";
 import "leaflet/dist/leaflet.css";
 import "mapbox-gl/dist/mapbox-gl.css";
@@ -922,7 +921,7 @@ export function PropertyMap() {
       );
       return true;
     },
-    [applyMapboxBoundsCamera, logMapboxEvent, mapboxActive],
+    [applyMapboxBoundsCamera, applyMapboxNavigationLimits, logMapboxEvent, mapboxActive],
   );
 
   const sendFeatureToMapbox = useCallback(
@@ -1258,7 +1257,6 @@ export function PropertyMap() {
   }, [
     deriveDrillChildren,
     filteredFeatures,
-    inferFeatureKind,
     leafletActiveNode,
     mapLevel,
     mapboxActive,
@@ -1307,7 +1305,7 @@ export function PropertyMap() {
       return new Set();
     }
     return developmentMunicipioKeys;
-  }, [features, inferFeatureLayer, mapLevel, selectedMunicipioGeoKey, selectedStateKey]);
+  }, [features, mapLevel, selectedMunicipioGeoKey, selectedStateKey]);
 
   useEffect(() => {
     municipioDevelopmentFeaturesRef.current = municipioDevelopmentFeatures;
@@ -2393,7 +2391,7 @@ export function PropertyMap() {
       layerRef.current?.clearLayers();
       municipalPolygonLayerRef.current?.clearLayers();
     };
-  }, [leaflet, applyLayerStyle, leafletMountVersion]);
+  }, [applyLayerStyle, buildRegionTooltipContent, leaflet, leafletMountVersion]);
 
   useEffect(() => {
     if (!leaflet || !leafletDrillControlsRef.current) {
@@ -3052,6 +3050,7 @@ export function PropertyMap() {
       }
     };
   }, [
+    applyMapboxNavigationLimits,
     mapboxActive,
     mapboxToken,
     sendFeatureToMapbox,
@@ -3391,6 +3390,7 @@ export function PropertyMap() {
     mapLevel,
     municipioDevelopmentFeatures,
     filteredDemografiaGeojson,
+    selectedMunicipioGeoKey,
   ]);
 
   const zoomToFeature = useCallback(
@@ -3500,7 +3500,10 @@ export function PropertyMap() {
   );
 
   const PolygonContainer = ({ geom, children }) => (
-    <div className="space-y-2 rounded border border-dashed border-slate-200 bg-slate-50/80 p-2">
+    <div
+      data-has-geometry={Boolean(geom) || undefined}
+      className="space-y-2 rounded border border-dashed border-slate-200 bg-slate-50/80 p-2"
+    >
       {children}
     </div>
   );

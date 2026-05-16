@@ -886,7 +886,7 @@ export function LeadDrawer({
     setNoteActivityType("seguimiento");
     setNoteAssignedTo(card?.asignadoId ?? "");
     setActivityError(null);
-  }, [card?.oportunidadId]);
+  }, [card?.asignadoId, card?.oportunidadId]);
 
   useEffect(() => {
     setQuotesState({ status: "idle", data: [] });
@@ -1353,7 +1353,16 @@ export function LeadDrawer({
     } finally {
       setNotePending(false);
     }
-  }, [card, noteText, noteReminderEnabled, noteReminderAt, noteActivityType, noteAssignedTo]);
+  }, [
+    card,
+    fetchActivities,
+    fetchNotes,
+    noteActivityType,
+    noteAssignedTo,
+    noteReminderAt,
+    noteReminderEnabled,
+    noteText,
+  ]);
 
   const handleCompleteActivity = useCallback(
     async (activityId: string) => {
@@ -4146,23 +4155,6 @@ function readStageMetaString(meta: Record<string, unknown> | undefined, key: str
   if (typeof value !== "string") return undefined;
   const trimmed = value.trim();
   return trimmed.length ? trimmed : undefined;
-}
-
-function dedupeHistoryEntries(
-  incoming: LeadHistoryEntry[],
-  existing: LeadHistoryEntry[],
-): LeadHistoryEntry[] {
-  const result: LeadHistoryEntry[] = [];
-  const seen = new Set<string>();
-
-  for (const entry of [...incoming, ...existing]) {
-    const key = entry.movimiento_id;
-    if (key && seen.has(key)) continue;
-    if (key) seen.add(key);
-    result.push(entry);
-  }
-
-  return result;
 }
 
 function formatDateTime(value: string): string {
