@@ -976,6 +976,13 @@ export function LeadDrawer({
   }, [open]);
 
   useEffect(() => {
+    if (!open || isCreateMode || !card) {
+      return;
+    }
+    reset(defaultFormValues);
+  }, [open, isCreateMode, card, defaultFormValues, reset]);
+
+  useEffect(() => {
     if (isCreateMode || !card) {
       setActiveTab("resumen");
     }

@@ -27,9 +27,41 @@ export function adaptCard(card: PipelineBoardCard): EmbudoCard {
       ? card.contacto_profile_name.trim()
       : null;
   const resolvedNombre =
-    typeof card.nombre === "string" && card.nombre.trim().length
-      ? card.nombre.trim()
-      : resolvedProfileName;
+    typeof metadata.contacto_nombre === "string" && metadata.contacto_nombre.trim().length
+      ? metadata.contacto_nombre.trim()
+      : typeof card.nombre === "string" && card.nombre.trim().length
+        ? card.nombre.trim()
+        : resolvedProfileName;
+  const resolvedCorreo =
+    typeof card.correo === "string" && card.correo.trim().length
+      ? card.correo.trim()
+      : typeof metadata.contacto_correo === "string" && metadata.contacto_correo.trim().length
+        ? metadata.contacto_correo.trim()
+        : null;
+  const resolvedTelefono =
+    typeof card.telefono === "string" && card.telefono.trim().length
+      ? card.telefono.trim()
+      : typeof metadata.contacto_telefono === "string" && metadata.contacto_telefono.trim().length
+        ? metadata.contacto_telefono.trim()
+        : null;
+  const resolvedEmpresa =
+    typeof card.empresa === "string" && card.empresa.trim().length
+      ? card.empresa.trim()
+      : typeof metadata.contacto_empresa === "string" && metadata.contacto_empresa.trim().length
+        ? metadata.contacto_empresa.trim()
+        : null;
+  const resolvedNotas =
+    typeof card.notas === "string" && card.notas.trim().length
+      ? card.notas.trim()
+      : typeof metadata.contacto_notas === "string" && metadata.contacto_notas.trim().length
+        ? metadata.contacto_notas.trim()
+        : null;
+  const resolvedNecesidadProposito =
+    typeof card.necesidad_proposito === "string" && card.necesidad_proposito.trim().length
+      ? card.necesidad_proposito.trim()
+      : typeof metadata.contacto_necesidad === "string" && metadata.contacto_necesidad.trim().length
+        ? metadata.contacto_necesidad.trim()
+        : null;
   const resolvedMonto =
     typeof card.monto_estimado === "number" && Number.isFinite(card.monto_estimado)
       ? card.monto_estimado
@@ -49,11 +81,11 @@ export function adaptCard(card: PipelineBoardCard): EmbudoCard {
     titulo: resolvedTitulo,
     nombre: resolvedNombre,
     contactoProfileName: resolvedProfileName,
-    correo: card.correo,
-    telefono: card.telefono,
-    empresa: card.empresa,
-    notas: card.notas,
-    necesidadProposito: card.necesidad_proposito ?? null,
+    correo: resolvedCorreo,
+    telefono: resolvedTelefono,
+    empresa: resolvedEmpresa,
+    notas: resolvedNotas,
+    necesidadProposito: resolvedNecesidadProposito,
     canal: card.canal,
     estado: resolvedEstado,
     etapaId: card.etapa_id,

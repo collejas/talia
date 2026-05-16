@@ -2973,7 +2973,8 @@ async def sync_persona_opportunity_context(
 
     if full_name:
         metadata["contacto_nombre"] = full_name
-        if not _clean_text(opportunity.get("contacto_nombre")):
+        current_name = _clean_text(opportunity.get("contacto_nombre"))
+        if not current_name or current_name != full_name:
             patch["contacto_nombre"] = full_name
     if email:
         metadata["contacto_correo"] = email

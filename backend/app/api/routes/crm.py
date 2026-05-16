@@ -35417,17 +35417,15 @@ def _card_from_opportunity(row: dict[str, Any]) -> CRMPipelineBoardCard | None:
             raw_title = title_value.strip()
     titulo_value = raw_title or cuenta.get("nombre") or "Oportunidad sin nombre"
 
-    contacto_nombre = contacto.get("nombre_completo")
-    if isinstance(contacto_nombre, str):
-        contacto_nombre = contacto_nombre.strip()
-    else:
-        contacto_nombre = None
+    contacto_nombre = _clean_text(row.get("contacto_nombre")) or None
+    metadata_contacto_nombre = _clean_text(metadata.get("contacto_nombre")) or None
+    contacto_nombre_relacion = _clean_text(contacto.get("nombre_completo")) or None
     contacto_datos = _ensure_dict(
         contacto.get("persona_datos") or contacto.get("contacto_datos"),
         default={},
     )
-    contacto_profile_name = _clean_text(contacto_datos.get("profile_name"))
-    nombre = contacto_nombre or contacto_profile_name or None
+    contacto_profile_name = _clean_text(contacto_datos.get("profile_name")) or None
+    nombre = metadata_contacto_nombre or contacto_nombre or contacto_nombre_relacion or contacto_profile_name
     conversacion_id = _safe_uuid(metadata.get("conversacion_id"))
     asignado_nombre = asignado.get("nombre_completo") or asignado.get("correo")
     prioridad = metadata.get("lead_score")
@@ -35439,8 +35437,28 @@ def _card_from_opportunity(row: dict[str, Any]) -> CRMPipelineBoardCard | None:
     )
     actualizado_en = _parse_datetime(row.get("actualizado_en"))
     canal = metadata.get("canal") or metadata.get("channel")
+    contacto_correo = (
+        _clean_text(metadata.get("contacto_correo"))
+        or _clean_text(contacto.get("correo_principal"))
+        or _clean_text(contacto.get("correo"))
+        or None
+    )
+    contacto_telefono = (
+        _clean_text(metadata.get("contacto_telefono"))
+        or _clean_text(contacto.get("telefono_principal_e164"))
+        or _clean_text(contacto.get("telefono_e164"))
+        or _clean_text(contacto.get("telefono"))
+        or None
+    )
+    contacto_empresa = (
+        _clean_text(metadata.get("contacto_empresa"))
+        or _clean_text(contacto.get("company_name"))
+        or _clean_text(cuenta.get("nombre"))
+        or None
+    )
     necesidad_proposito = (
-        contacto.get("necesidad_proposito")
+        _clean_text(metadata.get("contacto_necesidad"))
+        or _clean_text(contacto.get("necesidad_proposito"))
         or cuenta.get("necesidad_proposito")
         or metadata.get("necesidad_proposito")
     )
@@ -35452,10 +35470,10 @@ def _card_from_opportunity(row: dict[str, Any]) -> CRMPipelineBoardCard | None:
         titulo=titulo_value,
         nombre=nombre,
         contacto_profile_name=contacto_profile_name,
-        correo=contacto.get("correo"),
-        telefono=contacto.get("telefono_e164"),
-        empresa=contacto.get("company_name") or cuenta.get("nombre"),
-        notas=contacto.get("notas") or contacto.get("notes"),
+        correo=contacto_correo,
+        telefono=contacto_telefono,
+        empresa=contacto_empresa,
+        notas=_clean_text(metadata.get("contacto_notas")) or contacto.get("notas") or contacto.get("notes"),
         necesidad_proposito=necesidad_proposito,
         canal=canal,
         estado=contacto.get("estado") or contacto.get("captura_estado"),
