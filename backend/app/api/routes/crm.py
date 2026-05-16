@@ -1751,6 +1751,130 @@ def _stage_code_is_ready(code: str | None) -> bool:
     return any(token in normalized for token in OPPORTUNITY_SALE_STAGE_TOKENS)
 
 
+def _is_property_commercial_status(status: Any) -> bool:
+    return str(status or "").strip().lower() in SALE_TRACKED_PROPERTY_STATUSES
+
+
+def _normalize_property_destination(value: Any) -> str:
+    raw = str(value or "").strip().lower()
+    if not raw:
+        return PropiedadDestinoInventario.comercial.value
+    try:
+        return PropiedadDestinoInventario(raw).value
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="destino_inventario_invalid",
+        ) from exc
+
+
+def _normalize_property_price_type(value: Any) -> str:
+    raw = str(value or "").strip().lower()
+    if not raw:
+        return PropiedadPrecioTipo.manual.value
+    try:
+        return PropiedadPrecioTipo(raw).value
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="precio_tipo_invalid",
+        ) from exc
+
+
+def _decimal_or_none(value: Any) -> Decimal | None:
+    if value is None:
+        return None
+    if isinstance(value, Decimal):
+        return value
+    if isinstance(value, (int, float)):
+        return Decimal(str(value))
+    if isinstance(value, str):
+        trimmed = value.strip()
+        if not trimmed:
+            return None
+        return Decimal(trimmed)
+    return None
+
+
+def _build_propiedad_unidad_payload(
+    payload: PropiedadUnidadCreateRequest,
+    *,
+    current_row: dict[str, Any] | None = None,
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    current_row = current_row or {}
+    destino_inventario = payload.destino_inventario.value
+    precio_tipo = payload.precio_tipo.value
+    status_value = payload.status.value
+
+    precio_m2_value = _decimal_or_none(payload.precio_m2)
+    area_m2_value = _decimal_or_none(payload.area_m2)
+    precio_value = _decimal_or_none(payload.precio)
+
+    if precio_tipo == PropiedadPrecioTipo.m2.value:
+        if area_m2_value is None:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="area_m2_required_for_precio_m2")
+        if precio_m2_value is None:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="precio_m2_required")
+        precio_value = _decimal_to_number(area_m2_value * precio_m2_value)
+    elif precio_value is None and current_row.get("precio") is None:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="precio_required")
+
+    if destino_inventario == PropiedadDestinoInventario.patrimonial.value:
+        if status_value in SALE_TRACKED_PROPERTY_STATUSES:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="patrimonial_property_cannot_use_commercial_status",
+            )
+        status_value = PropiedadStatus.bloqueado.value
+
+    if _is_property_commercial_status(status_value):
+        opportunity_id = payload.oportunidad_id or current_row.get("oportunidad_id")
+        if opportunity_id is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="opportunity_required_for_commercial_status",
+            )
+
+    body: dict[str, Any] = {
+        "unidad": payload.unidad.strip(),
+        "nombre": (payload.nombre or payload.unidad).strip(),
+        "tipo_id": str(payload.tipo_id),
+        "nivel_id": str(payload.nivel_id),
+        "status": status_value,
+        "destino_inventario": destino_inventario,
+        "precio_tipo": precio_tipo,
+        "metadata": _normalize_metadata_value(payload.metadata) or {},
+    }
+    if payload.descripcion is not None:
+        body["descripcion"] = payload.descripcion.strip() or None
+    if precio_value is not None:
+        body["precio"] = precio_value
+    if precio_m2_value is not None:
+        body["precio_m2"] = _decimal_to_number(precio_m2_value)
+    if area_m2_value is not None:
+        body["area_m2"] = _decimal_to_number(area_m2_value)
+    if _is_property_commercial_status(status_value):
+        if payload.oportunidad_id:
+            body["oportunidad_id"] = str(payload.oportunidad_id)
+        elif current_row.get("oportunidad_id"):
+            body["oportunidad_id"] = str(current_row["oportunidad_id"])
+    elif current_row.get("oportunidad_id") is not None:
+        body["oportunidad_id"] = None
+    if payload.linea_id:
+        body["linea_id"] = str(payload.linea_id)
+    if payload.familia_id:
+        body["familia_id"] = str(payload.familia_id)
+    if payload.modelo_id:
+        body["modelo_id"] = str(payload.modelo_id)
+    if payload.desarrollo_id:
+        body["desarrollo_id"] = str(payload.desarrollo_id)
+    return body, {
+        "precio": precio_value,
+        "precio_m2": precio_m2_value,
+        "area_m2": area_m2_value,
+    }
+
+
 async def _ensure_opportunity_ready_for_sale(
     repo: CRMRepository,
     organizacion_id: UUID,
@@ -4256,6 +4380,24 @@ class PropiedadStatus(str, Enum):
     apartado = "apartado"
     vendido = "vendido"
     reservado = "reservado"
+    bloqueado = "bloqueado"
+
+
+class PropiedadDestinoInventario(str, Enum):
+    comercial = "comercial"
+    patrimonial = "patrimonial"
+
+
+class PropiedadPrecioTipo(str, Enum):
+    manual = "manual"
+    m2 = "m2"
+
+
+SALE_TRACKED_PROPERTY_STATUSES = {
+    PropiedadStatus.reservado.value,
+    PropiedadStatus.apartado.value,
+    PropiedadStatus.vendido.value,
+}
 
 
 class PropiedadDesarrolloTipo(str, Enum):
@@ -4325,9 +4467,13 @@ class PropiedadUnidadCreateRequest(BaseModel):
     nivel_id: UUID
     desarrollo_id: UUID | None = None
     status: PropiedadStatus = PropiedadStatus.disponible
+    destino_inventario: PropiedadDestinoInventario = PropiedadDestinoInventario.comercial
+    precio_tipo: PropiedadPrecioTipo = PropiedadPrecioTipo.manual
     descripcion: str | None = None
     precio: Decimal | None = None
+    precio_m2: Decimal | None = None
     area_m2: Decimal | None = None
+    oportunidad_id: UUID | None = None
     linea_id: UUID | None = None
     familia_id: UUID | None = None
     modelo_id: UUID | None = None
@@ -4678,9 +4824,13 @@ class ImportUnidad(BaseModel):
     tipo_id: UUID | None = None
     tipo_nombre: str | None = None
     status: PropiedadStatus = PropiedadStatus.disponible
+    destino_inventario: PropiedadDestinoInventario = PropiedadDestinoInventario.comercial
+    precio_tipo: PropiedadPrecioTipo = PropiedadPrecioTipo.manual
     descripcion: str | None = None
     precio: Decimal | None = None
+    precio_m2: Decimal | None = None
     area_m2: Decimal | None = None
+    oportunidad_id: UUID | None = None
     linea_id: UUID | None = None
     familia_id: UUID | None = None
     modelo_id: UUID | None = None
@@ -32751,29 +32901,7 @@ async def crear_propiedad(
     organizacion_id: UUID = Depends(require_organizacion_id),
     _: str = Depends(require_permission("settings.manage")),
 ) -> dict[str, Any]:
-    metadata = _normalize_metadata_value(payload.metadata) or {}
-    body: dict[str, Any] = {
-        "unidad": payload.unidad.strip(),
-        "nombre": (payload.nombre or payload.unidad).strip(),
-        "tipo_id": str(payload.tipo_id),
-        "nivel_id": str(payload.nivel_id),
-        "status": payload.status.value,
-        "metadata": metadata,
-    }
-    if payload.descripcion:
-        body["descripcion"] = payload.descripcion.strip()
-    if payload.precio is not None:
-        body["precio"] = _decimal_to_number(payload.precio)
-    if payload.area_m2 is not None:
-        body["area_m2"] = _decimal_to_number(payload.area_m2)
-    if payload.linea_id:
-        body["linea_id"] = str(payload.linea_id)
-    if payload.familia_id:
-        body["familia_id"] = str(payload.familia_id)
-    if payload.modelo_id:
-        body["modelo_id"] = str(payload.modelo_id)
-    if payload.desarrollo_id:
-        body["desarrollo_id"] = str(payload.desarrollo_id)
+    body, _ = _build_propiedad_unidad_payload(payload)
 
     try:
         record = await repo.create_propiedad_unidad(organizacion_id=organizacion_id, payload=body)
@@ -32802,13 +32930,17 @@ async def crear_propiedad(
         nombre=payload.nombre,
         tipo_id=payload.tipo_id,
         status=payload.status,
+        destino_inventario=payload.destino_inventario,
+        precio_tipo=payload.precio_tipo,
         descripcion=payload.descripcion,
         precio=payload.precio,
+        precio_m2=payload.precio_m2,
         area_m2=payload.area_m2,
+        oportunidad_id=payload.oportunidad_id,
         linea_id=payload.linea_id,
         familia_id=payload.familia_id,
         modelo_id=payload.modelo_id,
-        metadata=metadata,
+        metadata=body["metadata"],
     )
     linea_uuid = payload.linea_id
     familia_uuid = payload.familia_id
@@ -32840,35 +32972,62 @@ async def editar_propiedad_unidad(
     organizacion_id: UUID = Depends(require_organizacion_id),
     _: str = Depends(require_permission("settings.manage")),
 ) -> dict[str, Any]:
-    metadata = _normalize_metadata_value(payload.metadata) or {}
-    body: dict[str, Any] = {
-        "unidad": payload.unidad.strip(),
-        "nombre": (payload.nombre or payload.unidad).strip(),
-        "tipo_id": str(payload.tipo_id),
-        "nivel_id": str(payload.nivel_id),
-        "status": payload.status.value,
-        "metadata": metadata,
-    }
-    if payload.descripcion:
-        body["descripcion"] = payload.descripcion.strip()
-    if payload.precio is not None:
-        body["precio"] = _decimal_to_number(payload.precio)
-    if payload.area_m2 is not None:
-        body["area_m2"] = _decimal_to_number(payload.area_m2)
-    if payload.linea_id:
-        body["linea_id"] = str(payload.linea_id)
-    if payload.familia_id:
-        body["familia_id"] = str(payload.familia_id)
-    if payload.modelo_id:
-        body["modelo_id"] = str(payload.modelo_id)
-    if payload.desarrollo_id:
-        body["desarrollo_id"] = str(payload.desarrollo_id)
+    current_unidad = await repo.get_propiedad_unidad(unidad_id=unidad_id)
+    body, computed = _build_propiedad_unidad_payload(payload, current_row=current_unidad)
 
     try:
         record = await repo.update_propiedad_unidad(
             organizacion_id=organizacion_id,
             unidad_id=unidad_id,
             payload=body,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    nivel_uuid = _safe_uuid(record.get("nivel_id"))
+    capa_record: dict[str, Any] | None = None
+    if nivel_uuid:
+        capa_record = await repo.get_propiedad_capa(
+            organizacion_id=organizacion_id,
+            capa_id=nivel_uuid,
+        )
+    desarrollo_uuid = _safe_uuid(record.get("desarrollo_id")) or (
+        capa_record and _safe_uuid(capa_record.get("desarrollo_id"))
+    ) or _safe_uuid(payload.desarrollo_id)
+    desarrollo_record: dict[str, Any] | None = None
+    if desarrollo_uuid:
+        desarrollo_record = await repo.get_propiedad_desarrollo(
+            organizacion_id=organizacion_id,
+            desarrollo_id=desarrollo_uuid,
+        )
+    desarrollo_record = desarrollo_record or {"id": str(desarrollo_uuid) if desarrollo_uuid else None}
+    unidad_source = ImportUnidad(
+        unidad=payload.unidad,
+        nombre=payload.nombre,
+        tipo_id=payload.tipo_id,
+        status=payload.status,
+        destino_inventario=payload.destino_inventario,
+        precio_tipo=payload.precio_tipo,
+        descripcion=payload.descripcion,
+        precio=computed["precio"],
+        precio_m2=payload.precio_m2,
+        area_m2=payload.area_m2,
+        oportunidad_id=payload.oportunidad_id,
+        linea_id=payload.linea_id,
+        familia_id=payload.familia_id,
+        modelo_id=payload.modelo_id,
+        metadata=body["metadata"],
+    )
+    try:
+        await _ensure_catalog_item_for_unidad(
+            repo=repo,
+            organizacion_id=organizacion_id,
+            desarrollo_record=desarrollo_record,
+            unidad_record=record,
+            unidad_source=unidad_source,
+            linea_id=payload.linea_id,
+            familia_id=payload.familia_id,
+            modelo_id=payload.modelo_id,
         )
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
@@ -32886,10 +33045,21 @@ async def actualizar_status_propiedad_unidad(
     _: str = Depends(require_permission("settings.manage")),
 ) -> dict[str, Any]:
     current_unidad = await repo.get_propiedad_unidad(unidad_id=unidad_id)
+    current_destination = str(current_unidad.get("destino_inventario") or PropiedadDestinoInventario.comercial.value).strip().lower() if current_unidad else PropiedadDestinoInventario.comercial.value
+    if current_destination == PropiedadDestinoInventario.patrimonial.value and payload.status.value != PropiedadStatus.bloqueado.value:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="patrimonial_property_cannot_use_commercial_status",
+        )
     previous_status = str(current_unidad.get("status") or PropiedadStatus.disponible.value) if current_unidad else PropiedadStatus.disponible.value
     resolved_oportunidad_id = _safe_uuid(current_unidad.get("oportunidad_id")) if current_unidad else None
     resolved_persona_id = _safe_uuid(current_unidad.get("persona_id")) if current_unidad else None
     resolved_cuenta_id = _safe_uuid(current_unidad.get("cuenta_id")) if current_unidad else None
+    if payload.status.value in SALE_TRACKED_PROPERTY_STATUSES and resolved_oportunidad_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="opportunity_required_for_commercial_status",
+        )
     if resolved_oportunidad_id:
         try:
             opportunity = await repo.get_pipeline_opportunity(
@@ -32903,11 +33073,14 @@ async def actualizar_status_propiedad_unidad(
                 resolved_persona_id = _safe_uuid(opportunity.get("contacto_principal_id"))
             if resolved_cuenta_id is None:
                 resolved_cuenta_id = _safe_uuid(opportunity.get("cuenta_id"))
+    update_payload: dict[str, Any] = {"status": payload.status.value}
+    if payload.status.value not in SALE_TRACKED_PROPERTY_STATUSES:
+        update_payload["oportunidad_id"] = None
     try:
         record = await repo.update_propiedad_unidad(
             organizacion_id=organizacion_id,
             unidad_id=unidad_id,
-            payload={"status": payload.status.value},
+            payload=update_payload,
         )
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
@@ -32984,6 +33157,14 @@ async def registrar_venta_propiedad(
     if not catalog_item:
         raise HTTPException(status_code=404, detail="catalog_item_not_found")
     current_unidad = await repo.get_propiedad_unidad(unidad_id=payload.unidad_id)
+    current_destination = str(current_unidad.get("destino_inventario") or PropiedadDestinoInventario.comercial.value).strip().lower() if current_unidad else PropiedadDestinoInventario.comercial.value
+    current_status = str(current_unidad.get("status") or PropiedadStatus.disponible.value).strip().lower() if current_unidad else PropiedadStatus.disponible.value
+    if current_destination == PropiedadDestinoInventario.patrimonial.value:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="sale_requires_commercial_inventory")
+    if current_status == PropiedadStatus.bloqueado.value:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="property_blocked_for_sale")
+    if current_status == PropiedadStatus.vendido.value:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="property_already_sold")
     opportunity: dict[str, Any] | None = None
     resolved_oportunidad_id = payload.oportunidad_id
     resolved_persona_id = payload.persona_id or payload.contacto_id
@@ -33584,9 +33765,15 @@ def _csv_to_import_request(content: str) -> ImportPropiedadesRequest:
                     or row.get("tipo_unidad")
                 ),
                 status=_parse_status_value(row.get("status")),
+                destino_inventario=PropiedadDestinoInventario(
+                    _normalize_property_destination(row.get("destino_inventario"))
+                ),
+                precio_tipo=PropiedadPrecioTipo(_normalize_property_price_type(row.get("precio_tipo"))),
                 descripcion=_resolve_entity_description(row, "unidad"),
                 precio=_parse_decimal(row.get("precio")),
+                precio_m2=_parse_decimal(row.get("precio_m2")),
                 area_m2=_parse_decimal(row.get("area_m2")),
+                oportunidad_id=_parse_uuid_value(row.get("oportunidad_id")),
                 linea_id=_parse_uuid_value(row.get("linea_id")),
                 familia_id=_parse_uuid_value(row.get("familia_id")),
                 modelo_id=_parse_uuid_value(row.get("modelo_id")),
@@ -33703,7 +33890,9 @@ def _parse_status_value(value: Any) -> PropiedadStatus:
     try:
         return PropiedadStatus(trimmed.lower())
     except ValueError as exc:
-        raise ValueError(f"Estado '{trimmed}' inválido. Usa disponible/apartado/vendido/reservado.") from exc
+        raise ValueError(
+            f"Estado '{trimmed}' inválido. Usa disponible/apartado/vendido/reservado/bloqueado."
+        ) from exc
 
 
 def _parse_desarrollo_tipo(value: Any) -> PropiedadDesarrolloTipo:
@@ -34300,7 +34489,40 @@ async def _ensure_catalog_item_for_unidad(
     slug = _build_unidad_catalog_slug(development_name=desarrollo_record.get("nombre"), unidad_key=unidad_record.get("unidad"))
     metadata = _coerce_metadata(unidad_source.metadata)
     metadata = _strip_catalog_volume_metadata(metadata)
-    metadata = {**(metadata or {}), "propiedad_id": str(desarrollo_record["id"]), "unidad_id": str(unidad_record["id"])}
+    metadata = {
+        **(metadata or {}),
+        "propiedad_id": str(desarrollo_record["id"]),
+        "unidad_id": str(unidad_record["id"]),
+        "destino_inventario": unidad_source.destino_inventario.value,
+        "precio_tipo": unidad_source.precio_tipo.value,
+    }
+    destination = unidad_source.destino_inventario.value
+    if destination == PropiedadDestinoInventario.patrimonial.value:
+        existing = await repo.get_catalog_item_by_slug(
+            organizacion_id=organizacion_id,
+            slug=slug,
+        )
+        if existing:
+            await repo.update_catalog_item(
+                item_id=_safe_uuid(existing["id"]),
+                payload={
+                    "activo": False,
+                    "metadatos": {
+                        **metadata,
+                        "venta_activa": False,
+                        "inventario_destino": destination,
+                    },
+                },
+            )
+        _write_mapbox_debug_log(
+            "catalog_item_skip_patrimonial",
+            {
+                "organizacion_id": str(organizacion_id),
+                "unidad_id": str(unidad_record.get("id")),
+                "destino_inventario": destination,
+            },
+        )
+        return
     payload: dict[str, Any] = {
         "organizacion_id": str(organizacion_id),
         "nombre": f'{desarrollo_record.get("nombre") or "Propiedad"} · {unidad_record.get("unidad") or unidad_record.get("nombre") or ""}'.strip(" ·"),

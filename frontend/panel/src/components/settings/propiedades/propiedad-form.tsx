@@ -64,8 +64,12 @@ type UnidadNode = {
   id: string;
   unidad: string;
   status: string | null;
+  destino_inventario?: string | null;
+  precio_tipo?: string | null;
   precio: number | null;
+  precio_m2?: number | null;
   area_m2: number | null;
+  oportunidad_id?: string | null;
   metadata: Record<string, unknown>;
   poligono_id?: string | null;
   geom: { type: string; coordinates: unknown };
@@ -116,13 +120,25 @@ type MixItem = {
   desarrollo_id: string;
 };
 
+type OpportunityOption = {
+  id: string;
+  titulo: string;
+  contactoNombre: string | null;
+  cuentaNombre: string | null;
+  etapaCodigo: string | null;
+};
+
 type UnidadFormState = {
   unidad: string;
   nombre: string;
   tipoId: string;
   status: UnidadStatus;
+  destinoInventario: "comercial" | "patrimonial";
+  precioTipo: "manual" | "m2";
   precio: string;
+  precioM2: string;
   area: string;
+  oportunidadId: string;
   lineaId: string;
   familiaId: string;
   modeloId: string;
@@ -263,6 +279,10 @@ const PROPERTY_IMPORT_TEMPLATE_HEADERS = [
   "color",
   "precio",
   "area_m2",
+  "precio_tipo",
+  "precio_m2",
+  "destino_inventario",
+  "oportunidad_id",
   "pais_codigo",
   "estado_cve",
   "municipio_cve",
@@ -304,6 +324,10 @@ const PROPERTY_IMPORT_TEMPLATE_ROWS = [
     "#0F766E",
     "",
     "",
+    "",
+    "",
+    "comercial",
+    "",
     "MX",
     "09",
     "004",
@@ -337,6 +361,10 @@ const PROPERTY_IMPORT_TEMPLATE_ROWS = [
     "0",
     "1",
     "#0F766E",
+    "",
+    "",
+    "",
+    "",
     "",
     "",
     "MX",
@@ -374,6 +402,10 @@ const PROPERTY_IMPORT_TEMPLATE_ROWS = [
     "#0F766E",
     "3119155",
     "479.87",
+    "manual",
+    "",
+    "comercial",
+    "",
     "MX",
     "09",
     "004",
@@ -493,6 +525,10 @@ function buildPropertyExportCsv(
       stringFromProps(desarrolloProps, ["color"]) || "",
       "",
       "",
+      "",
+      "",
+      "",
+      "",
       geo.pais_codigo,
       geo.estado_cve,
       geo.municipio_cve,
@@ -520,6 +556,10 @@ function buildPropertyExportCsv(
         stringFromProps(capaProps, ["min_height"]) || "",
         stringFromProps(capaProps, ["levels"]) || "",
         stringFromProps(capaProps, ["color"]) || "",
+        "",
+        "",
+        "",
+        "",
         "",
         "",
         geo.pais_codigo,
@@ -552,6 +592,11 @@ function buildPropertyExportCsv(
           stringFromProps(unidadProps, ["color"]) || "",
           stringFromProps(unidadProps, ["precio"]) || csvField(unidad.precio ?? ""),
           stringFromProps(unidadProps, ["area_m2"]) || csvField(unidad.area_m2 ?? ""),
+          stringFromProps(unidadProps, ["precio_tipo"]) || csvField(unidad.precio_tipo || ""),
+          stringFromProps(unidadProps, ["precio_m2"]) || csvField(unidad.precio_m2 ?? ""),
+          stringFromProps(unidadProps, ["destino_inventario"]) ||
+            csvField(unidad.destino_inventario || "comercial"),
+          stringFromProps(unidadProps, ["oportunidad_id"]) || csvField(unidad.oportunidad_id ?? ""),
           geo.pais_codigo,
           geo.estado_cve,
           geo.municipio_cve,
@@ -571,11 +616,24 @@ const UNIDAD_STATUS_OPTIONS = [
   { value: "apartado", label: "Apartado" },
   { value: "vendido", label: "Vendido" },
   { value: "reservado", label: "Reservado" },
+  { value: "bloqueado", label: "Bloqueado" },
 ] as const;
 type UnidadStatus = (typeof UNIDAD_STATUS_OPTIONS)[number]["value"];
 
 const CAPA_STATUS_OPTIONS = UNIDAD_STATUS_OPTIONS;
 type CapaStatus = UnidadStatus;
+
+const DESTINO_INVENTARIO_OPTIONS = [
+  { value: "comercial", label: "Comercial" },
+  { value: "patrimonial", label: "Reserva patrimonial" },
+] as const;
+
+const PRECIO_TIPO_OPTIONS = [
+  { value: "manual", label: "Manual" },
+  { value: "m2", label: "Por m²" },
+] as const;
+
+const SALE_TRACKED_STATUS_SET = new Set(["reservado", "apartado", "vendido"]);
 
 export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFormProps) {
   const [formValues, setFormValues] = useState({
@@ -616,8 +674,12 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
       nombre: "",
       tipoId: tipos[0]?.id ?? "",
       status: "disponible",
+      destinoInventario: "comercial",
+      precioTipo: "manual",
       precio: "",
+      precioM2: "",
       area: "",
+      oportunidadId: "",
       lineaId: lineas[0]?.id ?? "",
       familiaId: familias[0]?.id ?? "",
       modeloId: modelos[0]?.id ?? "",
@@ -907,7 +969,20 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
 
   const handleUnidadField = useCallback(
     (field: keyof UnidadFormState, value: string) => {
-      setUnidadForm((prev) => ({ ...prev, [field]: value }));
+      setUnidadForm((prev) => {
+        const next = { ...prev, [field]: value } as UnidadFormState;
+        if (field === "destinoInventario" && value === "patrimonial") {
+          next.status = "bloqueado";
+          next.oportunidadId = "";
+        }
+        if (field === "precioTipo" && value === "manual") {
+          next.precioM2 = "";
+        }
+        if (field === "status" && !SALE_TRACKED_STATUS_SET.has(value)) {
+          next.oportunidadId = "";
+        }
+        return next;
+      });
     },
     [],
   );
@@ -970,13 +1045,25 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
     (desarrollo: DesarrolloNode, capa: CapaNode, unidad: UnidadNode) => {
       setCreatingUnidadFor({ desarrollo, capa });
       setEditingUnidad(unidad);
+      const destinoInventario =
+        (unidad.destino_inventario || "comercial").toLowerCase() === "patrimonial"
+          ? "patrimonial"
+          : "comercial";
+      const precioTipo =
+        (unidad.precio_tipo || (unidad.precio_m2 != null ? "m2" : "manual")).toLowerCase() === "m2"
+          ? "m2"
+          : "manual";
       setUnidadForm({
         unidad: unidad.unidad || "",
         nombre: unidad.nombre || unidad.unidad,
         tipoId: unidad.tipo_id || tipos[0]?.id || "",
-        status: (unidad.status || "disponible") as UnidadStatus,
+        status: destinoInventario === "patrimonial" ? "bloqueado" : ((unidad.status || "disponible") as UnidadStatus),
+        destinoInventario,
+        precioTipo,
         precio: unidad.precio != null ? String(unidad.precio) : "",
+        precioM2: unidad.precio_m2 != null ? String(unidad.precio_m2) : "",
         area: unidad.area_m2 != null ? String(unidad.area_m2) : "",
+        oportunidadId: unidad.oportunidad_id || "",
         lineaId: unidad.linea_id || "",
         familiaId: unidad.familia_id || "",
         modeloId: unidad.modelo_id || "",
@@ -1073,6 +1160,8 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
   const [mixMunicipioOptions, setMixMunicipioOptions] = useState<LocationOption[]>([]);
   const [locationError, setLocationError] = useState<string | null>(null);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+  const [isLoadingOpportunities, setIsLoadingOpportunities] = useState(false);
+  const [opportunityOptions, setOpportunityOptions] = useState<OpportunityOption[]>([]);
   const [importFile, setImportFile] = useState<File | null>(null);
   const [importFileName, setImportFileName] = useState<string | null>(null);
   const [importStatus, setImportStatus] = useState<ImportStatus>("idle");
@@ -1456,6 +1545,64 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
     };
   }, [mixForm.estadoCve]);
 
+  useEffect(() => {
+    if (!isUnidadModalOpen) {
+      setOpportunityOptions([]);
+      setIsLoadingOpportunities(false);
+      return;
+    }
+    const controller = new AbortController();
+    setIsLoadingOpportunities(true);
+    (async () => {
+      try {
+        const response = await fetch("/api/crm/oportunidades/ventas/lista?limit=200", {
+          signal: controller.signal,
+        });
+        if (!response.ok) {
+          const payload = await response.json().catch(() => null);
+          throw new Error(payload?.error || "No se pudieron consultar oportunidades.");
+        }
+        const data = await response.json().catch(() => []);
+        if (!controller.signal.aborted) {
+          setOpportunityOptions(Array.isArray(data) ? data : []);
+        }
+      } catch (error) {
+        if (!controller.signal.aborted) {
+          console.error("Error cargando oportunidades:", error);
+          setOpportunityOptions([]);
+        }
+      } finally {
+        if (!controller.signal.aborted) {
+          setIsLoadingOpportunities(false);
+        }
+      }
+    })();
+    return () => controller.abort();
+  }, [isUnidadModalOpen]);
+
+  const unidadRequiereOportunidad = SALE_TRACKED_STATUS_SET.has(unidadForm.status);
+  const unidadEsPatrimonial = unidadForm.destinoInventario === "patrimonial";
+  const unidadPrecioCalculado = useMemo(() => {
+    if (unidadForm.precioTipo === "m2") {
+      const areaValue = Number(unidadForm.area);
+      const precioM2Value = Number(unidadForm.precioM2);
+      if (
+        Number.isNaN(areaValue) ||
+        Number.isNaN(precioM2Value) ||
+        areaValue <= 0 ||
+        precioM2Value <= 0
+      ) {
+        return null;
+      }
+      return areaValue * precioM2Value;
+    }
+    const precioValue = Number(unidadForm.precio);
+    if (Number.isNaN(precioValue) || precioValue <= 0) {
+      return null;
+    }
+    return precioValue;
+  }, [unidadForm.area, unidadForm.precio, unidadForm.precioM2, unidadForm.precioTipo]);
+
   const isEditingDesarrollo = Boolean(editingDesarrolloId);
 
   const handleSaveDesarrollo = useCallback(async () => {
@@ -1708,26 +1855,48 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
       tipo_id: unidadForm.tipoId,
       nivel_id: creatingUnidadFor.capa.id,
       desarrollo_id: creatingUnidadFor.desarrollo.id,
-      status: unidadForm.status,
+      status: unidadForm.destinoInventario === "patrimonial" ? "bloqueado" : unidadForm.status,
+      destino_inventario: unidadForm.destinoInventario,
+      precio_tipo: unidadForm.precioTipo,
     };
     if (unidadForm.descripcion.trim()) {
       payload.descripcion = unidadForm.descripcion.trim();
     }
-    if (unidadForm.precio.trim()) {
-      const precioValue = Number(unidadForm.precio);
-      if (Number.isNaN(precioValue)) {
-        setUnidadFormError("Ingresa un precio válido.");
-        return;
-      }
-      payload.precio = precioValue;
-    }
-    if (unidadForm.area.trim()) {
+    if (unidadForm.precioTipo === "m2") {
       const areaValue = Number(unidadForm.area);
-      if (Number.isNaN(areaValue)) {
+      if (Number.isNaN(areaValue) || areaValue <= 0) {
         setUnidadFormError("Ingresa un área en m² válida.");
         return;
       }
       payload.area_m2 = areaValue;
+      const precioM2Value = Number(unidadForm.precioM2);
+      if (Number.isNaN(precioM2Value) || precioM2Value <= 0) {
+        setUnidadFormError("Ingresa un precio por m² válido.");
+        return;
+      }
+      payload.precio_m2 = precioM2Value;
+    } else {
+      const precioValue = Number(unidadForm.precio);
+      if (Number.isNaN(precioValue) || precioValue <= 0) {
+        setUnidadFormError("Ingresa un precio válido.");
+        return;
+      }
+      payload.precio = precioValue;
+      if (unidadForm.area.trim()) {
+        const areaValue = Number(unidadForm.area);
+        if (Number.isNaN(areaValue) || areaValue <= 0) {
+          setUnidadFormError("Ingresa un área en m² válida.");
+          return;
+        }
+        payload.area_m2 = areaValue;
+      }
+    }
+    if (unidadRequiereOportunidad) {
+      if (!unidadForm.oportunidadId) {
+        setUnidadFormError("Selecciona la oportunidad vinculada a este estado.");
+        return;
+      }
+      payload.oportunidad_id = unidadForm.oportunidadId;
     }
     if (unidadForm.lineaId) {
       payload.linea_id = unidadForm.lineaId;
@@ -1778,6 +1947,7 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
     editingUnidad,
     resetUnidadForm,
     unidadForm,
+    unidadRequiereOportunidad,
   ]);
 
   const handleCreateMix = useCallback(async () => {
@@ -1939,6 +2109,7 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
     apartado: "text-amber-500",
     vendido: "text-rose-500",
     reservado: "text-slate-400",
+    bloqueado: "text-slate-600",
   };
 
   const getStatusLabelClass = (status: string | null) => {
@@ -2979,8 +3150,8 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
             </DialogTitle>
             <DialogDescription>
               {editingUnidad
-                ? "Actualiza los datos comerciales de esta unidad y guarda el resultado."
-                : "Captura el inventario comercial y dibuja el polígono correspondiente antes de guardar."}
+                ? "Actualiza los datos de esta unidad, su destino de inventario y el precio."
+                : "Captura el inventario comercial o patrimonial y dibuja el polígono correspondiente antes de guardar."}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
@@ -3026,6 +3197,7 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
                 <Select
                   value={unidadForm.status}
                   onValueChange={(value) => handleUnidadField("status", value as UnidadStatus)}
+                  disabled={unidadEsPatrimonial}
                 >
                   <SelectTrigger size="sm">
                     <SelectValue placeholder="Selecciona un status" />
@@ -3042,15 +3214,91 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
             </div>
             <div className="grid gap-3 md:grid-cols-2">
               <div className="space-y-1">
-                <Label className="text-[0.7rem]">Precio</Label>
-                <Input
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  value={unidadForm.precio}
-                  onChange={(event) => handleUnidadField("precio", event.target.value)}
-                  placeholder="Ej. 3500000"
-                />
+                <Label className="text-[0.7rem]">Destino del inventario</Label>
+                <Select
+                  value={unidadForm.destinoInventario}
+                  onValueChange={(value) =>
+                    handleUnidadField(
+                      "destinoInventario",
+                      value === "patrimonial" ? "patrimonial" : "comercial",
+                    )
+                  }
+                >
+                  <SelectTrigger size="sm">
+                    <SelectValue placeholder="Selecciona un destino" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {DESTINO_INVENTARIO_OPTIONS.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {unidadEsPatrimonial && (
+                  <p className="text-[0.65rem] text-muted-foreground">
+                    Esta unidad se guardará como bloqueada y fuera del flujo comercial.
+                  </p>
+                )}
+              </div>
+              <div className="space-y-1">
+                <Label className="text-[0.7rem]">
+                  Oportunidad {unidadRequiereOportunidad ? "(requerida)" : "(opcional)"}
+                </Label>
+                <Select
+                  value={unidadForm.oportunidadId || "__none"}
+                  onValueChange={(value) =>
+                    handleUnidadField("oportunidadId", value === "__none" ? "" : value)
+                  }
+                  disabled={unidadEsPatrimonial}
+                >
+                  <SelectTrigger size="sm">
+                    <SelectValue
+                      placeholder={
+                        isLoadingOpportunities
+                          ? "Cargando oportunidades…"
+                          : "Selecciona una oportunidad"
+                      }
+                    />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none">Sin oportunidad</SelectItem>
+                    {opportunityOptions.map((option) => (
+                      <SelectItem key={option.id} value={option.id}>
+                        {option.titulo}
+                        {option.contactoNombre ? ` · ${option.contactoNombre}` : ""}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="grid gap-3 md:grid-cols-2">
+              <div className="space-y-1">
+                <Label className="text-[0.7rem]">Forma de precio</Label>
+                <Select
+                  value={unidadForm.precioTipo}
+                  onValueChange={(value) => handleUnidadField("precioTipo", value as "manual" | "m2")}
+                >
+                  <SelectTrigger size="sm">
+                    <SelectValue placeholder="Selecciona el cálculo" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {PRECIO_TIPO_OPTIONS.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {unidadPrecioCalculado != null && (
+                  <p className="text-[0.65rem] text-muted-foreground">
+                    Precio calculado: {new Intl.NumberFormat("es-MX", {
+                      style: "currency",
+                      currency: "MXN",
+                    }).format(unidadPrecioCalculado)}
+                  </p>
+                )}
               </div>
               <div className="space-y-1">
                 <Label className="text-[0.7rem]">Área (m²)</Label>
@@ -3064,6 +3312,31 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
                 />
               </div>
             </div>
+            {unidadForm.precioTipo === "m2" ? (
+              <div className="space-y-1">
+                <Label className="text-[0.7rem]">Precio por m²</Label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={unidadForm.precioM2}
+                  onChange={(event) => handleUnidadField("precioM2", event.target.value)}
+                  placeholder="Ej. 15000"
+                />
+              </div>
+            ) : (
+              <div className="space-y-1">
+                <Label className="text-[0.7rem]">Precio</Label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={unidadForm.precio}
+                  onChange={(event) => handleUnidadField("precio", event.target.value)}
+                  placeholder="Ej. 3500000"
+                />
+              </div>
+            )}
             <div className="space-y-1">
               <Label className="text-[0.7rem]">Línea de negocio</Label>
                 <Select

@@ -2391,7 +2391,7 @@ export function PropertyMap() {
       layerRef.current?.clearLayers();
       municipalPolygonLayerRef.current?.clearLayers();
     };
-  }, [applyLayerStyle, buildRegionTooltipContent, leaflet, leafletMountVersion]);
+  }, [applyLayerStyle, leaflet, leafletMountVersion]);
 
   useEffect(() => {
     if (!leaflet || !leafletDrillControlsRef.current) {
