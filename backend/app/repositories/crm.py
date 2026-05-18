@@ -10161,6 +10161,25 @@ class CRMRepository:
             data = [row for row in data if isinstance(row, dict) and row.get("contacto_id")]
         return data
 
+    async def visitas_persona_detalle(
+        self,
+        *,
+        usuario_token: str,
+        limit: int = 200,
+        offset: int = 0,
+        order_by: str = "primera",
+        order_dir: Literal["asc", "desc"] = "asc",
+        with_personas_only: bool = False,
+    ) -> list[dict[str, Any]]:
+        return await self.visitas_detalle(
+            usuario_token=usuario_token,
+            limit=limit,
+            offset=offset,
+            order_by=order_by,
+            order_dir=order_dir,
+            with_contacts_only=with_personas_only,
+        )
+
     async def visitas_detalle_custom(
         self,
         *,
@@ -10269,6 +10288,25 @@ class CRMRepository:
             rows=rows,
             source_fields=("contacto_id",),
             target_field="contacto",
+        )
+
+    async def visitas_persona_whatsapp_conversaciones(
+        self,
+        *,
+        usuario_token: str | None = None,
+        organizacion_id: UUID | None = None,
+        limit: int = 200,
+        date_from: datetime | None = None,
+        date_to: datetime | None = None,
+        include_persona_details: bool = True,
+    ) -> list[dict[str, Any]]:
+        return await self.visitas_whatsapp_conversaciones(
+            usuario_token=usuario_token,
+            organizacion_id=organizacion_id,
+            limit=limit,
+            date_from=date_from,
+            date_to=date_to,
+            include_contact_details=include_persona_details,
         )
 
     async def list_whatsapp_sales_assignments(

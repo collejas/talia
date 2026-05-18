@@ -700,12 +700,12 @@ async def _enrich_visitantes_payload_with_whatsapp_locations(
         return
 
     try:
-        whatsapp_rows = await repo.visitas_whatsapp_conversaciones(
+        whatsapp_rows = await repo.visitas_persona_whatsapp_conversaciones(
             organizacion_id=organizacion_id,
             limit=2000,
             date_from=date_from,
             date_to=date_to,
-            include_contact_details=False,
+            include_persona_details=False,
         )
     except CRMRepositoryError:
         logger.exception("crm.demografia.whatsapp_location_resolution_failed")
@@ -27956,13 +27956,13 @@ async def get_visits_detail(
         raise HTTPException(status_code=400, detail="order_dir_invalid")
     effective_order_by = (order_by or "primera").strip() or "primera"
     try:
-        rows = await repo.visitas_detalle(
+        rows = await repo.visitas_persona_detalle(
             usuario_token=user_token,
             limit=limit,
             offset=offset,
             order_by=effective_order_by,
             order_dir=order_dir,
-            with_contacts_only=with_contacts_only,
+            with_personas_only=with_contacts_only,
         )
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
@@ -28277,7 +28277,7 @@ async def get_visits_whatsapp_conversations(
             raise HTTPException(status_code=400, detail="wa_regla_id_invalid") from exc
 
     try:
-        rows = await repo.visitas_whatsapp_conversaciones(
+        rows = await repo.visitas_persona_whatsapp_conversaciones(
             usuario_token=_normalize_reports_user_token(user_token),
             organizacion_id=organizacion_id,
             limit=limit,
