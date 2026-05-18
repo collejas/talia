@@ -241,14 +241,14 @@ def _log_trace_stage(
     *,
     stage: str,
     conversation_id: str | None,
-    contact_id: str | None,
+    persona_id: str | None,
     inbound_message_id: str | None,
     extra: dict[str, Any] | None = None,
 ) -> None:
     payload: dict[str, Any] = {
         "stage": stage,
         "conversation_id": conversation_id,
-        "contact_id": contact_id,
+        "persona_id": persona_id,
         "inbound_message_id": inbound_message_id,
     }
     if extra:
@@ -268,7 +268,7 @@ def _log_turn_timing(
     *,
     trace_id: str,
     conversation_id: str | None,
-    contact_id: str | None,
+    persona_id: str | None,
     inbound_message_id: str | None,
     total_started_at: float,
     stage_timings: dict[str, float],
@@ -277,7 +277,7 @@ def _log_turn_timing(
     payload: dict[str, Any] = {
         "trace_id": trace_id,
         "conversation_id": conversation_id,
-        "contact_id": contact_id,
+        "persona_id": persona_id,
         "inbound_message_id": inbound_message_id,
         "total_ms": round((time.perf_counter() - total_started_at) * 1000, 2),
         "stage_timings": dict(stage_timings),
@@ -512,7 +512,7 @@ async def _ensure_opportunity_when_persona_ready(
             logger,
             "webchat.assignment.blocked_persona_missing",
             conversation_id=conversation_id,
-            contact_id=persona_key,
+            persona_id=persona_key,
         )
         raise ValueError(CONTACT_ASSIGNMENT_ERROR)
     return await storage.ensure_persona_conversation_opportunity(
@@ -1277,7 +1277,7 @@ async def schedule_calendar_booking(
             resource_id=resource_id,
             slot_start=start_at,
             conversation_id=conversation_id,
-            contact_id=persona_id,
+            persona_id=persona_id,
             tarjeta_id=tarjeta_id,
             hold_minutes=hold_minutes,
             metadata=hold_metadata,
@@ -3079,7 +3079,7 @@ async def handle_message(
     _log_trace_stage(
         stage="inbound_persisted",
         conversation_id=str(conversation_id),
-        contact_id=str(persona_id),
+        persona_id=str(persona_id),
         inbound_message_id=inbound_message_id,
         extra={"session_id": payload.session_id},
     )
@@ -3189,7 +3189,7 @@ async def handle_message(
             "webchat.booking_context_failed",
             extra={
                 "conversation_id": context.conversation_id,
-                "contact_id": context.persona_id,
+                "persona_id": context.persona_id,
                 "error": str(exc),
             },
         )
@@ -3198,7 +3198,7 @@ async def handle_message(
         _log_trace_stage(
             stage="assistant_generation_started",
             conversation_id=str(conversation_id),
-            contact_id=str(persona_id),
+            persona_id=str(persona_id),
             inbound_message_id=inbound_message_id,
             extra={
                 "previous_response_id": conversation_meta.get("last_response_id"),
@@ -3249,7 +3249,7 @@ async def handle_message(
         _log_turn_timing(
             trace_id=trace_id,
             conversation_id=str(conversation_id),
-            contact_id=str(persona_id),
+            persona_id=str(persona_id),
             inbound_message_id=inbound_message_id,
             total_started_at=turn_started,
             stage_timings=stage_timings,
@@ -3280,7 +3280,7 @@ async def handle_message(
         _log_trace_stage(
             stage="assistant_generated",
             conversation_id=str(conversation_id),
-            contact_id=str(persona_id),
+            persona_id=str(persona_id),
             inbound_message_id=inbound_message_id,
             extra={
                 "response_id": metadata.assistant_response_id,
@@ -3345,7 +3345,7 @@ async def handle_message(
             _log_trace_stage(
                 stage="assistant_persisted",
                 conversation_id=str(conversation_id),
-                contact_id=str(persona_id),
+                persona_id=str(persona_id),
                 inbound_message_id=inbound_message_id,
                 extra={"outbound_message_id": outgoing_registration.get("message_id")},
             )
@@ -3353,7 +3353,7 @@ async def handle_message(
     _log_trace_stage(
         stage="response_returned",
         conversation_id=str(conversation_id),
-        contact_id=str(persona_id),
+        persona_id=str(persona_id),
         inbound_message_id=inbound_message_id,
         extra={"fallback_used": assistant_reply == DEFAULT_FALLBACK},
     )
@@ -3364,7 +3364,7 @@ async def handle_message(
     _log_turn_timing(
         trace_id=trace_id,
         conversation_id=str(conversation_id),
-        contact_id=str(persona_id),
+        persona_id=str(persona_id),
         inbound_message_id=inbound_message_id,
         total_started_at=turn_started,
         stage_timings=stage_timings,
@@ -4030,7 +4030,7 @@ async def _run_assistant_turn(
                 api_key=api_key,
                 request_metadata={"conversation_id": context.conversation_id},
                 conversation_id=context.conversation_id,
-                contact_id=context.persona_id,
+                persona_id=context.persona_id,
                 quality_retry_used=True,
                 project_id=assistant.project_id,
             )
@@ -4646,6 +4646,7 @@ async def _execute_function_call(
 
         confirm_metadata = {
             "conversation_id": context.conversation_id,
+            "persona_id": context.persona_id,
             "contact_id": context.persona_id,
             "session_id": context.session_id,
             "tarjeta_id": tarjeta_id,
@@ -4660,7 +4661,7 @@ async def _execute_function_call(
                 resource_id=resource_id,
                 slot_start=slot_datetime,
                 conversation_id=context.conversation_id,
-                contact_id=context.persona_id,
+                persona_id=context.persona_id,
                 tarjeta_id=tarjeta_id,
                 hold_minutes=hold_minutes,
                 metadata=hold_metadata,
@@ -4694,7 +4695,7 @@ async def _execute_function_call(
         )
         await _send_booking_confirmation_email(
             booking=booking_response,
-            contact_id=context.persona_id,
+            persona_id=context.persona_id,
             conversation_id=context.conversation_id,
             tarjeta_id=tarjeta_id,
             persona=persona,
@@ -4809,7 +4810,7 @@ async def _execute_function_call(
             org_uuid = UUID(str((persona or {}).get("organizacion_id")))
             await enqueue_webchat_sales_notification(
                 conversation_id=context.conversation_id,
-                contact_id=context.persona_id,
+                persona_id=context.persona_id,
                 trigger="booking_confirmed",
                 channel="webchat",
                 organizacion_id=org_uuid,
@@ -4868,7 +4869,7 @@ async def _execute_function_call(
                 notes=notes,
                 metadata={
                     "conversation_id": context.conversation_id,
-                    "contact_id": context.persona_id,
+                    "persona_id": context.persona_id,
                     "session_id": context.session_id,
                 },
             )
@@ -4884,7 +4885,7 @@ async def _execute_function_call(
         )
         await _send_booking_confirmation_email(
             booking=booking_response,
-            contact_id=context.persona_id,
+            persona_id=context.persona_id,
             conversation_id=context.conversation_id,
             tarjeta_id=booking_response.tarjeta_id,
             persona=persona,
@@ -4927,7 +4928,7 @@ async def _execute_function_call(
             org_uuid = UUID(str((persona or {}).get("organizacion_id")))
             await enqueue_webchat_sales_notification(
                 conversation_id=context.conversation_id,
-                contact_id=context.persona_id,
+                persona_id=context.persona_id,
                 trigger="booking_canceled",
                 channel="webchat",
                 organizacion_id=org_uuid,

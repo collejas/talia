@@ -43,7 +43,8 @@ def _serialize_contact(contact: dict[str, Any] | None) -> dict[str, Any] | None:
 async def enqueue_webchat_sales_notification(
     *,
     conversation_id: str,
-    contact_id: str,
+    persona_id: str | None = None,
+    contact_id: str | None = None,
     trigger: str,
     channel: str,
     organizacion_id: UUID,
@@ -57,13 +58,14 @@ async def enqueue_webchat_sales_notification(
     """Encola una notificación crítica para vendedor."""
 
     conversation_uuid = _safe_uuid(conversation_id)
-    contact_uuid = _safe_uuid(contact_id)
+    resolved_contact_id = persona_id or contact_id
+    contact_uuid = _safe_uuid(resolved_contact_id)
     if not conversation_uuid or not contact_uuid:
         logger.warning(
             "sales_notification.enqueue_invalid_ids",
             extra={
                 "conversation_id": conversation_id,
-                "contact_id": contact_id,
+                "persona_id": resolved_contact_id,
                 "trigger": trigger,
             },
         )
@@ -73,6 +75,7 @@ async def enqueue_webchat_sales_notification(
         "context": {
             "conversation_id": str(conversation_uuid),
             "contact_id": str(contact_uuid),
+            "persona_id": str(contact_uuid),
             "channel": _clean_text(channel) or "webchat",
         },
         "trigger": _clean_text(trigger),
@@ -101,7 +104,7 @@ async def enqueue_webchat_sales_notification(
             "sales_notification.enqueue_failed",
             extra={
                 "conversation_id": str(conversation_uuid),
-                "contact_id": str(contact_uuid),
+                "persona_id": str(contact_uuid),
                 "trigger": trigger,
                 "error": str(exc),
             },
@@ -114,7 +117,7 @@ async def enqueue_webchat_sales_notification(
         extra={
             "job_id": row.get("id"),
             "conversation_id": str(conversation_uuid),
-            "contact_id": str(contact_uuid),
+            "persona_id": str(contact_uuid),
             "trigger": trigger,
         },
     )

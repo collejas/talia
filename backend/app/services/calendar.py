@@ -155,17 +155,19 @@ async def hold_slot(
     resource_id: str,
     slot_start: datetime,
     conversation_id: str | None,
+    persona_id: str | None = None,
     contact_id: str | None = None,
     tarjeta_id: str | None = None,
     hold_minutes: int = 5,
     metadata: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Crea un hold temporal para evitar doble reserva."""
+    resolved_persona_id = persona_id or contact_id
     payload = {
         "p_resource_id": resource_id,
         "p_slot_start": _normalize_datetime(slot_start),
         "p_conversacion_id": conversation_id,
-        "p_contact_id": contact_id,
+        "p_contact_id": resolved_persona_id,
         "p_hold_minutes": hold_minutes,
         "p_metadata": metadata or {},
     }
