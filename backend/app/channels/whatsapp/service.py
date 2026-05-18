@@ -1792,7 +1792,7 @@ async def handle_incoming_message(
         opportunity_ref = str(restart_context.get("oportunidad_id") or opportunity_ref or "").strip() or None
         context = ToolRuntimeContext(
             conversation_id=conversation_id,
-            contact_id=contact_id,
+            persona_id=contact_id,
             channel="whatsapp",
         )
         resumen_text = f"El contacto retomó la conversación (ciclo #{restart_sequence})."
@@ -2366,7 +2366,7 @@ async def _retry_failed_sales_notification(
     channel_value = str(assignment.get("canal") or "").strip().lower() or "whatsapp"
     context = ToolRuntimeContext(
         conversation_id=conversation_id,
-        contact_id=contact_id,
+        persona_id=contact_id,
         channel=channel_value,
     )
     try:
@@ -2934,7 +2934,7 @@ async def _generate_assistant_reply(
 
     context_obj = ToolRuntimeContext(
         conversation_id=conversation_id,
-        contact_id=contact_id,
+        persona_id=contact_id,
         session_id=f"whatsapp:{conversation_id}",
         channel="whatsapp",
         organizacion_id=str(organizacion_id) if organizacion_id else None,

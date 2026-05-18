@@ -3175,7 +3175,7 @@ async def handle_message(
         catalog_context = await build_catalog_context(
             organizacion_hint,
             payload.content or "",
-            user_id=context.contact_id,
+            user_id=context.persona_id,
             channel="webchat",
         )
         _record_stage_timing(stage_timings, "catalog_context_ms", catalog_context_started)
@@ -3183,7 +3183,7 @@ async def handle_message(
     try:
         booking_context_started = time.perf_counter()
         booking_context_text = await build_booking_context_message(
-            persona_id=context.contact_id,
+            persona_id=context.persona_id,
             conversation_id=context.conversation_id,
             channel="webchat",
             persona=persona,
@@ -3194,7 +3194,7 @@ async def handle_message(
             "webchat.booking_context_failed",
             extra={
                 "conversation_id": context.conversation_id,
-                "contact_id": context.contact_id,
+                "contact_id": context.persona_id,
                 "error": str(exc),
             },
         )
@@ -3928,7 +3928,7 @@ async def _run_assistant_turn(
 
     runtime_context = ToolRuntimeContext(
         conversation_id=context.conversation_id,
-        contact_id=context.contact_id,
+        persona_id=context.persona_id,
         session_id=context.session_id,
         channel="webchat",
         organizacion_id=organizacion_id,
@@ -4035,7 +4035,7 @@ async def _run_assistant_turn(
                 api_key=api_key,
                 request_metadata={"conversation_id": context.conversation_id},
                 conversation_id=context.conversation_id,
-                contact_id=context.contact_id,
+                contact_id=context.persona_id,
                 quality_retry_used=True,
                 project_id=assistant.project_id,
             )
@@ -4245,7 +4245,7 @@ async def _execute_function_call(
 
     lead_context = ToolRuntimeContext(
         conversation_id=context.conversation_id,
-        contact_id=context.contact_id,
+        persona_id=context.persona_id,
         session_id=context.session_id,
     )
     lead_result = await lead_tools.try_execute_lead_tool(name, arguments, lead_context)
@@ -4259,7 +4259,7 @@ async def _execute_function_call(
         if not notes or not necesidad:
             raise ValueError("notes y necesidad_proposito son requeridos para close_lead")
         await storage.update_persona(
-            context.contact_id,
+            context.persona_id,
             {"notes": notes, "necesidad_proposito": necesidad},
         )
         await storage.update_conversation(context.conversation_id, {"estado": "pendiente"})
@@ -4269,12 +4269,12 @@ async def _execute_function_call(
             intencion=necesidad,
             siguiente_accion=siguiente_accion,
         )
-        persona_record = await _resolve_persona(context.contact_id)
+        persona_record = await _resolve_persona(context.persona_id)
         opportunity_id = None
         try:
             opportunity_id = await storage.ensure_persona_conversation_opportunity(
                 conversation_id=context.conversation_id,
-                persona_id=context.contact_id,
+                persona_id=context.persona_id,
                 channel="webchat",
             )
         except StorageError as exc:
@@ -4288,9 +4288,9 @@ async def _execute_function_call(
             except StorageError:
                 convo_meta = {}
             resolved_persona_id = str(convo_meta.get("contact_id") or "").strip()
-            if resolved_persona_id and resolved_persona_id != context.contact_id:
+            if resolved_persona_id and resolved_persona_id != context.persona_id:
                 persona_record = await _resolve_persona(resolved_persona_id)
-                context.contact_id = resolved_persona_id
+                context.persona_id = resolved_persona_id
         if opportunity_id:
             channel_value = "webchat"
             profiling_enabled_for_channel = True
@@ -4429,7 +4429,7 @@ async def _execute_function_call(
                 try:
                     await storage.apply_persona_lead_scoring(
                         conversation_id=context.conversation_id,
-                        persona_id=context.contact_id,
+                        persona_id=context.persona_id,
                         opportunity_id=str(opportunity_id),
                         answers=scoring_answers,
                         events=scoring_events,
@@ -4445,7 +4445,7 @@ async def _execute_function_call(
                 try:
                     await storage.maybe_promote_prequalified_from_persona(
                         conversation_id=context.conversation_id,
-                        persona_id=context.contact_id,
+                        persona_id=context.persona_id,
                         opportunity_id=str(opportunity_id),
                         channel="webchat",
                     )
@@ -4466,7 +4466,7 @@ async def _execute_function_call(
         try:
             await storage.maybe_auto_name_persona_opportunity(
                 conversation_id=context.conversation_id,
-                persona_id=context.contact_id,
+                persona_id=context.persona_id,
                 opportunity_id=str(opportunity_id) if opportunity_id else None,
                 intent=necesidad,
                 summary=notes,
@@ -4528,7 +4528,7 @@ async def _execute_function_call(
         }
 
     if name == "schedule_demo":
-        persona = await _resolve_persona(context.contact_id)
+        persona = await _resolve_persona(context.persona_id)
         try:
             tarjeta_id = await _ensure_opportunity_when_persona_ready(
                 conversation_id=context.conversation_id,
@@ -4567,7 +4567,7 @@ async def _execute_function_call(
                 try:
                     await storage.apply_persona_lead_scoring(
                         conversation_id=context.conversation_id,
-                        persona_id=context.contact_id,
+                        persona_id=context.persona_id,
                         opportunity_id=str(tarjeta_id),
                         answers=inferred_answers,
                         events={
@@ -4633,7 +4633,7 @@ async def _execute_function_call(
             organizacion_id=UUID(str(organizacion_hint)) if organizacion_hint else None,
             start_at=slot_datetime,
             timezone_name=calendar_settings.timezone,
-            topic=f"Demo Tal-IA - {persona_name or context.contact_id}",
+            topic=f"Demo Tal-IA - {persona_name or context.persona_id}",
             agenda=notes,
         )
 
@@ -4651,7 +4651,7 @@ async def _execute_function_call(
 
         confirm_metadata = {
             "conversation_id": context.conversation_id,
-            "contact_id": context.contact_id,
+            "contact_id": context.persona_id,
             "session_id": context.session_id,
             "tarjeta_id": tarjeta_id,
         }
@@ -4665,7 +4665,7 @@ async def _execute_function_call(
                 resource_id=resource_id,
                 slot_start=slot_datetime,
                 conversation_id=context.conversation_id,
-                contact_id=context.contact_id,
+                contact_id=context.persona_id,
                 tarjeta_id=tarjeta_id,
                 hold_minutes=hold_minutes,
                 metadata=hold_metadata,
@@ -4682,7 +4682,7 @@ async def _execute_function_call(
 
         booking_response = _build_booking_response(booking)
         booking_response.hold_id = hold.get("hold_id")
-        persona = await _resolve_persona(context.contact_id)
+        persona = await _resolve_persona(context.persona_id)
         profiling_enabled_for_channel = True
         persona_org = _extract_persona_org(persona) if persona else None
         persona_org_uuid = _resolve_org_uuid(persona_org) if persona_org else None
@@ -4699,7 +4699,7 @@ async def _execute_function_call(
         )
         await _send_booking_confirmation_email(
             booking=booking_response,
-            contact_id=context.contact_id,
+            contact_id=context.persona_id,
             conversation_id=context.conversation_id,
             tarjeta_id=tarjeta_id,
             persona=persona,
@@ -4709,7 +4709,7 @@ async def _execute_function_call(
                 try:
                     await storage.apply_persona_lead_scoring(
                         conversation_id=context.conversation_id,
-                        persona_id=context.contact_id,
+                        persona_id=context.persona_id,
                         opportunity_id=str(tarjeta_id),
                         events={
                             "channel": "webchat",
@@ -4735,7 +4735,7 @@ async def _execute_function_call(
             try:
                 await storage.maybe_promote_prequalified_from_persona(
                     conversation_id=context.conversation_id,
-                    persona_id=context.contact_id,
+                    persona_id=context.persona_id,
                     opportunity_id=str(tarjeta_id),
                     channel="webchat",
                 )
@@ -4765,8 +4765,8 @@ async def _execute_function_call(
                 persona_patch["necesidad_proposito"] = necesidad_auto
             if persona_patch:
                 try:
-                    await storage.update_persona(context.contact_id, persona_patch)
-                    persona = await _resolve_persona(context.contact_id)
+                    await storage.update_persona(context.persona_id, persona_patch)
+                    persona = await _resolve_persona(context.persona_id)
                 except StorageError as exc:
                     logger.warning(
                         "webchat.schedule_demo.auto_persona_context_failed",
@@ -4775,7 +4775,7 @@ async def _execute_function_call(
             try:
                 await storage.sync_persona_opportunity_context(
                     conversation_id=context.conversation_id,
-                    persona_id=context.contact_id,
+                    persona_id=context.persona_id,
                     opportunity_id=str(tarjeta_id),
                     channel="webchat",
                 )
@@ -4799,7 +4799,7 @@ async def _execute_function_call(
             try:
                 await storage.maybe_auto_name_persona_opportunity(
                     conversation_id=context.conversation_id,
-                    persona_id=context.contact_id,
+                    persona_id=context.persona_id,
                     opportunity_id=str(tarjeta_id),
                     intent=necesidad_auto,
                     summary=notes_auto,
@@ -4814,7 +4814,7 @@ async def _execute_function_call(
             org_uuid = UUID(str((persona or {}).get("organizacion_id")))
             await enqueue_webchat_sales_notification(
                 conversation_id=context.conversation_id,
-                contact_id=context.contact_id,
+                contact_id=context.persona_id,
                 trigger="booking_confirmed",
                 channel="webchat",
                 organizacion_id=org_uuid,
@@ -4873,14 +4873,14 @@ async def _execute_function_call(
                 notes=notes,
                 metadata={
                     "conversation_id": context.conversation_id,
-                    "contact_id": context.contact_id,
+                    "contact_id": context.persona_id,
                     "session_id": context.session_id,
                 },
             )
         except CalendarError as exc:
             raise ValueError(str(exc)) from exc
         booking_response = _build_booking_response(booking)
-        persona = await _resolve_persona(context.contact_id)
+        persona = await _resolve_persona(context.persona_id)
         await _sync_booking_with_opportunity(
             booking=booking_response,
             tarjeta_id=booking_response.tarjeta_id,
@@ -4889,7 +4889,7 @@ async def _execute_function_call(
         )
         await _send_booking_confirmation_email(
             booking=booking_response,
-            contact_id=context.contact_id,
+            contact_id=context.persona_id,
             conversation_id=context.conversation_id,
             tarjeta_id=booking_response.tarjeta_id,
             persona=persona,
@@ -4927,12 +4927,12 @@ async def _execute_function_call(
             "end_at": booking.get("end_at"),
             "status": booking.get("status"),
         }
-        persona = await _resolve_persona(context.contact_id)
+        persona = await _resolve_persona(context.persona_id)
         try:
             org_uuid = UUID(str((persona or {}).get("organizacion_id")))
             await enqueue_webchat_sales_notification(
                 conversation_id=context.conversation_id,
-                contact_id=context.contact_id,
+                contact_id=context.persona_id,
                 trigger="booking_canceled",
                 channel="webchat",
                 organizacion_id=org_uuid,
@@ -4968,8 +4968,8 @@ async def _execute_function_call(
         org_value = str(org_value_raw).strip() if org_value_raw else None
         persona = None
         persona_org = None
-        if context.contact_id:
-            persona = await _resolve_persona(context.contact_id)
+        if context.persona_id:
+            persona = await _resolve_persona(context.persona_id)
             persona_org = _extract_persona_org(persona)
         if not org_value or org_value == context.conversation_id:
             org_value = persona_org
@@ -5032,8 +5032,8 @@ async def _execute_function_call(
         org_value = str(org_value_raw).strip() if org_value_raw else None
         persona = None
         persona_org = None
-        if context.contact_id:
-            persona = await _resolve_persona(context.contact_id)
+        if context.persona_id:
+            persona = await _resolve_persona(context.persona_id)
             persona_org = _extract_persona_org(persona)
         # No confiar ciegamente en el argumento del LLM para evitar cruces de tenant.
         # Si tenemos org del contacto, esa es la fuente canónica.
@@ -5109,8 +5109,8 @@ async def _execute_function_call(
         org_value = str(org_value_raw).strip() if org_value_raw else None
         persona = None
         persona_org = None
-        if context.contact_id:
-            persona = await _resolve_persona(context.contact_id)
+        if context.persona_id:
+            persona = await _resolve_persona(context.persona_id)
             persona_org = _extract_persona_org(persona)
         # No confiar ciegamente en el argumento del LLM para evitar cruces de tenant.
         # Si tenemos org del contacto, esa es la fuente canónica.

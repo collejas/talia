@@ -7098,20 +7098,6 @@ class CRMRepository:
                 prefer="return=representation",
             )
 
-        try:
-            await self.ensure_legacy_contact_shadow(
-                organizacion_id=organizacion_id,
-                persona_id=_coerce_uuid(str(persona_row.get("id")), field="persona_id"),
-            )
-        except CRMRepositoryError as exc:
-            logger.warning(
-                "crm.legacy_contact_shadow_failed",
-                extra={
-                    "persona_id": str(persona_row.get("id")),
-                    "error": str(exc),
-                },
-            )
-
         return await self.get_contact(
             organizacion_id=organizacion_id,
             contacto_id=contacto_id,

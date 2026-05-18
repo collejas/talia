@@ -239,7 +239,7 @@ class SalesNotificationJobsRunner:
             return
         context = ToolRuntimeContext(
             conversation_id=conversation_id,
-            contact_id=contact_id,
+            persona_id=contact_id,
             channel=channel,
         )
 

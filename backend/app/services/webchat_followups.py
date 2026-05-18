@@ -496,7 +496,7 @@ async def _escalate_due_to_attempt_limit(
 
     context = ToolRuntimeContext(
         conversation_id=conversation_id,
-        contact_id=contact_id,
+        persona_id=contact_id,
         channel="webchat",
     )
     resumen = str(contact.get("necesidad_proposito") or contact.get("notes") or "").strip() or None
@@ -908,7 +908,7 @@ async def notify_session_closed_lead(
 
     context = ToolRuntimeContext(
         conversation_id=conversation_id,
-        contact_id=str(contact_id),
+        persona_id=str(contact_id),
         channel="webchat",
     )
     resumen = str(contact.get("necesidad_proposito") or "").strip() or None
@@ -921,7 +921,7 @@ async def notify_session_closed_lead(
     try:
         await enqueue_webchat_sales_notification(
             conversation_id=context.conversation_id,
-            contact_id=context.contact_id,
+            contact_id=context.persona_id,
             trigger="webchat_session_closed",
             channel="webchat",
             organizacion_id=org_uuid,

@@ -470,7 +470,7 @@ async def _escalate_persona_to_sales(
 
     context = ToolRuntimeContext(
         conversation_id=conversation_id,
-        contact_id=persona_id,
+        persona_id=persona_id,
         channel="whatsapp",
     )
     try:

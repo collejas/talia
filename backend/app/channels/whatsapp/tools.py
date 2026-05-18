@@ -2254,7 +2254,7 @@ async def _handle_schedule_demo(
     try:
         tarjeta_id = await webchat_service._ensure_opportunity_when_persona_ready(
             conversation_id=context.conversation_id,
-            contact_id=persona_id,
+            persona_id=persona_id,
             channel="whatsapp",
             persona=persona,
         )

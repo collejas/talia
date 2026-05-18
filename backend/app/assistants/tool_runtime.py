@@ -30,19 +30,19 @@ class ToolRuntimeContext:
     """Contexto mínimo para ejecutar function calls."""
 
     conversation_id: str
-    contact_id: str
+    persona_id: str
     session_id: str | None = None
     channel: str | None = None
     organizacion_id: str | None = None
     feature: str | None = None
 
     @property
-    def persona_id(self) -> str:
-        return self.contact_id
+    def contact_id(self) -> str:
+        return self.persona_id
 
-    @persona_id.setter
-    def persona_id(self, value: str) -> None:
-        self.contact_id = value
+    @contact_id.setter
+    def contact_id(self, value: str) -> None:
+        self.persona_id = value
 
 
 @dataclass(slots=True)
@@ -201,7 +201,7 @@ async def run_tool_loop(
                     "pending_calls": len(pending_calls),
                 },
                 conversation_id=context.conversation_id,
-                contact_id=context.contact_id,
+                contact_id=context.persona_id,
                 project_id=assistant.project_id,
             )
         iteration_index += 1

@@ -102,7 +102,7 @@ async def _refresh_webchat_followup_state(context: ToolRuntimeContext) -> None:
     try:
         await webchat_followups.refresh_persona_followup_state(
             conversation_id=context.conversation_id,
-            persona_id=context.contact_id,
+            persona_id=context.persona_id,
             session_id=context.session_id,
         )
     except StorageError as exc:
@@ -110,7 +110,7 @@ async def _refresh_webchat_followup_state(context: ToolRuntimeContext) -> None:
             "lead_tools.followup_refresh_failed",
             extra={
                 "conversation_id": context.conversation_id,
-                "contact_id": context.contact_id,
+                "contact_id": context.persona_id,
                 "error": str(exc),
             },
         )
@@ -122,7 +122,7 @@ async def _mark_webchat_delivery(context: ToolRuntimeContext, reason: str) -> No
     try:
         await webchat_followups.mark_persona_information_delivered(
             conversation_id=context.conversation_id,
-            persona_id=context.contact_id,
+            persona_id=context.persona_id,
             reason=reason,
         )
     except StorageError as exc:
@@ -130,7 +130,7 @@ async def _mark_webchat_delivery(context: ToolRuntimeContext, reason: str) -> No
             "lead_tools.followup_delivery_failed",
             extra={
                 "conversation_id": context.conversation_id,
-                "contact_id": context.contact_id,
+                "contact_id": context.persona_id,
                 "reason": reason,
                 "error": str(exc),
             },
@@ -153,13 +153,13 @@ async def _notify_webchat_sales_if_needed(
     persona_record = persona
     if not persona_record:
         try:
-            persona_record = await storage.fetch_persona(context.contact_id)
+            persona_record = await storage.fetch_persona(context.persona_id)
         except StorageError as exc:
             logger.warning(
                 "lead_tools.notify_sales_contact_fetch_failed",
                 extra={
                     "conversation_id": context.conversation_id,
-                    "contact_id": context.contact_id,
+                    "contact_id": context.persona_id,
                     "trigger": trigger,
                     "error": str(exc),
                 },
@@ -184,7 +184,7 @@ async def _notify_webchat_sales_if_needed(
             "lead_tools.notify_sales_failed",
             extra={
                 "conversation_id": context.conversation_id,
-                "contact_id": context.contact_id,
+                "contact_id": context.persona_id,
                 "trigger": trigger,
                 "error": str(exc),
             },
@@ -201,15 +201,15 @@ async def try_execute_lead_tool(
     tool_name = name.strip()
     if tool_name == "set_full_name":
         full_name = _require_argument(arguments, "full_name")
-        await storage.update_persona(context.contact_id, {"nombre_completo": full_name})
+        await storage.update_persona(context.persona_id, {"nombre_completo": full_name})
         return {"status": "ok", "full_name": full_name}
 
     if tool_name == "set_email":
         email = _require_argument(arguments, "email").lower()
-        await storage.update_persona(context.contact_id, {"correo": email})
+        await storage.update_persona(context.persona_id, {"correo": email})
         await storage.capture_persona_lead_if_ready(
             conversation_id=context.conversation_id,
-            persona_id=context.contact_id,
+            persona_id=context.persona_id,
             channel=context.channel or "webchat",
         )
         await _refresh_webchat_followup_state(context)
@@ -217,10 +217,10 @@ async def try_execute_lead_tool(
 
     if tool_name == "set_phone_number":
         phone_number = _require_argument(arguments, "phone_number")
-        await storage.update_persona(context.contact_id, {"telefono_e164": phone_number})
+        await storage.update_persona(context.persona_id, {"telefono_e164": phone_number})
         await storage.capture_persona_lead_if_ready(
             conversation_id=context.conversation_id,
-            persona_id=context.contact_id,
+            persona_id=context.persona_id,
             channel=context.channel or "webchat",
         )
         await _refresh_webchat_followup_state(context)
@@ -228,7 +228,7 @@ async def try_execute_lead_tool(
 
     if tool_name == "set_company_name":
         company_name = _require_argument(arguments, "company_name")
-        await storage.update_persona(context.contact_id, {"company_name": company_name})
+        await storage.update_persona(context.persona_id, {"company_name": company_name})
         await _refresh_webchat_followup_state(context)
         return {"status": "ok", "company_name": company_name}
 
@@ -248,13 +248,13 @@ async def try_execute_lead_tool(
         tarjeta_id: str | None = None
         contact_ready = await webchat_followups.ensure_persona_ready_for_assignment(
             conversation_id=context.conversation_id,
-            persona_id=context.contact_id,
+            persona_id=context.persona_id,
         )
         if contact_ready:
             try:
                 tarjeta_id = await storage.ensure_persona_conversation_opportunity(
                     conversation_id=context.conversation_id,
-                    persona_id=context.contact_id,
+                    persona_id=context.persona_id,
                     channel=context.channel,
                 )
             except StorageError as exc:
@@ -263,7 +263,7 @@ async def try_execute_lead_tool(
                     extra={"conversation_id": context.conversation_id, "error": str(exc)},
                 )
         await storage.update_persona(
-            context.contact_id,
+            context.persona_id,
             {"notes": notes, "necesidad_proposito": necesidad},
         )
         try:
@@ -360,7 +360,7 @@ async def try_execute_lead_tool(
             try:
                 await storage.apply_persona_lead_scoring(
                     conversation_id=context.conversation_id,
-                    persona_id=context.contact_id,
+                    persona_id=context.persona_id,
                     opportunity_id=str(tarjeta_id),
                     answers=scoring_answers,
                     events=scoring_events,
@@ -376,7 +376,7 @@ async def try_execute_lead_tool(
             try:
                 await storage.maybe_promote_prequalified_from_persona(
                     conversation_id=context.conversation_id,
-                    persona_id=context.contact_id,
+                    persona_id=context.persona_id,
                     opportunity_id=str(tarjeta_id),
                     channel=context.channel or "webchat",
                 )
@@ -387,16 +387,16 @@ async def try_execute_lead_tool(
                 )
         await _refresh_webchat_followup_state(context)
         persona_record = None
-        if context.contact_id:
+        if context.persona_id:
             try:
-                persona_record = await storage.fetch_persona(context.contact_id)
+                persona_record = await storage.fetch_persona(context.persona_id)
             except StorageError:
                 persona_record = None
         if tarjeta_id:
             try:
                 await storage.maybe_auto_name_persona_opportunity(
                     conversation_id=context.conversation_id,
-                    persona_id=context.contact_id,
+                    persona_id=context.persona_id,
                     opportunity_id=str(tarjeta_id),
                     intent=necesidad,
                     summary=notes,
@@ -428,13 +428,13 @@ async def try_execute_lead_tool(
     if tool_name == "mark_contact_ready":
         ready = await webchat_followups.ensure_persona_ready_for_assignment(
             conversation_id=context.conversation_id,
-            persona_id=context.contact_id,
+            persona_id=context.persona_id,
         )
         if not ready:
             raise ValueError("No hay teléfono ni correo para marcar contacto listo")
         _, oportunidad_id = await storage.capture_persona_lead_if_ready(
             conversation_id=context.conversation_id,
-            persona_id=context.contact_id,
+            persona_id=context.persona_id,
             channel=context.channel or "webchat",
         )
         await _refresh_webchat_followup_state(context)
@@ -478,7 +478,7 @@ async def _handle_information_email(
                 if label and url:
                     resources.append({"label": label, "url": url})
 
-    persona = await _fetch_persona(context.contact_id)
+    persona = await _fetch_persona(context.persona_id)
     persona_notes = None
     persona_need = None
     if persona:
@@ -500,13 +500,13 @@ async def _handle_information_email(
         if contact_email and email_value and contact_email.lower() != email_value.lower():
             try:
                 await storage.update_persona(
-                    persona.get("id") or context.contact_id, {"correo": email_value.lower()}
+                    persona.get("id") or context.persona_id, {"correo": email_value.lower()}
                 )
             except StorageError as exc:
                 logger.warning(
                     "lead_tools.sync_contact_failed",
                     extra={
-                        "contact_id": persona.get("id") or context.contact_id,
+                        "contact_id": persona.get("id") or context.persona_id,
                         "error": str(exc),
                 },
                 )
@@ -573,7 +573,7 @@ async def _handle_restart_conversation_cycle(
     try:
         ensure_payload = await storage.ensure_persona_conversation_opportunity(
             conversation_id=context.conversation_id,
-            persona_id=context.contact_id,
+            persona_id=context.persona_id,
             channel=channel,
             force_new_opportunity_on_restart=True,
             include_restart_metadata=True,
@@ -583,7 +583,7 @@ async def _handle_restart_conversation_cycle(
             "lead_tools.restart_failed",
             extra={
                 "conversation_id": context.conversation_id,
-                "contact_id": context.contact_id,
+                "contact_id": context.persona_id,
                 "error": str(exc),
             },
         )
@@ -938,7 +938,7 @@ async def _handle_information_package(
         arguments,
         default_channel=str(context.channel or "email"),
     )
-    persona = await _fetch_persona(context.contact_id)
+    persona = await _fetch_persona(context.persona_id)
     persona_notes = None
     persona_need = None
     if persona:
