@@ -1441,7 +1441,7 @@ async def register_whatsapp_message(
         except CRMRepositoryError as exc:
             logger.warning(
                 "storage.whatsapp_profile_name_normalization_failed",
-                extra={"contact_id": persona_id_value, "error": str(exc)},
+                extra={"persona_id": persona_id_value, "error": str(exc)},
             )
     try:
         await _publish_inbox_realtime_event(
@@ -1614,8 +1614,8 @@ async def fetch_webchat_conversation(conversation_id: str) -> dict[str, Any]:
     return await fetch_conversation(conversation_id)
 
 
-async def get_webchat_contact_id(session_id: str) -> str | None:
-    """Devuelve el contacto asociado a un session_id para el canal webchat."""
+async def get_webchat_persona_id(session_id: str) -> str | None:
+    """Devuelve la persona asociada a un session_id para el canal webchat."""
     repo = CRMRepository()
     try:
         return await repo.get_webchat_contact_id_by_session(session_id=session_id)
@@ -1623,36 +1623,36 @@ async def get_webchat_contact_id(session_id: str) -> str | None:
         raise StorageError(str(exc)) from exc
 
 
-async def get_webchat_persona_id(session_id: str) -> str | None:
-    """Alias con nombre de persona para el contacto asociado a un session_id."""
-    return await get_webchat_contact_id(session_id)
+async def get_webchat_contact_id(session_id: str) -> str | None:
+    """Alias legado para el contacto asociado a un session_id."""
+    return await get_webchat_persona_id(session_id)
 
 
-async def fetch_webchat_session_id(contact_id: str) -> str | None:
-    """Obtiene el session_id asociado al contacto para el canal webchat."""
+async def fetch_webchat_session_id_by_persona(persona_id: str) -> str | None:
+    """Obtiene el session_id asociado a una persona para el canal webchat."""
     repo = CRMRepository()
     try:
-        return await repo.get_webchat_session_by_contact(contact_id=contact_id)
+        return await repo.get_webchat_session_by_contact(contact_id=persona_id)
     except CRMRepositoryError as exc:
         raise StorageError(str(exc)) from exc
 
 
-async def fetch_webchat_session_id_by_persona(persona_id: str) -> str | None:
-    """Alias con nombre de persona para el session_id webchat asociado."""
-    return await fetch_webchat_session_id(persona_id)
+async def fetch_webchat_session_id(contact_id: str) -> str | None:
+    """Alias legado del session_id webchat asociado."""
+    return await fetch_webchat_session_id_by_persona(contact_id)
 
 
 async def resolve_webchat_conversation_from_session(
     session_id: str,
 ) -> dict[str, Any] | None:
     """Obtiene la última conversación webchat asociada a un session_id."""
-    contact_id = await get_webchat_persona_id(session_id)
-    if not contact_id:
+    persona_id = await get_webchat_persona_id(session_id)
+    if not persona_id:
         return None
 
     repo = CRMRepository()
     try:
-        row = await repo.get_latest_webchat_conversation(contact_id=contact_id)
+        row = await repo.get_latest_webchat_conversation(contact_id=persona_id)
     except CRMRepositoryError as exc:
         raise StorageError(str(exc)) from exc
     if not row:
@@ -1662,6 +1662,7 @@ async def resolve_webchat_conversation_from_session(
     return {
         "id": row.get("id"),
         "contact_id": row.get("contacto_id"),
+        "persona_id": row.get("contacto_id"),
         "channel": row.get("canal"),
         "openai_conversation_id": row.get("conversacion_openai_id"),
         "last_response_id": row.get("last_response_id"),
@@ -2658,7 +2659,7 @@ async def ensure_conversation_opportunity(
                 meta = {
                     "channel": normalized_channel,
                     "conversation_id": conversation_id,
-                    "contact_id": contact_id,
+                    "persona_id": contact_id,
                     "opportunity_id": str(opportunity_id),
                 }
                 for usuario_id in recipients:
@@ -2763,7 +2764,7 @@ async def maybe_auto_name_opportunity(
     except StorageError as exc:
         logger.warning(
             "storage.auto_name_opportunity.persona_lookup_failed",
-            extra={"contact_id": contact_id, "conversation_id": conversation_id, "error": str(exc)},
+            extra={"persona_id": contact_id, "conversation_id": conversation_id, "error": str(exc)},
         )
         return None
 
@@ -2789,7 +2790,7 @@ async def maybe_auto_name_opportunity(
             logger.warning(
                 "storage.auto_name_opportunity.ensure_failed",
                 extra={
-                    "contact_id": contact_id,
+                    "persona_id": contact_id,
                     "conversation_id": conversation_id,
                     "error": str(exc),
                 },
@@ -2922,7 +2923,7 @@ async def sync_persona_opportunity_context(
     except StorageError as exc:
         logger.warning(
             "storage.sync_persona_opportunity_context.persona_lookup_failed",
-            extra={"contact_id": persona_id, "conversation_id": conversation_id, "error": str(exc)},
+            extra={"persona_id": persona_id, "conversation_id": conversation_id, "error": str(exc)},
         )
         return False
     if not persona:
@@ -3031,7 +3032,7 @@ async def apply_lead_scoring(
     except StorageError as exc:
         logger.warning(
             "storage.lead_scoring.contact_lookup_failed",
-            extra={"contact_id": contact_id, "conversation_id": conversation_id, "error": str(exc)},
+            extra={"persona_id": contact_id, "conversation_id": conversation_id, "error": str(exc)},
         )
         return None
 
@@ -3046,7 +3047,7 @@ async def apply_lead_scoring(
         except StorageError as exc:
             logger.warning(
                 "storage.lead_scoring.ensure_opportunity_failed",
-                extra={"contact_id": contact_id, "conversation_id": conversation_id, "error": str(exc)},
+                extra={"persona_id": contact_id, "conversation_id": conversation_id, "error": str(exc)},
             )
             return None
 
@@ -3266,7 +3267,7 @@ async def apply_lead_scoring(
     except StorageError as exc:
         logger.warning(
             "storage.lead_scoring.contact_update_failed",
-            extra={"contact_id": contact_id, "conversation_id": conversation_id, "error": str(exc)},
+            extra={"persona_id": contact_id, "conversation_id": conversation_id, "error": str(exc)},
         )
 
     try:
@@ -3803,7 +3804,7 @@ async def capture_opportunity_if_ready(
     capture_channel = channel or "assistant"
     log_context = {
         "conversation_id": conversation_id,
-        "contact_id": contact_id,
+        "persona_id": contact_id,
         "channel": capture_channel,
     }
 
@@ -3812,7 +3813,7 @@ async def capture_opportunity_if_ready(
     except StorageError as exc:
         logger.warning(
             "storage.capture_opportunity.contact_failed",
-            extra={"contact_id": contact_id, "error": str(exc)},
+            extra={"persona_id": contact_id, "error": str(exc)},
         )
         log_event(
             logger,
@@ -3839,7 +3840,7 @@ async def capture_opportunity_if_ready(
             "storage.capture_opportunity.ensure_failed",
             extra={
                 "conversation_id": conversation_id,
-                "contact_id": contact_id,
+                "persona_id": contact_id,
                 "error": str(exc),
             },
         )
@@ -3874,7 +3875,7 @@ async def capture_opportunity_if_ready(
             "storage.capture_opportunity.promote_failed",
             extra={
                 "conversation_id": conversation_id,
-                "contact_id": contact_id,
+                "persona_id": contact_id,
                 "error": str(exc),
             },
         )
