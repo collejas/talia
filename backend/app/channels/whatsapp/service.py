@@ -1737,18 +1737,18 @@ async def handle_incoming_message(
                 prospecto_opportunity = None
             if isinstance(prospecto_opportunity, dict):
                 opportunity_ref = str(prospecto_opportunity.get("id") or "").strip() or None
-                prospect_contact_id = str(
+                prospect_persona_id = str(
                     prospecto_opportunity.get("contacto_principal_id") or ""
                 ).strip()
-                if prospect_contact_id:
-                    ensure_persona_id = prospect_contact_id
+                if prospect_persona_id:
+                    ensure_persona_id = prospect_persona_id
                     log_event(
                         logger,
-                        "whatsapp.prospeccion_reuse_opportunity_contact",
+                        "whatsapp.prospeccion_reuse_opportunity_persona",
                         conversation_id=conversation_id,
                         prospecto_id=str(prospecto_uuid),
                         opportunity_id=opportunity_ref,
-                        persona_id=prospect_contact_id,
+                        persona_id=prospect_persona_id,
                         inbound_persona_id=persona_id,
                     )
     try:
