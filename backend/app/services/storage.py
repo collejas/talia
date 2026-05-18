@@ -1240,8 +1240,6 @@ async def register_webchat_message(
     inactivity_hours: int | None = None,
     attachments: list[dict[str, Any]] | None = None,
     organizacion_id: str | None = None,
-    persona_id: str | None = None,
-    contact_id: str | None = None,
 ) -> dict[str, str | None]:
     """Invoca la RPC `registrar_mensaje_webchat` a través del repositorio CRM."""
     repo = CRMRepository()
@@ -1271,9 +1269,7 @@ async def register_webchat_message(
                 extra={"conversation_id": conversation_id, "error": str(exc)},
             )
     try:
-        persona_id_value = str(
-            result.get("persona_id") or result.get("contact_id") or persona_id or contact_id or ""
-        )
+        persona_id_value = str(result.get("persona_id") or result.get("contact_id") or "")
         await _publish_inbox_realtime_event(
             organizacion_id=str(
                 result.get("organizacion_id")
@@ -1499,8 +1495,6 @@ async def register_messenger_message(
     attachments: list[dict[str, Any]] | None = None,
     response_id: str | None = None,
     organizacion_id: str | None = None,
-    persona_id: str | None = None,
-    contact_id: str | None = None,
 ) -> dict[str, Any]:
     """Registra un mensaje inbound del canal Messenger y marca la conversación."""
 
