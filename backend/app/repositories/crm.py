@@ -6813,9 +6813,13 @@ class CRMRepository:
         self,
         *,
         organizacion_id: UUID,
-        contacto_id: UUID,
+        persona_id: UUID | None = None,
+        contacto_id: UUID | None = None,
     ) -> dict[str, Any] | None:
-        return await self.get_persona(organizacion_id=organizacion_id, persona_id=contacto_id)
+        resolved_persona_id = persona_id or contacto_id
+        if not resolved_persona_id:
+            return None
+        return await self.get_persona(organizacion_id=organizacion_id, persona_id=resolved_persona_id)
 
     async def get_personas_by_ids(
         self,
@@ -7646,8 +7650,16 @@ class CRMRepository:
             return row
         return await self._persona_to_contact_row(persona=row, organizacion_id=org_uuid)
 
-    async def get_contact_by_id(self, *, contact_id: str) -> dict[str, Any] | None:
-        return await self.get_persona_by_id(persona_id=contact_id)
+    async def get_contact_by_id(
+        self,
+        *,
+        persona_id: str | None = None,
+        contact_id: str | None = None,
+    ) -> dict[str, Any] | None:
+        resolved_persona_id = persona_id or contact_id
+        if not resolved_persona_id:
+            return None
+        return await self.get_persona_by_id(persona_id=resolved_persona_id)
 
     async def get_persona_by_phone_e164(
         self,
@@ -7798,8 +7810,16 @@ class CRMRepository:
         data = resp.json() or []
         return data if isinstance(data, list) else []
 
-    async def list_contact_identities(self, *, contact_id: str) -> list[dict[str, Any]]:
-        return await self.list_persona_identities(persona_id=contact_id)
+    async def list_contact_identities(
+        self,
+        *,
+        persona_id: str | None = None,
+        contact_id: str | None = None,
+    ) -> list[dict[str, Any]]:
+        resolved_persona_id = persona_id or contact_id
+        if not resolved_persona_id:
+            return []
+        return await self.list_persona_identities(persona_id=resolved_persona_id)
 
     async def update_persona_by_id(self, *, persona_id: str, patch: dict[str, Any]) -> dict[str, Any]:
         if not patch:
@@ -7821,8 +7841,17 @@ class CRMRepository:
             payload=patch,
         )
 
-    async def update_contact_by_id(self, *, contact_id: str, patch: dict[str, Any]) -> dict[str, Any]:
-        return await self.update_persona_by_id(persona_id=contact_id, patch=patch)
+    async def update_contact_by_id(
+        self,
+        *,
+        persona_id: str | None = None,
+        contact_id: str | None = None,
+        patch: dict[str, Any],
+    ) -> dict[str, Any]:
+        resolved_persona_id = persona_id or contact_id
+        if not resolved_persona_id:
+            raise CRMRepositoryError("contact_not_found")
+        return await self.update_persona_by_id(persona_id=resolved_persona_id, patch=patch)
 
     async def create_persona(
         self,
@@ -8225,9 +8254,13 @@ class CRMRepository:
         self,
         *,
         organizacion_id: UUID,
-        contacto_id: UUID,
+        persona_id: UUID | None = None,
+        contacto_id: UUID | None = None,
     ) -> None:
-        await self.delete_persona(organizacion_id=organizacion_id, persona_id=contacto_id)
+        resolved_persona_id = persona_id or contacto_id
+        if resolved_persona_id is None:
+            return
+        await self.delete_persona(organizacion_id=organizacion_id, persona_id=resolved_persona_id)
 
     async def list_opportunity_stage_history(
         self,
