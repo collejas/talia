@@ -15468,7 +15468,7 @@ def _build_error_payload(row: Mapping[str, str], headers_map: dict[str, str]) ->
 
 
 @router.get("/contacts/search", response_model=CRMPersonaSearchResponse)
-async def search_contacts_legacy(
+async def search_personas_legacy(
     *,
     repo: CRMRepository = Depends(get_repository),
     organizacion_id: UUID = Depends(require_organizacion_id),
@@ -17327,7 +17327,7 @@ async def get_persona(
 
 
 @router.get("/contactos/catalogos/paises", response_model=list[CRMGeoCountryItem])
-async def get_contactos_catalogo_paises(
+async def get_personas_catalogo_paises_legacy(
     *,
     repo: CRMRepository = Depends(get_repository),
     _: str = Depends(require_permission("contacts.read")),
@@ -17353,11 +17353,11 @@ async def get_personas_catalogo_paises(
     repo: CRMRepository = Depends(get_repository),
     _: str = Depends(require_permission("contacts.read")),
 ) -> list[CRMGeoCountryItem]:
-    return await get_contactos_catalogo_paises(repo=repo, _=_)
+    return await get_personas_catalogo_paises_legacy(repo=repo, _=_)
 
 
 @router.get("/contactos/catalogos/estados", response_model=list[CRMGeoStateItem])
-async def get_contactos_catalogo_estados(
+async def get_personas_catalogo_estados_legacy(
     *,
     repo: CRMRepository = Depends(get_repository),
     _: str = Depends(require_permission("contacts.read")),
@@ -17386,11 +17386,11 @@ async def get_personas_catalogo_estados(
     _: str = Depends(require_permission("contacts.read")),
     pais: str = Query(default="MX"),
 ) -> list[CRMGeoStateItem]:
-    return await get_contactos_catalogo_estados(repo=repo, _=_, pais=pais)
+    return await get_personas_catalogo_estados_legacy(repo=repo, _=_, pais=pais)
 
 
 @router.get("/contactos/catalogos/municipios", response_model=list[CRMGeoMunicipalityItem])
-async def get_contactos_catalogo_municipios(
+async def get_personas_catalogo_municipios_legacy(
     *,
     repo: CRMRepository = Depends(get_repository),
     _: str = Depends(require_permission("contacts.read")),
@@ -17425,7 +17425,7 @@ async def get_personas_catalogo_municipios(
     pais: str = Query(default="MX"),
     estado: str = Query(..., min_length=1),
 ) -> list[CRMGeoMunicipalityItem]:
-    return await get_contactos_catalogo_municipios(repo=repo, _=_, pais=pais, estado=estado)
+    return await get_personas_catalogo_municipios_legacy(repo=repo, _=_, pais=pais, estado=estado)
 
 
 @router.post("/contactos/{contacto_id}/reasignar", response_model=CRMReassignContactResponse)
