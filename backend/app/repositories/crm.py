@@ -10317,6 +10317,7 @@ class CRMRepository:
         offset: int = 0,
         order: Literal["creado_en.desc", "creado_en.asc"] = "creado_en.desc",
         oportunidad_id: UUID | None = None,
+        persona_id: UUID | None = None,
         contacto_id: UUID | None = None,
         conversacion_id: UUID | None = None,
         vendedor_id: UUID | None = None,
@@ -10329,8 +10330,9 @@ class CRMRepository:
         }
         if oportunidad_id:
             params["oportunidad_id"] = f"eq.{oportunidad_id}"
-        if contacto_id:
-            params["contacto_id"] = f"eq.{contacto_id}"
+        resolved_persona_id = persona_id or contacto_id
+        if resolved_persona_id:
+            params["contacto_id"] = f"eq.{resolved_persona_id}"
         if conversacion_id:
             params["conversacion_id"] = f"eq.{conversacion_id}"
         if vendedor_id:
@@ -10346,6 +10348,29 @@ class CRMRepository:
                 f"Respuesta inesperada al listar asignaciones WhatsApp: {data!r}"
             )
         return data
+
+    async def list_persona_whatsapp_assignments(
+        self,
+        *,
+        organizacion_id: UUID,
+        limit: int = 50,
+        offset: int = 0,
+        order: Literal["creado_en.desc", "creado_en.asc"] = "creado_en.desc",
+        oportunidad_id: UUID | None = None,
+        persona_id: UUID | None = None,
+        conversacion_id: UUID | None = None,
+        vendedor_id: UUID | None = None,
+    ) -> list[dict[str, Any]]:
+        return await self.list_whatsapp_sales_assignments(
+            organizacion_id=organizacion_id,
+            limit=limit,
+            offset=offset,
+            order=order,
+            oportunidad_id=oportunidad_id,
+            persona_id=persona_id,
+            conversacion_id=conversacion_id,
+            vendedor_id=vendedor_id,
+        )
 
     async def list_agenda_bookings(
         self,

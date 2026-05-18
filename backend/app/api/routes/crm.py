@@ -13221,6 +13221,7 @@ async def list_opportunities(
     _: str = Depends(require_permission("pipeline.view")),
     user_token: str = Depends(require_user_token),  # noqa: ARG001
     usuario_id: UUID | None = Depends(optional_usuario_id),
+    persona_id: UUID | None = Query(default=None),
     contacto_id: UUID | None = Query(default=None),
     etapa_id: UUID | None = Query(default=None),
     estado: str | None = Query(default=None),
@@ -29246,11 +29247,12 @@ async def list_sales_assignments(
     if not can_view_all:
         vendedor_id = usuario_id
     try:
-        rows = await repo.list_whatsapp_sales_assignments(
+        rows = await repo.list_persona_whatsapp_assignments(
             organizacion_id=organizacion_id,
             limit=limit,
             offset=offset,
             oportunidad_id=oportunidad_id,
+            persona_id=persona_id,
             contacto_id=contacto_id,
             conversacion_id=conversacion_id,
             vendedor_id=vendedor_id,
