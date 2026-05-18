@@ -179,7 +179,7 @@ async def _process_conversation(
             "whatsapp.followup.skip_outbound_prospeccion",
             extra={
                 "conversation_id": convo_id,
-                "contact_id": contact_id,
+                "persona_id": persona_id,
                 "source": _ensure_dict(conversation.get("inbox_context")).get("source"),
             },
         )
@@ -238,7 +238,7 @@ async def _process_conversation(
             "whatsapp.followup.skip_business_rule",
             extra={
                 "conversation_id": convo_id,
-                "contact_id": contact_id,
+                "persona_id": persona_id,
             },
         )
         return
@@ -284,12 +284,12 @@ async def _process_conversation(
         "whatsapp.followup.reengage_check",
         extra={
             "conversation_id": convo_id,
-            "contact_id": contact_id,
+            "persona_id": persona_id,
             "last_out": last_out_iso,
             "reengage_cutoff": reengage_cutoff.isoformat(),
             "reengage_sent_at": reengage_sent_at.isoformat() if reengage_sent_at else None,
             "attempts": reengage_attempts,
-            "contact_complete": contact_complete,
+            "persona_complete": contact_complete,
             "should_reengage": should_reengage,
             "escalate_cutoff": escalate_cutoff.isoformat(),
             "escalate_reference": escalate_reference_iso,
@@ -302,7 +302,7 @@ async def _process_conversation(
     if should_reengage:
         await _send_persona_reengage_message(
             conversation_id=str(convo_id),
-            persona_id=str(contact_id),
+            persona_id=str(persona_id),
             persona=contact,
             followup_meta=followup_meta,
             metadata=metadata,
@@ -316,7 +316,7 @@ async def _process_conversation(
     if should_escalate:
         await _escalate_persona_to_sales(
             conversation_id=str(convo_id),
-            persona_id=str(contact_id),
+            persona_id=str(persona_id),
             opportunity=opportunity,
             followup_meta=followup_meta,
             metadata=metadata,
@@ -385,7 +385,7 @@ async def _send_persona_reengage_message(
                 body=REENGAGE_TEMPLATE,
                 message_sid=message_sid,
                 conversation_id=conversation_id,
-                contact_id=contact_id_str,
+                persona_id=contact_id_str,
                 metadata=metadata_payload,
                 organizacion_id=str(persona.get("organizacion_id")) if persona.get("organizacion_id") else None,
             )
@@ -558,7 +558,7 @@ async def _ensure_inferred_persona_context(
     if isinstance(summary_record, dict):
         summary_text = str(summary_record.get("resumen") or "").strip()
     if not summary_text:
-        return contact
+        return persona
 
     inferred_notes = existing_notes or f"{_INFERRED_INACTIVITY_LABEL}: {summary_text}"
     inferred_need = existing_need or _build_inactivity_need(summary_text)
@@ -568,14 +568,14 @@ async def _ensure_inferred_persona_context(
     if not existing_need:
         patch_payload["necesidad_proposito"] = inferred_need
     if not patch_payload:
-        return contact
+        return persona
 
     try:
         updated_contact = await storage.update_persona(persona_id, patch_payload)
     except StorageError as exc:
         logger.warning(
             "whatsapp.followup.inferred_contact_update_failed",
-            extra={"conversation_id": conversation_id, "contact_id": persona_id, "error": str(exc)},
+            extra={"conversation_id": conversation_id, "persona_id": persona_id, "error": str(exc)},
         )
         updated_contact = {**persona, **patch_payload}
     try:
@@ -594,7 +594,7 @@ async def _ensure_inferred_persona_context(
         "whatsapp.followup.inferred_contact_context_created",
         extra={
             "conversation_id": conversation_id,
-            "contact_id": persona_id,
+            "persona_id": persona_id,
             "filled_notes": "notes" in patch_payload,
             "filled_need": "necesidad_proposito" in patch_payload,
         },
@@ -605,7 +605,7 @@ async def _ensure_inferred_persona_context(
 async def _send_reengage_message(
     *,
     conversation_id: str,
-    contact_id: str,
+    persona_id: str,
     contact: dict[str, Any],
     followup_meta: dict[str, Any],
     metadata: dict[str, Any],
@@ -616,7 +616,7 @@ async def _send_reengage_message(
 ) -> None:
     await _send_persona_reengage_message(
         conversation_id=conversation_id,
-        persona_id=contact_id,
+        persona_id=persona_id,
         persona=contact,
         followup_meta=followup_meta,
         metadata=metadata,
@@ -630,7 +630,7 @@ async def _send_reengage_message(
 async def _escalate_to_sales(
     *,
     conversation_id: str,
-    contact_id: str,
+    persona_id: str,
     opportunity: dict[str, Any],
     followup_meta: dict[str, Any],
     metadata: dict[str, Any],
@@ -638,7 +638,7 @@ async def _escalate_to_sales(
 ) -> None:
     await _escalate_persona_to_sales(
         conversation_id=conversation_id,
-        persona_id=contact_id,
+        persona_id=persona_id,
         opportunity=opportunity,
         followup_meta=followup_meta,
         metadata=metadata,
@@ -649,13 +649,13 @@ async def _escalate_to_sales(
 async def _ensure_inferred_contact_context(
     *,
     conversation_id: str,
-    contact_id: str,
+    persona_id: str,
     contact: dict[str, Any],
     opportunity: dict[str, Any],
 ) -> dict[str, Any]:
     return await _ensure_inferred_persona_context(
         conversation_id=conversation_id,
-        persona_id=contact_id,
+        persona_id=persona_id,
         persona=contact,
         opportunity=opportunity,
     )
