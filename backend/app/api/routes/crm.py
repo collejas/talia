@@ -23604,7 +23604,7 @@ async def guardar_vistas_prospectos(
 
 
 @router.get("/prospeccion/prospectos/contact-indicadores")
-async def listar_prospecto_contact_indicadores(
+async def listar_prospecto_indicadores_contacto_legacy(
     *,
     repo: CRMRepository = Depends(get_repository),
     _: str = Depends(require_permission("ejecutar_busquedas")),
@@ -23659,7 +23659,7 @@ async def listar_prospecto_contact_indicadores(
 
 
 @router.get("/prospeccion/contacto/batches")
-async def listar_contacto_batches(
+async def listar_batches_prospeccion_contacto_legacy(
     *,
     repo: CRMRepository = Depends(get_repository),
     _: str = Depends(require_permission("ejecutar_busquedas")),
@@ -23689,7 +23689,7 @@ async def listar_contacto_batches(
 
 
 @router.get("/prospeccion/contacto/envios")
-async def listar_contacto_envios(
+async def listar_envios_prospeccion_contacto_legacy(
     *,
     repo: CRMRepository = Depends(get_repository),
     _: str = Depends(require_permission("ejecutar_busquedas")),
@@ -23752,7 +23752,7 @@ async def listar_contacto_envios(
 
 
 @router.get("/prospeccion/contacto/logs")
-async def listar_contacto_logs(
+async def listar_logs_prospeccion_contacto_legacy(
     *,
     repo: CRMRepository = Depends(get_repository),
     _: str = Depends(require_permission("ejecutar_busquedas")),
@@ -23786,7 +23786,7 @@ async def listar_contacto_logs(
 
 
 @router.get("/prospeccion/contacto/suppressions")
-async def listar_contacto_suppressions(
+async def listar_suppressions_prospeccion_contacto_legacy(
     *,
     repo: CRMRepository = Depends(get_repository),
     _: str = Depends(require_permission("ejecutar_busquedas")),
@@ -23815,7 +23815,7 @@ async def listar_contacto_suppressions(
 
 
 @router.post("/prospeccion/contacto/suppressions")
-async def crear_contacto_suppression(
+async def crear_suppression_prospeccion_contacto_legacy(
     *,
     payload: ContactSuppressionPayload,
     repo: CRMRepository = Depends(get_repository),
@@ -23846,7 +23846,7 @@ async def crear_contacto_suppression(
 
 
 @router.patch("/prospeccion/contacto/suppressions/{suppression_id}")
-async def actualizar_contacto_suppression(
+async def actualizar_suppression_prospeccion_contacto_legacy(
     *,
     suppression_id: UUID,
     payload: ContactSuppressionUpdatePayload,
@@ -24101,7 +24101,7 @@ async def simular_whatsapp_atribucion_regla(
 
 
 @router.get("/prospeccion/contacto/templates")
-async def listar_contacto_templates(
+async def listar_templates_prospeccion_contacto_legacy(
     *,
     repo: CRMRepository = Depends(get_repository),
     _: str = Depends(require_permission("ejecutar_busquedas")),
@@ -24188,7 +24188,7 @@ async def listar_contacto_templates(
 
 
 @router.get("/prospeccion/contacto/templates/brevo-catalog")
-async def listar_brevo_templates_catalogo(
+async def listar_catalogo_brevo_templates_contacto_legacy(
     *,
     _: str = Depends(require_permission("ejecutar_busquedas")),
     organizacion_id: UUID = Depends(require_organizacion_id),
@@ -24222,7 +24222,7 @@ async def listar_brevo_templates_catalogo(
 
 
 @router.post("/prospeccion/contacto/templates/import-brevo")
-async def importar_brevo_template(
+async def importar_template_brevo_contacto_legacy(
     *,
     repo: CRMRepository = Depends(get_repository),
     _: str = Depends(require_permission("ejecutar_busquedas")),
@@ -24393,7 +24393,7 @@ async def prospeccion_whatsapp_readiness(
 
 
 @router.post("/prospeccion/contacto/templates")
-async def crear_contacto_template(
+async def crear_template_prospeccion_contacto_legacy(
     *,
     repo: CRMRepository = Depends(get_repository),
     _: str = Depends(require_permission("ejecutar_busquedas")),
@@ -24425,7 +24425,7 @@ async def crear_contacto_template(
 
 
 @router.patch("/prospeccion/contacto/templates/{template_id}")
-async def actualizar_contacto_template(
+async def actualizar_template_prospeccion_contacto_legacy(
     *,
     repo: CRMRepository = Depends(get_repository),
     _: str = Depends(require_permission("ejecutar_busquedas")),
@@ -24483,7 +24483,7 @@ async def actualizar_contacto_template(
 
 
 @router.delete("/prospeccion/contacto/templates/{template_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def eliminar_contacto_template(
+async def eliminar_template_prospeccion_contacto_legacy(
     *,
     repo: CRMRepository = Depends(get_repository),
     _: str = Depends(require_permission("ejecutar_busquedas")),
@@ -24500,7 +24500,7 @@ async def eliminar_contacto_template(
 
 
 @router.get("/prospeccion/contacto/listas")
-async def listar_contacto_listas(
+async def listar_listas_prospeccion_contacto_legacy(
     *,
     repo: CRMRepository = Depends(get_repository),
     _: str = Depends(require_permission("ejecutar_busquedas")),
@@ -24528,7 +24528,7 @@ async def listar_contacto_listas(
 
 
 @router.post("/prospeccion/contacto/listas")
-async def crear_contacto_lista(
+async def crear_lista_prospeccion_contacto_legacy(
     *,
     repo: CRMRepository = Depends(get_repository),
     _: str = Depends(require_permission("ejecutar_busquedas")),
@@ -24544,7 +24544,7 @@ async def crear_contacto_lista(
 
 
 @router.patch("/prospeccion/contacto/listas/{lista_id}")
-async def actualizar_contacto_lista(
+async def actualizar_lista_prospeccion_contacto_legacy(
     *,
     repo: CRMRepository = Depends(get_repository),
     _: str = Depends(require_permission("ejecutar_busquedas")),
@@ -24569,7 +24569,7 @@ async def actualizar_contacto_lista(
 
 
 @router.delete("/prospeccion/contacto/listas/{lista_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def eliminar_contacto_lista(
+async def eliminar_lista_prospeccion_contacto_legacy(
     *,
     repo: CRMRepository = Depends(get_repository),
     _: str = Depends(require_permission("ejecutar_busquedas")),
