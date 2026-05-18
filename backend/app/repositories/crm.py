@@ -4136,6 +4136,7 @@ class CRMRepository:
         message_sid: str | None,
         profile_name: str | None = None,
         conversation_id: str | None = None,
+        persona_id: str | None = None,
         contact_id: str | None = None,
         response_id: str | None = None,
         metadata: dict[str, Any] | None = None,
@@ -4145,6 +4146,7 @@ class CRMRepository:
         webhook_payload: dict[str, Any] | None = None,
         organizacion_id: str | None = None,
     ) -> dict[str, Any]:
+        resolved_persona_id = persona_id or contact_id
         payload: dict[str, Any] = {
             "p_direction": direction,
             "p_whatsapp_id": wa_id,
@@ -4154,7 +4156,7 @@ class CRMRepository:
             "p_message_sid": message_sid,
             "p_profile_name": profile_name,
             "p_conversation_id": conversation_id,
-            "p_contact_id": contact_id,
+            "p_contact_id": resolved_persona_id,
             "p_response_id": response_id,
         }
         minutes = (
@@ -4179,6 +4181,7 @@ class CRMRepository:
         return {
             "conversation_id": row.get("conversacion_id"),
             "message_id": row.get("mensaje_id"),
+            "persona_id": row.get("contacto_id"),
             "contact_id": row.get("contacto_id"),
             "openai_conversation_id": row.get("conversacion_openai_id"),
         }

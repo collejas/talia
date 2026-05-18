@@ -1318,6 +1318,7 @@ async def register_whatsapp_message(
     message_sid: str | None,
     profile_name: str | None = None,
     conversation_id: str | None = None,
+    persona_id: str | None = None,
     contact_id: str | None = None,
     response_id: str | None = None,
     metadata: dict[str, Any] | None = None,
@@ -1332,7 +1333,7 @@ async def register_whatsapp_message(
     metadata_payload = dict(metadata or {})
     if organizacion_id and "resolved_organizacion_id" not in metadata_payload:
         metadata_payload["resolved_organizacion_id"] = organizacion_id
-    resolved_persona_id = contact_id
+    resolved_persona_id = persona_id or contact_id
     resolved_conversation_id = conversation_id
 
     # Reusar conversación activa del mismo contacto para evitar abrir hilos
@@ -1391,7 +1392,7 @@ async def register_whatsapp_message(
             message_sid=message_sid,
             profile_name=profile_name,
             conversation_id=resolved_conversation_id,
-            contact_id=resolved_persona_id,
+            persona_id=resolved_persona_id,
             response_id=response_id,
             metadata=metadata_payload,
             inactivity_minutes=effective_inactivity_minutes,
@@ -1413,8 +1414,8 @@ async def register_whatsapp_message(
                 extra={"conversation_id": conversation_id, "error": str(exc)},
             )
 
-    if direction == "entrante" and profile_name and result.get("contact_id"):
-        persona_id_value = resolved_persona_id or str(result.get("contact_id"))
+    if direction == "entrante" and profile_name and (result.get("persona_id") or result.get("contact_id")):
+        persona_id_value = resolved_persona_id or str(result.get("persona_id") or result.get("contact_id"))
         try:
             persona_row = await repo.get_persona_by_id(persona_id=str(persona_id_value))
             if persona_row:
@@ -1457,7 +1458,7 @@ async def register_whatsapp_message(
             payload={
                 "channel": "whatsapp",
                 "conversation_id": str(result.get("conversation_id") or ""),
-                "persona_id": persona_id_value,
+                "persona_id": str(result.get("persona_id") or persona_id_value),
                 "direction": str(direction),
             },
         )

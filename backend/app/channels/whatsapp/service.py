@@ -1605,7 +1605,7 @@ async def handle_incoming_message(
         raise HTTPException(status_code=502, detail="whatsapp_register_failed") from exc
 
     conversation_id = str(registration.get("conversation_id") or "")
-    persona_id = str(registration.get("contact_id") or "")
+    persona_id = str(registration.get("persona_id") or registration.get("contact_id") or "")
     current_message_id = str(registration.get("message_id") or "")
     inbound_message_id = _normalize_inbound_message_id(current_message_id)
     openai_conversation_id = registration.get("openai_conversation_id")
@@ -2148,7 +2148,7 @@ async def handle_incoming_message(
         outgoing_registration = await storage.register_whatsapp_message(
             direction="saliente",
             conversation_id=conversation_id,
-            contact_id=persona_id,
+            persona_id=persona_id,
             body=final_reply_text,
             message_sid=send_result.sid,
             response_id=assistant_reply.response_id,
