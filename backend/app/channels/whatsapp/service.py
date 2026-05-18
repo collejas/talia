@@ -1437,9 +1437,9 @@ async def _guard_booking_confirmation_claim(
         if (not resolved_persona) or not resolved_opportunity_id:
             conversation_meta = await storage.fetch_conversation(conversation_id)
             if not resolved_persona:
-                contact_id = str(conversation_meta.get("contact_id") or "").strip()
-                if contact_id:
-                    resolved_persona = await storage.fetch_persona(contact_id)
+                persona_id_value = str(conversation_meta.get("persona_id") or "").strip()
+                if persona_id_value:
+                    resolved_persona = await storage.fetch_persona(persona_id_value)
             if not resolved_opportunity_id and resolved_persona:
                 resolved_opportunity_id = await storage.ensure_persona_conversation_opportunity(
                     conversation_id=conversation_id,
@@ -1711,7 +1711,7 @@ async def handle_incoming_message(
 
     restart_context: dict[str, Any] | None = None
     opportunity_ref: str | None = None
-    ensure_contact_id = contact_id
+    ensure_persona_id = contact_id
     ensure_opportunity_started: float | None = None
     if repo:
         ensure_opportunity_started = time.perf_counter()
@@ -1741,20 +1741,20 @@ async def handle_incoming_message(
                     prospecto_opportunity.get("contacto_principal_id") or ""
                 ).strip()
                 if prospect_contact_id:
-                    ensure_contact_id = prospect_contact_id
+                    ensure_persona_id = prospect_contact_id
                     log_event(
                         logger,
                         "whatsapp.prospeccion_reuse_opportunity_contact",
                         conversation_id=conversation_id,
                         prospecto_id=str(prospecto_uuid),
                         opportunity_id=opportunity_ref,
-                        contact_id=prospect_contact_id,
-                        inbound_contact_id=contact_id,
+                        persona_id=prospect_contact_id,
+                        inbound_persona_id=contact_id,
                     )
     try:
         ensure_payload = await storage.ensure_persona_conversation_opportunity(
             conversation_id=conversation_id,
-            persona_id=ensure_contact_id,
+            persona_id=ensure_persona_id,
             channel="whatsapp",
             include_restart_metadata=True,
         )
