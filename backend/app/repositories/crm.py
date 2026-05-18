@@ -4513,7 +4513,7 @@ class CRMRepository:
         )
         return message_row
 
-    async def get_webchat_contact_id_by_session(self, *, session_id: str) -> str | None:
+    async def get_webchat_persona_id_by_session(self, *, session_id: str) -> str | None:
         session_key = session_id.strip()
         if not session_key:
             return None
@@ -4534,37 +4534,40 @@ class CRMRepository:
             row = None
         if not isinstance(row, dict):
             return None
-        contact_id = row.get("contacto_id")
-        if not contact_id:
+        persona_id = row.get("contacto_id")
+        if not persona_id:
             return None
-        contact_key = str(contact_id).strip()
-        if not contact_key:
+        persona_key = str(persona_id).strip()
+        if not persona_key:
             return None
 
         # Evita retornar referencias huérfanas desde identidades_canal.
         persona_resp = await self._request(
-            "GET",
-            "/rest/v1/personas",
-            params={
-                "id": f"eq.{contact_key}",
-                "select": "id",
-                "limit": "1",
-            },
-        )
+                "GET",
+                "/rest/v1/personas",
+                params={
+                    "id": f"eq.{persona_key}",
+                    "select": "id",
+                    "limit": "1",
+                },
+            )
         persona_rows = persona_resp.json() or []
         if isinstance(persona_rows, list) and persona_rows:
-            return contact_key
+            return persona_key
         if isinstance(persona_rows, dict) and persona_rows.get("id"):
-            return contact_key
+            return persona_key
         return None
 
-    async def get_webchat_session_by_contact(self, *, contact_id: str) -> str | None:
-        contact_key = contact_id.strip()
-        if not contact_key:
+    async def get_webchat_contact_id_by_session(self, *, session_id: str) -> str | None:
+        return await self.get_webchat_persona_id_by_session(session_id=session_id)
+
+    async def get_webchat_session_by_persona(self, *, persona_id: str) -> str | None:
+        persona_key = persona_id.strip()
+        if not persona_key:
             return None
         params = {
             "select": "id_externo",
-            "contacto_id": f"eq.{contact_key}",
+            "contacto_id": f"eq.{persona_key}",
             "canal": "eq.webchat",
             "limit": "1",
         }
@@ -4582,16 +4585,19 @@ class CRMRepository:
         session_id = row.get("id_externo")
         return str(session_id) if session_id else None
 
-    async def get_latest_webchat_conversation(self, *, contact_id: str) -> dict[str, Any] | None:
-        contact_key = contact_id.strip()
-        if not contact_key:
+    async def get_webchat_session_by_contact(self, *, contact_id: str) -> str | None:
+        return await self.get_webchat_session_by_persona(persona_id=contact_id)
+
+    async def get_latest_webchat_conversation(self, *, persona_id: str) -> dict[str, Any] | None:
+        persona_key = persona_id.strip()
+        if not persona_key:
             return None
         params = {
             "select": (
                 "id,contacto_id,canal,conversacion_openai_id,last_response_id,"
                 "conversaciones_controles(manual_override)"
             ),
-            "contacto_id": f"eq.{contact_key}",
+            "contacto_id": f"eq.{persona_key}",
             "canal": "eq.webchat",
             "order": "iniciada_en.desc",
             "limit": "1",
@@ -4608,13 +4614,13 @@ class CRMRepository:
             return None
         return row
 
-    async def get_latest_whatsapp_conversation(self, *, contact_id: str) -> dict[str, Any] | None:
-        contact_key = contact_id.strip()
-        if not contact_key:
+    async def get_latest_whatsapp_conversation(self, *, persona_id: str) -> dict[str, Any] | None:
+        persona_key = persona_id.strip()
+        if not persona_key:
             return None
         params = {
             "select": "id,contacto_id,canal,estado",
-            "contacto_id": f"eq.{contact_key}",
+            "contacto_id": f"eq.{persona_key}",
             "canal": "eq.whatsapp",
             "order": "iniciada_en.desc",
             "limit": "1",
@@ -5242,6 +5248,9 @@ class CRMRepository:
         if not isinstance(row, dict):
             return None
         return row
+
+    async def get_latest_whatsapp_conversation_legacy(self, *, contact_id: str) -> dict[str, Any] | None:
+        return await self.get_latest_whatsapp_conversation(persona_id=contact_id)
 
     async def upload_webchat_object(
         self,
