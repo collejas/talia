@@ -1197,7 +1197,7 @@ async def _maybe_apply_publicidad_whatsapp_attribution(
                 )
 
     try:
-        persona_row = await repo.get_persona_by_id(persona_id=contact_id)
+        persona_row = await repo.get_persona_by_id(persona_id=persona_id)
     except CRMRepositoryError as exc:
         log_event(
             logger,
@@ -1605,7 +1605,7 @@ async def handle_incoming_message(
         raise HTTPException(status_code=502, detail="whatsapp_register_failed") from exc
 
     conversation_id = str(registration.get("conversation_id") or "")
-    contact_id = str(registration.get("contact_id") or "")
+    persona_id = str(registration.get("contact_id") or "")
     current_message_id = str(registration.get("message_id") or "")
     inbound_message_id = _normalize_inbound_message_id(current_message_id)
     openai_conversation_id = registration.get("openai_conversation_id")
@@ -1614,7 +1614,7 @@ async def handle_incoming_message(
     _log_trace_stage(
         stage="inbound_persisted",
         conversation_id=conversation_id,
-        persona_id=contact_id,
+        persona_id=persona_id,
         inbound_message_id=inbound_message_id,
         extra={
             "message_sid": _trim_text(message.message_sid),
@@ -1632,7 +1632,7 @@ async def handle_incoming_message(
                 extra={"conversation_id": conversation_id, "error": str(exc)},
             )
 
-    if not conversation_id or not contact_id:
+    if not conversation_id or not persona_id:
         logger.error(
             "whatsapp.registration_missing_ids",
             extra={"conversation_id": conversation_id},
@@ -1652,7 +1652,7 @@ async def handle_incoming_message(
         _log_turn_timing(
             trace_id=trace_id,
             conversation_id=conversation_id,
-            persona_id=contact_id,
+            persona_id=persona_id,
             inbound_message_id=inbound_message_id,
             total_started_at=turn_started,
             stage_timings=stage_timings,
@@ -1674,14 +1674,14 @@ async def handle_incoming_message(
             repo=repo,
             conversation_id=conversation_id,
             organizacion_id=org_uuid,
-            persona_id=contact_id,
+            persona_id=persona_id,
             message=message,
         )
         publicidad_atribucion_event = await _maybe_apply_publicidad_whatsapp_attribution(
             repo=repo,
             organizacion_id=org_uuid,
             conversation_id=conversation_id,
-            persona_id=contact_id,
+            persona_id=persona_id,
             message_id=current_message_id,
             message=message,
         )
@@ -1711,13 +1711,13 @@ async def handle_incoming_message(
 
     restart_context: dict[str, Any] | None = None
     opportunity_ref: str | None = None
-    ensure_persona_id = contact_id
+    ensure_persona_id = persona_id
     ensure_opportunity_started: float | None = None
     if repo:
         ensure_opportunity_started = time.perf_counter()
         prospecto_uuid = await _resolve_prospeccion_prospecto_id(
             repo=repo,
-            persona_id=contact_id,
+            persona_id=persona_id,
             organizacion_id=org_uuid,
             message=message,
         )
@@ -1749,7 +1749,7 @@ async def handle_incoming_message(
                         prospecto_id=str(prospecto_uuid),
                         opportunity_id=opportunity_ref,
                         persona_id=prospect_contact_id,
-                        inbound_persona_id=contact_id,
+                        inbound_persona_id=persona_id,
                     )
     try:
         ensure_payload = await storage.ensure_persona_conversation_opportunity(
@@ -1784,7 +1784,7 @@ async def handle_incoming_message(
             attribution_event=publicidad_atribucion_event,
         )
 
-    persona_record = await _maybe_update_persona_location(persona_id=contact_id)
+    persona_record = await _maybe_update_persona_location(persona_id=persona_id)
 
     restart_created = bool(restart_context and restart_context.get("restart_created"))
     if restart_created:
@@ -1792,7 +1792,7 @@ async def handle_incoming_message(
         opportunity_ref = str(restart_context.get("oportunidad_id") or opportunity_ref or "").strip() or None
         context = ToolRuntimeContext(
             conversation_id=conversation_id,
-            persona_id=contact_id,
+            persona_id=persona_id,
             channel="whatsapp",
         )
         resumen_text = f"El contacto retomó la conversación (ciclo #{restart_sequence})."
@@ -1869,7 +1869,7 @@ async def handle_incoming_message(
     try:
         booking_context_started = time.perf_counter()
         booking_context_text = await build_booking_context_message(
-            persona_id=contact_id,
+            persona_id=persona_id,
             conversation_id=conversation_id,
             channel="whatsapp",
             persona=persona_record,
@@ -1880,7 +1880,7 @@ async def handle_incoming_message(
             "whatsapp.booking_context_failed",
             extra={
                 "conversation_id": conversation_id,
-                "contact_id": contact_id,
+                "persona_id": persona_id,
                 "error": str(exc),
             },
         )
@@ -1904,7 +1904,7 @@ async def handle_incoming_message(
         _log_trace_stage(
             stage="assistant_generation_started",
             conversation_id=conversation_id,
-            persona_id=contact_id,
+            persona_id=persona_id,
             inbound_message_id=inbound_message_id,
             extra={
                 "previous_response_id": _trim_text(previous_response_id),
@@ -1914,7 +1914,7 @@ async def handle_incoming_message(
         assistant_reply = await _generate_assistant_reply(
             message=message,
             conversation_id=conversation_id,
-            persona_id=contact_id,
+            persona_id=persona_id,
             openai_conversation_id=openai_conversation_id,
             previous_response_id=previous_response_id,
             catalog_context=catalog_context_text,
@@ -1953,7 +1953,7 @@ async def handle_incoming_message(
         _log_trace_stage(
             stage="assistant_generated",
             conversation_id=conversation_id,
-            persona_id=contact_id,
+            persona_id=persona_id,
             inbound_message_id=inbound_message_id,
             extra={
                 "response_id": _trim_text(assistant_reply.response_id),
@@ -2036,13 +2036,13 @@ async def handle_incoming_message(
         _log_trace_stage(
             stage="dispatch_cancelled",
             conversation_id=conversation_id,
-            persona_id=contact_id,
+            persona_id=persona_id,
             inbound_message_id=inbound_message_id,
         )
         _log_turn_timing(
             trace_id=trace_id,
             conversation_id=conversation_id,
-            persona_id=contact_id,
+            persona_id=persona_id,
             inbound_message_id=inbound_message_id,
             total_started_at=turn_started,
             stage_timings=stage_timings,
@@ -2088,7 +2088,7 @@ async def handle_incoming_message(
         _log_turn_timing(
             trace_id=trace_id,
             conversation_id=conversation_id,
-            persona_id=contact_id,
+            persona_id=persona_id,
             inbound_message_id=inbound_message_id,
             total_started_at=turn_started,
             stage_timings=stage_timings,
@@ -2114,7 +2114,7 @@ async def handle_incoming_message(
     _log_trace_stage(
         stage="dispatch_attempted",
         conversation_id=conversation_id,
-        persona_id=contact_id,
+        persona_id=persona_id,
         inbound_message_id=inbound_message_id,
         extra={
             "provider": send_result.provider,
@@ -2148,7 +2148,7 @@ async def handle_incoming_message(
         outgoing_registration = await storage.register_whatsapp_message(
             direction="saliente",
             conversation_id=conversation_id,
-            persona_id=contact_id,
+            contact_id=persona_id,
             body=final_reply_text,
             message_sid=send_result.sid,
             response_id=assistant_reply.response_id,
@@ -2182,7 +2182,7 @@ async def handle_incoming_message(
         _log_trace_stage(
             stage="assistant_persisted",
             conversation_id=conversation_id,
-            persona_id=contact_id,
+            persona_id=persona_id,
             inbound_message_id=inbound_message_id,
             extra={
                 "outbound_message_id": outgoing_registration.get("message_id"),
@@ -2193,7 +2193,7 @@ async def handle_incoming_message(
     _log_turn_timing(
         trace_id=trace_id,
         conversation_id=conversation_id,
-        persona_id=contact_id,
+        persona_id=persona_id,
         inbound_message_id=inbound_message_id,
         total_started_at=turn_started,
         stage_timings=stage_timings,
