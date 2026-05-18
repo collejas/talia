@@ -1337,7 +1337,7 @@ async def execute_tool(
             "descripcion": details,
             "estado": "pendiente",
             "prioridad": priority,
-            "contacto_id": persona_id,
+            "persona_id": persona_id,
             "metadata": {
                 "source": "prospeccion_whatsapp",
                 "conversation_id": context.conversation_id,
@@ -2106,7 +2106,7 @@ async def _handle_close_lead(
                 "whatsapp.close_lead.notify_failed",
                 extra={
                     "conversation_id": context.conversation_id,
-                    "contact_id": persona_id,
+                    "persona_id": persona_id,
                     "opportunity_id": str(tarjeta_id),
                 },
             )
@@ -2372,7 +2372,7 @@ async def _handle_schedule_demo(
     persona_record = persona
     confirm_metadata = {
         "conversation_id": context.conversation_id,
-        "contact_id": persona_id,
+        "persona_id": persona_id,
         "session_id": context.session_id,
         "tarjeta_id": tarjeta_id,
     }
@@ -2385,7 +2385,7 @@ async def _handle_schedule_demo(
             resource_id=resource_id,
             slot_start=slot_datetime,
             conversation_id=context.conversation_id,
-            contact_id=persona_id,
+            persona_id=persona_id,
             tarjeta_id=tarjeta_id,
             hold_minutes=hold_minutes,
             metadata=metadata_payload,
@@ -2402,7 +2402,7 @@ async def _handle_schedule_demo(
     persona = await _resolve_persona(persona_id)
     booking_response.hold_id = hold.get("hold_id")
     persona_record = persona
-    opportunity_contact_id = persona_id
+    opportunity_persona_id = persona_id
     channel_value = str(context.channel or "whatsapp").strip().lower() or "whatsapp"
     persona_org = webchat_service._extract_persona_org(persona_record)
     if persona_org:
@@ -2416,7 +2416,7 @@ async def _handle_schedule_demo(
         if isinstance(opportunity_contact, dict):
             resolved_persona_id = str(opportunity_contact.get("id") or "").strip()
             if resolved_persona_id:
-                opportunity_contact_id = resolved_persona_id
+                opportunity_persona_id = resolved_persona_id
             current_email = webchat_service._extract_persona_email(persona_record)
             fallback_email = webchat_service._extract_persona_email(opportunity_contact)
             current_name = webchat_service._extract_persona_name(persona_record)
@@ -2437,7 +2437,7 @@ async def _handle_schedule_demo(
     )
     await webchat_service._send_booking_confirmation_email(
         booking=booking_response,
-        contact_id=persona_id,
+        persona_id=persona_id,
         conversation_id=context.conversation_id,
         tarjeta_id=tarjeta_id,
         persona=persona_record,
@@ -2470,7 +2470,7 @@ async def _handle_schedule_demo(
         try:
             await storage.maybe_promote_prequalified_from_persona(
                 conversation_id=context.conversation_id,
-                contact_id=persona_id,
+                persona_id=persona_id,
                 opportunity_id=str(tarjeta_id),
                 channel=context.channel or "whatsapp",
             )
@@ -2509,7 +2509,7 @@ async def _handle_schedule_demo(
     is_prospeccion = _is_prospeccion_opportunity({"metadata": opportunity_metadata})
     # Si el contacto de la conversación y el de la oportunidad difieren,
     # propagamos datos capturados (nombre/correo/empresa) al contacto de oportunidad.
-    if opportunity_contact_id != persona_id and isinstance(persona, dict):
+    if opportunity_persona_id != persona_id and isinstance(persona, dict):
         merge_payload: dict[str, Any] = {}
         if not str((persona_record or {}).get("nombre_completo") or "").strip():
             candidate = str(persona.get("nombre_completo") or "").strip()
@@ -2525,8 +2525,8 @@ async def _handle_schedule_demo(
                 merge_payload["company_name"] = candidate
         if merge_payload:
             try:
-                await storage.update_persona(opportunity_contact_id, merge_payload)
-                persona_record = await _resolve_persona(opportunity_contact_id)
+                await storage.update_persona(opportunity_persona_id, merge_payload)
+                persona_record = await _resolve_persona(opportunity_persona_id)
             except StorageError as exc:
                 logger.warning(
                     "whatsapp.schedule_demo.contact_merge_failed",
@@ -2553,8 +2553,8 @@ async def _handle_schedule_demo(
         patch_payload["notes"] = inferred_notes
     if patch_payload:
         try:
-            await storage.update_persona(opportunity_contact_id, patch_payload)
-            persona_record = await _resolve_persona(opportunity_contact_id)
+            await storage.update_persona(opportunity_persona_id, patch_payload)
+            persona_record = await _resolve_persona(opportunity_persona_id)
         except StorageError as exc:
             logger.warning(
                 "whatsapp.schedule_demo.persona_context_patch_failed",
@@ -2575,7 +2575,7 @@ async def _handle_schedule_demo(
     try:
         await storage.maybe_auto_name_persona_opportunity(
             conversation_id=context.conversation_id,
-            persona_id=opportunity_contact_id,
+            persona_id=opportunity_persona_id,
             opportunity_id=str(tarjeta_id),
             intent=inferred_need,
             summary=inferred_notes,
@@ -2641,7 +2641,7 @@ async def _handle_schedule_demo(
                 "whatsapp.booking_notify_failed",
                 extra={
                     "conversation_id": context.conversation_id,
-                    "contact_id": persona_id,
+                    "persona_id": persona_id,
                 },
             )
 
@@ -2682,7 +2682,7 @@ async def _handle_reschedule_demo(
     resolved_org = webchat_service._resolve_org_uuid(org_hint)
     metadata_payload: dict[str, Any] = {
         "conversation_id": context.conversation_id,
-        "contact_id": persona_id,
+        "persona_id": persona_id,
         "session_id": context.session_id,
     }
     if resolved_org:
@@ -2705,7 +2705,7 @@ async def _handle_reschedule_demo(
     )
     await webchat_service._send_booking_confirmation_email(
         booking=booking_response,
-        contact_id=persona_id,
+        persona_id=persona_id,
         conversation_id=context.conversation_id,
         tarjeta_id=booking_response.tarjeta_id,
         persona=persona,
@@ -2730,7 +2730,7 @@ async def _handle_reschedule_demo(
             "whatsapp.booking_notify_failed",
             extra={
                 "conversation_id": context.conversation_id,
-                "contact_id": persona_id,
+                "persona_id": persona_id,
             },
         )
     return {
@@ -2764,7 +2764,7 @@ async def _handle_cancel_demo(arguments: dict[str, Any], context: ToolRuntimeCon
         "whatsapp.cancel_notify.start",
         extra={
             "conversation_id": context.conversation_id,
-            "contact_id": persona_id,
+            "persona_id": persona_id,
             "booking_id": booking_response.booking_id,
             "reason": reason,
         },
@@ -2790,7 +2790,7 @@ async def _handle_cancel_demo(arguments: dict[str, Any], context: ToolRuntimeCon
             "whatsapp.cancel_notify_failed",
             extra={
                 "conversation_id": context.conversation_id,
-                "contact_id": persona_id,
+                "persona_id": persona_id,
                 "error": str(exc),
             },
         )
@@ -2876,7 +2876,7 @@ async def _notify_sales_rep(
                 "whatsapp.notify_sales.ensure_failed",
                 extra={
                     "conversation_id": context.conversation_id,
-                    "contact_id": persona_id,
+                    "persona_id": persona_id,
                     "trigger": trigger,
                     "error": str(exc),
                 },
@@ -3090,7 +3090,7 @@ async def _notify_sales_rep(
                 "whatsapp.notify_sales.cancel_template_missing",
                 extra={
                     "conversation_id": context.conversation_id,
-                    "contact_id": persona_id,
+                    "persona_id": persona_id,
                     "trigger": trigger,
                     "seller_id": seller_id,
                 },
@@ -3158,7 +3158,7 @@ async def _notify_sales_rep(
                             },
                             attachments=recent_attachments,
                             conversation_id=context.conversation_id,
-                            contact_id=persona_id,
+                            persona_id=persona_id,
                             organizacion_id=str(org_id),
                         )
                     except StorageError as exc:
@@ -3235,7 +3235,7 @@ async def _notify_sales_rep(
                 },
                 attachments=recent_attachments,
                 conversation_id=context.conversation_id,
-                contact_id=persona_id,
+                persona_id=persona_id,
                 organizacion_id=str(org_id),
             )
         except StorageError as exc:
@@ -3259,7 +3259,7 @@ async def _notify_sales_rep(
     notifications[trigger] = {
         "sent_at": datetime.now(timezone.utc).isoformat(),
         "conversation_id": context.conversation_id,
-        "contact_id": persona_id,
+        "persona_id": persona_id,
         "notification_sid": message_sid,
         "retry_count": retry_count,
     }
@@ -3268,7 +3268,7 @@ async def _notify_sales_rep(
         primary_by_channel[channel_key] = {
             "sent_at": datetime.now(timezone.utc).isoformat(),
             "conversation_id": context.conversation_id,
-            "contact_id": persona_id,
+            "persona_id": persona_id,
             "trigger": trigger,
             "reason": primary_reason,
         }
@@ -3295,7 +3295,7 @@ async def _notify_sales_rep(
                 oportunidad_id=opp_uuid,
                 vendedor_id=seller_uuid,
                 conversation_id=context.conversation_id,
-                contact_id=persona_id,
+                persona_id=persona_id,
                 trigger=f"notify_{trigger}",
                 metadata=assignment_metadata,
                 notification_sid=message_sid,
