@@ -146,14 +146,14 @@ def _log_trace_stage(
     *,
     stage: str,
     conversation_id: str | None,
-    contact_id: str | None,
+    persona_id: str | None,
     inbound_message_id: str | None,
     extra: dict[str, Any] | None = None,
 ) -> None:
     payload: dict[str, Any] = {
         "stage": stage,
         "conversation_id": conversation_id,
-        "contact_id": contact_id,
+        "persona_id": persona_id,
         "inbound_message_id": inbound_message_id,
     }
     if extra:
@@ -173,7 +173,7 @@ def _log_turn_timing(
     *,
     trace_id: str,
     conversation_id: str | None,
-    contact_id: str | None,
+    persona_id: str | None,
     inbound_message_id: str | None,
     total_started_at: float,
     stage_timings: dict[str, float],
@@ -182,7 +182,7 @@ def _log_turn_timing(
     payload: dict[str, Any] = {
         "trace_id": trace_id,
         "conversation_id": conversation_id,
-        "contact_id": contact_id,
+        "persona_id": persona_id,
         "inbound_message_id": inbound_message_id,
         "total_ms": round((time.perf_counter() - total_started_at) * 1000, 2),
         "stage_timings": dict(stage_timings),
@@ -1614,7 +1614,7 @@ async def handle_incoming_message(
     _log_trace_stage(
         stage="inbound_persisted",
         conversation_id=conversation_id,
-        contact_id=contact_id,
+        persona_id=contact_id,
         inbound_message_id=inbound_message_id,
         extra={
             "message_sid": _trim_text(message.message_sid),
@@ -1652,7 +1652,7 @@ async def handle_incoming_message(
         _log_turn_timing(
             trace_id=trace_id,
             conversation_id=conversation_id,
-            contact_id=contact_id,
+            persona_id=contact_id,
             inbound_message_id=inbound_message_id,
             total_started_at=turn_started,
             stage_timings=stage_timings,
@@ -1953,7 +1953,7 @@ async def handle_incoming_message(
         _log_trace_stage(
             stage="assistant_generated",
             conversation_id=conversation_id,
-            contact_id=contact_id,
+            persona_id=contact_id,
             inbound_message_id=inbound_message_id,
             extra={
                 "response_id": _trim_text(assistant_reply.response_id),
@@ -2036,13 +2036,13 @@ async def handle_incoming_message(
         _log_trace_stage(
             stage="dispatch_cancelled",
             conversation_id=conversation_id,
-            contact_id=contact_id,
+            persona_id=contact_id,
             inbound_message_id=inbound_message_id,
         )
         _log_turn_timing(
             trace_id=trace_id,
             conversation_id=conversation_id,
-            contact_id=contact_id,
+            persona_id=contact_id,
             inbound_message_id=inbound_message_id,
             total_started_at=turn_started,
             stage_timings=stage_timings,
@@ -2088,7 +2088,7 @@ async def handle_incoming_message(
         _log_turn_timing(
             trace_id=trace_id,
             conversation_id=conversation_id,
-            contact_id=contact_id,
+            persona_id=contact_id,
             inbound_message_id=inbound_message_id,
             total_started_at=turn_started,
             stage_timings=stage_timings,
@@ -2114,7 +2114,7 @@ async def handle_incoming_message(
     _log_trace_stage(
         stage="dispatch_attempted",
         conversation_id=conversation_id,
-        contact_id=contact_id,
+        persona_id=contact_id,
         inbound_message_id=inbound_message_id,
         extra={
             "provider": send_result.provider,
@@ -2148,7 +2148,7 @@ async def handle_incoming_message(
         outgoing_registration = await storage.register_whatsapp_message(
             direction="saliente",
             conversation_id=conversation_id,
-            contact_id=contact_id,
+            persona_id=contact_id,
             body=final_reply_text,
             message_sid=send_result.sid,
             response_id=assistant_reply.response_id,
@@ -2182,7 +2182,7 @@ async def handle_incoming_message(
         _log_trace_stage(
             stage="assistant_persisted",
             conversation_id=conversation_id,
-            contact_id=contact_id,
+            persona_id=contact_id,
             inbound_message_id=inbound_message_id,
             extra={
                 "outbound_message_id": outgoing_registration.get("message_id"),
@@ -2193,7 +2193,7 @@ async def handle_incoming_message(
     _log_turn_timing(
         trace_id=trace_id,
         conversation_id=conversation_id,
-        contact_id=contact_id,
+        persona_id=contact_id,
         inbound_message_id=inbound_message_id,
         total_started_at=turn_started,
         stage_timings=stage_timings,
@@ -2333,13 +2333,13 @@ async def _retry_failed_sales_notification(
         return
 
     conversation_id = str(assignment.get("conversacion_id") or "").strip()
-    contact_id = str(assignment.get("contacto_id") or "").strip()
+    persona_id = str(assignment.get("contacto_id") or "").strip()
     opportunity_id = str(assignment.get("oportunidad_id") or "").strip() or None
-    if not conversation_id or not contact_id:
+    if not conversation_id or not persona_id:
         return
 
     try:
-        contact = await storage.fetch_persona(contact_id)
+        contact = await storage.fetch_persona(persona_id)
     except StorageError as exc:
         log_event(
             logger,
@@ -2366,7 +2366,7 @@ async def _retry_failed_sales_notification(
     channel_value = str(assignment.get("canal") or "").strip().lower() or "whatsapp"
     context = ToolRuntimeContext(
         conversation_id=conversation_id,
-        persona_id=contact_id,
+        persona_id=persona_id,
         channel=channel_value,
     )
     try:
