@@ -3783,7 +3783,7 @@ async def fetch_calendar_booking_by_persona(persona_id: str) -> dict[str, Any] |
         raise StorageError("calendar_booking_invalid_persona_id") from exc
     repo = CRMRepository()
     try:
-        return await repo.get_calendar_booking_by_contact(contact_id=persona_uuid)
+        return await repo.get_calendar_booking_by_persona(persona_id=persona_uuid)
     except CRMRepositoryError as exc:
         raise StorageError(str(exc)) from exc
 

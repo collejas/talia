@@ -10402,13 +10402,13 @@ class CRMRepository:
             return None
         return row
 
-    async def get_calendar_booking_by_contact(
+    async def get_calendar_booking_by_persona(
         self,
         *,
-        contact_id: UUID,
+        persona_id: UUID,
     ) -> dict[str, Any] | None:
         params = {
-            "contact_id": f"eq.{contact_id}",
+            "contact_id": f"eq.{persona_id}",
             "select": "id,resource_id,conversacion_id,contact_id,tarjeta_id,status,timezone,start_at,end_at,metadata",
             "order": "start_at.desc",
             "limit": "1",
@@ -10424,6 +10424,13 @@ class CRMRepository:
         if not isinstance(row, dict):
             return None
         return row
+
+    async def get_calendar_booking_by_contact(
+        self,
+        *,
+        contact_id: UUID,
+    ) -> dict[str, Any] | None:
+        return await self.get_calendar_booking_by_persona(persona_id=contact_id)
 
     async def list_calendar_bookings_by_opportunity(
         self,
