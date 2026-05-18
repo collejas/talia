@@ -26012,7 +26012,7 @@ async def prospeccion_campana_delete(
 
 
 @router.get("/prospeccion/prospectos/{prospecto_id}/contactos")
-async def listar_contactos_por_prospecto(
+async def listar_envios_por_prospecto_legacy(
     *,
     repo: CRMRepository = Depends(get_repository),
     _: str = Depends(require_permission("ejecutar_busquedas")),
@@ -26087,7 +26087,7 @@ async def listar_audit_por_prospecto(
 
 
 @router.post("/prospeccion/prospectos/{prospecto_id}/convertir-contacto")
-async def convertir_prospecto_contacto(
+async def convertir_prospecto_a_contacto_legacy(
     *,
     repo: CRMRepository = Depends(get_repository),
     _: str = Depends(require_permission("ejecutar_busquedas")),
@@ -27077,7 +27077,7 @@ async def prospeccion_checklist_scraper(
 
 
 @router.post("/prospeccion/prospectos/contactar")
-async def contactar_prospectos(
+async def contactar_prospectos_legacy(
     *,
     repo: CRMRepository = Depends(get_repository),
     _: str = Depends(require_permission("ejecutar_busquedas")),
@@ -27409,7 +27409,7 @@ async def contactar_prospectos(
 
 
 @router.get("/prospeccion/contacto/batches/{batch_id}")
-async def obtener_contacto_batch(
+async def obtener_batch_contacto_legacy(
     *,
     repo: CRMRepository = Depends(get_repository),
     _: str = Depends(require_permission("ejecutar_busquedas")),
@@ -27458,7 +27458,7 @@ async def obtener_contacto_batch(
 
 
 @router.post("/prospeccion/contacto/envios/{envio_id}/reintentar")
-async def reintentar_contacto_envio(
+async def reintentar_envio_contacto_legacy(
     *,
     repo: CRMRepository = Depends(get_repository),
     _: str = Depends(require_permission("ejecutar_busquedas")),
@@ -27517,7 +27517,7 @@ async def reintentar_contacto_envio(
 
 
 @router.post("/prospeccion/contacto/envios/{envio_id}/cancelar")
-async def cancelar_contacto_envio(
+async def cancelar_envio_contacto_legacy(
     *,
     repo: CRMRepository = Depends(get_repository),
     _: str = Depends(require_permission("ejecutar_busquedas")),
@@ -27577,7 +27577,7 @@ async def cancelar_contacto_envio(
 
 
 @router.get("/prospeccion/contacto/batches/{batch_id}/stream")
-async def stream_contacto_batch(
+async def stream_batch_contacto_legacy(
     *,
     repo: CRMRepository = Depends(get_repository),
     _: str = Depends(require_permission("ejecutar_busquedas")),
@@ -27614,7 +27614,7 @@ async def stream_contacto_batch(
 
 
 @router.post("/prospeccion/contacto/batches/{batch_id}/cancelar")
-async def cancelar_contacto_batch(
+async def cancelar_batch_contacto_legacy(
     *,
     repo: CRMRepository = Depends(get_repository),
     _: str = Depends(require_permission("ejecutar_busquedas")),
@@ -27686,7 +27686,7 @@ async def cancelar_contacto_batch(
 
 
 @router.get("/prospeccion/contacto/metrics")
-async def obtener_metrics_contacto(
+async def obtener_metrics_prospeccion_contacto_legacy(
     *,
     repo: CRMRepository = Depends(get_repository),
     _: str = Depends(require_permission("reports.view")),
@@ -27855,7 +27855,7 @@ async def obtener_brevo_quota_diaria(
 
 
 @router.post("/prospeccion/contacto/brevo/webhook", include_in_schema=False)
-async def prospeccion_contacto_brevo_webhook(
+async def prospeccion_webhook_brevo_contacto_legacy(
     *,
     repo: CRMRepository = Depends(get_repository),
     background_tasks: BackgroundTasks,
