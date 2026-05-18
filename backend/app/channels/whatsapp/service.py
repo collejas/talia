@@ -743,13 +743,13 @@ async def _sync_inbound_to_prospeccion_log(
     repo: CRMRepository,
     conversation_id: str | None = None,
     organizacion_id: UUID | None = None,
-    contact_id: str,
+    persona_id: str,
     message: schemas.WhatsAppIncomingMessage,
 ) -> bool:
     """Registra respuesta entrante en bitácora de prospección cuando aplica."""
 
     try:
-        contact_uuid = UUID(contact_id)
+        contact_uuid = UUID(persona_id)
     except (TypeError, ValueError):
         return False
 
@@ -762,7 +762,7 @@ async def _sync_inbound_to_prospeccion_log(
         log_event(
             logger,
             "whatsapp.prospeccion_reply_lookup_failed",
-            contact_id=contact_id,
+            persona_id=persona_id,
             error=str(exc),
         )
         return False
@@ -781,7 +781,7 @@ async def _sync_inbound_to_prospeccion_log(
                 log_event(
                     logger,
                     "whatsapp.prospeccion_reply_envio_phone_lookup_failed",
-                    contact_id=contact_id,
+                    persona_id=persona_id,
                     phone=",".join(phone_candidates),
                     error=str(exc),
                 )
@@ -796,7 +796,7 @@ async def _sync_inbound_to_prospeccion_log(
             log_event(
                 logger,
                 "whatsapp.prospeccion_reply_context_resolved_by_phone",
-                contact_id=contact_id,
+                persona_id=persona_id,
                 phone=phone_candidate,
                 prospecto_id=str(envio_prospecto_id),
                 envio_id=str(envio.get("id")) if envio.get("id") else None,
@@ -814,7 +814,7 @@ async def _sync_inbound_to_prospeccion_log(
                 log_event(
                     logger,
                     "whatsapp.prospeccion_reply_prospect_phone_lookup_failed",
-                    contact_id=contact_id,
+                    persona_id=persona_id,
                     phone=",".join(phone_candidates),
                     error=str(exc),
                 )
@@ -825,7 +825,7 @@ async def _sync_inbound_to_prospeccion_log(
             log_event(
                 logger,
                 "whatsapp.prospeccion_reply_context_resolved_by_prospect_phone",
-                contact_id=contact_id,
+                persona_id=persona_id,
                 phone=phone_candidate,
                 prospecto_id=str(prospecto.get("id")) if prospecto.get("id") else None,
             )
@@ -981,13 +981,13 @@ async def _sync_inbound_to_prospeccion_log(
 async def _resolve_prospeccion_prospecto_id(
     *,
     repo: CRMRepository,
-    contact_id: str,
+    persona_id: str,
     organizacion_id: UUID | None,
     message: schemas.WhatsAppIncomingMessage,
 ) -> UUID | None:
     """Resuelve prospecto relacionado al inbound usando contacto o teléfono."""
     try:
-        contact_uuid = UUID(contact_id)
+        contact_uuid = UUID(persona_id)
     except (TypeError, ValueError):
         contact_uuid = None
     if contact_uuid:
@@ -1028,7 +1028,7 @@ async def _maybe_apply_publicidad_whatsapp_attribution(
     repo: CRMRepository,
     organizacion_id: UUID,
     conversation_id: str,
-    contact_id: str,
+    persona_id: str,
     message_id: str | None,
     message: schemas.WhatsAppIncomingMessage,
 ) -> dict[str, Any] | None:
@@ -1046,7 +1046,7 @@ async def _maybe_apply_publicidad_whatsapp_attribution(
         return None
 
     try:
-        contact_uuid = UUID(contact_id)
+        contact_uuid = UUID(persona_id)
     except (TypeError, ValueError):
         return None
 
@@ -1057,7 +1057,7 @@ async def _maybe_apply_publicidad_whatsapp_attribution(
             logger,
             "whatsapp.publicidad_atribucion_rules_fetch_failed",
             conversation_id=conversation_id,
-            contact_id=contact_id,
+            persona_id=persona_id,
             error=str(exc),
         )
         return None
@@ -1073,7 +1073,7 @@ async def _maybe_apply_publicidad_whatsapp_attribution(
             logger,
             "whatsapp.publicidad_atribucion_no_match",
             conversation_id=conversation_id,
-            contact_id=contact_id,
+            persona_id=persona_id,
             phrase=normalized_phrase,
         )
         return None
@@ -1090,7 +1090,7 @@ async def _maybe_apply_publicidad_whatsapp_attribution(
             logger,
             "whatsapp.publicidad_atribucion_recent_lookup_failed",
             conversation_id=conversation_id,
-            contact_id=contact_id,
+            persona_id=persona_id,
             error=str(exc),
         )
         recent_event = None
@@ -1101,7 +1101,7 @@ async def _maybe_apply_publicidad_whatsapp_attribution(
                 logger,
                 "whatsapp.publicidad_atribucion_skipped_recent_contact_window",
                 conversation_id=conversation_id,
-                contact_id=contact_id,
+                persona_id=persona_id,
                 recent_conversation_id=recent_conversation_id,
                 window_minutes=_WHATSAPP_ATTRIB_CONTACT_DEDUP_MINUTES,
             )
@@ -1111,7 +1111,7 @@ async def _maybe_apply_publicidad_whatsapp_attribution(
         "organizacion_id": str(organizacion_id),
         "regla_id": _trim_text(matched_rule.get("id")),
         "conversacion_id": conversation_id,
-        "contacto_id": contact_id,
+        "persona_id": persona_id,
         "mensaje_id": _trim_text(message.message_sid),
         "frase_original": phrase_original,
         "frase_normalizada": normalized_phrase,
@@ -1137,7 +1137,7 @@ async def _maybe_apply_publicidad_whatsapp_attribution(
             logger,
             "whatsapp.publicidad_atribucion_event_create_failed",
             conversation_id=conversation_id,
-            contact_id=contact_id,
+            persona_id=persona_id,
             error=str(exc),
         )
         return None
@@ -1203,7 +1203,7 @@ async def _maybe_apply_publicidad_whatsapp_attribution(
             logger,
             "whatsapp.publicidad_atribucion_contact_fetch_failed",
             conversation_id=conversation_id,
-            contact_id=contact_id,
+            persona_id=persona_id,
             error=str(exc),
         )
         persona_row = None
@@ -1230,13 +1230,13 @@ async def _maybe_apply_publicidad_whatsapp_attribution(
         if (current_origen or "").lower() in {"", "whatsapp", "prospeccion"}:
             patch_payload["origen"] = "publicidad_whatsapp"
         try:
-            await repo.update_persona_by_id(persona_id=contact_id, patch=patch_payload)
+            await repo.update_persona_by_id(persona_id=persona_id, patch=patch_payload)
         except CRMRepositoryError as exc:
             log_event(
                 logger,
                 "whatsapp.publicidad_atribucion_contact_update_failed",
                 conversation_id=conversation_id,
-                contact_id=contact_id,
+                persona_id=persona_id,
                 error=str(exc),
             )
 
@@ -1264,7 +1264,7 @@ async def _maybe_apply_publicidad_whatsapp_attribution(
             logger,
             "whatsapp.publicidad_atribucion_conversation_snapshot_failed",
             conversation_id=conversation_id,
-            contact_id=contact_id,
+            persona_id=persona_id,
             error=str(exc),
         )
 
@@ -1272,7 +1272,7 @@ async def _maybe_apply_publicidad_whatsapp_attribution(
         logger,
         "whatsapp.publicidad_atribucion_applied",
         conversation_id=conversation_id,
-        contact_id=contact_id,
+        persona_id=persona_id,
         regla_id=_trim_text(matched_rule.get("id")),
         canal_publicitario=event_payload.get("canal_publicitario"),
         tipo_match=applied_match_type,
@@ -1674,14 +1674,14 @@ async def handle_incoming_message(
             repo=repo,
             conversation_id=conversation_id,
             organizacion_id=org_uuid,
-            contact_id=contact_id,
+            persona_id=contact_id,
             message=message,
         )
         publicidad_atribucion_event = await _maybe_apply_publicidad_whatsapp_attribution(
             repo=repo,
             organizacion_id=org_uuid,
             conversation_id=conversation_id,
-            contact_id=contact_id,
+            persona_id=contact_id,
             message_id=current_message_id,
             message=message,
         )
@@ -1717,7 +1717,7 @@ async def handle_incoming_message(
         ensure_opportunity_started = time.perf_counter()
         prospecto_uuid = await _resolve_prospeccion_prospecto_id(
             repo=repo,
-            contact_id=contact_id,
+            persona_id=contact_id,
             organizacion_id=org_uuid,
             message=message,
         )
