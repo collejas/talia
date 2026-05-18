@@ -15769,9 +15769,9 @@ async def create_persona_alta(
             ),
         }
         try:
-            relation_row = await repo.upsert_contact_account_relation(
+            relation_row = await repo.upsert_persona_account_relation(
                 organizacion_id=organizacion_id,
-                contacto_id=persona_out.id,
+                persona_id=persona_out.id,
                 cuenta_id=persona_out.cuenta_id,
                 payload=relation_defaults,
             )
@@ -15987,9 +15987,9 @@ async def update_persona(
             ),
         }
         try:
-            relation_row = await repo.upsert_contact_account_relation(
+            relation_row = await repo.upsert_persona_account_relation(
                 organizacion_id=organizacion_id,
-                contacto_id=contacto_id,
+                persona_id=contacto_id,
                 cuenta_id=persona_out.cuenta_id,
                 payload=relation_defaults,
             )
@@ -16097,14 +16097,14 @@ async def merge_persona(
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
-    source_relations = await repo.list_contact_account_relations(
+    source_relations = await repo.list_persona_account_relations(
         organizacion_id=organizacion_id,
-        contacto_id=source_id,
+        persona_id=source_id,
         activo=None,
     )
-    target_relations = await repo.list_contact_account_relations(
+    target_relations = await repo.list_persona_account_relations(
         organizacion_id=organizacion_id,
-        contacto_id=target_id,
+        persona_id=target_id,
         activo=None,
     )
     target_relations_by_account = {
@@ -16149,9 +16149,9 @@ async def merge_persona(
                 },
             }
             try:
-                await repo.update_contact_account_relation(
+                await repo.update_persona_account_relation(
                     organizacion_id=organizacion_id,
-                    contacto_id=target_id,
+                    persona_id=target_id,
                     relacion_id=_safe_uuid(target_relation["id"]),
                     payload=merged_relation_payload,
                 )
@@ -16164,9 +16164,9 @@ async def merge_persona(
                 "merged_from_persona_id": str(source_id),
             }
             try:
-                await repo.create_contact_account_relation(
+                await repo.create_persona_account_relation(
                     organizacion_id=organizacion_id,
-                    contacto_id=target_id,
+                    persona_id=target_id,
                     payload={
                         key: value
                         for key, value in relation_payload.items()
@@ -16177,9 +16177,9 @@ async def merge_persona(
             except CRMRepositoryError as exc:
                 raise HTTPException(status_code=502, detail=str(exc)) from exc
         try:
-            await repo.delete_contact_account_relation(
+            await repo.delete_persona_account_relation(
                 organizacion_id=organizacion_id,
-                contacto_id=source_id,
+                persona_id=source_id,
                 relacion_id=_safe_uuid(relation["id"]),
             )
         except CRMRepositoryError as exc:
@@ -16350,9 +16350,9 @@ async def list_persona_relaciones(
     activo: bool | None = Query(default=None),
 ) -> list[CRMCuentaPersonaRelacion]:
     try:
-        rows = await repo.list_contact_account_relations(
+        rows = await repo.list_persona_account_relations(
             organizacion_id=organizacion_id,
-            contacto_id=contacto_id,
+            persona_id=contacto_id,
             activo=activo,
         )
     except CRMRepositoryError as exc:
@@ -16376,9 +16376,9 @@ async def create_persona_relacion(
     payload: CRMCuentaPersonaRelacionCreate,
 ) -> CRMCuentaPersonaRelacion:
     try:
-        row = await repo.create_contact_account_relation(
+        row = await repo.create_persona_account_relation(
             organizacion_id=organizacion_id,
-            contacto_id=contacto_id,
+            persona_id=contacto_id,
             payload=payload.model_dump(mode="json", exclude_unset=True),
         )
     except CRMRepositoryError as exc:
@@ -16404,9 +16404,9 @@ async def update_persona_relacion(
     payload: CRMCuentaPersonaRelacionUpdate,
 ) -> CRMCuentaPersonaRelacion:
     try:
-        row = await repo.update_contact_account_relation(
+        row = await repo.update_persona_account_relation(
             organizacion_id=organizacion_id,
-            contacto_id=contacto_id,
+            persona_id=contacto_id,
             relacion_id=relacion_id,
             payload=payload.model_dump(mode="json", exclude_unset=True),
         )
@@ -16433,9 +16433,9 @@ async def update_persona_relacion_estado(
     payload: CRMCuentaPersonaRelacionStatusUpdate,
 ) -> CRMCuentaPersonaRelacion:
     try:
-        row = await repo.update_contact_account_relation(
+        row = await repo.update_persona_account_relation(
             organizacion_id=organizacion_id,
-            contacto_id=contacto_id,
+            persona_id=contacto_id,
             relacion_id=relacion_id,
             payload={"activo": payload.activo},
         )
@@ -16462,9 +16462,9 @@ async def delete_persona_relacion(
     relacion_id: UUID,
 ) -> Response:
     try:
-        await repo.delete_contact_account_relation(
+        await repo.delete_persona_account_relation(
             organizacion_id=organizacion_id,
-            contacto_id=contacto_id,
+            persona_id=contacto_id,
             relacion_id=relacion_id,
         )
     except CRMRepositoryError as exc:
@@ -17293,7 +17293,7 @@ async def export_personas_csv(
 
 
 @router.get("/contacts/{contacto_id}", response_model=CRMPersona)
-async def get_contact(
+async def get_contact_legacy(
     *,
     repo: CRMRepository = Depends(get_repository),
     organizacion_id: UUID = Depends(require_organizacion_id),
