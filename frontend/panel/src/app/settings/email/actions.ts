@@ -36,6 +36,29 @@ export type EmailTemplateSettingsInput = {
   signature: string;
 };
 
+export type AssistantDocumentChannelScope = "email" | "whatsapp" | "both";
+
+export type AssistantDocument = {
+  id: string;
+  organizacion_id: string;
+  title: string;
+  description: string | null;
+  channel_scope: AssistantDocumentChannelScope;
+  storage_bucket: string;
+  storage_path: string;
+  mime: string;
+  size_bytes: number | null;
+  tags: string[];
+  category: string | null;
+  active: boolean;
+  sort_order: number;
+  version: number;
+  uploaded_by: string | null;
+  created_at: string;
+  updated_at: string;
+  url: string | null;
+};
+
 const DEFAULT_SETTINGS: EmailTemplateSettings = {
   intro: "Gracias por tu interés en Tal-IA. Te comparto un resumen con la información que platicamos:",
   highlights: [
@@ -196,4 +219,113 @@ export async function saveEmailTemplateSettings(
   revalidatePath("/settings/email");
 
   return normalizeSettings(response.data);
+}
+
+function normalizeAssistantDocument(record: Record<string, unknown>): AssistantDocument {
+  return {
+    id: String(record.id),
+    organizacion_id: String(record.organizacion_id),
+    title: typeof record.title === "string" ? record.title : "",
+    description: typeof record.description === "string" ? record.description : null,
+    channel_scope:
+      record.channel_scope === "email" || record.channel_scope === "whatsapp"
+        ? record.channel_scope
+        : "both",
+    storage_bucket: typeof record.storage_bucket === "string" ? record.storage_bucket : "",
+    storage_path: typeof record.storage_path === "string" ? record.storage_path : "",
+    mime: typeof record.mime === "string" ? record.mime : "application/pdf",
+    size_bytes:
+      typeof record.size_bytes === "number"
+        ? record.size_bytes
+        : typeof record.size_bytes === "string"
+          ? Number(record.size_bytes)
+          : null,
+    tags: Array.isArray(record.tags)
+      ? record.tags.filter((item): item is string => typeof item === "string")
+      : [],
+    category: typeof record.category === "string" ? record.category : null,
+    active: typeof record.active === "boolean" ? record.active : true,
+    sort_order: typeof record.sort_order === "number" ? record.sort_order : 100,
+    version: typeof record.version === "number" ? record.version : 1,
+    uploaded_by: typeof record.uploaded_by === "string" ? record.uploaded_by : null,
+    created_at: typeof record.created_at === "string" ? record.created_at : "",
+    updated_at: typeof record.updated_at === "string" ? record.updated_at : "",
+    url: typeof record.url === "string" ? record.url : null,
+  };
+}
+
+export async function fetchAssistantDocuments(): Promise<AssistantDocument[]> {
+  const response = await callCrmApi<Record<string, unknown>[]>("/crm/settings/assistant-documents");
+  if (!response.ok || !Array.isArray(response.data)) {
+    console.warn(
+      "[settings] fetch assistant documents failed:",
+      response.ok ? "respuesta inválida" : response.error,
+    );
+    return [];
+  }
+  return response.data
+    .filter((entry): entry is Record<string, unknown> => !!entry && typeof entry === "object")
+    .map((entry) => normalizeAssistantDocument(entry));
+}
+
+export async function uploadAssistantDocument(formData: FormData): Promise<AssistantDocument> {
+  const response = await callCrmApi<Record<string, unknown>>(
+    "/crm/settings/assistant-documents/upload",
+    {
+      method: "POST",
+      body: formData,
+    },
+  );
+  if (!response.ok || !response.data) {
+    throw new Error(response.error || "No se pudo subir el PDF.");
+  }
+  revalidatePath("/settings/email");
+  return normalizeAssistantDocument(response.data);
+}
+
+export async function updateAssistantDocument(
+  documentId: string,
+  input: Partial<{
+    title: string;
+    description: string;
+    channel_scope: AssistantDocumentChannelScope;
+    category: string;
+    tags: string[];
+    active: boolean;
+    sort_order: number;
+    version: number;
+  }>,
+): Promise<AssistantDocument> {
+  const payload: Record<string, unknown> = {};
+  if (typeof input.title === "string") payload.title = input.title.trim();
+  if (typeof input.description === "string") payload.description = input.description.trim();
+  if (typeof input.channel_scope === "string") payload.channel_scope = input.channel_scope;
+  if (typeof input.category === "string") payload.category = input.category.trim();
+  if (Array.isArray(input.tags)) payload.tags = input.tags.map((tag) => tag.trim()).filter(Boolean);
+  if (typeof input.active === "boolean") payload.active = input.active;
+  if (typeof input.sort_order === "number") payload.sort_order = input.sort_order;
+  if (typeof input.version === "number") payload.version = input.version;
+
+  const response = await callCrmApi<Record<string, unknown>>(
+    `/crm/settings/assistant-documents/${documentId}`,
+    {
+      method: "PATCH",
+      body: payload,
+    },
+  );
+  if (!response.ok || !response.data) {
+    throw new Error(response.error || "No se pudo actualizar el PDF.");
+  }
+  revalidatePath("/settings/email");
+  return normalizeAssistantDocument(response.data);
+}
+
+export async function deleteAssistantDocument(documentId: string): Promise<void> {
+  const response = await callCrmApi<never>(`/crm/settings/assistant-documents/${documentId}`, {
+    method: "DELETE",
+  });
+  if (!response.ok) {
+    throw new Error(response.error || "No se pudo eliminar el PDF.");
+  }
+  revalidatePath("/settings/email");
 }

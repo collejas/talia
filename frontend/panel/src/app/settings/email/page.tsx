@@ -1,15 +1,19 @@
 import { Metadata } from "next";
 
 import { AppViewLayout } from "@/components/layouts/app-view-layout";
+import { AssistantDocumentManager } from "@/components/settings/assistant-document-manager";
 import { EmailTemplateSettingsForm } from "@/components/settings/email-template-form";
-import { fetchEmailTemplateSettings } from "./actions";
+import { fetchAssistantDocuments, fetchEmailTemplateSettings } from "./actions";
 
 export const metadata: Metadata = {
   title: "Formato de correos · Settings",
 };
 
 export default async function EmailSettingsPage() {
-  const settings = await fetchEmailTemplateSettings();
+  const [settings, assistantDocuments] = await Promise.all([
+    fetchEmailTemplateSettings(),
+    fetchAssistantDocuments(),
+  ]);
 
   return (
     <AppViewLayout title="Settings">
@@ -24,6 +28,7 @@ export default async function EmailSettingsPage() {
           </p>
         </div>
         <EmailTemplateSettingsForm initialSettings={settings} />
+        <AssistantDocumentManager initialDocuments={assistantDocuments} />
       </div>
     </AppViewLayout>
   );

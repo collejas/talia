@@ -10950,6 +10950,116 @@ class CRMEmailTemplateUpdate(BaseModel):
     signature: str
 
 
+class AssistantDocumentChannelScope(str, Enum):
+    email = "email"
+    whatsapp = "whatsapp"
+    both = "both"
+
+
+class CRMAssistantDocument(BaseModel):
+    id: UUID
+    organizacion_id: UUID
+    title: str
+    description: str | None = None
+    channel_scope: AssistantDocumentChannelScope
+    storage_bucket: str
+    storage_path: str
+    mime: str
+    size_bytes: int | None = None
+    tags: list[str] = Field(default_factory=list)
+    category: str | None = None
+    active: bool = True
+    sort_order: int = 100
+    version: int = 1
+    uploaded_by: UUID | None = None
+    created_at: datetime
+    updated_at: datetime
+    url: str | None = None
+
+
+class CRMAssistantDocumentCreate(BaseModel):
+    title: str = Field(..., min_length=1, max_length=255)
+    description: str | None = Field(default=None, max_length=2000)
+    channel_scope: AssistantDocumentChannelScope = AssistantDocumentChannelScope.both
+    category: str | None = Field(default=None, max_length=120)
+    tags: list[str] = Field(default_factory=list)
+    active: bool = True
+    sort_order: int = 100
+
+
+class CRMAssistantDocumentUpdate(BaseModel):
+    title: str | None = Field(default=None, min_length=1, max_length=255)
+    description: str | None = Field(default=None, max_length=2000)
+    channel_scope: AssistantDocumentChannelScope | None = None
+    category: str | None = Field(default=None, max_length=120)
+    tags: list[str] | None = None
+    active: bool | None = None
+    sort_order: int | None = None
+    version: int | None = None
+
+
+def _normalize_document_tags(raw: Any) -> list[str]:
+    if not isinstance(raw, list):
+        return []
+    tags: list[str] = []
+    for item in raw:
+        if isinstance(item, str):
+            tag = item.strip()
+            if tag:
+                tags.append(tag)
+    return list(dict.fromkeys(tags))
+
+
+def _build_assistant_document_model(
+    row: Mapping[str, Any],
+    *,
+    url: str | None = None,
+) -> CRMAssistantDocument | None:
+    required_fields = (
+        row.get("id"),
+        row.get("organizacion_id"),
+        row.get("title"),
+        row.get("channel_scope"),
+        row.get("storage_bucket"),
+        row.get("storage_path"),
+        row.get("mime"),
+        row.get("created_at"),
+        row.get("updated_at"),
+    )
+    if any(value is None for value in required_fields):
+        return None
+
+    channel_scope_raw = str(row.get("channel_scope") or "both")
+    try:
+        channel_scope = AssistantDocumentChannelScope(channel_scope_raw)
+    except ValueError:
+        channel_scope = AssistantDocumentChannelScope.both
+
+    sort_order_raw = row.get("sort_order")
+    version_raw = row.get("version")
+
+    return CRMAssistantDocument(
+        id=row["id"],
+        organizacion_id=row["organizacion_id"],
+        title=str(row["title"]),
+        description=row.get("description"),
+        channel_scope=channel_scope,
+        storage_bucket=str(row["storage_bucket"]),
+        storage_path=str(row["storage_path"]),
+        mime=str(row["mime"]),
+        size_bytes=row.get("size_bytes"),
+        tags=_normalize_document_tags(row.get("tags")),
+        category=row.get("category"),
+        active=bool(row.get("active", True)),
+        sort_order=int(sort_order_raw) if isinstance(sort_order_raw, (int, float, str)) and str(sort_order_raw).strip() else 100,
+        version=int(version_raw) if isinstance(version_raw, (int, float, str)) and str(version_raw).strip() else 1,
+        uploaded_by=row.get("uploaded_by"),
+        created_at=row["created_at"],
+        updated_at=row["updated_at"],
+        url=url,
+    )
+
+
 class CRMQuoteTemplate(BaseModel):
     slug: str
     nombre: str
@@ -16732,6 +16842,180 @@ async def upload_settings_media(
         raise HTTPException(status_code=502, detail="media_upload_failed") from exc
 
     return CRMMediaAssetUpload(url=upload["url"], path=upload["path"], bucket="recursos")
+
+
+@router.get("/settings/assistant-documents", response_model=list[CRMAssistantDocument])
+async def list_assistant_documents(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("settings.view")),
+    channel_scope: AssistantDocumentChannelScope | None = Query(default=None),
+    category: str | None = Query(default=None),
+    active: bool | None = Query(default=None),
+    limit: Annotated[int, Query(ge=1, le=200)] = 100,
+) -> list[CRMAssistantDocument]:
+    try:
+        rows = await repo.list_assistant_documents(
+            organizacion_id=organizacion_id,
+            channel_scope=channel_scope.value if channel_scope else None,
+            category=category,
+            active=active,
+            limit=limit,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    documents: list[CRMAssistantDocument] = []
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        url: str | None = None
+        storage_bucket = row.get("storage_bucket")
+        storage_path = row.get("storage_path")
+        if isinstance(storage_bucket, str) and isinstance(storage_path, str) and storage_bucket and storage_path:
+            try:
+                url = await repo.create_signed_storage_url(
+                    bucket=storage_bucket,
+                    object_path=storage_path,
+                    expires_in=3600,
+                )
+            except CRMRepositoryError:
+                url = None
+        document = _build_assistant_document_model(row, url=url)
+        if document:
+            documents.append(document)
+    return documents
+
+
+@router.post("/settings/assistant-documents/upload", response_model=CRMAssistantDocument)
+async def upload_assistant_document_route(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("settings.manage")),
+    usuario_id: UUID | None = Depends(optional_usuario_id),
+    file: UploadFile = File(...),
+    title: str = Form(...),
+    description: str | None = Form(default=None),
+    channel_scope: AssistantDocumentChannelScope = Form(default=AssistantDocumentChannelScope.both),
+    category: str | None = Form(default=None),
+    tags: str | None = Form(default=None),
+    active: bool = Form(default=True),
+    sort_order: int = Form(default=100),
+) -> CRMAssistantDocument:
+    from app.services.assistant_documents import AssistantDocumentError, upload_assistant_document
+
+    parsed_tags: list[str] = []
+    if tags:
+        try:
+            raw_tags = json.loads(tags)
+        except json.JSONDecodeError:
+            raw_tags = []
+        parsed_tags = _normalize_document_tags(raw_tags)
+
+    try:
+        normalized_title = title.strip()
+        if not normalized_title:
+            raise HTTPException(status_code=400, detail="assistant_document_title_required")
+        upload = await upload_assistant_document(
+            file=file,
+            organizacion_id=organizacion_id,
+            category=category,
+        )
+        row = await repo.create_assistant_document(
+            organizacion_id=organizacion_id,
+            payload={
+                "title": normalized_title,
+                "description": description.strip() if isinstance(description, str) and description.strip() else None,
+                "channel_scope": channel_scope.value,
+                "storage_bucket": upload["storage_bucket"],
+                "storage_path": upload["storage_path"],
+                "mime": upload["mime"],
+                "size_bytes": upload["size_bytes"],
+                "tags": parsed_tags,
+                "category": upload["category"],
+                "active": bool(active),
+                "sort_order": int(sort_order),
+                "uploaded_by": str(usuario_id) if usuario_id else None,
+            },
+        )
+    except AssistantDocumentError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    document = _build_assistant_document_model(row, url=upload.get("url"))
+    if not document:
+        raise HTTPException(status_code=502, detail="assistant_document_upload_invalid_response")
+    return document
+
+
+@router.patch("/settings/assistant-documents/{document_id}", response_model=CRMAssistantDocument)
+async def update_assistant_document_route(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("settings.manage")),
+    document_id: UUID,
+    payload: CRMAssistantDocumentUpdate,
+) -> CRMAssistantDocument:
+    body = payload.model_dump(mode="json", exclude_unset=True)
+    if "title" in body and isinstance(body["title"], str) and not body["title"].strip():
+        raise HTTPException(status_code=400, detail="assistant_document_title_required")
+    if "title" in body and isinstance(body["title"], str):
+        body["title"] = body["title"].strip()
+    if "channel_scope" in body and isinstance(body["channel_scope"], AssistantDocumentChannelScope):
+        body["channel_scope"] = body["channel_scope"].value
+    if "tags" in body:
+        body["tags"] = _normalize_document_tags(body["tags"])
+    if "description" in body and isinstance(body["description"], str) and not body["description"].strip():
+        body["description"] = None
+    if "category" in body and isinstance(body["category"], str) and not body["category"].strip():
+        body["category"] = None
+    try:
+        row = await repo.update_assistant_document(
+            organizacion_id=organizacion_id,
+            document_id=document_id,
+            payload=body,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    url: str | None = None
+    storage_bucket = row.get("storage_bucket")
+    storage_path = row.get("storage_path")
+    if isinstance(storage_bucket, str) and isinstance(storage_path, str) and storage_bucket and storage_path:
+        try:
+            url = await repo.create_signed_storage_url(
+                bucket=storage_bucket,
+                object_path=storage_path,
+                expires_in=3600,
+            )
+        except CRMRepositoryError:
+            url = None
+    document = _build_assistant_document_model(row, url=url)
+    if not document:
+        raise HTTPException(status_code=502, detail="assistant_document_update_invalid_response")
+    return document
+
+
+@router.delete("/settings/assistant-documents/{document_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_assistant_document_route(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("settings.manage")),
+    document_id: UUID,
+) -> Response:
+    try:
+        await repo.delete_assistant_document(
+            organizacion_id=organizacion_id,
+            document_id=document_id,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.get("/settings/email-template", response_model=CRMEmailTemplate)

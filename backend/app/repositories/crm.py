@@ -2039,6 +2039,118 @@ class CRMRepository:
             raise CRMRepositoryError(f"Respuesta inválida al crear archivo: {row!r}")
         return row
 
+    async def list_assistant_documents(
+        self,
+        *,
+        organizacion_id: UUID,
+        channel_scope: str | None = None,
+        category: str | None = None,
+        active: bool | None = None,
+        limit: int = 100,
+    ) -> list[dict[str, Any]]:
+        params: dict[str, Any] = {
+            "organizacion_id": f"eq.{organizacion_id}",
+            "order": "sort_order.asc,updated_at.desc",
+            "limit": str(max(1, min(limit, 200))),
+        }
+        if channel_scope:
+            params["channel_scope"] = f"eq.{channel_scope}"
+        if category:
+            params["category"] = f"eq.{category}"
+        if active is not None:
+            params["active"] = f"eq.{str(active).lower()}"
+        resp = await self._request("GET", "/rest/v1/assistant_documents", params=params)
+        data = resp.json()
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"Respuesta inesperada al listar documentos: {data!r}")
+        return data
+
+    async def get_assistant_document(
+        self,
+        *,
+        organizacion_id: UUID,
+        document_id: UUID,
+    ) -> dict[str, Any] | None:
+        params = {
+            "id": f"eq.{document_id}",
+            "organizacion_id": f"eq.{organizacion_id}",
+            "limit": "1",
+        }
+        resp = await self._request("GET", "/rest/v1/assistant_documents", params=params)
+        data = resp.json()
+        if not isinstance(data, list) or not data:
+            return None
+        row = data[0]
+        return row if isinstance(row, dict) else None
+
+    async def create_assistant_document(
+        self,
+        *,
+        organizacion_id: UUID,
+        payload: dict[str, Any],
+    ) -> dict[str, Any]:
+        body = {"organizacion_id": str(organizacion_id), **payload}
+        resp = await self._request(
+            "POST",
+            "/rest/v1/assistant_documents",
+            json=body,
+            prefer="return=representation",
+        )
+        data = resp.json()
+        if not isinstance(data, list) or not data:
+            raise CRMRepositoryError("Supabase no devolvió el documento creado")
+        row = data[0]
+        if not isinstance(row, dict):
+            raise CRMRepositoryError(f"Respuesta inválida al crear documento: {row!r}")
+        return row
+
+    async def update_assistant_document(
+        self,
+        *,
+        organizacion_id: UUID,
+        document_id: UUID,
+        payload: dict[str, Any],
+    ) -> dict[str, Any]:
+        params = {
+            "id": f"eq.{document_id}",
+            "organizacion_id": f"eq.{organizacion_id}",
+        }
+        resp = await self._request(
+            "PATCH",
+            "/rest/v1/assistant_documents",
+            params=params,
+            json=payload,
+            prefer="return=representation",
+        )
+        data = resp.json()
+        if not isinstance(data, list) or not data:
+            raise CRMRepositoryError("Supabase no devolvió el documento actualizado")
+        row = data[0]
+        if not isinstance(row, dict):
+            raise CRMRepositoryError(f"Respuesta inválida al actualizar documento: {row!r}")
+        return row
+
+    async def delete_assistant_document(
+        self,
+        *,
+        organizacion_id: UUID,
+        document_id: UUID,
+    ) -> None:
+        params = {
+            "id": f"eq.{document_id}",
+            "organizacion_id": f"eq.{organizacion_id}",
+        }
+        resp = await self._request(
+            "DELETE",
+            "/rest/v1/assistant_documents",
+            params=params,
+            prefer="return=minimal",
+        )
+        if resp.status_code not in (200, 204):
+            raise CRMRepositoryError(
+                f"Supabase respondió error al eliminar documento: {resp.status_code} {resp.text}"
+            )
+
     async def list_tags(
         self,
         *,
