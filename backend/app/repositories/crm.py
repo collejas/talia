@@ -3104,7 +3104,7 @@ class CRMRepository:
                 organizacion_id=organizacion_id,
                 current_assignee=assignee_uuid,
                 conversation_id=conversation_id,
-                contact_id=str(contacto_id),
+                persona_id=str(contacto_id),
                 contact_ready=contact_ready,
                 require_contact_ready=require_contact_ready,
                 channel=canal,
@@ -3205,7 +3205,7 @@ class CRMRepository:
                             organizacion_id=organizacion_id,
                             current_assignee=assignee_uuid,
                             conversation_id=conversation_id,
-                            contact_id=str(contacto_id),
+                            persona_id=str(contacto_id),
                             contact_ready=contact_ready,
                             require_contact_ready=require_contact_ready,
                             channel=canal,
@@ -3293,7 +3293,7 @@ class CRMRepository:
                 organizacion_id=organizacion_id,
                 current_assignee=assignee_uuid,
                 conversation_id=conversation_id,
-                contact_id=str(contacto_id),
+                persona_id=str(contacto_id),
                 contact_ready=contact_ready,
                 require_contact_ready=require_contact_ready,
                 channel=canal,
@@ -3446,7 +3446,7 @@ class CRMRepository:
                 oportunidad_id=opportunity_id,
                 organizacion_id=organizacion_id,
                 conversation_id=conversation_id,
-                contact_id=str(contacto_id),
+                persona_id=str(contacto_id),
                 contact_ready=contact_ready,
                 require_contact_ready=require_contact_ready,
                 channel=canal,
@@ -3462,7 +3462,7 @@ class CRMRepository:
                 oportunidad_id=opportunity_id,
                 vendedor_id=assigned_user_id,
                 conversation_id=conversation_id,
-                contact_id=str(contacto_id),
+                persona_id=str(contacto_id),
                 trigger="restart_conversation",
                 metadata=audit_metadata,
                 canal=assignment_channel,
@@ -3577,16 +3577,18 @@ class CRMRepository:
         organizacion_id: UUID,
         current_assignee: UUID | None = None,
         conversation_id: str | None = None,
+        persona_id: str | None = None,
         contact_id: str | None = None,
         contact_ready: bool | None = None,
         require_contact_ready: bool = False,
         channel: str | None = None,
     ) -> UUID | None:
         """Asigna un vendedor round-robin cuando la oportunidad aún no tiene dueño."""
+        resolved_persona_id = persona_id or contact_id
         if current_assignee:
-            await self._set_contact_owner_if_missing(
+            await self._set_persona_owner_if_missing(
                 organizacion_id=organizacion_id,
-                contact_id=contact_id,
+                persona_id=resolved_persona_id,
                 owner_id=current_assignee,
             )
             return current_assignee
@@ -3596,13 +3598,13 @@ class CRMRepository:
                 extra={
                     "oportunidad_id": str(oportunidad_id),
                     "organizacion_id": str(organizacion_id),
-                    "contact_id": contact_id,
+                    "persona_id": resolved_persona_id,
                 },
             )
             return None
-        if contact_id:
+        if resolved_persona_id:
             try:
-                contact_uuid = _coerce_uuid(contact_id, field="contact_id")
+                contact_uuid = _coerce_uuid(resolved_persona_id, field="persona_id")
             except ValueError:
                 contact_uuid = None
             if contact_uuid:
@@ -3633,7 +3635,7 @@ class CRMRepository:
                         )
                         await self._set_contact_owner_if_missing(
                             organizacion_id=organizacion_id,
-                            contact_id=contact_id,
+                            persona_id=resolved_persona_id,
                             owner_id=owner_uuid,
                         )
                         logger.info(
@@ -3650,7 +3652,7 @@ class CRMRepository:
                             oportunidad_id=oportunidad_id,
                             vendedor_id=owner_uuid,
                             conversation_id=conversation_id,
-                            contact_id=contact_id,
+                            persona_id=resolved_persona_id,
                             trigger="auto_assign",
                             metadata={"source": "contact_owner"},
                             canal=assignment_channel,
@@ -3680,7 +3682,7 @@ class CRMRepository:
         )
         await self._set_contact_owner_if_missing(
             organizacion_id=organizacion_id,
-            contact_id=contact_id,
+            persona_id=resolved_persona_id,
             owner_id=candidate["usuario_id"],
         )
         logger.info(
@@ -3697,24 +3699,24 @@ class CRMRepository:
             oportunidad_id=oportunidad_id,
             vendedor_id=candidate["usuario_id"],
             conversation_id=conversation_id,
-            contact_id=contact_id,
+            persona_id=resolved_persona_id,
             trigger="auto_assign",
             metadata={"source": "round_robin"},
             canal=assignment_channel,
         )
         return candidate["usuario_id"]
 
-    async def _set_contact_owner_if_missing(
+    async def _set_persona_owner_if_missing(
         self,
         *,
         organizacion_id: UUID,
-        contact_id: str | None,
+        persona_id: str | None,
         owner_id: UUID,
     ) -> None:
-        if not contact_id:
+        if not persona_id:
             return
         try:
-            contact_uuid = _coerce_uuid(contact_id, field="contact_id")
+            contact_uuid = _coerce_uuid(persona_id, field="persona_id")
         except ValueError:
             return
         await self._request(
@@ -3728,6 +3730,19 @@ class CRMRepository:
             },
             json={"propietario_usuario_id": str(owner_id)},
             prefer="return=minimal",
+        )
+
+    async def _set_contact_owner_if_missing(
+        self,
+        *,
+        organizacion_id: UUID,
+        contact_id: str | None,
+        owner_id: UUID,
+    ) -> None:
+        await self._set_persona_owner_if_missing(
+            organizacion_id=organizacion_id,
+            persona_id=contact_id,
+            owner_id=owner_id,
         )
 
     async def _set_conversation_restart_sequence(
@@ -3777,7 +3792,7 @@ class CRMRepository:
             oportunidad_id=oportunidad_id,
             vendedor_id=vendedor_id,
             conversation_id=conversation_id,
-            contact_id=persona_id or contact_id,
+            persona_id=persona_id or contact_id,
             trigger=trigger,
             metadata=metadata,
             notification_sid=notification_sid,
@@ -3791,7 +3806,7 @@ class CRMRepository:
         oportunidad_id: UUID | None,
         vendedor_id: UUID,
         conversation_id: str | None,
-        contact_id: str | None,
+        persona_id: str | None,
         trigger: str,
         metadata: dict[str, Any] | None,
         notification_sid: str | None = None,
@@ -3809,8 +3824,8 @@ class CRMRepository:
             payload["oportunidad_id"] = str(oportunidad_id)
         if conversation_id:
             payload["conversacion_id"] = str(conversation_id)
-        if contact_id:
-            payload["contacto_id"] = str(contact_id)
+        if persona_id:
+            payload["contacto_id"] = str(persona_id)
         if notification_sid:
             payload["notificacion_message_sid"] = notification_sid
         await self._request(
