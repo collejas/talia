@@ -3115,9 +3115,9 @@ class CRMRepository:
         # reutilizarla en lugar de crear una nueva.
         contact_phone: str | None = None
         try:
-            contact_row = await self.get_contact(
+            contact_row = await self.get_persona(
                 organizacion_id=organizacion_id,
-                contacto_id=contacto_id,
+                persona_id=contacto_id,
             )
         except CRMRepositoryError:
             contact_row = None
@@ -6756,15 +6756,15 @@ class CRMRepository:
             return None
         return row
 
-    async def get_contact(
+    async def get_persona(
         self,
         *,
         organizacion_id: UUID,
-        contacto_id: UUID,
+        persona_id: UUID,
     ) -> dict[str, Any] | None:
         params = {
             "organizacion_id": f"eq.{organizacion_id}",
-            "id": f"eq.{contacto_id}",
+            "id": f"eq.{persona_id}",
             "limit": "1",
             "select": (
                 "id,organizacion_id,nombre,apellido_paterno,apellido_materno,nombre_completo,"
@@ -6778,16 +6778,16 @@ class CRMRepository:
             return None
         row = data[0]
         if not isinstance(row, dict):
-            raise CRMRepositoryError(f"Respuesta inválida al obtener contacto: {row!r}")
+            raise CRMRepositoryError(f"Respuesta inválida al obtener persona: {row!r}")
         return await self._persona_to_contact_row(persona=row, organizacion_id=organizacion_id)
 
-    async def get_persona(
+    async def get_contact(
         self,
         *,
         organizacion_id: UUID,
-        persona_id: UUID,
+        contacto_id: UUID,
     ) -> dict[str, Any] | None:
-        return await self.get_contact(organizacion_id=organizacion_id, contacto_id=persona_id)
+        return await self.get_persona(organizacion_id=organizacion_id, persona_id=contacto_id)
 
     async def get_contacts_by_ids(
         self,
@@ -6838,36 +6838,32 @@ class CRMRepository:
             contacto_ids=persona_ids,
         )
 
-    async def update_contact(
+    async def update_persona(
         self,
         *,
         organizacion_id: UUID,
-        contacto_id: UUID,
+        persona_id: UUID,
         payload: dict[str, Any],
     ) -> dict[str, Any]:
         if not payload:
-            existing = await self.get_contact(
+            existing = await self.get_persona(
                 organizacion_id=organizacion_id,
-                contacto_id=contacto_id,
+                persona_id=persona_id,
             )
             if existing is None:
-                raise CRMRepositoryError("contacto_no_encontrado")
+                raise CRMRepositoryError("persona_no_encontrada")
             return existing
-        existing_contact = await self.get_contact(
+        existing_contact = await self.get_persona(
             organizacion_id=organizacion_id,
-            contacto_id=contacto_id,
+            persona_id=persona_id,
         )
         if existing_contact is None:
-            raise CRMRepositoryError("contacto_no_encontrado")
-        existing_persona = await self._get_persona_by_contact_id(
-            organizacion_id=organizacion_id,
-            contacto_id=contacto_id,
-        )
+            raise CRMRepositoryError("persona_no_encontrada")
         merged_contact = dict(existing_contact)
         merged_contact.update(payload)
         parts = self._build_contact_write_parts(
             organizacion_id=organizacion_id,
-            contact_id=contacto_id,
+            contact_id=persona_id,
             payload=merged_contact,
             existing=existing_contact,
         )
@@ -6876,12 +6872,10 @@ class CRMRepository:
         persona_body.pop("id", None)
         persona_body.pop("organizacion_id", None)
         persona_body.pop("creado_en", None)
-        persona_id = existing_persona.get("id") if isinstance(existing_persona, dict) else None
-        if not persona_id:
-            persona_id = contacto_id
+        persona_id_value = str(persona_id)
         persona_params = {
             "organizacion_id": f"eq.{organizacion_id}",
-            "id": f"eq.{persona_id}",
+            "id": f"eq.{persona_id_value}",
         }
         if persona_body.get("propietario_usuario_id") is None:
             persona_body.pop("propietario_usuario_id", None)
@@ -6894,7 +6888,7 @@ class CRMRepository:
         )
         persona_data = persona_resp.json()
         if not isinstance(persona_data, list) or not persona_data:
-            raise CRMRepositoryError("contacto_update_failed")
+            raise CRMRepositoryError("persona_update_failed")
         persona_row = persona_data[0]
         if not isinstance(persona_row, dict):
             raise CRMRepositoryError(f"Respuesta inválida al actualizar persona: {persona_row!r}")
@@ -7012,21 +7006,22 @@ class CRMRepository:
                 prefer="return=representation",
             )
 
-        return await self.get_contact(
+        updated_persona_id = UUID(str(persona_row.get("id")))
+        return await self.get_persona(
             organizacion_id=organizacion_id,
-            contacto_id=contacto_id,
+            persona_id=updated_persona_id,
         ) or persona_row
 
-    async def update_persona(
+    async def update_contact(
         self,
         *,
         organizacion_id: UUID,
-        persona_id: UUID,
+        contacto_id: UUID,
         payload: dict[str, Any],
     ) -> dict[str, Any]:
-        return await self.update_contact(
+        return await self.update_persona(
             organizacion_id=organizacion_id,
-            contacto_id=persona_id,
+            persona_id=contacto_id,
             payload=payload,
         )
 
@@ -7792,9 +7787,9 @@ class CRMRepository:
             persona_uuid = UUID(str(record.get("id") or persona_id))
         except (TypeError, ValueError) as exc:
             raise CRMRepositoryError("contact_invalid_uuid") from exc
-        return await self.update_contact(
+        return await self.update_persona(
             organizacion_id=org_uuid,
-            contacto_id=persona_uuid,
+            persona_id=persona_uuid,
             payload=patch,
         )
 
@@ -8200,24 +8195,21 @@ class CRMRepository:
                 return row
         return None
 
-    async def delete_contact(
+    async def delete_persona(
         self,
         *,
         organizacion_id: UUID,
-        contacto_id: UUID,
+        persona_id: UUID,
     ) -> None:
-        persona_row = await self._get_persona_by_contact_id(
-            organizacion_id=organizacion_id,
-            contacto_id=contacto_id,
-        )
+        persona_row = await self.get_persona(organizacion_id=organizacion_id, persona_id=persona_id)
         if persona_row and persona_row.get("id"):
-            persona_id = str(persona_row.get("id"))
+            persona_uuid = str(persona_row.get("id"))
             await self._request(
                 "DELETE",
                 "/rest/v1/cuenta_personas",
                 params={
                     "organizacion_id": f"eq.{organizacion_id}",
-                    "persona_id": f"eq.{persona_id}",
+                    "persona_id": f"eq.{persona_uuid}",
                 },
                 prefer="return=representation",
             )
@@ -8226,18 +8218,18 @@ class CRMRepository:
                 "/rest/v1/personas",
                 params={
                     "organizacion_id": f"eq.{organizacion_id}",
-                    "id": f"eq.{persona_id}",
+                    "id": f"eq.{persona_uuid}",
                 },
                 prefer="return=representation",
             )
 
-    async def delete_persona(
+    async def delete_contact(
         self,
         *,
         organizacion_id: UUID,
-        persona_id: UUID,
+        contacto_id: UUID,
     ) -> None:
-        await self.delete_contact(organizacion_id=organizacion_id, contacto_id=persona_id)
+        await self.delete_persona(organizacion_id=organizacion_id, persona_id=contacto_id)
 
     async def list_opportunity_stage_history(
         self,
