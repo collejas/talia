@@ -1904,7 +1904,7 @@ async def handle_incoming_message(
         _log_trace_stage(
             stage="assistant_generation_started",
             conversation_id=conversation_id,
-            contact_id=contact_id,
+            persona_id=contact_id,
             inbound_message_id=inbound_message_id,
             extra={
                 "previous_response_id": _trim_text(previous_response_id),
@@ -1914,7 +1914,7 @@ async def handle_incoming_message(
         assistant_reply = await _generate_assistant_reply(
             message=message,
             conversation_id=conversation_id,
-            contact_id=contact_id,
+            persona_id=contact_id,
             openai_conversation_id=openai_conversation_id,
             previous_response_id=previous_response_id,
             catalog_context=catalog_context_text,
@@ -2609,7 +2609,7 @@ async def _generate_assistant_reply(
     *,
     message: schemas.WhatsAppIncomingMessage,
     conversation_id: str,
-    contact_id: str,
+    persona_id: str,
     openai_conversation_id: str | None,
     previous_response_id: str | None,
     catalog_context: str | None,
@@ -2648,7 +2648,7 @@ async def _generate_assistant_reply(
 
     metadata_payload = {
         "conversation_id": conversation_id,
-        "contact_id": contact_id,
+        "persona_id": persona_id,
         "channel": "whatsapp",
         "message_sid": message.message_sid,
         "inbound_message_id": inbound_message_id,
@@ -2660,7 +2660,7 @@ async def _generate_assistant_reply(
         context_fetch_started = time.perf_counter()
         context_payload = await storage.fetch_persona_context(
             conversation_id=conversation_id,
-            persona_id=contact_id,
+            persona_id=persona_id,
         )
         debug_timings["fetch_persona_context_ms"] = round((time.perf_counter() - context_fetch_started) * 1000, 2)
     except StorageError as exc:  # pragma: no cover - fallbacks informativos
@@ -2668,7 +2668,7 @@ async def _generate_assistant_reply(
             "whatsapp.fetch_persona_context_failed",
             extra={
                 "conversation_id": conversation_id,
-                "contact_id": contact_id,
+                "persona_id": persona_id,
                 "error": str(exc),
             },
         )
@@ -2680,7 +2680,7 @@ async def _generate_assistant_reply(
         summary_started = time.perf_counter()
         summary_record = await conversation_summary.ensure_conversation_summary(
             conversation_id=conversation_id,
-            persona_id=contact_id,
+            persona_id=persona_id,
             context_data=context_payload,
             organizacion_id=organizacion_id,
             generate_if_missing=False,
@@ -2934,7 +2934,7 @@ async def _generate_assistant_reply(
 
     context_obj = ToolRuntimeContext(
         conversation_id=conversation_id,
-        persona_id=contact_id,
+        persona_id=persona_id,
         session_id=f"whatsapp:{conversation_id}",
         channel="whatsapp",
         organizacion_id=str(organizacion_id) if organizacion_id else None,
@@ -3070,7 +3070,7 @@ async def _generate_assistant_reply(
                     api_key=whatsapp_settings.voice_api_key,
                     request_metadata={"conversation_id": conversation_id},
                     conversation_id=conversation_id,
-                    contact_id=contact_id,
+                    persona_id=persona_id,
                     quality_retry_used=True,
                     project_id=assistant.project_id,
                 )
@@ -3112,7 +3112,7 @@ async def _generate_assistant_reply(
         asyncio.create_task(
             _refresh_conversation_summary_best_effort(
                 conversation_id=conversation_id,
-                persona_id=contact_id,
+                persona_id=persona_id,
                 organizacion_id=organizacion_id,
                 context_data=context_payload,
             )
