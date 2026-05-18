@@ -119,6 +119,7 @@ _WHATSAPP_INBOUND_FRAGMENT_MAX_WORDS = 12
 MAX_WHATSAPP_ATTACHMENT_BYTES = 8 * 1024 * 1024
 MAX_WHATSAPP_ATTACHMENT_TEXT_CHARS = 12000
 MAX_WHATSAPP_ATTACHMENTS_PER_MESSAGE = 4
+_MARKDOWN_LINK_RE = re.compile(r"\[([^\]]+)\]\((https?://[^)]+)\)")
 
 
 def _persona_datos(persona: Mapping[str, Any] | None) -> dict[str, Any]:
@@ -259,6 +260,38 @@ def _guess_attachment_extension(name: str, content_type: str | None) -> str:
         "application/vnd.ms-excel": ".xls",
     }
     return mime_map.get(mime, "")
+
+
+def _extract_pdf_attachments_from_reply_text(text: str) -> tuple[str, list[dict[str, Any]]]:
+    """Convierte enlaces markdown a PDFs en adjuntos reales para WhatsApp."""
+
+    if not text:
+        return text, []
+
+    attachments: list[dict[str, Any]] = []
+    cleaned_text = text
+    for match in _MARKDOWN_LINK_RE.finditer(text):
+        label = _trim_text(match.group(1)) or "documento"
+        url = _trim_text(match.group(2)) or ""
+        if not url:
+            continue
+        if ".pdf" not in url.lower():
+            continue
+        filename = Path(label).name
+        if not filename.lower().endswith(".pdf"):
+            filename = f"{filename}.pdf"
+        attachments.append(
+            {
+                "url": url,
+                "mime": "application/pdf",
+                "name": filename,
+            }
+        )
+        cleaned_text = cleaned_text.replace(match.group(0), "").strip()
+
+    if attachments:
+        cleaned_text = re.sub(r"\s{2,}", " ", cleaned_text).strip()
+    return cleaned_text, attachments[:MAX_WHATSAPP_ATTACHMENTS_PER_MESSAGE]
 
 
 def _is_image_mime(mime: str | None, *, extension: str | None = None) -> bool:
@@ -1981,12 +2014,14 @@ async def handle_incoming_message(
             error=str(exc),
         )
     final_reply_text = _compact_whatsapp_reply(final_reply_text, _DEFAULT_WHATSAPP_MAX_CHARS)
+    final_reply_text, reply_attachments = _extract_pdf_attachments_from_reply_text(final_reply_text)
 
     try:
         twilio_send_started = time.perf_counter()
         send_result = await _send_whatsapp_reply(
             to_number=message.from_number,
             body=final_reply_text,
+            attachments=reply_attachments or None,
             organizacion_id=org_uuid,
         )
         _record_stage_timing(stage_timings, "twilio_send_ms", twilio_send_started)
@@ -3204,7 +3239,7 @@ async def _send_meta_whatsapp_reply(
         return TwilioSendResult(sid=None, status="skipped", error="invalid_recipient", provider="meta")
 
     graph_version = runtime.meta_graph_api_version or "v21.0"
-    url = f"https://graph.facebook.com/{graph_version}/{runtime.meta_phone_number_id}/messages"
+    messages_url = f"https://graph.facebook.com/{graph_version}/{runtime.meta_phone_number_id}/messages"
     if normalized_template_name and normalized_template_language:
         payload = {
             "messaging_product": "whatsapp",
@@ -3219,40 +3254,58 @@ async def _send_meta_whatsapp_reply(
         attachment = next((item for item in attachments or [] if isinstance(item, dict) and item.get("url")), None)
         if attachment:
             mime = str(attachment.get("mime") or "").lower()
-            url = str(attachment["url"])
+            attachment_url = str(attachment["url"])
             name = str(attachment.get("name") or "").strip()
             if mime.startswith("image/"):
                 payload = {
                     "messaging_product": "whatsapp",
                     "to": normalized_to,
                     "type": "image",
-                    "image": {"link": url, **({"caption": body} if body else {})},
+                    "image": {"link": attachment_url, **({"caption": body} if body else {})},
                 }
             elif mime.startswith("audio/"):
                 payload = {
                     "messaging_product": "whatsapp",
                     "to": normalized_to,
                     "type": "audio",
-                    "audio": {"link": url},
+                    "audio": {"link": attachment_url},
                 }
             elif mime.startswith("video/"):
                 payload = {
                     "messaging_product": "whatsapp",
                     "to": normalized_to,
                     "type": "video",
-                    "video": {"link": url, **({"caption": body} if body else {})},
+                    "video": {"link": attachment_url, **({"caption": body} if body else {})},
                 }
             else:
-                payload = {
-                    "messaging_product": "whatsapp",
-                    "to": normalized_to,
-                    "type": "document",
-                    "document": {
-                        "link": url,
-                        **({"caption": body} if body else {}),
-                        **({"filename": name} if name else {}),
-                    },
-                }
+                media_id = await _upload_meta_whatsapp_document(
+                    runtime=runtime,
+                    source_url=attachment_url,
+                    filename=name or "documento.pdf",
+                    mime=mime or "application/pdf",
+                )
+                if media_id:
+                    payload = {
+                        "messaging_product": "whatsapp",
+                        "to": normalized_to,
+                        "type": "document",
+                        "document": {
+                            "id": media_id,
+                            **({"caption": body} if body else {}),
+                            **({"filename": name} if name else {}),
+                        },
+                    }
+                else:
+                    payload = {
+                        "messaging_product": "whatsapp",
+                        "to": normalized_to,
+                        "type": "document",
+                        "document": {
+                            "link": attachment_url,
+                            **({"caption": body} if body else {}),
+                            **({"filename": name} if name else {}),
+                        },
+                    }
         else:
             payload = {
                 "messaging_product": "whatsapp",
@@ -3268,7 +3321,7 @@ async def _send_meta_whatsapp_reply(
 
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
-            response = await client.post(url, json=payload, headers=headers)
+            response = await client.post(messages_url, json=payload, headers=headers)
     except Exception as exc:  # pragma: no cover - red/servicio externo
         logger.exception("whatsapp.meta_send_failed", extra={"error": str(exc)})
         return TwilioSendResult(sid=None, status="failed", error=str(exc), provider="meta")
@@ -3308,6 +3361,56 @@ async def _send_meta_whatsapp_reply(
         from_number=runtime.meta_phone_number_id,
         provider="meta",
     )
+
+
+async def _upload_meta_whatsapp_document(
+    *,
+    runtime: Any,
+    source_url: str,
+    filename: str,
+    mime: str,
+) -> str | None:
+    """Sube un PDF a Meta para enviarlo luego como documento por ID."""
+
+    if not runtime.meta_phone_number_id or not runtime.meta_page_access_token:
+        return None
+    graph_version = runtime.meta_graph_api_version or "v21.0"
+    upload_url = f"https://graph.facebook.com/{graph_version}/{runtime.meta_phone_number_id}/media"
+    try:
+        async with httpx.AsyncClient(timeout=30.0, follow_redirects=True) as client:
+            source_response = await client.get(source_url)
+            if source_response.status_code >= 400:
+                return None
+            upload_response = await client.post(
+                upload_url,
+                data={
+                    "messaging_product": "whatsapp",
+                    "type": mime or "application/pdf",
+                },
+                files={
+                    "file": (filename, source_response.content, mime or "application/pdf"),
+                },
+                headers={
+                    "Authorization": f"Bearer {runtime.meta_page_access_token}",
+                    "Accept": "application/json",
+                },
+            )
+    except Exception:
+        return None
+
+    if upload_response.status_code >= 400:
+        logger.warning(
+            "whatsapp.meta_media_upload_failed",
+            extra={"status_code": upload_response.status_code, "body": upload_response.text},
+        )
+        return None
+
+    try:
+        data = upload_response.json()
+    except ValueError:
+        return None
+    media_id = data.get("id") if isinstance(data, dict) else None
+    return str(media_id).strip() if media_id else None
 
 
 async def _send_whatsapp_reply(

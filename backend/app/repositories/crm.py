@@ -17933,6 +17933,61 @@ class CRMRepository:
             public_path = f"{prefix}{key}" if not key.startswith(prefix) else key
         return public_path
 
+    async def download_storage_object(
+        self,
+        *,
+        bucket: str,
+        object_path: str,
+    ) -> bytes:
+        bucket_name = bucket.strip().strip("/")
+        if not bucket_name:
+            raise CRMRepositoryError("bucket_required")
+        normalized_path = object_path.strip().lstrip("/")
+        if not normalized_path:
+            raise CRMRepositoryError("object_key_required")
+        candidate_paths: list[str] = []
+
+        def add_candidate(value: str) -> None:
+            candidate = value.strip().lstrip("/")
+            if candidate and candidate not in candidate_paths:
+                candidate_paths.append(candidate)
+
+        add_candidate(normalized_path)
+
+        stripped = normalized_path
+        prefix = f"{bucket_name}/"
+        while stripped.startswith(prefix):
+            stripped = stripped[len(prefix) :]
+            add_candidate(stripped)
+
+        if not normalized_path.startswith(prefix):
+            add_candidate(f"{bucket_name}/{normalized_path}")
+
+        headers = {
+            "apikey": self._service_role,
+            "Authorization": f"Bearer {self._service_role}",
+        }
+        last_error: CRMRepositoryError | None = None
+        for candidate in candidate_paths:
+            url = f"{self._base_url}/storage/v1/object/{bucket_name}/{candidate}"
+            try:
+                async with httpx.AsyncClient(timeout=self._timeout) as client:
+                    resp = await client.get(url, headers=headers)
+            except httpx.RequestError as exc:
+                raise CRMRepositoryError(
+                    f"Error de red al descargar objeto {bucket_name}/{candidate}: {exc}"
+                ) from exc
+            if resp.status_code < 400:
+                return resp.content
+            payload_text = resp.text or ""
+            if "not_found" in payload_text.lower() or "object not found" in payload_text.lower():
+                last_error = CRMRepositoryError(payload_text)
+                continue
+            raise CRMRepositoryError(
+                f"Supabase respondió error {resp.status_code} al descargar objeto {bucket_name}/{candidate}: {resp.text}"
+            )
+        raise last_error or CRMRepositoryError("object_not_found")
+
     async def create_signed_storage_url(
         self,
         *,
@@ -17952,44 +18007,70 @@ class CRMRepository:
         if not normalized_path:
             raise CRMRepositoryError("object_key_required")
 
-        candidate_paths = [normalized_path]
-        if normalized_path.startswith(f"{bucket_name}/"):
-            candidate_paths.append(normalized_path[len(bucket_name) + 1 :])
-        else:
-            candidate_paths.append(f"{bucket_name}/{normalized_path}")
+        candidate_paths: list[str] = []
+
+        def add_candidate(value: str) -> None:
+            candidate = value.strip().lstrip("/")
+            if candidate and candidate not in candidate_paths:
+                candidate_paths.append(candidate)
+
+        add_candidate(normalized_path)
+
+        stripped = normalized_path
+        prefix = f"{bucket_name}/"
+        while stripped.startswith(prefix):
+            stripped = stripped[len(prefix) :]
+            add_candidate(stripped)
+
+        if not normalized_path.startswith(prefix):
+            add_candidate(f"{bucket_name}/{normalized_path}")
 
         last_error: CRMRepositoryError | None = None
         for candidate in candidate_paths:
             if not candidate:
                 continue
-            resp = await self._request(
-                "POST",
-                f"/storage/v1/object/sign/{bucket_name}/{candidate}",
-                json={"expiresIn": expires_in},
-            )
-            if resp.status_code >= 400:
+            for attempt in range(3):
+                try:
+                    resp = await self._request(
+                        "POST",
+                        f"/storage/v1/object/sign/{bucket_name}/{candidate}",
+                        json={"expiresIn": expires_in},
+                    )
+                except CRMRepositoryError as exc:
+                    payload_text = str(exc)
+                    if "not_found" in payload_text.lower() or "object not found" in payload_text.lower():
+                        last_error = CRMRepositoryError(payload_text)
+                        if attempt < 2:
+                            continue
+                        break
+                    raise
+                if resp.status_code < 400:
+                    data = resp.json()
+                    if not isinstance(data, dict):
+                        raise CRMRepositoryError("signed_url_invalid_response")
+                    signed_fragment = data.get("signedURL") or data.get("signedUrl")
+                    if not signed_fragment or not isinstance(signed_fragment, str):
+                        raise CRMRepositoryError("signed_url_missing")
+                    if signed_fragment.startswith("http://") or signed_fragment.startswith("https://"):
+                        return signed_fragment
+
+                    fragment = signed_fragment if signed_fragment.startswith("/") else f"/{signed_fragment}"
+                    if not fragment.startswith("/storage/"):
+                        fragment = f"/storage/v1{fragment}"
+
+                    base = self._base_url.rstrip("/")
+                    return f"{base}{fragment}"
+
                 payload_text = resp.text or ""
                 if "not_found" in payload_text.lower() or "object not found" in payload_text.lower():
                     last_error = CRMRepositoryError(payload_text)
-                    continue
+                    if attempt < 2:
+                        await asyncio.sleep(0.4 * (attempt + 1))
+                        continue
+                    break
                 raise CRMRepositoryError(
                     f"Supabase respondió error {resp.status_code} al firmar objeto {bucket_name}/{candidate}: {resp.text}"
                 )
-            data = resp.json()
-            if not isinstance(data, dict):
-                raise CRMRepositoryError("signed_url_invalid_response")
-            signed_fragment = data.get("signedURL") or data.get("signedUrl")
-            if not signed_fragment or not isinstance(signed_fragment, str):
-                raise CRMRepositoryError("signed_url_missing")
-            if signed_fragment.startswith("http://") or signed_fragment.startswith("https://"):
-                return signed_fragment
-
-            fragment = signed_fragment if signed_fragment.startswith("/") else f"/{signed_fragment}"
-            if not fragment.startswith("/storage/"):
-                fragment = f"/storage/v1{fragment}"
-
-            base = self._base_url.rstrip("/")
-            return f"{base}{fragment}"
 
         raise last_error or CRMRepositoryError("signed_url_missing")
 

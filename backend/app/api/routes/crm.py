@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import base64
 import csv
+import hmac
 import hashlib
 import io
 import json
@@ -19703,6 +19704,139 @@ async def download_inbox_attachment(
         return RedirectResponse(url=stored_path, status_code=status.HTTP_307_TEMPORARY_REDIRECT)
 
     raise HTTPException(status_code=404, detail="attachment_not_found")
+
+
+def _assistant_document_delivery_secret() -> str | None:
+    candidates = [
+        getattr(settings, "secrets_master_key_high", None),
+        getattr(settings, "secrets_master_key", None),
+        getattr(settings, "supabase_jwt_secret", None),
+    ]
+    for candidate in candidates:
+        if candidate:
+            value = str(candidate).strip()
+            if value:
+                return value
+    return None
+
+
+def _decode_assistant_document_delivery_token(token: str) -> dict[str, Any] | None:
+    raw_token = (token or "").strip()
+    if not raw_token:
+        return None
+    parts = raw_token.split(".", 1)
+    if len(parts) != 2:
+        return None
+    payload_b64, signature_b64 = parts
+    secret = _assistant_document_delivery_secret()
+    if not secret:
+        return None
+    try:
+        payload_bytes = base64.urlsafe_b64decode(payload_b64 + "=" * (-len(payload_b64) % 4))
+        signature_bytes = base64.urlsafe_b64decode(signature_b64 + "=" * (-len(signature_b64) % 4))
+    except Exception:
+        return None
+    expected_signature = hmac.new(
+        secret.encode("utf-8"),
+        payload_b64.encode("ascii"),
+        hashlib.sha256,
+    ).digest()
+    if not hmac.compare_digest(expected_signature, signature_bytes):
+        return None
+    try:
+        payload = json.loads(payload_bytes.decode("utf-8"))
+    except Exception:
+        return None
+    if not isinstance(payload, dict):
+        return None
+    exp = payload.get("exp")
+    try:
+        if int(exp) < int(datetime.now(timezone.utc).timestamp()):
+            return None
+    except Exception:
+        return None
+    return payload
+
+
+async def _public_assistant_document_download_impl(
+    *,
+    document_id: UUID,
+    token: str = Query(..., min_length=10),
+) -> Response:
+    payload = _decode_assistant_document_delivery_token(token)
+    if not payload:
+        raise HTTPException(status_code=403, detail="assistant_document_token_invalid")
+
+    payload_document_id = str(payload.get("document_id") or "").strip()
+    payload_organizacion_id = str(payload.get("organizacion_id") or "").strip()
+    if payload_document_id != str(document_id):
+        raise HTTPException(status_code=403, detail="assistant_document_token_mismatch")
+
+    try:
+        org_uuid = UUID(payload_organizacion_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=403, detail="assistant_document_token_org_invalid") from exc
+
+    repo = CRMRepository()
+    try:
+        document = await repo.get_assistant_document(
+            organizacion_id=org_uuid,
+            document_id=document_id,
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"assistant_document_lookup_failed:{exc}") from exc
+
+    if not isinstance(document, dict):
+        raise HTTPException(status_code=404, detail="assistant_document_not_found")
+
+    storage_bucket = str(document.get("storage_bucket") or "").strip()
+    storage_path = str(document.get("storage_path") or "").strip()
+    if not storage_bucket or not storage_path:
+        raise HTTPException(status_code=404, detail="assistant_document_storage_missing")
+
+    try:
+        content = await repo.download_storage_object(
+            bucket=storage_bucket,
+            object_path=storage_path,
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"assistant_document_download_failed:{exc}") from exc
+
+    filename = str(document.get("title") or document_id).strip() or str(document_id)
+    if not filename.lower().endswith(".pdf"):
+        filename = f"{filename}.pdf"
+    headers = {
+        "Content-Disposition": f'inline; filename="{filename}"',
+        "Cache-Control": "no-store",
+    }
+    return Response(content=content, media_type="application/pdf", headers=headers)
+
+
+@router.get("/public/assistant-documents/{document_id}")
+async def public_assistant_document_download(
+    *,
+    document_id: UUID,
+    token: str = Query(..., min_length=10),
+) -> Response:
+    return await _public_assistant_document_download_impl(document_id=document_id, token=token)
+
+
+@router.head("/public/assistant-documents/{document_id}")
+async def public_assistant_document_download_head(
+    *,
+    document_id: UUID,
+    token: str = Query(..., min_length=10),
+) -> Response:
+    response = await _public_assistant_document_download_impl(document_id=document_id, token=token)
+    return Response(
+        content=b"",
+        status_code=response.status_code,
+        headers={
+            key: value
+            for key, value in response.headers.items()
+            if key.lower() in {"content-type", "content-disposition", "cache-control"}
+        },
+    )
 
 
 def _stringify_uuid(value: UUID | str | None) -> str | None:

@@ -79,6 +79,7 @@ def build_document_manifest(documents: Sequence[dict[str, Any]]) -> list[dict[st
                 "mime": document.get("mime"),
                 "size_bytes": document.get("size_bytes"),
                 "url": document.get("url"),
+                "delivery_url": document.get("delivery_url"),
             }
         )
     return manifest
@@ -115,10 +116,14 @@ async def build_email_attachments(
     for document in documents:
         if not isinstance(document, dict):
             continue
-        url = str(document.get("url") or "").strip()
-        if not url:
+        storage_bucket = str(document.get("storage_bucket") or "").strip()
+        storage_path = str(document.get("storage_path") or "").strip()
+        if not storage_bucket or not storage_path:
             continue
-        content = await assistant_documents.download_document_bytes(url)
+        content = await assistant_documents.download_storage_object_bytes(
+            bucket=storage_bucket,
+            object_path=storage_path,
+        )
         title = str(document.get("title") or "").strip() or str(document.get("storage_path") or "documento")
         filename = Path(title).name
         if not filename.lower().endswith(".pdf"):
@@ -141,7 +146,7 @@ def build_whatsapp_attachments(
     for document in documents:
         if not isinstance(document, dict):
             continue
-        url = str(document.get("url") or "").strip()
+        url = str(document.get("delivery_url") or document.get("url") or "").strip()
         if not url:
             continue
         title = str(document.get("title") or "").strip() or str(document.get("storage_path") or "documento")

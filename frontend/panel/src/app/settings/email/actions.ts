@@ -59,6 +59,10 @@ export type AssistantDocument = {
   url: string | null;
 };
 
+type ActionResult<T> =
+  | { ok: true; data: T }
+  | { ok: false; error: string };
+
 const DEFAULT_SETTINGS: EmailTemplateSettings = {
   intro: "Gracias por tu interés en Tal-IA. Te comparto un resumen con la información que platicamos:",
   highlights: [
@@ -268,7 +272,7 @@ export async function fetchAssistantDocuments(): Promise<AssistantDocument[]> {
     .map((entry) => normalizeAssistantDocument(entry));
 }
 
-export async function uploadAssistantDocument(formData: FormData): Promise<AssistantDocument> {
+export async function uploadAssistantDocument(formData: FormData): Promise<ActionResult<AssistantDocument>> {
   const response = await callCrmApi<Record<string, unknown>>(
     "/crm/settings/assistant-documents/upload",
     {
@@ -277,10 +281,10 @@ export async function uploadAssistantDocument(formData: FormData): Promise<Assis
     },
   );
   if (!response.ok || !response.data) {
-    throw new Error(response.error || "No se pudo subir el PDF.");
+    return { ok: false, error: !response.ok ? response.error : "No se pudo subir el PDF." };
   }
   revalidatePath("/settings/email");
-  return normalizeAssistantDocument(response.data);
+  return { ok: true, data: normalizeAssistantDocument(response.data) };
 }
 
 export async function updateAssistantDocument(
@@ -295,7 +299,7 @@ export async function updateAssistantDocument(
     sort_order: number;
     version: number;
   }>,
-): Promise<AssistantDocument> {
+): Promise<ActionResult<AssistantDocument>> {
   const payload: Record<string, unknown> = {};
   if (typeof input.title === "string") payload.title = input.title.trim();
   if (typeof input.description === "string") payload.description = input.description.trim();
@@ -314,18 +318,19 @@ export async function updateAssistantDocument(
     },
   );
   if (!response.ok || !response.data) {
-    throw new Error(response.error || "No se pudo actualizar el PDF.");
+    return { ok: false, error: !response.ok ? response.error : "No se pudo actualizar el PDF." };
   }
   revalidatePath("/settings/email");
-  return normalizeAssistantDocument(response.data);
+  return { ok: true, data: normalizeAssistantDocument(response.data) };
 }
 
-export async function deleteAssistantDocument(documentId: string): Promise<void> {
+export async function deleteAssistantDocument(documentId: string): Promise<ActionResult<null>> {
   const response = await callCrmApi<never>(`/crm/settings/assistant-documents/${documentId}`, {
     method: "DELETE",
   });
   if (!response.ok) {
-    throw new Error(response.error || "No se pudo eliminar el PDF.");
+    return { ok: false, error: response.error || "No se pudo eliminar el PDF." };
   }
   revalidatePath("/settings/email");
+  return { ok: true, data: null };
 }

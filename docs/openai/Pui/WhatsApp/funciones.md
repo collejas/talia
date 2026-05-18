@@ -245,6 +245,132 @@
 ---
 
 {
+  "name": "send_information_package",
+  "description": "Enviar un paquete de información al prospecto por uno o varios canales con PDFs reales del tenant, sin escribir ligas en el chat.",
+  "strict": true,
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "conversacion_id": {
+        "type": "string",
+        "description": "ID único de la conversación actual para registrar el seguimiento."
+      },
+      "delivery_channels": {
+        "type": "array",
+        "description": "Canales por los que se debe entregar el paquete. Usa email, whatsapp o ambos.",
+        "items": {
+          "type": "string",
+          "enum": [
+            "email",
+            "whatsapp"
+          ]
+        }
+      },
+      "email": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Correo de destino confirmado con el prospecto. Usa null si no se enviara por email."
+      },
+      "full_name": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Nombre de la persona a quien va dirigido el envío. Usa null si aún no se registró."
+      },
+      "company_name": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Nombre de la empresa o marca del prospecto para personalizar el mensaje."
+      },
+      "summary": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Resumen breve (1-2 frases) sobre la necesidad u objetivo principal del lead."
+      },
+      "highlights": {
+        "type": [
+          "array"
+        ],
+        "description": "Lista de beneficios concretos que quieres remarcar en el envío.",
+        "items": {
+          "type": "string"
+        }
+      },
+      "resources": {
+        "type": [
+          "array"
+        ],
+        "description": "Enlaces adicionales que quieras compartir por correo; nunca inventes URLs.",
+        "items": {
+          "type": "object",
+          "properties": {
+            "label": {
+              "type": "string",
+              "description": "Texto que describe el recurso."
+            },
+            "url": {
+              "type": "string",
+              "description": "Enlace completo al recurso."
+            }
+          },
+          "required": [
+            "label",
+            "url"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "assistant_document_ids": {
+        "type": [
+          "array"
+        ],
+        "description": "IDs de PDFs cargados en settings/email que se deben adjuntar o enviar.",
+        "items": {
+          "type": "string"
+        }
+      },
+      "assistant_document_category": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Categoría del PDF a usar cuando el asistente no conoce el ID exacto."
+      },
+      "assistant_document_limit": {
+        "type": [
+          "integer",
+          "null"
+        ],
+        "description": "Número máximo de PDFs a considerar en la selección."
+      }
+    },
+    "required": [
+      "conversacion_id",
+      "delivery_channels",
+      "email",
+      "full_name",
+      "company_name",
+      "summary",
+      "highlights",
+      "resources",
+      "assistant_document_ids",
+      "assistant_document_category",
+      "assistant_document_limit"
+    ],
+    "additionalProperties": false
+  }
+}
+
+---
+
+{
   "name": "list_assistant_documents",
   "description": "Lista los PDFs disponibles del tenant actual para elegir qué documento enviar por correo o WhatsApp.",
   "strict": true,
@@ -256,10 +382,7 @@
         "description": "ID único de la conversación actual."
       },
       "channel_scope": {
-        "type": [
-          "string",
-          "null"
-        ],
+        "type": "string",
         "enum": [
           "email",
           "whatsapp"

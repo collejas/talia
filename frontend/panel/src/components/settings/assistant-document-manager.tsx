@@ -100,7 +100,11 @@ export function AssistantDocumentManager({ initialDocuments }: Props) {
     startTransition(() => {
       uploadAssistantDocument(formData)
         .then((created) => {
-          replaceDocument(created);
+          if (!created.ok) {
+            setStatus({ type: "error", message: created.error });
+            return;
+          }
+          replaceDocument(created.data);
           setTitle("");
           setDescription("");
           setCategory("general");
@@ -133,7 +137,11 @@ export function AssistantDocumentManager({ initialDocuments }: Props) {
         sort_order: document.sort_order,
       })
         .then((updated) => {
-          replaceDocument(updated);
+          if (!updated.ok) {
+            setStatus({ type: "error", message: updated.error });
+            return;
+          }
+          replaceDocument(updated.data);
           setStatus({ type: "success", message: "Documento actualizado." });
         })
         .catch((error) => {
@@ -150,7 +158,11 @@ export function AssistantDocumentManager({ initialDocuments }: Props) {
     setStatus(null);
     startTransition(() => {
       deleteAssistantDocument(documentId)
-        .then(() => {
+        .then((result) => {
+          if (!result.ok) {
+            setStatus({ type: "error", message: result.error });
+            return;
+          }
           setDocuments((current) => current.filter((item) => item.id !== documentId));
           setStatus({ type: "success", message: "Documento eliminado." });
         })

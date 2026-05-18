@@ -454,7 +454,7 @@ async def _handle_information_email(
     arguments: dict[str, Any],
     context: ToolRuntimeContext,
 ) -> dict[str, Any]:
-    email_value = _require_argument(arguments, "email")
+    email_value = str(arguments.get("email") or "").strip()
     full_name = str(arguments.get("full_name") or "").strip() or None
     company_name = str(arguments.get("company_name") or "").strip() or None
     summary = str(arguments.get("summary") or "").strip() or None
@@ -484,7 +484,9 @@ async def _handle_information_email(
     if persona:
         contact_name = str(persona.get("nombre_completo") or "").strip() or None
         contact_company = str(persona.get("company_name") or "").strip() or None
-        contact_email = str(persona.get("correo") or "").strip() or None
+        contact_email = (
+            str(persona.get("correo") or persona.get("correo_principal") or "").strip() or None
+        )
         persona_notes = str(persona.get("notes") or "").strip() or None
         persona_need = str(persona.get("necesidad_proposito") or "").strip() or None
         if not full_name:
@@ -493,7 +495,9 @@ async def _handle_information_email(
             company_name = contact_company
         if not summary:
             summary = persona_need or persona_notes
-        if contact_email and contact_email.lower() != email_value.lower():
+        if not email_value and contact_email:
+            email_value = contact_email
+        if contact_email and email_value and contact_email.lower() != email_value.lower():
             try:
                 await storage.update_persona(
                     persona.get("id") or context.contact_id, {"correo": email_value.lower()}
@@ -504,8 +508,11 @@ async def _handle_information_email(
                     extra={
                         "contact_id": persona.get("id") or context.contact_id,
                         "error": str(exc),
-                    },
+                },
                 )
+
+    if not email_value:
+        raise ValueError("email requerido")
 
     mail_org_uuid = _persona_org_uuid(persona)
     mail_settings = await tenant_runtime.get_mail_runtime_settings(organizacion_id=mail_org_uuid)

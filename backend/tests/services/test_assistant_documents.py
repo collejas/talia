@@ -16,7 +16,6 @@ class FakeAssistantDocumentRepository:
 
     def __init__(self) -> None:
         self.upload_calls: list[dict[str, Any]] = []
-        self.sign_calls: list[dict[str, Any]] = []
 
     async def upload_storage_object(
         self,
@@ -35,22 +34,6 @@ class FakeAssistantDocumentRepository:
             }
         )
         return f"{bucket}/{object_key}"
-
-    async def create_signed_storage_url(
-        self,
-        *,
-        bucket: str,
-        object_path: str,
-        expires_in: int = 300,
-    ) -> str:
-        self.sign_calls.append(
-            {
-                "bucket": bucket,
-                "object_path": object_path,
-                "expires_in": expires_in,
-            }
-        )
-        return f"https://signed.example/{bucket}/{object_path}?exp={expires_in}"
 
 
 def _make_pdf_upload(filename: str = "catalogo.pdf", content: bytes = b"%PDF-1.4\ncontenido") -> UploadFile:
@@ -80,9 +63,8 @@ async def test_upload_assistant_document_generates_storage_path(
     assert result["mime"] == "application/pdf"
     assert result["size_bytes"] > 0
     assert result["category"] == "ventas"
-    assert result["url"].startswith("https://signed.example/")
+    assert result["url"] is None
     assert fake_repo.upload_calls[0]["bucket"] == assistant_documents.ASSISTANT_DOCUMENT_BUCKET
-    assert fake_repo.sign_calls[0]["bucket"] == assistant_documents.ASSISTANT_DOCUMENT_BUCKET
 
 
 @pytest.mark.asyncio

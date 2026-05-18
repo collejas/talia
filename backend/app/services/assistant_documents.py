@@ -2,6 +2,11 @@
 
 from __future__ import annotations
 
+import base64
+import hashlib
+import hmac
+import json
+import time
 from collections.abc import Iterable, Sequence
 from pathlib import Path
 from typing import Any
@@ -14,9 +19,11 @@ from app.core.config import settings
 from app.repositories.crm import CRMRepository, CRMRepositoryError
 
 ASSISTANT_DOCUMENT_BUCKET = "assistant_documents"
+ASSISTANT_DOCUMENT_DOWNLOAD_ROUTE = "/api/crm/public/assistant-documents"
 ALLOWED_ASSISTANT_DOCUMENT_MIME_TYPES = {"application/pdf"}
 ALLOWED_ASSISTANT_DOCUMENT_EXTENSIONS = {".pdf"}
 ALLOWED_ASSISTANT_DOCUMENT_SCOPES = {"email", "whatsapp", "both"}
+ASSISTANT_DOCUMENT_DOWNLOAD_TTL_SECONDS = 3600
 
 
 class AssistantDocumentError(RuntimeError):
@@ -45,6 +52,59 @@ def _normalize_scope(value: Any) -> str | None:
     if lowered in ALLOWED_ASSISTANT_DOCUMENT_SCOPES:
         return lowered
     return None
+
+
+def _resolve_public_base_url() -> str | None:
+    candidates = [
+        getattr(settings, "cliente_portal_base_url", None),
+    ]
+    for candidate in candidates:
+        if candidate:
+            return candidate.rstrip("/")
+    return "https://talia.mx"
+
+
+def _resolve_delivery_secret() -> str | None:
+    candidates = [
+        getattr(settings, "secrets_master_key_high", None),
+        getattr(settings, "secrets_master_key", None),
+        getattr(settings, "supabase_jwt_secret", None),
+    ]
+    for candidate in candidates:
+        if candidate:
+            return str(candidate).strip() or None
+    return None
+
+
+def _encode_delivery_token(payload: dict[str, Any]) -> str:
+    secret = _resolve_delivery_secret()
+    if not secret:
+        raise AssistantDocumentError("No hay secreto configurado para firmar enlaces de documentos.")
+    payload_json = json.dumps(payload, separators=(",", ":"), sort_keys=True).encode("utf-8")
+    payload_b64 = base64.urlsafe_b64encode(payload_json).decode("ascii").rstrip("=")
+    signature = hmac.new(secret.encode("utf-8"), payload_b64.encode("ascii"), hashlib.sha256).digest()
+    signature_b64 = base64.urlsafe_b64encode(signature).decode("ascii").rstrip("=")
+    return f"{payload_b64}.{signature_b64}"
+
+
+def build_public_delivery_url(
+    *,
+    document_id: UUID,
+    organizacion_id: UUID,
+    channel_scope: str | None = None,
+    expires_in: int = ASSISTANT_DOCUMENT_DOWNLOAD_TTL_SECONDS,
+) -> str | None:
+    base_url = _resolve_public_base_url()
+    if not base_url:
+        return None
+    token_payload = {
+        "document_id": str(document_id),
+        "organizacion_id": str(organizacion_id),
+        "channel_scope": _normalize_scope(channel_scope) or "whatsapp",
+        "exp": int(time.time()) + max(60, int(expires_in or ASSISTANT_DOCUMENT_DOWNLOAD_TTL_SECONDS)),
+    }
+    token = _encode_delivery_token(token_payload)
+    return f"{base_url}{ASSISTANT_DOCUMENT_DOWNLOAD_ROUTE}/{document_id}?token={token}"
 
 
 def _validate_pdf_filename(filename: str | None) -> None:
@@ -86,11 +146,6 @@ async def upload_assistant_document(
             content=content,
             content_type=content_type,
         )
-        signed_url = await repo.create_signed_storage_url(
-            bucket=ASSISTANT_DOCUMENT_BUCKET,
-            object_path=storage_path,
-            expires_in=3600,
-        )
     except CRMRepositoryError as exc:
         raise AssistantDocumentError(str(exc)) from exc
 
@@ -98,7 +153,7 @@ async def upload_assistant_document(
     return {
         "storage_bucket": ASSISTANT_DOCUMENT_BUCKET,
         "storage_path": storage_path,
-        "url": signed_url,
+        "url": None,
         "mime": content_type,
         "size_bytes": len(content),
         "name": safe_name,
@@ -145,7 +200,7 @@ async def list_assistant_documents_for_delivery(
 
     rows = await repo.list_assistant_documents(
         organizacion_id=organizacion_id,
-        channel_scope=normalized_scope,
+        channel_scope=None,
         category=normalized_category,
         active=active,
         limit=max(1, min(limit, 10)),
@@ -164,7 +219,7 @@ async def list_assistant_documents_for_delivery(
     if normalized_ids and not filtered_rows:
         fallback_rows = await repo.list_assistant_documents(
             organizacion_id=organizacion_id,
-            channel_scope=normalized_scope,
+            channel_scope=None,
             active=active,
             limit=max(1, min(limit, 10)),
         )
@@ -179,6 +234,7 @@ async def list_assistant_documents_for_delivery(
         storage_bucket = row.get("storage_bucket")
         storage_path = row.get("storage_path")
         signed_url = None
+        delivery_url = None
         if isinstance(storage_bucket, str) and isinstance(storage_path, str) and storage_bucket and storage_path:
             try:
                 signed_url = await repo.create_signed_storage_url(
@@ -188,8 +244,23 @@ async def list_assistant_documents_for_delivery(
                 )
             except CRMRepositoryError:
                 signed_url = None
+            try:
+                document_id = UUID(str(row.get("id") or ""))
+            except ValueError:
+                document_id = None
+            if document_id:
+                try:
+                    delivery_url = build_public_delivery_url(
+                        document_id=document_id,
+                        organizacion_id=organizacion_id,
+                        channel_scope=row.get("channel_scope") or channel_scope,
+                    )
+                except AssistantDocumentError:
+                    delivery_url = None
         enriched = dict(row)
         enriched["url"] = signed_url
+        if delivery_url:
+            enriched["delivery_url"] = delivery_url
         documents.append(enriched)
     return documents
 
@@ -207,3 +278,10 @@ async def download_document_bytes(url: str) -> bytes:
             f"No se pudo descargar el documento (http_{response.status_code})."
         )
     return response.content
+
+
+async def download_storage_object_bytes(*, bucket: str, object_path: str) -> bytes:
+    """Descarga un objeto de Storage usando credenciales de servicio."""
+
+    repo = CRMRepository()
+    return await repo.download_storage_object(bucket=bucket, object_path=object_path)
