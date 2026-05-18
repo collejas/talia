@@ -141,6 +141,35 @@ def test_send_email_forces_smtp_when_provider_preference_smtp(monkeypatch):
     assert called["brevo"] is False
 
 
+def test_send_email_uses_sender_domain_for_message_id(monkeypatch):
+    captured: dict[str, object] = {}
+
+    def fake_make_msgid(domain=None):
+        captured["domain"] = domain
+        return f"<test-message-id@{domain}>"
+
+    def fake_smtp(**kwargs):
+        return "smtp-123"
+
+    monkeypatch.setattr("app.services.email.make_msgid", fake_make_msgid)
+    monkeypatch.setattr("app.services.email._send_email_smtp", fake_smtp)
+    monkeypatch.setattr(settings, "brevo_api_key", None, raising=False)
+    monkeypatch.setattr(settings, "mail_username", "hola@talia.mx", raising=False)
+    monkeypatch.setattr(settings, "mail_password", "secret", raising=False)
+    monkeypatch.setattr(settings, "mail_outgoing_server", "mail.talia.mx", raising=False)
+    monkeypatch.setattr(settings, "mail_outgoing_port_smtp", 465, raising=False)
+
+    message_id = send_email(
+        subject="Hola",
+        body_text="Texto plano",
+        recipients=["usuario@example.com"],
+        provider_preference="smtp",
+    )
+
+    assert message_id == "smtp-123"
+    assert captured["domain"] == "talia.mx"
+
+
 def test_send_email_forces_brevo_and_fails_when_missing_api_key(monkeypatch):
     monkeypatch.setattr(settings, "brevo_api_key", None, raising=False)
     monkeypatch.setattr(settings, "mail_username", "sender@example.com", raising=False)

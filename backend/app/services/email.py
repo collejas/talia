@@ -7,6 +7,7 @@ import smtplib
 import ssl
 from email.message import EmailMessage
 from email.utils import formataddr, make_msgid
+from email import policy
 from typing import Iterable, Literal, Sequence
 
 import httpx
@@ -61,6 +62,26 @@ def _resolve_brevo_settings(brevo_settings: BrevoRuntimeSettings | None) -> Brev
     )
 
 
+def _resolve_message_id_domain(*, username: str | None, smtp_host: str | None) -> str | None:
+    """Prefiere el dominio del remitente para el Message-ID.
+
+    Roundcube y otros clientes del mismo buzón suelen usar un Message-ID
+    alineado con el dominio del correo emisor. Mantenerlo así reduce
+    diferencias entre el flujo de la app y el del webmail.
+    """
+
+    candidates = []
+    if username and "@" in username:
+        candidates.append(username.rsplit("@", 1)[-1].strip().lower())
+    if smtp_host:
+        candidates.append(smtp_host.strip().lower())
+
+    for candidate in candidates:
+        if candidate and "." in candidate and not candidate.startswith("["):
+            return candidate
+    return None
+
+
 def send_email(
     *,
     subject: str,
@@ -86,7 +107,11 @@ def send_email(
     if provider not in {"auto", "smtp", "brevo"}:
         raise EmailSendError("provider_preference inválido. Usa: auto, smtp o brevo.")
 
-    message_id = make_msgid()
+    message_id_domain = _resolve_message_id_domain(
+        username=mail_config.username,
+        smtp_host=mail_config.outgoing_server,
+    )
+    message_id = make_msgid(domain=message_id_domain)
     selected_provider = "smtp"
     if provider == "brevo":
         if not (brevo_settings_resolved.api_key or "").strip():
@@ -159,6 +184,16 @@ def _prepare_attachment_content(attachment: dict[str, object]) -> bytes:
     raise EmailSendError("Los adjuntos deben proporcionarse como bytes.")
 
 
+def _is_ascii_text(value: str | None) -> bool:
+    if value is None:
+        return True
+    try:
+        value.encode("ascii")
+        return True
+    except UnicodeEncodeError:
+        return False
+
+
 def _send_email_smtp(
     *,
     message_id: str,
@@ -178,7 +213,7 @@ def _send_email_smtp(
     if not smtp_host or not username or not password:
         raise EmailSendError("Configuración SMTP incompleta (host/usuario/contraseña).")
 
-    message = EmailMessage()
+    message = EmailMessage(policy=policy.SMTP)
     message["Subject"] = subject
     display_name = (mail_settings.from_name or "").strip()
     if display_name:
@@ -195,7 +230,10 @@ def _send_email_smtp(
         if header_key in message:
             del message[header_key]
         message[header_key] = header_content
-    message.set_content(body_text)
+    if _is_ascii_text(body_text):
+        message.set_content(body_text, cte="7bit")
+    else:
+        message.set_content(body_text, cte="quoted-printable")
     if body_html:
         message.add_alternative(body_html, subtype="html")
 
