@@ -366,7 +366,7 @@ async def _send_persona_reengage_message(
 
     message_sid = getattr(send_result, "sid", None) if send_result else None
     if message_sid:
-        persona_id_value = persona.get("id") or persona.get("contacto_id")
+        persona_id_value = persona.get("id") or persona_id
         wa_id = None
         if phone and phone.startswith("+"):
             wa_id = phone.lstrip("+")
@@ -421,7 +421,7 @@ async def _send_persona_reengage_message(
         return
 
     if attempt_count >= 1:
-        persona_id_value = str(persona.get("id") or persona.get("contacto_id") or persona_id)
+        persona_id_value = str(persona.get("id") or persona_id)
         try:
             await storage.ensure_conversation_opportunity(
                 conversation_id=conversation_id,
