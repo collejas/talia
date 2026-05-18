@@ -924,7 +924,7 @@ async def ensure_booking_invite_sent_for_opportunity(
         return
     booking_response = _build_booking_response_from_db_row(booking_row)
     tarjeta_id = booking_response.tarjeta_id or str(booking_row.get("tarjeta_id") or oportunidad_id)
-    persona_value = booking_row.get("persona_id") or booking_row.get("contact_id")
+    persona_value = booking_row.get("persona_id")
     conversation_value = booking_row.get("conversacion_id")
     await _send_booking_confirmation_email(
         booking=booking_response,

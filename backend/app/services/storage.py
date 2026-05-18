@@ -1605,7 +1605,6 @@ async def fetch_conversation(conversation_id: str) -> dict[str, Any]:
     manual_override = _normalize_manual_override(ctrl)
     return {
         "id": row.get("id"),
-        "contact_id": row.get("contacto_id"),
         "channel": channel_value,
         "openai_conversation_id": row.get("conversacion_openai_id"),
         "last_response_id": row.get("last_response_id"),
@@ -1660,7 +1659,6 @@ async def resolve_webchat_conversation_from_session(
     manual_override = _normalize_manual_override(ctrl)
     return {
         "id": row.get("id"),
-        "contact_id": row.get("contacto_id"),
         "persona_id": row.get("contacto_id"),
         "channel": row.get("canal"),
         "openai_conversation_id": row.get("conversacion_openai_id"),
