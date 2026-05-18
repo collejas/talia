@@ -227,10 +227,12 @@ class SalesNotificationJobsRunner:
         if not isinstance(context_payload, dict):
             context_payload = {}
         conversation_id = _clean_text(context_payload.get("conversation_id"))
-        contact_id = _clean_text(context_payload.get("contact_id"))
+        persona_id = _clean_text(context_payload.get("persona_id"))
+        if not persona_id:
+            persona_id = _clean_text(context_payload.get("contact_id"))
         channel = _clean_text(context_payload.get("channel")) or "webchat"
         trigger = _clean_text(payload.get("trigger")) or _clean_text(row.get("trigger")) or "unknown_trigger"
-        if not conversation_id or not contact_id:
+        if not conversation_id or not persona_id:
             await self._fail_job(
                 repo=repo,
                 row=row,
@@ -239,7 +241,7 @@ class SalesNotificationJobsRunner:
             return
         context = ToolRuntimeContext(
             conversation_id=conversation_id,
-            persona_id=contact_id,
+            persona_id=persona_id,
             channel=channel,
         )
 

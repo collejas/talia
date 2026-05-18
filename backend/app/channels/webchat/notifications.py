@@ -291,7 +291,14 @@ async def notify_sales_rep(
     raise_on_delivery_error: bool = False,
 ) -> None:
     channel_value = str(getattr(context, "channel", None) or "webchat").strip().lower() or "webchat"
-    persona_id = str(getattr(context, "persona_id", None) or context.contact_id)
+    persona_value = getattr(context, "persona_id", None)
+    persona_id = str(persona_value) if persona_value else ""
+    if not persona_id:
+        logger.warning(
+            "webchat.notify_sales.persona_id_missing",
+            extra={"conversation_id": context.conversation_id, "trigger": trigger},
+        )
+        return
     persona_record = persona or await storage.fetch_persona(persona_id)
     if not persona_record:
         logger.warning(

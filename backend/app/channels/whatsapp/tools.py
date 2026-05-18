@@ -1022,12 +1022,9 @@ def _build_persona_required_guidance(missing_fields: list[str]) -> str:
 
 def _context_persona_id(context: ToolRuntimeContext) -> str | None:
     persona_id = getattr(context, "persona_id", None)
-    if persona_id:
-        return str(persona_id)
-    contact_id = getattr(context, "contact_id", None)
-    if contact_id:
-        return str(contact_id)
-    return None
+    if not persona_id:
+        return None
+    return str(persona_id)
 
 
 async def _refresh_opportunity_context_from_persona(

@@ -36,14 +36,6 @@ class ToolRuntimeContext:
     organizacion_id: str | None = None
     feature: str | None = None
 
-    @property
-    def contact_id(self) -> str:
-        return self.persona_id
-
-    @contact_id.setter
-    def contact_id(self, value: str) -> None:
-        self.persona_id = value
-
 
 @dataclass(slots=True)
 class ToolRuntimeResult:
