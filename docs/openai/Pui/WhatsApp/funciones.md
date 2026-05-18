@@ -150,19 +150,22 @@
       },
       "full_name": {
         "type": [
-          "string"
+          "string",
+          "null"
         ],
-        "description": "Nombre de la persona a quien va dirigido el correo. Opcional si ya se registró."
+        "description": "Nombre de la persona a quien va dirigido el correo. Usa null si aún no se registró."
       },
       "company_name": {
         "type": [
-          "string"
+          "string",
+          "null"
         ],
         "description": "Nombre de la empresa o marca del prospecto para personalizar el asunto."
       },
       "summary": {
         "type": [
-          "string"
+          "string",
+          "null"
         ],
         "description": "Resumen breve (1-2 frases) sobre la necesidad u objetivo principal del lead."
       },
@@ -198,6 +201,29 @@
           ],
           "additionalProperties": false
         }
+      },
+      "assistant_document_ids": {
+        "type": [
+          "array"
+        ],
+        "description": "IDs de PDFs cargados en settings/email que se deben adjuntar o enviar.",
+        "items": {
+          "type": "string"
+        }
+      },
+      "assistant_document_category": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Categoría del PDF a usar cuando el asistente no conoce el ID exacto."
+      },
+      "assistant_document_limit": {
+        "type": [
+          "integer",
+          "null"
+        ],
+        "description": "Número máximo de PDFs a considerar en la selección."
       }
     },
     "required": [
@@ -207,7 +233,43 @@
       "company_name",
       "summary",
       "highlights",
-      "resources"
+      "resources",
+      "assistant_document_ids",
+      "assistant_document_category",
+      "assistant_document_limit"
+    ],
+    "additionalProperties": false
+  }
+}
+
+---
+
+{
+  "name": "list_assistant_documents",
+  "description": "Lista los PDFs disponibles del tenant actual para elegir qué documento enviar por correo o WhatsApp.",
+  "strict": true,
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "conversacion_id": {
+        "type": "string",
+        "description": "ID único de la conversación actual."
+      },
+      "channel_scope": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "enum": [
+          "email",
+          "whatsapp"
+        ],
+        "description": "Filtra los documentos por canal de uso."
+      }
+    },
+    "required": [
+      "conversacion_id",
+      "channel_scope"
     ],
     "additionalProperties": false
   }
@@ -355,4 +417,3 @@
 }
 
 ---
-

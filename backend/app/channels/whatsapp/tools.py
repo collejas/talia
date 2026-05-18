@@ -12,6 +12,7 @@ from uuid import UUID
 from zoneinfo import ZoneInfo
 
 from app.assistants.tool_runtime import ToolRuntimeContext
+from app.assistants.tools import lead as lead_tools
 from app.channels.webchat import service as webchat_service
 from app.core.config import settings
 from app.core.logging import get_logger
@@ -1288,7 +1289,13 @@ async def execute_tool(
         }
 
     if func == "send_information_email":
-        return await _handle_information_email(arguments, context)
+        return await lead_tools._handle_information_email(arguments, context)
+
+    if func == "list_assistant_documents":
+        return await lead_tools._handle_list_assistant_documents(arguments, context)
+
+    if func == "send_information_package":
+        return await lead_tools._handle_information_package(arguments, context)
 
     if func == "mark_lost_negacion":
         return await _handle_mark_lost_negacion(arguments, context)

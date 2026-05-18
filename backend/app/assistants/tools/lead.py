@@ -10,6 +10,7 @@ from uuid import UUID
 from app.assistants.tool_runtime import ToolRuntimeContext
 from app.channels.webchat import service as webchat_service
 from app.core.logging import get_logger
+from app.services import assistant_document_delivery as document_delivery_service
 from app.services import send_email, storage, tenant_runtime
 from app.services.email import EmailSendError
 from app.services.storage import StorageError
@@ -76,6 +77,18 @@ def _optional_int_argument(arguments: dict[str, Any], key: str) -> int | None:
     except (TypeError, ValueError):
         return None
     return max(0, parsed)
+
+
+def _parse_string_list_argument(arguments: dict[str, Any], key: str) -> list[str]:
+    raw = arguments.get(key)
+    if not isinstance(raw, list):
+        return []
+    values: list[str] = []
+    for item in raw:
+        text = str(item or "").strip()
+        if text and text not in values:
+            values.append(text)
+    return values
 
 
 def _is_webchat_context(context: ToolRuntimeContext) -> bool:
@@ -221,6 +234,12 @@ async def try_execute_lead_tool(
 
     if tool_name == "send_information_email":
         return await _handle_information_email(arguments, context)
+
+    if tool_name == "list_assistant_documents":
+        return await _handle_list_assistant_documents(arguments, context)
+
+    if tool_name == "send_information_package":
+        return await _handle_information_package(arguments, context)
 
     if tool_name == "close_lead":
         notes = _require_argument(arguments, "notes")
@@ -514,76 +533,26 @@ async def _handle_information_email(
     elif not resources:
         resources = [dict(resource) for resource in template_data["resources"]]
 
-    subject_target = company_name or full_name
-    subject = (
-        f"Tal-IA · Información para {subject_target}"
-        if subject_target
-        else "Tal-IA · Información solicitada"
-    )
-
-    body_text = _build_information_email_body(
-        template_data=template_data,
-        full_name=full_name,
-        summary=summary,
-        highlights=highlight_lines,
-        resources=resources,
-    )
-
-    try:
-        message_id = await asyncio.to_thread(
-            send_email,
-            subject=subject,
-            body_text=body_text,
-            recipients=[email_value],
-            body_html=None,
-            attachments=None,
-            mail_settings=mail_settings,
-            provider_preference="smtp",
-            flow="assistant_information_email",
-        )
-    except EmailSendError as exc:
-        logger.error(
-            "lead_tools.send_failed",
-            extra={"conversation_id": context.conversation_id, "error": str(exc)},
-        )
-        raise ValueError(
-            "No se pudo enviar el correo en este momento. Inténtalo nuevamente más tarde."
-        ) from exc
-    except Exception as exc:  # pragma: no cover - errores inesperados
-        logger.exception(
-            "lead_tools.send_unexpected",
-            extra={"conversation_id": context.conversation_id},
-        )
-        raise ValueError("Ocurrió un error inesperado al enviar el correo.") from exc
-
-    try:
-        await storage.upsert_conversation_insights(
-            conversation_id=context.conversation_id,
-            resumen=summary or persona_notes,
-            intencion=persona_need,
-            siguiente_accion="informacion_enviada_email",
-        )
-    except StorageError as exc:
-        logger.warning(
-            "lead_tools.insights_failed",
-            extra={"conversation_id": context.conversation_id, "error": str(exc)},
-        )
-    await _mark_webchat_delivery(context, reason="information_email")
-    await _notify_webchat_sales_if_needed(
+    email_result = await _send_information_email_with_documents(
+        arguments=arguments,
         context=context,
-        trigger="information_email",
-        opportunity_id=None,
-        resumen=summary or persona_need,
-        notes=persona_notes,
-        email=email_value,
         persona=persona,
-        extra={"source": "lead_tool_information_email", "mail_message_id": message_id},
+        mail_settings=mail_settings,
+        template_data=template_data,
+        email_value=email_value,
+        full_name=full_name,
+        company_name=company_name,
+        summary=summary,
+        highlight_lines=highlight_lines,
+        resources=resources,
+        persona_notes=persona_notes,
+        persona_need=persona_need,
     )
-
     return {
         "status": "sent",
         "email": email_value,
-        "message_id": message_id,
+        "message_id": email_result["message_id"],
+        "documents": email_result.get("documents", []),
     }
 
 
@@ -740,6 +709,333 @@ def _resolve_information_email_template(custom: dict[str, Any] | None) -> dict[s
             template[key] = value == "true"
 
     return template
+
+
+def _resolve_document_limit(arguments: dict[str, Any], *, default_limit: int) -> int:
+    limit = _optional_int_argument(arguments, "assistant_document_limit")
+    if limit is None:
+        limit = _optional_int_argument(arguments, "document_limit")
+    if limit is None:
+        return max(1, default_limit)
+    return max(1, min(limit, 10))
+
+
+async def _resolve_assistant_documents_for_context(
+    arguments: dict[str, Any],
+    context: ToolRuntimeContext,
+    *,
+    channel_scope: str,
+    default_limit: int,
+) -> list[dict[str, Any]]:
+    document_ids = _parse_string_list_argument(arguments, "assistant_document_ids")
+    if not document_ids:
+        document_ids = _parse_string_list_argument(arguments, "document_ids")
+    category = str(
+        arguments.get("assistant_document_category")
+        or arguments.get("category")
+        or ""
+    ).strip() or None
+    limit = _resolve_document_limit(arguments, default_limit=default_limit)
+    documents = await document_delivery_service.resolve_documents_for_context(
+        context=context,
+        channel_scope=channel_scope,
+        document_ids=document_ids or None,
+        category=category,
+        limit=limit,
+    )
+    return documents
+
+
+async def _build_email_attachments_from_documents(
+    documents: list[dict[str, Any]],
+) -> list[dict[str, object]]:
+    return await document_delivery_service.build_email_attachments(documents)
+
+
+def _build_whatsapp_attachments_from_documents(
+    documents: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    return document_delivery_service.build_whatsapp_attachments(documents)
+
+
+async def _handle_list_assistant_documents(
+    arguments: dict[str, Any],
+    context: ToolRuntimeContext,
+) -> dict[str, Any]:
+    channel_scope = str(arguments.get("channel_scope") or context.channel or "email").strip().lower()
+    if channel_scope not in {"email", "whatsapp"}:
+        channel_scope = "email"
+    documents = await _resolve_assistant_documents_for_context(
+        arguments,
+        context,
+        channel_scope=channel_scope,
+        default_limit=10,
+    )
+    return {
+        "status": "ok",
+        "channel_scope": channel_scope,
+        "documents": document_delivery_service.build_document_manifest(documents),
+    }
+
+
+async def _send_information_email_with_documents(
+    *,
+    arguments: dict[str, Any],
+    context: ToolRuntimeContext,
+    persona: dict[str, Any] | None,
+    mail_settings: Any,
+    template_data: dict[str, Any],
+    email_value: str,
+    full_name: str | None,
+    company_name: str | None,
+    summary: str | None,
+    highlight_lines: list[str],
+    resources: list[dict[str, str]],
+    persona_notes: str | None,
+    persona_need: str | None,
+) -> dict[str, Any]:
+    subject_target = company_name or full_name
+    subject = (
+        f"Tal-IA · Información para {subject_target}"
+        if subject_target
+        else "Tal-IA · Información solicitada"
+    )
+    body_text = _build_information_email_body(
+        template_data=template_data,
+        full_name=full_name,
+        summary=summary,
+        highlights=highlight_lines,
+        resources=resources,
+    )
+    documents = await _resolve_assistant_documents_for_context(
+        arguments,
+        context,
+        channel_scope="email",
+        default_limit=3,
+    )
+    attachments = await _build_email_attachments_from_documents(documents)
+    if not attachments:
+        attachments = None
+
+    try:
+        message_id = await asyncio.to_thread(
+            send_email,
+            subject=subject,
+            body_text=body_text,
+            recipients=[email_value],
+            body_html=None,
+            attachments=attachments,
+            mail_settings=mail_settings,
+            provider_preference="smtp",
+            flow="assistant_information_email",
+        )
+    except EmailSendError as exc:
+        logger.error(
+            "lead_tools.send_failed",
+            extra={"conversation_id": context.conversation_id, "error": str(exc)},
+        )
+        raise ValueError(
+            "No se pudo enviar el correo en este momento. Inténtalo nuevamente más tarde."
+        ) from exc
+    except Exception as exc:  # pragma: no cover - errores inesperados
+        logger.exception(
+            "lead_tools.send_unexpected",
+            extra={"conversation_id": context.conversation_id},
+        )
+        raise ValueError("Ocurrió un error inesperado al enviar el correo.") from exc
+
+    try:
+        await storage.upsert_conversation_insights(
+            conversation_id=context.conversation_id,
+            resumen=summary or persona_notes,
+            intencion=persona_need,
+            siguiente_accion="informacion_enviada_email",
+        )
+    except StorageError as exc:
+        logger.warning(
+            "lead_tools.insights_failed",
+            extra={"conversation_id": context.conversation_id, "error": str(exc)},
+        )
+    await _mark_webchat_delivery(context, reason="information_email")
+    await _notify_webchat_sales_if_needed(
+        context=context,
+        trigger="information_email",
+        opportunity_id=None,
+        resumen=summary or persona_need,
+        notes=persona_notes,
+        email=email_value,
+        persona=persona,
+        extra={
+            "source": "lead_tool_information_email",
+            "mail_message_id": message_id,
+            "assistant_documents": document_delivery_service.build_document_manifest(documents),
+        },
+    )
+
+    return {
+        "status": "sent",
+        "email": email_value,
+        "message_id": message_id,
+        "documents": document_delivery_service.build_document_manifest(documents),
+    }
+
+
+async def _send_whatsapp_information_documents(
+    *,
+    context: ToolRuntimeContext,
+    persona: dict[str, Any] | None,
+    documents: list[dict[str, Any]],
+    body_text: str,
+) -> list[dict[str, Any]]:
+    from app.channels.whatsapp import service as whatsapp_service
+
+    persona_phone = None
+    if persona:
+        persona_phone = (
+            str(persona.get("telefono_e164") or persona.get("telefono") or "").strip() or None
+        )
+    if not persona_phone:
+        raise ValueError("No pude resolver el teléfono del contacto para enviar WhatsApp.")
+
+    attachments = _build_whatsapp_attachments_from_documents(documents)
+    if not attachments:
+        raise ValueError("No hay PDF disponibles para enviar por WhatsApp.")
+
+    results: list[dict[str, Any]] = []
+    # WhatsApp/Meta suele aceptar un documento por mensaje; enviamos uno por uno.
+    for index, attachment in enumerate(attachments):
+        caption = body_text if index == 0 else None
+        send_result = await whatsapp_service.send_manual_message(
+            to_number=persona_phone,
+            body=caption,
+            attachments=[attachment],
+            organizacion_id=context.organizacion_id,
+        )
+        results.append(
+            {
+                "sid": send_result.sid,
+                "status": send_result.status,
+                "provider": send_result.provider,
+                "filename": attachment.get("name"),
+                "url": attachment.get("url"),
+            }
+        )
+    return results
+
+
+async def _handle_information_package(
+    arguments: dict[str, Any],
+    context: ToolRuntimeContext,
+) -> dict[str, Any]:
+    channels = document_delivery_service.parse_delivery_channels(
+        arguments,
+        default_channel=str(context.channel or "email"),
+    )
+    persona = await _fetch_persona(context.contact_id)
+    persona_notes = None
+    persona_need = None
+    if persona:
+        persona_notes = str(persona.get("notes") or "").strip() or None
+        persona_need = str(persona.get("necesidad_proposito") or "").strip() or None
+
+    full_name = str(arguments.get("full_name") or "").strip() or None
+    company_name = str(arguments.get("company_name") or "").strip() or None
+    summary = str(arguments.get("summary") or "").strip() or None
+
+    if persona:
+        if not full_name:
+            full_name = str(persona.get("nombre_completo") or "").strip() or None
+        if not company_name:
+            company_name = str(persona.get("company_name") or "").strip() or None
+        if not summary:
+            summary = persona_need or persona_notes
+
+    mail_org_uuid = _persona_org_uuid(persona)
+    mail_settings = await tenant_runtime.get_mail_runtime_settings(organizacion_id=mail_org_uuid)
+    template_row: dict[str, Any] | None = None
+    try:
+        template_row = await storage.fetch_email_template(organizacion_id=str(mail_org_uuid))
+    except StorageError as exc:
+        logger.warning(
+            "lead_tools.template_fetch_failed",
+            extra={"conversation_id": context.conversation_id, "error": str(exc)},
+        )
+    template_data = _resolve_information_email_template(template_row)
+
+    include_highlights = bool(template_data.get("use_highlights", True))
+    include_resources = bool(template_data.get("use_resources", True))
+    highlight_lines = []
+    resources: list[dict[str, str]] = []
+    highlights_raw = arguments.get("highlights")
+    if isinstance(highlights_raw, list):
+        for item in highlights_raw:
+            if isinstance(item, str) and item.strip():
+                highlight_lines.append(item.strip())
+    resources_raw = arguments.get("resources")
+    if isinstance(resources_raw, list):
+        for item in resources_raw:
+            if isinstance(item, dict):
+                label = str(item.get("label") or "").strip()
+                url = str(item.get("url") or "").strip()
+                if label and url:
+                    resources.append({"label": label, "url": url})
+    if include_highlights and not highlight_lines:
+        highlight_lines = list(template_data["highlights"])
+    if include_resources and not resources:
+        resources = [dict(resource) for resource in template_data["resources"]]
+
+    result: dict[str, Any] = {
+        "status": "ok",
+        "channels": channels,
+    }
+
+    if "email" in channels:
+        email_value = _require_argument(arguments, "email")
+        email_result = await _send_information_email_with_documents(
+            arguments=arguments,
+            context=context,
+            persona=persona,
+            mail_settings=mail_settings,
+            template_data=template_data,
+            email_value=email_value,
+            full_name=full_name,
+            company_name=company_name,
+            summary=summary,
+            highlight_lines=highlight_lines,
+            resources=resources,
+            persona_notes=persona_notes,
+            persona_need=persona_need,
+        )
+        result["email"] = email_result
+        result["documents"] = email_result.get("documents", [])
+
+    if "whatsapp" in channels:
+        whatsapp_documents = await _resolve_assistant_documents_for_context(
+            arguments,
+            context,
+            channel_scope="whatsapp",
+            default_limit=3,
+        )
+        whatsapp_body = _build_information_email_body(
+            template_data=template_data,
+            full_name=full_name,
+            summary=summary,
+            highlights=highlight_lines,
+            resources=resources,
+        )
+        whatsapp_results = await _send_whatsapp_information_documents(
+            context=context,
+            persona=persona,
+            documents=whatsapp_documents,
+            body_text=whatsapp_body,
+        )
+        result["whatsapp"] = whatsapp_results
+        if "documents" not in result:
+            result["documents"] = document_delivery_service.build_document_manifest(
+                whatsapp_documents
+            )
+
+    return result
 
 
 def _build_information_email_body(
