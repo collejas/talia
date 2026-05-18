@@ -1633,11 +1633,6 @@ async def get_webchat_persona_id(session_id: str) -> str | None:
         raise StorageError(str(exc)) from exc
 
 
-async def get_webchat_contact_id(session_id: str) -> str | None:
-    """Alias legado para el contacto asociado a un session_id."""
-    return await get_webchat_persona_id(session_id)
-
-
 async def fetch_webchat_session_id_by_persona(persona_id: str) -> str | None:
     """Obtiene el session_id asociado a una persona para el canal webchat."""
     repo = CRMRepository()
@@ -1647,12 +1642,9 @@ async def fetch_webchat_session_id_by_persona(persona_id: str) -> str | None:
         raise StorageError(str(exc)) from exc
 
 
-async def fetch_webchat_session_id(
-    persona_id: str | None = None,
-    contact_id: str | None = None,
-) -> str | None:
-    """Alias legado del session_id webchat asociado."""
-    return await fetch_webchat_session_id_by_persona(persona_id or contact_id or "")
+async def fetch_webchat_session_id(persona_id: str) -> str | None:
+    """Obtiene el session_id asociado a una persona para webchat."""
+    return await fetch_webchat_session_id_by_persona(persona_id)
 
 
 async def resolve_webchat_conversation_from_session(
@@ -3814,24 +3806,19 @@ async def fetch_calendar_booking_by_conversation(conversation_id: str) -> dict[s
         raise StorageError(str(exc)) from exc
 
 
-async def fetch_calendar_booking_by_contact(contact_id: str) -> dict[str, Any] | None:
-    """Busca la cita asociada al contacto dado."""
-    if not contact_id:
+async def fetch_calendar_booking_by_persona(persona_id: str) -> dict[str, Any] | None:
+    """Busca la cita asociada a una persona."""
+    if not persona_id:
         return None
     try:
-        contact_uuid = UUID(str(contact_id))
+        persona_uuid = UUID(str(persona_id))
     except (TypeError, ValueError) as exc:
-        raise StorageError("calendar_booking_invalid_contact_id") from exc
+        raise StorageError("calendar_booking_invalid_persona_id") from exc
     repo = CRMRepository()
     try:
-        return await repo.get_calendar_booking_by_contact(contact_id=contact_uuid)
+        return await repo.get_calendar_booking_by_contact(contact_id=persona_uuid)
     except CRMRepositoryError as exc:
         raise StorageError(str(exc)) from exc
-
-
-async def fetch_calendar_booking_by_persona(persona_id: str) -> dict[str, Any] | None:
-    """Alias de compatibilidad para la cita asociada a una persona."""
-    return await fetch_calendar_booking_by_contact(persona_id)
 
 
 async def capture_opportunity_if_ready(
@@ -3948,22 +3935,6 @@ async def capture_persona_opportunity_if_ready(
     return await capture_opportunity_if_ready(
         conversation_id=conversation_id,
         persona_id=persona_id,
-        channel=channel,
-    )
-
-
-async def capture_lead_if_ready(
-    *,
-    conversation_id: str,
-    persona_id: str | None = None,
-    contact_id: str | None = None,
-    channel: str | None = None,
-) -> tuple[bool, str | None]:
-    """Compatibilidad: delega a capture_opportunity_if_ready."""
-
-    return await capture_opportunity_if_ready(
-        conversation_id=conversation_id,
-        persona_id=persona_id or contact_id,
         channel=channel,
     )
 

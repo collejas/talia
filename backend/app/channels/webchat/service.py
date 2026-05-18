@@ -484,7 +484,7 @@ async def _resolve_conversation_metadata(conversation_id: str) -> dict[str, Any]
             extra={"conversation_id": conversation_id, "error": str(exc)},
         )
         raise ValueError("No se encontró la conversación solicitada.") from exc
-    persona_id = conversation_meta.get("persona_id") or conversation_meta.get("contact_id")
+    persona_id = conversation_meta.get("persona_id")
     if not persona_id:
         raise ValueError("No se encontró la persona asociada a la conversación.")
     if not conversation_meta.get("persona_id"):
@@ -924,11 +924,11 @@ async def ensure_booking_invite_sent_for_opportunity(
         return
     booking_response = _build_booking_response_from_db_row(booking_row)
     tarjeta_id = booking_response.tarjeta_id or str(booking_row.get("tarjeta_id") or oportunidad_id)
-    contact_value = booking_row.get("contact_id")
+    persona_value = booking_row.get("persona_id") or booking_row.get("contact_id")
     conversation_value = booking_row.get("conversacion_id")
     await _send_booking_confirmation_email(
         booking=booking_response,
-        contact_id=str(contact_value) if contact_value else None,
+        persona_id=str(persona_value) if persona_value else None,
         conversation_id=str(conversation_value or "manual"),
         tarjeta_id=tarjeta_id,
         persona=None,
@@ -1212,7 +1212,7 @@ async def schedule_calendar_booking(
     crear_oportunidad: bool = True,
 ) -> schemas.CalendarBookingResponse:
     conversation_meta = await _resolve_conversation_metadata(conversation_id)
-    persona_value = conversation_meta.get("persona_id") or conversation_meta.get("contact_id")
+    persona_value = conversation_meta.get("persona_id")
     persona_id = str(persona_value) if persona_value else None
     if not persona_id:
         raise ValueError("No fue posible asociar la cita con la persona de la conversación.")
@@ -1285,7 +1285,6 @@ async def schedule_calendar_booking(
         booking_metadata: dict[str, Any] = {
             "conversation_id": conversation_id,
             "persona_id": persona_id,
-            "contact_id": persona_id,
             "session_id": session_id,
             "crear_oportunidad": bool(crear_oportunidad),
             "channel": channel_value,
@@ -1637,7 +1636,7 @@ async def _guard_booking_confirmation_claim(
         if (not resolved_persona) or not resolved_opportunity_id:
             conversation_meta = await storage.fetch_webchat_conversation(conversation_id)
             if not resolved_persona:
-                persona_id = str(conversation_meta.get("persona_id") or conversation_meta.get("contact_id") or "").strip()
+                persona_id = str(conversation_meta.get("persona_id") or "").strip()
                 if persona_id:
                     resolved_persona = await _resolve_persona(persona_id) or {}
             if not resolved_opportunity_id and resolved_persona:
@@ -3071,7 +3070,7 @@ async def handle_message(
             attachments=attachments_models or None,
         )
 
-    persona_id = conversation_meta.get("persona_id") or conversation_meta.get("contact_id")
+    persona_id = conversation_meta.get("persona_id")
     if not persona_id:
         raise HTTPException(
             status_code=500, detail="No se pudo asociar la conversación a la persona"
@@ -3396,7 +3395,7 @@ async def append_manual_agent_context(
         return
 
     conversation_id = conversation_meta.get("id")
-    persona_id = conversation_meta.get("persona_id") or conversation_meta.get("contact_id")
+    persona_id = conversation_meta.get("persona_id")
     if not conversation_id or not persona_id:
         return
 
@@ -4282,7 +4281,7 @@ async def _execute_function_call(
                 convo_meta = await storage.fetch_conversation(context.conversation_id)
             except StorageError:
                 convo_meta = {}
-            resolved_persona_id = str(convo_meta.get("persona_id") or convo_meta.get("contact_id") or "").strip()
+            resolved_persona_id = str(convo_meta.get("persona_id") or "").strip()
             if resolved_persona_id and resolved_persona_id != context.persona_id:
                 persona_record = await _resolve_persona(resolved_persona_id)
                 context.persona_id = resolved_persona_id
@@ -4647,7 +4646,6 @@ async def _execute_function_call(
         confirm_metadata = {
             "conversation_id": context.conversation_id,
             "persona_id": context.persona_id,
-            "contact_id": context.persona_id,
             "session_id": context.session_id,
             "tarjeta_id": tarjeta_id,
         }
