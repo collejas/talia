@@ -6789,18 +6789,18 @@ class CRMRepository:
     ) -> dict[str, Any] | None:
         return await self.get_persona(organizacion_id=organizacion_id, persona_id=contacto_id)
 
-    async def get_contacts_by_ids(
+    async def get_personas_by_ids(
         self,
         *,
         organizacion_id: UUID,
-        contacto_ids: list[UUID],
+        persona_ids: list[UUID],
     ) -> list[dict[str, Any]]:
-        if not contacto_ids:
+        if not persona_ids:
             return []
         unique_ids: list[str] = []
         seen: set[str] = set()
-        for contacto_id in contacto_ids:
-            key = str(contacto_id).strip()
+        for persona_id in persona_ids:
+            key = str(persona_id).strip()
             if not key or key in seen:
                 continue
             seen.add(key)
@@ -6827,15 +6827,15 @@ class CRMRepository:
                 continue
         return rows
 
-    async def get_personas_by_ids(
+    async def get_contacts_by_ids(
         self,
         *,
         organizacion_id: UUID,
-        persona_ids: list[UUID],
+        contacto_ids: list[UUID],
     ) -> list[dict[str, Any]]:
-        return await self.get_contacts_by_ids(
+        return await self.get_personas_by_ids(
             organizacion_id=organizacion_id,
-            contacto_ids=persona_ids,
+            persona_ids=contacto_ids,
         )
 
     async def update_persona(
@@ -7909,13 +7909,13 @@ class CRMRepository:
         self,
         *,
         organizacion_id: UUID,
-        contacto_id: UUID,
+        persona_id: UUID,
         cuenta_id: UUID,
         payload: dict[str, Any],
     ) -> dict[str, Any]:
-        persona_row = await self._get_persona_by_contact_id(
+        persona_row = await self.get_persona(
             organizacion_id=organizacion_id,
-            contacto_id=contacto_id,
+            persona_id=persona_id,
         )
         if not isinstance(persona_row, dict) or not persona_row.get("id"):
             raise CRMRepositoryError("persona_no_encontrada_para_relacion")
@@ -7982,36 +7982,18 @@ class CRMRepository:
     ) -> dict[str, Any]:
         return await self.upsert_persona_account_relation(
             organizacion_id=organizacion_id,
-            contacto_id=contacto_id,
+            persona_id=contacto_id,
             cuenta_id=cuenta_id,
             payload=payload,
         )
-
-    async def _resolve_persona_id_from_contact_ref(
-        self,
-        *,
-        organizacion_id: UUID,
-        contacto_id: UUID,
-    ) -> UUID:
-        persona_row = await self._get_persona_by_contact_id(
-            organizacion_id=organizacion_id,
-            contacto_id=contacto_id,
-        )
-        if not isinstance(persona_row, dict) or not persona_row.get("id"):
-            raise CRMRepositoryError("persona_no_encontrada_para_relacion")
-        return _coerce_uuid(str(persona_row["id"]), field="persona_id")
 
     async def list_persona_account_relations(
         self,
         *,
         organizacion_id: UUID,
-        contacto_id: UUID,
+        persona_id: UUID,
         activo: bool | None = None,
     ) -> list[dict[str, Any]]:
-        persona_id = await self._resolve_persona_id_from_contact_ref(
-            organizacion_id=organizacion_id,
-            contacto_id=contacto_id,
-        )
         params: dict[str, str] = {
             "organizacion_id": f"eq.{organizacion_id}",
             "persona_id": f"eq.{persona_id}",
@@ -8034,13 +8016,9 @@ class CRMRepository:
         self,
         *,
         organizacion_id: UUID,
-        contacto_id: UUID,
+        persona_id: UUID,
         payload: dict[str, Any],
     ) -> dict[str, Any]:
-        persona_id = await self._resolve_persona_id_from_contact_ref(
-            organizacion_id=organizacion_id,
-            contacto_id=contacto_id,
-        )
         cuenta_id = payload.get("cuenta_id")
         if not cuenta_id:
             raise CRMRepositoryError("cuenta_id_required")
@@ -8075,14 +8053,10 @@ class CRMRepository:
         self,
         *,
         organizacion_id: UUID,
-        contacto_id: UUID,
+        persona_id: UUID,
         relacion_id: UUID,
         payload: dict[str, Any],
     ) -> dict[str, Any]:
-        persona_id = await self._resolve_persona_id_from_contact_ref(
-            organizacion_id=organizacion_id,
-            contacto_id=contacto_id,
-        )
         update_body = dict(payload)
         if "rol_en_cuenta" in update_body:
             update_body["rol_en_cuenta"] = str(update_body.get("rol_en_cuenta") or "").strip() or "contacto_principal"
@@ -8109,13 +8083,9 @@ class CRMRepository:
         self,
         *,
         organizacion_id: UUID,
-        contacto_id: UUID,
+        persona_id: UUID,
         relacion_id: UUID,
     ) -> None:
-        persona_id = await self._resolve_persona_id_from_contact_ref(
-            organizacion_id=organizacion_id,
-            contacto_id=contacto_id,
-        )
         await self._request(
             "DELETE",
             "/rest/v1/cuenta_personas",
@@ -8136,7 +8106,7 @@ class CRMRepository:
     ) -> list[dict[str, Any]]:
         return await self.list_persona_account_relations(
             organizacion_id=organizacion_id,
-            contacto_id=contacto_id,
+            persona_id=contacto_id,
             activo=activo,
         )
 
@@ -8149,7 +8119,7 @@ class CRMRepository:
     ) -> dict[str, Any]:
         return await self.create_persona_account_relation(
             organizacion_id=organizacion_id,
-            contacto_id=contacto_id,
+            persona_id=contacto_id,
             payload=payload,
         )
 
@@ -8163,7 +8133,7 @@ class CRMRepository:
     ) -> dict[str, Any]:
         return await self.update_persona_account_relation(
             organizacion_id=organizacion_id,
-            contacto_id=contacto_id,
+            persona_id=contacto_id,
             relacion_id=relacion_id,
             payload=payload,
         )
@@ -8177,7 +8147,7 @@ class CRMRepository:
     ) -> None:
         await self.delete_persona_account_relation(
             organizacion_id=organizacion_id,
-            contacto_id=contacto_id,
+            persona_id=contacto_id,
             relacion_id=relacion_id,
         )
 
