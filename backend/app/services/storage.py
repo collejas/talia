@@ -1831,6 +1831,7 @@ async def create_conversation_summary(
     *,
     conversation_id: str,
     resumen: str,
+    persona_id: str | None = None,
     contacto_id: str | None = None,
     organizacion_id: str | None = None,
     tipo: str | None = None,
@@ -1843,7 +1844,7 @@ async def create_conversation_summary(
         return await repo.create_conversation_summary(
             conversacion_id=conversation_id,
             resumen=resumen,
-            contacto_id=contacto_id,
+            contacto_id=persona_id or contacto_id,
             organizacion_id=organizacion_id,
             tipo=tipo,
             metadatos=metadatos,
@@ -2563,7 +2564,8 @@ async def fetch_leads_municipios(
 async def ensure_conversation_opportunity(
     *,
     conversation_id: str,
-    contact_id: str | None,
+    persona_id: str | None = None,
+    contact_id: str | None = None,
     channel: str | None = None,
     force_new_opportunity_on_restart: bool = False,
     include_restart_metadata: bool = False,
@@ -2571,10 +2573,11 @@ async def ensure_conversation_opportunity(
 ) -> str | dict[str, Any]:
     """Resuelve o crea una oportunidad CRM asociada a la conversación actual."""
 
-    if not contact_id:
+    resolved_persona_id = persona_id or contact_id
+    if not resolved_persona_id:
         raise StorageError("No fue posible resolver contacto para crear la oportunidad")
 
-    persona = await fetch_persona(contact_id)
+    persona = await fetch_persona(resolved_persona_id)
     organizacion_value = persona.get("organizacion_id")
     if not organizacion_value:
         raise StorageError("El contacto no tiene organizacion_id asociado")
@@ -2585,7 +2588,7 @@ async def ensure_conversation_opportunity(
         raise StorageError("organizacion_id_invalido") from exc
 
     try:
-        persona_uuid = UUID(str(contact_id))
+        persona_uuid = UUID(str(resolved_persona_id))
     except (TypeError, ValueError) as exc:
         raise StorageError("contacto_id_invalido") from exc
 
@@ -2659,7 +2662,7 @@ async def ensure_conversation_opportunity(
                 meta = {
                     "channel": normalized_channel,
                     "conversation_id": conversation_id,
-                    "persona_id": contact_id,
+                    "persona_id": resolved_persona_id,
                     "opportunity_id": str(opportunity_id),
                 }
                 for usuario_id in recipients:
@@ -2708,7 +2711,7 @@ async def ensure_persona_conversation_opportunity(
     """Alias con nombre de persona para la oportunidad de conversación."""
     return await ensure_conversation_opportunity(
         conversation_id=conversation_id,
-        contact_id=persona_id,
+        persona_id=persona_id,
         channel=channel,
         force_new_opportunity_on_restart=force_new_opportunity_on_restart,
         include_restart_metadata=include_restart_metadata,
@@ -2751,7 +2754,7 @@ async def ensure_persona_tarjeta(
 async def maybe_auto_name_opportunity(
     *,
     conversation_id: str,
-    contact_id: str,
+    persona_id: str,
     summary: str | None = None,
     intent: str | None = None,
     channel: str | None = None,
@@ -2760,11 +2763,11 @@ async def maybe_auto_name_opportunity(
     """Renombra la oportunidad con base en insights cuando el título actual es genérico."""
 
     try:
-        persona = await fetch_persona(contact_id)
+        persona = await fetch_persona(persona_id)
     except StorageError as exc:
         logger.warning(
             "storage.auto_name_opportunity.persona_lookup_failed",
-            extra={"persona_id": contact_id, "conversation_id": conversation_id, "error": str(exc)},
+            extra={"persona_id": persona_id, "conversation_id": conversation_id, "error": str(exc)},
         )
         return None
 
@@ -2782,7 +2785,7 @@ async def maybe_auto_name_opportunity(
         try:
             resolved = await ensure_conversation_opportunity(
                 conversation_id=conversation_id,
-                contact_id=contact_id,
+                persona_id=persona_id,
                 channel=channel,
             )
             opportunity_value = str(resolved)
@@ -2790,7 +2793,7 @@ async def maybe_auto_name_opportunity(
             logger.warning(
                 "storage.auto_name_opportunity.ensure_failed",
                 extra={
-                    "persona_id": contact_id,
+                    "persona_id": persona_id,
                     "conversation_id": conversation_id,
                     "error": str(exc),
                 },
@@ -3017,7 +3020,7 @@ async def sync_persona_opportunity_context(
 async def apply_lead_scoring(
     *,
     conversation_id: str,
-    contact_id: str,
+    persona_id: str,
     opportunity_id: str | None = None,
     answers: dict[str, Any] | None = None,
     events: dict[str, Any] | None = None,
@@ -3028,11 +3031,11 @@ async def apply_lead_scoring(
     """Calcula y persiste scoring en oportunidad, persona, insights e historial."""
 
     try:
-        contact = await fetch_persona(contact_id)
+        contact = await fetch_persona(persona_id)
     except StorageError as exc:
         logger.warning(
             "storage.lead_scoring.contact_lookup_failed",
-            extra={"persona_id": contact_id, "conversation_id": conversation_id, "error": str(exc)},
+            extra={"persona_id": persona_id, "conversation_id": conversation_id, "error": str(exc)},
         )
         return None
 
@@ -3041,13 +3044,13 @@ async def apply_lead_scoring(
         try:
             opportunity_value = await ensure_conversation_opportunity(
                 conversation_id=conversation_id,
-                contact_id=contact_id,
+                persona_id=persona_id,
                 channel=str((events or {}).get("channel") or "").strip() or None,
             )
         except StorageError as exc:
             logger.warning(
                 "storage.lead_scoring.ensure_opportunity_failed",
-                extra={"persona_id": contact_id, "conversation_id": conversation_id, "error": str(exc)},
+                extra={"persona_id": persona_id, "conversation_id": conversation_id, "error": str(exc)},
             )
             return None
 
@@ -3263,11 +3266,11 @@ async def apply_lead_scoring(
         "last_scored_at": now_iso,
     }
     try:
-        await update_persona(contact_id, {"persona_datos": persona_contacto_datos})
+        await update_persona(persona_id, {"persona_datos": persona_contacto_datos})
     except StorageError as exc:
         logger.warning(
             "storage.lead_scoring.contact_update_failed",
-            extra={"persona_id": contact_id, "conversation_id": conversation_id, "error": str(exc)},
+            extra={"persona_id": persona_id, "conversation_id": conversation_id, "error": str(exc)},
         )
 
     try:
@@ -3324,7 +3327,7 @@ async def apply_persona_lead_scoring(
     """Alias con nombre de persona para el scoring."""
     return await apply_lead_scoring(
         conversation_id=conversation_id,
-        contact_id=persona_id,
+        persona_id=persona_id,
         opportunity_id=opportunity_id,
         answers=answers,
         events=events,
@@ -3337,13 +3340,13 @@ async def apply_persona_lead_scoring(
 async def maybe_promote_prequalified_from_scoring(
     *,
     conversation_id: str,
-    contact_id: str,
+    persona_id: str,
     opportunity_id: str,
     channel: str,
 ) -> bool:
     """Promueve a precalificado cuando se cumplen condiciones minimas de scoring."""
     try:
-        contact = await fetch_persona(contact_id)
+        contact = await fetch_persona(persona_id)
     except StorageError:
         return False
     org_id = contact.get("organizacion_id")
@@ -3433,7 +3436,7 @@ async def maybe_promote_prequalified_from_persona(
     """Alias con nombre de persona para la promoción a precalificado."""
     return await maybe_promote_prequalified_from_scoring(
         conversation_id=conversation_id,
-        contact_id=persona_id,
+        persona_id=persona_id,
         opportunity_id=opportunity_id,
         channel=channel,
     )
@@ -3797,23 +3800,23 @@ async def fetch_calendar_booking_by_persona(persona_id: str) -> dict[str, Any] |
 async def capture_opportunity_if_ready(
     *,
     conversation_id: str,
-    contact_id: str,
+    persona_id: str,
     channel: str | None = None,
 ) -> tuple[bool, str | None]:
     """Crea/promueve la oportunidad cuando la persona ya tiene al menos un dato válido."""
     capture_channel = channel or "assistant"
     log_context = {
         "conversation_id": conversation_id,
-        "persona_id": contact_id,
+        "persona_id": persona_id,
         "channel": capture_channel,
     }
 
     try:
-        contact = await fetch_persona(contact_id)
+        contact = await fetch_persona(persona_id)
     except StorageError as exc:
         logger.warning(
             "storage.capture_opportunity.contact_failed",
-            extra={"persona_id": contact_id, "error": str(exc)},
+            extra={"persona_id": persona_id, "error": str(exc)},
         )
         log_event(
             logger,
@@ -3832,7 +3835,7 @@ async def capture_opportunity_if_ready(
     try:
         oportunidad_id = await ensure_conversation_opportunity(
             conversation_id=conversation_id,
-            contact_id=contact_id,
+            persona_id=persona_id,
             channel=capture_channel,
         )
     except StorageError as exc:
@@ -3840,7 +3843,7 @@ async def capture_opportunity_if_ready(
             "storage.capture_opportunity.ensure_failed",
             extra={
                 "conversation_id": conversation_id,
-                "persona_id": contact_id,
+                "persona_id": persona_id,
                 "error": str(exc),
             },
         )
@@ -3875,7 +3878,7 @@ async def capture_opportunity_if_ready(
             "storage.capture_opportunity.promote_failed",
             extra={
                 "conversation_id": conversation_id,
-                "persona_id": contact_id,
+                "persona_id": persona_id,
                 "error": str(exc),
             },
         )
@@ -3907,7 +3910,7 @@ async def capture_persona_opportunity_if_ready(
     """Alias con nombre de persona para la captura/promoción de oportunidad."""
     return await capture_opportunity_if_ready(
         conversation_id=conversation_id,
-        contact_id=persona_id,
+        persona_id=persona_id,
         channel=channel,
     )
 
@@ -3922,7 +3925,7 @@ async def capture_lead_if_ready(
 
     return await capture_opportunity_if_ready(
         conversation_id=conversation_id,
-        contact_id=contact_id,
+        persona_id=contact_id,
         channel=channel,
     )
 
