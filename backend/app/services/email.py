@@ -6,7 +6,7 @@ import base64
 import smtplib
 import ssl
 from email.message import EmailMessage
-from email.utils import formataddr, make_msgid
+from email.utils import formataddr, formatdate, make_msgid
 from email import policy
 from typing import Iterable, Literal, Sequence
 
@@ -194,6 +194,77 @@ def _is_ascii_text(value: str | None) -> bool:
         return False
 
 
+def _build_smtp_email_message(
+    *,
+    message_id: str,
+    subject: str,
+    body_text: str,
+    body_html: str | None,
+    recipients: Sequence[str],
+    attachments: Sequence[dict[str, object]],
+    headers: dict[str, str],
+    mail_settings: MailRuntimeSettings,
+) -> EmailMessage:
+    message = EmailMessage(policy=policy.SMTP)
+    message["Subject"] = subject
+    display_name = (mail_settings.from_name or "").strip()
+    username = (mail_settings.username or "").strip()
+    if display_name:
+        message["From"] = formataddr((display_name, username))
+    else:
+        message["From"] = username
+    message["To"] = ", ".join(recipients)
+    message["Message-ID"] = message_id
+    message["Date"] = formatdate(localtime=True)
+    # Roundcube añade estos encabezados en el flujo webmail; mantenerlos ayuda
+    # a acercar el MIME generado por la app al que el servidor ya valida bien.
+    message["X-Sender"] = username
+    message["User-Agent"] = "Roundcube Webmail/1.6.15"
+    for header_name, header_value in (headers or {}).items():
+        header_key = str(header_name or "").strip()
+        header_content = str(header_value or "").strip()
+        if not header_key or not header_content:
+            continue
+        if header_key in message:
+            del message[header_key]
+        message[header_key] = header_content
+
+    if _is_ascii_text(body_text):
+        message.set_content(
+            body_text,
+            cte="7bit",
+            charset="us-ascii",
+        )
+        message.set_param("format", "flowed", header="Content-Type")
+    else:
+        message.set_content(body_text, cte="quoted-printable")
+    if body_html:
+        message.add_alternative(body_html, subtype="html")
+
+    for attachment in attachments or ():
+        content = _prepare_attachment_content(attachment)
+        maintype = str(attachment.get("maintype") or "application")
+        subtype = str(attachment.get("subtype") or "octet-stream")
+        filename = attachment.get("filename")
+
+        message.add_attachment(
+            content,
+            maintype=maintype,
+            subtype=subtype,
+            filename=str(filename) if filename else None,
+        )
+        part = message.get_payload()[-1]
+        attachment_headers = attachment.get("headers")
+        if isinstance(attachment_headers, dict):
+            for header, value in attachment_headers.items():
+                header_name = str(header)
+                if header_name in part:
+                    del part[header_name]
+                part[header_name] = str(value)
+
+    return message
+
+
 def _send_email_smtp(
     *,
     message_id: str,
@@ -213,50 +284,16 @@ def _send_email_smtp(
     if not smtp_host or not username or not password:
         raise EmailSendError("Configuración SMTP incompleta (host/usuario/contraseña).")
 
-    message = EmailMessage(policy=policy.SMTP)
-    message["Subject"] = subject
-    display_name = (mail_settings.from_name or "").strip()
-    if display_name:
-        message["From"] = formataddr((display_name, username))
-    else:
-        message["From"] = username
-    message["To"] = ", ".join(recipients)
-    message["Message-ID"] = message_id
-    for header_name, header_value in (headers or {}).items():
-        header_key = str(header_name or "").strip()
-        header_content = str(header_value or "").strip()
-        if not header_key or not header_content:
-            continue
-        if header_key in message:
-            del message[header_key]
-        message[header_key] = header_content
-    if _is_ascii_text(body_text):
-        message.set_content(body_text, cte="7bit")
-    else:
-        message.set_content(body_text, cte="quoted-printable")
-    if body_html:
-        message.add_alternative(body_html, subtype="html")
-
-    for attachment in attachments or ():
-        content = _prepare_attachment_content(attachment)
-        maintype = str(attachment.get("maintype") or "application")
-        subtype = str(attachment.get("subtype") or "octet-stream")
-        filename = attachment.get("filename")
-
-        message.add_attachment(
-            content,
-            maintype=maintype,
-            subtype=subtype,
-            filename=str(filename) if filename else None,
-        )
-        part = message.get_payload()[-1]
-        headers = attachment.get("headers")
-        if isinstance(headers, dict):
-            for header, value in headers.items():
-                header_name = str(header)
-                if header_name in part:
-                    del part[header_name]
-                part[header_name] = str(value)
+    message = _build_smtp_email_message(
+        message_id=message_id,
+        subject=subject,
+        body_text=body_text,
+        body_html=body_html,
+        recipients=recipients,
+        attachments=attachments,
+        headers=headers,
+        mail_settings=mail_settings,
+    )
 
     context = ssl.create_default_context()
     use_ssl = mail_settings.use_ssl

@@ -2,7 +2,7 @@ import base64
 
 from app.core.config import settings
 from app.services.tenant_runtime import BrevoRuntimeSettings
-from app.services.email import EmailSendError, send_email
+from app.services.email import EmailSendError, _build_smtp_email_message, send_email
 
 
 def test_send_email_uses_brevo_adapter(monkeypatch):
@@ -168,6 +168,39 @@ def test_send_email_uses_sender_domain_for_message_id(monkeypatch):
 
     assert message_id == "smtp-123"
     assert captured["domain"] == "talia.mx"
+
+
+def test_build_smtp_email_message_uses_7bit_for_ascii_body():
+    from app.services.tenant_runtime import MailRuntimeSettings
+
+    message = _build_smtp_email_message(
+        message_id="<test@talia.mx>",
+        subject="ASCII subject",
+        body_text="ASCII body only",
+        body_html=None,
+        recipients=["user@example.com"],
+        attachments=(),
+        headers={},
+        mail_settings=MailRuntimeSettings(
+            username="hola@talia.mx",
+            password="secret",
+            incoming_server="mail.talia.mx",
+            incoming_port_imap=993,
+            outgoing_server="mail.talia.mx",
+            outgoing_port_smtp=465,
+            use_ssl=True,
+            use_tls=False,
+            from_name=None,
+            reply_to=None,
+        ),
+    )
+
+    assert message["From"] == "hola@talia.mx"
+    assert message["Date"]
+    assert "X-AuthUser" not in message
+    assert message.get_body(preferencelist=("plain",)).get_content_type() == "text/plain"
+    assert message.get_body(preferencelist=("plain",)).get("Content-Transfer-Encoding") == "7bit"
+    assert message.get_body(preferencelist=("plain",)).get_content_charset() == "us-ascii"
 
 
 def test_send_email_forces_brevo_and_fails_when_missing_api_key(monkeypatch):
