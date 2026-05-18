@@ -484,9 +484,11 @@ async def _resolve_conversation_metadata(conversation_id: str) -> dict[str, Any]
             extra={"conversation_id": conversation_id, "error": str(exc)},
         )
         raise ValueError("No se encontró la conversación solicitada.") from exc
-    contact_id = conversation_meta.get("contact_id")
-    if not contact_id:
-        raise ValueError("No se encontró el contacto asociado a la conversación.")
+    persona_id = conversation_meta.get("persona_id") or conversation_meta.get("contact_id")
+    if not persona_id:
+        raise ValueError("No se encontró la persona asociada a la conversación.")
+    if not conversation_meta.get("persona_id"):
+        conversation_meta["persona_id"] = persona_id
     return conversation_meta
 
 
@@ -695,14 +697,14 @@ async def _mark_booking_invite_status(
 async def _send_booking_confirmation_email(
     *,
     booking: schemas.CalendarBookingResponse,
-    contact_id: str | None,
+    persona_id: str | None,
     conversation_id: str | None,
     tarjeta_id: str | None,
     persona: dict[str, Any] | None = None,
 ) -> None:
-    if not contact_id and persona is None:
+    if not persona_id and persona is None:
         return
-    persona = persona or await _resolve_persona(contact_id)
+    persona = persona or await _resolve_persona(persona_id)
     metadata = booking.metadata if isinstance(booking.metadata, dict) else {}
     org_hint = _extract_persona_org(persona)
     if not org_hint and isinstance(metadata, dict):
@@ -731,7 +733,7 @@ async def _send_booking_confirmation_email(
                 fallback_email = _extract_persona_email(fallback_contact)
                 if fallback_email:
                     persona = fallback_contact
-                    contact_id = str(fallback_contact.get("id") or contact_id)
+                    persona_id = str(fallback_contact.get("id") or persona_id)
                     email_value = fallback_email
                     org_hint = _extract_persona_org(fallback_contact) or org_hint
                     logger.info(
@@ -739,7 +741,7 @@ async def _send_booking_confirmation_email(
                         extra={
                             "booking_id": booking.booking_id,
                             "tarjeta_id": tarjeta_id,
-                            "contact_id": contact_id,
+                            "persona_id": persona_id,
                         },
                     )
     if not email_value:
@@ -1013,13 +1015,13 @@ async def _sync_booking_with_opportunity(
 async def _send_booking_cancellation_email(
     *,
     booking: schemas.CalendarBookingResponse,
-    contact_id: str | None,
+    persona_id: str | None,
     conversation_id: str,
     reason: str | None,
 ) -> None:
-    if not contact_id:
+    if not persona_id:
         return
-    persona = await _resolve_persona(contact_id)
+    persona = await _resolve_persona(persona_id)
     if not persona:
         return
     email_value = str(persona.get("correo") or "").strip()
@@ -1028,7 +1030,7 @@ async def _send_booking_cancellation_email(
             booking,
             {
                 "cancel_email_status": "skipped",
-                "cancel_email_reason": "missing_contact_email",
+                "cancel_email_reason": "missing_persona_email",
                 "cancel_email_attempt_at": datetime.now(timezone.utc).isoformat(),
             },
             event="calendar.cancel_email_metadata_failed",
@@ -1210,22 +1212,22 @@ async def schedule_calendar_booking(
     crear_oportunidad: bool = True,
 ) -> schemas.CalendarBookingResponse:
     conversation_meta = await _resolve_conversation_metadata(conversation_id)
-    contact_value = conversation_meta.get("contact_id")
-    contact_id = str(contact_value) if contact_value else None
-    if not contact_id:
-        raise ValueError("No fue posible asociar la cita con el contacto de la conversación.")
+    persona_value = conversation_meta.get("persona_id") or conversation_meta.get("contact_id")
+    persona_id = str(persona_value) if persona_value else None
+    if not persona_id:
+        raise ValueError("No fue posible asociar la cita con la persona de la conversación.")
     raw_channel = conversation_meta.get("channel")
     channel_value = raw_channel.strip().lower() if isinstance(raw_channel, str) else ""
     if not channel_value:
         channel_value = "webchat"
-    persona: dict[str, Any] | None = await _resolve_persona(contact_id)
+    persona: dict[str, Any] | None = await _resolve_persona(persona_id)
     organizacion_id = _extract_persona_org(persona)
     tarjeta_id: str | None = None
     if crear_oportunidad:
         try:
             tarjeta_id = await _ensure_opportunity_when_persona_ready(
                 conversation_id=conversation_id,
-                persona_id=contact_id,
+                persona_id=persona_id,
                 channel=channel_value,
                 persona=persona,
             )
@@ -1252,7 +1254,7 @@ async def schedule_calendar_booking(
         organizacion_id=UUID(str(organizacion_id)) if organizacion_id else None,
         start_at=start_at,
         timezone_name=calendar_settings.timezone,
-        topic=f"Demo Tal-IA - {persona_name or contact_id}",
+        topic=f"Demo Tal-IA - {persona_name or persona_id}",
         agenda=notes,
     )
 
@@ -1275,14 +1277,15 @@ async def schedule_calendar_booking(
             resource_id=resource_id,
             slot_start=start_at,
             conversation_id=conversation_id,
-            contact_id=contact_id,
+            contact_id=persona_id,
             tarjeta_id=tarjeta_id,
             hold_minutes=hold_minutes,
             metadata=hold_metadata,
         )
         booking_metadata: dict[str, Any] = {
             "conversation_id": conversation_id,
-            "contact_id": contact_id,
+            "persona_id": persona_id,
+            "contact_id": persona_id,
             "session_id": session_id,
             "crear_oportunidad": bool(crear_oportunidad),
             "channel": channel_value,
@@ -1306,7 +1309,7 @@ async def schedule_calendar_booking(
     booking["hold_id"] = hold.get("hold_id")
     booking_response = _build_booking_response(booking)
     if persona is None:
-        persona = await _resolve_persona(contact_id)
+        persona = await _resolve_persona(persona_id)
     await _sync_booking_with_opportunity(
         booking=booking_response,
         tarjeta_id=tarjeta_id,
@@ -1315,7 +1318,7 @@ async def schedule_calendar_booking(
     )
     await _send_booking_confirmation_email(
         booking=booking_response,
-        contact_id=contact_id,
+        persona_id=persona_id,
         conversation_id=conversation_id,
         tarjeta_id=tarjeta_id,
         persona=persona,
@@ -1323,13 +1326,13 @@ async def schedule_calendar_booking(
     try:
         await webchat_followups.mark_persona_information_delivered(
             conversation_id=conversation_id,
-            persona_id=contact_id,
+            persona_id=persona_id,
             reason="demo_booking",
         )
     except StorageError as exc:
         logger.warning(
             "webchat.booking.followup_mark_failed",
-            extra={"conversation_id": conversation_id, "contact_id": contact_id, "error": str(exc)},
+            extra={"conversation_id": conversation_id, "persona_id": persona_id, "error": str(exc)},
         )
     return booking_response
 
@@ -1342,8 +1345,8 @@ async def reschedule_calendar_booking(
     notes: str | None = None,
 ) -> schemas.CalendarBookingResponse:
     conversation_meta = await _resolve_conversation_metadata(conversation_id)
-    contact_raw = conversation_meta.get("contact_id") if conversation_meta else None
-    contact_id = str(contact_raw) if contact_raw else None
+    persona_raw = conversation_meta.get("persona_id") if conversation_meta else None
+    persona_id = str(persona_raw) if persona_raw else None
     raw_channel = conversation_meta.get("channel") if conversation_meta else None
     channel_value = raw_channel.strip().lower() if isinstance(raw_channel, str) else ""
     if not channel_value:
@@ -1409,7 +1412,7 @@ async def reschedule_calendar_booking(
                     "zoom.update.failed",
                     extra={"meeting_id": zoom_meeting_id, "booking_id": booking_response.booking_id, "error": str(exc)},
                 )
-    persona = await _resolve_persona(contact_id)
+    persona = await _resolve_persona(persona_id)
     await _sync_booking_with_opportunity(
         booking=booking_response,
         tarjeta_id=booking_response.tarjeta_id,
@@ -1418,7 +1421,7 @@ async def reschedule_calendar_booking(
     )
     await _send_booking_confirmation_email(
         booking=booking_response,
-        contact_id=contact_id,
+        persona_id=persona_id,
         conversation_id=conversation_id,
         tarjeta_id=booking_response.tarjeta_id,
         persona=persona,
@@ -1449,8 +1452,8 @@ async def cancel_calendar_booking(
         )
         conversation_meta = None
 
-    contact_raw = conversation_meta.get("contact_id") if conversation_meta else None
-    contact_id = str(contact_raw) if contact_raw else None
+    persona_raw = conversation_meta.get("persona_id") if conversation_meta else None
+    persona_id = str(persona_raw) if persona_raw else None
     try:
         booking = await calendar_service.cancel_booking(
             booking_id=booking_id,
@@ -1499,7 +1502,7 @@ async def cancel_calendar_booking(
                 )
     await _send_booking_cancellation_email(
         booking=booking_response,
-        contact_id=contact_id,
+        persona_id=persona_id,
         conversation_id=conversation_id,
         reason=reason,
     )
@@ -1513,14 +1516,6 @@ class WebchatContext:
     conversation_id: str
     persona_id: str
     session_id: str
-
-    @property
-    def contact_id(self) -> str:
-        return self.persona_id
-
-    @contact_id.setter
-    def contact_id(self, value: str) -> None:
-        self.persona_id = value
 
 
 def _extract_client_ip(request: Request | None) -> str | None:
@@ -1642,9 +1637,9 @@ async def _guard_booking_confirmation_claim(
         if (not resolved_persona) or not resolved_opportunity_id:
             conversation_meta = await storage.fetch_webchat_conversation(conversation_id)
             if not resolved_persona:
-                contact_id = str(conversation_meta.get("contact_id") or "").strip()
-                if contact_id:
-                    resolved_persona = await _resolve_persona(contact_id) or {}
+                persona_id = str(conversation_meta.get("persona_id") or conversation_meta.get("contact_id") or "").strip()
+                if persona_id:
+                    resolved_persona = await _resolve_persona(persona_id) or {}
             if not resolved_opportunity_id and resolved_persona:
                 resolved_opportunity_id = await storage.ensure_persona_conversation_opportunity(
                     conversation_id=conversation_id,
@@ -2628,7 +2623,7 @@ async def _prepare_user_content_with_attachments(
 
 
 async def _maybe_enrich_persona_metadata(
-    contact_id: str,
+    persona_id: str,
     *,
     client_context: dict[str, Any],
     device_type: str | None,
@@ -2644,18 +2639,18 @@ async def _maybe_enrich_persona_metadata(
 ) -> None:
     if persona is None:
         try:
-            persona = await storage.fetch_persona(contact_id)
+            persona = await storage.fetch_persona(persona_id)
         except storage.StorageError as exc:
             error_text = str(exc).lower()
             if "contacto no encontrado" in error_text:
                 logger.warning(
                 "webchat.persona_enrich_skipped_missing_persona",
-                    extra={"contact_id": contact_id, "error": str(exc)},
+                    extra={"persona_id": persona_id, "error": str(exc)},
                 )
             else:
                 logger.exception(
                     "webchat.persona_fetch_failed",
-                    extra={"contact_id": contact_id, "error": str(exc)},
+                    extra={"persona_id": persona_id, "error": str(exc)},
                 )
             return
 
@@ -2751,11 +2746,11 @@ async def _maybe_enrich_persona_metadata(
         return
 
     try:
-        await storage.update_persona(contact_id, {"persona_datos": updated_data})
+        await storage.update_persona(persona_id, {"persona_datos": updated_data})
     except storage.StorageError as exc:
         logger.exception(
             "webchat.persona_update_failed",
-            extra={"contact_id": contact_id, "error": str(exc)},
+            extra={"persona_id": persona_id, "error": str(exc)},
         )
 
 
@@ -2764,7 +2759,7 @@ async def _register_webchat_visit(
     *,
     request: Request | None,
     metadata: dict[str, Any] | None,
-    contact_id_hint: str | None = None,
+    persona_id_hint: str | None = None,
     persona: dict[str, Any] | None = None,
 ) -> str | None:
     """Registra la visita para métricas y enriquece metadatos del contacto."""
@@ -2859,22 +2854,22 @@ async def _register_webchat_visit(
         },
     )
 
-    contact_id = str(contact_id_hint) if contact_id_hint else None
-    if not contact_id:
+    persona_id = str(persona_id_hint) if persona_id_hint else None
+    if not persona_id:
         try:
-            contact_id = await storage.get_webchat_persona_id(session_id)
+            persona_id = await storage.get_webchat_persona_id(session_id)
         except storage.StorageError as exc:
             logger.exception(
                 "webchat.resolve_contact_failed",
                 extra={"session_id": session_id, "error": str(exc)},
             )
-            contact_id = None
+            persona_id = None
     resolved_persona = persona
-    if contact_id and (
+    if persona_id and (
         not resolved_persona
-        or _safe_str_value(resolved_persona.get("id")) != _safe_str_value(contact_id)
+        or _safe_str_value(resolved_persona.get("id")) != _safe_str_value(persona_id)
     ):
-        resolved_persona = await _resolve_persona(contact_id)
+        resolved_persona = await _resolve_persona(persona_id)
 
     try:
         await storage.record_webchat_visit(
@@ -2897,10 +2892,10 @@ async def _register_webchat_visit(
             extra={"session_id": session_id, "error": str(exc)},
         )
 
-    if contact_id and resolved_persona is not None:
+    if persona_id and resolved_persona is not None:
         try:
             await _maybe_enrich_persona_metadata(
-                contact_id,
+                persona_id,
                 client_context=client_context,
                 device_type=device_type,
                 geo_ip_data=geo_ip_data,
@@ -2916,15 +2911,15 @@ async def _register_webchat_visit(
         except Exception:  # pragma: no cover - best effort
             logger.exception(
                 "webchat.persona_enrich_failed",
-                extra={"contact_id": contact_id},
+                extra={"persona_id": persona_id},
             )
-    elif contact_id:
+    elif persona_id:
         logger.warning(
             "webchat.persona_enrich_skipped_missing_persona",
-            extra={"contact_id": contact_id},
+            extra={"persona_id": persona_id},
         )
 
-    return contact_id
+    return persona_id
 
 
 async def register_visit(
@@ -3076,36 +3071,36 @@ async def handle_message(
             attachments=attachments_models or None,
         )
 
-    contact_id = conversation_meta.get("contact_id")
-    if not contact_id:
+    persona_id = conversation_meta.get("persona_id") or conversation_meta.get("contact_id")
+    if not persona_id:
         raise HTTPException(
-            status_code=500, detail="No se pudo asociar la conversación al contacto"
+            status_code=500, detail="No se pudo asociar la conversación a la persona"
         )
     _log_trace_stage(
         stage="inbound_persisted",
         conversation_id=str(conversation_id),
-        contact_id=str(contact_id),
+        contact_id=str(persona_id),
         inbound_message_id=inbound_message_id,
         extra={"session_id": payload.session_id},
     )
     await high_demand_controller.record_inbound(channel="webchat")
     resolve_contact_started = time.perf_counter()
-    persona: dict[str, Any] | None = await _resolve_persona(str(contact_id))
+    persona: dict[str, Any] | None = await _resolve_persona(str(persona_id))
     _record_stage_timing(stage_timings, "resolve_contact_ms", resolve_contact_started)
     resolved_organizacion_id = (
         await resolve_webchat_organizacion(metadata_dict, persona=persona) or organizacion_hint
     )
 
     register_visit_started = time.perf_counter()
-    contact_id_value = await _register_webchat_visit(
+    persona_id_value = await _register_webchat_visit(
         payload.session_id,
         request=request,
         metadata=metadata_dict,
-        contact_id_hint=str(contact_id),
+        persona_id_hint=str(persona_id),
         persona=persona,
     )
     _record_stage_timing(stage_timings, "register_visit_ms", register_visit_started)
-    contact_id = contact_id_value or str(contact_id)
+    persona_id = persona_id_value or str(persona_id)
 
     assistant: AssistantConfig
     try:
@@ -3154,7 +3149,7 @@ async def handle_message(
             ) from exc
     context = WebchatContext(
         conversation_id=str(conversation_id),
-        persona_id=str(contact_id),
+        persona_id=str(persona_id),
         session_id=payload.session_id,
     )
 
@@ -3203,7 +3198,7 @@ async def handle_message(
         _log_trace_stage(
             stage="assistant_generation_started",
             conversation_id=str(conversation_id),
-            contact_id=str(contact_id),
+            contact_id=str(persona_id),
             inbound_message_id=inbound_message_id,
             extra={
                 "previous_response_id": conversation_meta.get("last_response_id"),
@@ -3254,7 +3249,7 @@ async def handle_message(
         _log_turn_timing(
             trace_id=trace_id,
             conversation_id=str(conversation_id),
-            contact_id=str(contact_id),
+            contact_id=str(persona_id),
             inbound_message_id=inbound_message_id,
             total_started_at=turn_started,
             stage_timings=stage_timings,
@@ -3285,7 +3280,7 @@ async def handle_message(
         _log_trace_stage(
             stage="assistant_generated",
             conversation_id=str(conversation_id),
-            contact_id=str(contact_id),
+            contact_id=str(persona_id),
             inbound_message_id=inbound_message_id,
             extra={
                 "response_id": metadata.assistant_response_id,
@@ -3350,7 +3345,7 @@ async def handle_message(
             _log_trace_stage(
                 stage="assistant_persisted",
                 conversation_id=str(conversation_id),
-                contact_id=str(contact_id),
+                contact_id=str(persona_id),
                 inbound_message_id=inbound_message_id,
                 extra={"outbound_message_id": outgoing_registration.get("message_id")},
             )
@@ -3358,7 +3353,7 @@ async def handle_message(
     _log_trace_stage(
         stage="response_returned",
         conversation_id=str(conversation_id),
-        contact_id=str(contact_id),
+        contact_id=str(persona_id),
         inbound_message_id=inbound_message_id,
         extra={"fallback_used": assistant_reply == DEFAULT_FALLBACK},
     )
@@ -3369,7 +3364,7 @@ async def handle_message(
     _log_turn_timing(
         trace_id=trace_id,
         conversation_id=str(conversation_id),
-        contact_id=str(contact_id),
+        contact_id=str(persona_id),
         inbound_message_id=inbound_message_id,
         total_started_at=turn_started,
         stage_timings=stage_timings,
@@ -3401,8 +3396,8 @@ async def append_manual_agent_context(
         return
 
     conversation_id = conversation_meta.get("id")
-    contact_id = conversation_meta.get("contact_id")
-    if not conversation_id or not contact_id:
+    persona_id = conversation_meta.get("persona_id") or conversation_meta.get("contact_id")
+    if not conversation_id or not persona_id:
         return
 
     openai_conversation_id = conversation_meta.get("openai_conversation_id")
@@ -3428,7 +3423,7 @@ async def append_manual_agent_context(
 
     context = WebchatContext(
         conversation_id=str(conversation_id),
-        persona_id=str(contact_id),
+        persona_id=str(persona_id),
         session_id=session_id,
     )
 
@@ -4287,7 +4282,7 @@ async def _execute_function_call(
                 convo_meta = await storage.fetch_conversation(context.conversation_id)
             except StorageError:
                 convo_meta = {}
-            resolved_persona_id = str(convo_meta.get("contact_id") or "").strip()
+            resolved_persona_id = str(convo_meta.get("persona_id") or convo_meta.get("contact_id") or "").strip()
             if resolved_persona_id and resolved_persona_id != context.persona_id:
                 persona_record = await _resolve_persona(resolved_persona_id)
                 context.persona_id = resolved_persona_id
