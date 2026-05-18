@@ -121,7 +121,7 @@ async def _summarize_messages(
     messages: list[dict[str, Any]],
     *,
     conversation_id: str | None = None,
-    contact_id: str | None = None,
+    persona_id: str | None = None,
     organizacion_id: UUID | None = None,
     context_data: dict[str, Any] | None = None,
 ) -> str | None:
@@ -166,7 +166,7 @@ async def _summarize_messages(
         api_key=api_key,
         request_metadata={"history_messages": len(messages)},
         conversation_id=conversation_id,
-        contact_id=contact_id,
+        persona_id=persona_id,
         model_override=settings.conversation_summary_model,
         project_id=project_id,
     )
@@ -179,7 +179,7 @@ async def _summarize_messages(
 async def ensure_conversation_summary(
     *,
     conversation_id: str,
-    contact_id: str | None = None,
+    persona_id: str | None = None,
     organizacion_id: str | UUID | None = None,
     tipo: str = "conversation",
     context_data: dict[str, Any] | None = None,
@@ -235,7 +235,7 @@ async def ensure_conversation_summary(
     summary_text = await _summarize_messages(
         messages,
         conversation_id=conversation_id,
-        contact_id=contact_id,
+        persona_id=persona_id,
         organizacion_id=organizacion_uuid,
         context_data=context_data,
     )
@@ -259,7 +259,7 @@ async def ensure_conversation_summary(
         created = await storage.create_conversation_summary(
             conversation_id=conversation_id,
             resumen=summary_text,
-            persona_id=contact_id,
+            persona_id=persona_id,
             organizacion_id=resolved_org_id,
             tipo=tipo,
             metadatos=new_metadata,

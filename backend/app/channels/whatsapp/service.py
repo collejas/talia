@@ -1387,14 +1387,14 @@ def _is_previous_response_not_found_error(exc: Exception) -> bool:
 async def _refresh_conversation_summary_best_effort(
     *,
     conversation_id: str,
-    contact_id: str | None,
+    persona_id: str | None,
     organizacion_id: UUID | None,
     context_data: dict[str, Any] | None,
 ) -> None:
     try:
         await conversation_summary.ensure_conversation_summary(
             conversation_id=conversation_id,
-            contact_id=contact_id,
+            persona_id=persona_id,
             context_data=context_data,
             organizacion_id=organizacion_id,
         )
@@ -2680,7 +2680,7 @@ async def _generate_assistant_reply(
         summary_started = time.perf_counter()
         summary_record = await conversation_summary.ensure_conversation_summary(
             conversation_id=conversation_id,
-            contact_id=contact_id,
+            persona_id=contact_id,
             context_data=context_payload,
             organizacion_id=organizacion_id,
             generate_if_missing=False,
@@ -3112,7 +3112,7 @@ async def _generate_assistant_reply(
         asyncio.create_task(
             _refresh_conversation_summary_best_effort(
                 conversation_id=conversation_id,
-                contact_id=contact_id,
+                persona_id=contact_id,
                 organizacion_id=organizacion_id,
                 context_data=context_payload,
             )

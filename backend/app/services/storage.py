@@ -1269,7 +1269,7 @@ async def register_webchat_message(
                 extra={"conversation_id": conversation_id, "error": str(exc)},
             )
     try:
-        persona_id_value = str(result.get("persona_id") or result.get("contact_id") or "")
+        persona_id_value = str(result.get("persona_id") or "")
         await _publish_inbox_realtime_event(
             organizacion_id=str(
                 result.get("organizacion_id")
@@ -1318,7 +1318,6 @@ async def register_whatsapp_message(
     message_sid: str | None,
     profile_name: str | None = None,
     conversation_id: str | None = None,
-    persona_id: str | None = None,
     contact_id: str | None = None,
     response_id: str | None = None,
     metadata: dict[str, Any] | None = None,
@@ -1333,7 +1332,7 @@ async def register_whatsapp_message(
     metadata_payload = dict(metadata or {})
     if organizacion_id and "resolved_organizacion_id" not in metadata_payload:
         metadata_payload["resolved_organizacion_id"] = organizacion_id
-    resolved_persona_id = persona_id or contact_id
+    resolved_persona_id = contact_id
     resolved_conversation_id = conversation_id
 
     # Reusar conversación activa del mismo contacto para evitar abrir hilos
@@ -1446,7 +1445,7 @@ async def register_whatsapp_message(
                 extra={"persona_id": persona_id_value, "error": str(exc)},
             )
     try:
-        persona_id_value = str(result.get("persona_id") or result.get("contact_id") or "")
+        persona_id_value = str(result.get("persona_id") or "")
         await _publish_inbox_realtime_event(
             organizacion_id=str(
                 result.get("organizacion_id")
@@ -1529,7 +1528,7 @@ async def register_messenger_message(
                 extra={"conversation_id": conversation_id, "error": str(exc)},
             )
     try:
-        persona_id_value = str(result.get("persona_id") or result.get("contact_id") or "")
+        persona_id_value = str(result.get("persona_id") or "")
         await _publish_inbox_realtime_event(
             organizacion_id=str(
                 result.get("organizacion_id")
@@ -1824,7 +1823,6 @@ async def create_conversation_summary(
     conversation_id: str,
     resumen: str,
     persona_id: str | None = None,
-    contacto_id: str | None = None,
     organizacion_id: str | None = None,
     tipo: str | None = None,
     metadatos: dict[str, Any] | None = None,
@@ -1836,7 +1834,7 @@ async def create_conversation_summary(
         return await repo.create_conversation_summary(
             conversacion_id=conversation_id,
             resumen=resumen,
-            contacto_id=persona_id or contacto_id,
+            contacto_id=persona_id,
             organizacion_id=organizacion_id,
             tipo=tipo,
             metadatos=metadatos,

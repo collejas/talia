@@ -427,7 +427,7 @@ async def _handle_message(
     try:
         summary_record = await conversation_summary.ensure_conversation_summary(
             conversation_id=conversation_id,
-            contact_id=contact_id,
+            persona_id=contact_id,
             organizacion_id=org_id,
             context_data=contact_context,
         )
