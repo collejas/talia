@@ -1635,11 +1635,6 @@ async def fetch_webchat_session_id_by_persona(persona_id: str) -> str | None:
         raise StorageError(str(exc)) from exc
 
 
-async def fetch_webchat_session_id(persona_id: str) -> str | None:
-    """Obtiene el session_id asociado a una persona para webchat."""
-    return await fetch_webchat_session_id_by_persona(persona_id)
-
-
 async def resolve_webchat_conversation_from_session(
     session_id: str,
 ) -> dict[str, Any] | None:
@@ -2738,24 +2733,6 @@ async def ensure_persona_conversation_opportunity(
     )
 
 
-async def ensure_lead_tarjeta(
-    *,
-    tarjeta_id: str | None,
-    conversation_id: str,
-    persona_id: str | None = None,
-    contact_id: str | None = None,
-    channel: str | None = None,
-) -> str:
-    """Compatibilidad: delega a ensure_conversation_opportunity."""
-
-    return await ensure_conversation_opportunity(
-        conversation_id=conversation_id,
-        persona_id=persona_id,
-        contact_id=contact_id,
-        channel=channel,
-    )
-
-
 async def ensure_persona_tarjeta(
     *,
     tarjeta_id: str | None,
@@ -2764,8 +2741,7 @@ async def ensure_persona_tarjeta(
     channel: str | None = None,
 ) -> str:
     """Alias con nombre de persona para la tarjeta/oportunidad de conversación."""
-    return await ensure_lead_tarjeta(
-        tarjeta_id=tarjeta_id,
+    return await ensure_conversation_opportunity(
         conversation_id=conversation_id,
         persona_id=persona_id,
         channel=channel,
