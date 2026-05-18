@@ -372,7 +372,7 @@ async def _send_persona_reengage_message(
             wa_id = phone.lstrip("+")
         elif phone:
             wa_id = phone
-        contact_id_str = str(persona_id_value) if persona_id_value else None
+        persona_id_str = str(persona_id_value) if persona_id_value else None
         metadata_payload = {
             "reengage": True,
             "trigger": "whatsapp_followup",
@@ -385,7 +385,7 @@ async def _send_persona_reengage_message(
                 body=REENGAGE_TEMPLATE,
                 message_sid=message_sid,
                 conversation_id=conversation_id,
-                persona_id=contact_id_str,
+                persona_id=persona_id_str,
                 metadata=metadata_payload,
                 organizacion_id=str(persona.get("organizacion_id")) if persona.get("organizacion_id") else None,
             )
