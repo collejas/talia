@@ -163,8 +163,8 @@ async def _process_conversation(
     if state == "cerrada":
         return
     convo_id = conversation.get("id")
-    contact_id = conversation.get("contacto_id")
-    if not convo_id or not contact_id:
+    persona_id = conversation.get("persona_id") or conversation.get("contacto_id")
+    if not convo_id or not persona_id:
         return
     last_out = _parse_ts(conversation.get("ultimo_saliente_en"))
     if not last_out:
@@ -186,7 +186,7 @@ async def _process_conversation(
         return
 
     try:
-        contact = await storage.fetch_persona(contact_id)
+        contact = await storage.fetch_persona(persona_id)
     except StorageError as exc:
         logger.warning(
             "whatsapp.followup.contact_failed",
@@ -201,7 +201,7 @@ async def _process_conversation(
     try:
         oportunidad_id = await storage.ensure_conversation_opportunity(
             conversation_id=convo_id,
-            contact_id=contact_id,
+            persona_id=persona_id,
             channel="whatsapp",
         )
     except StorageError as exc:
@@ -366,13 +366,13 @@ async def _send_persona_reengage_message(
 
     message_sid = getattr(send_result, "sid", None) if send_result else None
     if message_sid:
-        contact_id_value = persona.get("id") or persona.get("contacto_id")
+        persona_id_value = persona.get("id") or persona.get("contacto_id")
         wa_id = None
         if phone and phone.startswith("+"):
             wa_id = phone.lstrip("+")
         elif phone:
             wa_id = phone
-        contact_id_str = str(contact_id_value) if contact_id_value else None
+        contact_id_str = str(persona_id_value) if persona_id_value else None
         metadata_payload = {
             "reengage": True,
             "trigger": "whatsapp_followup",
@@ -421,11 +421,11 @@ async def _send_persona_reengage_message(
         return
 
     if attempt_count >= 1:
-        contact_id_value = str(persona.get("id") or persona.get("contacto_id") or persona_id)
+        persona_id_value = str(persona.get("id") or persona.get("contacto_id") or persona_id)
         try:
             await storage.ensure_conversation_opportunity(
                 conversation_id=conversation_id,
-                contact_id=contact_id_value,
+                persona_id=persona_id_value,
                 channel="whatsapp",
             )
         except StorageError as exc:
@@ -543,7 +543,7 @@ async def _ensure_inferred_persona_context(
     try:
         summary_record = await conversation_summary.ensure_conversation_summary(
             conversation_id=conversation_id,
-            contact_id=persona_id,
+            persona_id=persona_id,
             organizacion_id=org_uuid,
             generate_if_missing=True,
         )

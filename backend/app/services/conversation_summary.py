@@ -259,7 +259,7 @@ async def ensure_conversation_summary(
         created = await storage.create_conversation_summary(
             conversation_id=conversation_id,
             resumen=summary_text,
-            contacto_id=contact_id,
+            persona_id=contact_id,
             organizacion_id=resolved_org_id,
             tipo=tipo,
             metadatos=new_metadata,

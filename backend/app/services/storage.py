@@ -1854,6 +1854,28 @@ async def create_conversation_summary(
         raise StorageError(str(exc)) from exc
 
 
+async def create_persona_conversation_summary(
+    *,
+    conversation_id: str,
+    resumen: str,
+    persona_id: str | None = None,
+    organizacion_id: str | None = None,
+    tipo: str | None = None,
+    metadatos: dict[str, Any] | None = None,
+    creado_por_usuario_id: str | None = None,
+) -> dict[str, Any]:
+    """Alias con nombre de persona para el resumen de conversación."""
+    return await create_conversation_summary(
+        conversation_id=conversation_id,
+        resumen=resumen,
+        persona_id=persona_id,
+        organizacion_id=organizacion_id,
+        tipo=tipo,
+        metadatos=metadatos,
+        creado_por_usuario_id=creado_por_usuario_id,
+    )
+
+
 async def fetch_latest_conversation_summary(
     *, conversation_id: str, tipo: str | None = None
 ) -> dict[str, Any] | None:
@@ -2723,13 +2745,15 @@ async def ensure_lead_tarjeta(
     *,
     tarjeta_id: str | None,
     conversation_id: str,
-    contact_id: str | None,
+    persona_id: str | None = None,
+    contact_id: str | None = None,
     channel: str | None = None,
 ) -> str:
     """Compatibilidad: delega a ensure_conversation_opportunity."""
 
     return await ensure_conversation_opportunity(
         conversation_id=conversation_id,
+        persona_id=persona_id,
         contact_id=contact_id,
         channel=channel,
     )
@@ -2746,7 +2770,7 @@ async def ensure_persona_tarjeta(
     return await ensure_lead_tarjeta(
         tarjeta_id=tarjeta_id,
         conversation_id=conversation_id,
-        contact_id=persona_id,
+        persona_id=persona_id,
         channel=channel,
     )
 
@@ -3918,14 +3942,15 @@ async def capture_persona_opportunity_if_ready(
 async def capture_lead_if_ready(
     *,
     conversation_id: str,
-    contact_id: str,
+    persona_id: str | None = None,
+    contact_id: str | None = None,
     channel: str | None = None,
 ) -> tuple[bool, str | None]:
     """Compatibilidad: delega a capture_opportunity_if_ready."""
 
     return await capture_opportunity_if_ready(
         conversation_id=conversation_id,
-        persona_id=contact_id,
+        persona_id=persona_id or contact_id,
         channel=channel,
     )
 

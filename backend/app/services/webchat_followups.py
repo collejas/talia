@@ -216,13 +216,13 @@ async def mark_persona_information_delivered(
 async def refresh_contact_followup_state(
     *,
     conversation_id: str,
-    contact_id: str,
+    persona_id: str,
     session_id: str | None = None,
     contact: dict[str, Any] | None = None,
 ) -> dict[str, Any] | None:
     return await refresh_persona_followup_state(
         conversation_id=conversation_id,
-        persona_id=contact_id,
+        persona_id=persona_id,
         session_id=session_id,
         persona=contact,
     )
@@ -231,12 +231,12 @@ async def refresh_contact_followup_state(
 async def ensure_contact_ready_for_assignment(
     *,
     conversation_id: str,
-    contact_id: str,
+    persona_id: str,
     contact: dict[str, Any] | None = None,
 ) -> bool:
     return await ensure_persona_ready_for_assignment(
         conversation_id=conversation_id,
-        persona_id=contact_id,
+        persona_id=persona_id,
         persona=contact,
     )
 
@@ -244,12 +244,12 @@ async def ensure_contact_ready_for_assignment(
 async def mark_information_delivered(
     *,
     conversation_id: str,
-    contact_id: str,
+    persona_id: str,
     reason: str,
 ) -> None:
     await mark_persona_information_delivered(
         conversation_id=conversation_id,
-        persona_id=contact_id,
+        persona_id=persona_id,
         reason=reason,
     )
 
@@ -404,14 +404,14 @@ async def _escalate_due_to_attempt_limit(
     conversation: dict[str, Any],
     contact: dict[str, Any],
     conversation_id: str,
-    contact_id: str,
+    persona_id: str,
     missing_fields: list[str],
     attempts: int,
 ) -> None:
     try:
         oportunidad_id = await storage.ensure_conversation_opportunity(
             conversation_id=conversation_id,
-            contact_id=contact_id,
+            persona_id=persona_id,
             channel="webchat",
         )
     except StorageError as exc:
@@ -419,7 +419,7 @@ async def _escalate_due_to_attempt_limit(
             "webchat.followup.escalate.ensure_failed",
             extra={
                 "conversation_id": conversation_id,
-                "contact_id": contact_id,
+                "persona_id": persona_id,
                 "error": str(exc),
             },
         )
@@ -432,7 +432,7 @@ async def _escalate_due_to_attempt_limit(
     if not org_id:
         logger.warning(
             "webchat.followup.escalate.org_missing",
-            extra={"conversation_id": conversation_id, "contact_id": contact_id},
+            extra={"conversation_id": conversation_id, "persona_id": persona_id},
         )
         return
 
@@ -442,7 +442,7 @@ async def _escalate_due_to_attempt_limit(
     except (TypeError, ValueError):
         logger.warning(
             "webchat.followup.escalate.invalid_ids",
-            extra={"conversation_id": conversation_id, "contact_id": contact_id},
+            extra={"conversation_id": conversation_id, "persona_id": persona_id},
         )
         return
 
@@ -456,7 +456,7 @@ async def _escalate_due_to_attempt_limit(
             "webchat.followup.escalate.fetch_failed",
             extra={
                 "conversation_id": conversation_id,
-                "contact_id": contact_id,
+                "persona_id": persona_id,
                 "error": str(exc),
             },
         )
@@ -465,7 +465,7 @@ async def _escalate_due_to_attempt_limit(
     if not opportunity:
         logger.warning(
             "webchat.followup.escalate.opportunity_missing",
-            extra={"conversation_id": conversation_id, "contact_id": contact_id},
+            extra={"conversation_id": conversation_id, "persona_id": persona_id},
         )
         return
 
@@ -476,7 +476,7 @@ async def _escalate_due_to_attempt_limit(
             logger,
             "webchat.followup.escalate_skipped_duplicate",
             conversation_id=conversation_id,
-            contact_id=contact_id,
+            persona_id=persona_id,
         )
         return
 
@@ -488,7 +488,7 @@ async def _escalate_due_to_attempt_limit(
             "webchat.followup.escalate.no_seller",
             extra={
                 "conversation_id": conversation_id,
-                "contact_id": contact_id,
+                "persona_id": persona_id,
                 "attempts": attempts,
             },
         )
@@ -496,7 +496,7 @@ async def _escalate_due_to_attempt_limit(
 
     context = ToolRuntimeContext(
         conversation_id=conversation_id,
-        persona_id=contact_id,
+        persona_id=persona_id,
         channel="webchat",
     )
     resumen = str(contact.get("necesidad_proposito") or contact.get("notes") or "").strip() or None
@@ -523,7 +523,7 @@ async def _escalate_due_to_attempt_limit(
             "webchat.followup.escalate_failed",
             extra={
                 "conversation_id": conversation_id,
-                "contact_id": contact_id,
+                "persona_id": persona_id,
                 "error": str(exc),
             },
         )
@@ -531,14 +531,14 @@ async def _escalate_due_to_attempt_limit(
 
     await mark_stop_reason(
         conversation_id=conversation_id,
-        contact_id=contact_id,
+        persona_id=persona_id,
         reason="reengage_limit",
     )
     log_event(
         logger,
         "webchat.followup.escalated",
         conversation_id=conversation_id,
-        contact_id=contact_id,
+        persona_id=persona_id,
         attempts=attempts,
         missing_fields=",".join(missing_fields),
     )
@@ -641,11 +641,11 @@ async def _process_conversation(
     if state_value == "cerrada":
         return
     convo_id = conversation.get("id")
-    contact_id = conversation.get("contacto_id")
-    if not convo_id or not contact_id:
+    persona_id = conversation.get("persona_id") or conversation.get("contacto_id")
+    if not convo_id or not persona_id:
         return
     conversation_id = str(convo_id)
-    contact_id_str = str(contact_id)
+    persona_id_str = str(persona_id)
     last_out = _parse_ts(conversation.get("ultimo_saliente_en"))
     if not last_out or last_out > reference_time:
         return
@@ -654,17 +654,17 @@ async def _process_conversation(
         return
 
     try:
-        contact = await storage.fetch_persona(contact_id_str)
+        contact = await storage.fetch_persona(persona_id_str)
     except StorageError as exc:
         logger.warning(
             "webchat.followup.contact_failed",
-            extra={"conversation_id": conversation_id, "contact_id": contact_id_str, "error": str(exc)},
+            extra={"conversation_id": conversation_id, "persona_id": persona_id_str, "error": str(exc)},
         )
         return
 
     state = await refresh_persona_followup_state(
         conversation_id=conversation_id,
-        persona_id=contact_id_str,
+        persona_id=persona_id_str,
         persona=contact,
     )
     state = state or {}
@@ -682,7 +682,7 @@ async def _process_conversation(
                 conversation=conversation,
                 contact=contact,
                 conversation_id=conversation_id,
-                contact_id=contact_id_str,
+                persona_id=persona_id_str,
                 missing_fields=missing_fields,
                 attempts=attempts,
             )
@@ -691,7 +691,7 @@ async def _process_conversation(
                 logger,
                 "webchat.followup.escalate_pending",
                 conversation_id=conversation_id,
-                contact_id=contact_id_str,
+                persona_id=persona_id_str,
                 wait_minutes=max(0, settings.webchat_escalate_minutes),
             )
         return
@@ -699,11 +699,11 @@ async def _process_conversation(
     session_id = _strip_text(state.get("last_session_id"))
     if not session_id:
         try:
-            session_id = await storage.fetch_webchat_session_id_by_persona(contact_id_str)
+            session_id = await storage.fetch_webchat_session_id_by_persona(persona_id_str)
         except StorageError as exc:
             logger.warning(
                 "webchat.followup.session_lookup_failed",
-                extra={"conversation_id": conversation_id, "contact_id": contact_id_str, "error": str(exc)},
+                extra={"conversation_id": conversation_id, "persona_id": persona_id_str, "error": str(exc)},
             )
             session_id = None
     if not session_id:
@@ -711,7 +711,7 @@ async def _process_conversation(
             logger,
             "webchat.followup.skipped_no_session",
             conversation_id=conversation_id,
-            contact_id=contact_id_str,
+            persona_id=persona_id_str,
         )
         return
 
@@ -719,7 +719,7 @@ async def _process_conversation(
         state = (
             await refresh_persona_followup_state(
                 conversation_id=conversation_id,
-                persona_id=contact_id_str,
+                persona_id=persona_id_str,
                 persona=contact,
                 session_id=session_id,
             )
@@ -729,14 +729,14 @@ async def _process_conversation(
     if await _session_closed_after(repo=repo, session_id=session_id, reference_ts=last_out):
         await mark_stop_reason(
             conversation_id=conversation_id,
-            contact_id=contact_id_str,
+            persona_id=persona_id_str,
             reason="session_closed",
         )
         log_event(
             logger,
             "webchat.followup.skipped_session_closed",
             conversation_id=conversation_id,
-            contact_id=contact_id_str,
+            persona_id=persona_id_str,
         )
         return
 
@@ -750,7 +750,7 @@ async def _process_conversation(
 
     await record_reengage_attempt(
         conversation_id=conversation_id,
-        contact_id=contact_id_str,
+        persona_id=persona_id_str,
         sent_at=reference_time,
         message=message,
     )
@@ -758,7 +758,7 @@ async def _process_conversation(
         logger,
         "webchat.followup.reengage_sent",
         conversation_id=conversation_id,
-        contact_id=contact_id_str,
+        persona_id=persona_id_str,
         missing_fields=",".join(missing_fields),
     )
 
@@ -832,14 +832,14 @@ async def notify_session_closed_lead(
         return False
 
     try:
-        contact_id = await storage.get_webchat_persona_id(session_key)
+        persona_id = await storage.get_webchat_persona_id(session_key)
     except StorageError as exc:
         logger.warning(
             "webchat.session_closed.contact_lookup_failed",
             extra={"session_id": session_key, "error": str(exc)},
         )
         return False
-    if not contact_id:
+    if not persona_id:
         return False
 
     try:
@@ -847,7 +847,7 @@ async def notify_session_closed_lead(
     except StorageError as exc:
         logger.warning(
             "webchat.session_closed.conversation_lookup_failed",
-            extra={"session_id": session_key, "contact_id": contact_id, "error": str(exc)},
+            extra={"session_id": session_key, "persona_id": persona_id, "error": str(exc)},
         )
         return False
     if not conversation:
@@ -858,14 +858,14 @@ async def notify_session_closed_lead(
         return False
 
     try:
-        contact = await storage.fetch_persona(contact_id)
+        contact = await storage.fetch_persona(persona_id)
     except StorageError as exc:
         logger.warning(
             "webchat.session_closed.contact_fetch_failed",
             extra={
                 "session_id": session_key,
                 "conversation_id": conversation_id,
-                "contact_id": contact_id,
+                "persona_id": persona_id,
                 "error": str(exc),
             },
         )
@@ -897,7 +897,7 @@ async def notify_session_closed_lead(
             extra={
                 "session_id": session_key,
                 "conversation_id": conversation_id,
-                "contact_id": contact_id,
+                "persona_id": persona_id,
                 "error": str(exc),
             },
         )
@@ -908,7 +908,7 @@ async def notify_session_closed_lead(
 
     context = ToolRuntimeContext(
         conversation_id=conversation_id,
-        persona_id=str(contact_id),
+        persona_id=str(persona_id),
         channel="webchat",
     )
     resumen = str(contact.get("necesidad_proposito") or "").strip() or None
@@ -921,7 +921,7 @@ async def notify_session_closed_lead(
     try:
         await enqueue_webchat_sales_notification(
             conversation_id=context.conversation_id,
-            contact_id=context.persona_id,
+            persona_id=context.persona_id,
             trigger="webchat_session_closed",
             channel="webchat",
             organizacion_id=org_uuid,
@@ -938,7 +938,7 @@ async def notify_session_closed_lead(
             extra={
                 "session_id": session_key,
                 "conversation_id": conversation_id,
-                "contact_id": contact_id,
+                "persona_id": persona_id,
                 "error": str(exc),
             },
         )
@@ -949,7 +949,7 @@ async def notify_session_closed_lead(
         extra={
             "session_id": session_key,
             "conversation_id": conversation_id,
-            "contact_id": str(contact_id),
+            "persona_id": str(persona_id),
             "opportunity_id": opportunity_id,
             "reason": reason,
         },
