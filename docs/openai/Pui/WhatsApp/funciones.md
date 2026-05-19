@@ -1,6 +1,6 @@
 {
   "name": "set_full_name",
-  "description": "Guardar o actualizar el nombre completo del contacto asociado a esta conversación.",
+  "description": "Guardar o actualizar el nombre completo real del contacto asociado a esta conversación. Nunca uses el nombre del perfil de WhatsApp ni placeholders como 'Visitante WhatsApp'.",
   "strict": true,
   "parameters": {
     "type": "object",

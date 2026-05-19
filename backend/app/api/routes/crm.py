@@ -36135,7 +36135,7 @@ def _card_from_opportunity(row: dict[str, Any]) -> CRMPipelineBoardCard | None:
         default={},
     )
     contacto_profile_name = _clean_text(contacto_datos.get("profile_name")) or None
-    nombre = contacto_nombre_relacion or metadata_contacto_nombre or contacto_nombre or contacto_profile_name
+    nombre = contacto_nombre_relacion or metadata_contacto_nombre or contacto_nombre
     conversacion_id = _safe_uuid(metadata.get("conversacion_id"))
     asignado_nombre = asignado.get("nombre_completo") or asignado.get("correo")
     prioridad = metadata.get("lead_score")

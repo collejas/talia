@@ -3841,6 +3841,21 @@ async def _run_assistant_turn(
             ],
         }
     )
+    base_input.append(
+        {
+            "role": "developer",
+            "content": [
+                {
+                    "type": "input_text",
+                    "text": (
+                        "Nombre real del lead: en `set_full_name` usa solo el nombre que el usuario "
+                        "escribió explícitamente en el chat. Nunca uses nombres de perfil, alias genéricos "
+                        "ni placeholders."
+                    ),
+                }
+            ],
+        }
+    )
     if not has_attachments:
         base_input.append(
             {

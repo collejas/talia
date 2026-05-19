@@ -1661,6 +1661,28 @@ async def handle_incoming_message(
         return
     message.body = merged_body
 
+    declared_name = whatsapp_tools.lead_tools._extract_name_from_message_text(message.body)
+    if declared_name and not whatsapp_tools.lead_tools._is_placeholder_full_name(declared_name):
+        try:
+            await storage.update_persona(persona_id, {"nombre_completo": declared_name})
+            logger.info(
+                "whatsapp.inbound_declared_name_applied",
+                extra={
+                    "conversation_id": conversation_id,
+                    "persona_id": persona_id,
+                    "declared_name": declared_name,
+                },
+            )
+        except StorageError as exc:
+            logger.warning(
+                "whatsapp.inbound_declared_name_failed",
+                extra={
+                    "conversation_id": conversation_id,
+                    "persona_id": persona_id,
+                    "error": str(exc),
+                },
+            )
+
     try:
         repo = CRMRepository()
     except CRMRepositoryError as exc:
@@ -2808,6 +2830,22 @@ async def _generate_assistant_reply(
                         "Si el prospecto menciona una zona/fraccionamiento sin coincidencias claras, "
                         "ejecuta list_catalog_fraccionamientos para obtener inventario real y responde "
                         "con zonas/fraccionamientos disponibles antes de hacer una sola pregunta de avance."
+                    ),
+                }
+            ],
+        },
+    )
+    initial_input.insert(
+        4,
+        {
+            "role": "developer",
+            "content": [
+                {
+                    "type": "input_text",
+                    "text": (
+                        "Nombre real del lead: en `set_full_name` usa solo el nombre que el usuario "
+                        "escribió explícitamente en el chat. Nunca uses el nombre del perfil de WhatsApp, "
+                        "alias genéricos ni placeholders como 'Visitante WhatsApp'."
                     ),
                 }
             ],

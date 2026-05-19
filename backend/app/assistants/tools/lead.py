@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import re
 from typing import Any
 from datetime import datetime, timezone
 
@@ -147,6 +148,132 @@ def _build_need_title(text: str, *, fallback_company: str | None = None) -> str:
     if company:
         return f"Información de Tal-IA para {company}"
     return "Interés en Tal-IA"
+
+
+_PLACEHOLDER_NAME_PATTERNS: tuple[re.Pattern[str], ...] = (
+    re.compile(r"(?i)^\s*visitante\s+whatsapp(?:\s+.*)?$"),
+)
+
+_NAME_DECLARATION_PATTERNS: tuple[re.Pattern[str], ...] = (
+    re.compile(r"(?i)\bm[ií]{1,2}\s+nombre\s+es\s+(.+?)(?:$|[\n\r.,;:!?¡¿])"),
+    re.compile(r"(?i)\bme\s+llamo\s+(.+?)(?:$|[\n\r.,;:!?¡¿])"),
+    re.compile(r"(?i)\bm[ií]\s+llamo\s+(.+?)(?:$|[\n\r.,;:!?¡¿])"),
+    re.compile(r"(?i)\bme\s+presento\s+como\s+(.+?)(?:$|[\n\r.,;:!?¡¿])"),
+)
+
+_PERSON_NAME_REJECT_WORDS: frozenset[str] = frozenset(
+    {
+        "anuales",
+        "casa",
+        "compania",
+        "compañia",
+        "compañía",
+        "correo",
+        "empresa",
+        "hotel",
+        "informacion",
+        "información",
+        "info",
+        "llamado",
+        "llamada",
+        "manejamos",
+        "manejemos",
+        "negocio",
+        "pui",
+        "registros",
+        "somos",
+        "sistema",
+    }
+)
+
+
+def _is_placeholder_full_name(value: str | None) -> bool:
+    text = " ".join(str(value or "").split()).strip().casefold()
+    if not text:
+        return True
+    return text.startswith("visitante whatsapp")
+
+
+def _sanitize_extracted_person_name(value: str | None) -> str | None:
+    candidate = " ".join(str(value or "").split()).strip(" \t\r\n.,;:!?¡¿")
+    if not candidate or _is_placeholder_full_name(candidate):
+        return None
+    lower_candidate = candidate.casefold()
+    if "@" in candidate or re.search(r"(?i)\b(?:https?://|www\.)", candidate):
+        return None
+    for separator in (" correo ", " email ", " empresa ", " compañía ", " compania ", " teléfono ", " telefono "):
+        if separator in f" {lower_candidate} ":
+            candidate = candidate.split(separator.strip(), 1)[0].strip(" \t\r\n.,;:!?¡¿")
+            lower_candidate = candidate.casefold()
+            break
+    words = [word.strip(" \t\r\n.,;:!?¡¿") for word in candidate.split()]
+    words = [word for word in words if word]
+    if not words or len(words) > 4 or len(candidate) > 60:
+        return None
+    normalized_words = {word.casefold() for word in words}
+    if normalized_words.intersection(_PERSON_NAME_REJECT_WORDS):
+        return None
+    if not re.search(r"[A-Za-zÁÉÍÓÚÜÑáéíóúüñ]{2,}", candidate):
+        return None
+    if re.search(r"\d", candidate):
+        return None
+    return " ".join(words)
+
+
+def _extract_name_from_message_text(text: str | None) -> str | None:
+    candidate = " ".join(str(text or "").split()).strip()
+    if not candidate:
+        return None
+    candidate = candidate.strip(" \t\r\n.,;:!?¡¿")
+    lowered = candidate.casefold()
+    if lowered.startswith("visitante whatsapp"):
+        return None
+    for pattern in _NAME_DECLARATION_PATTERNS:
+        match = pattern.search(candidate)
+        if match and match.lastindex and match.group(match.lastindex):
+            return _sanitize_extracted_person_name(match.group(match.lastindex))
+    return None
+
+
+async def _resolve_full_name_from_context(
+    *,
+    context: ToolRuntimeContext,
+    proposed_full_name: str,
+) -> str:
+    normalized = " ".join(str(proposed_full_name or "").split()).strip()
+    extracted_candidates: list[str] = []
+    if context.conversation_id:
+        try:
+            recent_messages = await storage.fetch_recent_messages(
+                conversation_id=context.conversation_id,
+                limit=6,
+            )
+        except StorageError:
+            recent_messages = []
+        for message in reversed(recent_messages):
+            if not isinstance(message, dict):
+                continue
+            if str(message.get("direccion") or "").strip().lower() != "entrante":
+                continue
+            candidate = _extract_name_from_message_text(message.get("texto"))
+            if candidate and not _is_placeholder_full_name(candidate):
+                extracted_candidates.append(candidate)
+        if extracted_candidates:
+            return extracted_candidates[0]
+    normalized_candidate = _sanitize_extracted_person_name(normalized)
+    if normalized_candidate:
+        return normalized_candidate
+    if context.persona_id:
+        try:
+            persona = await storage.fetch_persona(context.persona_id)
+        except StorageError:
+            persona = None
+        if isinstance(persona, dict):
+            current_full_name = " ".join(str(persona.get("nombre_completo") or "").split()).strip()
+            current_candidate = _sanitize_extracted_person_name(current_full_name)
+            if current_candidate:
+                return current_candidate
+    return ""
 
 
 async def _mark_auto_close_state(
@@ -598,7 +725,20 @@ async def try_execute_lead_tool(
         return None
     tool_name = name.strip()
     if tool_name == "set_full_name":
-        full_name = _require_argument(arguments, "full_name")
+        full_name = await _resolve_full_name_from_context(
+            context=context,
+            proposed_full_name=_require_argument(arguments, "full_name"),
+        )
+        if not full_name:
+            logger.warning(
+                "lead_tools.set_full_name_ignored",
+                extra={
+                    "conversation_id": context.conversation_id,
+                    "persona_id": context.persona_id,
+                    "reason": "full_name_not_resolved",
+                },
+            )
+            return {"status": "ignored", "reason": "full_name_not_resolved"}
         await storage.update_persona(context.persona_id, {"nombre_completo": full_name})
         await _refresh_webchat_followup_state(context)
         await _maybe_auto_close_lead(context=context, reason="set_full_name")
@@ -1225,6 +1365,25 @@ async def _send_information_email_with_documents(
         default_limit=3,
     )
     attachments = await _build_email_attachments_from_documents(documents)
+    logger.info(
+        "lead_tools.info_email_documents",
+        extra={
+            "conversation_id": context.conversation_id,
+            "persona_id": context.persona_id,
+            "documents_count": len(documents),
+            "attachments_count": len(attachments),
+            "documents": [
+                {
+                    "id": str(document.get("id") or ""),
+                    "title": document.get("title"),
+                    "category": document.get("category"),
+                    "channel_scope": document.get("channel_scope"),
+                }
+                for document in documents
+                if isinstance(document, dict)
+            ],
+        },
+    )
     if not attachments:
         attachments = None
 

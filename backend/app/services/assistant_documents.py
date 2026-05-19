@@ -41,7 +41,21 @@ def _normalize_category(value: str | None) -> str | None:
     category = _normalize_text(value)
     if not category:
         return None
-    return category.lower()
+    normalized = " ".join(category.lower().split())
+    if normalized in {
+        "informacion general",
+        "información general",
+        "info general",
+        "informacion",
+        "info",
+        "brochure",
+        "folleto",
+        "pdf",
+        "presentacion",
+        "presentación",
+    }:
+        return "general"
+    return normalized
 
 
 def _normalize_scope(value: Any) -> str | None:
@@ -205,6 +219,14 @@ async def list_assistant_documents_for_delivery(
         active=active,
         limit=max(1, min(limit, 10)),
     )
+    if normalized_category and not rows and not normalized_ids:
+        rows = await repo.list_assistant_documents(
+            organizacion_id=organizacion_id,
+            channel_scope=None,
+            category=None,
+            active=active,
+            limit=max(1, min(limit, 10)),
+        )
 
     filtered_rows: list[dict[str, Any]] = []
     for row in rows:

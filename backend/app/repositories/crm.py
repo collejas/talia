@@ -4192,7 +4192,7 @@ class CRMRepository:
             "p_body": body,
             "p_metadata": metadata or {},
             "p_message_sid": message_sid,
-            "p_profile_name": profile_name,
+            "p_profile_name": None,
             "p_conversation_id": conversation_id,
             "p_contact_id": resolved_persona_id,
             "p_response_id": response_id,
@@ -6618,7 +6618,7 @@ class CRMRepository:
 
         apellido_paterno = self._pick_text(merged, "apellido_paterno")
         apellido_materno = self._pick_text(merged, "apellido_materno")
-        given_name = self._pick_text(merged, "nombre_nombres", "nombre")
+        given_name = self._pick_text(merged, "nombre", "nombre_nombres")
         if not given_name and full_name:
             split_name, split_apellido_paterno, split_apellido_materno = self._split_full_name(full_name)
             if split_name:
@@ -6634,7 +6634,11 @@ class CRMRepository:
             and "nombre_nombres" not in payload
         )
         if full_name_was_explicitly_updated and full_name:
-            given_name = full_name
+            split_name, split_apellido_paterno, split_apellido_materno = self._split_full_name(full_name)
+            if split_name:
+                given_name = split_name
+            apellido_paterno = split_apellido_paterno
+            apellido_materno = split_apellido_materno
         if given_name:
             suffix_candidates = []
             if apellido_paterno and apellido_materno:
@@ -6703,8 +6707,13 @@ class CRMRepository:
             "apellido_paterno": apellido_paterno,
             "apellido_materno": apellido_materno,
             "nombre_completo": full_name,
-            "correo_principal": self._pick_text(merged, "correo", "email"),
-            "telefono_principal_e164": self._pick_text(merged, "telefono_e164", "telefono"),
+            "correo_principal": self._pick_text(merged, "correo", "email", "correo_principal"),
+            "telefono_principal_e164": self._pick_text(
+                merged,
+                "telefono_e164",
+                "telefono",
+                "telefono_principal_e164",
+            ),
             "puesto": self._pick_text(merged, "puesto"),
             "area": self._pick_text(merged, "area"),
             "rol_decision": self._pick_text(merged, "rol_decision"),

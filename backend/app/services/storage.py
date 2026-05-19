@@ -1477,36 +1477,6 @@ async def register_whatsapp_message(
                 extra={"conversation_id": conversation_id, "error": str(exc)},
             )
 
-    if direction == "entrante" and profile_name and (result.get("persona_id") or result.get("contact_id")):
-        persona_id_value = resolved_persona_id or str(result.get("persona_id") or result.get("contact_id"))
-        try:
-            persona_row = await repo.get_persona_by_id(persona_id=str(persona_id_value))
-            if persona_row:
-                raw_persona_data = persona_row.get("persona_datos") or persona_row.get("contacto_datos")
-                persona_data = _ensure_dict(raw_persona_data)
-                current_profile_name = _clean_text(persona_data.get("profile_name"))
-                incoming_profile_name = _clean_text(profile_name)
-                patch: dict[str, Any] = {}
-                if incoming_profile_name and current_profile_name != incoming_profile_name:
-                    persona_data["profile_name"] = incoming_profile_name
-                    patch["persona_datos"] = persona_data
-
-                # No usar nombre de perfil de WhatsApp como nombre real.
-                if _is_unconfirmed_whatsapp_name(
-                    contact_name=persona_row.get("nombre_completo"),
-                    profile_name=incoming_profile_name,
-                ):
-                    if "persona_datos" not in patch:
-                        persona_data["profile_name"] = incoming_profile_name
-                        patch["persona_datos"] = persona_data
-
-                if patch:
-                    await repo.update_persona_by_id(persona_id=persona_id_value, patch=patch)
-        except CRMRepositoryError as exc:
-            logger.warning(
-                "storage.whatsapp_profile_name_normalization_failed",
-                extra={"persona_id": persona_id_value, "error": str(exc)},
-            )
     try:
         persona_id_value = str(result.get("persona_id") or "")
         await _publish_inbox_realtime_event(

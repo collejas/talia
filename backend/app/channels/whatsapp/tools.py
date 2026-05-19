@@ -1222,7 +1222,20 @@ async def execute_tool(
 
     func = name.strip()
     if func == "set_full_name":
-        full_name = _require(arguments, "full_name")
+        full_name = await lead_tools._resolve_full_name_from_context(
+            context=context,
+            proposed_full_name=_require(arguments, "full_name"),
+        )
+        if not full_name:
+            logger.warning(
+                "whatsapp.set_full_name_ignored",
+                extra={
+                    "conversation_id": context.conversation_id,
+                    "persona_id": _context_persona_id(context),
+                    "reason": "full_name_not_resolved",
+                },
+            )
+            return {"status": "ignored", "reason": "full_name_not_resolved"}
         persona_id = _context_persona_id(context)
         await storage.update_persona(persona_id, {"nombre_completo": full_name})
         await _refresh_opportunity_context_from_persona(

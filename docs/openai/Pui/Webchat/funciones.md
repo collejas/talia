@@ -1,6 +1,6 @@
 {
   "name": "set_full_name",
-  "description": "Guardar o actualizar el nombre completo del contacto asociado a esta conversación.",
+  "description": "Guardar o actualizar el nombre completo real del contacto asociado a esta conversación. No uses nombres de perfil, alias genéricos ni placeholders.",
   "strict": true,
   "parameters": {
     "type": "object",
