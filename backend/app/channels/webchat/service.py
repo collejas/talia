@@ -315,11 +315,58 @@ async def get_calendar_runtime_settings_for_organizacion(
 
 
 async def _resolve_calendar_resource_id(value: Any | None = None) -> str:
-    calendar_settings = await get_calendar_runtime_settings_for_organizacion(value)
-    resource_id = calendar_settings.resource_id
-    if not resource_id:
-        raise ValueError("No se configuró el calendario de demos para el webchat.")
-    return resource_id
+    org_uuid = _resolve_calendar_organizacion_uuid(value)
+    calendar_settings = await get_calendar_runtime_settings_for_organizacion(org_uuid)
+    resource_id = str(calendar_settings.resource_id or "").strip()
+    repo = CRMRepository()
+    if resource_id:
+        try:
+            resource_row = await repo.get_calendar_resource_by_organizacion(
+                organizacion_id=org_uuid,
+                resource_id=UUID(resource_id),
+            )
+        except (CRMRepositoryError, ValueError):
+            resource_row = None
+        if isinstance(resource_row, dict) and resource_row.get("is_active", True):
+            return resource_id
+
+    try:
+        resources = await repo.list_calendar_resources_by_organizacion(
+            organizacion_id=org_uuid,
+            include_inactive=False,
+        )
+    except CRMRepositoryError as exc:
+        if resource_id:
+            logger.warning(
+                "calendar.resource_lookup_fallback_failed",
+                extra={
+                    "organizacion_id": str(org_uuid),
+                    "configured_resource_id": resource_id,
+                    "error": str(exc),
+                },
+            )
+            raise ValueError(
+                "No se encontró un calendario de demos activo para esta organización."
+            ) from exc
+        raise ValueError("No se encontró un calendario de demos activo para esta organización.") from exc
+
+    for resource in resources:
+        fallback_id = str(resource.get("id") or "").strip()
+        if fallback_id:
+            if resource_id and fallback_id != resource_id:
+                logger.warning(
+                    "calendar.resource_id_fallback",
+                    extra={
+                        "organizacion_id": str(org_uuid),
+                        "configured_resource_id": resource_id,
+                        "fallback_resource_id": fallback_id,
+                    },
+                )
+            return fallback_id
+
+    if resource_id:
+        return resource_id
+    raise ValueError("No se encontró un calendario de demos activo para esta organización.")
 
 
 def _normalize_reminder_offset(value: Any) -> int:
@@ -1147,9 +1194,7 @@ async def get_calendar_availability_response(
     calendar_settings = await get_calendar_runtime_settings_for_organizacion(
         conversation_meta.get("organizacion_id")
     )
-    resource_id = calendar_settings.resource_id
-    if not resource_id:
-        raise ValueError("No se configuró el calendario de demos para el webchat.")
+    resource_id = await _resolve_calendar_resource_id(conversation_meta.get("organizacion_id"))
     timezone_value = _resolve_timezone_preference(timezone_preference, calendar_settings)
     base_date = start_date or datetime.now(timezone.utc).date()
     days = _normalize_window_days(window_days, calendar_settings.default_days)
@@ -1242,9 +1287,7 @@ async def schedule_calendar_booking(
     calendar_settings = await get_calendar_runtime_settings_for_organizacion(
         conversation_meta.get("organizacion_id")
     )
-    resource_id = calendar_settings.resource_id
-    if not resource_id:
-        raise ValueError("No se configuró el calendario de demos para el webchat.")
+    resource_id = await _resolve_calendar_resource_id(conversation_meta.get("organizacion_id"))
     hold_minutes = max(1, calendar_settings.hold_minutes)
     slot_identifier = slot_id or _build_slot_identifier(resource_id, start_at)
     persona_name = (
@@ -4485,9 +4528,7 @@ async def _execute_function_call(
         calendar_settings = await get_calendar_runtime_settings_for_organizacion(
             conversation_meta.get("organizacion_id")
         )
-        resource_id = calendar_settings.resource_id
-        if not resource_id:
-            raise ValueError("No se configuró el calendario de demos para el webchat.")
+        resource_id = await _resolve_calendar_resource_id(conversation_meta.get("organizacion_id"))
         timezone_pref = _resolve_timezone_preference(arguments.get("timezone"), calendar_settings)
         start_raw = arguments.get("start_date") or arguments.get("window_start")
         start_date = _parse_calendar_date(start_raw)
@@ -4611,9 +4652,7 @@ async def _execute_function_call(
         calendar_settings = await get_calendar_runtime_settings_for_organizacion(
             organizacion_hint
         )
-        resource_id = calendar_settings.resource_id
-        if not resource_id:
-            raise ValueError("No se configuró el calendario de demos para el webchat.")
+        resource_id = await _resolve_calendar_resource_id(organizacion_hint)
         slot_id = str(arguments.get("slot_id") or "").strip()
         start_raw = arguments.get("start_at")
         if not start_raw and slot_id:

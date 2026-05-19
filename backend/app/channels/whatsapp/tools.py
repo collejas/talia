@@ -2171,12 +2171,9 @@ async def _handle_list_demo_slots(
     calendar_settings = await webchat_service.get_calendar_runtime_settings_for_organizacion(
         conversation_meta.get("organizacion_id")
     )
-    resource_id = calendar_settings.resource_id
-    if not resource_id:
-        raise ValueError(
-            "No se configuró el calendario de demos para esta organización "
-            "(falta webchat.calendar.resource_id)."
-        )
+    resource_id = await webchat_service._resolve_calendar_resource_id(
+        conversation_meta.get("organizacion_id")
+    )
     timezone_pref = webchat_service._resolve_timezone_preference(arguments.get("timezone"), calendar_settings)
     start_raw = arguments.get("start_date") or arguments.get("window_start")
     start_date = webchat_service._parse_calendar_date(start_raw)
@@ -2221,12 +2218,9 @@ async def _handle_schedule_demo(
     calendar_settings = await webchat_service.get_calendar_runtime_settings_for_organizacion(
         conversation_meta.get("organizacion_id")
     )
-    resource_id = calendar_settings.resource_id
-    if not resource_id:
-        raise ValueError(
-            "No se configuró el calendario de demos para esta organización "
-            "(falta webchat.calendar.resource_id)."
-        )
+    resource_id = await webchat_service._resolve_calendar_resource_id(
+        conversation_meta.get("organizacion_id")
+    )
     slot_id = str(arguments.get("slot_id") or "").strip()
     start_raw = arguments.get("start_at")
     if not start_raw and slot_id:
