@@ -930,6 +930,33 @@ async def _send_whatsapp_information_documents(
     return results
 
 
+def _build_information_whatsapp_body(
+    *,
+    full_name: str | None,
+    company_name: str | None,
+    summary: str | None,
+    document_count: int,
+) -> str:
+    greeting = f"Hola {full_name}," if full_name else "Hola,"
+    company_fragment = f" sobre {company_name}" if company_name else ""
+    lines = [
+        greeting,
+        "",
+        f"Te comparto la información solicitada{company_fragment} por aquí.",
+    ]
+    if summary:
+        lines.append("La información está enfocada en tu caso y te la dejo resumida en el PDF.")
+    if document_count > 1:
+        lines.append(f"Te envio {document_count} documentos para que los revises con calma.")
+    lines.extend(
+        [
+            "",
+            "Si también quieres que te la mande por correo, te la envío enseguida.",
+        ]
+    )
+    return "\n".join(lines)
+
+
 async def _handle_information_package(
     arguments: dict[str, Any],
     context: ToolRuntimeContext,
@@ -1023,12 +1050,11 @@ async def _handle_information_package(
             channel_scope="whatsapp",
             default_limit=3,
         )
-        whatsapp_body = _build_information_email_body(
-            template_data=template_data,
+        whatsapp_body = _build_information_whatsapp_body(
             full_name=full_name,
+            company_name=company_name,
             summary=summary,
-            highlights=highlight_lines,
-            resources=resources,
+            document_count=len(whatsapp_documents),
         )
         whatsapp_results = await _send_whatsapp_information_documents(
             context=context,

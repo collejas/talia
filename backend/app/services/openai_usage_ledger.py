@@ -294,6 +294,28 @@ async def record_response_usage(
             json_payload=payload,
             prefer="return=minimal",
         )
+    except httpx.HTTPStatusError as exc:
+        if exc.response.status_code == 409:
+            logger.debug(
+                "openai_usage_ledger.persist_duplicate_ignored",
+                extra={
+                    "organizacion_id": str(organizacion_id),
+                    "channel": channel,
+                    "request_purpose": request_purpose,
+                    "response_id": response_payload.get("id"),
+                },
+            )
+            return
+        logger.warning(
+            "openai_usage_ledger.persist_failed",
+            extra={
+                "organizacion_id": str(organizacion_id),
+                "channel": channel,
+                "request_purpose": request_purpose,
+                "response_id": response_payload.get("id"),
+                "error": str(exc),
+            },
+        )
     except Exception as exc:
         logger.warning(
             "openai_usage_ledger.persist_failed",

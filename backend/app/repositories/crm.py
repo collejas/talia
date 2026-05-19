@@ -5119,6 +5119,7 @@ class CRMRepository:
         *,
         conversacion_id: str,
         resumen: str,
+        persona_id: str | None = None,
         contacto_id: str | None = None,
         organizacion_id: str | None = None,
         tipo: str | None = None,
@@ -5130,8 +5131,9 @@ class CRMRepository:
             "resumen": resumen,
             "metadatos": metadatos or {},
         }
-        if contacto_id:
-            payload["contacto_id"] = contacto_id
+        resolved_persona_id = persona_id or contacto_id
+        if resolved_persona_id:
+            payload["persona_id"] = resolved_persona_id
         if organizacion_id:
             payload["organizacion_id"] = organizacion_id
         if tipo:

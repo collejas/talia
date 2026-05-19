@@ -1835,7 +1835,7 @@ async def create_conversation_summary(
         return await repo.create_conversation_summary(
             conversacion_id=conversation_id,
             resumen=resumen,
-            contacto_id=persona_id,
+            persona_id=persona_id,
             organizacion_id=organizacion_id,
             tipo=tipo,
             metadatos=metadatos,

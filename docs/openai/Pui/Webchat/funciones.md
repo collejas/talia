@@ -246,7 +246,7 @@
 
 {
   "name": "send_information_package",
-  "description": "Enviar un paquete de información al prospecto por uno o varios canales con PDFs reales del tenant, sin escribir ligas en el chat.",
+  "description": "Enviar un paquete de información al prospecto por uno o varios canales con PDFs reales del tenant, sin escribir ligas en el chat. Usala solo cuando el usuario pida explícitamente WhatsApp o ambos canales; si solo pide correo, usa send_information_email.",
   "strict": true,
   "parameters": {
     "type": "object",
