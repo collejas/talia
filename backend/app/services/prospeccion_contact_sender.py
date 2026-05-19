@@ -740,7 +740,7 @@ async def _ensure_whatsapp_conversation(
     persona_id: str,
 ) -> str | None:
     try:
-        existing = await repo.get_latest_whatsapp_conversation(contact_id=persona_id)
+        existing = await repo.get_latest_whatsapp_conversation(persona_id=persona_id)
     except CRMRepositoryError as exc:
         log_event(
             logger,
