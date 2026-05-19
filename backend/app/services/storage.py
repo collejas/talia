@@ -1366,7 +1366,7 @@ async def register_whatsapp_message(
             if persona_id_value:
                 resolved_persona_id = str(persona_id_value)
                 latest_conversation = await repo.get_latest_whatsapp_conversation(
-                    contact_id=resolved_persona_id
+                    persona_id=resolved_persona_id
                 )
                 if latest_conversation and latest_conversation.get("id"):
                     resolved_conversation_id = str(latest_conversation.get("id"))
@@ -1621,7 +1621,7 @@ async def get_webchat_persona_id(session_id: str) -> str | None:
     """Devuelve la persona asociada a un session_id para el canal webchat."""
     repo = CRMRepository()
     try:
-        return await repo.get_webchat_contact_id_by_session(session_id=session_id)
+        return await repo.get_webchat_persona_id_by_session(session_id=session_id)
     except CRMRepositoryError as exc:
         raise StorageError(str(exc)) from exc
 
@@ -1630,7 +1630,7 @@ async def fetch_webchat_session_id_by_persona(persona_id: str) -> str | None:
     """Obtiene el session_id asociado a una persona para el canal webchat."""
     repo = CRMRepository()
     try:
-        return await repo.get_webchat_session_by_contact(contact_id=persona_id)
+        return await repo.get_webchat_session_by_persona(persona_id=persona_id)
     except CRMRepositoryError as exc:
         raise StorageError(str(exc)) from exc
 
@@ -1645,7 +1645,7 @@ async def resolve_webchat_conversation_from_session(
 
     repo = CRMRepository()
     try:
-        row = await repo.get_latest_webchat_conversation(contact_id=persona_id)
+        row = await repo.get_latest_webchat_conversation(persona_id=persona_id)
     except CRMRepositoryError as exc:
         raise StorageError(str(exc)) from exc
     if not row:
