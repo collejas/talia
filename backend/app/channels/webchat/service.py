@@ -484,11 +484,13 @@ async def _resolve_conversation_metadata(conversation_id: str) -> dict[str, Any]
             extra={"conversation_id": conversation_id, "error": str(exc)},
         )
         raise ValueError("No se encontró la conversación solicitada.") from exc
-    persona_id = conversation_meta.get("persona_id")
+    persona_id = conversation_meta.get("persona_id") or conversation_meta.get("contact_id")
     if not persona_id:
         raise ValueError("No se encontró la persona asociada a la conversación.")
     if not conversation_meta.get("persona_id"):
         conversation_meta["persona_id"] = persona_id
+    if not conversation_meta.get("contact_id"):
+        conversation_meta["contact_id"] = persona_id
     return conversation_meta
 
 

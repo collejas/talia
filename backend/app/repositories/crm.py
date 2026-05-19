@@ -73,6 +73,27 @@ def _append_supabase_connectivity_event(entry: dict[str, Any]) -> None:
         pass
 
 
+def _normalize_provider_timestamp(value: Any) -> datetime | None:
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        return value if value.tzinfo else value.replace(tzinfo=timezone.utc)
+    raw = str(value).strip()
+    if not raw:
+        return None
+    try:
+        numeric = float(raw)
+    except ValueError:
+        try:
+            parsed = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+        except ValueError:
+            return None
+        return parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
+    if numeric > 10_000_000_000:
+        numeric /= 1000.0
+    return datetime.fromtimestamp(numeric, tz=timezone.utc)
+
+
 def _coerce_uuid(value: Any, *, field: str) -> UUID:
     try:
         return UUID(str(value))
@@ -5201,8 +5222,9 @@ class CRMRepository:
                 "provider": provider,
             }
         payload["mensaje_id"] = message_id
-        if provider_timestamp:
-            payload["proveedor_ts"] = provider_timestamp
+        normalized_timestamp = _normalize_provider_timestamp(provider_timestamp)
+        if normalized_timestamp:
+            payload["proveedor_ts"] = normalized_timestamp.isoformat()
 
         resp = await self._request(
             "POST",

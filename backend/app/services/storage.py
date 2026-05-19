@@ -1608,6 +1608,8 @@ async def fetch_conversation(conversation_id: str) -> dict[str, Any]:
         "channel": channel_value,
         "openai_conversation_id": row.get("conversacion_openai_id"),
         "last_response_id": row.get("last_response_id"),
+        "persona_id": row.get("persona_id") or row.get("contacto_id"),
+        "contact_id": row.get("contacto_id"),
         "manual_override": manual_override,
     }
 
@@ -1654,7 +1656,8 @@ async def resolve_webchat_conversation_from_session(
     manual_override = _normalize_manual_override(ctrl)
     return {
         "id": row.get("id"),
-        "persona_id": row.get("contacto_id"),
+        "persona_id": row.get("persona_id") or row.get("contacto_id"),
+        "contact_id": row.get("contacto_id"),
         "channel": row.get("canal"),
         "openai_conversation_id": row.get("conversacion_openai_id"),
         "last_response_id": row.get("last_response_id"),
@@ -2900,7 +2903,7 @@ async def maybe_auto_name_persona_opportunity(
     """Alias con nombre de persona para el auto-naming de oportunidad."""
     return await maybe_auto_name_opportunity(
         conversation_id=conversation_id,
-        contact_id=persona_id,
+        persona_id=persona_id,
         summary=summary,
         intent=intent,
         channel=channel,
