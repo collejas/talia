@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import asyncio
+import json
 from typing import Any
+from datetime import datetime, timezone
 
 from uuid import UUID
 
@@ -94,6 +96,367 @@ def _parse_string_list_argument(arguments: dict[str, Any], key: str) -> list[str
 def _is_webchat_context(context: ToolRuntimeContext) -> bool:
     channel = (context.channel or "").strip().lower()
     return not channel or channel == "webchat"
+
+
+def _persona_followup_state(persona: dict[str, Any] | None) -> dict[str, Any]:
+    if not isinstance(persona, dict):
+        return {}
+    raw = persona.get("persona_datos") or persona.get("contacto_datos") or persona.get("metadata")
+    if isinstance(raw, str):
+        try:
+            parsed = json.loads(raw)
+        except json.JSONDecodeError:
+            return {}
+        if isinstance(parsed, dict):
+            raw = parsed
+    if not isinstance(raw, dict):
+        return {}
+    followup = raw.get("webchat_followup")
+    return dict(followup) if isinstance(followup, dict) else {}
+
+
+def _lead_close_already_marked(persona: dict[str, Any] | None) -> bool:
+    state = _persona_followup_state(persona).get("state")
+    if not isinstance(state, dict):
+        return False
+    return bool(state.get("lead_closed_at"))
+
+
+def _has_required_close_lead_fields(persona: dict[str, Any] | None) -> bool:
+    if not isinstance(persona, dict):
+        return False
+    name = str(persona.get("nombre_completo") or "").strip()
+    email = str(persona.get("correo") or persona.get("correo_principal") or "").strip()
+    phone = str(persona.get("telefono_e164") or persona.get("telefono") or "").strip()
+    company = str(persona.get("company_name") or "").strip()
+    return bool(name and email and phone and company)
+
+
+def _build_need_title(text: str, *, fallback_company: str | None = None) -> str:
+    candidate = " ".join(str(text or "").strip().split())
+    if candidate:
+        for separator in (".", "!", "?", ";", "\n"):
+            if separator in candidate:
+                candidate = candidate.split(separator, 1)[0].strip()
+                break
+    if candidate and len(candidate) > 96:
+        candidate = candidate[:95].rstrip() + "…"
+    if candidate:
+        return candidate
+    company = str(fallback_company or "").strip()
+    if company:
+        return f"Información de Tal-IA para {company}"
+    return "Interés en Tal-IA"
+
+
+async def _mark_auto_close_state(
+    *,
+    persona_id: str,
+    persona: dict[str, Any] | None,
+    reason: str,
+) -> None:
+    if not isinstance(persona, dict):
+        return
+    raw = persona.get("persona_datos") or persona.get("contacto_datos") or persona.get("metadata")
+    if isinstance(raw, str):
+        try:
+            parsed = json.loads(raw)
+        except json.JSONDecodeError:
+            parsed = {}
+        if isinstance(parsed, dict):
+            raw = parsed
+    persona_data = dict(raw) if isinstance(raw, dict) else {}
+    followup = dict(persona_data.get("webchat_followup")) if isinstance(persona_data.get("webchat_followup"), dict) else {}
+    state = dict(followup.get("state")) if isinstance(followup.get("state"), dict) else {}
+    state["lead_closed_at"] = datetime.now(timezone.utc).isoformat()
+    state["lead_closed_reason"] = reason
+    followup["state"] = state
+    persona_data["webchat_followup"] = followup
+    await storage.update_persona(persona_id, {"persona_datos": persona_data})
+
+
+async def _maybe_auto_close_lead(
+    *,
+    context: ToolRuntimeContext,
+    persona: dict[str, Any] | None = None,
+    reason: str,
+) -> dict[str, Any] | None:
+    if not context.persona_id:
+        return None
+    persona_record = persona
+    if not isinstance(persona_record, dict):
+        try:
+            persona_record = await storage.fetch_persona(context.persona_id)
+        except StorageError:
+            return None
+    if _lead_close_already_marked(persona_record):
+        return None
+    if not _has_required_close_lead_fields(persona_record):
+        return None
+
+    summary_text = ""
+    try:
+        summary_row = await storage.fetch_latest_conversation_summary(conversation_id=context.conversation_id)
+    except StorageError:
+        summary_row = None
+    if isinstance(summary_row, dict):
+        summary_text = str(summary_row.get("resumen") or "").strip()
+
+    notes = str(persona_record.get("notes") or "").strip()
+    necesidad = str(persona_record.get("necesidad_proposito") or "").strip()
+    company_name = str(persona_record.get("company_name") or "").strip()
+    if not notes:
+        notes = summary_text or (
+            f"{str(persona_record.get('nombre_completo') or 'El prospecto').strip()} "
+            f"de {company_name or 'su empresa'} compartió sus datos básicos y pidió información."
+        )
+    if not necesidad:
+        necesidad = _build_need_title(summary_text or notes, fallback_company=company_name)
+
+    try:
+        result = await _complete_close_lead(
+            arguments={
+                "notes": notes,
+                "necesidad_proposito": necesidad,
+                "siguiente_accion": "continuar_conversacion",
+            },
+            context=context,
+            persona=persona_record,
+        )
+    except Exception as exc:
+        logger.warning(
+            "lead_tools.auto_close_failed",
+            extra={
+                "conversation_id": context.conversation_id,
+                "contact_id": context.persona_id,
+                "reason": reason,
+                "error": str(exc),
+            },
+        )
+        return None
+
+    try:
+        await _mark_auto_close_state(
+            persona_id=context.persona_id,
+            persona=persona_record,
+            reason=reason,
+        )
+    except StorageError as exc:
+        logger.warning(
+            "lead_tools.auto_close_state_failed",
+            extra={
+                "conversation_id": context.conversation_id,
+                "contact_id": context.persona_id,
+                "reason": reason,
+                "error": str(exc),
+            },
+        )
+    return result
+
+
+async def _complete_close_lead(
+    *,
+    arguments: dict[str, Any],
+    context: ToolRuntimeContext,
+    persona: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    persona_id = context.persona_id
+    persona_record = persona or await storage.fetch_persona(persona_id)
+    notes = _require_argument(arguments, "notes")
+    necesidad = _require_argument(arguments, "necesidad_proposito")
+    siguiente_accion = str(arguments.get("siguiente_accion") or "").strip() or None
+    tarjeta_id: str | None = None
+    contact_ready = await webchat_followups.ensure_persona_ready_for_assignment(
+        conversation_id=context.conversation_id,
+        persona_id=context.persona_id,
+    )
+    if contact_ready:
+        try:
+            tarjeta_id = await storage.ensure_persona_conversation_opportunity(
+                conversation_id=context.conversation_id,
+                persona_id=context.persona_id,
+                channel=context.channel,
+            )
+        except StorageError as exc:
+            logger.warning(
+                "lead_tools.ensure_opportunity_failed",
+                extra={"conversation_id": context.conversation_id, "error": str(exc)},
+            )
+    await storage.update_persona(
+        context.persona_id,
+        {"notes": notes, "necesidad_proposito": necesidad},
+    )
+    try:
+        await storage.update_conversation(context.conversation_id, {"estado": "pendiente"})
+    except StorageError as exc:
+        logger.warning(
+            "lead_tools.conversation_update_failed",
+            extra={"conversation_id": context.conversation_id, "error": str(exc)},
+        )
+    try:
+        await storage.upsert_conversation_insights(
+            conversation_id=context.conversation_id,
+            resumen=notes,
+            intencion=necesidad,
+            siguiente_accion=siguiente_accion,
+        )
+    except StorageError as exc:
+        logger.warning(
+            "lead_tools.insights_failed",
+            extra={"conversation_id": context.conversation_id, "error": str(exc)},
+        )
+    if tarjeta_id:
+        scoring_answers = {
+            key: arguments.get(key)
+            for key in (
+                "financing_type",
+                "credit_preapproved",
+                "budget_range",
+                "down_payment_ready",
+                "purchase_timeline",
+                "hard_deadline",
+                "requirements_defined",
+                "comparison_mode",
+                "visited_properties",
+                "decision_authority",
+                "buyer_type",
+            )
+            if key in arguments
+        }
+        action_text = (siguiente_accion or "").lower()
+        requested = any(
+            token in action_text for token in ("cita", "agendar", "demo", "visita")
+        )
+        appointment_requested = _optional_bool_argument(arguments, "appointment_requested")
+        accepted_questions = _optional_bool_argument(
+            arguments, "accepted_answering_questions"
+        )
+        evasive_count = _optional_int_argument(arguments, "evasive_answers_count")
+        response_time_bucket_raw = (
+            str(arguments.get("response_time_bucket") or "").strip().lower()
+        )
+        response_time_bucket = (
+            response_time_bucket_raw
+            if response_time_bucket_raw in {"fast", "medium", "slow"}
+            else None
+        )
+        scoring_events: dict[str, Any] = {
+            "channel": context.channel or "webchat",
+            "appointment_requested": (
+                appointment_requested if appointment_requested is not None else requested
+            ),
+            "accepted_answering_questions": (
+                accepted_questions if accepted_questions is not None else bool(scoring_answers)
+            ),
+        }
+        if evasive_count is not None:
+            scoring_events["evasive_answers_count"] = evasive_count
+        if response_time_bucket is not None:
+            scoring_events["response_time_bucket"] = response_time_bucket
+        profiling_statuses_raw = (
+            arguments.get("profiling_statuses")
+            if isinstance(arguments.get("profiling_statuses"), dict)
+            else arguments.get("perfilamiento_estados")
+        )
+        profiling_reprompt_counts_raw = (
+            arguments.get("profiling_reprompt_counts")
+            if isinstance(arguments.get("profiling_reprompt_counts"), dict)
+            else arguments.get("perfilamiento_repregunta_counts")
+        )
+        profiling_statuses = (
+            profiling_statuses_raw if isinstance(profiling_statuses_raw, dict) else None
+        )
+        profiling_reprompt_counts = (
+            profiling_reprompt_counts_raw if isinstance(profiling_reprompt_counts_raw, dict) else None
+        )
+        if profiling_enabled_for_channel := True:
+            try:
+                persona_org = webchat_service._extract_persona_org(persona_record)
+                persona_org_uuid = webchat_service._resolve_org_uuid(persona_org)
+                if persona_org_uuid and context.channel in {"whatsapp", "webchat"}:
+                    profiling_enabled_for_channel = await tenant_runtime.is_profiling_enabled(
+                        organizacion_id=UUID(persona_org_uuid),
+                        channel=context.channel or "webchat",
+                    )
+            except Exception:
+                profiling_enabled_for_channel = True
+        if profiling_enabled_for_channel:
+            try:
+                await storage.apply_persona_lead_scoring(
+                    conversation_id=context.conversation_id,
+                    persona_id=context.persona_id,
+                    opportunity_id=str(tarjeta_id),
+                    answers=scoring_answers,
+                    events=scoring_events,
+                    profiling_statuses=profiling_statuses,
+                    profiling_reprompt_counts=profiling_reprompt_counts,
+                    source="close_lead",
+                )
+            except StorageError as exc:
+                logger.warning(
+                    "lead_tools.scoring_failed",
+                    extra={"conversation_id": context.conversation_id, "error": str(exc)},
+                )
+            try:
+                await storage.maybe_promote_prequalified_from_persona(
+                    conversation_id=context.conversation_id,
+                    persona_id=context.persona_id,
+                    opportunity_id=str(tarjeta_id),
+                    channel=context.channel or "webchat",
+                )
+            except StorageError as exc:
+                logger.warning(
+                    "lead_tools.prequalified_failed",
+                    extra={"conversation_id": context.conversation_id, "error": str(exc)},
+                )
+        else:
+            logger.info(
+                "lead_tools.skip_scoring_profiling_disabled",
+                extra={
+                    "conversation_id": context.conversation_id,
+                    "opportunity_id": str(tarjeta_id),
+                    "channel": context.channel or "webchat",
+                },
+            )
+    await _refresh_webchat_followup_state(context)
+    if tarjeta_id:
+        try:
+            await storage.maybe_auto_name_persona_opportunity(
+                conversation_id=context.conversation_id,
+                persona_id=context.persona_id,
+                opportunity_id=str(tarjeta_id),
+                intent=necesidad,
+                summary=notes,
+                channel=context.channel or "webchat",
+            )
+        except StorageError as exc:
+            logger.warning(
+                "lead_tools.auto_name_failed",
+                extra={"conversation_id": context.conversation_id, "error": str(exc)},
+            )
+    persona_record = None
+    if context.persona_id:
+        try:
+            persona_record = await storage.fetch_persona(context.persona_id)
+        except StorageError:
+            persona_record = None
+    await _notify_webchat_sales_if_needed(
+        context=context,
+        trigger="close_lead",
+        opportunity_id=tarjeta_id,
+        resumen=necesidad,
+        notes=notes,
+        email=(persona_record or {}).get("correo") if persona_record else None,
+        persona=persona_record,
+        extra={"source": "lead_tool_close_lead"},
+    )
+    return {
+        "status": "ok",
+        "notes": notes,
+        "necesidad_proposito": necesidad,
+        "siguiente_accion": siguiente_accion,
+        "tarjeta_id": tarjeta_id,
+    }
 
 
 async def _refresh_webchat_followup_state(context: ToolRuntimeContext) -> None:
@@ -202,6 +565,8 @@ async def try_execute_lead_tool(
     if tool_name == "set_full_name":
         full_name = _require_argument(arguments, "full_name")
         await storage.update_persona(context.persona_id, {"nombre_completo": full_name})
+        await _refresh_webchat_followup_state(context)
+        await _maybe_auto_close_lead(context=context, reason="set_full_name")
         return {"status": "ok", "full_name": full_name}
 
     if tool_name == "set_email":
@@ -213,6 +578,7 @@ async def try_execute_lead_tool(
             channel=context.channel or "webchat",
         )
         await _refresh_webchat_followup_state(context)
+        await _maybe_auto_close_lead(context=context, reason="set_email")
         return {"status": "ok", "email": email}
 
     if tool_name == "set_phone_number":
@@ -224,12 +590,14 @@ async def try_execute_lead_tool(
             channel=context.channel or "webchat",
         )
         await _refresh_webchat_followup_state(context)
+        await _maybe_auto_close_lead(context=context, reason="set_phone_number")
         return {"status": "ok", "phone_number": phone_number}
 
     if tool_name == "set_company_name":
         company_name = _require_argument(arguments, "company_name")
         await storage.update_persona(context.persona_id, {"company_name": company_name})
         await _refresh_webchat_followup_state(context)
+        await _maybe_auto_close_lead(context=context, reason="set_company_name")
         return {"status": "ok", "company_name": company_name}
 
     if tool_name == "send_information_email":
@@ -242,6 +610,7 @@ async def try_execute_lead_tool(
         return await _handle_information_package(arguments, context)
 
     if tool_name == "close_lead":
+        return await _complete_close_lead(arguments=arguments, context=context)
         notes = _require_argument(arguments, "notes")
         necesidad = _require_argument(arguments, "necesidad_proposito")
         siguiente_accion = str(arguments.get("siguiente_accion") or "").strip() or None

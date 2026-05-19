@@ -99,11 +99,12 @@ Argumentos requeridos:
 - conversacion_id
 - company_name
 ### 5) close_lead
-Usala solo cuando ya esten confirmados y guardados:
+Usala en cuanto ya esten confirmados y guardados:
 - nombre completo,
 - correo,
 - telefono,
 - empresa.
+No depende de que haya cita agendada.
 Ademas, debes tener claro el caso comercial del prospecto.
 Argumentos requeridos:
 - conversacion_id
@@ -112,7 +113,7 @@ Argumentos requeridos:
 Reglas para construirlos:
 - notes: resumen breve y humano de que hace el prospecto, que problema tiene y que espera de Geoactiv.
 - necesidad_proposito: una sola frase tipo titular, clara y concreta.
-No uses close_lead antes de tiempo.
+No uses close_lead antes de tiempo, pero no lo retrases por no tener cita.
 ### 6) send_information_email
 Usala cuando el usuario prefiera recibir informacion por correo en lugar de agendar demo.
 Solo usala si ya tienes lo necesario para llenarla correctamente:

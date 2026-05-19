@@ -1140,6 +1140,23 @@ async def _refresh_opportunity_context_from_persona(
                 },
             )
 
+    try:
+        await lead_tools._maybe_auto_close_lead(
+            context=context,
+            persona=persona_record,
+            reason=reason,
+        )
+    except Exception as exc:
+        logger.warning(
+            "whatsapp.persona_context.auto_close_failed",
+            extra={
+                "conversation_id": context.conversation_id,
+                "persona_id": persona_id,
+                "reason": reason,
+                "error": str(exc),
+            },
+        )
+
 
 async def _resolve_org_for_catalog(
     context: ToolRuntimeContext,
