@@ -3680,7 +3680,7 @@ class CRMRepository:
             json={"asignado_a_usuario_id": str(candidate["usuario_id"])},
             prefer="return=minimal",
         )
-        await self._set_contact_owner_if_missing(
+        await self._set_persona_owner_if_missing(
             organizacion_id=organizacion_id,
             persona_id=resolved_persona_id,
             owner_id=candidate["usuario_id"],
@@ -3736,12 +3736,13 @@ class CRMRepository:
         self,
         *,
         organizacion_id: UUID,
-        contact_id: str | None,
+        contact_id: str | None = None,
+        persona_id: str | None = None,
         owner_id: UUID,
     ) -> None:
         await self._set_persona_owner_if_missing(
             organizacion_id=organizacion_id,
-            persona_id=contact_id,
+            persona_id=persona_id or contact_id,
             owner_id=owner_id,
         )
 
