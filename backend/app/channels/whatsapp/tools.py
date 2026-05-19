@@ -2984,28 +2984,13 @@ async def _notify_sales_rep(
                 return
             primary_reason = "case_a_booking_profile"
     elif trigger == "close_lead":
-        if not _has_base_fields_for_case_a(persona_record):
+        if not _has_base_fields_for_case_b(persona_record):
             logger.info(
-                "whatsapp.notify_sales.skip_case_a_base_missing",
+                "whatsapp.notify_sales.skip_case_d_base_missing",
                 extra={"conversation_id": context.conversation_id, "trigger": trigger},
             )
             return
-        if is_prospeccion:
-            primary_reason = "case_a_close_lead_prospeccion"
-        else:
-            if not await _has_minimum_profile_for_case_a(
-                persona=persona_record,
-                opportunity_metadata=metadata,
-                repo=repo,
-                organizacion_id=org_uuid,
-                channel=channel_key,
-            ):
-                logger.info(
-                    "whatsapp.notify_sales.skip_case_a_profile_missing",
-                    extra={"conversation_id": context.conversation_id, "trigger": trigger},
-                )
-                return
-            primary_reason = "case_a_close_lead_profile"
+        primary_reason = "case_d_lead_captured"
     elif trigger in {"followup_escalate", "webchat_escalate"}:
         if not _has_base_fields_for_case_b(persona_record):
             logger.info(

@@ -4362,7 +4362,7 @@ class CRMRepository:
             raise CRMRepositoryError("conversation_id_required")
         params = {
             "id": f"eq.{conversation_key}",
-            "select": "id,contacto_id,canal,conversacion_openai_id,last_response_id,"
+            "select": "id,contacto_id,persona_id,organizacion_id,canal,conversacion_openai_id,last_response_id,"
             "conversaciones_controles(manual_override)",
             "limit": "1",
         }

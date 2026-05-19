@@ -673,6 +673,33 @@ async def _notify_webchat_sales_if_needed(
     persona: dict[str, Any] | None = None,
     extra: dict[str, Any] | None = None,
 ) -> None:
+    channel = (context.channel or "").strip().lower()
+    if channel == "whatsapp":
+        try:
+            from app.channels.whatsapp import tools as whatsapp_tools
+
+            await whatsapp_tools._notify_sales_rep(
+                context=context,
+                trigger=trigger,
+                persona=persona,
+                opportunity_id=opportunity_id,
+                resumen=resumen,
+                notes=notes,
+                email=email,
+                extra=extra or {},
+            )
+        except Exception as exc:  # pragma: no cover - best effort
+            logger.warning(
+                "lead_tools.notify_sales_failed",
+                extra={
+                    "conversation_id": context.conversation_id,
+                    "contact_id": context.persona_id,
+                    "trigger": trigger,
+                    "channel": channel,
+                    "error": str(exc),
+                },
+            )
+        return
     if not _is_webchat_context(context):
         return
     persona_record = persona

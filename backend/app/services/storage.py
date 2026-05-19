@@ -1640,6 +1640,7 @@ async def fetch_conversation(conversation_id: str) -> dict[str, Any]:
         "channel": channel_value,
         "openai_conversation_id": row.get("conversacion_openai_id"),
         "last_response_id": row.get("last_response_id"),
+        "organizacion_id": row.get("organizacion_id"),
         "persona_id": row.get("persona_id") or row.get("contacto_id"),
         "contact_id": row.get("contacto_id"),
         "manual_override": manual_override,
