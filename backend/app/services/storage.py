@@ -158,6 +158,24 @@ def _clean_text(value: Any) -> str:
     return " ".join(text.split())
 
 
+def _split_person_name(value: Any) -> tuple[str | None, str | None, str | None]:
+    text = _clean_text(value)
+    if not text:
+        return None, None, None
+    normalized = text.split(",", 1)[0].strip()
+    normalized = " ".join(normalized.split())
+    if not normalized:
+        return None, None, None
+    parts = normalized.split()
+    if len(parts) == 1:
+        return parts[0], None, None
+    if len(parts) == 2:
+        return parts[0], parts[1], None
+    if len(parts) == 3:
+        return parts[0], parts[1], parts[2]
+    return " ".join(parts[:-2]).strip() or parts[0], parts[-2], parts[-1]
+
+
 def _safe_uuid(value: Any) -> UUID | None:
     try:
         return UUID(str(value))
@@ -1478,7 +1496,6 @@ async def register_whatsapp_message(
                     contact_name=persona_row.get("nombre_completo"),
                     profile_name=incoming_profile_name,
                 ):
-                    patch["nombre_completo"] = None
                     if "persona_datos" not in patch:
                         persona_data["profile_name"] = incoming_profile_name
                         patch["persona_datos"] = persona_data
@@ -2467,6 +2484,15 @@ async def update_persona(persona_id: str, patch: dict[str, Any]) -> dict[str, An
     """Alias con nombre de persona para actualizar perfil."""
     if not patch:
         raise StorageError("No se proporcionaron datos para actualizar la persona")
+    full_name = _clean_text(patch.get("nombre_completo"))
+    if full_name:
+        first_name, apellido_paterno, apellido_materno = _split_person_name(full_name)
+        if first_name and not _clean_text(patch.get("nombre")):
+            patch["nombre"] = first_name
+        if apellido_paterno and not _clean_text(patch.get("apellido_paterno")):
+            patch["apellido_paterno"] = apellido_paterno
+        if apellido_materno and not _clean_text(patch.get("apellido_materno")):
+            patch["apellido_materno"] = apellido_materno
     phone_value = patch.get("telefono_e164")
     if phone_value is not None:
         patch["telefono_e164"] = normalize_phone(phone_value)

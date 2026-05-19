@@ -6479,7 +6479,6 @@ class CRMRepository:
                 or account.get("codigo_cuenta")
             )
 
-        profile_name = _clean_text(persona_datos.get("profile_name")) or None
         contact_name_parts = [
             _clean_text(persona.get("nombre")),
             _clean_text(persona.get("apellido_paterno")),
@@ -6488,13 +6487,7 @@ class CRMRepository:
         contact_name_parts = [part for part in contact_name_parts if part]
         contact_name_from_parts = " ".join(contact_name_parts).strip() if contact_name_parts else None
         raw_full_name = _clean_text(persona.get("nombre_completo")) or None
-        preferred_name = raw_full_name
-        if profile_name and preferred_name and preferred_name.casefold() == profile_name.casefold():
-            preferred_name = contact_name_from_parts or _clean_text(persona.get("nombre")) or None
-        if not preferred_name:
-            preferred_name = contact_name_from_parts or _clean_text(persona.get("nombre")) or None
-        if not preferred_name:
-            preferred_name = raw_full_name
+        preferred_name = raw_full_name or contact_name_from_parts or _clean_text(persona.get("nombre")) or None
 
         return {
             "id": persona.get("id"),
@@ -6581,6 +6574,23 @@ class CRMRepository:
                 return value
         return None
 
+    @staticmethod
+    def _split_full_name(value: Any) -> tuple[str | None, str | None, str | None]:
+        text = CRMRepository._text_value(value)
+        if not text:
+            return None, None, None
+        text = " ".join(text.replace(",", " ").split())
+        if not text:
+            return None, None, None
+        parts = text.split()
+        if len(parts) == 1:
+            return parts[0], None, None
+        if len(parts) == 2:
+            return parts[0], parts[1], None
+        if len(parts) == 3:
+            return parts[0], parts[1], parts[2]
+        return " ".join(parts[:-2]).strip() or parts[0], parts[-2], parts[-1]
+
     def _build_contact_write_parts(
         self,
         *,
@@ -6608,10 +6618,19 @@ class CRMRepository:
 
         apellido_paterno = self._pick_text(merged, "apellido_paterno")
         apellido_materno = self._pick_text(merged, "apellido_materno")
-        given_name = self._pick_text(merged, "nombre_nombres")
+        given_name = self._pick_text(merged, "nombre_nombres", "nombre")
+        if not given_name and full_name:
+            split_name, split_apellido_paterno, split_apellido_materno = self._split_full_name(full_name)
+            if split_name:
+                given_name = split_name
+            if not apellido_paterno:
+                apellido_paterno = split_apellido_paterno
+            if not apellido_materno:
+                apellido_materno = split_apellido_materno
         full_name_was_explicitly_updated = (
             isinstance(payload, dict)
             and "nombre_completo" in payload
+            and "nombre" not in payload
             and "nombre_nombres" not in payload
         )
         if full_name_was_explicitly_updated and full_name:
@@ -6628,6 +6647,11 @@ class CRMRepository:
                     break
         if not given_name:
             given_name = full_name
+        if not apellido_paterno and not apellido_materno and full_name and given_name:
+            split_name, split_apellido_paterno, split_apellido_materno = self._split_full_name(full_name)
+            if split_name and split_name.casefold() == given_name.casefold():
+                apellido_paterno = split_apellido_paterno
+                apellido_materno = split_apellido_materno
 
         contact_kind_raw = self._pick_text(merged, "persona_fisica_moral")
         contact_kind = contact_kind_raw.casefold() if contact_kind_raw else ""
@@ -6676,8 +6700,8 @@ class CRMRepository:
             "id": str(contact_id),
             "organizacion_id": str(organizacion_id),
             "nombre": given_name,
-            "apellido_paterno": self._pick_text(merged, "apellido_paterno"),
-            "apellido_materno": self._pick_text(merged, "apellido_materno"),
+            "apellido_paterno": apellido_paterno,
+            "apellido_materno": apellido_materno,
             "nombre_completo": full_name,
             "correo_principal": self._pick_text(merged, "correo", "email"),
             "telefono_principal_e164": self._pick_text(merged, "telefono_e164", "telefono"),

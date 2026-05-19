@@ -150,7 +150,7 @@ BEGIN
         SELECT id, organizacion_id
           INTO v_tmp_persona, v_tmp_org
           FROM public.personas
-         WHERE telefono_principal_e164 = p_phone_e164
+         WHERE regexp_replace(COALESCE(telefono_principal_e164, ''), '[^0-9]', '', 'g') = regexp_replace(COALESCE(p_phone_e164, ''), '[^0-9]', '', 'g')
          LIMIT 1;
         IF FOUND THEN
             v_contact_id := v_tmp_persona;
@@ -174,7 +174,7 @@ BEGIN
             organizacion_id
         )
         VALUES (
-            COALESCE(NULLIF(p_profile_name, ''), 'Visitante WhatsApp'),
+            'Visitante WhatsApp',
             NULLIF(p_phone_e164, ''),
             'whatsapp',
             jsonb_build_object('wa_id', p_whatsapp_id, 'profile_name', p_profile_name),

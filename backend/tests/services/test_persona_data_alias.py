@@ -51,3 +51,44 @@ def test_build_contact_write_parts_merges_persona_datos_into_metadata() -> None:
     assert persona_body["metadata"]["profile_name"] == "Ada"
     assert persona_body["metadata"]["lead_scoring"]["answers"]["budget_range"] == "alto"
 
+
+@pytest.mark.asyncio
+async def test_update_persona_expands_full_name_into_parts(monkeypatch: pytest.MonkeyPatch) -> None:
+    persona_id = str(uuid4())
+    row = {
+        "id": persona_id,
+        "organizacion_id": str(uuid4()),
+        "nombre_completo": "Collejas",
+        "nombre": "Collejas",
+        "apellido_paterno": "",
+        "apellido_materno": "",
+        "metadata": {},
+    }
+
+    captured: dict[str, object] = {}
+
+    class FakeRepo:
+        async def update_persona_by_id(self, *, persona_id: str, patch: dict[str, object]) -> dict[str, object]:
+            assert persona_id == row["id"]
+            captured["persona_id"] = persona_id
+            captured["payload"] = dict(patch)
+            return {
+                **row,
+                "nombre": patch.get("nombre"),
+                "apellido_paterno": patch.get("apellido_paterno"),
+                "apellido_materno": patch.get("apellido_materno"),
+                "nombre_completo": patch.get("nombre_completo"),
+            }
+
+    monkeypatch.setattr(storage, "CRMRepository", lambda: FakeRepo())
+
+    storage_repo = await storage.update_persona(row["id"], {"nombre_completo": "Luis Perez, hoteles catalina"})
+
+    assert captured["persona_id"] == row["id"]
+    payload = captured["payload"]
+    assert isinstance(payload, dict)
+    assert payload["nombre"] == "Luis"
+    assert payload["apellido_paterno"] == "Perez"
+    assert "apellido_materno" not in payload or not payload["apellido_materno"]
+    assert payload["nombre_completo"] == "Luis Perez, hoteles catalina"
+    assert storage_repo["nombre_completo"] == "Luis Perez, hoteles catalina"
