@@ -277,4 +277,16 @@ async def ensure_conversation_summary(
         return summary
 
     created["metadatos"] = _ensure_dict(created.get("metadatos"))
+    try:
+        await storage.refresh_persona_insights_from_conversation(
+            conversation_id=conversation_id,
+            persona_id=persona_id,
+            summary_text=summary_text,
+            source="conversation_summary",
+        )
+    except StorageError as exc:
+        logger.warning(
+            "conversation_summary.insights_refresh_failed",
+            extra={"conversation_id": conversation_id, "error": str(exc)},
+        )
     return created

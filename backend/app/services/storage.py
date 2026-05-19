@@ -356,6 +356,22 @@ def _looks_like_placeholder_name(value: str) -> bool:
     }
 
 
+def _looks_like_placeholder_insight(value: str) -> bool:
+    lowered = " ".join(value.strip().lower().split())
+    if not lowered:
+        return True
+    return lowered in {
+        "interés en tal-ia",
+        "interes en tal-ia",
+        "información comercial compartida durante la conversación.",
+        "informacion comercial compartida durante la conversacion.",
+        "prospecto en conversación activa solicitando información.",
+        "prospecto en conversacion activa solicitando informacion.",
+        "resumen generado por tal-ia",
+        "necesidad capturada por tal-ia",
+    }
+
+
 def _build_opportunity_title(
     *,
     contact: dict[str, Any],
@@ -390,6 +406,35 @@ def _build_opportunity_description(
         or _normalize_title_fragment(contact.get("necesidad_proposito"), max_len=280)
     )
     return description
+
+
+def _build_persona_insights(
+    *,
+    persona: dict[str, Any],
+    summary_text: str | None = None,
+) -> tuple[str, str]:
+    persona_name = _clean_text(persona.get("nombre_completo")) or "El prospecto"
+    company_name = _clean_text(persona.get("company_name"))
+    notes_source = _clean_text(persona.get("notes"))
+    need_source = _clean_text(persona.get("necesidad_proposito"))
+    summary_fragment = _normalize_title_fragment(summary_text or notes_source, max_len=280)
+
+    notes = notes_source
+    if not notes or _looks_like_placeholder_insight(notes):
+        notes = (
+            summary_text
+            or f"{persona_name} de {company_name or 'su empresa'} compartió sus datos y solicitó información."
+        )
+    if not notes:
+        notes = "Prospecto en conversación activa solicitando información."
+
+    necesidad = need_source
+    if not necesidad or _looks_like_placeholder_insight(necesidad):
+        necesidad = _build_need_title(summary_fragment or notes, fallback_company=company_name)
+    if not necesidad:
+        necesidad = "Interés en Tal-IA"
+
+    return notes, necesidad
 
 
 def _is_generic_opportunity_title(
@@ -1781,6 +1826,81 @@ async def upsert_conversation_insights(
         )
     except CRMRepositoryError as exc:
         raise StorageError(str(exc)) from exc
+
+
+async def refresh_persona_insights_from_conversation(
+    *,
+    conversation_id: str,
+    persona_id: str | None,
+    summary_text: str | None = None,
+    source: str = "conversation_summary",
+) -> dict[str, Any] | None:
+    """Rellena/normaliza notes y necesidad_proposito sin pisar valores manuales buenos."""
+    if not persona_id:
+        return None
+    try:
+        persona = await fetch_persona(persona_id)
+    except StorageError as exc:
+        logger.warning(
+            "storage.refresh_persona_insights.persona_lookup_failed",
+            extra={"persona_id": persona_id, "conversation_id": conversation_id, "error": str(exc)},
+        )
+        return None
+    if not persona:
+        return None
+
+    resolved_summary = _clean_text(summary_text)
+    if not resolved_summary:
+        try:
+            summary_row = await fetch_latest_conversation_summary(conversation_id=conversation_id)
+        except StorageError:
+            summary_row = None
+        if isinstance(summary_row, dict):
+            resolved_summary = _clean_text(summary_row.get("resumen"))
+
+    notes, necesidad = _build_persona_insights(persona=persona, summary_text=resolved_summary)
+    current_notes = _clean_text(persona.get("notes"))
+    current_need = _clean_text(persona.get("necesidad_proposito"))
+    patch: dict[str, Any] = {}
+    if not current_notes or _looks_like_placeholder_insight(current_notes):
+        patch["notes"] = notes
+    if not current_need or _looks_like_placeholder_insight(current_need):
+        patch["necesidad_proposito"] = necesidad
+    if not patch:
+        return {
+            "persona_id": persona_id,
+            "notes": current_notes,
+            "necesidad_proposito": current_need,
+            "updated": False,
+        }
+
+    try:
+        await update_persona(persona_id, patch)
+    except StorageError as exc:
+        logger.warning(
+            "storage.refresh_persona_insights.update_failed",
+            extra={"persona_id": persona_id, "conversation_id": conversation_id, "error": str(exc), "source": source},
+        )
+        return None
+
+    try:
+        await upsert_conversation_insights(
+            conversation_id=conversation_id,
+            resumen=patch.get("notes", notes),
+            intencion=patch.get("necesidad_proposito", necesidad),
+        )
+    except StorageError as exc:
+        logger.warning(
+            "storage.refresh_persona_insights.insights_update_failed",
+            extra={"persona_id": persona_id, "conversation_id": conversation_id, "error": str(exc), "source": source},
+        )
+
+    return {
+        "persona_id": persona_id,
+        "notes": patch.get("notes", current_notes),
+        "necesidad_proposito": patch.get("necesidad_proposito", current_need),
+        "updated": True,
+    }
 
 
 async def get_manual_override(conversation_id: str) -> bool:
