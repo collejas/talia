@@ -1075,6 +1075,7 @@ async def _refresh_opportunity_context_from_persona(
     persona = await _resolve_persona(persona_id)
     if not isinstance(persona, dict):
         return
+    persona_record = persona
 
     full_name = str(persona.get("nombre_completo") or "").strip()
     company_name = str(persona.get("company_name") or "").strip()

@@ -262,8 +262,30 @@ async def _complete_close_lead(
 ) -> dict[str, Any]:
     persona_id = context.persona_id
     persona_record = persona or await storage.fetch_persona(persona_id)
-    notes = _require_argument(arguments, "notes")
-    necesidad = _require_argument(arguments, "necesidad_proposito")
+    summary_text = ""
+    try:
+        summary_row = await storage.fetch_latest_conversation_summary(
+            conversation_id=context.conversation_id
+        )
+    except StorageError:
+        summary_row = None
+    if isinstance(summary_row, dict):
+        summary_text = str(summary_row.get("resumen") or "").strip()
+
+    notes = str(arguments.get("notes") or "").strip()
+    necesidad = str(arguments.get("necesidad_proposito") or "").strip()
+    company_name = str(persona_record.get("company_name") or "").strip()
+    if not notes:
+        notes = summary_text or (
+            f"{str(persona_record.get('nombre_completo') or 'El prospecto').strip()} "
+            f"de {company_name or 'su empresa'} compartió sus datos básicos y pidió información."
+        )
+    if not necesidad:
+        necesidad = _build_need_title(summary_text or notes, fallback_company=company_name)
+    if not notes:
+        notes = "Información comercial compartida durante la conversación."
+    if not necesidad:
+        necesidad = "Interés en Tal-IA"
     siguiente_accion = str(arguments.get("siguiente_accion") or "").strip() or None
     tarjeta_id: str | None = None
     contact_ready = await webchat_followups.ensure_persona_ready_for_assignment(
@@ -293,6 +315,19 @@ async def _complete_close_lead(
             "lead_tools.conversation_update_failed",
             extra={"conversation_id": context.conversation_id, "error": str(exc)},
         )
+    if tarjeta_id:
+        try:
+            await storage.sync_persona_opportunity_context(
+                conversation_id=context.conversation_id,
+                persona_id=context.persona_id,
+                opportunity_id=str(tarjeta_id),
+                channel=context.channel,
+            )
+        except StorageError as exc:
+            logger.warning(
+                "lead_tools.opportunity_sync_failed",
+                extra={"conversation_id": context.conversation_id, "error": str(exc)},
+            )
     try:
         await storage.upsert_conversation_insights(
             conversation_id=context.conversation_id,
