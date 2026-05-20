@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useTransition, type ReactNode } from "react";
 import type { CheckedState } from "@radix-ui/react-checkbox";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
@@ -64,6 +64,7 @@ import {
   IconTargetArrow,
   IconTrash,
   IconTrophy,
+  IconUser,
 } from "@tabler/icons-react";
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/i;
@@ -790,6 +791,32 @@ export function LeadDrawer({
       };
     }
     return null;
+  }, [card]);
+
+  const contactOriginBadge = useMemo(() => {
+    if (!card) return null;
+    const origin = typeof card.contactOrigin === "string" ? card.contactOrigin.trim() : "";
+    if (!origin) return null;
+    const normalized = origin.toLowerCase();
+    const className = CONTACT_ORIGIN_BADGE_TONES[normalized] ?? "border-slate-300 bg-slate-50 text-slate-700";
+    return {
+      label: `Origen: ${origin}`,
+      title: `Origen del contacto: ${origin}`,
+      className,
+    };
+  }, [card]);
+
+  const channelBadge = useMemo(() => {
+    if (!card) return null;
+    const channel = typeof card.canal === "string" ? card.canal.trim().toLowerCase() : "";
+    if (!channel) return null;
+    const config = CHANNEL_BADGE_TONES[channel] ?? {
+      label: formatChannelLabel(channel),
+      title: `Canal: ${formatChannelLabel(channel)}`,
+      className: "border-slate-300 bg-slate-50 text-slate-700",
+      icon: null,
+    };
+    return config;
   }, [card]);
 
   const form = useForm<FormValues>({
@@ -2290,11 +2317,36 @@ export function LeadDrawer({
           <DrawerTitle>{isCreateMode ? "Nuevo lead" : card?.nombre ?? "Lead sin nombre"}</DrawerTitle>
           <DrawerDescription className="flex flex-col gap-1 text-left">
             <span>{isCreateMode ? `Creando en etapa: ${stageName}` : `Etapa: ${stageName}`}</span>
-            {!isCreateMode && originBadge ? (
-              <span className="inline-flex items-center gap-2">
-                <Badge variant="outline" className={cn("w-fit text-[10px] font-semibold uppercase tracking-wide", originBadge.className)} title={originBadge.title}>
-                  {originBadge.label}
-                </Badge>
+            {!isCreateMode ? (
+              <span className="flex flex-wrap items-center gap-2">
+                {originBadge ? (
+                  <Badge
+                    variant="outline"
+                    className={cn("w-fit text-[10px] font-semibold uppercase tracking-wide", originBadge.className)}
+                    title={originBadge.title}
+                  >
+                    {originBadge.label}
+                  </Badge>
+                ) : null}
+                {contactOriginBadge ? (
+                  <Badge
+                    variant="outline"
+                    className={cn("w-fit text-[10px] font-semibold uppercase tracking-wide", contactOriginBadge.className)}
+                    title={contactOriginBadge.title}
+                  >
+                    {contactOriginBadge.label}
+                  </Badge>
+                ) : null}
+                {channelBadge ? (
+                  <Badge
+                    variant="outline"
+                    className={cn("w-fit text-[10px] font-semibold uppercase tracking-wide", channelBadge.className)}
+                    title={channelBadge.title}
+                  >
+                    {channelBadge.icon}
+                    {channelBadge.label}
+                  </Badge>
+                ) : null}
               </span>
             ) : null}
           </DrawerDescription>
@@ -2332,10 +2384,27 @@ export function LeadDrawer({
                   <p className="font-semibold text-primary-800 dark:text-primary-100">
                     Tal-IA movió este lead automáticamente.
                   </p>
-                  <p className="text-[11px] leading-snug">
-                    Etapa actual: {autoStageSummary.stageLabel}. Canal: {autoStageSummary.channel}.
-                    {autoStageSummary.at ? ` · ${autoStageSummary.at}` : null}
-                  </p>
+                  <div className="mt-1 flex flex-wrap items-center gap-2">
+                    <span className="text-[11px] leading-snug">
+                      Etapa actual: {autoStageSummary.stageLabel}.
+                    </span>
+                    <Badge
+                      variant="outline"
+                      className={cn(
+                        "w-fit text-[10px] font-semibold uppercase tracking-wide",
+                        CHANNEL_BADGE_TONES[autoStageSummary.channel?.trim().toLowerCase() || ""]?.className ??
+                          "border-primary/30 bg-primary/5 text-primary",
+                      )}
+                      title={`Canal: ${autoStageSummary.channel}`}
+                    >
+                      {CHANNEL_BADGE_TONES[autoStageSummary.channel?.trim().toLowerCase() || ""]?.icon ?? (
+                        <IconRobot className="size-3" />
+                      )}
+                      {CHANNEL_BADGE_TONES[autoStageSummary.channel?.trim().toLowerCase() || ""]?.label ??
+                        autoStageSummary.channel}
+                    </Badge>
+                    {autoStageSummary.at ? <span className="text-[11px] leading-snug">{autoStageSummary.at}</span> : null}
+                  </div>
                 </div>
               </div>
             ) : null}
@@ -4355,6 +4424,60 @@ function formatQuoteChannel(channel: string | null): string {
   if (channel.toLowerCase() === "whatsapp") return "WhatsApp";
   return channel;
 }
+
+function formatChannelLabel(value: string): string {
+  if (value === "whatsapp") return "WhatsApp";
+  if (value === "webchat") return "Webchat";
+  if (value === "email") return "Email";
+  if (value === "voz") return "Voz";
+  if (value === "manual") return "Manual";
+  return value.charAt(0).toUpperCase() + value.slice(1);
+}
+
+const CHANNEL_BADGE_TONES: Record<string, { label: string; title: string; className: string; icon: ReactNode | null }> = {
+  whatsapp: {
+    label: "WhatsApp",
+    title: "Canal: WhatsApp",
+    className: "border-emerald-300 bg-emerald-50 text-emerald-800",
+    icon: <IconBrandWhatsapp className="size-3" />,
+  },
+  webchat: {
+    label: "Webchat",
+    title: "Canal: Webchat",
+    className: "border-cyan-300 bg-cyan-50 text-cyan-800",
+    icon: <IconMessageCircle className="size-3" />,
+  },
+  email: {
+    label: "Email",
+    title: "Canal: Email",
+    className: "border-amber-300 bg-amber-50 text-amber-800",
+    icon: <IconMail className="size-3" />,
+  },
+  voz: {
+    label: "Voz",
+    title: "Canal: Voz",
+    className: "border-slate-300 bg-slate-50 text-slate-700",
+    icon: <IconTargetArrow className="size-3" />,
+  },
+  manual: {
+    label: "Manual",
+    title: "Canal: Manual",
+    className: "border-slate-300 bg-slate-50 text-slate-700",
+    icon: <IconUser className="size-3" />,
+  },
+};
+
+const CONTACT_ORIGIN_BADGE_TONES: Record<string, string> = {
+  whatsapp: "border-emerald-300 bg-emerald-50 text-emerald-800",
+  webchat: "border-cyan-300 bg-cyan-50 text-cyan-800",
+  email: "border-amber-300 bg-amber-50 text-amber-800",
+  correo: "border-amber-300 bg-amber-50 text-amber-800",
+  denue: "border-indigo-300 bg-indigo-50 text-indigo-800",
+  google: "border-rose-300 bg-rose-50 text-rose-800",
+  manual: "border-slate-300 bg-slate-50 text-slate-700",
+  usuario: "border-slate-300 bg-slate-50 text-slate-700",
+  importado: "border-slate-300 bg-slate-50 text-slate-700",
+};
 
 function formatQuoteDate(value: string | null): string {
   if (!value) return "—";
