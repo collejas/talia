@@ -16557,6 +16557,7 @@ async def update_persona_legacy(
     _: str = Depends(require_permission("contacts.write")),
     contacto_id: UUID,
     payload: CRMPersonaUpdate,
+    skip_conversation_sync: bool = Query(False),
 ) -> CRMPersona:
     body = payload.model_dump(mode="json", exclude_unset=True)
     try:
@@ -16569,40 +16570,41 @@ async def update_persona_legacy(
         if "contacto_no_encontrado" in str(exc):
             raise HTTPException(status_code=404, detail="contacto_no_encontrado") from exc
         raise HTTPException(status_code=502, detail=str(exc)) from exc
-    try:
-        latest_conversation_id = await repo.get_latest_conversation_id_by_contact(
-            organizacion_id=organizacion_id,
-            contacto_id=contacto_id,
-        )
-        contact_opportunity = await repo.get_contact_opportunity(contact_id=contacto_id)
-        if latest_conversation_id and isinstance(contact_opportunity, dict) and contact_opportunity.get("id"):
-            opportunity_metadata = _ensure_dict(contact_opportunity.get("metadata"))
-            opportunity_summary = (
-                _clean_text(opportunity_metadata.get("project_name"))
-                or _clean_text(contact_opportunity.get("descripcion"))
-                or _clean_text(opportunity_metadata.get("contacto_necesidad"))
-                or _clean_text(contact_opportunity.get("contacto_nombre"))
-                or None
+    if not skip_conversation_sync:
+        try:
+            latest_conversation_id = await repo.get_latest_conversation_id_by_contact(
+                organizacion_id=organizacion_id,
+                contacto_id=contacto_id,
             )
-            await storage.sync_persona_opportunity_context(
-                conversation_id=str(latest_conversation_id),
-                persona_id=str(contacto_id),
-                opportunity_id=str(contact_opportunity.get("id")),
-                channel="whatsapp",
+            contact_opportunity = await repo.get_contact_opportunity(contact_id=contacto_id)
+            if latest_conversation_id and isinstance(contact_opportunity, dict) and contact_opportunity.get("id"):
+                opportunity_metadata = _ensure_dict(contact_opportunity.get("metadata"))
+                opportunity_summary = (
+                    _clean_text(opportunity_metadata.get("project_name"))
+                    or _clean_text(contact_opportunity.get("descripcion"))
+                    or _clean_text(opportunity_metadata.get("contacto_necesidad"))
+                    or _clean_text(contact_opportunity.get("contacto_nombre"))
+                    or None
+                )
+                await storage.sync_persona_opportunity_context(
+                    conversation_id=str(latest_conversation_id),
+                    persona_id=str(contacto_id),
+                    opportunity_id=str(contact_opportunity.get("id")),
+                    channel="whatsapp",
+                )
+                await storage.maybe_auto_name_persona_opportunity(
+                    conversation_id=str(latest_conversation_id),
+                    persona_id=str(contacto_id),
+                    opportunity_id=str(contact_opportunity.get("id")),
+                    summary=opportunity_summary,
+                    intent=_clean_text(opportunity_metadata.get("contacto_necesidad")) or None,
+                    channel="whatsapp",
+                )
+        except (StorageError, CRMRepositoryError) as exc:
+            logger.warning(
+                "crm.contact_update.opportunity_sync_failed",
+                extra={"contacto_id": str(contacto_id), "error": str(exc)},
             )
-            await storage.maybe_auto_name_persona_opportunity(
-                conversation_id=str(latest_conversation_id),
-                persona_id=str(contacto_id),
-                opportunity_id=str(contact_opportunity.get("id")),
-                summary=opportunity_summary,
-                intent=_clean_text(opportunity_metadata.get("contacto_necesidad")) or None,
-                channel="whatsapp",
-            )
-    except StorageError as exc:
-        logger.warning(
-            "crm.contact_update.opportunity_sync_failed",
-            extra={"contacto_id": str(contacto_id), "error": str(exc)},
-        )
     return CRMPersona.model_validate(row)
 
 
@@ -16617,6 +16619,7 @@ async def update_persona_crud(
     _: str = Depends(require_permission("contacts.write")),
     persona_id: UUID,
     payload: CRMPersonaUpdate,
+    skip_conversation_sync: bool = Query(False),
 ) -> CRMPersona:
     body = payload.model_dump(mode="json", exclude_unset=True)
     try:
@@ -16629,40 +16632,41 @@ async def update_persona_crud(
         if "contacto_no_encontrado" in str(exc):
             raise HTTPException(status_code=404, detail="contacto_no_encontrado") from exc
         raise HTTPException(status_code=502, detail=str(exc)) from exc
-    try:
-        latest_conversation_id = await repo.get_latest_conversation_id_by_contact(
-            organizacion_id=organizacion_id,
-            contacto_id=persona_id,
-        )
-        contact_opportunity = await repo.get_contact_opportunity(contact_id=persona_id)
-        if latest_conversation_id and isinstance(contact_opportunity, dict) and contact_opportunity.get("id"):
-            opportunity_metadata = _ensure_dict(contact_opportunity.get("metadata"))
-            opportunity_summary = (
-                _clean_text(opportunity_metadata.get("project_name"))
-                or _clean_text(contact_opportunity.get("descripcion"))
-                or _clean_text(opportunity_metadata.get("contacto_necesidad"))
-                or _clean_text(contact_opportunity.get("contacto_nombre"))
-                or None
+    if not skip_conversation_sync:
+        try:
+            latest_conversation_id = await repo.get_latest_conversation_id_by_contact(
+                organizacion_id=organizacion_id,
+                contacto_id=persona_id,
             )
-            await storage.sync_persona_opportunity_context(
-                conversation_id=str(latest_conversation_id),
-                persona_id=str(persona_id),
-                opportunity_id=str(contact_opportunity.get("id")),
-                channel="whatsapp",
+            contact_opportunity = await repo.get_contact_opportunity(contact_id=persona_id)
+            if latest_conversation_id and isinstance(contact_opportunity, dict) and contact_opportunity.get("id"):
+                opportunity_metadata = _ensure_dict(contact_opportunity.get("metadata"))
+                opportunity_summary = (
+                    _clean_text(opportunity_metadata.get("project_name"))
+                    or _clean_text(contact_opportunity.get("descripcion"))
+                    or _clean_text(opportunity_metadata.get("contacto_necesidad"))
+                    or _clean_text(contact_opportunity.get("contacto_nombre"))
+                    or None
+                )
+                await storage.sync_persona_opportunity_context(
+                    conversation_id=str(latest_conversation_id),
+                    persona_id=str(persona_id),
+                    opportunity_id=str(contact_opportunity.get("id")),
+                    channel="whatsapp",
+                )
+                await storage.maybe_auto_name_persona_opportunity(
+                    conversation_id=str(latest_conversation_id),
+                    persona_id=str(persona_id),
+                    opportunity_id=str(contact_opportunity.get("id")),
+                    summary=opportunity_summary,
+                    intent=_clean_text(opportunity_metadata.get("contacto_necesidad")) or None,
+                    channel="whatsapp",
+                )
+        except (StorageError, CRMRepositoryError) as exc:
+            logger.warning(
+                "crm.persona_update.opportunity_sync_failed",
+                extra={"persona_id": str(persona_id), "error": str(exc)},
             )
-            await storage.maybe_auto_name_persona_opportunity(
-                conversation_id=str(latest_conversation_id),
-                persona_id=str(persona_id),
-                opportunity_id=str(contact_opportunity.get("id")),
-                summary=opportunity_summary,
-                intent=_clean_text(opportunity_metadata.get("contacto_necesidad")) or None,
-                channel="whatsapp",
-            )
-    except StorageError as exc:
-        logger.warning(
-            "crm.persona_update.opportunity_sync_failed",
-            extra={"persona_id": str(persona_id), "error": str(exc)},
-        )
     return CRMPersona.model_validate(row)
 
 

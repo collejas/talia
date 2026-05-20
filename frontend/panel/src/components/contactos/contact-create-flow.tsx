@@ -199,6 +199,12 @@ type ContactCreateFlowProps = {
   initialMode?: CreateMode;
 };
 
+type ValidationNoticeState = {
+  open: boolean;
+  title: string;
+  message: string;
+};
+
 const PERSONA_ESTADO_OPTIONS = [
   { value: "lead", label: "Lead" },
   { value: "activo", label: "Activo" },
@@ -650,6 +656,7 @@ export function ContactCreateFlow({ open, onOpenChange, onCreated, initialMode =
   const [pendingDedupe, setPendingDedupe] = React.useState<PersonaAltaValidationResponse | null>(null);
   const [selectedPersonaReuseId, setSelectedPersonaReuseId] = React.useState("");
   const [selectedCuentaReuseId, setSelectedCuentaReuseId] = React.useState("");
+  const [validationNotice, setValidationNotice] = React.useState<ValidationNoticeState | null>(null);
 
   React.useEffect(() => {
     if (!open) {
@@ -657,6 +664,7 @@ export function ContactCreateFlow({ open, onOpenChange, onCreated, initialMode =
       setPendingDedupe(null);
       setSelectedPersonaReuseId("");
       setSelectedCuentaReuseId("");
+      setValidationNotice(null);
       return;
     }
     dispatch({ type: "reset" });
@@ -756,8 +764,17 @@ export function ContactCreateFlow({ open, onOpenChange, onCreated, initialMode =
   const submit = async (dedupeDecision?: DedupeDecision) => {
     const validationError = validateState(state);
     if (validationError) {
-      dispatch({ type: "error/set", value: validationError });
-      toast.error(validationError);
+      if (validationError === "Selecciona una empresa existente.") {
+        dispatch({ type: "error/set", value: null });
+        setValidationNotice({
+          open: true,
+          title: "Falta vincular una empresa",
+          message: validationError,
+        });
+      } else {
+        dispatch({ type: "error/set", value: validationError });
+        toast.error(validationError);
+      }
       return;
     }
 
@@ -822,6 +839,7 @@ export function ContactCreateFlow({ open, onOpenChange, onCreated, initialMode =
   };
 
   return (
+    <>
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-6xl">
         <DialogHeader className="space-y-2">
@@ -1371,5 +1389,27 @@ export function ContactCreateFlow({ open, onOpenChange, onCreated, initialMode =
         </div>
       </DialogContent>
     </Dialog>
+
+    <Dialog
+      open={Boolean(validationNotice?.open)}
+      onOpenChange={(nextOpen) => {
+        if (!nextOpen) {
+          setValidationNotice(null);
+        }
+      }}
+    >
+      <DialogContent className="sm:max-w-md" showCloseButton={false}>
+        <DialogHeader className="text-left">
+          <DialogTitle>{validationNotice?.title ?? "Aviso"}</DialogTitle>
+          <DialogDescription>{validationNotice?.message ?? ""}</DialogDescription>
+        </DialogHeader>
+        <div className="mt-4 flex justify-end">
+          <Button type="button" onClick={() => setValidationNotice(null)}>
+            Entendido
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+    </>
   );
 }

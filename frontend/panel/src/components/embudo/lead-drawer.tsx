@@ -697,6 +697,10 @@ export function LeadDrawer({
 }: LeadDrawerProps) {
   const isCreateMode = mode === "create";
   const stageName = currentStage?.nombre ?? "Sin etapa";
+  const resolvedTableroId = useMemo(
+    () => currentStage?.tableroId || allStages.find((stage) => stage.tableroId)?.tableroId || "",
+    [allStages, currentStage?.tableroId],
+  );
   const [activeTab, setActiveTab] =
     useState<"resumen" | "notas" | "actividades" | "historial" | "onboarding">("resumen");
 
@@ -1443,7 +1447,7 @@ export function LeadDrawer({
     const advanceStage = onAdvanceStage ?? null;
 
     if (isCreateMode) {
-      if (!currentStage || !currentStage.tableroId) {
+      if (!currentStage) {
         setError("Selecciona una etapa válida para crear el lead.");
         return;
       }
@@ -1500,7 +1504,7 @@ export function LeadDrawer({
       setPending(true);
       const result = await onCreate({
         stageId: currentStage.id,
-        tableroId: currentStage.tableroId,
+        tableroId: currentStage.tableroId || resolvedTableroId,
         contacto: contactoPayload,
         oportunidad: oportunidadPayload,
         contactId: selectedContactId,
@@ -2615,6 +2619,21 @@ export function LeadDrawer({
                   ) : null}
                 </div>
               </section>
+
+              {isCreateMode ? (
+                <section className="space-y-3 rounded-2xl border border-border/60 bg-card/60 p-4 shadow-sm">
+                  <div className="space-y-1">
+                    <h4 className="text-sm font-semibold text-foreground">Cotizaciones</h4>
+                    <p className="text-xs text-muted-foreground">
+                      La cotización se habilita después de guardar el lead, porque necesita una oportunidad
+                      persistida para generar el PDF y su historial.
+                    </p>
+                  </div>
+                  <div className="rounded-xl border border-dashed border-border/70 bg-muted/30 p-3 text-xs text-muted-foreground">
+                    Guarda primero la oportunidad para abrir el flujo de cotización desde esta misma ficha.
+                  </div>
+                </section>
+              ) : null}
 
               {!isCreateMode && card ? (
                 <section className="space-y-3 rounded-2xl border border-border/60 bg-card/60 p-4 shadow-sm">

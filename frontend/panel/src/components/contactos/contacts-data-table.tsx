@@ -384,61 +384,60 @@ export function ContactsDataTable({ data }: { data: ContactTableRow[] }) {
   };
 
   const extraColumns = React.useMemo<ColumnDef<TableRow>[]>(() => {
+    const actionColumn: ColumnDef<TableRow> = {
+      id: "acciones",
+      header: "Acciones",
+      cell: ({ row }: { row: { original: TableRow } }) => (
+        <div className="flex justify-end gap-1">
+          {canWrite ? (
+            <Button variant="ghost" size="icon" className="size-8" onClick={() => void openEdit(row.original)}>
+              <IconPencil className="size-4" />
+              <span className="sr-only">Editar</span>
+            </Button>
+          ) : null}
+          {canReassign ? (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="size-8"
+              onClick={() => {
+                setActiveRow(row.original);
+                const ownerId = extractString(row.original.raw as Record<string, unknown> | undefined, ["propietario_id"]);
+                setSelectedVendorId(ownerId ?? "");
+                setError(null);
+                setSuccess(null);
+                setReassignOpen(true);
+              }}
+            >
+              <IconArrowsLeftRight className="size-4" />
+              <span className="sr-only">Reasignar</span>
+            </Button>
+          ) : null}
+          {canWrite ? (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="size-8"
+              onClick={() => {
+                setActiveRow(row.original);
+                setError(null);
+                setSuccess(null);
+                setDeleteOpen(true);
+              }}
+            >
+              <IconTrash className="size-4" />
+              <span className="sr-only">Eliminar</span>
+            </Button>
+          ) : null}
+        </div>
+      ),
+      enableSorting: false,
+      meta: { label: "Acciones", reorderable: false },
+    };
+
     if (!canWrite && !canReassign) return contactExtraColumns;
 
-    return [
-      ...contactExtraColumns,
-      {
-        id: "acciones",
-        header: "Acciones",
-        cell: ({ row }: { row: { original: TableRow } }) => (
-          <div className="flex justify-end gap-1">
-            {canWrite ? (
-              <Button variant="ghost" size="icon" className="size-8" onClick={() => void openEdit(row.original)}>
-                <IconPencil className="size-4" />
-                <span className="sr-only">Editar</span>
-              </Button>
-            ) : null}
-            {canReassign ? (
-              <Button
-                variant="ghost"
-                size="icon"
-                className="size-8"
-                onClick={() => {
-                  setActiveRow(row.original);
-                  const ownerId = extractString(row.original.raw as Record<string, unknown> | undefined, ["propietario_id"]);
-                  setSelectedVendorId(ownerId ?? "");
-                  setError(null);
-                  setSuccess(null);
-                  setReassignOpen(true);
-                }}
-              >
-                <IconArrowsLeftRight className="size-4" />
-                <span className="sr-only">Reasignar</span>
-              </Button>
-            ) : null}
-            {canWrite ? (
-              <Button
-                variant="ghost"
-                size="icon"
-                className="size-8"
-                onClick={() => {
-                  setActiveRow(row.original);
-                  setError(null);
-                  setSuccess(null);
-                  setDeleteOpen(true);
-                }}
-              >
-                <IconTrash className="size-4" />
-                <span className="sr-only">Eliminar</span>
-              </Button>
-            ) : null}
-          </div>
-        ),
-        enableSorting: false,
-        meta: { label: "Acciones", reorderable: false },
-      },
-    ];
+    return [actionColumn, ...contactExtraColumns];
   }, [canWrite, canReassign]);
 
   const runAndReload = async (fn: () => Promise<void>) => {
@@ -644,7 +643,27 @@ export function ContactsDataTable({ data }: { data: ContactTableRow[] }) {
   );
 
   const contactColumnOrder = React.useMemo(
-    () => ["drag-handle", "row-select", "session", "acciones"],
+    () => [
+      "drag-handle",
+      "row-select",
+      "acciones",
+      "session",
+      "contact_company",
+      "contact_codigo",
+      "account_codigo",
+      "contact_correo",
+      "contact_telefono",
+      "contact_rfc",
+      "contact_puesto",
+      "contact_rol",
+      "contact_cp",
+      "contact_origen",
+      "contact_estado",
+      "contact_captura",
+      "contact_ultimo",
+      "contact_conversaciones",
+      "contact_notes",
+    ],
     [],
   );
 

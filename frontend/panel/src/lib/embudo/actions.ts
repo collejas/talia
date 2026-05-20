@@ -333,6 +333,7 @@ export async function createLeadCard(input: CreateLeadInput): Promise<LeadAction
     logDebug("contact-update", { contactId, fields: Object.keys(contactUpdatePayload) });
     const updateResult = await callCrmApi<CrmContact>(`/crm/contacts/${contactId}`, {
       method: "PATCH",
+      searchParams: { skip_conversation_sync: "true" },
       body: contactUpdatePayload,
     });
     if (!updateResult.ok) {
