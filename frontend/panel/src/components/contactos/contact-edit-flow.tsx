@@ -14,6 +14,13 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { GeoLocationSelects } from "@/components/contactos/geo-location-selects";
@@ -224,6 +231,14 @@ type ContactEditFlowProps = {
   onSaved?: () => void;
 };
 
+const PERSONA_ESTADO_OPTIONS = [
+  { value: "lead", label: "Lead" },
+  { value: "activo", label: "Activo" },
+  { value: "inactivo", label: "Inactivo" },
+  { value: "bloqueado", label: "Bloqueado" },
+  { value: "fusionado", label: "Fusionado" },
+] as const;
+
 const INITIAL_STATE: ContactEditState = {
   mode: "solo_persona",
   persona: {
@@ -235,7 +250,7 @@ const INITIAL_STATE: ContactEditState = {
     puesto: "",
     area: "",
     rol_decision: "",
-    estado: "",
+    estado: "lead",
     origen: "",
     notas: "",
     propietario_usuario_id: "",
@@ -1256,7 +1271,21 @@ export function ContactEditFlow({ open, onOpenChange, personaId, onSaved }: Cont
                 <Input value={state.persona.rol_decision} onChange={(e) => dispatch({ type: "persona/set", field: "rol_decision", value: e.target.value })} />
               </Field>
               <Field label="Estado">
-                <Input value={state.persona.estado} onChange={(e) => dispatch({ type: "persona/set", field: "estado", value: e.target.value })} />
+                <Select
+                  value={state.persona.estado || "lead"}
+                  onValueChange={(value) => dispatch({ type: "persona/set", field: "estado", value })}
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Selecciona un estado" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {PERSONA_ESTADO_OPTIONS.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </Field>
             </div>
             <Field label="Notas">

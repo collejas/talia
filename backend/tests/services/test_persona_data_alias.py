@@ -52,6 +52,35 @@ def test_build_contact_write_parts_merges_persona_datos_into_metadata() -> None:
     assert persona_body["metadata"]["lead_scoring"]["answers"]["budget_range"] == "alto"
 
 
+@pytest.mark.parametrize(
+    ("input_estado", "expected_estado"),
+    [
+        ("", "lead"),
+        ("nuevo", "lead"),
+        ("cliente", "activo"),
+        ("Bloqueada", "bloqueado"),
+        ("fusionada", "fusionado"),
+        ("desconocido", "lead"),
+    ],
+)
+def test_build_contact_write_parts_normalizes_persona_estado(
+    input_estado: str,
+    expected_estado: str,
+) -> None:
+    repo = CRMRepository.__new__(CRMRepository)
+    parts = repo._build_contact_write_parts(
+        organizacion_id=uuid4(),
+        contact_id=uuid4(),
+        payload={
+            "nombre": "Ada",
+            "apellido_paterno": "Lovelace",
+            "estado": input_estado,
+        },
+    )
+
+    assert parts["persona_body"]["estado"] == expected_estado
+
+
 @pytest.mark.asyncio
 async def test_update_persona_expands_full_name_into_parts(monkeypatch: pytest.MonkeyPatch) -> None:
     persona_id = str(uuid4())

@@ -56,6 +56,24 @@ PERSONA_SELECT_FIELDS = (
     "origen,notas,metadata,persona_datos,propietario_usuario_id,creado_en,actualizado_en,"
     "archived_at,merged_into_persona_id,merge_metadata"
 )
+PERSONA_ESTADO_VALIDOS = {"lead", "activo", "inactivo", "bloqueado", "fusionado"}
+PERSONA_ESTADO_ALIAS = {
+    "nuevo": "lead",
+    "nueva": "lead",
+    "prospecto": "lead",
+    "prospecta": "lead",
+    "lead": "lead",
+    "activo": "activo",
+    "activa": "activo",
+    "cliente": "activo",
+    "cliente_activo": "activo",
+    "inactivo": "inactivo",
+    "inactiva": "inactivo",
+    "bloqueado": "bloqueado",
+    "bloqueada": "bloqueado",
+    "fusionado": "fusionado",
+    "fusionada": "fusionado",
+}
 
 
 def _is_transient_supabase_error_message(value: Any) -> bool:
@@ -120,6 +138,19 @@ def _clean_text(value: Any) -> str:
     if isinstance(value, str):
         return value.strip()
     return str(value).strip()
+
+
+def _normalize_persona_estado(value: Any) -> str:
+    raw = _clean_text(value)
+    if not raw:
+        return "lead"
+    normalized = unicodedata.normalize("NFKD", raw).encode("ascii", "ignore").decode("ascii")
+    normalized = normalized.replace("-", "_").replace(" ", "_").casefold()
+    if normalized in PERSONA_ESTADO_ALIAS:
+        return PERSONA_ESTADO_ALIAS[normalized]
+    if normalized in PERSONA_ESTADO_VALIDOS:
+        return normalized
+    return "lead"
 
 
 def _deep_merge_metadata(base: dict[str, Any], patch: dict[str, Any]) -> dict[str, Any]:
@@ -6717,7 +6748,7 @@ class CRMRepository:
             "puesto": self._pick_text(merged, "puesto"),
             "area": self._pick_text(merged, "area"),
             "rol_decision": self._pick_text(merged, "rol_decision"),
-            "estado": self._pick_text(merged, "estado") or "lead",
+            "estado": _normalize_persona_estado(self._pick_text(merged, "estado")),
             "origen": self._pick_text(merged, "origen"),
             "notas": self._pick_text(merged, "notas", "notes"),
             "metadata": metadata,

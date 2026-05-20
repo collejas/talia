@@ -10258,6 +10258,39 @@ def _persona_alta_clean_text(value: str | None, *, compact_spaces: bool = False)
     return trimmed or None
 
 
+_PERSONA_ESTADO_VALIDOS = {"lead", "activo", "inactivo", "bloqueado", "fusionado"}
+_PERSONA_ESTADO_ALIAS = {
+    "nuevo": "lead",
+    "nueva": "lead",
+    "prospecto": "lead",
+    "prospecta": "lead",
+    "lead": "lead",
+    "activo": "activo",
+    "activa": "activo",
+    "cliente": "activo",
+    "cliente_activo": "activo",
+    "inactivo": "inactivo",
+    "inactiva": "inactivo",
+    "bloqueado": "bloqueado",
+    "bloqueada": "bloqueado",
+    "fusionado": "fusionado",
+    "fusionada": "fusionado",
+}
+
+
+def _persona_alta_normalize_estado(value: str | None) -> str:
+    cleaned = _persona_alta_clean_text(value, compact_spaces=True)
+    if not cleaned:
+        return "lead"
+    normalized = unicodedata.normalize("NFKD", cleaned).encode("ascii", "ignore").decode("ascii")
+    normalized = normalized.replace("-", "_").replace(" ", "_").casefold()
+    if normalized in _PERSONA_ESTADO_ALIAS:
+        return _PERSONA_ESTADO_ALIAS[normalized]
+    if normalized in _PERSONA_ESTADO_VALIDOS:
+        return normalized
+    return "lead"
+
+
 def _persona_alta_normalize_email(value: str | None) -> str | None:
     cleaned = _persona_alta_clean_text(value)
     return cleaned.lower() if cleaned else None
@@ -10282,7 +10315,7 @@ def _persona_alta_normalize_persona(payload: CRMPersonaAltaPersona) -> CRMPerson
             "puesto": _persona_alta_clean_text(payload.puesto, compact_spaces=True),
             "area": _persona_alta_clean_text(payload.area, compact_spaces=True),
             "rol_decision": _persona_alta_clean_text(payload.rol_decision, compact_spaces=True),
-            "estado": _persona_alta_clean_text(payload.estado, compact_spaces=True),
+            "estado": _persona_alta_normalize_estado(payload.estado),
             "origen": _persona_alta_clean_text(payload.origen),
             "notas": _persona_alta_clean_text(payload.notas),
         }
@@ -10794,7 +10827,7 @@ def _persona_alta_to_contact_payload(
         "puesto": _persona_alta_clean_text(persona.puesto),
         "area": _persona_alta_clean_text(persona.area),
         "rol_decision": _persona_alta_clean_text(persona.rol_decision),
-        "estado": _persona_alta_clean_text(persona.estado) or "lead",
+        "estado": _persona_alta_normalize_estado(persona.estado),
         "origen": _persona_alta_clean_text(persona.origen),
         "notes": _persona_alta_clean_text(persona.notas),
         "propietario_usuario_id": str(persona.propietario_usuario_id) if persona.propietario_usuario_id else None,
@@ -15709,7 +15742,7 @@ async def create_persona_alta(
     relation_out: CRMCuentaPersonaRelacion | None = None
 
     if persona_out.cuenta_id:
-        if cuenta:
+        if cuenta and cuenta.cuenta_id and existing_account:
             account_patch = {
                 key: value
                 for key, value in _persona_alta_to_account_payload(
@@ -15938,7 +15971,7 @@ async def update_persona(
 
     if persona_out.cuenta_id:
         # Si la UI mandó datos de cuenta, los aplicamos también sobre cuentas existentes.
-        if cuenta:
+        if cuenta and cuenta.cuenta_id and existing_account:
             account_patch = {
                 key: value
                 for key, value in _persona_alta_to_account_payload(
