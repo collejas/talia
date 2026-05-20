@@ -12470,6 +12470,7 @@ class CRMPipelineBoardCard(BaseModel):
     tarjeta_id: UUID
     contacto_id: UUID | None = None
     conversacion_id: UUID | None = None
+    origen: str | None = None
     titulo: str
     nombre: str | None = None
     contacto_profile_name: str | None = None
@@ -29395,7 +29396,7 @@ async def pipeline_board(
             q=q,
             etapa_ids=etapa_ids,
             tiene_cita=tiene_cita,
-            include_contact_rows=False,
+            include_contact_rows=True,
             count_exact=False,
         )
     except CRMRepositoryError as exc:
@@ -36184,6 +36185,14 @@ def _card_from_opportunity(row: dict[str, Any]) -> CRMPipelineBoardCard | None:
     )
     actualizado_en = _parse_datetime(row.get("actualizado_en"))
     canal = metadata.get("canal") or metadata.get("channel")
+    origen_contacto = (
+        _clean_text(contacto.get("origen"))
+        or _clean_text(metadata.get("contacto_origen"))
+        or _clean_text(metadata.get("contact_origin"))
+        or _clean_text(metadata.get("origen_contacto"))
+        or _clean_text(metadata.get("contact_source"))
+        or None
+    )
     contacto_correo = (
         _clean_text(metadata.get("contacto_correo"))
         or _clean_text(contacto.get("correo_principal"))
@@ -36214,6 +36223,7 @@ def _card_from_opportunity(row: dict[str, Any]) -> CRMPipelineBoardCard | None:
         tarjeta_id=oportunidad_id,
         contacto_id=_safe_uuid(contacto.get("id")),
         conversacion_id=conversacion_id,
+        origen=origen_contacto,
         titulo=titulo_value,
         nombre=nombre,
         contacto_profile_name=contacto_profile_name,

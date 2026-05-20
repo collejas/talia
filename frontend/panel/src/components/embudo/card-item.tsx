@@ -58,6 +58,7 @@ export function EmbudoCardItem({
   const missingFieldsCount = card.leadScoring?.missingFields ?? 0;
   const evasiveAnswersCount = card.leadScoring?.evasiveAnswersCount;
   const originBadge = useMemo(() => resolveOriginBadge(card), [card]);
+  const contactOriginBadge = useMemo(() => resolveContactOriginBadge(card), [card]);
   const inboxHref = card.contactoId ? `/inbox?contactId=${encodeURIComponent(card.contactoId)}` : "/inbox";
 
   return (
@@ -133,6 +134,15 @@ export function EmbudoCardItem({
               {originBadge.label}
             </Badge>
           ) : null}
+          {contactOriginBadge ? (
+            <Badge
+              variant="outline"
+              className={cn("text-[10px] font-semibold uppercase tracking-wide", contactOriginBadge.className)}
+              title={contactOriginBadge.title}
+            >
+              {contactOriginBadge.label}
+            </Badge>
+          ) : null}
         </div>
 
         <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-xs text-muted-foreground">
@@ -140,6 +150,9 @@ export function EmbudoCardItem({
             Canal:
             {isWhatsappChannel(card.canal) ? <IconBrandWhatsapp className="size-3" /> : null}
             <span>{card.canal || "Sin canal"}</span>
+          </span>
+          <span className="truncate">
+            Origen contacto: {card.contactOrigin || "Sin origen"}
           </span>
           <span className="truncate">
             {card.asignadoNombre ? (
@@ -258,6 +271,18 @@ function resolveOriginBadge(
   }
 
   return null;
+}
+
+function resolveContactOriginBadge(
+  card: EmbudoCard,
+): { label: string; title: string; className?: string } | null {
+  const origin = typeof card.contactOrigin === "string" ? card.contactOrigin.trim() : "";
+  if (!origin) return null;
+  return {
+    label: `Origen: ${origin}`,
+    title: `Origen del contacto: ${origin}`,
+    className: "border-slate-300 bg-slate-50 text-slate-700",
+  };
 }
 
 function normalizeLabel(value: string): string {

@@ -25,6 +25,7 @@ export function adaptCard(card: PipelineBoardCard): EmbudoCard {
     typeof metadata.created_via === "string" && metadata.created_via.trim().length
       ? metadata.created_via.trim()
       : null;
+  const contactOrigin = resolveContactOrigin(card, metadata);
   const resolvedProfileName =
     typeof card.contacto_profile_name === "string" && card.contacto_profile_name.trim().length
       ? card.contacto_profile_name.trim()
@@ -83,6 +84,7 @@ export function adaptCard(card: PipelineBoardCard): EmbudoCard {
     contactoId: card.contacto_id ?? "",
     conversacionId: resolvedConversationId,
     createdVia,
+    contactOrigin,
     titulo: resolvedTitulo,
     nombre: resolvedNombre,
     contactoProfileName: resolvedProfileName,
@@ -111,6 +113,58 @@ export function adaptCard(card: PipelineBoardCard): EmbudoCard {
     autoStage: resolveAutoStage(metadata, etapaCodigo),
     restartSequence,
   };
+}
+
+function resolveContactOrigin(
+  card: PipelineBoardCard,
+  metadata: Record<string, unknown>,
+): EmbudoCard["contactOrigin"] {
+  const rawCandidates = [
+    card.origen,
+    metadata["contacto_origen"],
+    metadata["contact_origin"],
+    metadata["origen_contacto"],
+    metadata["contact_source"],
+  ];
+  for (const candidate of rawCandidates) {
+    const normalized = normalizeContactOrigin(candidate);
+    if (normalized) {
+      return normalized;
+    }
+  }
+  return null;
+}
+
+function normalizeContactOrigin(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  const lower = trimmed.toLowerCase();
+  const aliases: Record<string, string> = {
+    denue: "DENUE",
+    "google_places": "Google",
+    google: "Google",
+    manual_panel_contactos: "Manual",
+    agenda_manual: "Manual",
+    manual: "Manual",
+    usuario: "Manual",
+    importado: "Importado",
+    imported: "Importado",
+    webchat: "Webchat",
+    whatsapp: "WhatsApp",
+    email: "Email",
+    correo: "Email",
+    voz: "Voz",
+    phone: "Voz",
+  };
+  if (aliases[lower]) {
+    return aliases[lower];
+  }
+  return trimmed
+    .split(/[_\-\s]+/g)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
+    .join(" ");
 }
 
 function extractLeadScoring(metadata: Record<string, unknown>): EmbudoCard["leadScoring"] {

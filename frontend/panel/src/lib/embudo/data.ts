@@ -32,6 +32,7 @@ export type EmbudoCard = {
   contactoId: string;
   conversacionId: string | null;
   createdVia: string | null;
+  contactOrigin: string | null;
   titulo: string;
   nombre: string | null;
   contactoProfileName: string | null;
@@ -111,6 +112,7 @@ export type PipelineBoardCard = {
   oportunidad_id?: string | null;
   contacto_id: string | null;
   conversacion_id: string | null;
+  origen?: string | null;
   titulo?: string | null;
   nombre?: string | null;
   contacto_profile_name?: string | null;
