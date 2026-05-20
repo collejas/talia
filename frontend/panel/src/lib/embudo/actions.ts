@@ -30,6 +30,7 @@ export type CreateLeadInput = {
   contacto: Record<string, unknown>;
   oportunidad: Record<string, unknown>;
   contactId?: string | null;
+  originStageId?: string | null;
 };
 
 export type MoveLeadInput = {
@@ -354,7 +355,7 @@ export async function createLeadCard(input: CreateLeadInput): Promise<LeadAction
     baseMetadata.created_via = "embudo_manual";
   }
   if (!("created_stage_id" in baseMetadata)) {
-    baseMetadata.created_stage_id = input.stageId;
+    baseMetadata.created_stage_id = input.originStageId ?? input.stageId;
   }
 
   const baseCanal =

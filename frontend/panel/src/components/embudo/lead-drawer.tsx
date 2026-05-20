@@ -122,6 +122,7 @@ export type LeadDrawerCreatePayload = {
   contacto: Record<string, unknown>;
   oportunidad: Record<string, unknown>;
   contactId?: string | null;
+  originStageId?: string | null;
 };
 
 type LeadDrawerProps = {
@@ -1499,15 +1500,28 @@ export function LeadDrawer({
       if (proyectoNecesidadesRaw.length) {
         metadata.proyecto_necesidades = proyectoNecesidadesRaw;
       }
+      const autoTargetStage =
+        findAutoAdvanceStage(currentStage, upcomingStageGroups, stagePrep) ?? currentStage;
+      if (autoTargetStage && autoTargetStage.id !== currentStage.id) {
+        metadata.auto_stage = {
+          [autoTargetStage.codigo.toLowerCase()]: {
+            stage_code: autoTargetStage.codigo.toLowerCase(),
+            source: "embudo_manual",
+            channel: "panel",
+            at: new Date().toISOString(),
+          },
+        };
+      }
       oportunidadPayload.metadata = metadata;
 
       setPending(true);
       const result = await onCreate({
-        stageId: currentStage.id,
+        stageId: autoTargetStage?.id ?? currentStage.id,
         tableroId: currentStage.tableroId || resolvedTableroId,
         contacto: contactoPayload,
         oportunidad: oportunidadPayload,
         contactId: selectedContactId,
+        originStageId: currentStage.id,
       });
       setPending(false);
 
