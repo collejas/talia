@@ -59,6 +59,7 @@ export function EmbudoCardItem({
   const evasiveAnswersCount = card.leadScoring?.evasiveAnswersCount;
   const originBadge = useMemo(() => resolveOriginBadge(card), [card]);
   const contactOriginBadge = useMemo(() => resolveContactOriginBadge(card), [card]);
+  const channelBadge = useMemo(() => resolveChannelBadge(card.canal), [card.canal]);
   const inboxHref = card.contactoId ? `/inbox?contactId=${encodeURIComponent(card.contactoId)}` : "/inbox";
 
   return (
@@ -146,10 +147,22 @@ export function EmbudoCardItem({
         </div>
 
         <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-xs text-muted-foreground">
-          <span className="truncate inline-flex items-center gap-1">
-            Canal:
-            {isWhatsappChannel(card.canal) ? <IconBrandWhatsapp className="size-3" /> : null}
-            <span>{card.canal || "Sin canal"}</span>
+          <span className="truncate inline-flex items-center gap-2">
+            {channelBadge ? (
+              <Badge
+                variant="outline"
+                className={cn("text-[10px] font-semibold uppercase tracking-wide", channelBadge.className)}
+                title={channelBadge.title}
+              >
+                {channelBadge.icon}
+                {channelBadge.label}
+              </Badge>
+            ) : (
+              <>
+                Canal:
+                <span>Sin canal</span>
+              </>
+            )}
           </span>
           <span className="truncate">
             {card.asignadoNombre ? (
@@ -275,12 +288,82 @@ function resolveContactOriginBadge(
 ): { label: string; title: string; className?: string } | null {
   const origin = typeof card.contactOrigin === "string" ? card.contactOrigin.trim() : "";
   if (!origin) return null;
+  const normalized = origin.toLowerCase();
+  const tone = CONTACT_ORIGIN_BADGE_TONES[normalized] ?? "border-slate-300 bg-slate-50 text-slate-700";
   return {
     label: `Origen: ${origin}`,
     title: `Origen del contacto: ${origin}`,
-    className: "border-slate-300 bg-slate-50 text-slate-700",
+    className: tone,
   };
 }
+
+function resolveChannelBadge(
+  channel: string | null,
+): { label: string; title: string; className: string; icon: ReactNode } | null {
+  const normalized = (channel || "").trim().toLowerCase();
+  if (!normalized) return null;
+  const config = CHANNEL_BADGE_TONES[normalized] ?? {
+    label: formatChannelLabel(normalized),
+    title: `Canal: ${formatChannelLabel(normalized)}`,
+    className: "border-slate-300 bg-slate-50 text-slate-700",
+    icon: null,
+  };
+  return config;
+}
+
+function formatChannelLabel(value: string): string {
+  if (value === "whatsapp") return "WhatsApp";
+  if (value === "webchat") return "Webchat";
+  if (value === "email") return "Email";
+  if (value === "voz") return "Voz";
+  if (value === "manual") return "Manual";
+  return value.charAt(0).toUpperCase() + value.slice(1);
+}
+
+const CHANNEL_BADGE_TONES: Record<string, { label: string; title: string; className: string; icon: ReactNode }> = {
+  whatsapp: {
+    label: "WhatsApp",
+    title: "Canal: WhatsApp",
+    className: "border-emerald-300 bg-emerald-50 text-emerald-800",
+    icon: <IconBrandWhatsapp className="size-3" />,
+  },
+  webchat: {
+    label: "Webchat",
+    title: "Canal: Webchat",
+    className: "border-cyan-300 bg-cyan-50 text-cyan-800",
+    icon: <IconMessageCircle className="size-3" />,
+  },
+  email: {
+    label: "Email",
+    title: "Canal: Email",
+    className: "border-amber-300 bg-amber-50 text-amber-800",
+    icon: <IconMessageCircle className="size-3" />,
+  },
+  voz: {
+    label: "Voz",
+    title: "Canal: Voz",
+    className: "border-slate-300 bg-slate-50 text-slate-700",
+    icon: <IconMessageCircle className="size-3" />,
+  },
+  manual: {
+    label: "Manual",
+    title: "Canal: Manual",
+    className: "border-slate-300 bg-slate-50 text-slate-700",
+    icon: <IconUser className="size-3" />,
+  },
+};
+
+const CONTACT_ORIGIN_BADGE_TONES: Record<string, string> = {
+  whatsapp: "border-emerald-300 bg-emerald-50 text-emerald-800",
+  webchat: "border-cyan-300 bg-cyan-50 text-cyan-800",
+  email: "border-amber-300 bg-amber-50 text-amber-800",
+  correo: "border-amber-300 bg-amber-50 text-amber-800",
+  denue: "border-indigo-300 bg-indigo-50 text-indigo-800",
+  google: "border-rose-300 bg-rose-50 text-rose-800",
+  manual: "border-slate-300 bg-slate-50 text-slate-700",
+  usuario: "border-slate-300 bg-slate-50 text-slate-700",
+  importado: "border-slate-300 bg-slate-50 text-slate-700",
+};
 
 function normalizeLabel(value: string): string {
   const trimmed = value.trim().toLowerCase();
@@ -316,9 +399,6 @@ function scoreTone(score: number): string {
   return "border-rose-300 bg-rose-50 text-rose-800";
 }
 
-function isWhatsappChannel(channel: string | null): boolean {
-  return (channel || "").trim().toLowerCase() === "whatsapp";
-}
 
 function isGenericConversationLabel(value: string | null | undefined): boolean {
   if (!value) return false;
