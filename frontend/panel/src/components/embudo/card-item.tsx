@@ -152,9 +152,6 @@ export function EmbudoCardItem({
             <span>{card.canal || "Sin canal"}</span>
           </span>
           <span className="truncate">
-            Origen contacto: {card.contactOrigin || "Sin origen"}
-          </span>
-          <span className="truncate">
             {card.asignadoNombre ? (
               <span className="inline-flex items-center gap-1">
                 <IconUser className="size-3" />
