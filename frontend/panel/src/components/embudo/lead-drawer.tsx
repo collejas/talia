@@ -1502,16 +1502,6 @@ export function LeadDrawer({
       }
       const autoTargetStage =
         findAutoAdvanceStage(currentStage, upcomingStageGroups, stagePrep) ?? currentStage;
-      if (autoTargetStage && autoTargetStage.id !== currentStage.id) {
-        metadata.auto_stage = {
-          [autoTargetStage.codigo.toLowerCase()]: {
-            stage_code: autoTargetStage.codigo.toLowerCase(),
-            source: "embudo_manual",
-            channel: "panel",
-            at: new Date().toISOString(),
-          },
-        };
-      }
       oportunidadPayload.metadata = metadata;
 
       setPending(true);
