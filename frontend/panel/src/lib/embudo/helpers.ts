@@ -21,6 +21,10 @@ export function adaptCard(card: PipelineBoardCard): EmbudoCard {
       ? metadata.conversation_id.trim()
       : null;
   const resolvedConversationId = card.conversacion_id ?? metadataConversationId;
+  const createdVia =
+    typeof metadata.created_via === "string" && metadata.created_via.trim().length
+      ? metadata.created_via.trim()
+      : null;
   const resolvedProfileName =
     typeof card.contacto_profile_name === "string" && card.contacto_profile_name.trim().length
       ? card.contacto_profile_name.trim()
@@ -78,6 +82,7 @@ export function adaptCard(card: PipelineBoardCard): EmbudoCard {
     oportunidadId,
     contactoId: card.contacto_id ?? "",
     conversacionId: resolvedConversationId,
+    createdVia,
     titulo: resolvedTitulo,
     nombre: resolvedNombre,
     contactoProfileName: resolvedProfileName,

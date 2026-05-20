@@ -1,6 +1,6 @@
 "use client";
 
-import { type HTMLAttributes, useMemo } from "react"
+import { type HTMLAttributes, type ReactNode, useMemo } from "react"
 import { IconBrandWhatsapp, IconMessageCircle, IconRobot, IconUser } from "@tabler/icons-react"
 import type { DraggableSyntheticListeners } from "@dnd-kit/core"
 
@@ -57,6 +57,7 @@ export function EmbudoCardItem({
   const confidenceValue = card.leadScoring?.confidence;
   const missingFieldsCount = card.leadScoring?.missingFields ?? 0;
   const evasiveAnswersCount = card.leadScoring?.evasiveAnswersCount;
+  const originBadge = useMemo(() => resolveOriginBadge(card), [card]);
   const inboxHref = card.contactoId ? `/inbox?contactId=${encodeURIComponent(card.contactoId)}` : "/inbox";
 
   return (
@@ -122,14 +123,15 @@ export function EmbudoCardItem({
               {`Evasivas: ${evasiveAnswersCount}`}
             </span>
           ) : null}
-          {card.autoStage ? (
-            <span
-              className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-primary"
-              title={buildAutoStageTooltip(card)}
+          {originBadge ? (
+            <Badge
+              variant={originBadge.variant}
+              className={cn("text-[10px] font-semibold uppercase tracking-wide", originBadge.className)}
+              title={originBadge.title}
             >
-              <IconRobot className="size-3" />
-              Tal-IA
-            </span>
+              {originBadge.icon}
+              {originBadge.label}
+            </Badge>
           ) : null}
         </div>
 
@@ -219,6 +221,43 @@ function buildAutoStageTooltip(card: EmbudoCard): string {
     }
   }
   return parts.join(" · ");
+}
+
+function resolveOriginBadge(
+  card: EmbudoCard,
+): { label: string; title: string; variant: "outline" | "secondary"; className?: string; icon: ReactNode } | null {
+  const createdVia = (card.createdVia || card.metadata?.created_via) as string | undefined;
+  const normalizedCreatedVia = typeof createdVia === "string" ? createdVia.trim().toLowerCase() : "";
+  const isManual = normalizedCreatedVia === "embudo_manual";
+  const isAssistantOrigin =
+    Boolean(card.autoStage) ||
+    normalizedCreatedVia.startsWith("inbox_") ||
+    normalizedCreatedVia.startsWith("assistant_") ||
+    normalizedCreatedVia.startsWith("webchat_") ||
+    normalizedCreatedVia.startsWith("whatsapp_") ||
+    normalizedCreatedVia.includes("assistant");
+
+  if (isManual) {
+    return {
+      label: "Manual",
+      title: "Oportunidad creada manualmente",
+      variant: "secondary",
+      className: "border-slate-200 bg-slate-100 text-slate-800",
+      icon: <IconUser className="size-3" />,
+    };
+  }
+
+  if (isAssistantOrigin) {
+    return {
+      label: "Tal-IA",
+      title: buildAutoStageTooltip(card),
+      variant: "outline",
+      className: "border-primary/30 bg-primary/5 text-primary",
+      icon: <IconRobot className="size-3" />,
+    };
+  }
+
+  return null;
 }
 
 function normalizeLabel(value: string): string {

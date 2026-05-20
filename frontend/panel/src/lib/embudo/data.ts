@@ -31,6 +31,7 @@ export type EmbudoCard = {
   oportunidadId: string;
   contactoId: string;
   conversacionId: string | null;
+  createdVia: string | null;
   titulo: string;
   nombre: string | null;
   contactoProfileName: string | null;

@@ -771,6 +771,27 @@ export function LeadDrawer({
     };
   }, [card?.autoStage, card?.etapaNombre, currentStage?.nombre]);
 
+  const originBadge = useMemo(() => {
+    if (!card) return null;
+    const createdVia = (card.createdVia || card.metadata?.created_via) as string | undefined;
+    const normalizedCreatedVia = typeof createdVia === "string" ? createdVia.trim().toLowerCase() : "";
+    if (normalizedCreatedVia === "embudo_manual") {
+      return {
+        label: "Manual",
+        title: "Oportunidad creada manualmente",
+        className: "border-slate-200 bg-slate-100 text-slate-800",
+      };
+    }
+    if (card.autoStage || normalizedCreatedVia.includes("assistant") || normalizedCreatedVia.startsWith("inbox_")) {
+      return {
+        label: "Tal-IA",
+        title: "Oportunidad generada por TAL-IA",
+        className: "border-primary/30 bg-primary/5 text-primary",
+      };
+    }
+    return null;
+  }, [card]);
+
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: defaultFormValues,
@@ -2269,6 +2290,13 @@ export function LeadDrawer({
           <DrawerTitle>{isCreateMode ? "Nuevo lead" : card?.nombre ?? "Lead sin nombre"}</DrawerTitle>
           <DrawerDescription className="flex flex-col gap-1 text-left">
             <span>{isCreateMode ? `Creando en etapa: ${stageName}` : `Etapa: ${stageName}`}</span>
+            {!isCreateMode && originBadge ? (
+              <span className="inline-flex items-center gap-2">
+                <Badge variant="outline" className={cn("w-fit text-[10px] font-semibold uppercase tracking-wide", originBadge.className)} title={originBadge.title}>
+                  {originBadge.label}
+                </Badge>
+              </span>
+            ) : null}
           </DrawerDescription>
         </DrawerHeader>
 
