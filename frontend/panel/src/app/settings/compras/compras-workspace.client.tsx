@@ -9,6 +9,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 
 import {
   createAlmacenAction,
+  createInventarioAjusteAction,
   createOrdenCompraAction,
   createProveedorAction,
   createRecepcionAction,
@@ -264,6 +265,11 @@ export function ComprasWorkspace({
   const [orderObservations, setOrderObservations] = useState("")
   const [orderInstructions, setOrderInstructions] = useState("")
   const [orderLines, setOrderLines] = useState<OrderLine[]>(() => [createEmptyOrderLine()])
+  const [adjustmentWarehouseId, setAdjustmentWarehouseId] = useState<string>(defaultWarehouseId)
+  const [adjustmentCatalogItemId, setAdjustmentCatalogItemId] = useState<string>(String(catalogItems[0]?.id ?? ""))
+  const [adjustmentSentido, setAdjustmentSentido] = useState<"entrada" | "salida">("entrada")
+  const [adjustmentCantidad, setAdjustmentCantidad] = useState("")
+  const [adjustmentMotivo, setAdjustmentMotivo] = useState("")
   const [warehouseFormCode, setWarehouseFormCode] = useState("")
   const [warehouseFormName, setWarehouseFormName] = useState("")
   const [warehouseFormType, setWarehouseFormType] = useState<"central" | "sucursal" | "transito" | "consignacion">("central")
@@ -305,6 +311,13 @@ export function ComprasWorkspace({
   const totalStockDisponible = useMemo(
     () => filteredExistencias.reduce((sum, row) => sum + asNumber(row.stock_disponible), 0),
     [filteredExistencias],
+  )
+  const adjustmentExistencia = useMemo(
+    () =>
+      existencias.find(
+        (row) => String(row.catalog_item_id) === adjustmentCatalogItemId && String(row.almacen_id) === adjustmentWarehouseId,
+      ) ?? null,
+    [adjustmentCatalogItemId, adjustmentWarehouseId, existencias],
   )
   const alertasStock = useMemo(
     () =>
@@ -1183,6 +1196,117 @@ export function ComprasWorkspace({
               {recepciones.length ? `${recepciones.length} registros recientes` : "Sin movimientos todavía"}
             </div>
           </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Ajuste manual de inventario</CardTitle>
+          <CardDescription>Corrige stock real con una entrada o salida simple y auditada.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <form action={createInventarioAjusteAction} className="space-y-4">
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="space-y-2">
+                <label className="text-sm font-medium" htmlFor="ajuste-almacen">
+                  Almacén
+                </label>
+                <select
+                  id="ajuste-almacen"
+                  name="almacen_id"
+                  value={adjustmentWarehouseId}
+                  onChange={(event) => setAdjustmentWarehouseId(event.target.value)}
+                  className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                  required
+                >
+                  <option value="">Selecciona un almacén</option>
+                  {almacenes.map((almacen) => (
+                    <option key={String(almacen.id)} value={String(almacen.id)}>
+                      {asString(almacen.codigo)} · {asString(almacen.nombre)}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium" htmlFor="ajuste-producto">
+                  Producto
+                </label>
+                <select
+                  id="ajuste-producto"
+                  name="catalog_item_id"
+                  value={adjustmentCatalogItemId}
+                  onChange={(event) => setAdjustmentCatalogItemId(event.target.value)}
+                  className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                  required
+                >
+                  <option value="">Selecciona un producto</option>
+                  {catalogItems.map((item) => (
+                    <option key={String(item.id)} value={String(item.id)}>
+                      {asString(item.nombre)} · {asString(item.unidad, "unidad")}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            <div className="grid gap-4 md:grid-cols-3">
+              <div className="space-y-2">
+                <label className="text-sm font-medium" htmlFor="ajuste-sentido">
+                  Tipo de ajuste
+                </label>
+                <select
+                  id="ajuste-sentido"
+                  name="sentido"
+                  value={adjustmentSentido}
+                  onChange={(event) => setAdjustmentSentido(event.target.value as "entrada" | "salida")}
+                  className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                >
+                  <option value="entrada">Entrada</option>
+                  <option value="salida">Salida</option>
+                </select>
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium" htmlFor="ajuste-cantidad">
+                  Cantidad
+                </label>
+                <Input
+                  id="ajuste-cantidad"
+                  name="cantidad"
+                  type="number"
+                  min="0"
+                  step="0.001"
+                  value={adjustmentCantidad}
+                  onChange={(event) => setAdjustmentCantidad(event.target.value)}
+                  placeholder="0.000"
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium" htmlFor="ajuste-stock-actual">
+                  Stock actual
+                </label>
+                <Input
+                  id="ajuste-stock-actual"
+                  value={Number.isFinite(asNumber(adjustmentExistencia?.stock_actual)) ? asNumber(adjustmentExistencia?.stock_actual).toFixed(3) : "0.000"}
+                  readOnly
+                />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium" htmlFor="ajuste-motivo">
+                Motivo
+              </label>
+              <Input
+                id="ajuste-motivo"
+                name="motivo"
+                value={adjustmentMotivo}
+                onChange={(event) => setAdjustmentMotivo(event.target.value)}
+                placeholder="Conteo físico, merma, corrección..."
+              />
+            </div>
+            <Button type="submit" className="w-full" disabled={!adjustmentWarehouseId || !adjustmentCatalogItemId || !adjustmentCantidad}>
+              Aplicar ajuste
+            </Button>
+          </form>
         </CardContent>
       </Card>
 

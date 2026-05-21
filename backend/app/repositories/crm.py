@@ -9442,6 +9442,71 @@ class CRMRepository:
             raise CRMRepositoryError(f"Respuesta inesperada al listar existencias: {data!r}")
         return data
 
+    async def get_inventario_existencia(
+        self,
+        *,
+        organizacion_id: UUID,
+        catalog_item_id: UUID,
+        almacen_id: UUID,
+    ) -> dict[str, Any] | None:
+        params: dict[str, Any] = {
+            "organizacion_id": f"eq.{organizacion_id}",
+            "catalog_item_id": f"eq.{catalog_item_id}",
+            "almacen_id": f"eq.{almacen_id}",
+            "limit": "1",
+            "select": (
+                "id,organizacion_id,catalog_item_id,almacen_id,stock_actual,stock_reservado,stock_disponible,"
+                "stock_minimo,stock_objetivo,costo_ultimo,costo_promedio,creado_en,actualizado_en,"
+                "catalog_item:catalog_items(id,slug,nombre,codigo,unidad,activo,maneja_inventario),"
+                "almacen:almacenes(id,codigo,nombre,tipo,activo,es_principal)"
+            ),
+        }
+        resp = await self._request("GET", "/rest/v1/inventario_existencias", params=params)
+        data = resp.json()
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"Respuesta inesperada al buscar existencia: {data!r}")
+        if not data:
+            return None
+        row = data[0]
+        if not isinstance(row, dict):
+            raise CRMRepositoryError(f"Respuesta invalida al buscar existencia: {row!r}")
+        return row
+
+    async def adjust_inventario(
+        self,
+        *,
+        organizacion_id: UUID,
+        catalog_item_id: UUID,
+        almacen_id: UUID,
+        sentido: str,
+        cantidad: float,
+        motivo: str | None = None,
+        creado_por: UUID | None = None,
+    ) -> UUID:
+        body = {
+            "p_organizacion_id": str(organizacion_id),
+            "p_catalog_item_id": str(catalog_item_id),
+            "p_almacen_id": str(almacen_id),
+            "p_sentido": sentido,
+            "p_cantidad": cantidad,
+            "p_motivo": motivo,
+            "p_creado_por": str(creado_por) if creado_por else None,
+        }
+        result = await self._rpc("crm_ajustar_inventario", body)
+        if isinstance(result, dict):
+            movement_id = result.get("crm_ajustar_inventario")
+            if movement_id:
+                return UUID(str(movement_id))
+            for value in result.values():
+                if isinstance(value, str):
+                    try:
+                        return UUID(value)
+                    except ValueError:
+                        continue
+        if isinstance(result, str):
+            return UUID(result)
+        raise CRMRepositoryError(f"Respuesta inesperada al ajustar inventario: {result!r}")
+
     async def list_ordenes_compra(
         self,
         *,

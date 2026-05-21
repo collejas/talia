@@ -272,6 +272,25 @@ export async function createRecepcionAction(formData: FormData): Promise<void> {
   revalidatePath(SETTINGS_PATH)
 }
 
+export async function createInventarioAjusteAction(formData: FormData): Promise<void> {
+  const payload = {
+    catalog_item_id: parseRequiredText(formData.get("catalog_item_id"), "catalog_item_id"),
+    almacen_id: parseRequiredText(formData.get("almacen_id"), "almacen_id"),
+    sentido: parseRequiredText(formData.get("sentido"), "sentido") as "entrada" | "salida",
+    cantidad: parseRequiredNumber(formData.get("cantidad"), "cantidad"),
+    motivo: parseOptionalText(formData.get("motivo")),
+  }
+
+  const response = await callCrmApi("/crm/compras/inventario/ajustes", {
+    method: "POST",
+    body: payload,
+  })
+  if (!response.ok) {
+    throw new Error(response.error)
+  }
+  revalidatePath(SETTINGS_PATH)
+}
+
 export async function createOrdenCompraAction(formData: FormData): Promise<void> {
   const items = zipOrderItems(formData)
   const payload = {

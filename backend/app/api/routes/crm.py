@@ -11387,6 +11387,14 @@ class CRMInventarioExistencia(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
 
+class CRMInventarioAjusteCreate(BaseModel):
+    catalog_item_id: UUID
+    almacen_id: UUID
+    sentido: Literal["entrada", "salida"]
+    cantidad: Annotated[float, Field(gt=0)]
+    motivo: str | None = Field(default=None, max_length=2000)
+
+
 class CRMOrdenCompraCreateItem(BaseModel):
     catalog_item_id: UUID
     proveedor_item_id: UUID | None = None
@@ -14576,6 +14584,42 @@ async def list_compras_existencias(
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     return [CRMInventarioExistencia.model_validate(row) for row in rows]
+
+
+@router.post("/compras/inventario/ajustes", response_model=CRMInventarioExistencia)
+async def create_compras_ajuste_inventario(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("settings.manage")),
+    usuario_id: UUID | None = Depends(optional_usuario_id),
+    payload: CRMInventarioAjusteCreate,
+) -> CRMInventarioExistencia:
+    if usuario_id is None:
+        raise HTTPException(status_code=401, detail="usuario_no_autenticado")
+    try:
+        await repo.adjust_inventario(
+            organizacion_id=organizacion_id,
+            catalog_item_id=payload.catalog_item_id,
+            almacen_id=payload.almacen_id,
+            sentido=payload.sentido,
+            cantidad=payload.cantidad,
+            motivo=payload.motivo,
+            creado_por=usuario_id,
+        )
+        row = await repo.get_inventario_existencia(
+            organizacion_id=organizacion_id,
+            catalog_item_id=payload.catalog_item_id,
+            almacen_id=payload.almacen_id,
+        )
+    except CRMRepositoryError as exc:
+        detail = str(exc)
+        if "negativo" in detail.lower():
+            raise HTTPException(status_code=409, detail=detail) from exc
+        raise HTTPException(status_code=502, detail=detail) from exc
+    if row is None:
+        raise HTTPException(status_code=404, detail="inventario_existencia_not_found")
+    return CRMInventarioExistencia.model_validate(row)
 
 
 @router.post("/compras/proveedores", response_model=CRMProveedor, status_code=status.HTTP_201_CREATED)
