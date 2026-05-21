@@ -73,10 +73,17 @@ type CatalogItemFormValues = {
   descripcionCorta: string
   descripcionLarga: string
   unidad: string
+  unidadInventario: string
   precioBase: string
   moneda: string
   requiereFactura: boolean
   activo: boolean
+  manejaInventario: boolean
+  activoCompra: boolean
+  requiereLote: boolean
+  requiereSerie: boolean
+  stockMinimo: string
+  stockObjetivo: string
   claveSat: string
   unidadSat: string
   lineaId: string
@@ -91,10 +98,17 @@ const EMPTY_FORM: CatalogItemFormValues = {
   descripcionCorta: "",
   descripcionLarga: "",
   unidad: "unidad",
+  unidadInventario: "unidad",
   precioBase: "",
   moneda: "MXN",
   requiereFactura: false,
   activo: true,
+  manejaInventario: false,
+  activoCompra: true,
+  requiereLote: false,
+  requiereSerie: false,
+  stockMinimo: "",
+  stockObjetivo: "",
   claveSat: "",
   unidadSat: "",
   lineaId: "",
@@ -137,10 +151,17 @@ function mapItemToFormValues(item: CatalogItem): CatalogItemFormValues {
     descripcionCorta: item.descripcionCorta ?? "",
     descripcionLarga: item.descripcionLarga ?? "",
     unidad: item.unidad ?? "unidad",
+    unidadInventario: item.unidadInventario ?? item.unidad ?? "unidad",
     precioBase: item.precioBase != null ? String(item.precioBase) : "",
     moneda: item.moneda || "MXN",
     requiereFactura: item.requiereFactura,
     activo: item.activo,
+    manejaInventario: item.manejaInventario,
+    activoCompra: item.activoCompra,
+    requiereLote: item.requiereLote,
+    requiereSerie: item.requiereSerie,
+    stockMinimo: item.stockMinimo != null ? String(item.stockMinimo) : "",
+    stockObjetivo: item.stockObjetivo != null ? String(item.stockObjetivo) : "",
     claveSat: item.claveSat ?? "",
     unidadSat: item.unidadSat ?? "",
     lineaId: item.lineaId ?? "",
@@ -162,6 +183,13 @@ function formValuesToInput(values: CatalogItemFormValues, impuestos?: CatalogIte
     impuestos: impuestos ?? [],
     activo: values.activo,
     requiereFactura: values.requiereFactura,
+    manejaInventario: values.manejaInventario,
+    activoCompra: values.activoCompra,
+    requiereLote: values.requiereLote,
+    requiereSerie: values.requiereSerie,
+    unidadInventario: values.unidadInventario || values.unidad || "unidad",
+    stockMinimo: values.stockMinimo.trim().length ? Number(values.stockMinimo) : null,
+    stockObjetivo: values.stockObjetivo.trim().length ? Number(values.stockObjetivo) : null,
     claveSat: values.claveSat || null,
     unidadSat: values.unidadSat || null,
     metadatos: metadatos ?? {},
@@ -819,6 +847,14 @@ const handleDelete = useCallback(
                       <Badge variant="secondary" className="capitalize">
                         {item.tipo}
                       </Badge>
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        <Badge variant={item.manejaInventario ? "default" : "outline"} className="text-[10px] uppercase tracking-wide">
+                          {item.manejaInventario ? "Con inventario" : "Sin inventario"}
+                        </Badge>
+                        <Badge variant={item.activoCompra ? "secondary" : "outline"} className="text-[10px] uppercase tracking-wide">
+                          {item.activoCompra ? "Compra activa" : "No compra"}
+                        </Badge>
+                      </div>
                     </TableCell>
                     <TableCell>
                       <div className="font-semibold">
@@ -1021,6 +1057,89 @@ const handleDelete = useCallback(
               <div className="space-y-2">
                 <Label htmlFor="catalog-clave-sat">Clave SAT</Label>
                 <Input id="catalog-clave-sat" {...form.register("claveSat")} placeholder="81112100" />
+              </div>
+            </div>
+            <div className="rounded-2xl border border-border/70 bg-muted/30 p-4">
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-sm font-semibold">Inventario</p>
+                  <p className="text-xs text-muted-foreground">
+                    Activa esto solo si el producto debe controlar stock real.
+                  </p>
+                </div>
+                <Badge variant="outline">Operativo</Badge>
+              </div>
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="flex items-center gap-2 rounded-md border bg-background px-3 py-2">
+                  <Checkbox
+                    id="catalog-maneja-inventario"
+                    checked={form.watch("manejaInventario")}
+                    onCheckedChange={(checked) => form.setValue("manejaInventario", Boolean(checked))}
+                  />
+                  <Label htmlFor="catalog-maneja-inventario" className="text-sm font-normal">
+                    Maneja inventario
+                  </Label>
+                </div>
+                <div className="flex items-center gap-2 rounded-md border bg-background px-3 py-2">
+                  <Checkbox
+                    id="catalog-activo-compra"
+                    checked={form.watch("activoCompra")}
+                    onCheckedChange={(checked) => form.setValue("activoCompra", Boolean(checked))}
+                  />
+                  <Label htmlFor="catalog-activo-compra" className="text-sm font-normal">
+                    Habilitado para compra
+                  </Label>
+                </div>
+                <div className="flex items-center gap-2 rounded-md border bg-background px-3 py-2">
+                  <Checkbox
+                    id="catalog-requiere-lote"
+                    checked={form.watch("requiereLote")}
+                    onCheckedChange={(checked) => form.setValue("requiereLote", Boolean(checked))}
+                  />
+                  <Label htmlFor="catalog-requiere-lote" className="text-sm font-normal">
+                    Requiere lote
+                  </Label>
+                </div>
+                <div className="flex items-center gap-2 rounded-md border bg-background px-3 py-2">
+                  <Checkbox
+                    id="catalog-requiere-serie"
+                    checked={form.watch("requiereSerie")}
+                    onCheckedChange={(checked) => form.setValue("requiereSerie", Boolean(checked))}
+                  />
+                  <Label htmlFor="catalog-requiere-serie" className="text-sm font-normal">
+                    Requiere serie
+                  </Label>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="catalog-unidad-inventario">Unidad de inventario</Label>
+                  <Input
+                    id="catalog-unidad-inventario"
+                    {...form.register("unidadInventario")}
+                    placeholder="pieza, caja, litro"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="catalog-stock-minimo">Stock mínimo</Label>
+                  <Input
+                    id="catalog-stock-minimo"
+                    type="number"
+                    min="0"
+                    step="0.001"
+                    {...form.register("stockMinimo")}
+                    placeholder="0.000"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="catalog-stock-objetivo">Stock objetivo</Label>
+                  <Input
+                    id="catalog-stock-objetivo"
+                    type="number"
+                    min="0"
+                    step="0.001"
+                    {...form.register("stockObjetivo")}
+                    placeholder="0.000"
+                  />
+                </div>
               </div>
             </div>
             <Separator />

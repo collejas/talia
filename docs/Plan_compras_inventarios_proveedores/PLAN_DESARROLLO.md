@@ -434,7 +434,7 @@ Tareas:
 
 1. Definir si el modulo vivira en el schema actual o en un schema nuevo.
 2. Crear la migracion SQL de la Fase 1.
-3. Ajustar el frontend de catalogo para mostrar `maneja_inventario`, `stock_minimo` y `stock_objetivo`.
+3. Ajustar el frontend de catalogo para mostrar `maneja_inventario`, `activo_compra`, `stock_minimo` y `stock_objetivo`.
 4. Agregar vistas simples de almacenes y existencias.
 5. Implementar despues proveedores y ordenes de compra.
 
@@ -445,4 +445,5 @@ Tareas:
 - Fase 2 preparada para proveedores y compras en `supabase/migrations/20260521_140000_inventory_purchases_phase2.sql`.
 - Fase 3 aplicada para recepciones de compra y entrada a inventario en `supabase/migrations/20260521_150000_inventory_purchases_phase3.sql`.
 - Existe una primera pantalla operativa en `frontend/panel/src/app/settings/compras/page.tsx` con alta de almacenes y recepción de mercancía.
+- El catálogo ya muestra y guarda campos operativos de inventario desde `frontend/panel/src/components/settings/catalog-items-panel.tsx`.
 - La siguiente entrega debe enfocarse en validar el flujo end-to-end y luego ampliar el CRUD de existencias, proveedores y órdenes de compra en la app.

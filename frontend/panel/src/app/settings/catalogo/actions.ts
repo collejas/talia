@@ -25,6 +25,16 @@ export type CatalogItem = {
   claveSat: string | null;
   unidadSat: string | null;
   metadatos: Record<string, unknown>;
+  manejaInventario: boolean;
+  unidadInventario: string;
+  stockMinimo: number | null;
+  stockObjetivo: number | null;
+  costoUltimo: number | null;
+  costoPromedio: number | null;
+  requiereLote: boolean;
+  requiereSerie: boolean;
+  proveedorPrincipalId: string | null;
+  activoCompra: boolean;
   createdBy: string | null;
   updatedBy: string | null;
   creadoEn: string | null;
@@ -53,6 +63,16 @@ export type CatalogItemInput = {
   claveSat?: string | null;
   unidadSat?: string | null;
   metadatos?: Record<string, unknown> | null;
+  manejaInventario?: boolean;
+  unidadInventario?: string | null;
+  stockMinimo?: number | null;
+  stockObjetivo?: number | null;
+  costoUltimo?: number | null;
+  costoPromedio?: number | null;
+  requiereLote?: boolean;
+  requiereSerie?: boolean;
+  proveedorPrincipalId?: string | null;
+  activoCompra?: boolean;
   lineaId?: string | null;
   familiaId?: string | null;
   modeloId?: string | null;
@@ -186,6 +206,16 @@ function normalizeCatalogItem(record: Record<string, unknown>): CatalogItem {
       (record.metadatos && typeof record.metadatos === "object"
         ? (record.metadatos as Record<string, unknown>)
         : {}),
+    manejaInventario: normalizeBoolean(record.maneja_inventario ?? record.manejaInventario, false),
+    unidadInventario: normalizeString(record.unidad_inventario ?? record.unidadInventario) ?? "unidad",
+    stockMinimo: normalizeNumber(record.stock_minimo ?? record.stockMinimo),
+    stockObjetivo: normalizeNumber(record.stock_objetivo ?? record.stockObjetivo),
+    costoUltimo: normalizeNumber(record.costo_ultimo ?? record.costoUltimo),
+    costoPromedio: normalizeNumber(record.costo_promedio ?? record.costoPromedio),
+    requiereLote: normalizeBoolean(record.requiere_lote ?? record.requiereLote, false),
+    requiereSerie: normalizeBoolean(record.requiere_serie ?? record.requiereSerie, false),
+    proveedorPrincipalId: normalizeString(record.proveedor_principal_id ?? record.proveedorPrincipalId),
+    activoCompra: normalizeBoolean(record.activo_compra ?? record.activoCompra, true),
     createdBy: normalizeString(record.created_by ?? record.createdBy),
     updatedBy: normalizeString(record.updated_by ?? record.updatedBy),
     creadoEn: normalizeString(record.creado_en ?? record.creadoEn),
@@ -262,6 +292,16 @@ function buildPayload(input: CatalogItemInput): Record<string, unknown> {
   if (input.claveSat !== undefined) payload.clave_sat = sanitizeText(input.claveSat)
   if (input.unidadSat !== undefined) payload.unidad_sat = sanitizeText(input.unidadSat)
   if (input.metadatos !== undefined) payload.metadatos = input.metadatos ?? {}
+  if (input.manejaInventario !== undefined) payload.maneja_inventario = Boolean(input.manejaInventario)
+  if (input.unidadInventario !== undefined) payload.unidad_inventario = sanitizeText(input.unidadInventario) ?? "unidad"
+  if (input.stockMinimo !== undefined) payload.stock_minimo = input.stockMinimo ?? null
+  if (input.stockObjetivo !== undefined) payload.stock_objetivo = input.stockObjetivo ?? null
+  if (input.costoUltimo !== undefined) payload.costo_ultimo = input.costoUltimo ?? null
+  if (input.costoPromedio !== undefined) payload.costo_promedio = input.costoPromedio ?? null
+  if (input.requiereLote !== undefined) payload.requiere_lote = Boolean(input.requiereLote)
+  if (input.requiereSerie !== undefined) payload.requiere_serie = Boolean(input.requiereSerie)
+  if (input.proveedorPrincipalId !== undefined) payload.proveedor_principal_id = input.proveedorPrincipalId ?? null
+  if (input.activoCompra !== undefined) payload.activo_compra = Boolean(input.activoCompra)
   if (input.lineaId !== undefined) payload.linea_id = input.lineaId ?? null
   if (input.familiaId !== undefined) payload.familia_id = input.familiaId ?? null
   if (input.modeloId !== undefined) payload.modelo_id = input.modeloId ?? null

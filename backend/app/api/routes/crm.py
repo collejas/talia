@@ -11168,6 +11168,16 @@ class CRMCatalogItem(BaseModel):
     clave_sat: str | None = None
     unidad_sat: str | None = None
     metadatos: dict[str, Any] | None = None
+    maneja_inventario: bool = False
+    unidad_inventario: str = "unidad"
+    stock_minimo: float | None = None
+    stock_objetivo: float | None = None
+    costo_ultimo: float | None = None
+    costo_promedio: float | None = None
+    requiere_lote: bool = False
+    requiere_serie: bool = False
+    proveedor_principal_id: UUID | None = None
+    activo_compra: bool = True
     created_by: UUID | None = None
     updated_by: UUID | None = None
     creado_en: datetime
@@ -11197,6 +11207,16 @@ class CRMCatalogItemCreate(BaseModel):
     clave_sat: str | None = Field(default=None, max_length=100)
     unidad_sat: str | None = Field(default=None, max_length=100)
     metadatos: dict[str, Any] | None = Field(default_factory=dict)
+    maneja_inventario: bool = False
+    unidad_inventario: str = Field(default="unidad", max_length=80)
+    stock_minimo: float | None = Field(default=None, ge=0)
+    stock_objetivo: float | None = Field(default=None, ge=0)
+    costo_ultimo: float | None = Field(default=None, ge=0)
+    costo_promedio: float | None = Field(default=None, ge=0)
+    requiere_lote: bool = False
+    requiere_serie: bool = False
+    proveedor_principal_id: UUID | None = None
+    activo_compra: bool = True
     linea_id: UUID | None = None
     familia_id: UUID | None = None
     modelo_id: UUID | None = None
@@ -11217,6 +11237,16 @@ class CRMCatalogItemUpdate(BaseModel):
     clave_sat: str | None = Field(default=None, max_length=100)
     unidad_sat: str | None = Field(default=None, max_length=100)
     metadatos: dict[str, Any] | None = None
+    maneja_inventario: bool | None = None
+    unidad_inventario: str | None = Field(default=None, max_length=80)
+    stock_minimo: float | None = Field(default=None, ge=0)
+    stock_objetivo: float | None = Field(default=None, ge=0)
+    costo_ultimo: float | None = Field(default=None, ge=0)
+    costo_promedio: float | None = Field(default=None, ge=0)
+    requiere_lote: bool | None = None
+    requiere_serie: bool | None = None
+    proveedor_principal_id: UUID | None = None
+    activo_compra: bool | None = None
     linea_id: UUID | None = None
     familia_id: UUID | None = None
     modelo_id: UUID | None = None
