@@ -6,11 +6,19 @@ import { ThemeToggle } from '@/components/ThemeToggle'
 import { loadEmbudoData } from '@/lib/embudo/data'
 import { fetchPermissionContext } from '@/lib/auth/permissions'
 import type { CSSProperties } from 'react'
+import { performance } from 'node:perf_hooks'
 
 export const dynamic = 'force-dynamic'
 
 export default async function Page() {
+  const pageStartedAt = performance.now()
+  console.info('[embudo:page] start')
+
+  const permissionStartedAt = performance.now()
   const permContext = await fetchPermissionContext()
+  console.info('[embudo:page] permissions-loaded', {
+    elapsed_ms: Math.round(performance.now() - permissionStartedAt),
+  })
   const normalizedRoles = (permContext.roles ?? [])
     .map((role) => (role ?? '').toString().trim().toLowerCase())
     .filter(Boolean)
@@ -30,8 +38,15 @@ export default async function Page() {
       value.includes('vendedor'),
   )
 
+  const boardStartedAt = performance.now()
   const embudo = await loadEmbudoData({
     asignadoId: isAgenteRole && !isPrivilegedRole && permContext.usuario_id ? permContext.usuario_id : undefined,
+  })
+  console.info('[embudo:page] embudo-loaded', {
+    elapsed_ms: Math.round(performance.now() - boardStartedAt),
+  })
+  console.info('[embudo:page] done', {
+    elapsed_ms: Math.round(performance.now() - pageStartedAt),
   })
 
   return (

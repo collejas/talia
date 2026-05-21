@@ -1,5 +1,7 @@
 "use server";
 
+import { performance } from "node:perf_hooks";
+
 import { callCrmApi } from "@/lib/api/crm";
 import { adaptCard, adaptStage, parseMetadatos } from "@/lib/embudo/helpers";
 
@@ -175,32 +177,61 @@ export async function loadEmbudoData(options: LoadEmbudoOptions = {}): Promise<E
   const etapaIds = Array.isArray(options.etapaIds)
     ? options.etapaIds.map((value) => value.trim()).filter(Boolean)
     : [];
-  const [boardResponse, scoringResponse] = await Promise.all([
-    callCrmApi<PipelineBoardResponse>("/crm/pipeline/board", {
-      searchParams: {
-        limit: String(limit),
-        ...(options.asignadoId ? { asignado_id: options.asignadoId } : {}),
-        ...(options.canal ? { canal: options.canal } : {}),
-        ...(options.estado ? { estado: options.estado } : {}),
-        ...(options.q ? { q: options.q } : {}),
-        ...(etapaIds.length ? { etapa_ids: etapaIds.join(",") } : {}),
-        ...(options.tieneCita ? { tiene_cita: options.tieneCita } : {}),
-      },
-      withUserToken: true,
-    }),
-    callCrmApi<EmbudoScoringKpis>("/crm/pipeline/scoring/kpis", {
-      searchParams: {
-        days: String(days),
-        ...(options.asignadoId ? { asignado_id: options.asignadoId } : {}),
-        ...(options.canal ? { canal: options.canal } : {}),
-        ...(options.estado ? { estado: options.estado } : {}),
-        ...(options.q ? { q: options.q } : {}),
-        ...(etapaIds.length ? { etapa_ids: etapaIds.join(",") } : {}),
-        ...(options.tieneCita ? { tiene_cita: options.tieneCita } : {}),
-      },
-      withUserToken: true,
-    }),
-  ]);
+  const startedAt = performance.now();
+  console.info("[embudo:load] start", {
+    limit,
+    days,
+    asignadoId: options.asignadoId ?? null,
+    canal: options.canal ?? null,
+    estado: options.estado ?? null,
+    q: options.q ?? null,
+    etapaIds,
+    tieneCita: options.tieneCita ?? null,
+  });
+
+  const boardStartedAt = performance.now();
+  const boardPromise = callCrmApi<PipelineBoardResponse>("/crm/pipeline/board", {
+    searchParams: {
+      limit: String(limit),
+      ...(options.asignadoId ? { asignado_id: options.asignadoId } : {}),
+      ...(options.canal ? { canal: options.canal } : {}),
+      ...(options.estado ? { estado: options.estado } : {}),
+      ...(options.q ? { q: options.q } : {}),
+      ...(etapaIds.length ? { etapa_ids: etapaIds.join(",") } : {}),
+      ...(options.tieneCita ? { tiene_cita: options.tieneCita } : {}),
+    },
+    withUserToken: true,
+  }).then((result) => {
+    console.info("[embudo:load] board-finished", {
+      ok: result.ok,
+      status: result.ok ? 200 : result.status ?? null,
+      elapsed_ms: Math.round(performance.now() - boardStartedAt),
+    });
+    return result;
+  });
+
+  const scoringStartedAt = performance.now();
+  const scoringPromise = callCrmApi<EmbudoScoringKpis>("/crm/pipeline/scoring/kpis", {
+    searchParams: {
+      days: String(days),
+      ...(options.asignadoId ? { asignado_id: options.asignadoId } : {}),
+      ...(options.canal ? { canal: options.canal } : {}),
+      ...(options.estado ? { estado: options.estado } : {}),
+      ...(options.q ? { q: options.q } : {}),
+      ...(etapaIds.length ? { etapa_ids: etapaIds.join(",") } : {}),
+      ...(options.tieneCita ? { tiene_cita: options.tieneCita } : {}),
+    },
+    withUserToken: true,
+  }).then((result) => {
+    console.info("[embudo:load] scoring-finished", {
+      ok: result.ok,
+      status: result.ok ? 200 : result.status ?? null,
+      elapsed_ms: Math.round(performance.now() - scoringStartedAt),
+    });
+    return result;
+  });
+
+  const [boardResponse, scoringResponse] = await Promise.all([boardPromise, scoringPromise]);
 
   const errors: string[] = [];
   if (!boardResponse.ok) errors.push(boardResponse.error);
@@ -215,13 +246,23 @@ export async function loadEmbudoData(options: LoadEmbudoOptions = {}): Promise<E
       ? boardResponse.data.visitantes_sin_chat
       : 0;
 
-  return {
+  const result = {
     stages,
     sinConversacion,
     visitantesSinChat,
     scoringKpis: scoringResponse.ok ? scoringResponse.data : null,
     errors: Array.from(new Set(errors)),
   };
+
+  console.info("[embudo:load] done", {
+    elapsed_ms: Math.round(performance.now() - startedAt),
+    stages: stages.length,
+    sinConversacion: sinConversacion.length,
+    visitors: visitantesSinChat,
+    errors: errors.length,
+  });
+
+  return result;
 }
 
 function adaptPipelineBoard(

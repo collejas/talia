@@ -29379,13 +29379,38 @@ async def pipeline_board(
     tiene_cita: str | None = Query(default=None),
 ) -> CRMPipelineBoard:
     """Construir el board del pipeline filtrando opcionalmente por tablero."""
+    request_started = time.perf_counter()
+    logger.info(
+        "crm.pipeline_board.start",
+        extra={
+            "limit": limit,
+            "tablero_id": str(tablero_id) if tablero_id else None,
+            "asignado_id": str(asignado_id) if asignado_id else None,
+            "canal": canal,
+            "estado": estado,
+            "q": q,
+            "etapa_ids": etapa_ids,
+            "tiene_cita": tiene_cita,
+        },
+    )
     try:
         try:
+            stage_started = time.perf_counter()
             await repo.ensure_prospeccion_stage(organizacion_id=organizacion_id)
+            logger.info(
+                "crm.pipeline_board.ensure_prospeccion_stage.done",
+                extra={"elapsed_ms": round((time.perf_counter() - stage_started) * 1000, 1)},
+            )
         except CRMRepositoryError as stage_exc:
             logger.warning("crm.ensure_prospeccion_stage_failed", extra={"error": str(stage_exc)})
 
+        pipelines_started = time.perf_counter()
         stages = await repo.list_pipelines(organizacion_id=organizacion_id, tablero_id=tablero_id)
+        logger.info(
+            "crm.pipeline_board.list_pipelines.done",
+            extra={"elapsed_ms": round((time.perf_counter() - pipelines_started) * 1000, 1), "stages": len(stages)},
+        )
+        rows_started = time.perf_counter()
         rows, _ = await repo.list_pipeline_opportunities(
             organizacion_id=organizacion_id,
             limit=limit,
@@ -29396,20 +29421,40 @@ async def pipeline_board(
             q=q,
             etapa_ids=etapa_ids,
             tiene_cita=tiene_cita,
-            include_contact_rows=True,
+            # El select del tablero ya trae `contacto` embebido; hidratarlo otra
+            # vez dispara N+1 queries y degrada la vista.
+            include_contact_rows=False,
             count_exact=False,
+        )
+        logger.info(
+            "crm.pipeline_board.list_pipeline_opportunities.done",
+            extra={"elapsed_ms": round((time.perf_counter() - rows_started) * 1000, 1), "rows": len(rows)},
         )
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
     visitors = 0
     try:
+        kpis_started = time.perf_counter()
         kpis_payload = await repo.visitas_dashboard_kpis(usuario_token=user_token)
         visitors = _extract_visitas_sin_chat(kpis_payload)
+        logger.info(
+            "crm.pipeline_board.visitas_dashboard_kpis.done",
+            extra={"elapsed_ms": round((time.perf_counter() - kpis_started) * 1000, 1), "visitors": visitors},
+        )
     except CRMRepositoryError:
         visitors = 0
 
     board = _build_pipeline_board(stages, rows, tablero_id)
+    logger.info(
+        "crm.pipeline_board.done",
+        extra={
+            "elapsed_ms": round((time.perf_counter() - request_started) * 1000, 1),
+            "stages": len(board.stages),
+            "sin_conversacion": len(board.sin_conversacion),
+            "visitors": visitors,
+        },
+    )
     return CRMPipelineBoard(
         stages=board.stages,
         sin_conversacion=board.sin_conversacion,
