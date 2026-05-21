@@ -27,20 +27,65 @@ function parseRequiredText(value: FormDataEntryValue | null, field: string): str
   return value.trim()
 }
 
-function parseItemsJson(value: FormDataEntryValue | null): Record<string, unknown>[] {
-  const raw = parseOptionalText(value)
-  if (!raw) {
+function parseRequiredNumber(value: FormDataEntryValue | null, field: string): number {
+  if (typeof value !== "string" || !value.trim()) {
+    throw new Error(`${field}_required`)
+  }
+  const parsed = Number(value)
+  if (!Number.isFinite(parsed)) {
+    throw new Error(`${field}_invalid`)
+  }
+  return parsed
+}
+
+function getFormDataTextArray(formData: FormData, name: string): string[] {
+  return formData
+    .getAll(name)
+    .map((value) => (typeof value === "string" ? value : ""))
+}
+
+function getFormDataNumberArray(formData: FormData, name: string, field: string): number[] {
+  return formData.getAll(name).map((value) => parseRequiredNumber(value, field))
+}
+
+function zipReceptionItems(formData: FormData): Record<string, unknown>[] {
+  const ordenCompraItemIds = getFormDataTextArray(formData, "items_orden_compra_item_id")
+  const catalogItemIds = getFormDataTextArray(formData, "items_catalog_item_id")
+  const cantidadesRecibidas = getFormDataNumberArray(formData, "items_cantidad_recibida", "items_cantidad_recibida")
+  const costosUnitarios = getFormDataNumberArray(formData, "items_costo_unitario_real", "items_costo_unitario_real")
+  const lotes = getFormDataTextArray(formData, "items_lote_codigo")
+  const caducidades = getFormDataTextArray(formData, "items_fecha_caducidad")
+  const series = getFormDataTextArray(formData, "items_serie")
+  const observaciones = getFormDataTextArray(formData, "items_observaciones")
+
+  const expectedLength = ordenCompraItemIds.length
+  if (!expectedLength) {
     throw new Error("items_required")
   }
-  try {
-    const parsed = JSON.parse(raw)
-    if (!Array.isArray(parsed) || !parsed.length) {
-      throw new Error("items_required")
-    }
-    return parsed.filter((entry) => entry && typeof entry === "object") as Record<string, unknown>[]
-  } catch {
-    throw new Error("items_json_invalid")
+
+  const arrays = [
+    catalogItemIds,
+    cantidadesRecibidas,
+    costosUnitarios,
+    lotes,
+    caducidades,
+    series,
+    observaciones,
+  ]
+  if (arrays.some((array) => array.length !== expectedLength)) {
+    throw new Error("items_mismatch")
   }
+
+  return ordenCompraItemIds.map((ordenCompraItemId, index) => ({
+    orden_compra_item_id: parseRequiredText(ordenCompraItemId, "items_orden_compra_item_id"),
+    catalog_item_id: parseRequiredText(catalogItemIds[index], "items_catalog_item_id"),
+    cantidad_recibida: cantidadesRecibidas[index],
+    costo_unitario_real: costosUnitarios[index],
+    lote_codigo: parseOptionalText(lotes[index]),
+    fecha_caducidad: parseOptionalText(caducidades[index]),
+    serie: parseOptionalText(series[index]),
+    observaciones: parseOptionalText(observaciones[index]),
+  }))
 }
 
 export async function createAlmacenAction(formData: FormData): Promise<void> {
@@ -67,7 +112,7 @@ export async function createAlmacenAction(formData: FormData): Promise<void> {
 }
 
 export async function createRecepcionAction(formData: FormData): Promise<void> {
-  const items = parseItemsJson(formData.get("items_json"))
+  const items = zipReceptionItems(formData)
   const payload = {
     orden_compra_id: parseRequiredText(formData.get("orden_compra_id"), "orden_compra_id"),
     almacen_id: parseRequiredText(formData.get("almacen_id"), "almacen_id"),

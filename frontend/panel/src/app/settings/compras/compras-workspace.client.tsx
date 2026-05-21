@@ -77,10 +77,6 @@ function formatDateTime(value: unknown): string {
   }).format(parsed)
 }
 
-function isTruthy(value: unknown): boolean {
-  return Boolean(value)
-}
-
 function buildLinesFromOrder(order: AnyRecord | undefined | null): ReceptionLine[] {
   if (!order || !Array.isArray(order.items)) return []
   return order.items
@@ -149,21 +145,6 @@ export function ComprasWorkspace({
   const selectedOrder = ordenes.find((orden) => String(orden.id) === selectedOrderId) ?? null
   const selectedProvider = selectedOrder && typeof selectedOrder.proveedor === "object" ? (selectedOrder.proveedor as AnyRecord) : null
 
-  const payload = useMemo(
-    () =>
-      lines.map((line) => ({
-        orden_compra_item_id: line.orden_compra_item_id,
-        catalog_item_id: line.catalog_item_id,
-        cantidad_recibida: Number(line.cantidad_recibida || 0),
-        costo_unitario_real: Number(line.costo_unitario_real || 0),
-        lote_codigo: line.lote_codigo,
-        fecha_caducidad: line.fecha_caducidad || undefined,
-        serie: line.serie,
-        observaciones: line.observaciones,
-      })),
-    [lines],
-  )
-
   const totalReceived = lines.reduce((sum, line) => sum + (Number.isFinite(line.cantidad_recibida) ? line.cantidad_recibida : 0), 0)
   const totalValue = lines.reduce((sum, line) => sum + (Number.isFinite(line.cantidad_recibida) ? line.cantidad_recibida : 0) * (Number.isFinite(line.costo_unitario_real) ? line.costo_unitario_real : 0), 0)
 
@@ -192,6 +173,27 @@ export function ComprasWorkspace({
         }
       }),
     )
+  }
+
+  const getLineStatus = (line: ReceptionLine) => {
+    const received = Math.max(line.cantidad_recibida || 0, 0)
+    const requested = Math.max(line.cantidad_solicitada || 0, 0)
+    if (received <= 0) {
+      return {
+        label: "Pendiente",
+        className: "border-amber-200 bg-amber-50 text-amber-700",
+      }
+    }
+    if (received >= requested) {
+      return {
+        label: "Completo",
+        className: "border-emerald-200 bg-emerald-50 text-emerald-700",
+      }
+    }
+    return {
+      label: "Parcial",
+      className: "border-sky-200 bg-sky-50 text-sky-700",
+    }
   }
 
   return (
@@ -419,70 +421,89 @@ export function ComprasWorkspace({
                     <TableHead>Recibido</TableHead>
                     <TableHead>Costo</TableHead>
                     <TableHead>Lote / Serie</TableHead>
+                    <TableHead>Estado</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {!lines.length ? (
                     <TableRow>
-                      <TableCell colSpan={5} className="py-8 text-center text-sm text-muted-foreground">
+                      <TableCell colSpan={6} className="py-8 text-center text-sm text-muted-foreground">
                         Selecciona una orden para cargar sus productos.
                       </TableCell>
                     </TableRow>
                   ) : (
                     lines.map((line, index) => (
-                      <TableRow key={`${line.orden_compra_item_id}-${index}`}>
+                      <TableRow
+                        key={`${line.orden_compra_item_id}-${index}`}
+                        className={getLineStatus(line).label === "Completo" ? "bg-emerald-50/40" : undefined}
+                      >
                         <TableCell className="min-w-56">
                           <div className="space-y-1">
                             <div className="font-medium">{line.nombre}</div>
                             <div className="text-xs text-muted-foreground font-mono">{line.unidad}</div>
                           </div>
-                          <input type="hidden" name="line_catalog_item_id" value={line.catalog_item_id} readOnly />
-                          <input type="hidden" name="line_orden_compra_item_id" value={line.orden_compra_item_id} readOnly />
+                          <input type="hidden" name="items_catalog_item_id" value={line.catalog_item_id} readOnly />
+                          <input type="hidden" name="items_orden_compra_item_id" value={line.orden_compra_item_id} readOnly />
                         </TableCell>
                         <TableCell className="w-28">
-                          <Input value={line.cantidad_solicitada.toString()} readOnly />
+                          <Input value={line.cantidad_solicitada.toString()} readOnly aria-label={`Solicitado ${line.nombre}`} />
                         </TableCell>
                         <TableCell className="w-28">
                           <Input
+                            name="items_cantidad_recibida"
                             type="number"
                             min="0"
                             step="0.001"
                             value={Number.isFinite(line.cantidad_recibida) ? line.cantidad_recibida : 0}
                             onChange={(event) => updateLine(index, { cantidad_recibida: Number(event.target.value) })}
+                            aria-label={`Recibido ${line.nombre}`}
                           />
                         </TableCell>
                         <TableCell className="w-36">
                           <Input
+                            name="items_costo_unitario_real"
                             type="number"
                             min="0"
                             step="0.0001"
                             value={Number.isFinite(line.costo_unitario_real) ? line.costo_unitario_real : 0}
                             onChange={(event) => updateLine(index, { costo_unitario_real: Number(event.target.value) })}
+                            aria-label={`Costo unitario ${line.nombre}`}
                           />
                         </TableCell>
                         <TableCell className="min-w-64">
                           <div className="grid gap-2 md:grid-cols-2">
                             <Input
+                              name="items_lote_codigo"
                               placeholder="Lote"
                               value={line.lote_codigo}
                               onChange={(event) => updateLine(index, { lote_codigo: event.target.value })}
                             />
                             <Input
+                              name="items_serie"
                               placeholder="Serie"
                               value={line.serie}
                               onChange={(event) => updateLine(index, { serie: event.target.value })}
                             />
                             <Input
+                              name="items_fecha_caducidad"
                               type="date"
                               value={line.fecha_caducidad}
                               onChange={(event) => updateLine(index, { fecha_caducidad: event.target.value })}
                             />
                             <Input
+                              name="items_observaciones"
                               placeholder="Observación"
                               value={line.observaciones}
                               onChange={(event) => updateLine(index, { observaciones: event.target.value })}
                             />
                           </div>
+                        </TableCell>
+                        <TableCell className="whitespace-nowrap">
+                          <span
+                            className={`inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-medium ${getLineStatus(line).className}`}
+                          >
+                            {getLineStatus(line).label}
+                          </span>
                         </TableCell>
                       </TableRow>
                     ))
@@ -490,8 +511,6 @@ export function ComprasWorkspace({
                 </TableBody>
               </Table>
             </div>
-
-            <input type="hidden" name="items_json" value={JSON.stringify(payload)} readOnly />
             <Button type="submit" disabled={!lines.length}>
               Registrar recepción
             </Button>
