@@ -375,6 +375,10 @@ Resultado esperado:
 - actualizar cantidades recibidas en la OC,
 - dejar evidencia auditable del ingreso.
 
+Estado:
+
+- aplicada en `supabase/migrations/20260521_150000_inventory_purchases_phase3.sql`.
+
 ### Fase 4: refinamiento operativo
 
 Objetivo:
@@ -439,4 +443,5 @@ Tareas:
 - Fase 1 iniciada con migracion base en `supabase/migrations/20260521_120000_inventory_purchases_phase1.sql`.
 - El enfoque ya quedo definido alrededor de `catalog_items` como catalogo canonicamente operable.
 - Fase 2 preparada para proveedores y compras en `supabase/migrations/20260521_140000_inventory_purchases_phase2.sql`.
-- La siguiente entrega debe completar validacion tecnica y luego el CRUD de almacenes, existencias, proveedores y ordenes de compra en la app.
+- Fase 3 aplicada para recepciones de compra y entrada a inventario en `supabase/migrations/20260521_150000_inventory_purchases_phase3.sql`.
+- La siguiente entrega debe enfocarse en validacion funcional y luego el CRUD de almacenes, existencias, proveedores, ordenes de compra y recepciones en la app.
