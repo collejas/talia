@@ -148,8 +148,8 @@ const CONTACT_COLUMNS: Array<{
   accessor: (row: TableRow) => React.ReactNode;
   defaultVisible?: boolean;
 }> = [
-  { id: "contact_codigo", label: "Código contacto", accessor: (row) => renderField(row, "codigo_contacto"), defaultVisible: true },
-  { id: "account_codigo", label: "Código empresa", accessor: (row) => renderField(row, "codigo_cuenta"), defaultVisible: true },
+  { id: "contact_codigo", label: "Código contacto", accessor: (row) => renderField(row, "codigo_contacto") },
+  { id: "account_codigo", label: "Código empresa", accessor: (row) => renderField(row, "codigo_cuenta") },
   { id: "contact_correo", label: "Correo", accessor: (row) => renderField(row, "correo"), defaultVisible: true },
   { id: "contact_telefono", label: "Teléfono", accessor: (row) => renderField(row, "telefono"), defaultVisible: true },
   { id: "contact_rfc", label: "RFC", accessor: (row) => renderField(row, "rfc"), defaultVisible: true },
@@ -159,7 +159,7 @@ const CONTACT_COLUMNS: Array<{
   { id: "contact_origen", label: "Origen", accessor: (row) => renderField(row, "origen"), defaultVisible: true },
   { id: "contact_estado", label: "Estado", accessor: (row) => renderField(row, "estado") },
   { id: "contact_captura", label: "Captura", accessor: (row) => renderField(row, "captura_estado") },
-  { id: "contact_company", label: "Empresa", accessor: (row) => renderField(row, "company_name") },
+  { id: "contact_company", label: "Empresa", accessor: (row) => renderField(row, "company_name"), defaultVisible: true },
   { id: "contact_ultimo", label: "Último contacto", accessor: (row) => renderField(row, "ultimo_contacto_en"), defaultVisible: true },
   { id: "contact_conversaciones", label: "Conversaciones", accessor: (row) => renderField(row, "conversaciones") },
   { id: "contact_notes", label: "Notas", accessor: (row) => renderField(row, "notes") },

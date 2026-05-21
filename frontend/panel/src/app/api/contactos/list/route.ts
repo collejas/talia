@@ -76,7 +76,7 @@ export async function GET(request: Request) {
 
     return {
       id: index + 1,
-      header: row.nombre?.trim() || "Contacto sin nombre",
+      header: row.nombre?.trim() || row.company_name?.trim() || "Contacto sin nombre",
       type: normalizeLabel(row.estado) || "Desconocido",
       status: captureDone ? "Done" : "In Process",
       target: conversations.toString(),
