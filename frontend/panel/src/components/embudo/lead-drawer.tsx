@@ -899,6 +899,7 @@ export function LeadDrawer({
   const [contactSearchResults, setContactSearchResults] = useState<ContactSearchResult[]>([]);
   const [contactSearchError, setContactSearchError] = useState<string | null>(null);
   const [contactSearchPending, startContactSearch] = useTransition();
+  const contactSearchRequestRef = useRef(0);
   const [quotePending, startQuoteAction] = useTransition();
   const isBusy = pending || deletePending;
   const wasOpenRef = useRef(false);
@@ -1049,6 +1050,35 @@ export function LeadDrawer({
       setContactSearchError(null);
     }
   }, [open, isCreateMode]);
+
+  useEffect(() => {
+    if (!open || !isCreateMode) {
+      return;
+    }
+
+    const term = contactSearchQuery.trim();
+    if (term.length < 3) {
+      contactSearchRequestRef.current += 1;
+      setContactSearchResults([]);
+      setContactSearchError(null);
+      return;
+    }
+
+    const requestId = contactSearchRequestRef.current + 1;
+    const timeout = window.setTimeout(() => {
+      contactSearchRequestRef.current = requestId;
+      startContactSearch(async () => {
+        const results = await searchEmbudoContacts(term, 8);
+        if (contactSearchRequestRef.current !== requestId) {
+          return;
+        }
+        setContactSearchResults(results);
+        setContactSearchError(results.length ? null : "No encontramos coincidencias.");
+      });
+    }, 300);
+
+    return () => window.clearTimeout(timeout);
+  }, [contactSearchQuery, isCreateMode, open, startContactSearch]);
 
   useEffect(() => {
     if (selectedContact) {
@@ -1755,20 +1785,28 @@ export function LeadDrawer({
     }
   };
 
-  const handleContactSearch = useCallback(() => {
-    const term = contactSearchQuery.trim();
+  const runContactSearch = useCallback((term: string) => {
     if (term.length < 3) {
       setContactSearchError("Escribe al menos 3 caracteres para buscar.");
       setContactSearchResults([]);
       return;
     }
     setContactSearchError(null);
+    const requestId = contactSearchRequestRef.current + 1;
+    contactSearchRequestRef.current = requestId;
     startContactSearch(async () => {
       const results = await searchEmbudoContacts(term, 8);
+      if (contactSearchRequestRef.current !== requestId) {
+        return;
+      }
       setContactSearchResults(results);
       setContactSearchError(results.length ? null : "No encontramos coincidencias.");
     });
-  }, [contactSearchQuery]);
+  }, [startContactSearch]);
+
+  const handleContactSearch = useCallback(() => {
+    runContactSearch(contactSearchQuery.trim());
+  }, [contactSearchQuery, runContactSearch]);
 
   const handleSelectExistingContact = (contact: ContactSearchResult) => {
     setSelectedContact(contact);
