@@ -438,4 +438,5 @@ Tareas:
 
 - Fase 1 iniciada con migracion base en `supabase/migrations/20260521_120000_inventory_purchases_phase1.sql`.
 - El enfoque ya quedo definido alrededor de `catalog_items` como catalogo canonicamente operable.
-- La siguiente entrega debe completar validacion tecnica y, despues, el CRUD de almacenes y existencias en la app.
+- Fase 2 preparada para proveedores y compras en `supabase/migrations/20260521_140000_inventory_purchases_phase2.sql`.
+- La siguiente entrega debe completar validacion tecnica y luego el CRUD de almacenes, existencias, proveedores y ordenes de compra en la app.
