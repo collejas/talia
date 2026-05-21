@@ -9210,6 +9210,176 @@ class CRMRepository:
             raise CRMRepositoryError(f"Respuesta inválida al eliminar catálogo: {row!r}")
         return row
 
+    async def list_almacenes(
+        self,
+        *,
+        organizacion_id: UUID,
+        include_inactive: bool = False,
+        limit: int = 100,
+    ) -> list[dict[str, Any]]:
+        params: dict[str, Any] = {
+            "organizacion_id": f"eq.{organizacion_id}",
+            "order": "es_principal.desc,nombre.asc",
+            "limit": str(max(1, min(limit, 5000))),
+        }
+        if not include_inactive:
+            params["activo"] = "eq.true"
+        resp = await self._request("GET", "/rest/v1/almacenes", params=params)
+        data = resp.json()
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"Respuesta inesperada al listar almacenes: {data!r}")
+        return data
+
+    async def create_almacen(
+        self,
+        *,
+        organizacion_id: UUID,
+        payload: dict[str, Any],
+    ) -> dict[str, Any]:
+        body = {"organizacion_id": str(organizacion_id), **payload}
+        resp = await self._request(
+            "POST",
+            "/rest/v1/almacenes",
+            json=body,
+            prefer="return=representation",
+            organizacion_id=organizacion_id,
+        )
+        data = resp.json()
+        if not isinstance(data, list) or not data:
+            raise CRMRepositoryError("almacen_not_created")
+        row = data[0]
+        if not isinstance(row, dict):
+            raise CRMRepositoryError(f"Respuesta inválida al crear almacén: {row!r}")
+        return row
+
+    async def list_ordenes_compra_para_recepcion(
+        self,
+        *,
+        organizacion_id: UUID,
+        limit: int = 100,
+    ) -> list[dict[str, Any]]:
+        params: dict[str, Any] = {
+            "organizacion_id": f"eq.{organizacion_id}",
+            "estado": "in.(borrador,enviada,aprobada,parcial)",
+            "order": "fecha_emision.desc",
+            "limit": str(max(1, min(limit, 5000))),
+            "select": (
+                "id,organizacion_id,folio,proveedor_id,almacen_destino_id,estado,fecha_emision,fecha_entrega_estimada,"
+                "moneda,subtotal,descuento_total,impuestos_total,total,solicitado_por_usuario_id,aprobado_por_usuario_id,"
+                "referencia_externa,observaciones,instrucciones_entrega,creado_en,actualizado_en,"
+                "proveedor:proveedores(id,codigo_proveedor,razon_social,nombre_comercial,activo),"
+                "almacen:almacenes(id,codigo,nombre,activo),"
+                "items:ordenes_compra_items("
+                "id,orden_compra_id,catalog_item_id,proveedor_item_id,cantidad_solicitada,cantidad_recibida,"
+                "unidad,costo_unitario,descuento_porcentaje,subtotal,impuestos,total,observaciones,creado_en,actualizado_en,"
+                "catalog_item:catalog_items(id,slug,nombre,tipo,unidad,activo,maneja_inventario)"
+                ")"
+            ),
+        }
+        resp = await self._request("GET", "/rest/v1/ordenes_compra", params=params)
+        data = resp.json()
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"Respuesta inesperada al listar ordenes de compra: {data!r}")
+        return data
+
+    async def list_recepciones_compra(
+        self,
+        *,
+        organizacion_id: UUID,
+        limit: int = 50,
+    ) -> list[dict[str, Any]]:
+        params: dict[str, Any] = {
+            "organizacion_id": f"eq.{organizacion_id}",
+            "order": "recibido_en.desc",
+            "limit": str(max(1, min(limit, 5000))),
+            "select": (
+                "id,organizacion_id,orden_compra_id,almacen_id,numero_recepcion,estado,recibido_por_usuario_id,"
+                "recibido_en,referencia_externa,observaciones,creado_en,actualizado_en,"
+                "orden_compra:ordenes_compra(id,folio,estado,proveedor_id,almacen_destino_id),"
+                "almacen:almacenes(id,codigo,nombre),"
+                "items:recepciones_compra_items("
+                "id,recepcion_id,orden_compra_item_id,catalog_item_id,cantidad_recibida,costo_unitario_real,subtotal,"
+                "lote_codigo,fecha_caducidad,serie,observaciones,creado_en,actualizado_en,"
+                "catalog_item:catalog_items(id,slug,nombre,unidad,tipo)"
+                ")"
+            ),
+        }
+        resp = await self._request("GET", "/rest/v1/recepciones_compra", params=params)
+        data = resp.json()
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"Respuesta inesperada al listar recepciones: {data!r}")
+        return data
+
+    async def get_recepcion_compra(
+        self,
+        *,
+        organizacion_id: UUID,
+        recepcion_id: UUID,
+    ) -> dict[str, Any] | None:
+        params: dict[str, Any] = {
+            "organizacion_id": f"eq.{organizacion_id}",
+            "id": f"eq.{recepcion_id}",
+            "limit": "1",
+            "select": (
+                "id,organizacion_id,orden_compra_id,almacen_id,numero_recepcion,estado,recibido_por_usuario_id,"
+                "recibido_en,referencia_externa,observaciones,creado_en,actualizado_en,"
+                "orden_compra:ordenes_compra(id,folio,estado,proveedor_id,almacen_destino_id),"
+                "almacen:almacenes(id,codigo,nombre),"
+                "items:recepciones_compra_items("
+                "id,recepcion_id,orden_compra_item_id,catalog_item_id,cantidad_recibida,costo_unitario_real,subtotal,"
+                "lote_codigo,fecha_caducidad,serie,observaciones,creado_en,actualizado_en,"
+                "catalog_item:catalog_items(id,slug,nombre,unidad,tipo)"
+                ")"
+            ),
+        }
+        resp = await self._request("GET", "/rest/v1/recepciones_compra", params=params)
+        data = resp.json()
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"Respuesta inesperada al buscar recepcion: {data!r}")
+        if not data:
+            return None
+        row = data[0]
+        if not isinstance(row, dict):
+            raise CRMRepositoryError(f"Respuesta inválida al buscar recepcion: {row!r}")
+        return row
+
+    async def register_recepcion_compra(
+        self,
+        *,
+        organizacion_id: UUID,
+        payload: dict[str, Any],
+    ) -> UUID:
+        body = {
+            "p_organizacion_id": str(organizacion_id),
+            "p_orden_compra_id": payload.get("orden_compra_id"),
+            "p_almacen_id": payload.get("almacen_id"),
+            "p_numero_recepcion": payload.get("numero_recepcion"),
+            "p_recibido_por_usuario_id": payload.get("recibido_por_usuario_id"),
+            "p_referencia_externa": payload.get("referencia_externa"),
+            "p_observaciones": payload.get("observaciones"),
+            "p_items": payload.get("items") or [],
+        }
+        resp = await self._request(
+            "POST",
+            "/rest/v1/rpc/registrar_recepcion_compra",
+            json=body,
+            organizacion_id=organizacion_id,
+        )
+        data = resp.json()
+        if isinstance(data, str):
+            try:
+                return UUID(data)
+            except (TypeError, ValueError) as exc:
+                raise CRMRepositoryError(f"Respuesta inválida al registrar recepcion: {data!r}") from exc
+        if isinstance(data, dict):
+            candidate = data.get("id") or data.get("recepcion_id")
+            if candidate:
+                try:
+                    return UUID(str(candidate))
+                except (TypeError, ValueError) as exc:
+                    raise CRMRepositoryError(f"Respuesta inválida al registrar recepcion: {data!r}") from exc
+        raise CRMRepositoryError(f"Respuesta inesperada al registrar recepcion: {data!r}")
+
     async def soft_delete_catalog_item(
         self,
         *,

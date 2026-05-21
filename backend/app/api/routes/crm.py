@@ -11244,6 +11244,145 @@ class CRMBulkDeleteResponse(BaseModel):
     errors: list[CRMBulkDeleteError] = Field(default_factory=list)
 
 
+class CRMAlmacen(BaseModel):
+    id: UUID
+    organizacion_id: UUID
+    codigo: str
+    nombre: str
+    tipo: str
+    activo: bool
+    es_principal: bool
+    direccion_id: UUID | None = None
+    responsable_usuario_id: UUID | None = None
+    telefono: str | None = None
+    email: str | None = None
+    creado_en: datetime
+    actualizado_en: datetime
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class CRMAlmacenCreate(BaseModel):
+    codigo: str = Field(..., min_length=1, max_length=50)
+    nombre: str = Field(..., min_length=1, max_length=200)
+    tipo: Literal["central", "sucursal", "transito", "consignacion"]
+    activo: bool = True
+    es_principal: bool = False
+    direccion_id: UUID | None = None
+    responsable_usuario_id: UUID | None = None
+    telefono: str | None = Field(default=None, max_length=50)
+    email: str | None = Field(default=None, max_length=254)
+
+
+class CRMRecepcionCompraItem(BaseModel):
+    id: UUID
+    recepcion_id: UUID
+    orden_compra_item_id: UUID
+    catalog_item_id: UUID
+    cantidad_recibida: float
+    costo_unitario_real: float
+    subtotal: float
+    lote_codigo: str | None = None
+    fecha_caducidad: date | None = None
+    serie: str | None = None
+    observaciones: str | None = None
+    creado_en: datetime
+    actualizado_en: datetime
+    catalog_item: dict[str, Any] | None = None
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class CRMRecepcionCompra(BaseModel):
+    id: UUID
+    organizacion_id: UUID
+    orden_compra_id: UUID
+    almacen_id: UUID
+    numero_recepcion: str
+    estado: str
+    recibido_por_usuario_id: UUID | None = None
+    recibido_en: datetime
+    referencia_externa: str | None = None
+    observaciones: str | None = None
+    creado_en: datetime
+    actualizado_en: datetime
+    orden_compra: dict[str, Any] | None = None
+    almacen: dict[str, Any] | None = None
+    items: list[CRMRecepcionCompraItem] = Field(default_factory=list)
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class CRMRecepcionCompraCreateItem(BaseModel):
+    orden_compra_item_id: UUID
+    catalog_item_id: UUID
+    cantidad_recibida: Annotated[float, Field(gt=0)]
+    costo_unitario_real: Annotated[float, Field(ge=0)]
+    lote_codigo: str | None = Field(default=None, max_length=100)
+    fecha_caducidad: date | None = None
+    serie: str | None = Field(default=None, max_length=120)
+    observaciones: str | None = Field(default=None, max_length=1000)
+
+
+class CRMRecepcionCompraCreate(BaseModel):
+    orden_compra_id: UUID
+    almacen_id: UUID
+    numero_recepcion: str = Field(..., min_length=1, max_length=80)
+    recibido_por_usuario_id: UUID | None = None
+    referencia_externa: str | None = Field(default=None, max_length=120)
+    observaciones: str | None = Field(default=None, max_length=2000)
+    items: list[CRMRecepcionCompraCreateItem] = Field(min_length=1)
+
+
+class CRMOrdenCompraRecepcionItem(BaseModel):
+    id: UUID
+    orden_compra_id: UUID
+    catalog_item_id: UUID
+    proveedor_item_id: UUID | None = None
+    cantidad_solicitada: float
+    cantidad_recibida: float
+    unidad: str
+    costo_unitario: float
+    descuento_porcentaje: float | None = None
+    subtotal: float
+    impuestos: float
+    total: float
+    observaciones: str | None = None
+    creado_en: datetime
+    actualizado_en: datetime
+    catalog_item: dict[str, Any] | None = None
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class CRMOrdenCompraRecepcion(BaseModel):
+    id: UUID
+    organizacion_id: UUID
+    folio: str
+    proveedor_id: UUID
+    almacen_destino_id: UUID
+    estado: str
+    fecha_emision: datetime
+    fecha_entrega_estimada: date | None = None
+    moneda: str
+    subtotal: float
+    descuento_total: float
+    impuestos_total: float
+    total: float
+    solicitado_por_usuario_id: UUID | None = None
+    aprobado_por_usuario_id: UUID | None = None
+    referencia_externa: str | None = None
+    observaciones: str | None = None
+    instrucciones_entrega: str | None = None
+    creado_en: datetime
+    actualizado_en: datetime
+    proveedor: dict[str, Any] | None = None
+    almacen: dict[str, Any] | None = None
+    items: list[CRMOrdenCompraRecepcionItem] = Field(default_factory=list)
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
 # existing classes...
 class CRMProductoMetadataField(BaseModel):
     id: str
@@ -14189,6 +14328,131 @@ async def delete_catalog_item(
         detail = "catalog_item_not_found" if "catalog_item_not_found" in str(exc) else str(exc)
         status_code = 404 if detail == "catalog_item_not_found" else 502
         raise HTTPException(status_code=status_code, detail=detail) from exc
+
+
+@router.get("/compras/almacenes", response_model=list[CRMAlmacen])
+async def list_compras_almacenes(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("settings.view")),
+    include_inactive: bool = Query(default=False),
+    limit: Annotated[int, Query(ge=1, le=500)] = 100,
+) -> list[CRMAlmacen]:
+    try:
+        rows = await repo.list_almacenes(
+            organizacion_id=organizacion_id,
+            include_inactive=include_inactive,
+            limit=limit,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return [CRMAlmacen.model_validate(row) for row in rows]
+
+
+@router.post("/compras/almacenes", response_model=CRMAlmacen, status_code=status.HTTP_201_CREATED)
+async def create_compras_almacen(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("settings.manage")),
+    payload: CRMAlmacenCreate,
+) -> CRMAlmacen:
+    try:
+        row = await repo.create_almacen(
+            organizacion_id=organizacion_id,
+            payload=payload.model_dump(mode="json", exclude_unset=True),
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return CRMAlmacen.model_validate(row)
+
+
+@router.get("/compras/ordenes", response_model=list[CRMOrdenCompraRecepcion])
+async def list_compras_ordenes_para_recepcion(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("settings.view")),
+    limit: Annotated[int, Query(ge=1, le=500)] = 100,
+) -> list[CRMOrdenCompraRecepcion]:
+    try:
+        rows = await repo.list_ordenes_compra_para_recepcion(
+            organizacion_id=organizacion_id,
+            limit=limit,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return [CRMOrdenCompraRecepcion.model_validate(row) for row in rows]
+
+
+@router.get("/compras/recepciones", response_model=list[CRMRecepcionCompra])
+async def list_compras_recepciones(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("settings.view")),
+    limit: Annotated[int, Query(ge=1, le=200)] = 50,
+) -> list[CRMRecepcionCompra]:
+    try:
+        rows = await repo.list_recepciones_compra(
+            organizacion_id=organizacion_id,
+            limit=limit,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return [CRMRecepcionCompra.model_validate(row) for row in rows]
+
+
+@router.get("/compras/recepciones/{recepcion_id}", response_model=CRMRecepcionCompra)
+async def get_compras_recepcion(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("settings.view")),
+    recepcion_id: UUID,
+) -> CRMRecepcionCompra:
+    try:
+        row = await repo.get_recepcion_compra(
+            organizacion_id=organizacion_id,
+            recepcion_id=recepcion_id,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    if row is None:
+        raise HTTPException(status_code=404, detail="recepcion_compra_not_found")
+    return CRMRecepcionCompra.model_validate(row)
+
+
+@router.post("/compras/recepciones", response_model=CRMRecepcionCompra, status_code=status.HTTP_201_CREATED)
+async def create_compras_recepcion(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("settings.manage")),
+    usuario_id: UUID | None = Depends(optional_usuario_id),
+    payload: CRMRecepcionCompraCreate,
+) -> CRMRecepcionCompra:
+    body = payload.model_dump(mode="json", exclude_unset=True)
+    if usuario_id:
+        body.setdefault("recibido_por_usuario_id", str(usuario_id))
+    try:
+        recepcion_id = await repo.register_recepcion_compra(
+            organizacion_id=organizacion_id,
+            payload=body,
+        )
+        row = await repo.get_recepcion_compra(
+            organizacion_id=organizacion_id,
+            recepcion_id=recepcion_id,
+        )
+    except CRMRepositoryError as exc:
+        detail = str(exc)
+        if "exists" in detail.lower() or "unq" in detail.lower():
+            raise HTTPException(status_code=409, detail=detail) from exc
+        raise HTTPException(status_code=502, detail=detail) from exc
+    if row is None:
+        raise HTTPException(status_code=502, detail="recepcion_compra_not_created")
+    return CRMRecepcionCompra.model_validate(row)
 
 
 class CatalogVectorStoreStatus(BaseModel):

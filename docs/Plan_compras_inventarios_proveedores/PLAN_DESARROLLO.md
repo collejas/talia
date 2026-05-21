@@ -444,4 +444,5 @@ Tareas:
 - El enfoque ya quedo definido alrededor de `catalog_items` como catalogo canonicamente operable.
 - Fase 2 preparada para proveedores y compras en `supabase/migrations/20260521_140000_inventory_purchases_phase2.sql`.
 - Fase 3 aplicada para recepciones de compra y entrada a inventario en `supabase/migrations/20260521_150000_inventory_purchases_phase3.sql`.
-- La siguiente entrega debe enfocarse en validacion funcional y luego el CRUD de almacenes, existencias, proveedores, ordenes de compra y recepciones en la app.
+- Existe una primera pantalla operativa en `frontend/panel/src/app/settings/compras/page.tsx` con alta de almacenes y recepción de mercancía.
+- La siguiente entrega debe enfocarse en validar el flujo end-to-end y luego ampliar el CRUD de existencias, proveedores y órdenes de compra en la app.
