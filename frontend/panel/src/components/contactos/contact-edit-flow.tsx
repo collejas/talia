@@ -239,6 +239,16 @@ const PERSONA_ESTADO_OPTIONS = [
   { value: "fusionado", label: "Fusionado" },
 ] as const;
 
+const PERSONA_ORIGEN_OPTIONS = [
+  { value: "prospeccion_propia", label: "Prospección propia" },
+  { value: "referido_cliente", label: "Referido cliente" },
+  { value: "llamada_entrante", label: "Llamada entrante" },
+  { value: "visita_oficina", label: "Visita oficina" },
+  { value: "evento_feria", label: "Evento o feria" },
+  { value: "redes_sociales", label: "Redes sociales" },
+  { value: "importacion", label: "Importación" },
+] as const;
+
 const INITIAL_STATE: ContactEditState = {
   mode: "solo_persona",
   persona: {
@@ -1259,7 +1269,21 @@ export function ContactEditFlow({ open, onOpenChange, personaId, onSaved }: Cont
                 <Input value={state.persona.telefono_principal_e164} onChange={(e) => dispatch({ type: "persona/set", field: "telefono_principal_e164", value: e.target.value })} />
               </Field>
               <Field label="Origen">
-                <Input value={state.persona.origen} onChange={(e) => dispatch({ type: "persona/set", field: "origen", value: e.target.value })} />
+                <Select
+                  value={state.persona.origen || undefined}
+                  onValueChange={(value) => dispatch({ type: "persona/set", field: "origen", value })}
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Selecciona origen" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {PERSONA_ORIGEN_OPTIONS.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </Field>
               <Field label="Puesto">
                 <Input value={state.persona.puesto} onChange={(e) => dispatch({ type: "persona/set", field: "puesto", value: e.target.value })} />
