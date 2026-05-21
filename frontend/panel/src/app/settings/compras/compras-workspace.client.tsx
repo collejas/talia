@@ -7,7 +7,18 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 
-import { createAlmacenAction, createOrdenCompraAction, createProveedorAction, createRecepcionAction } from "./actions"
+import {
+  createAlmacenAction,
+  createOrdenCompraAction,
+  createProveedorAction,
+  createRecepcionAction,
+  cancelOrdenCompraAction,
+  deleteAlmacenAction,
+  deleteOrdenCompraAction,
+  deleteProveedorAction,
+  updateAlmacenAction,
+  updateProveedorAction,
+} from "./actions"
 
 type AnyRecord = Record<string, unknown>
 
@@ -173,6 +184,8 @@ export function ComprasWorkspace({
   const [receptionNumber, setReceptionNumber] = useState<string>(defaultReceptionNumber || createSuggestedReceptionNumber())
   const [referenceExternal, setReferenceExternal] = useState("")
   const [observations, setObservations] = useState("")
+  const [editingWarehouseId, setEditingWarehouseId] = useState<string | null>(null)
+  const [editingProviderId, setEditingProviderId] = useState<string | null>(null)
   const [providerFormCode, setProviderFormCode] = useState("")
   const [providerFormName, setProviderFormName] = useState("")
   const [providerFormCommercialName, setProviderFormCommercialName] = useState("")
@@ -266,7 +279,7 @@ export function ComprasWorkspace({
   const setOrderLineFromCatalog = (index: number, catalogItemId: string) => {
     const item = catalogItems.find((entry) => String(entry.id) === catalogItemId) ?? null
     const unidad = asString(item?.unidad, "unidad")
-    const costo = asNumber(item?.costo_ultimo ?? item?.precio_base ?? item?.precioBase)
+    const costo = asNumber(item?.costo_ultimo ?? item?.costoUltimo ?? item?.costo_promedio ?? item?.costoPromedio)
     updateOrderLine(index, {
       catalog_item_id: catalogItemId,
       proveedor_item_id: "",
@@ -319,6 +332,62 @@ export function ComprasWorkspace({
     }
   }
 
+  const warehouseFormAction = editingWarehouseId
+    ? updateAlmacenAction.bind(null, editingWarehouseId)
+    : createAlmacenAction
+  const providerFormAction = editingProviderId
+    ? updateProveedorAction.bind(null, editingProviderId)
+    : createProveedorAction
+  const orderFormAction = createOrdenCompraAction
+
+  const startEditWarehouse = (almacen: AnyRecord) => {
+    setEditingWarehouseId(String(almacen.id))
+    setWarehouseFormCode(asString(almacen.codigo, ""))
+    setWarehouseFormName(asString(almacen.nombre, ""))
+    setWarehouseFormType((asString(almacen.tipo, "central") as typeof warehouseFormType) || "central")
+    setWarehouseFormPhone(asString(almacen.telefono, ""))
+    setWarehouseFormEmail(asString(almacen.email, ""))
+    setWarehouseFormActive(Boolean(almacen.activo))
+    setWarehouseFormPrincipal(Boolean(almacen.es_principal))
+  }
+
+  const clearWarehouseForm = () => {
+    setEditingWarehouseId(null)
+    setWarehouseFormCode("")
+    setWarehouseFormName("")
+    setWarehouseFormType("central")
+    setWarehouseFormPhone("")
+    setWarehouseFormEmail("")
+    setWarehouseFormActive(true)
+    setWarehouseFormPrincipal(false)
+  }
+
+  const startEditProvider = (proveedor: AnyRecord) => {
+    setEditingProviderId(String(proveedor.id))
+    setProviderFormCode(asString(proveedor.codigo_proveedor, ""))
+    setProviderFormName(asString(proveedor.razon_social, ""))
+    setProviderFormCommercialName(asString(proveedor.nombre_comercial, ""))
+    setProviderFormEmail(asString(proveedor.correo, ""))
+    setProviderFormPhone(asString(proveedor.telefono, ""))
+    setProviderFormTax(asString(proveedor.rfc, ""))
+    setProviderFormPayDays(asString(proveedor.plazo_pago_dias, ""))
+    setProviderFormLeadDays(asString(proveedor.plazo_entrega_dias, ""))
+    setProviderFormActive(Boolean(proveedor.activo))
+  }
+
+  const clearProviderForm = () => {
+    setEditingProviderId(null)
+    setProviderFormCode("")
+    setProviderFormName("")
+    setProviderFormCommercialName("")
+    setProviderFormEmail("")
+    setProviderFormPhone("")
+    setProviderFormTax("")
+    setProviderFormPayDays("")
+    setProviderFormLeadDays("")
+    setProviderFormActive(true)
+  }
+
   return (
     <div className="grid gap-4 xl:grid-cols-3">
       <Card>
@@ -327,7 +396,7 @@ export function ComprasWorkspace({
           <CardDescription>Crea un almacén con datos simples y claros.</CardDescription>
         </CardHeader>
         <CardContent>
-          <form action={createAlmacenAction} className="space-y-4">
+          <form action={warehouseFormAction} className="space-y-4">
             <div className="space-y-2">
               <label className="text-sm font-medium" htmlFor="almacen-codigo">
                 Código
@@ -416,10 +485,58 @@ export function ComprasWorkspace({
               />
               Principal
             </label>
-            <Button type="submit" className="w-full">
-              Guardar almacén
-            </Button>
+            <div className="flex gap-2">
+              <Button type="submit" className="flex-1">
+                {editingWarehouseId ? "Actualizar almacén" : "Guardar almacén"}
+              </Button>
+              {editingWarehouseId ? (
+                <Button type="button" variant="outline" onClick={clearWarehouseForm}>
+                  Cancelar
+                </Button>
+              ) : null}
+            </div>
           </form>
+          <div className="mt-4 overflow-hidden rounded-lg border">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Código</TableHead>
+                  <TableHead>Nombre</TableHead>
+                  <TableHead>Tipo</TableHead>
+                  <TableHead className="text-right">Acciones</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {!almacenes.length ? (
+                  <TableRow>
+                    <TableCell colSpan={4} className="py-6 text-center text-sm text-muted-foreground">
+                      Aún no hay almacenes.
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  almacenes.map((almacen) => (
+                    <TableRow key={String(almacen.id)}>
+                      <TableCell className="font-mono text-xs">{asString(almacen.codigo)}</TableCell>
+                      <TableCell>{asString(almacen.nombre)}</TableCell>
+                      <TableCell>{asString(almacen.tipo)}</TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex justify-end gap-2">
+                          <Button type="button" variant="outline" size="sm" onClick={() => startEditWarehouse(almacen)}>
+                            Editar
+                          </Button>
+                          <form action={deleteAlmacenAction.bind(null, String(almacen.id))}>
+                            <Button type="submit" variant="ghost" size="sm">
+                              Eliminar
+                            </Button>
+                          </form>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </div>
         </CardContent>
       </Card>
 
@@ -429,7 +546,7 @@ export function ComprasWorkspace({
           <CardDescription>Registra un proveedor para poder generar órdenes de compra.</CardDescription>
         </CardHeader>
         <CardContent>
-          <form action={createProveedorAction} className="space-y-4">
+          <form action={providerFormAction} className="space-y-4">
             <div className="space-y-2">
               <label className="text-sm font-medium" htmlFor="proveedor-codigo">
                 Código
@@ -486,10 +603,58 @@ export function ComprasWorkspace({
               <input type="checkbox" name="activo" checked={providerFormActive} onChange={(event) => setProviderFormActive(event.target.checked)} />
               Activo
             </label>
-            <Button type="submit" className="w-full">
-              Guardar proveedor
-            </Button>
+            <div className="flex gap-2">
+              <Button type="submit" className="flex-1">
+                {editingProviderId ? "Actualizar proveedor" : "Guardar proveedor"}
+              </Button>
+              {editingProviderId ? (
+                <Button type="button" variant="outline" onClick={clearProviderForm}>
+                  Cancelar
+                </Button>
+              ) : null}
+            </div>
           </form>
+          <div className="mt-4 overflow-hidden rounded-lg border">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Código</TableHead>
+                  <TableHead>Razón social</TableHead>
+                  <TableHead>Activo</TableHead>
+                  <TableHead className="text-right">Acciones</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {!proveedores.length ? (
+                  <TableRow>
+                    <TableCell colSpan={4} className="py-6 text-center text-sm text-muted-foreground">
+                      Aún no hay proveedores.
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  proveedores.map((proveedor) => (
+                    <TableRow key={String(proveedor.id)}>
+                      <TableCell className="font-mono text-xs">{asString(proveedor.codigo_proveedor)}</TableCell>
+                      <TableCell>{asString(proveedor.razon_social)}</TableCell>
+                      <TableCell>{Boolean(proveedor.activo) ? "Sí" : "No"}</TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex justify-end gap-2">
+                          <Button type="button" variant="outline" size="sm" onClick={() => startEditProvider(proveedor)}>
+                            Editar
+                          </Button>
+                          <form action={deleteProveedorAction.bind(null, String(proveedor.id))}>
+                            <Button type="submit" variant="ghost" size="sm">
+                              Eliminar
+                            </Button>
+                          </form>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </div>
         </CardContent>
       </Card>
 
@@ -1031,21 +1196,22 @@ export function ComprasWorkspace({
           <CardDescription>Vista rápida de las compras registradas y su estado actual.</CardDescription>
         </CardHeader>
         <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Folio</TableHead>
-                <TableHead>Proveedor</TableHead>
-                <TableHead>Almacén</TableHead>
-                <TableHead>Estado</TableHead>
-                <TableHead>Fecha</TableHead>
-                <TableHead className="text-right">Total</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {!ordenes.length ? (
+            <Table>
+              <TableHeader>
                 <TableRow>
-                  <TableCell colSpan={6} className="py-8 text-center text-sm text-muted-foreground">
+                  <TableHead>Folio</TableHead>
+                  <TableHead>Proveedor</TableHead>
+                  <TableHead>Almacén</TableHead>
+                  <TableHead>Estado</TableHead>
+                  <TableHead>Fecha</TableHead>
+                  <TableHead className="text-right">Total</TableHead>
+                  <TableHead className="text-right">Acciones</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {!ordenes.length ? (
+                  <TableRow>
+                  <TableCell colSpan={7} className="py-8 text-center text-sm text-muted-foreground">
                     Aún no hay órdenes de compra registradas.
                   </TableCell>
                 </TableRow>
@@ -1058,6 +1224,22 @@ export function ComprasWorkspace({
                     <TableCell>{asString(orden.estado)}</TableCell>
                     <TableCell>{formatDateTime(orden.fecha_emision)}</TableCell>
                     <TableCell className="text-right">{formatCurrency(orden.total)}</TableCell>
+                    <TableCell className="text-right">
+                      <div className="flex justify-end gap-2">
+                        {String(orden.estado ?? "").toLowerCase() !== "cancelada" ? (
+                          <form action={cancelOrdenCompraAction.bind(null, String(orden.id))}>
+                            <Button type="submit" variant="outline" size="sm">
+                              Cancelar
+                            </Button>
+                          </form>
+                        ) : null}
+                        <form action={deleteOrdenCompraAction.bind(null, String(orden.id))}>
+                          <Button type="submit" variant="ghost" size="sm">
+                            Eliminar
+                          </Button>
+                        </form>
+                      </div>
+                    </TableCell>
                   </TableRow>
                 ))
               )}

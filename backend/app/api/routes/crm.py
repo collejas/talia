@@ -11304,6 +11304,18 @@ class CRMAlmacenCreate(BaseModel):
     email: str | None = Field(default=None, max_length=254)
 
 
+class CRMAlmacenUpdate(BaseModel):
+    codigo: str | None = Field(default=None, min_length=1, max_length=50)
+    nombre: str | None = Field(default=None, min_length=1, max_length=200)
+    tipo: Literal["central", "sucursal", "transito", "consignacion"] | None = None
+    activo: bool | None = None
+    es_principal: bool | None = None
+    direccion_id: UUID | None = None
+    responsable_usuario_id: UUID | None = None
+    telefono: str | None = Field(default=None, max_length=50)
+    email: str | None = Field(default=None, max_length=254)
+
+
 class CRMProveedor(BaseModel):
     id: UUID
     organizacion_id: UUID
@@ -11337,6 +11349,21 @@ class CRMProveedorCreate(BaseModel):
     limite_credito: float | None = Field(default=None, ge=0)
     moneda_preferida: str = Field(default="MXN", min_length=3, max_length=3)
     activo: bool = True
+    observaciones: str | None = Field(default=None, max_length=2000)
+
+
+class CRMProveedorUpdate(BaseModel):
+    codigo_proveedor: str | None = Field(default=None, min_length=1, max_length=50)
+    razon_social: str | None = Field(default=None, min_length=1, max_length=255)
+    nombre_comercial: str | None = Field(default=None, max_length=255)
+    rfc: str | None = Field(default=None, max_length=20)
+    correo: str | None = Field(default=None, max_length=254)
+    telefono: str | None = Field(default=None, max_length=50)
+    plazo_pago_dias: int | None = Field(default=None, ge=0)
+    plazo_entrega_dias: int | None = Field(default=None, ge=0)
+    limite_credito: float | None = Field(default=None, ge=0)
+    moneda_preferida: str | None = Field(default=None, min_length=3, max_length=3)
+    activo: bool | None = None
     observaciones: str | None = Field(default=None, max_length=2000)
 
 
@@ -11384,6 +11411,16 @@ class CRMOrdenCompraCreate(BaseModel):
     observaciones: str | None = Field(default=None, max_length=2000)
     instrucciones_entrega: str | None = Field(default=None, max_length=4000)
     items: list[CRMOrdenCompraCreateItem] = Field(min_length=1)
+
+
+class CRMOrdenCompraUpdate(BaseModel):
+    folio: str | None = Field(default=None, min_length=1, max_length=80)
+    fecha_entrega_estimada: date | None = None
+    moneda: str | None = Field(default=None, min_length=3, max_length=3)
+    referencia_externa: str | None = Field(default=None, max_length=120)
+    observaciones: str | None = Field(default=None, max_length=2000)
+    instrucciones_entrega: str | None = Field(default=None, max_length=4000)
+    estado: str | None = None
 
 
 class CRMRecepcionCompraItem(BaseModel):
@@ -14548,6 +14585,47 @@ async def create_compras_proveedor(
     return CRMProveedor.model_validate(row)
 
 
+@router.patch("/compras/proveedores/{proveedor_id}", response_model=CRMProveedor)
+async def update_compras_proveedor(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("settings.manage")),
+    proveedor_id: UUID,
+    payload: CRMProveedorUpdate,
+) -> CRMProveedor:
+    try:
+        row = await repo.update_proveedor(
+            organizacion_id=organizacion_id,
+            proveedor_id=proveedor_id,
+            payload=payload.model_dump(mode="json", exclude_unset=True),
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return CRMProveedor.model_validate(row)
+
+
+@router.delete("/compras/proveedores/{proveedor_id}", response_model=CRMProveedor)
+async def delete_compras_proveedor(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("settings.manage")),
+    proveedor_id: UUID,
+) -> CRMProveedor:
+    try:
+        row = await repo.delete_proveedor(
+            organizacion_id=organizacion_id,
+            proveedor_id=proveedor_id,
+        )
+    except CRMRepositoryError as exc:
+        detail = str(exc)
+        if "foreign key" in detail.lower() or "restrict" in detail.lower():
+            raise HTTPException(status_code=409, detail=detail) from exc
+        raise HTTPException(status_code=502, detail=detail) from exc
+    return CRMProveedor.model_validate(row)
+
+
 @router.post("/compras/almacenes", response_model=CRMAlmacen, status_code=status.HTTP_201_CREATED)
 async def create_compras_almacen(
     *,
@@ -14563,6 +14641,47 @@ async def create_compras_almacen(
         )
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return CRMAlmacen.model_validate(row)
+
+
+@router.patch("/compras/almacenes/{almacen_id}", response_model=CRMAlmacen)
+async def update_compras_almacen(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("settings.manage")),
+    almacen_id: UUID,
+    payload: CRMAlmacenUpdate,
+) -> CRMAlmacen:
+    try:
+        row = await repo.update_almacen(
+            organizacion_id=organizacion_id,
+            almacen_id=almacen_id,
+            payload=payload.model_dump(mode="json", exclude_unset=True),
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return CRMAlmacen.model_validate(row)
+
+
+@router.delete("/compras/almacenes/{almacen_id}", response_model=CRMAlmacen)
+async def delete_compras_almacen(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("settings.manage")),
+    almacen_id: UUID,
+) -> CRMAlmacen:
+    try:
+        row = await repo.delete_almacen(
+            organizacion_id=organizacion_id,
+            almacen_id=almacen_id,
+        )
+    except CRMRepositoryError as exc:
+        detail = str(exc)
+        if "foreign key" in detail.lower() or "restrict" in detail.lower():
+            raise HTTPException(status_code=409, detail=detail) from exc
+        raise HTTPException(status_code=502, detail=detail) from exc
     return CRMAlmacen.model_validate(row)
 
 
@@ -14615,6 +14734,47 @@ async def create_compras_orden(
     if row is not None:
         return CRMOrdenCompraRecepcion.model_validate(row)
     raise HTTPException(status_code=502, detail="orden_compra_not_found")
+
+
+@router.patch("/compras/ordenes/{orden_id}", response_model=CRMOrdenCompraRecepcion)
+async def update_compras_orden(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("settings.manage")),
+    orden_id: UUID,
+    payload: CRMOrdenCompraUpdate,
+) -> CRMOrdenCompraRecepcion:
+    try:
+        row = await repo.update_orden_compra(
+            organizacion_id=organizacion_id,
+            orden_id=orden_id,
+            payload=payload.model_dump(mode="json", exclude_unset=True),
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return CRMOrdenCompraRecepcion.model_validate(row)
+
+
+@router.delete("/compras/ordenes/{orden_id}", response_model=CRMOrdenCompraRecepcion)
+async def delete_compras_orden(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("settings.manage")),
+    orden_id: UUID,
+) -> CRMOrdenCompraRecepcion:
+    try:
+        row = await repo.delete_orden_compra(
+            organizacion_id=organizacion_id,
+            orden_id=orden_id,
+        )
+    except CRMRepositoryError as exc:
+        detail = str(exc)
+        if "foreign key" in detail.lower() or "restrict" in detail.lower():
+            raise HTTPException(status_code=409, detail=detail) from exc
+        raise HTTPException(status_code=502, detail=detail) from exc
+    return CRMOrdenCompraRecepcion.model_validate(row)
 
 
 @router.get("/compras/recepciones", response_model=list[CRMRecepcionCompra])

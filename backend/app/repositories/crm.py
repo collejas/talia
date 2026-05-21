@@ -9374,6 +9374,48 @@ class CRMRepository:
             raise CRMRepositoryError(f"Respuesta inválida al crear proveedor: {row!r}")
         return row
 
+    async def update_proveedor(
+        self,
+        *,
+        organizacion_id: UUID,
+        proveedor_id: UUID,
+        payload: dict[str, Any],
+    ) -> dict[str, Any]:
+        resp = await self._request(
+            "PATCH",
+            f"/rest/v1/proveedores?id=eq.{proveedor_id}",
+            json=payload,
+            prefer="return=representation",
+            organizacion_id=organizacion_id,
+        )
+        data = resp.json()
+        if not isinstance(data, list) or not data:
+            raise CRMRepositoryError("proveedor_not_updated")
+        row = data[0]
+        if not isinstance(row, dict):
+            raise CRMRepositoryError(f"Respuesta inválida al actualizar proveedor: {row!r}")
+        return row
+
+    async def delete_proveedor(
+        self,
+        *,
+        organizacion_id: UUID,
+        proveedor_id: UUID,
+    ) -> dict[str, Any]:
+        resp = await self._request(
+            "DELETE",
+            f"/rest/v1/proveedores?id=eq.{proveedor_id}",
+            prefer="return=representation",
+            organizacion_id=organizacion_id,
+        )
+        data = resp.json()
+        if not isinstance(data, list) or not data:
+            raise CRMRepositoryError("proveedor_not_deleted")
+        row = data[0]
+        if not isinstance(row, dict):
+            raise CRMRepositoryError(f"Respuesta inválida al eliminar proveedor: {row!r}")
+        return row
+
     async def list_inventario_existencias(
         self,
         *,
@@ -9488,6 +9530,48 @@ class CRMRepository:
             raise CRMRepositoryError(f"Respuesta inválida al crear almacén: {row!r}")
         return row
 
+    async def update_almacen(
+        self,
+        *,
+        organizacion_id: UUID,
+        almacen_id: UUID,
+        payload: dict[str, Any],
+    ) -> dict[str, Any]:
+        resp = await self._request(
+            "PATCH",
+            f"/rest/v1/almacenes?id=eq.{almacen_id}",
+            json=payload,
+            prefer="return=representation",
+            organizacion_id=organizacion_id,
+        )
+        data = resp.json()
+        if not isinstance(data, list) or not data:
+            raise CRMRepositoryError("almacen_not_updated")
+        row = data[0]
+        if not isinstance(row, dict):
+            raise CRMRepositoryError(f"Respuesta inválida al actualizar almacén: {row!r}")
+        return row
+
+    async def delete_almacen(
+        self,
+        *,
+        organizacion_id: UUID,
+        almacen_id: UUID,
+    ) -> dict[str, Any]:
+        resp = await self._request(
+            "DELETE",
+            f"/rest/v1/almacenes?id=eq.{almacen_id}",
+            prefer="return=representation",
+            organizacion_id=organizacion_id,
+        )
+        data = resp.json()
+        if not isinstance(data, list) or not data:
+            raise CRMRepositoryError("almacen_not_deleted")
+        row = data[0]
+        if not isinstance(row, dict):
+            raise CRMRepositoryError(f"Respuesta inválida al eliminar almacén: {row!r}")
+        return row
+
     async def list_ordenes_compra_para_recepcion(
         self,
         *,
@@ -9536,6 +9620,48 @@ class CRMRepository:
         if isinstance(result, str):
             return UUID(result)
         raise CRMRepositoryError(f"Respuesta inesperada al crear orden de compra: {result!r}")
+
+    async def update_orden_compra(
+        self,
+        *,
+        organizacion_id: UUID,
+        orden_id: UUID,
+        payload: dict[str, Any],
+    ) -> dict[str, Any]:
+        resp = await self._request(
+            "PATCH",
+            f"/rest/v1/ordenes_compra?id=eq.{orden_id}",
+            json=payload,
+            prefer="return=representation",
+            organizacion_id=organizacion_id,
+        )
+        data = resp.json()
+        if not isinstance(data, list) or not data:
+            raise CRMRepositoryError("orden_compra_not_updated")
+        row = data[0]
+        if not isinstance(row, dict):
+            raise CRMRepositoryError(f"Respuesta inválida al actualizar orden de compra: {row!r}")
+        return row
+
+    async def delete_orden_compra(
+        self,
+        *,
+        organizacion_id: UUID,
+        orden_id: UUID,
+    ) -> dict[str, Any]:
+        resp = await self._request(
+            "DELETE",
+            f"/rest/v1/ordenes_compra?id=eq.{orden_id}",
+            prefer="return=representation",
+            organizacion_id=organizacion_id,
+        )
+        data = resp.json()
+        if not isinstance(data, list) or not data:
+            raise CRMRepositoryError("orden_compra_not_deleted")
+        row = data[0]
+        if not isinstance(row, dict):
+            raise CRMRepositoryError(f"Respuesta inválida al eliminar orden de compra: {row!r}")
+        return row
 
     async def list_recepciones_compra(
         self,

@@ -155,6 +155,39 @@ export async function createAlmacenAction(formData: FormData): Promise<void> {
   revalidatePath(SETTINGS_PATH)
 }
 
+export async function updateAlmacenAction(almacenId: string, formData: FormData): Promise<void> {
+  const payload = {
+    codigo: parseRequiredText(formData.get("codigo"), "codigo"),
+    nombre: parseRequiredText(formData.get("nombre"), "nombre"),
+    tipo: parseRequiredText(formData.get("tipo"), "tipo") as "central" | "sucursal" | "transito" | "consignacion",
+    activo: parseBoolean(formData.get("activo"), true),
+    es_principal: parseBoolean(formData.get("es_principal"), false),
+    direccion_id: parseOptionalText(formData.get("direccion_id")),
+    responsable_usuario_id: parseOptionalText(formData.get("responsable_usuario_id")),
+    telefono: parseOptionalText(formData.get("telefono")),
+    email: parseOptionalText(formData.get("email")),
+  }
+
+  const response = await callCrmApi(`/crm/compras/almacenes/${almacenId}`, {
+    method: "PATCH",
+    body: payload,
+  })
+  if (!response.ok) {
+    throw new Error(response.error)
+  }
+  revalidatePath(SETTINGS_PATH)
+}
+
+export async function deleteAlmacenAction(almacenId: string): Promise<void> {
+  const response = await callCrmApi(`/crm/compras/almacenes/${almacenId}`, {
+    method: "DELETE",
+  })
+  if (!response.ok) {
+    throw new Error(response.error)
+  }
+  revalidatePath(SETTINGS_PATH)
+}
+
 export async function createProveedorAction(formData: FormData): Promise<void> {
   const payload = {
     codigo_proveedor: parseRequiredText(formData.get("codigo_proveedor"), "codigo_proveedor"),
@@ -174,6 +207,42 @@ export async function createProveedorAction(formData: FormData): Promise<void> {
   const response = await callCrmApi("/crm/compras/proveedores", {
     method: "POST",
     body: payload,
+  })
+  if (!response.ok) {
+    throw new Error(response.error)
+  }
+  revalidatePath(SETTINGS_PATH)
+}
+
+export async function updateProveedorAction(proveedorId: string, formData: FormData): Promise<void> {
+  const payload = {
+    codigo_proveedor: parseRequiredText(formData.get("codigo_proveedor"), "codigo_proveedor"),
+    razon_social: parseRequiredText(formData.get("razon_social"), "razon_social"),
+    nombre_comercial: parseOptionalText(formData.get("nombre_comercial")),
+    rfc: parseOptionalText(formData.get("rfc")),
+    correo: parseOptionalText(formData.get("correo")),
+    telefono: parseOptionalText(formData.get("telefono")),
+    plazo_pago_dias: parseOptionalNumber(formData.get("plazo_pago_dias")),
+    plazo_entrega_dias: parseOptionalNumber(formData.get("plazo_entrega_dias")),
+    limite_credito: parseOptionalNumber(formData.get("limite_credito")),
+    moneda_preferida: parseOptionalText(formData.get("moneda_preferida")) || "MXN",
+    activo: parseBoolean(formData.get("activo"), true),
+    observaciones: parseOptionalText(formData.get("observaciones")),
+  }
+
+  const response = await callCrmApi(`/crm/compras/proveedores/${proveedorId}`, {
+    method: "PATCH",
+    body: payload,
+  })
+  if (!response.ok) {
+    throw new Error(response.error)
+  }
+  revalidatePath(SETTINGS_PATH)
+}
+
+export async function deleteProveedorAction(proveedorId: string): Promise<void> {
+  const response = await callCrmApi(`/crm/compras/proveedores/${proveedorId}`, {
+    method: "DELETE",
   })
   if (!response.ok) {
     throw new Error(response.error)
@@ -223,6 +292,48 @@ export async function createOrdenCompraAction(formData: FormData): Promise<void>
   const response = await callCrmApi("/crm/compras/ordenes", {
     method: "POST",
     body: payload,
+  })
+  if (!response.ok) {
+    throw new Error(response.error)
+  }
+  revalidatePath(SETTINGS_PATH)
+}
+
+export async function updateOrdenCompraAction(ordenId: string, formData: FormData): Promise<void> {
+  const payload = {
+    folio: parseRequiredText(formData.get("folio"), "folio"),
+    fecha_entrega_estimada: parseOptionalText(formData.get("fecha_entrega_estimada")),
+    moneda: parseOptionalText(formData.get("moneda")) || "MXN",
+    referencia_externa: parseOptionalText(formData.get("referencia_externa")),
+    observaciones: parseOptionalText(formData.get("observaciones")),
+    instrucciones_entrega: parseOptionalText(formData.get("instrucciones_entrega")),
+    estado: parseOptionalText(formData.get("estado")),
+  }
+
+  const response = await callCrmApi(`/crm/compras/ordenes/${ordenId}`, {
+    method: "PATCH",
+    body: payload,
+  })
+  if (!response.ok) {
+    throw new Error(response.error)
+  }
+  revalidatePath(SETTINGS_PATH)
+}
+
+export async function cancelOrdenCompraAction(ordenId: string): Promise<void> {
+  const response = await callCrmApi(`/crm/compras/ordenes/${ordenId}`, {
+    method: "PATCH",
+    body: { estado: "cancelada" },
+  })
+  if (!response.ok) {
+    throw new Error(response.error)
+  }
+  revalidatePath(SETTINGS_PATH)
+}
+
+export async function deleteOrdenCompraAction(ordenId: string): Promise<void> {
+  const response = await callCrmApi(`/crm/compras/ordenes/${ordenId}`, {
+    method: "DELETE",
   })
   if (!response.ok) {
     throw new Error(response.error)
