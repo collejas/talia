@@ -393,6 +393,7 @@ Tareas:
 - validaciones de stock minimo,
 - reportes de rotacion, faltantes y compras sugeridas.
 - ajuste manual de inventario con movimiento auditado.
+- reserva y liberacion de stock al aceptar o cancelar cotizaciones.
 
 ### Fase 5: edicion operativa de ordenes de compra
 
@@ -469,4 +470,5 @@ Tareas:
 - El catálogo ya muestra y guarda campos operativos de inventario desde `frontend/panel/src/components/settings/catalog-items-panel.tsx`.
 - Ya existe un maestro editable de unidades de medida en `settings/productos/unidades-medida` y el catálogo usa ese maestro para `unidad_inventario`.
 - Ya existe un ajuste manual de inventario en la vista de compras, con movimiento auditable.
+- Ya existe reserva y liberacion de inventario desde el flujo de cotizaciones aceptadas o canceladas.
 - La siguiente entrega debe enfocarse en validar el flujo end-to-end, luego reforzar el CRUD de órdenes, existencias y reportes operativos.

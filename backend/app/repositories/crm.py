@@ -9507,6 +9507,42 @@ class CRMRepository:
             return UUID(result)
         raise CRMRepositoryError(f"Respuesta inesperada al ajustar inventario: {result!r}")
 
+    async def reserve_quote_inventory(
+        self,
+        *,
+        organizacion_id: UUID,
+        quote_id: UUID,
+        almacen_id: UUID,
+        items: list[dict[str, Any]],
+        creado_por: UUID | None = None,
+    ) -> None:
+        body = {
+            "p_organizacion_id": str(organizacion_id),
+            "p_quote_id": str(quote_id),
+            "p_almacen_id": str(almacen_id),
+            "p_items": items,
+            "p_creado_por": str(creado_por) if creado_por else None,
+        }
+        result = await self._rpc("crm_reservar_inventario_cotizacion", body)
+        if isinstance(result, dict) and result.get("error"):
+            raise CRMRepositoryError(str(result["error"]))
+
+    async def release_quote_inventory(
+        self,
+        *,
+        organizacion_id: UUID,
+        quote_id: UUID,
+        liberado_por: UUID | None = None,
+    ) -> None:
+        body = {
+            "p_organizacion_id": str(organizacion_id),
+            "p_quote_id": str(quote_id),
+            "p_liberado_por": str(liberado_por) if liberado_por else None,
+        }
+        result = await self._rpc("crm_liberar_inventario_cotizacion", body)
+        if isinstance(result, dict) and result.get("error"):
+            raise CRMRepositoryError(str(result["error"]))
+
     async def list_ordenes_compra(
         self,
         *,

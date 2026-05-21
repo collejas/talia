@@ -22212,20 +22212,98 @@ async def mark_lead_quote(
     payload: LeadQuoteMarkPayload,
     usuario_id: UUID | None = Depends(optional_usuario_id),
 ) -> LeadQuoteResponse:
+    current_quote_row = await repo.get_quote_entry(
+        organizacion_id=organizacion_id,
+        quote_id=cotizacion_id,
+    )
+    current_quote = _quote_from_row(current_quote_row)
     extra = _quote_extra_payload(payload)
     extra["canal_envio"] = payload.canal
     extra["marcada_en"] = datetime.now(timezone.utc).isoformat()
     if usuario_id:
         extra["marcada_por"] = str(usuario_id)
-    try:
-        quote_row = await repo.mark_quote_entry(
+
+    should_reserve = current_quote.estado != "aceptada" and payload.estado == "aceptada"
+    should_release = current_quote.estado == "aceptada" and payload.estado in {"rechazada", "cancelada"}
+    reservation_items = [
+        {
+            "quote_item_id": str(item.id),
+            "catalog_item_id": str(item.catalog_item_id),
+            "cantidad": float(item.cantidad or 0),
+        }
+        for item in current_quote.items
+        if item.catalog_item_id and float(item.cantidad or 0) > 0
+    ]
+    warehouse_id: UUID | None = None
+    if should_reserve and reservation_items:
+        warehouses = await repo.list_almacenes(
             organizacion_id=organizacion_id,
-            quote_id=cotizacion_id,
-            estatus=payload.estado,
-            metadata_patch=extra,
+            include_inactive=False,
+            limit=1,
         )
-    except CRMRepositoryError as exc:
-        raise HTTPException(status_code=502, detail=str(exc)) from exc
+        if warehouses:
+            warehouse_row = warehouses[0]
+            warehouse_id_raw = warehouse_row.get("id")
+            if warehouse_id_raw:
+                warehouse_id = UUID(str(warehouse_id_raw))
+        if warehouse_id is None:
+            raise HTTPException(status_code=409, detail="no_hay_almacen_principal_para_reservas")
+
+    if should_reserve and reservation_items:
+        try:
+            await repo.reserve_quote_inventory(
+                organizacion_id=organizacion_id,
+                quote_id=cotizacion_id,
+                almacen_id=warehouse_id,
+                items=reservation_items,
+                creado_por=usuario_id,
+            )
+            quote_row = await repo.mark_quote_entry(
+                organizacion_id=organizacion_id,
+                quote_id=cotizacion_id,
+                estatus=payload.estado,
+                metadata_patch=extra,
+            )
+        except CRMRepositoryError as exc:
+            try:
+                await repo.release_quote_inventory(
+                    organizacion_id=organizacion_id,
+                    quote_id=cotizacion_id,
+                    liberado_por=usuario_id,
+                )
+            except CRMRepositoryError:
+                pass
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+    else:
+        try:
+            quote_row = await repo.mark_quote_entry(
+                organizacion_id=organizacion_id,
+                quote_id=cotizacion_id,
+                estatus=payload.estado,
+                metadata_patch=extra,
+            )
+        except CRMRepositoryError as exc:
+            raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    if should_release:
+        try:
+            await repo.release_quote_inventory(
+                organizacion_id=organizacion_id,
+                quote_id=cotizacion_id,
+                liberado_por=usuario_id,
+            )
+        except CRMRepositoryError as exc:
+            await repo.mark_quote_entry(
+                organizacion_id=organizacion_id,
+                quote_id=cotizacion_id,
+                estatus=current_quote.estado,
+            )
+            quote_row = await repo.get_quote_entry(
+                organizacion_id=organizacion_id,
+                quote_id=cotizacion_id,
+            )
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+
     quote = _quote_from_row(quote_row)
     if quote.estado == "aceptada":
         oportunidad_id = quote.oportunidad_id
