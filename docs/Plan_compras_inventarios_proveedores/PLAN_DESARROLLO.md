@@ -434,3 +434,8 @@ Tareas:
 4. Agregar vistas simples de almacenes y existencias.
 5. Implementar despues proveedores y ordenes de compra.
 
+## Estado actual
+
+- Fase 1 iniciada con migracion base en `supabase/migrations/20260521_120000_inventory_purchases_phase1.sql`.
+- El enfoque ya quedo definido alrededor de `catalog_items` como catalogo canonicamente operable.
+- La siguiente entrega debe completar validacion tecnica y, despues, el CRUD de almacenes y existencias en la app.
