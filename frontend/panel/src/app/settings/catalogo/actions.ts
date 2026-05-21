@@ -26,7 +26,6 @@ export type CatalogItem = {
   unidadSat: string | null;
   metadatos: Record<string, unknown>;
   manejaInventario: boolean;
-  unidadInventario: string;
   stockMinimo: number | null;
   stockObjetivo: number | null;
   costoUltimo: number | null;
@@ -64,7 +63,6 @@ export type CatalogItemInput = {
   unidadSat?: string | null;
   metadatos?: Record<string, unknown> | null;
   manejaInventario?: boolean;
-  unidadInventario?: string | null;
   stockMinimo?: number | null;
   stockObjetivo?: number | null;
   costoUltimo?: number | null;
@@ -207,7 +205,6 @@ function normalizeCatalogItem(record: Record<string, unknown>): CatalogItem {
         ? (record.metadatos as Record<string, unknown>)
         : {}),
     manejaInventario: normalizeBoolean(record.maneja_inventario ?? record.manejaInventario, false),
-    unidadInventario: normalizeString(record.unidad_inventario ?? record.unidadInventario) ?? "unidad",
     stockMinimo: normalizeNumber(record.stock_minimo ?? record.stockMinimo),
     stockObjetivo: normalizeNumber(record.stock_objetivo ?? record.stockObjetivo),
     costoUltimo: normalizeNumber(record.costo_ultimo ?? record.costoUltimo),
@@ -293,7 +290,9 @@ function buildPayload(input: CatalogItemInput): Record<string, unknown> {
   if (input.unidadSat !== undefined) payload.unidad_sat = sanitizeText(input.unidadSat)
   if (input.metadatos !== undefined) payload.metadatos = input.metadatos ?? {}
   if (input.manejaInventario !== undefined) payload.maneja_inventario = Boolean(input.manejaInventario)
-  if (input.unidadInventario !== undefined) payload.unidad_inventario = sanitizeText(input.unidadInventario) ?? "unidad"
+  const unidad = sanitizeText(input.unidad) ?? DEFAULT_UNIDAD
+  payload.unidad = unidad
+  payload.unidad_inventario = unidad
   if (input.stockMinimo !== undefined) payload.stock_minimo = input.stockMinimo ?? null
   if (input.stockObjetivo !== undefined) payload.stock_objetivo = input.stockObjetivo ?? null
   if (input.costoUltimo !== undefined) payload.costo_ultimo = input.costoUltimo ?? null

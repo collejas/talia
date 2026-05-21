@@ -82,7 +82,6 @@ type CatalogItemFormValues = {
   descripcionCorta: string
   descripcionLarga: string
   unidad: string
-  unidadInventario: string
   precioBase: string
   moneda: string
   requiereFactura: boolean
@@ -107,7 +106,6 @@ const EMPTY_FORM: CatalogItemFormValues = {
   descripcionCorta: "",
   descripcionLarga: "",
   unidad: "unidad",
-  unidadInventario: "unidad",
   precioBase: "",
   moneda: "MXN",
   requiereFactura: false,
@@ -160,7 +158,6 @@ function mapItemToFormValues(item: CatalogItem): CatalogItemFormValues {
     descripcionCorta: item.descripcionCorta ?? "",
     descripcionLarga: item.descripcionLarga ?? "",
     unidad: item.unidad ?? "unidad",
-    unidadInventario: item.unidadInventario ?? item.unidad ?? "unidad",
     precioBase: item.precioBase != null ? String(item.precioBase) : "",
     moneda: item.moneda || "MXN",
     requiereFactura: item.requiereFactura,
@@ -196,7 +193,6 @@ function formValuesToInput(values: CatalogItemFormValues, impuestos?: CatalogIte
     activoCompra: values.activoCompra,
     requiereLote: values.requiereLote,
     requiereSerie: values.requiereSerie,
-    unidadInventario: values.unidadInventario || values.unidad || "unidad",
     stockMinimo: values.stockMinimo.trim().length ? Number(values.stockMinimo) : null,
     stockObjetivo: values.stockObjetivo.trim().length ? Number(values.stockObjetivo) : null,
     claveSat: values.claveSat || null,
@@ -1078,7 +1074,23 @@ const handleDelete = useCallback(
             <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2">
                 <Label htmlFor="catalog-unidad">Unidad</Label>
-                <Input id="catalog-unidad" {...form.register("unidad")} placeholder="unidad, hora, licencia" />
+                <Select
+                  value={form.watch("unidad")}
+                  onValueChange={(value) => {
+                    form.setValue("unidad", value)
+                  }}
+                >
+                  <SelectTrigger id="catalog-unidad">
+                    <SelectValue placeholder="Selecciona una unidad" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {unidadOptions.map((unidad) => (
+                      <SelectItem key={unidad.codigo} value={unidad.codigo}>
+                        {unidad.codigo} · {unidad.nombre}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="catalog-clave-sat">Clave SAT</Label>
@@ -1135,27 +1147,6 @@ const handleDelete = useCallback(
                   <Label htmlFor="catalog-requiere-serie" className="text-sm font-normal">
                     Requiere serie
                   </Label>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="catalog-unidad-inventario">Unidad de inventario</Label>
-                  <Select
-                    value={form.watch("unidadInventario")}
-                    onValueChange={(value) => form.setValue("unidadInventario", value)}
-                  >
-                    <SelectTrigger id="catalog-unidad-inventario">
-                      <SelectValue placeholder="Selecciona una unidad de inventario" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {unidadOptions.map((unidad) => (
-                        <SelectItem key={unidad.codigo} value={unidad.codigo}>
-                          {unidad.codigo} · {unidad.nombre}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <p className="text-xs text-muted-foreground">
-                    Si falta una unidad, créala en Unidades de medida.
-                  </p>
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="catalog-stock-minimo">Stock mínimo</Label>
