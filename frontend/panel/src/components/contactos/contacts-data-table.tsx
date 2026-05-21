@@ -642,31 +642,6 @@ export function ContactsDataTable({ data }: { data: ContactTableRow[] }) {
     </div>
   );
 
-  const contactColumnOrder = React.useMemo(
-    () => [
-      "drag-handle",
-      "row-select",
-      "acciones",
-      "session",
-      "contact_company",
-      "contact_codigo",
-      "account_codigo",
-      "contact_correo",
-      "contact_telefono",
-      "contact_rfc",
-      "contact_puesto",
-      "contact_rol",
-      "contact_cp",
-      "contact_origen",
-      "contact_estado",
-      "contact_captura",
-      "contact_ultimo",
-      "contact_conversaciones",
-      "contact_notes",
-    ],
-    [],
-  );
-
   const renderRowDetails = (row: TableRow) => (
     <ContactDetailPanel
       row={row}
@@ -698,7 +673,6 @@ export function ContactsDataTable({ data }: { data: ContactTableRow[] }) {
         detailDescription="Detalle del contacto"
         toolbarLeadingActions={toolbarLeadingActions}
         renderRowDetails={renderRowDetails}
-        forcedColumnOrder={contactColumnOrder}
         hideDefaultActions
         initialVisibility={contactColumnVisibility}
         storageKey="contacts-table-column-order"
