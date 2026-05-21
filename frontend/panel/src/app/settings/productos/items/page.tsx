@@ -8,14 +8,16 @@ import {
   fetchFamiliasDeProductos,
   fetchLineasDeNegocio,
   fetchModelosProductos,
+  fetchUnidadesMedida,
 } from "@/app/settings/productos/actions"
 
 export default async function SettingsProductosItemsPage() {
-  const [items, lineas, familias, modelos] = await Promise.all([
+  const [items, lineas, familias, modelos, unidadesMedida] = await Promise.all([
     fetchCatalogItems({ includeInactive: true }),
     fetchLineasDeNegocio({ includeInactive: true }),
     fetchFamiliasDeProductos({ includeInactive: true }),
     fetchModelosProductos({ includeInactive: true }),
+    fetchUnidadesMedida({ includeInactive: true }),
   ])
   return (
     <AppViewLayout title="Settings · Productos y servicios">
@@ -47,6 +49,9 @@ export default async function SettingsProductosItemsPage() {
           <Button variant="secondary" size="sm" asChild>
             <Link href="/settings/productos/importador">Configurar importador</Link>
           </Button>
+          <Button variant="outline" size="sm" asChild>
+            <Link href="/settings/productos/unidades-medida">Unidades de medida</Link>
+          </Button>
         </div>
         <Separator />
         <CatalogItemsPanel
@@ -54,6 +59,7 @@ export default async function SettingsProductosItemsPage() {
           lineas={lineas}
           familias={familias}
           modelos={modelos}
+          unidadesMedida={unidadesMedida}
         />
       </div>
     </AppViewLayout>

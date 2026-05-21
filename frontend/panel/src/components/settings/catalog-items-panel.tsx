@@ -66,6 +66,15 @@ type ModeloOption = {
   familiaId: string | null
 }
 
+type UnidadMedidaOption = {
+  id: string
+  codigo: string
+  nombre: string
+  simbolo: string | null
+  activo: boolean
+  esBase: boolean
+}
+
 type CatalogItemFormValues = {
   nombre: string
   slug: string
@@ -226,11 +235,13 @@ export function CatalogItemsPanel({
   lineas,
   familias,
   modelos,
+  unidadesMedida,
 }: {
   initialItems: CatalogItem[]
   lineas: LineaOption[]
   familias: FamiliaOption[]
   modelos: ModeloOption[]
+  unidadesMedida: UnidadMedidaOption[]
 }) {
   const [items, setItems] = useState<CatalogItem[]>(() => sortItems(initialItems))
   const [search, setSearch] = useState("")
@@ -329,6 +340,21 @@ export function CatalogItemsPanel({
   )
   const selectAllChecked = allVisibleSelected ? true : someVisibleSelected ? "indeterminate" : false
   const selectedCount = selectedIds.size
+  const unidadOptions = useMemo(() => {
+    const base = [
+      { id: "unidad", codigo: "unidad", nombre: "Unidad", simbolo: "u", activo: true, esBase: true },
+      ...unidadesMedida,
+    ]
+    const map = new Map<string, UnidadMedidaOption>()
+    for (const unidad of base) {
+      map.set(unidad.codigo, unidad)
+    }
+    return Array.from(map.values()).sort((a, b) => {
+      if (a.codigo === "unidad") return -1
+      if (b.codigo === "unidad") return 1
+      return a.nombre.localeCompare(b.nombre, "es", { sensitivity: "base" })
+    })
+  }, [unidadesMedida])
 
   const handleToggleSelection = useCallback((id: string, checked: boolean) => {
     setSelectedIds((prev) => {
@@ -1112,11 +1138,24 @@ const handleDelete = useCallback(
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="catalog-unidad-inventario">Unidad de inventario</Label>
-                  <Input
-                    id="catalog-unidad-inventario"
-                    {...form.register("unidadInventario")}
-                    placeholder="pieza, caja, litro"
-                  />
+                  <Select
+                    value={form.watch("unidadInventario")}
+                    onValueChange={(value) => form.setValue("unidadInventario", value)}
+                  >
+                    <SelectTrigger id="catalog-unidad-inventario">
+                      <SelectValue placeholder="Selecciona una unidad de inventario" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {unidadOptions.map((unidad) => (
+                        <SelectItem key={unidad.codigo} value={unidad.codigo}>
+                          {unidad.codigo} · {unidad.nombre}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">
+                    Si falta una unidad, créala en Unidades de medida.
+                  </p>
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="catalog-stock-minimo">Stock mínimo</Label>

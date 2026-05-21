@@ -11490,6 +11490,34 @@ class CRMModeloProducto(BaseModel):
     familia_id: UUID | None = None
 
 
+class CRMUnidadMedida(BaseModel):
+    id: UUID
+    organizacion_id: UUID
+    codigo: str
+    nombre: str
+    simbolo: str | None = None
+    activo: bool
+    es_base: bool
+    creado_en: datetime
+    actualizado_en: datetime
+
+
+class CRMUnidadMedidaCreate(BaseModel):
+    codigo: str = Field(..., max_length=60)
+    nombre: str = Field(..., max_length=120)
+    simbolo: str | None = Field(default=None, max_length=20)
+    activo: bool = True
+    es_base: bool = False
+
+
+class CRMUnidadMedidaUpdate(BaseModel):
+    codigo: str | None = Field(default=None, max_length=60)
+    nombre: str | None = Field(default=None, max_length=120)
+    simbolo: str | None = Field(default=None, max_length=20)
+    activo: bool | None = None
+    es_base: bool | None = None
+
+
 class CRMLineaDeNegocioCreate(BaseModel):
     nombre: str = Field(..., max_length=255)
     descripcion: str | None = Field(default=None, max_length=2000)
@@ -15565,6 +15593,95 @@ async def bulk_delete_product_modelos(
         deleted_ids=deleted_ids,
         errors=errors,
     )
+
+
+@router.get("/productos/unidades-medida", response_model=list[CRMUnidadMedida])
+async def list_product_unidades_medida(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_tenant_module_enabled("productos")),
+    _: str = Depends(require_permission("settings.view")),
+    include_inactive: bool = Query(default=False),
+    search: str | None = Query(default=None, max_length=200),
+    limit: Annotated[int, Query(ge=1, le=5000)] = 2000,
+) -> list[CRMUnidadMedida]:
+    try:
+        rows = await repo.list_unidades_medida(
+            organizacion_id=organizacion_id,
+            include_inactive=include_inactive,
+            search=search,
+            limit=limit,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return [CRMUnidadMedida.model_validate(row) for row in rows]
+
+
+@router.post(
+    "/productos/unidades-medida",
+    response_model=CRMUnidadMedida,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_product_unidad_medida(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_tenant_module_enabled("productos")),
+    _: str = Depends(require_permission("settings.manage")),
+    payload: CRMUnidadMedidaCreate,
+) -> CRMUnidadMedida:
+    try:
+        row = await repo.create_unidad_medida(
+            organizacion_id=organizacion_id,
+            payload=payload.model_dump(mode="json", exclude_unset=True),
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return CRMUnidadMedida.model_validate(row)
+
+
+@router.patch("/productos/unidades-medida/{unidad_id}", response_model=CRMUnidadMedida)
+async def update_product_unidad_medida(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_tenant_module_enabled("productos")),
+    _: str = Depends(require_permission("settings.manage")),
+    unidad_id: UUID,
+    payload: CRMUnidadMedidaUpdate,
+) -> CRMUnidadMedida:
+    body = payload.model_dump(mode="json", exclude_unset=True)
+    if not body:
+        raise HTTPException(status_code=400, detail="empty_update")
+    try:
+        row = await repo.update_unidad_medida(
+            organizacion_id=organizacion_id,
+            unidad_id=unidad_id,
+            payload=body,
+        )
+    except CRMRepositoryError as exc:
+        detail = "unidad_not_found" if "unidad_not_found" in str(exc) else str(exc)
+        status_code = 404 if detail == "unidad_not_found" else 502
+        raise HTTPException(status_code=status_code, detail=detail) from exc
+    return CRMUnidadMedida.model_validate(row)
+
+
+@router.delete("/productos/unidades-medida/{unidad_id}", response_model=CRMUnidadMedida)
+async def delete_product_unidad_medida(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_tenant_module_enabled("productos")),
+    _: str = Depends(require_permission("settings.manage")),
+    unidad_id: UUID,
+) -> CRMUnidadMedida:
+    try:
+        row = await repo.delete_unidad_medida(
+            organizacion_id=organizacion_id,
+            unidad_id=unidad_id,
+        )
+    except CRMRepositoryError as exc:
+        detail = "unidad_not_found" if "unidad_not_found" in str(exc) else str(exc)
+        status_code = 404 if detail == "unidad_not_found" else 502
+        raise HTTPException(status_code=status_code, detail=detail) from exc
+    return CRMUnidadMedida.model_validate(row)
 
 
 @router.get(

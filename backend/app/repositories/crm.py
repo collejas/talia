@@ -8686,6 +8686,108 @@ class CRMRepository:
             raise CRMRepositoryError(f"Respuesta inesperada al listar modelos: {data!r}")
         return data
 
+    async def list_unidades_medida(
+        self,
+        *,
+        organizacion_id: UUID,
+        include_inactive: bool = False,
+        search: str | None = None,
+        limit: int = 200,
+    ) -> list[dict[str, Any]]:
+        params: dict[str, Any] = {
+            "organizacion_id": f"eq.{organizacion_id}",
+            "order": "nombre.asc",
+            "limit": str(max(1, min(limit, 5000))),
+        }
+        if not include_inactive:
+            params["activo"] = "eq.true"
+        if search:
+            sanitized = _sanitize_search_pattern(search)
+            if sanitized:
+                params["or"] = f"(nombre.ilike.*{sanitized}*,codigo.ilike.*{sanitized}*,simbolo.ilike.*{sanitized}*)"
+        resp = await self._request("GET", "/rest/v1/unidades_medida", params=params)
+        data = resp.json()
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"Respuesta inesperada al listar unidades: {data!r}")
+        return data
+
+    async def create_unidad_medida(
+        self,
+        *,
+        organizacion_id: UUID,
+        payload: dict[str, Any],
+    ) -> dict[str, Any]:
+        body = {"organizacion_id": str(organizacion_id), **payload}
+        resp = await self._request(
+            "POST",
+            "/rest/v1/unidades_medida",
+            json=body,
+            prefer="return=representation",
+            organizacion_id=organizacion_id,
+        )
+        data = resp.json()
+        if not isinstance(data, list) or not data:
+            raise CRMRepositoryError("unidad_not_created")
+        row = data[0]
+        if not isinstance(row, dict):
+            raise CRMRepositoryError(f"Respuesta inválida al crear unidad: {row!r}")
+        return row
+
+    async def update_unidad_medida(
+        self,
+        *,
+        organizacion_id: UUID,
+        unidad_id: UUID,
+        payload: dict[str, Any],
+    ) -> dict[str, Any]:
+        params = {
+            "organizacion_id": f"eq.{organizacion_id}",
+            "id": f"eq.{unidad_id}",
+        }
+        resp = await self._request(
+            "PATCH",
+            "/rest/v1/unidades_medida",
+            params=params,
+            json=payload,
+            prefer="return=representation",
+            organizacion_id=organizacion_id,
+        )
+        data = resp.json()
+        if not isinstance(data, list) or not data:
+            raise CRMRepositoryError("unidad_not_found")
+        row = data[0]
+        if not isinstance(row, dict):
+            raise CRMRepositoryError(f"Respuesta inválida al actualizar unidad: {row!r}")
+        return row
+
+    async def delete_unidad_medida(
+        self,
+        *,
+        organizacion_id: UUID,
+        unidad_id: UUID,
+    ) -> dict[str, Any]:
+        params = {
+            "organizacion_id": f"eq.{organizacion_id}",
+            "id": f"eq.{unidad_id}",
+        }
+        try:
+            resp = await self._request(
+                "DELETE",
+                "/rest/v1/unidades_medida",
+                params=params,
+                prefer="return=representation",
+                organizacion_id=organizacion_id,
+            )
+        except CRMRepositoryError as exc:
+            raise _map_fk_delete_error(exc, "unidad_has_children") from exc
+        data = resp.json()
+        if not isinstance(data, list) or not data:
+            raise CRMRepositoryError("unidad_not_found")
+        row = data[0]
+        if not isinstance(row, dict):
+            raise CRMRepositoryError(f"Respuesta inválida al eliminar unidad: {row!r}")
+        return row
+
     async def list_product_metadata_schemes(
         self,
         *,

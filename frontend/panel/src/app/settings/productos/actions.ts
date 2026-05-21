@@ -119,6 +119,17 @@ export type ModeloProducto = {
   familiaId: string | null;
 };
 
+export type UnidadMedida = {
+  id: string;
+  codigo: string;
+  nombre: string;
+  simbolo: string | null;
+  activo: boolean;
+  esBase: boolean;
+  creadoEn: string;
+  actualizadoEn: string;
+};
+
 const transformLinea = (row: CrmRow): LineaDeNegocio => {
   const meta = normalizeMetadata(row.metadata);
   return {
@@ -163,6 +174,19 @@ const transformModelo = (row: CrmRow): ModeloProducto => {
   };
 };
 
+const transformUnidadMedida = (row: CrmRow): UnidadMedida => {
+  return {
+    id: String(row.id ?? ""),
+    codigo: normalizeString(row.codigo) ?? "unidad",
+    nombre: normalizeString(row.nombre) ?? "Unidad",
+    simbolo: normalizeString(row.simbolo),
+    activo: normalizeBoolean(row.activo, true),
+    esBase: normalizeBoolean(row.es_base, false),
+    creadoEn: String(row.creado_en ?? row.creadoEn ?? ""),
+    actualizadoEn: String(row.actualizado_en ?? row.actualizadoEn ?? ""),
+  };
+};
+
 type FetchOptions = {
   includeInactive?: boolean;
   search?: string | null;
@@ -195,6 +219,15 @@ export async function fetchModelosProductos(options?: FetchOptions): Promise<Mod
     limit: options?.limit ? String(options.limit) : undefined,
   });
   return response.map(transformModelo);
+}
+
+export async function fetchUnidadesMedida(options?: FetchOptions): Promise<UnidadMedida[]> {
+  const response = await fetchCrmRows("/crm/productos/unidades-medida", {
+    include_inactive: options?.includeInactive ? "true" : undefined,
+    search: options?.search ?? undefined,
+    limit: options?.limit ? String(options.limit) : undefined,
+  });
+  return response.map(transformUnidadMedida);
 }
 
 type CrmPayload = Record<string, unknown>
@@ -436,6 +469,66 @@ export async function deleteFamiliasProductoBulk(ids: string[]): Promise<BulkDel
 
 export async function deleteModelosProductoBulk(ids: string[]): Promise<BulkDeleteResult> {
   return callBulkDelete("/crm/productos/modelos/bulk-delete", ids)
+}
+
+export type UnidadMedidaFormInput = {
+  codigo: string
+  nombre: string
+  simbolo?: string | null
+  activo?: boolean
+  esBase?: boolean
+}
+
+export async function createUnidadMedida(input: UnidadMedidaFormInput): Promise<UnidadMedida> {
+  const response = await callCrmApi<CrmRow>("/crm/productos/unidades-medida", {
+    method: "POST",
+    body: {
+      codigo: input.codigo,
+      nombre: input.nombre,
+      simbolo: input.simbolo ?? null,
+      activo: input.activo ?? true,
+      es_base: input.esBase ?? false,
+    },
+  })
+  const row = normalizeResponseRow(response)
+  return transformUnidadMedida(row)
+}
+
+export async function updateUnidadMedida(
+  id: string,
+  input: UnidadMedidaFormInput,
+): Promise<UnidadMedida> {
+  if (!id) {
+    throw new Error("Falta el identificador de la unidad")
+  }
+  const payload: CrmPayload = {}
+  if (input.codigo) payload.codigo = input.codigo
+  if (input.nombre) payload.nombre = input.nombre
+  if (input.simbolo !== undefined) payload.simbolo = input.simbolo
+  if (input.activo !== undefined) payload.activo = input.activo
+  if (input.esBase !== undefined) payload.es_base = input.esBase
+  if (!Object.keys(payload).length) {
+    throw new Error("No hay cambios para guardar")
+  }
+  const response = await callCrmApi<CrmRow>(`/crm/productos/unidades-medida/${id}`, {
+    method: "PATCH",
+    body: payload,
+  })
+  const row = normalizeResponseRow(response)
+  return transformUnidadMedida(row)
+}
+
+export async function deleteUnidadMedida(id: string): Promise<void> {
+  if (!id) {
+    throw new Error("Falta el identificador de la unidad")
+  }
+  const response = await callCrmApi(`/crm/productos/unidades-medida/${id}`, {
+    method: "DELETE",
+  })
+  if (!response.ok) {
+    throw new Error(response.error || "No se pudo eliminar la unidad.")
+  }
+  revalidatePath("/settings/productos/unidades-medida")
 }
 
 export type CatalogVectorStoreStatus = {

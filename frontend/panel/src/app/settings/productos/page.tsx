@@ -2,7 +2,7 @@ import Link from "next/link"
 import { AppViewLayout } from "@/components/layouts/app-view-layout"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { IconBuildingFactory, IconHierarchy, IconBox, IconPhoto, IconActivity, IconTruck } from "@tabler/icons-react"
+import { IconBuildingFactory, IconHierarchy, IconBox, IconPhoto, IconActivity, IconTruck, IconRulerMeasure } from "@tabler/icons-react"
 
 const SECTIONS = [
   {
@@ -28,6 +28,12 @@ const SECTIONS = [
     description: "Administra cada SKU con precios, costos, imágenes y metadatos específicos.",
     url: "/settings/productos/items",
     icon: IconPhoto,
+  },
+  {
+    title: "Unidades de medida",
+    description: "Define las unidades válidas para inventario y captura de productos.",
+    url: "/settings/productos/unidades-medida",
+    icon: IconRulerMeasure,
   },
   {
     title: "Observabilidad vectorial",
