@@ -464,6 +464,7 @@ Tareas:
 - Ya se puede editar una orden de compra en borrador o estado abierto desde la misma vista de compras.
 - Ya se puede mover una orden por el flujo operativo basico: `borrador` -> `enviada` -> `aprobada` -> `cerrada`.
 - Ya se registra quien envia y quien aprueba una orden, y se muestra en la tabla de ordenes.
+- `Cerrar` solo se habilita cuando la orden ya tiene recepcion completa.
 - El catálogo ya muestra y guarda campos operativos de inventario desde `frontend/panel/src/components/settings/catalog-items-panel.tsx`.
 - Ya existe un maestro editable de unidades de medida en `settings/productos/unidades-medida` y el catálogo usa ese maestro para `unidad_inventario`.
 - La siguiente entrega debe enfocarse en validar el flujo end-to-end, luego reforzar el CRUD de órdenes, existencias y reportes operativos.

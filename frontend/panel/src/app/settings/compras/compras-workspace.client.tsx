@@ -109,6 +109,34 @@ function formatDateTime(value: unknown): string {
   }).format(parsed)
 }
 
+function getOrderStatusBadge(estado: unknown): { label: string; className: string } {
+  const normalized = String(estado ?? "").toLowerCase()
+  if (normalized === "borrador") {
+    return { label: "Borrador", className: "border-amber-200 bg-amber-50 text-amber-700" }
+  }
+  if (normalized === "enviada") {
+    return { label: "Enviada", className: "border-sky-200 bg-sky-50 text-sky-700" }
+  }
+  if (normalized === "aprobada") {
+    return { label: "Aprobada", className: "border-violet-200 bg-violet-50 text-violet-700" }
+  }
+  if (normalized === "recibida") {
+    return { label: "Recibida", className: "border-emerald-200 bg-emerald-50 text-emerald-700" }
+  }
+  if (normalized === "cerrada") {
+    return { label: "Cerrada", className: "border-slate-200 bg-slate-100 text-slate-700" }
+  }
+  if (normalized === "cancelada") {
+    return { label: "Cancelada", className: "border-rose-200 bg-rose-50 text-rose-700" }
+  }
+  return { label: normalized ? normalized.charAt(0).toUpperCase() + normalized.slice(1) : "—", className: "border-border bg-muted text-muted-foreground" }
+}
+
+function getAuditLabel(user: unknown, fallback = "Sin registrar"): string {
+  const record = user && typeof user === "object" ? (user as AnyRecord) : null
+  return asString(record?.nombre_completo ?? record?.nombre ?? record?.correo, fallback)
+}
+
 function buildLinesFromOrder(order: AnyRecord | undefined | null): ReceptionLine[] {
   if (!order || !Array.isArray(order.items)) return []
   return order.items
@@ -1291,16 +1319,26 @@ export function ComprasWorkspace({
                     <TableCell className="font-mono text-xs">{asString(orden.folio)}</TableCell>
                     <TableCell>{asString((orden.proveedor as AnyRecord | undefined)?.razon_social ?? (orden.proveedor as AnyRecord | undefined)?.nombre_comercial, "Proveedor")}</TableCell>
                     <TableCell>{asString((orden.almacen as AnyRecord | undefined)?.nombre, "Almacén")}</TableCell>
-                    <TableCell>{asString(orden.estado)}</TableCell>
+                    <TableCell>
+                      <span
+                        className={`inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-semibold ${getOrderStatusBadge(
+                          orden.estado,
+                        ).className}`}
+                      >
+                        {getOrderStatusBadge(orden.estado).label}
+                      </span>
+                    </TableCell>
                     <TableCell>
                       <div className="space-y-1 text-xs">
-                        <div>
-                          <span className="font-medium">Enviado:</span>{" "}
-                          {asString((orden.enviada_por_usuario as AnyRecord | undefined)?.nombre_completo, "Sin registrar")}
+                        <div className="space-y-0.5">
+                          <div className="font-medium text-foreground">Enviado</div>
+                          <div>{getAuditLabel(orden.enviada_por_usuario)}</div>
+                          <div className="text-[11px] text-muted-foreground">{formatDateTime(orden.enviada_en)}</div>
                         </div>
-                        <div>
-                          <span className="font-medium">Aprobado:</span>{" "}
-                          {asString((orden.aprobado_por_usuario as AnyRecord | undefined)?.nombre_completo, "Sin registrar")}
+                        <div className="space-y-0.5">
+                          <div className="font-medium text-foreground">Aprobado</div>
+                          <div>{getAuditLabel(orden.aprobado_por_usuario)}</div>
+                          <div className="text-[11px] text-muted-foreground">{formatDateTime(orden.aprobada_en)}</div>
                         </div>
                       </div>
                     </TableCell>
@@ -1322,7 +1360,7 @@ export function ComprasWorkspace({
                             </Button>
                           </form>
                         ) : null}
-                        {["aprobada", "parcial", "recibida"].includes(String(orden.estado ?? "").toLowerCase()) ? (
+                        {String(orden.estado ?? "").toLowerCase() === "recibida" ? (
                           <form action={closeOrdenCompraAction.bind(null, String(orden.id))}>
                             <Button type="submit" variant="secondary" size="sm">
                               Cerrar

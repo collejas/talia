@@ -14865,12 +14865,30 @@ async def close_compras_orden(
     _: str = Depends(require_permission("settings.manage")),
     orden_id: UUID,
 ) -> CRMOrdenCompraRecepcion:
+    row_actual = await repo.get_orden_compra(
+        organizacion_id=organizacion_id,
+        orden_id=orden_id,
+    )
+    if row_actual is None:
+        raise HTTPException(status_code=404, detail="orden_compra_not_found")
+    if str(row_actual.get("estado") or "").lower() != "recibida":
+        raise HTTPException(status_code=409, detail="Solo se puede cerrar una orden con recepcion completa")
+    items = row_actual.get("items")
+    if not isinstance(items, list) or not items:
+        raise HTTPException(status_code=409, detail="La orden no tiene lineas para verificar recepcion")
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        solicitada = float(item.get("cantidad_solicitada") or 0)
+        recibida = float(item.get("cantidad_recibida") or 0)
+        if recibida < solicitada:
+            raise HTTPException(status_code=409, detail="No se puede cerrar una orden con pendientes de recepcion")
     return await _update_compras_orden_estado(
         repo=repo,
         organizacion_id=organizacion_id,
         orden_id=orden_id,
         estado_objetivo="cerrada",
-        estados_permitidos={"aprobada", "parcial", "recibida"},
+        estados_permitidos={"recibida"},
     )
 
 
