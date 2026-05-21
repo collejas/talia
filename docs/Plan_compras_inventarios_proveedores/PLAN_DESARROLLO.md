@@ -462,6 +462,8 @@ Tareas:
 - Ya existe alta simple de proveedores y creación de órdenes de compra en la misma vista de compras.
 - Ya existe una vista simple de existencias por almacén dentro de `frontend/panel/src/app/settings/compras/compras-workspace.client.tsx`.
 - Ya se puede editar una orden de compra en borrador o estado abierto desde la misma vista de compras.
+- Ya se puede mover una orden por el flujo operativo basico: `borrador` -> `enviada` -> `aprobada` -> `cerrada`.
+- Ya se registra quien envia y quien aprueba una orden, y se muestra en la tabla de ordenes.
 - El catálogo ya muestra y guarda campos operativos de inventario desde `frontend/panel/src/components/settings/catalog-items-panel.tsx`.
 - Ya existe un maestro editable de unidades de medida en `settings/productos/unidades-medida` y el catálogo usa ese maestro para `unidad_inventario`.
 - La siguiente entrega debe enfocarse en validar el flujo end-to-end, luego reforzar el CRUD de órdenes, existencias y reportes operativos.

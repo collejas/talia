@@ -337,6 +337,36 @@ export async function cancelOrdenCompraAction(ordenId: string): Promise<void> {
   revalidatePath(SETTINGS_PATH)
 }
 
+export async function sendOrdenCompraAction(ordenId: string): Promise<void> {
+  const response = await callCrmApi(`/crm/compras/ordenes/${ordenId}/enviar`, {
+    method: "POST",
+  })
+  if (!response.ok) {
+    throw new Error(response.error)
+  }
+  revalidatePath(SETTINGS_PATH)
+}
+
+export async function approveOrdenCompraAction(ordenId: string): Promise<void> {
+  const response = await callCrmApi(`/crm/compras/ordenes/${ordenId}/aprobar`, {
+    method: "POST",
+  })
+  if (!response.ok) {
+    throw new Error(response.error)
+  }
+  revalidatePath(SETTINGS_PATH)
+}
+
+export async function closeOrdenCompraAction(ordenId: string): Promise<void> {
+  const response = await callCrmApi(`/crm/compras/ordenes/${ordenId}/cerrar`, {
+    method: "POST",
+  })
+  if (!response.ok) {
+    throw new Error(response.error)
+  }
+  revalidatePath(SETTINGS_PATH)
+}
+
 export async function deleteOrdenCompraAction(ordenId: string): Promise<void> {
   const response = await callCrmApi(`/crm/compras/ordenes/${ordenId}`, {
     method: "DELETE",

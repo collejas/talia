@@ -11526,6 +11526,9 @@ class CRMOrdenCompraRecepcion(BaseModel):
     total: float
     solicitado_por_usuario_id: UUID | None = None
     aprobado_por_usuario_id: UUID | None = None
+    enviada_por_usuario_id: UUID | None = None
+    enviada_en: datetime | None = None
+    aprobada_en: datetime | None = None
     referencia_externa: str | None = None
     observaciones: str | None = None
     instrucciones_entrega: str | None = None
@@ -11533,6 +11536,8 @@ class CRMOrdenCompraRecepcion(BaseModel):
     actualizado_en: datetime
     proveedor: dict[str, Any] | None = None
     almacen: dict[str, Any] | None = None
+    enviada_por_usuario: dict[str, Any] | None = None
+    aprobado_por_usuario: dict[str, Any] | None = None
     items: list[CRMOrdenCompraRecepcionItem] = Field(default_factory=list)
 
     model_config = ConfigDict(populate_by_name=True)
@@ -14769,6 +14774,104 @@ async def update_compras_orden(
     if row is None:
         raise HTTPException(status_code=404, detail="orden_compra_not_found")
     return CRMOrdenCompraRecepcion.model_validate(row)
+
+
+async def _update_compras_orden_estado(
+    *,
+    repo: CRMRepository,
+    organizacion_id: UUID,
+    orden_id: UUID,
+    estado_objetivo: str,
+    estados_permitidos: set[str],
+    usuario_id: UUID | None = None,
+) -> CRMOrdenCompraRecepcion:
+    row_actual = await repo.get_orden_compra(
+        organizacion_id=organizacion_id,
+        orden_id=orden_id,
+    )
+    if row_actual is None:
+        raise HTTPException(status_code=404, detail="orden_compra_not_found")
+    estado_actual = str(row_actual.get("estado") or "").lower()
+    if estado_actual not in estados_permitidos:
+        raise HTTPException(
+            status_code=409,
+            detail=f"No se puede mover una orden en estado {estado_actual or 'desconocido'} a {estado_objetivo}",
+        )
+    try:
+        await repo.update_orden_compra_estado(
+            organizacion_id=organizacion_id,
+            orden_id=orden_id,
+            estado=estado_objetivo,
+            usuario_id=usuario_id,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    row = await repo.get_orden_compra(
+        organizacion_id=organizacion_id,
+        orden_id=orden_id,
+    )
+    if row is None:
+        raise HTTPException(status_code=404, detail="orden_compra_not_found")
+    return CRMOrdenCompraRecepcion.model_validate(row)
+
+
+@router.post("/compras/ordenes/{orden_id}/enviar", response_model=CRMOrdenCompraRecepcion)
+async def send_compras_orden(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("settings.manage")),
+    usuario_id: UUID | None = Depends(optional_usuario_id),
+    orden_id: UUID,
+) -> CRMOrdenCompraRecepcion:
+    if usuario_id is None:
+        raise HTTPException(status_code=401, detail="usuario_no_autenticado")
+    return await _update_compras_orden_estado(
+        repo=repo,
+        organizacion_id=organizacion_id,
+        orden_id=orden_id,
+        estado_objetivo="enviada",
+        estados_permitidos={"borrador"},
+        usuario_id=usuario_id,
+    )
+
+
+@router.post("/compras/ordenes/{orden_id}/aprobar", response_model=CRMOrdenCompraRecepcion)
+async def approve_compras_orden(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("settings.manage")),
+    usuario_id: UUID | None = Depends(optional_usuario_id),
+    orden_id: UUID,
+) -> CRMOrdenCompraRecepcion:
+    if usuario_id is None:
+        raise HTTPException(status_code=401, detail="usuario_no_autenticado")
+    return await _update_compras_orden_estado(
+        repo=repo,
+        organizacion_id=organizacion_id,
+        orden_id=orden_id,
+        estado_objetivo="aprobada",
+        estados_permitidos={"enviada"},
+        usuario_id=usuario_id,
+    )
+
+
+@router.post("/compras/ordenes/{orden_id}/cerrar", response_model=CRMOrdenCompraRecepcion)
+async def close_compras_orden(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("settings.manage")),
+    orden_id: UUID,
+) -> CRMOrdenCompraRecepcion:
+    return await _update_compras_orden_estado(
+        repo=repo,
+        organizacion_id=organizacion_id,
+        orden_id=orden_id,
+        estado_objetivo="cerrada",
+        estados_permitidos={"aprobada", "parcial", "recibida"},
+    )
 
 
 @router.delete("/compras/ordenes/{orden_id}", response_model=CRMOrdenCompraRecepcion)

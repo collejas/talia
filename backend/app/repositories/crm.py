@@ -9456,9 +9456,12 @@ class CRMRepository:
             "select": (
                 "id,organizacion_id,folio,proveedor_id,almacen_destino_id,estado,fecha_emision,fecha_entrega_estimada,"
                 "moneda,subtotal,descuento_total,impuestos_total,total,solicitado_por_usuario_id,aprobado_por_usuario_id,"
+                "enviada_por_usuario_id,enviada_en,aprobada_en,"
                 "referencia_externa,observaciones,instrucciones_entrega,creado_en,actualizado_en,"
                 "proveedor:proveedores(id,codigo_proveedor,razon_social,nombre_comercial,activo),"
                 "almacen:almacenes(id,codigo,nombre,activo,es_principal),"
+                "enviada_por_usuario:usuarios!ordenes_compra_enviada_por_usuario_id_fkey(id,nombre_completo,correo),"
+                "aprobado_por_usuario:usuarios!ordenes_compra_aprobado_por_usuario_id_fkey(id,nombre_completo,correo),"
                 "items:ordenes_compra_items("
                 "id,orden_compra_id,catalog_item_id,proveedor_item_id,cantidad_solicitada,cantidad_recibida,"
                 "unidad,costo_unitario,descuento_porcentaje,subtotal,impuestos,total,observaciones,creado_en,actualizado_en,"
@@ -9487,9 +9490,12 @@ class CRMRepository:
             "select": (
                 "id,organizacion_id,folio,proveedor_id,almacen_destino_id,estado,fecha_emision,fecha_entrega_estimada,"
                 "moneda,subtotal,descuento_total,impuestos_total,total,solicitado_por_usuario_id,aprobado_por_usuario_id,"
+                "enviada_por_usuario_id,enviada_en,aprobada_en,"
                 "referencia_externa,observaciones,instrucciones_entrega,creado_en,actualizado_en,"
                 "proveedor:proveedores(id,codigo_proveedor,razon_social,nombre_comercial,activo),"
                 "almacen:almacenes(id,codigo,nombre,activo,es_principal),"
+                "enviada_por_usuario:usuarios!ordenes_compra_enviada_por_usuario_id_fkey(id,nombre_completo,correo),"
+                "aprobado_por_usuario:usuarios!ordenes_compra_aprobado_por_usuario_id_fkey(id,nombre_completo,correo),"
                 "items:ordenes_compra_items("
                 "id,orden_compra_id,catalog_item_id,proveedor_item_id,cantidad_solicitada,cantidad_recibida,"
                 "unidad,costo_unitario,descuento_porcentaje,subtotal,impuestos,total,observaciones,creado_en,actualizado_en,"
@@ -9679,6 +9685,39 @@ class CRMRepository:
         row = data[0]
         if not isinstance(row, dict):
             raise CRMRepositoryError(f"Respuesta inválida al actualizar orden de compra: {row!r}")
+        return row
+
+    async def update_orden_compra_estado(
+        self,
+        *,
+        organizacion_id: UUID,
+        orden_id: UUID,
+        estado: str,
+        usuario_id: UUID | None = None,
+    ) -> dict[str, Any]:
+        body: dict[str, Any] = {"estado": estado}
+        now_iso = datetime.now(timezone.utc).isoformat()
+        if estado == "enviada":
+            if usuario_id is not None:
+                body["enviada_por_usuario_id"] = str(usuario_id)
+            body["enviada_en"] = now_iso
+        elif estado == "aprobada":
+            if usuario_id is not None:
+                body["aprobado_por_usuario_id"] = str(usuario_id)
+            body["aprobada_en"] = now_iso
+        resp = await self._request(
+            "PATCH",
+            f"/rest/v1/ordenes_compra?id=eq.{orden_id}",
+            json=body,
+            prefer="return=representation",
+            organizacion_id=organizacion_id,
+        )
+        data = resp.json()
+        if not isinstance(data, list) or not data:
+            raise CRMRepositoryError("orden_compra_estado_not_updated")
+        row = data[0]
+        if not isinstance(row, dict):
+            raise CRMRepositoryError(f"Respuesta inválida al actualizar estado de orden de compra: {row!r}")
         return row
 
     async def delete_orden_compra(

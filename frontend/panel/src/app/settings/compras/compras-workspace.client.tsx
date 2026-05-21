@@ -13,9 +13,12 @@ import {
   createProveedorAction,
   createRecepcionAction,
   cancelOrdenCompraAction,
+  approveOrdenCompraAction,
+  closeOrdenCompraAction,
   deleteAlmacenAction,
   deleteOrdenCompraAction,
   deleteProveedorAction,
+  sendOrdenCompraAction,
   updateAlmacenAction,
   updateOrdenCompraAction,
   updateProveedorAction,
@@ -1264,20 +1267,21 @@ export function ComprasWorkspace({
         <CardContent>
           <Table>
             <TableHeader>
-              <TableRow>
-                <TableHead>Folio</TableHead>
-                <TableHead>Proveedor</TableHead>
-                <TableHead>Almacén</TableHead>
-                <TableHead>Estado</TableHead>
-                <TableHead>Fecha</TableHead>
-                <TableHead className="text-right">Total</TableHead>
-                <TableHead className="text-right">Acciones</TableHead>
-              </TableRow>
-            </TableHeader>
+                <TableRow>
+                  <TableHead>Folio</TableHead>
+                  <TableHead>Proveedor</TableHead>
+                  <TableHead>Almacén</TableHead>
+                  <TableHead>Estado</TableHead>
+                  <TableHead>Auditoría</TableHead>
+                  <TableHead>Fecha</TableHead>
+                  <TableHead className="text-right">Total</TableHead>
+                  <TableHead className="text-right">Acciones</TableHead>
+                </TableRow>
+              </TableHeader>
             <TableBody>
               {!ordenes.length ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="py-8 text-center text-sm text-muted-foreground">
+                  <TableCell colSpan={8} className="py-8 text-center text-sm text-muted-foreground">
                     Aún no hay órdenes de compra registradas.
                   </TableCell>
                 </TableRow>
@@ -1288,10 +1292,43 @@ export function ComprasWorkspace({
                     <TableCell>{asString((orden.proveedor as AnyRecord | undefined)?.razon_social ?? (orden.proveedor as AnyRecord | undefined)?.nombre_comercial, "Proveedor")}</TableCell>
                     <TableCell>{asString((orden.almacen as AnyRecord | undefined)?.nombre, "Almacén")}</TableCell>
                     <TableCell>{asString(orden.estado)}</TableCell>
+                    <TableCell>
+                      <div className="space-y-1 text-xs">
+                        <div>
+                          <span className="font-medium">Enviado:</span>{" "}
+                          {asString((orden.enviada_por_usuario as AnyRecord | undefined)?.nombre_completo, "Sin registrar")}
+                        </div>
+                        <div>
+                          <span className="font-medium">Aprobado:</span>{" "}
+                          {asString((orden.aprobado_por_usuario as AnyRecord | undefined)?.nombre_completo, "Sin registrar")}
+                        </div>
+                      </div>
+                    </TableCell>
                     <TableCell>{formatDateTime(orden.fecha_emision)}</TableCell>
                     <TableCell className="text-right">{formatCurrency(orden.total)}</TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-2">
+                        {String(orden.estado ?? "").toLowerCase() === "borrador" ? (
+                          <form action={sendOrdenCompraAction.bind(null, String(orden.id))}>
+                            <Button type="submit" variant="secondary" size="sm">
+                              Enviar
+                            </Button>
+                          </form>
+                        ) : null}
+                        {String(orden.estado ?? "").toLowerCase() === "enviada" ? (
+                          <form action={approveOrdenCompraAction.bind(null, String(orden.id))}>
+                            <Button type="submit" variant="secondary" size="sm">
+                              Aprobar
+                            </Button>
+                          </form>
+                        ) : null}
+                        {["aprobada", "parcial", "recibida"].includes(String(orden.estado ?? "").toLowerCase()) ? (
+                          <form action={closeOrdenCompraAction.bind(null, String(orden.id))}>
+                            <Button type="submit" variant="secondary" size="sm">
+                              Cerrar
+                            </Button>
+                          </form>
+                        ) : null}
                         {String(orden.estado ?? "").toLowerCase() !== "cancelada" ? (
                           <Button type="button" variant="outline" size="sm" onClick={() => startEditOrder(orden)}>
                             Editar
