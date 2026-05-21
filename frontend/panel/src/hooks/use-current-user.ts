@@ -11,6 +11,7 @@ type UseCurrentUserState = {
   employeePosition: string | null
   isPlatformAdmin: boolean
   profilingEnabled: boolean
+  featureFlags: SessionPayload["featureFlags"] | null
   loading: boolean
   error: string | null
 }
@@ -37,6 +38,7 @@ export function useCurrentUser() {
     employeePosition: null,
     isPlatformAdmin: false,
     profilingEnabled: true,
+    featureFlags: null,
     loading: true,
     error: null,
   })
@@ -61,6 +63,7 @@ export function useCurrentUser() {
           employeePosition: null,
           isPlatformAdmin: false,
           profilingEnabled: true,
+          featureFlags: null,
           error: "auth_required",
         }
       }
@@ -71,6 +74,7 @@ export function useCurrentUser() {
           employeePosition: null,
           isPlatformAdmin: false,
           profilingEnabled: true,
+          featureFlags: null,
           error: (error as Error).message,
         }
       }
@@ -81,6 +85,7 @@ export function useCurrentUser() {
         employeePosition: null,
         isPlatformAdmin: false,
         profilingEnabled: true,
+        featureFlags: null,
         error: "auth_network_error",
       }
     },
@@ -97,6 +102,7 @@ export function useCurrentUser() {
         employeePosition: data.employeePosition ?? null,
         isPlatformAdmin: Boolean(data.isPlatformAdmin),
         profilingEnabled: data.profilingEnabled ?? true,
+        featureFlags: data.featureFlags ?? null,
         loading: false,
         error: data.user ? null : "auth_invalid_payload",
       })
@@ -119,6 +125,7 @@ export function useCurrentUser() {
           employeePosition: data.employeePosition ?? null,
           isPlatformAdmin: Boolean(data.isPlatformAdmin),
           profilingEnabled: data.profilingEnabled ?? true,
+          featureFlags: data.featureFlags ?? null,
           loading: false,
           error: data.user ? null : "auth_invalid_payload",
         })

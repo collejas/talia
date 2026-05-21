@@ -12,13 +12,14 @@ import { getSupabaseConfig } from "@/lib/auth/supabase"
 import { SupabaseErrorResponse, SupabaseTokenResponse } from "@/lib/auth/types"
 import { callCrmApi } from "@/lib/api/crm"
 import { callSupabaseRest } from "@/lib/supabase/rest"
-import { SessionPayload, SupabaseUser, TenantInfo } from "@/lib/auth/session"
+import { FeatureFlags, SessionPayload, SupabaseUser, TenantInfo } from "@/lib/auth/session"
 import { resolveOrganizacionId } from "@/lib/settings/org"
 
 type TenantSettingsResponse = {
   organizacion_id: string
   nombre: string
   razon_social?: string | null
+  config?: Record<string, unknown> | null
 }
 
 type SupabaseEmployeeRow = {
@@ -78,21 +79,58 @@ async function refreshSupabaseTokens(
   })
 }
 
-async function fetchTenantMetadata(): Promise<TenantInfo | null> {
+type TenantContextData = {
+  tenant: TenantInfo | null
+  featureFlags: FeatureFlags
+}
+
+async function fetchTenantContextData(): Promise<TenantContextData> {
   const response = await callCrmApi<TenantSettingsResponse>("/tenant/me/settings", {
     organizacionId: null,
     withUserToken: true,
   })
   if (!response.ok || !response.data) {
-    return null
+    return {
+      tenant: null,
+      featureFlags: {},
+    }
   }
   const { nombre, razon_social } = response.data
-  if (!nombre && !razon_social) {
-    return null
+  const config = response.data.config
+  const features =
+    config && typeof config === "object" && !Array.isArray(config)
+      ? (config.features as Record<string, unknown> | null | undefined)
+      : null
+  const readFlag = (key: string): boolean | undefined => {
+    if (!features || typeof features !== "object" || Array.isArray(features)) {
+      return undefined
+    }
+    const feature = features[key]
+    if (!feature || typeof feature !== "object" || Array.isArray(feature)) {
+      return undefined
+    }
+    const enabled = (feature as Record<string, unknown>).enabled
+    if (typeof enabled === "boolean") {
+      return enabled
+    }
+    return undefined
   }
   return {
-    nombre: nombre ?? "",
-    razon_social: razon_social ?? null,
+    tenant:
+      nombre || razon_social
+        ? {
+            nombre: nombre ?? "",
+            razon_social: razon_social ?? null,
+          }
+        : null,
+    featureFlags: {
+      webchatEnabled: readFlag("webchat"),
+      whatsappEnabled: readFlag("whatsapp"),
+      messengerEnabled: readFlag("messenger"),
+      voiceEnabled: readFlag("voice"),
+      productosEnabled: readFlag("productos"),
+      propiedadesEnabled: readFlag("propiedades"),
+    },
   }
 }
 
@@ -118,8 +156,8 @@ async function fetchEmployeePosition(usuarioId: string | null): Promise<string |
 }
 
 async function buildSessionPayload(user: SupabaseUser): Promise<SessionPayload> {
-  const [tenant, organizacionId, employeePosition, isPlatformAdmin, profilingEnabled] = await Promise.all([
-    fetchTenantMetadata(),
+  const [tenantContext, organizacionId, employeePosition, isPlatformAdmin, profilingEnabled] = await Promise.all([
+    fetchTenantContextData(),
     resolveOrganizacionId(),
     fetchEmployeePosition(user.id),
     fetchPlatformAdminStatus(),
@@ -127,11 +165,12 @@ async function buildSessionPayload(user: SupabaseUser): Promise<SessionPayload> 
   ])
   return {
     user,
-    tenant,
+    tenant: tenantContext.tenant,
     organizacion_id: organizacionId,
     employeePosition,
     isPlatformAdmin,
     profilingEnabled,
+    featureFlags: tenantContext.featureFlags,
   }
 }
 

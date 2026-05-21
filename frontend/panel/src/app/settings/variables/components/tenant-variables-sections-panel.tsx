@@ -31,10 +31,25 @@ type SectionConfig = {
 
 const SECTIONS: SectionConfig[] = [
   {
+    title: "Módulos",
+    description: "Activa o desactiva las áreas funcionales visibles para este tenant.",
+    fields: [
+      { label: "Webchat habilitado", path: "features.webchat.enabled", control: "checkbox" },
+      { label: "WhatsApp habilitado", path: "features.whatsapp.enabled", control: "checkbox" },
+      { label: "Messenger habilitado", path: "features.messenger.enabled", control: "checkbox" },
+      { label: "Voz habilitada", path: "features.voice.enabled", control: "checkbox" },
+      { label: "Productos habilitado", path: "features.productos.enabled", control: "checkbox" },
+      { label: "Propiedades habilitado", path: "features.propiedades.enabled", control: "checkbox" },
+    ],
+    notes: [
+      "Estos flags controlan la visibilidad del menú y el acceso a las rutas de cada módulo.",
+      "La taxonomía compartida sigue existiendo, pero el inventario operativo se separa por módulo.",
+    ],
+  },
+  {
     title: "Webchat",
     description: "Ajusta prompts, reenganches y habilita el canal Webchat.",
     fields: [
-      { label: "Webchat habilitado", path: "features.webchat.enabled", control: "checkbox" },
       { label: "Assistant ID", path: "webchat.assistant_id" },
       { label: "Prompt version", path: "webchat.prompt_version" },
       { label: "Inactivity minutes", path: "webchat.inactivity_minutes", type: "number" },

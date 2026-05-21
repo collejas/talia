@@ -1,6 +1,6 @@
 "use client"
 
-import { createContext, ReactNode, useActionState, useContext, useEffect, useRef, useState } from "react"
+import { createContext, ReactNode, useActionState, useContext, useEffect, useMemo, useRef, useState } from "react"
 import { useFormStatus } from "react-dom"
 
 import { Button } from "@/components/ui/button"
@@ -141,6 +141,36 @@ function useCrudForm(action: CrudActionHandler) {
   return { state, formAction, formRef }
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value)
+}
+
+function readFeatureEnabled(features: Record<string, unknown> | null | undefined, key: string): boolean {
+  if (!isRecord(features)) return false
+  const entry = features[key]
+  if (!isRecord(entry)) return false
+  return Boolean(entry.enabled)
+}
+
+function buildModuleConfigJson(
+  config: Record<string, unknown> | null | undefined,
+  productosEnabled: boolean,
+  propiedadesEnabled: boolean,
+): string {
+  const nextConfig: Record<string, unknown> = isRecord(config) ? { ...config } : {}
+  const features = isRecord(nextConfig.features) ? { ...nextConfig.features } : {}
+  features.productos = {
+    ...(isRecord(features.productos) ? features.productos : {}),
+    enabled: productosEnabled,
+  }
+  features.propiedades = {
+    ...(isRecord(features.propiedades) ? features.propiedades : {}),
+    enabled: propiedadesEnabled,
+  }
+  nextConfig.features = features
+  return JSON.stringify(nextConfig, null, 2)
+}
+
 export function TenantConfigEditor({
   tenantId,
   initialConfigJson,
@@ -169,6 +199,73 @@ export function TenantConfigEditor({
       <div className="flex items-center justify-between gap-3">
         <FormStatusMessage state={state} />
         <SubmitButton label="Guardar config" pendingLabel="Guardando..." />
+      </div>
+    </form>
+  )
+}
+
+export function TenantModuleFlagsForm({
+  tenantId,
+  config,
+}: {
+  tenantId: string
+  config: Record<string, unknown> | null
+}) {
+  const actions = useTenantSettingsActions()
+  const [state, formAction] = useActionState(actions.updateTenantConfigAction, INITIAL_CRUD_STATE)
+  const features = isRecord(config?.features) ? (config?.features as Record<string, unknown>) : null
+  const [productosEnabled, setProductosEnabled] = useState(() => readFeatureEnabled(features, "productos"))
+  const [propiedadesEnabled, setPropiedadesEnabled] = useState(() => readFeatureEnabled(features, "propiedades"))
+  const configJson = useMemo(
+    () => buildModuleConfigJson(config, productosEnabled, propiedadesEnabled),
+    [config, productosEnabled, propiedadesEnabled],
+  )
+
+  useEffect(() => {
+    setProductosEnabled(readFeatureEnabled(features, "productos"))
+    setPropiedadesEnabled(readFeatureEnabled(features, "propiedades"))
+  }, [features])
+
+  return (
+    <form action={formAction} className="space-y-4">
+      <input type="hidden" name="tenant_id" value={tenantId} />
+      <input type="hidden" name="config_json" value={configJson} />
+      <div className="grid gap-4 md:grid-cols-2">
+        <div className="space-y-2 md:col-span-2">
+          <div className="flex items-center gap-3">
+            <input
+              id="module_productos_enabled"
+              type="checkbox"
+              checked={productosEnabled}
+              onChange={(event) => setProductosEnabled(event.target.checked)}
+              className="size-4"
+            />
+            <Label htmlFor="module_productos_enabled">Productos habilitado</Label>
+          </div>
+        </div>
+        <div className="space-y-2 md:col-span-2">
+          <div className="flex items-center gap-3">
+            <input
+              id="module_propiedades_enabled"
+              type="checkbox"
+              checked={propiedadesEnabled}
+              onChange={(event) => setPropiedadesEnabled(event.target.checked)}
+              className="size-4"
+            />
+            <Label htmlFor="module_propiedades_enabled">Propiedades habilitado</Label>
+          </div>
+        </div>
+      </div>
+      <p className="text-xs text-muted-foreground">
+        Esto actualiza <code>organizaciones.config.features.productos.enabled</code> y{" "}
+        <code>organizaciones.config.features.propiedades.enabled</code>.
+      </p>
+      <p className="text-xs text-muted-foreground">
+        La taxonomía puede seguir compartida, pero el acceso operativo al módulo queda separado.
+      </p>
+      <div className="flex items-center justify-between gap-3">
+        <FormStatusMessage state={state} />
+        <SubmitButton label="Guardar módulos" pendingLabel="Guardando..." />
       </div>
     </form>
   )

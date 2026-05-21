@@ -192,6 +192,14 @@ Valores que sirven para “mapear” tráfico entrante a `organizacion_id`:
 
 Valores no sensibles que quieres editar desde UI por tenant.
 
+Flags de módulo:
+- `features.webchat.enabled`
+- `features.whatsapp.enabled`
+- `features.messenger.enabled`
+- `features.voice.enabled`
+- `features.productos.enabled`
+- `features.propiedades.enabled`
+
 Webchat (ejemplos):
 - `TALIA_OPENAI_WEBCHAT_ASSISTANT_ID`
 - `TALIA_OPENAI_PROMPT_WEBCHAT_VERSION`

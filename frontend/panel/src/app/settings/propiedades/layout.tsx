@@ -4,14 +4,14 @@ import type { ReactNode } from "react"
 import { requireTenantModuleEnabled } from "@/lib/settings/module-flags"
 
 export const metadata: Metadata = {
-  title: "Productos y servicios",
+  title: "Propiedades inmobiliarias",
 }
 
-export default async function SettingsProductosLayout({
+export default async function SettingsPropiedadesLayout({
   children,
 }: {
   children: ReactNode
 }) {
-  await requireTenantModuleEnabled("productos")
+  await requireTenantModuleEnabled("propiedades")
   return <>{children}</>
 }

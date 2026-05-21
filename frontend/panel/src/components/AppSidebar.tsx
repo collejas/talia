@@ -214,7 +214,7 @@ export function AppSidebar({
   ...props
 }: React.ComponentProps<typeof Sidebar>) {
   const router = useRouter()
-  const { user, loading, isPlatformAdmin, profilingEnabled } = useCurrentUser()
+  const { user, loading, isPlatformAdmin, profilingEnabled, featureFlags } = useCurrentUser()
   const { context: permissionContext, loading: permissionsLoading } = usePermissions()
   const [hydrated, setHydrated] = useState(false)
   const sidebarApiEnabled = !loading && Boolean(user)
@@ -223,6 +223,13 @@ export function AppSidebar({
     tenantName: activeTenantName,
     refresh: refreshTenantContext,
   } = useTenantContext({ enabled: sidebarApiEnabled && isPlatformAdmin })
+  const moduleFlags = useMemo(
+    () => ({
+      productosEnabled: Boolean(featureFlags?.productosEnabled),
+      propiedadesEnabled: Boolean(featureFlags?.propiedadesEnabled),
+    }),
+    [featureFlags?.productosEnabled, featureFlags?.propiedadesEnabled],
+  )
   const settingsChildren = useMemo(() => {
     const base = SETTINGS_CHILDREN_TEMPLATE.map((child) => ({ ...child })).filter((child) =>
       child.url === "/settings/scoring" ? profilingEnabled : true,
@@ -233,15 +240,29 @@ export function AppSidebar({
       icon: IconAdjustments,
       permission: "settings.manage",
     })
+    const filtered = base.filter((child) => {
+      if (!moduleFlags.productosEnabled && child.url.startsWith("/settings/productos")) {
+        return false
+      }
+      if (!moduleFlags.propiedadesEnabled && child.url === "/settings/propiedades") {
+        return false
+      }
+      return true
+    })
     if (isPlatformAdmin) {
-      base.push({ title: "Tenants", url: "/settings/tenants", icon: IconDatabase })
+      filtered.push({ title: "Tenants", url: "/settings/tenants", icon: IconDatabase })
     }
-    return base
-  }, [isPlatformAdmin, profilingEnabled])
+    return filtered
+  }, [isPlatformAdmin, moduleFlags.productosEnabled, moduleFlags.propiedadesEnabled, profilingEnabled])
   const navItems = useMemo(() => {
     const items = NAVIGATION.navMain.map((item) =>
       item.title === "Settings" ? { ...item, children: settingsChildren } : item,
-    )
+    ).filter((item) => {
+      if (item.url === "/propiedades" && !moduleFlags.propiedadesEnabled) {
+        return false
+      }
+      return true
+    })
 
     if (permissionsLoading) {
       return items
@@ -268,7 +289,7 @@ export function AppSidebar({
       }, [])
 
     return filterItems(items)
-  }, [settingsChildren, permissionsLoading, permissionContext])
+  }, [moduleFlags.propiedadesEnabled, settingsChildren, permissionsLoading, permissionContext])
   const dashboardRoutePrefetchedRef = useRef(false)
   const mapaRoutePrefetchedRef = useRef(false)
 

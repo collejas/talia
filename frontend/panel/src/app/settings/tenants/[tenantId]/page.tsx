@@ -13,6 +13,7 @@ import {
   TenantCalendarSettings,
   TenantMailSettings,
   TenantMessengerSettings,
+  TenantModuleFlagsForm,
   TenantOrganizationInfoForm,
   TenantProfilingToggleForm,
   TenantSecretsManager,
@@ -277,6 +278,18 @@ export default async function TenantDetailSettingsPage({ params }: { params: Pro
             <TenantOrganizationInfoForm tenantId={tenantId} info={tenantInfo} />
           </CardContent>
         </Card>
+
+        {isPlatformAdmin ? (
+          <Card>
+            <CardHeader className="space-y-1">
+              <CardTitle>Módulos</CardTitle>
+              <CardDescription>Controla qué áreas funcionales verá y podrá usar este tenant.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <TenantModuleFlagsForm tenantId={tenantId} config={config} />
+            </CardContent>
+          </Card>
+        ) : null}
 
         <Card>
           <CardHeader className="space-y-1">

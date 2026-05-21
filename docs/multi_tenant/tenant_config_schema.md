@@ -63,6 +63,14 @@ Referencia: `docs/multi_tenant/secrets_security.md`.
 - `features.whatsapp.enabled` (bool)
 - `features.messenger.enabled` (bool)
 - `features.voice.enabled` (bool)
+- `features.productos.enabled` (bool)
+- `features.propiedades.enabled` (bool)
+
+> Nota: `features.productos.enabled` controla la visibilidad del catálogo comercial general
+> (`/settings/productos`) y `features.propiedades.enabled` controla la visibilidad del módulo
+> inmobiliario (`/settings/propiedades`). Ambos módulos comparten taxonomía base
+> (`lineas`, `familias`, `modelos`), pero no comparten inventario operativo ni permisos de
+> exposición por defecto.
 
 ### `webchat.*`
 - `webchat.assistant_id` (string)  ← de `TALIA_OPENAI_WEBCHAT_ASSISTANT_ID`

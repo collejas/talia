@@ -11,6 +11,15 @@ export type TenantInfo = {
   razon_social?: string | null
 }
 
+export type FeatureFlags = {
+  webchatEnabled?: boolean
+  whatsappEnabled?: boolean
+  messengerEnabled?: boolean
+  voiceEnabled?: boolean
+  productosEnabled?: boolean
+  propiedadesEnabled?: boolean
+}
+
 export type SessionPayload = {
   user: SupabaseUser
   tenant?: TenantInfo | null
@@ -18,4 +27,5 @@ export type SessionPayload = {
   employeePosition?: string | null
   isPlatformAdmin?: boolean
   profilingEnabled?: boolean
+  featureFlags?: FeatureFlags
 }

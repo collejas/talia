@@ -40,6 +40,10 @@ Desplegar una experiencia geoespacial jerárquica donde Leaflet controle la nave
 
 ## Flujo multi-negocio y separación de capas
 - La solución inmobiliaria se mantiene como un módulo con su propia capa espacial, pero permite referenciar líneas/familias/modelos sin mezclar la lógica de `/settings/productos`. En paralelo, `/settings/productos` sigue manejando productos no espaciales.
+- El control de exposición debe vivir en `organizaciones.config.features`:
+  - `features.productos.enabled` gobierna `/settings/productos` y sus rutas relacionadas.
+  - `features.propiedades.enabled` gobierna `/settings/propiedades` y sus rutas relacionadas.
+  - Ambos módulos pueden compartir taxonomía base, pero no comparten inventario operativo ni se habilitan por defecto juntos.
 - Documentar el flujo que conecta `settings/productos` con `settings/propiedades` si se decide compartir plantillas; pero dejar claro que la gestión de polígonos y mapas permanece en el módulo inmobiliario.
 - Para soportar nuevas ubicaciones de desarrollos se puede extender el RPC y JSONB para cargar nuevos estados/municipios y el conjunto de 30 desarrollos (10 por cada ubicación) se mantiene limitado a esos territorios para reducir carga de Mapbox.
 

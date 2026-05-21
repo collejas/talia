@@ -5067,6 +5067,28 @@ async def require_organizacion_id(
     return organizacion_id
 
 
+TenantModuleName = Literal["productos", "propiedades"]
+
+
+def require_tenant_module_enabled(module_name: TenantModuleName):
+    async def _dependency(
+        repo: CRMRepository = Depends(get_repository),
+        organizacion_id: UUID = Depends(require_organizacion_id),
+    ) -> UUID:
+        try:
+            config = await repo.get_organizacion_config(organizacion_id=organizacion_id) or {}
+        except CRMRepositoryError as exc:
+            raise HTTPException(status_code=502, detail=str(exc)) from exc
+        features = config.get("features") if isinstance(config, dict) else None
+        module_config = features.get(module_name) if isinstance(features, dict) else None
+        enabled = bool(module_config.get("enabled")) if isinstance(module_config, dict) else False
+        if not enabled:
+            raise HTTPException(status_code=403, detail=f"feature_{module_name}_disabled")
+        return organizacion_id
+
+    return _dependency
+
+
 def optional_usuario_id(
     x_usuario_id: Annotated[str | None, Header(alias="X-Usuario-Id")] = None,
 ) -> UUID | None:
@@ -14726,7 +14748,7 @@ async def catalog_modelos(
 async def list_product_lineas(
     *,
     repo: CRMRepository = Depends(get_repository),
-    organizacion_id: UUID = Depends(require_organizacion_id),
+    organizacion_id: UUID = Depends(require_tenant_module_enabled("productos")),
     _: str = Depends(require_permission("settings.view")),
     include_inactive: bool = Query(default=False),
     search: str | None = Query(default=None, max_length=200),
@@ -14752,7 +14774,7 @@ async def list_product_lineas(
 async def create_product_linea(
     *,
     repo: CRMRepository = Depends(get_repository),
-    organizacion_id: UUID = Depends(require_organizacion_id),
+    organizacion_id: UUID = Depends(require_tenant_module_enabled("productos")),
     _: str = Depends(require_permission("settings.manage")),
     payload: CRMLineaDeNegocioCreate,
     background_tasks: BackgroundTasks,
@@ -14783,7 +14805,7 @@ async def create_product_linea(
 async def update_product_linea(
     *,
     repo: CRMRepository = Depends(get_repository),
-    organizacion_id: UUID = Depends(require_organizacion_id),
+    organizacion_id: UUID = Depends(require_tenant_module_enabled("productos")),
     _: str = Depends(require_permission("settings.manage")),
     linea_id: UUID,
     payload: CRMLineaDeNegocioUpdate,
@@ -14825,7 +14847,7 @@ async def update_product_linea(
 async def delete_product_linea(
     *,
     repo: CRMRepository = Depends(get_repository),
-    organizacion_id: UUID = Depends(require_organizacion_id),
+    organizacion_id: UUID = Depends(require_tenant_module_enabled("productos")),
     _: str = Depends(require_permission("settings.manage")),
     linea_id: UUID,
     background_tasks: BackgroundTasks,
@@ -14855,7 +14877,7 @@ async def delete_product_linea(
 async def bulk_delete_product_lineas(
     *,
     repo: CRMRepository = Depends(get_repository),
-    organizacion_id: UUID = Depends(require_organizacion_id),
+    organizacion_id: UUID = Depends(require_tenant_module_enabled("productos")),
     _: str = Depends(require_permission("settings.manage")),
     payload: CRMBulkDeleteRequest,
     background_tasks: BackgroundTasks,
@@ -14903,7 +14925,7 @@ async def bulk_delete_product_lineas(
 async def list_product_familias(
     *,
     repo: CRMRepository = Depends(get_repository),
-    organizacion_id: UUID = Depends(require_organizacion_id),
+    organizacion_id: UUID = Depends(require_tenant_module_enabled("productos")),
     _: str = Depends(require_permission("settings.view")),
     include_inactive: bool = Query(default=False),
     linea_id: UUID | None = Query(default=None),
@@ -14931,7 +14953,7 @@ async def list_product_familias(
 async def create_product_familia(
     *,
     repo: CRMRepository = Depends(get_repository),
-    organizacion_id: UUID = Depends(require_organizacion_id),
+    organizacion_id: UUID = Depends(require_tenant_module_enabled("productos")),
     _: str = Depends(require_permission("settings.manage")),
     payload: CRMFamiliaProductoCreate,
     background_tasks: BackgroundTasks,
@@ -14960,7 +14982,7 @@ async def create_product_familia(
 async def update_product_familia(
     *,
     repo: CRMRepository = Depends(get_repository),
-    organizacion_id: UUID = Depends(require_organizacion_id),
+    organizacion_id: UUID = Depends(require_tenant_module_enabled("productos")),
     _: str = Depends(require_permission("settings.manage")),
     familia_id: UUID,
     payload: CRMFamiliaProductoUpdate,
@@ -15002,7 +15024,7 @@ async def update_product_familia(
 async def delete_product_familia(
     *,
     repo: CRMRepository = Depends(get_repository),
-    organizacion_id: UUID = Depends(require_organizacion_id),
+    organizacion_id: UUID = Depends(require_tenant_module_enabled("productos")),
     _: str = Depends(require_permission("settings.manage")),
     familia_id: UUID,
     background_tasks: BackgroundTasks,
@@ -15032,7 +15054,7 @@ async def delete_product_familia(
 async def bulk_delete_product_familias(
     *,
     repo: CRMRepository = Depends(get_repository),
-    organizacion_id: UUID = Depends(require_organizacion_id),
+    organizacion_id: UUID = Depends(require_tenant_module_enabled("productos")),
     _: str = Depends(require_permission("settings.manage")),
     payload: CRMBulkDeleteRequest,
     background_tasks: BackgroundTasks,
@@ -15080,7 +15102,7 @@ async def bulk_delete_product_familias(
 async def list_product_modelos(
     *,
     repo: CRMRepository = Depends(get_repository),
-    organizacion_id: UUID = Depends(require_organizacion_id),
+    organizacion_id: UUID = Depends(require_tenant_module_enabled("productos")),
     _: str = Depends(require_permission("settings.view")),
     include_inactive: bool = Query(default=False),
     search: str | None = Query(default=None, max_length=200),
@@ -15106,7 +15128,7 @@ async def list_product_modelos(
 async def create_product_modelo(
     *,
     repo: CRMRepository = Depends(get_repository),
-    organizacion_id: UUID = Depends(require_organizacion_id),
+    organizacion_id: UUID = Depends(require_tenant_module_enabled("productos")),
     _: str = Depends(require_permission("settings.manage")),
     payload: CRMModeloProductoCreate,
     background_tasks: BackgroundTasks,
@@ -15135,7 +15157,7 @@ async def create_product_modelo(
 async def update_product_modelo(
     *,
     repo: CRMRepository = Depends(get_repository),
-    organizacion_id: UUID = Depends(require_organizacion_id),
+    organizacion_id: UUID = Depends(require_tenant_module_enabled("productos")),
     _: str = Depends(require_permission("settings.manage")),
     modelo_id: UUID,
     payload: CRMModeloProductoUpdate,
@@ -15177,7 +15199,7 @@ async def update_product_modelo(
 async def delete_product_modelo(
     *,
     repo: CRMRepository = Depends(get_repository),
-    organizacion_id: UUID = Depends(require_organizacion_id),
+    organizacion_id: UUID = Depends(require_tenant_module_enabled("productos")),
     _: str = Depends(require_permission("settings.manage")),
     modelo_id: UUID,
     background_tasks: BackgroundTasks,
@@ -15207,7 +15229,7 @@ async def delete_product_modelo(
 async def bulk_delete_product_modelos(
     *,
     repo: CRMRepository = Depends(get_repository),
-    organizacion_id: UUID = Depends(require_organizacion_id),
+    organizacion_id: UUID = Depends(require_tenant_module_enabled("productos")),
     _: str = Depends(require_permission("settings.manage")),
     payload: CRMBulkDeleteRequest,
     background_tasks: BackgroundTasks,
@@ -15258,7 +15280,7 @@ async def bulk_delete_product_modelos(
 async def list_product_metadata_schemes(
     *,
     repo: CRMRepository = Depends(get_repository),
-    organizacion_id: UUID = Depends(require_organizacion_id),
+    organizacion_id: UUID = Depends(require_tenant_module_enabled("productos")),
     _: str = Depends(require_permission("settings.view")),
 ) -> list[CRMProductMetadataScheme]:
     try:
@@ -15276,7 +15298,7 @@ async def list_product_metadata_schemes(
 async def create_product_metadata_scheme(
     *,
     repo: CRMRepository = Depends(get_repository),
-    organizacion_id: UUID = Depends(require_organizacion_id),
+    organizacion_id: UUID = Depends(require_tenant_module_enabled("productos")),
     _: str = Depends(require_permission("settings.manage")),
     payload: CRMProductMetadataSchemeCreate,
 ) -> CRMProductMetadataScheme:
@@ -15294,7 +15316,7 @@ async def create_product_metadata_scheme(
 async def update_product_metadata_scheme(
     *,
     repo: CRMRepository = Depends(get_repository),
-    organizacion_id: UUID = Depends(require_organizacion_id),
+    organizacion_id: UUID = Depends(require_tenant_module_enabled("productos")),
     _: str = Depends(require_permission("settings.manage")),
     scheme_id: UUID,
     payload: CRMProductMetadataSchemeUpdate,
@@ -15322,7 +15344,7 @@ async def update_product_metadata_scheme(
 async def delete_product_metadata_scheme(
     *,
     repo: CRMRepository = Depends(get_repository),
-    organizacion_id: UUID = Depends(require_organizacion_id),
+    organizacion_id: UUID = Depends(require_tenant_module_enabled("productos")),
     _: str = Depends(require_permission("settings.manage")),
     scheme_id: UUID,
 ) -> Response:
@@ -29057,7 +29079,7 @@ async def delete_tagging(
 async def list_products(
     *,
     repo: CRMRepository = Depends(get_repository),
-    organizacion_id: UUID = Depends(require_organizacion_id),
+    organizacion_id: UUID = Depends(require_tenant_module_enabled("productos")),
     _: str = Depends(require_permission("settings.view")),
     activos: bool | None = Query(default=None),
 ) -> list[CRMProduct]:
@@ -29072,7 +29094,7 @@ async def list_products(
 async def create_product(
     *,
     repo: CRMRepository = Depends(get_repository),
-    organizacion_id: UUID = Depends(require_organizacion_id),
+    organizacion_id: UUID = Depends(require_tenant_module_enabled("productos")),
     _: str = Depends(require_permission("settings.manage")),
     payload: CRMProductCreate,
 ) -> CRMProduct:
@@ -32961,7 +32983,7 @@ async def demografia_geo_paises(
 async def propiedades_geojson(
     *,
     repo: CRMRepository = Depends(get_repository),
-    organizacion_id: UUID = Depends(require_organizacion_id),
+    organizacion_id: UUID = Depends(require_tenant_module_enabled("propiedades")),
     _: str = Depends(require_permission("propiedades.view")),
     nivel: Annotated[int | None, Query(gt=0)] = None,
     tipo_id: UUID | None = Query(default=None),
@@ -33055,7 +33077,7 @@ def _enrich_geojson_location_names(payload: dict[str, Any]) -> None:
 async def propiedades_tipos(
     *,
     repo: CRMRepository = Depends(get_repository),
-    organizacion_id: UUID = Depends(require_organizacion_id),
+    organizacion_id: UUID = Depends(require_tenant_module_enabled("propiedades")),
     _: str = Depends(require_permission("propiedades.view")),
 ) -> list[dict[str, Any]]:
     try:
@@ -33068,7 +33090,7 @@ async def propiedades_tipos(
 async def propiedades_hierarquia(
     *,
     repo: CRMRepository = Depends(get_repository),
-    organizacion_id: UUID = Depends(require_organizacion_id),
+    organizacion_id: UUID = Depends(require_tenant_module_enabled("propiedades")),
     _: str = Depends(require_permission("propiedades.view")),
 ) -> dict[str, Any]:
     try:
@@ -33082,7 +33104,7 @@ async def crear_propiedad_desarrollo(
     *,
     payload: PropiedadDesarrolloCreateRequest,
     repo: CRMRepository = Depends(get_repository),
-    organizacion_id: UUID = Depends(require_organizacion_id),
+    organizacion_id: UUID = Depends(require_tenant_module_enabled("propiedades")),
     _: str = Depends(require_permission("settings.manage")),
 ) -> dict[str, Any]:
     metadata = _normalize_metadata_value(payload.metadata) or {}
@@ -33126,7 +33148,7 @@ async def editar_propiedad_desarrollo(
     desarrollo_id: UUID,
     payload: PropiedadDesarrolloUpdateRequest,
     repo: CRMRepository = Depends(get_repository),
-    organizacion_id: UUID = Depends(require_organizacion_id),
+    organizacion_id: UUID = Depends(require_tenant_module_enabled("propiedades")),
     _: str = Depends(require_permission("settings.manage")),
 ) -> dict[str, Any]:
     if not any(
@@ -33184,7 +33206,7 @@ async def eliminar_propiedad_desarrollo(
     *,
     desarrollo_id: UUID,
     repo: CRMRepository = Depends(get_repository),
-    organizacion_id: UUID = Depends(require_organizacion_id),
+    organizacion_id: UUID = Depends(require_tenant_module_enabled("propiedades")),
     _: str = Depends(require_permission("settings.manage")),
 ) -> dict[str, Any]:
     try:
@@ -33202,7 +33224,7 @@ async def crear_propiedad_desarrollo_mix(
     *,
     payload: PropiedadDesarrolloMixCreateRequest,
     repo: CRMRepository = Depends(get_repository),
-    organizacion_id: UUID = Depends(require_organizacion_id),
+    organizacion_id: UUID = Depends(require_tenant_module_enabled("propiedades")),
     _: str = Depends(require_permission("settings.manage")),
 ) -> dict[str, Any]:
     metadata = _normalize_metadata_value(payload.metadata) or {}
@@ -33239,7 +33261,7 @@ async def crear_propiedad_desarrollo_mix_item(
     *,
     payload: PropiedadDesarrolloMixItemCreateRequest,
     repo: CRMRepository = Depends(get_repository),
-    organizacion_id: UUID = Depends(require_organizacion_id),
+    organizacion_id: UUID = Depends(require_tenant_module_enabled("propiedades")),
     _: str = Depends(require_permission("settings.manage")),
 ) -> dict[str, Any]:
     metadata = _normalize_metadata_value(payload.metadata) or {}
@@ -33276,7 +33298,7 @@ async def crear_propiedad_capa(
     *,
     payload: PropiedadCapaCreateRequest,
     repo: CRMRepository = Depends(get_repository),
-    organizacion_id: UUID = Depends(require_organizacion_id),
+    organizacion_id: UUID = Depends(require_tenant_module_enabled("propiedades")),
     _: str = Depends(require_permission("settings.manage")),
 ) -> dict[str, Any]:
     metadata = _normalize_metadata_value(payload.metadata) or {}
@@ -33310,7 +33332,7 @@ async def editar_propiedad_capa(
     capa_id: UUID,
     payload: PropiedadCapaUpdateRequest,
     repo: CRMRepository = Depends(get_repository),
-    organizacion_id: UUID = Depends(require_organizacion_id),
+    organizacion_id: UUID = Depends(require_tenant_module_enabled("propiedades")),
     _: str = Depends(require_permission("settings.manage")),
 ) -> dict[str, Any]:
     if not any(
@@ -33360,7 +33382,7 @@ async def eliminar_propiedad_capa(
     *,
     capa_id: UUID,
     repo: CRMRepository = Depends(get_repository),
-    organizacion_id: UUID = Depends(require_organizacion_id),
+    organizacion_id: UUID = Depends(require_tenant_module_enabled("propiedades")),
     _: str = Depends(require_permission("settings.manage")),
 ) -> dict[str, Any]:
     try:
@@ -33378,7 +33400,7 @@ async def crear_propiedad_poligono(
     *,
     payload: PropiedadPoligonoCreateRequest,
     repo: CRMRepository = Depends(get_repository),
-    organizacion_id: UUID = Depends(require_organizacion_id),
+    organizacion_id: UUID = Depends(require_tenant_module_enabled("propiedades")),
     _: str = Depends(require_permission("settings.manage")),
 ) -> dict[str, Any]:
     metadata = _coerce_metadata(payload.metadata)
@@ -33425,7 +33447,7 @@ async def editar_propiedad_poligono(
     poligono_id: UUID,
     payload: PropiedadPoligonoUpdateRequest,
     repo: CRMRepository = Depends(get_repository),
-    organizacion_id: UUID = Depends(require_organizacion_id),
+    organizacion_id: UUID = Depends(require_tenant_module_enabled("propiedades")),
     _: str = Depends(require_permission("settings.manage")),
 ) -> dict[str, Any]:
     if (
@@ -33483,7 +33505,7 @@ async def eliminar_propiedad_poligono(
     *,
     poligono_id: UUID,
     repo: CRMRepository = Depends(get_repository),
-    organizacion_id: UUID = Depends(require_organizacion_id),
+    organizacion_id: UUID = Depends(require_tenant_module_enabled("propiedades")),
     _: str = Depends(require_permission("settings.manage")),
 ) -> dict[str, Any]:
     try:
@@ -33502,7 +33524,7 @@ async def obtener_propiedad_poligono(
     target_type: PropiedadPoligonoTarget = Query(...),
     target_id: UUID = Query(...),
     repo: CRMRepository = Depends(get_repository),
-    organizacion_id: UUID = Depends(require_organizacion_id),
+    organizacion_id: UUID = Depends(require_tenant_module_enabled("propiedades")),
     _: str = Depends(require_permission("settings.view")),
 ) -> dict[str, Any]:
     request_payload = {
@@ -33537,7 +33559,7 @@ async def crear_propiedad(
     *,
     payload: PropiedadUnidadCreateRequest,
     repo: CRMRepository = Depends(get_repository),
-    organizacion_id: UUID = Depends(require_organizacion_id),
+    organizacion_id: UUID = Depends(require_tenant_module_enabled("propiedades")),
     _: str = Depends(require_permission("settings.manage")),
 ) -> dict[str, Any]:
     body, _ = _build_propiedad_unidad_payload(payload)
@@ -33608,7 +33630,7 @@ async def editar_propiedad_unidad(
     unidad_id: UUID,
     payload: PropiedadUnidadCreateRequest,
     repo: CRMRepository = Depends(get_repository),
-    organizacion_id: UUID = Depends(require_organizacion_id),
+    organizacion_id: UUID = Depends(require_tenant_module_enabled("propiedades")),
     _: str = Depends(require_permission("settings.manage")),
 ) -> dict[str, Any]:
     current_unidad = await repo.get_propiedad_unidad(unidad_id=unidad_id)
@@ -33679,7 +33701,7 @@ async def actualizar_status_propiedad_unidad(
     unidad_id: UUID,
     payload: PropiedadUnidadStatusUpdateRequest,
     repo: CRMRepository = Depends(get_repository),
-    organizacion_id: UUID = Depends(require_organizacion_id),
+    organizacion_id: UUID = Depends(require_tenant_module_enabled("propiedades")),
     usuario_id: UUID | None = Depends(optional_usuario_id),
     _: str = Depends(require_permission("settings.manage")),
 ) -> dict[str, Any]:
@@ -33764,7 +33786,7 @@ async def eliminar_propiedad_unidad(
     *,
     unidad_id: UUID,
     repo: CRMRepository = Depends(get_repository),
-    organizacion_id: UUID = Depends(require_organizacion_id),
+    organizacion_id: UUID = Depends(require_tenant_module_enabled("propiedades")),
     _: str = Depends(require_permission("settings.manage")),
 ) -> dict[str, Any]:
     try:
@@ -33786,7 +33808,7 @@ async def registrar_venta_propiedad(
     *,
     payload: CRMPropertySaleRequest,
     repo: CRMRepository = Depends(get_repository),
-    organizacion_id: UUID = Depends(require_organizacion_id),
+    organizacion_id: UUID = Depends(require_tenant_module_enabled("propiedades")),
     usuario_id: UUID | None = Depends(optional_usuario_id),
     _: str = Depends(require_permission("settings.manage")),
 ) -> CRMQuote:
@@ -34129,7 +34151,7 @@ async def propiedades_ventas_vendedores(
     *,
     payload: CRMPropertySalesVendorRequest,
     repo: CRMRepository = Depends(get_repository),
-    organizacion_id: UUID = Depends(require_organizacion_id),
+    organizacion_id: UUID = Depends(require_tenant_module_enabled("propiedades")),
     _: str = Depends(require_permission("propiedades.view")),
 ) -> CRMPropertySalesVendorResponse:
     try:
@@ -34148,7 +34170,7 @@ async def importar_propiedades(
     *,
     payload: ImportPropiedadesRequest,
     repo: CRMRepository = Depends(get_repository),
-    organizacion_id: UUID = Depends(require_organizacion_id),
+    organizacion_id: UUID = Depends(require_tenant_module_enabled("propiedades")),
     _: str = Depends(require_permission("settings.manage")),
 ) -> dict[str, Any]:
     try:
@@ -34166,7 +34188,7 @@ async def importar_propiedades_csv(
     *,
     file: UploadFile = File(...),
     repo: CRMRepository = Depends(get_repository),
-    organizacion_id: UUID = Depends(require_organizacion_id),
+    organizacion_id: UUID = Depends(require_tenant_module_enabled("propiedades")),
     _: str = Depends(require_permission("settings.manage")),
 ) -> dict[str, Any]:
     start = time.perf_counter()

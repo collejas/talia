@@ -17,6 +17,7 @@ import {
   TenantWhatsAppSettings,
   TenantWhatsAppProspeccionSettings,
   TenantMessengerSettings,
+  TenantModuleFlagsForm,
   TenantBusquedaSettings,
   TenantOpenaiSettings,
   TenantSecretsManager,
@@ -51,6 +52,7 @@ export const metadata: Metadata = {
 
 export const dynamic = "force-dynamic"
 export const fetchCache = "force-no-store"
+const MASTER_TENANT_ID = "00000000-0000-0000-0000-000000000001"
 
 type TenantSettingsResponse = {
   organizacion_id: string
@@ -277,9 +279,21 @@ export default async function SettingsVariablesPage() {
               <CardDescription>Actualiza los campos de <code>public.organizaciones</code> del tenant.</CardDescription>
             </CardHeader>
             <CardContent>
-            <TenantOrganizationInfoForm tenantId={tenantId} info={tenantInfo} showActiveToggle={false} />
+              <TenantOrganizationInfoForm tenantId={tenantId} info={tenantInfo} showActiveToggle={false} />
             </CardContent>
           </Card>
+
+          {tenantId === MASTER_TENANT_ID ? (
+            <Card>
+              <CardHeader className="space-y-1">
+                <CardTitle>Módulos</CardTitle>
+                <CardDescription>Activa o desactiva las áreas funcionales visibles para este tenant.</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <TenantModuleFlagsForm tenantId={tenantId} config={config} />
+              </CardContent>
+            </Card>
+          ) : null}
 
           <Card>
             <CardHeader className="space-y-1">
