@@ -11304,6 +11304,42 @@ class CRMAlmacenCreate(BaseModel):
     email: str | None = Field(default=None, max_length=254)
 
 
+class CRMProveedor(BaseModel):
+    id: UUID
+    organizacion_id: UUID
+    codigo_proveedor: str
+    razon_social: str
+    nombre_comercial: str | None = None
+    rfc: str | None = None
+    correo: str | None = None
+    telefono: str | None = None
+    plazo_pago_dias: int | None = None
+    plazo_entrega_dias: int | None = None
+    limite_credito: float | None = None
+    moneda_preferida: str
+    activo: bool
+    observaciones: str | None = None
+    creado_en: datetime
+    actualizado_en: datetime
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class CRMProveedorCreate(BaseModel):
+    codigo_proveedor: str = Field(..., min_length=1, max_length=50)
+    razon_social: str = Field(..., min_length=1, max_length=255)
+    nombre_comercial: str | None = Field(default=None, max_length=255)
+    rfc: str | None = Field(default=None, max_length=20)
+    correo: str | None = Field(default=None, max_length=254)
+    telefono: str | None = Field(default=None, max_length=50)
+    plazo_pago_dias: int | None = Field(default=None, ge=0)
+    plazo_entrega_dias: int | None = Field(default=None, ge=0)
+    limite_credito: float | None = Field(default=None, ge=0)
+    moneda_preferida: str = Field(default="MXN", min_length=3, max_length=3)
+    activo: bool = True
+    observaciones: str | None = Field(default=None, max_length=2000)
+
+
 class CRMInventarioExistencia(BaseModel):
     id: UUID
     organizacion_id: UUID
@@ -11322,6 +11358,32 @@ class CRMInventarioExistencia(BaseModel):
     almacen: dict[str, Any] | None = None
 
     model_config = ConfigDict(populate_by_name=True)
+
+
+class CRMOrdenCompraCreateItem(BaseModel):
+    catalog_item_id: UUID
+    proveedor_item_id: UUID | None = None
+    cantidad_solicitada: Annotated[float, Field(gt=0)]
+    unidad: str | None = Field(default=None, max_length=80)
+    costo_unitario: Annotated[float, Field(ge=0)]
+    descuento_porcentaje: float | None = Field(default=None, ge=0, le=100)
+    impuestos: float | None = Field(default=0, ge=0)
+    observaciones: str | None = Field(default=None, max_length=1000)
+
+
+class CRMOrdenCompraCreate(BaseModel):
+    folio: str = Field(..., min_length=1, max_length=80)
+    proveedor_id: UUID
+    almacen_destino_id: UUID
+    fecha_emision: datetime | None = None
+    fecha_entrega_estimada: date | None = None
+    moneda: str = Field(default="MXN", min_length=3, max_length=3)
+    solicitado_por_usuario_id: UUID | None = None
+    aprobado_por_usuario_id: UUID | None = None
+    referencia_externa: str | None = Field(default=None, max_length=120)
+    observaciones: str | None = Field(default=None, max_length=2000)
+    instrucciones_entrega: str | None = Field(default=None, max_length=4000)
+    items: list[CRMOrdenCompraCreateItem] = Field(min_length=1)
 
 
 class CRMRecepcionCompraItem(BaseModel):
@@ -14428,6 +14490,26 @@ async def list_compras_almacenes(
     return [CRMAlmacen.model_validate(row) for row in rows]
 
 
+@router.get("/compras/proveedores", response_model=list[CRMProveedor])
+async def list_compras_proveedores(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("settings.view")),
+    include_inactive: bool = Query(default=False),
+    limit: Annotated[int, Query(ge=1, le=500)] = 100,
+) -> list[CRMProveedor]:
+    try:
+        rows = await repo.list_proveedores(
+            organizacion_id=organizacion_id,
+            include_inactive=include_inactive,
+            limit=limit,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return [CRMProveedor.model_validate(row) for row in rows]
+
+
 @router.get("/compras/existencias", response_model=list[CRMInventarioExistencia])
 async def list_compras_existencias(
     *,
@@ -14446,6 +14528,24 @@ async def list_compras_existencias(
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     return [CRMInventarioExistencia.model_validate(row) for row in rows]
+
+
+@router.post("/compras/proveedores", response_model=CRMProveedor, status_code=status.HTTP_201_CREATED)
+async def create_compras_proveedor(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("settings.manage")),
+    payload: CRMProveedorCreate,
+) -> CRMProveedor:
+    try:
+        row = await repo.create_proveedor(
+            organizacion_id=organizacion_id,
+            payload=payload.model_dump(mode="json", exclude_unset=True),
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return CRMProveedor.model_validate(row)
 
 
 @router.post("/compras/almacenes", response_model=CRMAlmacen, status_code=status.HTTP_201_CREATED)
@@ -14472,16 +14572,49 @@ async def list_compras_ordenes_para_recepcion(
     repo: CRMRepository = Depends(get_repository),
     organizacion_id: UUID = Depends(require_organizacion_id),
     _: str = Depends(require_permission("settings.view")),
+    solo_abiertas: bool = Query(default=True),
     limit: Annotated[int, Query(ge=1, le=500)] = 100,
 ) -> list[CRMOrdenCompraRecepcion]:
     try:
-        rows = await repo.list_ordenes_compra_para_recepcion(
+        rows = await repo.list_ordenes_compra(
             organizacion_id=organizacion_id,
+            include_closed=not solo_abiertas,
             limit=limit,
         )
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     return [CRMOrdenCompraRecepcion.model_validate(row) for row in rows]
+
+
+@router.post("/compras/ordenes", response_model=CRMOrdenCompraRecepcion, status_code=status.HTTP_201_CREATED)
+async def create_compras_orden(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("settings.manage")),
+    usuario_id: UUID | None = Depends(optional_usuario_id),
+    payload: CRMOrdenCompraCreate,
+) -> CRMOrdenCompraRecepcion:
+    body = payload.model_dump(mode="json", exclude_unset=True)
+    if usuario_id:
+        body.setdefault("solicitado_por_usuario_id", str(usuario_id))
+    try:
+        orden_id = await repo.create_orden_compra(
+            organizacion_id=organizacion_id,
+            payload=body,
+        )
+        row = await repo.get_orden_compra(
+            organizacion_id=organizacion_id,
+            orden_id=orden_id,
+        )
+    except CRMRepositoryError as exc:
+        detail = str(exc)
+        if "exists" in detail.lower() or "unq" in detail.lower():
+            raise HTTPException(status_code=409, detail=detail) from exc
+        raise HTTPException(status_code=502, detail=detail) from exc
+    if row is not None:
+        return CRMOrdenCompraRecepcion.model_validate(row)
+    raise HTTPException(status_code=502, detail="orden_compra_not_found")
 
 
 @router.get("/compras/recepciones", response_model=list[CRMRecepcionCompra])

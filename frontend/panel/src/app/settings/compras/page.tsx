@@ -40,9 +40,11 @@ function makeDefaultReceptionNumber(): string {
 }
 
 export default async function SettingsComprasPage() {
-  const [almacenes, ordenes, recepciones, existencias] = await Promise.all([
+  const [almacenes, proveedores, catalogItems, ordenes, recepciones, existencias] = await Promise.all([
     fetchList("/crm/compras/almacenes", { include_inactive: false, limit: 100 }),
-    fetchList("/crm/compras/ordenes", { limit: 100 }),
+    fetchList("/crm/compras/proveedores", { include_inactive: false, limit: 100 }),
+    fetchList("/crm/catalog/items", { include_inactive: false, limit: 1000 }),
+    fetchList("/crm/compras/ordenes", { solo_abiertas: false, limit: 100 }),
     fetchList("/crm/compras/recepciones", { limit: 25 }),
     fetchList("/crm/compras/existencias", { limit: 200 }),
   ])
@@ -69,6 +71,8 @@ export default async function SettingsComprasPage() {
 
         <ComprasWorkspace
           almacenes={almacenes}
+          proveedores={proveedores}
+          catalogItems={catalogItems}
           ordenes={ordenes}
           recepciones={recepciones}
           existencias={existencias}

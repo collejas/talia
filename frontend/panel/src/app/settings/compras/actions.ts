@@ -38,6 +38,18 @@ function parseRequiredNumber(value: FormDataEntryValue | null, field: string): n
   return parsed
 }
 
+function parseOptionalNumber(value: FormDataEntryValue | null): number | null {
+  if (typeof value !== "string") {
+    return null
+  }
+  const trimmed = value.trim()
+  if (!trimmed.length) {
+    return null
+  }
+  const parsed = Number(trimmed)
+  return Number.isFinite(parsed) ? parsed : null
+}
+
 function getFormDataTextArray(formData: FormData, name: string): string[] {
   return formData
     .getAll(name)
@@ -46,6 +58,38 @@ function getFormDataTextArray(formData: FormData, name: string): string[] {
 
 function getFormDataNumberArray(formData: FormData, name: string, field: string): number[] {
   return formData.getAll(name).map((value) => parseRequiredNumber(value, field))
+}
+
+function zipOrderItems(formData: FormData): Record<string, unknown>[] {
+  const catalogItemIds = getFormDataTextArray(formData, "items_catalog_item_id")
+  const proveedorItemIds = getFormDataTextArray(formData, "items_proveedor_item_id")
+  const cantidades = getFormDataNumberArray(formData, "items_cantidad_solicitada", "items_cantidad_solicitada")
+  const unidades = getFormDataTextArray(formData, "items_unidad")
+  const costos = getFormDataNumberArray(formData, "items_costo_unitario", "items_costo_unitario")
+  const descuentos = formData.getAll("items_descuento_porcentaje").map((value) => parseOptionalNumber(value))
+  const impuestos = formData.getAll("items_impuestos").map((value) => parseOptionalNumber(value) ?? 0)
+  const observaciones = getFormDataTextArray(formData, "items_observaciones")
+
+  const expectedLength = catalogItemIds.length
+  if (!expectedLength) {
+    throw new Error("items_required")
+  }
+
+  const arrays = [proveedorItemIds, cantidades, unidades, costos, descuentos, impuestos, observaciones]
+  if (arrays.some((array) => array.length !== expectedLength)) {
+    throw new Error("items_mismatch")
+  }
+
+  return catalogItemIds.map((catalogItemId, index) => ({
+    catalog_item_id: parseRequiredText(catalogItemId, "items_catalog_item_id"),
+    proveedor_item_id: parseOptionalText(proveedorItemIds[index]),
+    cantidad_solicitada: cantidades[index],
+    unidad: parseOptionalText(unidades[index]) ?? "unidad",
+    costo_unitario: costos[index],
+    descuento_porcentaje: descuentos[index],
+    impuestos: impuestos[index],
+    observaciones: parseOptionalText(observaciones[index]),
+  }))
 }
 
 function zipReceptionItems(formData: FormData): Record<string, unknown>[] {
@@ -111,6 +155,32 @@ export async function createAlmacenAction(formData: FormData): Promise<void> {
   revalidatePath(SETTINGS_PATH)
 }
 
+export async function createProveedorAction(formData: FormData): Promise<void> {
+  const payload = {
+    codigo_proveedor: parseRequiredText(formData.get("codigo_proveedor"), "codigo_proveedor"),
+    razon_social: parseRequiredText(formData.get("razon_social"), "razon_social"),
+    nombre_comercial: parseOptionalText(formData.get("nombre_comercial")),
+    rfc: parseOptionalText(formData.get("rfc")),
+    correo: parseOptionalText(formData.get("correo")),
+    telefono: parseOptionalText(formData.get("telefono")),
+    plazo_pago_dias: parseOptionalNumber(formData.get("plazo_pago_dias")),
+    plazo_entrega_dias: parseOptionalNumber(formData.get("plazo_entrega_dias")),
+    limite_credito: parseOptionalNumber(formData.get("limite_credito")),
+    moneda_preferida: parseOptionalText(formData.get("moneda_preferida")) || "MXN",
+    activo: parseBoolean(formData.get("activo"), true),
+    observaciones: parseOptionalText(formData.get("observaciones")),
+  }
+
+  const response = await callCrmApi("/crm/compras/proveedores", {
+    method: "POST",
+    body: payload,
+  })
+  if (!response.ok) {
+    throw new Error(response.error)
+  }
+  revalidatePath(SETTINGS_PATH)
+}
+
 export async function createRecepcionAction(formData: FormData): Promise<void> {
   const items = zipReceptionItems(formData)
   const payload = {
@@ -124,6 +194,33 @@ export async function createRecepcionAction(formData: FormData): Promise<void> {
   }
 
   const response = await callCrmApi("/crm/compras/recepciones", {
+    method: "POST",
+    body: payload,
+  })
+  if (!response.ok) {
+    throw new Error(response.error)
+  }
+  revalidatePath(SETTINGS_PATH)
+}
+
+export async function createOrdenCompraAction(formData: FormData): Promise<void> {
+  const items = zipOrderItems(formData)
+  const payload = {
+    folio: parseRequiredText(formData.get("folio"), "folio"),
+    proveedor_id: parseRequiredText(formData.get("proveedor_id"), "proveedor_id"),
+    almacen_destino_id: parseRequiredText(formData.get("almacen_destino_id"), "almacen_destino_id"),
+    fecha_emision: parseOptionalText(formData.get("fecha_emision")),
+    fecha_entrega_estimada: parseOptionalText(formData.get("fecha_entrega_estimada")),
+    moneda: parseOptionalText(formData.get("moneda")) || "MXN",
+    solicitado_por_usuario_id: parseOptionalText(formData.get("solicitado_por_usuario_id")),
+    aprobado_por_usuario_id: parseOptionalText(formData.get("aprobado_por_usuario_id")),
+    referencia_externa: parseOptionalText(formData.get("referencia_externa")),
+    observaciones: parseOptionalText(formData.get("observaciones")),
+    instrucciones_entrega: parseOptionalText(formData.get("instrucciones_entrega")),
+    items,
+  }
+
+  const response = await callCrmApi("/crm/compras/ordenes", {
     method: "POST",
     body: payload,
   })

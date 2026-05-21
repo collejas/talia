@@ -7,12 +7,14 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 
-import { createAlmacenAction, createRecepcionAction } from "./actions"
+import { createAlmacenAction, createOrdenCompraAction, createProveedorAction, createRecepcionAction } from "./actions"
 
 type AnyRecord = Record<string, unknown>
 
 type ComprasWorkspaceProps = {
   almacenes: AnyRecord[]
+  proveedores: AnyRecord[]
+  catalogItems: AnyRecord[]
   ordenes: AnyRecord[]
   recepciones: AnyRecord[]
   existencias: AnyRecord[]
@@ -32,6 +34,17 @@ type ReceptionLine = {
   lote_codigo: string
   fecha_caducidad: string
   serie: string
+  observaciones: string
+}
+
+type OrderLine = {
+  catalog_item_id: string
+  proveedor_item_id: string
+  nombre: string
+  unidad: string
+  cantidad_solicitada: number
+  costo_unitario: number
+  descuento_porcentaje: string
   observaciones: string
 }
 
@@ -111,8 +124,31 @@ function createSuggestedReceptionNumber(): string {
   )}${pad(now.getSeconds())}`
 }
 
+function createSuggestedOrderNumber(): string {
+  const now = new Date()
+  const pad = (n: number) => String(n).padStart(2, "0")
+  return `OC-${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}-${pad(now.getHours())}${pad(
+    now.getMinutes(),
+  )}${pad(now.getSeconds())}`
+}
+
+function createEmptyOrderLine(): OrderLine {
+  return {
+    catalog_item_id: "",
+    proveedor_item_id: "",
+    nombre: "",
+    unidad: "unidad",
+    cantidad_solicitada: 1,
+    costo_unitario: 0,
+    descuento_porcentaje: "",
+    observaciones: "",
+  }
+}
+
 export function ComprasWorkspace({
   almacenes,
+  proveedores,
+  catalogItems,
   ordenes,
   recepciones,
   existencias,
@@ -120,9 +156,16 @@ export function ComprasWorkspace({
   defaultWarehouseId,
   defaultReceptionNumber,
 }: ComprasWorkspaceProps) {
+  const openOrders = useMemo(
+    () =>
+      ordenes.filter((orden) =>
+        ["borrador", "enviada", "aprobada", "parcial"].includes(String(orden.estado ?? "").toLowerCase()),
+      ),
+    [ordenes],
+  )
   const initialOrder = useMemo(
-    () => ordenes.find((orden) => String(orden.id) === defaultOrderId) ?? ordenes[0] ?? null,
-    [defaultOrderId, ordenes],
+    () => openOrders.find((orden) => String(orden.id) === defaultOrderId) ?? openOrders[0] ?? null,
+    [defaultOrderId, openOrders],
   )
   const [selectedOrderId, setSelectedOrderId] = useState<string>(String(initialOrder?.id ?? ""))
   const [selectedWarehouseId, setSelectedWarehouseId] = useState<string>(defaultWarehouseId)
@@ -130,6 +173,24 @@ export function ComprasWorkspace({
   const [receptionNumber, setReceptionNumber] = useState<string>(defaultReceptionNumber || createSuggestedReceptionNumber())
   const [referenceExternal, setReferenceExternal] = useState("")
   const [observations, setObservations] = useState("")
+  const [providerFormCode, setProviderFormCode] = useState("")
+  const [providerFormName, setProviderFormName] = useState("")
+  const [providerFormCommercialName, setProviderFormCommercialName] = useState("")
+  const [providerFormEmail, setProviderFormEmail] = useState("")
+  const [providerFormPhone, setProviderFormPhone] = useState("")
+  const [providerFormTax, setProviderFormTax] = useState("")
+  const [providerFormPayDays, setProviderFormPayDays] = useState("")
+  const [providerFormLeadDays, setProviderFormLeadDays] = useState("")
+  const [providerFormActive, setProviderFormActive] = useState(true)
+  const [orderFolio, setOrderFolio] = useState(createSuggestedOrderNumber())
+  const [orderProviderId, setOrderProviderId] = useState<string>(String(proveedores[0]?.id ?? ""))
+  const [orderWarehouseId, setOrderWarehouseId] = useState<string>(defaultWarehouseId)
+  const [orderDueDate, setOrderDueDate] = useState("")
+  const [orderCurrency, setOrderCurrency] = useState("MXN")
+  const [orderReferenceExternal, setOrderReferenceExternal] = useState("")
+  const [orderObservations, setOrderObservations] = useState("")
+  const [orderInstructions, setOrderInstructions] = useState("")
+  const [orderLines, setOrderLines] = useState<OrderLine[]>(() => [createEmptyOrderLine()])
   const [warehouseFormCode, setWarehouseFormCode] = useState("")
   const [warehouseFormName, setWarehouseFormName] = useState("")
   const [warehouseFormType, setWarehouseFormType] = useState<"central" | "sucursal" | "transito" | "consignacion">("central")
@@ -140,16 +201,24 @@ export function ComprasWorkspace({
   const [selectedExistenceWarehouseId, setSelectedExistenceWarehouseId] = useState<string>(defaultWarehouseId)
 
   useEffect(() => {
-    const currentOrder = ordenes.find((orden) => String(orden.id) === selectedOrderId) ?? null
+    const currentOrder = openOrders.find((orden) => String(orden.id) === selectedOrderId) ?? null
     setLines(buildLinesFromOrder(currentOrder))
     setSelectedWarehouseId((currentOrder?.almacen_destino_id as string | undefined) || defaultWarehouseId)
-  }, [defaultWarehouseId, ordenes, selectedOrderId])
+  }, [defaultWarehouseId, openOrders, selectedOrderId])
 
-  const selectedOrder = ordenes.find((orden) => String(orden.id) === selectedOrderId) ?? null
+  const selectedOrder = openOrders.find((orden) => String(orden.id) === selectedOrderId) ?? null
   const selectedProvider = selectedOrder && typeof selectedOrder.proveedor === "object" ? (selectedOrder.proveedor as AnyRecord) : null
 
   const totalReceived = lines.reduce((sum, line) => sum + (Number.isFinite(line.cantidad_recibida) ? line.cantidad_recibida : 0), 0)
   const totalValue = lines.reduce((sum, line) => sum + (Number.isFinite(line.cantidad_recibida) ? line.cantidad_recibida : 0) * (Number.isFinite(line.costo_unitario_real) ? line.costo_unitario_real : 0), 0)
+  const orderSubtotal = orderLines.reduce((sum, line) => {
+    const qty = Number.isFinite(line.cantidad_solicitada) ? line.cantidad_solicitada : 0
+    const cost = Number.isFinite(line.costo_unitario) ? line.costo_unitario : 0
+    const discount = Number.parseFloat(line.descuento_porcentaje || "0")
+    const gross = qty * cost
+    const net = gross - (Number.isFinite(discount) ? gross * discount / 100 : 0)
+    return sum + net
+  }, 0)
   const filteredExistencias = useMemo(() => {
     if (!selectedExistenceWarehouseId) {
       return existencias
@@ -180,6 +249,32 @@ export function ComprasWorkspace({
     setLines((current) =>
       current.map((line, currentIndex) => (currentIndex === index ? { ...line, ...patch } : line)),
     )
+  }
+
+  const updateOrderLine = (index: number, patch: Partial<OrderLine>) => {
+    setOrderLines((current) => current.map((line, currentIndex) => (currentIndex === index ? { ...line, ...patch } : line)))
+  }
+
+  const addOrderLine = () => {
+    setOrderLines((current) => [...current, createEmptyOrderLine()])
+  }
+
+  const removeOrderLine = (index: number) => {
+    setOrderLines((current) => current.filter((_, currentIndex) => currentIndex !== index))
+  }
+
+  const setOrderLineFromCatalog = (index: number, catalogItemId: string) => {
+    const item = catalogItems.find((entry) => String(entry.id) === catalogItemId) ?? null
+    const unidad = asString(item?.unidad, "unidad")
+    const costo = asNumber(item?.costo_ultimo ?? item?.precio_base ?? item?.precioBase)
+    updateOrderLine(index, {
+      catalog_item_id: catalogItemId,
+      proveedor_item_id: "",
+      nombre: asString(item?.nombre, "Producto"),
+      unidad,
+      cantidad_solicitada: Number.isFinite(orderLines[index]?.cantidad_solicitada) ? orderLines[index]!.cantidad_solicitada : 1,
+      costo_unitario: Number.isFinite(costo) && costo > 0 ? costo : 0,
+    })
   }
 
   const fillRemaining = () => {
@@ -328,6 +423,262 @@ export function ComprasWorkspace({
         </CardContent>
       </Card>
 
+      <Card>
+        <CardHeader>
+          <CardTitle>Alta rápida de proveedor</CardTitle>
+          <CardDescription>Registra un proveedor para poder generar órdenes de compra.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <form action={createProveedorAction} className="space-y-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium" htmlFor="proveedor-codigo">
+                Código
+              </label>
+              <Input id="proveedor-codigo" name="codigo_proveedor" value={providerFormCode} onChange={(event) => setProviderFormCode(event.target.value)} placeholder="PROV-001" required />
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium" htmlFor="proveedor-razon">
+                Razón social
+              </label>
+              <Input id="proveedor-razon" name="razon_social" value={providerFormName} onChange={(event) => setProviderFormName(event.target.value)} placeholder="Proveedor SA de CV" required />
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium" htmlFor="proveedor-comercial">
+                Nombre comercial
+              </label>
+              <Input id="proveedor-comercial" name="nombre_comercial" value={providerFormCommercialName} onChange={(event) => setProviderFormCommercialName(event.target.value)} placeholder="Proveedor visible" />
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="space-y-2">
+                <label className="text-sm font-medium" htmlFor="proveedor-correo">
+                  Correo
+                </label>
+                <Input id="proveedor-correo" name="correo" type="email" value={providerFormEmail} onChange={(event) => setProviderFormEmail(event.target.value)} placeholder="ventas@proveedor.com" />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium" htmlFor="proveedor-telefono">
+                  Teléfono
+                </label>
+                <Input id="proveedor-telefono" name="telefono" value={providerFormPhone} onChange={(event) => setProviderFormPhone(event.target.value)} placeholder="55 5555 5555" />
+              </div>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="space-y-2">
+                <label className="text-sm font-medium" htmlFor="proveedor-plazo-pago">
+                  Plazo pago
+                </label>
+                <Input id="proveedor-plazo-pago" name="plazo_pago_dias" type="number" min="0" value={providerFormPayDays} onChange={(event) => setProviderFormPayDays(event.target.value)} placeholder="30" />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium" htmlFor="proveedor-plazo-entrega">
+                  Plazo entrega
+                </label>
+                <Input id="proveedor-plazo-entrega" name="plazo_entrega_dias" type="number" min="0" value={providerFormLeadDays} onChange={(event) => setProviderFormLeadDays(event.target.value)} placeholder="5" />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium" htmlFor="proveedor-rfc">
+                RFC
+              </label>
+              <Input id="proveedor-rfc" name="rfc" value={providerFormTax} onChange={(event) => setProviderFormTax(event.target.value)} placeholder="RFC del proveedor" />
+            </div>
+            <label className="flex items-center gap-2 text-sm">
+              <input type="checkbox" name="activo" checked={providerFormActive} onChange={(event) => setProviderFormActive(event.target.checked)} />
+              Activo
+            </label>
+            <Button type="submit" className="w-full">
+              Guardar proveedor
+            </Button>
+          </form>
+        </CardContent>
+      </Card>
+
+      <Card className="xl:col-span-2">
+        <CardHeader>
+          <CardTitle>Crear orden de compra</CardTitle>
+          <CardDescription>Selecciona proveedor, almacén y productos. Todo se guarda en una sola operación.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <form action={createOrdenCompraAction} className="space-y-5">
+            <input type="hidden" name="fecha_emision" value={new Date().toISOString()} readOnly />
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="space-y-2">
+                <label className="text-sm font-medium" htmlFor="orden-folio">
+                  Folio
+                </label>
+                <Input id="orden-folio" name="folio" value={orderFolio} onChange={(event) => setOrderFolio(event.target.value)} required />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium" htmlFor="orden-moneda">
+                  Moneda
+                </label>
+                <select id="orden-moneda" name="moneda" value={orderCurrency} onChange={(event) => setOrderCurrency(event.target.value)} className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm">
+                  <option value="MXN">MXN</option>
+                  <option value="USD">USD</option>
+                  <option value="COP">COP</option>
+                  <option value="CLP">CLP</option>
+                  <option value="EUR">EUR</option>
+                </select>
+              </div>
+            </div>
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="space-y-2">
+                <label className="text-sm font-medium" htmlFor="orden-proveedor">
+                  Proveedor
+                </label>
+                <select id="orden-proveedor" name="proveedor_id" value={orderProviderId} onChange={(event) => setOrderProviderId(event.target.value)} className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" required>
+                  <option value="">Selecciona un proveedor</option>
+                  {proveedores.map((proveedor) => (
+                    <option key={String(proveedor.id)} value={String(proveedor.id)}>
+                      {asString(proveedor.codigo_proveedor)} · {asString(proveedor.razon_social)}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium" htmlFor="orden-almacen">
+                  Almacén destino
+                </label>
+                <select id="orden-almacen" name="almacen_destino_id" value={orderWarehouseId} onChange={(event) => setOrderWarehouseId(event.target.value)} className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" required>
+                  <option value="">Selecciona un almacén</option>
+                  {almacenes.map((almacen) => (
+                    <option key={String(almacen.id)} value={String(almacen.id)}>
+                      {asString(almacen.codigo)} · {asString(almacen.nombre)}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            <div className="grid gap-4 md:grid-cols-3">
+              <div className="space-y-2">
+                <label className="text-sm font-medium" htmlFor="orden-entrega">
+                  Fecha estimada
+                </label>
+                <Input id="orden-entrega" name="fecha_entrega_estimada" type="date" value={orderDueDate} onChange={(event) => setOrderDueDate(event.target.value)} />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium" htmlFor="orden-ref">
+                  Referencia externa
+                </label>
+                <Input id="orden-ref" name="referencia_externa" value={orderReferenceExternal} onChange={(event) => setOrderReferenceExternal(event.target.value)} placeholder="Cotización, solicitud..." />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium" htmlFor="orden-notas">
+                  Observaciones
+                </label>
+                <Input id="orden-notas" name="observaciones" value={orderObservations} onChange={(event) => setOrderObservations(event.target.value)} placeholder="Notas para compras" />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium" htmlFor="orden-instrucciones">
+                Instrucciones de entrega
+              </label>
+              <Input id="orden-instrucciones" name="instrucciones_entrega" value={orderInstructions} onChange={(event) => setOrderInstructions(event.target.value)} placeholder="Horario, recepción, contacto..." />
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button type="button" variant="secondary" onClick={addOrderLine}>
+                Agregar producto
+              </Button>
+              <div className="ml-auto text-sm text-muted-foreground">
+                {orderLines.length} líneas · {formatCurrency(orderSubtotal)}
+              </div>
+            </div>
+            <div className="overflow-hidden rounded-lg border">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Producto</TableHead>
+                    <TableHead>Cantidad</TableHead>
+                    <TableHead>Costo</TableHead>
+                    <TableHead>Desc %</TableHead>
+                    <TableHead>Observaciones</TableHead>
+                    <TableHead className="text-right">Acción</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {orderLines.map((line, index) => (
+                    <TableRow key={`${line.catalog_item_id || "new"}-${index}`}>
+                      <TableCell className="align-top">
+                        <div className="space-y-2 min-w-72">
+                          <select
+                            value={line.catalog_item_id}
+                            onChange={(event) => setOrderLineFromCatalog(index, event.target.value)}
+                            className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                            required
+                          >
+                            <option value="">Selecciona producto</option>
+                            {catalogItems.map((item) => (
+                              <option key={String(item.id)} value={String(item.id)}>
+                                {asString(item.nombre)} · {asString(item.unidad, "unidad")}
+                              </option>
+                            ))}
+                          </select>
+                          <div className="text-xs text-muted-foreground">
+                            {line.unidad || "unidad"} · costo sugerido {formatCurrency(line.costo_unitario)}
+                          </div>
+                          <input type="hidden" name="items_catalog_item_id" value={line.catalog_item_id} readOnly />
+                          <input type="hidden" name="items_proveedor_item_id" value={line.proveedor_item_id} readOnly />
+                          <input type="hidden" name="items_unidad" value={line.unidad} readOnly />
+                          <input type="hidden" name="items_impuestos" value="0" readOnly />
+                        </div>
+                      </TableCell>
+                      <TableCell className="w-28 align-top">
+                        <Input
+                          name="items_cantidad_solicitada"
+                          type="number"
+                          min="0"
+                          step="0.001"
+                          value={Number.isFinite(line.cantidad_solicitada) ? line.cantidad_solicitada : 0}
+                          onChange={(event) => updateOrderLine(index, { cantidad_solicitada: Number(event.target.value) })}
+                        />
+                      </TableCell>
+                      <TableCell className="w-36 align-top">
+                        <Input
+                          name="items_costo_unitario"
+                          type="number"
+                          min="0"
+                          step="0.0001"
+                          value={Number.isFinite(line.costo_unitario) ? line.costo_unitario : 0}
+                          onChange={(event) => updateOrderLine(index, { costo_unitario: Number(event.target.value) })}
+                        />
+                      </TableCell>
+                      <TableCell className="w-28 align-top">
+                        <Input
+                          name="items_descuento_porcentaje"
+                          type="number"
+                          min="0"
+                          max="100"
+                          step="0.01"
+                          value={line.descuento_porcentaje}
+                          onChange={(event) => updateOrderLine(index, { descuento_porcentaje: event.target.value })}
+                          placeholder="0"
+                        />
+                      </TableCell>
+                      <TableCell className="align-top">
+                        <Input
+                          name="items_observaciones"
+                          value={line.observaciones}
+                          onChange={(event) => updateOrderLine(index, { observaciones: event.target.value })}
+                          placeholder="Opcional"
+                        />
+                      </TableCell>
+                      <TableCell className="text-right align-top">
+                        <Button type="button" variant="ghost" size="sm" onClick={() => removeOrderLine(index)} disabled={orderLines.length <= 1}>
+                          Quitar
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+            <Button type="submit" disabled={!orderLines.length || !orderProviderId || !orderWarehouseId}>
+              Guardar orden de compra
+            </Button>
+          </form>
+        </CardContent>
+      </Card>
+
       <Card className="xl:col-span-2">
         <CardHeader>
           <CardTitle>Registrar recepción</CardTitle>
@@ -353,7 +704,7 @@ export function ComprasWorkspace({
                   <option value="" disabled>
                     Selecciona una orden
                   </option>
-                  {ordenes.map((orden) => (
+                  {openOrders.map((orden) => (
                     <option key={String(orden.id)} value={String(orden.id)}>
                       {asString(orden.folio)} · {asString((orden.proveedor as AnyRecord | undefined)?.razon_social ?? (orden.proveedor as AnyRecord | undefined)?.nombre_comercial, "Proveedor")}
                     </option>
@@ -561,7 +912,7 @@ export function ComprasWorkspace({
           <div className="rounded-lg border bg-muted/30 p-4">
             <div className="text-sm font-medium">Órdenes abiertas</div>
             <div className="mt-1 text-sm text-muted-foreground">
-              {ordenes.length ? `${ordenes.length} órdenes listas para recibir` : "No hay órdenes abiertas"}
+              {openOrders.length ? `${openOrders.length} órdenes listas para recibir` : "No hay órdenes abiertas"}
             </div>
           </div>
           <div className="rounded-lg border bg-muted/30 p-4">
@@ -671,6 +1022,47 @@ export function ComprasWorkspace({
               </TableBody>
             </Table>
           </div>
+        </CardContent>
+      </Card>
+
+      <Card className="xl:col-span-3">
+        <CardHeader>
+          <CardTitle>Órdenes de compra recientes</CardTitle>
+          <CardDescription>Vista rápida de las compras registradas y su estado actual.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Folio</TableHead>
+                <TableHead>Proveedor</TableHead>
+                <TableHead>Almacén</TableHead>
+                <TableHead>Estado</TableHead>
+                <TableHead>Fecha</TableHead>
+                <TableHead className="text-right">Total</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {!ordenes.length ? (
+                <TableRow>
+                  <TableCell colSpan={6} className="py-8 text-center text-sm text-muted-foreground">
+                    Aún no hay órdenes de compra registradas.
+                  </TableCell>
+                </TableRow>
+              ) : (
+                ordenes.map((orden) => (
+                  <TableRow key={String(orden.id)}>
+                    <TableCell className="font-mono text-xs">{asString(orden.folio)}</TableCell>
+                    <TableCell>{asString((orden.proveedor as AnyRecord | undefined)?.razon_social ?? (orden.proveedor as AnyRecord | undefined)?.nombre_comercial, "Proveedor")}</TableCell>
+                    <TableCell>{asString((orden.almacen as AnyRecord | undefined)?.nombre, "Almacén")}</TableCell>
+                    <TableCell>{asString(orden.estado)}</TableCell>
+                    <TableCell>{formatDateTime(orden.fecha_emision)}</TableCell>
+                    <TableCell className="text-right">{formatCurrency(orden.total)}</TableCell>
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
         </CardContent>
       </Card>
 
