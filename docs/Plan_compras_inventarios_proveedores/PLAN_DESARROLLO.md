@@ -445,6 +445,7 @@ Tareas:
 - Fase 2 preparada para proveedores y compras en `supabase/migrations/20260521_140000_inventory_purchases_phase2.sql`.
 - Fase 3 aplicada para recepciones de compra y entrada a inventario en `supabase/migrations/20260521_150000_inventory_purchases_phase3.sql`.
 - Existe una primera pantalla operativa en `frontend/panel/src/app/settings/compras/page.tsx` con alta de almacenes y recepción de mercancía.
+- Ya existe una vista simple de existencias por almacén dentro de `frontend/panel/src/app/settings/compras/compras-workspace.client.tsx`.
 - El catálogo ya muestra y guarda campos operativos de inventario desde `frontend/panel/src/components/settings/catalog-items-panel.tsx`.
 - Ya existe un maestro editable de unidades de medida en `settings/productos/unidades-medida` y el catálogo usa ese maestro para `unidad_inventario`.
 - La siguiente entrega debe enfocarse en validar el flujo end-to-end y luego ampliar el CRUD de existencias, proveedores y órdenes de compra en la app.

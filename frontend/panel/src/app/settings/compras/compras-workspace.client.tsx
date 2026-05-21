@@ -15,6 +15,7 @@ type ComprasWorkspaceProps = {
   almacenes: AnyRecord[]
   ordenes: AnyRecord[]
   recepciones: AnyRecord[]
+  existencias: AnyRecord[]
   defaultOrderId: string
   defaultWarehouseId: string
   defaultReceptionNumber: string
@@ -114,6 +115,7 @@ export function ComprasWorkspace({
   almacenes,
   ordenes,
   recepciones,
+  existencias,
   defaultOrderId,
   defaultWarehouseId,
   defaultReceptionNumber,
@@ -135,6 +137,7 @@ export function ComprasWorkspace({
   const [warehouseFormEmail, setWarehouseFormEmail] = useState("")
   const [warehouseFormActive, setWarehouseFormActive] = useState(true)
   const [warehouseFormPrincipal, setWarehouseFormPrincipal] = useState(!almacenes.length)
+  const [selectedExistenceWarehouseId, setSelectedExistenceWarehouseId] = useState<string>(defaultWarehouseId)
 
   useEffect(() => {
     const currentOrder = ordenes.find((orden) => String(orden.id) === selectedOrderId) ?? null
@@ -147,6 +150,31 @@ export function ComprasWorkspace({
 
   const totalReceived = lines.reduce((sum, line) => sum + (Number.isFinite(line.cantidad_recibida) ? line.cantidad_recibida : 0), 0)
   const totalValue = lines.reduce((sum, line) => sum + (Number.isFinite(line.cantidad_recibida) ? line.cantidad_recibida : 0) * (Number.isFinite(line.costo_unitario_real) ? line.costo_unitario_real : 0), 0)
+  const filteredExistencias = useMemo(() => {
+    if (!selectedExistenceWarehouseId) {
+      return existencias
+    }
+    return existencias.filter((existencia) => String(existencia.almacen_id) === selectedExistenceWarehouseId)
+  }, [existencias, selectedExistenceWarehouseId])
+  const totalStockActual = useMemo(
+    () => filteredExistencias.reduce((sum, row) => sum + asNumber(row.stock_actual), 0),
+    [filteredExistencias],
+  )
+  const totalStockDisponible = useMemo(
+    () => filteredExistencias.reduce((sum, row) => sum + asNumber(row.stock_disponible), 0),
+    [filteredExistencias],
+  )
+  const alertasStock = useMemo(
+    () =>
+      filteredExistencias.filter((row) => {
+        const minimo = asNumber(row.stock_minimo)
+        if (!Number.isFinite(minimo) || minimo <= 0) {
+          return false
+        }
+        return asNumber(row.stock_disponible) <= minimo
+      }).length,
+    [filteredExistencias],
+  )
 
   const updateLine = (index: number, patch: Partial<ReceptionLine>) => {
     setLines((current) =>
@@ -541,6 +569,107 @@ export function ComprasWorkspace({
             <div className="mt-1 text-sm text-muted-foreground">
               {recepciones.length ? `${recepciones.length} registros recientes` : "Sin movimientos todavía"}
             </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card className="xl:col-span-3">
+        <CardHeader>
+          <CardTitle>Existencias por almacén</CardTitle>
+          <CardDescription>Consulta rápida del stock real disponible para cada almacén.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid gap-4 md:grid-cols-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium" htmlFor="existencias-almacen">
+                Almacén
+              </label>
+              <select
+                id="existencias-almacen"
+                value={selectedExistenceWarehouseId}
+                onChange={(event) => setSelectedExistenceWarehouseId(event.target.value)}
+                className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+              >
+                <option value="">Todos los almacenes</option>
+                {almacenes.map((almacen) => (
+                  <option key={String(almacen.id)} value={String(almacen.id)}>
+                    {asString(almacen.codigo)} · {asString(almacen.nombre)}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="rounded-lg border bg-muted/30 p-4">
+              <div className="text-xs uppercase tracking-wide text-muted-foreground">Líneas</div>
+              <div className="mt-1 text-2xl font-semibold">{filteredExistencias.length}</div>
+            </div>
+            <div className="rounded-lg border bg-muted/30 p-4">
+              <div className="text-xs uppercase tracking-wide text-muted-foreground">Stock actual</div>
+              <div className="mt-1 text-2xl font-semibold">{totalStockActual.toFixed(3)}</div>
+            </div>
+            <div className="rounded-lg border bg-muted/30 p-4">
+              <div className="text-xs uppercase tracking-wide text-muted-foreground">Alertas</div>
+              <div className="mt-1 text-2xl font-semibold">{alertasStock}</div>
+              <div className="text-xs text-muted-foreground">{totalStockDisponible.toFixed(3)} disponibles</div>
+            </div>
+          </div>
+
+          <div className="overflow-hidden rounded-lg border">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Producto</TableHead>
+                  <TableHead>Almacén</TableHead>
+                  <TableHead>Actual</TableHead>
+                  <TableHead>Reservado</TableHead>
+                  <TableHead>Disponible</TableHead>
+                  <TableHead>Mínimo</TableHead>
+                  <TableHead>Objetivo</TableHead>
+                  <TableHead>Costo último</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {!filteredExistencias.length ? (
+                  <TableRow>
+                    <TableCell colSpan={8} className="py-8 text-center text-sm text-muted-foreground">
+                      Todavía no hay existencias registradas para este almacén.
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  filteredExistencias.map((existencia) => {
+                    const catalogItem = existencia.catalog_item && typeof existencia.catalog_item === "object" ? (existencia.catalog_item as AnyRecord) : {}
+                    const almacen = existencia.almacen && typeof existencia.almacen === "object" ? (existencia.almacen as AnyRecord) : {}
+                    const disponible = asNumber(existencia.stock_disponible)
+                    const minimo = asNumber(existencia.stock_minimo)
+                    const esAlerta = Number.isFinite(minimo) && minimo > 0 && disponible <= minimo
+                    return (
+                      <TableRow key={String(existencia.id)}>
+                        <TableCell>
+                          <div className="space-y-1">
+                            <div className="font-medium">{asString(catalogItem.nombre, "Producto")}</div>
+                            <div className="text-xs text-muted-foreground">{asString(catalogItem.codigo, "Sin código")}</div>
+                          </div>
+                        </TableCell>
+                        <TableCell>{asString(almacen.nombre, "Almacén")}</TableCell>
+                        <TableCell>{asNumber(existencia.stock_actual).toFixed(3)}</TableCell>
+                        <TableCell>{asNumber(existencia.stock_reservado).toFixed(3)}</TableCell>
+                        <TableCell>
+                          <span className={esAlerta ? "font-semibold text-rose-600" : "font-medium"}>
+                            {disponible.toFixed(3)}
+                          </span>
+                        </TableCell>
+                        <TableCell>{Number.isFinite(minimo) && minimo > 0 ? minimo.toFixed(3) : "—"}</TableCell>
+                        <TableCell>
+                          {Number.isFinite(asNumber(existencia.stock_objetivo)) && asNumber(existencia.stock_objetivo) > 0
+                            ? asNumber(existencia.stock_objetivo).toFixed(3)
+                            : "—"}
+                        </TableCell>
+                        <TableCell>{formatCurrency(existencia.costo_ultimo)}</TableCell>
+                      </TableRow>
+                    )
+                  })
+                )}
+              </TableBody>
+            </Table>
           </div>
         </CardContent>
       </Card>

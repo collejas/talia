@@ -11304,6 +11304,26 @@ class CRMAlmacenCreate(BaseModel):
     email: str | None = Field(default=None, max_length=254)
 
 
+class CRMInventarioExistencia(BaseModel):
+    id: UUID
+    organizacion_id: UUID
+    catalog_item_id: UUID
+    almacen_id: UUID
+    stock_actual: float
+    stock_reservado: float
+    stock_disponible: float
+    stock_minimo: float | None = None
+    stock_objetivo: float | None = None
+    costo_ultimo: float | None = None
+    costo_promedio: float | None = None
+    creado_en: datetime
+    actualizado_en: datetime
+    catalog_item: dict[str, Any] | None = None
+    almacen: dict[str, Any] | None = None
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
 class CRMRecepcionCompraItem(BaseModel):
     id: UUID
     recepcion_id: UUID
@@ -14406,6 +14426,26 @@ async def list_compras_almacenes(
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     return [CRMAlmacen.model_validate(row) for row in rows]
+
+
+@router.get("/compras/existencias", response_model=list[CRMInventarioExistencia])
+async def list_compras_existencias(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("settings.view")),
+    almacen_id: UUID | None = Query(default=None),
+    limit: Annotated[int, Query(ge=1, le=500)] = 200,
+) -> list[CRMInventarioExistencia]:
+    try:
+        rows = await repo.list_inventario_existencias(
+            organizacion_id=organizacion_id,
+            almacen_id=almacen_id,
+            limit=limit,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return [CRMInventarioExistencia.model_validate(row) for row in rows]
 
 
 @router.post("/compras/almacenes", response_model=CRMAlmacen, status_code=status.HTTP_201_CREATED)

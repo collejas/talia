@@ -40,10 +40,11 @@ function makeDefaultReceptionNumber(): string {
 }
 
 export default async function SettingsComprasPage() {
-  const [almacenes, ordenes, recepciones] = await Promise.all([
+  const [almacenes, ordenes, recepciones, existencias] = await Promise.all([
     fetchList("/crm/compras/almacenes", { include_inactive: false, limit: 100 }),
     fetchList("/crm/compras/ordenes", { limit: 100 }),
     fetchList("/crm/compras/recepciones", { limit: 25 }),
+    fetchList("/crm/compras/existencias", { limit: 200 }),
   ])
 
   const principalWarehouse = almacenes.find((almacen) => Boolean(almacen.es_principal)) ?? almacenes[0] ?? null
@@ -70,6 +71,7 @@ export default async function SettingsComprasPage() {
           almacenes={almacenes}
           ordenes={ordenes}
           recepciones={recepciones}
+          existencias={existencias}
           defaultOrderId={defaultOrderId}
           defaultWarehouseId={defaultWarehouseId}
           defaultReceptionNumber={makeDefaultReceptionNumber()}

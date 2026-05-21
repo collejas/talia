@@ -9332,6 +9332,32 @@ class CRMRepository:
             raise CRMRepositoryError(f"Respuesta inesperada al listar almacenes: {data!r}")
         return data
 
+    async def list_inventario_existencias(
+        self,
+        *,
+        organizacion_id: UUID,
+        almacen_id: UUID | None = None,
+        limit: int = 200,
+    ) -> list[dict[str, Any]]:
+        params: dict[str, Any] = {
+            "organizacion_id": f"eq.{organizacion_id}",
+            "order": "almacen_id.asc,catalog_item_id.asc",
+            "limit": str(max(1, min(limit, 5000))),
+            "select": (
+                "id,organizacion_id,catalog_item_id,almacen_id,stock_actual,stock_reservado,stock_disponible,"
+                "stock_minimo,stock_objetivo,costo_ultimo,costo_promedio,creado_en,actualizado_en,"
+                "catalog_item:catalog_items(id,slug,nombre,codigo,unidad,activo,maneja_inventario),"
+                "almacen:almacenes(id,codigo,nombre,tipo,activo,es_principal)"
+            ),
+        }
+        if almacen_id is not None:
+            params["almacen_id"] = f"eq.{almacen_id}"
+        resp = await self._request("GET", "/rest/v1/inventario_existencias", params=params)
+        data = resp.json()
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"Respuesta inesperada al listar existencias: {data!r}")
+        return data
+
     async def create_almacen(
         self,
         *,
