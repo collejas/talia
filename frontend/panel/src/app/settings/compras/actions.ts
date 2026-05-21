@@ -300,14 +300,20 @@ export async function createOrdenCompraAction(formData: FormData): Promise<void>
 }
 
 export async function updateOrdenCompraAction(ordenId: string, formData: FormData): Promise<void> {
+  const items = zipOrderItems(formData)
   const payload = {
+    proveedor_id: parseRequiredText(formData.get("proveedor_id"), "proveedor_id"),
+    almacen_destino_id: parseRequiredText(formData.get("almacen_destino_id"), "almacen_destino_id"),
     folio: parseRequiredText(formData.get("folio"), "folio"),
+    fecha_emision: parseOptionalText(formData.get("fecha_emision")),
     fecha_entrega_estimada: parseOptionalText(formData.get("fecha_entrega_estimada")),
     moneda: parseOptionalText(formData.get("moneda")) || "MXN",
+    solicitado_por_usuario_id: parseOptionalText(formData.get("solicitado_por_usuario_id")),
+    aprobado_por_usuario_id: parseOptionalText(formData.get("aprobado_por_usuario_id")),
     referencia_externa: parseOptionalText(formData.get("referencia_externa")),
     observaciones: parseOptionalText(formData.get("observaciones")),
     instrucciones_entrega: parseOptionalText(formData.get("instrucciones_entrega")),
-    estado: parseOptionalText(formData.get("estado")),
+    items,
   }
 
   const response = await callCrmApi(`/crm/compras/ordenes/${ordenId}`, {

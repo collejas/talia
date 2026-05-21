@@ -17,6 +17,7 @@ import {
   deleteOrdenCompraAction,
   deleteProveedorAction,
   updateAlmacenAction,
+  updateOrdenCompraAction,
   updateProveedorAction,
 } from "./actions"
 
@@ -32,6 +33,8 @@ type ComprasWorkspaceProps = {
   defaultOrderId: string
   defaultWarehouseId: string
   defaultReceptionNumber: string
+  defaultOrderFolio: string
+  defaultOrderEmissionIso: string
 }
 
 type ReceptionLine = {
@@ -99,6 +102,7 @@ function formatDateTime(value: unknown): string {
   return new Intl.DateTimeFormat("es-MX", {
     dateStyle: "medium",
     timeStyle: "short",
+    timeZone: "America/Mexico_City",
   }).format(parsed)
 }
 
@@ -123,6 +127,27 @@ function buildLinesFromOrder(order: AnyRecord | undefined | null): ReceptionLine
         fecha_caducidad: "",
         serie: "",
         observaciones: "",
+      }
+    })
+}
+
+function buildOrderLinesFromOrder(order: AnyRecord | undefined | null): OrderLine[] {
+  if (!order || !Array.isArray(order.items) || !order.items.length) {
+    return [createEmptyOrderLine()]
+  }
+  return order.items
+    .filter((item): item is AnyRecord => Boolean(item) && typeof item === "object")
+    .map((item) => {
+      const catalogItem = item.catalog_item && typeof item.catalog_item === "object" ? (item.catalog_item as AnyRecord) : {}
+      return {
+        catalog_item_id: asString(item.catalog_item_id, ""),
+        proveedor_item_id: asString(item.proveedor_item_id, ""),
+        nombre: asString(catalogItem.nombre, "Producto"),
+        unidad: asString(item.unidad ?? catalogItem.unidad, "unidad"),
+        cantidad_solicitada: asNumber(item.cantidad_solicitada),
+        costo_unitario: asNumber(item.costo_unitario),
+        descuento_porcentaje: asString(item.descuento_porcentaje, ""),
+        observaciones: asString(item.observaciones, ""),
       }
     })
 }
@@ -166,6 +191,8 @@ export function ComprasWorkspace({
   defaultOrderId,
   defaultWarehouseId,
   defaultReceptionNumber,
+  defaultOrderFolio,
+  defaultOrderEmissionIso,
 }: ComprasWorkspaceProps) {
   const openOrders = useMemo(
     () =>
@@ -186,6 +213,7 @@ export function ComprasWorkspace({
   const [observations, setObservations] = useState("")
   const [editingWarehouseId, setEditingWarehouseId] = useState<string | null>(null)
   const [editingProviderId, setEditingProviderId] = useState<string | null>(null)
+  const [editingOrderId, setEditingOrderId] = useState<string | null>(null)
   const [providerFormCode, setProviderFormCode] = useState("")
   const [providerFormName, setProviderFormName] = useState("")
   const [providerFormCommercialName, setProviderFormCommercialName] = useState("")
@@ -195,9 +223,10 @@ export function ComprasWorkspace({
   const [providerFormPayDays, setProviderFormPayDays] = useState("")
   const [providerFormLeadDays, setProviderFormLeadDays] = useState("")
   const [providerFormActive, setProviderFormActive] = useState(true)
-  const [orderFolio, setOrderFolio] = useState(createSuggestedOrderNumber())
+  const [orderFolio, setOrderFolio] = useState(defaultOrderFolio)
   const [orderProviderId, setOrderProviderId] = useState<string>(String(proveedores[0]?.id ?? ""))
   const [orderWarehouseId, setOrderWarehouseId] = useState<string>(defaultWarehouseId)
+  const [orderEmissionIso, setOrderEmissionIso] = useState(defaultOrderEmissionIso)
   const [orderDueDate, setOrderDueDate] = useState("")
   const [orderCurrency, setOrderCurrency] = useState("MXN")
   const [orderReferenceExternal, setOrderReferenceExternal] = useState("")
@@ -338,7 +367,9 @@ export function ComprasWorkspace({
   const providerFormAction = editingProviderId
     ? updateProveedorAction.bind(null, editingProviderId)
     : createProveedorAction
-  const orderFormAction = createOrdenCompraAction
+  const orderFormAction = editingOrderId
+    ? updateOrdenCompraAction.bind(null, editingOrderId)
+    : createOrdenCompraAction
 
   const startEditWarehouse = (almacen: AnyRecord) => {
     setEditingWarehouseId(String(almacen.id))
@@ -373,6 +404,34 @@ export function ComprasWorkspace({
     setProviderFormPayDays(asString(proveedor.plazo_pago_dias, ""))
     setProviderFormLeadDays(asString(proveedor.plazo_entrega_dias, ""))
     setProviderFormActive(Boolean(proveedor.activo))
+  }
+
+  const startEditOrder = (orden: AnyRecord) => {
+    setEditingOrderId(String(orden.id))
+    setOrderFolio(asString(orden.folio, defaultOrderFolio))
+    setOrderProviderId(asString(orden.proveedor_id, ""))
+    setOrderWarehouseId(asString(orden.almacen_destino_id, defaultWarehouseId))
+    setOrderEmissionIso(asString(orden.fecha_emision, defaultOrderEmissionIso))
+    setOrderDueDate(asString(orden.fecha_entrega_estimada, ""))
+    setOrderCurrency(asString(orden.moneda, "MXN"))
+    setOrderReferenceExternal(asString(orden.referencia_externa, ""))
+    setOrderObservations(asString(orden.observaciones, ""))
+    setOrderInstructions(asString(orden.instrucciones_entrega, ""))
+    setOrderLines(buildOrderLinesFromOrder(orden))
+  }
+
+  const clearOrderForm = () => {
+    setEditingOrderId(null)
+    setOrderFolio(defaultOrderFolio)
+    setOrderProviderId(String(proveedores[0]?.id ?? ""))
+    setOrderWarehouseId(defaultWarehouseId)
+    setOrderEmissionIso(defaultOrderEmissionIso)
+    setOrderDueDate("")
+    setOrderCurrency("MXN")
+    setOrderReferenceExternal("")
+    setOrderObservations("")
+    setOrderInstructions("")
+    setOrderLines([createEmptyOrderLine()])
   }
 
   const clearProviderForm = () => {
@@ -660,12 +719,12 @@ export function ComprasWorkspace({
 
       <Card className="xl:col-span-2">
         <CardHeader>
-          <CardTitle>Crear orden de compra</CardTitle>
+          <CardTitle>{editingOrderId ? "Editar orden de compra" : "Crear orden de compra"}</CardTitle>
           <CardDescription>Selecciona proveedor, almacén y productos. Todo se guarda en una sola operación.</CardDescription>
         </CardHeader>
         <CardContent>
-          <form action={createOrdenCompraAction} className="space-y-5">
-            <input type="hidden" name="fecha_emision" value={new Date().toISOString()} readOnly />
+          <form action={orderFormAction} className="space-y-5">
+            <input type="hidden" name="fecha_emision" value={orderEmissionIso} readOnly />
             <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2">
                 <label className="text-sm font-medium" htmlFor="orden-folio">
@@ -837,9 +896,16 @@ export function ComprasWorkspace({
                 </TableBody>
               </Table>
             </div>
-            <Button type="submit" disabled={!orderLines.length || !orderProviderId || !orderWarehouseId}>
-              Guardar orden de compra
-            </Button>
+            <div className="flex flex-wrap gap-2">
+              <Button type="submit" disabled={!orderLines.length || !orderProviderId || !orderWarehouseId}>
+                {editingOrderId ? "Actualizar orden de compra" : "Guardar orden de compra"}
+              </Button>
+              {editingOrderId ? (
+                <Button type="button" variant="outline" onClick={clearOrderForm}>
+                  Cancelar edición
+                </Button>
+              ) : null}
+            </div>
           </form>
         </CardContent>
       </Card>
@@ -1196,21 +1262,21 @@ export function ComprasWorkspace({
           <CardDescription>Vista rápida de las compras registradas y su estado actual.</CardDescription>
         </CardHeader>
         <CardContent>
-            <Table>
-              <TableHeader>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Folio</TableHead>
+                <TableHead>Proveedor</TableHead>
+                <TableHead>Almacén</TableHead>
+                <TableHead>Estado</TableHead>
+                <TableHead>Fecha</TableHead>
+                <TableHead className="text-right">Total</TableHead>
+                <TableHead className="text-right">Acciones</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {!ordenes.length ? (
                 <TableRow>
-                  <TableHead>Folio</TableHead>
-                  <TableHead>Proveedor</TableHead>
-                  <TableHead>Almacén</TableHead>
-                  <TableHead>Estado</TableHead>
-                  <TableHead>Fecha</TableHead>
-                  <TableHead className="text-right">Total</TableHead>
-                  <TableHead className="text-right">Acciones</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {!ordenes.length ? (
-                  <TableRow>
                   <TableCell colSpan={7} className="py-8 text-center text-sm text-muted-foreground">
                     Aún no hay órdenes de compra registradas.
                   </TableCell>
@@ -1226,6 +1292,11 @@ export function ComprasWorkspace({
                     <TableCell className="text-right">{formatCurrency(orden.total)}</TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-2">
+                        {String(orden.estado ?? "").toLowerCase() !== "cancelada" ? (
+                          <Button type="button" variant="outline" size="sm" onClick={() => startEditOrder(orden)}>
+                            Editar
+                          </Button>
+                        ) : null}
                         {String(orden.estado ?? "").toLowerCase() !== "cancelada" ? (
                           <form action={cancelOrdenCompraAction.bind(null, String(orden.id))}>
                             <Button type="submit" variant="outline" size="sm">

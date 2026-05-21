@@ -57,6 +57,17 @@ export default async function SettingsComprasPage() {
       ? asString(firstOrder.almacen_destino_id)
       : ""
   const defaultOrderId = firstOrder ? asString(firstOrder.id) : ""
+  const defaultOrderFolio = [
+    "OC-",
+    new Date().getFullYear(),
+    String(new Date().getMonth() + 1).padStart(2, "0"),
+    String(new Date().getDate()).padStart(2, "0"),
+    "-",
+    String(new Date().getHours()).padStart(2, "0"),
+    String(new Date().getMinutes()).padStart(2, "0"),
+    String(new Date().getSeconds()).padStart(2, "0"),
+  ].join("")
+  const defaultOrderEmissionIso = new Date().toISOString()
 
   return (
     <AppViewLayout title="Settings · Compras e inventario">
@@ -79,6 +90,8 @@ export default async function SettingsComprasPage() {
           defaultOrderId={defaultOrderId}
           defaultWarehouseId={defaultWarehouseId}
           defaultReceptionNumber={makeDefaultReceptionNumber()}
+          defaultOrderFolio={defaultOrderFolio}
+          defaultOrderEmissionIso={defaultOrderEmissionIso}
         />
       </div>
     </AppViewLayout>

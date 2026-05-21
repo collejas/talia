@@ -9621,6 +9621,44 @@ class CRMRepository:
             return UUID(result)
         raise CRMRepositoryError(f"Respuesta inesperada al crear orden de compra: {result!r}")
 
+    async def update_orden_compra_transactional(
+        self,
+        *,
+        organizacion_id: UUID,
+        orden_id: UUID,
+        payload: dict[str, Any],
+    ) -> UUID:
+        body = {
+            "p_organizacion_id": str(organizacion_id),
+            "p_orden_id": str(orden_id),
+            "p_proveedor_id": payload.get("proveedor_id"),
+            "p_almacen_destino_id": payload.get("almacen_destino_id"),
+            "p_folio": payload.get("folio"),
+            "p_fecha_emision": payload.get("fecha_emision"),
+            "p_fecha_entrega_estimada": payload.get("fecha_entrega_estimada"),
+            "p_moneda": payload.get("moneda"),
+            "p_solicitado_por_usuario_id": payload.get("solicitado_por_usuario_id"),
+            "p_aprobado_por_usuario_id": payload.get("aprobado_por_usuario_id"),
+            "p_referencia_externa": payload.get("referencia_externa"),
+            "p_observaciones": payload.get("observaciones"),
+            "p_instrucciones_entrega": payload.get("instrucciones_entrega"),
+            "p_items": payload.get("items") or [],
+        }
+        result = await self._rpc("crm_actualizar_orden_compra", body)
+        if isinstance(result, dict):
+            order_id = result.get("crm_actualizar_orden_compra")
+            if order_id:
+                return UUID(str(order_id))
+            for value in result.values():
+                if isinstance(value, str):
+                    try:
+                        return UUID(value)
+                    except ValueError:
+                        continue
+        if isinstance(result, str):
+            return UUID(result)
+        raise CRMRepositoryError(f"Respuesta inesperada al actualizar orden de compra: {result!r}")
+
     async def update_orden_compra(
         self,
         *,

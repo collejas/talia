@@ -11414,13 +11414,19 @@ class CRMOrdenCompraCreate(BaseModel):
 
 
 class CRMOrdenCompraUpdate(BaseModel):
+    proveedor_id: UUID | None = None
+    almacen_destino_id: UUID | None = None
     folio: str | None = Field(default=None, min_length=1, max_length=80)
+    fecha_emision: datetime | None = None
     fecha_entrega_estimada: date | None = None
     moneda: str | None = Field(default=None, min_length=3, max_length=3)
+    solicitado_por_usuario_id: UUID | None = None
+    aprobado_por_usuario_id: UUID | None = None
     referencia_externa: str | None = Field(default=None, max_length=120)
     observaciones: str | None = Field(default=None, max_length=2000)
     instrucciones_entrega: str | None = Field(default=None, max_length=4000)
     estado: str | None = None
+    items: list[CRMOrdenCompraCreateItem] | None = None
 
 
 class CRMRecepcionCompraItem(BaseModel):
@@ -14746,13 +14752,22 @@ async def update_compras_orden(
     payload: CRMOrdenCompraUpdate,
 ) -> CRMOrdenCompraRecepcion:
     try:
-        row = await repo.update_orden_compra(
+        orden_id_result = await repo.update_orden_compra_transactional(
             organizacion_id=organizacion_id,
             orden_id=orden_id,
             payload=payload.model_dump(mode="json", exclude_unset=True),
         )
+        row = await repo.get_orden_compra(
+            organizacion_id=organizacion_id,
+            orden_id=orden_id_result,
+        )
     except CRMRepositoryError as exc:
-        raise HTTPException(status_code=502, detail=str(exc)) from exc
+        detail = str(exc)
+        if "No se puede editar" in detail or "no se puede editar" in detail.lower():
+            raise HTTPException(status_code=409, detail=detail) from exc
+        raise HTTPException(status_code=502, detail=detail) from exc
+    if row is None:
+        raise HTTPException(status_code=404, detail="orden_compra_not_found")
     return CRMOrdenCompraRecepcion.model_validate(row)
 
 

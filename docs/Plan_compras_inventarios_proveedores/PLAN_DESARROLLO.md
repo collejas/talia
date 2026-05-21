@@ -393,6 +393,20 @@ Tareas:
 - validaciones de stock minimo,
 - reportes de rotacion, faltantes y compras sugeridas.
 
+### Fase 5: edicion operativa de ordenes de compra
+
+Objetivo:
+
+- permitir corregir una orden de compra antes de su recepcion.
+
+Tareas:
+
+- editar cabecera de la orden,
+- reemplazar las lineas de la orden de forma transaccional,
+- bloquear edicion en estados `recibida`, `cerrada` y `cancelada`,
+- recalcular importes al guardar cambios,
+- mantener la recepcion posterior consistente con las lineas actualizadas.
+
 ## Reglas de negocio recomendadas
 
 - No actualizar directamente `inventario_existencias` sin generar un movimiento.
@@ -447,6 +461,7 @@ Tareas:
 - Existe una primera pantalla operativa en `frontend/panel/src/app/settings/compras/page.tsx` con alta de almacenes y recepción de mercancía.
 - Ya existe alta simple de proveedores y creación de órdenes de compra en la misma vista de compras.
 - Ya existe una vista simple de existencias por almacén dentro de `frontend/panel/src/app/settings/compras/compras-workspace.client.tsx`.
+- Ya se puede editar una orden de compra en borrador o estado abierto desde la misma vista de compras.
 - El catálogo ya muestra y guarda campos operativos de inventario desde `frontend/panel/src/components/settings/catalog-items-panel.tsx`.
 - Ya existe un maestro editable de unidades de medida en `settings/productos/unidades-medida` y el catálogo usa ese maestro para `unidad_inventario`.
-- La siguiente entrega debe enfocarse en validar el flujo end-to-end y luego ampliar el CRUD de existencias, proveedores y órdenes de compra en la app.
+- La siguiente entrega debe enfocarse en validar el flujo end-to-end, luego reforzar el CRUD de órdenes, existencias y reportes operativos.
