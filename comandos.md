@@ -88,6 +88,8 @@ npm run build
 sudo systemctl restart talia-api.service
 sudo systemctl restart talia-panel.service
 
+IDEA PROPIEDADES: codex resume 019e4b72-22f4-7610-aeb4-67be8a2b7c23
+
 MAPA DE CONVERSION codex resume 019ddea5-0634-7a70-a464-a6b789b1d26d
 REFACTO DE CONTACTOS codex resume 019ddec6-b7e9-7b30-9dd1-8a4ed30e58ba
 
