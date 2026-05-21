@@ -2739,7 +2739,7 @@ class CRMRepository:
         params = {
             "organizacion_id": f"eq.{organizacion_id}",
             "id": _postgrest_in_clause(values),
-            "select": "id,canal,payload,detalle,estado,creado_en",
+            "select": "id,prospecto_id,canal,payload,detalle,estado,creado_en",
             "limit": str(min(1000, max(1, len(values)))),
         }
         resp = await self._request("GET", "/rest/v1/prospeccion_contacto_envio", params=params)
@@ -12025,7 +12025,8 @@ class CRMRepository:
     async def list_prospectos_by_ids(
         self,
         *,
-        usuario_token: str,
+        usuario_token: str | None = None,
+        organizacion_id: UUID | None = None,
         prospecto_ids: list[UUID],
     ) -> list[dict[str, Any]]:
         """Obtiene prospectos filtrando por su identificador."""
@@ -12034,12 +12035,23 @@ class CRMRepository:
             return []
         ids_param = ",".join(str(value) for value in prospecto_ids)
         params = {"id": f"in.({ids_param})"}
-        resp = await self._request_with_user(
-            "GET",
-            "/rest/v1/prospeccion_prospectos",
-            token=usuario_token,
-            params=params,
-        )
+        if organizacion_id is not None:
+            params["organizacion_id"] = f"eq.{organizacion_id}"
+            resp = await self._request(
+                "GET",
+                "/rest/v1/prospeccion_prospectos",
+                params=params,
+                organizacion_id=organizacion_id,
+            )
+        else:
+            if not usuario_token:
+                raise CRMRepositoryError("prospectos_by_ids_missing_token")
+            resp = await self._request_with_user(
+                "GET",
+                "/rest/v1/prospeccion_prospectos",
+                token=usuario_token,
+                params=params,
+            )
         data = resp.json() or []
         if not isinstance(data, list):
             raise CRMRepositoryError(f"Respuesta inesperada al listar prospectos: {data!r}")
@@ -15245,6 +15257,41 @@ class CRMRepository:
         if not isinstance(data, list):
             raise CRMRepositoryError(f"prospecto_audit_invalid:{data!r}")
         return data
+
+    async def list_latest_prospectos_audit_by_ids(
+        self,
+        *,
+        organizacion_id: UUID,
+        prospecto_ids: Sequence[UUID],
+    ) -> list[dict[str, Any]]:
+        """Obtiene la auditoria mas reciente de prospectos eliminados o historicos."""
+
+        if not prospecto_ids:
+            return []
+        params = {
+            "organizacion_id": f"eq.{organizacion_id}",
+            "prospecto_id": _postgrest_in_clause([str(value) for value in prospecto_ids]),
+            "select": "prospecto_id,accion,cambios,realizado_en",
+            "order": "realizado_en.desc",
+            "limit": str(max(1, min(len(prospecto_ids) * 5, 1000))),
+        }
+        resp = await self._request(
+            "GET",
+            "/rest/v1/prospeccion_prospectos_audit",
+            params=params,
+            organizacion_id=organizacion_id,
+        )
+        data = resp.json() or []
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"prospectos_audit_by_ids_invalid:{data!r}")
+        latest_by_id: dict[str, dict[str, Any]] = {}
+        for row in data:
+            if not isinstance(row, dict):
+                continue
+            prospecto_id = str(row.get("prospecto_id") or "").strip()
+            if prospecto_id and prospecto_id not in latest_by_id:
+                latest_by_id[prospecto_id] = row
+        return list(latest_by_id.values())
 
     async def update_contact_envio(
         self,

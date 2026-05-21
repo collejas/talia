@@ -73,6 +73,7 @@ type WebSessionAttributionRow = {
   eid?: string | null;
   contacto_id?: string | null;
   contacto_nombre?: string | null;
+  contacto_origen?: string | null;
   contacto_telefono?: string | null;
   contacto_correo?: string | null;
   correo_envio?: string | null;
@@ -145,6 +146,7 @@ export type VisitDetailRaw = {
   ultimo_mensaje_conversacion: string | null;
   contacto_id: string | null;
   contacto_nombre: string | null;
+  contacto_origen?: string | null;
   contacto_correo: string | null;
   correo_envio?: string | null;
   contacto_telefono: string | null;
@@ -325,6 +327,7 @@ function normalizeWebSessionRows(rows: WebSessionAttributionRow[]): VisitDetailR
         ultimo_mensaje_conversacion: null,
         contacto_id: row.contacto_id ?? null,
         contacto_nombre: row.contacto_nombre ?? null,
+        contacto_origen: row.contacto_origen ?? null,
         contacto_correo: row.correo_envio ?? row.contacto_correo ?? null,
         correo_envio: row.correo_envio ?? null,
         contacto_telefono: row.contacto_telefono ?? null,
@@ -800,20 +803,30 @@ function mapTable(
     };
     const isWhatsapp = row.canal === "whatsapp";
     const contactLabel =
-      row.contacto_nombre || row.contacto_correo || row.contacto_telefono || null;
+      row.contacto_nombre ||
+      row.contacto_correo ||
+      row.correo_envio ||
+      row.contacto_telefono ||
+      null;
+    const contactIdentifier = formatContactIdentifier(row);
+    const unresolvedContactLabel = isProspectionVisit(row)
+      ? "Prospecto sin resolver"
+      : "Visitante sin identificar";
     const header = isWhatsapp
-      ? `WhatsApp · ${row.contacto_nombre || row.contacto_telefono || row.contacto_correo || "Conversación"}`
+      ? `WhatsApp · ${contactIdentifier || "Conversación"}`
       : contactLabel
-      ? `Webchat · ${contactLabel}`
-      : row.session_id || `Sesión ${index + 1}`;
+        ? contactIdentifier || contactLabel
+        : unresolvedContactLabel;
     const type = isWhatsapp
       ? `${resolveWhatsappLocationLabel(row) || "WhatsApp"} · WhatsApp`
-      : row.state_name ||
-        row.country_name ||
-        (isWhatsapp ? "WhatsApp" : "Webchat");
+      : row.contacto_origen
+        ? formatContactOrigin(row.contacto_origen)
+        : row.state_name ||
+          row.country_name ||
+          "Webchat";
     const status = row.tuvo_chat || isWhatsapp ? "Done" : "In Process";
     const target = isWhatsapp ? "1" : toNumber(row.visit_count).toString();
-    const reviewer = contactLabel || "Asignar contacto";
+    const reviewer = contactIdentifier || contactLabel || "Asignar contacto";
 
     return {
       id: index + 1,
@@ -890,6 +903,32 @@ function resolveSourceClass(row: VisitDetailRaw): string {
     utmMedium: row.utm_medium ?? null,
     utmCampaign: row.utm_campaign ?? null,
   });
+}
+
+function formatContactOrigin(value: string | null | undefined): string {
+  const cleaned = (value || "").trim().toLowerCase();
+  if (!cleaned) return "Sin origen";
+  return cleaned
+    .split(/[_\s]+/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}
+
+function formatContactIdentifier(row: VisitDetailRaw): string | null {
+  const email = (row.contacto_correo || row.correo_envio || "").trim();
+  if (email) return email;
+  const phone = (row.contacto_telefono || "").trim();
+  if (phone) return phone;
+  const name = (row.contacto_nombre || "").trim();
+  if (name) return name;
+  return null;
+}
+
+function isProspectionVisit(row: VisitDetailRaw): boolean {
+  const sourceClass = (row.source_class || "").trim().toLowerCase();
+  const utmSource = (row.utm_source || "").trim().toLowerCase();
+  return sourceClass === "prospeccion" || utmSource === "prospeccion";
 }
 
 function matchesVisitsFilters(row: VisitDetailRaw, filters: VisitsFilters): boolean {

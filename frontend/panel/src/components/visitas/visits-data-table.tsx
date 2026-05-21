@@ -30,6 +30,16 @@ const DATE_TIME_FORMATTER = new Intl.DateTimeFormat("es-MX", {
 
 const DASH = <span className="text-muted-foreground">—</span>;
 
+function formatContactOrigin(value: unknown) {
+  const cleaned = typeof value === "string" ? value.trim().toLowerCase() : "";
+  if (!cleaned) return DASH;
+  return cleaned
+    .split(/[_\s]+/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}
+
 function getRawValue(row: TableRow, key: keyof VisitDetailRaw) {
   const raw = row.raw as VisitDetailRaw | undefined;
   if (!raw) return null;
@@ -154,6 +164,15 @@ const VISIT_FIELDS: VisitField[] = [
   { id: "primer_mensaje_en", key: "primer_mensaje_en", label: "Primer mensaje", type: "datetime" },
   { id: "ultimo_mensaje_conversacion", key: "ultimo_mensaje_conversacion", label: "Último mensaje", type: "datetime" },
   { id: "contacto_id", key: "contacto_id", label: "Contacto ID", type: "code" },
+  { id: "contacto_nombre", key: "contacto_nombre", label: "Contacto", type: "string", defaultVisible: true },
+  {
+    id: "contacto_origen",
+    key: "contacto_origen",
+    label: "Origen contacto",
+    type: "string",
+    defaultVisible: true,
+    format: (value) => formatContactOrigin(value),
+  },
   { id: "correo_envio", key: "correo_envio", label: "Correo prospección", type: "string", defaultVisible: true },
   { id: "contacto_telefono", key: "contacto_telefono", label: "Contacto teléfono", type: "string" },
   { id: "contacto_empresa", key: "contacto_empresa", label: "Empresa", type: "string" },
@@ -243,8 +262,8 @@ export function VisitsDataTable({ data }: { data: VisitTableRow[] }) {
       initialVisibility={visitColumnVisibility}
       storageKey="visits-table-column-order"
       columnLabels={{
-        header: "Sesión / Canal",
-        type: "Ubicación / Canal",
+        header: "Contacto",
+        type: "Origen contacto",
         status: "Estado del chat",
         target: "Visitas registradas",
         reviewer: "Contacto asignado",

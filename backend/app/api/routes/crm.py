@@ -28052,6 +28052,43 @@ async def get_visits_web_sessions(
         timezone_name=effective_timezone,
     )
 
+    def _row_tracking_param(row: dict[str, Any], key: str) -> str | None:
+        normalized_key = key.strip().lower()
+        direct_value = _clean_text(row.get(normalized_key))
+        if direct_value:
+            return direct_value
+        metadata = _ensure_dict(row.get("metadata"), default={})
+        metadata_candidates = (
+            metadata,
+            _ensure_dict(metadata.get("utm"), default={}),
+            _ensure_dict(metadata.get("campaign"), default={}),
+            _ensure_dict(metadata.get("attribution"), default={}),
+        )
+        for candidate_meta in metadata_candidates:
+            value = _clean_text(candidate_meta.get(normalized_key))
+            if value:
+                return value
+        for url_key in ("landing_url", "referrer"):
+            raw_url = _clean_text(row.get(url_key))
+            if not raw_url:
+                continue
+            try:
+                parsed = urlparse(raw_url)
+                query_values = parse_qs(parsed.query or "", keep_blank_values=False)
+            except Exception:
+                continue
+            for param_key, values in query_values.items():
+                clean_key = param_key.strip().lower()
+                if clean_key.startswith("amp;"):
+                    clean_key = clean_key[4:]
+                if clean_key != normalized_key:
+                    continue
+                for value in values:
+                    cleaned = _clean_text(value)
+                    if cleaned:
+                        return cleaned
+        return None
+
     try:
         rows = await repo.list_web_sessions_attribution_detail(
             organizacion_id=organizacion_id,
@@ -28070,25 +28107,38 @@ async def get_visits_web_sessions(
         seen_envios: set[str] = set()
         contact_ids: list[UUID] = []
         seen_contacts: set[str] = set()
+        prospecto_ids: list[UUID] = []
+        seen_prospectos: set[str] = set()
         template_ids: list[str] = []
         seen_templates: set[str] = set()
         for row in rows:
-            envio_id_value = str(row.get("eid") or "").strip()
+            envio_id_value = _row_tracking_param(row, "eid") or ""
             if envio_id_value and envio_id_value not in seen_envios:
                 seen_envios.add(envio_id_value)
                 envio_ids.append(envio_id_value)
+            prospecto_id_value = (
+                _row_tracking_param(row, "pid")
+                or _row_tracking_param(row, "prospecto_id")
+                or ""
+            )
+            if prospecto_id_value and prospecto_id_value not in seen_prospectos:
+                parsed_prospecto = _safe_uuid(prospecto_id_value)
+                if parsed_prospecto:
+                    seen_prospectos.add(prospecto_id_value)
+                    prospecto_ids.append(parsed_prospecto)
             contact_id_raw = str(row.get("contacto_id") or "").strip()
             if contact_id_raw and contact_id_raw not in seen_contacts:
                 parsed_contact = _safe_uuid(contact_id_raw)
                 if parsed_contact:
                     seen_contacts.add(contact_id_raw)
                     contact_ids.append(parsed_contact)
-            template_id_value = str(row.get("tid") or "").strip()
+            template_id_value = _row_tracking_param(row, "tid") or ""
             if template_id_value and template_id_value not in seen_templates:
-                    seen_templates.add(template_id_value)
-                    template_ids.append(template_id_value)
+                seen_templates.add(template_id_value)
+                template_ids.append(template_id_value)
 
         envios_map: dict[str, dict[str, Any]] = {}
+        prospectos_map: dict[str, dict[str, Any]] = {}
         if envio_ids:
             envios = await repo.list_contact_envios_by_ids(
                 organizacion_id=organizacion_id,
@@ -28099,6 +28149,51 @@ async def get_visits_web_sessions(
                 for item in envios
                 if isinstance(item, dict) and item.get("id")
             }
+            for item in envios:
+                if not isinstance(item, dict):
+                    continue
+                prospecto_id_raw = str(item.get("prospecto_id") or "").strip()
+                if not prospecto_id_raw or prospecto_id_raw in seen_prospectos:
+                    continue
+                parsed_prospecto = _safe_uuid(prospecto_id_raw)
+                if parsed_prospecto:
+                    seen_prospectos.add(prospecto_id_raw)
+                    prospecto_ids.append(parsed_prospecto)
+
+        if prospecto_ids:
+            prospectos = await repo.list_prospectos_by_ids(
+                organizacion_id=organizacion_id,
+                prospecto_ids=prospecto_ids,
+            )
+            prospectos_map = {
+                str(item.get("id")): item
+                for item in prospectos
+                if isinstance(item, dict) and item.get("id")
+            }
+            missing_prospecto_ids = [
+                prospecto_id
+                for prospecto_id in prospecto_ids
+                if str(prospecto_id) not in prospectos_map
+            ]
+            if missing_prospecto_ids:
+                audit_rows = await repo.list_latest_prospectos_audit_by_ids(
+                    organizacion_id=organizacion_id,
+                    prospecto_ids=missing_prospecto_ids,
+                )
+                for audit_row in audit_rows:
+                    prospecto_id = str(audit_row.get("prospecto_id") or "").strip()
+                    if not prospecto_id or prospecto_id in prospectos_map:
+                        continue
+                    cambios = _ensure_dict(audit_row.get("cambios"), default={})
+                    snapshot = _ensure_dict(cambios.get("after"), default={}) or _ensure_dict(
+                        cambios.get("before"),
+                        default={},
+                    )
+                    if not snapshot:
+                        snapshot = cambios
+                    if snapshot:
+                        snapshot.setdefault("id", prospecto_id)
+                        prospectos_map[prospecto_id] = snapshot
 
         contacts_map: dict[str, dict[str, Any]] = {}
         if contact_ids:
@@ -28128,6 +28223,7 @@ async def get_visits_web_sessions(
 
     items: list[dict[str, Any]] = []
     for row in rows:
+        row_metadata = _ensure_dict(row.get("metadata"), default={})
         def _pick_envio_email(envio_row: dict[str, Any] | None) -> str | None:
             if not isinstance(envio_row, dict):
                 return None
@@ -28150,11 +28246,17 @@ async def get_visits_web_sessions(
                     return value
             return None
 
-        envio_id_value = str(row.get("eid") or "").strip() or None
+        envio_id_value = _row_tracking_param(row, "eid")
         envio_row = envios_map.get(envio_id_value) if envio_id_value else None
         correo_envio = _pick_envio_email(envio_row)
+        prospecto_id_value = (
+            str(envio_row.get("prospecto_id") or "").strip()
+            if isinstance(envio_row, dict)
+            else None
+        ) or _row_tracking_param(row, "pid") or _row_tracking_param(row, "prospecto_id")
+        prospecto_row = prospectos_map.get(prospecto_id_value) if prospecto_id_value else None
         contact_id_value = str(row.get("contacto_id") or "").strip() or None
-        template_id_value = str(row.get("tid") or "").strip() or None
+        template_id_value = _row_tracking_param(row, "tid")
         contact_row = contacts_map.get(contact_id_value) if contact_id_value else None
         template_row = templates_map.get(template_id_value) if template_id_value else None
         template_slug = (
@@ -28163,30 +28265,64 @@ async def get_visits_web_sessions(
         template_name = (
             str(template_row.get("nombre") or "").strip() if isinstance(template_row, dict) else ""
         ) or None
+        prospect_name = (
+            str(prospecto_row.get("display_name") or "").strip()
+            if isinstance(prospecto_row, dict)
+            else ""
+        ) or None
+        prospect_email = (
+            str(prospecto_row.get("email") or "").strip()
+            if isinstance(prospecto_row, dict)
+            else ""
+        ) or None
+        prospect_phone = (
+            str(prospecto_row.get("phone_e164") or prospecto_row.get("phone") or "").strip()
+            if isinstance(prospecto_row, dict)
+            else ""
+        ) or None
+        prospect_origin = (
+            str(prospecto_row.get("fuente") or "").strip()
+            if isinstance(prospecto_row, dict)
+            else ""
+        ) or None
+        metadata_contact_name = _clean_text(row_metadata.get("contacto_nombre")) or None
+        metadata_contact_email = _clean_text(row_metadata.get("contacto_correo")) or None
+        metadata_contact_phone = _clean_text(row_metadata.get("contacto_telefono")) or None
+        metadata_contact_origin = _clean_text(
+            row_metadata.get("contacto_origen")
+            or row_metadata.get("contact_origin")
+            or row_metadata.get("origen_contacto")
+            or row_metadata.get("contact_source")
+        ) or None
+        contact_name = (
+            str(contact_row.get("nombre_completo") or "").strip()
+            if isinstance(contact_row, dict)
+            else None
+        ) or prospect_name or metadata_contact_name or None
+        contact_origin = (
+            str(contact_row.get("origen") or "").strip()
+            if isinstance(contact_row, dict)
+            else None
+        ) or prospect_origin or metadata_contact_origin or None
+        contact_phone = (
+            str(contact_row.get("telefono_e164") or "").strip()
+            if isinstance(contact_row, dict)
+            else None
+        ) or prospect_phone or metadata_contact_phone or None
+        contact_email = (
+            str(contact_row.get("correo") or "").strip()
+            if isinstance(contact_row, dict)
+            else None
+        ) or correo_envio or prospect_email or metadata_contact_email or None
 
         items.append(
             {
                 "session_id": row.get("session_id"),
-                "contacto_id": contact_id_value,
-                "contacto_nombre": (
-                    str(contact_row.get("nombre_completo") or "").strip()
-                    if isinstance(contact_row, dict)
-                    else None
-                )
-                or None,
-                "contacto_telefono": (
-                    str(contact_row.get("telefono_e164") or "").strip()
-                    if isinstance(contact_row, dict)
-                    else None
-                )
-                or None,
-                "contacto_correo": (
-                    correo_envio
-                    or str(contact_row.get("correo") or "").strip()
-                    if isinstance(contact_row, dict)
-                    else correo_envio
-                )
-                or None,
+                "contacto_id": contact_id_value or prospecto_id_value,
+                "contacto_nombre": contact_name,
+                "contacto_origen": contact_origin,
+                "contacto_telefono": contact_phone,
+                "contacto_correo": contact_email,
                 "correo_envio": correo_envio,
                 "first_seen_at": row.get("first_seen_at"),
                 "last_seen_at": row.get("last_seen_at"),
