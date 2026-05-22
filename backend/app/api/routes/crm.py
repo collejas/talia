@@ -148,6 +148,21 @@ import_debug_logger = get_logger("app.api.crm.import")
 sale_logger = get_logger("app.api.crm.sales")
 tenant_access_logger = get_logger("app.api.crm.tenant_access")
 UTC = timezone.utc
+GOOGLE_RESULT_PHONE_FIELDS = ("phone", "phone_e164", "telefono_principal_e164", "telefono_movil_1_e164")
+GOOGLE_RESULT_WEBSITE_FIELDS = ("website",)
+GOOGLE_RESULT_SEARCH_FIELDS = (
+    "display_name",
+    "actividad",
+    "address",
+    "phone",
+    "phone_e164",
+    "telefono_principal_e164",
+    "telefono_movil_1_e164",
+    "email",
+    "correo_principal",
+    "correo_secundario",
+    "website",
+)
 _T = TypeVar("_T")
 TIMEZONE_CACHE_TTL_SECONDS = 300
 _USER_TIMEZONE_CACHE: dict[str, tuple[str | None, float]] = {}
@@ -23814,14 +23829,25 @@ async def listar_resultados_google(
         params["distancia_m"] = f"lte.{max_distancia_m}"
     if min_rating is not None:
         params["rating"] = f"gte.{min_rating}"
+    required_groups: list[str] = []
     if phone_present is True:
-        params["phone"] = "not.is.null"
+        required_groups.append(
+            "("
+            + ",".join(f"{field}.not.is.null" for field in GOOGLE_RESULT_PHONE_FIELDS)
+            + ")"
+        )
     elif phone_present is False:
-        params["phone"] = "is.null"
+        for field in GOOGLE_RESULT_PHONE_FIELDS:
+            params[field] = "is.null"
     if website_present is True:
-        params["website"] = "not.is.null"
+        required_groups.append(
+            "("
+            + ",".join(f"{field}.not.is.null" for field in GOOGLE_RESULT_WEBSITE_FIELDS)
+            + ")"
+        )
     elif website_present is False:
-        params["website"] = "is.null"
+        for field in GOOGLE_RESULT_WEBSITE_FIELDS:
+            params[field] = "is.null"
     if actividades:
         unique_activities: list[str] = []
         seen_activities: set[str] = set()
@@ -23836,11 +23862,20 @@ async def listar_resultados_google(
             params["actividad"] = f"in.({quoted})"
     if q:
         sanitized = q.replace("*", "").replace("%", "")
-        params["or"] = (
-            f"(display_name.ilike.*{sanitized}*,"
-            f"actividad.ilike.*{sanitized}*,"
-            f"address.ilike.*{sanitized}*)"
+        search_group = (
+            "("
+            + ",".join(
+                f"{field}.ilike.*{sanitized}*"
+                for field in GOOGLE_RESULT_SEARCH_FIELDS
+            )
+            + ")"
         )
+        required_groups.insert(0, search_group)
+    if required_groups:
+        if len(required_groups) == 1:
+            params["or"] = required_groups[0]
+        else:
+            params["and"] = "(" + ",".join(required_groups) + ")"
     effective_limit = min(limit, 5000)
     params["limit"] = str(effective_limit)
     params["offset"] = str(offset)
