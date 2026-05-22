@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useMemo, useState } from "react"
 
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -192,14 +192,6 @@ function createSuggestedReceptionNumber(): string {
   )}${pad(now.getSeconds())}`
 }
 
-function createSuggestedOrderNumber(): string {
-  const now = new Date()
-  const pad = (n: number) => String(n).padStart(2, "0")
-  return `OC-${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}-${pad(now.getHours())}${pad(
-    now.getMinutes(),
-  )}${pad(now.getSeconds())}`
-}
-
 function createEmptyOrderLine(): OrderLine {
   return {
     catalog_item_id: "",
@@ -278,12 +270,6 @@ export function ComprasWorkspace({
   const [warehouseFormActive, setWarehouseFormActive] = useState(true)
   const [warehouseFormPrincipal, setWarehouseFormPrincipal] = useState(!almacenes.length)
   const [selectedExistenceWarehouseId, setSelectedExistenceWarehouseId] = useState<string>(defaultWarehouseId)
-
-  useEffect(() => {
-    const currentOrder = openOrders.find((orden) => String(orden.id) === selectedOrderId) ?? null
-    setLines(buildLinesFromOrder(currentOrder))
-    setSelectedWarehouseId((currentOrder?.almacen_destino_id as string | undefined) || defaultWarehouseId)
-  }, [defaultWarehouseId, openOrders, selectedOrderId])
 
   const selectedOrder = openOrders.find((orden) => String(orden.id) === selectedOrderId) ?? null
   const selectedProvider = selectedOrder && typeof selectedOrder.proveedor === "object" ? (selectedOrder.proveedor as AnyRecord) : null
@@ -489,6 +475,13 @@ export function ComprasWorkspace({
     setProviderFormPayDays("")
     setProviderFormLeadDays("")
     setProviderFormActive(true)
+  }
+
+  const handleSelectOrder = (orderId: string) => {
+    setSelectedOrderId(orderId)
+    const currentOrder = openOrders.find((orden) => String(orden.id) === orderId) ?? null
+    setLines(buildLinesFromOrder(currentOrder))
+    setSelectedWarehouseId((currentOrder?.almacen_destino_id as string | undefined) || defaultWarehouseId)
   }
 
   return (
@@ -972,7 +965,7 @@ export function ComprasWorkspace({
                   id="recepcion-orden"
                   name="orden_compra_id"
                   value={selectedOrderId}
-                  onChange={(event) => setSelectedOrderId(event.target.value)}
+                  onChange={(event) => handleSelectOrder(event.target.value)}
                   className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                   required
                 >
