@@ -866,19 +866,19 @@ export function ContactCreateFlow({ open, onOpenChange, onCreated, initialMode =
             <RadioGroup value={state.mode} onValueChange={(value) => dispatch({ type: "mode/set", mode: value as CreateMode })} className="grid gap-3 md:grid-cols-3">
               {[
                 {
-                  value: "empresa_existente",
-                  title: "Contacto",
-                  description: "Persona ligada a una empresa ya registrada.",
-                },
-                {
                   value: "empresa_nueva",
                   title: "Empresa",
                   description: "Datos de una empresa nueva con su contacto.",
                 },
                 {
                   value: "persona_fisica_actividad_empresarial",
-                  title: "Persona física con actividad empresarial",
+                  title: "Persona física",
                   description: "Persona, negocio y relación principal automática.",
+                },
+                {
+                  value: "empresa_existente",
+                  title: "Contacto",
+                  description: "Persona ligada a una empresa ya registrada.",
                 },
               ].map((option) => (
                 <label
