@@ -37,6 +37,7 @@ type PersonaDraft = {
   apellido_paterno: string;
   apellido_materno: string;
   correo_principal: string;
+  correo_secundario: string;
   correo_institucional: string;
   correo_personal_3: string;
   telefono_principal_e164: string;
@@ -288,6 +289,7 @@ const INITIAL_STATE: ContactEditState = {
     apellido_paterno: "",
     apellido_materno: "",
     correo_principal: "",
+    correo_secundario: "",
     correo_institucional: "",
     correo_personal_3: "",
     telefono_principal_e164: "",
@@ -1559,7 +1561,7 @@ export function ContactEditFlow({ open, onOpenChange, personaId, onSaved }: Cont
                 <Field label="Tipo persona">
                   <select
                     className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs"
-                    value={state.cuenta.tipo_persona}
+                    value={state.cuenta.tipo_persona || ""}
                     onChange={(e) => dispatch({ type: "cuenta/set", field: "tipo_persona", value: e.target.value })}
                     disabled={state.mode === "persona_fisica_actividad_empresarial"}
                   >

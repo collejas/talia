@@ -37,6 +37,7 @@ type PersonaDraft = {
   apellido_paterno: string;
   apellido_materno: string;
   correo_principal: string;
+  correo_secundario: string;
   correo_institucional: string;
   correo_personal_3: string;
   telefono_principal_e164: string;
@@ -262,6 +263,7 @@ const INITIAL_STATE: ContactCreateState = {
     apellido_paterno: "",
     apellido_materno: "",
     correo_principal: "",
+    correo_secundario: "",
     correo_institucional: "",
     correo_personal_3: "",
     telefono_principal_e164: "",
@@ -516,6 +518,13 @@ function buildFullName(persona: PersonaDraft): string {
     .filter(Boolean)
     .join(" ")
     .trim();
+}
+
+function formatSummaryLine(parts: Array<string | null | undefined>, fallback: string): string {
+  const cleaned = parts
+    .map((part) => (typeof part === "string" ? part.trim() : ""))
+    .filter((part) => Boolean(part));
+  return cleaned.length ? cleaned.join(" · ") : fallback;
 }
 
 function cleanObject<T extends Record<string, unknown>>(input: T): Partial<T> {
@@ -1172,7 +1181,7 @@ export function ContactCreateFlow({ open, onOpenChange, onCreated, initialMode =
                 <Field label="Tipo persona" required>
                   <select
                     className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs"
-                    value={state.cuenta.tipo_persona}
+                    value={state.cuenta.tipo_persona || ""}
                     onChange={(e) => dispatch({ type: "cuenta/set", field: "tipo_persona", value: e.target.value })}
                     disabled={isPfaeMode}
                   >

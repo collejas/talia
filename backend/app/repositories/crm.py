@@ -6847,7 +6847,6 @@ class CRMRepository:
                 "telefono_movil_2_extension",
             ),
             "correo": self._pick_text(merged, "correo_principal", "correo", "email"),
-            "telefono_e164": self._pick_text(merged, "telefono_principal_e164", "telefono_movil_1_e164", "telefono_e164", "telefono"),
             "puesto": self._pick_text(merged, "puesto"),
             "area": self._pick_text(merged, "area"),
             "rol_decision": self._pick_text(merged, "rol_decision"),
