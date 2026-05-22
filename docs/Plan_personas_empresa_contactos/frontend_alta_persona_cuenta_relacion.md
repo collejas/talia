@@ -65,8 +65,13 @@ Capturar a la persona humana, aunque todavia no se sepa si pertenece a una empre
 - `nombre`
 - `apellido_paterno`
 - `origen`
-- `correo_institucional`
-- `telefono_movil_1_e164`
+- segun el tipo de alta:
+  - `Contacto`
+    - `correo_principal`
+    - `telefono_movil_1_e164`
+  - `Empresa` y `Persona física con actividad empresarial`
+    - `correo_institucional`
+    - `telefono_movil_1_e164`
 
 ### Campos opcionales recomendados
 
@@ -88,18 +93,27 @@ Capturar a la persona humana, aunque todavia no se sepa si pertenece a una empre
 
 - `nombre` no vacio
 - `origen` no vacio
-- `correo_institucional` no vacio
+- en `Contacto`, `correo_principal` no vacio
+- en `Empresa` y `Persona física con actividad empresarial`, `correo_institucional` no vacio
 - `telefono_movil_1_e164` no vacio
-- si hay correo principal o correo personal 3, validarlos
+- `correo_principal` se valida si se muestra
+- `correo_personal_3` se valida si se muestra
 - si hay telefonos adicionales, normalizarlos
 
 ### Regla visual
 
 En la UI, los campos obligatorios deben llevar asterisco rojo.
-En este flujo, el asterisco aplica de forma directa a:
+La obligatoriedad depende del tipo de alta:
 
-- `correo_institucional`
-- `telefono_movil_1_e164`
+- `Contacto`
+  - `correo_principal`
+  - `telefono_movil_1_e164`
+- `Empresa`
+  - `correo_institucional`
+  - `telefono_movil_1_e164`
+- `Persona física con actividad empresarial`
+  - `correo_institucional`
+  - `telefono_movil_1_e164`
 
 Cuando la obligatoriedad sea compartida por un grupo de campos, debe mostrarse una nota explicativa junto al grupo.
 

@@ -611,7 +611,11 @@ function validateState(state: ContactCreateState): string | null {
   if (!state.persona.nombre.trim()) return "El nombre es obligatorio.";
   if (!state.persona.apellido_paterno.trim()) return "El apellido paterno es obligatorio.";
   if (!state.persona.origen.trim()) return "Selecciona el origen del contacto.";
-  if (!state.persona.correo_institucional.trim()) return "El correo institucional es obligatorio.";
+  if (state.mode === "empresa_existente") {
+    if (!state.persona.correo_principal.trim()) return "El correo 1 principal es obligatorio.";
+  } else if (!state.persona.correo_institucional.trim()) {
+    return "El correo institucional es obligatorio.";
+  }
   if (!state.persona.telefono_movil_1_e164.trim()) return "El teléfono móvil 1 es obligatorio.";
   if (state.mode === "empresa_existente" && !state.cuenta.cuenta_id.trim()) {
     return "Selecciona una empresa existente.";
@@ -787,6 +791,8 @@ export function ContactCreateFlow({ open, onOpenChange, onCreated, initialMode =
       : isCompanyMode
         ? "Captura la persona responsable y los datos de la empresa."
         : "Captura la persona y la empresa en un solo flujo.";
+  const showContactExtras = isContactMode;
+  const showCompanyPhones = isCompanyMode || isPfaeMode;
   const relationSectionTitle =
     isPfaeMode
       ? "Vínculo principal"
@@ -935,33 +941,41 @@ export function ContactCreateFlow({ open, onOpenChange, onCreated, initialMode =
               <Field label="Apellido materno">
                 <Input value={state.persona.apellido_materno} onChange={(e) => dispatch({ type: "persona/set", field: "apellido_materno", value: e.target.value })} />
               </Field>
-              <Field label="Correo 1 principal">
+              <Field label="Correo 1 principal" required={isContactMode}>
                 <Input value={state.persona.correo_principal} onChange={(e) => dispatch({ type: "persona/set", field: "correo_principal", value: e.target.value })} />
               </Field>
-              <Field label="Correo 2 institucional" required>
+              <Field label="Correo 2 institucional" required={!isContactMode}>
                 <Input value={state.persona.correo_institucional} onChange={(e) => dispatch({ type: "persona/set", field: "correo_institucional", value: e.target.value })} />
               </Field>
-              <Field label="Correo 3 personal 3">
-                <Input value={state.persona.correo_personal_3} onChange={(e) => dispatch({ type: "persona/set", field: "correo_personal_3", value: e.target.value })} />
-              </Field>
+              {showContactExtras ? (
+                <Field label="Correo 3 personal 3">
+                  <Input value={state.persona.correo_personal_3} onChange={(e) => dispatch({ type: "persona/set", field: "correo_personal_3", value: e.target.value })} />
+                </Field>
+              ) : null}
               <Field label="Teléfono móvil 1" required>
                 <Input value={state.persona.telefono_movil_1_e164} onChange={(e) => dispatch({ type: "persona/set", field: "telefono_movil_1_e164", value: e.target.value })} />
               </Field>
-              <Field label="Teléfono móvil 2">
-                <Input value={state.persona.telefono_movil_2_e164} onChange={(e) => dispatch({ type: "persona/set", field: "telefono_movil_2_e164", value: e.target.value })} />
-              </Field>
-              <Field label="Teléfono de la empresa 1 con extensión">
-                <div className="grid grid-cols-[minmax(0,1fr)_120px] gap-2">
-                  <Input value={state.persona.telefono_empresa_1_e164} onChange={(e) => dispatch({ type: "persona/set", field: "telefono_empresa_1_e164", value: e.target.value })} />
-                  <Input placeholder="Ext." value={state.persona.telefono_empresa_1_extension} onChange={(e) => dispatch({ type: "persona/set", field: "telefono_empresa_1_extension", value: e.target.value })} />
-                </div>
-              </Field>
-              <Field label="Teléfono de la empresa 2 con extensión">
-                <div className="grid grid-cols-[minmax(0,1fr)_120px] gap-2">
-                  <Input value={state.persona.telefono_empresa_2_e164} onChange={(e) => dispatch({ type: "persona/set", field: "telefono_empresa_2_e164", value: e.target.value })} />
-                  <Input placeholder="Ext." value={state.persona.telefono_empresa_2_extension} onChange={(e) => dispatch({ type: "persona/set", field: "telefono_empresa_2_extension", value: e.target.value })} />
-                </div>
-              </Field>
+              {showContactExtras ? (
+                <Field label="Teléfono móvil 2">
+                  <Input value={state.persona.telefono_movil_2_e164} onChange={(e) => dispatch({ type: "persona/set", field: "telefono_movil_2_e164", value: e.target.value })} />
+                </Field>
+              ) : null}
+              {showCompanyPhones ? (
+                <>
+                  <Field label="Teléfono de la empresa 1 con extensión">
+                    <div className="grid grid-cols-[minmax(0,1fr)_120px] gap-2">
+                      <Input value={state.persona.telefono_empresa_1_e164} onChange={(e) => dispatch({ type: "persona/set", field: "telefono_empresa_1_e164", value: e.target.value })} />
+                      <Input placeholder="Ext." value={state.persona.telefono_empresa_1_extension} onChange={(e) => dispatch({ type: "persona/set", field: "telefono_empresa_1_extension", value: e.target.value })} />
+                    </div>
+                  </Field>
+                  <Field label="Teléfono de la empresa 2 con extensión">
+                    <div className="grid grid-cols-[minmax(0,1fr)_120px] gap-2">
+                      <Input value={state.persona.telefono_empresa_2_e164} onChange={(e) => dispatch({ type: "persona/set", field: "telefono_empresa_2_e164", value: e.target.value })} />
+                      <Input placeholder="Ext." value={state.persona.telefono_empresa_2_extension} onChange={(e) => dispatch({ type: "persona/set", field: "telefono_empresa_2_extension", value: e.target.value })} />
+                    </div>
+                  </Field>
+                </>
+              ) : null}
               <Field label="Origen" required>
                 <Select
                   value={state.persona.origen || undefined}

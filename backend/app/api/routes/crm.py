@@ -16629,7 +16629,12 @@ async def validate_persona_alta(
 
     if not _persona_alta_clean_text(persona.nombre) or not _persona_alta_clean_text(persona.apellido_paterno):
         raise HTTPException(status_code=400, detail="persona_incompleta")
-    if not _persona_alta_clean_text(persona.correo_institucional) or not _persona_alta_clean_text(persona.telefono_movil_1_e164):
+    if contexto.modo == "empresa_existente":
+        if not _persona_alta_clean_text(persona.correo_principal):
+            raise HTTPException(status_code=400, detail="medio_contacto_required")
+    elif not _persona_alta_clean_text(persona.correo_institucional):
+        raise HTTPException(status_code=400, detail="medio_contacto_required")
+    if not _persona_alta_clean_text(persona.telefono_movil_1_e164):
         raise HTTPException(status_code=400, detail="medio_contacto_required")
 
     persona_candidates, account_candidates, suggested_persona_id, suggested_account_id, requires_confirmation = (
@@ -16670,7 +16675,12 @@ async def create_persona_alta(
 
     if not _persona_alta_clean_text(persona.nombre) or not _persona_alta_clean_text(persona.apellido_paterno):
         raise HTTPException(status_code=400, detail="persona_incompleta")
-    if not _persona_alta_clean_text(persona.correo_institucional) or not _persona_alta_clean_text(persona.telefono_movil_1_e164):
+    if contexto.modo == "empresa_existente":
+        if not _persona_alta_clean_text(persona.correo_principal):
+            raise HTTPException(status_code=400, detail="medio_contacto_required")
+    elif not _persona_alta_clean_text(persona.correo_institucional):
+        raise HTTPException(status_code=400, detail="medio_contacto_required")
+    if not _persona_alta_clean_text(persona.telefono_movil_1_e164):
         raise HTTPException(status_code=400, detail="medio_contacto_required")
 
     existing_account: CRMAccount | None = None
@@ -16906,7 +16916,12 @@ async def update_persona(
 
     if not _persona_alta_clean_text(persona.nombre) or not _persona_alta_clean_text(persona.apellido_paterno):
         raise HTTPException(status_code=400, detail="persona_incompleta")
-    if not _persona_alta_clean_text(persona.correo_institucional) or not _persona_alta_clean_text(persona.telefono_movil_1_e164):
+    if contexto.modo == "empresa_existente":
+        if not _persona_alta_clean_text(persona.correo_principal):
+            raise HTTPException(status_code=400, detail="medio_contacto_required")
+    elif not _persona_alta_clean_text(persona.correo_institucional):
+        raise HTTPException(status_code=400, detail="medio_contacto_required")
+    if not _persona_alta_clean_text(persona.telefono_movil_1_e164):
         raise HTTPException(status_code=400, detail="medio_contacto_required")
 
     existing_account: CRMAccount | None = None
@@ -17370,7 +17385,12 @@ async def validate_persona_update(
 
     if not _persona_alta_clean_text(persona.nombre) or not _persona_alta_clean_text(persona.apellido_paterno):
         raise HTTPException(status_code=400, detail="persona_incompleta")
-    if not _persona_alta_clean_text(persona.correo_institucional) or not _persona_alta_clean_text(persona.telefono_movil_1_e164):
+    if contexto.modo == "empresa_existente":
+        if not _persona_alta_clean_text(persona.correo_principal):
+            raise HTTPException(status_code=400, detail="medio_contacto_required")
+    elif not _persona_alta_clean_text(persona.correo_institucional):
+        raise HTTPException(status_code=400, detail="medio_contacto_required")
+    if not _persona_alta_clean_text(persona.telefono_movil_1_e164):
         raise HTTPException(status_code=400, detail="medio_contacto_required")
 
     exclude_account_id = cuenta.cuenta_id if cuenta and cuenta.cuenta_id else None
