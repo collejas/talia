@@ -203,8 +203,8 @@ function ResultTooltipContent({ item }: { item: GoogleResultadoItem & Record<str
     push("Tipo", item.google_primary_type_display_name ?? item.google_primary_type);
     push("Tipos", item.google_types);
     push("Dirección", item.address);
-    push("Teléfono", item.phone);
-    push("Email", item.email);
+    push("Teléfono", item.telefono_principal_e164 ?? item.phone);
+    push("Email", item.correo_principal ?? item.correo_secundario ?? item.email);
     push("Sitio web", item.website, typeof item.website === "string" ? formatWebsiteUrl(item.website) : undefined);
     push("Tamaño", (item as Record<string, unknown>).estrato);
     if (typeof item.rating === "number") {

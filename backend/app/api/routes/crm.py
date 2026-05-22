@@ -3487,7 +3487,12 @@ class ProspectoConvertirPayload(BaseModel):
 
     nombre: str | None = Field(default=None, min_length=2, max_length=200)
     correo: str | None = Field(default=None, max_length=320)
+    correo_principal: str | None = Field(default=None, max_length=320)
+    correo_secundario: str | None = Field(default=None, max_length=320)
     telefono: str | None = Field(default=None, max_length=60)
+    telefono_principal_e164: str | None = Field(default=None, max_length=60)
+    telefono_principal_tipo_linea: str | None = Field(default=None, max_length=32)
+    telefono_principal_extension: str | None = Field(default=None, max_length=16)
     company_name: str | None = Field(default=None, max_length=160)
     website: str | None = Field(default=None, max_length=300)
     segmento: str | None = Field(default=None, max_length=120)
@@ -7898,7 +7903,14 @@ def _build_prospecto_from_contactable(
         "estrato": row.get("estrato"),
         "phone": phone_value,
         "phone_e164": _normalize_phone_e164(phone_value),
+        "telefono_principal_e164": _normalize_phone_e164(phone_value),
+        "telefono_principal_tipo_linea": _clean_text(row.get("telefono_principal_tipo_linea")),
+        "telefono_principal_extension": _clean_text(row.get("telefono_principal_extension")),
+        "telefono_movil_1_e164": _normalize_phone_e164(row.get("telefono_movil_1_e164") or phone_value),
+        "telefono_movil_1_tipo_linea": _clean_text(row.get("telefono_movil_1_tipo_linea")),
         "email": _normalize_email(row.get("email")),
+        "correo_principal": _normalize_email(row.get("correo_principal") or row.get("email")),
+        "correo_secundario": _normalize_email(row.get("correo_secundario")),
         "website": _clean_text(row.get("website")),
         "address": address_full_value,
         "address_full": address_full_value,
@@ -27450,8 +27462,16 @@ async def convertir_prospecto_a_contacto_legacy(
         prospecto_id=prospecto_id,
     )
     nombre = _clean_text(payload.nombre) or _clean_text(prospecto.get("nombre_comercial")) or _clean_text(prospecto.get("display_name"))
-    correo = payload.correo or prospecto.get("email")
-    telefono = payload.telefono or prospecto.get("phone_e164") or prospecto.get("phone")
+    correo_principal = payload.correo_principal or payload.correo or prospecto.get("email")
+    correo_secundario = payload.correo_secundario
+    telefono_principal_e164 = (
+        payload.telefono_principal_e164
+        or payload.telefono
+        or prospecto.get("phone_e164")
+        or prospecto.get("phone")
+    )
+    telefono_principal_tipo_linea = payload.telefono_principal_tipo_linea
+    telefono_principal_extension = payload.telefono_principal_extension
     canal_origen = (payload.canal_origen or "otro").lower()
     source_label = _describe_prospeccion_source(prospecto)
     pipeline_canal_label = _infer_prospeccion_canal_label(prospecto)
@@ -27461,8 +27481,13 @@ async def convertir_prospecto_a_contacto_legacy(
     actividad = payload.actividad or prospecto.get("actividad")
     persona_body = {
         "nombre_completo": nombre,
-        "correo": correo,
-        "telefono_e164": telefono,
+        "correo_principal": correo_principal,
+        "correo": correo_principal,
+        "telefono_principal_e164": telefono_principal_e164,
+        "telefono_e164": telefono_principal_e164,
+        "telefono_principal_tipo_linea": telefono_principal_tipo_linea,
+        "telefono_principal_extension": telefono_principal_extension,
+        "correo_secundario": correo_secundario,
         "company_name": company_name,
         "website": website,
         "segmento": segmento,

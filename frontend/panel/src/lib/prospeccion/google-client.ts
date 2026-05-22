@@ -63,6 +63,10 @@ export type GoogleResultadoItem = {
   actividad: string | null;
   phone: string | null;
   email: string | null;
+  telefono_principal_e164?: string | null;
+  telefono_movil_1_e164?: string | null;
+  correo_principal?: string | null;
+  correo_secundario?: string | null;
   website: string | null;
   address: string | null;
   lat: number | null;

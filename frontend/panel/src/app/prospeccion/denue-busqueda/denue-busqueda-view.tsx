@@ -948,13 +948,17 @@ export function DenueBusquedaView() {
     for (const row of mapItems) {
       if (typeof row.lat !== "number" || typeof row.lng !== "number") continue;
       if (row.kind === "cluster") {
-        items.push({
+          items.push({
           resultado_id: `cluster:${row.id}`,
           busqueda_id: activeBusquedaId,
           display_name: null,
           actividad: null,
           phone: null,
           email: null,
+          telefono_principal_e164: null,
+          telefono_movil_1_e164: null,
+          correo_principal: null,
+          correo_secundario: null,
           website: null,
           address: null,
           lat: row.lat,
@@ -979,6 +983,10 @@ export function DenueBusquedaView() {
         actividad: row.actividad,
         phone: row.phone,
         email: row.email,
+        telefono_principal_e164: row.telefono_principal_e164 ?? null,
+        telefono_movil_1_e164: row.telefono_movil_1_e164 ?? null,
+        correo_principal: row.correo_principal ?? row.email ?? null,
+        correo_secundario: row.correo_secundario ?? null,
         website: row.website,
         address: row.address,
         lat: row.lat,
@@ -2497,16 +2505,16 @@ export function DenueBusquedaView() {
                               </div>
                             </div>
                             <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
-                              {item.phone ? (
+                              {(item.telefono_principal_e164 ?? item.phone) ? (
                                 <span className="inline-flex items-center gap-1">
                                   <Phone className="h-3 w-3" />
-                                  {item.phone}
+                                  {item.telefono_principal_e164 ?? item.phone}
                                 </span>
                               ) : null}
-                              {item.email ? (
+                              {(item.correo_principal ?? item.correo_secundario ?? item.email) ? (
                                 <span className="inline-flex items-center gap-1">
                                   <Mail className="h-3 w-3" />
-                                  {item.email}
+                                  {item.correo_principal ?? item.correo_secundario ?? item.email}
                                 </span>
                               ) : null}
                               {item.website ? (

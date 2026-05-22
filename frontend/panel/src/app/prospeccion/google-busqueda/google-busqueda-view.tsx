@@ -689,15 +689,19 @@ export function GoogleBusquedaView() {
     return mapItems.map((item) => {
       if (item.kind === "cluster") {
         const clusterId = item.id ?? `${item.lat ?? "0"},${item.lng ?? "0"}`;
-        return {
-          resultado_id: `cluster:${clusterId}`,
-          busqueda_id: activeBusquedaId ?? "",
-          display_name: null,
-          actividad: null,
-          phone: null,
-          email: null,
-          website: null,
-          address: null,
+          return {
+            resultado_id: `cluster:${clusterId}`,
+            busqueda_id: activeBusquedaId ?? "",
+            display_name: null,
+            actividad: null,
+            phone: null,
+            email: null,
+            telefono_principal_e164: null,
+            telefono_movil_1_e164: null,
+            correo_principal: null,
+            correo_secundario: null,
+            website: null,
+            address: null,
           lat: item.lat ?? null,
           lng: item.lng ?? null,
           rating: null,
@@ -719,6 +723,10 @@ export function GoogleBusquedaView() {
         actividad: item.actividad ?? null,
         phone: item.phone ?? null,
         email: item.email ?? null,
+        telefono_principal_e164: item.telefono_principal_e164 ?? item.phone_e164 ?? null,
+        telefono_movil_1_e164: item.telefono_movil_1_e164 ?? item.phone_e164 ?? null,
+        correo_principal: item.correo_principal ?? item.email ?? null,
+        correo_secundario: item.correo_secundario ?? null,
         website: item.website ?? null,
         address: item.address ?? null,
         lat: item.lat ?? null,
@@ -1817,10 +1825,10 @@ export function GoogleBusquedaView() {
                             ) : null}
                           </div>
                           <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
-                            {item.phone ? (
+                            {(item.telefono_principal_e164 ?? item.phone) ? (
                               <span className="inline-flex items-center gap-1">
                                 <Phone className="h-3 w-3" />
-                                {item.phone}
+                                {item.telefono_principal_e164 ?? item.phone}
                               </span>
                             ) : null}
                             {item.website ? (

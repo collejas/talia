@@ -12,7 +12,11 @@ export type ProspectoItem = {
   estrato?: string | null
   phone: string | null
   phone_e164?: string | null
+  telefono_principal_e164?: string | null
+  telefono_movil_1_e164?: string | null
   email: string | null
+  correo_principal?: string | null
+  correo_secundario?: string | null
   email_lookup_status?: string | null
   email_lookup_error?: string | null
   email_lookup_checked_en?: string | null
@@ -1293,7 +1297,12 @@ export async function createCrmCampaign(payload: {
 export type ConvertirProspectoPayload = {
   nombre?: string
   correo?: string
+  correo_principal?: string
+  correo_secundario?: string
   telefono?: string
+  telefono_principal_e164?: string
+  telefono_principal_tipo_linea?: string
+  telefono_principal_extension?: string
   company_name?: string
   website?: string
   segmento?: string

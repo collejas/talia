@@ -965,6 +965,8 @@ function ProspectosView() {
     nombre: string
     correo: string
     telefono: string
+    telefonoTipoLinea: string
+    telefonoExtension: string
     company: string
     notas: string
     stage: ProspeccionStage
@@ -973,6 +975,8 @@ function ProspectosView() {
     nombre: "",
     correo: "",
     telefono: "",
+    telefonoTipoLinea: "",
+    telefonoExtension: "",
     company: "",
     notas: "",
     stage: "evaluate",
@@ -3158,17 +3162,26 @@ function ProspectosView() {
         : "evaluate"
     setConvertProspect(prospecto)
     let canal: ProspeccionCanal = "otro"
-    if (prospecto.email) {
+    const emailValue = prospecto.correo_principal || prospecto.correo_secundario || prospecto.email || ""
+    const phoneValue =
+      prospecto.telefono_principal_e164 ||
+      prospecto.telefono_movil_1_e164 ||
+      prospecto.phone_e164 ||
+      prospecto.phone ||
+      ""
+    if (emailValue) {
       canal = "correo"
     } else if (prospecto.whatsapp_permitido) {
       canal = "whatsapp"
-    } else if (prospecto.phone || prospecto.phone_e164) {
+    } else if (phoneValue) {
       canal = "llamada"
     }
     setConvertForm({
       nombre: prospecto.display_name ?? "",
-      correo: prospecto.email ?? "",
-      telefono: prospecto.phone_e164 ?? prospecto.phone ?? "",
+      correo: emailValue,
+      telefono: phoneValue,
+      telefonoTipoLinea: "",
+      telefonoExtension: "",
       company: prospecto.nombre_comercial ?? prospecto.display_name ?? prospecto.segmento ?? "",
       notas: "",
       stage: stageValue,
@@ -3220,8 +3233,12 @@ function ProspectosView() {
       }
     }
     assign(convertForm.nombre, "nombre")
+    assign(convertForm.correo, "correo_principal")
     assign(convertForm.correo, "correo")
+    assign(convertForm.telefono, "telefono_principal_e164")
     assign(convertForm.telefono, "telefono")
+    assign(convertForm.telefonoTipoLinea, "telefono_principal_tipo_linea")
+    assign(convertForm.telefonoExtension, "telefono_principal_extension")
     assign(convertForm.company, "company_name")
     assign(convertForm.notas, "notas")
     assign(convertProspect.website ?? "", "website")
@@ -3270,8 +3287,13 @@ function ProspectosView() {
     setFormValues({
       displayName: prospecto.display_name ?? "",
       actividad: prospecto.actividad ?? "",
-      phone: prospecto.phone ?? prospecto.phone_e164 ?? "",
-      email: prospecto.email ?? "",
+      phone:
+        prospecto.telefono_principal_e164 ||
+        prospecto.telefono_movil_1_e164 ||
+        prospecto.phone_e164 ||
+        prospecto.phone ||
+        "",
+      email: prospecto.correo_principal || prospecto.correo_secundario || prospecto.email || "",
       website: prospecto.website ?? "",
       address: prospecto.address ?? "",
       segmento: prospecto.segmento ?? "",
@@ -5053,8 +5075,19 @@ function ProspectosView() {
                                 )
                               }
                               case "correo": {
-                                const phoneLabel = (prospecto.phone_e164 || prospecto.phone || "").trim()
-                                const emailLabel = (prospecto.email || "").trim().toLowerCase()
+                                const phoneLabel = (
+                                  prospecto.telefono_principal_e164 ||
+                                  prospecto.telefono_movil_1_e164 ||
+                                  prospecto.phone_e164 ||
+                                  prospecto.phone ||
+                                  ""
+                                ).trim()
+                                const emailLabel = (
+                                  prospecto.correo_principal ||
+                                  prospecto.correo_secundario ||
+                                  prospecto.email ||
+                                  ""
+                                ).trim().toLowerCase()
                                 const websiteLabel = (prospecto.website || "").trim()
                                 const websiteHref = buildWebsiteHref(websiteLabel)
                                 return (
@@ -5091,10 +5124,21 @@ function ProspectosView() {
                                 )
                               }
                               case "sitio_web": {
-                                const phoneLabel = (prospecto.phone_e164 || prospecto.phone || "").trim()
+                                const phoneLabel = (
+                                  prospecto.telefono_principal_e164 ||
+                                  prospecto.telefono_movil_1_e164 ||
+                                  prospecto.phone_e164 ||
+                                  prospecto.phone ||
+                                  ""
+                                ).trim()
                                 const phoneStatus = (prospecto.lookup_status || (phoneLabel ? "pendiente" : "sin_numero")) as string
                                 const carrier = prospecto.carrier_type ? carrierLabel(prospecto.carrier_type) : "Sin tipo"
-                                const emailLabel = (prospecto.email || "").trim().toLowerCase()
+                                const emailLabel = (
+                                  prospecto.correo_principal ||
+                                  prospecto.correo_secundario ||
+                                  prospecto.email ||
+                                  ""
+                                ).trim().toLowerCase()
                                 const emailStatus = (prospecto.email_lookup_status || (emailLabel ? "pendiente" : "sin_email")) as string
                                 const score = typeof prospecto.email_risk_score === "number" ? prospecto.email_risk_score : null
                                 const recommendation = (prospecto.email_recommendation || "").trim()
@@ -5140,7 +5184,13 @@ function ProspectosView() {
                                 return (
                                   <TableCell key={columnId}>
                                     <div className="flex flex-col gap-1">
-                                      <span className="text-[11px]">{prospecto.phone_e164 || prospecto.phone || "—"}</span>
+                                      <span className="text-[11px]">
+                                        {prospecto.telefono_principal_e164 ||
+                                          prospecto.telefono_movil_1_e164 ||
+                                          prospecto.phone_e164 ||
+                                          prospecto.phone ||
+                                          "—"}
+                                      </span>
                                       <div className="flex flex-wrap items-center gap-1">
                                         <LookupStatusBadge status={prospecto.lookup_status} className="text-[10px]" />
                                         <Badge variant="outline" className="text-[10px]">
@@ -5287,7 +5337,7 @@ function ProspectosView() {
               />
             </div>
             <div className="space-y-1">
-              <Label>Correo</Label>
+              <Label>Correo principal</Label>
               <Input
                 type="email"
                 value={convertForm.correo}
@@ -5295,10 +5345,33 @@ function ProspectosView() {
               />
             </div>
             <div className="space-y-1">
-              <Label>Teléfono</Label>
+              <Label>Teléfono principal</Label>
               <Input
                 value={convertForm.telefono}
                 onChange={(event) => setConvertForm((prev) => ({ ...prev, telefono: event.target.value }))}
+              />
+            </div>
+            <div className="space-y-1">
+              <Label>Tipo de línea</Label>
+              <Select
+                value={convertForm.telefonoTipoLinea}
+                onValueChange={(value) => setConvertForm((prev) => ({ ...prev, telefonoTipoLinea: value }))}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecciona tipo de línea" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="movil">Móvil</SelectItem>
+                  <SelectItem value="fija">Fija</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1">
+              <Label>Extensión</Label>
+              <Input
+                value={convertForm.telefonoExtension}
+                onChange={(event) => setConvertForm((prev) => ({ ...prev, telefonoExtension: event.target.value }))}
+                placeholder="Opcional"
               />
             </div>
             <div className="space-y-1">

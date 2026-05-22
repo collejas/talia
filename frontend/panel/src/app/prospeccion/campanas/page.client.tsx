@@ -959,8 +959,19 @@ ${secondCellHtml}
     const nombre = (previewProspecto.display_name || "").trim()
     const segmento = (previewProspecto.segmento || "").trim()
     const empresa = (templateForm.nombreEmpresa || "").trim() || segmento
-    const email = (previewProspecto.email || "").trim()
-    const telefono = (previewProspecto.phone_e164 || previewProspecto.phone || "").trim()
+    const email = (
+      previewProspecto.email ||
+      previewProspecto.correo_principal ||
+      previewProspecto.correo_secundario ||
+      ""
+    ).trim()
+    const telefono = (
+      previewProspecto.phone_e164 ||
+      previewProspecto.phone ||
+      previewProspecto.telefono_principal_e164 ||
+      previewProspecto.telefono_movil_1_e164 ||
+      ""
+    ).trim()
     const canalOrigen = resolvePreviewCanalOrigen(previewProspecto)
     const websiteUrl =
       normalizeWebBaseUrl(templateForm.ctaBaseUrl || tenantBaseUrl || "https://talia.mx/") || "https://talia.mx/"
