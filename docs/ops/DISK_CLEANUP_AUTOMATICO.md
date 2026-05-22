@@ -27,6 +27,11 @@ Variables principales:
 - `KEEP_CURRENT_LOGS`
 - `RUN_USER_LOG_CLEAN`
 - `USER_HOME_DIRS`
+- `RUN_USER_NPM_CACHE_CLEAN`
+- `RUN_USER_PLAYWRIGHT_CACHE_CLEAN`
+- `RUN_USER_GO_CACHE_CLEAN`
+- `RUN_VSCODE_SERVER_PRUNE`
+- `VSCODE_SERVER_KEEP_VERSIONS`
 - `DRY_RUN`
 
 Notas:
@@ -34,6 +39,7 @@ Notas:
 - Por defecto también procesa `/var/www/PUI`, `/var/www/maria_imlux`, `/home/devuser/richard` y `/home/devuser/talia`.
 - Si existen, limpia sus logs de `frontend/.next/dev/logs` y corre `git gc` sobre esos repos para reducir reflogs y objetos sueltos.
 - También limpia logs de usuario en `/home/jorge`, incluyendo `.npm/_logs`, `.vscode-server`, `.codex/log` y `.twilio-cli`.
+- También limpia caches de usuario de npm, Playwright y Go, y recorta versiones viejas de VS Code Server dejando solo la(s) más reciente(s).
 - Con `RUN_LOGS_PURGE=1` borra rotados (`.log.*`, `.out`, `.err`) aunque todavía no hayan vencido; con `KEEP_CURRENT_LOGS=1` conserva los `.log` activos.
 
 ## Verificacion

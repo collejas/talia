@@ -26,6 +26,11 @@ RUN_SOURCE_BUILD_CACHE_CLEAN="${RUN_SOURCE_BUILD_CACHE_CLEAN:-0}"
 RUN_EXTRA_PROJECTS_CLEAN="${RUN_EXTRA_PROJECTS_CLEAN:-1}"
 RUN_APT_AUTOREMOVE="${RUN_APT_AUTOREMOVE:-0}"
 RUN_USER_LOG_CLEAN="${RUN_USER_LOG_CLEAN:-1}"
+RUN_USER_NPM_CACHE_CLEAN="${RUN_USER_NPM_CACHE_CLEAN:-1}"
+RUN_USER_PLAYWRIGHT_CACHE_CLEAN="${RUN_USER_PLAYWRIGHT_CACHE_CLEAN:-1}"
+RUN_USER_GO_CACHE_CLEAN="${RUN_USER_GO_CACHE_CLEAN:-1}"
+RUN_VSCODE_SERVER_PRUNE="${RUN_VSCODE_SERVER_PRUNE:-1}"
+VSCODE_SERVER_KEEP_VERSIONS="${VSCODE_SERVER_KEEP_VERSIONS:-1}"
 
 # Extra projects living in same droplet that may accumulate logs/caches/backups.
 EXTRA_PROJECT_DIRS="${EXTRA_PROJECT_DIRS:-/var/www/PUI /var/www/maria_imlux /opt/richard /home/devuser/richard /home/devuser/talia}"
@@ -436,6 +441,28 @@ cleanup_system_logs() {
   fi
 }
 
+cleanup_vscode_server_versions_in_dir() {
+  local home_dir="$1"
+  [[ -d "${home_dir}/.vscode-server/cli/servers" ]] || return 0
+  [[ "${RUN_VSCODE_SERVER_PRUNE}" == "1" ]] || return 0
+  [[ "${VSCODE_SERVER_KEEP_VERSIONS}" =~ ^[0-9]+$ ]] || return 0
+
+  local base_dir="${home_dir}/.vscode-server/cli/servers"
+  mapfile -t versions < <(ls -1dt "${base_dir}"/Stable-* 2>/dev/null || true)
+  (( ${#versions[@]} > ${VSCODE_SERVER_KEEP_VERSIONS} )) || return 0
+
+  local idx=0
+  local version_path=""
+  for version_path in "${versions[@]}"; do
+    idx=$((idx + 1))
+    if [[ "${idx}" -le "${VSCODE_SERVER_KEEP_VERSIONS}" ]]; then
+      log "keep vscode server version ${version_path}"
+      continue
+    fi
+    run_rm_rf "${version_path}"
+  done
+}
+
 cleanup_user_logs_in_dir() {
   local home_dir="$1"
   [[ -d "${home_dir}" ]] || return 0
@@ -455,6 +482,31 @@ cleanup_user_logs_in_dir() {
   log "user log cleanup done dir=${home_dir}"
 }
 
+cleanup_user_caches_in_dir() {
+  local home_dir="$1"
+  [[ -d "${home_dir}" ]] || return 0
+
+  log "user cache cleanup start dir=${home_dir}"
+
+  if [[ "${RUN_USER_NPM_CACHE_CLEAN}" == "1" ]]; then
+    run_rm_rf "${home_dir}/.npm/_cacache"
+    run_rm_rf "${home_dir}/.npm/_npx"
+  fi
+
+  if [[ "${RUN_USER_PLAYWRIGHT_CACHE_CLEAN}" == "1" ]]; then
+    run_rm_rf "${home_dir}/.cache/ms-playwright"
+  fi
+
+  if [[ "${RUN_USER_GO_CACHE_CLEAN}" == "1" ]]; then
+    run_rm_rf "${home_dir}/go/pkg/mod/cache"
+    run_rm_rf "${home_dir}/go/pkg/sumdb"
+  fi
+
+  cleanup_vscode_server_versions_in_dir "${home_dir}"
+
+  log "user cache cleanup done dir=${home_dir}"
+}
+
 cleanup_user_logs() {
   if [[ "${RUN_USER_LOG_CLEAN}" != "1" ]]; then
     return 0
@@ -463,6 +515,13 @@ cleanup_user_logs() {
   local home_dir=""
   for home_dir in ${USER_HOME_DIRS}; do
     cleanup_user_logs_in_dir "${home_dir}"
+  done
+}
+
+cleanup_user_caches() {
+  local home_dir=""
+  for home_dir in ${USER_HOME_DIRS}; do
+    cleanup_user_caches_in_dir "${home_dir}"
   done
 }
 
@@ -556,6 +615,7 @@ main() {
   cleanup_source_build_caches
   cleanup_extra_projects
   cleanup_user_logs
+  cleanup_user_caches
   cleanup_git_objects
   cleanup_system_logs
 
