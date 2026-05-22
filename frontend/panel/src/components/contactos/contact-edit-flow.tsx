@@ -1488,7 +1488,7 @@ export function ContactEditFlow({ open, onOpenChange, personaId, onSaved }: Cont
                   ) : null}
                 </div>
               </Field>
-              <Field label="Área">
+              <Field label="Área de trabajo del contacto">
                 <Input value={state.persona.area} onChange={(e) => dispatch({ type: "persona/set", field: "area", value: e.target.value })} />
               </Field>
               <Field label="Rol de decisión">
