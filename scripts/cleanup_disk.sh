@@ -6,7 +6,7 @@ ROOT_DIR="${ROOT_DIR:-/var/www/talia}"
 KEEP_PROD_RELEASES="${KEEP_PROD_RELEASES:-1}"
 KEEP_STG_RELEASES="${KEEP_STG_RELEASES:-1}"
 KEEP_BACKUPS="${KEEP_BACKUPS:-2}"
-JOURNAL_VACUUM_TIME="${JOURNAL_VACUUM_TIME:-5d}"
+JOURNAL_VACUUM_TIME="${JOURNAL_VACUUM_TIME:-2d}"
 KEEP_LOG_DAYS="${KEEP_LOG_DAYS:-2}"
 TRUNCATE_LOGS_OVER_MB="${TRUNCATE_LOGS_OVER_MB:-5}"
 
@@ -28,7 +28,7 @@ RUN_APT_AUTOREMOVE="${RUN_APT_AUTOREMOVE:-0}"
 RUN_USER_LOG_CLEAN="${RUN_USER_LOG_CLEAN:-1}"
 
 # Extra projects living in same droplet that may accumulate logs/caches/backups.
-EXTRA_PROJECT_DIRS="${EXTRA_PROJECT_DIRS:-/var/www/PUI /var/www/maria_imlux /opt/richard}"
+EXTRA_PROJECT_DIRS="${EXTRA_PROJECT_DIRS:-/var/www/PUI /var/www/maria_imlux /opt/richard /home/devuser/richard /home/devuser/talia}"
 
 # User-level log locations.
 USER_HOME_DIRS="${USER_HOME_DIRS:-/home/jorge}"
