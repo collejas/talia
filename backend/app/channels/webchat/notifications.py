@@ -59,6 +59,33 @@ def _has_text(value: Any) -> bool:
     return bool(str(value or "").strip())
 
 
+def _contact_email_value(persona: Mapping[str, Any] | None) -> str | None:
+    if not persona:
+        return None
+    for key in ("correo_principal", "correo_secundario", "correo", "email"):
+        email = str(persona.get(key) or "").strip()
+        if email:
+            return email
+    return None
+
+
+def _contact_phone_value(persona: Mapping[str, Any] | None) -> str | None:
+    if not persona:
+        return None
+    for key in (
+        "telefono_principal_e164",
+        "telefono_movil_1_e164",
+        "telefono_e164",
+        "telefono",
+        "telefono_secundario_e164",
+        "telefono_movil_2_e164",
+    ):
+        phone = str(persona.get(key) or "").strip()
+        if phone:
+            return phone
+    return None
+
+
 def _is_answered_scoring_value(value: Any) -> bool:
     if value is None:
         return False
@@ -187,17 +214,13 @@ async def _load_required_case_a_questions(
 def _has_base_fields_for_case_a(persona: dict[str, Any] | None) -> bool:
     if not persona:
         return False
-    return _has_text(persona.get("correo")) or _has_text(
-        persona.get("telefono_e164") or persona.get("telefono")
-    )
+    return _has_text(_contact_email_value(persona)) or _has_text(_contact_phone_value(persona))
 
 
 def _has_base_fields_for_case_b(persona: dict[str, Any] | None) -> bool:
     if not persona:
         return False
-    return _has_text(persona.get("correo")) or _has_text(
-        persona.get("telefono_e164") or persona.get("telefono")
-    )
+    return _has_text(_contact_email_value(persona)) or _has_text(_contact_phone_value(persona))
 
 
 async def _has_minimum_profile_for_case_a(
@@ -264,13 +287,7 @@ def _get_primary_notification_by_channel(
 
 
 def _extract_persona_email(persona: dict[str, Any] | None) -> str | None:
-    if not persona:
-        return None
-    for key in ("correo", "email", "correo_principal"):
-        email = str(persona.get(key) or "").strip()
-        if email:
-            return email
-    return None
+    return _contact_email_value(persona)
 
 
 def _build_profile_summary_text(opportunity_metadata: Mapping[str, Any]) -> str | None:

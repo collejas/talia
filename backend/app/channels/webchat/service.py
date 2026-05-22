@@ -1073,7 +1073,7 @@ async def _send_booking_cancellation_email(
     persona = await _resolve_persona(persona_id)
     if not persona:
         return
-    email_value = str(persona.get("correo") or "").strip()
+    email_value = _extract_persona_email(persona)
     if not email_value:
         await _patch_booking_metadata(
             booking,
@@ -2242,7 +2242,7 @@ def _normalize_required_fields_for_context(
 def _extract_persona_email(persona: dict[str, Any] | None) -> str | None:
     if not persona:
         return None
-    for key in ("correo", "email", "correo_principal"):
+    for key in ("correo_principal", "correo_secundario", "correo", "email"):
         value = persona.get(key)
         if not isinstance(value, str):
             continue
@@ -4990,7 +4990,7 @@ async def _execute_function_call(
                 opportunity_id=None,
                 resumen="Cita cancelada",
                 notes=reason,
-                email=persona.get("correo") if persona else None,
+                email=_extract_persona_email(persona),
                 extra={
                     "booking_id": booking_payload["booking_id"],
                     "slot_start": booking_payload["start_at"],

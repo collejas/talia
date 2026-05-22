@@ -144,9 +144,42 @@ def _contact_has_minimum_info(contact: dict[str, Any]) -> bool:
     """Determina si el contacto ya tiene al menos teléfono o correo."""
     if not contact:
         return False
-    phone = str(contact.get("telefono_e164") or "").strip()
-    email = str(contact.get("correo") or "").strip()
+    phone = _contact_phone_value(contact)
+    email = _contact_email_value(contact)
     return bool(phone or email)
+
+
+def _contact_email_value(contact: dict[str, Any] | None) -> str | None:
+    if not contact:
+        return None
+    for key in ("correo_principal", "correo_secundario", "correo", "email"):
+        value = contact.get(key)
+        if not isinstance(value, str):
+            continue
+        trimmed = value.strip()
+        if trimmed:
+            return trimmed
+    return None
+
+
+def _contact_phone_value(contact: dict[str, Any] | None) -> str | None:
+    if not contact:
+        return None
+    for key in (
+        "telefono_principal_e164",
+        "telefono_movil_1_e164",
+        "telefono_e164",
+        "telefono",
+        "telefono_secundario_e164",
+        "telefono_movil_2_e164",
+    ):
+        value = contact.get(key)
+        if not isinstance(value, str):
+            continue
+        trimmed = value.strip()
+        if trimmed:
+            return trimmed
+    return None
 
 
 def _clean_text(value: Any) -> str:
@@ -2464,9 +2497,16 @@ async def update_persona(persona_id: str, patch: dict[str, Any]) -> dict[str, An
             patch["apellido_paterno"] = apellido_paterno
         if apellido_materno and not _clean_text(patch.get("apellido_materno")):
             patch["apellido_materno"] = apellido_materno
-    phone_value = patch.get("telefono_e164")
-    if phone_value is not None:
-        patch["telefono_e164"] = normalize_phone(phone_value)
+    for phone_key in (
+        "telefono_e164",
+        "telefono_principal_e164",
+        "telefono_movil_1_e164",
+        "telefono_movil_2_e164",
+        "telefono_secundario_e164",
+    ):
+        phone_value = patch.get(phone_key)
+        if phone_value is not None:
+            patch[phone_key] = normalize_phone(phone_value)
     repo = CRMRepository()
     try:
         row = await repo.update_persona_by_id(persona_id=persona_id, patch=patch)
@@ -3937,8 +3977,8 @@ async def capture_opportunity_if_ready(
         )
         return False, None
 
-    correo = str(contact.get("correo") or "").strip()
-    telefono = str(contact.get("telefono_e164") or "").strip()
+    correo = _contact_email_value(contact)
+    telefono = _contact_phone_value(contact)
     if not correo and not telefono:
         log_event(logger, "capture_opportunity.skipped_no_contact_data", **log_context)
         return False, None

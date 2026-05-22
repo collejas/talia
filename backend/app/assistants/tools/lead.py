@@ -99,6 +99,37 @@ def _is_webchat_context(context: ToolRuntimeContext) -> bool:
     return not channel or channel == "webchat"
 
 
+def _contact_email_value(persona: dict[str, Any] | None) -> str | None:
+    if not persona:
+        return None
+    for key in ("correo_principal", "correo_secundario", "correo", "email"):
+        value = persona.get(key)
+        if isinstance(value, str):
+            trimmed = value.strip()
+            if trimmed:
+                return trimmed
+    return None
+
+
+def _contact_phone_value(persona: dict[str, Any] | None) -> str | None:
+    if not persona:
+        return None
+    for key in (
+        "telefono_principal_e164",
+        "telefono_movil_1_e164",
+        "telefono_e164",
+        "telefono",
+        "telefono_secundario_e164",
+        "telefono_movil_2_e164",
+    ):
+        value = persona.get(key)
+        if isinstance(value, str):
+            trimmed = value.strip()
+            if trimmed:
+                return trimmed
+    return None
+
+
 def _persona_followup_state(persona: dict[str, Any] | None) -> dict[str, Any]:
     if not isinstance(persona, dict):
         return {}
@@ -127,8 +158,8 @@ def _has_required_close_lead_fields(persona: dict[str, Any] | None) -> bool:
     if not isinstance(persona, dict):
         return False
     name = str(persona.get("nombre_completo") or "").strip()
-    email = str(persona.get("correo") or persona.get("correo_principal") or "").strip()
-    phone = str(persona.get("telefono_e164") or persona.get("telefono") or "").strip()
+    email = _contact_email_value(persona) or ""
+    phone = _contact_phone_value(persona) or ""
     company = str(persona.get("company_name") or "").strip()
     return bool(name and email and phone and company)
 
@@ -773,7 +804,12 @@ async def try_execute_lead_tool(
 
     if tool_name == "set_email":
         email = _require_argument(arguments, "email").lower()
-        await storage.update_persona(context.persona_id, {"correo": email})
+        email_patch = (
+            {"correo_principal": email}
+            if _is_webchat_context(context)
+            else {"correo": email}
+        )
+        await storage.update_persona(context.persona_id, email_patch)
         await storage.capture_persona_lead_if_ready(
             conversation_id=context.conversation_id,
             persona_id=context.persona_id,
@@ -785,7 +821,12 @@ async def try_execute_lead_tool(
 
     if tool_name == "set_phone_number":
         phone_number = _require_argument(arguments, "phone_number")
-        await storage.update_persona(context.persona_id, {"telefono_e164": phone_number})
+        phone_patch = (
+            {"telefono_principal_e164": phone_number}
+            if _is_webchat_context(context)
+            else {"telefono_e164": phone_number}
+        )
+        await storage.update_persona(context.persona_id, phone_patch)
         await storage.capture_persona_lead_if_ready(
             conversation_id=context.conversation_id,
             persona_id=context.persona_id,
@@ -1055,9 +1096,7 @@ async def _handle_information_email(
     if persona:
         contact_name = str(persona.get("nombre_completo") or "").strip() or None
         contact_company = str(persona.get("company_name") or "").strip() or None
-        contact_email = (
-            str(persona.get("correo") or persona.get("correo_principal") or "").strip() or None
-        )
+        contact_email = _contact_email_value(persona)
         persona_notes = str(persona.get("notes") or "").strip() or None
         persona_need = str(persona.get("necesidad_proposito") or "").strip() or None
         if not full_name:
@@ -1070,8 +1109,13 @@ async def _handle_information_email(
             email_value = contact_email
         if contact_email and email_value and contact_email.lower() != email_value.lower():
             try:
+                email_patch = (
+                    {"correo_principal": email_value.lower()}
+                    if _is_webchat_context(context)
+                    else {"correo": email_value.lower()}
+                )
                 await storage.update_persona(
-                    persona.get("id") or context.persona_id, {"correo": email_value.lower()}
+                    persona.get("id") or context.persona_id, email_patch
                 )
             except StorageError as exc:
                 logger.warning(
@@ -1488,9 +1532,7 @@ async def _send_whatsapp_information_documents(
 
     persona_phone = None
     if persona:
-        persona_phone = (
-            str(persona.get("telefono_e164") or persona.get("telefono") or "").strip() or None
-        )
+        persona_phone = _contact_phone_value(persona)
     if not persona_phone:
         raise ValueError("No pude resolver el teléfono del contacto para enviar WhatsApp.")
 

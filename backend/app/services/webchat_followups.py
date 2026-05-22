@@ -53,6 +53,37 @@ def _has_value(value: Any) -> bool:
     return bool(_strip_text(value))
 
 
+def _contact_email_value(contact: dict[str, Any] | None) -> str | None:
+    if not contact:
+        return None
+    for key in ("correo_principal", "correo_secundario", "correo", "email"):
+        value = contact.get(key)
+        if isinstance(value, str):
+            trimmed = value.strip()
+            if trimmed:
+                return trimmed
+    return None
+
+
+def _contact_phone_value(contact: dict[str, Any] | None) -> str | None:
+    if not contact:
+        return None
+    for key in (
+        "telefono_principal_e164",
+        "telefono_movil_1_e164",
+        "telefono_e164",
+        "telefono",
+        "telefono_secundario_e164",
+        "telefono_movil_2_e164",
+    ):
+        value = contact.get(key)
+        if isinstance(value, str):
+            trimmed = value.strip()
+            if trimmed:
+                return trimmed
+    return None
+
+
 def _load_persona_data(persona: dict[str, Any]) -> dict[str, Any]:
     raw = persona.get("persona_datos") or persona.get("contacto_datos") or persona.get("metadata")
     if isinstance(raw, dict):
@@ -115,8 +146,8 @@ async def refresh_persona_followup_state(
     original_fields = state.get("fields")
     fields = dict(original_fields) if isinstance(original_fields, dict) else {}
 
-    has_email = _has_value(persona_row.get("correo"))
-    has_phone = _has_value(persona_row.get("telefono_e164"))
+    has_email = _has_value(_contact_email_value(persona_row))
+    has_phone = _has_value(_contact_phone_value(persona_row))
     has_company = _has_value(persona_row.get("company_name"))
     has_need = _has_value(persona_row.get("necesidad_proposito"))
 
@@ -168,8 +199,8 @@ async def ensure_persona_ready_for_assignment(
 ) -> bool:
     """Verifica y marca que el contacto tiene al menos teléfono o correo."""
     persona_row = persona or await storage.fetch_persona(persona_id)
-    has_phone = _has_value(persona_row.get("telefono_e164"))
-    has_email = _has_value(persona_row.get("correo"))
+    has_phone = _has_value(_contact_phone_value(persona_row))
+    has_email = _has_value(_contact_email_value(persona_row))
     if not (has_phone or has_email):
         return False
     await refresh_persona_followup_state(
@@ -256,9 +287,9 @@ async def mark_information_delivered(
 
 def _missing_required_fields(contact: dict[str, Any]) -> list[str]:
     missing: list[str] = []
-    if not _has_value(contact.get("telefono_e164")):
+    if not _has_value(_contact_phone_value(contact)):
         missing.append("phone")
-    if not _has_value(contact.get("correo")):
+    if not _has_value(_contact_email_value(contact)):
         missing.append("email")
     if not _has_value(contact.get("company_name")):
         missing.append("company")
@@ -501,7 +532,7 @@ async def _escalate_due_to_attempt_limit(
     )
     resumen = str(contact.get("necesidad_proposito") or contact.get("notes") or "").strip() or None
     notes = str(contact.get("notes") or "").strip() or None
-    email = str(contact.get("correo") or "").strip() or None
+    email = _contact_email_value(contact)
 
     try:
         await whatsapp_tools._notify_sales_rep(
@@ -871,8 +902,8 @@ async def notify_session_closed_lead(
         )
         return False
 
-    has_base_contact = _has_value(contact.get("correo")) or _has_value(
-        contact.get("telefono_e164") or contact.get("telefono")
+    has_base_contact = _has_value(_contact_email_value(contact)) or _has_value(
+        _contact_phone_value(contact)
     )
     if not has_base_contact:
         return False
@@ -913,7 +944,7 @@ async def notify_session_closed_lead(
     )
     resumen = str(contact.get("necesidad_proposito") or "").strip() or None
     notes = str(contact.get("notes") or "").strip() or None
-    email = str(contact.get("correo") or "").strip() or None
+    email = _contact_email_value(contact)
     opportunity_id = str(opportunity.get("id") or "").strip() or None
     if not opportunity_id:
         return False
