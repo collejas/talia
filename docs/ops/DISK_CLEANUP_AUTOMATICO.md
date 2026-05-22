@@ -23,10 +23,13 @@ Variables principales:
 - `KEEP_BACKUPS`
 - `JOURNAL_VACUUM_TIME`
 - `KEEP_LOG_DAYS`
+- `RUN_LOGS_PURGE`
+- `KEEP_CURRENT_LOGS`
 - `DRY_RUN`
 
 Notas:
 - `scripts/cleanup_disk.sh` limpia `logs/` y también logs sueltos de nivel raíz dentro de cada proyecto, por ejemplo `denue_merge.log` o `frontend/panel/build.log`.
+- Con `RUN_LOGS_PURGE=1` borra rotados (`.log.*`, `.out`, `.err`) aunque todavía no hayan vencido; con `KEEP_CURRENT_LOGS=1` conserva los `.log` activos.
 
 ## Verificacion
 ```bash

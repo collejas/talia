@@ -11,6 +11,8 @@ KEEP_LOG_DAYS="${KEEP_LOG_DAYS:-2}"
 TRUNCATE_LOGS_OVER_MB="${TRUNCATE_LOGS_OVER_MB:-5}"
 
 DRY_RUN="${DRY_RUN:-0}"
+RUN_LOGS_PURGE="${RUN_LOGS_PURGE:-0}"
+KEEP_CURRENT_LOGS="${KEEP_CURRENT_LOGS:-1}"
 
 RUN_NPM_CACHE_CLEAN="${RUN_NPM_CACHE_CLEAN:-1}"
 RUN_GIT_GC="${RUN_GIT_GC:-1}"
@@ -152,9 +154,27 @@ cleanup_backups() {
   done
 }
 
-cleanup_old_logs_in_dir() {
+cleanup_logs_in_dir() {
   local logs_dir="$1"
   [[ -d "${logs_dir}" ]] || return 0
+
+  if [[ "${RUN_LOGS_PURGE}" == "1" ]]; then
+    if [[ "${DRY_RUN}" == "1" ]]; then
+      log "DRY_RUN purge logs in ${logs_dir} keep_current=${KEEP_CURRENT_LOGS}"
+      return 0
+    fi
+
+    find "${logs_dir}" -type f -name "*.log.*" -delete 2>/dev/null || true
+    find "${logs_dir}" -type f -name "*.out" -delete 2>/dev/null || true
+    find "${logs_dir}" -type f -name "*.err" -delete 2>/dev/null || true
+    if [[ "${KEEP_CURRENT_LOGS}" != "1" ]]; then
+      find "${logs_dir}" -type f -name "*.log" -delete 2>/dev/null || true
+      log "logs purged in ${logs_dir} keep_current=0"
+    else
+      log "rotated logs purged in ${logs_dir} keep_current=1"
+    fi
+    return 0
+  fi
 
   if [[ "${DRY_RUN}" == "1" ]]; then
     log "DRY_RUN prune old logs in ${logs_dir} keep_days=${KEEP_LOG_DAYS}"
@@ -171,6 +191,24 @@ cleanup_old_logs_in_dir() {
 cleanup_top_level_logs_in_dir() {
   local base_dir="$1"
   [[ -d "${base_dir}" ]] || return 0
+
+  if [[ "${RUN_LOGS_PURGE}" == "1" ]]; then
+    if [[ "${DRY_RUN}" == "1" ]]; then
+      log "DRY_RUN purge top-level logs in ${base_dir} keep_current=${KEEP_CURRENT_LOGS}"
+      return 0
+    fi
+
+    find "${base_dir}" -maxdepth 1 -type f -name "*.log.*" -delete 2>/dev/null || true
+    find "${base_dir}" -maxdepth 1 -type f -name "*.out" -delete 2>/dev/null || true
+    find "${base_dir}" -maxdepth 1 -type f -name "*.err" -delete 2>/dev/null || true
+    if [[ "${KEEP_CURRENT_LOGS}" != "1" ]]; then
+      find "${base_dir}" -maxdepth 1 -type f -name "*.log" -delete 2>/dev/null || true
+      log "top-level logs purged in ${base_dir} keep_current=0"
+    else
+      log "top-level rotated logs purged in ${base_dir} keep_current=1"
+    fi
+    return 0
+  fi
 
   if [[ "${DRY_RUN}" == "1" ]]; then
     log "DRY_RUN prune top-level logs in ${base_dir} keep_days=${KEEP_LOG_DAYS}"
@@ -200,7 +238,7 @@ truncate_large_logs_in_dir() {
 }
 
 cleanup_old_logs() {
-  cleanup_old_logs_in_dir "${ROOT_DIR}/logs"
+  cleanup_logs_in_dir "${ROOT_DIR}/logs"
   cleanup_top_level_logs_in_dir "${ROOT_DIR}"
   cleanup_top_level_logs_in_dir "${ROOT_DIR}/frontend/panel"
   truncate_large_logs_in_dir "${ROOT_DIR}/logs"
@@ -391,7 +429,7 @@ cleanup_extra_project_dir() {
 
   log "extra project cleanup start dir=${project_dir}"
 
-  cleanup_old_logs_in_dir "${project_dir}/logs"
+  cleanup_logs_in_dir "${project_dir}/logs"
   cleanup_top_level_logs_in_dir "${project_dir}"
   truncate_large_logs_in_dir "${project_dir}/logs"
   truncate_large_logs_in_dir "${project_dir}"
@@ -454,7 +492,7 @@ log_disk_state() {
 }
 
 main() {
-  log "start cleanup root=${ROOT_DIR} keep_prod=${KEEP_PROD_RELEASES} keep_stg=${KEEP_STG_RELEASES} keep_backups=${KEEP_BACKUPS} keep_log_days=${KEEP_LOG_DAYS} truncate_over_mb=${TRUNCATE_LOGS_OVER_MB} dry_run=${DRY_RUN}"
+  log "start cleanup root=${ROOT_DIR} keep_prod=${KEEP_PROD_RELEASES} keep_stg=${KEEP_STG_RELEASES} keep_backups=${KEEP_BACKUPS} keep_log_days=${KEEP_LOG_DAYS} logs_purge=${RUN_LOGS_PURGE} keep_current_logs=${KEEP_CURRENT_LOGS} truncate_over_mb=${TRUNCATE_LOGS_OVER_MB} dry_run=${DRY_RUN}"
 
   log_disk_state
 
