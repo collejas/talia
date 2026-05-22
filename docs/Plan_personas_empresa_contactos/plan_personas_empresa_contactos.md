@@ -75,7 +75,7 @@ Campos sugeridos:
 - `estado`
 - `origen`
 - `notas`
-- `metadata`
+- campos de compatibilidad interna
 - `propietario_usuario_id`
 - `creado_en`
 - `actualizado_en`
@@ -121,7 +121,7 @@ Campos sugeridos:
 - `propietario_usuario_id`
 - `estado`
 - `notas`
-- `metadata`
+- campos de compatibilidad interna
 - `creado_en`
 - `actualizado_en`
 
@@ -189,7 +189,7 @@ Campos sugeridos:
 - `tipo_establecimiento`
 - `latitud`
 - `longitud`
-- `metadata`
+- campos de compatibilidad interna
 - `creado_en`
 
 Esta tabla es la base reusable. Se conecta con cuentas a través de `cuenta_direcciones`.
@@ -208,7 +208,7 @@ Campos sugeridos:
 - `es_principal`
 - `activo`
 - `notas`
-- `metadata`
+- campos de compatibilidad interna
 - `creado_en`
 - `actualizado_en`
 
@@ -351,7 +351,7 @@ Backfill de registros existentes:
 Primera pasada recomendada:
 
 - conservar una fila por contacto legacy
-- guardar la trazabilidad completa en `metadata`
+- guardar la trazabilidad tecnica en campos de compatibilidad
 - no fusionar duplicados todavía
 - dejar la deduplicación para la fase de limpieza controlada
 
@@ -359,7 +359,7 @@ Segunda pasada recomendada:
 
 - crear cuentas desde las personas legacy marcadas como empresa
 - vincular cada cuenta creada con su persona legacy en `cuenta_personas`
-- usar `metadata` para conservar el origen completo
+- usar campos de compatibilidad para conservar el origen completo
 - dejar `cuenta_direcciones` vacía hasta que existan domicilios reales que mapear
 
 Objetivo:

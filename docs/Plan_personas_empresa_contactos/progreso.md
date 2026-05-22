@@ -125,7 +125,7 @@ Archivos principales del avance:
 Notas:
 - `propietario_usuario_id` en tablas nuevas respeta integridad por organización (FK compuesta).
 - `rol_en_cuenta` se mantiene flexible (texto), evitando `CHECK` rígido.
-- Se dejó trazabilidad a legacy en `metadata` para backfill y auditoría.
+- Se dejó trazabilidad técnica para backfill y auditoría en campos de compatibilidad.
 
 ### 2) Backend (API y repositorio)
 
@@ -224,7 +224,7 @@ Notas:
 - Ya existe un merge formal de personas en `POST /crm/personas/{contacto_id}/merge`:
   - mueve oportunidades al registro destino,
   - reasigna relaciones de empresa,
-  - conserva el origen como archivado con metadata de merge.
+  - conserva el origen como archivado con trazabilidad de merge.
 - La base de datos ya tiene soporte nativo para este cierre:
   - `personas.archived_at`
   - `personas.merged_into_persona_id`
@@ -238,7 +238,7 @@ Notas:
   - mueve oportunidades al registro destino,
   - reasigna relaciones `cuenta_personas`,
   - reasigna relaciones `cuenta_direcciones`,
-  - conserva la cuenta origen como archivada con metadata de merge.
+  - conserva la cuenta origen como archivada con trazabilidad de merge.
 - El panel ya expone el proxy de merge para cuentas en `frontend/panel/src/app/api/cuentas/[cuentaId]/merge/route.ts`.
 - La UI de cuentas ya tiene ficha dedicada en `frontend/panel/src/app/cuentas/[cuentaId]/page.tsx` y un drawer del listado que enlaza a esa ficha.
 - La ficha dedicada ya lista relaciones de `cuenta_personas` y permite vincular/quitar personas sin pasar por `contacto_id`.

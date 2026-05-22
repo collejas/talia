@@ -8,7 +8,7 @@ Este documento resume todo lo que se fue cerrando dentro del plan `personas, cue
 
 ### 1.1 Vista de contactos
 
-- La grafica de `contactos` ya no queda alta de mas.
+- La vista de `contactos` ya no queda alta de mas.
 - Se agrego buscador de contactos en el toolbar superior.
 - El buscador se alineo con el resto de acciones de la barra superior.
 - Se movio el contador y el buscador al lado izquierdo.
@@ -112,7 +112,7 @@ compatibilidad hasta retirar esas FKs.
 - Se agrego `POST /crm/personas/{contacto_id}/merge` para fusionar duplicados de persona
   de forma controlada.
 - La fusion mueve oportunidades a la persona destino, reubica relaciones de empresa y
-  archiva el origen con metadata de merge.
+  archiva el origen con trazabilidad de merge.
 - La pantalla dedicada de detalle en el panel expone esta accion desde la ficha rica.
 
 ### 2.6 Contrato publico del panel
@@ -149,7 +149,7 @@ Regla practica:
 
 - codigo nuevo: `persona_id`
 - compatibilidad temporal: `contacto_id`
-- metadatos e ისტორico: se queda hasta migracion final
+- trazabilidad tecnica e historico: se queda hasta migracion final
 
 ## 3. Limpieza semantica que se hizo
 
