@@ -24,7 +24,9 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { GeoLocationSelects } from "@/components/contactos/geo-location-selects";
+import { ContactCatalogSelect, mergeCatalogOptions } from "@/components/contactos/contact-catalog-select";
 import { RELATION_ROLE_OPTIONS } from "@/components/contactos/relation-role-options";
+import { useTenantContactCatalogs } from "@/components/contactos/use-contact-catalogs";
 
 type CreateMode =
   | "solo_persona"
@@ -835,6 +837,7 @@ export function ContactEditFlow({ open, onOpenChange, personaId, onSaved }: Cont
   const resolvedPersonaId = personaId;
   const [state, dispatch] = React.useReducer(reducer, INITIAL_STATE);
   const deferredAccountQuery = React.useDeferredValue(state.accountQuery);
+  const tenantCatalogs = useTenantContactCatalogs();
   const [pendingDedupe, setPendingDedupe] = React.useState<PersonaValidationResponse | null>(null);
   const [selectedPersonaReuseId, setSelectedPersonaReuseId] = React.useState("");
   const [selectedCuentaReuseId, setSelectedCuentaReuseId] = React.useState("");
@@ -969,6 +972,15 @@ export function ContactEditFlow({ open, onOpenChange, personaId, onSaved }: Cont
     run();
     return () => controller.abort();
   }, [deferredRelationAccountQuery]);
+
+  const puestoOptions = React.useMemo(
+    () => mergeCatalogOptions(tenantCatalogs.puestoOptions, state.persona.puesto),
+    [state.persona.puesto, tenantCatalogs.puestoOptions],
+  );
+  const rolDecisionOptions = React.useMemo(
+    () => mergeCatalogOptions(tenantCatalogs.rolDecisionOptions, state.persona.rol_decision),
+    [state.persona.rol_decision, tenantCatalogs.rolDecisionOptions],
+  );
 
   const loadRelations = React.useCallback(async () => {
     if (!resolvedPersonaId) return;
@@ -1462,13 +1474,37 @@ export function ContactEditFlow({ open, onOpenChange, personaId, onSaved }: Cont
                 </Select>
               </Field>
               <Field label="Puesto">
-                <Input value={state.persona.puesto} onChange={(e) => dispatch({ type: "persona/set", field: "puesto", value: e.target.value })} />
+                <div className="space-y-2">
+                  <ContactCatalogSelect
+                    value={state.persona.puesto}
+                    onValueChange={(value) => dispatch({ type: "persona/set", field: "puesto", value })}
+                    options={puestoOptions}
+                    placeholder={tenantCatalogs.loading ? "Cargando catálogo..." : "Selecciona un puesto"}
+                    disabled={puestoOptions.length === 0}
+                    emptyLabel="Configura opciones en Variables"
+                  />
+                  {!tenantCatalogs.loading && puestoOptions.length === 0 ? (
+                    <p className="text-xs text-muted-foreground">Configura los puestos en Variables · Contactos para usar este campo como select.</p>
+                  ) : null}
+                </div>
               </Field>
               <Field label="Área">
                 <Input value={state.persona.area} onChange={(e) => dispatch({ type: "persona/set", field: "area", value: e.target.value })} />
               </Field>
               <Field label="Rol de decisión">
-                <Input value={state.persona.rol_decision} onChange={(e) => dispatch({ type: "persona/set", field: "rol_decision", value: e.target.value })} />
+                <div className="space-y-2">
+                  <ContactCatalogSelect
+                    value={state.persona.rol_decision}
+                    onValueChange={(value) => dispatch({ type: "persona/set", field: "rol_decision", value })}
+                    options={rolDecisionOptions}
+                    placeholder={tenantCatalogs.loading ? "Cargando catálogo..." : "Selecciona un rol"}
+                    disabled={rolDecisionOptions.length === 0}
+                    emptyLabel="Configura opciones en Variables"
+                  />
+                  {!tenantCatalogs.loading && rolDecisionOptions.length === 0 ? (
+                    <p className="text-xs text-muted-foreground">Configura los roles de decisión en Variables · Contactos para usar este campo como select.</p>
+                  ) : null}
+                </div>
               </Field>
               <Field label="Estado">
                 <Select

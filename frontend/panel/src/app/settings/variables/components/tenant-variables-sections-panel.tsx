@@ -10,7 +10,7 @@ type SectionConfig = {
   fields: Array<{
     label: string
     path: string
-    type?: "text" | "number"
+    type?: "text" | "number" | "list"
     placeholder?: string
     multiline?: boolean
     control?: "checkbox"

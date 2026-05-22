@@ -291,6 +291,7 @@ export default async function TenantDetailSettingsPage({ params }: { params: Pro
           </Card>
         ) : null}
 
+
         <Card>
           <CardHeader className="space-y-1">
             <CardTitle>Calificación IA</CardTitle>

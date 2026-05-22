@@ -81,6 +81,7 @@ async function refreshSupabaseTokens(
 
 type TenantContextData = {
   tenant: TenantInfo | null
+  tenantConfig: Record<string, unknown> | null
   featureFlags: FeatureFlags
 }
 
@@ -92,6 +93,7 @@ async function fetchTenantContextData(): Promise<TenantContextData> {
   if (!response.ok || !response.data) {
     return {
       tenant: null,
+      tenantConfig: null,
       featureFlags: {},
     }
   }
@@ -123,6 +125,7 @@ async function fetchTenantContextData(): Promise<TenantContextData> {
             razon_social: razon_social ?? null,
           }
         : null,
+    tenantConfig: config && typeof config === "object" && !Array.isArray(config) ? config : null,
     featureFlags: {
       webchatEnabled: readFlag("webchat"),
       whatsappEnabled: readFlag("whatsapp"),
@@ -166,6 +169,7 @@ async function buildSessionPayload(user: SupabaseUser): Promise<SessionPayload> 
   return {
     user,
     tenant: tenantContext.tenant,
+    tenantConfig: tenantContext.tenantConfig,
     organizacion_id: organizacionId,
     employeePosition,
     isPlatformAdmin,

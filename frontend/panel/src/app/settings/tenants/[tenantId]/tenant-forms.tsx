@@ -317,7 +317,101 @@ export function TenantProfilingToggleForm({
   )
 }
 
+function parseListLines(value: string): string[] {
+  return value
+    .split(/\r?\n/)
+    .map((item) => item.trim())
+    .filter(Boolean)
+}
+
+function buildContactosCatalogsJson(
+  config: Record<string, unknown> | null | undefined,
+  puestos: string[],
+  rolesDecision: string[],
+): string {
+  const nextConfig: Record<string, unknown> = isRecord(config) ? { ...config } : {}
+  const contactos = isRecord(nextConfig.contactos) ? { ...nextConfig.contactos } : {}
+  const catalogos = isRecord(contactos.catalogos) ? { ...contactos.catalogos } : {}
+  catalogos.puesto = puestos
+  catalogos.rol_decision = rolesDecision
+  contactos.catalogos = catalogos
+  nextConfig.contactos = contactos
+  return JSON.stringify(nextConfig, null, 2)
+}
+
+export function TenantContactCatalogsForm({
+  tenantId,
+  config,
+}: {
+  tenantId: string
+  config: Record<string, unknown> | null
+}) {
+  const actions = useTenantSettingsActions()
+  const [state, formAction] = useActionState(actions.updateTenantConfigAction, INITIAL_CRUD_STATE)
+  const contactosConfig = isRecord(config?.contactos) ? (config?.contactos as Record<string, unknown>) : null
+  const catalogosConfig = isRecord(contactosConfig?.catalogos)
+    ? (contactosConfig?.catalogos as Record<string, unknown>)
+    : null
+  const [puestos, setPuestos] = useState(() =>
+    (Array.isArray(catalogosConfig?.puesto) ? catalogosConfig?.puesto : [])
+      .map((item) => (typeof item === "string" ? item : ""))
+      .filter(Boolean)
+      .join("\n"),
+  )
+  const [rolesDecision, setRolesDecision] = useState(() =>
+    (Array.isArray(catalogosConfig?.rol_decision) ? catalogosConfig?.rol_decision : [])
+      .map((item) => (typeof item === "string" ? item : ""))
+      .filter(Boolean)
+      .join("\n"),
+  )
+  const configJson = useMemo(
+    () => buildContactosCatalogsJson(config, parseListLines(puestos), parseListLines(rolesDecision)),
+    [config, puestos, rolesDecision],
+  )
+
+  return (
+    <form action={formAction} className="space-y-4">
+      <input type="hidden" name="tenant_id" value={tenantId} />
+      <input type="hidden" name="config_json" value={configJson} />
+      <div className="grid gap-4 md:grid-cols-2">
+        <div className="space-y-2">
+          <Label htmlFor="contactos_puestos">Puestos</Label>
+          <Textarea
+            id="contactos_puestos"
+            value={puestos}
+            onChange={(event) => setPuestos(event.target.value)}
+            placeholder={"Gerente\nDirector\nCoordinador"}
+            className="min-h-[180px]"
+          />
+          <p className="text-xs text-muted-foreground">
+            Un valor por línea. Se mostrará como select al capturar un contacto.
+          </p>
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="contactos_roles_decision">Roles de decisión</Label>
+          <Textarea
+            id="contactos_roles_decision"
+            value={rolesDecision}
+            onChange={(event) => setRolesDecision(event.target.value)}
+            placeholder={"Dueño\nInfluenciador\nUsuario final"}
+            className="min-h-[180px]"
+          />
+          <p className="text-xs text-muted-foreground">
+            Un valor por línea. Los valores antiguos se conservan en el modal de edición para no romper contactos
+            existentes.
+          </p>
+        </div>
+      </div>
+      <div className="flex items-center justify-between gap-3">
+        <FormStatusMessage state={state} />
+        <SubmitButton label="Guardar catálogos" pendingLabel="Guardando..." />
+      </div>
+    </form>
+  )
+}
+
 export type SecretItem = {
+
   clave: string
   etiqueta?: string | null
   version: number

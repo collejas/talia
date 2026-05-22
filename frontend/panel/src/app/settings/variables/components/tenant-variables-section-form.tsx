@@ -13,7 +13,7 @@ import { formatApiError } from "@/app/settings/variables/utils/format-error"
 type FieldSpec = {
   label: string
   path: string
-  type?: "text" | "number"
+  type?: "text" | "number" | "list"
   placeholder?: string
   multiline?: boolean
   control?: "checkbox"
@@ -76,6 +76,12 @@ export function TenantSectionForm({ section, config }: SectionFormProps) {
       const raw = getNestedValue(config, field.path)
       if (field.control === "checkbox") {
         values[field.path] = Boolean(raw)
+      } else if (field.type === "list") {
+        values[field.path] = Array.isArray(raw)
+          ? raw.map((item) => (typeof item === "string" ? item.trim() : "")).filter(Boolean).join("\n")
+          : typeof raw === "string"
+            ? raw
+            : ""
       } else {
         values[field.path] = raw !== undefined && raw !== null ? String(raw) : ""
       }
@@ -128,9 +134,16 @@ export function TenantSectionForm({ section, config }: SectionFormProps) {
         const rawValue = values[field.path]
         if (typeof rawValue !== "string") return
         const raw = rawValue.trim()
-        if (!raw) return
+        if (!raw && field.type !== "list") return
         const parsed =
-          field.type === "number" ? (isNaN(Number(raw)) ? undefined : Number(raw)) : raw
+          field.type === "number"
+            ? (isNaN(Number(raw)) ? undefined : Number(raw))
+            : field.type === "list"
+              ? raw
+                  .split(/\r?\n/)
+                  .map((item) => item.trim())
+                  .filter(Boolean)
+              : raw
         if (parsed === undefined) return
         setNestedValue(patch, field.path.split("."), parsed)
       })
@@ -234,7 +247,7 @@ export function TenantSectionForm({ section, config }: SectionFormProps) {
               const fieldValue: string =
                 typeof values[field.path] === "string" ? (values[field.path] as string) : ""
 
-              if (field.multiline) {
+              if (field.multiline || field.type === "list") {
                 return (
                   <div key={field.path} className="space-y-1 md:col-span-2">
                     <Label htmlFor={field.path}>{field.label}</Label>
@@ -243,8 +256,11 @@ export function TenantSectionForm({ section, config }: SectionFormProps) {
                       value={fieldValue}
                       onChange={(event) => handleChange(field.path, event.target.value)}
                       placeholder={field.placeholder}
-                      rows={4}
+                      rows={field.type === "list" ? 5 : 4}
                     />
+                    {field.type === "list" ? (
+                      <p className="text-xs text-muted-foreground">Un valor por línea. El catálogo se mostrará como select en contactos.</p>
+                    ) : null}
                   </div>
                 )
               }

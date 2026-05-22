@@ -23,6 +23,7 @@ export type FeatureFlags = {
 export type SessionPayload = {
   user: SupabaseUser
   tenant?: TenantInfo | null
+  tenantConfig?: Record<string, unknown> | null
   organizacion_id?: string | null
   employeePosition?: string | null
   isPlatformAdmin?: boolean

@@ -1,8 +1,9 @@
 import type { Metadata } from "next"
 
 import { AppViewLayout } from "@/components/layouts/app-view-layout"
-import { TenantVariablesPanel, type TenantScopedSettings } from "@/app/settings/variables/components/tenant-variables-panel"
+import { type TenantScopedSettings } from "@/app/settings/variables/components/tenant-variables-panel"
 import { callCrmApi } from "@/lib/api/crm"
+import { TenantContactCatalogsForm } from "../tenants/[tenantId]/tenant-forms"
 
 export const metadata: Metadata = {
   title: "Account · Settings",
@@ -18,18 +19,20 @@ export default async function SettingsAccountPage() {
   })
 
   const data = response.ok ? response.data : null
-  const error = response.ok ? null : response.error
-
   return (
     <AppViewLayout title="Account" withThemeToggle={false} contentClassName="px-0">
       <div className="flex flex-col gap-6 px-4 py-6 lg:px-6">
-        <TenantVariablesPanel
-          data={data}
-          error={error}
-          title="Cuenta y organización"
-          description="Actualiza sólo los datos públicos de tu organización."
-          showRoutes={false}
-        />
+        {data ? (
+          <div className="rounded-lg border border-border bg-card p-6">
+            <div className="mb-4 space-y-1">
+              <h2 className="text-lg font-semibold">Contactos</h2>
+              <p className="text-sm text-muted-foreground">
+                Cada tenant puede definir sus propios catálogos de puesto y rol de decisión.
+              </p>
+            </div>
+            <TenantContactCatalogsForm tenantId={data.organizacion_id} config={data.config ?? null} />
+          </div>
+        ) : null}
       </div>
     </AppViewLayout>
   )
