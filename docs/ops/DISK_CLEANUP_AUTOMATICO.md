@@ -25,12 +25,15 @@ Variables principales:
 - `KEEP_LOG_DAYS`
 - `RUN_LOGS_PURGE`
 - `KEEP_CURRENT_LOGS`
+- `RUN_USER_LOG_CLEAN`
+- `USER_HOME_DIRS`
 - `DRY_RUN`
 
 Notas:
 - `scripts/cleanup_disk.sh` limpia `logs/` y también logs sueltos de nivel raíz dentro de cada proyecto, por ejemplo `denue_merge.log` o `frontend/panel/build.log`.
 - Por defecto también procesa `/var/www/PUI` y `/var/www/maria_imlux`.
 - Si existen, limpia sus logs de `frontend/.next/dev/logs` y corre `git gc` sobre esos repos para reducir reflogs y objetos sueltos.
+- También limpia logs de usuario en `/home/jorge`, incluyendo `.npm/_logs`, `.vscode-server`, `.codex/log` y `.twilio-cli`.
 - Con `RUN_LOGS_PURGE=1` borra rotados (`.log.*`, `.out`, `.err`) aunque todavía no hayan vencido; con `KEEP_CURRENT_LOGS=1` conserva los `.log` activos.
 
 ## Verificacion

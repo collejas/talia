@@ -25,9 +25,13 @@ RUN_VSCODE_CACHE_CLEAN="${RUN_VSCODE_CACHE_CLEAN:-0}"
 RUN_SOURCE_BUILD_CACHE_CLEAN="${RUN_SOURCE_BUILD_CACHE_CLEAN:-0}"
 RUN_EXTRA_PROJECTS_CLEAN="${RUN_EXTRA_PROJECTS_CLEAN:-1}"
 RUN_APT_AUTOREMOVE="${RUN_APT_AUTOREMOVE:-0}"
+RUN_USER_LOG_CLEAN="${RUN_USER_LOG_CLEAN:-1}"
 
 # Extra projects living in same droplet that may accumulate logs/caches/backups.
 EXTRA_PROJECT_DIRS="${EXTRA_PROJECT_DIRS:-/var/www/PUI /var/www/maria_imlux /opt/richard}"
+
+# User-level log locations.
+USER_HOME_DIRS="${USER_HOME_DIRS:-/home/jorge}"
 
 # VS Code remote
 VSCODE_SERVER_DIR="${VSCODE_SERVER_DIR:-/home/jorge/.vscode-server}"
@@ -432,6 +436,36 @@ cleanup_system_logs() {
   fi
 }
 
+cleanup_user_logs_in_dir() {
+  local home_dir="$1"
+  [[ -d "${home_dir}" ]] || return 0
+
+  log "user log cleanup start dir=${home_dir}"
+
+  cleanup_logs_in_dir "${home_dir}/.npm/_logs"
+  cleanup_top_level_logs_in_dir "${home_dir}/.vscode-server"
+  cleanup_logs_in_dir "${home_dir}/.codex/log"
+  cleanup_top_level_logs_in_dir "${home_dir}/.twilio-cli"
+
+  truncate_large_logs_in_dir "${home_dir}/.npm/_logs"
+  truncate_large_logs_in_dir "${home_dir}/.vscode-server"
+  truncate_large_logs_in_dir "${home_dir}/.codex/log"
+  truncate_large_logs_in_dir "${home_dir}/.twilio-cli"
+
+  log "user log cleanup done dir=${home_dir}"
+}
+
+cleanup_user_logs() {
+  if [[ "${RUN_USER_LOG_CLEAN}" != "1" ]]; then
+    return 0
+  fi
+
+  local home_dir=""
+  for home_dir in ${USER_HOME_DIRS}; do
+    cleanup_user_logs_in_dir "${home_dir}"
+  done
+}
+
 cleanup_extra_project_dir() {
   local project_dir="$1"
   [[ -d "${project_dir}" ]] || return 0
@@ -521,6 +555,7 @@ main() {
   cleanup_vscode_caches
   cleanup_source_build_caches
   cleanup_extra_projects
+  cleanup_user_logs
   cleanup_git_objects
   cleanup_system_logs
 
