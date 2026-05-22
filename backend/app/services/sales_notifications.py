@@ -26,9 +26,25 @@ def _contact_name(contact: Mapping[str, Any]) -> str:
 def _contact_email(contact: Mapping[str, Any], *, override: str | None = None) -> str:
     for candidate in (
         override,
+        contact.get("correo_principal"),
+        contact.get("correo_secundario"),
         contact.get("correo"),
         contact.get("email"),
-        contact.get("correo_principal"),
+    ):
+        value = str(candidate or "").strip()
+        if value:
+            return value
+    return ""
+
+
+def _contact_phone(contact: Mapping[str, Any]) -> str:
+    for candidate in (
+        contact.get("telefono_principal_e164"),
+        contact.get("telefono_movil_1_e164"),
+        contact.get("telefono_e164"),
+        contact.get("telefono"),
+        contact.get("telefono_secundario_e164"),
+        contact.get("telefono_movil_2_e164"),
     ):
         value = str(candidate or "").strip()
         if value:
@@ -110,7 +126,7 @@ def compose_sales_notification_message(
     extra: Mapping[str, Any] | None,
 ) -> str:
     company = str(contact.get("company_name") or "").strip()
-    phone = str(contact.get("telefono_e164") or contact.get("telefono") or "").strip()
+    phone = _contact_phone(contact)
     correo = _contact_email(contact, override=email)
 
     lines = [
@@ -169,7 +185,7 @@ def build_sales_template_variables(
 ) -> dict[str, str]:
     summary_text = resumen or notes or "Pendiente de detalle"
     next_action = str((extra or {}).get("siguiente_accion") or "").strip()
-    phone = str(contact.get("telefono_e164") or contact.get("telefono") or "").strip()
+    phone = _contact_phone(contact)
     company = str(contact.get("company_name") or "").strip()
     email_value = _contact_email(contact, override=email)
     return {
@@ -199,7 +215,7 @@ def build_booking_template_variables(
         if len(model) > 500:
             model = model[:499].rstrip() + "…"
     location = _extract_contact_location(contact)
-    phone = str(contact.get("telefono_e164") or contact.get("telefono") or "N/D").strip() or "N/D"
+    phone = _contact_phone(contact) or "N/D"
     variables = {
         "1": seller_name,
         "2": _contact_name(contact),

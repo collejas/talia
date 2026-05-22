@@ -63,8 +63,18 @@ def _build_contact_context_lines(contact: dict[str, Any] | None) -> list[str]:
     if contact_name and profile_name and contact_name.lower() == profile_name.lower():
         contact_name = ""
     lines.append(f"- Nombre: {_safe_text(contact_name)}")
-    lines.append(f"- Correo: {_safe_text(contact.get('correo'))}")
-    lines.append(f"- Teléfono: {_safe_text(contact.get('telefono_e164'))}")
+    correo = _safe_text(
+        contact.get("correo_principal")
+        or contact.get("correo_secundario")
+        or contact.get("correo")
+    )
+    telefono = _safe_text(
+        contact.get("telefono_principal_e164")
+        or contact.get("telefono_movil_1_e164")
+        or contact.get("telefono_e164")
+    )
+    lines.append(f"- Correo: {correo}")
+    lines.append(f"- Teléfono: {telefono}")
     lines.append(f"- Empresa: {_safe_text(contact.get('company_name'))}")
     necesidad = contact.get("necesidad_proposito")
     if necesidad:

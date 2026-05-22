@@ -66,6 +66,31 @@ def _clean_text(value: Any) -> str | None:
     return trimmed or None
 
 
+def _detail_email(detail: dict[str, Any]) -> str | None:
+    for key in ("correo_principal", "correo_secundario", "email", "correo"):
+        value = _clean_text(detail.get(key))
+        if value:
+            return value
+    return None
+
+
+def _detail_phone(detail: dict[str, Any]) -> str | None:
+    for key in (
+        "telefono_principal_e164",
+        "telefono_movil_1_e164",
+        "telefono_e164",
+        "phone_e164",
+        "phone",
+        "telefono",
+        "telefono_secundario_e164",
+        "telefono_movil_2_e164",
+    ):
+        value = _clean_text(detail.get(key))
+        if value:
+            return value
+    return None
+
+
 def _prospecto_whatsapp_allowed(info: dict[str, Any]) -> bool:
     # Prospección en frío puede forzar intento aunque lookup no tenga carrier móvil.
     if info.get("whatsapp_force"):
@@ -1013,7 +1038,7 @@ async def _run_envio_whatsapp(
     *,
     organizacion_id: UUID | None = None,
 ) -> ContactEnvioResult:
-    telefono = _clean_text(detalle.get("phone"))
+    telefono = _detail_phone(detalle)
     if not telefono or not _prospecto_whatsapp_allowed(detalle):
         return ContactEnvioResult(
             estado="omitido",
@@ -1120,7 +1145,7 @@ async def _run_envio_whatsapp(
 
 
 async def _run_envio_llamada(envio: dict[str, Any], payload: dict[str, Any]) -> ContactEnvioResult:
-    telefono = _clean_text(envio.get("phone"))
+    telefono = _detail_phone(envio)
     if not telefono or not _prospecto_llamada_permitida(envio):
         return ContactEnvioResult(
             estado="omitido",
@@ -1544,10 +1569,10 @@ class ProspeccionContactSender:
     def _normalize_recipient_scope(canal: str, detalle: dict[str, Any]) -> str | None:
         canal_key = (canal or "").strip().lower()
         if canal_key == "correo":
-            email = _clean_text(detalle.get("email"))
+            email = _detail_email(detalle)
             return email.lower() if email else None
         if canal_key in {"whatsapp", "llamada"}:
-            phone_raw = _clean_text(detalle.get("phone"))
+            phone_raw = _detail_phone(detalle)
             if not phone_raw:
                 return None
             digits = "".join(ch for ch in phone_raw if ch.isdigit())
