@@ -30,6 +30,17 @@ Motivo:
 - `productos` existe como tabla legado,
 - el inventario y las compras deben colgar del mismo identificador de producto para no duplicar informacion.
 
+## Regla de separacion con propiedades
+
+El modulo de compras e inventario solo aplica a articulos stockables. Las propiedades inmobiliarias viven en su propio dominio y no deben entrar al flujo de almacenes, recepciones, compras ni ajustes de stock.
+
+Reglas practicas:
+
+- si el item maneja inventario, puede entrar a compras e inventario;
+- si el item es una propiedad o unidad inmobiliaria, debe quedar fuera del flujo de compras;
+- los `catalog_items` generados desde propiedades deben guardarse como catalogo de venta, no como inventario operativo;
+- para unidades patrimoniales, no se debe crear `catalog_item` operativo y cualquier catalogo existente debe quedar inactivo y sin flags de inventario o compra.
+
 ## Tablas propuestas
 
 ### 1. `catalog_items`

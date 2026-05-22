@@ -29,6 +29,7 @@ Este documento describe la **versión mínima viable** para desarrolladoras, inm
 - Tal-IA se encarga del **primer contacto**, el **seguimiento**, la **agenda** y el **orden comercial**, para que tu equipo humano se enfoque en lo que sí requiere       persona: negociación, visita, cierre.
 - Resguardo, control y gestion de todos los prospectos, contactos, clientes, que generaste desde tus campañas de mercadotecnia, con la finalidad de evitar fuga de prospectos.
 - Gestion y control de  inventario inmoviliario: venta, reservacion y apartado.
+- Las propiedades inmobiliarias se gestionan en su propio modulo y no se mezclan con el inventario de almacenes ni con las compras de productos stockables.
 - Centralizar todo el flujo comercial.
 
 ---
@@ -219,4 +220,3 @@ y el inventario deja de ser un punto de fricción en la venta.
 - Beneficio principal:
 
 *Tu equipo se enfoca en la negociación y el cierre*, mientras Tal-IA automatiza la captación, calificación, agenda y documentación, reduciendo fugas de prospectos y acelerando ventas.
-

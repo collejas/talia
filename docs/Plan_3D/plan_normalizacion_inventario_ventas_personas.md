@@ -44,6 +44,7 @@ Este plan cubre tres frentes:
 - Un cambio de estado comercial relevante debe estar ligado a una oportunidad.
 - `Reserva Patrimonial` no es un estado comercial; es una clasificación de inventario fuera del flujo de venta.
 - El actor humano canónico del CRM debe ser `personas`.
+- Los `catalog_items` que se generan desde propiedades deben ser solo de referencia comercial; nunca deben quedar habilitados para compras, almacenes o reservas de stock.
 
 ## Estado base actual
 

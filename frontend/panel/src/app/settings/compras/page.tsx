@@ -24,6 +24,10 @@ function asString(value: unknown, fallback = ""): string {
   return String(value)
 }
 
+function isInventoryCatalogItem(item: AnyRecord): boolean {
+  return Boolean(item.maneja_inventario ?? item.manejaInventario)
+}
+
 function makeDefaultReceptionNumber(): string {
   const now = new Date()
   const pad = (value: number) => String(value).padStart(2, "0")
@@ -48,6 +52,7 @@ export default async function SettingsComprasPage() {
     fetchList("/crm/compras/recepciones", { limit: 25 }),
     fetchList("/crm/compras/existencias", { limit: 200 }),
   ])
+  const inventoryCatalogItems = catalogItems.filter(isInventoryCatalogItem)
 
   const principalWarehouse = almacenes.find((almacen) => Boolean(almacen.es_principal)) ?? almacenes[0] ?? null
   const firstOrder = ordenes[0] ?? null
@@ -83,7 +88,7 @@ export default async function SettingsComprasPage() {
         <ComprasWorkspace
           almacenes={almacenes}
           proveedores={proveedores}
-          catalogItems={catalogItems}
+          catalogItems={inventoryCatalogItems}
           ordenes={ordenes}
           recepciones={recepciones}
           existencias={existencias}

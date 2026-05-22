@@ -17,6 +17,7 @@ Definir el orden de migracion para que el inventario inmobiliario y el flujo com
 - El inventario comercial distingue claramente `disponible`, `reservado`, `apartado`, `vendido` y `bloqueado`.
 - `Reserva Patrimonial` queda fuera del flujo comercial y se maneja como clasificación aparte.
 - El precio por m2 permite capturar terrenos y lotes con más precisión.
+- Los `catalog_items` derivados de propiedades son de venta y trazabilidad, no de inventario operativo.
 
 ## Orden recomendado de migraciones
 

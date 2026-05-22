@@ -14452,6 +14452,7 @@ async def update_catalog_item(
     *,
     repo: CRMRepository = Depends(get_repository),
     _: str = Depends(require_permission("settings.manage")),
+    organizacion_id: UUID = Depends(require_organizacion_id),
     item_id: UUID,
     usuario_id: UUID | None = Depends(optional_usuario_id),
     payload: CRMCatalogItemUpdate,
@@ -14462,6 +14463,15 @@ async def update_catalog_item(
         raise HTTPException(status_code=400, detail="empty_update")
     if usuario_id:
         body["updated_by"] = str(usuario_id)
+    try:
+        existing_row = await repo.get_catalog_item(organizacion_id=organizacion_id, item_id=item_id)
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    if existing_row and (
+        existing_row.get("propiedad_id") is not None or existing_row.get("unidad_id") is not None
+    ):
+        body["maneja_inventario"] = False
+        body["activo_compra"] = False
     try:
         row = await repo.update_catalog_item(item_id=item_id, payload=body)
     except CRMRepositoryError as exc:
@@ -36170,6 +36180,8 @@ async def _ensure_catalog_item_for_unidad(
                 item_id=_safe_uuid(existing["id"]),
                 payload={
                     "activo": False,
+                    "maneja_inventario": False,
+                    "activo_compra": False,
                     "metadatos": {
                         **metadata,
                         "venta_activa": False,
@@ -36194,6 +36206,8 @@ async def _ensure_catalog_item_for_unidad(
         "precio_base": _decimal_to_number(unidad_source.precio),
         "moneda": "MXN",
         "activo": True,
+        "maneja_inventario": False,
+        "activo_compra": False,
         "propiedad_id": str(desarrollo_record["id"]),
         "unidad_id": str(unidad_record["id"]),
         "metadatos": metadata,
