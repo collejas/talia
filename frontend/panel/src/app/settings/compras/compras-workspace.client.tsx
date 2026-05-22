@@ -778,7 +778,14 @@ export function ComprasWorkspace({
                 <label className="text-sm font-medium" htmlFor="orden-folio">
                   Folio
                 </label>
-                <Input id="orden-folio" name="folio" value={orderFolio} onChange={(event) => setOrderFolio(event.target.value)} required />
+                <Input
+                  id="orden-folio"
+                  name="folio"
+                  value={orderFolio}
+                  readOnly
+                  className="bg-muted/40 font-mono"
+                  placeholder="OC-20260522-001"
+                />
               </div>
               <div className="space-y-2">
                 <label className="text-sm font-medium" htmlFor="orden-moneda">
