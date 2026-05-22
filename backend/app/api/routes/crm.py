@@ -29640,12 +29640,23 @@ async def get_visits_web_sessions(
             else ""
         ) or None
         prospect_email = (
-            str(prospecto_row.get("email") or "").strip()
+            str(
+                prospecto_row.get("correo_principal")
+                or prospecto_row.get("correo_secundario")
+                or prospecto_row.get("email")
+                or ""
+            ).strip()
             if isinstance(prospecto_row, dict)
             else ""
         ) or None
         prospect_phone = (
-            str(prospecto_row.get("phone_e164") or prospecto_row.get("phone") or "").strip()
+            str(
+                prospecto_row.get("telefono_principal_e164")
+                or prospecto_row.get("telefono_movil_1_e164")
+                or prospecto_row.get("phone_e164")
+                or prospecto_row.get("phone")
+                or ""
+            ).strip()
             if isinstance(prospecto_row, dict)
             else ""
         ) or None
@@ -29674,12 +29685,25 @@ async def get_visits_web_sessions(
             else None
         ) or prospect_origin or metadata_contact_origin or None
         contact_phone = (
-            str(contact_row.get("telefono_e164") or "").strip()
+            str(
+                contact_row.get("telefono_movil_1_e164")
+                or contact_row.get("telefono_principal_e164")
+                or contact_row.get("telefono_e164")
+                or contact_row.get("phone_e164")
+                or contact_row.get("telefono")
+                or ""
+            ).strip()
             if isinstance(contact_row, dict)
             else None
         ) or prospect_phone or metadata_contact_phone or None
         contact_email = (
-            str(contact_row.get("correo") or "").strip()
+            str(
+                contact_row.get("correo_principal")
+                or contact_row.get("correo_secundario")
+                or contact_row.get("correo_institucional")
+                or contact_row.get("correo")
+                or ""
+            ).strip()
             if isinstance(contact_row, dict)
             else None
         ) or correo_envio or prospect_email or metadata_contact_email or None

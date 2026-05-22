@@ -13106,8 +13106,8 @@ class CRMRepository:
         if llamada_permitida is not None:
             params["llamada_permitida"] = f"eq.{str(llamada_permitida).lower()}"
         contact_phone_fields = ("phone", "phone_e164", "telefono_principal_e164", "telefono_movil_1_e164")
-        contact_email_fields = ("email", "correo_principal", "correo_secundario", "correo_institucional")
-        contact_website_fields = ("website", "sitio_web")
+        contact_email_fields = ("email", "correo_principal", "correo_secundario")
+        contact_website_fields = ("website",)
         if phone_present is True:
             and_filters.append(_postgrest_presence_clause(contact_phone_fields, True))
         elif phone_present is False:
@@ -13177,9 +13177,7 @@ class CRMRepository:
                     f"email.ilike.{pattern}",
                     f"correo_principal.ilike.{pattern}",
                     f"correo_secundario.ilike.{pattern}",
-                    f"correo_institucional.ilike.{pattern}",
                     f"website.ilike.{pattern}",
-                    f"sitio_web.ilike.{pattern}",
                 ]
             )
             and_filters.append(f"or({or_filters})")
@@ -14827,14 +14825,14 @@ class CRMRepository:
         """Regresa prospectos sin correo pero con sitio web para lanzar el scraper."""
 
         params = {
-            "select": "id,display_name,website,sitio_web,correo_principal,correo_secundario,segmento,metadata",
+            "select": "id,display_name,website,correo_principal,correo_secundario,segmento,metadata",
             "order": "creado_en.asc",
             "limit": str(max(1, min(limit, 20))),
         }
         params["and"] = "(" + ",".join(
             [
-                _postgrest_presence_clause(("email", "correo_principal", "correo_secundario", "correo_institucional"), False),
-                _postgrest_presence_clause(("website", "sitio_web"), True),
+                _postgrest_presence_clause(("email", "correo_principal", "correo_secundario"), False),
+                _postgrest_presence_clause(("website",), True),
             ]
         ) + ")"
         resp = await self._request_with_user(
