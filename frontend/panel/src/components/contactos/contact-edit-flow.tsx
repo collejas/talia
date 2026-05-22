@@ -37,7 +37,15 @@ type PersonaDraft = {
   apellido_paterno: string;
   apellido_materno: string;
   correo_principal: string;
+  correo_institucional: string;
+  correo_personal_3: string;
   telefono_principal_e164: string;
+  telefono_movil_1_e164: string;
+  telefono_movil_2_e164: string;
+  telefono_empresa_1_e164: string;
+  telefono_empresa_1_extension: string;
+  telefono_empresa_2_e164: string;
+  telefono_empresa_2_extension: string;
   puesto: string;
   area: string;
   rol_decision: string;
@@ -256,7 +264,15 @@ const INITIAL_STATE: ContactEditState = {
     apellido_paterno: "",
     apellido_materno: "",
     correo_principal: "",
+    correo_institucional: "",
+    correo_personal_3: "",
     telefono_principal_e164: "",
+    telefono_movil_1_e164: "",
+    telefono_movil_2_e164: "",
+    telefono_empresa_1_e164: "",
+    telefono_empresa_1_extension: "",
+    telefono_empresa_2_e164: "",
+    telefono_empresa_2_extension: "",
     puesto: "",
     area: "",
     rol_decision: "",
@@ -485,9 +501,8 @@ function buildPayload(state: ContactEditState, dedupe?: DedupeDecision) {
 function validateState(state: ContactEditState): string | null {
   if (!state.persona.nombre.trim()) return "El nombre es obligatorio.";
   if (!state.persona.apellido_paterno.trim()) return "El apellido paterno es obligatorio.";
-  if (!state.persona.correo_principal.trim() && !state.persona.telefono_principal_e164.trim()) {
-    return "Debes capturar teléfono o correo.";
-  }
+  if (!state.persona.correo_institucional.trim()) return "El correo institucional es obligatorio.";
+  if (!state.persona.telefono_movil_1_e164.trim()) return "El teléfono móvil 1 es obligatorio.";
   if (state.mode === "empresa_existente" && !state.cuenta.cuenta_id.trim()) {
     return "Selecciona una cuenta existente.";
   }
@@ -556,8 +571,16 @@ function reducer(state: ContactEditState, action: ContactEditAction): ContactEdi
           nombre: readString(detail, "nombre_nombres") || readString(detail, "nombre") || "",
           apellido_paterno: readString(detail, "apellido_paterno"),
           apellido_materno: readString(detail, "apellido_materno"),
-          correo_principal: readString(detail, "correo"),
-          telefono_principal_e164: readString(detail, "telefono_e164"),
+          correo_principal: readString(detail, "correo_principal") || readString(detail, "correo_institucional") || readString(detail, "correo"),
+          correo_institucional: readString(detail, "correo_institucional") || readString(detail, "correo_principal") || readString(detail, "correo"),
+          correo_personal_3: readString(detail, "correo_personal_3"),
+          telefono_principal_e164: readString(detail, "telefono_principal_e164") || readString(detail, "telefono_movil_1_e164") || readString(detail, "telefono_e164"),
+          telefono_movil_1_e164: readString(detail, "telefono_movil_1_e164") || readString(detail, "telefono_principal_e164") || readString(detail, "telefono_e164"),
+          telefono_movil_2_e164: readString(detail, "telefono_movil_2_e164"),
+          telefono_empresa_1_e164: readString(detail, "telefono_empresa_1_e164"),
+          telefono_empresa_1_extension: readString(detail, "telefono_empresa_1_extension"),
+          telefono_empresa_2_e164: readString(detail, "telefono_empresa_2_e164"),
+          telefono_empresa_2_extension: readString(detail, "telefono_empresa_2_extension"),
           puesto: readString(detail, "puesto"),
           area: readString(detail, "area"),
           rol_decision: readString(detail, "rol_decision"),
@@ -705,14 +728,20 @@ function Field({
   label,
   children,
   hint,
+  required = false,
 }: {
   label: string;
   children: React.ReactNode;
   hint?: string;
+  required?: boolean;
 }) {
   return (
     <div className="space-y-1.5">
-      <Label>{label}</Label>
+      <Label>
+        <span>{label}</span>
+        {required ? <span aria-hidden="true" className="text-destructive">*</span> : null}
+        {required ? <span className="sr-only">obligatorio</span> : null}
+      </Label>
       {hint ? <p className="text-xs text-muted-foreground">{hint}</p> : null}
       {children}
     </div>
@@ -1206,7 +1235,7 @@ export function ContactEditFlow({ open, onOpenChange, personaId, onSaved }: Cont
                 <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Persona</div>
                 <div className="mt-2 text-sm font-medium">{fullName || "Sin nombre"}</div>
                 <div className="mt-1 text-xs text-muted-foreground">
-                  {formatSummaryLine([state.persona.correo_principal, state.persona.telefono_principal_e164, state.persona.estado], "Sin medio de contacto")}
+                  {formatSummaryLine([state.persona.correo_institucional, state.persona.telefono_movil_1_e164, state.persona.estado], "Sin medio de contacto")}
                 </div>
               </div>
               <div className="rounded-lg border border-border/60 bg-background p-3">
@@ -1262,11 +1291,32 @@ export function ContactEditFlow({ open, onOpenChange, personaId, onSaved }: Cont
               <Field label="Apellido materno">
                 <Input value={state.persona.apellido_materno} onChange={(e) => dispatch({ type: "persona/set", field: "apellido_materno", value: e.target.value })} />
               </Field>
-              <Field label="Correo principal">
+              <Field label="Correo 1 principal">
                 <Input value={state.persona.correo_principal} onChange={(e) => dispatch({ type: "persona/set", field: "correo_principal", value: e.target.value })} />
               </Field>
-              <Field label="Teléfono principal">
-                <Input value={state.persona.telefono_principal_e164} onChange={(e) => dispatch({ type: "persona/set", field: "telefono_principal_e164", value: e.target.value })} />
+              <Field label="Correo 2 institucional" required>
+                <Input value={state.persona.correo_institucional} onChange={(e) => dispatch({ type: "persona/set", field: "correo_institucional", value: e.target.value })} />
+              </Field>
+              <Field label="Correo 3 personal 3">
+                <Input value={state.persona.correo_personal_3} onChange={(e) => dispatch({ type: "persona/set", field: "correo_personal_3", value: e.target.value })} />
+              </Field>
+              <Field label="Teléfono móvil 1" required>
+                <Input value={state.persona.telefono_movil_1_e164} onChange={(e) => dispatch({ type: "persona/set", field: "telefono_movil_1_e164", value: e.target.value })} />
+              </Field>
+              <Field label="Teléfono móvil 2">
+                <Input value={state.persona.telefono_movil_2_e164} onChange={(e) => dispatch({ type: "persona/set", field: "telefono_movil_2_e164", value: e.target.value })} />
+              </Field>
+              <Field label="Teléfono de la empresa 1 con extensión">
+                <div className="grid grid-cols-[minmax(0,1fr)_120px] gap-2">
+                  <Input value={state.persona.telefono_empresa_1_e164} onChange={(e) => dispatch({ type: "persona/set", field: "telefono_empresa_1_e164", value: e.target.value })} />
+                  <Input placeholder="Ext." value={state.persona.telefono_empresa_1_extension} onChange={(e) => dispatch({ type: "persona/set", field: "telefono_empresa_1_extension", value: e.target.value })} />
+                </div>
+              </Field>
+              <Field label="Teléfono de la empresa 2 con extensión">
+                <div className="grid grid-cols-[minmax(0,1fr)_120px] gap-2">
+                  <Input value={state.persona.telefono_empresa_2_e164} onChange={(e) => dispatch({ type: "persona/set", field: "telefono_empresa_2_e164", value: e.target.value })} />
+                  <Input placeholder="Ext." value={state.persona.telefono_empresa_2_extension} onChange={(e) => dispatch({ type: "persona/set", field: "telefono_empresa_2_extension", value: e.target.value })} />
+                </div>
               </Field>
               <Field label="Origen">
                 <Select

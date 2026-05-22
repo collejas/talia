@@ -9785,6 +9785,16 @@ class CRMContact(BaseModel):
     notes: str | None = None
     notas: str | None = None
     necesidad_proposito: str | None = None
+    correo_principal: str | None = None
+    correo_institucional: str | None = None
+    correo_personal_3: str | None = None
+    telefono_principal_e164: str | None = None
+    telefono_movil_1_e164: str | None = None
+    telefono_movil_2_e164: str | None = None
+    telefono_empresa_1_e164: str | None = None
+    telefono_empresa_1_extension: str | None = None
+    telefono_empresa_2_e164: str | None = None
+    telefono_empresa_2_extension: str | None = None
     estado: str | None = None
     origen: str | None = None
     propietario_usuario_id: UUID | None = None
@@ -9828,8 +9838,18 @@ class CRMContactCreate(BaseModel):
     rol_decision: str | None = Field(default=None, max_length=120)
     correo: str | None = Field(default=None, max_length=255)
     email: str | None = Field(default=None, max_length=255)
+    correo_principal: str | None = Field(default=None, max_length=255)
+    correo_institucional: str | None = Field(default=None, max_length=255)
+    correo_personal_3: str | None = Field(default=None, max_length=255)
     telefono_e164: str | None = Field(default=None, max_length=32)
     telefono: str | None = Field(default=None, max_length=64)
+    telefono_principal_e164: str | None = Field(default=None, max_length=32)
+    telefono_movil_1_e164: str | None = Field(default=None, max_length=32)
+    telefono_movil_2_e164: str | None = Field(default=None, max_length=32)
+    telefono_empresa_1_e164: str | None = Field(default=None, max_length=32)
+    telefono_empresa_1_extension: str | None = Field(default=None, max_length=16)
+    telefono_empresa_2_e164: str | None = Field(default=None, max_length=32)
+    telefono_empresa_2_extension: str | None = Field(default=None, max_length=16)
     tipo_vialidad: str | None = Field(default=None, max_length=120)
     nombre_vialidad: str | None = Field(default=None, max_length=255)
     numero_exterior: str | None = Field(default=None, max_length=64)
@@ -9892,8 +9912,18 @@ class CRMContactUpdate(BaseModel):
     rol_decision: str | None = Field(default=None, max_length=120)
     correo: str | None = Field(default=None, max_length=255)
     email: str | None = Field(default=None, max_length=255)
+    correo_principal: str | None = Field(default=None, max_length=255)
+    correo_institucional: str | None = Field(default=None, max_length=255)
+    correo_personal_3: str | None = Field(default=None, max_length=255)
     telefono_e164: str | None = Field(default=None, max_length=32)
     telefono: str | None = Field(default=None, max_length=64)
+    telefono_principal_e164: str | None = Field(default=None, max_length=32)
+    telefono_movil_1_e164: str | None = Field(default=None, max_length=32)
+    telefono_movil_2_e164: str | None = Field(default=None, max_length=32)
+    telefono_empresa_1_e164: str | None = Field(default=None, max_length=32)
+    telefono_empresa_1_extension: str | None = Field(default=None, max_length=16)
+    telefono_empresa_2_e164: str | None = Field(default=None, max_length=32)
+    telefono_empresa_2_extension: str | None = Field(default=None, max_length=16)
     tipo_vialidad: str | None = Field(default=None, max_length=120)
     nombre_vialidad: str | None = Field(default=None, max_length=255)
     numero_exterior: str | None = Field(default=None, max_length=64)
@@ -9953,7 +9983,15 @@ class CRMPersonaAltaPersona(BaseModel):
     apellido_materno: str | None = Field(default=None, max_length=160)
     nombre_completo: str | None = Field(default=None, max_length=255)
     correo_principal: str | None = Field(default=None, max_length=255)
+    correo_institucional: str | None = Field(default=None, max_length=255)
+    correo_personal_3: str | None = Field(default=None, max_length=255)
     telefono_principal_e164: str | None = Field(default=None, max_length=32)
+    telefono_movil_1_e164: str | None = Field(default=None, max_length=32)
+    telefono_movil_2_e164: str | None = Field(default=None, max_length=32)
+    telefono_empresa_1_e164: str | None = Field(default=None, max_length=32)
+    telefono_empresa_1_extension: str | None = Field(default=None, max_length=16)
+    telefono_empresa_2_e164: str | None = Field(default=None, max_length=32)
+    telefono_empresa_2_extension: str | None = Field(default=None, max_length=16)
     puesto: str | None = Field(default=None, max_length=120)
     area: str | None = Field(default=None, max_length=120)
     rol_decision: str | None = Field(default=None, max_length=120)
@@ -10325,6 +10363,14 @@ def _persona_alta_normalize_phone(value: str | None) -> str | None:
     return normalize_phone(cleaned) or cleaned
 
 
+def _persona_alta_first_text(*values: str | None) -> str | None:
+    for value in values:
+        cleaned = _persona_alta_clean_text(value)
+        if cleaned:
+            return cleaned
+    return None
+
+
 def _persona_alta_normalize_persona(payload: CRMPersonaAltaPersona) -> CRMPersonaAltaPersona:
     return payload.model_copy(
         update={
@@ -10333,7 +10379,17 @@ def _persona_alta_normalize_persona(payload: CRMPersonaAltaPersona) -> CRMPerson
             "apellido_materno": _persona_alta_clean_text(payload.apellido_materno, compact_spaces=True),
             "nombre_completo": _persona_alta_clean_text(payload.nombre_completo, compact_spaces=True),
             "correo_principal": _persona_alta_normalize_email(payload.correo_principal),
+            "correo_institucional": _persona_alta_normalize_email(payload.correo_institucional)
+            or _persona_alta_normalize_email(payload.correo_principal),
+            "correo_personal_3": _persona_alta_normalize_email(payload.correo_personal_3),
             "telefono_principal_e164": _persona_alta_normalize_phone(payload.telefono_principal_e164),
+            "telefono_movil_1_e164": _persona_alta_normalize_phone(payload.telefono_movil_1_e164)
+            or _persona_alta_normalize_phone(payload.telefono_principal_e164),
+            "telefono_movil_2_e164": _persona_alta_normalize_phone(payload.telefono_movil_2_e164),
+            "telefono_empresa_1_e164": _persona_alta_normalize_phone(payload.telefono_empresa_1_e164),
+            "telefono_empresa_1_extension": _persona_alta_clean_text(payload.telefono_empresa_1_extension),
+            "telefono_empresa_2_e164": _persona_alta_normalize_phone(payload.telefono_empresa_2_e164),
+            "telefono_empresa_2_extension": _persona_alta_clean_text(payload.telefono_empresa_2_extension),
             "puesto": _persona_alta_clean_text(payload.puesto, compact_spaces=True),
             "area": _persona_alta_clean_text(payload.area, compact_spaces=True),
             "rol_decision": _persona_alta_clean_text(payload.rol_decision, compact_spaces=True),
@@ -10550,8 +10606,8 @@ async def _persona_alta_find_persona_candidates(
     exclude_contacto_id: UUID | None = None,
 ) -> list[dict[str, Any]]:
     candidates: list[dict[str, Any]] = []
-    telefono_key = _persona_alta_normalize_phone(persona.telefono_principal_e164)
-    correo_key = _persona_alta_normalize_email(persona.correo_principal)
+    telefono_key = _persona_alta_normalize_phone(persona.telefono_movil_1_e164) or _persona_alta_normalize_phone(persona.telefono_principal_e164)
+    correo_key = _persona_alta_normalize_email(persona.correo_institucional) or _persona_alta_normalize_email(persona.correo_principal)
     nombre_key = _persona_alta_match_name(_persona_alta_full_name(persona))
     empresa_key = _persona_alta_match_name(
         _persona_alta_clean_text(cuenta.nombre_comercial if cuenta else None)
@@ -10578,6 +10634,8 @@ async def _persona_alta_find_persona_candidates(
                     "correo": by_phone.get("correo"),
                     "telefono": by_phone.get("telefono_e164"),
                     "empresa": by_phone.get("company_name"),
+                    "correo_institucional": by_phone.get("correo_institucional"),
+                    "telefono_movil_1_e164": by_phone.get("telefono_movil_1_e164"),
                     "nivel": "fuerte",
                     "motivo": "telefono",
                 },
@@ -10602,6 +10660,8 @@ async def _persona_alta_find_persona_candidates(
                     "correo": by_email.get("correo"),
                     "telefono": by_email.get("telefono_e164"),
                     "empresa": by_email.get("company_name"),
+                    "correo_institucional": by_email.get("correo_institucional"),
+                    "telefono_movil_1_e164": by_email.get("telefono_movil_1_e164"),
                     "nivel": "fuerte",
                     "motivo": "correo",
                 },
@@ -10640,6 +10700,8 @@ async def _persona_alta_find_persona_candidates(
                     "correo": row.get("correo"),
                     "telefono": row.get("telefono_e164"),
                     "empresa": row.get("company_name"),
+                    "correo_institucional": row.get("correo_institucional"),
+                    "telefono_movil_1_e164": row.get("telefono_movil_1_e164"),
                     "nivel": level,
                     "motivo": reason,
                 },
@@ -10735,7 +10797,15 @@ async def _persona_dedupe_preview(
         apellido_materno=persona_row.get("apellido_materno") or None,
         nombre_completo=persona_row.get("nombre_completo"),
         correo_principal=persona_row.get("correo_principal") or persona_row.get("correo"),
+        correo_institucional=persona_row.get("correo_institucional") or persona_row.get("correo_principal") or persona_row.get("correo"),
+        correo_personal_3=persona_row.get("correo_personal_3"),
         telefono_principal_e164=persona_row.get("telefono_principal_e164") or persona_row.get("telefono_e164"),
+        telefono_movil_1_e164=persona_row.get("telefono_movil_1_e164") or persona_row.get("telefono_principal_e164") or persona_row.get("telefono_e164"),
+        telefono_movil_2_e164=persona_row.get("telefono_movil_2_e164"),
+        telefono_empresa_1_e164=persona_row.get("telefono_empresa_1_e164"),
+        telefono_empresa_1_extension=persona_row.get("telefono_empresa_1_extension"),
+        telefono_empresa_2_e164=persona_row.get("telefono_empresa_2_e164"),
+        telefono_empresa_2_extension=persona_row.get("telefono_empresa_2_extension"),
         puesto=persona_row.get("puesto"),
         area=persona_row.get("area"),
         rol_decision=persona_row.get("rol_decision"),
@@ -10844,8 +10914,22 @@ def _persona_alta_to_contact_payload(
         "apellido_paterno": _persona_alta_clean_text(persona.apellido_paterno),
         "apellido_materno": _persona_alta_clean_text(persona.apellido_materno),
         "nombre_completo": _persona_alta_full_name(persona),
-        "correo": _persona_alta_clean_text(persona.correo_principal),
-        "telefono_e164": _persona_alta_clean_text(persona.telefono_principal_e164),
+        "correo_principal": _persona_alta_clean_text(persona.correo_principal),
+        "correo_institucional": _persona_alta_clean_text(persona.correo_institucional)
+        or _persona_alta_clean_text(persona.correo_principal),
+        "correo_personal_3": _persona_alta_clean_text(persona.correo_personal_3),
+        "correo": _persona_alta_clean_text(persona.correo_institucional)
+        or _persona_alta_clean_text(persona.correo_principal),
+        "telefono_principal_e164": _persona_alta_clean_text(persona.telefono_principal_e164),
+        "telefono_movil_1_e164": _persona_alta_clean_text(persona.telefono_movil_1_e164)
+        or _persona_alta_clean_text(persona.telefono_principal_e164),
+        "telefono_movil_2_e164": _persona_alta_clean_text(persona.telefono_movil_2_e164),
+        "telefono_empresa_1_e164": _persona_alta_clean_text(persona.telefono_empresa_1_e164),
+        "telefono_empresa_1_extension": _persona_alta_clean_text(persona.telefono_empresa_1_extension),
+        "telefono_empresa_2_e164": _persona_alta_clean_text(persona.telefono_empresa_2_e164),
+        "telefono_empresa_2_extension": _persona_alta_clean_text(persona.telefono_empresa_2_extension),
+        "telefono_e164": _persona_alta_clean_text(persona.telefono_movil_1_e164)
+        or _persona_alta_clean_text(persona.telefono_principal_e164),
         "puesto": _persona_alta_clean_text(persona.puesto),
         "area": _persona_alta_clean_text(persona.area),
         "rol_decision": _persona_alta_clean_text(persona.rol_decision),
@@ -16489,8 +16573,8 @@ async def search_personas_legacy(
             CRMPersonaSearchItem(
                 id=contacto_id,
                 nombre=row.get("nombre_completo"),
-                correo=row.get("correo"),
-                telefono=row.get("telefono_e164"),
+                correo=row.get("correo_institucional") or row.get("correo_principal") or row.get("correo"),
+                telefono=row.get("telefono_movil_1_e164") or row.get("telefono_principal_e164") or row.get("telefono_e164"),
                 empresa=row.get("company_name"),
             )
         )
@@ -16522,8 +16606,8 @@ async def search_personas(
             CRMPersonaSearchItem(
                 id=persona_id,
                 nombre=row.get("nombre_completo"),
-                correo=row.get("correo"),
-                telefono=row.get("telefono_e164"),
+                correo=row.get("correo_institucional") or row.get("correo_principal") or row.get("correo"),
+                telefono=row.get("telefono_movil_1_e164") or row.get("telefono_principal_e164") or row.get("telefono_e164"),
                 empresa=row.get("company_name"),
             )
         )
@@ -16545,7 +16629,7 @@ async def validate_persona_alta(
 
     if not _persona_alta_clean_text(persona.nombre) or not _persona_alta_clean_text(persona.apellido_paterno):
         raise HTTPException(status_code=400, detail="persona_incompleta")
-    if not _persona_alta_clean_text(persona.correo_principal) and not _persona_alta_clean_text(persona.telefono_principal_e164):
+    if not _persona_alta_clean_text(persona.correo_institucional) or not _persona_alta_clean_text(persona.telefono_movil_1_e164):
         raise HTTPException(status_code=400, detail="medio_contacto_required")
 
     persona_candidates, account_candidates, suggested_persona_id, suggested_account_id, requires_confirmation = (
@@ -16586,7 +16670,7 @@ async def create_persona_alta(
 
     if not _persona_alta_clean_text(persona.nombre) or not _persona_alta_clean_text(persona.apellido_paterno):
         raise HTTPException(status_code=400, detail="persona_incompleta")
-    if not _persona_alta_clean_text(persona.correo_principal) and not _persona_alta_clean_text(persona.telefono_principal_e164):
+    if not _persona_alta_clean_text(persona.correo_institucional) or not _persona_alta_clean_text(persona.telefono_movil_1_e164):
         raise HTTPException(status_code=400, detail="medio_contacto_required")
 
     existing_account: CRMAccount | None = None
@@ -16822,7 +16906,7 @@ async def update_persona(
 
     if not _persona_alta_clean_text(persona.nombre) or not _persona_alta_clean_text(persona.apellido_paterno):
         raise HTTPException(status_code=400, detail="persona_incompleta")
-    if not _persona_alta_clean_text(persona.correo_principal) and not _persona_alta_clean_text(persona.telefono_principal_e164):
+    if not _persona_alta_clean_text(persona.correo_institucional) or not _persona_alta_clean_text(persona.telefono_movil_1_e164):
         raise HTTPException(status_code=400, detail="medio_contacto_required")
 
     existing_account: CRMAccount | None = None
@@ -17286,7 +17370,7 @@ async def validate_persona_update(
 
     if not _persona_alta_clean_text(persona.nombre) or not _persona_alta_clean_text(persona.apellido_paterno):
         raise HTTPException(status_code=400, detail="persona_incompleta")
-    if not _persona_alta_clean_text(persona.correo_principal) and not _persona_alta_clean_text(persona.telefono_principal_e164):
+    if not _persona_alta_clean_text(persona.correo_institucional) or not _persona_alta_clean_text(persona.telefono_movil_1_e164):
         raise HTTPException(status_code=400, detail="medio_contacto_required")
 
     exclude_account_id = cuenta.cuenta_id if cuenta and cuenta.cuenta_id else None
@@ -37420,12 +37504,14 @@ def _card_from_opportunity(row: dict[str, Any]) -> CRMPipelineBoardCard | None:
     )
     contacto_correo = (
         _clean_text(metadata.get("contacto_correo"))
+        or _clean_text(contacto.get("correo_institucional"))
         or _clean_text(contacto.get("correo_principal"))
         or _clean_text(contacto.get("correo"))
         or None
     )
     contacto_telefono = (
         _clean_text(metadata.get("contacto_telefono"))
+        or _clean_text(contacto.get("telefono_movil_1_e164"))
         or _clean_text(contacto.get("telefono_principal_e164"))
         or _clean_text(contacto.get("telefono_e164"))
         or _clean_text(contacto.get("telefono"))

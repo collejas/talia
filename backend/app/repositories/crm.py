@@ -71,7 +71,10 @@ def _next_sequential_code(prefix: str, existing_codes: Sequence[Any], *, width: 
 
 PERSONA_SELECT_FIELDS = (
     "id,organizacion_id,nombre,apellido_paterno,apellido_materno,nombre_completo,"
-    "correo_principal,telefono_principal_e164,puesto,area,rol_decision,estado,"
+    "correo_principal,correo_institucional,correo_personal_3,"
+    "telefono_principal_e164,telefono_movil_1_e164,telefono_movil_2_e164,"
+    "telefono_empresa_1_e164,telefono_empresa_1_extension,telefono_empresa_2_e164,telefono_empresa_2_extension,"
+    "puesto,area,rol_decision,estado,"
     "origen,notas,metadata,persona_datos,propietario_usuario_id,creado_en,actualizado_en,"
     "archived_at,merged_into_persona_id,merge_metadata"
 )
@@ -757,7 +760,7 @@ class CRMRepository:
             "cuenta_id",
             "contacto_principal_id",
             "contacto:personas!oportunidades_contacto_principal_org_fkey("
-            "id,nombre_completo,correo_principal,telefono_principal_e164,company_name,notas,origen,estado,metadata,persona_datos"
+            "id,nombre_completo,correo_principal,correo_institucional,telefono_principal_e164,telefono_movil_1_e164,company_name,notas,origen,estado,metadata,persona_datos"
             ")",
             "etapa_id",
             "titulo",
@@ -6260,15 +6263,15 @@ class CRMRepository:
 
         params = {
             "organizacion_id": f"eq.{organizacion_id}",
-            "select": (
-                "id,organizacion_id,nombre_completo,correo_principal,telefono_principal_e164,"
-                "notas,metadata,persona_datos,propietario_usuario_id,creado_en,actualizado_en"
-            ),
+            "select": PERSONA_SELECT_FIELDS,
             "limit": str(limit),
             "offset": str(offset),
             "or": (
                 f"(nombre_completo.ilike.*{pattern}*,correo_principal.ilike.*{pattern}*,"
-                f"telefono_principal_e164.ilike.*{pattern}*,notas.ilike.*{pattern}*,"
+                f"correo_institucional.ilike.*{pattern}*,correo_personal_3.ilike.*{pattern}*,"
+                f"telefono_principal_e164.ilike.*{pattern}*,telefono_movil_1_e164.ilike.*{pattern}*,"
+                f"telefono_movil_2_e164.ilike.*{pattern}*,telefono_empresa_1_e164.ilike.*{pattern}*,"
+                f"telefono_empresa_2_e164.ilike.*{pattern}*,notas.ilike.*{pattern}*,"
                 f"area.ilike.*{pattern}*,puesto.ilike.*{pattern}*,rol_decision.ilike.*{pattern}*)"
             ),
         }
@@ -6545,11 +6548,21 @@ class CRMRepository:
             "cuenta_id": account.get("id") if isinstance(account, dict) else persona.get("cuenta_id"),
             "nombre_completo": preferred_name or raw_full_name,
             "nombre": preferred_name or raw_full_name,
-            "correo": persona.get("correo_principal"),
-            "email": persona.get("correo_principal"),
-            "telefono_e164": persona.get("telefono_principal_e164"),
-            "telefono": persona.get("telefono_principal_e164"),
-            "phone_e164": persona.get("telefono_principal_e164"),
+            "correo_principal": persona.get("correo_principal"),
+            "correo_institucional": persona.get("correo_institucional") or persona.get("correo_principal"),
+            "correo_personal_3": persona.get("correo_personal_3"),
+            "correo": persona.get("correo_institucional") or persona.get("correo_principal"),
+            "email": persona.get("correo_institucional") or persona.get("correo_principal"),
+            "telefono_principal_e164": persona.get("telefono_principal_e164"),
+            "telefono_movil_1_e164": persona.get("telefono_movil_1_e164") or persona.get("telefono_principal_e164"),
+            "telefono_movil_2_e164": persona.get("telefono_movil_2_e164"),
+            "telefono_empresa_1_e164": persona.get("telefono_empresa_1_e164"),
+            "telefono_empresa_1_extension": persona.get("telefono_empresa_1_extension"),
+            "telefono_empresa_2_e164": persona.get("telefono_empresa_2_e164"),
+            "telefono_empresa_2_extension": persona.get("telefono_empresa_2_extension"),
+            "telefono_e164": persona.get("telefono_movil_1_e164") or persona.get("telefono_principal_e164"),
+            "telefono": persona.get("telefono_movil_1_e164") or persona.get("telefono_principal_e164"),
+            "phone_e164": persona.get("telefono_movil_1_e164") or persona.get("telefono_principal_e164"),
             "company_name": account_name,
             "notes": persona.get("notas"),
             "necesidad_proposito": account.get("necesidad_proposito") if isinstance(account, dict) else None,
@@ -6757,13 +6770,35 @@ class CRMRepository:
             "apellido_paterno": apellido_paterno,
             "apellido_materno": apellido_materno,
             "nombre_completo": full_name,
-            "correo_principal": self._pick_text(merged, "correo", "email", "correo_principal"),
+            "correo_principal": self._pick_text(merged, "correo_principal", "correo", "email"),
+            "correo_institucional": self._pick_text(
+                merged,
+                "correo_institucional",
+                "correo",
+                "email",
+                "correo_principal",
+            ),
+            "correo_personal_3": self._pick_text(merged, "correo_personal_3"),
             "telefono_principal_e164": self._pick_text(
                 merged,
+                "telefono_principal_e164",
+                "telefono_movil_1_e164",
                 "telefono_e164",
                 "telefono",
-                "telefono_principal_e164",
             ),
+            "telefono_movil_1_e164": self._pick_text(
+                merged,
+                "telefono_movil_1_e164",
+                "telefono_principal_e164",
+                "telefono_e164",
+            ),
+            "telefono_movil_2_e164": self._pick_text(merged, "telefono_movil_2_e164"),
+            "telefono_empresa_1_e164": self._pick_text(merged, "telefono_empresa_1_e164"),
+            "telefono_empresa_1_extension": self._pick_text(merged, "telefono_empresa_1_extension"),
+            "telefono_empresa_2_e164": self._pick_text(merged, "telefono_empresa_2_e164"),
+            "telefono_empresa_2_extension": self._pick_text(merged, "telefono_empresa_2_extension"),
+            "correo": self._pick_text(merged, "correo_institucional", "correo_principal", "correo", "email"),
+            "telefono_e164": self._pick_text(merged, "telefono_movil_1_e164", "telefono_principal_e164", "telefono_e164", "telefono"),
             "puesto": self._pick_text(merged, "puesto"),
             "area": self._pick_text(merged, "area"),
             "rol_decision": self._pick_text(merged, "rol_decision"),
@@ -6902,11 +6937,7 @@ class CRMRepository:
             "organizacion_id": f"eq.{organizacion_id}",
             "id": f"eq.{persona_id}",
             "limit": "1",
-            "select": (
-                "id,organizacion_id,nombre,apellido_paterno,apellido_materno,nombre_completo,"
-                "correo_principal,telefono_principal_e164,puesto,area,rol_decision,estado,"
-                "origen,notas,metadata,persona_datos,propietario_usuario_id,creado_en,actualizado_en"
-            ),
+            "select": PERSONA_SELECT_FIELDS,
         }
         resp = await self._request("GET", "/rest/v1/personas", params=params)
         data = resp.json()
@@ -7247,7 +7278,7 @@ class CRMRepository:
                 "id,organizacion_id,cuenta_id,persona_id,rol_en_cuenta,puesto,es_contacto_principal,"
                 "es_contacto_facturacion,es_representante_legal,activo,fecha_inicio,fecha_fin,notas,"
                 "metadata,creado_en,actualizado_en,"
-                "persona:personas(id,nombre_completo,correo_principal,telefono_principal_e164,company_name)"
+                "persona:personas(id,nombre_completo,correo_principal,correo_institucional,telefono_principal_e164,telefono_movil_1_e164,company_name)"
             ),
         }
         if activo is not None:
@@ -7778,34 +7809,39 @@ class CRMRepository:
         phone_candidates = _phone_lookup_variants(phone_e164)
         if not phone_candidates:
             return None
-        select_fields = (
-            PERSONA_SELECT_FIELDS
-        )
+        select_fields = PERSONA_SELECT_FIELDS
         for phone_key in phone_candidates:
-            params: dict[str, str] = {
-                "telefono_principal_e164": f"eq.{phone_key}",
-                "limit": "1",
-                "select": select_fields,
-            }
-            if organizacion_id:
-                params["organizacion_id"] = f"eq.{organizacion_id}"
-            resp = await self._request("GET", "/rest/v1/personas", params=params)
-            data = resp.json() or []
-            if isinstance(data, list) and data:
-                row = data[0]
-            elif isinstance(data, dict):
-                row = data
-            else:
-                row = None
-            if isinstance(row, dict):
-                org_value = row.get("organizacion_id")
-                if not org_value:
-                    return row
-                try:
-                    org_uuid = _coerce_uuid(str(org_value), field="organizacion_id")
-                except ValueError:
-                    return row
-                return await self._persona_to_contact_row(persona=row, organizacion_id=org_uuid)
+            for field_name in (
+                "telefono_movil_1_e164",
+                "telefono_principal_e164",
+                "telefono_movil_2_e164",
+                "telefono_empresa_1_e164",
+                "telefono_empresa_2_e164",
+            ):
+                params: dict[str, str] = {
+                    field_name: f"eq.{phone_key}",
+                    "limit": "1",
+                    "select": select_fields,
+                }
+                if organizacion_id:
+                    params["organizacion_id"] = f"eq.{organizacion_id}"
+                resp = await self._request("GET", "/rest/v1/personas", params=params)
+                data = resp.json() or []
+                if isinstance(data, list) and data:
+                    row = data[0]
+                elif isinstance(data, dict):
+                    row = data
+                else:
+                    row = None
+                if isinstance(row, dict):
+                    org_value = row.get("organizacion_id")
+                    if not org_value:
+                        return row
+                    try:
+                        org_uuid = _coerce_uuid(str(org_value), field="organizacion_id")
+                    except ValueError:
+                        return row
+                    return await self._persona_to_contact_row(persona=row, organizacion_id=org_uuid)
         return None
 
     async def get_contact_by_phone_e164(
@@ -7828,31 +7864,33 @@ class CRMRepository:
         email_key = str(email or "").strip().lower()
         if not email_key:
             return None
-        params: dict[str, str] = {
-            "correo_principal": f"eq.{email_key}",
-            "limit": "1",
-            "select": PERSONA_SELECT_FIELDS,
-        }
-        if organizacion_id:
-            params["organizacion_id"] = f"eq.{organizacion_id}"
-        resp = await self._request("GET", "/rest/v1/personas", params=params)
-        data = resp.json() or []
-        if isinstance(data, list) and data:
-            row = data[0]
-        elif isinstance(data, dict):
-            row = data
-        else:
-            row = None
-        if not isinstance(row, dict):
-            return None
-        org_value = row.get("organizacion_id")
-        if not org_value:
-            return row
-        try:
-            org_uuid = _coerce_uuid(str(org_value), field="organizacion_id")
-        except ValueError:
-            return row
-        return await self._persona_to_contact_row(persona=row, organizacion_id=org_uuid)
+        for field_name in ("correo_institucional", "correo_principal", "correo_personal_3"):
+            params: dict[str, str] = {
+                field_name: f"eq.{email_key}",
+                "limit": "1",
+                "select": PERSONA_SELECT_FIELDS,
+            }
+            if organizacion_id:
+                params["organizacion_id"] = f"eq.{organizacion_id}"
+            resp = await self._request("GET", "/rest/v1/personas", params=params)
+            data = resp.json() or []
+            if isinstance(data, list) and data:
+                row = data[0]
+            elif isinstance(data, dict):
+                row = data
+            else:
+                row = None
+            if not isinstance(row, dict):
+                continue
+            org_value = row.get("organizacion_id")
+            if not org_value:
+                return row
+            try:
+                org_uuid = _coerce_uuid(str(org_value), field="organizacion_id")
+            except ValueError:
+                return row
+            return await self._persona_to_contact_row(persona=row, organizacion_id=org_uuid)
+        return None
 
     async def get_contact_by_email(
         self,
@@ -17193,7 +17231,7 @@ class CRMRepository:
             "metadata->>prospecto_id": f"eq.{prospecto_id}",
             "select": (
                 "id,organizacion_id,nombre,apellido_paterno,apellido_materno,nombre_completo,"
-                "correo_principal,telefono_principal_e164,puesto,area,rol_decision,estado,"
+                "correo_principal,correo_institucional,telefono_principal_e164,telefono_movil_1_e164,puesto,area,rol_decision,estado,"
                 "origen,notas,metadata,persona_datos,propietario_usuario_id,creado_en,actualizado_en"
             ),
             "limit": "1",

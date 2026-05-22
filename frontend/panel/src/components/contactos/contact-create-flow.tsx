@@ -37,7 +37,15 @@ type PersonaDraft = {
   apellido_paterno: string;
   apellido_materno: string;
   correo_principal: string;
+  correo_institucional: string;
+  correo_personal_3: string;
   telefono_principal_e164: string;
+  telefono_movil_1_e164: string;
+  telefono_movil_2_e164: string;
+  telefono_empresa_1_e164: string;
+  telefono_empresa_1_extension: string;
+  telefono_empresa_2_e164: string;
+  telefono_empresa_2_extension: string;
   puesto: string;
   area: string;
   rol_decision: string;
@@ -230,7 +238,15 @@ const INITIAL_STATE: ContactCreateState = {
     apellido_paterno: "",
     apellido_materno: "",
     correo_principal: "",
+    correo_institucional: "",
+    correo_personal_3: "",
     telefono_principal_e164: "",
+    telefono_movil_1_e164: "",
+    telefono_movil_2_e164: "",
+    telefono_empresa_1_e164: "",
+    telefono_empresa_1_extension: "",
+    telefono_empresa_2_e164: "",
+    telefono_empresa_2_extension: "",
     puesto: "",
     area: "",
     rol_decision: "",
@@ -595,9 +611,8 @@ function validateState(state: ContactCreateState): string | null {
   if (!state.persona.nombre.trim()) return "El nombre es obligatorio.";
   if (!state.persona.apellido_paterno.trim()) return "El apellido paterno es obligatorio.";
   if (!state.persona.origen.trim()) return "Selecciona el origen del contacto.";
-  if (!state.persona.correo_principal.trim() && !state.persona.telefono_principal_e164.trim()) {
-    return "Debes capturar teléfono o correo.";
-  }
+  if (!state.persona.correo_institucional.trim()) return "El correo institucional es obligatorio.";
+  if (!state.persona.telefono_movil_1_e164.trim()) return "El teléfono móvil 1 es obligatorio.";
   if (state.mode === "empresa_existente" && !state.cuenta.cuenta_id.trim()) {
     return "Selecciona una empresa existente.";
   }
@@ -920,11 +935,32 @@ export function ContactCreateFlow({ open, onOpenChange, onCreated, initialMode =
               <Field label="Apellido materno">
                 <Input value={state.persona.apellido_materno} onChange={(e) => dispatch({ type: "persona/set", field: "apellido_materno", value: e.target.value })} />
               </Field>
-              <Field label="Correo principal" required>
+              <Field label="Correo 1 principal">
                 <Input value={state.persona.correo_principal} onChange={(e) => dispatch({ type: "persona/set", field: "correo_principal", value: e.target.value })} />
               </Field>
-              <Field label="Teléfono principal" required>
-                <Input value={state.persona.telefono_principal_e164} onChange={(e) => dispatch({ type: "persona/set", field: "telefono_principal_e164", value: e.target.value })} />
+              <Field label="Correo 2 institucional" required>
+                <Input value={state.persona.correo_institucional} onChange={(e) => dispatch({ type: "persona/set", field: "correo_institucional", value: e.target.value })} />
+              </Field>
+              <Field label="Correo 3 personal 3">
+                <Input value={state.persona.correo_personal_3} onChange={(e) => dispatch({ type: "persona/set", field: "correo_personal_3", value: e.target.value })} />
+              </Field>
+              <Field label="Teléfono móvil 1" required>
+                <Input value={state.persona.telefono_movil_1_e164} onChange={(e) => dispatch({ type: "persona/set", field: "telefono_movil_1_e164", value: e.target.value })} />
+              </Field>
+              <Field label="Teléfono móvil 2">
+                <Input value={state.persona.telefono_movil_2_e164} onChange={(e) => dispatch({ type: "persona/set", field: "telefono_movil_2_e164", value: e.target.value })} />
+              </Field>
+              <Field label="Teléfono de la empresa 1 con extensión">
+                <div className="grid grid-cols-[minmax(0,1fr)_120px] gap-2">
+                  <Input value={state.persona.telefono_empresa_1_e164} onChange={(e) => dispatch({ type: "persona/set", field: "telefono_empresa_1_e164", value: e.target.value })} />
+                  <Input placeholder="Ext." value={state.persona.telefono_empresa_1_extension} onChange={(e) => dispatch({ type: "persona/set", field: "telefono_empresa_1_extension", value: e.target.value })} />
+                </div>
+              </Field>
+              <Field label="Teléfono de la empresa 2 con extensión">
+                <div className="grid grid-cols-[minmax(0,1fr)_120px] gap-2">
+                  <Input value={state.persona.telefono_empresa_2_e164} onChange={(e) => dispatch({ type: "persona/set", field: "telefono_empresa_2_e164", value: e.target.value })} />
+                  <Input placeholder="Ext." value={state.persona.telefono_empresa_2_extension} onChange={(e) => dispatch({ type: "persona/set", field: "telefono_empresa_2_extension", value: e.target.value })} />
+                </div>
               </Field>
               <Field label="Origen" required>
                 <Select
@@ -943,9 +979,6 @@ export function ContactCreateFlow({ open, onOpenChange, onCreated, initialMode =
                   </SelectContent>
                 </Select>
               </Field>
-              <div className="md:col-span-2 -mt-2 text-xs text-muted-foreground">
-                Debes capturar al menos correo principal o teléfono principal.
-              </div>
               <Field label="Puesto">
                 <Input value={state.persona.puesto} onChange={(e) => dispatch({ type: "persona/set", field: "puesto", value: e.target.value })} />
               </Field>
@@ -1275,7 +1308,9 @@ export function ContactCreateFlow({ open, onOpenChange, onCreated, initialMode =
               <div className="rounded-lg border border-border/60 bg-background p-3">
                 <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Persona</div>
                 <div className="mt-2 text-sm font-medium">{review.persona || "Sin nombre completo todavía"}</div>
-                <div className="mt-1 text-xs text-muted-foreground">{state.persona.correo_principal || state.persona.telefono_principal_e164 || "Sin medio de contacto"}</div>
+                <div className="mt-1 text-xs text-muted-foreground">
+                  {state.persona.correo_institucional || state.persona.telefono_movil_1_e164 || "Sin medio de contacto"}
+                </div>
               </div>
               <div className="rounded-lg border border-border/60 bg-background p-3">
               <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Empresa</div>
@@ -1405,7 +1440,7 @@ export function ContactCreateFlow({ open, onOpenChange, onCreated, initialMode =
                   <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Contacto</div>
                   <div className="mt-1 text-sm font-semibold">{review.persona || "Pendiente"}</div>
                   <div className="mt-1 text-xs text-muted-foreground">
-                    {state.persona.correo_principal || state.persona.telefono_principal_e164 || "Sin medio de contacto"}
+                    {state.persona.correo_institucional || state.persona.telefono_movil_1_e164 || "Sin medio de contacto"}
                   </div>
                 </div>
                 <div className="rounded-xl border border-border/60 bg-background p-3">
