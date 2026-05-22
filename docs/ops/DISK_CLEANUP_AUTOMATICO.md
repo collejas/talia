@@ -22,7 +22,11 @@ Variables principales:
 - `KEEP_STG_RELEASES`
 - `KEEP_BACKUPS`
 - `JOURNAL_VACUUM_TIME`
+- `KEEP_LOG_DAYS`
 - `DRY_RUN`
+
+Notas:
+- `scripts/cleanup_disk.sh` limpia `logs/` y también logs sueltos de nivel raíz dentro de cada proyecto, por ejemplo `denue_merge.log` o `frontend/panel/build.log`.
 
 ## Verificacion
 ```bash

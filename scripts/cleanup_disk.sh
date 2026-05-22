@@ -6,9 +6,9 @@ ROOT_DIR="${ROOT_DIR:-/var/www/talia}"
 KEEP_PROD_RELEASES="${KEEP_PROD_RELEASES:-1}"
 KEEP_STG_RELEASES="${KEEP_STG_RELEASES:-1}"
 KEEP_BACKUPS="${KEEP_BACKUPS:-2}"
-JOURNAL_VACUUM_TIME="${JOURNAL_VACUUM_TIME:-10d}"
-KEEP_LOG_DAYS="${KEEP_LOG_DAYS:-7}"
-TRUNCATE_LOGS_OVER_MB="${TRUNCATE_LOGS_OVER_MB:-25}"
+JOURNAL_VACUUM_TIME="${JOURNAL_VACUUM_TIME:-5d}"
+KEEP_LOG_DAYS="${KEEP_LOG_DAYS:-2}"
+TRUNCATE_LOGS_OVER_MB="${TRUNCATE_LOGS_OVER_MB:-5}"
 
 DRY_RUN="${DRY_RUN:-0}"
 
@@ -168,6 +168,22 @@ cleanup_old_logs_in_dir() {
   log "old logs pruned in ${logs_dir} keep_days=${KEEP_LOG_DAYS}"
 }
 
+cleanup_top_level_logs_in_dir() {
+  local base_dir="$1"
+  [[ -d "${base_dir}" ]] || return 0
+
+  if [[ "${DRY_RUN}" == "1" ]]; then
+    log "DRY_RUN prune top-level logs in ${base_dir} keep_days=${KEEP_LOG_DAYS}"
+    return 0
+  fi
+
+  find "${base_dir}" -maxdepth 1 -type f -name "*.log" -mtime +"${KEEP_LOG_DAYS}" -delete 2>/dev/null || true
+  find "${base_dir}" -maxdepth 1 -type f -name "*.log.*" -mtime +"${KEEP_LOG_DAYS}" -delete 2>/dev/null || true
+  find "${base_dir}" -maxdepth 1 -type f -name "*.out" -mtime +"${KEEP_LOG_DAYS}" -delete 2>/dev/null || true
+  find "${base_dir}" -maxdepth 1 -type f -name "*.err" -mtime +"${KEEP_LOG_DAYS}" -delete 2>/dev/null || true
+  log "top-level logs pruned in ${base_dir} keep_days=${KEEP_LOG_DAYS}"
+}
+
 truncate_large_logs_in_dir() {
   local logs_dir="$1"
   [[ -d "${logs_dir}" ]] || return 0
@@ -185,7 +201,11 @@ truncate_large_logs_in_dir() {
 
 cleanup_old_logs() {
   cleanup_old_logs_in_dir "${ROOT_DIR}/logs"
+  cleanup_top_level_logs_in_dir "${ROOT_DIR}"
+  cleanup_top_level_logs_in_dir "${ROOT_DIR}/frontend/panel"
   truncate_large_logs_in_dir "${ROOT_DIR}/logs"
+  truncate_large_logs_in_dir "${ROOT_DIR}"
+  truncate_large_logs_in_dir "${ROOT_DIR}/frontend/panel"
 }
 
 cleanup_tool_caches() {
@@ -372,7 +392,9 @@ cleanup_extra_project_dir() {
   log "extra project cleanup start dir=${project_dir}"
 
   cleanup_old_logs_in_dir "${project_dir}/logs"
+  cleanup_top_level_logs_in_dir "${project_dir}"
   truncate_large_logs_in_dir "${project_dir}/logs"
+  truncate_large_logs_in_dir "${project_dir}"
 
   # Common local backups directories used in side projects.
   local backups_dir=""

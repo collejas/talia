@@ -88,7 +88,7 @@ npm run build
 sudo systemctl restart talia-api.service
 sudo systemctl restart talia-panel.service
 
-codex resume 019e4b7a-649d-7980-9ffb-0563f57640e9
+codex resume 019e4b7a-649d-7980-9ffb-0563f57640e9   #################
 
 IDEA PROPIEDADES: codex resume 019e4b72-22f4-7610-aeb4-67be8a2b7c23
 

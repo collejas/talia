@@ -116,6 +116,8 @@ tail -n 120 /var/www/talia/logs/request.log
 * Si falta espacio o quieres mantenimiento de disco:
 sudo bash scripts/cleanup_disk.sh
 
+* Esto también limpia logs locales viejos como `logs/*.log`, `denue_merge.log` y `frontend/panel/*.log`
+
 * Para limpieza más profunda manual
 sudo RUN_VSCODE_CACHE_CLEAN=1 RUN_EXTRA_PROJECTS_CLEAN=1 bash scripts/cleanup_disk.sh
 
