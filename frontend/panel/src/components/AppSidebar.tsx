@@ -11,7 +11,7 @@ import {
   IconInbox,
   IconFolder,
   IconHelp,
-  IconListDetails,
+  IconFilter,
   IconReport,
   IconSearch,
   IconSettings,
@@ -81,7 +81,7 @@ const NAVIGATION: {
 } = {
   navMain: [
     { title: "Dashboard", url: "/dashboard", icon: IconChartBar, permission: "ver_panel" },
-    { title: "Embudo", url: "/embudo", icon: IconListDetails, permission: "pipeline.view" },
+    { title: "Embudo", url: "/embudo", icon: IconFilter, permission: "pipeline.view" },
     { title: "Inbox", url: "/inbox", icon: IconInbox, permission: "ver_inbox" },
     { title: "Agenda", url: "/agenda", icon: IconCalendar, permission: "agenda.view" },
     { title: "Disponibilidad agenda", url: "/agenda/disponibilidad", icon: IconCalendar, permission: "agenda.manage" },

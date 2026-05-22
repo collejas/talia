@@ -2352,7 +2352,9 @@ export function LeadDrawer({
       <Drawer open={open} onOpenChange={onOpenChange} direction="right">
       <DrawerContent className="data-[vaul-drawer-direction=right]:w-full data-[vaul-drawer-direction=right]:max-w-lg data-[vaul-drawer-direction=right]:h-screen data-[vaul-drawer-direction=right]:max-h-screen data-[vaul-drawer-direction=right]:overflow-hidden">
         <DrawerHeader className="items-start">
-          <DrawerTitle>{isCreateMode ? "Nuevo lead" : card?.nombre ?? "Lead sin nombre"}</DrawerTitle>
+          <DrawerTitle>
+            {isCreateMode ? "Nueva Oportunidad" : card?.nombre ?? "Lead sin nombre"}
+          </DrawerTitle>
           <DrawerDescription className="flex flex-col gap-1 text-left">
             <span>{isCreateMode ? `Creando en etapa: ${stageName}` : `Etapa: ${stageName}`}</span>
             {!isCreateMode ? (

@@ -59,7 +59,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Loader2, SlidersHorizontal } from "lucide-react";
+import { Loader2, Plus, SlidersHorizontal } from "lucide-react";
 import { usePermissions } from "@/hooks/use-permissions";
 
 export type EmbudoBoardClientProps = {
@@ -466,6 +466,8 @@ export function EmbudoBoardClient({
     }
   }, [showVendorFilter, vendorOptions.length, fetchSupervisedVendors]);
 
+  const defaultCreateStage = useMemo(() => sortStages(stages)[0] ?? null, [stages]);
+
   useEffect(() => {
     if (!hasMountedRef.current) {
       hasMountedRef.current = true;
@@ -721,6 +723,11 @@ export function EmbudoBoardClient({
     setSelectedCard(null);
     setDrawerMode("create");
     setDrawerOpen(true);
+  };
+
+  const handleNewOpportunity = () => {
+    if (!defaultCreateStage) return;
+    handleAddLead(defaultCreateStage);
   };
 
   const handleScheduleSubmit = async (event: FormEvent<HTMLFormElement>) => {
@@ -1340,24 +1347,37 @@ export function EmbudoBoardClient({
         {boardState.scoringKpis ? <ScoringKpisOverview kpis={boardState.scoringKpis} /> : null}
         {showFiltersButton ? (
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => {
-                setDraftDays(appliedDays);
-                setDraftCanal(appliedCanal);
-                setDraftEstado(appliedEstado);
-                setDraftQuery(appliedQuery);
-                setDraftTieneCita(appliedTieneCita);
-                setDraftEtapaIds(appliedEtapaIds);
-                setFiltersOpen(true);
-              }}
-              className="gap-2"
-            >
-              <SlidersHorizontal className="h-4 w-4" />
-              Filtros{activeFiltersCount ? ` (${activeFiltersCount})` : ""}
-            </Button>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                type="button"
+                variant="default"
+                size="sm"
+                onClick={handleNewOpportunity}
+                disabled={!defaultCreateStage}
+                className="gap-2"
+              >
+                <Plus className="h-4 w-4" />
+                Nueva Oportunidad
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setDraftDays(appliedDays);
+                  setDraftCanal(appliedCanal);
+                  setDraftEstado(appliedEstado);
+                  setDraftQuery(appliedQuery);
+                  setDraftTieneCita(appliedTieneCita);
+                  setDraftEtapaIds(appliedEtapaIds);
+                  setFiltersOpen(true);
+                }}
+                className="gap-2"
+              >
+                <SlidersHorizontal className="h-4 w-4" />
+                Filtros{activeFiltersCount ? ` (${activeFiltersCount})` : ""}
+              </Button>
+            </div>
             {boardLoading ? (
               <span className="inline-flex items-center gap-2 rounded-full border border-muted-foreground/60 px-3 py-1 text-xs text-muted-foreground">
                 <Loader2 className="h-3 w-3 animate-spin" />
