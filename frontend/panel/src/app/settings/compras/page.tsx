@@ -24,6 +24,28 @@ function asString(value: unknown, fallback = ""): string {
   return String(value)
 }
 
+function nextSequentialCode(prefix: string, values: Array<unknown>, width = 3): string {
+  const normalizedPrefix = prefix.trim()
+  const lowerPrefix = normalizedPrefix.toLowerCase()
+  let highest = 0
+  for (const value of values) {
+    const code = asString(value).trim()
+    if (!code.toLowerCase().startsWith(lowerPrefix)) {
+      continue
+    }
+    const suffix = code.slice(normalizedPrefix.length).trim()
+    const match = suffix.match(/(\d+)$/)
+    if (!match) {
+      continue
+    }
+    const parsed = Number(match[1])
+    if (Number.isFinite(parsed)) {
+      highest = Math.max(highest, parsed)
+    }
+  }
+  return `${normalizedPrefix}${String(highest + 1).padStart(width, "0")}`
+}
+
 function isInventoryCatalogItem(item: AnyRecord): boolean {
   return Boolean(item.maneja_inventario ?? item.manejaInventario)
 }
@@ -61,6 +83,8 @@ export default async function SettingsComprasPage() {
     : firstOrder
       ? asString(firstOrder.almacen_destino_id)
       : ""
+  const defaultWarehouseCode = nextSequentialCode("AL-", almacenes.map((almacen) => almacen.codigo))
+  const defaultProviderCode = nextSequentialCode("Prov-", proveedores.map((proveedor) => proveedor.codigo_proveedor))
   const defaultOrderId = firstOrder ? asString(firstOrder.id) : ""
   const defaultOrderFolio = [
     "OC-",
@@ -94,6 +118,8 @@ export default async function SettingsComprasPage() {
           existencias={existencias}
           defaultOrderId={defaultOrderId}
           defaultWarehouseId={defaultWarehouseId}
+          defaultWarehouseCode={defaultWarehouseCode}
+          defaultProviderCode={defaultProviderCode}
           defaultReceptionNumber={makeDefaultReceptionNumber()}
           defaultOrderFolio={defaultOrderFolio}
           defaultOrderEmissionIso={defaultOrderEmissionIso}

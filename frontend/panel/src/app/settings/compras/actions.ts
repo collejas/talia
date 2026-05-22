@@ -134,7 +134,6 @@ function zipReceptionItems(formData: FormData): Record<string, unknown>[] {
 
 export async function createAlmacenAction(formData: FormData): Promise<void> {
   const payload = {
-    codigo: parseRequiredText(formData.get("codigo"), "codigo"),
     nombre: parseRequiredText(formData.get("nombre"), "nombre"),
     tipo: parseRequiredText(formData.get("tipo"), "tipo") as "central" | "sucursal" | "transito" | "consignacion",
     activo: parseBoolean(formData.get("activo"), true),
@@ -157,7 +156,6 @@ export async function createAlmacenAction(formData: FormData): Promise<void> {
 
 export async function updateAlmacenAction(almacenId: string, formData: FormData): Promise<void> {
   const payload = {
-    codigo: parseRequiredText(formData.get("codigo"), "codigo"),
     nombre: parseRequiredText(formData.get("nombre"), "nombre"),
     tipo: parseRequiredText(formData.get("tipo"), "tipo") as "central" | "sucursal" | "transito" | "consignacion",
     activo: parseBoolean(formData.get("activo"), true),
@@ -190,7 +188,6 @@ export async function deleteAlmacenAction(almacenId: string): Promise<void> {
 
 export async function createProveedorAction(formData: FormData): Promise<void> {
   const payload = {
-    codigo_proveedor: parseRequiredText(formData.get("codigo_proveedor"), "codigo_proveedor"),
     razon_social: parseRequiredText(formData.get("razon_social"), "razon_social"),
     nombre_comercial: parseOptionalText(formData.get("nombre_comercial")),
     rfc: parseOptionalText(formData.get("rfc")),
@@ -216,7 +213,6 @@ export async function createProveedorAction(formData: FormData): Promise<void> {
 
 export async function updateProveedorAction(proveedorId: string, formData: FormData): Promise<void> {
   const payload = {
-    codigo_proveedor: parseRequiredText(formData.get("codigo_proveedor"), "codigo_proveedor"),
     razon_social: parseRequiredText(formData.get("razon_social"), "razon_social"),
     nombre_comercial: parseOptionalText(formData.get("nombre_comercial")),
     rfc: parseOptionalText(formData.get("rfc")),

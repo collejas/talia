@@ -11293,7 +11293,6 @@ class CRMAlmacen(BaseModel):
 
 
 class CRMAlmacenCreate(BaseModel):
-    codigo: str = Field(..., min_length=1, max_length=50)
     nombre: str = Field(..., min_length=1, max_length=200)
     tipo: Literal["central", "sucursal", "transito", "consignacion"]
     activo: bool = True
@@ -11338,7 +11337,6 @@ class CRMProveedor(BaseModel):
 
 
 class CRMProveedorCreate(BaseModel):
-    codigo_proveedor: str = Field(..., min_length=1, max_length=50)
     razon_social: str = Field(..., min_length=1, max_length=255)
     nombre_comercial: str | None = Field(default=None, max_length=255)
     rfc: str | None = Field(default=None, max_length=20)
@@ -14659,11 +14657,15 @@ async def update_compras_proveedor(
     proveedor_id: UUID,
     payload: CRMProveedorUpdate,
 ) -> CRMProveedor:
+    body = payload.model_dump(mode="json", exclude_unset=True)
+    body.pop("codigo_proveedor", None)
+    if not body:
+        raise HTTPException(status_code=400, detail="empty_update")
     try:
         row = await repo.update_proveedor(
             organizacion_id=organizacion_id,
             proveedor_id=proveedor_id,
-            payload=payload.model_dump(mode="json", exclude_unset=True),
+            payload=body,
         )
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
@@ -14718,11 +14720,15 @@ async def update_compras_almacen(
     almacen_id: UUID,
     payload: CRMAlmacenUpdate,
 ) -> CRMAlmacen:
+    body = payload.model_dump(mode="json", exclude_unset=True)
+    body.pop("codigo", None)
+    if not body:
+        raise HTTPException(status_code=400, detail="empty_update")
     try:
         row = await repo.update_almacen(
             organizacion_id=organizacion_id,
             almacen_id=almacen_id,
-            payload=payload.model_dump(mode="json", exclude_unset=True),
+            payload=body,
         )
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc

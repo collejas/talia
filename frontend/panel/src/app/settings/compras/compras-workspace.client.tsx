@@ -36,6 +36,8 @@ type ComprasWorkspaceProps = {
   existencias: AnyRecord[]
   defaultOrderId: string
   defaultWarehouseId: string
+  defaultWarehouseCode: string
+  defaultProviderCode: string
   defaultReceptionNumber: string
   defaultOrderFolio: string
   defaultOrderEmissionIso: string
@@ -214,6 +216,8 @@ export function ComprasWorkspace({
   existencias,
   defaultOrderId,
   defaultWarehouseId,
+  defaultWarehouseCode,
+  defaultProviderCode,
   defaultReceptionNumber,
   defaultOrderFolio,
   defaultOrderEmissionIso,
@@ -238,7 +242,7 @@ export function ComprasWorkspace({
   const [editingWarehouseId, setEditingWarehouseId] = useState<string | null>(null)
   const [editingProviderId, setEditingProviderId] = useState<string | null>(null)
   const [editingOrderId, setEditingOrderId] = useState<string | null>(null)
-  const [providerFormCode, setProviderFormCode] = useState("")
+  const [providerFormCode, setProviderFormCode] = useState(defaultProviderCode)
   const [providerFormName, setProviderFormName] = useState("")
   const [providerFormCommercialName, setProviderFormCommercialName] = useState("")
   const [providerFormEmail, setProviderFormEmail] = useState("")
@@ -262,7 +266,7 @@ export function ComprasWorkspace({
   const [adjustmentSentido, setAdjustmentSentido] = useState<"entrada" | "salida">("entrada")
   const [adjustmentCantidad, setAdjustmentCantidad] = useState("")
   const [adjustmentMotivo, setAdjustmentMotivo] = useState("")
-  const [warehouseFormCode, setWarehouseFormCode] = useState("")
+  const [warehouseFormCode, setWarehouseFormCode] = useState(defaultWarehouseCode)
   const [warehouseFormName, setWarehouseFormName] = useState("")
   const [warehouseFormType, setWarehouseFormType] = useState<"central" | "sucursal" | "transito" | "consignacion">("central")
   const [warehouseFormPhone, setWarehouseFormPhone] = useState("")
@@ -414,7 +418,7 @@ export function ComprasWorkspace({
 
   const clearWarehouseForm = () => {
     setEditingWarehouseId(null)
-    setWarehouseFormCode("")
+    setWarehouseFormCode(defaultWarehouseCode)
     setWarehouseFormName("")
     setWarehouseFormType("central")
     setWarehouseFormPhone("")
@@ -466,7 +470,7 @@ export function ComprasWorkspace({
 
   const clearProviderForm = () => {
     setEditingProviderId(null)
-    setProviderFormCode("")
+    setProviderFormCode(defaultProviderCode)
     setProviderFormName("")
     setProviderFormCommercialName("")
     setProviderFormEmail("")
@@ -495,15 +499,15 @@ export function ComprasWorkspace({
           <form action={warehouseFormAction} className="space-y-4">
             <div className="space-y-2">
               <label className="text-sm font-medium" htmlFor="almacen-codigo">
-                Código
+                Código automático
               </label>
               <Input
                 id="almacen-codigo"
                 name="codigo"
-                placeholder="CENTRAL"
-                required
+                placeholder="AL-001"
+                readOnly
+                className="bg-muted/40"
                 value={warehouseFormCode}
-                onChange={(event) => setWarehouseFormCode(event.target.value)}
               />
             </div>
             <div className="space-y-2">
@@ -645,9 +649,16 @@ export function ComprasWorkspace({
           <form action={providerFormAction} className="space-y-4">
             <div className="space-y-2">
               <label className="text-sm font-medium" htmlFor="proveedor-codigo">
-                Código
+                Código automático
               </label>
-              <Input id="proveedor-codigo" name="codigo_proveedor" value={providerFormCode} onChange={(event) => setProviderFormCode(event.target.value)} placeholder="PROV-001" required />
+              <Input
+                id="proveedor-codigo"
+                name="codigo_proveedor"
+                value={providerFormCode}
+                readOnly
+                placeholder="Prov-001"
+                className="bg-muted/40"
+              />
             </div>
             <div className="space-y-2">
               <label className="text-sm font-medium" htmlFor="proveedor-razon">

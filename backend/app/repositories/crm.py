@@ -50,6 +50,25 @@ SUPABASE_TRANSIENT_MARKERS = (
     "temporarily unavailable",
 )
 
+
+def _next_sequential_code(prefix: str, existing_codes: Sequence[Any], *, width: int = 3) -> str:
+    prefix_clean = prefix.strip()
+    prefix_lower = prefix_clean.lower()
+    highest = 0
+    for raw_code in existing_codes:
+        code = str(raw_code or "").strip()
+        if not code.lower().startswith(prefix_lower):
+            continue
+        suffix = code[len(prefix_clean) :].strip()
+        match = re.search(r"(\d+)$", suffix)
+        if not match:
+            continue
+        try:
+            highest = max(highest, int(match.group(1)))
+        except ValueError:
+            continue
+    return f"{prefix_clean}{highest + 1:0{width}d}"
+
 PERSONA_SELECT_FIELDS = (
     "id,organizacion_id,nombre,apellido_paterno,apellido_materno,nombre_completo,"
     "correo_principal,telefono_principal_e164,puesto,area,rol_decision,estado,"
@@ -9359,6 +9378,15 @@ class CRMRepository:
         payload: dict[str, Any],
     ) -> dict[str, Any]:
         body = {"organizacion_id": str(organizacion_id), **payload}
+        code = str(body.get("codigo_proveedor") or "").strip()
+        if not code:
+            existing = await self.list_proveedores(
+                organizacion_id=organizacion_id,
+                include_inactive=True,
+                limit=5000,
+            )
+            code = _next_sequential_code("Prov-", [row.get("codigo_proveedor") for row in existing])
+        body["codigo_proveedor"] = code
         resp = await self._request(
             "POST",
             "/rest/v1/proveedores",
@@ -9622,6 +9650,15 @@ class CRMRepository:
         payload: dict[str, Any],
     ) -> dict[str, Any]:
         body = {"organizacion_id": str(organizacion_id), **payload}
+        code = str(body.get("codigo") or "").strip()
+        if not code:
+            existing = await self.list_almacenes(
+                organizacion_id=organizacion_id,
+                include_inactive=True,
+                limit=5000,
+            )
+            code = _next_sequential_code("AL-", [row.get("codigo") for row in existing])
+        body["codigo"] = code
         resp = await self._request(
             "POST",
             "/rest/v1/almacenes",
