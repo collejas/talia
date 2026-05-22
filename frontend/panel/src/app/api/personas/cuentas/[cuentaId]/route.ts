@@ -32,6 +32,7 @@ export async function GET(_request: Request, { params }: Params) {
       nombre: String(account.nombre ?? ""),
       alias: account.alias ? String(account.alias) : null,
       tipo: account.tipo ? String(account.tipo) : null,
+      codigo_cuenta: account.codigo_cuenta ? String(account.codigo_cuenta) : null,
       correo: account.correo_principal ? String(account.correo_principal) : account.correo ? String(account.correo) : null,
       correo_principal: account.correo_principal ? String(account.correo_principal) : account.correo ? String(account.correo) : null,
       correo_secundario: account.correo_secundario ? String(account.correo_secundario) : null,

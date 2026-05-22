@@ -8,6 +8,7 @@ type CRMAccount = {
   nombre: string;
   alias: string | null;
   tipo: string | null;
+  codigo_cuenta?: string | null;
   telefono: string | null;
   correo: string | null;
   correo_principal?: string | null;
@@ -46,6 +47,7 @@ export async function GET(request: NextRequest) {
       const haystack = [
         account.nombre,
         account.alias ?? "",
+        account.codigo_cuenta ?? "",
         account.tipo ?? "",
         account.correo_principal ?? account.correo ?? "",
         account.correo_secundario ?? "",
@@ -62,6 +64,7 @@ export async function GET(request: NextRequest) {
         nombre: account.nombre,
         alias: account.alias,
         tipo: account.tipo,
+        codigo_cuenta: account.codigo_cuenta ?? null,
         correo: account.correo_principal ?? account.correo,
         correo_principal: account.correo_principal ?? account.correo,
         correo_secundario: account.correo_secundario ?? null,

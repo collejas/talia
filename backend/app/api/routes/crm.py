@@ -2706,6 +2706,10 @@ class CRMAccountsResponse(BaseModel):
     offset: int
 
 
+class CRMCuentaCodigoResponse(BaseModel):
+    codigo_cuenta: str | None = None
+
+
 class WhatsAppSalesAssignment(BaseModel):
     """Registro auditado de asignaciones de vendedores en WhatsApp."""
 
@@ -13372,6 +13376,21 @@ async def list_accounts(
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     items = [CRMAccount.model_validate(row) for row in rows]
     return CRMAccountsResponse(items=items, limit=limit, offset=offset)
+
+
+@router.get("/cuentas/codigo-siguiente", response_model=CRMCuentaCodigoResponse)
+async def get_next_account_code(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("contacts.read")),
+    tipo: str | None = Query(default=None),
+) -> CRMCuentaCodigoResponse:
+    try:
+        codigo = await repo.preview_account_code(organizacion_id=organizacion_id, tipo=tipo)
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return CRMCuentaCodigoResponse(codigo_cuenta=codigo)
 
 
 @router.post("/cuentas", response_model=CRMAccount, status_code=status.HTTP_201_CREATED)

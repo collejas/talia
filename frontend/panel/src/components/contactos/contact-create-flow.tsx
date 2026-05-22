@@ -144,6 +144,7 @@ type AccountOption = {
   nombre: string;
   alias?: string | null;
   tipo?: string | null;
+  codigo_cuenta?: string | null;
   correo?: string | null;
   telefono?: string | null;
   correo_principal?: string | null;
@@ -392,6 +393,7 @@ function createReducer(state: ContactCreateState, action: ContactCreateAction): 
         nextState.cuenta = {
           ...state.cuenta,
           cuenta_id: "",
+          codigo_cuenta: "",
           alias: state.cuenta.alias || nombreCompleto,
           razon_social: nombreCompleto || state.cuenta.razon_social,
           nombre_comercial: state.cuenta.nombre_comercial || nombreCompleto,
@@ -411,6 +413,7 @@ function createReducer(state: ContactCreateState, action: ContactCreateAction): 
         nextState.cuenta = {
           ...state.cuenta,
           cuenta_id: "",
+          codigo_cuenta: "",
           tipo: "empresa",
           tipo_cuenta: "empresa",
         };
@@ -422,6 +425,8 @@ function createReducer(state: ContactCreateState, action: ContactCreateAction): 
       if (action.mode === "empresa_existente") {
         nextState.cuenta = {
           ...state.cuenta,
+          cuenta_id: "",
+          codigo_cuenta: "",
           tipo: "empresa",
           tipo_cuenta: "empresa",
         };
@@ -488,6 +493,7 @@ function createReducer(state: ContactCreateState, action: ContactCreateAction): 
           ...state.cuenta,
           cuenta_id: action.account.id,
           nombre_comercial: action.account.nombre,
+          codigo_cuenta: action.account.codigo_cuenta ?? state.cuenta.codigo_cuenta,
           correo_principal: action.account.correo_principal ?? action.account.correo ?? state.cuenta.correo_principal,
           correo_secundario: action.account.correo_secundario ?? state.cuenta.correo_secundario,
           telefono_principal_e164:
@@ -576,10 +582,9 @@ function buildPayload(state: ContactCreateState, dedupe?: DedupeDecision) {
         ? "persona_fisica_actividad_empresarial"
         : state.cuenta.tipo_cuenta,
     tipo:
-      state.mode === "persona_fisica_actividad_empresarial"
-        ? "persona_fisica_actividad_empresarial"
-        : state.cuenta.tipo,
-    codigo_cuenta: state.cuenta.codigo_cuenta,
+    state.mode === "persona_fisica_actividad_empresarial"
+      ? "persona_fisica_actividad_empresarial"
+      : state.cuenta.tipo,
     tamano: state.cuenta.tamano,
     correo_principal: state.cuenta.correo_principal || state.cuenta.correo,
     correo_secundario: state.cuenta.correo_secundario,
@@ -859,6 +864,47 @@ export function ContactCreateFlow({ open, onOpenChange, onCreated, initialMode =
     () => mergeCatalogOptions(tenantCatalogs.rolDecisionOptions, state.persona.rol_decision),
     [state.persona.rol_decision, tenantCatalogs.rolDecisionOptions],
   );
+
+  React.useEffect(() => {
+    const desiredPrefix = isPfaeMode ? "PFAE-" : "Emp-";
+    if (!isCompanyMode && !isPfaeMode) {
+      if (!state.cuenta.cuenta_id && state.cuenta.codigo_cuenta) {
+        dispatch({ type: "cuenta/set", field: "codigo_cuenta", value: "" });
+      }
+      return;
+    }
+    if (!state.cuenta.cuenta_id && state.cuenta.codigo_cuenta.startsWith(desiredPrefix)) {
+      return;
+    }
+    if (state.cuenta.cuenta_id) {
+      return;
+    }
+
+    const controller = new AbortController();
+    const run = async () => {
+      try {
+        const response = await fetch(
+          `/api/personas/cuentas/codigo-siguiente?tipo=${encodeURIComponent(
+            isPfaeMode ? "persona_fisica_actividad_empresarial" : "empresa",
+          )}`,
+          {
+            cache: "no-store",
+            signal: controller.signal,
+          },
+        );
+        const body = (await response.json().catch(() => ({}))) as { codigo_cuenta?: string | null };
+        if (!response.ok) return;
+        dispatch({ type: "cuenta/set", field: "codigo_cuenta", value: body.codigo_cuenta ?? "" });
+      } catch (error) {
+        if ((error as Error).name !== "AbortError") {
+          return;
+        }
+      }
+    };
+
+    run();
+    return () => controller.abort();
+  }, [isCompanyMode, isPfaeMode, state.cuenta.cuenta_id, state.cuenta.codigo_cuenta]);
   const personSectionTitle =
     isContactMode
       ? "Datos del contacto"
@@ -1182,7 +1228,7 @@ export function ContactCreateFlow({ open, onOpenChange, onCreated, initialMode =
                           onClick={() => dispatch({ type: "account/select", account })}
                         >
                           <div className="text-sm font-medium">{account.nombre}</div>
-                          <div className="text-xs text-muted-foreground">{[account.alias, account.correo_principal, account.telefono_principal_e164].filter(Boolean).join(" · ") || "Sin datos adicionales"}</div>
+                          <div className="text-xs text-muted-foreground">{[account.codigo_cuenta, account.correo_principal, account.telefono_principal_e164].filter(Boolean).join(" · ") || "Sin datos adicionales"}</div>
                         </button>
                       );
                     })}
@@ -1204,8 +1250,13 @@ export function ContactCreateFlow({ open, onOpenChange, onCreated, initialMode =
                 <Field label="Razón social" required>
                   <Input value={state.cuenta.razon_social} onChange={(e) => dispatch({ type: "cuenta/set", field: "razon_social", value: e.target.value })} />
                 </Field>
-                <Field label="Código de cuenta">
-                  <Input value={state.cuenta.codigo_cuenta} onChange={(e) => dispatch({ type: "cuenta/set", field: "codigo_cuenta", value: e.target.value })} />
+                <Field label={isPfaeMode ? "ID de empresa propia" : "ID de empresa"}>
+                  <Input
+                    value={state.cuenta.codigo_cuenta || "Se generará automáticamente"}
+                    readOnly
+                    disabled
+                    className="bg-muted"
+                  />
                 </Field>
                 <Field label="Tipo">
                   <Input value={state.cuenta.tipo} onChange={(e) => dispatch({ type: "cuenta/set", field: "tipo", value: e.target.value })} />

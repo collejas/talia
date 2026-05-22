@@ -144,6 +144,7 @@ type AccountOption = {
   nombre: string;
   alias?: string | null;
   tipo?: string | null;
+  codigo_cuenta?: string | null;
   correo?: string | null;
   telefono?: string | null;
   correo_principal?: string | null;
@@ -740,7 +741,20 @@ function reducer(state: ContactEditState, action: ContactEditAction): ContactEdi
       };
     }
     case "mode/set":
-      return { ...state, mode: action.mode, error: null, accountError: null };
+      return {
+        ...state,
+        mode: action.mode,
+        cuenta:
+          action.mode === "empresa_nueva" || action.mode === "empresa_existente"
+            ? {
+                ...state.cuenta,
+                cuenta_id: action.mode === "empresa_nueva" ? "" : state.cuenta.cuenta_id,
+                codigo_cuenta: action.mode === "empresa_nueva" ? "" : state.cuenta.codigo_cuenta,
+              }
+            : state.cuenta,
+        error: null,
+        accountError: null,
+      };
     case "persona/set":
       return { ...state, persona: { ...state.persona, [action.field]: action.value } };
     case "cuenta/set":
@@ -766,6 +780,7 @@ function reducer(state: ContactEditState, action: ContactEditAction): ContactEdi
           ...state.cuenta,
           cuenta_id: action.account.id,
           nombre_comercial: action.account.nombre,
+          codigo_cuenta: action.account.codigo_cuenta ?? state.cuenta.codigo_cuenta,
           correo_principal: action.account.correo_principal ?? action.account.correo ?? state.cuenta.correo_principal,
           correo_secundario: action.account.correo_secundario ?? state.cuenta.correo_secundario,
           telefono_principal_e164:
@@ -982,6 +997,50 @@ export function ContactEditFlow({ open, onOpenChange, personaId, onSaved }: Cont
     [state.persona.rol_decision, tenantCatalogs.rolDecisionOptions],
   );
 
+  const isCompanyMode = state.mode === "empresa_nueva";
+  const isPfaeMode = state.mode === "persona_fisica_actividad_empresarial";
+
+  React.useEffect(() => {
+    const desiredPrefix = isPfaeMode ? "PFAE-" : "Emp-";
+    if (!isCompanyMode && !isPfaeMode) {
+      if (!state.cuenta.cuenta_id && state.cuenta.codigo_cuenta) {
+        dispatch({ type: "cuenta/set", field: "codigo_cuenta", value: "" });
+      }
+      return;
+    }
+    if (!state.cuenta.cuenta_id && state.cuenta.codigo_cuenta.startsWith(desiredPrefix)) {
+      return;
+    }
+    if (state.cuenta.cuenta_id) {
+      return;
+    }
+
+    const controller = new AbortController();
+    const run = async () => {
+      try {
+        const response = await fetch(
+          `/api/personas/cuentas/codigo-siguiente?tipo=${encodeURIComponent(
+            isPfaeMode ? "persona_fisica_actividad_empresarial" : "empresa",
+          )}`,
+          {
+            cache: "no-store",
+            signal: controller.signal,
+          },
+        );
+        const body = (await response.json().catch(() => ({}))) as { codigo_cuenta?: string | null };
+        if (!response.ok) return;
+        dispatch({ type: "cuenta/set", field: "codigo_cuenta", value: body.codigo_cuenta ?? "" });
+      } catch (error) {
+        if ((error as Error).name !== "AbortError") {
+          return;
+        }
+      }
+    };
+
+    run();
+    return () => controller.abort();
+  }, [isCompanyMode, isPfaeMode, state.cuenta.cuenta_id, state.cuenta.codigo_cuenta]);
+
   const loadRelations = React.useCallback(async () => {
     if (!resolvedPersonaId) return;
     setRelationsLoading(true);
@@ -1029,7 +1088,7 @@ export function ContactEditFlow({ open, onOpenChange, personaId, onSaved }: Cont
               cache: "no-store",
             });
             const accountBody = (await accountResponse.json().catch(() => ({}))) as {
-              item?: { id?: string; nombre?: string; alias?: string | null };
+              item?: { id?: string; nombre?: string; alias?: string | null; codigo_cuenta?: string | null };
             };
             if (!accountResponse.ok || !accountBody.item?.nombre) {
               return null;
@@ -1038,15 +1097,16 @@ export function ContactEditFlow({ open, onOpenChange, personaId, onSaved }: Cont
               id: cuentaId,
               nombre: accountBody.item.nombre,
               alias: accountBody.item.alias ?? null,
+              codigo_cuenta: accountBody.item.codigo_cuenta ?? null,
             };
           } catch {
             return null;
           }
         }),
       );
-      const summaryMap = summaries.reduce<Record<string, { nombre: string; alias: string | null }>>((acc, item) => {
+      const summaryMap = summaries.reduce<Record<string, { nombre: string; alias: string | null; codigo_cuenta: string | null }>>((acc, item) => {
         if (!item) return acc;
-        acc[item.id] = { nombre: item.nombre, alias: item.alias };
+        acc[item.id] = { nombre: item.nombre, alias: item.alias, codigo_cuenta: item.codigo_cuenta ?? null };
         return acc;
       }, {});
       setRelations(
@@ -1272,7 +1332,7 @@ export function ContactEditFlow({ open, onOpenChange, personaId, onSaved }: Cont
   const businessSummary = formatSummaryLine(
     [
       state.cuenta.nombre_comercial || state.cuenta.razon_social,
-      state.cuenta.alias,
+      state.cuenta.codigo_cuenta,
       state.cuenta.tipo_persona,
       state.cuenta.tamano,
       state.cuenta.tipo_establecimiento,
@@ -1541,7 +1601,7 @@ export function ContactEditFlow({ open, onOpenChange, personaId, onSaved }: Cont
                     <div className="mt-1 font-medium">{state.cuenta.nombre_comercial || state.cuenta.razon_social || "Empresa vinculada"}</div>
                     <div className="mt-1 text-xs text-muted-foreground">
                       {formatSummaryLine(
-                        [state.cuenta.alias, state.cuenta.rfc, state.cuenta.tipo_persona, state.cuenta.sitio_web || state.cuenta.correo_principal],
+                        [state.cuenta.codigo_cuenta, state.cuenta.rfc, state.cuenta.tipo_persona, state.cuenta.sitio_web || state.cuenta.correo_principal],
                         "Sin datos adicionales",
                       )}
                     </div>
@@ -1561,7 +1621,7 @@ export function ContactEditFlow({ open, onOpenChange, personaId, onSaved }: Cont
                           onClick={() => dispatch({ type: "account/select", account })}
                         >
                           <div className="text-sm font-medium">{account.nombre}</div>
-                          <div className="text-xs text-muted-foreground">{[account.alias, account.correo_principal, account.telefono_principal_e164].filter(Boolean).join(" · ") || "Sin datos adicionales"}</div>
+                          <div className="text-xs text-muted-foreground">{[account.codigo_cuenta, account.correo_principal, account.telefono_principal_e164].filter(Boolean).join(" · ") || "Sin datos adicionales"}</div>
                         </button>
                       );
                     })}
@@ -1585,8 +1645,8 @@ export function ContactEditFlow({ open, onOpenChange, personaId, onSaved }: Cont
                 <Field label="Razón social">
                   <Input value={state.cuenta.razon_social} onChange={(e) => dispatch({ type: "cuenta/set", field: "razon_social", value: e.target.value })} />
                 </Field>
-                <Field label="Código de cuenta">
-                  <Input value={state.cuenta.codigo_cuenta} onChange={(e) => dispatch({ type: "cuenta/set", field: "codigo_cuenta", value: e.target.value })} />
+                <Field label={isPfaeMode ? "ID de empresa propia" : "ID de empresa"}>
+                  <Input value={state.cuenta.codigo_cuenta || "Se generará automáticamente"} readOnly disabled className="bg-muted" />
                 </Field>
                 <Field label="Tipo">
                   <Input value={state.cuenta.tipo} onChange={(e) => dispatch({ type: "cuenta/set", field: "tipo", value: e.target.value })} />
@@ -1992,7 +2052,7 @@ export function ContactEditFlow({ open, onOpenChange, personaId, onSaved }: Cont
                         >
                           <div className="text-sm font-medium">{account.nombre}</div>
                           <div className="text-xs text-muted-foreground">
-                            {[account.alias, account.correo_principal, account.telefono_principal_e164].filter(Boolean).join(" · ") || "Sin datos adicionales"}
+                            {[account.codigo_cuenta, account.correo_principal, account.telefono_principal_e164].filter(Boolean).join(" · ") || "Sin datos adicionales"}
                           </div>
                         </button>
                       );

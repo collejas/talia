@@ -870,6 +870,33 @@ class CRMRepository:
             raise CRMRepositoryError(f"Respuesta inesperada al listar cuentas: {data!r}")
         return data
 
+    async def preview_account_code(
+        self,
+        *,
+        organizacion_id: UUID,
+        tipo: str | None = None,
+    ) -> str:
+        tipo_norm = str(tipo or "").strip().lower()
+        prefix = "PFAE-" if tipo_norm in {"persona_fisica_actividad_empresarial", "pfae"} else "Emp-"
+        rows: list[dict[str, Any]] = []
+        offset = 0
+        page_size = 200
+        while True:
+            batch = await self.list_accounts(
+                organizacion_id=organizacion_id,
+                limit=page_size,
+                offset=offset,
+                order="creado_en.desc",
+            )
+            rows.extend(batch)
+            if len(batch) < page_size:
+                break
+            offset += page_size
+            if offset >= 2000:
+                break
+        codes = [row.get("codigo_cuenta") for row in rows if isinstance(row, dict)]
+        return _next_sequential_code(prefix, codes, width=1)
+
     async def get_propiedades_geojson(
         self,
         *,
@@ -1430,6 +1457,11 @@ class CRMRepository:
         payload: dict[str, Any],
     ) -> dict[str, Any]:
         body = {"organizacion_id": str(organizacion_id), **payload}
+        if not str(body.get("codigo_cuenta") or "").strip():
+            body["codigo_cuenta"] = await self.preview_account_code(
+                organizacion_id=organizacion_id,
+                tipo=str(body.get("tipo") or body.get("tipo_cuenta") or ""),
+            )
         resp = await self._request(
             "POST",
             "/rest/v1/cuentas",
@@ -1457,6 +1489,7 @@ class CRMRepository:
                 raise CRMRepositoryError("cuenta_no_encontrada")
             return existing
 
+        body = {key: value for key, value in payload.items() if key != "codigo_cuenta"}
         params = {
             "organizacion_id": f"eq.{organizacion_id}",
             "id": f"eq.{account_id}",
@@ -1465,7 +1498,7 @@ class CRMRepository:
             "PATCH",
             "/rest/v1/cuentas",
             params=params,
-            json=payload,
+            json=body,
             prefer="return=representation",
         )
         data = resp.json()
