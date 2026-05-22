@@ -137,6 +137,37 @@ def _persona_datos(persona: Mapping[str, Any] | None) -> dict[str, Any]:
     return {}
 
 
+def _contact_email_value(contact: Mapping[str, Any] | None) -> str | None:
+    if not contact:
+        return None
+    for key in ("correo_principal", "correo_secundario", "correo", "email"):
+        value = contact.get(key)
+        if isinstance(value, str):
+            trimmed = value.strip()
+            if trimmed:
+                return trimmed
+    return None
+
+
+def _contact_phone_value(contact: Mapping[str, Any] | None) -> str | None:
+    if not contact:
+        return None
+    for key in (
+        "telefono_principal_e164",
+        "telefono_movil_1_e164",
+        "telefono_e164",
+        "telefono",
+        "telefono_secundario_e164",
+        "telefono_movil_2_e164",
+    ):
+        value = contact.get(key)
+        if isinstance(value, str):
+            trimmed = value.strip()
+            if trimmed:
+                return trimmed
+    return None
+
+
 def _normalize_inbound_message_id(value: Any) -> str | None:
     parsed = str(value or "").strip()
     return parsed or None
@@ -2374,12 +2405,7 @@ async def _retry_failed_sales_notification(
 
     resumen = str(contact.get("necesidad_proposito") or "").strip() or None
     notes = str(contact.get("notes") or "").strip() or None
-    email = (
-        str(contact.get("correo") or "").strip()
-        or str(contact.get("email") or "").strip()
-        or str(contact.get("correo_principal") or "").strip()
-        or None
-    )
+    email = _contact_email_value(contact)
     extra_reason = assignment_metadata.get("reason")
     extra: dict[str, Any] = dict(extra_reason) if isinstance(extra_reason, dict) else {}
     extra["retry_of_sid"] = sid

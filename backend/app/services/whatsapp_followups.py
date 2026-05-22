@@ -29,6 +29,25 @@ WHATSAPP_FOLLOWUP_PREFILTER_MINUTES = 3
 _INFERRED_INACTIVITY_LABEL = "Resumen inferido por inactividad"
 
 
+def _contact_phone_value(contact: dict[str, Any] | None) -> str | None:
+    if not contact:
+        return None
+    for key in (
+        "telefono_principal_e164",
+        "telefono_movil_1_e164",
+        "telefono_e164",
+        "telefono",
+        "telefono_secundario_e164",
+        "telefono_movil_2_e164",
+    ):
+        value = contact.get(key)
+        if isinstance(value, str):
+            trimmed = value.strip()
+            if trimmed:
+                return trimmed
+    return None
+
+
 def _extract_cursor(conversation: dict[str, Any]) -> tuple[datetime, str] | None:
     convo_id = str(conversation.get("id") or "").strip()
     last_out = _parse_ts(conversation.get("ultimo_saliente_en"))
@@ -193,7 +212,7 @@ async def _process_conversation(
             extra={"conversation_id": convo_id, "error": str(exc)},
         )
         return
-    if not contact or not contact.get("telefono_e164"):
+    if not contact or not _contact_phone_value(contact):
         return
 
     contact_complete = bool(contact.get("notes")) and bool(contact.get("necesidad_proposito"))
@@ -338,7 +357,7 @@ async def _send_persona_reengage_message(
     org_id: UUID,
     whatsapp_settings: tenant_runtime.WhatsappRuntimeSettings,
 ) -> None:
-    phone = str(persona.get("telefono_e164") or "").strip()
+    phone = _contact_phone_value(persona) or ""
     if not phone:
         return
     logger.info(

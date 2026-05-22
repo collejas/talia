@@ -96,6 +96,37 @@ INFORMATION_EMAIL_TEMPLATE: dict[str, Any] = {
 }
 
 
+def _contact_email_value(persona: dict[str, Any] | None) -> str | None:
+    if not persona:
+        return None
+    for key in ("correo_principal", "correo_secundario", "correo", "email"):
+        value = persona.get(key)
+        if isinstance(value, str):
+            trimmed = value.strip()
+            if trimmed:
+                return trimmed
+    return None
+
+
+def _contact_phone_value(persona: dict[str, Any] | None) -> str | None:
+    if not persona:
+        return None
+    for key in (
+        "telefono_principal_e164",
+        "telefono_movil_1_e164",
+        "telefono_e164",
+        "telefono",
+        "telefono_secundario_e164",
+        "telefono_movil_2_e164",
+    ):
+        value = persona.get(key)
+        if isinstance(value, str):
+            trimmed = value.strip()
+            if trimmed:
+                return trimmed
+    return None
+
+
 def _resolve_sales_notification_template(
     *,
     trigger: str,
@@ -472,8 +503,8 @@ def _is_profile_field_answered(
 def _has_base_fields_for_case_a(persona: Mapping[str, Any] | None) -> bool:
     if not persona:
         return False
-    has_contact = _has_text(persona.get("correo")) or _has_text(
-        persona.get("telefono_e164") or persona.get("telefono")
+    has_contact = _has_text(_contact_email_value(dict(persona))) or _has_text(
+        _contact_phone_value(dict(persona))
     )
     has_context = _has_text(persona.get("necesidad_proposito")) or _has_text(persona.get("notes"))
     return has_contact and has_context
@@ -482,8 +513,8 @@ def _has_base_fields_for_case_a(persona: Mapping[str, Any] | None) -> bool:
 def _has_base_fields_for_case_b(persona: Mapping[str, Any] | None) -> bool:
     if not persona:
         return False
-    has_contact = _has_text(persona.get("correo")) or _has_text(
-        persona.get("telefono_e164") or persona.get("telefono")
+    has_contact = _has_text(_contact_email_value(dict(persona))) or _has_text(
+        _contact_phone_value(dict(persona))
     )
     return has_contact
 
@@ -1248,7 +1279,7 @@ async def execute_tool(
     if func == "set_email":
         email = _require(arguments, "email").lower()
         persona_id = _context_persona_id(context)
-        await storage.update_persona(persona_id, {"correo": email})
+        await storage.update_persona(persona_id, {"correo_principal": email})
         await _refresh_opportunity_context_from_persona(
             context,
             reason="set_email",
@@ -1259,7 +1290,7 @@ async def execute_tool(
     if func == "set_phone_number":
         phone = _require(arguments, "phone_number")
         persona_id = _context_persona_id(context)
-        await storage.update_persona(persona_id, {"telefono_e164": phone})
+        await storage.update_persona(persona_id, {"telefono_principal_e164": phone})
         await _refresh_opportunity_context_from_persona(
             context,
             reason="set_phone_number",
@@ -1715,15 +1746,13 @@ async def _handle_information_email(
             if label and url:
                 resources.append({"label": label, "url": url})
 
-    persona = await _resolve_persona(persona_id)
+        persona = await _resolve_persona(persona_id)
     persona_notes = None
     persona_need = None
     if persona:
         persona_name = str(persona.get("nombre_completo") or "").strip() or None
         persona_company = str(persona.get("company_name") or "").strip() or None
-        persona_email = (
-            str(persona.get("correo") or persona.get("correo_principal") or "").strip() or None
-        )
+        persona_email = _contact_email_value(persona)
         persona_notes = str(persona.get("notes") or "").strip() or None
         persona_need = str(persona.get("necesidad_proposito") or "").strip() or None
         if not full_name:
@@ -2540,10 +2569,10 @@ async def _handle_schedule_demo(
             candidate = str(persona.get("nombre_completo") or "").strip()
             if candidate:
                 merge_payload["nombre_completo"] = candidate
-        if not str((persona_record or {}).get("correo") or "").strip():
-            candidate = str(persona.get("correo") or "").strip()
+        if not _contact_email_value(persona_record):
+            candidate = _contact_email_value(persona)
             if candidate:
-                merge_payload["correo"] = candidate
+                merge_payload["correo_principal"] = candidate
         if not str((persona_record or {}).get("company_name") or "").strip():
             candidate = str(persona.get("company_name") or "").strip()
             if candidate:
