@@ -28,15 +28,23 @@ Fecha: 2026-04-29 (UTC)
 | `apellido_paterno` | Visible | Apellido |
 | `apellido_materno` | Visible | Apellido |
 | `nombre_completo` | Solo lectura | Derivado / materializado |
-| `correo_principal` | Visible | Correo principal |
-| `telefono_principal_e164` | Visible | Teléfono principal |
+| `correo_principal` | Visible | Correo 1 principal |
+| `correo_institucional` | Visible | Correo 2 institucional, obligatorio |
+| `correo_personal_3` | Visible | Correo 3 personal 3 |
+| `telefono_principal_e164` | Visible | Alias técnico / compatibilidad |
+| `telefono_movil_1_e164` | Visible | Teléfono móvil 1, obligatorio |
+| `telefono_movil_2_e164` | Visible | Teléfono móvil 2 |
+| `telefono_empresa_1_e164` | Visible | Teléfono de la empresa 1 |
+| `telefono_empresa_1_extension` | Visible | Extensión de la empresa 1 |
+| `telefono_empresa_2_e164` | Visible | Teléfono de la empresa 2 |
+| `telefono_empresa_2_extension` | Visible | Extensión de la empresa 2 |
 | `puesto` | Visible | Cargo |
 | `area` | Visible | Área |
 | `rol_decision` | Visible | Rol de decisión |
 | `estado` | Visible | Estado operativo |
 | `origen` | Visible | Fuente de captura |
 | `notas` | Visible | Notas libres |
-| `metadata` | Avanzado | Datos técnicos o de extensión |
+| `metadata` | Avanzado | Datos técnicos de compatibilidad, no para captura principal |
 | `propietario_usuario_id` | Oculto | Relación interna |
 | `creado_en` | Solo lectura | Auditoría |
 | `actualizado_en` | Solo lectura | Auditoría |

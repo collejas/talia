@@ -44,6 +44,14 @@ Ese endpoint debe resolver internamente los escenarios de:
 - persona + cuenta nueva
 - persona fisica con actividad empresarial
 
+## 3.3 Edicion
+
+La edicion de contacto usa el mismo shape funcional de `persona`, `contexto_comercial`, `cuenta`, `relacion` y `extras`, con la diferencia de que el backend recibe el identificador por ruta:
+
+- `PATCH /crm/personas/{contacto_id}`
+
+En edicion se conservan las mismas reglas de obligatoriedad para `correo_institucional` y `telefono_movil_1_e164`.
+
 ## 3.2 Compatibilidad temporal
 
 Nota de archivo:
@@ -78,7 +86,15 @@ Representa la identidad humana real.
   "apellido_materno": "Lopez",
   "nombre_completo": "Jorge Perez Lopez",
   "correo_principal": "jorge@correo.com",
+  "correo_institucional": "jorge@empresa.com",
+  "correo_personal_3": "jorge.personal@correo.com",
   "telefono_principal_e164": "+5215555555555",
+  "telefono_movil_1_e164": "+5215555555555",
+  "telefono_movil_2_e164": "+5215555555666",
+  "telefono_empresa_1_e164": "+5215555555777",
+  "telefono_empresa_1_extension": "123",
+  "telefono_empresa_2_e164": "+5215555555888",
+  "telefono_empresa_2_extension": "456",
   "puesto": "Director comercial",
   "area": "Ventas",
   "rol_decision": "Decisor",
@@ -93,16 +109,20 @@ Representa la identidad humana real.
 - `nombre` es obligatorio
 - `apellido_paterno` es obligatorio en el alta rapido actual
 - `origen` es obligatorio en el alta actual
-- debe existir `correo_principal` o `telefono_principal_e164`
+- `correo_institucional` es obligatorio
+- `telefono_movil_1_e164` es obligatorio
+- `correo_principal` permanece como correo 1 principal opcional
+- `telefono_principal_e164` permanece como alias tecnico/compatibilidad opcional
 - `nombre_completo` puede enviarse desde frontend, pero backend debe poder derivarlo
 - backend debe tratar `nombre_completo` como derivado, no como fuente principal
 
 ## 5.4 Validaciones
 
 - `nombre` no vacio
-- `correo_principal` valido si existe
-- `telefono_principal_e164` normalizado si existe
-- rechazar payload sin telefono ni correo
+- `correo_institucional` valido y obligatorio
+- `telefono_movil_1_e164` normalizado y obligatorio
+- `correo_principal`, `correo_personal_3`, `telefono_movil_2_e164`, `telefono_empresa_1_e164`, `telefono_empresa_1_extension`, `telefono_empresa_2_e164`, `telefono_empresa_2_extension` son opcionales
+- rechazar payload sin correo institucional o sin telefono movil 1
 
 ## 6. Objeto `contexto_comercial`
 
@@ -150,7 +170,6 @@ Representa una cuenta existente o una nueva cuenta a crear.
   "rfc": "PELJ800101XXX",
   "industria": "Arquitectura",
   "segmento": "Servicios",
-  "subindustria": "",
   "sitio_web": "https://ejemplo.com",
   "correo_principal": "contacto@ejemplo.com",
   "telefono_principal": "+5215555555555",

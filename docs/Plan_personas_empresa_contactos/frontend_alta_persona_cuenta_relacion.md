@@ -65,13 +65,19 @@ Capturar a la persona humana, aunque todavia no se sepa si pertenece a una empre
 - `nombre`
 - `apellido_paterno`
 - `origen`
-- al menos uno:
-  - `telefono_principal_e164`
-  - `correo_principal`
+- `correo_institucional`
+- `telefono_movil_1_e164`
 
 ### Campos opcionales recomendados
 
 - `apellido_materno`
+- `correo_principal`
+- `correo_personal_3`
+- `telefono_movil_2_e164`
+- `telefono_empresa_1_e164`
+- `telefono_empresa_1_extension`
+- `telefono_empresa_2_e164`
+- `telefono_empresa_2_extension`
 - `puesto`
 - `area`
 - `rol_decision`
@@ -82,13 +88,19 @@ Capturar a la persona humana, aunque todavia no se sepa si pertenece a una empre
 
 - `nombre` no vacio
 - `origen` no vacio
-- debe existir telefono o correo
-- si hay correo, validarlo
-- si hay telefono, normalizarlo
+- `correo_institucional` no vacio
+- `telefono_movil_1_e164` no vacio
+- si hay correo principal o correo personal 3, validarlos
+- si hay telefonos adicionales, normalizarlos
 
 ### Regla visual
 
 En la UI, los campos obligatorios deben llevar asterisco rojo.
+En este flujo, el asterisco aplica de forma directa a:
+
+- `correo_institucional`
+- `telefono_movil_1_e164`
+
 Cuando la obligatoriedad sea compartida por un grupo de campos, debe mostrarse una nota explicativa junto al grupo.
 
 ### Regla UX
@@ -108,7 +120,15 @@ Se prepara informacion para `personas`:
 - `apellido_materno`
 - `nombre_completo`
 - `correo_principal`
+- `correo_institucional`
+- `correo_personal_3`
 - `telefono_principal_e164`
+- `telefono_movil_1_e164`
+- `telefono_movil_2_e164`
+- `telefono_empresa_1_e164`
+- `telefono_empresa_1_extension`
+- `telefono_empresa_2_e164`
+- `telefono_empresa_2_extension`
 - `puesto`
 - `area`
 - `rol_decision`
@@ -208,7 +228,9 @@ Campos recomendados:
 - `segmento`
 - `sitio_web`
 - `correo_principal`
+- `correo_institucional`
 - `telefono_principal`
+- `telefono_movil_1_e164`
 - `notas`
 
 ### Regla UX
@@ -238,7 +260,9 @@ Campos visibles:
 - `nombre_comercial`
 - `rfc`
 - `correo_principal`
+- `correo_institucional`
 - `telefono_principal`
+- `telefono_movil_1_e164`
 - `sitio_web`
 - `industria`
 - `segmento`
