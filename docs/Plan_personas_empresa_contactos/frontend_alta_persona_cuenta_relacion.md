@@ -64,6 +64,7 @@ Capturar a la persona humana, aunque todavia no se sepa si pertenece a una empre
 
 - `nombre`
 - `apellido_paterno`
+- `origen`
 - al menos uno:
   - `telefono_principal_e164`
   - `correo_principal`
@@ -75,15 +76,20 @@ Capturar a la persona humana, aunque todavia no se sepa si pertenece a una empre
 - `area`
 - `rol_decision`
 - `propietario_usuario_id`
-- `origen`
 - `notas`
 
 ### Validaciones
 
 - `nombre` no vacio
+- `origen` no vacio
 - debe existir telefono o correo
 - si hay correo, validarlo
 - si hay telefono, normalizarlo
+
+### Regla visual
+
+En la UI, los campos obligatorios deben llevar asterisco rojo.
+Cuando la obligatoriedad sea compartida por un grupo de campos, debe mostrarse una nota explicativa junto al grupo.
 
 ### Regla UX
 

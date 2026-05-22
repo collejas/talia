@@ -92,6 +92,7 @@ Representa la identidad humana real.
 
 - `nombre` es obligatorio
 - `apellido_paterno` es obligatorio en el alta rapido actual
+- `origen` es obligatorio en el alta actual
 - debe existir `correo_principal` o `telefono_principal_e164`
 - `nombre_completo` puede enviarse desde frontend, pero backend debe poder derivarlo
 - backend debe tratar `nombre_completo` como derivado, no como fuente principal

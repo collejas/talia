@@ -626,16 +626,22 @@ function validateState(state: ContactCreateState): string | null {
 function FormSection({
   title,
   description,
+  required = false,
   children,
 }: {
   title: string;
   description?: string;
+  required?: boolean;
   children: React.ReactNode;
 }) {
   return (
     <section className="space-y-4 rounded-xl border border-border/60 bg-muted/20 p-4 shadow-sm">
       <div className="space-y-1">
-        <h3 className="text-sm font-semibold leading-none">{title}</h3>
+        <h3 className="flex items-center gap-1 text-sm font-semibold leading-none">
+          <span>{title}</span>
+          {required ? <span aria-hidden="true" className="text-destructive">*</span> : null}
+          {required ? <span className="sr-only">obligatorio</span> : null}
+        </h3>
         {description ? <p className="text-xs text-muted-foreground">{description}</p> : null}
       </div>
       {children}
@@ -647,14 +653,20 @@ function Field({
   label,
   children,
   hint,
+  required = false,
 }: {
   label: string;
   children: React.ReactNode;
   hint?: string;
+  required?: boolean;
 }) {
   return (
     <div className="space-y-1.5">
-      <Label>{label}</Label>
+      <Label>
+        <span>{label}</span>
+        {required ? <span aria-hidden="true" className="text-destructive">*</span> : null}
+        {required ? <span className="sr-only">obligatorio</span> : null}
+      </Label>
       {hint ? <p className="text-xs text-muted-foreground">{hint}</p> : null}
       {children}
     </div>
@@ -862,7 +874,7 @@ export function ContactCreateFlow({ open, onOpenChange, onCreated, initialMode =
 
         <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
           <div className="space-y-5">
-          <FormSection title="Tipo de alta" description="Elige el camino que mejor describe lo que vas a registrar.">
+          <FormSection title="Tipo de alta" description="Elige el camino que mejor describe lo que vas a registrar." required>
             <RadioGroup value={state.mode} onValueChange={(value) => dispatch({ type: "mode/set", mode: value as CreateMode })} className="grid gap-3 md:grid-cols-3">
               {[
                 {
@@ -899,22 +911,22 @@ export function ContactCreateFlow({ open, onOpenChange, onCreated, initialMode =
 
           <FormSection title={personSectionTitle} description={personSectionDescription}>
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-              <Field label="Nombre">
+              <Field label="Nombre" required>
                 <Input value={state.persona.nombre} onChange={(e) => dispatch({ type: "persona/set", field: "nombre", value: e.target.value })} />
               </Field>
-              <Field label="Apellido paterno">
+              <Field label="Apellido paterno" required>
                 <Input value={state.persona.apellido_paterno} onChange={(e) => dispatch({ type: "persona/set", field: "apellido_paterno", value: e.target.value })} />
               </Field>
               <Field label="Apellido materno">
                 <Input value={state.persona.apellido_materno} onChange={(e) => dispatch({ type: "persona/set", field: "apellido_materno", value: e.target.value })} />
               </Field>
-              <Field label="Correo principal">
+              <Field label="Correo principal" required>
                 <Input value={state.persona.correo_principal} onChange={(e) => dispatch({ type: "persona/set", field: "correo_principal", value: e.target.value })} />
               </Field>
-              <Field label="Teléfono principal">
+              <Field label="Teléfono principal" required>
                 <Input value={state.persona.telefono_principal_e164} onChange={(e) => dispatch({ type: "persona/set", field: "telefono_principal_e164", value: e.target.value })} />
               </Field>
-              <Field label="Origen">
+              <Field label="Origen" required>
                 <Select
                   value={state.persona.origen || undefined}
                   onValueChange={(value) => dispatch({ type: "persona/set", field: "origen", value })}
@@ -931,6 +943,9 @@ export function ContactCreateFlow({ open, onOpenChange, onCreated, initialMode =
                   </SelectContent>
                 </Select>
               </Field>
+              <div className="md:col-span-2 -mt-2 text-xs text-muted-foreground">
+                Debes capturar al menos correo principal o teléfono principal.
+              </div>
               <Field label="Puesto">
                 <Input value={state.persona.puesto} onChange={(e) => dispatch({ type: "persona/set", field: "puesto", value: e.target.value })} />
               </Field>
@@ -966,7 +981,7 @@ export function ContactCreateFlow({ open, onOpenChange, onCreated, initialMode =
           {isContactMode ? (
             <FormSection title="Empresa vinculada" description="Busca una empresa ya creada y selecciónala.">
               <div className="space-y-3">
-                <Field label="Buscar empresa" hint="Busca por nombre, correo, teléfono o alias.">
+                <Field label="Buscar empresa" hint="Busca por nombre, correo, teléfono o alias." required>
                   <Input value={state.accountQuery} onChange={(e) => dispatch({ type: "account-query/set", value: e.target.value })} placeholder="Escribe al menos 2 caracteres" />
                 </Field>
                 {state.accountLoading ? <p className="text-xs text-muted-foreground">Buscando empresas...</p> : null}
@@ -999,13 +1014,13 @@ export function ContactCreateFlow({ open, onOpenChange, onCreated, initialMode =
               description={isPfaeMode ? "Se prellena desde la persona y puedes ajustar los datos comerciales." : "Datos de la empresa que se persistirán."}
             >
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                <Field label="Nombre comercial">
+                <Field label="Nombre comercial" required>
                   <Input value={state.cuenta.nombre_comercial} onChange={(e) => dispatch({ type: "cuenta/set", field: "nombre_comercial", value: e.target.value })} />
                 </Field>
                 <Field label="Alias">
                   <Input value={state.cuenta.alias} onChange={(e) => dispatch({ type: "cuenta/set", field: "alias", value: e.target.value })} />
                 </Field>
-                <Field label="Razón social">
+                <Field label="Razón social" required>
                   <Input value={state.cuenta.razon_social} onChange={(e) => dispatch({ type: "cuenta/set", field: "razon_social", value: e.target.value })} />
                 </Field>
                 <Field label="Código de cuenta">
@@ -1014,7 +1029,7 @@ export function ContactCreateFlow({ open, onOpenChange, onCreated, initialMode =
                 <Field label="Tipo">
                   <Input value={state.cuenta.tipo} onChange={(e) => dispatch({ type: "cuenta/set", field: "tipo", value: e.target.value })} />
                 </Field>
-                <Field label="Tipo persona">
+                <Field label="Tipo persona" required>
                   <select
                     className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs"
                     value={state.cuenta.tipo_persona}
@@ -1026,6 +1041,9 @@ export function ContactCreateFlow({ open, onOpenChange, onCreated, initialMode =
                     <option value="moral">Moral</option>
                   </select>
                 </Field>
+                <div className="md:col-span-2 -mt-2 text-xs text-muted-foreground">
+                  Debes completar al menos nombre comercial o razón social.
+                </div>
                 <Field label="RFC">
                   <Input value={state.cuenta.rfc} onChange={(e) => dispatch({ type: "cuenta/set", field: "rfc", value: e.target.value })} />
                 </Field>
@@ -1078,7 +1096,7 @@ export function ContactCreateFlow({ open, onOpenChange, onCreated, initialMode =
           {isContactMode || isCompanyMode ? (
             <FormSection title={relationSectionTitle} description={relationSectionDescription}>
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                <Field label="Función en la empresa" hint="Este es el rol operativo; los checks marcan si además es principal, de facturación o representante legal.">
+                <Field label="Función en la empresa" hint="Este es el rol operativo; los checks marcan si además es principal, de facturación o representante legal." required>
                   <select
                     className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs"
                     value={state.relacion.rol_en_cuenta}
