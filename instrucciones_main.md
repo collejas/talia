@@ -117,6 +117,7 @@ tail -n 120 /var/www/talia/logs/request.log
 sudo bash scripts/cleanup_disk.sh
 
 * Esto también limpia logs locales viejos como `logs/*.log`, `denue_merge.log` y `frontend/panel/*.log`
+* También incluye `PUI` y `maria_imlux` por defecto, y sus logs de `frontend/.next/dev/logs` si existen
 
 * Si quieres purgar logs rotados aunque no hayan vencido:
 sudo RUN_LOGS_PURGE=1 KEEP_CURRENT_LOGS=1 bash scripts/cleanup_disk.sh

@@ -27,7 +27,7 @@ RUN_EXTRA_PROJECTS_CLEAN="${RUN_EXTRA_PROJECTS_CLEAN:-1}"
 RUN_APT_AUTOREMOVE="${RUN_APT_AUTOREMOVE:-0}"
 
 # Extra projects living in same droplet that may accumulate logs/caches/backups.
-EXTRA_PROJECT_DIRS="${EXTRA_PROJECT_DIRS:-/var/www/maria_imlux /opt/richard}"
+EXTRA_PROJECT_DIRS="${EXTRA_PROJECT_DIRS:-/var/www/PUI /var/www/maria_imlux /opt/richard}"
 
 # VS Code remote
 VSCODE_SERVER_DIR="${VSCODE_SERVER_DIR:-/home/jorge/.vscode-server}"
@@ -154,6 +154,34 @@ cleanup_backups() {
   done
 }
 
+cleanup_git_objects_in_dir() {
+  local repo_dir="$1"
+  [[ -d "${repo_dir}/.git" ]] || return 0
+  command -v git >/dev/null 2>&1 || return 0
+
+  local repo_owner
+  repo_owner="$(resolve_path_owner "${repo_dir}/.git" || resolve_path_owner "${repo_dir}" || true)"
+
+  if [[ "${DRY_RUN}" == "1" ]]; then
+    log "DRY_RUN git -C ${repo_dir} gc --prune=now (owner=${repo_owner:-unknown})"
+    return 0
+  fi
+
+  if [[ "$(id -u)" -eq 0 && -n "${repo_owner}" && "${repo_owner}" != "root" ]]; then
+    if command -v sudo >/dev/null 2>&1; then
+      sudo -u "${repo_owner}" git -C "${repo_dir}" gc --prune=now >/dev/null 2>&1 || true
+    elif command -v runuser >/dev/null 2>&1; then
+      runuser -u "${repo_owner}" -- git -C "${repo_dir}" gc --prune=now >/dev/null 2>&1 || true
+    else
+      su -s /bin/bash - "${repo_owner}" -c "git -C '${repo_dir}' gc --prune=now" >/dev/null 2>&1 || true
+    fi
+    log "git gc completed in ${repo_dir} as ${repo_owner}"
+  else
+    git -C "${repo_dir}" gc --prune=now >/dev/null 2>&1 || true
+    log "git gc completed in ${repo_dir}"
+  fi
+}
+
 cleanup_logs_in_dir() {
   local logs_dir="$1"
   [[ -d "${logs_dir}" ]] || return 0
@@ -241,9 +269,11 @@ cleanup_old_logs() {
   cleanup_logs_in_dir "${ROOT_DIR}/logs"
   cleanup_top_level_logs_in_dir "${ROOT_DIR}"
   cleanup_top_level_logs_in_dir "${ROOT_DIR}/frontend/panel"
+  cleanup_logs_in_dir "${ROOT_DIR}/frontend/panel/.next/dev/logs"
   truncate_large_logs_in_dir "${ROOT_DIR}/logs"
   truncate_large_logs_in_dir "${ROOT_DIR}"
   truncate_large_logs_in_dir "${ROOT_DIR}/frontend/panel"
+  truncate_large_logs_in_dir "${ROOT_DIR}/frontend/panel/.next/dev/logs"
 }
 
 cleanup_tool_caches() {
@@ -372,28 +402,7 @@ cleanup_git_objects() {
     return 0
   fi
 
-  if [[ -d "${ROOT_DIR}/.git" ]] && command -v git >/dev/null 2>&1; then
-    local repo_owner
-    repo_owner="$(resolve_path_owner "${ROOT_DIR}/.git" || resolve_path_owner "${ROOT_DIR}" || true)"
-
-    if [[ "${DRY_RUN}" == "1" ]]; then
-      log "DRY_RUN git -C ${ROOT_DIR} gc --prune=now (owner=${repo_owner:-unknown})"
-    else
-      if [[ "$(id -u)" -eq 0 && -n "${repo_owner}" && "${repo_owner}" != "root" ]]; then
-        if command -v sudo >/dev/null 2>&1; then
-          sudo -u "${repo_owner}" git -C "${ROOT_DIR}" gc --prune=now >/dev/null 2>&1 || true
-        elif command -v runuser >/dev/null 2>&1; then
-          runuser -u "${repo_owner}" -- git -C "${ROOT_DIR}" gc --prune=now >/dev/null 2>&1 || true
-        else
-          su -s /bin/bash - "${repo_owner}" -c "git -C '${ROOT_DIR}' gc --prune=now" >/dev/null 2>&1 || true
-        fi
-        log "git gc completed as ${repo_owner}"
-      else
-        git -C "${ROOT_DIR}" gc --prune=now >/dev/null 2>&1 || true
-        log "git gc completed"
-      fi
-    fi
-  fi
+  cleanup_git_objects_in_dir "${ROOT_DIR}"
 }
 
 cleanup_system_logs() {
@@ -431,8 +440,10 @@ cleanup_extra_project_dir() {
 
   cleanup_logs_in_dir "${project_dir}/logs"
   cleanup_top_level_logs_in_dir "${project_dir}"
+  cleanup_logs_in_dir "${project_dir}/frontend/.next/dev/logs"
   truncate_large_logs_in_dir "${project_dir}/logs"
   truncate_large_logs_in_dir "${project_dir}"
+  truncate_large_logs_in_dir "${project_dir}/frontend/.next/dev/logs"
 
   # Common local backups directories used in side projects.
   local backups_dir=""
@@ -481,6 +492,7 @@ cleanup_extra_projects() {
   local project_dir=""
   for project_dir in ${EXTRA_PROJECT_DIRS}; do
     cleanup_extra_project_dir "${project_dir}"
+    cleanup_git_objects_in_dir "${project_dir}"
   done
 }
 
