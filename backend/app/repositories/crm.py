@@ -263,6 +263,19 @@ def _postgrest_ilike_literal(value: str) -> str:
     return f"*{literal}*"
 
 
+def _postgrest_presence_clause(fields: Sequence[str], present: bool) -> str:
+    if not fields:
+        raise ValueError("fields must not be empty")
+    joiner = "or" if present else "and"
+    parts = []
+    for field in fields:
+        if present:
+            parts.append(f"{field}.not.is.null")
+        else:
+            parts.append(f"{field}.is.null")
+    return f"{joiner}({','.join(parts)})"
+
+
 def _resolve_timezone_zone(value: str | None) -> ZoneInfo:
     tz_name = (value or settings.webchat_calendar_timezone or "America/Mexico_City").strip()
     if not tz_name:
@@ -13092,18 +13105,21 @@ class CRMRepository:
             params["whatsapp_permitido"] = f"eq.{str(whatsapp_permitido).lower()}"
         if llamada_permitida is not None:
             params["llamada_permitida"] = f"eq.{str(llamada_permitida).lower()}"
+        contact_phone_fields = ("phone", "phone_e164", "telefono_principal_e164", "telefono_movil_1_e164")
+        contact_email_fields = ("email", "correo_principal", "correo_secundario", "correo_institucional")
+        contact_website_fields = ("website", "sitio_web")
         if phone_present is True:
-            params["phone"] = "not.is.null"
+            and_filters.append(_postgrest_presence_clause(contact_phone_fields, True))
         elif phone_present is False:
-            params["phone"] = "is.null"
+            and_filters.append(_postgrest_presence_clause(contact_phone_fields, False))
         if email_present is True:
-            params["email"] = "not.is.null"
+            and_filters.append(_postgrest_presence_clause(contact_email_fields, True))
         elif email_present is False:
-            params["email"] = "is.null"
+            and_filters.append(_postgrest_presence_clause(contact_email_fields, False))
         if website_present is True:
-            params["website"] = "not.is.null"
+            and_filters.append(_postgrest_presence_clause(contact_website_fields, True))
         elif website_present is False:
-            params["website"] = "is.null"
+            and_filters.append(_postgrest_presence_clause(contact_website_fields, False))
         # `creado_en` is a timestamptz. The UI sends dates (YYYY-MM-DD) in the user's local
         # timezone; we convert those local-day boundaries into UTC instants so filtering by
         # "Hoy" behaves as expected (e.g. America/Mexico_City vs UTC).
@@ -13155,8 +13171,15 @@ class CRMRepository:
                     f"display_name.ilike.{pattern}",
                     f"actividad.ilike.{pattern}",
                     f"phone.ilike.{pattern}",
+                    f"phone_e164.ilike.{pattern}",
+                    f"telefono_principal_e164.ilike.{pattern}",
+                    f"telefono_movil_1_e164.ilike.{pattern}",
                     f"email.ilike.{pattern}",
+                    f"correo_principal.ilike.{pattern}",
+                    f"correo_secundario.ilike.{pattern}",
+                    f"correo_institucional.ilike.{pattern}",
                     f"website.ilike.{pattern}",
+                    f"sitio_web.ilike.{pattern}",
                 ]
             )
             and_filters.append(f"or({or_filters})")
@@ -14804,12 +14827,16 @@ class CRMRepository:
         """Regresa prospectos sin correo pero con sitio web para lanzar el scraper."""
 
         params = {
-            "select": "id,display_name,website,segmento,metadata",
+            "select": "id,display_name,website,sitio_web,correo_principal,correo_secundario,segmento,metadata",
             "order": "creado_en.asc",
             "limit": str(max(1, min(limit, 20))),
-            "or": "(email.is.null,email.eq.)",
-            "website": "not.is.null",
         }
+        params["and"] = "(" + ",".join(
+            [
+                _postgrest_presence_clause(("email", "correo_principal", "correo_secundario", "correo_institucional"), False),
+                _postgrest_presence_clause(("website", "sitio_web"), True),
+            ]
+        ) + ")"
         resp = await self._request_with_user(
             "GET",
             "/rest/v1/prospeccion_prospectos",
