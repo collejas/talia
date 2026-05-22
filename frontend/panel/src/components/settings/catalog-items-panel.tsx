@@ -146,6 +146,36 @@ function formatCurrency(value: number | null | undefined, currency: string): str
   }
 }
 
+function getCatalogScope(item: CatalogItem): {
+  label: string
+  tone: "default" | "secondary" | "outline" | "destructive"
+} {
+  const metadata = item.metadatos && typeof item.metadatos === "object" ? item.metadatos : {}
+  const destinoInventario = String(
+    (metadata as Record<string, unknown>).destino_inventario ??
+      (metadata as Record<string, unknown>).inventario_destino ??
+      "",
+  ).trim().toLowerCase()
+  const hasPropertyLink =
+    Boolean((metadata as Record<string, unknown>).propiedad_id) ||
+    Boolean((metadata as Record<string, unknown>).unidad_id) ||
+    destinoInventario === "patrimonial"
+
+  if (item.manejaInventario) {
+    return { label: "Inventario", tone: "default" }
+  }
+  if (hasPropertyLink) {
+    return { label: "Inmobiliario", tone: "secondary" }
+  }
+  if (item.tipo === "servicio") {
+    return { label: "Servicio", tone: "outline" }
+  }
+  if (item.tipo === "paquete") {
+    return { label: "Paquete", tone: "destructive" }
+  }
+  return { label: "Producto", tone: "outline" }
+}
+
 function sortItems(list: CatalogItem[]): CatalogItem[] {
   return [...list].sort((a, b) => a.nombre.localeCompare(b.nombre, "es", { sensitivity: "base" }))
 }
@@ -866,9 +896,14 @@ const handleDelete = useCallback(
                       </div>
                     </TableCell>
                     <TableCell>
-                      <Badge variant="secondary" className="capitalize">
-                        {item.tipo}
-                      </Badge>
+                      <div className="flex flex-wrap gap-2">
+                        <Badge variant={getCatalogScope(item).tone} className="capitalize">
+                          {getCatalogScope(item).label}
+                        </Badge>
+                        <Badge variant="secondary" className="capitalize">
+                          {item.tipo}
+                        </Badge>
+                      </div>
                       <div className="mt-2 flex flex-wrap gap-2">
                         <Badge variant={item.manejaInventario ? "default" : "outline"} className="text-[10px] uppercase tracking-wide">
                           {item.manejaInventario ? "Con inventario" : "Sin inventario"}
