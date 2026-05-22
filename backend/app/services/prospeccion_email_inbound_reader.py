@@ -229,7 +229,7 @@ async def _ensure_general_email_inbox_context(
     if not persona:
         persona_payload: dict[str, Any] = {
             "nombre_completo": sender_name or sender_email.split("@")[0],
-            "correo": sender_email,
+            "correo_principal": sender_email,
             "persona_datos": {
                 "source": "inbox_email_inbound",
                 "prospeccion_canal": "correo",

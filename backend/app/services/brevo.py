@@ -310,7 +310,7 @@ async def _ensure_email_inbox_context(
             "nombre_completo": sender_name
             or _clean_text((prospecto or {}).get("display_name"))
             or sender_email.split("@")[0],
-            "correo": sender_email,
+            "correo_principal": sender_email,
             "company_name": _clean_text((prospecto or {}).get("segmento")),
             "persona_datos": {
                 "source": "prospeccion_email_inbound",

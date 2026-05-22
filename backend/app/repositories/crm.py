@@ -7975,7 +7975,7 @@ class CRMRepository:
         email_key = str(email or "").strip().lower()
         if not email_key:
             return None
-        for field_name in ("correo_institucional", "correo_principal", "correo_personal_3"):
+        for field_name in ("correo_principal", "correo_secundario", "correo_institucional", "correo_personal_3"):
             params: dict[str, str] = {
                 field_name: f"eq.{email_key}",
                 "limit": "1",
