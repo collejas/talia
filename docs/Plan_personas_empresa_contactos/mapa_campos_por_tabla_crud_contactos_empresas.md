@@ -29,15 +29,13 @@ Fecha: 2026-04-29 (UTC)
 | `apellido_materno` | Visible | Apellido |
 | `nombre_completo` | Solo lectura | Derivado / materializado |
 | `correo_principal` | Visible | Correo 1 principal |
-| `correo_institucional` | Visible | Correo 2 institucional, obligatorio |
-| `correo_personal_3` | Visible | Correo 3 personal 3 |
-| `telefono_principal_e164` | Visible | Alias técnico / compatibilidad |
-| `telefono_movil_1_e164` | Visible | Teléfono móvil 1, obligatorio |
-| `telefono_movil_2_e164` | Visible | Teléfono móvil 2 |
-| `telefono_empresa_1_e164` | Visible | Teléfono de la empresa 1 |
-| `telefono_empresa_1_extension` | Visible | Extensión de la empresa 1 |
-| `telefono_empresa_2_e164` | Visible | Teléfono de la empresa 2 |
-| `telefono_empresa_2_extension` | Visible | Extensión de la empresa 2 |
+| `correo_secundario` | Visible | Correo 2 |
+| `telefono_principal_e164` | Visible | Teléfono principal |
+| `telefono_principal_tipo_linea` | Visible | Selector `movil` o `fijo` |
+| `telefono_principal_extension` | Visible | Aparece si la línea es fija, sin bloquear guardado |
+| `telefono_secundario_e164` | Visible | Teléfono 2 |
+| `telefono_secundario_tipo_linea` | Visible | Selector `movil` o `fijo` |
+| `telefono_secundario_extension` | Visible | Aparece si la línea es fija, sin bloquear guardado |
 | `puesto` | Visible | Cargo |
 | `area` | Visible | Área |
 | `rol_decision` | Visible | Rol de decisión |
@@ -60,8 +58,14 @@ Fecha: 2026-04-29 (UTC)
 | `industria` | Visible | Industria |
 | `tamano` | Visible | Tamaño |
 | `sitio_web` | Visible | Sitio web |
-| `telefono` | Visible | Teléfono |
-| `correo` | Visible | Correo |
+| `correo_principal` | Visible | Correo 1 principal |
+| `correo_secundario` | Visible | Correo 2 |
+| `telefono_principal_e164` | Visible | Teléfono principal |
+| `telefono_principal_tipo_linea` | Visible | Selector `movil` o `fijo` |
+| `telefono_principal_extension` | Visible | Aparece si la línea es fija, sin bloquear guardado |
+| `telefono_secundario_e164` | Visible | Teléfono 2 |
+| `telefono_secundario_tipo_linea` | Visible | Selector `movil` o `fijo` |
+| `telefono_secundario_extension` | Visible | Aparece si la línea es fija, sin bloquear guardado |
 | `direccion` | Avanzado | JSON base de dirección |
 | `propietario_usuario_id` | Oculto | Relación interna |
 | `metadata` | Oculto | Datos técnicos o extensión |
@@ -98,8 +102,8 @@ Fecha: 2026-04-29 (UTC)
 | `clave_localidad` | Visible | Dirección |
 | `localidad` | Visible | Dirección |
 | `pais` | Visible | Dirección |
-| `email` | Visible | Contacto |
-| `website` | Visible | Alias funcional de sitio web |
+| `email` | Oculto | Compatibilidad |
+| `website` | Oculto | Compatibilidad |
 | `tipo_establecimiento` | Visible | Dirección / sucursal |
 | `latitud` | Visible | Ubicación |
 | `longitud` | Visible | Ubicación |

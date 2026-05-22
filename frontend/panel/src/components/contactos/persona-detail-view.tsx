@@ -181,7 +181,9 @@ export function PersonaDetailView({ personaId }: { personaId: string }) {
   const contactName = getText(detail?.nombre_completo ?? detail?.nombre);
   const companyName = getText(detail?.company_name);
   const email = getText(detail?.correo_principal ?? detail?.correo);
-  const phone = getText(detail?.telefono_principal_e164 ?? detail?.telefono_e164);
+  const phoneBase = getText(detail?.telefono_principal_e164 ?? detail?.telefono_e164);
+  const phoneExtension = getText(detail?.telefono_principal_extension);
+  const phone = phoneBase && phoneExtension ? `${phoneBase} ext. ${phoneExtension}` : phoneBase;
   const notes = getText(detail?.notas ?? detail?.notes);
   const status = getText(detail?.estado);
   const origin = getText(detail?.origen);

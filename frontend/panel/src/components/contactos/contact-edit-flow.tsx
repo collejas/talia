@@ -40,8 +40,16 @@ type PersonaDraft = {
   correo_institucional: string;
   correo_personal_3: string;
   telefono_principal_e164: string;
+  telefono_principal_tipo_linea: string;
+  telefono_principal_extension: string;
   telefono_movil_1_e164: string;
+  telefono_movil_1_tipo_linea: string;
   telefono_movil_2_e164: string;
+  telefono_movil_2_tipo_linea: string;
+  telefono_movil_2_extension: string;
+  telefono_secundario_e164: string;
+  telefono_secundario_tipo_linea: string;
+  telefono_secundario_extension: string;
   telefono_empresa_1_e164: string;
   telefono_empresa_1_extension: string;
   telefono_empresa_2_e164: string;
@@ -70,7 +78,14 @@ type CuentaDraft = {
   tamano: string;
   sitio_web: string;
   correo_principal: string;
+  correo_secundario: string;
   telefono_principal: string;
+  telefono_principal_e164: string;
+  telefono_principal_tipo_linea: string;
+  telefono_principal_extension: string;
+  telefono_secundario_e164: string;
+  telefono_secundario_tipo_linea: string;
+  telefono_secundario_extension: string;
   correo: string;
   telefono: string;
   notas: string;
@@ -128,6 +143,10 @@ type AccountOption = {
   tipo?: string | null;
   correo?: string | null;
   telefono?: string | null;
+  correo_principal?: string | null;
+  correo_secundario?: string | null;
+  telefono_principal_e164?: string | null;
+  telefono_secundario_e164?: string | null;
 };
 
 type DedupeCandidate = {
@@ -257,6 +276,11 @@ const PERSONA_ORIGEN_OPTIONS = [
   { value: "importacion", label: "Importación" },
 ] as const;
 
+const PHONE_LINE_TYPE_OPTIONS = [
+  { value: "movil", label: "Móvil" },
+  { value: "fijo", label: "Fijo" },
+] as const;
+
 const INITIAL_STATE: ContactEditState = {
   mode: "solo_persona",
   persona: {
@@ -267,8 +291,16 @@ const INITIAL_STATE: ContactEditState = {
     correo_institucional: "",
     correo_personal_3: "",
     telefono_principal_e164: "",
+    telefono_principal_tipo_linea: "movil",
+    telefono_principal_extension: "",
     telefono_movil_1_e164: "",
+    telefono_movil_1_tipo_linea: "movil",
     telefono_movil_2_e164: "",
+    telefono_movil_2_tipo_linea: "movil",
+    telefono_movil_2_extension: "",
+    telefono_secundario_e164: "",
+    telefono_secundario_tipo_linea: "movil",
+    telefono_secundario_extension: "",
     telefono_empresa_1_e164: "",
     telefono_empresa_1_extension: "",
     telefono_empresa_2_e164: "",
@@ -296,7 +328,14 @@ const INITIAL_STATE: ContactEditState = {
     tamano: "",
     sitio_web: "",
     correo_principal: "",
+    correo_secundario: "",
     telefono_principal: "",
+    telefono_principal_e164: "",
+    telefono_principal_tipo_linea: "movil",
+    telefono_principal_extension: "",
+    telefono_secundario_e164: "",
+    telefono_secundario_tipo_linea: "movil",
+    telefono_secundario_extension: "",
     correo: "",
     telefono: "",
     notas: "",
@@ -417,6 +456,7 @@ function buildPayload(state: ContactEditState, dedupe?: DedupeDecision) {
   const persona = cleanObject({
     ...state.persona,
     nombre_completo: nombreCompleto || state.persona.nombre.trim(),
+    correo_secundario: state.persona.correo_secundario || state.persona.correo_institucional,
   }, { keepEmptyStringsAsNull: true });
 
   const cuentaBase = cleanObject({
@@ -437,6 +477,16 @@ function buildPayload(state: ContactEditState, dedupe?: DedupeDecision) {
       state.mode === "persona_fisica_actividad_empresarial"
         ? "persona_fisica_actividad_empresarial"
         : state.cuenta.tipo_cuenta,
+    correo_principal: state.cuenta.correo_principal || state.cuenta.correo,
+    correo_secundario: state.cuenta.correo_secundario,
+    telefono_principal_e164: state.cuenta.telefono_principal_e164 || state.cuenta.telefono_principal || state.cuenta.telefono,
+    telefono_principal_tipo_linea: state.cuenta.telefono_principal_tipo_linea,
+    telefono_principal_extension: state.cuenta.telefono_principal_extension,
+    telefono_secundario_e164: state.cuenta.telefono_secundario_e164,
+    telefono_secundario_tipo_linea: state.cuenta.telefono_secundario_tipo_linea,
+    telefono_secundario_extension: state.cuenta.telefono_secundario_extension,
+    correo: state.cuenta.correo || state.cuenta.correo_principal,
+    telefono: state.cuenta.telefono || state.cuenta.telefono_principal_e164 || state.cuenta.telefono_principal,
   }, { keepEmptyStringsAsNull: true });
 
   const relacion =
@@ -501,12 +551,8 @@ function buildPayload(state: ContactEditState, dedupe?: DedupeDecision) {
 function validateState(state: ContactEditState): string | null {
   if (!state.persona.nombre.trim()) return "El nombre es obligatorio.";
   if (!state.persona.apellido_paterno.trim()) return "El apellido paterno es obligatorio.";
-  if (state.mode === "empresa_existente") {
-    if (!state.persona.correo_principal.trim()) return "El correo 1 principal es obligatorio.";
-  } else if (!state.persona.correo_institucional.trim()) {
-    return "El correo institucional es obligatorio.";
-  }
-  if (!state.persona.telefono_movil_1_e164.trim()) return "El teléfono móvil 1 es obligatorio.";
+  if (!state.persona.correo_principal.trim()) return "El correo 1 principal es obligatorio.";
+  if (!state.persona.telefono_principal_e164.trim()) return "El teléfono principal es obligatorio.";
   if (state.mode === "empresa_existente" && !state.cuenta.cuenta_id.trim()) {
     return "Selecciona una cuenta existente.";
   }
@@ -522,6 +568,18 @@ function validateState(state: ContactEditState): string | null {
     !state.cuenta.tipo_persona.trim()
   ) {
     return "Selecciona el tipo de persona de la cuenta.";
+  }
+  if (
+    (state.mode === "empresa_nueva" || state.mode === "persona_fisica_actividad_empresarial") &&
+    !state.cuenta.correo_principal.trim()
+  ) {
+    return "El correo principal de la cuenta es obligatorio.";
+  }
+  if (
+    (state.mode === "empresa_nueva" || state.mode === "persona_fisica_actividad_empresarial") &&
+    !state.cuenta.telefono_principal_e164.trim()
+  ) {
+    return "El teléfono principal de la cuenta es obligatorio.";
   }
   if (state.mode !== "solo_persona" && !state.relacion.rol_en_cuenta.trim()) {
     return "Define el rol de la persona dentro de la cuenta.";
@@ -575,12 +633,20 @@ function reducer(state: ContactEditState, action: ContactEditAction): ContactEdi
           nombre: readString(detail, "nombre_nombres") || readString(detail, "nombre") || "",
           apellido_paterno: readString(detail, "apellido_paterno"),
           apellido_materno: readString(detail, "apellido_materno"),
-          correo_principal: readString(detail, "correo_principal") || readString(detail, "correo_institucional") || readString(detail, "correo"),
-          correo_institucional: readString(detail, "correo_institucional") || readString(detail, "correo_principal") || readString(detail, "correo"),
+          correo_principal: readString(detail, "correo_principal") || readString(detail, "correo") || readString(detail, "email"),
+          correo_institucional: readString(detail, "correo_institucional"),
           correo_personal_3: readString(detail, "correo_personal_3"),
-          telefono_principal_e164: readString(detail, "telefono_principal_e164") || readString(detail, "telefono_movil_1_e164") || readString(detail, "telefono_e164"),
+          telefono_principal_e164: readString(detail, "telefono_principal_e164") || readString(detail, "telefono_movil_1_e164") || readString(detail, "telefono_e164") || readString(detail, "telefono"),
+          telefono_principal_tipo_linea: readString(detail, "telefono_principal_tipo_linea") || readString(detail, "telefono_movil_1_tipo_linea") || "movil",
+          telefono_principal_extension: readString(detail, "telefono_principal_extension"),
           telefono_movil_1_e164: readString(detail, "telefono_movil_1_e164") || readString(detail, "telefono_principal_e164") || readString(detail, "telefono_e164"),
+          telefono_movil_1_tipo_linea: readString(detail, "telefono_movil_1_tipo_linea") || readString(detail, "telefono_principal_tipo_linea") || "movil",
           telefono_movil_2_e164: readString(detail, "telefono_movil_2_e164"),
+          telefono_movil_2_tipo_linea: readString(detail, "telefono_movil_2_tipo_linea") || readString(detail, "telefono_secundario_tipo_linea") || "movil",
+          telefono_movil_2_extension: readString(detail, "telefono_movil_2_extension") || readString(detail, "telefono_secundario_extension"),
+          telefono_secundario_e164: readString(detail, "telefono_secundario_e164") || readString(detail, "telefono_movil_2_e164"),
+          telefono_secundario_tipo_linea: readString(detail, "telefono_secundario_tipo_linea") || readString(detail, "telefono_movil_2_tipo_linea") || "movil",
+          telefono_secundario_extension: readString(detail, "telefono_secundario_extension") || readString(detail, "telefono_movil_2_extension"),
           telefono_empresa_1_e164: readString(detail, "telefono_empresa_1_e164"),
           telefono_empresa_1_extension: readString(detail, "telefono_empresa_1_extension"),
           telefono_empresa_2_e164: readString(detail, "telefono_empresa_2_e164"),
@@ -606,8 +672,15 @@ function reducer(state: ContactEditState, action: ContactEditAction): ContactEdi
           rfc: readString(detail, "rfc"),
           industria: readString(detail, "tipo_industria"),
           sitio_web: readString(detail, "website"),
-          correo_principal: readString(detail, "email_facturacion"),
-          telefono_principal: readString(detail, "telefono_e164"),
+          correo_principal: readString(detail, "cuenta_correo_principal") || readString(detail, "correo_principal") || readString(detail, "correo") || readString(detail, "email"),
+          correo_secundario: readString(detail, "cuenta_correo_secundario") || readString(detail, "correo_secundario"),
+          telefono_principal: readString(detail, "cuenta_telefono_principal_e164") || readString(detail, "telefono_principal_e164") || readString(detail, "telefono"),
+          telefono_principal_e164: readString(detail, "cuenta_telefono_principal_e164") || readString(detail, "telefono_principal_e164") || readString(detail, "telefono"),
+          telefono_principal_tipo_linea: readString(detail, "cuenta_telefono_principal_tipo_linea") || readString(detail, "telefono_principal_tipo_linea") || "movil",
+          telefono_principal_extension: readString(detail, "cuenta_telefono_principal_extension") || readString(detail, "telefono_principal_extension"),
+          telefono_secundario_e164: readString(detail, "cuenta_telefono_secundario_e164") || readString(detail, "telefono_secundario_e164"),
+          telefono_secundario_tipo_linea: readString(detail, "cuenta_telefono_secundario_tipo_linea") || readString(detail, "telefono_secundario_tipo_linea") || "movil",
+          telefono_secundario_extension: readString(detail, "cuenta_telefono_secundario_extension") || readString(detail, "telefono_secundario_extension"),
           correo: readString(detail, "correo"),
           telefono: readString(detail, "telefono"),
           notas: "",
@@ -689,8 +762,12 @@ function reducer(state: ContactEditState, action: ContactEditAction): ContactEdi
           ...state.cuenta,
           cuenta_id: action.account.id,
           nombre_comercial: action.account.nombre,
-          correo_principal: action.account.correo ?? state.cuenta.correo_principal,
-          telefono_principal: action.account.telefono ?? state.cuenta.telefono_principal,
+          correo_principal: action.account.correo_principal ?? action.account.correo ?? state.cuenta.correo_principal,
+          correo_secundario: action.account.correo_secundario ?? state.cuenta.correo_secundario,
+          telefono_principal_e164:
+            action.account.telefono_principal_e164 ?? action.account.telefono ?? state.cuenta.telefono_principal_e164,
+          telefono_principal: action.account.telefono_principal_e164 ?? action.account.telefono ?? state.cuenta.telefono_principal,
+          telefono_secundario_e164: action.account.telefono_secundario_e164 ?? state.cuenta.telefono_secundario_e164,
         },
         relacion: {
           ...state.relacion,
@@ -1170,8 +1247,6 @@ export function ContactEditFlow({ open, onOpenChange, personaId, onSaved }: Cont
         : state.mode === "empresa_nueva"
           ? "Edita la persona y los datos de la empresa asociada."
           : "Edita la persona y la empresa en un mismo flujo.";
-  const showContactExtras = state.mode === "empresa_existente";
-  const showCompanyPhones = state.mode === "empresa_nueva" || state.mode === "persona_fisica_actividad_empresarial";
   const relationSectionTitle =
     state.mode === "persona_fisica_actividad_empresarial"
       ? "Vínculo principal"
@@ -1241,7 +1316,7 @@ export function ContactEditFlow({ open, onOpenChange, personaId, onSaved }: Cont
                 <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Persona</div>
                 <div className="mt-2 text-sm font-medium">{fullName || "Sin nombre"}</div>
                 <div className="mt-1 text-xs text-muted-foreground">
-                  {formatSummaryLine([state.persona.correo_institucional, state.persona.telefono_movil_1_e164, state.persona.estado], "Sin medio de contacto")}
+                  {formatSummaryLine([state.persona.correo_principal, state.persona.telefono_principal_e164, state.persona.estado], "Sin medio de contacto")}
                 </div>
               </div>
               <div className="rounded-lg border border-border/60 bg-background p-3">
@@ -1297,41 +1372,76 @@ export function ContactEditFlow({ open, onOpenChange, personaId, onSaved }: Cont
               <Field label="Apellido materno">
                 <Input value={state.persona.apellido_materno} onChange={(e) => dispatch({ type: "persona/set", field: "apellido_materno", value: e.target.value })} />
               </Field>
-              <Field label="Correo 1 principal" required={state.mode === "empresa_existente"}>
+              <Field label="Correo 1 principal" required>
                 <Input value={state.persona.correo_principal} onChange={(e) => dispatch({ type: "persona/set", field: "correo_principal", value: e.target.value })} />
               </Field>
-              <Field label="Correo 2 institucional" required={state.mode !== "empresa_existente"}>
+              <Field label="Correo 2" hint="Opcional">
                 <Input value={state.persona.correo_institucional} onChange={(e) => dispatch({ type: "persona/set", field: "correo_institucional", value: e.target.value })} />
               </Field>
-              {showContactExtras ? (
-                <Field label="Correo 3 personal 3">
-                  <Input value={state.persona.correo_personal_3} onChange={(e) => dispatch({ type: "persona/set", field: "correo_personal_3", value: e.target.value })} />
-                </Field>
-              ) : null}
-              <Field label="Teléfono móvil 1" required>
-                <Input value={state.persona.telefono_movil_1_e164} onChange={(e) => dispatch({ type: "persona/set", field: "telefono_movil_1_e164", value: e.target.value })} />
+              <Field label="Teléfono principal" required>
+                <div className="space-y-2">
+                  <div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_160px]">
+                    <Input
+                      value={state.persona.telefono_principal_e164}
+                      onChange={(e) => dispatch({ type: "persona/set", field: "telefono_principal_e164", value: e.target.value })}
+                    />
+                    <Select
+                      value={state.persona.telefono_principal_tipo_linea || "movil"}
+                      onValueChange={(value) => dispatch({ type: "persona/set", field: "telefono_principal_tipo_linea", value })}
+                    >
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder="Tipo de línea" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {PHONE_LINE_TYPE_OPTIONS.map((option) => (
+                          <SelectItem key={option.value} value={option.value}>
+                            {option.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  {state.persona.telefono_principal_tipo_linea === "fijo" ? (
+                    <Input
+                      placeholder="Extensión"
+                      value={state.persona.telefono_principal_extension}
+                      onChange={(e) => dispatch({ type: "persona/set", field: "telefono_principal_extension", value: e.target.value })}
+                    />
+                  ) : null}
+                </div>
               </Field>
-              {showContactExtras ? (
-                <Field label="Teléfono móvil 2">
-                  <Input value={state.persona.telefono_movil_2_e164} onChange={(e) => dispatch({ type: "persona/set", field: "telefono_movil_2_e164", value: e.target.value })} />
-                </Field>
-              ) : null}
-              {showCompanyPhones ? (
-                <>
-                  <Field label="Teléfono de la empresa 1 con extensión">
-                    <div className="grid grid-cols-[minmax(0,1fr)_120px] gap-2">
-                      <Input value={state.persona.telefono_empresa_1_e164} onChange={(e) => dispatch({ type: "persona/set", field: "telefono_empresa_1_e164", value: e.target.value })} />
-                      <Input placeholder="Ext." value={state.persona.telefono_empresa_1_extension} onChange={(e) => dispatch({ type: "persona/set", field: "telefono_empresa_1_extension", value: e.target.value })} />
-                    </div>
-                  </Field>
-                  <Field label="Teléfono de la empresa 2 con extensión">
-                    <div className="grid grid-cols-[minmax(0,1fr)_120px] gap-2">
-                      <Input value={state.persona.telefono_empresa_2_e164} onChange={(e) => dispatch({ type: "persona/set", field: "telefono_empresa_2_e164", value: e.target.value })} />
-                      <Input placeholder="Ext." value={state.persona.telefono_empresa_2_extension} onChange={(e) => dispatch({ type: "persona/set", field: "telefono_empresa_2_extension", value: e.target.value })} />
-                    </div>
-                  </Field>
-                </>
-              ) : null}
+              <Field label="Teléfono 2" hint="Opcional">
+                <div className="space-y-2">
+                  <div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_160px]">
+                    <Input
+                      value={state.persona.telefono_movil_2_e164}
+                      onChange={(e) => dispatch({ type: "persona/set", field: "telefono_movil_2_e164", value: e.target.value })}
+                    />
+                    <Select
+                      value={state.persona.telefono_movil_2_tipo_linea || "movil"}
+                      onValueChange={(value) => dispatch({ type: "persona/set", field: "telefono_movil_2_tipo_linea", value })}
+                    >
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder="Tipo de línea" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {PHONE_LINE_TYPE_OPTIONS.map((option) => (
+                          <SelectItem key={option.value} value={option.value}>
+                            {option.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  {state.persona.telefono_movil_2_tipo_linea === "fijo" ? (
+                    <Input
+                      placeholder="Extensión"
+                      value={state.persona.telefono_movil_2_extension}
+                      onChange={(e) => dispatch({ type: "persona/set", field: "telefono_movil_2_extension", value: e.target.value })}
+                    />
+                  ) : null}
+                </div>
+              </Field>
               <Field label="Origen">
                 <Select
                   value={state.persona.origen || undefined}
@@ -1413,7 +1523,7 @@ export function ContactEditFlow({ open, onOpenChange, personaId, onSaved }: Cont
                           onClick={() => dispatch({ type: "account/select", account })}
                         >
                           <div className="text-sm font-medium">{account.nombre}</div>
-                          <div className="text-xs text-muted-foreground">{[account.alias, account.correo, account.telefono].filter(Boolean).join(" · ") || "Sin datos adicionales"}</div>
+                          <div className="text-xs text-muted-foreground">{[account.alias, account.correo_principal, account.telefono_principal_e164].filter(Boolean).join(" · ") || "Sin datos adicionales"}</div>
                         </button>
                       );
                     })}
@@ -1467,17 +1577,75 @@ export function ContactEditFlow({ open, onOpenChange, personaId, onSaved }: Cont
                 <Field label="Sitio web">
                   <Input value={state.cuenta.sitio_web} onChange={(e) => dispatch({ type: "cuenta/set", field: "sitio_web", value: e.target.value })} />
                 </Field>
-                <Field label="Correo principal">
+                <Field label="Correo 1 principal" required>
                   <Input value={state.cuenta.correo_principal} onChange={(e) => dispatch({ type: "cuenta/set", field: "correo_principal", value: e.target.value })} />
                 </Field>
-                <Field label="Teléfono principal">
-                  <Input value={state.cuenta.telefono_principal} onChange={(e) => dispatch({ type: "cuenta/set", field: "telefono_principal", value: e.target.value })} />
+                <Field label="Correo 2" hint="Opcional">
+                  <Input value={state.cuenta.correo_secundario} onChange={(e) => dispatch({ type: "cuenta/set", field: "correo_secundario", value: e.target.value })} />
                 </Field>
-                <Field label="Correo">
-                  <Input value={state.cuenta.correo} onChange={(e) => dispatch({ type: "cuenta/set", field: "correo", value: e.target.value })} />
+                <Field label="Teléfono principal" required>
+                  <div className="space-y-2">
+                    <div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_160px]">
+                      <Input
+                        value={state.cuenta.telefono_principal_e164}
+                        onChange={(e) => dispatch({ type: "cuenta/set", field: "telefono_principal_e164", value: e.target.value })}
+                      />
+                      <Select
+                        value={state.cuenta.telefono_principal_tipo_linea || "movil"}
+                        onValueChange={(value) => dispatch({ type: "cuenta/set", field: "telefono_principal_tipo_linea", value })}
+                      >
+                        <SelectTrigger className="w-full">
+                          <SelectValue placeholder="Tipo de línea" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {PHONE_LINE_TYPE_OPTIONS.map((option) => (
+                            <SelectItem key={option.value} value={option.value}>
+                              {option.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    {state.cuenta.telefono_principal_tipo_linea === "fijo" ? (
+                      <Input
+                        placeholder="Extensión"
+                        value={state.cuenta.telefono_principal_extension}
+                        onChange={(e) => dispatch({ type: "cuenta/set", field: "telefono_principal_extension", value: e.target.value })}
+                      />
+                    ) : null}
+                  </div>
                 </Field>
-                <Field label="Teléfono">
-                  <Input value={state.cuenta.telefono} onChange={(e) => dispatch({ type: "cuenta/set", field: "telefono", value: e.target.value })} />
+                <Field label="Teléfono 2" hint="Opcional">
+                  <div className="space-y-2">
+                    <div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_160px]">
+                      <Input
+                        value={state.cuenta.telefono_secundario_e164}
+                        onChange={(e) => dispatch({ type: "cuenta/set", field: "telefono_secundario_e164", value: e.target.value })}
+                      />
+                      <Select
+                        value={state.cuenta.telefono_secundario_tipo_linea || "movil"}
+                        onValueChange={(value) => dispatch({ type: "cuenta/set", field: "telefono_secundario_tipo_linea", value })}
+                      >
+                        <SelectTrigger className="w-full">
+                          <SelectValue placeholder="Tipo de línea" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {PHONE_LINE_TYPE_OPTIONS.map((option) => (
+                            <SelectItem key={option.value} value={option.value}>
+                              {option.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    {state.cuenta.telefono_secundario_tipo_linea === "fijo" ? (
+                      <Input
+                        placeholder="Extensión"
+                        value={state.cuenta.telefono_secundario_extension}
+                        onChange={(e) => dispatch({ type: "cuenta/set", field: "telefono_secundario_extension", value: e.target.value })}
+                      />
+                    ) : null}
+                  </div>
                 </Field>
                 <Field label="Necesidad / propósito">
                   <Input value={state.cuenta.necesidad_proposito} onChange={(e) => dispatch({ type: "cuenta/set", field: "necesidad_proposito", value: e.target.value })} />
@@ -1789,7 +1957,7 @@ export function ContactEditFlow({ open, onOpenChange, personaId, onSaved }: Cont
                         >
                           <div className="text-sm font-medium">{account.nombre}</div>
                           <div className="text-xs text-muted-foreground">
-                            {[account.alias, account.correo, account.telefono].filter(Boolean).join(" · ") || "Sin datos adicionales"}
+                            {[account.alias, account.correo_principal, account.telefono_principal_e164].filter(Boolean).join(" · ") || "Sin datos adicionales"}
                           </div>
                         </button>
                       );

@@ -181,7 +181,13 @@ type PersonaDraft = {
   apellido_materno: string;
   nombre_completo: string;
   correo_principal: string;
+  correo_secundario: string;
   telefono_principal_e164: string;
+  telefono_principal_tipo_linea: string;
+  telefono_principal_extension: string;
+  telefono_secundario_e164: string;
+  telefono_secundario_tipo_linea: string;
+  telefono_secundario_extension: string;
   puesto: string;
   area: string;
   rol_decision: string;
@@ -206,7 +212,13 @@ type CuentaDraft = {
   subindustria: string;
   sitio_web: string;
   correo_principal: string;
-  telefono_principal: string;
+  correo_secundario: string;
+  telefono_principal_e164: string;
+  telefono_principal_tipo_linea: string;
+  telefono_principal_extension: string;
+  telefono_secundario_e164: string;
+  telefono_secundario_tipo_linea: string;
+  telefono_secundario_extension: string;
   notas: string;
 };
 

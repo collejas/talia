@@ -71,8 +71,8 @@ def _next_sequential_code(prefix: str, existing_codes: Sequence[Any], *, width: 
 
 PERSONA_SELECT_FIELDS = (
     "id,organizacion_id,nombre,apellido_paterno,apellido_materno,nombre_completo,"
-    "correo_principal,correo_institucional,correo_personal_3,"
-    "telefono_principal_e164,telefono_movil_1_e164,telefono_movil_2_e164,"
+    "correo_principal,correo_secundario,correo_institucional,correo_personal_3,"
+    "telefono_principal_e164,telefono_principal_tipo_linea,telefono_principal_extension,telefono_movil_1_e164,telefono_movil_1_tipo_linea,telefono_movil_2_e164,telefono_movil_2_tipo_linea,telefono_movil_2_extension,telefono_secundario_e164,telefono_secundario_tipo_linea,telefono_secundario_extension,"
     "telefono_empresa_1_e164,telefono_empresa_1_extension,telefono_empresa_2_e164,telefono_empresa_2_extension,"
     "puesto,area,rol_decision,estado,"
     "origen,notas,metadata,persona_datos,propietario_usuario_id,creado_en,actualizado_en,"
@@ -760,7 +760,7 @@ class CRMRepository:
             "cuenta_id",
             "contacto_principal_id",
             "contacto:personas!oportunidades_contacto_principal_org_fkey("
-            "id,nombre_completo,correo_principal,correo_institucional,telefono_principal_e164,telefono_movil_1_e164,company_name,notas,origen,estado,metadata,persona_datos"
+            "id,nombre_completo,correo_principal,correo_secundario,correo_institucional,telefono_principal_e164,telefono_principal_extension,telefono_movil_1_e164,company_name,notas,origen,estado,metadata,persona_datos"
             ")",
             "etapa_id",
             "titulo",
@@ -6549,13 +6549,22 @@ class CRMRepository:
             "nombre_completo": preferred_name or raw_full_name,
             "nombre": preferred_name or raw_full_name,
             "correo_principal": persona.get("correo_principal"),
+            "correo_secundario": persona.get("correo_secundario") or persona.get("correo_institucional"),
             "correo_institucional": persona.get("correo_institucional") or persona.get("correo_principal"),
             "correo_personal_3": persona.get("correo_personal_3"),
-            "correo": persona.get("correo_institucional") or persona.get("correo_principal"),
-            "email": persona.get("correo_institucional") or persona.get("correo_principal"),
+            "correo": persona.get("correo_secundario") or persona.get("correo_institucional") or persona.get("correo_principal"),
+            "email": persona.get("correo_secundario") or persona.get("correo_institucional") or persona.get("correo_principal"),
             "telefono_principal_e164": persona.get("telefono_principal_e164"),
+            "telefono_principal_tipo_linea": persona.get("telefono_principal_tipo_linea"),
+            "telefono_principal_extension": persona.get("telefono_principal_extension"),
             "telefono_movil_1_e164": persona.get("telefono_movil_1_e164") or persona.get("telefono_principal_e164"),
+            "telefono_movil_1_tipo_linea": persona.get("telefono_movil_1_tipo_linea") or persona.get("telefono_principal_tipo_linea"),
             "telefono_movil_2_e164": persona.get("telefono_movil_2_e164"),
+            "telefono_movil_2_tipo_linea": persona.get("telefono_movil_2_tipo_linea"),
+            "telefono_movil_2_extension": persona.get("telefono_movil_2_extension"),
+            "telefono_secundario_e164": persona.get("telefono_secundario_e164") or persona.get("telefono_movil_2_e164"),
+            "telefono_secundario_tipo_linea": persona.get("telefono_secundario_tipo_linea") or persona.get("telefono_movil_2_tipo_linea"),
+            "telefono_secundario_extension": persona.get("telefono_secundario_extension") or persona.get("telefono_movil_2_extension"),
             "telefono_empresa_1_e164": persona.get("telefono_empresa_1_e164"),
             "telefono_empresa_1_extension": persona.get("telefono_empresa_1_extension"),
             "telefono_empresa_2_e164": persona.get("telefono_empresa_2_e164"),
@@ -6575,6 +6584,14 @@ class CRMRepository:
             "nombre_nombres": persona.get("nombre"),
             "apellido_paterno": persona.get("apellido_paterno"),
             "apellido_materno": persona.get("apellido_materno"),
+            "cuenta_correo_principal": account.get("correo_principal") if isinstance(account, dict) else None,
+            "cuenta_correo_secundario": account.get("correo_secundario") if isinstance(account, dict) else None,
+            "cuenta_telefono_principal_e164": account.get("telefono_principal_e164") if isinstance(account, dict) else None,
+            "cuenta_telefono_principal_tipo_linea": account.get("telefono_principal_tipo_linea") if isinstance(account, dict) else None,
+            "cuenta_telefono_principal_extension": account.get("telefono_principal_extension") if isinstance(account, dict) else None,
+            "cuenta_telefono_secundario_e164": account.get("telefono_secundario_e164") if isinstance(account, dict) else None,
+            "cuenta_telefono_secundario_tipo_linea": account.get("telefono_secundario_tipo_linea") if isinstance(account, dict) else None,
+            "cuenta_telefono_secundario_extension": account.get("telefono_secundario_extension") if isinstance(account, dict) else None,
             "razon_social": account.get("razon_social") if isinstance(account, dict) else None,
             "rfc": account.get("rfc") if isinstance(account, dict) else None,
             "uso_cfdi": account.get("uso_cfdi") if isinstance(account, dict) else None,
@@ -6583,13 +6600,13 @@ class CRMRepository:
             "email_facturacion": account.get("email_facturacion") if isinstance(account, dict) else None,
             "tipo_industria": account.get("tipo_industria") if isinstance(account, dict) else None,
             "tamano": account.get("tamano") if isinstance(account, dict) else None,
+            "cuenta_tipo": account.get("tipo") if isinstance(account, dict) else None,
             "puesto": relation.get("puesto") if isinstance(relation, dict) and relation.get("puesto") else persona.get("puesto"),
             "rol_en_cuenta": relation.get("rol_en_cuenta") if isinstance(relation, dict) else None,
             "es_contacto_principal": relation.get("es_contacto_principal") if isinstance(relation, dict) else None,
             "es_contacto_facturacion": relation.get("es_contacto_facturacion") if isinstance(relation, dict) else None,
             "es_representante_legal": relation.get("es_representante_legal") if isinstance(relation, dict) else None,
             "relacion_activa": relation.get("activo") if isinstance(relation, dict) else None,
-            "cuenta_tipo": account.get("tipo") if isinstance(account, dict) else None,
             "area": persona.get("area"),
             "rol_decision": persona.get("rol_decision"),
             "codigo_postal": account.get("codigo_postal") if isinstance(account, dict) else None,
@@ -6735,6 +6752,14 @@ class CRMRepository:
                 "company_name",
                 "razon_social",
                 "rfc",
+                "cuenta_correo_principal",
+                "cuenta_correo_secundario",
+                "cuenta_telefono_principal_e164",
+                "cuenta_telefono_principal_tipo_linea",
+                "cuenta_telefono_principal_extension",
+                "cuenta_telefono_secundario_e164",
+                "cuenta_telefono_secundario_tipo_linea",
+                "cuenta_telefono_secundario_extension",
                 "uso_cfdi",
                 "metodo_pago",
                 "forma_pago",
@@ -6771,13 +6796,8 @@ class CRMRepository:
             "apellido_materno": apellido_materno,
             "nombre_completo": full_name,
             "correo_principal": self._pick_text(merged, "correo_principal", "correo", "email"),
-            "correo_institucional": self._pick_text(
-                merged,
-                "correo_institucional",
-                "correo",
-                "email",
-                "correo_principal",
-            ),
+            "correo_secundario": self._pick_text(merged, "correo_secundario", "correo_institucional"),
+            "correo_institucional": self._pick_text(merged, "correo_institucional"),
             "correo_personal_3": self._pick_text(merged, "correo_personal_3"),
             "telefono_principal_e164": self._pick_text(
                 merged,
@@ -6786,19 +6806,48 @@ class CRMRepository:
                 "telefono_e164",
                 "telefono",
             ),
+            "telefono_principal_tipo_linea": self._pick_text(
+                merged,
+                "telefono_principal_tipo_linea",
+                "telefono_movil_1_tipo_linea",
+            ),
+            "telefono_principal_extension": self._pick_text(merged, "telefono_principal_extension"),
             "telefono_movil_1_e164": self._pick_text(
                 merged,
                 "telefono_movil_1_e164",
                 "telefono_principal_e164",
                 "telefono_e164",
+                "telefono",
             ),
-            "telefono_movil_2_e164": self._pick_text(merged, "telefono_movil_2_e164"),
-            "telefono_empresa_1_e164": self._pick_text(merged, "telefono_empresa_1_e164"),
-            "telefono_empresa_1_extension": self._pick_text(merged, "telefono_empresa_1_extension"),
-            "telefono_empresa_2_e164": self._pick_text(merged, "telefono_empresa_2_e164"),
-            "telefono_empresa_2_extension": self._pick_text(merged, "telefono_empresa_2_extension"),
-            "correo": self._pick_text(merged, "correo_institucional", "correo_principal", "correo", "email"),
-            "telefono_e164": self._pick_text(merged, "telefono_movil_1_e164", "telefono_principal_e164", "telefono_e164", "telefono"),
+            "telefono_movil_1_tipo_linea": self._pick_text(
+                merged,
+                "telefono_movil_1_tipo_linea",
+                "telefono_principal_tipo_linea",
+            ),
+            "telefono_movil_2_e164": self._pick_text(merged, "telefono_movil_2_e164", "telefono_secundario_e164"),
+            "telefono_movil_2_tipo_linea": self._pick_text(
+                merged,
+                "telefono_movil_2_tipo_linea",
+                "telefono_secundario_tipo_linea",
+            ),
+            "telefono_movil_2_extension": self._pick_text(
+                merged,
+                "telefono_movil_2_extension",
+                "telefono_secundario_extension",
+            ),
+            "telefono_secundario_e164": self._pick_text(merged, "telefono_secundario_e164", "telefono_movil_2_e164"),
+            "telefono_secundario_tipo_linea": self._pick_text(
+                merged,
+                "telefono_secundario_tipo_linea",
+                "telefono_movil_2_tipo_linea",
+            ),
+            "telefono_secundario_extension": self._pick_text(
+                merged,
+                "telefono_secundario_extension",
+                "telefono_movil_2_extension",
+            ),
+            "correo": self._pick_text(merged, "correo_principal", "correo", "email"),
+            "telefono_e164": self._pick_text(merged, "telefono_principal_e164", "telefono_movil_1_e164", "telefono_e164", "telefono"),
             "puesto": self._pick_text(merged, "puesto"),
             "area": self._pick_text(merged, "area"),
             "rol_decision": self._pick_text(merged, "rol_decision"),
@@ -6855,8 +6904,69 @@ class CRMRepository:
                 "industria": self._pick_text(merged, "tipo_industria"),
                 "tamano": self._pick_text(merged, "tamano"),
                 "sitio_web": self._pick_text(merged, "sitio_web", "website"),
-                "telefono": self._pick_text(merged, "telefono_e164", "telefono"),
-                "correo": self._pick_text(merged, "correo", "email"),
+                "correo_principal": self._pick_text(
+                    merged,
+                    "cuenta_correo_principal",
+                    "correo_principal",
+                    "correo",
+                    "email",
+                ),
+                "correo_secundario": self._pick_text(merged, "cuenta_correo_secundario", "correo_secundario"),
+                "telefono_principal_e164": self._pick_text(
+                    merged,
+                    "cuenta_telefono_principal_e164",
+                    "telefono_principal_e164",
+                    "telefono_principal",
+                    "telefono_e164",
+                    "telefono",
+                ),
+                "telefono_principal_tipo_linea": self._pick_text(
+                    merged,
+                    "cuenta_telefono_principal_tipo_linea",
+                    "telefono_principal_tipo_linea",
+                ),
+                "telefono_principal_extension": self._pick_text(
+                    merged,
+                    "cuenta_telefono_principal_extension",
+                    "telefono_principal_extension",
+                ),
+                "telefono_secundario_e164": self._pick_text(
+                    merged,
+                    "cuenta_telefono_secundario_e164",
+                    "telefono_secundario_e164",
+                ),
+                "telefono_secundario_tipo_linea": self._pick_text(
+                    merged,
+                    "cuenta_telefono_secundario_tipo_linea",
+                    "telefono_secundario_tipo_linea",
+                ),
+                "telefono_secundario_extension": self._pick_text(
+                    merged,
+                    "cuenta_telefono_secundario_extension",
+                    "telefono_secundario_extension",
+                ),
+                "telefono": self._pick_text(
+                    merged,
+                    "cuenta_telefono_principal_e164",
+                    "telefono_principal_e164",
+                    "telefono_principal",
+                    "telefono_e164",
+                    "telefono",
+                ),
+                "correo": self._pick_text(
+                    merged,
+                    "cuenta_correo_principal",
+                    "correo_principal",
+                    "correo",
+                    "email",
+                ),
+                "email": self._pick_text(
+                    merged,
+                    "cuenta_correo_principal",
+                    "correo_principal",
+                    "email",
+                    "correo",
+                ),
                 "codigo_cuenta": self._pick_text(merged, "codigo_cuenta"),
                 "razon_social": reason_name,
                 "rfc": self._pick_text(merged, "rfc"),
@@ -7278,7 +7388,7 @@ class CRMRepository:
                 "id,organizacion_id,cuenta_id,persona_id,rol_en_cuenta,puesto,es_contacto_principal,"
                 "es_contacto_facturacion,es_representante_legal,activo,fecha_inicio,fecha_fin,notas,"
                 "metadata,creado_en,actualizado_en,"
-                "persona:personas(id,nombre_completo,correo_principal,correo_institucional,telefono_principal_e164,telefono_movil_1_e164,company_name)"
+                "persona:personas(id,nombre_completo,correo_principal,correo_secundario,correo_institucional,telefono_principal_e164,telefono_principal_extension,telefono_movil_1_e164,company_name)"
             ),
         }
         if activo is not None:
@@ -7815,6 +7925,7 @@ class CRMRepository:
                 "telefono_movil_1_e164",
                 "telefono_principal_e164",
                 "telefono_movil_2_e164",
+                "telefono_secundario_e164",
                 "telefono_empresa_1_e164",
                 "telefono_empresa_2_e164",
             ):
@@ -17231,7 +17342,7 @@ class CRMRepository:
             "metadata->>prospecto_id": f"eq.{prospecto_id}",
             "select": (
                 "id,organizacion_id,nombre,apellido_paterno,apellido_materno,nombre_completo,"
-                "correo_principal,correo_institucional,telefono_principal_e164,telefono_movil_1_e164,puesto,area,rol_decision,estado,"
+                "correo_principal,correo_secundario,correo_institucional,telefono_principal_e164,telefono_principal_extension,telefono_movil_1_e164,puesto,area,rol_decision,estado,"
                 "origen,notas,metadata,persona_datos,propietario_usuario_id,creado_en,actualizado_en"
             ),
             "limit": "1",

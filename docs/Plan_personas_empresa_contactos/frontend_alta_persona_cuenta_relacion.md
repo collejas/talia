@@ -65,24 +65,18 @@ Capturar a la persona humana, aunque todavia no se sepa si pertenece a una empre
 - `nombre`
 - `apellido_paterno`
 - `origen`
-- segun el tipo de alta:
-  - `Contacto`
-    - `correo_principal`
-    - `telefono_movil_1_e164`
-  - `Empresa` y `Persona física con actividad empresarial`
-    - `correo_institucional`
-    - `telefono_movil_1_e164`
+- `correo_principal`
+- `telefono_principal_e164`
 
 ### Campos opcionales recomendados
 
 - `apellido_materno`
-- `correo_principal`
-- `correo_personal_3`
-- `telefono_movil_2_e164`
-- `telefono_empresa_1_e164`
-- `telefono_empresa_1_extension`
-- `telefono_empresa_2_e164`
-- `telefono_empresa_2_extension`
+- `correo_secundario`
+- `telefono_principal_tipo_linea`
+- `telefono_principal_extension`
+- `telefono_secundario_e164`
+- `telefono_secundario_tipo_linea`
+- `telefono_secundario_extension`
 - `puesto`
 - `area`
 - `rol_decision`
@@ -93,27 +87,20 @@ Capturar a la persona humana, aunque todavia no se sepa si pertenece a una empre
 
 - `nombre` no vacio
 - `origen` no vacio
-- en `Contacto`, `correo_principal` no vacio
-- en `Empresa` y `Persona física con actividad empresarial`, `correo_institucional` no vacio
-- `telefono_movil_1_e164` no vacio
-- `correo_principal` se valida si se muestra
-- `correo_personal_3` se valida si se muestra
-- si hay telefonos adicionales, normalizarlos
+- `correo_principal` no vacio
+- `telefono_principal_e164` no vacio
+- `telefono_principal_tipo_linea` se normaliza a `movil` o `fijo`
+- `telefono_principal_extension` se muestra si la linea es fija, pero sigue siendo opcional
+- `telefono_secundario_e164` es opcional
+- `telefono_secundario_tipo_linea` se normaliza a `movil` o `fijo`
+- `telefono_secundario_extension` se muestra si la linea es fija, pero sigue siendo opcional
+- si hay telefonos o correos adicionales, normalizarlos
 
 ### Regla visual
 
 En la UI, los campos obligatorios deben llevar asterisco rojo.
-La obligatoriedad depende del tipo de alta:
-
-- `Contacto`
-  - `correo_principal`
-  - `telefono_movil_1_e164`
-- `Empresa`
-  - `correo_institucional`
-  - `telefono_movil_1_e164`
-- `Persona física con actividad empresarial`
-  - `correo_institucional`
-  - `telefono_movil_1_e164`
+Los campos `correo_principal` y `telefono_principal_e164` llevan asterisco rojo tanto en `personas` como en `cuentas`.
+La extension solo se muestra cuando la linea es fija, pero no bloquea el guardado.
 
 Cuando la obligatoriedad sea compartida por un grupo de campos, debe mostrarse una nota explicativa junto al grupo.
 
@@ -134,21 +121,40 @@ Se prepara informacion para `personas`:
 - `apellido_materno`
 - `nombre_completo`
 - `correo_principal`
-- `correo_institucional`
-- `correo_personal_3`
+- `correo_secundario`
 - `telefono_principal_e164`
-- `telefono_movil_1_e164`
-- `telefono_movil_2_e164`
-- `telefono_empresa_1_e164`
-- `telefono_empresa_1_extension`
-- `telefono_empresa_2_e164`
-- `telefono_empresa_2_extension`
+- `telefono_principal_tipo_linea`
+- `telefono_principal_extension`
+- `telefono_secundario_e164`
+- `telefono_secundario_tipo_linea`
+- `telefono_secundario_extension`
 - `puesto`
 - `area`
 - `rol_decision`
 - `notas`
 - `origen`
 - `propietario_usuario_id`
+
+Los datos de empresa y persona fisica con actividad empresarial se preparan aparte para `cuentas`:
+
+- `nombre_comercial`
+- `razon_social`
+- `tipo_persona`
+- `tipo_cuenta`
+- `correo_principal`
+- `correo_secundario`
+- `telefono_principal_e164`
+- `telefono_principal_tipo_linea`
+- `telefono_principal_extension`
+- `telefono_secundario_e164`
+- `telefono_secundario_tipo_linea`
+- `telefono_secundario_extension`
+- `rfc`
+- `industria`
+- `segmento`
+- `tamano`
+- `sitio_web`
+- `notas`
 
 ## 5.2 Bloque B - Contexto comercial
 
@@ -220,7 +226,7 @@ Debe existir un buscador por:
 - `razon_social`
 - `rfc`
 - `correo_principal`
-- `telefono_principal`
+- `telefono_principal_e164`
 
 Si el usuario selecciona una cuenta existente:
 
@@ -233,6 +239,8 @@ Campos obligatorios minimos:
 
 - `nombre_comercial` o `razon_social`
 - `tipo_persona`
+- `correo_principal`
+- `telefono_principal_e164`
 
 Campos recomendados:
 
@@ -242,9 +250,13 @@ Campos recomendados:
 - `segmento`
 - `sitio_web`
 - `correo_principal`
-- `correo_institucional`
-- `telefono_principal`
-- `telefono_movil_1_e164`
+- `correo_secundario`
+- `telefono_principal_e164`
+- `telefono_principal_tipo_linea`
+- `telefono_principal_extension`
+- `telefono_secundario_e164`
+- `telefono_secundario_tipo_linea`
+- `telefono_secundario_extension`
 - `notas`
 
 ### Regla UX
@@ -274,9 +286,13 @@ Campos visibles:
 - `nombre_comercial`
 - `rfc`
 - `correo_principal`
-- `correo_institucional`
-- `telefono_principal`
-- `telefono_movil_1_e164`
+- `correo_secundario`
+- `telefono_principal_e164`
+- `telefono_principal_tipo_linea`
+- `telefono_principal_extension`
+- `telefono_secundario_e164`
+- `telefono_secundario_tipo_linea`
+- `telefono_secundario_extension`
 - `sitio_web`
 - `industria`
 - `segmento`

@@ -2506,6 +2506,14 @@ class CRMAccount(BaseModel):
     sitio_web: str | None = None
     telefono: str | None = None
     correo: str | None = None
+    correo_principal: str | None = None
+    correo_secundario: str | None = None
+    telefono_principal_e164: str | None = None
+    telefono_principal_tipo_linea: str | None = None
+    telefono_principal_extension: str | None = None
+    telefono_secundario_e164: str | None = None
+    telefono_secundario_tipo_linea: str | None = None
+    telefono_secundario_extension: str | None = None
     direccion: dict | None = Field(default=None)
     codigo_cuenta: str | None = None
     razon_social: str | None = None
@@ -2566,6 +2574,14 @@ class CRMAccountCreate(BaseModel):
     sitio_web: str | None = Field(default=None, max_length=255)
     telefono: str | None = Field(default=None, max_length=64)
     correo: str | None = Field(default=None, max_length=320)
+    correo_principal: str | None = Field(default=None, max_length=320)
+    correo_secundario: str | None = Field(default=None, max_length=320)
+    telefono_principal_e164: str | None = Field(default=None, max_length=64)
+    telefono_principal_tipo_linea: str | None = Field(default=None, max_length=32)
+    telefono_principal_extension: str | None = Field(default=None, max_length=16)
+    telefono_secundario_e164: str | None = Field(default=None, max_length=64)
+    telefono_secundario_tipo_linea: str | None = Field(default=None, max_length=32)
+    telefono_secundario_extension: str | None = Field(default=None, max_length=16)
     direccion: dict | None = Field(default=None)
     codigo_cuenta: str | None = Field(default=None, max_length=64)
     razon_social: str | None = Field(default=None, max_length=255)
@@ -2617,6 +2633,14 @@ class CRMAccountUpdate(BaseModel):
     sitio_web: str | None = Field(default=None, max_length=255)
     telefono: str | None = Field(default=None, max_length=64)
     correo: str | None = Field(default=None, max_length=320)
+    correo_principal: str | None = Field(default=None, max_length=320)
+    correo_secundario: str | None = Field(default=None, max_length=320)
+    telefono_principal_e164: str | None = Field(default=None, max_length=64)
+    telefono_principal_tipo_linea: str | None = Field(default=None, max_length=32)
+    telefono_principal_extension: str | None = Field(default=None, max_length=16)
+    telefono_secundario_e164: str | None = Field(default=None, max_length=64)
+    telefono_secundario_tipo_linea: str | None = Field(default=None, max_length=32)
+    telefono_secundario_extension: str | None = Field(default=None, max_length=16)
     direccion: dict | None = Field(default=None)
     codigo_cuenta: str | None = Field(default=None, max_length=64)
     razon_social: str | None = Field(default=None, max_length=255)
@@ -9789,6 +9813,7 @@ class CRMContact(BaseModel):
     correo_institucional: str | None = None
     correo_personal_3: str | None = None
     telefono_principal_e164: str | None = None
+    telefono_principal_extension: str | None = None
     telefono_movil_1_e164: str | None = None
     telefono_movil_2_e164: str | None = None
     telefono_empresa_1_e164: str | None = None
@@ -9844,6 +9869,7 @@ class CRMContactCreate(BaseModel):
     telefono_e164: str | None = Field(default=None, max_length=32)
     telefono: str | None = Field(default=None, max_length=64)
     telefono_principal_e164: str | None = Field(default=None, max_length=32)
+    telefono_principal_extension: str | None = Field(default=None, max_length=16)
     telefono_movil_1_e164: str | None = Field(default=None, max_length=32)
     telefono_movil_2_e164: str | None = Field(default=None, max_length=32)
     telefono_empresa_1_e164: str | None = Field(default=None, max_length=32)
@@ -9918,6 +9944,7 @@ class CRMContactUpdate(BaseModel):
     telefono_e164: str | None = Field(default=None, max_length=32)
     telefono: str | None = Field(default=None, max_length=64)
     telefono_principal_e164: str | None = Field(default=None, max_length=32)
+    telefono_principal_extension: str | None = Field(default=None, max_length=16)
     telefono_movil_1_e164: str | None = Field(default=None, max_length=32)
     telefono_movil_2_e164: str | None = Field(default=None, max_length=32)
     telefono_empresa_1_e164: str | None = Field(default=None, max_length=32)
@@ -9983,11 +10010,17 @@ class CRMPersonaAltaPersona(BaseModel):
     apellido_materno: str | None = Field(default=None, max_length=160)
     nombre_completo: str | None = Field(default=None, max_length=255)
     correo_principal: str | None = Field(default=None, max_length=255)
+    correo_secundario: str | None = Field(default=None, max_length=255)
     correo_institucional: str | None = Field(default=None, max_length=255)
     correo_personal_3: str | None = Field(default=None, max_length=255)
     telefono_principal_e164: str | None = Field(default=None, max_length=32)
+    telefono_principal_tipo_linea: str | None = Field(default=None, max_length=32)
+    telefono_principal_extension: str | None = Field(default=None, max_length=16)
     telefono_movil_1_e164: str | None = Field(default=None, max_length=32)
+    telefono_movil_1_tipo_linea: str | None = Field(default=None, max_length=32)
     telefono_movil_2_e164: str | None = Field(default=None, max_length=32)
+    telefono_movil_2_tipo_linea: str | None = Field(default=None, max_length=32)
+    telefono_movil_2_extension: str | None = Field(default=None, max_length=16)
     telefono_empresa_1_e164: str | None = Field(default=None, max_length=32)
     telefono_empresa_1_extension: str | None = Field(default=None, max_length=16)
     telefono_empresa_2_e164: str | None = Field(default=None, max_length=32)
@@ -10028,7 +10061,14 @@ class CRMPersonaAltaCuenta(BaseModel):
     tamano: str | None = Field(default=None, max_length=120)
     sitio_web: str | None = Field(default=None, max_length=255)
     correo_principal: str | None = Field(default=None, max_length=320)
+    correo_secundario: str | None = Field(default=None, max_length=320)
     telefono_principal: str | None = Field(default=None, max_length=64)
+    telefono_principal_e164: str | None = Field(default=None, max_length=64)
+    telefono_principal_tipo_linea: str | None = Field(default=None, max_length=32)
+    telefono_principal_extension: str | None = Field(default=None, max_length=16)
+    telefono_secundario_e164: str | None = Field(default=None, max_length=64)
+    telefono_secundario_tipo_linea: str | None = Field(default=None, max_length=32)
+    telefono_secundario_extension: str | None = Field(default=None, max_length=16)
     correo: str | None = Field(default=None, max_length=320)
     telefono: str | None = Field(default=None, max_length=64)
     notas: str | None = Field(default=None, max_length=4000)
@@ -10363,6 +10403,19 @@ def _persona_alta_normalize_phone(value: str | None) -> str | None:
     return normalize_phone(cleaned) or cleaned
 
 
+def _persona_alta_normalize_phone_line_type(value: str | None) -> str | None:
+    cleaned = _persona_alta_clean_text(value, compact_spaces=True)
+    if not cleaned:
+        return None
+    normalized = unicodedata.normalize("NFKD", cleaned).encode("ascii", "ignore").decode("ascii")
+    normalized = normalized.replace("-", "_").replace(" ", "_").casefold()
+    if normalized in {"fijo", "fija", "landline", "fixed", "linea_fija", "linea_fijo"}:
+        return "fijo"
+    if normalized in {"movil", "movil", "mobile", "celular", "cell", "linea_movil"}:
+        return "movil"
+    return normalized
+
+
 def _persona_alta_first_text(*values: str | None) -> str | None:
     for value in values:
         cleaned = _persona_alta_clean_text(value)
@@ -10378,14 +10431,32 @@ def _persona_alta_normalize_persona(payload: CRMPersonaAltaPersona) -> CRMPerson
             "apellido_paterno": _persona_alta_clean_text(payload.apellido_paterno, compact_spaces=True),
             "apellido_materno": _persona_alta_clean_text(payload.apellido_materno, compact_spaces=True),
             "nombre_completo": _persona_alta_clean_text(payload.nombre_completo, compact_spaces=True),
-            "correo_principal": _persona_alta_normalize_email(payload.correo_principal),
-            "correo_institucional": _persona_alta_normalize_email(payload.correo_institucional)
-            or _persona_alta_normalize_email(payload.correo_principal),
+            "correo_principal": _persona_alta_normalize_email(payload.correo_principal)
+            or _persona_alta_normalize_email(getattr(payload, "correo", None))
+            or _persona_alta_normalize_email(getattr(payload, "email", None)),
+            "correo_institucional": _persona_alta_normalize_email(payload.correo_institucional),
             "correo_personal_3": _persona_alta_normalize_email(payload.correo_personal_3),
-            "telefono_principal_e164": _persona_alta_normalize_phone(payload.telefono_principal_e164),
+            "telefono_principal_e164": _persona_alta_normalize_phone(payload.telefono_principal_e164)
+            or _persona_alta_normalize_phone(payload.telefono_movil_1_e164),
+            "telefono_principal_tipo_linea": _persona_alta_normalize_phone_line_type(payload.telefono_principal_tipo_linea)
+            or _persona_alta_normalize_phone_line_type(payload.telefono_movil_1_tipo_linea),
+            "telefono_principal_extension": _persona_alta_clean_text(payload.telefono_principal_extension),
             "telefono_movil_1_e164": _persona_alta_normalize_phone(payload.telefono_movil_1_e164)
             or _persona_alta_normalize_phone(payload.telefono_principal_e164),
-            "telefono_movil_2_e164": _persona_alta_normalize_phone(payload.telefono_movil_2_e164),
+            "telefono_movil_1_tipo_linea": _persona_alta_normalize_phone_line_type(payload.telefono_movil_1_tipo_linea)
+            or _persona_alta_normalize_phone_line_type(payload.telefono_principal_tipo_linea),
+            "telefono_movil_2_e164": _persona_alta_normalize_phone(payload.telefono_movil_2_e164)
+            or _persona_alta_normalize_phone(payload.telefono_secundario_e164),
+            "telefono_movil_2_tipo_linea": _persona_alta_normalize_phone_line_type(payload.telefono_movil_2_tipo_linea)
+            or _persona_alta_normalize_phone_line_type(payload.telefono_secundario_tipo_linea),
+            "telefono_movil_2_extension": _persona_alta_clean_text(payload.telefono_movil_2_extension)
+            or _persona_alta_clean_text(payload.telefono_secundario_extension),
+            "telefono_secundario_e164": _persona_alta_normalize_phone(payload.telefono_secundario_e164)
+            or _persona_alta_normalize_phone(payload.telefono_movil_2_e164),
+            "telefono_secundario_tipo_linea": _persona_alta_normalize_phone_line_type(payload.telefono_secundario_tipo_linea)
+            or _persona_alta_normalize_phone_line_type(payload.telefono_movil_2_tipo_linea),
+            "telefono_secundario_extension": _persona_alta_clean_text(payload.telefono_secundario_extension)
+            or _persona_alta_clean_text(payload.telefono_movil_2_extension),
             "telefono_empresa_1_e164": _persona_alta_normalize_phone(payload.telefono_empresa_1_e164),
             "telefono_empresa_1_extension": _persona_alta_clean_text(payload.telefono_empresa_1_extension),
             "telefono_empresa_2_e164": _persona_alta_normalize_phone(payload.telefono_empresa_2_e164),
@@ -10416,10 +10487,26 @@ def _persona_alta_normalize_cuenta(payload: CRMPersonaAltaCuenta | None) -> CRMP
             "segmento": _persona_alta_clean_text(payload.segmento, compact_spaces=True),
             "tamano": _persona_alta_clean_text(payload.tamano, compact_spaces=True),
             "sitio_web": _persona_alta_clean_text(payload.sitio_web),
-            "correo_principal": _persona_alta_normalize_email(payload.correo_principal),
-            "telefono_principal": _persona_alta_normalize_phone(payload.telefono_principal),
-            "correo": _persona_alta_normalize_email(payload.correo),
-            "telefono": _persona_alta_normalize_phone(payload.telefono),
+            "correo_principal": _persona_alta_normalize_email(payload.correo_principal)
+            or _persona_alta_normalize_email(payload.correo)
+            or _persona_alta_normalize_email(getattr(payload, "email", None)),
+            "correo_secundario": _persona_alta_normalize_email(payload.correo_secundario),
+            "telefono_principal": _persona_alta_normalize_phone(payload.telefono_principal)
+            or _persona_alta_normalize_phone(payload.telefono_principal_e164)
+            or _persona_alta_normalize_phone(payload.telefono),
+            "telefono_principal_e164": _persona_alta_normalize_phone(payload.telefono_principal_e164)
+            or _persona_alta_normalize_phone(payload.telefono_principal)
+            or _persona_alta_normalize_phone(payload.telefono),
+            "telefono_principal_tipo_linea": _persona_alta_normalize_phone_line_type(payload.telefono_principal_tipo_linea),
+            "telefono_principal_extension": _persona_alta_clean_text(payload.telefono_principal_extension),
+            "telefono_secundario_e164": _persona_alta_normalize_phone(payload.telefono_secundario_e164),
+            "telefono_secundario_tipo_linea": _persona_alta_normalize_phone_line_type(payload.telefono_secundario_tipo_linea),
+            "telefono_secundario_extension": _persona_alta_clean_text(payload.telefono_secundario_extension),
+            "correo": _persona_alta_normalize_email(payload.correo)
+            or _persona_alta_normalize_email(payload.correo_principal),
+            "telefono": _persona_alta_normalize_phone(payload.telefono)
+            or _persona_alta_normalize_phone(payload.telefono_principal_e164)
+            or _persona_alta_normalize_phone(payload.telefono_principal),
             "notas": _persona_alta_clean_text(payload.notas),
             "necesidad_proposito": _persona_alta_clean_text(payload.necesidad_proposito),
             "tipo_establecimiento": _persona_alta_clean_text(payload.tipo_establecimiento, compact_spaces=True),
@@ -10582,8 +10669,8 @@ async def _persona_alta_find_existing_account(
                 "nombre": account.nombre,
                 "alias": account.alias,
                 "rfc": account.rfc,
-                "correo": account.correo,
-                "telefono": account.telefono,
+                "correo": account.correo_principal or account.correo,
+                "telefono": account.telefono_principal_e164 or account.telefono,
                 "nivel": level,
                 "motivo": reason,
             },
@@ -10607,7 +10694,11 @@ async def _persona_alta_find_persona_candidates(
 ) -> list[dict[str, Any]]:
     candidates: list[dict[str, Any]] = []
     telefono_key = _persona_alta_normalize_phone(persona.telefono_movil_1_e164) or _persona_alta_normalize_phone(persona.telefono_principal_e164)
-    correo_key = _persona_alta_normalize_email(persona.correo_institucional) or _persona_alta_normalize_email(persona.correo_principal)
+    correo_key = (
+        _persona_alta_normalize_email(persona.correo_secundario)
+        or _persona_alta_normalize_email(persona.correo_institucional)
+        or _persona_alta_normalize_email(persona.correo_principal)
+    )
     nombre_key = _persona_alta_match_name(_persona_alta_full_name(persona))
     empresa_key = _persona_alta_match_name(
         _persona_alta_clean_text(cuenta.nombre_comercial if cuenta else None)
@@ -10634,7 +10725,7 @@ async def _persona_alta_find_persona_candidates(
                     "correo": by_phone.get("correo"),
                     "telefono": by_phone.get("telefono_e164"),
                     "empresa": by_phone.get("company_name"),
-                    "correo_institucional": by_phone.get("correo_institucional"),
+                    "correo_institucional": by_phone.get("correo_secundario") or by_phone.get("correo_institucional"),
                     "telefono_movil_1_e164": by_phone.get("telefono_movil_1_e164"),
                     "nivel": "fuerte",
                     "motivo": "telefono",
@@ -10660,7 +10751,7 @@ async def _persona_alta_find_persona_candidates(
                     "correo": by_email.get("correo"),
                     "telefono": by_email.get("telefono_e164"),
                     "empresa": by_email.get("company_name"),
-                    "correo_institucional": by_email.get("correo_institucional"),
+                    "correo_institucional": by_email.get("correo_secundario") or by_email.get("correo_institucional"),
                     "telefono_movil_1_e164": by_email.get("telefono_movil_1_e164"),
                     "nivel": "fuerte",
                     "motivo": "correo",
@@ -10700,7 +10791,7 @@ async def _persona_alta_find_persona_candidates(
                     "correo": row.get("correo"),
                     "telefono": row.get("telefono_e164"),
                     "empresa": row.get("company_name"),
-                    "correo_institucional": row.get("correo_institucional"),
+                    "correo_institucional": row.get("correo_secundario") or row.get("correo_institucional"),
                     "telefono_movil_1_e164": row.get("telefono_movil_1_e164"),
                     "nivel": level,
                     "motivo": reason,
@@ -10800,6 +10891,7 @@ async def _persona_dedupe_preview(
         correo_institucional=persona_row.get("correo_institucional") or persona_row.get("correo_principal") or persona_row.get("correo"),
         correo_personal_3=persona_row.get("correo_personal_3"),
         telefono_principal_e164=persona_row.get("telefono_principal_e164") or persona_row.get("telefono_e164"),
+        telefono_principal_extension=persona_row.get("telefono_principal_extension"),
         telefono_movil_1_e164=persona_row.get("telefono_movil_1_e164") or persona_row.get("telefono_principal_e164") or persona_row.get("telefono_e164"),
         telefono_movil_2_e164=persona_row.get("telefono_movil_2_e164"),
         telefono_empresa_1_e164=persona_row.get("telefono_empresa_1_e164"),
@@ -10853,8 +10945,15 @@ async def _account_dedupe_preview(
             segmento=None,
             tamano=account.tamano,
             sitio_web=account.sitio_web,
-            correo_principal=account.correo,
-            telefono_principal=account.telefono,
+            correo_principal=account.correo_principal or account.correo,
+            correo_secundario=account.correo_secundario,
+            telefono_principal=account.telefono_principal_e164 or account.telefono,
+            telefono_principal_e164=account.telefono_principal_e164 or account.telefono,
+            telefono_principal_tipo_linea=account.telefono_principal_tipo_linea,
+            telefono_principal_extension=account.telefono_principal_extension,
+            telefono_secundario_e164=account.telefono_secundario_e164,
+            telefono_secundario_tipo_linea=account.telefono_secundario_tipo_linea,
+            telefono_secundario_extension=account.telefono_secundario_extension,
             correo=account.correo,
             telefono=account.telefono,
             notas=account.notas if hasattr(account, "notas") else None,
@@ -10915,21 +11014,23 @@ def _persona_alta_to_contact_payload(
         "apellido_materno": _persona_alta_clean_text(persona.apellido_materno),
         "nombre_completo": _persona_alta_full_name(persona),
         "correo_principal": _persona_alta_clean_text(persona.correo_principal),
-        "correo_institucional": _persona_alta_clean_text(persona.correo_institucional)
-        or _persona_alta_clean_text(persona.correo_principal),
+        "correo_secundario": _persona_alta_clean_text(persona.correo_secundario)
+        or _persona_alta_clean_text(persona.correo_institucional),
+        "correo_institucional": _persona_alta_clean_text(persona.correo_institucional),
         "correo_personal_3": _persona_alta_clean_text(persona.correo_personal_3),
-        "correo": _persona_alta_clean_text(persona.correo_institucional)
-        or _persona_alta_clean_text(persona.correo_principal),
         "telefono_principal_e164": _persona_alta_clean_text(persona.telefono_principal_e164),
+        "telefono_principal_tipo_linea": _persona_alta_normalize_phone_line_type(persona.telefono_principal_tipo_linea),
+        "telefono_principal_extension": _persona_alta_clean_text(persona.telefono_principal_extension),
         "telefono_movil_1_e164": _persona_alta_clean_text(persona.telefono_movil_1_e164)
         or _persona_alta_clean_text(persona.telefono_principal_e164),
+        "telefono_movil_1_tipo_linea": _persona_alta_normalize_phone_line_type(persona.telefono_movil_1_tipo_linea)
+        or _persona_alta_normalize_phone_line_type(persona.telefono_principal_tipo_linea),
         "telefono_movil_2_e164": _persona_alta_clean_text(persona.telefono_movil_2_e164),
-        "telefono_empresa_1_e164": _persona_alta_clean_text(persona.telefono_empresa_1_e164),
-        "telefono_empresa_1_extension": _persona_alta_clean_text(persona.telefono_empresa_1_extension),
-        "telefono_empresa_2_e164": _persona_alta_clean_text(persona.telefono_empresa_2_e164),
-        "telefono_empresa_2_extension": _persona_alta_clean_text(persona.telefono_empresa_2_extension),
-        "telefono_e164": _persona_alta_clean_text(persona.telefono_movil_1_e164)
-        or _persona_alta_clean_text(persona.telefono_principal_e164),
+        "telefono_movil_2_tipo_linea": _persona_alta_normalize_phone_line_type(persona.telefono_movil_2_tipo_linea),
+        "telefono_movil_2_extension": _persona_alta_clean_text(persona.telefono_movil_2_extension),
+        "telefono_secundario_e164": _persona_alta_clean_text(persona.telefono_movil_2_e164),
+        "telefono_secundario_tipo_linea": _persona_alta_normalize_phone_line_type(persona.telefono_movil_2_tipo_linea),
+        "telefono_secundario_extension": _persona_alta_clean_text(persona.telefono_movil_2_extension),
         "puesto": _persona_alta_clean_text(persona.puesto),
         "area": _persona_alta_clean_text(persona.area),
         "rol_decision": _persona_alta_clean_text(persona.rol_decision),
@@ -10939,6 +11040,25 @@ def _persona_alta_to_contact_payload(
         "propietario_usuario_id": str(persona.propietario_usuario_id) if persona.propietario_usuario_id else None,
         "company_name": account_name if contexto.modo != "solo_persona" else None,
         "persona_fisica_moral": persona_fisica_moral,
+        "cuenta_correo_principal": _persona_alta_clean_text(cuenta.correo_principal if cuenta else None)
+        or _persona_alta_clean_text(existing_account.correo_principal if existing_account else None)
+        or _persona_alta_clean_text(existing_account.correo if existing_account else None),
+        "cuenta_correo_secundario": _persona_alta_clean_text(cuenta.correo_secundario if cuenta else None)
+        or _persona_alta_clean_text(existing_account.correo_secundario if existing_account else None),
+        "cuenta_telefono_principal_e164": _persona_alta_clean_text(cuenta.telefono_principal_e164 if cuenta else None)
+        or _persona_alta_clean_text(cuenta.telefono_principal if cuenta else None)
+        or _persona_alta_clean_text(existing_account.telefono_principal_e164 if existing_account else None)
+        or _persona_alta_clean_text(existing_account.telefono if existing_account else None),
+        "cuenta_telefono_principal_tipo_linea": _persona_alta_normalize_phone_line_type(cuenta.telefono_principal_tipo_linea if cuenta else None)
+        or _persona_alta_normalize_phone_line_type(existing_account.telefono_principal_tipo_linea if existing_account else None),
+        "cuenta_telefono_principal_extension": _persona_alta_clean_text(cuenta.telefono_principal_extension if cuenta else None)
+        or _persona_alta_clean_text(existing_account.telefono_principal_extension if existing_account else None),
+        "cuenta_telefono_secundario_e164": _persona_alta_clean_text(cuenta.telefono_secundario_e164 if cuenta else None)
+        or _persona_alta_clean_text(existing_account.telefono_secundario_e164 if existing_account else None),
+        "cuenta_telefono_secundario_tipo_linea": _persona_alta_normalize_phone_line_type(cuenta.telefono_secundario_tipo_linea if cuenta else None)
+        or _persona_alta_normalize_phone_line_type(existing_account.telefono_secundario_tipo_linea if existing_account else None),
+        "cuenta_telefono_secundario_extension": _persona_alta_clean_text(cuenta.telefono_secundario_extension if cuenta else None)
+        or _persona_alta_clean_text(existing_account.telefono_secundario_extension if existing_account else None),
         "razon_social": _persona_alta_clean_text(cuenta.razon_social if cuenta else None) or (existing_account.razon_social if existing_account else None),
         "rfc": _persona_alta_clean_text(cuenta.rfc if cuenta else None) or (existing_account.rfc if existing_account else None),
         "tipo_industria": _persona_alta_clean_text(cuenta.industria if cuenta else None) or (existing_account.industria if existing_account else None),
@@ -10987,12 +11107,15 @@ def _persona_alta_to_account_payload(
     base_correo = (
         _persona_alta_clean_text(cuenta.correo)
         or _persona_alta_clean_text(cuenta.correo_principal)
+        or _persona_alta_clean_text(existing_values.get("correo_principal"))
         or _persona_alta_clean_text(existing_values.get("correo"))
         or _persona_alta_clean_text(existing_values.get("email"))
     )
     base_telefono = (
         _persona_alta_clean_text(cuenta.telefono)
         or _persona_alta_clean_text(cuenta.telefono_principal)
+        or _persona_alta_clean_text(cuenta.telefono_principal_e164)
+        or _persona_alta_clean_text(existing_values.get("telefono_principal_e164"))
         or _persona_alta_clean_text(existing_values.get("telefono"))
     )
     return {
@@ -11011,6 +11134,24 @@ def _persona_alta_to_account_payload(
         "telefono": base_telefono,
         "correo": base_correo,
         "email": base_correo,
+        "correo_principal": _persona_alta_clean_text(cuenta.correo_principal)
+        or _persona_alta_clean_text(existing_values.get("correo_principal"))
+        or base_correo,
+        "correo_secundario": _persona_alta_clean_text(cuenta.correo_secundario)
+        or _persona_alta_clean_text(existing_values.get("correo_secundario")),
+        "telefono_principal_e164": _persona_alta_clean_text(cuenta.telefono_principal_e164)
+        or _persona_alta_clean_text(cuenta.telefono_principal)
+        or base_telefono,
+        "telefono_principal_tipo_linea": _persona_alta_normalize_phone_line_type(cuenta.telefono_principal_tipo_linea)
+        or _persona_alta_normalize_phone_line_type(existing_values.get("telefono_principal_tipo_linea")),
+        "telefono_principal_extension": _persona_alta_clean_text(cuenta.telefono_principal_extension)
+        or _persona_alta_clean_text(existing_values.get("telefono_principal_extension")),
+        "telefono_secundario_e164": _persona_alta_clean_text(cuenta.telefono_secundario_e164)
+        or _persona_alta_clean_text(existing_values.get("telefono_secundario_e164")),
+        "telefono_secundario_tipo_linea": _persona_alta_normalize_phone_line_type(cuenta.telefono_secundario_tipo_linea)
+        or _persona_alta_normalize_phone_line_type(existing_values.get("telefono_secundario_tipo_linea")),
+        "telefono_secundario_extension": _persona_alta_clean_text(cuenta.telefono_secundario_extension)
+        or _persona_alta_clean_text(existing_values.get("telefono_secundario_extension")),
         "codigo_cuenta": _persona_alta_clean_text(cuenta.codigo_cuenta) or _persona_alta_clean_text(existing_values.get("codigo_cuenta")),
         "razon_social": _persona_alta_clean_text(cuenta.razon_social)
         or _persona_alta_clean_text(existing_values.get("razon_social"))
@@ -16573,7 +16714,7 @@ async def search_personas_legacy(
             CRMPersonaSearchItem(
                 id=contacto_id,
                 nombre=row.get("nombre_completo"),
-                correo=row.get("correo_institucional") or row.get("correo_principal") or row.get("correo"),
+                correo=row.get("correo_secundario") or row.get("correo_institucional") or row.get("correo_principal") or row.get("correo"),
                 telefono=row.get("telefono_movil_1_e164") or row.get("telefono_principal_e164") or row.get("telefono_e164"),
                 empresa=row.get("company_name"),
             )
@@ -16606,7 +16747,7 @@ async def search_personas(
             CRMPersonaSearchItem(
                 id=persona_id,
                 nombre=row.get("nombre_completo"),
-                correo=row.get("correo_institucional") or row.get("correo_principal") or row.get("correo"),
+                correo=row.get("correo_secundario") or row.get("correo_institucional") or row.get("correo_principal") or row.get("correo"),
                 telefono=row.get("telefono_movil_1_e164") or row.get("telefono_principal_e164") or row.get("telefono_e164"),
                 empresa=row.get("company_name"),
             )
@@ -16629,14 +16770,19 @@ async def validate_persona_alta(
 
     if not _persona_alta_clean_text(persona.nombre) or not _persona_alta_clean_text(persona.apellido_paterno):
         raise HTTPException(status_code=400, detail="persona_incompleta")
-    if contexto.modo == "empresa_existente":
-        if not _persona_alta_clean_text(persona.correo_principal):
-            raise HTTPException(status_code=400, detail="medio_contacto_required")
-    elif not _persona_alta_clean_text(persona.correo_institucional):
-        raise HTTPException(status_code=400, detail="medio_contacto_required")
-    if not _persona_alta_clean_text(persona.telefono_movil_1_e164):
-        raise HTTPException(status_code=400, detail="medio_contacto_required")
-
+    if not _persona_alta_clean_text(persona.correo_principal):
+        raise HTTPException(status_code=400, detail="correo_principal_required")
+    if not _persona_alta_clean_text(persona.telefono_principal_e164):
+        raise HTTPException(status_code=400, detail="telefono_principal_required")
+    if contexto.modo in {"empresa_nueva", "persona_fisica_actividad_empresarial"}:
+        if not cuenta:
+            raise HTTPException(status_code=400, detail="cuenta_required")
+        if not _persona_alta_clean_text(cuenta.correo_principal):
+            raise HTTPException(status_code=400, detail="cuenta_correo_principal_required")
+        if not _persona_alta_clean_text(cuenta.telefono_principal_e164):
+            raise HTTPException(status_code=400, detail="cuenta_telefono_principal_required")
+    if contexto.modo == "empresa_existente" and not cuenta:
+        raise HTTPException(status_code=400, detail="cuenta_required")
     persona_candidates, account_candidates, suggested_persona_id, suggested_account_id, requires_confirmation = (
         await _persona_alta_build_dedupe_preview(
             repo=repo,
@@ -16675,14 +16821,19 @@ async def create_persona_alta(
 
     if not _persona_alta_clean_text(persona.nombre) or not _persona_alta_clean_text(persona.apellido_paterno):
         raise HTTPException(status_code=400, detail="persona_incompleta")
-    if contexto.modo == "empresa_existente":
-        if not _persona_alta_clean_text(persona.correo_principal):
-            raise HTTPException(status_code=400, detail="medio_contacto_required")
-    elif not _persona_alta_clean_text(persona.correo_institucional):
-        raise HTTPException(status_code=400, detail="medio_contacto_required")
-    if not _persona_alta_clean_text(persona.telefono_movil_1_e164):
-        raise HTTPException(status_code=400, detail="medio_contacto_required")
-
+    if not _persona_alta_clean_text(persona.correo_principal):
+        raise HTTPException(status_code=400, detail="correo_principal_required")
+    if not _persona_alta_clean_text(persona.telefono_principal_e164):
+        raise HTTPException(status_code=400, detail="telefono_principal_required")
+    if contexto.modo in {"empresa_nueva", "persona_fisica_actividad_empresarial"}:
+        if not cuenta:
+            raise HTTPException(status_code=400, detail="cuenta_required")
+        if not _persona_alta_clean_text(cuenta.correo_principal):
+            raise HTTPException(status_code=400, detail="cuenta_correo_principal_required")
+        if not _persona_alta_clean_text(cuenta.telefono_principal_e164):
+            raise HTTPException(status_code=400, detail="cuenta_telefono_principal_required")
+    if contexto.modo == "empresa_existente" and not cuenta:
+        raise HTTPException(status_code=400, detail="cuenta_required")
     existing_account: CRMAccount | None = None
     persona_candidates: list[dict[str, Any]] = []
     account_candidates: list[dict[str, Any]] = []
@@ -16916,14 +17067,19 @@ async def update_persona(
 
     if not _persona_alta_clean_text(persona.nombre) or not _persona_alta_clean_text(persona.apellido_paterno):
         raise HTTPException(status_code=400, detail="persona_incompleta")
-    if contexto.modo == "empresa_existente":
-        if not _persona_alta_clean_text(persona.correo_principal):
-            raise HTTPException(status_code=400, detail="medio_contacto_required")
-    elif not _persona_alta_clean_text(persona.correo_institucional):
-        raise HTTPException(status_code=400, detail="medio_contacto_required")
-    if not _persona_alta_clean_text(persona.telefono_movil_1_e164):
-        raise HTTPException(status_code=400, detail="medio_contacto_required")
-
+    if not _persona_alta_clean_text(persona.correo_principal):
+        raise HTTPException(status_code=400, detail="correo_principal_required")
+    if not _persona_alta_clean_text(persona.telefono_principal_e164):
+        raise HTTPException(status_code=400, detail="telefono_principal_required")
+    if contexto.modo in {"empresa_nueva", "persona_fisica_actividad_empresarial"}:
+        if not cuenta:
+            raise HTTPException(status_code=400, detail="cuenta_required")
+        if not _persona_alta_clean_text(cuenta.correo_principal):
+            raise HTTPException(status_code=400, detail="cuenta_correo_principal_required")
+        if not _persona_alta_clean_text(cuenta.telefono_principal_e164):
+            raise HTTPException(status_code=400, detail="cuenta_telefono_principal_required")
+    if contexto.modo == "empresa_existente" and not cuenta:
+        raise HTTPException(status_code=400, detail="cuenta_required")
     existing_account: CRMAccount | None = None
     persona_candidates: list[dict[str, Any]] = []
     account_candidates: list[dict[str, Any]] = []
@@ -17385,13 +17541,19 @@ async def validate_persona_update(
 
     if not _persona_alta_clean_text(persona.nombre) or not _persona_alta_clean_text(persona.apellido_paterno):
         raise HTTPException(status_code=400, detail="persona_incompleta")
-    if contexto.modo == "empresa_existente":
-        if not _persona_alta_clean_text(persona.correo_principal):
-            raise HTTPException(status_code=400, detail="medio_contacto_required")
-    elif not _persona_alta_clean_text(persona.correo_institucional):
-        raise HTTPException(status_code=400, detail="medio_contacto_required")
-    if not _persona_alta_clean_text(persona.telefono_movil_1_e164):
-        raise HTTPException(status_code=400, detail="medio_contacto_required")
+    if not _persona_alta_clean_text(persona.correo_principal):
+        raise HTTPException(status_code=400, detail="correo_principal_required")
+    if not _persona_alta_clean_text(persona.telefono_principal_e164):
+        raise HTTPException(status_code=400, detail="telefono_principal_required")
+    if contexto.modo in {"empresa_nueva", "persona_fisica_actividad_empresarial"}:
+        if not cuenta:
+            raise HTTPException(status_code=400, detail="cuenta_required")
+        if not _persona_alta_clean_text(cuenta.correo_principal):
+            raise HTTPException(status_code=400, detail="cuenta_correo_principal_required")
+        if not _persona_alta_clean_text(cuenta.telefono_principal_e164):
+            raise HTTPException(status_code=400, detail="cuenta_telefono_principal_required")
+    if contexto.modo == "empresa_existente" and not cuenta:
+        raise HTTPException(status_code=400, detail="cuenta_required")
 
     exclude_account_id = cuenta.cuenta_id if cuenta and cuenta.cuenta_id else None
     persona_candidates, account_candidates, suggested_persona_id, suggested_account_id, requires_confirmation = (

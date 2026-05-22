@@ -32,8 +32,16 @@ export async function GET(_request: Request, { params }: Params) {
       nombre: String(account.nombre ?? ""),
       alias: account.alias ? String(account.alias) : null,
       tipo: account.tipo ? String(account.tipo) : null,
-      correo: account.correo ? String(account.correo) : null,
-      telefono: account.telefono ? String(account.telefono) : null,
+      correo: account.correo_principal ? String(account.correo_principal) : account.correo ? String(account.correo) : null,
+      correo_principal: account.correo_principal ? String(account.correo_principal) : account.correo ? String(account.correo) : null,
+      correo_secundario: account.correo_secundario ? String(account.correo_secundario) : null,
+      telefono: account.telefono_principal_e164 ? String(account.telefono_principal_e164) : account.telefono ? String(account.telefono) : null,
+      telefono_principal_e164: account.telefono_principal_e164 ? String(account.telefono_principal_e164) : account.telefono ? String(account.telefono) : null,
+      telefono_principal_tipo_linea: account.telefono_principal_tipo_linea ? String(account.telefono_principal_tipo_linea) : null,
+      telefono_principal_extension: account.telefono_principal_extension ? String(account.telefono_principal_extension) : null,
+      telefono_secundario_e164: account.telefono_secundario_e164 ? String(account.telefono_secundario_e164) : null,
+      telefono_secundario_tipo_linea: account.telefono_secundario_tipo_linea ? String(account.telefono_secundario_tipo_linea) : null,
+      telefono_secundario_extension: account.telefono_secundario_extension ? String(account.telefono_secundario_extension) : null,
     },
   });
 }

@@ -50,7 +50,7 @@ La edicion de contacto usa el mismo shape funcional de `persona`, `contexto_come
 
 - `PATCH /crm/personas/{contacto_id}`
 
-En edicion se conservan las mismas reglas de obligatoriedad para `correo_institucional` y `telefono_movil_1_e164`.
+En edicion se conservan las mismas reglas por tabla: `personas` guarda los datos del humano y `cuentas` guarda los datos comerciales.
 
 ## 3.2 Compatibilidad temporal
 
@@ -86,15 +86,13 @@ Representa la identidad humana real.
   "apellido_materno": "Lopez",
   "nombre_completo": "Jorge Perez Lopez",
   "correo_principal": "jorge@correo.com",
-  "correo_institucional": "jorge@empresa.com",
-  "correo_personal_3": "jorge.personal@correo.com",
+  "correo_secundario": "jorge@otra-cuenta.com",
   "telefono_principal_e164": "+5215555555555",
-  "telefono_movil_1_e164": "+5215555555555",
-  "telefono_movil_2_e164": "+5215555555666",
-  "telefono_empresa_1_e164": "+5215555555777",
-  "telefono_empresa_1_extension": "123",
-  "telefono_empresa_2_e164": "+5215555555888",
-  "telefono_empresa_2_extension": "456",
+  "telefono_principal_tipo_linea": "movil",
+  "telefono_principal_extension": "123",
+  "telefono_secundario_e164": "+5215555555666",
+  "telefono_secundario_tipo_linea": "fijo",
+  "telefono_secundario_extension": "456",
   "puesto": "Director comercial",
   "area": "Ventas",
   "rol_decision": "Decisor",
@@ -109,31 +107,20 @@ Representa la identidad humana real.
 - `nombre` es obligatorio
 - `apellido_paterno` es obligatorio en el alta rapido actual
 - `origen` es obligatorio en el alta actual
-- la obligatoriedad de correo depende del `modo`:
-  - `empresa_existente`:
-    - `correo_principal` obligatorio
-    - `telefono_movil_1_e164` obligatorio
-  - `empresa_nueva`:
-    - `correo_institucional` obligatorio
-    - `telefono_movil_1_e164` obligatorio
-  - `persona_fisica_actividad_empresarial`:
-    - `correo_institucional` obligatorio
-    - `telefono_movil_1_e164` obligatorio
-  - `solo_persona`:
-    - `correo_institucional` obligatorio
-    - `telefono_movil_1_e164` obligatorio
-- `correo_principal` permanece como correo 1 principal opcional
-- `telefono_principal_e164` permanece como alias tecnico/compatibilidad opcional
+- `correo_principal` es obligatorio en `personas`
+- `telefono_principal_e164` es obligatorio en `personas`
+- `correo_secundario` es opcional
+- `telefono_principal_tipo_linea` y `telefono_secundario_tipo_linea` se normalizan a `movil` o `fijo`
+- `telefono_principal_extension` y `telefono_secundario_extension` aparecen cuando la línea es fija, pero no bloquean el guardado
 - `nombre_completo` puede enviarse desde frontend, pero backend debe poder derivarlo
 - backend debe tratar `nombre_completo` como derivado, no como fuente principal
 
 ## 5.4 Validaciones
 
 - `nombre` no vacio
-- `correo_principal` valido cuando el modo es `empresa_existente`
-- `correo_institucional` valido cuando el modo no es `empresa_existente`
-- `telefono_movil_1_e164` normalizado y obligatorio en todos los modos
-- `correo_personal_3`, `telefono_movil_2_e164`, `telefono_empresa_1_e164`, `telefono_empresa_1_extension`, `telefono_empresa_2_e164`, `telefono_empresa_2_extension` son opcionales
+- `correo_principal` normalizado y obligatorio
+- `telefono_principal_e164` normalizado y obligatorio
+- `telefono_secundario_e164`, `telefono_secundario_extension` y `correo_secundario` son opcionales
 - rechazar payload sin el medio de contacto requerido por modo
 
 ## 6. Objeto `contexto_comercial`
@@ -184,7 +171,13 @@ Representa una cuenta existente o una nueva cuenta a crear.
   "segmento": "Servicios",
   "sitio_web": "https://ejemplo.com",
   "correo_principal": "contacto@ejemplo.com",
-  "telefono_principal": "+5215555555555",
+  "correo_secundario": "ventas@ejemplo.com",
+  "telefono_principal_e164": "+5215555555555",
+  "telefono_principal_tipo_linea": "movil",
+  "telefono_principal_extension": "",
+  "telefono_secundario_e164": "+5215555555666",
+  "telefono_secundario_tipo_linea": "fijo",
+  "telefono_secundario_extension": "123",
   "notas": "Cuenta creada desde alta"
 }
 ```
@@ -204,6 +197,8 @@ Representa una cuenta existente o una nueva cuenta a crear.
 
 - no enviar `cuenta_id`
 - enviar datos minimos para crear cuenta
+- `cuenta.correo_principal` obligatorio
+- `cuenta.telefono_principal_e164` obligatorio
 
 ### `persona_fisica_actividad_empresarial`
 
@@ -212,11 +207,15 @@ Representa una cuenta existente o una nueva cuenta a crear.
 - si falta `nombre_comercial`, backend puede usar `nombre_completo`
 - `tipo_persona` debe ser `fisica`
 - `tipo_cuenta` debe ser `persona_fisica_actividad_empresarial`
+- `cuenta.correo_principal` obligatorio
+- `cuenta.telefono_principal_e164` obligatorio
 
 ## 7.4 Campos minimos para crear cuenta
 
 - `nombre_comercial` o `razon_social`
 - `tipo_persona`
+- `correo_principal`
+- `telefono_principal_e164`
 
 ## 8. Objeto `relacion`
 

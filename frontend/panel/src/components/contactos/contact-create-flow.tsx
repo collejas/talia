@@ -40,8 +40,16 @@ type PersonaDraft = {
   correo_institucional: string;
   correo_personal_3: string;
   telefono_principal_e164: string;
+  telefono_principal_tipo_linea: string;
+  telefono_principal_extension: string;
   telefono_movil_1_e164: string;
+  telefono_movil_1_tipo_linea: string;
   telefono_movil_2_e164: string;
+  telefono_movil_2_tipo_linea: string;
+  telefono_movil_2_extension: string;
+  telefono_secundario_e164: string;
+  telefono_secundario_tipo_linea: string;
+  telefono_secundario_extension: string;
   telefono_empresa_1_e164: string;
   telefono_empresa_1_extension: string;
   telefono_empresa_2_e164: string;
@@ -70,7 +78,14 @@ type CuentaDraft = {
   tamano: string;
   sitio_web: string;
   correo_principal: string;
+  correo_secundario: string;
   telefono_principal: string;
+  telefono_principal_e164: string;
+  telefono_principal_tipo_linea: string;
+  telefono_principal_extension: string;
+  telefono_secundario_e164: string;
+  telefono_secundario_tipo_linea: string;
+  telefono_secundario_extension: string;
   correo: string;
   telefono: string;
   notas: string;
@@ -128,6 +143,10 @@ type AccountOption = {
   tipo?: string | null;
   correo?: string | null;
   telefono?: string | null;
+  correo_principal?: string | null;
+  correo_secundario?: string | null;
+  telefono_principal_e164?: string | null;
+  telefono_secundario_e164?: string | null;
 };
 
 type PersonaAltaResumen = {
@@ -231,6 +250,11 @@ const PERSONA_ORIGEN_OPTIONS = [
   { value: "importacion", label: "Importación" },
 ] as const;
 
+const PHONE_LINE_TYPE_OPTIONS = [
+  { value: "movil", label: "Móvil" },
+  { value: "fijo", label: "Fijo" },
+] as const;
+
 const INITIAL_STATE: ContactCreateState = {
   mode: "solo_persona",
   persona: {
@@ -241,8 +265,16 @@ const INITIAL_STATE: ContactCreateState = {
     correo_institucional: "",
     correo_personal_3: "",
     telefono_principal_e164: "",
+    telefono_principal_tipo_linea: "movil",
+    telefono_principal_extension: "",
     telefono_movil_1_e164: "",
+    telefono_movil_1_tipo_linea: "movil",
     telefono_movil_2_e164: "",
+    telefono_movil_2_tipo_linea: "movil",
+    telefono_movil_2_extension: "",
+    telefono_secundario_e164: "",
+    telefono_secundario_tipo_linea: "movil",
+    telefono_secundario_extension: "",
     telefono_empresa_1_e164: "",
     telefono_empresa_1_extension: "",
     telefono_empresa_2_e164: "",
@@ -270,7 +302,14 @@ const INITIAL_STATE: ContactCreateState = {
     tamano: "",
     sitio_web: "",
     correo_principal: "",
+    correo_secundario: "",
     telefono_principal: "",
+    telefono_principal_e164: "",
+    telefono_principal_tipo_linea: "movil",
+    telefono_principal_extension: "",
+    telefono_secundario_e164: "",
+    telefono_secundario_tipo_linea: "movil",
+    telefono_secundario_extension: "",
     correo: "",
     telefono: "",
     notas: "",
@@ -445,8 +484,12 @@ function createReducer(state: ContactCreateState, action: ContactCreateAction): 
           ...state.cuenta,
           cuenta_id: action.account.id,
           nombre_comercial: action.account.nombre,
-          correo_principal: action.account.correo ?? state.cuenta.correo_principal,
-          telefono_principal: action.account.telefono ?? state.cuenta.telefono_principal,
+          correo_principal: action.account.correo_principal ?? action.account.correo ?? state.cuenta.correo_principal,
+          correo_secundario: action.account.correo_secundario ?? state.cuenta.correo_secundario,
+          telefono_principal_e164:
+            action.account.telefono_principal_e164 ?? action.account.telefono ?? state.cuenta.telefono_principal_e164,
+          telefono_principal: action.account.telefono_principal_e164 ?? action.account.telefono ?? state.cuenta.telefono_principal,
+          telefono_secundario_e164: action.account.telefono_secundario_e164 ?? state.cuenta.telefono_secundario_e164,
         },
         relacion: {
           ...state.relacion,
@@ -499,6 +542,7 @@ function buildPayload(state: ContactCreateState, dedupe?: DedupeDecision) {
   const persona = cleanObject({
     ...state.persona,
     nombre_completo: nombreCompleto || state.persona.nombre.trim(),
+    correo_secundario: state.persona.correo_secundario || state.persona.correo_institucional,
   });
 
   const cuentaBase = cleanObject({
@@ -526,8 +570,16 @@ function buildPayload(state: ContactCreateState, dedupe?: DedupeDecision) {
         : state.cuenta.tipo,
     codigo_cuenta: state.cuenta.codigo_cuenta,
     tamano: state.cuenta.tamano,
+    correo_principal: state.cuenta.correo_principal || state.cuenta.correo,
+    correo_secundario: state.cuenta.correo_secundario,
+    telefono_principal_e164: state.cuenta.telefono_principal_e164 || state.cuenta.telefono_principal || state.cuenta.telefono,
+    telefono_principal_tipo_linea: state.cuenta.telefono_principal_tipo_linea,
+    telefono_principal_extension: state.cuenta.telefono_principal_extension,
+    telefono_secundario_e164: state.cuenta.telefono_secundario_e164,
+    telefono_secundario_tipo_linea: state.cuenta.telefono_secundario_tipo_linea,
+    telefono_secundario_extension: state.cuenta.telefono_secundario_extension,
     correo: state.cuenta.correo || state.cuenta.correo_principal,
-    telefono: state.cuenta.telefono || state.cuenta.telefono_principal,
+    telefono: state.cuenta.telefono || state.cuenta.telefono_principal_e164 || state.cuenta.telefono_principal,
     necesidad_proposito: state.cuenta.necesidad_proposito,
     tipo_establecimiento: state.cuenta.tipo_establecimiento,
     fecha_incorporacion: state.cuenta.fecha_incorporacion || undefined,
@@ -611,12 +663,8 @@ function validateState(state: ContactCreateState): string | null {
   if (!state.persona.nombre.trim()) return "El nombre es obligatorio.";
   if (!state.persona.apellido_paterno.trim()) return "El apellido paterno es obligatorio.";
   if (!state.persona.origen.trim()) return "Selecciona el origen del contacto.";
-  if (state.mode === "empresa_existente") {
-    if (!state.persona.correo_principal.trim()) return "El correo 1 principal es obligatorio.";
-  } else if (!state.persona.correo_institucional.trim()) {
-    return "El correo institucional es obligatorio.";
-  }
-  if (!state.persona.telefono_movil_1_e164.trim()) return "El teléfono móvil 1 es obligatorio.";
+  if (!state.persona.correo_principal.trim()) return "El correo 1 principal es obligatorio.";
+  if (!state.persona.telefono_principal_e164.trim()) return "El teléfono principal es obligatorio.";
   if (state.mode === "empresa_existente" && !state.cuenta.cuenta_id.trim()) {
     return "Selecciona una empresa existente.";
   }
@@ -632,6 +680,18 @@ function validateState(state: ContactCreateState): string | null {
     !state.cuenta.tipo_persona.trim()
   ) {
     return "Selecciona el tipo de persona de la empresa.";
+  }
+  if (
+    (state.mode === "empresa_nueva" || state.mode === "persona_fisica_actividad_empresarial") &&
+    !state.cuenta.correo_principal.trim()
+  ) {
+    return "El correo principal de la empresa es obligatorio.";
+  }
+  if (
+    (state.mode === "empresa_nueva" || state.mode === "persona_fisica_actividad_empresarial") &&
+    !state.cuenta.telefono_principal_e164.trim()
+  ) {
+    return "El teléfono principal de la empresa es obligatorio.";
   }
   if (
     (state.mode === "empresa_existente" || state.mode === "empresa_nueva") &&
@@ -791,8 +851,6 @@ export function ContactCreateFlow({ open, onOpenChange, onCreated, initialMode =
       : isCompanyMode
         ? "Captura la persona responsable y los datos de la empresa."
         : "Captura la persona y la empresa en un solo flujo.";
-  const showContactExtras = isContactMode;
-  const showCompanyPhones = isCompanyMode || isPfaeMode;
   const relationSectionTitle =
     isPfaeMode
       ? "Vínculo principal"
@@ -941,41 +999,76 @@ export function ContactCreateFlow({ open, onOpenChange, onCreated, initialMode =
               <Field label="Apellido materno">
                 <Input value={state.persona.apellido_materno} onChange={(e) => dispatch({ type: "persona/set", field: "apellido_materno", value: e.target.value })} />
               </Field>
-              <Field label="Correo 1 principal" required={isContactMode}>
+              <Field label="Correo 1 principal" required>
                 <Input value={state.persona.correo_principal} onChange={(e) => dispatch({ type: "persona/set", field: "correo_principal", value: e.target.value })} />
               </Field>
-              <Field label="Correo 2 institucional" required={!isContactMode}>
+              <Field label="Correo 2" hint="Opcional">
                 <Input value={state.persona.correo_institucional} onChange={(e) => dispatch({ type: "persona/set", field: "correo_institucional", value: e.target.value })} />
               </Field>
-              {showContactExtras ? (
-                <Field label="Correo 3 personal 3">
-                  <Input value={state.persona.correo_personal_3} onChange={(e) => dispatch({ type: "persona/set", field: "correo_personal_3", value: e.target.value })} />
-                </Field>
-              ) : null}
-              <Field label="Teléfono móvil 1" required>
-                <Input value={state.persona.telefono_movil_1_e164} onChange={(e) => dispatch({ type: "persona/set", field: "telefono_movil_1_e164", value: e.target.value })} />
+              <Field label="Teléfono principal" required>
+                <div className="space-y-2">
+                  <div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_160px]">
+                    <Input
+                      value={state.persona.telefono_principal_e164}
+                      onChange={(e) => dispatch({ type: "persona/set", field: "telefono_principal_e164", value: e.target.value })}
+                    />
+                    <Select
+                      value={state.persona.telefono_principal_tipo_linea || "movil"}
+                      onValueChange={(value) => dispatch({ type: "persona/set", field: "telefono_principal_tipo_linea", value })}
+                    >
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder="Tipo de línea" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {PHONE_LINE_TYPE_OPTIONS.map((option) => (
+                          <SelectItem key={option.value} value={option.value}>
+                            {option.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  {state.persona.telefono_principal_tipo_linea === "fijo" ? (
+                    <Input
+                      placeholder="Extensión"
+                      value={state.persona.telefono_principal_extension}
+                      onChange={(e) => dispatch({ type: "persona/set", field: "telefono_principal_extension", value: e.target.value })}
+                    />
+                  ) : null}
+                </div>
               </Field>
-              {showContactExtras ? (
-                <Field label="Teléfono móvil 2">
-                  <Input value={state.persona.telefono_movil_2_e164} onChange={(e) => dispatch({ type: "persona/set", field: "telefono_movil_2_e164", value: e.target.value })} />
-                </Field>
-              ) : null}
-              {showCompanyPhones ? (
-                <>
-                  <Field label="Teléfono de la empresa 1 con extensión">
-                    <div className="grid grid-cols-[minmax(0,1fr)_120px] gap-2">
-                      <Input value={state.persona.telefono_empresa_1_e164} onChange={(e) => dispatch({ type: "persona/set", field: "telefono_empresa_1_e164", value: e.target.value })} />
-                      <Input placeholder="Ext." value={state.persona.telefono_empresa_1_extension} onChange={(e) => dispatch({ type: "persona/set", field: "telefono_empresa_1_extension", value: e.target.value })} />
-                    </div>
-                  </Field>
-                  <Field label="Teléfono de la empresa 2 con extensión">
-                    <div className="grid grid-cols-[minmax(0,1fr)_120px] gap-2">
-                      <Input value={state.persona.telefono_empresa_2_e164} onChange={(e) => dispatch({ type: "persona/set", field: "telefono_empresa_2_e164", value: e.target.value })} />
-                      <Input placeholder="Ext." value={state.persona.telefono_empresa_2_extension} onChange={(e) => dispatch({ type: "persona/set", field: "telefono_empresa_2_extension", value: e.target.value })} />
-                    </div>
-                  </Field>
-                </>
-              ) : null}
+              <Field label="Teléfono 2" hint="Opcional">
+                <div className="space-y-2">
+                  <div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_160px]">
+                    <Input
+                      value={state.persona.telefono_movil_2_e164}
+                      onChange={(e) => dispatch({ type: "persona/set", field: "telefono_movil_2_e164", value: e.target.value })}
+                    />
+                    <Select
+                      value={state.persona.telefono_movil_2_tipo_linea || "movil"}
+                      onValueChange={(value) => dispatch({ type: "persona/set", field: "telefono_movil_2_tipo_linea", value })}
+                    >
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder="Tipo de línea" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {PHONE_LINE_TYPE_OPTIONS.map((option) => (
+                          <SelectItem key={option.value} value={option.value}>
+                            {option.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  {state.persona.telefono_movil_2_tipo_linea === "fijo" ? (
+                    <Input
+                      placeholder="Extensión"
+                      value={state.persona.telefono_movil_2_extension}
+                      onChange={(e) => dispatch({ type: "persona/set", field: "telefono_movil_2_extension", value: e.target.value })}
+                    />
+                  ) : null}
+                </div>
+              </Field>
               <Field label="Origen" required>
                 <Select
                   value={state.persona.origen || undefined}
@@ -1045,7 +1138,7 @@ export function ContactCreateFlow({ open, onOpenChange, onCreated, initialMode =
                           onClick={() => dispatch({ type: "account/select", account })}
                         >
                           <div className="text-sm font-medium">{account.nombre}</div>
-                          <div className="text-xs text-muted-foreground">{[account.alias, account.correo, account.telefono].filter(Boolean).join(" · ") || "Sin datos adicionales"}</div>
+                          <div className="text-xs text-muted-foreground">{[account.alias, account.correo_principal, account.telefono_principal_e164].filter(Boolean).join(" · ") || "Sin datos adicionales"}</div>
                         </button>
                       );
                     })}
@@ -1094,17 +1187,75 @@ export function ContactCreateFlow({ open, onOpenChange, onCreated, initialMode =
                 <Field label="RFC">
                   <Input value={state.cuenta.rfc} onChange={(e) => dispatch({ type: "cuenta/set", field: "rfc", value: e.target.value })} />
                 </Field>
-                <Field label="Correo principal">
+                <Field label="Correo 1 principal" required>
                   <Input value={state.cuenta.correo_principal} onChange={(e) => dispatch({ type: "cuenta/set", field: "correo_principal", value: e.target.value })} />
                 </Field>
-                <Field label="Teléfono principal">
-                  <Input value={state.cuenta.telefono_principal} onChange={(e) => dispatch({ type: "cuenta/set", field: "telefono_principal", value: e.target.value })} />
+                <Field label="Correo 2" hint="Opcional">
+                  <Input value={state.cuenta.correo_secundario} onChange={(e) => dispatch({ type: "cuenta/set", field: "correo_secundario", value: e.target.value })} />
                 </Field>
-                <Field label="Correo">
-                  <Input value={state.cuenta.correo} onChange={(e) => dispatch({ type: "cuenta/set", field: "correo", value: e.target.value })} />
+                <Field label="Teléfono principal" required>
+                  <div className="space-y-2">
+                    <div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_160px]">
+                      <Input
+                        value={state.cuenta.telefono_principal_e164}
+                        onChange={(e) => dispatch({ type: "cuenta/set", field: "telefono_principal_e164", value: e.target.value })}
+                      />
+                      <Select
+                        value={state.cuenta.telefono_principal_tipo_linea || "movil"}
+                        onValueChange={(value) => dispatch({ type: "cuenta/set", field: "telefono_principal_tipo_linea", value })}
+                      >
+                        <SelectTrigger className="w-full">
+                          <SelectValue placeholder="Tipo de línea" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {PHONE_LINE_TYPE_OPTIONS.map((option) => (
+                            <SelectItem key={option.value} value={option.value}>
+                              {option.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    {state.cuenta.telefono_principal_tipo_linea === "fijo" ? (
+                      <Input
+                        placeholder="Extensión"
+                        value={state.cuenta.telefono_principal_extension}
+                        onChange={(e) => dispatch({ type: "cuenta/set", field: "telefono_principal_extension", value: e.target.value })}
+                      />
+                    ) : null}
+                  </div>
                 </Field>
-                <Field label="Teléfono">
-                  <Input value={state.cuenta.telefono} onChange={(e) => dispatch({ type: "cuenta/set", field: "telefono", value: e.target.value })} />
+                <Field label="Teléfono 2" hint="Opcional">
+                  <div className="space-y-2">
+                    <div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_160px]">
+                      <Input
+                        value={state.cuenta.telefono_secundario_e164}
+                        onChange={(e) => dispatch({ type: "cuenta/set", field: "telefono_secundario_e164", value: e.target.value })}
+                      />
+                      <Select
+                        value={state.cuenta.telefono_secundario_tipo_linea || "movil"}
+                        onValueChange={(value) => dispatch({ type: "cuenta/set", field: "telefono_secundario_tipo_linea", value })}
+                      >
+                        <SelectTrigger className="w-full">
+                          <SelectValue placeholder="Tipo de línea" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {PHONE_LINE_TYPE_OPTIONS.map((option) => (
+                            <SelectItem key={option.value} value={option.value}>
+                              {option.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    {state.cuenta.telefono_secundario_tipo_linea === "fijo" ? (
+                      <Input
+                        placeholder="Extensión"
+                        value={state.cuenta.telefono_secundario_extension}
+                        onChange={(e) => dispatch({ type: "cuenta/set", field: "telefono_secundario_extension", value: e.target.value })}
+                      />
+                    ) : null}
+                  </div>
                 </Field>
                 <Field label="Industria">
                   <Input value={state.cuenta.industria} onChange={(e) => dispatch({ type: "cuenta/set", field: "industria", value: e.target.value })} />
@@ -1323,7 +1474,7 @@ export function ContactCreateFlow({ open, onOpenChange, onCreated, initialMode =
                 <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Persona</div>
                 <div className="mt-2 text-sm font-medium">{review.persona || "Sin nombre completo todavía"}</div>
                 <div className="mt-1 text-xs text-muted-foreground">
-                  {state.persona.correo_institucional || state.persona.telefono_movil_1_e164 || "Sin medio de contacto"}
+                  {formatSummaryLine([state.persona.correo_principal, state.persona.telefono_principal_e164], "Sin medio de contacto")}
                 </div>
               </div>
               <div className="rounded-lg border border-border/60 bg-background p-3">
@@ -1454,7 +1605,7 @@ export function ContactCreateFlow({ open, onOpenChange, onCreated, initialMode =
                   <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Contacto</div>
                   <div className="mt-1 text-sm font-semibold">{review.persona || "Pendiente"}</div>
                   <div className="mt-1 text-xs text-muted-foreground">
-                    {state.persona.correo_institucional || state.persona.telefono_movil_1_e164 || "Sin medio de contacto"}
+                    {formatSummaryLine([state.persona.correo_principal, state.persona.telefono_principal_e164], "Sin medio de contacto")}
                   </div>
                 </div>
                 <div className="rounded-xl border border-border/60 bg-background p-3">

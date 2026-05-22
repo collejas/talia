@@ -39,7 +39,13 @@ Representa a la persona humana real.
 - `apellido_materno text`
 - `nombre_completo text not null`
 - `correo_principal text`
+- `correo_secundario text`
 - `telefono_principal_e164 text`
+- `telefono_principal_tipo_linea text`
+- `telefono_principal_extension text`
+- `telefono_secundario_e164 text`
+- `telefono_secundario_tipo_linea text`
+- `telefono_secundario_extension text`
 - `puesto text`
 - `area text`
 - `rol_decision text`
@@ -64,6 +70,7 @@ Representa a la persona humana real.
 - `personas_org_owner_idx on (organizacion_id, propietario_usuario_id)`
 - `personas_org_email_idx on (organizacion_id, lower(correo_principal)) where correo_principal is not null and btrim(correo_principal) <> ''`
 - `personas_org_phone_idx on (organizacion_id, telefono_principal_e164) where telefono_principal_e164 is not null and btrim(telefono_principal_e164) <> ''`
+- `personas_org_phone_ext_idx` no es necesario por ahora; la extensión solo acompaña al teléfono fijo
 
 ### 3.5 Regla de uso
 
@@ -92,8 +99,14 @@ Representa la entidad comercial o fiscal.
 - `subindustria text`
 - `tamano text`
 - `sitio_web text`
-- `telefono_principal text`
 - `correo_principal text`
+- `correo_secundario text`
+- `telefono_principal_e164 text`
+- `telefono_principal_tipo_linea text`
+- `telefono_principal_extension text`
+- `telefono_secundario_e164 text`
+- `telefono_secundario_tipo_linea text`
+- `telefono_secundario_extension text`
 - `propietario_usuario_id uuid`
 - `estado text not null default 'activo'`
 - `notas text`
