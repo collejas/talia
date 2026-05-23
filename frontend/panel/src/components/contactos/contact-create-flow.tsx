@@ -258,6 +258,49 @@ function formatDedupeSeller(candidate: DedupeCandidate): string {
   return candidate.propietario_nombre?.trim() || candidate.propietario_usuario_id?.trim() || "Sin vendedor";
 }
 
+function formatDedupeCandidateClipboard(candidate: DedupeCandidate): string {
+  const lines = [
+    `Nombre: ${candidate.nombre || "Sin nombre"}`,
+    `Tipo: ${formatDedupeRecordType(candidate.tipo_registro)}`,
+    `Nivel: ${candidate.nivel || "debil"}`,
+    `Coincidencia: ${candidate.coincidencia_en || "Coincidencia detectada"}`,
+    `Vendedor: ${formatDedupeSeller(candidate)}`,
+  ];
+  if (candidate.correo) lines.push(`Correo: ${candidate.correo}`);
+  if (candidate.telefono) lines.push(`Teléfono: ${candidate.telefono}`);
+  if (candidate.empresa) lines.push(`Empresa: ${candidate.empresa}`);
+  if (candidate.rfc) lines.push(`RFC: ${candidate.rfc}`);
+  if (candidate.alias) lines.push(`Alias: ${candidate.alias}`);
+  if (candidate.motivo) lines.push(`Motivo: ${candidate.motivo}`);
+  return lines.join("\n");
+}
+
+function buildDedupeClipboardText(state: PersonaAltaValidationResponse | null): string {
+  if (!state) return "Sin coincidencias detectadas.";
+  const parts: string[] = [
+    "Aviso de posibles duplicados",
+    `Requiere confirmación: ${state.requiere_confirmacion ? "Sí" : "No"}`,
+  ];
+
+  if (state.candidatos_persona?.length) {
+    parts.push("");
+    parts.push("Personas:");
+    state.candidatos_persona.forEach((candidate, index) => {
+      parts.push(`${index + 1}. ${formatDedupeCandidateClipboard(candidate)}`);
+    });
+  }
+
+  if (state.candidatos_cuenta?.length) {
+    parts.push("");
+    parts.push("Cuentas:");
+    state.candidatos_cuenta.forEach((candidate, index) => {
+      parts.push(`${index + 1}. ${formatDedupeCandidateClipboard(candidate)}`);
+    });
+  }
+
+  return parts.join("\n");
+}
+
 const PERSONA_ESTADO_OPTIONS = [
   { value: "lead", label: "Lead" },
   { value: "activo", label: "Activo" },
@@ -792,6 +835,7 @@ export function ContactCreateFlow({ open, onOpenChange, onCreated, initialMode =
   const [pendingDedupe, setPendingDedupe] = React.useState<PersonaAltaValidationResponse | null>(null);
   const [selectedPersonaReuseId, setSelectedPersonaReuseId] = React.useState("");
   const [selectedCuentaReuseId, setSelectedCuentaReuseId] = React.useState("");
+  const [copyingDedupe, setCopyingDedupe] = React.useState(false);
   const [validationNotice, setValidationNotice] = React.useState<ValidationNoticeState | null>(null);
   const tenantCatalogs = useTenantContactCatalogs();
 
@@ -898,6 +942,21 @@ export function ContactCreateFlow({ open, onOpenChange, onCreated, initialMode =
             : state.relacion.rol_en_cuenta,
     };
   }, [state]);
+
+  const dedupeClipboardText = React.useMemo(() => buildDedupeClipboardText(pendingDedupe), [pendingDedupe]);
+
+  const copyDedupeSummary = React.useCallback(async () => {
+    if (!dedupeClipboardText) return;
+    try {
+      setCopyingDedupe(true);
+      await navigator.clipboard.writeText(dedupeClipboardText);
+      toast.success("Aviso copiado");
+    } catch {
+      toast.error("No se pudo copiar el texto");
+    } finally {
+      setCopyingDedupe(false);
+    }
+  }, [dedupeClipboardText]);
 
   const isContactMode = state.mode === "empresa_existente";
   const isCompanyMode = state.mode === "empresa_nueva";
@@ -1702,6 +1761,20 @@ export function ContactCreateFlow({ open, onOpenChange, onCreated, initialMode =
         </DialogHeader>
 
         <div className="space-y-4">
+          <div className="rounded-xl border border-border/60 bg-muted/20 p-3">
+            <div className="flex items-center justify-between gap-2">
+              <div className="text-sm font-medium">Texto copiable</div>
+              <Button type="button" variant="outline" size="sm" onClick={() => void copyDedupeSummary()} disabled={copyingDedupe}>
+                {copyingDedupe ? "Copiando..." : "Copiar aviso"}
+              </Button>
+            </div>
+            <Textarea
+              readOnly
+              value={dedupeClipboardText}
+              className="mt-3 min-h-48 whitespace-pre-wrap font-mono text-xs"
+            />
+          </div>
+
           {pendingDedupe?.candidatos_persona?.length ? (
             <div className="space-y-2">
               <div className="text-sm font-medium">Personas</div>
