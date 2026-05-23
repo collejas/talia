@@ -3,7 +3,7 @@
 import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { IconArrowLeft, IconBuilding, IconTrash, IconUserPlus, IconUsers, IconX } from "@tabler/icons-react";
+import { IconArrowLeft, IconBuilding, IconPencil, IconTrash, IconUserPlus, IconUsers, IconX } from "@tabler/icons-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -11,6 +11,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 
 type AccountDetail = Record<string, unknown>;
 type AccountRelation = {
@@ -52,11 +53,56 @@ type DedupeCandidate = {
   nivel: string;
   motivo: string;
 };
+type AccountEditForm = {
+  nombre: string;
+  alias: string;
+  razon_social: string;
+  rfc: string;
+  website: string;
+  correo: string;
+  telefono: string;
+  industria: string;
+  tamano: string;
+  tipo_establecimiento: string;
+  uso_cfdi: string;
+  metodo_pago: string;
+  forma_pago: string;
+  email_facturacion: string;
+  pais: string;
+  entidad: string;
+  clave_entidad: string;
+  municipio: string;
+  clave_municipio: string;
+  localidad: string;
+  clave_localidad: string;
+  tipo_vialidad: string;
+  nombre_vialidad: string;
+  numero_exterior: string;
+  letra_exterior: string;
+  numero_interior: string;
+  letra_interior: string;
+  edificio: string;
+  edificio_piso: string;
+  tipo_asentamiento: string;
+  nombre_asentamiento: string;
+  tipo_centro_comercial: string;
+  corredor_industrial: string;
+  numero_local: string;
+  codigo_postal: string;
+  notas: string;
+  necesidad_proposito: string;
+};
 
 function getText(value: unknown): string {
   if (typeof value === "string" && value.trim()) return value.trim();
   if (typeof value === "number" && Number.isFinite(value)) return String(value);
   return "—";
+}
+
+function getInputText(value: unknown): string {
+  if (typeof value === "string") return value;
+  if (typeof value === "number" && Number.isFinite(value)) return String(value);
+  return "";
 }
 
 function formatDate(value: unknown): string {
@@ -93,6 +139,48 @@ export function CuentaDetailView({ cuentaId }: { cuentaId: string }) {
   const [mergeError, setMergeError] = React.useState<string | null>(null);
   const [mergeTargetId, setMergeTargetId] = React.useState<string>("");
   const [mergeSubmitting, setMergeSubmitting] = React.useState(false);
+  const [editOpen, setEditOpen] = React.useState(false);
+  const [editSubmitting, setEditSubmitting] = React.useState(false);
+  const [editError, setEditError] = React.useState<string | null>(null);
+  const [editForm, setEditForm] = React.useState<AccountEditForm>({
+    nombre: "",
+    alias: "",
+    razon_social: "",
+    rfc: "",
+    website: "",
+    correo: "",
+    telefono: "",
+    industria: "",
+    tamano: "",
+    tipo_establecimiento: "",
+    uso_cfdi: "",
+    metodo_pago: "",
+    forma_pago: "",
+    email_facturacion: "",
+    pais: "",
+    entidad: "",
+    clave_entidad: "",
+    municipio: "",
+    clave_municipio: "",
+    localidad: "",
+    clave_localidad: "",
+    tipo_vialidad: "",
+    nombre_vialidad: "",
+    numero_exterior: "",
+    letra_exterior: "",
+    numero_interior: "",
+    letra_interior: "",
+    edificio: "",
+    edificio_piso: "",
+    tipo_asentamiento: "",
+    nombre_asentamiento: "",
+    tipo_centro_comercial: "",
+    corredor_industrial: "",
+    numero_local: "",
+    codigo_postal: "",
+    notas: "",
+    necesidad_proposito: "",
+  });
 
   const loadData = React.useCallback(async () => {
     setLoading(true);
@@ -272,6 +360,111 @@ export function CuentaDetailView({ cuentaId }: { cuentaId: string }) {
     }
   };
 
+  const openEditDialog = () => {
+    setEditForm({
+      nombre: getInputText(detail?.nombre),
+      alias: getInputText(detail?.alias),
+      razon_social: getInputText(detail?.razon_social),
+      rfc: getInputText(detail?.rfc),
+      website: getInputText(detail?.website ?? detail?.sitio_web),
+      correo: getInputText(detail?.correo ?? detail?.email ?? detail?.correo_principal),
+      telefono: getInputText(detail?.telefono),
+      industria: getInputText(detail?.industria),
+      tamano: getInputText(detail?.tamano),
+      tipo_establecimiento: getInputText(detail?.tipo_establecimiento),
+      uso_cfdi: getInputText(detail?.uso_cfdi),
+      metodo_pago: getInputText(detail?.metodo_pago),
+      forma_pago: getInputText(detail?.forma_pago),
+      email_facturacion: getInputText(detail?.email_facturacion),
+      pais: getInputText(detail?.pais),
+      entidad: getInputText(detail?.entidad),
+      clave_entidad: getInputText(detail?.clave_entidad),
+      municipio: getInputText(detail?.municipio),
+      clave_municipio: getInputText(detail?.clave_municipio),
+      localidad: getInputText(detail?.localidad),
+      clave_localidad: getInputText(detail?.clave_localidad),
+      tipo_vialidad: getInputText(detail?.tipo_vialidad),
+      nombre_vialidad: getInputText(detail?.nombre_vialidad),
+      numero_exterior: getInputText(detail?.numero_exterior),
+      letra_exterior: getInputText(detail?.letra_exterior),
+      numero_interior: getInputText(detail?.numero_interior),
+      letra_interior: getInputText(detail?.letra_interior),
+      edificio: getInputText(detail?.edificio),
+      edificio_piso: getInputText(detail?.edificio_piso),
+      tipo_asentamiento: getInputText(detail?.tipo_asentamiento),
+      nombre_asentamiento: getInputText(detail?.nombre_asentamiento),
+      tipo_centro_comercial: getInputText(detail?.tipo_centro_comercial),
+      corredor_industrial: getInputText(detail?.corredor_industrial),
+      numero_local: getInputText(detail?.numero_local),
+      codigo_postal: getInputText(detail?.codigo_postal),
+      notas: getInputText(detail?.notas),
+      necesidad_proposito: getInputText(detail?.necesidad_proposito),
+    });
+    setEditError(null);
+    setEditOpen(true);
+  };
+
+  const handleSaveEdit = async () => {
+    setEditSubmitting(true);
+    setEditError(null);
+    try {
+      const response = await fetch(`/api/cuentas/${encodeURIComponent(cuentaId)}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          nombre: editForm.nombre.trim(),
+          alias: editForm.alias.trim(),
+          razon_social: editForm.razon_social.trim(),
+          rfc: editForm.rfc.trim(),
+          website: editForm.website.trim(),
+          correo: editForm.correo.trim(),
+          telefono: editForm.telefono.trim(),
+          industria: editForm.industria.trim(),
+          tamano: editForm.tamano.trim(),
+          tipo_establecimiento: editForm.tipo_establecimiento.trim(),
+          uso_cfdi: editForm.uso_cfdi.trim(),
+          metodo_pago: editForm.metodo_pago.trim(),
+          forma_pago: editForm.forma_pago.trim(),
+          email_facturacion: editForm.email_facturacion.trim(),
+          pais: editForm.pais.trim(),
+          entidad: editForm.entidad.trim(),
+          clave_entidad: editForm.clave_entidad.trim(),
+          municipio: editForm.municipio.trim(),
+          clave_municipio: editForm.clave_municipio.trim(),
+          localidad: editForm.localidad.trim(),
+          clave_localidad: editForm.clave_localidad.trim(),
+          tipo_vialidad: editForm.tipo_vialidad.trim(),
+          nombre_vialidad: editForm.nombre_vialidad.trim(),
+          numero_exterior: editForm.numero_exterior.trim(),
+          letra_exterior: editForm.letra_exterior.trim(),
+          numero_interior: editForm.numero_interior.trim(),
+          letra_interior: editForm.letra_interior.trim(),
+          edificio: editForm.edificio.trim(),
+          edificio_piso: editForm.edificio_piso.trim(),
+          tipo_asentamiento: editForm.tipo_asentamiento.trim(),
+          nombre_asentamiento: editForm.nombre_asentamiento.trim(),
+          tipo_centro_comercial: editForm.tipo_centro_comercial.trim(),
+          corredor_industrial: editForm.corredor_industrial.trim(),
+          numero_local: editForm.numero_local.trim(),
+          codigo_postal: editForm.codigo_postal.trim(),
+          notas: editForm.notas.trim(),
+          necesidad_proposito: editForm.necesidad_proposito.trim(),
+        }),
+      });
+      const body = (await response.json().catch(() => ({}))) as { error?: string };
+      if (!response.ok) throw new Error(body.error || "No se pudo actualizar la empresa.");
+      toast.success("Empresa actualizada.");
+      setEditOpen(false);
+      await loadData();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "No se pudo actualizar la empresa.";
+      setEditError(message);
+      toast.error(message);
+    } finally {
+      setEditSubmitting(false);
+    }
+  };
+
   const handleAddRelation = async () => {
     if (!relationTargetId) {
       toast.error("Selecciona una persona.");
@@ -357,6 +550,10 @@ export function CuentaDetailView({ cuentaId }: { cuentaId: string }) {
           <p className="mt-1 text-sm text-muted-foreground">{alias !== "—" ? alias : "Sin alias"}</p>
         </div>
         <div className="flex flex-wrap gap-2">
+          <Button onClick={openEditDialog}>
+            <IconPencil className="mr-2 size-4" />
+            Editar
+          </Button>
           <Button asChild variant="outline">
             <Link href="/crm">
               <IconArrowLeft className="mr-2 size-4" />
@@ -576,6 +773,342 @@ export function CuentaDetailView({ cuentaId }: { cuentaId: string }) {
               </Button>
               <Button type="button" onClick={() => void handleMerge()} disabled={mergeSubmitting || !mergeTargetId}>
                 {mergeSubmitting ? "Fusionando..." : "Fusionar seleccionado"}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={editOpen} onOpenChange={setEditOpen}>
+        <DialogContent className="max-w-5xl">
+          <div className="space-y-5">
+            <div>
+              <h2 className="text-lg font-semibold">Editar empresa</h2>
+              <p className="text-sm text-muted-foreground">
+                Actualiza los datos principales sin tocar el código de empresa.
+              </p>
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="grid gap-2">
+                <Label htmlFor="edit-nombre">Nombre</Label>
+                <Input
+                  id="edit-nombre"
+                  value={editForm.nombre}
+                  onChange={(event) => setEditForm((prev) => ({ ...prev, nombre: event.target.value }))}
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="edit-alias">Alias</Label>
+                <Input
+                  id="edit-alias"
+                  value={editForm.alias}
+                  onChange={(event) => setEditForm((prev) => ({ ...prev, alias: event.target.value }))}
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="edit-razon-social">Razón social</Label>
+                <Input
+                  id="edit-razon-social"
+                  value={editForm.razon_social}
+                  onChange={(event) => setEditForm((prev) => ({ ...prev, razon_social: event.target.value }))}
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="edit-rfc">RFC</Label>
+                <Input
+                  id="edit-rfc"
+                  value={editForm.rfc}
+                  onChange={(event) => setEditForm((prev) => ({ ...prev, rfc: event.target.value }))}
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="edit-website">Sitio web</Label>
+                <Input
+                  id="edit-website"
+                  value={editForm.website}
+                  onChange={(event) => setEditForm((prev) => ({ ...prev, website: event.target.value }))}
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="edit-correo">Correo</Label>
+                <Input
+                  id="edit-correo"
+                  value={editForm.correo}
+                  onChange={(event) => setEditForm((prev) => ({ ...prev, correo: event.target.value }))}
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="edit-telefono">Teléfono</Label>
+                <Input
+                  id="edit-telefono"
+                  value={editForm.telefono}
+                  onChange={(event) => setEditForm((prev) => ({ ...prev, telefono: event.target.value }))}
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="edit-industria">Industria</Label>
+                <Input
+                  id="edit-industria"
+                  value={editForm.industria}
+                  onChange={(event) => setEditForm((prev) => ({ ...prev, industria: event.target.value }))}
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="edit-tamano">Tamaño</Label>
+                <Input
+                  id="edit-tamano"
+                  value={editForm.tamano}
+                  onChange={(event) => setEditForm((prev) => ({ ...prev, tamano: event.target.value }))}
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="edit-tipo-establecimiento">Clasificación de negocio</Label>
+                <Input
+                  id="edit-tipo-establecimiento"
+                  value={editForm.tipo_establecimiento}
+                  onChange={(event) => setEditForm((prev) => ({ ...prev, tipo_establecimiento: event.target.value }))}
+                />
+              </div>
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="grid gap-2">
+                <Label htmlFor="edit-uso-cfdi">Uso CFDI</Label>
+                <Input
+                  id="edit-uso-cfdi"
+                  value={editForm.uso_cfdi}
+                  onChange={(event) => setEditForm((prev) => ({ ...prev, uso_cfdi: event.target.value }))}
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="edit-metodo-pago">Método de pago</Label>
+                <Input
+                  id="edit-metodo-pago"
+                  value={editForm.metodo_pago}
+                  onChange={(event) => setEditForm((prev) => ({ ...prev, metodo_pago: event.target.value }))}
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="edit-forma-pago">Forma de pago</Label>
+                <Input
+                  id="edit-forma-pago"
+                  value={editForm.forma_pago}
+                  onChange={(event) => setEditForm((prev) => ({ ...prev, forma_pago: event.target.value }))}
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="edit-email-facturacion">Email de facturación</Label>
+                <Input
+                  id="edit-email-facturacion"
+                  value={editForm.email_facturacion}
+                  onChange={(event) => setEditForm((prev) => ({ ...prev, email_facturacion: event.target.value }))}
+                />
+              </div>
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-3">
+              <div className="grid gap-2">
+                <Label htmlFor="edit-pais">País</Label>
+                <Input
+                  id="edit-pais"
+                  value={editForm.pais}
+                  onChange={(event) => setEditForm((prev) => ({ ...prev, pais: event.target.value }))}
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="edit-clave-entidad">Clave entidad</Label>
+                <Input
+                  id="edit-clave-entidad"
+                  value={editForm.clave_entidad}
+                  onChange={(event) => setEditForm((prev) => ({ ...prev, clave_entidad: event.target.value }))}
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="edit-entidad">Entidad</Label>
+                <Input
+                  id="edit-entidad"
+                  value={editForm.entidad}
+                  onChange={(event) => setEditForm((prev) => ({ ...prev, entidad: event.target.value }))}
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="edit-clave-municipio">Clave municipio</Label>
+                <Input
+                  id="edit-clave-municipio"
+                  value={editForm.clave_municipio}
+                  onChange={(event) => setEditForm((prev) => ({ ...prev, clave_municipio: event.target.value }))}
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="edit-municipio">Municipio</Label>
+                <Input
+                  id="edit-municipio"
+                  value={editForm.municipio}
+                  onChange={(event) => setEditForm((prev) => ({ ...prev, municipio: event.target.value }))}
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="edit-clave-localidad">Clave localidad</Label>
+                <Input
+                  id="edit-clave-localidad"
+                  value={editForm.clave_localidad}
+                  onChange={(event) => setEditForm((prev) => ({ ...prev, clave_localidad: event.target.value }))}
+                />
+              </div>
+              <div className="grid gap-2 md:col-span-3">
+                <Label htmlFor="edit-localidad">Localidad</Label>
+                <Input
+                  id="edit-localidad"
+                  value={editForm.localidad}
+                  onChange={(event) => setEditForm((prev) => ({ ...prev, localidad: event.target.value }))}
+                />
+              </div>
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="grid gap-2">
+                <Label htmlFor="edit-tipo-vialidad">Tipo de vialidad</Label>
+                <Input
+                  id="edit-tipo-vialidad"
+                  value={editForm.tipo_vialidad}
+                  onChange={(event) => setEditForm((prev) => ({ ...prev, tipo_vialidad: event.target.value }))}
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="edit-nombre-vialidad">Nombre de vialidad</Label>
+                <Input
+                  id="edit-nombre-vialidad"
+                  value={editForm.nombre_vialidad}
+                  onChange={(event) => setEditForm((prev) => ({ ...prev, nombre_vialidad: event.target.value }))}
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="edit-numero-exterior">Número exterior</Label>
+                <Input
+                  id="edit-numero-exterior"
+                  value={editForm.numero_exterior}
+                  onChange={(event) => setEditForm((prev) => ({ ...prev, numero_exterior: event.target.value }))}
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="edit-letra-exterior">Letra exterior</Label>
+                <Input
+                  id="edit-letra-exterior"
+                  value={editForm.letra_exterior}
+                  onChange={(event) => setEditForm((prev) => ({ ...prev, letra_exterior: event.target.value }))}
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="edit-numero-interior">Número interior</Label>
+                <Input
+                  id="edit-numero-interior"
+                  value={editForm.numero_interior}
+                  onChange={(event) => setEditForm((prev) => ({ ...prev, numero_interior: event.target.value }))}
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="edit-letra-interior">Letra interior</Label>
+                <Input
+                  id="edit-letra-interior"
+                  value={editForm.letra_interior}
+                  onChange={(event) => setEditForm((prev) => ({ ...prev, letra_interior: event.target.value }))}
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="edit-edificio">Edificio</Label>
+                <Input
+                  id="edit-edificio"
+                  value={editForm.edificio}
+                  onChange={(event) => setEditForm((prev) => ({ ...prev, edificio: event.target.value }))}
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="edit-edificio-piso">Piso / nivel</Label>
+                <Input
+                  id="edit-edificio-piso"
+                  value={editForm.edificio_piso}
+                  onChange={(event) => setEditForm((prev) => ({ ...prev, edificio_piso: event.target.value }))}
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="edit-tipo-asentamiento">Tipo de asentamiento</Label>
+                <Input
+                  id="edit-tipo-asentamiento"
+                  value={editForm.tipo_asentamiento}
+                  onChange={(event) => setEditForm((prev) => ({ ...prev, tipo_asentamiento: event.target.value }))}
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="edit-nombre-asentamiento">Nombre de asentamiento</Label>
+                <Input
+                  id="edit-nombre-asentamiento"
+                  value={editForm.nombre_asentamiento}
+                  onChange={(event) => setEditForm((prev) => ({ ...prev, nombre_asentamiento: event.target.value }))}
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="edit-tipo-centro-comercial">Tipo de centro comercial</Label>
+                <Input
+                  id="edit-tipo-centro-comercial"
+                  value={editForm.tipo_centro_comercial}
+                  onChange={(event) => setEditForm((prev) => ({ ...prev, tipo_centro_comercial: event.target.value }))}
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="edit-corredor-industrial">Corredor industrial</Label>
+                <Input
+                  id="edit-corredor-industrial"
+                  value={editForm.corredor_industrial}
+                  onChange={(event) => setEditForm((prev) => ({ ...prev, corredor_industrial: event.target.value }))}
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="edit-numero-local">Número local</Label>
+                <Input
+                  id="edit-numero-local"
+                  value={editForm.numero_local}
+                  onChange={(event) => setEditForm((prev) => ({ ...prev, numero_local: event.target.value }))}
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="edit-codigo-postal">Código postal</Label>
+                <Input
+                  id="edit-codigo-postal"
+                  value={editForm.codigo_postal}
+                  onChange={(event) => setEditForm((prev) => ({ ...prev, codigo_postal: event.target.value }))}
+                />
+              </div>
+            </div>
+
+            <div className="grid gap-2">
+              <Label htmlFor="edit-notas">Notas</Label>
+              <Textarea
+                id="edit-notas"
+                value={editForm.notas}
+                onChange={(event) => setEditForm((prev) => ({ ...prev, notas: event.target.value }))}
+                rows={4}
+              />
+            </div>
+
+            <div className="grid gap-2">
+              <Label htmlFor="edit-necesidad-proposito">Necesidad / propósito</Label>
+              <Textarea
+                id="edit-necesidad-proposito"
+                value={editForm.necesidad_proposito}
+                onChange={(event) => setEditForm((prev) => ({ ...prev, necesidad_proposito: event.target.value }))}
+                rows={3}
+              />
+            </div>
+
+            {editError ? <p className="text-sm text-destructive">{editError}</p> : null}
+
+            <div className="flex justify-end gap-2">
+              <Button type="button" variant="outline" onClick={() => setEditOpen(false)} disabled={editSubmitting}>
+                Cancelar
+              </Button>
+              <Button type="button" onClick={() => void handleSaveEdit()} disabled={editSubmitting}>
+                {editSubmitting ? "Guardando..." : "Guardar cambios"}
               </Button>
             </div>
           </div>
