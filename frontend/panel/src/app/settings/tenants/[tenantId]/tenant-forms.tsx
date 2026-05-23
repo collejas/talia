@@ -328,12 +328,14 @@ function buildContactosCatalogsJson(
   config: Record<string, unknown> | null | undefined,
   puestos: string[],
   rolesDecision: string[],
+  clasificacionesNegocio: string[],
 ): string {
   const nextConfig: Record<string, unknown> = isRecord(config) ? { ...config } : {}
   const contactos = isRecord(nextConfig.contactos) ? { ...nextConfig.contactos } : {}
   const catalogos = isRecord(contactos.catalogos) ? { ...contactos.catalogos } : {}
   catalogos.puesto = puestos
   catalogos.rol_decision = rolesDecision
+  catalogos.clasificacion_negocio = clasificacionesNegocio
   contactos.catalogos = catalogos
   nextConfig.contactos = contactos
   return JSON.stringify(nextConfig, null, 2)
@@ -364,9 +366,21 @@ export function TenantContactCatalogsForm({
       .filter(Boolean)
       .join("\n"),
   )
+  const [clasificacionesNegocio, setClasificacionesNegocio] = useState(() =>
+    (Array.isArray(catalogosConfig?.clasificacion_negocio) ? catalogosConfig?.clasificacion_negocio : [])
+      .map((item) => (typeof item === "string" ? item : ""))
+      .filter(Boolean)
+      .join("\n"),
+  )
   const configJson = useMemo(
-    () => buildContactosCatalogsJson(config, parseListLines(puestos), parseListLines(rolesDecision)),
-    [config, puestos, rolesDecision],
+    () =>
+      buildContactosCatalogsJson(
+        config,
+        parseListLines(puestos),
+        parseListLines(rolesDecision),
+        parseListLines(clasificacionesNegocio),
+      ),
+    [config, puestos, rolesDecision, clasificacionesNegocio],
   )
 
   return (
@@ -399,6 +413,19 @@ export function TenantContactCatalogsForm({
           <p className="text-xs text-muted-foreground">
             Un valor por línea. Los valores antiguos se conservan en el modal de edición para no romper contactos
             existentes.
+          </p>
+        </div>
+        <div className="space-y-2 md:col-span-2">
+          <Label htmlFor="contactos_clasificaciones_negocio">Clasificación de negocio</Label>
+          <Textarea
+            id="contactos_clasificaciones_negocio"
+            value={clasificacionesNegocio}
+            onChange={(event) => setClasificacionesNegocio(event.target.value)}
+            placeholder={"Restaurante\nConsultorio\nTienda"}
+            className="min-h-[180px]"
+          />
+          <p className="text-xs text-muted-foreground">
+            Un valor por línea. Se mostrará como select al capturar empresa o persona física con actividad empresarial.
           </p>
         </div>
       </div>

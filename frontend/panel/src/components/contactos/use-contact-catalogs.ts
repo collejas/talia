@@ -43,6 +43,7 @@ function valuesToOptions(values: string[]): ContactCatalogOption[] {
 export function useTenantContactCatalogs() {
   const [puestoOptions, setPuestoOptions] = useState<ContactCatalogOption[]>([])
   const [rolDecisionOptions, setRolDecisionOptions] = useState<ContactCatalogOption[]>([])
+  const [clasificacionNegocioOptions, setClasificacionNegocioOptions] = useState<ContactCatalogOption[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -59,6 +60,7 @@ export function useTenantContactCatalogs() {
         if (!response.ok) {
           setPuestoOptions([])
           setRolDecisionOptions([])
+          setClasificacionNegocioOptions([])
           setLoading(false)
           return
         }
@@ -69,12 +71,16 @@ export function useTenantContactCatalogs() {
         const puestosRaw = catalogos ? catalogos.puesto ?? catalogos.puestos : null
         const rolesRaw =
           catalogos ? catalogos.rol_decision ?? catalogos.rol_decisiones ?? catalogos.roles_decision : null
+        const clasificacionesRaw =
+          catalogos ? catalogos.clasificacion_negocio ?? catalogos.clasificaciones_negocio : null
         setPuestoOptions(valuesToOptions(normalizeValues(puestosRaw)))
         setRolDecisionOptions(valuesToOptions(normalizeValues(rolesRaw)))
+        setClasificacionNegocioOptions(valuesToOptions(normalizeValues(clasificacionesRaw)))
       } catch {
         if (controller.signal.aborted) return
         setPuestoOptions([])
         setRolDecisionOptions([])
+        setClasificacionNegocioOptions([])
       } finally {
         if (!controller.signal.aborted) {
           setLoading(false)
@@ -91,8 +97,9 @@ export function useTenantContactCatalogs() {
     () => ({
       puestoOptions,
       rolDecisionOptions,
+      clasificacionNegocioOptions,
       loading,
     }),
-    [loading, puestoOptions, rolDecisionOptions],
+    [loading, puestoOptions, rolDecisionOptions, clasificacionNegocioOptions],
   )
 }

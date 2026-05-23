@@ -27,7 +27,7 @@ export default async function SettingsAccountPage() {
             <div className="mb-4 space-y-1">
               <h2 className="text-lg font-semibold">Contactos</h2>
               <p className="text-sm text-muted-foreground">
-                Cada tenant puede definir sus propios catálogos de puesto y rol de decisión.
+                Cada tenant puede definir sus propios catálogos de puesto, rol de decisión y clasificación de negocio.
               </p>
             </div>
             <TenantContactCatalogsForm tenantId={data.organizacion_id} config={data.config ?? null} />

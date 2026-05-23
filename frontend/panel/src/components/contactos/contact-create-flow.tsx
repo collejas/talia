@@ -915,6 +915,10 @@ export function ContactCreateFlow({ open, onOpenChange, onCreated, initialMode =
     () => mergeCatalogOptions(tenantCatalogs.rolDecisionOptions, state.persona.rol_decision),
     [state.persona.rol_decision, tenantCatalogs.rolDecisionOptions],
   );
+  const clasificacionNegocioOptions = React.useMemo(
+    () => mergeCatalogOptions(tenantCatalogs.clasificacionNegocioOptions, state.cuenta.tipo_establecimiento),
+    [state.cuenta.tipo_establecimiento, tenantCatalogs.clasificacionNegocioOptions],
+  );
 
   React.useEffect(() => {
     const desiredPrefix = isPfaeMode ? "PFAE-" : "Emp-";
@@ -1334,12 +1338,6 @@ export function ContactCreateFlow({ open, onOpenChange, onCreated, initialMode =
                 <Field label="RFC">
                   <Input value={state.cuenta.rfc} onChange={(e) => dispatch({ type: "cuenta/set", field: "rfc", value: e.target.value })} />
                 </Field>
-                <Field label="Correo 1 principal" required>
-                  <Input value={state.cuenta.correo_principal} onChange={(e) => dispatch({ type: "cuenta/set", field: "correo_principal", value: e.target.value })} />
-                </Field>
-                <Field label="Correo 2" hint="Opcional">
-                  <Input value={state.cuenta.correo_secundario} onChange={(e) => dispatch({ type: "cuenta/set", field: "correo_secundario", value: e.target.value })} />
-                </Field>
                 <Field label="Teléfono principal" required>
                   <div className="space-y-2">
                     <div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_160px]">
@@ -1413,8 +1411,20 @@ export function ContactCreateFlow({ open, onOpenChange, onCreated, initialMode =
                 <Field label="Sitio web">
                   <Input value={state.cuenta.sitio_web} onChange={(e) => dispatch({ type: "cuenta/set", field: "sitio_web", value: e.target.value })} />
                 </Field>
-                <Field label="Tipo de establecimiento">
-                  <Input value={state.cuenta.tipo_establecimiento} onChange={(e) => dispatch({ type: "cuenta/set", field: "tipo_establecimiento", value: e.target.value })} />
+                <Field label="Clasificación de negocio">
+                  <div className="space-y-2">
+                    <ContactCatalogSelect
+                      value={state.cuenta.tipo_establecimiento}
+                      onValueChange={(value) => dispatch({ type: "cuenta/set", field: "tipo_establecimiento", value })}
+                      options={clasificacionNegocioOptions}
+                      placeholder={tenantCatalogs.loading ? "Cargando catálogo..." : "Selecciona una clasificación"}
+                      disabled={clasificacionNegocioOptions.length === 0}
+                      emptyLabel="Configura opciones en Cuenta y contactos"
+                    />
+                    {!tenantCatalogs.loading && clasificacionNegocioOptions.length === 0 ? (
+                      <p className="text-xs text-muted-foreground">Configura la clasificación de negocio en Settings · Contactos para usar este campo como select.</p>
+                    ) : null}
+                  </div>
                 </Field>
                 <Field label="Fecha de incorporación">
                   <Input type="date" value={state.cuenta.fecha_incorporacion} onChange={(e) => dispatch({ type: "cuenta/set", field: "fecha_incorporacion", value: e.target.value })} />
