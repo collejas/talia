@@ -1413,9 +1413,6 @@ export function ContactCreateFlow({ open, onOpenChange, onCreated, initialMode =
                 <Field label="Sitio web">
                   <Input value={state.cuenta.sitio_web} onChange={(e) => dispatch({ type: "cuenta/set", field: "sitio_web", value: e.target.value })} />
                 </Field>
-                <Field label="Necesidad / propósito">
-                  <Input value={state.cuenta.necesidad_proposito} onChange={(e) => dispatch({ type: "cuenta/set", field: "necesidad_proposito", value: e.target.value })} />
-                </Field>
                 <Field label="Tipo de establecimiento">
                   <Input value={state.cuenta.tipo_establecimiento} onChange={(e) => dispatch({ type: "cuenta/set", field: "tipo_establecimiento", value: e.target.value })} />
                 </Field>
