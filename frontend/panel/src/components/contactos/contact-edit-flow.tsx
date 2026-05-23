@@ -35,6 +35,7 @@ type CreateMode =
   | "persona_fisica_actividad_empresarial";
 
 type PersonaDraft = {
+  codigo_contacto: string;
   nombre: string;
   apellido_paterno: string;
   apellido_materno: string;
@@ -288,6 +289,7 @@ const PHONE_LINE_TYPE_OPTIONS = [
 const INITIAL_STATE: ContactEditState = {
   mode: "solo_persona",
   persona: {
+    codigo_contacto: "",
     nombre: "",
     apellido_paterno: "",
     apellido_materno: "",
@@ -635,6 +637,7 @@ function reducer(state: ContactEditState, action: ContactEditAction): ContactEdi
         mode,
         persona: {
           ...INITIAL_STATE.persona,
+          codigo_contacto: readString(detail, "codigo_contacto") || readString(detail, "legacy_contacto_codigo"),
           nombre: readString(detail, "nombre_nombres") || readString(detail, "nombre") || "",
           apellido_paterno: readString(detail, "apellido_paterno"),
           apellido_materno: readString(detail, "apellido_materno"),
@@ -1449,6 +1452,9 @@ export function ContactEditFlow({ open, onOpenChange, personaId, onSaved }: Cont
               </Field>
               <Field label="Apellido materno">
                 <Input value={state.persona.apellido_materno} onChange={(e) => dispatch({ type: "persona/set", field: "apellido_materno", value: e.target.value })} />
+              </Field>
+              <Field label="ID de contacto">
+                <Input value={state.persona.codigo_contacto || "Se generará automáticamente"} readOnly disabled className="bg-muted" />
               </Field>
               <Field label="Correo 1 principal" required>
                 <Input value={state.persona.correo_principal} onChange={(e) => dispatch({ type: "persona/set", field: "correo_principal", value: e.target.value })} />

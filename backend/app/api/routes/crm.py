@@ -10036,6 +10036,7 @@ class CRMPersonaUpdate(CRMContactUpdate):
 
 
 class CRMPersonaAltaPersona(BaseModel):
+    codigo_contacto: str | None = Field(default=None, max_length=64)
     nombre: str = Field(..., max_length=160)
     apellido_paterno: str = Field(..., max_length=160)
     apellido_materno: str | None = Field(default=None, max_length=160)
@@ -10461,6 +10462,7 @@ def _persona_alta_first_text(*values: str | None) -> str | None:
 def _persona_alta_normalize_persona(payload: CRMPersonaAltaPersona) -> CRMPersonaAltaPersona:
     return payload.model_copy(
         update={
+            "codigo_contacto": _persona_alta_clean_text(payload.codigo_contacto, compact_spaces=True),
             "nombre": _persona_alta_clean_text(payload.nombre, compact_spaces=True),
             "apellido_paterno": _persona_alta_clean_text(payload.apellido_paterno, compact_spaces=True),
             "apellido_materno": _persona_alta_clean_text(payload.apellido_materno, compact_spaces=True),
@@ -11187,6 +11189,7 @@ def _persona_alta_to_account_payload(
         "telefono_secundario_extension": _persona_alta_clean_text(cuenta.telefono_secundario_extension)
         or _persona_alta_clean_text(existing_values.get("telefono_secundario_extension")),
         "codigo_cuenta": _persona_alta_clean_text(cuenta.codigo_cuenta) or _persona_alta_clean_text(existing_values.get("codigo_cuenta")),
+        "codigo_contacto": _persona_alta_clean_text(persona.codigo_contacto) or _persona_alta_clean_text(existing_values.get("codigo_contacto")),
         "razon_social": _persona_alta_clean_text(cuenta.razon_social)
         or _persona_alta_clean_text(existing_values.get("razon_social"))
         or (full_name if contexto.modo == "persona_fisica_actividad_empresarial" else None),
@@ -13357,6 +13360,10 @@ class CRMMediaAssetUpload(BaseModel):
     bucket: str = Field(default="recursos")
 
 
+class CRMPersonaCodigoResponse(BaseModel):
+    codigo_contacto: str | None = None
+
+
 @router.get("/cuentas", response_model=CRMAccountsResponse)
 async def list_accounts(
     *,
@@ -13391,6 +13398,20 @@ async def get_next_account_code(
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     return CRMCuentaCodigoResponse(codigo_cuenta=codigo)
+
+
+@router.get("/personas/codigo-siguiente", response_model=CRMPersonaCodigoResponse)
+async def get_next_persona_code(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("contacts.read")),
+) -> CRMPersonaCodigoResponse:
+    try:
+        codigo = await repo.preview_contact_code(organizacion_id=organizacion_id)
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return CRMPersonaCodigoResponse(codigo_contacto=codigo)
 
 
 @router.post("/cuentas", response_model=CRMAccount, status_code=status.HTTP_201_CREATED)

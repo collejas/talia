@@ -70,7 +70,7 @@ def _next_sequential_code(prefix: str, existing_codes: Sequence[Any], *, width: 
     return f"{prefix_clean}{highest + 1:0{width}d}"
 
 PERSONA_SELECT_FIELDS = (
-    "id,organizacion_id,nombre,apellido_paterno,apellido_materno,nombre_completo,"
+    "id,organizacion_id,codigo_contacto,nombre,apellido_paterno,apellido_materno,nombre_completo,"
     "correo_principal,correo_secundario,correo_institucional,correo_personal_3,"
     "telefono_principal_e164,telefono_principal_tipo_linea,telefono_principal_extension,telefono_movil_1_e164,telefono_movil_1_tipo_linea,telefono_movil_2_e164,telefono_movil_2_tipo_linea,telefono_movil_2_extension,telefono_secundario_e164,telefono_secundario_tipo_linea,telefono_secundario_extension,"
     "telefono_empresa_1_e164,telefono_empresa_1_extension,telefono_empresa_2_e164,telefono_empresa_2_extension,"
@@ -896,6 +896,35 @@ class CRMRepository:
                 break
         codes = [row.get("codigo_cuenta") for row in rows if isinstance(row, dict)]
         return _next_sequential_code(prefix, codes, width=1)
+
+    async def preview_contact_code(
+        self,
+        *,
+        organizacion_id: UUID,
+    ) -> str:
+        rows: list[dict[str, Any]] = []
+        offset = 0
+        page_size = 200
+        while True:
+            params = {
+                "organizacion_id": f"eq.{organizacion_id}",
+                "select": "codigo_contacto",
+                "order": "creado_en.desc",
+                "limit": str(page_size),
+                "offset": str(offset),
+            }
+            resp = await self._request("GET", "/rest/v1/personas", params=params)
+            batch = resp.json()
+            if not isinstance(batch, list):
+                raise CRMRepositoryError(f"Respuesta inesperada al previsualizar codigo de contacto: {batch!r}")
+            rows.extend([row for row in batch if isinstance(row, dict)])
+            if len(batch) < page_size:
+                break
+            offset += page_size
+            if offset >= 2000:
+                break
+        codes = [row.get("codigo_contacto") for row in rows if isinstance(row, dict)]
+        return _next_sequential_code("Cont-", codes, width=1)
 
     async def get_propiedades_geojson(
         self,
@@ -6313,7 +6342,7 @@ class CRMRepository:
             "limit": str(limit),
             "offset": str(offset),
             "or": (
-                f"(nombre_completo.ilike.*{pattern}*,correo_principal.ilike.*{pattern}*,"
+                f"(codigo_contacto.ilike.*{pattern}*,nombre_completo.ilike.*{pattern}*,correo_principal.ilike.*{pattern}*,"
                 f"correo_institucional.ilike.*{pattern}*,correo_personal_3.ilike.*{pattern}*,"
                 f"telefono_principal_e164.ilike.*{pattern}*,telefono_movil_1_e164.ilike.*{pattern}*,"
                 f"telefono_movil_2_e164.ilike.*{pattern}*,telefono_empresa_1_e164.ilike.*{pattern}*,"
@@ -6598,6 +6627,7 @@ class CRMRepository:
             "correo_secundario": persona.get("correo_secundario") or persona.get("correo_institucional"),
             "correo_institucional": persona.get("correo_institucional") or persona.get("correo_principal"),
             "correo_personal_3": persona.get("correo_personal_3"),
+            "codigo_contacto": persona.get("codigo_contacto") or _ensure_metadata(persona.get("metadata")).get("legacy_contacto_codigo"),
             "correo": persona.get("correo_secundario") or persona.get("correo_institucional") or persona.get("correo_principal"),
             "email": persona.get("correo_secundario") or persona.get("correo_institucional") or persona.get("correo_principal"),
             "telefono_principal_e164": persona.get("telefono_principal_e164"),
@@ -6837,6 +6867,7 @@ class CRMRepository:
         persona_body: dict[str, Any] = {
             "id": str(contact_id),
             "organizacion_id": str(organizacion_id),
+            "codigo_contacto": self._pick_text(merged, "codigo_contacto"),
             "nombre": given_name,
             "apellido_paterno": apellido_paterno,
             "apellido_materno": apellido_materno,

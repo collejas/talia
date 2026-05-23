@@ -35,6 +35,7 @@ type CreateMode =
   | "persona_fisica_actividad_empresarial";
 
 type PersonaDraft = {
+  codigo_contacto: string;
   nombre: string;
   apellido_paterno: string;
   apellido_materno: string;
@@ -262,6 +263,7 @@ const PHONE_LINE_TYPE_OPTIONS = [
 const INITIAL_STATE: ContactCreateState = {
   mode: "solo_persona",
   persona: {
+    codigo_contacto: "",
     nombre: "",
     apellido_paterno: "",
     apellido_materno: "",
@@ -791,6 +793,34 @@ export function ContactCreateFlow({ open, onOpenChange, onCreated, initialMode =
   }, [open, initialMode]);
 
   React.useEffect(() => {
+    if (!open) return;
+    if (state.persona.codigo_contacto.trim()) return;
+
+    const controller = new AbortController();
+    const run = async () => {
+      try {
+        const response = await fetch("/api/personas/codigo-siguiente", {
+          cache: "no-store",
+          signal: controller.signal,
+        });
+        const body = (await response.json().catch(() => ({}))) as { codigo_contacto?: string | null };
+        if (!response.ok) return;
+        const codigo = typeof body.codigo_contacto === "string" ? body.codigo_contacto.trim() : "";
+        if (codigo) {
+          dispatch({ type: "persona/set", field: "codigo_contacto", value: codigo });
+        }
+      } catch (error) {
+        if ((error as Error).name !== "AbortError") {
+          return;
+        }
+      }
+    };
+
+    run();
+    return () => controller.abort();
+  }, [open, state.persona.codigo_contacto]);
+
+  React.useEffect(() => {
     if (state.mode !== "empresa_existente") return;
     const query = deferredAccountQuery.trim();
     if (query.length < 2) {
@@ -1065,6 +1095,9 @@ export function ContactCreateFlow({ open, onOpenChange, onCreated, initialMode =
               </Field>
               <Field label="Apellido materno">
                 <Input value={state.persona.apellido_materno} onChange={(e) => dispatch({ type: "persona/set", field: "apellido_materno", value: e.target.value })} />
+              </Field>
+              <Field label="ID de contacto">
+                <Input value={state.persona.codigo_contacto || "Se generará automáticamente"} readOnly disabled className="bg-muted" />
               </Field>
               <Field label="Correo 1 principal" required>
                 <Input value={state.persona.correo_principal} onChange={(e) => dispatch({ type: "persona/set", field: "correo_principal", value: e.target.value })} />
