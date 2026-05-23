@@ -1402,9 +1402,6 @@ export function ContactCreateFlow({ open, onOpenChange, onCreated, initialMode =
                     ) : null}
                   </div>
                 </Field>
-                <Field label="Segmento">
-                  <Input value={state.cuenta.segmento} onChange={(e) => dispatch({ type: "cuenta/set", field: "segmento", value: e.target.value })} />
-                </Field>
                 <Field label="Tamaño">
                   <Input value={state.cuenta.tamano} onChange={(e) => dispatch({ type: "cuenta/set", field: "tamano", value: e.target.value })} />
                 </Field>
