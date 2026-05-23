@@ -162,6 +162,10 @@ type DedupeCandidate = {
   correo?: string | null;
   telefono?: string | null;
   rfc?: string | null;
+  tipo_registro?: string | null;
+  coincidencia_en?: string | null;
+  propietario_usuario_id?: string | null;
+  propietario_nombre?: string | null;
   nivel?: "fuerte" | "medio" | "debil" | string;
   motivo?: string | null;
 };
@@ -285,6 +289,23 @@ const PHONE_LINE_TYPE_OPTIONS = [
   { value: "movil", label: "Móvil" },
   { value: "fijo", label: "Fijo" },
 ] as const;
+
+function formatDedupeRecordType(value: string | null | undefined): string {
+  switch ((value || "").trim()) {
+    case "empresa":
+      return "Empresa";
+    case "empresa_propia":
+      return "Empresa propia";
+    case "contacto":
+      return "Contacto";
+    default:
+      return "Registro existente";
+  }
+}
+
+function formatDedupeSeller(candidate: DedupeCandidate): string {
+  return candidate.propietario_nombre?.trim() || candidate.propietario_usuario_id?.trim() || "Sin vendedor";
+}
 
 const INITIAL_STATE: ContactEditState = {
   mode: "solo_persona",
@@ -1378,6 +1399,7 @@ export function ContactEditFlow({ open, onOpenChange, personaId, onSaved }: Cont
   );
 
   return (
+    <>
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-5xl">
         <DialogHeader className="space-y-2">
@@ -2226,98 +2248,6 @@ export function ContactEditFlow({ open, onOpenChange, personaId, onSaved }: Cont
             </div>
           </FormSection>
 
-          {pendingDedupe ? (
-            <FormSection
-              title="Posibles duplicados detectados"
-              description="Selecciona registros existentes para reutilizar o crea nuevos."
-            >
-              {pendingDedupe.candidatos_persona.length ? (
-                <div className="space-y-2">
-                  <div className="text-sm font-medium">Personas candidatas</div>
-                  {pendingDedupe.candidatos_persona.map((candidate) => {
-                    const selected = selectedPersonaReuseId === candidate.id;
-                    return (
-                      <button
-                        key={`edit-persona-${candidate.id}`}
-                        type="button"
-                        className={`w-full rounded-xl border px-4 py-3 text-left ${selected ? "border-foreground bg-muted/40" : "border-border/60 bg-background"}`}
-                        onClick={() => setSelectedPersonaReuseId(candidate.id)}
-                      >
-                        <div className="text-sm font-medium">
-                          {candidate.nombre || "Sin nombre"}{" "}
-                          <span className="text-xs text-muted-foreground">({candidate.nivel || "debil"})</span>
-                        </div>
-                        <div className="text-xs text-muted-foreground">
-                          {[candidate.correo, candidate.telefono, candidate.empresa].filter(Boolean).join(" · ") || "Sin datos adicionales"}
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
-              ) : null}
-
-              {pendingDedupe.candidatos_cuenta.length ? (
-                <div className="mt-3 space-y-2">
-                  <div className="text-sm font-medium">Cuentas candidatas</div>
-                  {pendingDedupe.candidatos_cuenta.map((candidate) => {
-                    const selected = selectedCuentaReuseId === candidate.id;
-                    return (
-                      <button
-                        key={`edit-cuenta-${candidate.id}`}
-                        type="button"
-                        className={`w-full rounded-xl border px-4 py-3 text-left ${selected ? "border-foreground bg-muted/40" : "border-border/60 bg-background"}`}
-                        onClick={() => setSelectedCuentaReuseId(candidate.id)}
-                      >
-                        <div className="text-sm font-medium">
-                          {candidate.nombre || "Sin nombre"}{" "}
-                          <span className="text-xs text-muted-foreground">({candidate.nivel || "debil"})</span>
-                        </div>
-                        <div className="text-xs text-muted-foreground">
-                          {[candidate.rfc, candidate.correo, candidate.telefono, candidate.alias].filter(Boolean).join(" · ") || "Sin datos adicionales"}
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
-              ) : null}
-
-              <div className="mt-3 flex flex-wrap gap-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  disabled={state.saving}
-                  onClick={() =>
-                    void submit({
-                      persona_reutilizar_id: selectedPersonaReuseId || undefined,
-                      cuenta_reutilizar_id: selectedCuentaReuseId || undefined,
-                    })
-                  }
-                >
-                  Reutilizar seleccionados y guardar
-                </Button>
-                <Button
-                  type="button"
-                  variant="secondary"
-                  disabled={state.saving}
-                  onClick={() => void submit({ confirmar_creacion: true })}
-                >
-                  Crear nuevos de todos modos
-                </Button>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  disabled={state.saving}
-                  onClick={() => {
-                    setPendingDedupe(null);
-                    setSelectedPersonaReuseId("");
-                    setSelectedCuentaReuseId("");
-                  }}
-                >
-                  Cerrar revision
-                </Button>
-              </div>
-            </FormSection>
-          ) : null}
         </div>
 
         <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
@@ -2330,5 +2260,130 @@ export function ContactEditFlow({ open, onOpenChange, personaId, onSaved }: Cont
         </div>
       </DialogContent>
     </Dialog>
+
+    <Dialog
+      open={Boolean(pendingDedupe)}
+      onOpenChange={(nextOpen) => {
+        if (!nextOpen) {
+          setPendingDedupe(null);
+          setSelectedPersonaReuseId("");
+          setSelectedCuentaReuseId("");
+        }
+      }}
+    >
+      <DialogContent className="sm:max-w-4xl">
+        <DialogHeader className="text-left">
+          <DialogTitle>Coincidencias detectadas</DialogTitle>
+          <DialogDescription>
+            Revisa si el registro ya existe y en qué tipo de entidad y vendedor quedó guardado.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-4">
+          {pendingDedupe?.candidatos_persona?.length ? (
+            <div className="space-y-2">
+              <div className="text-sm font-medium">Personas</div>
+              {pendingDedupe.candidatos_persona.map((candidate) => {
+                const selected = selectedPersonaReuseId === candidate.id;
+                return (
+                  <button
+                    key={`edit-persona-${candidate.id}`}
+                    type="button"
+                    className={`w-full rounded-xl border px-4 py-3 text-left ${selected ? "border-foreground bg-muted/40" : "border-border/60 bg-background"}`}
+                    onClick={() => setSelectedPersonaReuseId(candidate.id)}
+                  >
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="text-sm font-medium">
+                        {candidate.nombre || "Sin nombre"}{" "}
+                        <span className="text-xs text-muted-foreground">({candidate.nivel || "debil"})</span>
+                      </div>
+                      <div className="text-xs text-muted-foreground">{formatDedupeRecordType(candidate.tipo_registro)}</div>
+                    </div>
+                    <div className="mt-1 text-xs text-muted-foreground">
+                      {[candidate.correo, candidate.telefono, candidate.empresa].filter(Boolean).join(" · ") || "Sin datos adicionales"}
+                    </div>
+                    <div className="mt-1 text-xs text-muted-foreground">
+                      {candidate.coincidencia_en ? `Coincidencia: ${candidate.coincidencia_en}` : "Coincidencia detectada"}
+                      {" · "}
+                      {formatDedupeSeller(candidate)}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          ) : null}
+
+          {pendingDedupe?.candidatos_cuenta?.length ? (
+            <div className="space-y-2">
+              <div className="text-sm font-medium">Cuentas</div>
+              {pendingDedupe.candidatos_cuenta.map((candidate) => {
+                const selected = selectedCuentaReuseId === candidate.id;
+                return (
+                  <button
+                    key={`edit-cuenta-${candidate.id}`}
+                    type="button"
+                    className={`w-full rounded-xl border px-4 py-3 text-left ${selected ? "border-foreground bg-muted/40" : "border-border/60 bg-background"}`}
+                    onClick={() => setSelectedCuentaReuseId(candidate.id)}
+                  >
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="text-sm font-medium">
+                        {candidate.nombre || "Sin nombre"}{" "}
+                        <span className="text-xs text-muted-foreground">({candidate.nivel || "debil"})</span>
+                      </div>
+                      <div className="text-xs text-muted-foreground">{formatDedupeRecordType(candidate.tipo_registro)}</div>
+                    </div>
+                    <div className="mt-1 text-xs text-muted-foreground">
+                      {[candidate.rfc, candidate.correo, candidate.telefono, candidate.alias].filter(Boolean).join(" · ") || "Sin datos adicionales"}
+                    </div>
+                    <div className="mt-1 text-xs text-muted-foreground">
+                      {candidate.coincidencia_en ? `Coincidencia: ${candidate.coincidencia_en}` : "Coincidencia detectada"}
+                      {" · "}
+                      {formatDedupeSeller(candidate)}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          ) : null}
+
+          <div className="flex flex-wrap gap-2 pt-2">
+            <Button
+              type="button"
+              variant="outline"
+              disabled={state.saving}
+              onClick={() =>
+                void submit({
+                  persona_reutilizar_id: selectedPersonaReuseId || undefined,
+                  cuenta_reutilizar_id: selectedCuentaReuseId || undefined,
+                })
+              }
+            >
+              Reutilizar seleccionados y guardar
+            </Button>
+            <Button
+              type="button"
+              variant="secondary"
+              disabled={state.saving}
+              onClick={() => void submit({ confirmar_creacion: true })}
+            >
+              Crear nuevos de todos modos
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              disabled={state.saving}
+              onClick={() => {
+                setPendingDedupe(null);
+                setSelectedPersonaReuseId("");
+                setSelectedCuentaReuseId("");
+              }}
+            >
+              Cerrar revisión
+            </Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+    </>
   );
 }

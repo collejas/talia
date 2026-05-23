@@ -10194,6 +10194,10 @@ class CRMDedupeCandidate(BaseModel):
     correo: str | None = None
     telefono: str | None = None
     empresa: str | None = None
+    tipo_registro: str | None = None
+    coincidencia_en: str | None = None
+    propietario_usuario_id: UUID | None = None
+    propietario_nombre: str | None = None
     nivel: str
     motivo: str
 
@@ -10634,6 +10638,58 @@ def _dedupe_level_rank(level: str) -> int:
     return 1
 
 
+def _dedupe_tipo_registro_label(value: str | None) -> str:
+    normalized = _persona_alta_clean_text(value, compact_spaces=True)
+    if not normalized:
+        return "Contacto"
+    lowered = normalized.casefold()
+    if lowered in {"empresa", "empresa_nueva"}:
+        return "Empresa"
+    if lowered in {"persona_fisica_actividad_empresarial", "pfae"}:
+        return "Empresa propia"
+    if lowered in {"contacto"}:
+        return "Contacto"
+    return normalized
+
+
+async def _attach_dedupe_owner_names(
+    *,
+    repo: CRMRepository,
+    organizacion_id: UUID,
+    candidates: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    owner_ids: list[UUID] = []
+    seen: set[str] = set()
+    for candidate in candidates:
+        owner_id = _safe_uuid(candidate.get("propietario_usuario_id"))
+        if not owner_id:
+            continue
+        owner_key = str(owner_id)
+        if owner_key in seen:
+            continue
+        seen.add(owner_key)
+        owner_ids.append(owner_id)
+    owner_map: dict[str, str] = {}
+    if owner_ids:
+        try:
+            users = await repo.list_users_by_ids(organizacion_id=organizacion_id, user_ids=owner_ids)
+        except CRMRepositoryError:
+            users = []
+        for user in users:
+            if not isinstance(user, dict):
+                continue
+            user_id = str(user.get("id") or "").strip()
+            if not user_id:
+                continue
+            owner_map[user_id] = str(user.get("nombre_completo") or user.get("correo") or "").strip()
+    for candidate in candidates:
+        owner_id = _safe_uuid(candidate.get("propietario_usuario_id"))
+        if owner_id:
+            candidate["propietario_nombre"] = owner_map.get(str(owner_id)) or candidate.get("propietario_nombre")
+        candidate["tipo_registro"] = _dedupe_tipo_registro_label(str(candidate.get("tipo_registro") or ""))
+    return candidates
+
+
 def _merge_dedupe_candidates(
     current: list[dict[str, Any]],
     candidate: dict[str, Any],
@@ -10669,13 +10725,35 @@ async def _persona_alta_find_existing_account(
     rfc_key = _persona_alta_match_rfc(cuenta.rfc)
     razon_key = _persona_alta_match_key(cuenta.razon_social)
     nombre_key = _persona_alta_match_key(cuenta.nombre_comercial)
-    if not rfc_key and not razon_key and not nombre_key:
+    email_keys = {
+        _persona_alta_normalize_email(cuenta.correo_principal),
+        _persona_alta_normalize_email(cuenta.correo_secundario),
+        _persona_alta_normalize_email(cuenta.correo),
+        _persona_alta_normalize_email(getattr(cuenta, "email", None)),
+    }
+    phone_keys = {
+        _persona_alta_normalize_phone(cuenta.telefono_principal_e164),
+        _persona_alta_normalize_phone(cuenta.telefono_principal),
+        _persona_alta_normalize_phone(cuenta.telefono_secundario_e164),
+        _persona_alta_normalize_phone(cuenta.telefono),
+    }
+    email_keys = {value for value in email_keys if value}
+    phone_keys = {value for value in phone_keys if value}
+    if not rfc_key and not razon_key and not nombre_key and not email_keys and not phone_keys:
         return None, []
-    try:
-        rows = await repo.list_accounts(organizacion_id=organizacion_id, limit=200, offset=0)
-    except CRMRepositoryError:
-        return None, []
-    accounts = [CRMAccount.model_validate(row) for row in rows]
+    accounts: list[CRMAccount] = []
+    offset = 0
+    page_size = 200
+    while True:
+        try:
+            rows = await repo.list_accounts(organizacion_id=organizacion_id, limit=page_size, offset=offset)
+        except CRMRepositoryError:
+            return None, []
+        batch = [CRMAccount.model_validate(row) for row in rows]
+        accounts.extend(batch)
+        if len(batch) < page_size or offset >= 2000:
+            break
+        offset += page_size
     candidates: list[dict[str, Any]] = []
     selected: CRMAccount | None = None
     selected_level = "debil"
@@ -10684,18 +10762,44 @@ async def _persona_alta_find_existing_account(
             continue
         level = ""
         reason = ""
+        match_field = ""
         if rfc_key and _persona_alta_match_rfc(account.rfc) == rfc_key:
             level = "fuerte"
             reason = "rfc"
+            match_field = "rfc"
         elif razon_key and _persona_alta_match_key(account.razon_social) == razon_key:
             level = "medio"
             reason = "razon_social"
+            match_field = "razon_social"
         elif nombre_key and (
             _persona_alta_match_key(account.nombre) == nombre_key
             or _persona_alta_match_key(account.alias) == nombre_key
         ):
             level = "debil"
             reason = "nombre_comercial"
+            match_field = "nombre_comercial"
+        else:
+            account_email_keys = {
+                _persona_alta_normalize_email(account.correo_principal),
+                _persona_alta_normalize_email(account.correo_secundario),
+                _persona_alta_normalize_email(account.correo),
+                _persona_alta_normalize_email(account.email),
+            }
+            account_phone_keys = {
+                _persona_alta_normalize_phone(account.telefono_principal_e164),
+                _persona_alta_normalize_phone(account.telefono),
+                _persona_alta_normalize_phone(account.telefono_secundario_e164),
+            }
+            account_email_keys = {value for value in account_email_keys if value}
+            account_phone_keys = {value for value in account_phone_keys if value}
+            if email_keys and account_email_keys.intersection(email_keys):
+                level = "fuerte"
+                reason = "correo"
+                match_field = "correo"
+            elif phone_keys and account_phone_keys.intersection(phone_keys):
+                level = "fuerte"
+                reason = "telefono"
+                match_field = "telefono"
         if not level:
             continue
         candidates = _merge_dedupe_candidates(
@@ -10707,6 +10811,9 @@ async def _persona_alta_find_existing_account(
                 "rfc": account.rfc,
                 "correo": account.correo_principal or account.correo,
                 "telefono": account.telefono_principal_e164 or account.telefono,
+                "tipo_registro": "empresa_propia" if account.tipo == "persona_fisica_actividad_empresarial" else "empresa",
+                "coincidencia_en": match_field or reason,
+                "propietario_usuario_id": account.propietario_usuario_id,
                 "nivel": level,
                 "motivo": reason,
             },
@@ -10716,8 +10823,18 @@ async def _persona_alta_find_existing_account(
             selected_level = level
     # Auto-reuso solo en fuerte. Medio/debil quedan para confirmación explícita en UI.
     if selected and selected_level == "fuerte":
-        return selected, candidates[:10]
-    return None, candidates[:10]
+        enriched = await _attach_dedupe_owner_names(
+            repo=repo,
+            organizacion_id=organizacion_id,
+            candidates=candidates[:10],
+        )
+        return selected, enriched
+    enriched = await _attach_dedupe_owner_names(
+        repo=repo,
+        organizacion_id=organizacion_id,
+        candidates=candidates[:10],
+    )
+    return None, enriched
 
 
 async def _persona_alta_find_persona_candidates(
@@ -10729,19 +10846,30 @@ async def _persona_alta_find_persona_candidates(
     exclude_contacto_id: UUID | None = None,
 ) -> list[dict[str, Any]]:
     candidates: list[dict[str, Any]] = []
-    telefono_key = _persona_alta_normalize_phone(persona.telefono_movil_1_e164) or _persona_alta_normalize_phone(persona.telefono_principal_e164)
-    correo_key = (
-        _persona_alta_normalize_email(persona.correo_secundario)
-        or _persona_alta_normalize_email(persona.correo_institucional)
-        or _persona_alta_normalize_email(persona.correo_principal)
-    )
+    telefono_keys = {
+        _persona_alta_normalize_phone(persona.telefono_principal_e164),
+        _persona_alta_normalize_phone(persona.telefono_movil_1_e164),
+        _persona_alta_normalize_phone(persona.telefono_movil_2_e164),
+        _persona_alta_normalize_phone(persona.telefono_secundario_e164),
+        _persona_alta_normalize_phone(persona.telefono_empresa_1_e164),
+        _persona_alta_normalize_phone(persona.telefono_empresa_2_e164),
+    }
+    correo_keys = {
+        _persona_alta_normalize_email(persona.correo_principal),
+        _persona_alta_normalize_email(persona.correo_secundario),
+        _persona_alta_normalize_email(persona.correo_institucional),
+        _persona_alta_normalize_email(persona.correo_personal_3),
+    }
+    telefono_keys = {value for value in telefono_keys if value}
+    correo_keys = {value for value in correo_keys if value}
     nombre_key = _persona_alta_match_name(_persona_alta_full_name(persona))
+    apellido_key = _persona_alta_match_name(persona.apellido_paterno)
     empresa_key = _persona_alta_match_name(
         _persona_alta_clean_text(cuenta.nombre_comercial if cuenta else None)
         or _persona_alta_clean_text(cuenta.razon_social if cuenta else None)
     )
 
-    if telefono_key:
+    for telefono_key in telefono_keys:
         try:
             by_phone = await repo.get_persona_by_phone_e164(
                 phone_e164=telefono_key,
@@ -10749,9 +10877,8 @@ async def _persona_alta_find_persona_candidates(
             )
         except CRMRepositoryError:
             by_phone = None
-        if by_phone:
-            if exclude_contacto_id and _safe_uuid(by_phone.get("id")) == exclude_contacto_id:
-                by_phone = None
+        if by_phone and exclude_contacto_id and _safe_uuid(by_phone.get("id")) == exclude_contacto_id:
+            by_phone = None
         if by_phone:
             candidates = _merge_dedupe_candidates(
                 candidates,
@@ -10761,13 +10888,16 @@ async def _persona_alta_find_persona_candidates(
                     "correo": by_phone.get("correo"),
                     "telefono": by_phone.get("telefono_e164"),
                     "empresa": by_phone.get("company_name"),
+                    "propietario_usuario_id": by_phone.get("propietario_usuario_id"),
+                    "tipo_registro": "contacto",
+                    "coincidencia_en": "telefono",
                     "correo_institucional": by_phone.get("correo_secundario") or by_phone.get("correo_institucional"),
                     "telefono_movil_1_e164": by_phone.get("telefono_movil_1_e164"),
                     "nivel": "fuerte",
                     "motivo": "telefono",
                 },
             )
-    if correo_key:
+    for correo_key in correo_keys:
         try:
             by_email = await repo.get_persona_by_email(
                 email=correo_key,
@@ -10775,9 +10905,8 @@ async def _persona_alta_find_persona_candidates(
             )
         except CRMRepositoryError:
             by_email = None
-        if by_email:
-            if exclude_contacto_id and _safe_uuid(by_email.get("id")) == exclude_contacto_id:
-                by_email = None
+        if by_email and exclude_contacto_id and _safe_uuid(by_email.get("id")) == exclude_contacto_id:
+            by_email = None
         if by_email:
             candidates = _merge_dedupe_candidates(
                 candidates,
@@ -10787,6 +10916,9 @@ async def _persona_alta_find_persona_candidates(
                     "correo": by_email.get("correo"),
                     "telefono": by_email.get("telefono_e164"),
                     "empresa": by_email.get("company_name"),
+                    "propietario_usuario_id": by_email.get("propietario_usuario_id"),
+                    "tipo_registro": "contacto",
+                    "coincidencia_en": "correo",
                     "correo_institucional": by_email.get("correo_secundario") or by_email.get("correo_institucional"),
                     "telefono_movil_1_e164": by_email.get("telefono_movil_1_e164"),
                     "nivel": "fuerte",
@@ -10811,14 +10943,17 @@ async def _persona_alta_find_persona_candidates(
             if exclude_contacto_id and _safe_uuid(row.get("id")) == exclude_contacto_id:
                 continue
             row_name_key = _persona_alta_match_name(row.get("nombre_completo"))
-            if not row_name_key or row_name_key != nombre_key:
+            row_apellido_key = _persona_alta_match_name(row.get("apellido_paterno"))
+            if not row_name_key or (row_name_key != nombre_key and row_apellido_key != apellido_key):
                 continue
             row_company_key = _persona_alta_match_name(row.get("company_name"))
             level = "debil"
-            reason = "nombre_completo"
+            reason = "nombre_completo" if row_name_key == nombre_key else "apellido_paterno"
+            match_field = reason
             if empresa_key and row_company_key and empresa_key == row_company_key:
                 level = "medio"
                 reason = "nombre_completo_y_empresa"
+                match_field = "nombre_completo_y_empresa"
             candidates = _merge_dedupe_candidates(
                 candidates,
                 {
@@ -10827,6 +10962,9 @@ async def _persona_alta_find_persona_candidates(
                     "correo": row.get("correo"),
                     "telefono": row.get("telefono_e164"),
                     "empresa": row.get("company_name"),
+                    "propietario_usuario_id": row.get("propietario_usuario_id"),
+                    "tipo_registro": "contacto",
+                    "coincidencia_en": match_field,
                     "correo_institucional": row.get("correo_secundario") or row.get("correo_institucional"),
                     "telefono_movil_1_e164": row.get("telefono_movil_1_e164"),
                     "nivel": level,
@@ -10835,7 +10973,12 @@ async def _persona_alta_find_persona_candidates(
             )
 
     candidates.sort(key=lambda item: _dedupe_level_rank(str(item.get("nivel") or "debil")), reverse=True)
-    return candidates[:10]
+    candidates = await _attach_dedupe_owner_names(
+        repo=repo,
+        organizacion_id=organizacion_id,
+        candidates=candidates[:10],
+    )
+    return candidates
 
 
 def _pick_first_strong_persona_candidate(candidates: list[dict[str, Any]]) -> UUID | None:
@@ -10883,21 +11026,13 @@ async def _persona_alta_build_dedupe_preview(
         )
         suggested_account_id = reused_account.id if reused_account else None
 
-    persona_pending = [
-        item for item in persona_candidates if str(item.get("nivel") or "") in {"medio", "debil"}
-    ]
-    cuenta_pending = [
-        item for item in account_candidates if str(item.get("nivel") or "") in {"medio", "debil"}
-    ]
+    persona_pending = [item for item in persona_candidates if isinstance(item, dict)]
+    cuenta_pending = [item for item in account_candidates if isinstance(item, dict)]
     requires_confirmation = bool(persona_pending or cuenta_pending)
 
     if dedupe and dedupe.confirmar_creacion:
         requires_confirmation = False
-    if dedupe and dedupe.persona_reutilizar_id:
-        requires_confirmation = bool(cuenta_pending)
-    if dedupe and dedupe.cuenta_reutilizar_id:
-        requires_confirmation = bool(persona_pending)
-    if dedupe and dedupe.persona_reutilizar_id and dedupe.cuenta_reutilizar_id:
+    if dedupe and (dedupe.persona_reutilizar_id or dedupe.cuenta_reutilizar_id):
         requires_confirmation = False
 
     return (

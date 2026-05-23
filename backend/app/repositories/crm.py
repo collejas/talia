@@ -6346,7 +6346,7 @@ class CRMRepository:
                 f"correo_institucional.ilike.*{pattern}*,correo_personal_3.ilike.*{pattern}*,"
                 f"telefono_principal_e164.ilike.*{pattern}*,telefono_movil_1_e164.ilike.*{pattern}*,"
                 f"telefono_movil_2_e164.ilike.*{pattern}*,telefono_empresa_1_e164.ilike.*{pattern}*,"
-                f"telefono_empresa_2_e164.ilike.*{pattern}*,notas.ilike.*{pattern}*,"
+                f"telefono_empresa_2_e164.ilike.*{pattern}*,apellido_paterno.ilike.*{pattern}*,notas.ilike.*{pattern}*,"
                 f"area.ilike.*{pattern}*,puesto.ilike.*{pattern}*,rol_decision.ilike.*{pattern}*)"
             ),
         }
