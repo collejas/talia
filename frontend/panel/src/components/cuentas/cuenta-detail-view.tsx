@@ -8,7 +8,7 @@ import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -105,6 +105,28 @@ function getInputText(value: unknown): string {
   return "";
 }
 
+function formatDeleteBlockedMessage(error: string | undefined): string | null {
+  if (!error) return null;
+  const normalized = error.trim();
+  const contactMatch = normalized.match(/^cuenta_tiene_contactos(?::(\d+))?$/);
+  if (contactMatch) {
+    const count = Number(contactMatch[1] || "0");
+    if (count === 1) {
+      return "No se puede eliminar: la empresa tiene 1 contacto vinculado.";
+    }
+    return `No se puede eliminar: la empresa tiene ${count} contactos vinculados.`;
+  }
+  const opportunityMatch = normalized.match(/^cuenta_tiene_oportunidades(?::(\d+))?$/);
+  if (opportunityMatch) {
+    const count = Number(opportunityMatch[1] || "0");
+    if (count === 1) {
+      return "No se puede eliminar: la empresa tiene 1 oportunidad vinculada.";
+    }
+    return `No se puede eliminar: la empresa tiene ${count} oportunidades vinculadas.`;
+  }
+  return null;
+}
+
 function formatDate(value: unknown): string {
   if (typeof value !== "string") return "—";
   const date = new Date(value);
@@ -143,6 +165,9 @@ export function CuentaDetailView({ cuentaId }: { cuentaId: string }) {
   const [editOpen, setEditOpen] = React.useState(false);
   const [editSubmitting, setEditSubmitting] = React.useState(false);
   const [editError, setEditError] = React.useState<string | null>(null);
+  const [deleteOpen, setDeleteOpen] = React.useState(false);
+  const [deleteSubmitting, setDeleteSubmitting] = React.useState(false);
+  const [deleteError, setDeleteError] = React.useState<string | null>(null);
   const [editForm, setEditForm] = React.useState<AccountEditForm>({
     nombre: "",
     alias: "",
@@ -473,6 +498,32 @@ export function CuentaDetailView({ cuentaId }: { cuentaId: string }) {
     }
   };
 
+  const handleDeleteAccount = async () => {
+    setDeleteSubmitting(true);
+    setDeleteError(null);
+    try {
+      const response = await fetch(`/api/cuentas/${encodeURIComponent(cuentaId)}`, {
+        method: "DELETE",
+      });
+      const body = (await response.json().catch(() => ({}))) as { error?: string };
+      if (!response.ok) {
+        const blockedMessage = formatDeleteBlockedMessage(body.error);
+        if (blockedMessage) throw new Error(blockedMessage);
+        throw new Error(body.error || "No se pudo eliminar la empresa.");
+      }
+      toast.success("Empresa eliminada.");
+      setDeleteOpen(false);
+      router.push("/crm");
+      router.refresh();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "No se pudo eliminar la empresa.";
+      setDeleteError(message);
+      toast.error(message);
+    } finally {
+      setDeleteSubmitting(false);
+    }
+  };
+
   const handleAddRelation = async () => {
     if (!relationTargetId) {
       toast.error("Selecciona una persona.");
@@ -571,6 +622,10 @@ export function CuentaDetailView({ cuentaId }: { cuentaId: string }) {
           <Button variant="outline" onClick={() => setMergeOpen(true)}>
             <IconUsers className="mr-2 size-4" />
             Fusionar
+          </Button>
+          <Button variant="destructive" onClick={() => setDeleteOpen(true)}>
+            <IconTrash className="mr-2 size-4" />
+            Eliminar
           </Button>
         </div>
       </div>
@@ -784,6 +839,31 @@ export function CuentaDetailView({ cuentaId }: { cuentaId: string }) {
               </Button>
             </div>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Eliminar empresa</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-2 text-sm">
+            <p>
+              Vas a eliminar <strong>{name}</strong>.
+            </p>
+            <p className="text-muted-foreground">
+              El sistema bloqueará la eliminación si la empresa tiene contactos u oportunidades vinculadas.
+            </p>
+            {deleteError ? <p className="text-destructive">{deleteError}</p> : null}
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setDeleteOpen(false)} disabled={deleteSubmitting}>
+              Cancelar
+            </Button>
+            <Button type="button" variant="destructive" onClick={() => void handleDeleteAccount()} disabled={deleteSubmitting}>
+              {deleteSubmitting ? "Eliminando..." : "Eliminar"}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 

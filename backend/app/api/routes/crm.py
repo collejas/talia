@@ -13652,9 +13652,9 @@ async def delete_account(
         if "cuenta_no_encontrada" in detail:
             raise HTTPException(status_code=404, detail="cuenta_no_encontrada") from exc
         if "cuenta_tiene_contactos" in detail:
-            raise HTTPException(status_code=409, detail="cuenta_tiene_contactos") from exc
+            raise HTTPException(status_code=409, detail=detail) from exc
         if "cuenta_tiene_oportunidades" in detail:
-            raise HTTPException(status_code=409, detail="cuenta_tiene_oportunidades") from exc
+            raise HTTPException(status_code=409, detail=detail) from exc
         raise HTTPException(status_code=502, detail=detail) from exc
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 

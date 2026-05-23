@@ -41,6 +41,28 @@ function getAccountId(row: DataTableRow): string | null {
   return typeof id === "string" && id.trim() ? id.trim() : null;
 }
 
+function formatDeleteBlockedMessage(error: string | undefined): string | null {
+  if (!error) return null;
+  const normalized = error.trim();
+  const contactMatch = normalized.match(/^cuenta_tiene_contactos(?::(\d+))?$/);
+  if (contactMatch) {
+    const count = Number(contactMatch[1] || "0");
+    if (count === 1) {
+      return "No se puede eliminar: la empresa tiene 1 contacto vinculado.";
+    }
+    return `No se puede eliminar: la empresa tiene ${count} contactos vinculados.`;
+  }
+  const opportunityMatch = normalized.match(/^cuenta_tiene_oportunidades(?::(\d+))?$/);
+  if (opportunityMatch) {
+    const count = Number(opportunityMatch[1] || "0");
+    if (count === 1) {
+      return "No se puede eliminar: la empresa tiene 1 oportunidad vinculada.";
+    }
+    return `No se puede eliminar: la empresa tiene ${count} oportunidades vinculadas.`;
+  }
+  return null;
+}
+
 function AccountRowActions({
   row,
   onDeleteRequest,
@@ -163,12 +185,8 @@ export function AccountsDataTable({ rows }: Props) {
       });
       const body = (await response.json().catch(() => ({}))) as { error?: string };
       if (!response.ok) {
-        if (body.error === "cuenta_tiene_contactos") {
-          throw new Error("No se puede eliminar: primero elimina los contactos vinculados.");
-        }
-        if (body.error === "cuenta_tiene_oportunidades") {
-          throw new Error("No se puede eliminar: primero elimina las oportunidades vinculadas.");
-        }
+        const blockedMessage = formatDeleteBlockedMessage(body.error);
+        if (blockedMessage) throw new Error(blockedMessage);
         throw new Error(body.error || "No se pudo eliminar la empresa.");
       }
       toast.success("Empresa eliminada.");
@@ -206,7 +224,7 @@ export function AccountsDataTable({ rows }: Props) {
           <div className="space-y-2 text-sm">
             <p>Vas a eliminar <strong>{deleteTarget?.name || "esta empresa"}</strong>.</p>
             <p className="text-muted-foreground">
-              Si tiene contactos vinculados u oportunidades activas, el sistema bloqueará la eliminación.
+              Si tiene contactos u oportunidades vinculadas, el sistema bloqueará la eliminación.
             </p>
           </div>
           <DialogFooter>

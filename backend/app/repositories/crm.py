@@ -1548,23 +1548,20 @@ class CRMRepository:
         if not existing:
             raise CRMRepositoryError("cuenta_no_encontrada")
 
-        person_relations = await self.list_account_person_relations(
+        person_relations_count = await self.count_account_person_relations(
             organizacion_id=organizacion_id,
             cuenta_id=account_id,
             activo=None,
         )
-        if person_relations:
-            raise CRMRepositoryError("cuenta_tiene_contactos")
+        if person_relations_count:
+            raise CRMRepositoryError(f"cuenta_tiene_contactos:{person_relations_count}")
 
-        opportunities = await self.list_opportunities(
+        opportunities_count = await self.count_account_opportunities(
             organizacion_id=organizacion_id,
             cuenta_id=account_id,
-            limit=1,
-            offset=0,
-            include_contact_rows=False,
         )
-        if opportunities:
-            raise CRMRepositoryError("cuenta_tiene_oportunidades")
+        if opportunities_count:
+            raise CRMRepositoryError(f"cuenta_tiene_oportunidades:{opportunities_count}")
 
         address_relations = await self.list_account_address_relations(
             organizacion_id=organizacion_id,
@@ -7506,17 +7503,49 @@ class CRMRepository:
             raise CRMRepositoryError(f"Respuesta inválida al marcar merge de cuenta: {row!r}")
         return row
 
+    async def count_account_person_relations(
+        self,
+        *,
+        organizacion_id: UUID,
+        cuenta_id: UUID,
+        activo: bool | None = None,
+    ) -> int:
+        total = 0
+        offset = 0
+        page_size = 200
+        while True:
+            batch = await self.list_account_person_relations(
+                organizacion_id=organizacion_id,
+                cuenta_id=cuenta_id,
+                activo=activo,
+                limit=page_size,
+                offset=offset,
+            )
+            if not batch:
+                break
+            total += len(batch)
+            if len(batch) < page_size:
+                break
+            offset += page_size
+            if offset >= 2000:
+                break
+        return total
+
     async def list_account_person_relations(
         self,
         *,
         organizacion_id: UUID,
         cuenta_id: UUID,
         activo: bool | None = None,
+        limit: int = 200,
+        offset: int = 0,
     ) -> list[dict[str, Any]]:
         params: dict[str, str] = {
             "organizacion_id": f"eq.{organizacion_id}",
             "cuenta_id": f"eq.{cuenta_id}",
             "order": "es_contacto_principal.desc,es_representante_legal.desc,activo.desc,creado_en.asc",
+            "limit": str(limit),
+            "offset": str(offset),
             "select": (
                 "id,organizacion_id,cuenta_id,persona_id,rol_en_cuenta,puesto,es_contacto_principal,"
                 "es_contacto_facturacion,es_representante_legal,activo,fecha_inicio,fecha_fin,notas,"
@@ -7531,6 +7560,33 @@ class CRMRepository:
         if not isinstance(data, list):
             raise CRMRepositoryError("cuenta_personas_list_invalid_response")
         return [row for row in data if isinstance(row, dict)]
+
+    async def count_account_opportunities(
+        self,
+        *,
+        organizacion_id: UUID,
+        cuenta_id: UUID,
+    ) -> int:
+        total = 0
+        offset = 0
+        page_size = 200
+        while True:
+            batch = await self.list_opportunities(
+                organizacion_id=organizacion_id,
+                cuenta_id=cuenta_id,
+                limit=page_size,
+                offset=offset,
+                include_contact_rows=False,
+            )
+            if not batch:
+                break
+            total += len(batch)
+            if len(batch) < page_size:
+                break
+            offset += page_size
+            if offset >= 2000:
+                break
+        return total
 
     async def create_account_person_relation(
         self,
