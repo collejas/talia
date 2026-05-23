@@ -905,6 +905,7 @@ export function ContactCreateFlow({ open, onOpenChange, onCreated, initialMode =
     run();
     return () => controller.abort();
   }, [isCompanyMode, isPfaeMode, state.cuenta.cuenta_id, state.cuenta.codigo_cuenta]);
+
   const personSectionTitle =
     isContactMode
       ? "Datos del contacto"

@@ -1109,6 +1109,10 @@ export function ContactEditFlow({ open, onOpenChange, personaId, onSaved }: Cont
         acc[item.id] = { nombre: item.nombre, alias: item.alias, codigo_cuenta: item.codigo_cuenta ?? null };
         return acc;
       }, {});
+      const currentAccountSummary = state.cuenta.cuenta_id ? summaryMap[state.cuenta.cuenta_id] : null;
+      if (currentAccountSummary?.codigo_cuenta && currentAccountSummary.codigo_cuenta !== state.cuenta.codigo_cuenta) {
+        dispatch({ type: "cuenta/set", field: "codigo_cuenta", value: currentAccountSummary.codigo_cuenta });
+      }
       setRelations(
         mapped.map((relation) => {
           const summary = summaryMap[relation.cuenta_id];
@@ -1125,7 +1129,7 @@ export function ContactEditFlow({ open, onOpenChange, personaId, onSaved }: Cont
     } finally {
       setRelationsLoading(false);
     }
-  }, [resolvedPersonaId]);
+  }, [resolvedPersonaId, state.cuenta.cuenta_id, state.cuenta.codigo_cuenta]);
 
   React.useEffect(() => {
     if (!open || !resolvedPersonaId) return;
